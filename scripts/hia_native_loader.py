@@ -18,7 +18,7 @@ import stat
 import threading
 
 ABI = "hepta.runtime.borrowed-bytes.linux-x86_64.v1"
-COMPILER_COMMIT = "f33d8da316de8fdf27b504371f1a5310997ff548"
+COMPILER_COMMIT = "d3e2c90173cf733e42b299d0c4274df4b593a12f"
 MAX_IMAGE = 1 << 20
 # Some CPython builds omit the Linux constants although the kernel API exists.
 F_ADD_SEALS = getattr(fcntl, "F_ADD_SEALS", 1033)

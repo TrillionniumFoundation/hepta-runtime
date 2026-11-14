@@ -7,9 +7,10 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from qualify_hia_runtime_native import record_check, sources
+from qualify_hia_runtime_native import MODULES, io_reference_evidence, record_check, sources
 from compare_hia_runtime_rust import run as compare_rust
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
+from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
 
 
 class QualificationReportingTests(unittest.TestCase):
@@ -86,6 +87,36 @@ class QualificationReportingTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "differs from pinned baseline"):
                     check_original_sources(fixture)
                 path.write_bytes(original)
+
+    def test_cold_summary_flag_cannot_replace_the_actual_report(self):
+        import hashlib
+        bootstrap = self.output / "build/bootstrap"
+        bootstrap.mkdir(parents=True)
+        raw = json.dumps({"dependency": {"commit": HEPTA_COMMIT, "tree": HEPTA_TREE, "files": {}}}).encode()
+        (bootstrap / "bootstrap.json").write_bytes(raw)
+        for label in ("B1", "B2", "B3"):
+            (bootstrap / (label + ".image.bin")).write_bytes(b"compiler")
+        report = {"schema": "hepta.runtime.hia-native-qualification.v1", "status": "NATIVE_COMPONENTS_PASS",
+                  "native_components_status": "PASS", "rust_comparison_status": "PENDING",
+                  "source_sha256": sources(), "rust_oracle_inputs": {}, "checks": [],
+                  "modules": {item["key"]: {} for item in MODULES},
+                  "inventory": {"original_sources": check_original_sources(ROOT)},
+                  "compiler_bootstrap_sha256": hashlib.sha256(raw).hexdigest(),
+                  "compiler_image_sha256": hashlib.sha256(b"compiler").hexdigest(),
+                  "matching_source_full_cold_qualified": True, "compiler_cold_status": "PASS"}
+        (self.output / "result.json").write_text(json.dumps(report))
+        result = compare_rust(self.output, "missing-rustc")
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["error"]["type"], "ValueError")
+        self.assertIn("compiler-cold.json", result["error"]["message"])
+        self.assertEqual(result["checks"], [])
+
+    def test_io_reference_suite_cannot_pass_with_zero_original_comparisons(self):
+        record_check(self.output, self.report, name="test_native_io.py", timeout=5,
+                     command=[sys.executable, "-I", "-c",
+                              "print('{\"native_io\": {\"elf_requests\": 113, \"original_read_comparisons\": 0}}')"])
+        with self.assertRaisesRegex(ValueError, "retained-reference coverage differs"):
+            io_reference_evidence(self.output, self.report)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 # HIA native runtime
 
 This directory contains the current HIA implementation of deterministic runtime
-components and a persistent native MCP stdio service. All implementation sources
+components, a read-only descriptor dependency and a persistent native MCP stdio service. All implementation sources
 in this directory use `.hepta` and are compiled by HIA to machine code. The Linux
 executables have no Python, Rust, libc or dynamic-loader runtime dependency.
 
@@ -17,8 +17,8 @@ of the original runtime remain incomplete.
 | --- | --- |
 | Runtime source | `a0dcdda1991ec536d5e2d252c006a778993fa566` |
 | Runtime tree | `98d96c88d54082637c27f1cbfae61a66d0dd81e7` |
-| Hepta compiler | `f33d8da316de8fdf27b504371f1a5310997ff548` |
-| Hepta tree | `378bc0dc613befc7006f1514bd2229357ae0d07c` |
+| Hepta compiler | `d3e2c90173cf733e42b299d0c4274df4b593a12f` |
+| Hepta tree | `8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49` |
 | Native target | Linux x86-64, LP64, SysV AMD64 |
 
 The runtime baseline is the head of the existing #118 → #119 → #120 integration
@@ -36,6 +36,10 @@ continue to identify the language and are not filename extensions.
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
 | [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
+| [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
+| [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
+| [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded read continuations, file versions and error/cleanup decisions |
+| [io_packer.hepta](io_packer.hepta) | Static ELF construction with checked syscall records, opaque handles and persistent binary I/O framing |
 | [stdio_packer.hepta](stdio_packer.hepta) | ELF construction and persistent newline-delimited input/output transport |
 | [filter_packer.hepta](filter_packer.hepta) | ELF construction for one complete binary input/output operation |
 
@@ -43,7 +47,12 @@ The byte ABI and all eight operations are specified in
 [runtime_bytes_abi.md](runtime_bytes_abi.md). Text behavior is specified in
 [text_budget_abi.md](text_budget_abi.md), and the typed endpoint boundary in
 [line_endpoint_abi.json](line_endpoint_abi.json). Delta operations, exact ordering
-and capacity rules are specified in [delta_abi.md](delta_abi.md). No native component falls back to
+and capacity rules are specified in [delta_abi.md](delta_abi.md). Hash/state layouts,
+binary bounds and Base64 policies are specified in [binary_codec_abi.md](binary_codec_abi.md).
+Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
+The read-only OS dependency, startup-root custody and exact wire records are
+specified in [io.abi.json](io.abi.json).
+No native component falls back to
 a Rust or Python implementation of its calculations. Endpoint JSON number
 classification and compact display bytes remain explicit caller inputs; the
 component does not claim to replace the serde parser itself.
@@ -59,8 +68,10 @@ Use an ordinary checkout of the exact Hepta commit shown above. The builder
 checks both the commit/tree and the actual tracked source bytes; changing the
 dependency checkout, a source file, or a cached compiler image is rejected.
 Python 3.11+ and a C toolchain are build/test dependencies for the initial seed.
-Independent comparison also requires Rust 1.95.0 and Cargo; endpoint reference
-dependencies are pinned in its Cargo.lock.
+Independent comparison also requires Rust 1.95.0 and Cargo; endpoint and codec
+reference dependencies are pinned in their Cargo.lock files.
+The read-only I/O fault tests also require Linux seccomp user notification for
+their own test child. The suite does not skip these controls when unavailable.
 They are not dependencies of the emitted executable.
 
 From this runtime checkout:
@@ -77,18 +88,32 @@ python3 -B scripts/compare_hia_runtime_rust.py \
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The resulting B3 compiles the runtime sources and both HIA transport packers.
-This is development fixed-point evidence; the upstream complete cold
-qualification is a separate requirement.
-The pinned upstream cold check was also rerun with its unchanged 180-second
-deadline. It timed out at 180.309 seconds, with 6/11 outer checks passing and
-owned-process cleanup confirmed. The original result remains a failure; see
-[compiler_cold_observation.json](compiler_cold_observation.json).
+The resulting B3 compiles the runtime sources and their HIA transport packers.
+Every invocation also runs the complete upstream cold replay in a new source-only
+export, retaining the upstream 180-second qualification and separate 3-second
+cleanup budgets. The outer process has 240 seconds only to allow cleanup and
+report writing; it cannot extend the inner qualification deadline. The result
+must contain all 11 original outer checks and all 5,049 nested checks, matching
+source hashes, a successful owned-process receipt and B1/B2/B3 images identical
+to the compiler used for these runtime modules. Only then can
+`matching_source_full_cold_qualified` become true.
+
+The earlier `f33d8da` compiler cold run timed out at 180.309 seconds with 6/11
+outer checks. It remains recorded as a failure in
+[compiler_cold_observation.json](compiler_cold_observation.json). The current
+`d3e2c901` compiler changes final evidence serialization while preserving the
+HIA compiler image. Its observed 11/11 and 5,049/5,049 cold pass in 173.029 seconds
+is retained with original report/source digests in
+[compiler_compact_cold_observation.json](compiler_compact_cold_observation.json).
+That historical observation never substitutes for the fresh replay above.
 
 The main output files are:
 
 ```text
 result.json
+compiler-cold.json
+compiler-cold.cold/qualification.json
+compiler-cold.cold/process-owner.json
 build/modules/runtime-protocol/runtime-protocol.elf
 build/modules/runtime-protocol/manifest.json
 build/modules/runtime-bytes/runtime-bytes.elf
@@ -98,14 +123,20 @@ rust-oracle/native-output.bin.gz
 text-rust-oracle/native-corpus.json
 endpoint-rust-oracle/native-corpus.json
 delta-rust-oracle/native-corpus.json
+codec-rust-oracle/native-corpus.json
+codec-rust-oracle/codec_cases.jsonl.gz
+policy-rust-oracle/native-corpus.json
 ```
 
 The test driver runs actual native images and the standalone ELF. It retains
 test stdout/stderr, source identities, compiler receipts and exact output
-corpora. The CI workflow also compiles the original Rust function bodies and
-compares their outputs against the retained native corpus. The aggregate
-result is `NATIVE_COMPONENTS_PASS` after native tests and becomes `PASS` only
-after all four independent Rust comparisons succeed. Timeouts retain partial
+corpora. The CI workflow compiles original Rust function bodies and independent
+locked Rust reference crates, then compares their results with the retained
+native corpus. The aggregate
+result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
+native tests and retained-Python I/O comparisons. It becomes `PASS` only
+after all six independent Rust comparisons succeed. The Python reference domain
+is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
 ## MCP stdio service
@@ -170,6 +201,43 @@ bytes**; see [delta_original_rust_comparison.json](delta_original_rust_compariso
 It also passed 90 malformed-record controls, capacity and semantic-`None`
 distinction, five VM cases and three standalone ELF calls. File access and
 per-session view-cache state remain original caller owners.
+
+The codec component has passed **22,517 direct native calls**, including SHA256
+padding/block boundaries, portable state partitions and forks, a 9 MiB stream,
+Base64 grammar/pad-bit controls and the exact binary payload bounds. The SHA
+compression helpers are imported unchanged from the pinned upstream HIA source,
+with function-index relocation checked by structural hashes. Independent locked
+Rust `sha2`/`base64` crates matched **16,965 captured cases**. Actual desktop
+CPython 3.12.3 matched **5,380 legacy-decode cases**; actual scratch CPython
+3.12.14 matched **5,381 strict-padding cases**, including an additional input
+bound control. Each run tests only its observed Python policy directly. Both
+policies remain explicitly selectable in native code; the canonical profile
+also rejects nonzero pad bits. See
+[binary_codec_independent_comparison.json](binary_codec_independent_comparison.json).
+These comparisons replay existing native calls and do not add new native
+coverage. Filesystem publication, file-version checks and upload state remain
+with their existing owners.
+
+The policy component has passed **11,655 valid native cases** covering first-error
+order, permission/protection precedence, environment checks, executable denial,
+Unicode whitespace, arbitrary Unix path bytes and exact lexical normalization.
+The unchanged original Rust policy functions produced the same **1,550,158
+output bytes**. Its 188 malformed controls, buffer-capacity checks, independent
+VM cases and actual static ELF calls are separate. See
+[policy_original_rust_comparison.json](policy_original_rust_comparison.json).
+This component does not load host configuration or resolve filesystem paths.
+
+The read-only I/O dependency has passed **13 test groups and 113 actual ELF
+requests**, including **8 direct comparisons** with the retained Python
+`binary_file.py` read helper. Both that helper and its `file_metadata.py`
+dependency are bound to their original Git blobs. Tests exercise real short
+reads, injected EINTR/EIO, version changes during reads, close failures, empty
+PATH execution, broken output pipes, descriptor reuse and rejection of malformed
+effect records. Its startup root inode remains in custody across requests;
+the old helper reopens pathnames on every request. That distinction is tested
+explicitly and prevents a claim of complete original authorization or tool
+parity. The retained observation is in
+[io_reference_proof.json](../tests/hia_native/io_reference_proof.json).
 
 The protocol tests cover randomized JSON formatting and field order, strict
 Unicode, duplicate decoded keys, ID echo, invalid envelopes, initialization

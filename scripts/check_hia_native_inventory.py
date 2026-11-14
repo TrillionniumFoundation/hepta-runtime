@@ -27,6 +27,10 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/runtime/config.rs": "e55d9f536c069b7612f7a7cf81e691fd2394439c",
     "src/mcp/runtime/execution.rs": "541d7bf2ee069ae082b01ac10e0b1ed215927683",
     "src/mcp/runtime/jobs.rs": "7b9ca9d1c00f31411265c1dc26a18ead79907ec9",
+    "src/mcp/runtime/binary.rs": "7195d29297e018be1b640f6ad5caab02738a87a5",
+    "src/mcp/runtime/binary_file.py": "e5dddd844cb9ab869f4784a93f228a8a5ac91a74",
+    "src/mcp/runtime/file_metadata.py": "a289f7c52a554f0c299541b932fcf30fba9251f5",
+    "src/mcp/runtime/inode_patch.py": "25bdc18a30bfe23e84f9b25a5e77dd761841d5cd",
 }
 
 
@@ -36,11 +40,11 @@ def check_original_sources(root: Path) -> dict:
     for name, expected in ORIGINAL_RUNTIME_BLOBS.items():
         path = root / name
         if not path.is_file() or path.is_symlink() or path.resolve() != path:
-            raise ValueError("original Rust reference must be a regular unsymlinked file: " + name)
+            raise ValueError("original runtime reference must be a regular unsymlinked file: " + name)
         raw = path.read_bytes()
         blob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
         if blob != expected:
-            raise ValueError("original Rust reference differs from pinned baseline: " + name)
+            raise ValueError("original runtime reference differs from pinned baseline: " + name)
         result[name] = {"git_blob": blob, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
     return result
 

@@ -17,6 +17,10 @@ on:
       - 'src/mcp/runtime/config.rs'
       - 'src/mcp/runtime/execution.rs'
       - 'src/mcp/runtime/jobs.rs'
+      - 'src/mcp/runtime/binary.rs'
+      - 'src/mcp/runtime/binary_file.py'
+      - 'src/mcp/runtime/file_metadata.py'
+      - 'src/mcp/runtime/inode_patch.py'
   pull_request:
     paths:
       - 'native/**'
@@ -32,6 +36,10 @@ on:
       - 'src/mcp/runtime/config.rs'
       - 'src/mcp/runtime/execution.rs'
       - 'src/mcp/runtime/jobs.rs'
+      - 'src/mcp/runtime/binary.rs'
+      - 'src/mcp/runtime/binary_file.py'
+      - 'src/mcp/runtime/file_metadata.py'
+      - 'src/mcp/runtime/inode_patch.py'
   workflow_dispatch:
 
 permissions:
@@ -43,7 +51,7 @@ concurrency:
 
 jobs:
   native:
-    name: Native HIA components and stdio
+    name: Full compiler cold gate and native HIA components
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -65,10 +73,10 @@ jobs:
         with:
           repository: TrillionniumFoundation/Hepta
           path: compiler
-          ref: f33d8da316de8fdf27b504371f1a5310997ff548
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
           persist-credentials: false
 
-      - name: Build native images and run actual executable tests
+      - name: Replay fresh full cold gate and test native executables
         env:
           EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -77,7 +85,7 @@ jobs:
             --hepta "$GITHUB_WORKSPACE/compiler" \
             --output "$RUNNER_TEMP/hia-runtime-native"
 
-      - name: Compare against original Rust function bodies
+      - name: Compare all six original owners and Rust references
         run: |
           rustup toolchain install 1.95.0 --profile minimal
           python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \
@@ -90,5 +98,6 @@ jobs:
         with:
           name: hia-runtime-native-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/hia-runtime-native/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14

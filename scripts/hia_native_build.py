@@ -17,8 +17,8 @@ import struct
 import subprocess
 import sys
 
-HEPTA_COMMIT = "f33d8da316de8fdf27b504371f1a5310997ff548"
-HEPTA_TREE = "378bc0dc613befc7006f1514bd2229357ae0d07c"
+HEPTA_COMMIT = "d3e2c90173cf733e42b299d0c4274df4b593a12f"
+HEPTA_TREE = "8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49"
 ABI = "hepta.runtime.borrowed-bytes.linux-x86_64.v1"
 MAX_IMAGE = 1 << 20
 INPUT_BYTES = 8 << 20
@@ -61,8 +61,17 @@ def check_dependency(root: Path) -> dict:
         raise ValueError("Hepta dependency commit differs from the pinned compiler")
     if _git(root, "rev-parse", "HEAD^{tree}").strip().decode() != HEPTA_TREE:
         raise ValueError("Hepta dependency tree differs from the pinned compiler")
+    contract_path = "docs/HIA_SELFHOST_CORE_SUPPORT.json"
+    cold_files = json.loads((root / contract_path).read_bytes())["source_identity"]["files"]
+    if not isinstance(cold_files, dict) or any(
+            not isinstance(name, str) or Path(name).is_absolute() or ".." in Path(name).parts
+            for name in cold_files):
+        raise ValueError("invalid full cold source closure paths")
+    # The ordinary compiler inputs plus every upstream cold-gate owner must be
+    # bound to the pinned Git tree, including workflow and reference sources.
     raw = _git(root, "ls-tree", "-rz", "HEAD", "--", "hepta", "tools",
-               "examples/hia_bootstrap", "docs/HIA_SELFHOST_CORE_SUPPORT.json")
+               "examples/hia_bootstrap", contract_path,
+               *(":(literal)" + name for name in cold_files))
     files = {}
     for record in raw.split(b"\0"):
         if not record:
@@ -83,6 +92,8 @@ def check_dependency(root: Path) -> dict:
         files[relative] = digest(data)
     if not files:
         raise ValueError("empty compiler source inventory")
+    if any(files.get(name) != expected for name, expected in cold_files.items()):
+        raise ValueError("full cold source closure differs from the pinned Git tree")
     return {"commit": HEPTA_COMMIT, "tree": HEPTA_TREE, "files": files}
 
 

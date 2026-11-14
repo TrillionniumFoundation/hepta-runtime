@@ -1,0 +1,82 @@
+{
+  "artifact_sha256": {
+    "native/io.abi.json": "9f7cd69bc67ae704a883ea938398d41620df7b685b9b846a47e0fa7ac82ebdf4",
+    "native/io_packer.hepta": "a74f580a887f6b4cd7a7bfcca74292a4649327262c9369e8417260a8a1fd9f0e",
+    "native/io_policy.hepta": "7551fab5c709d359746c14b6bfd5fdd2434b5790778cd255718322bab219d473",
+    "scripts/hia_native_io_build.py": "3dbdadd2ea157a7c45418a3947d442e0965191c614c5f7858149fc58c60f7477",
+    "tests/hia_native/io_fault_supervisor.py": "9d96aabbd9667d6f84f1123b38fdd4c4f5d82caa9b183553bdad9aad33b952bf",
+    "tests/hia_native/io_invalid_effect_probe.hepta": "fecbb5f407618cb1cccc9e9fafe8efc34f7aba447b751d49edb5dad7b9b4b0df",
+    "tests/hia_native/test_native_io.py": "91b9415f351be99f296c18bcacaaf90e66bb4a022bdb2002bbfdcef141dca0b6"
+  },
+  "authorization_distinction": "Startup root inode custody is retained across requests; the original helper reopens parent pathnames each time. Root rename/replacement distinction is an explicit dependency profile and not a caller-authorization parity claim.",
+  "compiler_qualification": "development_fixed_point_at_recorded_pin",
+  "fault_evidence": "An unprivileged seccomp notification supervisor applies only to its own child. Normal operations continue in the Linux kernel. It injects one errno or mutates a private test fixture before kernel pread. It never computes read bytes or protocol output. The injected close-EINTR case skips the actual close; the process exits immediately after its error response and kernel teardown releases the injected residue.",
+  "native": {
+    "compiler_commit": "f33d8da316de8fdf27b504371f1a5310997ff548",
+    "compiler_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
+    "executable_sha256": "28d348cf41e489d6bf3bfeab771bdfa21685b2ee3d2d0007457a3c466072afea",
+    "inspection": {
+      "bytes": 102877,
+      "dynamic_loader": false,
+      "elf_type": "ET_EXEC",
+      "entry": 4194480,
+      "interpreter": null,
+      "libc": false,
+      "machine": "EM_X86_64",
+      "program_headers": [
+        "PT_LOAD_RX",
+        "PT_GNU_STACK_RW"
+      ],
+      "sha256": "28d348cf41e489d6bf3bfeab771bdfa21685b2ee3d2d0007457a3c466072afea"
+    },
+    "packer_image_sha256": "f96393edaf0b284d77cc9b58a359fe8656526178185b493c63cb79b016435359",
+    "packer_source_sha256": "a74f580a887f6b4cd7a7bfcca74292a4649327262c9369e8417260a8a1fd9f0e",
+    "policy_source_sha256": "7551fab5c709d359746c14b6bfd5fdd2434b5790778cd255718322bab219d473"
+  },
+  "reference": {
+    "binary_file.py_sha256": "c15e8900b0ab867b221ff08d5a10401c8b656c87676f57b478b9a21219f7fe12",
+    "compared_fields": [
+      "data bytes",
+      "offset progression",
+      "eof",
+      "descriptor version",
+      "mode"
+    ],
+    "file_metadata.py_sha256": "24b9df89816536db16dd35a74d6460b1a215981a00798393a00853da6077f5d3",
+    "not_full_original_tool_parity": true,
+    "runtime_commit": "a0dcdda1991ec536d5e2d252c006a778993fa566"
+  },
+  "reproduction": {
+    "builder": "scripts/hia_native_io_build.py",
+    "environments": [
+      "HIA_HEPTA_DIR",
+      "HIA_BUILD_ROOT",
+      "HIA_REFERENCE_RUNTIME"
+    ],
+    "optional_manifest_environment": "HIA_IO_MANIFEST",
+    "required_fault_test_capability": "unprivileged Linux seccomp user notification; no ptrace required",
+    "test": "tests/hia_native/test_native_io.py"
+  },
+  "schema": "hepta.runtime.native-io-dependency-proof.v1",
+  "scope": "Read-only descriptor capability and bounded byte continuation dependency. No MCP tool or complete filesystem runtime is replaced.",
+  "status": "PASS",
+  "target": "linux-x86_64-lp64",
+  "validation": {
+    "EINTR_retry": true,
+    "ELF_only_linux_kernel": true,
+    "EOF_and_truncated_frames": true,
+    "SIGPIPE_and_dev_full": true,
+    "actual_elf_requests": 113,
+    "cached_policy_image_tampering_rejected": true,
+    "checked_pointer_offsets_and_handle_generations": true,
+    "close_error_reported_without_retry": true,
+    "empty_PATH": true,
+    "malformed_native_effect_cases": 12,
+    "persistent_mixed_success_failure_requests": 60,
+    "read_error_cleanup_and_reuse": true,
+    "real_partial_kernel_read_then_version_rejection": true,
+    "retained_read_comparisons": 8,
+    "root_pathname_replacement_custody": true,
+    "test_groups": 13
+  }
+}
