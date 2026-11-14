@@ -1,63 +1,36 @@
-name: HIA source recovery
+name: HIA scope seed replay
 on:
   push:
     branches: ['recovery/hia-bd947-20261114']
 permissions:
   contents: read
+  actions: read
 jobs:
-  export:
+  replay:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Read pinned runtime
+      - name: Checkout exact scope candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          repository: TrillionniumFoundation/hepta-runtime
-          ref: be1b871ce482fec97e65664866731c0b145e79c3
-          path: runtime
           persist-credentials: false
-      - name: Verify and export runtime in bounded parts
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p export
-          test "$(git -C runtime rev-parse HEAD)" = "be1b871ce482fec97e65664866731c0b145e79c3"
-          test "$(git -C runtime rev-parse 'HEAD^{tree}')" = "d82430fed6d100184dae83d74cbe749116523ada"
-          test -z "$(git -C runtime status --porcelain)"
-          if git -C runtime config --local --name-only --list | grep -Ei 'extraheader|credential|includeif'; then exit 1; fi
-          tar -czf export/runtime.tar.gz runtime
-          split -b 300M -d -a 2 export/runtime.tar.gz export/runtime.tar.gz.part
-          test "$(find export -name 'runtime.tar.gz.part*' | wc -l)" = 3
-          (cd export && sha256sum runtime.tar.gz runtime.tar.gz.part* > RUNTIME_SHA256SUMS)
-      - name: Upload runtime part 00
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            .github
+      - name: Download exact failed-run binary artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api /repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14119238060/zip > "$RUNNER_TEMP/scope-seed-source.zip"
+      - name: Replay all native and original scope cases
+        run: python3 -I -B .github/scripts/scope-seed-replay.py
+      - name: Preserve complete observations
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: recovery-runtime-part00-bd947
-          path: export/runtime.tar.gz.part00
-          compression-level: 0
-          retention-days: 14
-          if-no-files-found: error
-      - name: Upload runtime part 01
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: recovery-runtime-part01-bd947
-          path: export/runtime.tar.gz.part01
-          compression-level: 0
-          retention-days: 14
-          if-no-files-found: error
-      - name: Upload runtime part 02
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: recovery-runtime-part02-bd947
-          path: export/runtime.tar.gz.part02
-          compression-level: 0
-          retention-days: 14
-          if-no-files-found: error
-      - name: Upload runtime checksums
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: recovery-runtime-checksums-bd947
-          path: export/RUNTIME_SHA256SUMS
-          compression-level: 0
+          name: scope-seed-replay-${{ github.sha }}
+          path: ${{ runner.temp }}/scope-seed-replay
           retention-days: 14
           if-no-files-found: error

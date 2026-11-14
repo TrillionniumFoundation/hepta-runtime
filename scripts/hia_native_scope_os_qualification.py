@@ -350,7 +350,7 @@ def trace_evidence(session,spec, *, original,binary_sha256):
         aux=auxiliary[0]
         require(type(aux) is dict and set(aux)=={"kind","requested","flags","completion","callsite"}
                 and aux.get("kind")=="standard_library_hashset_seed" and type(aux.get("requested")) is int
-                and aux["requested"]==32 and type(aux.get("flags")) is int and aux["flags"]==0
+                and type(aux.get("flags")) is int and (aux["requested"],aux["flags"]) in {(16,4),(32,0)}
                 and aux.get("completion")=="kernel","auxiliary entropy was changed or injected")
         callsite(aux["callsite"],auxiliary=True)
         expected_order.insert(spec["auxiliary_at"],{"domain":"original_standard_library","index":0})
@@ -470,6 +470,7 @@ def kernel_evidence(root,receipt,artifact, *, original_binary_sha256=None):
     cases=receipt.get("cases")
     require(type(cases) is list and len(cases)==len(specs),"declared process domain is incomplete")
     counts,domains,libraries=Counter(),[],{}
+    seed_profile=None
     for case,spec in zip(cases,specs,strict=True):
         wanted=spec["comparison"]
         if not paired and wanted=="cross-owner-authenticated-plaintext": wanted="native-authenticated-roundtrip"
@@ -487,6 +488,9 @@ def kernel_evidence(root,receipt,artifact, *, original_binary_sha256=None):
             actual,original=session_evidence(reference,spec,original=True,binary_sha256=original_binary_sha256)
             counts.update(actual)
             counts["original_compared_process_pairs"]+=1
+            observed_profile={key:original["auxiliary"][0][key] for key in ("requested","flags")}
+            if seed_profile is None: seed_profile=observed_profile
+            require(seed_profile==observed_profile,"original HashSet seed profile changed within one retained replay")
             require([row for row in trace["events"] if row["kind"]!="close_urandom"]==original["events"],
                     "SystemEntropy notification comparison differs")
             if wanted==EXACT:
@@ -510,6 +514,7 @@ def kernel_evidence(root,receipt,artifact, *, original_binary_sha256=None):
     calls=sum(counts[name] for name in owner_fields)
     require(not paired or (calls==220 and counts["original_responses"]-calls==6),"original owner/adapter domains differ")
     return {"status":"PASS","counts":dict(counts),"process_domains":domains,"read_module_sha256":libraries,
+            "original_standard_library_kernel_profile":seed_profile,
             "original_owner_calls":calls,"original_adapter_only_responses":6 if paired else 0,
             "normal_random_bytes_equality_claimed":False,"native_cleanup_inspected_bytes_per_process":33039048}
 

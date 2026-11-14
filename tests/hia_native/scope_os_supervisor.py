@@ -23,6 +23,26 @@ def device_for_fd(pid, fd):
     except FileNotFoundError:
         return None
 
+def original_rng_domain(site, requested, flags, *, seed_seen=False):
+    """Keep observed HashSet seed profiles separate from SystemEntropy.
+
+    Linux/libc may expose Rust's 16-byte GRND_INSECURE request directly or
+    perform a 32-byte flags-zero vDSO refill. Neither auxiliary request may
+    receive a controlled SystemEntropy completion. The independently observed
+    allocator-startup 8-byte GRND_NONBLOCK call remains outside this owner
+    domain, as it was before this classification repair.
+    """
+    assert type(requested) is int and 0 <= requested <= 128
+    assert type(flags) is int and flags in (0, 4)
+    location = (site['module_kind'], site['symbol'])
+    if location == ('libc', 'syscall'):
+        assert flags == 0, 'SystemEntropy changed its getrandom flags'
+        return 'system_entropy'
+    assert location in {('libc', 'getrandom'), ('linux-vdso', '__vdso_getrandom')}
+    assert (requested, flags) in {(16, 4), (32, 0)}, 'unknown original HashSet seed profile'
+    assert not seed_seen, 'duplicate original HashSet seed request'
+    return 'original_standard_library'
+
 def original_rng_callsite(pid, instruction, cache):
     """Classify syscall(318) versus libc getrandom without reading result bytes.
 
@@ -343,12 +363,13 @@ def main():
                 cleanup = verify_native_cleanup(libc, pid, native_base, descriptors)
                 cleanup['exit_code'] = values[0]
             auxiliary = False
-            if not native and number == 318 and values[2] == 0 and values[1] <= 128:
+            if not native and number == 318 and values[2] in (0, 4):
                 site = original_rng_callsite(pid,int(note.data.ip),libc_symbols)
-                if site['symbol'] in ('getrandom','__vdso_getrandom'):
+                domain = original_rng_domain(site,values[1],values[2],
+                                             seed_seen=bool(original_auxiliary_entropy))
+                if domain == 'original_standard_library':
                     # Keep this real standard-library request separate before
                     # applying faults or incrementing any SystemEntropy count.
-                    assert values[1] == 32 and not original_auxiliary_entropy
                     original_auxiliary_entropy.append({'kind':'standard_library_hashset_seed',
                         'requested':values[1],'flags':values[2],'completion':'kernel','callsite':site})
                     entropy_event_order.append({'domain':'original_standard_library','index':len(original_auxiliary_entropy)-1})
