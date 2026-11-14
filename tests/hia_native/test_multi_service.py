@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
-"""Actual six-image ELF against unchanged original strict-UTF8 batch helpers."""
+"""Actual seven-image ELF against unchanged original strict-UTF8 batch helpers."""
 from __future__ import annotations
 import hashlib,json,os,random,sys,tempfile,unittest
 from pathlib import Path
@@ -15,9 +15,10 @@ class MultiServiceTests(unittest.TestCase):
  def setUpClass(cls):
   shared.NativeServiceTests.setUpClass()
   cls.executable=shared.NativeServiceTests.executable;cls.manifest=shared.NativeServiceTests.manifest;cls.metadata=shared.NativeServiceTests.metadata
-  assert len(cls.metadata['profile'])==6
-  assert cls.metadata['profile'][0]['call_mask']==62 and cls.metadata['profile'][5]['call_mask']==30
-  assert cls.metadata['profile'][3]['workspace_capacity']==86016
+  assert len(cls.metadata['profile'])==7
+  assert cls.metadata['profile'][0]['call_mask']==126 and cls.metadata['profile'][5]['call_mask']==30
+  assert cls.metadata['profile'][3]['workspace_capacity']==8<<20
+  assert cls.metadata['profile'][3]['flags']==3 and cls.metadata['profile'][3]['call_mask']==4
   raw=(ROOT/'src/mcp/runtime/multi_read_host.py').read_bytes();assert hashlib.sha256(raw).hexdigest()==ORIGINAL_MULTI_SHA
   namespace=dict(vars(shared.NativeServiceTests.original));namespace.update(__name__='hia_original_multi_service',__file__=str(ROOT/'src/mcp/runtime/multi_read_host.py'))
   exec(compile(raw,str(ROOT/'src/mcp/runtime/multi_read_host.py'),'exec'),namespace)

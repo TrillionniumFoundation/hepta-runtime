@@ -7,12 +7,14 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from qualify_hia_runtime_native import (MODULES, io_reference_evidence, local_service_reference_evidence,
+from qualify_hia_runtime_native import (MODULES, file_info_evidence, io_reference_evidence, local_service_reference_evidence,
                                        native_composition_evidence, nonce_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        operation_record_evidence, record_composition_evidence,
                                        qualification_env, record_check, sources)
+from qualify_hia_runtime_native import FILE_INFO_SUITES, validate_file_info_guard_times
 from compare_hia_runtime_rust import run as compare_rust
+from compare_hia_runtime_rust import RECIPES, NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
 from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
 
@@ -75,6 +77,16 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertEqual(result["rust_comparison_status"], "FAIL")
         self.assertIn("module inventory differs", result["error"]["message"])
         self.assertTrue((self.output / "rust-comparison-failure.txt").is_file())
+
+    def test_every_component_has_one_explicit_reference_domain(self):
+        declared = {item['key'] for item in MODULES}
+        domains = (set(RECIPES), NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS)
+        self.assertEqual(declared, set.union(*domains))
+        for left in range(len(domains)):
+            for right in range(left + 1, len(domains)):
+                self.assertFalse(domains[left] & domains[right])
+        self.assertIn('file_info_service', PYTHON_REFERENCE_COMPONENTS)
+        self.assertNotIn('file_info_service', RECIPES)
 
     def test_every_copied_original_owner_is_pinned_to_baseline_bytes(self):
         fixture = self.output / "reference"
@@ -145,7 +157,7 @@ class QualificationReportingTests(unittest.TestCase):
         (self.output / "manifest.json").write_bytes(raw)
         report = {"compiler_image_sha256": proof["compiler_sha256"], "modules": {"local_service": {
             "builder": "composition", "manifest": "manifest.json", "sha256": hashlib.sha256(raw).hexdigest()}}}
-        with self.assertRaisesRegex(ValueError, "fixed six-image authority table differs"):
+        with self.assertRaisesRegex(ValueError, "fixed seven-image authority table differs"):
             native_composition_evidence(self.output, report)
 
     def test_kdf_reference_suite_cannot_drop_its_capacity_reference_domain(self):
@@ -284,6 +296,59 @@ class QualificationReportingTests(unittest.TestCase):
         row = record_check(self.output, self.report, name="record-build-import-custody", timeout=5,
                            command=[sys.executable, "-I", "-B", "-c", program], env=env)
         self.assertEqual(row.stdout, b"PASS\n")
+
+    def file_info_receipt_fixture(self):
+        """Recorded receipts are validator fixtures, never new native executions."""
+        from copy import deepcopy
+        from unittest.mock import patch
+        evidence = json.loads((ROOT / "native/file_info_deadline_observation.json").read_bytes())["evidence"]
+        keys = ("original_file_info", "hia_controller_fixtures", "hia_io_fixtures",
+                "hia_deadline_fixtures", "actual_metadata_faults", "actual_fixed_deadline",
+                "actual_blocking_pipe")
+        rows = {}
+        for (test, receipt, _, _), key in zip(FILE_INFO_SUITES, keys):
+            summary = deepcopy(evidence[key])
+            rows[test] = summary
+            (self.output / receipt).write_text(json.dumps(summary))
+        mocked = patch("qualify_hia_runtime_native.completed_test_summary",
+                       side_effect=lambda output, report, test: (
+                           {"stdout_sha256": "explicit-validator-fixture",
+                            "stderr_sha256": "explicit-validator-fixture"}, rows[test]))
+        return rows, mocked
+
+    def test_file_info_guard_cannot_replace_actual_cancellation_with_fixture_counts(self):
+        rows, mocked = self.file_info_receipt_fixture()
+        rows["test_file_info_guard.py"]["counts"]["worker_cancellations"] = 0
+        with mocked, self.assertRaisesRegex(ValueError, "exact test/reference/effect accounting differs"):
+            file_info_evidence(self.output, self.report)
+
+    def test_file_info_original_comparisons_cannot_be_dropped(self):
+        rows, mocked = self.file_info_receipt_fixture()
+        rows["test_info_service.py"]["counts"]["original_info_comparisons"] = 0
+        with mocked, self.assertRaisesRegex(ValueError, "exact test/reference/effect accounting differs"):
+            file_info_evidence(self.output, self.report)
+
+    def test_file_info_receipt_cannot_replace_its_completed_stdout(self):
+        _, mocked = self.file_info_receipt_fixture()
+        (self.output / "file-info-io-state.json").write_text('{"status":"pass"}')
+        with mocked, self.assertRaisesRegex(ValueError, "receipt differs from completed executable stdout"):
+            file_info_evidence(self.output, self.report)
+
+    def test_file_info_fixed_duration_cannot_be_shortened_or_relabelled(self):
+        from copy import deepcopy
+        actual = json.loads((ROOT / "native/file_info_deadline_observation.json").read_bytes())
+        valid = actual["evidence"]["actual_fixed_deadline"]["timings"]
+        validate_file_info_guard_times(valid)
+        mutations = [[], valid[:1], valid + valid[:1]]
+        for field, value in (("fixed_deadline_seconds", 0.2), ("elapsed_seconds", 0.2),
+                             ("elapsed_seconds", 34), ("elapsed_seconds", float('nan')),
+                             ("hold_seconds_until_response", 0), ("hold_seconds_until_response", 40)):
+            changed = deepcopy(valid)
+            changed[0][field] = value
+            mutations.append(changed)
+        for invalid in mutations:
+            with self.subTest(value=invalid), self.assertRaises(ValueError):
+                validate_file_info_guard_times(invalid)
 
 
 if __name__ == "__main__":

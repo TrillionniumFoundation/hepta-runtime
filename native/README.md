@@ -9,7 +9,7 @@ The complete existing runtime has **not** been replaced. Its 125 registered MCP
 tool handlers and the durable/remote service owners remain in their original
 implementation. The diagnostic native service advertises `runtime_native_info`
 and `runtime_line_hash`. A separate, explicitly selected local read profile
-provides `host_list`, `binary_read` and `read_multiple_files` through six native HIA images. It has
+provides `host_list`, `binary_read`, `read_multiple_files` and `file_info` through seven native HIA images. It has
 partial original-tool coverage; configured remote hosts and complete original
 authorization behavior remain outside that profile. Production activation and
 deletion of the original runtime remain incomplete.
@@ -32,7 +32,7 @@ continue to identify the language and are not filename extensions.
 
 ## Native components
 
-Qualification covers 19 production HIA sources through 15 executable components
+Qualification covers 20 production HIA sources through 16 executable components
 and their four HIA packers. Test-only HIA fixtures are recorded separately from
 the production source inventory.
 
@@ -50,11 +50,12 @@ the production source inventory.
 | [operation_record.hepta](operation_record.hepta) | Internal original binding/AAD and bounded result seal/open composition, complete u128 timestamps, authenticated inner-record validation and private staging cleanup |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
-| [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks and cleanup decisions |
+| [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks, complete fingerprint/Linux metadata capture and typed deadline/finalizer decisions |
 | [io_packer.hepta](io_packer.hepta) | Static ELF construction with checked syscall records, opaque handles and persistent binary I/O framing |
-| [local_service.hepta](local_service.hepta) | Persistent MCP controller for the explicit `native-local` profile, with `host_list`, `binary_read` and delegation to the batch owner |
+| [local_service.hepta](local_service.hepta) | Persistent MCP controller for the explicit `native-local` profile, with `host_list`, `binary_read` and delegation to the batch and file-info owners |
 | [multi_read_service.hepta](multi_read_service.hepta) | Exact original batch validation order, policy-before-effects, complete UTF-8 file results, MCP text-result budget and redacted failures |
-| [composition_packer.hepta](composition_packer.hepta) | Closed native image tables, fixed call authority, private workspaces and bounded child/OS continuations in one static ELF |
+| [file_info_service.hepta](file_info_service.hepta) | Original typed file-info admission and exact compact Linux fingerprint/metadata results, checked IO response and version formatting |
+| [composition_packer.hepta](composition_packer.hepta) | Closed native image tables, fixed call authority, private workspaces and bounded child/OS continuations and fixed owned-worker inspection deadline in one static ELF |
 | [stdio_packer.hepta](stdio_packer.hepta) | ELF construction and persistent newline-delimited input/output transport |
 | [filter_packer.hepta](filter_packer.hepta) | ELF construction for one complete binary input/output operation |
 
@@ -66,7 +67,7 @@ and capacity rules are specified in [delta_abi.md](delta_abi.md). Hash/state lay
 binary bounds and Base64 policies are specified in [binary_codec_abi.md](binary_codec_abi.md).
 The internal key/binding frame and caller-owned secret boundary are specified in
 [operation_kdf_abi.md](operation_kdf_abi.md). This primitive is not an MCP tool and
-is not installed in the six-image local read service. Its key outputs require a
+is not installed in the seven-image local read service. Its key outputs require a
 trusted caller; token authentication and the original non-exportable crypto scope
 remain separate owners.
 The AEAD byte frame and authentication-failure boundary are specified in
@@ -76,7 +77,7 @@ entropy and trusted scope lifetime remain separate requirements; the record byte
 The serial nonce-set boundary is specified in [operation_nonce_abi.md](operation_nonce_abi.md).
 It requires one private persistent workspace per trusted scope; all scope clones
 must reach that same state. Its two-image hex transport is a qualification fixture
-under `tests/hia_native`, separate from the six-image local read service.
+under `tests/hia_native`, separate from the seven-image local read service.
 Entropy, production serialization and destruction of the corresponding key
 capability remain caller-owned requirements.
 The internal record frame is specified in [operation_record_abi.md](operation_record_abi.md).
@@ -94,6 +95,11 @@ The explicit local MCP profile is defined in [service_contract.md](service_contr
 and the closed native call boundary in [composition_abi.md](composition_abi.md).
 The batch owner and its independently checked validation/reference domains are
 defined in [multi_read_service_abi.md](multi_read_service_abi.md).
+The file-info controller, metadata IO order and native watchdog are specified in
+[file_info_service_abi.md](file_info_service_abi.md), [file_info_io_abi.md](file_info_io_abi.md)
+and [file_info_deadline_abi.md](file_info_deadline_abi.md). Its normal filesystem
+comparisons, synthetic native state controls and actual cancellation evidence
+remain separate in [file_info_deadline_observation.json](file_info_deadline_observation.json).
 No native component falls back to
 a Rust or Python implementation of its calculations. Endpoint JSON number
 classification and compact display bytes remain explicit caller inputs; the
@@ -121,7 +127,9 @@ The independent Python AEAD reference uses the exact packages in
 virtual environment. Emitted HIA programs do not use those packages.
 The read-only I/O fault tests also require Linux seccomp user notification for
 their own test child. The suite does not skip these controls when unavailable.
-They are not dependencies of the emitted executable.
+They are not dependencies of the emitted executable. The observed empty-pipe
+blocking fixture additionally uses GNU `as` and `ld` at test time, and its actual
+ELF is retained with the qualification receipts.
 
 From this runtime checkout:
 
@@ -191,6 +199,14 @@ stat-version-python-reference/native-corpus.json
 stat-version-python-reference/stat-version-cases.jsonl.gz
 local-service-python-reference.json
 multi-service-python-reference.json
+file-info-python-reference.json
+file-info-controller.json
+file-info-io-state.json
+file-info-deadline-state.json
+file-info-io-faults.json
+file-info-guard.json
+file-info-blocking-probe.json
+file-info-blocking-probe.elf
 multi-read-rust-oracle/native-corpus.json
 multi-read-rust-oracle/requests.hex.gz
 multi-read-rust-oracle/native-output.txt.gz
@@ -214,7 +230,7 @@ inode and timestamp values vary on each run. The original Python read helper
 runs against those same fixtures, and the test compares the native MCP result
 text byte for byte. This reference domain has no synthetic Rust recipe. The
 closed image table and its generic continuation controls are reported separately
-as new native adapter behavior. Qualification rechecks all six source/image
+as new native adapter behavior. Qualification rechecks all seven source/image
 pairs, the HIA packer, exact call masks and capacities, packed-frame digest and
 final executable identity before accepting this evidence. Each packed child is
 also matched to the native image independently exercised by its component suite.
@@ -230,7 +246,7 @@ not relabelled as original interface comparisons.
 
 ## Explicit native local read service
 
-Build the six-image service using the same pinned compiler:
+Build the seven-image service using the same pinned compiler:
 
 ```sh
 python3 -I -B scripts/hia_native_composition_build.py \
@@ -265,9 +281,26 @@ and requires strict UTF-8. Its result states `atomic_snapshot: false` and
 without publishing earlier file content. The result limit covers the complete
 MCP text result, including nested escaping, and excludes the JSON-RPC envelope.
 
+`file_info` requires string `host` and `path` only. It hashes the complete held
+regular file to EOF, then captures Linux xattr/ACL metadata through a retained
+parent descriptor and separate version intervals. It preserves original compact
+text, metadata ordering and last-finalizer error precedence on the declared
+local domain. Its native watchdog has a fixed 30-second duration: only an owned
+worker performs target effects, and the parent imports a complete result after
+root, counter, descriptor-generation and deadline checks. Timeout discards partial
+state and cancels that worker. At most one not-yet-reaped worker can remain;
+subsequent inspection returns `EBUSY` until a nonblocking reap succeeds.
+
+The current normal suites observe 415 actual service responses. Separate actual
+metadata-fault and guard controls add 30 and 34 responses. The guard controls
+include blocked read/xattr deadlines, five setup failures with same-process
+recovery, resource custody, root replacement and a closed-stderr launch retaining
+its root as raw fd 2. HIA fixture acknowledgements and the separate 200 ms actual
+pipe-block probe are never counted as production filesystem results.
+
 The controller calls fixed HIA owners for policy, binary codec, read-only I/O,
 stat version and batch orchestration. The batch owner may call the same four
-leaves; it cannot call the main controller. The executable contains all six images and the native
+leaves; it cannot call the main controller. The executable contains all seven images and the native
 continuation adapter; it invokes no Python semantic dispatcher or dynamic module
 loader. Call masks and region bounds constrain child calls. Private mappings,
 an eight-level depth bound and a 262,144-entry per-frame continuation budget constrain the

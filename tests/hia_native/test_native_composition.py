@@ -187,6 +187,41 @@ class Composition(unittest.TestCase):
             image.write_bytes(original)
         self.assertEqual(build_composition(self.hepta, self.build, self.members, source_root=ROOT), self.manifest)
 
+    def test_11_combined_io_profile_is_confined_and_atomic(self):
+        service_path = Path(os.environ['HIA_COMPOSITION_MANIFEST'])
+        service = json.loads(service_path.read_bytes())
+        self.assertEqual(service['profile'][3]['flags'], 3)
+        self.assertEqual(service['profile'][3]['call_mask'], 4)
+        wire = bytearray(b'HIABND01' + struct.pack('<3Q', len(service['members']), 0, 0))
+        offsets = []
+        for row, profile in zip(service['members'], service['profile']):
+            module_path = service_path.parent / row['manifest']
+            self.assertEqual(digest(module_path.read_bytes()), row['manifest_sha256'])
+            module = json.loads(module_path.read_bytes())
+            image = (service_path.parent / module['image']).read_bytes()
+            self.assertEqual(digest(image), module['image_sha256'])
+            offsets.append(len(wire))
+            wire.extend(struct.pack('<8Q', len(image), profile['input_capacity'], profile['output_capacity'],
+                                    profile['workspace_capacity'], profile['flags'], profile['call_mask'], 0, 0))
+            wire.extend(bytes.fromhex(module['source_sha256']))
+            wire.extend(hashlib.sha256(image).digest())
+            wire.extend(image)
+        valid = bytes(wire)
+        packed = self.packer.invoke(valid, output_capacity=WIRE, workspace_capacity=4096)
+        self.assertEqual(packed[:4], b'\x7fELF')
+        at = offsets[3]
+        invalid = [(at + 8, 4207), (at + 16, 75775), (at + 24, 86016),
+                   (at + 24, (8 << 20) - 1), (at + 24, (8 << 20) + 1),
+                   (at + 32, 2), (at + 40, 0), (at + 40, 5),
+                   (offsets[2] + 32, 3), (offsets[0] + 32, 3)]
+        for offset, value in invalid:
+            changed = bytearray(valid)
+            struct.pack_into('<Q', changed, offset, value)
+            code, output, _ = self.packer.invoke_raw(bytes(changed), output_capacity=WIRE,
+                                                   workspace_capacity=4096, output_fill=0xa5)
+            self.assertEqual(code, 0xffffffff, (offset, value))
+            self.assertEqual(output, b'\xa5' * len(output))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -197,6 +232,7 @@ if __name__ == '__main__':
         parser.error('--hepta and --build-root or HIA_HEPTA_DIR/HIA_BUILD_ROOT are required')
     os.environ['HIA_HEPTA_DIR'] = str(args.hepta)
     os.environ['HIA_BUILD_ROOT'] = str(args.build_root)
+    sys.path.insert(0, str(Path(os.environ.get('HIA_RUNTIME_REPO', ROOT)) / 'scripts'))
     sys.path.insert(0, str(ROOT / 'scripts'))
     program = unittest.main(argv=[sys.argv[0], *remaining], exit=False)
     passed = program.result.wasSuccessful() and not program.result.skipped

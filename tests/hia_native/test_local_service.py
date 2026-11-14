@@ -94,9 +94,10 @@ class NativeServiceTests(unittest.TestCase):
  def test_protocol_and_host_list(self):
   with tempfile.TemporaryDirectory() as directory,Session(self.executable,directory) as service:
    self.assertEqual(service.call(req('tools/list'))['error']['code'],-32002);service.ready()
-   catalog=service.call(req('tools/list'))['result']['tools'];self.assertEqual([v['name'] for v in catalog],['host_list','binary_read','read_multiple_files'])
+   catalog=service.call(req('tools/list'))['result']['tools'];self.assertEqual([v['name'] for v in catalog],['host_list','binary_read','read_multiple_files','file_info'])
    self.assertTrue(all(v['annotations']['readOnlyHint'] for v in catalog))
    self.assertEqual(catalog[2]['title'],'Read Multiple UTF-8 Files');self.assertFalse(catalog[2]['annotations']['openWorldHint'])
+   self.assertEqual(catalog[3]['title'],'file_info');self.assertTrue(catalog[3]['annotations']['openWorldHint'])
    error,text=service.tool('host_list',{})
    expected={'hosts':[{'name':'native-local','platform':'linux','execution_mode':'operator','operator_tools':True,'allow_execute':False,'allow_pty':False,'allow_write':False,'privileged_actions':[]}]}
    self.assertFalse(error);self.assertEqual(text,json.dumps(expected,ensure_ascii=False,sort_keys=True,indent=2))
@@ -192,6 +193,9 @@ class NativeServiceTests(unittest.TestCase):
     put(b+88,seq);code,_,work=call(b'/tmp',0);self.assertEqual(code,0xffffffe0)
     self.assertEqual(struct.unpack_from('<Q',work,b+16)[0],5)
     seq=struct.unpack_from('<Q',work,b+8)[0]
+    put(b+80,0);put(b+88,seq);put(b+96,1);code,_,work=call(b'/tmp',0);self.assertEqual(code,0xffffffe0)
+    self.assertEqual(struct.unpack_from('<Q',work,b+16)[0],6)
+    seq=struct.unpack_from('<Q',work,b+8)[0]
     put(b+80,0);put(b+88,seq);put(b+96,1);self.assertEqual(call(b'/tmp',0)[0],0)
     # Declared synthetic startup completion isolates protocol state. This test
     # never claims a filesystem read or supplies a production runtime fallback.
@@ -200,7 +204,7 @@ class NativeServiceTests(unittest.TestCase):
     code,out,work=call(init(),1);self.assertLess(code,0xffff0000);self.assertIn('result',json.loads(out[:code]))
     self.assertEqual(struct.unpack_from('<Q',work,(32<<20)-4096+520)[0],1)
     self.assertEqual(call(b'{"jsonrpc":"2.0","method":"notifications/initialized"}',1)[0],0)
-    code,out,_=call(req('tools/list'),1);self.assertEqual(len(json.loads(out[:code])['result']['tools']),3)
+    code,out,_=call(req('tools/list'),1);self.assertEqual(len(json.loads(out[:code])['result']['tools']),4)
 
 if __name__=='__main__':
  result=unittest.main(exit=False,verbosity=2)

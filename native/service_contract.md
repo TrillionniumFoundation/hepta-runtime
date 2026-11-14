@@ -9,7 +9,7 @@ controller never takes configuration from an MCP request.
 This service is an explicit `native-local` read-only Linux profile. The
 administrator supplies its absolute capability root at process startup, before
 stdin is read. It does not load an SSH alias or reinterpret an original remote
-host as the local machine. Its implementation owns `host_list`, `binary_read` and `read_multiple_files`
+host as the local machine. Its implementation owns `host_list`, `binary_read`, `read_multiple_files` and `file_info`
 for this declared profile; remote host transport and the complete original
 runtime remain separate migration owners.
 
@@ -27,6 +27,8 @@ All original bodies refer to `TrillionniumFoundation/hepta-runtime` at commit
 - `src/mcp/runtime/multi_read.rs`: complete typed batch validation and ordering.
 - `src/mcp/runtime/multi_read_host.py`: strict complete UTF-8 reads, shared
   escaped response budget and original redacted batch errors.
+- `src/mcp/runtime/file_metadata.py`: descriptor-bound xattr and ACL capture,
+  version checks and metadata summaries.
 - `src/mcp/runtime/binary_file.py`: descriptor-relative file admission, exact
   version comparison, cursor bounds, stable read, Base64 and SHA256.
 - `src/mcp/runtime/ssh.rs`: remote subprocess errors are wrapped with SSH target,
@@ -89,7 +91,7 @@ Python helper reopens its root pathname per request. Root replacement semantics
 therefore belong to this explicit local profile, and are not claimed as exact
 remote transport parity. Administrator roots and `binary_read` paths are limited
 to 4095 UTF-8 bytes. `read_multiple_files` retains its original 4096-byte
-whole-path bound through component-relative opens.
+whole-path bound; `file_info` uses the declared 4096-byte local path bound through component-relative opens.
 
 ## Complete UTF-8 batches
 
@@ -119,8 +121,42 @@ The catalog preserves title `Read Multiple UTF-8 Files` and
 input region 0 and accepts the complete bounded response in output region 1.
 The child does not initialize or close the shared IO root. Ordinary scratch calls
 stay bounded at 131072 bytes; only unchanged-input forwarding permits 8 MiB.
-The new IO workspace is 86016 bytes. The bridge entry ceiling is 262144 per
-frame, covering the bounded deep walks of up to 16 files while remaining finite.
+The shared IO workspace is 8 MiB for the additional file-info capture and
+streaming state. The full-file batch operation retains its own original bounds;
+its input and result do not acquire file-info authority or metadata state.
+
+## Complete file fingerprints and metadata
+
+`file_info` requires exactly string `host` and `path`, with no optional fields.
+Typed parameter admission precedes configured host lookup and read-path policy.
+It streams the complete regular file to EOF for SHA256 independently of initial
+stat size, verifies the original fingerprint version, closes that descriptor,
+then reopens the target through the retained parent. The reopened version is
+checked before the separate metadata capture begins.
+
+The metadata owner preserves Linux UID, GID, permission bits and link count,
+plus sorted valid-UTF-8 xattr names and the SHA256 of each value. The Linux ACL
+hash is taken from `system.posix_acl_access`, or empty bytes when absent. Values
+are not returned. Capture compares its own first/final versions. Top-level mode
+belongs to the earlier fingerprint and metadata mode to the later capture;
+those values are not conflated across the original phase boundary. Ordinary
+hardlinks and special permission bits remain readable.
+
+The child validates the complete typed IO result before constructing the compact
+original string result. It retains metadata across its stat-version child call,
+checks every record boundary, requires sorted distinct valid UTF-8 names, and
+hex-encodes raw digests using HIA. Source and completion ABI details are in
+`file_info_service_abi.md`. The IO owner's separate documentation defines its
+operation-3 deadline and cleanup boundary; this controller adds no full-file
+byte cap and does not implement cancellation by host-language fallback.
+
+The actual-ELF `test_info_service.py` compares unchanged `binary_file.py` and
+`file_metadata.py` results on the same owned files, including binary contents,
+files larger than 1 MiB, xattrs and a real Linux ACL. Its ACL fixture uses the
+workspace filesystem because this environment's `/tmp` mount lacks ACL support;
+`HIA_INFO_FIXTURE_ROOT` can select another admitted writable fixture filesystem.
+No ACL test is silently skipped. The separate direct-controller suite labels its
+IO completions as synthetic and does not count them as filesystem evidence.
 
 ## HIA controller and continuation ABI
 
@@ -131,12 +167,13 @@ bridge table admits these component identities:
 
 | ID | Component | Calls it may request |
 |---|---|---|
-| 0 | Local service controller | 1, 2, 3, 4, 5 |
+| 0 | Local service controller | 1, 2, 3, 4, 5, 6 |
 | 1 | Native configuration policy | None |
 | 2 | Native binary codec | None |
-| 3 | Native descriptor IO | Its closed OS effects only |
+| 3 | Native descriptor IO | Its closed OS effects and codec 2 |
 | 4 | Native stat-version codec | None |
 | 5 | Complete UTF-8 batch handler | 1, 2, 3, 4 |
+| 6 | File-info handler | 1, 2, 3, 4 |
 
 The controller returns `0xffffffe0` for a child call. Its descriptor starts at
 `B = length(workspace) - 256`; every field below is a little-endian u64:
@@ -171,7 +208,8 @@ hold persistent protocol state, per-request continuation state and the bridge
 footer. No parsed request is allowed to overwrite these spans.
 
 Startup asks module 3 to admit the immutable root, then supplies the same
-immutable root to module 5 through input region 3. Both must acknowledge startup.
+immutable root to modules 5 and 6 through input region 3. All three children
+must acknowledge startup before protocol readiness.
 Every nested invocation has kind 3; the batch handler retains its initialization
 state to distinguish later requests. Only module 0 owns IO startup and shutdown. EOF asks module 3 to close that descriptor.
 Per read, the controller calls policy operation 6, optional stat-version parsing,
@@ -197,7 +235,7 @@ from the same composition manifest as the tested ELF. Optional
 
 The baseline suite preserves 234 actual ELF responses, 118 direct unchanged
 original binary-read comparisons, 20 protocol refusals and 21 tool-domain
-refusals. Its eight direct native controller calls cover both declared simulated
+refusals. Its nine direct native controller calls cover all three declared simulated
 startup acknowledgements, replay refusal and initialization capacity. Those
 simulations are not counted as file reads.
 
@@ -209,4 +247,12 @@ files, embedded controls, empty content, defaults/nulls, an actual 4096-byte
 component walk, policy-before-IO error order, redaction after an earlier good
 file, and interleaving the two IO callers in one persistent process. Optional
 `HIA_MULTI_SERVICE_RESULT` records its exact observed identities and counts.
-Final combined evidence is retained in `local_service_observation.json`.
+Final combined evidence is retained in `local_service_observation.json` after
+the seven-image actual-ELF qualification has completed.
+
+`test_info_service.py` compares exact compact file-info results with the
+unchanged original helpers, including full hashes beyond 1 MiB, actual Linux
+xattrs and ACLs, repeated calls and errors followed by recovery. The fixed
+30-second native watchdog is documented in `file_info_deadline_abi.md`. Its
+real cancellation, atomic state handoff and retained-root recovery tests are
+separate from synthetic HIA continuation controls.

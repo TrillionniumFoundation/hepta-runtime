@@ -41,15 +41,19 @@ does not claim an isolation mechanism for arbitrary hostile machine code.
 
 | ID in the local service | Owner | Flag | Allowed callees |
 |---|---|---|---|
-| 0 | MCP controller | 1: continuation | 1, 2, 3, 4, 5 |
+| 0 | MCP controller | 1: continuation | 1, 2, 3, 4, 5, 6 |
 | 1 | Policy | 0: leaf | None |
 | 2 | Binary codecs | 0: leaf | None |
-| 3 | Descriptor IO | 2: IO leaf | Typed OS effects only |
+| 3 | Descriptor IO | 3: continuation and IO | 2, plus typed OS effects |
 | 4 | Stat-version codec | 0: leaf | None |
 | 5 | Full-file batch handler | 1: continuation | 1, 2, 3, 4 |
+| 6 | File-info handler | 1: continuation | 1, 2, 3, 4 |
 
-Only ID 3 may carry the IO flag, and the production builder requires its source
-to equal the selected IO owner. Generic qualification fixtures use different
+Only ID 3 may carry IO flag bit 2, and the production builder requires its source
+to equal the selected IO owner. It must have flags 3, call mask 4, exactly 8 MiB
+of workspace, at least 4,208 bytes of input capacity and 75,776 bytes of output
+capacity. Its sole native callee is the pinned codec, used for incremental
+file hashing and xattr digests. Generic qualification fixtures use different
 fixed tables without obtaining that flag. The maximum active call depth is 8,
 including the root. An already active module cannot recur. At most 262144 native
 entries/effect resumptions are admitted for one root frame. This count bounds
@@ -57,7 +61,7 @@ continuation churn; it does not add an instruction meter inside a HIA function.
 
 ## Call continuation
 
-Only flag-1 modules reserve the last 256 bytes of their workspace for a call
+Modules with flag bit 1 reserve the last 256 bytes of their workspace for a call
 record. A module returns `0xffffffe0` to request one child invocation. All fields
 are little-endian u64 and relative to `B = workspace_length - 256`.
 
@@ -95,8 +99,11 @@ On an admitted child return, all domain results in `0xffff0000..0xffffffff`
 are preserved for the parent except the two reserved continuation codes. A
 normal result must fit the child's output capacity. The adapter checks the
 full native 64-bit return for dirty upper bits. IO yields are admitted only
-from flag 2; call yields only from flag 1. The IO workspace has no generic
-footer: writing one there would overwrite its file-data buffer.
+when flag bit 2 is set; call yields require flag bit 1. The combined IO owner
+has its call footer at the end of its 8 MiB workspace, disjoint from the file
+and metadata buffers described in `file_info_io_abi.md`. The smaller standalone
+operation-1/2 IO transport retains its previous profile and does not supply
+the operation-3 module bridge.
 
 ## Startup, frames and shutdown
 
@@ -134,7 +141,8 @@ write, execution, HTTP, or other runtime owners.
 
 ## Full-file operation extension
 
-The IO owner now has 86016 private workspace bytes. Its typed pread span ends at
+The standalone operation-1/2 IO adapter has 86016 private workspace bytes; the
+seven-image composition gives the combined IO owner 8 MiB. Its typed pread span ends at
 81921, permitting exactly one overflow-sentinel byte beyond a 65536-byte full-file
 ceiling. Operation 2 performs single-link admission, complete bounded reading,
 strict UTF-8 validation and descriptor-path confirmation before returning bytes.
@@ -143,3 +151,13 @@ sequence and may be called serially by different fixed HIA modules. The bridge
 call mask grants the IO module as a whole; the trusted source controller retains
 startup/shutdown sequencing authority. The 262144 entry budget accommodates
 16 files with two deep component walks, while active depth remains 8.
+
+## Fixed inspection watchdog
+
+Operation 3 starts an owned native worker with a fixed 30-second monotonic
+deadline. The parent admits a staged complete result only after checking exact
+root custody, caller contexts, both sequence pairs and closed descriptor
+generations. Timeout leaves its live IO state unchanged and cancels only the
+owned worker. See `file_info_deadline_abi.md` for the complete start/finish,
+atomic handoff, pending-worker and real cancellation contract. This boundary
+is inactive for generic compositions that have no IO owner.

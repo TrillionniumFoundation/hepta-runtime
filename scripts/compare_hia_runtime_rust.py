@@ -20,7 +20,7 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from qualify_hia_runtime_native import (MODULES, multi_read_controller_evidence, native_composition_evidence,
+from qualify_hia_runtime_native import (MODULES, file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        operation_record_evidence,
                                        python_reference_evidence, qualification_env,
@@ -91,6 +91,8 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required operation nonce state/ELF evidence differs")
     if report.get("operation_record_evidence") != operation_record_evidence(output, report):
         raise ValueError("required operation record composition/reference evidence differs")
+    if report.get("file_info_evidence") != file_info_evidence(output, report):
+        raise ValueError("required file-info controller/metadata/deadline evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
         for relative, expected in report[collection].items():
             path = Path(relative)
@@ -634,7 +636,7 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
 NEW_COMPONENTS = {"runtime_protocol"}
 # These are checked in check_input_pins against the native process evidence and
 # original Python source identities. They are not counted as Rust comparisons.
-PYTHON_REFERENCE_COMPONENTS = {"native_io", "stat_version", "local_service"}
+PYTHON_REFERENCE_COMPONENTS = {"native_io", "stat_version", "local_service", "file_info_service"}
 
 
 def run(output: Path, rustc_name: str) -> dict:

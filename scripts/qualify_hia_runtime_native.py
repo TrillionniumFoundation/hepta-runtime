@@ -60,14 +60,40 @@ MODULES = (
      "additional_tests": ("test_native_full_io.py",)},
     {"key": "multi_read_service", "name": "multi-read-service", "source": "native/multi_read_service.hepta",
      "standalone": None, "manifest_env": "HIA_MULTI_READ_MANIFEST", "test": "test_multi_read_controller.py"},
+    {"key": "file_info_service", "name": "file-info-service", "source": "native/file_info_service.hepta",
+     "standalone": None, "manifest_env": "HIA_FILE_INFO_MANIFEST", "test": "test_file_info_controller.py"},
     {"key": "local_service", "name": "local-service", "source": "native/local_service.hepta",
      "companion_sources": ("native/composition_packer.hepta",), "builder": "composition",
      "manifest_env": "HIA_SERVICE_MANIFEST", "test": "test_local_service.py",
-     "additional_tests": ("test_multi_service.py",)},
+     "additional_tests": ("test_multi_service.py", "test_info_service.py", "test_file_info_io_state.py",
+                          "test_file_info_deadline_state.py", "test_file_info_io_faults.py",
+                          "test_file_info_guard.py", "test_native_deadline_probe.py")},
 )
 PACKERS = {"native/filter_packer.hepta", "native/stdio_packer.hepta"}
 EXTRA_TESTS = ("test_transport.py", "test_native_composition.py", "test_qualification_reporting.py")
 RUST_CORPUS_FILES = ("native-corpus.json", "input.bin.gz", "native-output.bin.gz")
+FILE_INFO_SUITES = (
+    ("test_info_service.py", "file-info-python-reference.json", "hepta.runtime.native-info-service-test.v1",
+     {"info_requests": 64, "original_info_comparisons": 39, "original_failure_comparisons": 4,
+      "parameter_refusals": 13, "domain_refusals": 12, "acl_comparisons": 1, "all_actual_elf_responses": 73}),
+    ("test_file_info_controller.py", "file-info-controller.json", "hepta.runtime.file-info-controller-test.v1",
+     {"requests": 23, "native_controller_calls": 152, "native_leaf_calls": 42, "fixture_io_calls": 35}),
+    ("test_file_info_io_state.py", "file-info-io-state.json", "hepta.runtime.native-info-io-state-test.v1",
+     {"native_io_calls": 3579, "native_sha_calls": 729, "original_metadata_controls": 6,
+      "requests": 53, "synthetic_effects": 2711}),
+    ("test_file_info_deadline_state.py", "file-info-deadline-state.json", "hepta.runtime.native-info-deadline-state-test.v1",
+     {"native_io_calls": 327, "native_sha_calls": 44, "original_metadata_controls": 0,
+      "requests": 16, "synthetic_effects": 243}),
+    ("test_file_info_io_faults.py", "file-info-io-faults.json", "hepta.runtime.native-info-io-fault-test.v1",
+     {"actual_info_requests": 10, "fixture_races": 6, "original_success_comparisons": 2, "syscall_faults": 6}),
+    ("test_file_info_guard.py", "file-info-guard.json", "hepta.runtime.native-info-guard-test.v1",
+     {"closed_stderr_controls": 1, "deadline_requests": 2, "kernel_notification_holds": 2,
+      "original_info_comparisons": 9, "original_read_comparisons": 2, "parent_resource_controls": 12,
+      "root_fd2_controls": 3, "root_rebind_controls": 2, "setup_failure_controls": 5,
+      "setup_recovery_controls": 5, "worker_cancellations": 2, "worker_reap_controls": 2}),
+    ("test_native_deadline_probe.py", "file-info-blocking-probe.json", "hepta.runtime.native-deadline-probe.v1", None),
+)
+FILE_INFO_RECEIPTS = tuple(row[1] for row in FILE_INFO_SUITES)
 
 
 def sha(path: Path) -> str:
@@ -304,7 +330,7 @@ def local_service_reference_evidence(output: Path, report: dict) -> dict:
     """Account the live original helper comparisons at the actual MCP boundary."""
     check, summary = completed_test_summary(output, report, "test_local_service.py")
     counts = {"elf_requests": 234, "original_read_comparisons": 118,
-              "protocol_errors": 20, "domain_errors": 21, "native_controller_calls": 8}
+              "protocol_errors": 20, "domain_errors": 21, "native_controller_calls": 9}
     if (summary.get("schema") != "hepta.runtime.native-local-service-test.v1"
             or summary.get("status") != "pass" or summary.get("counts") != counts):
         raise ValueError("local service retained-reference coverage differs")
@@ -324,7 +350,7 @@ def local_service_reference_evidence(output: Path, report: dict) -> dict:
             "actual_elf_requests": counts["elf_requests"], "native_cases_added_by_replay": 0,
             "protocol_refusals": counts["protocol_errors"], "domain_refusals": counts["domain_errors"],
             "isolated_controller_calls": counts["native_controller_calls"],
-            "controller_startup_acknowledgement": "two explicit lifecycle fixture acknowledgements; no file operation",
+            "controller_startup_acknowledgement": "three explicit lifecycle fixture acknowledgements; no file operation",
             "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
             "live_reference_receipt_sha256": sha(capture),
             "module_manifest_sha256": module["sha256"], "executable_sha256": metadata["executable_sha256"],
@@ -1052,19 +1078,20 @@ def native_composition_evidence(output: Path, report: dict) -> dict:
             or metadata.get("runtime_libc_required") is not False
             or metadata.get("whole_runtime_replaced") is not False):
         raise ValueError("native composition manifest identity or runtime ownership differs")
-    specs = (("local-service", "native/local_service.hepta", 1, 62, 32 << 20),
+    specs = (("local-service", "native/local_service.hepta", 1, 126, 32 << 20),
              ("policy", "native/policy.hepta", 0, 0, 32 << 20),
              ("codec", "native/binary_codec.hepta", 0, 0, 32 << 20),
-             ("io", "native/io_policy.hepta", 2, 0, 86016),
+             ("io", "native/io_policy.hepta", 3, 4, 8 << 20),
              ("stat-version", "native/stat_version.hepta", 0, 0, 32 << 20),
-             ("multi-read-service", "native/multi_read_service.hepta", 1, 30, 32 << 20))
+             ("multi-read-service", "native/multi_read_service.hepta", 1, 30, 32 << 20),
+             ("file-info-service", "native/file_info_service.hepta", 1, 30, 32 << 20))
     profile = [{"id": index, "name": name, "source_sha256": sha(ROOT / source),
                 "flags": flags, "call_mask": mask, "input_capacity": 8 << 20,
                 "output_capacity": 8 << 20, "workspace_capacity": workspace}
                for index, (name, source, flags, mask, workspace) in enumerate(specs)]
     if (json_bytes(metadata.get("profile")) != json_bytes(profile) or type(metadata.get("members")) is not list
             or len(metadata["members"]) != len(specs)):
-        raise ValueError("native composition fixed six-image authority table differs")
+        raise ValueError("native composition fixed seven-image authority table differs")
     frame = bytearray(b"HIABND01" + struct.pack("<3Q", len(specs), 0, 0))
     rows = [("packer", "native/composition_packer.hepta", metadata["packer"])]
     rows.extend((f"module_{index:02d}", spec[1], metadata["members"][index]) for index, spec in enumerate(specs))
@@ -1089,7 +1116,7 @@ def native_composition_evidence(output: Path, report: dict) -> dict:
                 or child.get("workspace_capacity") != 32 << 20):
             raise ValueError("native composition source/image artifact or capacity differs")
         if index:
-            tested_key = (None, "policy", "binary_codec", "native_io", "stat_version", "multi_read_service")[index - 1]
+            tested_key = (None, "policy", "binary_codec", "native_io", "stat_version", "multi_read_service", "file_info_service")[index - 1]
             if tested_key is not None:
                 tested_owner = report["modules"][tested_key]
                 tested_relative = Path(tested_owner["manifest"])
@@ -1141,6 +1168,154 @@ def native_composition_evidence(output: Path, report: dict) -> dict:
             "original_reference_recipe": None, "whole_runtime_replaced": False}
 
 
+def validate_file_info_guard_times(timings) -> None:
+    """Both real production holds must retain their original fixed duration."""
+    import math
+
+    if (type(timings) is not list or len(timings) != 2
+            or {row.get("mode") for row in timings} != {"read", "flistxattr"}):
+        raise ValueError("file-info requires both actual production deadline controls")
+    for row in timings:
+        elapsed, held = row.get("elapsed_seconds"), row.get("hold_seconds_until_response")
+        if (set(row) != {"mode", "fixed_deadline_seconds", "elapsed_seconds", "hold_seconds_until_response"}
+                or row["fixed_deadline_seconds"] != 30 or type(elapsed) not in (int, float)
+                or type(held) not in (int, float) or not math.isfinite(elapsed) or not math.isfinite(held)
+                or not 29.5 <= elapsed < 33 or not 0 < held <= elapsed):
+            raise ValueError("file-info production deadline timing differs")
+
+
+def file_info_evidence(output: Path, report: dict) -> dict:
+    """Bind real deadline/filesystem receipts separately from native fixtures."""
+    def owned(relative: str, expected: str | None = None) -> tuple[Path, bytes]:
+        part = Path(relative)
+        path = output / part
+        if (part.is_absolute() or ".." in part.parts or path.is_symlink()
+                or not path.is_file() or path.resolve() != path.absolute()):
+            raise ValueError("file-info artifact is outside the retained owned result")
+        raw = path.read_bytes()
+        if expected is not None and hashlib.sha256(raw).hexdigest() != expected:
+            raise ValueError("file-info retained artifact identity differs")
+        return path, raw
+
+    summaries, receipts, checks = {}, {}, {}
+    for test, name, schema, counts in FILE_INFO_SUITES:
+        check, summary = completed_test_summary(output, report, test)
+        if (summary.get("schema") != schema or summary.get("status") != "pass"
+                or (counts is not None and json_bytes(summary.get("counts")) != json_bytes(counts))):
+            raise ValueError("file-info exact test/reference/effect accounting differs: " + test)
+        capture, raw = owned(name)
+        if json.loads(raw) != summary:
+            raise ValueError("file-info receipt differs from completed executable stdout: " + test)
+        summaries[test] = summary
+        receipts[name] = sha(capture)
+        checks[test] = {"stdout_sha256": check["stdout_sha256"], "stderr_sha256": check["stderr_sha256"],
+                        "test_source_sha256": sha(ROOT / "tests/hia_native" / test)}
+
+    owner = report["modules"]["local_service"]
+    manifest, raw = owned(owner["manifest"], owner["sha256"])
+    metadata = json.loads(raw)
+    if (owner.get("builder") != "composition" or len(metadata.get("members", [])) != 7
+            or metadata.get("compiler_sha256") != report["compiler_image_sha256"]):
+        raise ValueError("file-info requires the qualified seven-image composition")
+    executable, raw_executable = owned(str(manifest.parent.relative_to(output) / metadata["executable"]),
+                                     metadata["executable_sha256"])
+    if not raw_executable.startswith(b"\x7fELF"):
+        raise ValueError("file-info service is not the retained native executable")
+    packed = {}
+    packed_manifest_sha = {}
+    for index in (2, 3, 6):
+        row = metadata["members"][index]
+        path, raw = owned(str(manifest.parent.relative_to(output) / row["manifest"]), row["manifest_sha256"])
+        packed[index] = json.loads(raw)
+        packed_manifest_sha[index] = sha(path)
+    controller_owner = report["modules"]["file_info_service"]
+    controller_path, raw = owned(controller_owner["manifest"], controller_owner["sha256"])
+    controller = json.loads(raw)
+    for key in ("source_sha256", "image_sha256", "compiler_sha256"):
+        if controller.get(key) != packed[6].get(key):
+            raise ValueError("file-info packed controller differs from its independently tested image")
+    if controller.get("source_sha256") != sha(ROOT / "native/file_info_service.hepta"):
+        raise ValueError("file-info controller source identity differs")
+    if (packed[3].get("source_sha256") != sha(ROOT / "native/io_policy.hepta")
+            or packed[2].get("source_sha256") != sha(ROOT / "native/binary_codec.hepta")):
+        raise ValueError("file-info IO/codec source identity differs")
+    originals = report["inventory"]["original_sources"]
+    binary_sha = originals["src/mcp/runtime/binary_file.py"]["sha256"]
+    metadata_sha = originals["src/mcp/runtime/file_metadata.py"]["sha256"]
+    for name in ("test_info_service.py", "test_file_info_io_faults.py", "test_file_info_guard.py"):
+        summary = summaries[name]
+        if (summary.get("manifest_sha256") != owner["sha256"]
+                or summary.get("executable_sha256") != metadata["executable_sha256"]
+                or summary.get("original_helper_sha256") != binary_sha):
+            raise ValueError("file-info live executable or original source receipt differs: " + name)
+    normal = summaries["test_info_service.py"]
+    fixture = summaries["test_file_info_controller.py"]
+    state = summaries["test_file_info_io_state.py"]
+    deadline_state = summaries["test_file_info_deadline_state.py"]
+    faults = summaries["test_file_info_io_faults.py"]
+    guard = summaries["test_file_info_guard.py"]
+    probe = summaries["test_native_deadline_probe.py"]
+    if (normal.get("original_metadata_sha256") != metadata_sha
+            or fixture.get("original_metadata_sha256") != metadata_sha
+            or fixture.get("source_sha256") != controller["source_sha256"]
+            or fixture.get("image_sha256") != controller["image_sha256"]
+            or fixture.get("io_completions") != "explicit synthetic fixtures, not filesystem observations"):
+        raise ValueError("file-info controller/reference fixture identity or scope differs")
+    for item in (state, deadline_state, guard):
+        if (item.get("io_manifest_sha256") != packed_manifest_sha[3]
+                or item.get("io_source_sha256") != packed[3]["source_sha256"]):
+            raise ValueError("file-info state/guard receipt belongs to a different IO image")
+    if (state.get("manifest_sha256") != owner["sha256"]
+            or state.get("codec_source_sha256") != packed[2]["source_sha256"]
+            or state.get("original_metadata_source_sha256") != metadata_sha
+            or state.get("os_effects") != "declared synthetic completions; actual ELF tests are separate"
+            or deadline_state.get("guard") != "synthetic acknowledgements; no real wall-clock deadline claim"):
+        raise ValueError("file-info native fixture source or synthetic-effect boundary differs")
+    if (faults.get("actual_elf_responses") != 30 or faults.get("production_semantic_fallback") is not False
+            or guard.get("actual_elf_responses") != 34 or guard.get("production_semantic_fallback") is not False
+            or guard.get("original_metadata_source_sha256") != metadata_sha
+            or guard.get("hold_kind") != "actual worker syscall held by kernel notification"
+            or guard.get("synthetic_hia_acknowledgements") is not False
+            or guard.get("empty_pipe_kernel_block_probe_included") is not False):
+        raise ValueError("file-info real syscall/deadline accounting or scope differs")
+    source_names = ("info_guard_supervisor.py", "io_fault_supervisor.py",
+                    "test_file_info_guard.py", "test_local_service.py")
+    if guard.get("test_sources_sha256") != {name: sha(ROOT / "tests/hia_native" / name) for name in source_names}:
+        raise ValueError("file-info guard helper/source receipt differs")
+    timings = guard.get("timings")
+    validate_file_info_guard_times(timings)
+    block = probe.get("observed_block", {})
+    if (probe.get("explicit_test_timeout_ms") != 200 or type(probe.get("elapsed_nanoseconds")) is not int
+            or not 190000000 <= probe["elapsed_nanoseconds"] < 2000000000
+            or probe.get("native_exit") != 0 or probe.get("wait_signal") != 9
+            or probe.get("worker_reaped") is not True or probe.get("runtime_python_required") is not False
+            or probe.get("evidence_kind") != "actual empty-pipe blocking SYS_read"
+            or probe.get("source_sha256") != sha(ROOT / "tests/hia_native/native_deadline_probe.S")
+            or type(probe.get("executable_sha256")) is not str
+            or block.get("state") != "S" or block.get("syscall") != "0" or block.get("read_bytes") != 1
+            or "pipe_read" not in block.get("wait_channel", "")
+            or probe.get("retained_executable") != "file-info-blocking-probe.elf"):
+        raise ValueError("file-info actual kernel-block/reap probe evidence differs")
+    path, raw = owned("file-info-blocking-probe.elf", probe.get("executable_sha256"))
+    if not raw.startswith(b"\x7fELF"):
+        raise ValueError("file-info blocking probe executable is not native ELF")
+    receipts[path.name] = sha(path)
+    return {"status": "PASS", "scope": "native-local Linux file_info; original helpers and owned-worker boundary",
+            "complete_original_remote_tool_parity": False, "production_activated": False,
+            "module_manifest_sha256": owner["sha256"], "executable_sha256": metadata["executable_sha256"],
+            "controller_manifest_sha256": sha(controller_path), "controller_image_sha256": controller["image_sha256"],
+            "io_manifest_sha256": packed_manifest_sha[3], "codec_manifest_sha256": packed_manifest_sha[2],
+            "normal_original_comparisons": normal["counts"], "controller_fixture_controls": fixture["counts"],
+            "io_fixture_controls": state["counts"], "deadline_fixture_controls": deadline_state["counts"],
+            "actual_metadata_fault_controls": faults["counts"], "actual_deadline_controls": guard["counts"],
+            "actual_service_responses": 137, "production_deadline_seconds": 30, "deadline_timings": timings,
+            "actual_blocking_probe": probe, "native_cases_added_by_replay": 0,
+            "receipts_sha256": receipts, "checks": checks,
+            "original_sources": {name: originals[name] for name in (
+                "src/mcp/runtime/binary_file.py", "src/mcp/runtime/file_metadata.py",
+                "src/mcp/runtime/binary.rs", "src/mcp/runtime/config.rs", "src/mcp/server.rs")}}
+
+
 def python_reference_evidence(output: Path, report: dict) -> dict:
     return {"native_io": io_reference_evidence(output, report),
             "native_full_io": full_io_reference_evidence(output, report),
@@ -1159,7 +1334,7 @@ def run(output: Path, hepta: Path) -> dict:
         "started_at": datetime.now(timezone.utc).isoformat(),
         "checkout_head": None, "source_identity_authority": "source_sha256", "source_sha256": {},
         "compiler_commit": HEPTA_COMMIT, "compiler_tree": HEPTA_TREE,
-        "scope": "native kernels, closed six-image local MCP read profile, and Linux x86-64 stdio/read-only dependencies",
+        "scope": "native kernels, closed seven-image local MCP read profile, and Linux x86-64 stdio/read-only dependencies",
         "whole_runtime_replaced": False, "production_activated": False,
         "old_stack_removal_qualified": False, "matching_source_full_cold_qualified": False,
         "compiler_cold_status": "PENDING", "native_components_status": "RUNNING",
@@ -1209,6 +1384,14 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
             "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
             "HIA_MULTI_SERVICE_RESULT": str(output / "multi-service-python-reference.json"),
+            "HIA_INFO_SERVICE_RESULT": str(output / "file-info-python-reference.json"),
+            "HIA_FILE_INFO_RESULT": str(output / "file-info-controller.json"),
+            "HIA_INFO_IO_STATE_RESULT": str(output / "file-info-io-state.json"),
+            "HIA_INFO_DEADLINE_STATE_RESULT": str(output / "file-info-deadline-state.json"),
+            "HIA_INFO_IO_FAULT_RESULT": str(output / "file-info-io-faults.json"),
+            "HIA_INFO_GUARD_RESULT": str(output / "file-info-guard.json"),
+            "HIA_DEADLINE_PROBE_RESULT": str(output / "file-info-blocking-probe.json"),
+            "HIA_DEADLINE_PROBE_EXECUTABLE": str(output / "file-info-blocking-probe.elf"),
             "HIA_MULTI_READ_CORPUS_DIR": str(output / "multi-read-rust-oracle"),
             "HIA_REFERENCE_RUNTIME": str(ROOT),
         })
@@ -1248,6 +1431,7 @@ def run(output: Path, hepta: Path) -> dict:
         report["original_python_comparisons"] = python_reference_evidence(output, report)
         report["native_composition_evidence"] = native_composition_evidence(output, report)
         report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
+        report["file_info_evidence"] = file_info_evidence(output, report)
         report["operation_kdf_evidence"] = operation_kdf_evidence(output, report)
         report["operation_aead_evidence"] = operation_aead_evidence(output, report)
         report["operation_nonce_evidence"] = operation_nonce_evidence(output, report)
@@ -1260,6 +1444,9 @@ def run(output: Path, hepta: Path) -> dict:
             output / "local-service-python-reference.json")
         report["python_reference_inputs"]["multi-service-python-reference.json"] = sha(
             output / "multi-service-python-reference.json")
+        for name in FILE_INFO_RECEIPTS:
+            report["python_reference_inputs"][name] = sha(output / name)
+        report["python_reference_inputs"]["file-info-blocking-probe.elf"] = sha(output / "file-info-blocking-probe.elf")
         report["rust_oracle_inputs"] = {
             "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
         report["rust_oracle_inputs"].update({
