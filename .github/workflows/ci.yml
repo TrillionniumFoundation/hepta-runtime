@@ -26,12 +26,23 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify checked-out revision
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          echo "Expected source: $EXPECTED_SHA"
+          echo "Checked-out source: $ACTUAL_SHA"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
 
       - name: Install pinned Rust toolchain
         run: |
-          rustup toolchain install 1.95.0 --profile minimal
-          rustup component add rustfmt clippy --toolchain 1.95.0
-          rustup default 1.95.0
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup component add rustfmt clippy --toolchain 1.99.0
+          rustup default 1.99.0
           rustc --version
           cargo --version
 
@@ -49,3 +60,30 @@ jobs:
 
       - name: Release build
         run: cargo build --locked --release
+
+  msrv:
+    name: Rust 1.95 minimum-version check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify checked-out revision
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          echo "Expected source: $EXPECTED_SHA"
+          echo "Checked-out source: $ACTUAL_SHA"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+
+      - name: Install minimum supported Rust
+        run: rustup toolchain install 1.95.0 --profile minimal
+
+      - name: Check minimum supported Rust
+        run: cargo +1.95.0 check --locked --all-targets
