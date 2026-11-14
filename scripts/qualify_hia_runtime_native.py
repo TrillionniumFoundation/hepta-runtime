@@ -1,7 +1,7 @@
 """Build and test the declared HIA runtime profile from pinned source bytes.
 
 NATIVE_COMPONENTS_PASS records the fresh full compiler cold gate, native tests
-and their retained Python comparisons. Aggregate PASS also requires all nine
+and their retained Python comparisons. Aggregate PASS also requires all ten
 independent Rust comparisons. Neither phase qualifies the remaining 125
 production tool owners, production adoption, or removal of the old runtime.
 """
@@ -46,6 +46,8 @@ MODULES = (
      "standalone": "filter", "manifest_env": "HIA_KDF_MANIFEST", "test": "test_operation_kdf.py"},
     {"key": "operation_aead", "name": "operation-aead", "source": "native/operation_aead.hepta",
      "standalone": "filter", "manifest_env": "HIA_AEAD_MANIFEST", "test": "test_operation_aead.py"},
+    {"key": "operation_nonce", "name": "operation-nonce", "source": "native/operation_nonce.hepta",
+     "standalone": "filter", "manifest_env": "HIA_NONCE_MANIFEST", "test": "test_operation_nonce.py"},
     {"key": "policy", "name": "policy", "source": "native/policy.hepta",
      "standalone": "filter", "manifest_env": "HIA_POLICY_MANIFEST", "test": "test_policy.py"},
     {"key": "stat_version", "name": "stat-version", "source": "native/stat_version.hepta",
@@ -560,6 +562,217 @@ def operation_aead_evidence(output: Path, report: dict) -> dict:
             "constant_time_qualified": False, "compiler_stack_erasure_qualified": False}
 
 
+def nonce_composition_evidence(output: Path, report: dict, tested: dict) -> dict:
+    """Bind the persistent nonce fixture to its tested leaf and closed image table."""
+    owner = report["nonce_composition"]
+    relative = Path(owner["manifest"])
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("nonce composition manifest is outside the retained result")
+    manifest = output / relative
+
+    def raw_file(path: Path) -> bytes:
+        if path.is_symlink() or not path.is_file() or path.resolve() != path.absolute():
+            raise ValueError("nonce composition artifact is not a regular owned file")
+        return path.read_bytes()
+
+    def digest(raw: bytes) -> str:
+        return hashlib.sha256(raw).hexdigest()
+
+    raw_manifest = raw_file(manifest)
+    metadata = json.loads(raw_manifest)
+    if (owner.get("builder") != "composition_fixture" or digest(raw_manifest) != owner["sha256"]
+            or metadata.get("schema") != "hepta.runtime.native-composition.v1"
+            or metadata.get("target") != "linux-x86_64" or metadata.get("transport") != "newline-json"
+            or metadata.get("compiler_commit") != HEPTA_COMMIT
+            or metadata.get("compiler_sha256") != report["compiler_image_sha256"]
+            or metadata.get("executable") != "native-local-read.elf"
+            or metadata.get("runtime_python_required") is not False
+            or metadata.get("runtime_libc_required") is not False
+            or metadata.get("whole_runtime_replaced") is not False):
+        raise ValueError("nonce composition manifest identity or ownership differs")
+    specs = (("nonce-hex-fixture", "tests/hia_native/nonce_hex_transport.hepta", 1, 2,
+              8 << 20, 8 << 20, 16 << 20),
+             ("operation-nonce", "native/operation_nonce.hepta", 0, 0, 164, 64, 1576960))
+    profile = [{"id": i, "name": name, "source_sha256": sha(ROOT / source), "flags": flags,
+                "call_mask": mask, "input_capacity": inp, "output_capacity": out,
+                "workspace_capacity": work}
+               for i, (name, source, flags, mask, inp, out, work) in enumerate(specs)]
+    if (json_bytes(metadata.get("profile")) != json_bytes(profile)
+            or type(metadata.get("members")) is not list or len(metadata["members"]) != 2):
+        raise ValueError("nonce composition fixed two-image authority table differs")
+    rows = [("packer", "native/composition_packer.hepta", metadata["packer"])]
+    rows.extend((f"module_{i:02d}", spec[1], metadata["members"][i]) for i, spec in enumerate(specs))
+    frame = bytearray(b"HIABND01" + struct.pack("<3Q", 2, 0, 0))
+    for index, (stem, source_name, row) in enumerate(rows):
+        if row.get("manifest") != stem + ".json":
+            raise ValueError("nonce composition child manifest path differs")
+        raw = raw_file(manifest.parent / row["manifest"])
+        child = json.loads(raw)
+        if (digest(raw) != row.get("manifest_sha256")
+                or child.get("schema") != "hepta.runtime.native-module.v1"
+                or child.get("abi") != "hepta.runtime.borrowed-bytes.linux-x86_64.v1"
+                or child.get("target") != "linux-x86_64" or child.get("compiler_commit") != HEPTA_COMMIT
+                or child.get("compiler_sha256") != report["compiler_image_sha256"]
+                or child.get("source") != stem + ".hepta" or child.get("image") != stem + ".image.bin"
+                or child.get("standalone") is not None):
+            raise ValueError("nonce composition child manifest or compiler differs")
+        source = raw_file(manifest.parent / child["source"])
+        image = raw_file(manifest.parent / child["image"])
+        if (source != raw_file(ROOT / source_name) or digest(source) != child.get("source_sha256")
+                or digest(source) != row.get("source_sha256") or not 0 < len(image) <= 1 << 20
+                or digest(image) != child.get("image_sha256") or digest(image) != row.get("image_sha256")
+                or child.get("input_capacity") != 8 << 20 or child.get("output_capacity") != 8 << 20
+                or child.get("workspace_capacity") != 32 << 20):
+            raise ValueError("nonce composition source/image artifact or capacity differs")
+        if index == 2 and any(child.get(key) != tested.get(key)
+                              for key in ("source_sha256", "image_sha256", "compiler_sha256")):
+            raise ValueError("packed nonce leaf differs from the directly tested native image")
+        if index:
+            p = profile[index - 1]
+            frame.extend(struct.pack("<8Q", len(image), p["input_capacity"], p["output_capacity"],
+                                     p["workspace_capacity"], p["flags"], p["call_mask"], 0, 0))
+            frame.extend(bytes.fromhex(digest(source)) + bytes.fromhex(digest(image)) + image)
+    key = digest(json_bytes({"compiler": report["compiler_image_sha256"], "members": profile,
+                             "packer": sha(ROOT / "native/composition_packer.hepta")}))
+    executable = raw_file(manifest.parent / "native-local-read.elf")
+    inspection = metadata["inspection"]
+    if (metadata.get("key") != key or metadata.get("frame_sha256") != digest(frame)
+            or metadata.get("frame_bytes") != len(frame) or len(frame) > 8 << 20
+            or digest(executable) != metadata.get("executable_sha256")
+            or inspection.get("sha256") != digest(executable) or inspection.get("bytes") != len(executable)
+            or inspection.get("dynamic_loader") is not False or inspection.get("libc") is not False
+            or inspection.get("interpreter") is not None
+            or metadata.get("packing") != {"owner": "HIA", "input_unchanged": True,
+                 "buffer_canaries_unchanged": True, "packer_image_sha256": metadata["packer"]["image_sha256"]}):
+        raise ValueError("nonce composition packed frame or executable identity differs")
+    return {"status": "PASS", "manifest_sha256": digest(raw_manifest),
+            "source_sha256": profile[0]["source_sha256"], "executable_sha256": digest(executable),
+            "frame_sha256": digest(frame), "profile": profile, "modules": metadata["members"],
+            "packer": metadata["packer"], "requests": 16399, "processes": 2,
+            "scope": "test-only persistent nonce leaf; no public crypto service or OS effects"}
+
+
+def operation_nonce_evidence(output: Path, report: dict) -> dict:
+    """Keep native state controls, persistent ELF calls and original replay distinct."""
+    check, summary = completed_test_summary(output, report, "test_operation_nonce.py")
+    counts = {"native_calls": 17830, "initializations": 9, "destructions": 4,
+              "accepted_reservations": 17183, "nonce_refusals": 287, "admission_refusals": 325,
+              "state_refusals": 13, "capacity_refusals": 9, "elf_requests": 16401,
+              "elf_processes": 4, "composed_elf_requests": 16399}
+    if summary != {"status": "PASS", "counts": counts}:
+        raise ValueError("operation nonce state/capacity/ELF accounting differs")
+    stderr = (output / "test_operation_nonce.py.stderr").read_text()
+    if stderr.count("\nRan 9 tests in ") != 1 or not stderr.endswith("\nOK\n"):
+        raise ValueError("operation nonce requires all nine completed executable test groups")
+    folder = output / "operation-nonce-rust-oracle"
+    metadata_path = folder / "native-corpus.json"
+    metadata = json.loads(metadata_path.read_bytes())
+    if (metadata.get("schema") != "hepta.runtime.native-operation-nonce-corpus.v1"
+            or metadata.get("counts") != counts):
+        raise ValueError("operation nonce corpus schema or coverage differs")
+    owner = report["modules"]["operation_nonce"]
+    relative = Path(owner["manifest"])
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("operation nonce manifest is outside the retained result")
+    manifest = output / relative
+    module = json.loads(manifest.read_bytes())
+    original = report["inventory"]["original_sources"]["src/mcp/runtime/operation_crypto.rs"]
+    reference_names = ("oracle_operation_nonce.rs", "nonce_oracle/Cargo.toml", "nonce_oracle/Cargo.lock",
+                       "nonce_oracle/build.rs", "nonce_oracle/original_access.rs")
+    reference_sources = {name: sha(ROOT / "tests/hia_native" / name) for name in reference_names}
+    if (sha(manifest) != owner["sha256"]
+            or module.get("compiler_commit") != HEPTA_COMMIT
+            or module.get("compiler_sha256") != report["compiler_image_sha256"]
+            or metadata.get("source_sha256") != module.get("source_sha256")
+            or metadata.get("source_sha256") != sha(ROOT / "native/operation_nonce.hepta")
+            or metadata.get("image_sha256") != module.get("image_sha256")
+            or metadata.get("original_source_sha256") != original["sha256"]
+            or metadata.get("composition_sha256") != sha(ROOT / "native/operation_nonce_composition.json")
+            or metadata.get("oracle_sources_sha256") != reference_sources):
+        raise ValueError("operation nonce original/native/oracle source identity differs")
+    for field in ("source", "image"):
+        name = Path(module[field])
+        artifact = manifest.parent / name
+        if (name.is_absolute() or len(name.parts) != 1 or artifact.is_symlink()
+                or artifact.resolve() != artifact.absolute()
+                or sha(artifact) != module[field + "_sha256"]):
+            raise ValueError("operation nonce direct module artifact identity differs")
+    fixture = nonce_composition_evidence(output, report, module)
+    if metadata.get("composition_fixture") != {key: fixture[key] for key in
+            ("source_sha256", "manifest_sha256", "executable_sha256", "requests")}:
+        raise ValueError("operation nonce retained ELF fixture identity differs")
+    entry = metadata["corpus"]
+    if (entry.get("file") != "nonce_cases.jsonl.gz" or entry.get("cases") != 17811
+            or entry.get("raw_bytes") != 6935313
+            or entry.get("raw_sha256") != "04818159bcc689f78298b91766cf6352016f1acdb7ff404db0f5764f482ec63f"):
+        raise ValueError("operation nonce captured corpus identity differs")
+    packed = (folder / entry["file"]).read_bytes()
+    if hashlib.sha256(packed).hexdigest() != entry.get("gzip_sha256"):
+        raise ValueError("operation nonce captured corpus bytes differ")
+    wire = gzip.decompress(packed)
+    if (hashlib.sha256(wire).hexdigest() != entry["raw_sha256"]
+            or len(wire) != entry["raw_bytes"] or not wire.endswith(b"\n")):
+        raise ValueError("operation nonce captured corpus bytes differ")
+    rows = wire.splitlines()
+    if len(rows) != entry["cases"] or len(rows) + counts["capacity_refusals"] + 10 != counts["native_calls"]:
+        raise ValueError("operation nonce captured/native call accounting differs")
+    observed = {"initializations": 0, "destructions": 0, "accepted_reservations": 0,
+                "invalid_refusals": 0, "binding_refusals": 0, "nonce_refusals": 0, "state_refusals": 0}
+    refusals = {0xFFFFFFFF: "invalid_refusals", 0xFFFFFFFD: "binding_refusals",
+                0xFFFFFFFC: "nonce_refusals", 0xFFFFFFFB: "state_refusals"}
+    sessions = {}
+    output_hash = hashlib.sha256()
+    for encoded in rows:
+        row = json.loads(encoded)
+        if set(row) != {"session", "input_hex", "code", "count"}:
+            raise ValueError("operation nonce captured row fields differ")
+        session, code, count = row["session"], row["code"], row["count"]
+        request = bytes.fromhex(row["input_hex"])
+        if (type(session) is not str or not session or not session.isascii()
+                or any(c in session for c in ":\r\n") or type(code) is not int
+                or type(count) is not int or not 0 <= count <= 16384
+                or request.hex() != row["input_hex"]):
+            raise ValueError("operation nonce captured status, state or encoding differs")
+        previous = sessions.get(session, 0)
+        if code == 0:
+            if len(request) < 24 or request[:8] != b"HRNONC01" or request[16:24] != bytes(8):
+                raise ValueError("operation nonce captured successful frame differs")
+            op = int.from_bytes(request[8:16], "little")
+            if op not in (1, 2, 3) or len(request) != (164 if op == 2 else 24):
+                raise ValueError("operation nonce captured successful operation differs")
+            observed[{1: "initializations", 2: "accepted_reservations", 3: "destructions"}[op]] += 1
+            expected = previous + 1 if op == 2 else 0
+        elif code in refusals:
+            observed[refusals[code]] += 1
+            expected = previous
+        else:
+            raise ValueError("operation nonce captured refusal domain differs")
+        if count != expected:
+            raise ValueError("operation nonce captured state transition differs")
+        sessions[session] = count
+        output_hash.update(f"{session}:{code}:{count}\n".encode())
+    expected_domains = {"initializations": 9, "destructions": 4, "accepted_reservations": 17183,
+                        "invalid_refusals": 186, "binding_refusals": 139,
+                        "nonce_refusals": 287, "state_refusals": 3}
+    if observed != expected_domains or len(sessions) != 8:
+        raise ValueError("operation nonce captured reference domains differ")
+    if (output_hash.hexdigest() != metadata.get("native_output_sha256")
+            or output_hash.hexdigest() != "28f0e89d9488aa1fca4e877f822d2fe5e7b6ba7a253ab48c2b4aaca9c7b23967"):
+        raise ValueError("operation nonce captured native output digest differs")
+    return {"status": "PASS", "counts": counts, "test_groups": 9, "captured_native_cases": len(rows),
+            "captured_domains": observed, "sessions": len(sessions), "native_cases_added_by_replay": 0,
+            "private_state_fault_controls": 10, "module_manifest_sha256": owner["sha256"],
+            "source_sha256": module["source_sha256"], "image_sha256": module["image_sha256"],
+            "original_source": original, "composition_sha256": metadata["composition_sha256"],
+            "oracle_sources_sha256": reference_sources, "composition_fixture": fixture,
+            "corpus_metadata_sha256": sha(metadata_path), "corpus_sha256": entry["gzip_sha256"],
+            "input_sha256": entry["raw_sha256"], "native_output_sha256": output_hash.hexdigest(),
+            "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
+            "scope": "serial nonce reservation over a trusted private workspace; no entropy or production scope lifetime",
+            "concurrent_scope_qualified": False, "entropy_qualified": False,
+            "complete_original_crypto_scope_parity": False, "production_activated": False}
+
+
 def native_composition_evidence(output: Path, report: dict) -> dict:
     """Recheck every image, fixed authority table and actual generic bridge suite."""
     owner = report["modules"]["local_service"]
@@ -739,6 +952,7 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_CODEC_CORPUS_DIR": str(output / "codec-rust-oracle"),
             "HIA_KDF_CORPUS_DIR": str(output / "operation-kdf-rust-oracle"),
             "HIA_AEAD_CORPUS_DIR": str(output / "operation-aead-rust-oracle"),
+            "HIA_NONCE_CORPUS_DIR": str(output / "operation-nonce-rust-oracle"),
             "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
             "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
             "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
@@ -760,6 +974,16 @@ def run(output: Path, hepta: Path) -> dict:
                 "manifest": str(built.relative_to(output)), "sha256": sha(built), "source": item["source"],
                 "builder": item.get("builder", "borrowed_bytes")}
             env[item["manifest_env"]] = str(built)
+        from hia_native_composition_build import ModuleSpec, build_composition
+        nonce_fixture = build_composition(hepta, output / "build", [
+            ModuleSpec("nonce-hex-fixture", ROOT / "tests/hia_native/nonce_hex_transport.hepta",
+                       flags=1, call_mask=2, workspace_capacity=16 << 20),
+            ModuleSpec("operation-nonce", ROOT / "native/operation_nonce.hepta",
+                       input_capacity=164, output_capacity=64, workspace_capacity=1576960),
+        ])
+        report["nonce_composition"] = {"manifest": str(nonce_fixture.relative_to(output)),
+                                        "sha256": sha(nonce_fixture), "builder": "composition_fixture"}
+        env["HIA_NONCE_COMPOSITION_MANIFEST"] = str(nonce_fixture)
         tests = tuple(dict.fromkeys(name for item in MODULES
                                     for name in (item["test"], *item.get("additional_tests", ())))) + EXTRA_TESTS
         for name in tests:
@@ -771,6 +995,7 @@ def run(output: Path, hepta: Path) -> dict:
         report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
         report["operation_kdf_evidence"] = operation_kdf_evidence(output, report)
         report["operation_aead_evidence"] = operation_aead_evidence(output, report)
+        report["operation_nonce_evidence"] = operation_nonce_evidence(output, report)
         report["retained_python_comparison_status"] = "PASS"
         report["python_reference_inputs"] = {
             "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
@@ -805,6 +1030,9 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update({
             "operation-aead-rust-oracle/" + name: sha(output / "operation-aead-rust-oracle" / name)
             for name in ("native-corpus.json", "aead_cases.jsonl.gz")})
+        report["rust_oracle_inputs"].update({
+            "operation-nonce-rust-oracle/" + name: sha(output / "operation-nonce-rust-oracle" / name)
+            for name in ("native-corpus.json", "nonce_cases.jsonl.gz")})
         builder.bootstrap()  # Revalidate the same compiler image after all tests.
         builder._recheck()
         if sources() != manifest:

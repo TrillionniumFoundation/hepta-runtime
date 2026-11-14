@@ -32,6 +32,10 @@ continue to identify the language and are not filename extensions.
 
 ## Native components
 
+Qualification covers 18 production HIA sources through 14 executable components
+and their four HIA packers. Test-only HIA fixtures are recorded separately from
+the production source inventory.
+
 | Source | Implemented behavior |
 | --- | --- |
 | [runtime_bytes.hepta](runtime_bytes.hepta) | Existing line hash/ID, strict and clamped line indices, log cursor/page arithmetic, name/digest/text predicates |
@@ -42,6 +46,7 @@ continue to identify the language and are not filename extensions.
 | [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
 | [operation_kdf.hepta](operation_kdf.hepta) | Internal HMAC/HKDF-SHA256, original token-key derivation, private binding bytes and per-record key derivation with cleared workspace |
 | [operation_aead.hepta](operation_aead.hepta) | Internal ChaCha20-Poly1305, full-tag authentication before plaintext output, exact refusal/capacity behavior and declared-workspace clearing |
+| [operation_nonce.hepta](operation_nonce.hepta) | Internal serial nonce reservation, original 16,384-use scope budget, exact identity namespaces and persistent private-set lifecycle |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
 | [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks and cleanup decisions |
@@ -67,6 +72,12 @@ The AEAD byte frame and authentication-failure boundary are specified in
 [operation_aead_abi.md](operation_aead_abi.md). It is also internal and is not
 installed in the local read service. Nonce uniqueness, trusted scope state,
 entropy and complete record ownership remain separate requirements.
+The serial nonce-set boundary is specified in [operation_nonce_abi.md](operation_nonce_abi.md).
+It requires one private persistent workspace per trusted scope; all scope clones
+must reach that same state. Its two-image hex transport is a qualification fixture
+under `tests/hia_native`, separate from the six-image local read service.
+Entropy, production serialization and destruction of the corresponding key
+capability remain caller-owned requirements.
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -95,7 +106,7 @@ its own manifest, source, compiler and corpus inputs. Standalone suites retain
 their explicit development overrides; these cannot silently substitute an
 external loader or fault probe in the closed qualification.
 Python 3.11+ and a C toolchain are build/test dependencies for the initial seed.
-Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec, KDF and AEAD
+Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec, KDF, AEAD and nonce
 reference dependencies are pinned in their Cargo.lock files.
 The independent Python AEAD reference uses the exact packages in
 `tests/hia_native/python-reference-requirements.txt`, installed in a test-only
@@ -163,6 +174,8 @@ operation-kdf-rust-oracle/native-corpus.json
 operation-kdf-rust-oracle/kdf_cases.jsonl.gz
 operation-aead-rust-oracle/native-corpus.json
 operation-aead-rust-oracle/aead_cases.jsonl.gz
+operation-nonce-rust-oracle/native-corpus.json
+operation-nonce-rust-oracle/nonce_cases.jsonl.gz
 policy-rust-oracle/native-corpus.json
 stat-version-python-reference/native-corpus.json
 stat-version-python-reference/stat-version-cases.jsonl.gz
@@ -182,7 +195,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all nine independent Rust comparisons succeed. The Python reference domain
+after all ten independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -370,6 +383,27 @@ leaves the entire output unchanged. Successful operations and authentication
 refusals wipe the declared 512-byte workspace. CPU register/stack erasure,
 constant-time behavior, nonce uniqueness and complete crypto scope ownership
 are not certified by these byte tests.
+
+The operation nonce component has passed **17,830 direct native calls** and
+**16,401 requests across four actual static ELF processes**. The latter comprises
+16,399 requests through the persistent two-image test fixture and two standalone
+lifecycle requests. Direct controls cover exact exhaustion at 16,384 reservations,
+namespace separation, all nonce bytes, collision chains that wrap the table,
+duplicate refusal without state loss, nine capacity refusals and ten private-state
+fault controls. A trusted controller must retain the same workspace for every
+clone of a scope and destroy its key capability when clearing that workspace.
+
+The original Rust execution matched all **17,811 captured session rows**,
+including **17,611 original binding calls**, **17,470 actual NonceLedger
+reservations**, **17,183 accepted reservations** and **287 nonce refusals** across
+eight sessions. The retained observation is
+[operation_nonce_original_rust_comparison.json](operation_nonce_original_rust_comparison.json).
+Every qualification must execute that tenth Rust recipe again; the historical
+observation cannot advance an aggregate result. The checker binds the corpus and
+output digests, exact counts, original source, direct native image, both packed
+fixture images and their fixed authority table. The fixture does not qualify
+entropy, production concurrency, rollback resistance or complete crypto-scope
+replacement, and introduces no public MCP crypto tool.
 
 The policy component has passed **11,655 valid native cases** covering first-error
 order, permission/protection precedence, environment checks, executable denial,

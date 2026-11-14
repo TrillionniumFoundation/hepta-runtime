@@ -21,7 +21,8 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, multi_read_controller_evidence, native_composition_evidence,
-                                       operation_aead_evidence, operation_kdf_evidence, python_reference_evidence, qualification_env,
+                                       operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
+                                       python_reference_evidence, qualification_env,
                                        record_check, save_report, sha, sources)
 from check_hia_native_inventory import RUNTIME_BASE_COMMIT, check_original_sources
 from hia_native_build import HEPTA_COMMIT
@@ -85,6 +86,8 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required operation KDF primitive/binding evidence differs")
     if report.get("operation_aead_evidence") != operation_aead_evidence(output, report):
         raise ValueError("required operation AEAD/authentication evidence differs")
+    if report.get("operation_nonce_evidence") != operation_nonce_evidence(output, report):
+        raise ValueError("required operation nonce state/ELF evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
         for relative, expected in report[collection].items():
             path = Path(relative)
@@ -529,10 +532,55 @@ def compare_operation_aead(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_operation_nonce(output: Path, report: dict, rustc: Path) -> dict:
+    """Execute the unchanged Rust binding and NonceLedger on each retained session."""
+    evidence = operation_nonce_evidence(output, report)
+    if evidence != report.get("operation_nonce_evidence"):
+        raise ValueError("operation nonce native evidence changed before Rust replay")
+    folder = output / "operation-nonce-rust-oracle"
+    wire = gzip.decompress((folder / "nonce_cases.jsonl.gz").read_bytes())
+    if digest(wire) != evidence["input_sha256"]:
+        raise ValueError("operation nonce input corpus changed before Rust replay")
+    manifest = ROOT / "tests/hia_native/nonce_oracle/Cargo.toml"
+    target = folder / "target"
+    if target.exists():
+        raise ValueError("operation nonce reference target directory already exists")
+    cargo = executable("cargo")
+    env = qualification_env()
+    env.update({"HIA_REFERENCE_RUNTIME": str(ROOT), "RUSTC": str(rustc)})
+    record_check(output, report, name="operation-nonce-rust-compile",
+                 command=[str(cargo), "build", "--locked", "--release", "--manifest-path", str(manifest),
+                          "--target-dir", str(target)], env=env, timeout=180)
+    binary = target / "release/hia-operation-nonce-reference"
+    row = record_check(output, report, name="operation-nonce-rust-compare",
+                       command=[str(binary)], input_bytes=wire, env=env, timeout=60)
+    observed = json.loads(row.stdout)
+    expected = {"status": "PASS", "rust_oracle_cases": 17811, "original_binding_calls": 17611,
+                "original_nonce_reservations": 17470, "accepted_reservations": 17183,
+                "nonce_refusals": 287, "sessions": 8,
+                "output_sha256": evidence["native_output_sha256"], "native_cases_added_by_replay": 0}
+    result = {**observed, "status": "PASS" if observed == expected and not row.stderr else "FAIL",
+              "input_sha256": evidence["input_sha256"],
+              "native_output_sha256": evidence["native_output_sha256"],
+              "oracle_executable_sha256": sha(binary),
+              "oracle_sources_sha256": evidence["oracle_sources_sha256"],
+              "original_source": evidence["original_source"],
+              "composition_sha256": evidence["composition_sha256"],
+              "composition_fixture": evidence["composition_fixture"],
+              "corpus_metadata_sha256": evidence["corpus_metadata_sha256"],
+              "reference_kind": "complete unchanged original TrustedResultBinding and NonceLedger",
+              "scope": "serial reservation and original scope budget; no entropy, production locking or key lifetime qualification"}
+    (folder / "rust-comparison.json").write_text(json.dumps(result, indent=2) + "\n")
+    if result["status"] != "PASS":
+        raise ValueError("original Rust nonce ledger or output accounting differs")
+    return result
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,
-           "operation_kdf": compare_operation_kdf, "operation_aead": compare_operation_aead}
+           "operation_kdf": compare_operation_kdf, "operation_aead": compare_operation_aead,
+           "operation_nonce": compare_operation_nonce}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}

@@ -8,7 +8,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, io_reference_evidence, local_service_reference_evidence,
-                                       native_composition_evidence, operation_aead_evidence, operation_kdf_evidence,
+                                       native_composition_evidence, nonce_composition_evidence,
+                                       operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        qualification_env, record_check, sources)
 from compare_hia_runtime_rust import run as compare_rust
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
@@ -165,6 +166,47 @@ class QualificationReportingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "reference/authentication/capacity accounting differs"):
             operation_aead_evidence(self.output, self.report)
 
+    def test_nonce_reference_suite_cannot_replace_persistent_elf_calls_with_direct_calls(self):
+        summary = {"status": "PASS", "counts": {
+            "native_calls": 17830, "initializations": 9, "destructions": 4,
+            "accepted_reservations": 17183, "nonce_refusals": 287, "admission_refusals": 325,
+            "state_refusals": 13, "capacity_refusals": 9, "elf_requests": 16401,
+            "elf_processes": 4, "composed_elf_requests": 0}}
+        record_check(self.output, self.report, name="test_operation_nonce.py", timeout=5,
+                     command=[sys.executable, "-I", "-c", "print(" + repr(json.dumps(summary)) + ")"])
+        with self.assertRaisesRegex(ValueError, "state/capacity/ELF accounting differs"):
+            operation_nonce_evidence(self.output, self.report)
+
+    def test_nonce_fixture_cannot_grant_its_leaf_continuation_authority(self):
+        import hashlib
+        profile = [{"id": 0, "name": "nonce-hex-fixture", "flags": 1, "call_mask": 2,
+                    "input_capacity": 8 << 20, "output_capacity": 8 << 20,
+                    "workspace_capacity": 16 << 20,
+                    "source_sha256": hashlib.sha256((ROOT / "tests/hia_native/nonce_hex_transport.hepta").read_bytes()).hexdigest()},
+                   {"id": 1, "name": "operation-nonce", "flags": 1, "call_mask": 1,
+                    "input_capacity": 164, "output_capacity": 64, "workspace_capacity": 1576960,
+                    "source_sha256": hashlib.sha256((ROOT / "native/operation_nonce.hepta").read_bytes()).hexdigest()}]
+        metadata = {"schema": "hepta.runtime.native-composition.v1", "target": "linux-x86_64",
+                    "transport": "newline-json", "compiler_commit": HEPTA_COMMIT,
+                    "compiler_sha256": "fixture-compiler", "executable": "native-local-read.elf",
+                    "runtime_python_required": False, "runtime_libc_required": False,
+                    "whole_runtime_replaced": False, "profile": profile, "members": [{}, {}]}
+        raw = json.dumps(metadata).encode()
+        (self.output / "manifest.json").write_bytes(raw)
+        report = {"compiler_image_sha256": "fixture-compiler", "nonce_composition": {
+            "builder": "composition_fixture", "manifest": "manifest.json",
+            "sha256": hashlib.sha256(raw).hexdigest()}}
+        with self.assertRaisesRegex(ValueError, "fixed two-image authority table differs"):
+            nonce_composition_evidence(self.output, report, {})
+
+    def test_nonce_summary_cannot_replace_all_nine_executable_test_groups(self):
+        historical = json.loads((ROOT / "native/operation_nonce_original_rust_comparison.json").read_bytes())
+        summary = {"status": "PASS", "counts": historical["native_corpus"]["counts"]}
+        record_check(self.output, self.report, name="test_operation_nonce.py", timeout=5,
+                     command=[sys.executable, "-I", "-c", "print(" + repr(json.dumps(summary)) + ")"])
+        with self.assertRaisesRegex(ValueError, "all nine completed executable test groups"):
+            operation_nonce_evidence(self.output, self.report)
+
     def test_qualification_child_cannot_inherit_external_loader_source_or_probe(self):
         external = {"HIA_NATIVE_LOADER": "/external/loader.py",
                     "HIA_PROTOCOL_SOURCE": "/external/protocol.hepta",
@@ -172,6 +214,8 @@ class QualificationReportingTests(unittest.TestCase):
                     "HIA_SERVICE_SOURCE": "/external/service.hepta",
                     "HIA_KDF_SOURCE_ROOT": "/external/kdf-source",
                     "HIA_AEAD_SOURCE_ROOT": "/external/aead-source",
+                    "HIA_NONCE_SOURCE_ROOT": "/external/nonce-source",
+                    "HIA_NONCE_COMPOSITION_MANIFEST": "/external/nonce-composition/manifest.json",
                     "HIA_RUNTIME_REPO": "/external/repository",
                     "HIA_COMPOSITION_MANIFEST": "/external/composition/manifest.json",
                     "HIA_FUTURE_DEVELOPMENT_OVERRIDE": "/external/future",
