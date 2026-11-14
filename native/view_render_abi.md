@@ -28,13 +28,17 @@ The exact source SHA-256 and Git blob identities are recorded in
 | `src/utils/truncation.rs` | Exact line renderer and megabyte formatting |
 | `src/mcp/server.rs` | `append_hints` after the result-size gate |
 
-The complete native source has 61 functions. Forty-nine are taken from the
+The complete native source has 70 functions. Forty-nine are taken from the
 existing `runtime_bytes.hepta`, `text_budget.hepta`, and `delta.hepta` owners.
 Composition changes only their function identifiers and call targets. Tests
 reverse this relocation and compare every imported function, block and
-operation to its original admitted HIA document. No second implementation of
-line hashing, clamped signed indexing, formatting, normalization or Myers is
-used by the native runtime.
+operation to its original admitted HIA document. All 49 imported functions
+remain unchanged. Native bulk helpers copy complete text spans, normalize CRLF
+by contiguous spans, and measure line prefixes without rendering unused hash
+bytes. Publication still uses the original line hash; signed indexing, range
+errors, Myers order, capacity admission and appended hints remain unchanged.
+The change redirects three local functions and adds nine helpers; the other
+58 previously admitted functions remain identical.
 
 JSON endpoint parsing remains the existing `line_endpoint.hepta` owner. The
 new component begins after that parser has produced typed endpoints. A parsed
@@ -254,11 +258,17 @@ buffer controls, a 32-MiB workspace refusal distinct from Myers `None`, and
 three real static-ELF cases. A separate transport suite passed six HIA VM /
 native / independent-reference samples, explicit profile admission controls,
 exact fixed transport-prefix and embedded-image binding, and actual output-IO
-failure. The current measurement-reuse source completed the unchanged full
-suite in 145.32 seconds (145.48 seconds including process startup and exit),
-under the existing 180-second suite limit. The loader, all 3,125 corpus rows,
-assertions and named buffer profiles were unchanged. These local observations
-do not establish a CI speedup or a future timing guarantee.
+failure. The current bulk-rendering source completed the unchanged full
+suite in 43.608 seconds (43.668 seconds including process startup and exit),
+under the existing 180-second suite limit. All 3,125 corpus rows, assertions
+and named buffer profiles were unchanged. The borrowed-buffer loader now
+reads each 16-byte guard directly instead of copying the entire workspace;
+ordinary responses copy exactly the validated result length. Its raw
+qualification API still returns both complete mutable buffers. The actual
+11-group transport suite passes 64 deliberate output/workspace guard
+corruptions, including zero-size buffers, and an input-mutation refusal.
+These local observations do not establish a CI speedup or a future timing
+guarantee. The earlier `1ce0868a` CI timeout remains recorded as a failure.
 
 `oracle_view_render.rs` contains the unchanged original function bodies and
 the original Apache-2.0 notices. The test recreates it from the pinned original
@@ -283,9 +293,9 @@ optimization does not claim another Rust compilation or execution.
 
 | Artifact | SHA-256 |
 | --- | --- |
-| HIA source | `fe21cd3aa04cf81fd8a59480dcbf614de7ffddd8c9f25157007c2869bc7f0968` |
-| Actual HIA image | `089f3b64ad7df1e0cec496fa5f0b2f9be34b96c83aacb1ad2e314295526e49ee` |
-| Static ELF | `6de6d2d3d0d20fd2b70f9a13dc5bb40ae71b031a0de0a9105ebc12d08173a965` |
+| HIA source | `d7012a796fd83744bcfb4951d01a95d3bab63f9a7ed185ad035c4665989066a3` |
+| Actual HIA image | `a1e5bc7cf485dd0d91521a3018c6e67e8fda5c85fcdbe1dfbb27fa37dca6e9c6` |
+| Static ELF | `c1135143fe2141b1ef6d20e773217761277fa6b48f74b74fed3d0503157a9f8d` |
 | Rust source | `36efacf6a1d418c10251afed788f52b20127c62fa39a3f2534882461cce8d585` |
 | Decompressed requests | `25ee9795db24913b4d2bb717711f613242b51b629203a1588e79bc7dba71a8db` |
 | Native and Rust output | `3d432e0350eb351df875bcc8fa7d195fbefe2e64460a117a6e3c92c601417c17` |

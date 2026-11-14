@@ -217,21 +217,23 @@ this isolated component.
 
 ### View dependency update
 
-The cache plan dependency is the measurement-reuse `view_render.hepta` source
-`fe21cd3aa04cf81fd8a59480dcbf614de7ffddd8c9f25157007c2869bc7f0968`,
+The cache plan dependency is the bulk-rendering `view_render.hepta` source
+`d7012a796fd83744bcfb4951d01a95d3bab63f9a7ed185ad035c4665989066a3`,
 with actual image
-`089f3b64ad7df1e0cec496fa5f0b2f9be34b96c83aacb1ad2e314295526e49ee`.
+`a1e5bc7cf485dd0d91521a3018c6e67e8fda5c85fcdbe1dfbb27fa37dca6e9c6`.
 Its manifest SHA-256 is
-`ece6774a98545ef196eccf9a650e77de0513c366cf3cf3270630d18458198ab6`.
+`357356bf90e8a90dc025a8ee815e5d990e08e066a0e81dba9f14cd8f78f71144`.
 The cache HIA source, cache image, transport and test inputs did not change.
 
 After updating that dependency, both test processes actually ran again:
-the eight-group native suite completed in 20.361 seconds, and the four-group
-evidence suite completed in 2.297 seconds, each under its unchanged 180-second
+the eight-group native suite completed in 11.428 seconds, and the four-group
+evidence suite completed in 1.377 seconds, each under its unchanged 180-second
 process budget. All 13,873 direct cache calls, 66 persistent ELF requests,
-13 actual view calls and ten evidence refusals passed. The retained compiler
-and compile receipts were checked against the selected artifacts; this run
-did not rebuild the compiler or invoke the full cold gate.
+13 actual view calls and ten evidence refusals passed. The selected compiler
+and compile receipts were checked against 42 actual artifact identities. The
+cache image was freshly compiled; the current view image had been compiled
+and fully exercised in the same increment. This run reused the verified
+compiler bootstrap and did not invoke the full cold gate.
 
 All 13,907 exported rows, their complete request/output bytes and ordered domain
 history are byte-identical to the earlier original-Rust comparison. The new

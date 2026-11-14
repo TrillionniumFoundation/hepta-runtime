@@ -177,8 +177,11 @@ class NativeModule:
             ctypes.memset(ctypes.addressof(output) + output_capacity, 0xA5, 16)
             ctypes.memset(ctypes.addressof(workspace) + workspace_capacity, 0x5A, 16)
             result = self._entry(source, len(wire), output, output_capacity, workspace, workspace_capacity)
-            if (source.raw != (wire or b"\0") or output.raw[output_capacity:] != b"\xa5" * 16
-                    or workspace.raw[workspace_capacity:] != b"\x5a" * 16):
+            # Inspect the exact guard spans without copying the owned workspace.
+            # The raw qualification path below still returns both full buffers.
+            if (source.raw != (wire or b"\0")
+                    or ctypes.string_at(ctypes.addressof(output) + output_capacity, 16) != b"\xa5" * 16
+                    or ctypes.string_at(ctypes.addressof(workspace) + workspace_capacity, 16) != b"\x5a" * 16):
                 raise RuntimeError("native borrowed-buffer boundary changed")
             if raw:
                 return result, output.raw[:output_capacity], workspace.raw[:workspace_capacity]
@@ -190,7 +193,7 @@ class NativeModule:
                 raise NativeRejected("HIA component returned a domain rejection", result)
             if not 0 <= result <= output_capacity:
                 raise RuntimeError("native HIA result is outside the declared output")
-            return output.raw[:result]
+            return ctypes.string_at(output, result)
 
     def close(self):
         with self._lock:

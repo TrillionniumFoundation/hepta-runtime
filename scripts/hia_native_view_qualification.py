@@ -76,7 +76,7 @@ def view_evidence(root, output, report, completed):
     exact_counts(transport.get('counts'), TRANSPORT_COUNTS)
     if (summary.get('status') != 'PASS' or summary.get('complete_byte_bounds') is not True
             or summary.get('whole_view_migrated') is not False or type(summary.get('functions')) is not int
-            or summary['functions'] != 61 or type(summary.get('seconds')) not in (int, float)
+            or summary['functions'] != 70 or type(summary.get('seconds')) not in (int, float)
             or not math.isfinite(summary['seconds']) or summary['seconds'] <= 0
             or transport.get('status') != 'PASS'):
         raise ValueError('view full byte-domain and transport suites did not complete')

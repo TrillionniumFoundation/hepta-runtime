@@ -115,6 +115,8 @@ class NativeTransportTests(unittest.TestCase):
         self.assertEqual((result.returncode, result.stderr), (4, b""))
 
     def test_loader_uses_native_result_full_buffers_and_immutable_code(self):
+        import ctypes
+
         with self.load() as module:
             self.assertEqual(module.invoke(b"abc", output_capacity=3, workspace_capacity=0), b"abc")
             with self.assertRaises(NativeCapacityError):
@@ -126,6 +128,29 @@ class NativeTransportTests(unittest.TestCase):
             maps = Path("/proc/self/maps").read_text().splitlines()
             row = next(line for line in maps if int(line.split("-", 1)[0], 16) <= address < int(line.split("-", 1)[1].split()[0], 16))
             self.assertEqual(row.split()[1][:3], "r-x")
+            original_entry = module._entry
+            try:
+                # Test-only fault injection after a real native call. Every byte
+                # of each guard remains checked, including zero-size buffers.
+                for output_size, workspace_size in ((0, 0), (7, 11)):
+                    for argument in (2, 4):
+                        for offset in range(16):
+                            def corrupt_guard(*args):
+                                result = original_entry(*args)
+                                ctypes.memset(ctypes.addressof(args[argument]) + args[argument + 1] + offset, 0, 1)
+                                return result
+                            module._entry = corrupt_guard
+                            with self.assertRaisesRegex(RuntimeError, "borrowed-buffer boundary"):
+                                module.invoke(b"", output_capacity=output_size, workspace_capacity=workspace_size)
+                def corrupt_input(*args):
+                    result = original_entry(*args)
+                    ctypes.memset(args[0], 0, 1)
+                    return result
+                module._entry = corrupt_input
+                with self.assertRaisesRegex(RuntimeError, "borrowed-buffer boundary"):
+                    module.invoke(b"abc", output_capacity=3, workspace_capacity=0)
+            finally:
+                module._entry = original_entry
         with self.assertRaisesRegex(RuntimeError, "closed"):
             module.invoke(b"", output_capacity=0, workspace_capacity=0)
 
