@@ -114,7 +114,7 @@ changed recipe bytes or the fresh repository aggregate.
 
 ## Native components
 
-Qualification covers 57 native HIA sources through 33 executable component
+Qualification covers 58 native HIA sources through 34 executable component
 entries; the two scope profiles share their HIA scope owner. The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
@@ -138,6 +138,7 @@ These counts do not count migrated production MCP handlers.
 | [view_filter_packer.hepta](view_filter_packer.hepta) | Static filter for the explicit view-render capacity profile, with exact compiled-image binding |
 | [view_cache.hepta](view_cache.hepta) | Persistent serial cache state, lifecycle, per-value limit, invalidation, poisoned-lock behavior and native view-plan application |
 | [history.hepta](history.hepta) | Persistent serial original undo snapshots, ten-entry per-file eviction, 64 MiB global budget, stale queue events and exact push/pop/lifecycle behavior |
+| [session_workdir.hepta](session_workdir.hepta) | Private per-session root/current path state, exact poisoned-lock behavior and the one-time first-tool atomic latch |
 | [fence_json.hepta](fence_json.hepta) | Exact original typed owner/job serde projection, duplicate-known rejection and IgnoredAny grammar |
 | [serde_json.hepta](serde_json.hepta) | Locked Value ordering, integer/float classification and compact finite-number serialization |
 | [serde_filter_packer.hepta](serde_filter_packer.hepta) | Static filter for the explicit serde-json.v1 16/64/256 MiB profile |
@@ -248,6 +249,24 @@ The retained observation is in
 Shared file locks, canonical path keys, filesystem writes and production undo
 routing remain separate owners; a serial snapshot store alone does not replace
 the `undo_edit` handler.
+
+The [private session owner](session_workdir_abi.md) retains an immutable root,
+optional current path, original poisoned-lock behavior and the first-tool atomic
+latch in one session-owned workspace. Its native suite replays all 4,914
+original-owner rows, including complete 8 MiB path values, with 5,043 image
+calls. Eight persistent ELF sessions separately replay 320 smaller wire frames;
+that fixture domain does not stand in for the wide image corpus. The original
+recipe freshly compiles the unchanged `SessionWorkdir` methods, genuinely
+poisons nine original locks and checks the atomic latch with 64 Rust threads.
+The native side admits 64 serialized entries against the same private state.
+Fifteen evidence controls bind the complete streams, images, private call table,
+compiler receipts and actual process commands. An independent invocation of the
+three unified qualification entries passed in 18.807 seconds using verified
+compiler artifacts; this is a focused run, not a fresh full compiler-cold claim.
+First-capabilities policy/OS checks, the public `workdir` handler and concurrent
+HTTP session ownership remain caller work. No production handler is activated
+by this state component.
+
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -319,7 +338,7 @@ limit; every native process retains 180 seconds and the cold/owner limits below
 are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
-native evidence checks and all 28 original Rust recipes. Artifact transport can
+native evidence checks and all 29 original Rust recipes. Artifact transport can
 strip executable permissions; only byte-verified owned regular files have their
 recorded ordinary permissions restored. The aggregate retains the original
 partition reports and rechecks them before and after the original comparisons.
@@ -332,8 +351,8 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 81 native suite processes, the fresh compiler cold process,
-28 required original Rust recipes and one Rust-version process: 142 recorded
+The declared run has 83 native suite processes, the fresh compiler cold process,
+29 required original Rust recipes and one Rust-version process: 145 recorded
 checks in a complete successful aggregate. The two JSON recipes share one locked
 Cargo build and each perform a complete independent replay. A component's retained historical
 comparison is not a fresh aggregate invocation.
@@ -449,7 +468,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all 27 required original Rust recipes succeed. The Python reference domain
+after all 29 required original Rust recipes succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 

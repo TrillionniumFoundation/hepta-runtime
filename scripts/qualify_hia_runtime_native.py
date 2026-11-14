@@ -63,6 +63,7 @@ from hia_native_json_qualification import (COMPONENTS as JSON_COMPONENTS, TRANSP
 import hia_native_execution_qualification as execution_qualification
 import hia_native_effect_fence_qualification as effect_fence_qualification
 import hia_native_config_qualification as config_qualification
+import hia_native_session_qualification as session_qualification
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -104,6 +105,9 @@ MODULES = (
     {"key": "history", "name": "history", "source": "native/history.hepta",
      "builder": "history", "manifest_env": "HIA_HISTORY_BUNDLE", "test": "test_history.py",
      "additional_tests": ("test_history_evidence.py",)},
+    {"key": "session_workdir", "name": "session-workdir", "source": "native/session_workdir.hepta",
+     "builder": "session_workdir", "manifest_env": "HIA_SESSION_BUNDLE", "test": "test_session_workdir.py",
+     "additional_tests": ("test_session_evidence.py",)},
     {"key": "fence_json", "name": "fence-json", "source": "native/fence_json.hepta",
      "standalone": "filter", "manifest_env": "HIA_FENCE_JSON_MANIFEST", "test": "test_fence_json.py"},
     {"key": "serde_json", "name": "serde-json", "source": "native/serde_json.hepta",
@@ -242,6 +246,7 @@ def sources() -> dict:
         'hia_native_config_reference.py',
         'hia_native_config_qualification.py',
         "hia_native_execution_build.py", "hia_native_execution_qualification.py",
+        "hia_native_session_build.py", "hia_native_session_qualification.py",
         "hia_native_effect_fence_build.py", "hia_native_effect_fence_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
@@ -861,6 +866,10 @@ def history_evidence(output: Path, report: dict) -> dict:
 
 def config_evidence(output: Path, report: dict, *, create: bool = False) -> dict:
     return config_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def session_evidence(output: Path, report: dict) -> dict:
+    return session_qualification.qualification_evidence(ROOT, output, report, completed_test_summary)
 
 
 def effect_fence_evidence(output: Path, report: dict) -> dict:
@@ -2116,6 +2125,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "history":
             from hia_native_history_build import build_history
             built = build_history(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "session_workdir":
+            from hia_native_session_build import build_session
+            built = build_session(hepta, output / "build", source_root=ROOT, reference_root=ROOT)
         elif item.get("builder") == "runtime_config":
             built = config_qualification.build_config(hepta, output / "build", ROOT)
         elif item.get("builder") == "execution_shadow":
@@ -2172,6 +2184,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands = batch_apply_test_commands(output, output / report["modules"]["batch_apply"]["manifest"])
     commands.update(execution_test_commands(output, report))
     commands.update(config_qualification.test_commands(ROOT, output, report))
+    commands.update(session_qualification.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
@@ -2202,6 +2215,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["view_render_evidence"] = view_render_evidence(output, report)
     report["view_cache_evidence"] = view_cache_evidence(output, report)
     report["history_evidence"] = history_evidence(output, report)
+    report["session_evidence"] = session_evidence(output, report)
     report["json_evidence"] = json_evidence(output, report)
     report["execution_evidence"] = execution_evidence(output, report)
     report["effect_fence_evidence"] = effect_fence_evidence(output, report)

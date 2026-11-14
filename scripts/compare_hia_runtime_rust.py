@@ -27,6 +27,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
                                        history_evidence, json_evidence, execution_evidence, effect_fence_evidence, config_evidence,
+                                       session_evidence,
                                        atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
@@ -160,6 +161,14 @@ def check_input_pins(output: Path, report: dict) -> None:
     check_json_original_receipts(ROOT, output, report, completed_test_summary)
     if report.get("history_evidence") != history_evidence(output, report):
         raise ValueError("required history state/original-domain/static-image evidence differs")
+    if report.get("session_evidence") != session_evidence(output, report):
+        raise ValueError("required session state, latch, full corpus and executable evidence differs")
+    if "session_workdir" in report.get("original_rust_comparisons", {}):
+        import hia_native_session_qualification as session_qualification
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        actual = session_qualification.retained_original(ROOT, output, report, rustc, completed_test_summary)
+        if report["original_rust_comparisons"]["session_workdir"] != actual:
+            raise ValueError("required actual session original invocation changed")
     if report.get("view_cache_evidence") != view_cache_evidence(output, report):
         raise ValueError("required cache state/lifecycle/view-plan/transport evidence differs")
     if report.get("operation_scope_os_evidence") != operation_scope_os_evidence(output, report):
@@ -212,7 +221,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1305,11 +1314,17 @@ def compare_effect_fence(output: Path, report: dict, rustc: Path) -> dict:
                               q.completed_process, record_check, qualification_env())
 
 
+def compare_session_workdir(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_session_qualification as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                              record_check, qualification_env())
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
-           "view_cache": compare_view_cache, "history": compare_history,
+           "view_cache": compare_view_cache, "history": compare_history, "session_workdir": compare_session_workdir,
            "fence_json": compare_fence_json, "serde_json": compare_serde_json, "execution_shadow": compare_execution,
            "effect_fence": compare_effect_fence, "runtime_config": compare_config,
            "operation_scope_os": compare_operation_scope_os,
