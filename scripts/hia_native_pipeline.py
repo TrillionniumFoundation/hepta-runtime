@@ -26,11 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qualify_hia_runtime_native as q
 
 PARTITIONS = {
-    "batch": ("batch_plan", "batch_apply"),
+    "batch": ("batch_plan", "batch_apply", "atomic_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "request_context", "response_hints",
              "line_endpoint", "line_verify",
              "delta", "editable_content", "view_render", "view_cache", "history"),
-    "json": ("fence_json", "serde_json"),
+    "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
                "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service"),
@@ -97,6 +97,23 @@ def inventory(root: Path, exclude=()) -> tuple[dict, list[str]]:
             if relative not in exclude:
                 files[relative] = file_identity(path)
     return files, directories
+
+
+def verify_directories(root: Path, names: list[str], *, restore: bool = False) -> None:
+    """Keep actual empty evidence directories through ZIP artifact transport."""
+    if type(names) is not list or any(type(name) is not str for name in names) or len(names) != len(set(names)):
+        raise ValueError("native shard directory inventory differs")
+    if root.is_symlink() or root.resolve(strict=True) != root.absolute():
+        raise ValueError("native shard directory root crosses a symlink")
+    for name in sorted(names, key=lambda value: (value.count("/"), value)):
+        path = root / relative_path(name)
+        if path.is_symlink() or path.resolve() != path.absolute():
+            raise ValueError("native shard directory crosses a symlink")
+        if restore:
+            path.mkdir(mode=0o700, parents=True, exist_ok=True)
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+            raise ValueError("native shard directory is not owned")
 
 
 def verify_files(root: Path, files: dict, *, restore_modes: bool = False) -> None:
@@ -263,15 +280,25 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
     destination.mkdir(parents=True, mode=0o700, exist_ok=False)
     data = destination / "data"
     data.mkdir(mode=0o700)
-    files, _ = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
+    if any(row.get("name") == "test_atomic_write_policy.py" for row in report.get("checks", ())):
+        # Actual filesystem snapshots and full content gzips are mandatory.
+        # Their live effect targets may be symlinks or inaccessible directories;
+        # they are not evidence files and never enter a transported artifact.
+        evidence = q.atomic_write_evidence(output, report)
+        q.atomic_write_retire_fixtures(output, tuple(evidence["transient_fixture_directories"]),
+            output / "atomic-write/retired-fixtures.json", evidence["native_evidence"], create=True)
+    files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
+    for name in directories:
+        if name not in seal.get("directories", ()):
+            (data / relative_path(name)).mkdir(mode=0o700, parents=True, exist_ok=True)
     for name, identity in files.items():
         target = data / relative_path(name)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(owned(output, name), target)
         target.chmod(identity["mode"])
     q.save_report(destination / "shard-report.json", report)
-    q.save_report(destination / "shard.json", {"schema": "hepta.runtime.native-shard.v1",
-        "binding": report["qualification_shard"], "files": files,
+    q.save_report(destination / "shard.json", {"schema": "hepta.runtime.native-shard.v2",
+        "binding": report["qualification_shard"], "files": files, "directories": inventory(data)[1],
         "report_sha256": digest(destination / "shard-report.json")})
 
 
@@ -306,13 +333,16 @@ def admit_shard(data: Path, receipt_path: Path, report_path: Path, prepared: dic
     receipt = read_json(receipt_path)
     tests = partition_tests()[group]
     binding = {"group": group, "invocation": invocation, "prepared_sha256": expected, "tests": list(tests)}
-    if (set(receipt) != {"schema", "binding", "files", "report_sha256"}
-            or receipt["schema"] != "hepta.runtime.native-shard.v1" or receipt["binding"] != binding
+    if (set(receipt) != {"schema", "binding", "files", "directories", "report_sha256"}
+            or receipt["schema"] != "hepta.runtime.native-shard.v2" or receipt["binding"] != binding
             or digest(report_path) != receipt["report_sha256"]):
         raise ValueError("native shard binding or actual report identity differs")
     verify_files(data, receipt["files"], restore_modes=exact_files)
-    if exact_files and inventory(data)[0] != receipt["files"]:
-        raise ValueError("native shard artifact file inventory differs")
+    verify_directories(data, receipt["directories"], restore=exact_files)
+    if exact_files:
+        files, directories = inventory(data)
+        if files != receipt["files"] or set(directories) != set(receipt["directories"]):
+            raise ValueError("native shard artifact file or directory inventory differs")
     report = read_json(report_path)
     changed = {"status", "phase", "native_components_status", "checks"}
     additions = {"qualification_shard", "native_parallel_receipts", "shard_elapsed_seconds", "shard_finished_at"}
@@ -383,7 +413,7 @@ def collect(output: Path, hepta: Path, expected: str, invocation: str, shards: P
         folders = sorted(shards.iterdir())
         if len(folders) != len(PARTITIONS) or any(p.is_symlink() or not p.is_dir() for p in folders):
             raise ValueError("collector requires exactly four complete shard artifacts")
-        parts, copies, all_files = {}, {}, {}
+        parts, copies, all_files, all_directories = {}, {}, {}, set()
         for folder in folders:
             receipt_path, report_path = owned(folder, "shard.json"), owned(folder, "shard-report.json")
             group = read_json(receipt_path).get("binding", {}).get("group")
@@ -394,6 +424,7 @@ def collect(output: Path, hepta: Path, expected: str, invocation: str, shards: P
             receipt, part = admit_shard(folder / "data", receipt_path, report_path, prepared, expected,
                                         invocation, group, exact_files=True)
             parts[group] = (folder, receipt, part)
+            all_directories.update(receipt["directories"])
             for name, identity in receipt["files"].items():
                 if name in seal["files"] or name in {BUILD_SEAL, "result.json"} or name.startswith("qualification-shards/"):
                     raise ValueError("native shard attempts to replace an immutable prepared artifact")
@@ -402,6 +433,7 @@ def collect(output: Path, hepta: Path, expected: str, invocation: str, shards: P
                 all_files[name], copies[name] = identity, folder / "data" / name
         if set(parts) != set(PARTITIONS):
             raise ValueError("collector is missing a complete native shard")
+        verify_directories(output, sorted(all_directories), restore=True)
         for name, source in copies.items():
             target = output / relative_path(name)
             if target.exists() or target.is_symlink():

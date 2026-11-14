@@ -1,7 +1,7 @@
 # HIA native runtime
 
 This directory contains the current HIA implementation of deterministic runtime
-components, a read-only descriptor dependency and persistent native MCP stdio services. All implementation sources
+components, local read/write descriptor owners and persistent native MCP stdio services. All implementation sources
 in this directory use `.hepta` and are compiled by HIA to machine code. The Linux
 executables have no Python, Rust, libc or dynamic-loader runtime dependency.
 
@@ -30,12 +30,97 @@ complete functionality. This work preserves the integration stack as its base.
 Hepta already uses the `.hepta` suffix; protocol names such as `hia-asm.v1`
 continue to identify the language and are not filename extensions.
 
+## Shadow execution composition
+
+The [three shadow owners](execution_shadow_abi.md) preserve exact original serde
+admission, non-effectful validation, canonical SHA256 and parameter errors.
+The composed controller calls typed JSON, installed exact-host lookup, then the
+core; unknown hosts therefore retain their original priority over invalid record
+fields. It cannot install configuration or grant execution.
+
+The source-bound scoped run executes five actual native suites in 115.922 seconds:
+73,349 core rows, 14,960 direct/Value JSON rows, all 7,480 canonical-Value error
+outcomes, 963 controller calls with explicitly identified host dependency
+fixtures, and one accepted evidence object plus 20 physical corruption refusals.
+Actual standard-profile ELF tests are separate from wide composed-image profiles.
+No complete installed-host or public MCP parity is claimed by these fixtures.
+
+The portable original recipe freshly compiles the exact original owner and both
+reference entries with 28 production-lock-verified dependencies, runs all five
+original tests, and replays both full corpora. Its observed ai395 run
+`1a1dbf15a2f-392-1b3a` passes all five subprocesses in 11.809 seconds. It compares
+39,009,956 core output bytes and 41,226,842 normalized JSON output bytes, plus the
+complete 58,230,252-byte original typed result/error stream. Historical receipts
+do not replace the fresh mandatory original recipe in the aggregate.
+
+Every new native suite retains 180 seconds, and the single original-recipe
+process retains 180 seconds including compilation and full replay. The ordinary
+builder, loader, compiler pin and all existing component gates remain unchanged.
+The `execution_shadow` registry entry belongs to the JSON partition; no
+production handler, activation or old-stack-removal state is advanced.
+
+## Effect fence acquisition and lifetime
+
+The [native effect fence](effect_fence_abi.md) combines the original admission
+decision, descriptor custody and private asynchronous permit lifecycle in a
+fixed static executable. It validates owner/state/predecessor identity, holds
+the actual shared fence until release, and reclaims cancelled or failed workers.
+The production profile has 512 workers. A separately source-pinned one-worker
+packer exists only for queued-cancellation qualification.
+
+The frozen scoped run `1a1dbed81b7-392-1b32` completed seven native suites and
+eight actual original Rust checks in 91.395 seconds. Its 36 native groups include
+128 real executable processes, 49,757 transport frames, 249 complete semantic
+responses, 98 native packer calls, one valid cache admission with ten refusals,
+and one accepted evidence object with 38 refusals. Both freshly built original
+references pass the complete serial and paired-kernel domain, all five unchanged
+acquisition test bodies and the real Mutex-poison control. Earlier failures,
+including the observer's incorrect original task-count assumption, remain
+identified in the retained observations.
+
+The same seven suites and eight subprocess checks are mandatory in the aggregate.
+The JSON partition executes the seven suites in dependency order; every process
+retains 180 seconds. Trusted startup and private permit ownership do not yet
+connect every production effect caller or install RuntimeConfig. The public
+tool and old-stack-removal declarations therefore remain incomplete.
+
+## Installed configuration and MCP composition
+
+The [configuration scope](config_scope.md) and [private owner contract](config_owner_abi.md)
+cover six native semantic owners and four fixed HIA packers. The ten-image static
+stdio profile provides `host_list`, `effective_config` and `execution_shadow_admit`.
+Startup owns configuration installation, actual lock descriptors and immutable
+host identity; tool input cannot install a configuration or supply an authority
+receipt. Its fixed call table connects generic JSON Value parsing, typed schemas,
+installed exact-host lookup and the native shadow controller.
+
+Six mandatory native suites cover 35 test groups. The focused observed version
+passes 6,580 typed calls, 4,049 semantic calls, 61 filesystem requests, 73 owner
+requests, 60 actual MCP responses and 38 continuation-receipt controls. The
+aggregate executes these as six separately retained processes under the existing
+180-second limits. Its original reference recipe performs one locked Cargo build
+of four entries, compares 6,491 typed inputs, 2,063 semantic inputs, 62 installed
+owner scenarios and 1,119 complete SDK protocol responses. The latter two domains
+execute both native and original binaries on identical fixture paths.
+
+Four semantic corpus entries still require complete regular-expression
+compilation. They are explicitly recorded as pending, separately from exact
+comparisons, and prevent a complete configuration-owner claim. The original
+owner comparison also documents excluded diagnostic categories and opaque node
+identity. The original recipe now permits fetching its exact locked dependencies
+on a fresh CI runner; `--offline` remains an explicit development option. Both
+paths use the selected Rust compiler. Historical focused runs cannot qualify
+changed recipe bytes or the fresh repository aggregate.
+
 ## Native components
 
-Qualification covers 39 production HIA sources through 31 executable components
-and eight HIA packers; the two scope profiles share their HIA scope owner.
-Test-only HIA fixtures are recorded separately from
-the production source inventory.
+Qualification covers 59 native HIA sources through 35 executable component
+entries, including 15 HIA packers; the two scope profiles share their HIA scope
+owner. The complete source closure binds 528 files. The shadow entry
+qualifies its typed JSON, canonical core and ordered composition controller.
+The source registry explicitly identifies the immutable one-worker fence packer
+as qualification-only. The 16 other test HIA fixtures are recorded separately.
+These counts do not count migrated production MCP handlers.
 
 | Source | Implemented behavior |
 | --- | --- |
@@ -47,6 +132,8 @@ the production source inventory.
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
 | [batch_plan.hepta](batch_plan.hepta) | Original typed batch admission, operation parsing and endpoint planning, complete ordered diagnostics and full 50-operation / 5 MiB file domains |
 | [batch_apply.hepta](batch_apply.hepta) | Original ordered batch conflicts, duplicate/noise diagnostics, full application through EditableContent, Rust Debug escaping and fixed plan-to-apply composition |
+| [atomic_write.hepta](atomic_write.hepta) | Complete original Linux Local atomic-write policy, exact Unix temporary paths, metadata/permission behavior, retries, cleanup and cancellation ordering |
+| [atomic_write_packer.hepta](atomic_write_packer.hepta) | Fixed native write syscall boundary, descriptor custody, owned worker, cancellation/drain and parent-death cleanup |
 | [line_verify.hepta](line_verify.hepta) | Original stale line-ID verification, exact fresh context and nearest-three relocation hints, plus complete strict/clamped index results |
 | [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
 | [editable_content.hepta](editable_content.hepta) | Original ordered text state, per-line endings, insertion, normalized-byte replacement and trailing-newline preservation |
@@ -57,6 +144,24 @@ the production source inventory.
 | [fence_json.hepta](fence_json.hepta) | Exact original typed owner/job serde projection, duplicate-known rejection and IgnoredAny grammar |
 | [serde_json.hepta](serde_json.hepta) | Locked Value ordering, integer/float classification and compact finite-number serialization |
 | [serde_filter_packer.hepta](serde_filter_packer.hepta) | Static filter for the explicit serde-json.v1 16/64/256 MiB profile |
+| [execution_shadow.hepta](execution_shadow.hepta) | Original typed intent validation, canonical struct serialization, domain-separated SHA256 and exact shadow-only result |
+| [execution_json.hepta](execution_json.hepta) | Original execution serde types, direct and canonical Value admission, strict unknown-field rules and exact typed error messages |
+| [execution_controller.hepta](execution_controller.hepta) | Fixed typed admission, installed-host lookup and core validation order, with checked private child continuations |
+| [config_json.hepta](config_json.hepta) | Original typed configuration schemas and defaults |
+| [config_validation.hepta](config_validation.hepta) | Configuration validation order and normalization; four regex cases remain pending |
+| [config_identity.hepta](config_identity.hepta) | Effective configuration serialization and installed identity digest |
+| [config_fs.hepta](config_fs.hepta) | Actual startup file/state operations and retained lock descriptors |
+| [config_owner.hepta](config_owner.hepta) | Private installed configuration, exact host lookup and immutable cached responses |
+| [config_mcp.hepta](config_mcp.hepta) | Persistent stdio controller for the three configured tools |
+| [config_fs_packer.hepta](config_fs_packer.hepta) | Static filesystem qualification executable |
+| [config_owner_packer.hepta](config_owner_packer.hepta) | Static startup owner with five fixed images |
+| [config_owner_fixture_packer.hepta](config_owner_fixture_packer.hepta) | Immutable test profile for reinstallation controls |
+| [config_mcp_packer.hepta](config_mcp_packer.hepta) | Static MCP executable with ten fixed native images |
+| [effect_owner_fence.hepta](effect_owner_fence.hepta) | Original owner/state/predecessor admission and exact semantic results |
+| [effect_fence_fs.hepta](effect_fence_fs.hepta) | Descriptor custody, filesystem validation and real Linux failure/race controls |
+| [effect_fence_manager.hepta](effect_fence_manager.hepta) | Private asynchronous acquisition, worker cancellation and live permit lifetime |
+| [effect_fence_async_packer.hepta](effect_fence_async_packer.hepta) | Fixed five-image static executable with the 512-worker startup profile |
+| [effect_fence_async_queue_fixture_packer.hepta](effect_fence_async_queue_fixture_packer.hepta) | Immutable one-worker qualification fixture for queued cancellation |
 | [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
 | [operation_kdf.hepta](operation_kdf.hepta) | Internal HMAC/HKDF-SHA256, original token-key derivation, private binding bytes and per-record key derivation with cleared workspace |
 | [operation_aead.hepta](operation_aead.hepta) | Internal ChaCha20-Poly1305, full-tag authentication before plaintext output, exact refusal/capacity behavior and declared-workspace clearing |
@@ -212,21 +317,27 @@ and one aggregate/original-Rust job. The prepare job executes the full cold gate
 and builds every module once. Its exact SHA256 is passed through the workflow;
 every partition checks the full source, compiler, build and invocation identity
 before executing its complete suite list. Batch, text/history/view, JSON and
-system suites run on separate runners. Each job retains the original 15-minute
+system suites run on separate runners with 10, 21, 22 and 32 native suites,
+respectively. Each job retains the original 15-minute
 limit; every native process retains 180 seconds and the cold/owner limits below
 are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
-native evidence checks and all 26 original Rust recipes. Artifact transport can
+native evidence checks and all 30 original Rust recipes. Artifact transport can
 strip executable permissions; only byte-verified owned regular files have their
 recorded ordinary permissions restored. The aggregate retains the original
 partition reports and rechecks them before and after the original comparisons.
+The shard receipt also binds its complete directory inventory, preserving empty
+content snapshots through artifact ZIP transport. The atomic writer's live
+effect targets are retired only after complete snapshots, full content gzips,
+raw traces and all actual process outputs pass their evidence checks. Retirement
+records bind that accepted evidence; no semantic call is added or reconstructed.
 The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 63 native suite processes, the fresh compiler cold process,
-26 required original Rust recipes and one Rust-version process: 116 recorded
+The declared run has 85 native suite processes, the fresh compiler cold process,
+30 required original Rust recipes and one Rust-version process: 149 recorded
 checks in a complete successful aggregate. The two JSON recipes share one locked
 Cargo build and each perform a complete independent replay. The two request-context
 recipes share another fresh locked Cargo build and two original execution processes.
@@ -344,7 +455,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all 24 required original Rust recipes succeed. The Python reference domain
+after all 27 required original Rust recipes succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -730,6 +841,36 @@ The EditableContent LF scan and bulk operations have changed f3/f5/f8; all other
 twenty functions retain their exact source and the complete original Editable
 recipe remains mandatory. Canonical locks, file writes, history/cache updates,
 configuration, authorization and production routing remain separate owners.
+
+The [local atomic-write owner](atomic_write_abi.md) runs the complete original
+Linux Local `atomic_write` ordering through a fixed syscall-only native boundary.
+It preserves raw Unix parent bytes, lossy temporary names, followed metadata,
+all original permission bits, open/write/chmod retry behavior, partial writes,
+write-failure temporary files and chmod/rename cleanup precedence. The native
+worker preserves cancellation acknowledgements, blocking-stage drain, persistent
+statx fallback state and parent-death custody. The complete batch-derived
+**505 MiB write** uses the existing named adapter capacity profile; it does not
+introduce a new file-size policy.
+
+Four mandatory suites cover **170,947 direct HIA entries**, including **88,807
+path requests** and synthetic effect/error histories; **151 real-kernel cases
+with 171 actual write requests**; **28 actual boundary processes**; and **34
+evidence-corruption refusals**. Synthetic transitions, filesystem requests and
+refusal checks remain separately counted. All four processes keep the original
+180-second deadline. They run sequentially in the batch partition, preserving
+the complete large-memory domain.
+
+The required original recipe uses Rust **1.95.0**, the complete unchanged
+`text_editing.rs` atomic function and locked original dependencies. It freshly
+builds the oracle, compares all 88,807 path responses and 4,095 errno properties
+plus two NUL/WriteZero properties, then runs both writers against fresh kernel
+fixtures: 151 state/trace comparisons and 171 requests per writer. The new paired
+native calls do not increase the native-phase count. The
+[captured original comparison](atomic_write_original_rust_comparison.json)
+retains the final actual remote execution and earlier failures, including the
+statx fallback correction. That observation does not substitute for the required
+fresh CI recipe. Canonical file locks, shared caller lifetimes, authorization,
+history/cache updates, Remote/SSH and production tool routing remain unported.
 
 The editable-content component compares **8,749 complete ordered responses**
 with the unchanged original `EditableContent` methods. This includes mixed
