@@ -26,7 +26,9 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        PARALLEL_NATIVE_SUITES,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
-                                       history_evidence, json_evidence,
+                                       history_evidence, json_evidence, execution_evidence, effect_fence_evidence, config_evidence,
+                                       atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
+                                       atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        operation_record_evidence, operation_scope_evidence,
@@ -133,10 +135,28 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required complete batch input/endpoint/large-result evidence differs")
     if report.get("batch_apply_evidence") != batch_apply_evidence(output, report):
         raise ValueError("required batch application complete native execution evidence differs")
+    if report.get("atomic_write_evidence") != atomic_write_evidence(output, report):
+        raise ValueError("required atomic policy, kernel, boundary or refusal evidence differs")
+    if "atomic_write" in report.get("original_rust_comparisons", {}):
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        if report["original_rust_comparisons"]["atomic_write"] != atomic_write_original_evidence(output, report, rustc):
+            raise ValueError("required actual atomic original invocation or retained corpus differs")
     if report.get("view_render_evidence") != view_render_evidence(output, report):
         raise ValueError("required complete view byte-domain/cache-plan/transport evidence differs")
     if report.get("json_evidence") != json_evidence(output, report):
         raise ValueError("required JSON actual native/ELF/corpus evidence differs")
+    if report.get("execution_evidence") != execution_evidence(output, report):
+        raise ValueError("required execution typed/core/controller evidence differs")
+    if report.get("effect_fence_evidence") != effect_fence_evidence(output, report):
+        raise ValueError("required effect fence actual process/lifetime/kernel evidence differs")
+    if report.get("config_evidence") != config_evidence(output, report):
+        raise ValueError("required configuration native evidence differs")
+    if "runtime_config" in report.get("original_rust_comparisons", {}):
+        if report["original_rust_comparisons"]["runtime_config"] != retained_config_original(output, report):
+            raise ValueError("required complete original configuration evidence differs")
+    if "execution_shadow" in report.get("original_rust_comparisons", {}):
+        if report["original_rust_comparisons"]["execution_shadow"] != retained_execution_original(output, report):
+            raise ValueError("required complete original execution replay changed")
     check_json_original_receipts(ROOT, output, report, completed_test_summary)
     if report.get("history_evidence") != history_evidence(output, report):
         raise ValueError("required history state/original-domain/static-image evidence differs")
@@ -192,7 +212,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "history"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1021,6 +1041,61 @@ def compare_batch_apply(output: Path, report: dict, rustc: Path) -> dict:
             "original_stderr_sha256": check["stderr_sha256"]}
 
 
+def atomic_write_original_command(output: Path, report: dict, rustc: Path) -> list[str]:
+    cargo = executable(str(rustc.with_name("cargo")))
+    return [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_atomic_write_original.py"),
+            "--runtime", str(ROOT), "--native-manifest", str(output / report["modules"]["atomic_write"]["manifest"]),
+            "--policy-corpus", str(output / "atomic-write/policy"), "--output", str(output / "atomic-write-original"),
+            "--rustc", str(rustc), "--cargo", str(cargo)]
+
+
+def atomic_write_original_evidence(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_atomic_write_qualification as q
+    folder = output / "atomic-write-original"
+    command = atomic_write_original_command(output, report, rustc)
+    completed = atomic_write_completed_process(output, report, "atomic-write-rust-compare", command,
+                                               phase="original_rust_comparison")
+    evidence = q.original_comparison_evidence(folder, output / report["modules"]["atomic_write"]["manifest"],
+        output / "atomic-write/policy", source_root=ROOT, reference_root=ROOT,
+        stdout=output / "atomic-write-rust-compare.stdout")
+    retained = q.obj(folder / "result.json")
+    for name, path in (("rustc", rustc), ("cargo", Path(command[-1]))):
+        if any(retained[name].get(key) != value for key, value in q.file_record(path).items()):
+            raise ValueError("atomic original compiler or Cargo executable changed")
+    fixtures = tuple(f"atomic-write-original/{kind}-kernel/{index:04d}-{case['name']}/fixture"
+                     for kind in ("native", "original") for index, case in enumerate(q.case_module.cases()))
+    atomic_write_retire_fixtures(output, fixtures, folder / "retired-fixtures.json", evidence)
+    return {"schema": "hepta.runtime.atomic-write-required-original.v1", "status": "PASS",
+        "reference_kind": "complete unchanged Linux Local atomic_write, actual std::Path and std::io properties",
+        "compiled_by_qualification_recipe": True, "completed_process": completed, "reference_evidence": evidence,
+        "retained_files_sha256": atomic_write_retained_files(output, folder, fixtures=fixtures),
+        "rust_path_cases": 88807, "original_atomic_write_requests": 171, "kernel_state_and_trace_comparisons": 151,
+        "paired_native_atomic_write_requests": 171, "native_phase_cases_added_by_reference": 0,
+        "original_error_display_property_rows": 4095, "original_nul_and_writezero_properties": 2,
+        "complete_original_tool_parity": False, "remote_ssh_parity": False,
+        "production_activated": False, "whole_runtime_replaced": False}
+
+
+def compare_atomic_write(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_atomic_write_qualification as q
+    native = atomic_write_evidence(output, report)
+    if native != report.get("atomic_write_evidence"):
+        raise ValueError("atomic native execution evidence changed before original replay")
+    record_check(output, report, name="atomic-write-rust-compare",
+        command=atomic_write_original_command(output, report, rustc), timeout=180, env=qualification_env())
+    folder = output / "atomic-write-original"
+    completed = q.original_comparison_evidence(folder, output / report["modules"]["atomic_write"]["manifest"],
+        output / "atomic-write/policy", source_root=ROOT, reference_root=ROOT,
+        stdout=output / "atomic-write-rust-compare.stdout")
+    fixtures = tuple(f"atomic-write-original/{kind}-kernel/{index:04d}-{case['name']}/fixture"
+                     for kind in ("native", "original") for index, case in enumerate(q.case_module.cases()))
+    atomic_write_retire_fixtures(output, fixtures, folder / "retired-fixtures.json", completed, create=True)
+    result = atomic_write_original_evidence(output, report, rustc)
+    if atomic_write_evidence(output, report) != native:
+        raise ValueError("atomic native execution evidence changed during original replay")
+    return result
+
+
 def compare_line_verify(output: Path, report: dict, rustc: Path) -> dict:
     evidence = line_verify_evidence(output, report)
     if evidence != report.get("line_verify_evidence"):
@@ -1166,11 +1241,77 @@ def compare_serde_json(output: Path, report: dict, rustc: Path) -> dict:
         "serde_json", completed=completed_test_summary, record_check=record_check, environment=qualification_env)
 
 
+def retained_execution_original(output: Path, report: dict) -> dict:
+    import hia_native_execution_qualification as q
+    name = "execution-shadow-rust-compare"
+    check, summary = completed_test_summary(output, report, name)
+    folder = output / "execution-shadow-rust-reference"
+    result = q.original_evidence(ROOT, output / q.FOLDER, folder, stdout=output / (name + ".stdout"))
+    q.exact(summary, result["report"], "actual original aggregate stdout differs")
+    if (check.get("timeout_seconds") != 180 or not 0 < check.get("elapsed_seconds", 0) < 180
+            or check.get("stderr_bytes") != 0 or check["stdout_bytes"] != (output / (name + ".stdout")).stat().st_size):
+        raise ValueError("execution original aggregate process differs")
+    command = check["command"]
+    expected = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_execution_original.py"),
+                "--runtime", str(ROOT), "--corpus", str(output / q.FOLDER), "--output", str(folder),
+                "--rustc", report["rust_compiler"]["invocation_path"]]
+    if len(command) != len(expected) + 2 or command[:len(expected)] != expected or command[-2] != "--cargo":
+        raise ValueError("execution original aggregate invocation differs")
+    return {**result, "completed_process": {key: check[key] for key in
+            ("command", "exit_code", "timed_out", "timeout_seconds", "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256")}}
+
+
+def compare_execution(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_execution_qualification as q
+    before = execution_evidence(output, report)
+    if before != report.get("execution_evidence"):
+        raise ValueError("execution native evidence changed before original replay")
+    cargo = executable(str(rustc.with_name("cargo")))
+    command = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_execution_original.py"),
+               "--runtime", str(ROOT), "--corpus", str(output / q.FOLDER),
+               "--output", str(output / "execution-shadow-rust-reference"), "--rustc", str(rustc), "--cargo", str(cargo)]
+    record_check(output, report, name="execution-shadow-rust-compare", command=command, timeout=180,
+                 env=qualification_env())
+    result = retained_execution_original(output, report)
+    if execution_evidence(output, report) != before:
+        raise ValueError("execution native evidence changed during original replay")
+    return result
+
+
+def retained_config_original(output: Path, report: dict) -> dict:
+    import hia_native_config_qualification as q
+    return q.original_evidence(ROOT, output, report, completed_test_summary)
+
+
+def compare_config(output: Path, report: dict, rustc: Path) -> dict:
+    before = config_evidence(output, report)
+    if before != report.get("config_evidence"):
+        raise ValueError("configuration native evidence changed before original replay")
+    cargo = executable(str(rustc.with_name("cargo")))
+    command = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_config_original.py"),
+               "--repo", str(ROOT), "--native-results", str(output / "config-native/result.json"),
+               "--output", str(output / "config-original"), "--cargo", str(cargo), "--rustc", str(rustc)]
+    record_check(output, report, name="config-rust-compare", command=command, timeout=180,
+                 env=qualification_env())
+    result = retained_config_original(output, report)
+    if config_evidence(output, report) != before:
+        raise ValueError("configuration native evidence changed during original replay")
+    return result
+
+
+def compare_effect_fence(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_effect_fence_qualification as q
+    return q.compare_original(ROOT, output, report, rustc,
+                              q.completed_process, record_check, qualification_env())
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
+           "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
            "view_cache": compare_view_cache, "history": compare_history,
-           "fence_json": compare_fence_json, "serde_json": compare_serde_json,
+           "fence_json": compare_fence_json, "serde_json": compare_serde_json, "execution_shadow": compare_execution,
+           "effect_fence": compare_effect_fence, "runtime_config": compare_config,
            "operation_scope_os": compare_operation_scope_os,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,

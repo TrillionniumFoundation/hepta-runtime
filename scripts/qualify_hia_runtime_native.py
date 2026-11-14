@@ -14,7 +14,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
+import stat
 import struct
 import subprocess
 import sys
@@ -52,11 +54,15 @@ from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 batch_plan_evidence as checked_batch_plan_evidence)
 
 import hia_native_batch_apply_qualification as batch_apply_qualification
+import hia_native_atomic_write_qualification as atomic_write_qualification
 from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
                                               qualification_evidence as checked_history_evidence)
 
 from hia_native_json_qualification import (COMPONENTS as JSON_COMPONENTS, TRANSPORT_REPORT as JSON_TRANSPORT_REPORT,
                                            qualification_evidence as checked_json_evidence)
+import hia_native_execution_qualification as execution_qualification
+import hia_native_effect_fence_qualification as effect_fence_qualification
+import hia_native_config_qualification as config_qualification
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -78,6 +84,11 @@ MODULES = (
      "builder": "batch_apply", "manifest_env": "HIA_APPLY_BUNDLE", "test": "test_batch_apply.py",
      "additional_tests": ("test_batch_apply_contract.py", "test_batch_apply_artifacts.py",
                           "test_batch_apply_evidence.py")},
+    {"key": "atomic_write", "name": "atomic-write", "source": "native/atomic_write.hepta",
+     "builder": "atomic_write", "manifest_env": "HIA_ATOMIC_MANIFEST", "test": "test_atomic_write_policy.py",
+     "additional_tests": ("test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
+                          "test_atomic_write_evidence.py"),
+     "companion_sources": ("native/atomic_write_packer.hepta",)},
     {"key": "delta", "name": "delta", "source": "native/delta.hepta",
      "standalone": "filter", "manifest_env": "HIA_DELTA_MANIFEST", "test": "test_delta.py"},
     {"key": "editable_content", "name": "editable-content", "source": "native/editable_content.hepta",
@@ -100,6 +111,29 @@ MODULES = (
      "companion_sources": ("native/serde_filter_packer.hepta",),
      "manifest_env": "HIA_SERDE_JSON_MANIFEST", "test": "test_serde_json.py",
      "additional_tests": ("test_serde_json_transport.py", "test_json_evidence.py")},
+    {"key": "runtime_config", "name": "runtime-config", "source": "native/config_owner.hepta",
+     "builder": "runtime_config", "manifest_env": "HIA_CONFIG_BUILD", "test": "test_config_json.py",
+     "additional_tests": ("test_config_semantics.py", "test_config_fs.py", "test_config_owner.py",
+                          "test_config_mcp.py", "test_config_mcp_receipts.py"),
+     "companion_sources": ("native/config_json.hepta", "native/config_validation.hepta",
+                           "native/config_identity.hepta", "native/config_fs.hepta", "native/config_mcp.hepta",
+                           "native/config_fs_packer.hepta", "native/config_owner_packer.hepta",
+                           "native/config_owner_fixture_packer.hepta", "native/config_mcp_packer.hepta")},
+    {"key": "execution_shadow", "name": "execution-shadow", "source": "native/execution_shadow.hepta",
+     "builder": "execution_shadow", "manifest_env": "HIA_EXECUTION_BUNDLE",
+     "companion_sources": ("native/execution_json.hepta", "native/execution_controller.hepta"),
+     "test": "test_execution_shadow.py",
+     "additional_tests": ("test_execution_json.py", "test_execution_json_errors.py",
+                          "test_execution_controller.py", "test_execution_evidence.py")},
+    {"key": "effect_fence", "name": "effect-fence", "source": "native/effect_owner_fence.hepta",
+     "builder": "effect_fence", "manifest_env": "HIA_FENCE_BUNDLE",
+     "companion_sources": ("native/effect_fence_fs.hepta", "native/effect_fence_manager.hepta",
+                           "native/effect_fence_async_packer.hepta",
+                           "native/effect_fence_async_queue_fixture_packer.hepta"),
+     "test": "test_fence_async.py",
+     "additional_tests": ("test_fence_worker.py", "test_fence_lifetime.py",
+                          "effect_fence_async_serial_adapter.py", "test_fence_kernel.py",
+                          "test_fence_packer.py", "test_fence_evidence.py")},
     {"key": "binary_codec", "name": "binary-codec", "source": "native/binary_codec.hepta",
      "standalone": "filter", "manifest_env": "HIA_CODEC_MANIFEST", "test": "test_binary_codec.py"},
     {"key": "operation_kdf", "name": "operation-kdf", "source": "native/operation_kdf.hepta",
@@ -197,9 +231,22 @@ def sources() -> dict:
         "hia_native_editable_qualification.py", "hia_native_view_qualification.py",
         "hia_native_view_cache_build.py", "hia_native_view_cache_qualification.py",
         "hia_native_history_build.py", "hia_native_history_qualification.py", "hia_native_json_qualification.py",
+        'build_config_fs_probe.py',
+        'build_config_mcp_service.py',
+        'build_config_owner_probe.py',
+        'build_hia_config_service.py',
+        'config_fs_adapter.S',
+        'config_mcp_adapter.S',
+        'config_owner_adapter.S',
+        'config_schema.py',
+        'hia_native_config_reference.py',
+        'hia_native_config_qualification.py',
+        "hia_native_execution_build.py", "hia_native_execution_qualification.py",
+        "hia_native_effect_fence_build.py", "hia_native_effect_fence_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
         "hia_native_batch_apply_build.py", "hia_native_batch_apply_qualification.py",
+        "hia_native_atomic_write_build.py", "hia_native_atomic_write_qualification.py",
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
@@ -324,11 +371,14 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
     commands = commands or {}
     if set(commands) - set(tests):
         raise ValueError("native command override names an undeclared suite")
+    config_commands = (config_qualification.test_commands(ROOT, output, report)
+                       if set(tests) & set(config_qualification.TESTS) else {})
     def command(name):
         prefix = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
         argv = commands.get(name, prefix)
         if (type(argv) is not list or any(type(value) is not str for value in argv)
-                or argv[:len(prefix)] != prefix):
+                or (argv != config_commands[name] if name in config_commands
+                    else argv[:len(prefix)] != prefix)):
             raise ValueError("native command differs from its source-owned suite: " + name)
         return argv
     invocation = {name: command(name) for name in tests}
@@ -641,6 +691,162 @@ def batch_apply_evidence(output: Path, report: dict) -> dict:
             "whole_runtime_replaced": False}
 
 
+def atomic_write_test_commands(output: Path, bundle: Path, hepta: Path) -> dict[str, list[str]]:
+    folder = output / "atomic-write"
+    prefix = lambda name: [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
+    return {
+        "test_atomic_write_policy.py": prefix("test_atomic_write_policy.py") + [
+            "--manifest", str(bundle.parent / "policy.json"), "--output", str(folder / "policy")],
+        "test_atomic_write_kernel.py": prefix("test_atomic_write_kernel.py") + [
+            "--manifest", str(bundle), "--output", str(folder / "kernel")],
+        "test_atomic_write_boundary.py": prefix("test_atomic_write_boundary.py") + [
+            "--manifest", str(bundle), "--hepta", str(hepta), "--build-root", str(output / "build"),
+            "--output", str(folder / "boundary")],
+        "test_atomic_write_evidence.py": prefix("test_atomic_write_evidence.py") + [
+            "--manifest", str(bundle), "--policy", str(folder / "policy"), "--kernel", str(folder / "kernel"),
+            "--boundary", str(folder / "boundary"),
+            "--policy-stdout", str(output / "test_atomic_write_policy.py.stdout"),
+            "--kernel-stdout", str(output / "test_atomic_write_kernel.py.stdout"),
+            "--boundary-stdout", str(output / "test_atomic_write_boundary.py.stdout"),
+            "--hepta", str(hepta), "--runtime", str(ROOT), "--output", str(folder / "evidence-controls")],
+    }
+
+
+def atomic_write_fixture_directories() -> tuple[str, ...]:
+    """Live effect targets are distinct from the complete retained snapshots.
+
+    Their symlinks, inaccessible directories and large uncompressed contents
+    stay in the execution sandbox. Only these exact fixture roots are omitted
+    from artifact transport, after all four actual suites have been verified.
+    """
+    kernel = tuple(f"atomic-write/kernel/{index:04d}-{case['name']}/fixture"
+                   for index, case in enumerate(atomic_write_qualification.case_module.cases()))
+    boundary = tuple("atomic-write/boundary/" + name + "/fixture" for name in (
+        *(f"contract-{index:02d}" for index in range(19)),
+        *("transport-" + name for name in ("empty", "short-length", "short-frame", "over-capacity",
+            "empty-frame", "bad-frame", "extra-argument", "invalid-recovery")), "parent-death"))
+    return kernel + boundary
+
+
+def atomic_write_retained_files(output: Path, directory: Path, *, fixtures: tuple[str, ...] = ()) -> dict:
+    omitted = {output / name for name in fixtures}
+    files = {}
+    if directory.is_symlink() or directory.resolve(strict=True) != directory:
+        raise ValueError("atomic retained root crosses a symlink")
+    for base, dirs, names in os.walk(directory, followlinks=False):
+        dirs.sort()
+        for name in list(dirs):
+            path = Path(base) / name
+            info = path.lstat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or path.resolve() != path:
+                raise ValueError("atomic retained directory is not owned or crosses a symlink")
+            if path in omitted:
+                dirs.remove(name)
+        for name in sorted(names):
+            path = Path(base) / name
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or path.resolve() != path:
+                raise ValueError("atomic retained evidence is not an owned regular file")
+            files[path.relative_to(output).as_posix()] = sha(path)
+    return files
+
+
+def atomic_write_retire_fixtures(output: Path, fixtures: tuple[str, ...], receipt: Path,
+                                 evidence: dict, *, create: bool = False) -> dict:
+    """Retire only owned live targets after their complete evidence is admitted."""
+    expected = {"schema": "hepta.runtime.atomic-write-fixture-retirement.v1", "status": "PASS",
+        "fixture_directories": list(fixtures), "complete_evidence_sha256":
+            atomic_write_qualification.sha(atomic_write_qualification.canonical(evidence)),
+        "semantic_invocations_added": 0}
+    if receipt.exists():
+        if receipt.is_symlink() or atomic_write_qualification.obj(receipt) != expected:
+            raise ValueError("atomic fixture retirement receipt differs")
+    elif create:
+        if output.is_symlink() or output.resolve(strict=True) != output:
+            raise ValueError("atomic fixture retirement root differs")
+        paths = []
+        for name in fixtures:
+            relative = Path(name)
+            if relative.is_absolute() or ".." in relative.parts or relative.name != "fixture":
+                raise ValueError("atomic fixture retirement path escaped its owner")
+            path = output / relative
+            info = path.lstat()
+            if path.resolve() != path or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+                raise ValueError("atomic live fixture is not an owned real directory")
+            paths.append(path)
+        # Children have already been reaped. Make only owned directories
+        # traversable; leave symlinks untouched and use fd-based rmtree.
+        if not shutil.rmtree.avoids_symlink_attacks:
+            raise ValueError("atomic fixture retirement requires descriptor-based removal")
+        for path in paths:
+            path.chmod(0o700)
+            for base, dirs, _ in os.walk(path, followlinks=False):
+                for name in dirs:
+                    child = Path(base) / name
+                    info = child.lstat()
+                    if stat.S_ISDIR(info.st_mode):
+                        if info.st_uid != os.getuid():
+                            raise ValueError("atomic live fixture contains an unowned directory")
+                        child.chmod(0o700, follow_symlinks=False)
+            shutil.rmtree(path)
+        with receipt.open("x") as stream:
+            stream.write(json.dumps(expected, sort_keys=True, indent=2) + "\n")
+    else:
+        raise ValueError("completed atomic fixture retirement receipt is missing")
+    if any((output / name).exists() or (output / name).is_symlink() for name in fixtures):
+        raise ValueError("retired atomic live fixture reappeared")
+    return expected
+
+
+def atomic_write_completed_process(output: Path, report: dict, name: str, command: list[str],
+                                   *, phase: str = "native_components") -> dict:
+    check, _ = completed_test_summary(output, report, name)
+    elapsed = check.get("elapsed_seconds")
+    if (check.get("command") != command or check.get("phase") != phase
+            or type(check.get("exit_code")) is not int or type(check.get("stdout_bytes")) is not int
+            or type(check.get("stderr_bytes")) is not int or type(check.get("timeout_seconds")) is not int
+            or check["timeout_seconds"] != 180 or type(elapsed) not in (int, float) or not 0 < elapsed < 180
+            or check.get("stdout_bytes") != (output / (name + ".stdout")).stat().st_size
+            or check.get("stderr_bytes") != (output / (name + ".stderr")).stat().st_size
+            or (output / (name + ".stderr")).read_bytes() != b""):
+        raise ValueError("atomic actual invocation, output or unchanged deadline differs: " + name)
+    return {key: check[key] for key in ("command", "exit_code", "timed_out", "timeout_seconds",
+        "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256")}
+
+
+def atomic_write_evidence(output: Path, report: dict) -> dict:
+    q = atomic_write_qualification
+    hepta = Path(report["compiler_checkout"]).resolve(strict=True)
+    bootstrap = json.loads((output / "build/bootstrap/bootstrap.json").read_bytes())
+    if check_dependency(hepta) != bootstrap.get("dependency"):
+        raise ValueError("atomic source parser differs from the pinned compiler checkout")
+    bundle = output / report["modules"]["atomic_write"]["manifest"]
+    folder = output / "atomic-write"
+    commands = atomic_write_test_commands(output, bundle, hepta)
+    completed = {name: atomic_write_completed_process(output, report, name, command)
+                 for name, command in commands.items()}
+    native = q.evidence(bundle, folder / "policy", folder / "kernel", folder / "boundary",
+        source_root=ROOT, reference_root=ROOT, hepta=hepta,
+        policy_stdout=output / "test_atomic_write_policy.py.stdout",
+        kernel_stdout=output / "test_atomic_write_kernel.py.stdout",
+        boundary_stdout=output / "test_atomic_write_boundary.py.stdout")
+    controls = q.controls_evidence(folder / "evidence-controls", native, source_root=ROOT, reference_root=ROOT,
+        stdout=output / "test_atomic_write_evidence.py.stdout")
+    fixtures = atomic_write_fixture_directories()
+    if (folder / "retired-fixtures.json").exists():
+        atomic_write_retire_fixtures(output, fixtures, folder / "retired-fixtures.json", native)
+    corpus = atomic_write_retained_files(output, folder, fixtures=fixtures)
+    for name in commands:
+        for channel in ("stdout", "stderr"):
+            relative = name + "." + channel
+            corpus[relative] = sha(output / relative)
+    return {"schema": "hepta.runtime.atomic-write-completed-evidence.v1", "status": "PASS",
+        "native_evidence": native, "control_evidence": controls, "completed_processes": completed,
+        "artifact_sha256": atomic_write_retained_files(output, bundle.parent), "corpus_sha256": corpus,
+        "transient_fixture_directories": list(fixtures), "complete_original_tool_parity": False,
+        "remote_ssh_parity": False, "production_activated": False, "whole_runtime_replaced": False}
+
+
 def view_render_evidence(output: Path, report: dict) -> dict:
     return checked_view_evidence(ROOT, output, report, completed_test_summary)
 
@@ -651,6 +857,74 @@ def json_evidence(output: Path, report: dict) -> dict:
 
 def history_evidence(output: Path, report: dict) -> dict:
     return checked_history_evidence(ROOT, output, report, completed_test_summary)
+
+
+def config_evidence(output: Path, report: dict, *, create: bool = False) -> dict:
+    return config_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def effect_fence_evidence(output: Path, report: dict) -> dict:
+    return effect_fence_qualification.qualification_evidence(ROOT, output, report)
+
+
+def execution_test_commands(output: Path, report: dict) -> dict[str, list[str]]:
+    q = execution_qualification
+    bundle = output / report["modules"]["execution_shadow"]["manifest"]
+    metadata = q.object_at(bundle)
+    members = {name: output / "build" / row["manifest"] for name, row in metadata["members"].items()}
+    serde = output / report["modules"]["serde_json"]["manifest"]
+    original = ROOT / "tests/hia_native/execution_json_original_rows.jsonl.gz"
+    folder = output / q.FOLDER
+    arguments = {
+        q.TESTS[0]: ["--manifest", members["core"], "--output", folder / "core"],
+        q.TESTS[1]: ["--manifest", members["json"], "--serde-manifest", serde,
+                    "--core-manifest", members["core"], "--output", folder / "json"],
+        q.TESTS[2]: ["--manifest", members["json"], "--serde-manifest", serde,
+                    "--original", original, "--output", folder / "errors"],
+        q.TESTS[3]: ["--manifest", members["controller"], "--typed-manifest", members["json_composed"],
+                    "--core-manifest", members["core_composed"], "--serde-manifest", serde,
+                    "--original", original, "--output", folder / "controller"],
+        "test_execution_evidence.py": ["--runtime", ROOT, "--hepta", report["compiler_checkout"],
+                    "--manifest", bundle, "--corpus", folder, "--output", folder / "evidence-controls"],
+    }
+    for label, name in zip(("core", "json", "errors", "controller"), q.TESTS):
+        arguments["test_execution_evidence.py"] += ["--" + label + "-stdout", output / (name + ".stdout")]
+    return {name: [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name), *map(str, args)]
+            for name, args in arguments.items()}
+
+
+def execution_evidence(output: Path, report: dict) -> dict:
+    q = execution_qualification
+    owner = report["modules"]["execution_shadow"]
+    if owner.get("builder") != "execution_shadow" or owner.get("source") != "native/execution_shadow.hepta":
+        raise ValueError("execution owner registry differs")
+    bundle = output / owner["manifest"]
+    if sha(bundle) != owner["sha256"]:
+        raise ValueError("execution bundle identity changed")
+    folder = output / q.FOLDER
+    stdout = {name: output / (name + ".stdout") for name in q.TESTS}
+    native = q.checked_native(bundle, folder, source_root=ROOT,
+                              hepta=Path(report["compiler_checkout"]), stdout=stdout)
+    controls = q.controls_evidence(folder / "evidence-controls", native, source_root=ROOT,
+                                   stdout=output / "test_execution_evidence.py.stdout")
+    completed = {}
+    for name, command in execution_test_commands(output, report).items():
+        check, _ = completed_test_summary(output, report, name)
+        if (check.get("command") != command or check.get("timeout_seconds") != 180
+                or type(check.get("elapsed_seconds")) not in (int, float)
+                or not 0 < check["elapsed_seconds"] < 180
+                or check["stdout_bytes"] != (output / (name + ".stdout")).stat().st_size
+                or check["stderr_bytes"] != 0):
+            raise ValueError("execution actual completed command differs: " + name)
+        completed[name] = {key: check[key] for key in ("command", "exit_code", "timed_out", "timeout_seconds",
+            "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256")}
+    artifacts = dict(native["artifact_sha256"])
+    for path in (folder / "evidence-controls/result.json", output / "test_execution_evidence.py.stdout"):
+        artifacts[path.relative_to(output).as_posix()] = sha(path)
+    return {"schema": "hepta.runtime.execution-completed-evidence.v1", "status": "PASS",
+            "native": native, "controls": controls, "completed_processes": completed,
+            "artifact_sha256": artifacts, "production_activated": False,
+            "whole_runtime_replaced": False, "old_stack_removal_qualified": False}
 
 
 def view_cache_evidence(output: Path, report: dict) -> dict:
@@ -1752,6 +2026,17 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_DEADLINE_PROBE_EXECUTABLE": str(output / "file-info-blocking-probe.elf"),
         "HIA_MULTI_READ_CORPUS_DIR": str(output / "multi-read-rust-oracle"),
         "HIA_REFERENCE_RUNTIME": str(ROOT),
+        "HIA_FENCE_ASYNC_CORPUS_DIR": str(output / effect_fence_qualification.FOLDER / "async"),
+        "HIA_FENCE_WORKER_CORPUS_DIR": str(output / effect_fence_qualification.FOLDER / "worker"),
+        "HIA_FENCE_LIFETIME_CORPUS_DIR": str(output / effect_fence_qualification.FOLDER / "lifetime"),
+        "HIA_FENCE_CORPUS_DIR": str(output / effect_fence_qualification.FOLDER / "owner"),
+        "HIA_FENCE_KERNEL_CORPUS_DIR": str(output / effect_fence_qualification.FOLDER / "kernel"),
+        "HIA_FENCE_KERNEL_BACKEND": "native",
+        "HIA_FENCE_PACKER_REPORT": str(output / effect_fence_qualification.FOLDER / "packer.json"),
+        "HIA_FENCE_EVIDENCE_REPORT": str(output / effect_fence_qualification.FOLDER / "evidence.json"),
+        "HIA_FENCE_QUALIFICATION_OUTPUT": str(output),
+        "HIA_CONFIG_JSON_CORPUS_DIR": str(output / "config-native/typed-corpus"),
+        "HIA_CONFIG_SEMANTICS_CORPUS_DIR": str(output / "config-native/semantics-corpus"),
     })
     env.update({variable: str(output / SCOPE_OS_FOLDER / receipt)
                 for _, variable, receipt, _, _ in SCOPE_OS_SUITES})
@@ -1760,6 +2045,12 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         env[item["manifest_env"]] = str(built)
         if item.get("builder") == "composition":
             env["HIA_COMPOSITION_MANIFEST"] = str(built)
+        elif item.get("builder") == "effect_fence":
+            bundle = json.loads(built.read_bytes())
+            env["HIA_FENCE_ASYNC_MANIFEST"] = str(
+                output / "build" / bundle["members"]["production"]["manifest"])
+            env["HIA_FENCE_ASYNC_SINGLE_MANIFEST"] = str(
+                output / "build" / bundle["members"]["queue_fixture"]["manifest"])
         elif item.get("builder") == "authority_composition":
             env["HIA_AUTHORITY_MANIFEST"] = str(built.parent / "module_00.json")
             env["HIA_AUTHORITY_LOADER_MANIFEST"] = str(built.parent / "module_08.json")
@@ -1825,9 +2116,20 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "history":
             from hia_native_history_build import build_history
             built = build_history(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "runtime_config":
+            built = config_qualification.build_config(hepta, output / "build", ROOT)
+        elif item.get("builder") == "execution_shadow":
+            from hia_native_execution_build import build_execution
+            built = build_execution(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "effect_fence":
+            from hia_native_effect_fence_build import build_effect_fence_bundle
+            built = build_effect_fence_bundle(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "batch_apply":
             from hia_native_batch_apply_build import build_batch_apply
             built = build_batch_apply(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "atomic_write":
+            from hia_native_atomic_write_build import build_atomic_write
+            built = build_atomic_write(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "batch_plan":
             from hia_native_batch_plan_build import build_batch_plan
             built = build_batch_plan(hepta, output / "build", source_root=ROOT)
@@ -1854,6 +2156,8 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     report["cache_composition"] = {"manifest": str(cache_fixture.relative_to(output)),
                                    "sha256": sha(cache_fixture), "builder": "composition_fixture"}
     (output / "batch-apply").mkdir()
+    (output / "atomic-write").mkdir()
+    (output / "config-native").mkdir()
     return builder
 
 
@@ -1866,6 +2170,10 @@ def native_tests() -> tuple[str, ...]:
 
 def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[str, list[str]]:
     commands = batch_apply_test_commands(output, output / report["modules"]["batch_apply"]["manifest"])
+    commands.update(execution_test_commands(output, report))
+    commands.update(config_qualification.test_commands(ROOT, output, report))
+    commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
+                                               Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
 
 
@@ -1885,10 +2193,19 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["line_verify_evidence"] = line_verify_evidence(output, report)
     report["batch_plan_evidence"] = batch_plan_evidence(output, report)
     report["batch_apply_evidence"] = batch_apply_evidence(output, report)
+    atomic = atomic_write_evidence(output, report)
+    retirement = output / "atomic-write/retired-fixtures.json"
+    atomic_write_retire_fixtures(output, atomic_write_fixture_directories(), retirement,
+                                atomic["native_evidence"], create=True)
+    atomic["corpus_sha256"][retirement.relative_to(output).as_posix()] = sha(retirement)
+    report["atomic_write_evidence"] = atomic
     report["view_render_evidence"] = view_render_evidence(output, report)
     report["view_cache_evidence"] = view_cache_evidence(output, report)
     report["history_evidence"] = history_evidence(output, report)
     report["json_evidence"] = json_evidence(output, report)
+    report["execution_evidence"] = execution_evidence(output, report)
+    report["effect_fence_evidence"] = effect_fence_evidence(output, report)
+    report["config_evidence"] = config_evidence(output, report, create=True)
     scope_os_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
     capture_scope_os_corpus(ROOT, output / SCOPE_OS_FOLDER, scope_os_profile(ROOT, scope_os_manifest))
     report["operation_scope_os_evidence"] = operation_scope_os_evidence(output, report)
@@ -1923,10 +2240,17 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["history_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["json_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["json_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["execution_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["effect_fence_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["effect_fence_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["config_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["config_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["corpus_sha256"])
     authority = report["caller_authority_evidence"]
     for label in ("artifact", "probe"):
         report["rust_oracle_inputs"].update({"build/" + name: expected

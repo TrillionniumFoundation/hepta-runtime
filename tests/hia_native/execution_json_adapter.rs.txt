@@ -1,0 +1,81 @@
+use std::io::{self, BufRead, Write};
+#[path = "exact_owner.rs"]
+mod original;
+
+fn packet(record: &original::CanonicalExecutionRecordV1) -> Vec<u8> {
+    use original::*;
+    let CanonicalExecutionRecordV1::ExecutionIntent(intent) = record;
+    let b = &intent.binding;
+    let flags = u64::from(b.cell_id.is_some())
+        | u64::from(b.organ_id.is_some()) << 1
+        | u64::from(b.predecessor.is_some()) << 2
+        | u64::from(b.rollback_reference.is_some()) << 3;
+    let mut raw = b"HXSREC01".to_vec();
+    for value in [1, u64::from(b.schema_version), b.generation, intent.class as u64,
+                  b.currentness as u64, flags, 0] {
+        raw.extend_from_slice(&value.to_le_bytes());
+    }
+    for value in [Some(&b.run_id), Some(&b.turn_id), b.cell_id.as_ref(), b.organ_id.as_ref(),
+                  Some(&b.operation_id), Some(&b.principal), Some(&b.objective_digest),
+                  Some(&b.policy_digest), Some(&b.candidate_digest), Some(&b.host),
+                  Some(&b.idempotency_key), b.predecessor.as_ref(), b.rollback_reference.as_ref(),
+                  Some(&intent.payload_digest)] {
+        let bytes = value.map_or(&[][..], |s| s.as_bytes());
+        raw.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+        raw.extend_from_slice(bytes);
+    }
+    raw
+}
+fn hex(raw: &[u8]) -> String {
+    use std::fmt::Write;
+    let mut result = String::with_capacity(raw.len() * 2);
+    for value in raw { write!(result, "{value:02x}").unwrap(); }
+    result
+}
+fn unhex(raw: &str) -> Result<Vec<u8>, ()> {
+    if raw.len() % 2 != 0 { return Err(()); }
+    raw.as_bytes().chunks_exact(2).map(|pair| {
+        let a = (pair[0] as char).to_digit(16).ok_or(())?;
+        let b = (pair[1] as char).to_digit(16).ok_or(())?;
+        Ok((a * 16 + b) as u8)
+    }).collect()
+}
+fn parse<T: serde::de::DeserializeOwned>(raw: &[u8], through_value: bool) -> Result<T, serde_json::Error> {
+    if through_value {
+        let value: serde_json::Value = serde_json::from_slice(raw)?;
+        serde_json::from_value(value)
+    } else {
+        serde_json::from_slice(raw)
+    }
+}
+fn run(kind: u64, raw: &[u8]) -> Result<serde_json::Value, serde_json::Error> {
+    use original::*;
+    let through_value = kind >= 10;
+    match kind % 10 {
+        1 => {
+            let value: ShadowExecutionIntentParams = parse(raw, through_value)?;
+            Ok(serde_json::json!({"canonical":serde_json::to_string(&value)?,"packet":hex(&packet(&value.record))}))
+        }
+        2 => {
+            let value: CanonicalExecutionRecordV1 = parse(raw, through_value)?;
+            Ok(serde_json::json!({"canonical":serde_json::to_string(&value)?,"packet":hex(&packet(&value))}))
+        }
+        3 => { let value: CanonicalExecutionBindingV1 = parse(raw, through_value)?; Ok(serde_json::json!({"canonical":serde_json::to_string(&value)?})) }
+        4 => { let value: CanonicalExecutionClassV1 = parse(raw, through_value)?; Ok(serde_json::json!({"canonical":serde_json::to_string(&value)?})) }
+        5 => { let value: CanonicalCurrentnessV1 = parse(raw, through_value)?; Ok(serde_json::json!({"canonical":serde_json::to_string(&value)?})) }
+        6 => { let value: ShadowFinalUseV1 = parse(raw, through_value)?; Ok(serde_json::json!({"canonical":serde_json::to_string(&value)?})) }
+        _ => unreachable!(),
+    }
+}
+fn main() {
+    let stdin = io::stdin(); let mut stdout = io::BufWriter::new(io::stdout().lock());
+    for line in stdin.lock().lines() {
+        let line = line.unwrap(); let (kind, data) = line.split_once(' ').unwrap();
+        let kind = kind.parse::<u64>().unwrap(); let raw = unhex(data).unwrap();
+        let result = match run(kind, &raw) {
+            Ok(value) => serde_json::json!({"accepted":true,"value":value}),
+            Err(error) => serde_json::json!({"accepted":false,"error":error.to_string(),"category":format!("{:?}", error.classify()),"line":error.line(),"column":error.column()}),
+        };
+        writeln!(stdout, "{result}").unwrap();
+    }
+}

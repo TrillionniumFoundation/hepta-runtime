@@ -21,7 +21,19 @@ from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
 RUNTIME_BASE_COMMIT = "a0dcdda1991ec536d5e2d252c006a778993fa566"
 RUNTIME_BASE_TREE = "98d96c88d54082637c27f1cbfae61a66d0dd81e7"
 ORIGINAL_RUNTIME_BLOBS = {
+    'src/mcp/hia_contract.rs': 'f5a17e918d7b4fedf0bbc220c5e9fa8f42c69f09',
+    'src/mcp/hia_provider.rs': '8753395459a5b1b9ead73d7f5607d8f9928803bc',
+    'src/mcp/hia_tool_catalog.json': '5d69d45291559cc17c17b50581ee006dedda644f',
+    'src/mcp/rea_engine_profile.rs': 'eb05488c5c08be98ae49410cc3fece84f53b1fc4',
+    'src/mcp/rea_provider.rs': '1ff7e4c7f520c3a5f4af9b2bd9da90436ad23f22',
+    'src/mcp/runtime/config_tests.rs': 'a5320a1614deee65cd592dc4f257192d009e83c6',
+    'src/mcp/runtime/effective_config.rs': '671998a03830f7b6448a14972ca01575d4a2634e',
+    'src/mcp/runtime/effective_config_tests.rs': '2a0314c071ae44f3bba8e91f0d6fd6a152616604',
+    'src/mcp/runtime/inspect_tests.rs': '0571cb9bdc618b38e7e3c3864852c1bb2af39b3a',
+    'src/mcp/weight_config.rs': '133458dffde4f226913892ae5f346f794376736f',
+    'src/utils/json_size.rs': 'e1c3b5f6e91e2c2ae73a2fb78de8b81a5a0bb483',
     "src/mcp/runtime/effect_owner_fence.rs": "bbb7565103061b79e063e3aa5452ec74d04e4f34",
+    "src/mcp/runtime/effect_owner_fence_acquisition_tests.rs": "69c878983c38c77ac7b36afd57ca9cfa6f1b57ea",
     "Cargo.lock": "dec7d4e88dbae3e9e2415e98a55400bc1f81f939",
     "Cargo.toml": "246f38e394de474fa0d55297b6b93cea40b77393",
     "src/main.rs": "b4e43b5571aab1d758915429585ad3f20c008d04",
@@ -40,6 +52,7 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/fs/delta.rs": "76681c01b571536e80f5bd1b93d79053d9df8985",
     "src/mcp/runtime/config.rs": "e55d9f536c069b7612f7a7cf81e691fd2394439c",
     "src/mcp/runtime/execution.rs": "541d7bf2ee069ae082b01ac10e0b1ed215927683",
+    "src/mcp/runtime/execution_tests.rs": "09d1c012436ed94aaa6a0c88de040e1ba6ef0b8b",
     "src/mcp/runtime/jobs.rs": "7b9ca9d1c00f31411265c1dc26a18ead79907ec9",
     "src/mcp/runtime/binary.rs": "7195d29297e018be1b640f6ad5caab02738a87a5",
     "src/mcp/runtime/binary_file.py": "e5dddd844cb9ab869f4784a93f228a8a5ac91a74",

@@ -162,6 +162,25 @@ class QualificationReportingTests(unittest.TestCase):
                 q.run_native_checks(self.output, self.report, ("one.py",), {}, **settings)
         self.assertEqual(self.report["checks"], [])
 
+    def test_config_launcher_requires_the_complete_source_owned_command(self):
+        import qualify_hia_runtime_native as q
+        helper = q.config_qualification
+        name = helper.TESTS[0]
+        root = self.wait_fixture({name: "print(json.dumps({'actual_owned_launcher':True}))\n"})
+        expected = helper.launch(root, "tests/hia_native/" + name, [])
+        with patch.object(q, "ROOT", root), patch.object(helper, "test_commands", return_value={name: expected}):
+            q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                ordered_groups=(), commands={name: expected}, timeout=5)
+            self.assertEqual(self.report["checks"][0]["command"], expected)
+            self.assertEqual(json.loads((self.output / (name + ".stdout")).read_bytes()),
+                             {"actual_owned_launcher": True})
+            for argv in (expected + ["--foreign-argument"], expected[:4] + ["print('{}')"] + expected[5:],
+                         [sys.executable, "-I", "-B", str(root / "tests/hia_native" / name)]):
+                with self.subTest(command=argv), self.assertRaises(ValueError):
+                    q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                        ordered_groups=(), commands={name: argv}, timeout=5)
+        self.assertEqual(len(self.report["checks"]), 1)
+
     def original_worker_fixture(self, *, serial_code=0, worker_code=0, blocked=False):
         import compare_hia_runtime_rust as comparison
         root = self.wait_fixture({
@@ -272,6 +291,78 @@ class QualificationReportingTests(unittest.TestCase):
              "--emit-oracle", str(oracle)], cwd=self.output, capture_output=True, timeout=10)
         self.assertEqual(completed.returncode, 0, completed.stderr.decode())
         self.assertEqual(oracle.read_bytes(), (ROOT / "tests/hia_native/oracle_editable_content.rs").read_bytes())
+
+    def test_atomic_registry_binds_all_four_processes_and_original_recipe(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_atomic_write_qualification as owner
+        entry = {row["key"]: row for row in MODULES}["atomic_write"]
+        expected = ("test_atomic_write_policy.py", "test_atomic_write_kernel.py",
+                    "test_atomic_write_boundary.py", "test_atomic_write_evidence.py")
+        self.assertEqual((entry["test"], *entry["additional_tests"]), expected)
+        self.assertEqual(entry["builder"], "atomic_write")
+        self.assertEqual(entry["companion_sources"], ("native/atomic_write_packer.hepta",))
+        self.assertIn("atomic_write", RECIPES)
+        self.assertNotIn("atomic_write", PYTHON_REFERENCE_COMPONENTS)
+        self.assertEqual(ORIGINAL_RUNTIME_BLOBS["src/mcp/fs/text_editing.rs"], owner.ORIGINAL_BLOB)
+        self.assertTrue(set(owner.OWN_FILES) | set(owner.REFERENCE_FILES) <= set(sources()))
+        bundle = self.output / "build/atomic/manifest.json"
+        hepta = self.output / "compiler"
+        commands = q.atomic_write_test_commands(self.output, bundle, hepta)
+        self.assertEqual(tuple(commands), expected)
+        for name, command in commands.items():
+            self.assertEqual(command[:4], [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)])
+        evidence = commands["test_atomic_write_evidence.py"]
+        for name in expected[:3]:
+            self.assertIn(str(self.output / (name + ".stdout")), evidence)
+        self.assertIn(str(bundle.parent / "policy.json"), commands[expected[0]])
+        self.assertIn(str(hepta), commands[expected[2]])
+        overrides = {name: "/external/source" for name in (
+            "HIA_ATOMIC_MANIFEST", "HIA_ATOMIC_POLICY_MANIFEST", "HIA_ATOMIC_POLICY_CORPUS_DIR",
+            "HIA_ATOMIC_KERNEL_DIR", "HIA_ATOMIC_BOUNDARY_DIR", "HIA_ATOMIC_POLICY_STDOUT",
+            "HIA_ATOMIC_KERNEL_STDOUT", "HIA_ATOMIC_BOUNDARY_STDOUT")}
+        self.assertEqual(qualification_env(dict(overrides, PATH="/usr/bin")), {"PATH": "/usr/bin"})
+
+    def test_atomic_completed_check_requires_actual_command_deadline_and_streams(self):
+        import copy
+        import qualify_hia_runtime_native as q
+        command = [sys.executable, "-I", "-B", "-c", "print('{\"reporting_fixture_only\":true}')"]
+        self.report["phase"] = "native_components"
+        record_check(self.output, self.report, name="atomic-reporting", command=command, timeout=180)
+        q.atomic_write_completed_process(self.output, self.report, "atomic-reporting", command)
+        mutations = ({"phase": "original_rust_comparison"}, {"timeout_seconds": 181},
+            {"elapsed_seconds": float("nan")}, {"exit_code": False}, {"stderr_bytes": False},
+            {"command": command + ["--omitted-domain"]}, {"stdout_bytes": 0}, {"timed_out": True})
+        for changes in mutations:
+            changed = copy.deepcopy(self.report); changed["checks"][0].update(changes)
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                q.atomic_write_completed_process(self.output, changed, "atomic-reporting", command)
+        (self.output / "atomic-reporting.stdout").write_bytes(b"{}\n")
+        with self.assertRaises(ValueError):
+            q.atomic_write_completed_process(self.output, self.report, "atomic-reporting", command)
+
+    def test_atomic_live_target_retirement_preserves_full_evidence_and_outside_paths(self):
+        import qualify_hia_runtime_native as q
+        folder = self.output / "atomic-write/kernel/0000-fixture"
+        fixture = folder / "fixture"; fixture.mkdir(parents=True)
+        outside = self.output / "outside"; outside.mkdir(); (outside / "sentinel").write_bytes(b"untouched")
+        (fixture / "outside-link").symlink_to(outside, target_is_directory=True)
+        denied = fixture / "denied"; denied.mkdir(); (denied / "target").write_bytes(b"live effect target")
+        denied.chmod(0)
+        retained = folder / "after-content"; retained.mkdir(); (retained / "content.bin.gz").write_bytes(b"retained full bytes fixture")
+        receipt = folder / "retired.json"; evidence = {"reporting_fixture_only": True}
+        paths = (fixture.relative_to(self.output).as_posix(),)
+        record = q.atomic_write_retire_fixtures(self.output, paths, receipt, evidence, create=True)
+        self.assertFalse(fixture.exists())
+        self.assertEqual((outside / "sentinel").read_bytes(), b"untouched")
+        self.assertEqual((retained / "content.bin.gz").read_bytes(), b"retained full bytes fixture")
+        self.assertEqual(q.atomic_write_retire_fixtures(self.output, paths, receipt, evidence), record)
+        fixture.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "reappeared"):
+            q.atomic_write_retire_fixtures(self.output, paths, receipt, evidence)
+        fixture.unlink(); receipt.unlink(); fixture.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "owned real directory"):
+            q.atomic_write_retire_fixtures(self.output, paths, receipt, evidence, create=True)
+        self.assertEqual((outside / "sentinel").read_bytes(), b"untouched")
 
     def test_editable_and_view_capture_domains_cannot_be_shortened_or_boolean(self):
         for expected, check in ((EDITABLE_COUNTS, editable_counts),

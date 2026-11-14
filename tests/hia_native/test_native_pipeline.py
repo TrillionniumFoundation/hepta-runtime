@@ -34,7 +34,9 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(set(flat), set(q.native_tests()))
         self.assertEqual(tuple(partitions["batch"]),
             ("test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
-             "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py"))
+             "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
+             "test_atomic_write_policy.py", "test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
+             "test_atomic_write_evidence.py"))
         for bad in ("missing", "duplicate", "unknown", "new_module", "split_ordered"):
             changed = copy.deepcopy(p.PARTITIONS)
             modules = q.MODULES
@@ -100,6 +102,8 @@ class NativePipelineTests(unittest.TestCase):
         source = self.root / "source"
         tests = source / "tests/hia_native"; tests.mkdir(parents=True)
         output = self.root / "output"; output.mkdir()
+        (output / "empty-evidence/before").mkdir(parents=True)
+        (output / "empty-evidence/after").mkdir()
         script = tests / "check.py"
         script.write_text("import json,sys\nprint(json.dumps({'actual_reporting_fixture':True}))\n"
                           "print('retained fixture stderr',file=sys.stderr)\n")
@@ -142,6 +146,25 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(set(receipt["files"]), {"check.py.stdout", "check.py.stderr"})
         # Extra bytes are refused even when the required process files remain.
         (destination / "data/undeclared").write_bytes(b"not admitted")
+        with self.assertRaisesRegex(ValueError, "inventory differs"):
+            self.admit_fixture(source, prepared, destination)
+
+    def test_actual_empty_evidence_directories_survive_artifact_transport(self):
+        source, prepared, _, destination = self.actual_fixture()
+        receipt = p.read_json(destination / "shard.json")
+        self.assertEqual(receipt["schema"], "hepta.runtime.native-shard.v2")
+        self.assertEqual(set(receipt["directories"]),
+                         {"empty-evidence", "empty-evidence/before", "empty-evidence/after"})
+        before = destination / "data/empty-evidence/before"
+        after = destination / "data/empty-evidence/after"
+        before.rmdir(); after.rmdir()
+        self.admit_fixture(source, prepared, destination)
+        self.assertTrue(before.is_dir() and after.is_dir())
+        before.rmdir(); before.symlink_to(self.root, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            self.admit_fixture(source, prepared, destination)
+        before.unlink(); before.mkdir()
+        (destination / "data/undeclared-empty").mkdir()
         with self.assertRaisesRegex(ValueError, "inventory differs"):
             self.admit_fixture(source, prepared, destination)
 
