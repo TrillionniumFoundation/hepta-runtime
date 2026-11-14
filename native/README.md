@@ -1,15 +1,18 @@
 # HIA native runtime
 
 This directory contains the current HIA implementation of deterministic runtime
-components, a read-only descriptor dependency and a persistent native MCP stdio service. All implementation sources
+components, a read-only descriptor dependency and persistent native MCP stdio services. All implementation sources
 in this directory use `.hepta` and are compiled by HIA to machine code. The Linux
 executables have no Python, Rust, libc or dynamic-loader runtime dependency.
 
 The complete existing runtime has **not** been replaced. Its 125 registered MCP
 tool handlers and the durable/remote service owners remain in their original
-implementation. This native service currently advertises two implemented tools:
-`runtime_native_info` and `runtime_line_hash`. Production activation and deletion
-of the original runtime remain incomplete.
+implementation. The diagnostic native service advertises `runtime_native_info`
+and `runtime_line_hash`. A separate, explicitly selected local read profile
+provides `host_list` and `binary_read` through five native HIA images. It has
+partial original-tool coverage; configured remote hosts and complete original
+authorization behavior remain outside that profile. Production activation and
+deletion of the original runtime remain incomplete.
 
 ## Fixed source baseline
 
@@ -41,6 +44,8 @@ continue to identify the language and are not filename extensions.
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
 | [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded read continuations, file versions and error/cleanup decisions |
 | [io_packer.hepta](io_packer.hepta) | Static ELF construction with checked syscall records, opaque handles and persistent binary I/O framing |
+| [local_service.hepta](local_service.hepta) | Persistent MCP controller for the explicit `native-local` profile, with `host_list` and bounded `binary_read` responses |
+| [composition_packer.hepta](composition_packer.hepta) | Closed native image tables, fixed call authority, private workspaces and bounded child/OS continuations in one static ELF |
 | [stdio_packer.hepta](stdio_packer.hepta) | ELF construction and persistent newline-delimited input/output transport |
 | [filter_packer.hepta](filter_packer.hepta) | ELF construction for one complete binary input/output operation |
 
@@ -54,6 +59,8 @@ Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
 specified in [io.abi.json](io.abi.json).
+The explicit local MCP profile is defined in [service_contract.md](service_contract.md),
+and the closed native call boundary in [composition_abi.md](composition_abi.md).
 No native component falls back to
 a Rust or Python implementation of its calculations. Endpoint JSON number
 classification and compact display bytes remain explicit caller inputs; the
@@ -134,6 +141,9 @@ codec-rust-oracle/codec_cases.jsonl.gz
 policy-rust-oracle/native-corpus.json
 stat-version-python-reference/native-corpus.json
 stat-version-python-reference/stat-version-cases.jsonl.gz
+local-service-python-reference.json
+build/composition/<source-key>/manifest.json
+build/composition/<source-key>/native-local-read.elf
 ```
 
 The test driver runs actual native images and the standalone ELF. It retains
@@ -142,12 +152,63 @@ corpora. The CI workflow compiles original Rust function bodies and independent
 locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
-native tests and retained-Python I/O/file-version comparisons. It becomes `PASS` only
+native tests and retained-Python I/O/file-version/local-service comparisons. It becomes `PASS` only
 after all six independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
-## MCP stdio service
+The local-service receipt records live comparisons on temporary files whose
+inode and timestamp values vary on each run. The original Python read helper
+runs against those same fixtures, and the test compares the native MCP result
+text byte for byte. This reference domain has no synthetic Rust recipe. The
+closed image table and its generic continuation controls are reported separately
+as new native adapter behavior. Qualification rechecks all five source/image
+pairs, the HIA packer, exact call masks and capacities, packed-frame digest and
+final executable identity before accepting this evidence.
+
+## Explicit native local read service
+
+Build the five-image service using the same pinned compiler:
+
+```sh
+python3 -I -B scripts/hia_native_composition_build.py \
+  --hepta /absolute/path/to/pinned/Hepta \
+  --build-root /absolute/path/to/native-build
+```
+
+The command returns a manifest path. Its directory contains the executable:
+
+```sh
+/absolute/path/to/native-build/composition/<source-key>/native-local-read.elf \
+  --local-read-profile /administrator/selected/root
+```
+
+The explicit profile argument is required. The root is supplied by the operator
+at startup and retained as an open directory capability. Client JSON cannot
+change it or reinterpret an existing SSH alias. `host_list` returns one host
+named `native-local`, with reads enabled and execution, PTY and writes disabled.
+After initialization, `binary_read` accepts that host and an absolute path under
+the selected root. It preserves the original read response fields, default and
+clamped limits, Base64 bytes, SHA256, exact version text and successful MCP text
+envelope on the tested shared domain. A noncanonical expected-version string
+becomes a version mismatch after file/path/type admission and before cursor
+checks, preserving the original error order.
+
+The controller calls four fixed HIA owners: policy, binary codec, read-only I/O
+and stat version. The executable contains all five images and the native
+continuation adapter; it invokes no Python semantic dispatcher or dynamic module
+loader. Call masks and region bounds constrain child calls. Private mappings,
+an eight-level depth bound and a per-frame continuation budget constrain the
+adapter. This is a closed set of trusted compiled HIA images, not a sandbox for
+arbitrary uploaded machine code.
+
+This profile deliberately retains root inode custody across requests, while the
+original Python helper reopens pathnames. It also has explicit native path and
+frame bounds. It does not replace configured host loading, SSH, remote platforms
+or the complete original authorization model. Those differences keep the 125
+production-handler migration rows and all completion/removal flags unchanged.
+
+## Diagnostic MCP stdio service
 
 Launch `runtime-protocol.elf` directly with no arguments. It reads one JSON
 message per LF-delimited frame and writes one LF-delimited response. A final
@@ -249,7 +310,7 @@ success and three native comparison inputs for the ELF checks are separately
 asserted. See [stat_version_original_python_comparison.json](stat_version_original_python_comparison.json).
 This is a representation boundary; it does not open files or replace a tool.
 
-The read-only I/O dependency has passed **13 test groups and 113 actual ELF
+The read-only I/O dependency has passed **14 test groups and 119 actual ELF
 requests**, including **8 direct comparisons** with the retained Python
 `binary_file.py` read helper. Both that helper and its `file_metadata.py`
 dependency are bound to their original Git blobs. Tests exercise real short
@@ -258,8 +319,27 @@ PATH execution, broken output pipes, descriptor reuse and rejection of malformed
 effect records. Its startup root inode remains in custody across requests;
 the old helper reopens pathnames on every request. That distinction is tested
 explicitly and prevents a claim of complete original authorization or tool
-parity. The retained observation is in
-[io_reference_proof.json](../tests/hia_native/io_reference_proof.json).
+parity. The original 113-request observation remains in
+[io_reference_proof.json](../tests/hia_native/io_reference_proof.json). The current
+119-request extension adds guaranteed expected-version mismatch precedence;
+its frozen observation is in [composition_observation.json](composition_observation.json).
+
+The local service has passed **six suites with 234 actual ELF requests**,
+including **118 live original Python read comparisons**, 20 protocol refusals
+and 21 tool-domain refusals. Seven direct native controller calls separately
+exercise response capacity and continuation acknowledgement. Their synthetic
+startup acknowledgement isolates lifecycle state and is never counted as a
+filesystem read. All real service processes execute with an empty `PATH`.
+The frozen identities and counts are retained in
+[local_service_observation.json](local_service_observation.json); the current
+aggregate gate repeats them from its own source snapshot.
+
+The generic composition suite adds **10 groups, 26 actual ELF executions and
+39 frames**. It checks call-mask and depth refusal, recursion, overlapping
+borrows, footer protection, nonprogressing continuations, exact maximum framing,
+broken stdout, malformed packer inputs and cache-image mutation. It also packs
+and runs an actual executable larger than 1 MiB. Its generic controller/leaf
+fixtures remain under `tests/hia_native`; they are not production native owners.
 
 The protocol tests cover randomized JSON formatting and field order, strict
 Unicode, duplicate decoded keys, ID echo, invalid envelopes, initialization

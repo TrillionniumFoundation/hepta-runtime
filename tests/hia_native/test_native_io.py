@@ -186,10 +186,26 @@ class NativeIoTests(unittest.TestCase):
         with Session(self.executable,"/"+str(self.root)) as session:
             self.assertEqual(session.call(request("/"+str(self.file),limit=3))["data"],self.content[:3])
 
+    def test_guaranteed_version_mismatch_preserves_error_order(self):
+        def mismatch(path, **kwargs):
+            raw = request(path, **kwargs)
+            return raw[:40] + struct.pack("<Q", 2) + raw[48:]
+        with Session(self.executable, self.root) as session:
+            for path, status in [(self.file, 6), (self.root / "missing", 3), (self.root, 1)]:
+                response = session.call(mismatch(path, offset=(1 << 64) - 1))
+                self.assertEqual((response["status"], response["data"]), (status, b""))
+            directory = self.root / "version-directory"
+            directory.mkdir()
+            self.assertEqual(session.call(mismatch(directory))["status"], 4)
+            raw = mismatch(self.file)
+            nonzero = raw[:48] + struct.pack("<Q", 1) + raw[56:]
+            self.assertEqual(session.call(nonzero)["status"], 10)
+            self.assertEqual(session.call(request(self.file, limit=3))["data"], self.content[:3])
+
     def test_malformed_requests_do_not_change_authority(self):
         good=request(self.file)
         variants=[b"BADMAGIC"+good[8:],request(self.file,limit=0),request(self.file,limit=65537),
-                  good[:40]+struct.pack("<Q",2)+good[48:],good[:48]+struct.pack("<Q",1)+good[56:]]
+                  good[:40]+struct.pack("<Q",3)+good[48:],good[:48]+struct.pack("<Q",1)+good[56:]]
         with Session(self.executable,self.root) as session:
             for value in variants:self.assertEqual(session.call(value)["status"],10)
             for raw in [b"/tmp/\x00x",b"/tmp/\xff",b"/tmp/\xc0\x80"]:

@@ -7,7 +7,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from qualify_hia_runtime_native import MODULES, io_reference_evidence, qualification_env, record_check, sources
+from qualify_hia_runtime_native import (MODULES, io_reference_evidence, local_service_reference_evidence,
+                                       native_composition_evidence, qualification_env, record_check, sources)
 from compare_hia_runtime_rust import run as compare_rust
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
 from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
@@ -114,14 +115,43 @@ class QualificationReportingTests(unittest.TestCase):
     def test_io_reference_suite_cannot_pass_with_zero_original_comparisons(self):
         record_check(self.output, self.report, name="test_native_io.py", timeout=5,
                      command=[sys.executable, "-I", "-c",
-                              "print('{\"native_io\": {\"elf_requests\": 113, \"original_read_comparisons\": 0}}')"])
+                              "print('{\"native_io\": {\"elf_requests\": 119, \"original_read_comparisons\": 0}}')"])
         with self.assertRaisesRegex(ValueError, "retained-reference coverage differs"):
             io_reference_evidence(self.output, self.report)
+
+    def test_service_reference_suite_cannot_pass_without_live_comparisons(self):
+        summary = {"schema": "hepta.runtime.native-local-service-test.v1", "status": "pass",
+                   "counts": {"elf_requests": 234, "original_read_comparisons": 0,
+                              "protocol_errors": 20, "domain_errors": 21, "native_controller_calls": 7}}
+        record_check(self.output, self.report, name="test_local_service.py", timeout=5,
+                     command=[sys.executable, "-I", "-c", "print(" + repr(json.dumps(summary)) + ")"])
+        with self.assertRaisesRegex(ValueError, "retained-reference coverage differs"):
+            local_service_reference_evidence(self.output, self.report)
+
+    def test_composition_cannot_replace_its_fixed_authority_table(self):
+        import hashlib
+        proof = json.loads((ROOT / "native/local_service_observation.json").read_bytes())
+        profile = proof["profile"]
+        profile[0]["call_mask"] |= 1  # Root recursion is outside the declared service table.
+        metadata = {"schema": "hepta.runtime.native-composition.v1", "target": "linux-x86_64",
+                    "transport": "newline-json", "compiler_commit": HEPTA_COMMIT,
+                    "compiler_sha256": proof["compiler_sha256"], "executable": "native-local-read.elf",
+                    "runtime_python_required": False, "runtime_libc_required": False,
+                    "whole_runtime_replaced": False, "profile": profile, "members": proof["modules"]}
+        raw = json.dumps(metadata).encode()
+        (self.output / "manifest.json").write_bytes(raw)
+        report = {"compiler_image_sha256": proof["compiler_sha256"], "modules": {"local_service": {
+            "builder": "composition", "manifest": "manifest.json", "sha256": hashlib.sha256(raw).hexdigest()}}}
+        with self.assertRaisesRegex(ValueError, "fixed five-image authority table differs"):
+            native_composition_evidence(self.output, report)
 
     def test_qualification_child_cannot_inherit_external_loader_source_or_probe(self):
         external = {"HIA_NATIVE_LOADER": "/external/loader.py",
                     "HIA_PROTOCOL_SOURCE": "/external/protocol.hepta",
                     "HIA_IO_PROBE_MANIFEST": "/external/probe/manifest.json",
+                    "HIA_SERVICE_SOURCE": "/external/service.hepta",
+                    "HIA_RUNTIME_REPO": "/external/repository",
+                    "HIA_COMPOSITION_MANIFEST": "/external/composition/manifest.json",
                     "HIA_FUTURE_DEVELOPMENT_OVERRIDE": "/external/future",
                     "QUALIFICATION_HOST_MARKER": "preserved"}
         child = qualification_env(external)

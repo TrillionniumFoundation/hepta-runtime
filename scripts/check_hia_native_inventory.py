@@ -31,6 +31,9 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/runtime/binary_file.py": "e5dddd844cb9ab869f4784a93f228a8a5ac91a74",
     "src/mcp/runtime/file_metadata.py": "a289f7c52a554f0c299541b932fcf30fba9251f5",
     "src/mcp/runtime/inode_patch.py": "25bdc18a30bfe23e84f9b25a5e77dd761841d5cd",
+    "src/mcp/runtime/inspect.rs": "9cc9f7c799c45dd0cef98cef76094c338fc215c8",
+    "src/mcp/runtime/ssh.rs": "35f54b9abb26e3f5c61750766168fa4084117362",
+    "src/mcp/server.rs": "90fe15fd6a998e9b165739bc27e6f3854022221d",
 }
 
 

@@ -1,65 +1,163 @@
 {
-  "schema": "hepta.runtime.native-io-abi.v1",
-  "target": "linux-x86_64-lp64",
-  "scope": "Read-only OS dependency primitive. No MCP tool registration, complete binary_read/view replacement, configured host authorization or whole-runtime closure is claimed.",
-  "executable": {
-    "arguments": ["native-read.elf", "administrator-supplied absolute root"],
-    "runtime_dependencies": ["Linux kernel"],
-    "input_transport": "Repeated u64 little-endian byte length followed by that many request bytes; 112..4207 bytes per request",
-    "output_transport": "Repeated u64 little-endian byte length followed by a complete response; 128..65664 bytes per response",
-    "shutdown": "EOF at a frame boundary asks HIA to close the root handle; truncated frames fail. No response is published before file identity and close checks finish.",
-    "exit_status": {"0": "clean EOF", "2": "invalid framing or native contract", "3": "capacity refusal", "64": "invalid startup root or failed root admission", "74": "transport or shutdown IO failure"}
-  },
   "authority": {
-    "root_source": "Only startup argv from the administrator; no request field can change the root",
-    "root_custody": "The startup directory is opened component by component with O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC and retained as an opaque descriptor capability until EOF. Requests use that same inode even if its old pathname is renamed or replaced.",
+    "hardlinks": "Ordinary read targets may have multiple links, matching the retained read helper. This is not a filesystem sandbox against external writers or privileged namespace changes.",
+    "not_implemented": [
+      "host/config loading and authorization",
+      "remote SSH/SFTP",
+      "arbitrary non-UTF8 Unix filenames",
+      "write operations",
+      "MCP schemas and responses",
+      "base64 and SHA256 output fields",
+      "complete file_info or view behavior"
+    ],
     "original_behavior_distinction": "The retained binary_file.py helper reopens parent directories from / for each request. This primitive intentionally pins startup root custody. Its root-replacement behavior is explicitly tested and must be reconciled by the eventual caller authorization owner before tool replacement.",
     "path_profile": "Valid UTF-8 absolute paths of at most 4095 bytes, without NUL or any .. component. Dot and redundant slash components normalize like PurePosixPath, including its distinct exactly-two-leading-slash anchor. The root itself and final names beginning .hepta- are refused.",
-    "symlinks": "O_NOFOLLOW on every opened path component, including the final file",
-    "hardlinks": "Ordinary read targets may have multiple links, matching the retained read helper. This is not a filesystem sandbox against external writers or privileged namespace changes.",
-    "not_implemented": ["host/config loading and authorization", "remote SSH/SFTP", "arbitrary non-UTF8 Unix filenames", "write operations", "MCP schemas and responses", "base64 and SHA256 output fields", "complete file_info or view behavior"]
-  },
-  "request": {
-    "magic": "HIARD001",
-    "header_bytes": 112,
-    "fields_after_magic": ["request_id:u64", "operation:u64=1", "offset:u64", "limit:u64=1..65536", "has_expected_version:u64=0|1", "expected_version:7*u64", "path_length:u64"],
-    "payload": "Exact path UTF-8 bytes",
-    "absent_version": "All seven version words must be zero when has_expected_version=0"
-  },
-  "response": {
-    "magic": "HIARR001",
-    "header_bytes": 128,
-    "fields_after_magic": ["request_id:u64", "status:u64", "errno:u64", "data_length:u64", "offset:u64", "next_offset:u64", "eof:u64=0|1", "version:7*u64", "mode:u64"],
-    "payload": "Successful read bytes only; every failed response has empty data and zero file metadata",
-    "version": ["st_dev", "st_ino", "st_size", "mtime_seconds_bits", "mtime_nanoseconds", "ctime_seconds_bits", "ctime_nanoseconds"],
-    "version_semantics": "The before/after descriptor version preserves the retained dev/inode/size/mtime_ns/ctime_ns identity without narrowing seconds*1e9. Seconds retain signed two-complement bits. atime is intentionally excluded.",
-    "mode": "st_mode & 07777",
-    "status": {"0": "success", "1": "invalid path or reserved target", "2": "outside configured root", "3": "open failed", "4": "not a regular nonnegative-size file", "5": "cursor beyond file size", "6": "expected version differs", "7": "file changed while reading", "8": "stat/read failed", "9": "close failed", "10": "malformed request"}
-  },
-  "policy_entry": {
-    "signature": "f0(readbuf input, mutbuf output, mutbuf workspace)->u32",
-    "workspace_bytes": 81920,
-    "output_bytes": 65664,
-    "startup": "A fresh zeroed workspace receives the administrator root UTF-8 bytes. The adapter reenters with unchanged input until HIA returns zero.",
-    "requests": "The adapter reenters with the same unchanged request until a complete response is returned. A zero-length input at an idle initialized state denotes transport-owned shutdown.",
-    "returns": {"0xfffffff0": "one effect request pending", "0xfffffffe": "insufficient workspace/output capacity", "0xfffffffc": "startup root admission failed", "0xfffffffb": "shutdown close failed", "0xffffffff": "contract refused", "0": "startup/shutdown complete", "128..65664": "complete request response extent"}
+    "root_custody": "The startup directory is opened component by component with O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC and retained as an opaque descriptor capability until EOF. Requests use that same inode even if its old pathname is renamed or replaced.",
+    "root_source": "Only startup argv from the administrator; no request field can change the root",
+    "symlinks": "O_NOFOLLOW on every opened path component, including the final file"
   },
   "continuation": {
-    "offset": 256,
-    "magic": "HIAFX001",
-    "u64_fields": ["magic", "sequence", "action", "opaque_handle", "buffer_offset", "buffer_length", "argument", "reserved_zero", "result_bits", "positive_errno", "result_handle", "completed_sequence", "completed_flag"],
-    "sequence": "Strictly increases across startup and all requests; the adapter independently checks it. At most 8192 effects may run for one startup/request/shutdown frame.",
-    "actions": {"1": "open / once for startup at sequence 1", "2": "open one directory component", "3": "open one regular-file candidate component", "4": "fstat", "5": "pread64", "6": "close"},
-    "handles": "Eight private adapter slots carry fd plus 56-bit generation. HIA receives generation<<8 | (slot+1), never a raw fd. Unknown, released or mismatched-generation handles are rejected.",
-    "buffer_admission": {
-      "component": "Only workspace offset 12288, extent 2..4096 including terminal NUL; no earlier NUL, slash, . or .. component",
-      "stat": "Only offset 512 or 656, exactly 144 bytes",
-      "pread": "A nonempty extent at most 4096 wholly inside workspace[16384,81920); signed nonnegative file offset",
-      "close": "All buffer/argument fields zero"
+    "actions": {
+      "1": "open / once for startup at sequence 1",
+      "2": "open one directory component",
+      "3": "open one regular-file candidate component",
+      "4": "fstat",
+      "5": "pread64",
+      "6": "close"
     },
-    "syscalls": ["openat", "fstat", "pread64", "close"],
-    "transport_syscalls": ["read", "write", "mmap", "rt_sigaction", "exit"],
+    "buffer_admission": {
+      "close": "All buffer/argument fields zero",
+      "component": "Only workspace offset 12288, extent 2..4096 including terminal NUL; no earlier NUL, slash, . or .. component",
+      "pread": "A nonempty extent at most 4096 wholly inside workspace[16384,81920); signed nonnegative file offset",
+      "stat": "Only offset 512 or 656, exactly 144 bytes"
+    },
+    "cleanup": "HIA closes request file/intermediate directory handles before any response and closes its root on EOF. The adapter also closes every still-tracked handle on fatal exits. The kernel releases remaining descriptors on process teardown. Handles remain private to one process.",
+    "handles": "Eight private adapter slots carry fd plus 56-bit generation. HIA receives generation<<8 | (slot+1), never a raw fd. Unknown, released or mismatched-generation handles are rejected.",
     "interrupts": "openat/fstat/pread/read/write retry EINTR. close is issued once and its handle is retired before the syscall. SIGPIPE is ignored so output failure becomes exit 74.",
-    "cleanup": "HIA closes request file/intermediate directory handles before any response and closes its root on EOF. The adapter also closes every still-tracked handle on fatal exits. The kernel releases remaining descriptors on process teardown. Handles remain private to one process."
-  }
+    "magic": "HIAFX001",
+    "offset": 256,
+    "sequence": "Strictly increases across startup and all requests; the adapter independently checks it. At most 8192 effects may run for one startup/request/shutdown frame.",
+    "syscalls": [
+      "openat",
+      "fstat",
+      "pread64",
+      "close"
+    ],
+    "transport_syscalls": [
+      "read",
+      "write",
+      "mmap",
+      "rt_sigaction",
+      "exit"
+    ],
+    "u64_fields": [
+      "magic",
+      "sequence",
+      "action",
+      "opaque_handle",
+      "buffer_offset",
+      "buffer_length",
+      "argument",
+      "reserved_zero",
+      "result_bits",
+      "positive_errno",
+      "result_handle",
+      "completed_sequence",
+      "completed_flag"
+    ]
+  },
+  "executable": {
+    "arguments": [
+      "native-read.elf",
+      "administrator-supplied absolute root"
+    ],
+    "exit_status": {
+      "0": "clean EOF",
+      "2": "invalid framing or native contract",
+      "3": "capacity refusal",
+      "64": "invalid startup root or failed root admission",
+      "74": "transport or shutdown IO failure"
+    },
+    "input_transport": "Repeated u64 little-endian byte length followed by that many request bytes; 112..4207 bytes per request",
+    "output_transport": "Repeated u64 little-endian byte length followed by a complete response; 128..65664 bytes per response",
+    "runtime_dependencies": [
+      "Linux kernel"
+    ],
+    "shutdown": "EOF at a frame boundary asks HIA to close the root handle; truncated frames fail. No response is published before file identity and close checks finish."
+  },
+  "policy_entry": {
+    "output_bytes": 65664,
+    "requests": "The adapter reenters with the same unchanged request until a complete response is returned. A zero-length input at an idle initialized state denotes transport-owned shutdown.",
+    "returns": {
+      "0": "startup/shutdown complete",
+      "0xfffffff0": "one effect request pending",
+      "0xfffffffb": "shutdown close failed",
+      "0xfffffffc": "startup root admission failed",
+      "0xfffffffe": "insufficient workspace/output capacity",
+      "0xffffffff": "contract refused",
+      "128..65664": "complete request response extent"
+    },
+    "signature": "f0(readbuf input, mutbuf output, mutbuf workspace)->u32",
+    "startup": "A fresh zeroed workspace receives the administrator root UTF-8 bytes. The adapter reenters with unchanged input until HIA returns zero.",
+    "workspace_bytes": 81920
+  },
+  "request": {
+    "absent_version": "All seven version words must be zero when has_expected_version is 0 or 2",
+    "fields_after_magic": [
+      "request_id:u64",
+      "operation:u64=1",
+      "offset:u64",
+      "limit:u64=1..65536",
+      "has_expected_version:u64=0|1|2",
+      "expected_version:7*u64",
+      "path_length:u64"
+    ],
+    "guaranteed_mismatch": "Flag 2 represents a caller-proven noncanonical expected-version string. It returns status 6 after successful regular-file fstat admission, before cursor checks or file reads. Path/open/type errors still take precedence. Flags 0 and 1 are unchanged.",
+    "header_bytes": 112,
+    "magic": "HIARD001",
+    "payload": "Exact path UTF-8 bytes"
+  },
+  "response": {
+    "fields_after_magic": [
+      "request_id:u64",
+      "status:u64",
+      "errno:u64",
+      "data_length:u64",
+      "offset:u64",
+      "next_offset:u64",
+      "eof:u64=0|1",
+      "version:7*u64",
+      "mode:u64"
+    ],
+    "header_bytes": 128,
+    "magic": "HIARR001",
+    "mode": "st_mode & 07777",
+    "payload": "Successful read bytes only; every failed response has empty data and zero file metadata",
+    "status": {
+      "0": "success",
+      "1": "invalid path or reserved target",
+      "10": "malformed request",
+      "2": "outside configured root",
+      "3": "open failed",
+      "4": "not a regular nonnegative-size file",
+      "5": "cursor beyond file size",
+      "6": "expected version differs",
+      "7": "file changed while reading",
+      "8": "stat/read failed",
+      "9": "close failed"
+    },
+    "version": [
+      "st_dev",
+      "st_ino",
+      "st_size",
+      "mtime_seconds_bits",
+      "mtime_nanoseconds",
+      "ctime_seconds_bits",
+      "ctime_nanoseconds"
+    ],
+    "version_semantics": "The before/after descriptor version preserves the retained dev/inode/size/mtime_ns/ctime_ns identity without narrowing seconds*1e9. Seconds retain signed two-complement bits. atime is intentionally excluded."
+  },
+  "schema": "hepta.runtime.native-io-abi.v1",
+  "scope": "Read-only OS dependency primitive. No MCP tool registration, complete binary_read/view replacement, configured host authorization or whole-runtime closure is claimed.",
+  "target": "linux-x86_64-lp64"
 }

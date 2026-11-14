@@ -20,7 +20,8 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from qualify_hia_runtime_native import MODULES, python_reference_evidence, record_check, save_report, sha, sources
+from qualify_hia_runtime_native import (MODULES, native_composition_evidence, python_reference_evidence,
+                                       record_check, save_report, sha, sources)
 from check_hia_native_inventory import RUNTIME_BASE_COMMIT, check_original_sources
 from hia_native_build import HEPTA_COMMIT
 from hia_native_cold import validate_cold_evidence
@@ -74,20 +75,33 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required matching-source full cold evidence differs")
     if (report.get("retained_python_comparison_status") != "PASS"
             or report.get("original_python_comparisons") != python_reference_evidence(output, report)):
-        raise ValueError("required retained-Python IO/stat-version evidence differs")
+        raise ValueError("required retained-Python IO/stat-version/local-service evidence differs")
+    if report.get("native_composition_evidence") != native_composition_evidence(output, report):
+        raise ValueError("required native composition evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
         for relative, expected in report[collection].items():
             path = Path(relative)
             if path.is_absolute() or ".." in path.parts or sha(output / path) != expected:
                 raise ValueError("retained native reference corpus changed: " + relative)
-    for item in report["modules"].values():
-        manifest = output / item["manifest"]
+    declared = {item["key"]: item for item in MODULES}
+    for key, item in report["modules"].items():
+        expected = declared[key]
+        relative = Path(item["manifest"])
+        if (item.get("source") != expected["source"]
+                or item.get("builder") != expected.get("builder", "borrowed_bytes")
+                or relative.is_absolute() or ".." in relative.parts):
+            raise ValueError("compiled module registry or retained path differs: " + key)
+        manifest = output / relative
         if sha(manifest) != item["sha256"]:
             raise ValueError("compiled module manifest changed")
         module = json.loads(manifest.read_bytes())
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
+        if item.get("builder") == "composition":
+            # The exact five-image authority table, all child source/image pairs,
+            # packer and executable were revalidated above, including the suite.
+            continue
         if item.get("builder") == "io":
             if (module.get("schema") != "hepta.runtime.native-io.v1"
                     or module.get("executable") != "native-read.elf"
@@ -386,7 +400,7 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
 NEW_COMPONENTS = {"runtime_protocol"}
 # These are checked in check_input_pins against the native process evidence and
 # original Python source identities. They are not counted as Rust comparisons.
-PYTHON_REFERENCE_COMPONENTS = {"native_io", "stat_version"}
+PYTHON_REFERENCE_COMPONENTS = {"native_io", "stat_version", "local_service"}
 
 
 def run(output: Path, rustc_name: str) -> dict:

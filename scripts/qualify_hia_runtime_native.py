@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import struct
 import subprocess
 import sys
 import time
@@ -23,7 +24,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, inspect
-from hia_native_build import NativeBuild, HEPTA_COMMIT, HEPTA_TREE
+from hia_native_build import NativeBuild, HEPTA_COMMIT, HEPTA_TREE, json_bytes
 from hia_native_cold import validate_cold_evidence
 
 # Every native owner needs an executable qualification entry. Transport tests
@@ -48,9 +49,12 @@ MODULES = (
     {"key": "native_io", "name": "native-io", "source": "native/io_policy.hepta",
      "companion_sources": ("native/io_packer.hepta",), "builder": "io",
      "manifest_env": "HIA_IO_MANIFEST", "test": "test_native_io.py"},
+    {"key": "local_service", "name": "local-service", "source": "native/local_service.hepta",
+     "companion_sources": ("native/composition_packer.hepta",), "builder": "composition",
+     "manifest_env": "HIA_SERVICE_MANIFEST", "test": "test_local_service.py"},
 )
 PACKERS = {"native/filter_packer.hepta", "native/stdio_packer.hepta"}
-EXTRA_TESTS = ("test_transport.py", "test_qualification_reporting.py")
+EXTRA_TESTS = ("test_transport.py", "test_native_composition.py", "test_qualification_reporting.py")
 RUST_CORPUS_FILES = ("native-corpus.json", "input.bin.gz", "native-output.bin.gz")
 
 
@@ -73,7 +77,7 @@ def sources() -> dict:
     paths.update((ROOT / "tests/hia_native").rglob("*"))
     paths.update(ROOT / "scripts" / name for name in (
         "hia_native_build.py", "hia_native_loader.py", "generate_hia_transport.py",
-        "hia_native_io_build.py", "hia_native_cold.py",
+        "hia_native_io_build.py", "hia_native_composition_build.py", "hia_native_cold.py",
         "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-runtime-native.yml"))
@@ -161,7 +165,7 @@ def io_reference_evidence(output: Path, report: dict) -> dict:
             or json.loads(raw) != row.get("summary")):
         raise ValueError("native IO test execution evidence differs")
     counts = row["summary"].get("native_io")
-    if counts != {"elf_requests": 113, "original_read_comparisons": 8}:
+    if counts != {"elf_requests": 119, "original_read_comparisons": 8}:
         raise ValueError("native IO retained-reference coverage differs")
     originals = report["inventory"]["original_sources"]
     return {"status": "PASS", "reference_kind": "retained original Python binary read",
@@ -248,9 +252,156 @@ def stat_version_reference_evidence(output: Path, report: dict) -> dict:
             "scope": "pure stat version codec; no filesystem or complete tool replacement"}
 
 
+def completed_test_summary(output: Path, report: dict, name: str) -> tuple[dict, dict]:
+    checks = [row for row in report["checks"] if row["name"] == name]
+    if len(checks) != 1:
+        raise ValueError(name + " requires exactly one completed executable suite")
+    check = checks[0]
+    stdout = (output / (name + ".stdout")).read_bytes()
+    stderr = (output / (name + ".stderr")).read_bytes()
+    summary = json.loads(stdout)
+    if (check["exit_code"] != 0 or check["timed_out"] is not False or check.get("start_error")
+            or hashlib.sha256(stdout).hexdigest() != check["stdout_sha256"]
+            or hashlib.sha256(stderr).hexdigest() != check["stderr_sha256"]
+            or summary != check.get("summary")):
+        raise ValueError(name + " test execution evidence differs")
+    return check, summary
+
+
+def local_service_reference_evidence(output: Path, report: dict) -> dict:
+    """Account the live original helper comparisons at the actual MCP boundary."""
+    check, summary = completed_test_summary(output, report, "test_local_service.py")
+    counts = {"elf_requests": 234, "original_read_comparisons": 118,
+              "protocol_errors": 20, "domain_errors": 21, "native_controller_calls": 7}
+    if (summary.get("schema") != "hepta.runtime.native-local-service-test.v1"
+            or summary.get("status") != "pass" or summary.get("counts") != counts):
+        raise ValueError("local service retained-reference coverage differs")
+    capture = output / "local-service-python-reference.json"
+    if json.loads(capture.read_bytes()) != summary:
+        raise ValueError("local service live reference receipt differs from actual stdout")
+    module = report["modules"]["local_service"]
+    manifest = output / module["manifest"]
+    metadata = json.loads(manifest.read_bytes())
+    originals = report["inventory"]["original_sources"]
+    if (sha(manifest) != module["sha256"] or summary.get("manifest_sha256") != module["sha256"]
+            or summary.get("executable_sha256") != metadata.get("executable_sha256")
+            or summary.get("original_helper_sha256") != originals["src/mcp/runtime/binary_file.py"]["sha256"]):
+        raise ValueError("local service executable or original helper identity differs")
+    return {"status": "PASS", "reference_kind": "live retained original Python binary read through native MCP",
+            "original_read_comparisons": counts["original_read_comparisons"],
+            "actual_elf_requests": counts["elf_requests"], "native_cases_added_by_replay": 0,
+            "protocol_refusals": counts["protocol_errors"], "domain_refusals": counts["domain_errors"],
+            "isolated_controller_calls": counts["native_controller_calls"],
+            "controller_startup_acknowledgement": "explicit lifecycle fixture; no file operation",
+            "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
+            "live_reference_receipt_sha256": sha(capture),
+            "module_manifest_sha256": module["sha256"], "executable_sha256": metadata["executable_sha256"],
+            "original_sources": {name: originals[name] for name in (
+                "src/mcp/runtime/binary_file.py", "src/mcp/runtime/file_metadata.py",
+                "src/mcp/runtime/binary.rs", "src/mcp/runtime/config.rs",
+                "src/mcp/runtime/inspect.rs", "src/mcp/runtime/ssh.rs", "src/mcp/server.rs")},
+            "scope": "explicit administrator-owned native-local read-only profile; host_list and binary_read subset",
+            "complete_original_remote_tool_parity": False, "production_activated": False}
+
+
+def native_composition_evidence(output: Path, report: dict) -> dict:
+    """Recheck every image, fixed authority table and actual generic bridge suite."""
+    owner = report["modules"]["local_service"]
+    relative = Path(owner["manifest"])
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("native composition manifest path is not retained under the result")
+    manifest = output / relative
+
+    def raw_file(path: Path) -> bytes:
+        if path.is_symlink() or not path.is_file() or path.resolve() != path.absolute():
+            raise ValueError("native composition artifact is not a regular owned file: " + str(path))
+        return path.read_bytes()
+
+    def digest(raw: bytes) -> str:
+        return hashlib.sha256(raw).hexdigest()
+
+    raw_manifest = raw_file(manifest)
+    metadata = json.loads(raw_manifest)
+    if (owner.get("builder") != "composition" or digest(raw_manifest) != owner["sha256"]
+            or metadata.get("schema") != "hepta.runtime.native-composition.v1"
+            or metadata.get("target") != "linux-x86_64" or metadata.get("transport") != "newline-json"
+            or metadata.get("compiler_commit") != HEPTA_COMMIT
+            or metadata.get("compiler_sha256") != report["compiler_image_sha256"]
+            or metadata.get("executable") != "native-local-read.elf"
+            or metadata.get("runtime_python_required") is not False
+            or metadata.get("runtime_libc_required") is not False
+            or metadata.get("whole_runtime_replaced") is not False):
+        raise ValueError("native composition manifest identity or runtime ownership differs")
+    specs = (("local-service", "native/local_service.hepta", 1, 30, 32 << 20),
+             ("policy", "native/policy.hepta", 0, 0, 32 << 20),
+             ("codec", "native/binary_codec.hepta", 0, 0, 32 << 20),
+             ("io", "native/io_policy.hepta", 2, 0, 81920),
+             ("stat-version", "native/stat_version.hepta", 0, 0, 32 << 20))
+    profile = [{"id": index, "name": name, "source_sha256": sha(ROOT / source),
+                "flags": flags, "call_mask": mask, "input_capacity": 8 << 20,
+                "output_capacity": 8 << 20, "workspace_capacity": workspace}
+               for index, (name, source, flags, mask, workspace) in enumerate(specs)]
+    if (json_bytes(metadata.get("profile")) != json_bytes(profile) or type(metadata.get("members")) is not list
+            or len(metadata["members"]) != len(specs)):
+        raise ValueError("native composition fixed five-image authority table differs")
+    frame = bytearray(b"HIABND01" + struct.pack("<3Q", len(specs), 0, 0))
+    rows = [("packer", "native/composition_packer.hepta", metadata["packer"])]
+    rows.extend((f"module_{index:02d}", spec[1], metadata["members"][index]) for index, spec in enumerate(specs))
+    for index, (stem, source_name, row) in enumerate(rows):
+        if row.get("manifest") != stem + ".json":
+            raise ValueError("native composition child manifest path differs")
+        raw = raw_file(manifest.parent / row["manifest"])
+        child = json.loads(raw)
+        if (digest(raw) != row["manifest_sha256"] or child.get("schema") != "hepta.runtime.native-module.v1"
+                or child.get("abi") != "hepta.runtime.borrowed-bytes.linux-x86_64.v1"
+                or child.get("target") != "linux-x86_64" or child.get("compiler_commit") != HEPTA_COMMIT
+                or child.get("compiler_sha256") != report["compiler_image_sha256"]
+                or child.get("source") != stem + ".hepta" or child.get("image") != stem + ".image.bin"
+                or child.get("standalone") is not None):
+            raise ValueError("native composition child manifest or compiler differs")
+        source = raw_file(manifest.parent / child["source"])
+        image = raw_file(manifest.parent / child["image"])
+        if (source != raw_file(ROOT / source_name) or digest(source) != child.get("source_sha256")
+                or digest(source) != row.get("source_sha256") or not 0 < len(image) <= 1 << 20
+                or digest(image) != child.get("image_sha256") or digest(image) != row.get("image_sha256")
+                or child.get("input_capacity") != 8 << 20 or child.get("output_capacity") != 8 << 20
+                or child.get("workspace_capacity") != 32 << 20):
+            raise ValueError("native composition source/image artifact or capacity differs")
+        if index:
+            p = profile[index - 1]
+            frame.extend(struct.pack("<8Q", len(image), p["input_capacity"], p["output_capacity"],
+                                     p["workspace_capacity"], p["flags"], p["call_mask"], 0, 0))
+            frame.extend(bytes.fromhex(digest(source)) + bytes.fromhex(digest(image)) + image)
+    key = digest(json_bytes({"compiler": report["compiler_image_sha256"], "members": profile,
+                             "packer": sha(ROOT / "native/composition_packer.hepta")}))
+    executable = raw_file(manifest.parent / "native-local-read.elf")
+    inspection = metadata["inspection"]
+    if (metadata.get("key") != key or metadata.get("frame_sha256") != digest(frame)
+            or metadata.get("frame_bytes") != len(frame) or len(frame) > 8 << 20
+            or digest(executable) != metadata.get("executable_sha256")
+            or inspection.get("sha256") != digest(executable) or inspection.get("bytes") != len(executable)
+            or inspection.get("dynamic_loader") is not False or inspection.get("libc") is not False
+            or inspection.get("interpreter") is not None
+            or metadata.get("packing") != {"owner": "HIA", "input_unchanged": True,
+                 "buffer_canaries_unchanged": True, "packer_image_sha256": metadata["packer"]["image_sha256"]}):
+        raise ValueError("native composition packed frame or executable identity differs")
+    check, summary = completed_test_summary(output, report, "test_native_composition.py")
+    if summary != {"status": "PASS", "native_executions": 26, "native_frames": 39,
+                   "adapter": "closed-native-multi-image"}:
+        raise ValueError("native composition executable control coverage differs")
+    return {"status": "PASS", "kind": "new closed native composition adapter",
+            "module_manifest_sha256": digest(raw_manifest), "executable_sha256": digest(executable),
+            "frame_sha256": digest(frame), "profile": profile, "modules": metadata["members"],
+            "packer": metadata["packer"], "native_executions": summary["native_executions"],
+            "native_frames": summary["native_frames"], "native_cases_added_by_replay": 0,
+            "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
+            "original_reference_recipe": None, "whole_runtime_replaced": False}
+
+
 def python_reference_evidence(output: Path, report: dict) -> dict:
     return {"native_io": io_reference_evidence(output, report),
-            "stat_version": stat_version_reference_evidence(output, report)}
+            "stat_version": stat_version_reference_evidence(output, report),
+            "local_service": local_service_reference_evidence(output, report)}
 
 
 def run(output: Path, hepta: Path) -> dict:
@@ -263,7 +414,7 @@ def run(output: Path, hepta: Path) -> dict:
         "started_at": datetime.now(timezone.utc).isoformat(),
         "checkout_head": None, "source_identity_authority": "source_sha256", "source_sha256": {},
         "compiler_commit": HEPTA_COMMIT, "compiler_tree": HEPTA_TREE,
-        "scope": "native pure kernels, MCP protocol subset, and Linux x86-64 stdio/read-only descriptor dependencies",
+        "scope": "native kernels, closed five-image local MCP read profile, and Linux x86-64 stdio/read-only dependencies",
         "whole_runtime_replaced": False, "production_activated": False,
         "old_stack_removal_qualified": False, "matching_source_full_cold_qualified": False,
         "compiler_cold_status": "PENDING", "native_components_status": "RUNNING",
@@ -307,12 +458,17 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_CODEC_CORPUS_DIR": str(output / "codec-rust-oracle"),
             "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
             "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
+            "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
             "HIA_REFERENCE_RUNTIME": str(ROOT),
         })
         for item in MODULES:
             if item.get("builder") == "io":
                 from hia_native_io_build import build_io
                 built = build_io(hepta, output / "build")
+            elif item.get("builder") == "composition":
+                from hia_native_composition_build import build_local_read
+                built = build_local_read(hepta, output / "build")
+                env["HIA_COMPOSITION_MANIFEST"] = str(built)
             else:
                 built = builder.compile(item["name"], ROOT / item["source"], standalone=item["standalone"])
             report["modules"][item["key"]] = {
@@ -325,10 +481,13 @@ def run(output: Path, hepta: Path) -> dict:
                          command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)],
                          env=env, timeout=180)
         report["original_python_comparisons"] = python_reference_evidence(output, report)
+        report["native_composition_evidence"] = native_composition_evidence(output, report)
         report["retained_python_comparison_status"] = "PASS"
         report["python_reference_inputs"] = {
             "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
             for name in ("native-corpus.json", "stat-version-cases.jsonl.gz")}
+        report["python_reference_inputs"]["local-service-python-reference.json"] = sha(
+            output / "local-service-python-reference.json")
         report["rust_oracle_inputs"] = {
             "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
         report["rust_oracle_inputs"].update({
