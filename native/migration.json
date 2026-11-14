@@ -1,0 +1,1009 @@
+{
+  "schema": "hepta.runtime.hia-migration.v1",
+  "runtime_base_commit": "a0dcdda1991ec536d5e2d252c006a778993fa566",
+  "runtime_base_tree": "98d96c88d54082637c27f1cbfae61a66d0dd81e7",
+  "compiler_repository": "TrillionniumFoundation/Hepta",
+  "compiler_commit": "f33d8da316de8fdf27b504371f1a5310997ff548",
+  "compiler_tree": "378bc0dc613befc7006f1514bd2229357ae0d07c",
+  "target": "linux-x86_64",
+  "whole_runtime_replaced": false,
+  "old_stack_removal_qualified": false,
+  "production_activated": false,
+  "native_components": [
+    {
+      "source": "native/runtime_bytes.hepta",
+      "scope": "Byte hashes and line identifiers; strict/clamped signed line indices; log page windows; bounded identity predicates. Borrowed byte ABI; no filesystem or process effects.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/runtime_protocol.hepta",
+      "scope": "Strict JSON parsing, MCP 2025-06-18 negotiation and initialization state, native JSON response serialization, runtime_native_info and original line-hash computation. Existing 125 production tool handlers are not provided by this service.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/text_budget.hepta",
+      "scope": "Original token estimate, one-decimal MiB formatting, line-ID range rendering and smart head/tail truncation under the retained Rust release semantics.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/line_endpoint.hepta",
+      "scope": "Original line-endpoint parsing and exact error formatting at a typed serde Value boundary, including Unicode trim, signed/unsigned integer parsing and N:hh normalization. JSON classification/serialization remains the caller boundary.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/stdio_packer.hepta",
+      "scope": "Native ELF construction for persistent LF-delimited stdio framing and Linux system-call transport.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/filter_packer.hepta",
+      "scope": "Native ELF construction for a single binary input/output invocation.",
+      "legacy_call_sites_replaced": false
+    }
+  ],
+  "legacy_tool_handlers": [
+    {
+      "name": "hia_describe",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_artifact",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_read",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_context",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_inspect",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_candidate",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_verify",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_emit",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_evaluate",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_adopt",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_rollback",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "effective_config",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "usage_stats",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_archive",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_history",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_status",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_result",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_start",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_cancel",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "operation_start",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "operation_status",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "operation_result",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "operation_cancel",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "view",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "text_editor",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "directory_create",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "file_move",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "text_file_write",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "directory_move",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "batch_edit",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "extract_lines",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "shell",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "shell_start",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "host_processes",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "host_signal",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "sudo_start",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "execution_shadow_admit",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "host_list",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "search_start",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "search_results",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "search_list",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "search_stop",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "read_multiple_files",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "host_health",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_artifact",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_model",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_read_model",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_web_capture",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_compare_web_captures",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_replay_web_entry",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_javascript_package",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_javascript_graph",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_elf_notes",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_apk_signature_evidence",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_analysis_view",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_import_evidence_bundle",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_export_evidence_bundle",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_get_evidence_bundle",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_read_evidence_bundle",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_close_evidence_snapshot",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_source_map",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_model_session_list",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_application",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_apk_signature",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_model_session_open",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_model_session_query",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_model_session_read",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_archive",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_asar",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_read_asar_member",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_profiles",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_start",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_status",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_read",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_cancel",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_verify_evidence",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_retain_preview",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_read_preview",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_artifact_patch",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_artifact_restore",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_linear_forward",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_profiles",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_open",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_call",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_status",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_read",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_close",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_start",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_status",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_read",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_wait",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_cancel",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_list",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_list_page",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "document_read",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "image_read",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "document_write",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "document_edit",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "file_info",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "binary_read",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "binary_write",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "binary_upload",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pdf_edit",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "worksheet_edit",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "document_render",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "worksheet_recalculate",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "binary_patch_inode",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pdf_security",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_prepare",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_status",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_read",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_write",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_close",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_list",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_checkpoint",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_start",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_read",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_write",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_close",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_list",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hardware_snapshot",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "service_status",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "network_inspect",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "privileged_action",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "workdir",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    }
+  ],
+  "remaining_system_owners": [
+    {
+      "name": "durable_request_and_process_state",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/runtime/jobs.rs",
+        "src/mcp/runtime/request_async.rs",
+        "src/mcp/runtime/operation_async.rs"
+      ]
+    },
+    {
+      "name": "authorization_and_effect_ownership",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/runtime/caller_scope.rs",
+        "src/mcp/runtime/effect_owner_fence.rs",
+        "src/mcp/runtime/config.rs"
+      ]
+    },
+    {
+      "name": "ssh_sftp_http_pty_and_services",
+      "status": "not_ported",
+      "paths": [
+        "src/main.rs",
+        "src/mcp/fs/remote.rs",
+        "src/mcp/runtime/ssh.rs",
+        "src/mcp/runtime/pty.rs"
+      ]
+    },
+    {
+      "name": "filesystem_edits_and_recovery",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/fs/core.rs",
+        "src/mcp/fs/text_editing.rs",
+        "src/mcp/fs/delta.rs"
+      ]
+    },
+    {
+      "name": "rea_parsers_and_evidence",
+      "status": "not_ported",
+      "paths": [
+        "src/rea"
+      ]
+    },
+    {
+      "name": "documents_and_worksheets",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/runtime/documents.rs"
+      ]
+    },
+    {
+      "name": "weights_and_provider_workers",
+      "status": "not_ported",
+      "paths": [
+        "src/weight",
+        "workers/weight"
+      ]
+    },
+    {
+      "name": "hia_agent_store_and_worker",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/hia_provider.rs",
+        "deploy/hia_mcp_catalog.py"
+      ]
+    },
+    {
+      "name": "deployment_gateway_and_control_plane",
+      "status": "not_ported",
+      "paths": [
+        "deploy/chatgpt_full_operator.py",
+        "deploy/chatgpt_mcp_bridge.py"
+      ]
+    },
+    {
+      "name": "other_targets",
+      "status": "not_ported",
+      "paths": []
+    }
+  ],
+  "cleanup": {
+    "history_rewrite": false,
+    "legacy_implementation_retained": true,
+    "historical_evidence_retained": true,
+    "reason": "Existing tools and recovery owners are still active; CI and regression controls still read archived evidence. Remove only after their complete replacement is verified."
+  }
+}

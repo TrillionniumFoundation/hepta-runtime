@@ -1,0 +1,65 @@
+{
+  "artifact_sha256": {
+    "native/line_endpoint_abi.json": "97866152ee85a6517b2a99c0609d710368678c324290abff556dca4b8aafb4f2",
+    "tests/hia_native/endpoint_oracle/Cargo.lock": "ffce0ebacc6e3c39fc7fc591f173c94c70b58df7325c96594dbc57aa40e4dd2b",
+    "tests/hia_native/endpoint_oracle/Cargo.toml": "ba64f2bfa57ae0d84da0af6e9e573624dfe06996cdaface019545bd705b06e1e",
+    "tests/hia_native/line_endpoint_rust_vectors.json": "666963a4387a3da0d7aa88ce7f971bb0b717f6d4891eb304a5d7473b57136eb1",
+    "tests/hia_native/oracle_line_endpoint.rs": "9390357b5bd778b105a40771500daf4c923c354cf5b6c602f180cf8c93cfa9df",
+    "tests/hia_native/test_line_endpoint.py": "ced50756d94802588663b3a11fb773aa9ad6d541914409c6c229204a149536df"
+  },
+  "checks": {
+    "borrowed_buffer_canaries": true,
+    "captured_native_calls_compared_with_original_rust": 6155,
+    "fixed_original_rust_vectors": 930,
+    "independent_python_differential_cases": 5224,
+    "invalid_utf8_cases": 136,
+    "maximum_input_bytes": 8388608,
+    "native_calls": 6366,
+    "native_test_groups": 8,
+    "output_shortage_is_atomic": true,
+    "rust_comparison_status": "PASS"
+  },
+  "corpus": {
+    "file": "endpoint_cases.jsonl.gz",
+    "gzip_bytes": 345058,
+    "gzip_sha256": "b5f8c3bd3f68e6e7172a733a299fd6bfa7c6a09c80f5e6b728e45efda4acfa84",
+    "raw_bytes": 3272549,
+    "raw_sha256": "f9b759940554c6e9f21e2bd4af71b93f325cd1610fb566514c196011d9a4b165"
+  },
+  "native": {
+    "compiler_commit": "f33d8da316de8fdf27b504371f1a5310997ff548",
+    "compiler_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
+    "image_sha256": "0015c437dfdda0e3538e97c3296b3ce6f073a0bc78ed78456b5fb2780b140079",
+    "source_sha256": "7c1fd4c24114726d7d3446241c8bdc4ff0152ce2533193a309bc1c66c6031141"
+  },
+  "reference": {
+    "cargo_lock_sha256": "ffce0ebacc6e3c39fc7fc591f173c94c70b58df7325c96594dbc57aa40e4dd2b",
+    "line_hash_sha256": "904bc9a70e1ade3802213cd067ab7b75bce4dd075e4ab4965f32e9964293ba57",
+    "runtime_commit": "a0dcdda1991ec536d5e2d252c006a778993fa566",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "serde": "1.0.229",
+    "serde_json": "1.0.151",
+    "serde_json_features": [
+      "float_roundtrip",
+      "raw_value"
+    ],
+    "target": "linux-x86_64-lp64"
+  },
+  "reproduction": {
+    "cargo_args": [
+      "build",
+      "--locked"
+    ],
+    "cargo_manifest": "tests/hia_native/endpoint_oracle/Cargo.toml",
+    "corpus_environment": "HIA_ENDPOINT_CORPUS_DIR",
+    "native_manifest_environment": "HIA_ENDPOINT_MANIFEST",
+    "native_test": "tests/hia_native/test_line_endpoint.py",
+    "oracle_binary": "hia-line-endpoint-reference",
+    "oracle_stdin": "gzip-decompressed endpoint_cases.jsonl.gz",
+    "original_checkout_environment": "HIA_REFERENCE_RUNTIME"
+  },
+  "schema": "hepta.runtime.line-endpoint-parity.v1",
+  "scope": "Complete parse_endpoint owner within its documented typed Value and bounded buffer ABI; component evidence only.",
+  "status": "PASS",
+  "target": "linux-x86_64-lp64"
+}

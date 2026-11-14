@@ -1,0 +1,92 @@
+"""Regressions for qualification failures and preserved subprocess evidence."""
+from pathlib import Path
+import json
+import sys
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+from qualify_hia_runtime_native import record_check, sources
+from compare_hia_runtime_rust import run as compare_rust
+from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
+
+
+class QualificationReportingTests(unittest.TestCase):
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory(prefix="hia-reporting-")
+        self.addCleanup(self.folder.cleanup)
+        self.output = Path(self.folder.name)
+        self.report = {"phase": "reporting-regression", "checks": []}
+
+    def test_success_retains_exact_streams(self):
+        row = record_check(self.output, self.report, name="success", timeout=5,
+                           command=[sys.executable, "-I", "-c", "print('ready')"])
+        self.assertEqual(row.stdout, b"ready\n")
+        self.assertEqual((self.output / "success.stdout").read_bytes(), row.stdout)
+        self.assertEqual(self.report["checks"][0]["exit_code"], 0)
+        self.assertFalse(self.report["checks"][0]["timed_out"])
+
+    def test_nonzero_retains_stderr_and_failed_check(self):
+        with self.assertRaisesRegex(RuntimeError, "failed"):
+            record_check(self.output, self.report, name="failure", timeout=5,
+                         command=[sys.executable, "-I", "-c", "import sys; sys.stderr.write('original error'); sys.exit(7)"])
+        self.assertEqual((self.output / "failure.stderr").read_bytes(), b"original error")
+        saved = json.loads((self.output / "result.json").read_bytes())
+        self.assertEqual(saved["checks"][0]["exit_code"], 7)
+
+    def test_timeout_retains_output_and_failed_check(self):
+        program = "import sys,time; print('before timeout',flush=True); print('original stderr',file=sys.stderr,flush=True); time.sleep(30)"
+        with self.assertRaisesRegex(RuntimeError, "timed out"):
+            record_check(self.output, self.report, name="timeout", timeout=0.5,
+                         command=[sys.executable, "-I", "-c", program])
+        self.assertEqual((self.output / "timeout.stdout").read_bytes(), b"before timeout\n")
+        self.assertEqual((self.output / "timeout.stderr").read_bytes(), b"original stderr\n")
+        saved = json.loads((self.output / "result.json").read_bytes())
+        self.assertTrue(saved["checks"][0]["timed_out"])
+        self.assertNotEqual(saved["checks"][0]["exit_code"], 0)
+
+    def test_missing_executable_retains_start_failure(self):
+        with self.assertRaisesRegex(RuntimeError, "could not start"):
+            record_check(self.output, self.report, name="missing", timeout=5,
+                         command=[str(self.output / "missing-executable")])
+        self.assertEqual(self.report["checks"][0]["start_error"]["type"], "FileNotFoundError")
+        self.assertIsNone(self.report["checks"][0]["exit_code"])
+
+    def test_failed_phase_cannot_be_relabelled_by_comparison(self):
+        original = b'{"schema":"hepta.runtime.hia-native-qualification.v1","status":"FAIL"}\n'
+        (self.output / "result.json").write_bytes(original)
+        with self.assertRaisesRegex(ValueError, "pending Rust comparison"):
+            compare_rust(self.output, "rustc")
+        self.assertEqual((self.output / "result.json").read_bytes(), original)
+
+    def test_empty_native_inventory_cannot_pass_without_oracles(self):
+        report = {"schema": "hepta.runtime.hia-native-qualification.v1", "status": "NATIVE_COMPONENTS_PASS",
+                  "native_components_status": "PASS", "rust_comparison_status": "PENDING",
+                  "source_sha256": sources(), "rust_oracle_inputs": {}, "modules": {}, "checks": []}
+        (self.output / "result.json").write_text(json.dumps(report))
+        result = compare_rust(self.output, "missing-rustc")
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["rust_comparison_status"], "FAIL")
+        self.assertIn("module inventory differs", result["error"]["message"])
+        self.assertTrue((self.output / "rust-comparison-failure.txt").is_file())
+
+    def test_every_copied_original_owner_is_pinned_to_baseline_bytes(self):
+        fixture = self.output / "reference"
+        for name in ORIGINAL_RUNTIME_BLOBS:
+            path = fixture / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes((ROOT / name).read_bytes())
+        self.assertEqual(set(check_original_sources(fixture)), set(ORIGINAL_RUNTIME_BLOBS))
+        for name in ORIGINAL_RUNTIME_BLOBS:
+            with self.subTest(owner=name):
+                path = fixture / name
+                original = path.read_bytes()
+                path.write_bytes(original + b"\n// source changed after copied oracle\n")
+                with self.assertRaisesRegex(ValueError, "differs from pinned baseline"):
+                    check_original_sources(fixture)
+                path.write_bytes(original)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

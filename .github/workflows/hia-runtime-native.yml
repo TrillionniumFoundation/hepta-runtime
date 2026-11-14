@@ -1,0 +1,92 @@
+name: HIA Runtime Native
+
+on:
+  push:
+    branches: ['codex/**', hepta-runtime-base]
+    paths:
+      - 'native/**'
+      - 'scripts/*hia*native*'
+      - 'scripts/generate_hia_transport.py'
+      - 'scripts/compare_hia_runtime_rust.py'
+      - 'tests/hia_native/**'
+      - '.github/workflows/hia-runtime-native.yml'
+      - 'src/mcp/server.rs'
+      - 'src/utils/line_hash.rs'
+      - 'src/utils/truncation.rs'
+      - 'src/mcp/runtime/config.rs'
+      - 'src/mcp/runtime/execution.rs'
+      - 'src/mcp/runtime/jobs.rs'
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'scripts/*hia*native*'
+      - 'scripts/generate_hia_transport.py'
+      - 'scripts/compare_hia_runtime_rust.py'
+      - 'tests/hia_native/**'
+      - '.github/workflows/hia-runtime-native.yml'
+      - 'src/mcp/server.rs'
+      - 'src/utils/line_hash.rs'
+      - 'src/utils/truncation.rs'
+      - 'src/mcp/runtime/config.rs'
+      - 'src/mcp/runtime/execution.rs'
+      - 'src/mcp/runtime/jobs.rs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Native HIA components and stdio
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            .github
+
+      - name: Checkout pinned HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: f33d8da316de8fdf27b504371f1a5310997ff548
+          persist-credentials: false
+
+      - name: Build native images and run actual executable tests
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+          python3 -I -B runtime/scripts/qualify_hia_runtime_native.py \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-runtime-native"
+
+      - name: Compare against original Rust function bodies
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --rustc "$(rustup which --toolchain 1.95.0 rustc)"
+
+      - name: Retain original native results and executable identities
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-runtime-native-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-runtime-native/
+          if-no-files-found: error
+          retention-days: 14
