@@ -1,7 +1,7 @@
 """Build and test the declared HIA runtime profile from pinned source bytes.
 
 NATIVE_COMPONENTS_PASS records the fresh full compiler cold gate, native tests
-and their retained Python comparisons. Aggregate PASS also requires all seven
+and their retained Python comparisons. Aggregate PASS also requires all eight
 independent Rust comparisons. Neither phase qualifies the remaining 125
 production tool owners, production adoption, or removal of the old runtime.
 """
@@ -42,6 +42,8 @@ MODULES = (
      "standalone": "filter", "manifest_env": "HIA_DELTA_MANIFEST", "test": "test_delta.py"},
     {"key": "binary_codec", "name": "binary-codec", "source": "native/binary_codec.hepta",
      "standalone": "filter", "manifest_env": "HIA_CODEC_MANIFEST", "test": "test_binary_codec.py"},
+    {"key": "operation_kdf", "name": "operation-kdf", "source": "native/operation_kdf.hepta",
+     "standalone": "filter", "manifest_env": "HIA_KDF_MANIFEST", "test": "test_operation_kdf.py"},
     {"key": "policy", "name": "policy", "source": "native/policy.hepta",
      "standalone": "filter", "manifest_env": "HIA_POLICY_MANIFEST", "test": "test_policy.py"},
     {"key": "stat_version", "name": "stat-version", "source": "native/stat_version.hepta",
@@ -392,6 +394,83 @@ def multi_read_controller_evidence(output: Path, report: dict) -> dict:
             "actual_filesystem_comparisons": 0, "complete_original_tool_parity": False}
 
 
+def operation_kdf_evidence(output: Path, report: dict) -> dict:
+    """Keep primitive, original-binding, capacity and ELF observations distinct."""
+    check, summary = completed_test_summary(output, report, "test_operation_kdf.py")
+    counts = {"native_calls": 1378, "standard_reference_cases": 867, "original_binding_cases": 388,
+              "exact_capacity_reference_cases": 7, "capacity_refusal_cases": 14, "elf_requests": 5}
+    if summary.get("status") != "PASS" or summary.get("counts") != counts:
+        raise ValueError("operation KDF reference/capacity accounting differs")
+    folder = output / "operation-kdf-rust-oracle"
+    metadata_path = folder / "native-corpus.json"
+    metadata = json.loads(metadata_path.read_bytes())
+    if (metadata.get("schema") != "hepta.runtime.native-operation-kdf-corpus.v1"
+            or metadata.get("counts") != counts):
+        raise ValueError("operation KDF corpus schema or coverage differs")
+    owner = report["modules"]["operation_kdf"]
+    manifest = output / owner["manifest"]
+    module = json.loads(manifest.read_bytes())
+    original = report["inventory"]["original_sources"]["src/mcp/runtime/operation_crypto.rs"]
+    reference_names = ("oracle_operation_kdf.rs", "kdf_oracle/Cargo.toml", "kdf_oracle/Cargo.lock",
+                       "kdf_oracle/build.rs", "kdf_oracle/original_access.rs")
+    reference_sources = {name: sha(ROOT / "tests/hia_native" / name) for name in reference_names}
+    if (sha(manifest) != owner["sha256"]
+            or metadata.get("source_sha256") != module.get("source_sha256")
+            or metadata.get("source_sha256") != sha(ROOT / "native/operation_kdf.hepta")
+            or metadata.get("image_sha256") != module.get("image_sha256")
+            or metadata.get("original_source_sha256") != original["sha256"]
+            or metadata.get("composition_sha256") != sha(ROOT / "native/operation_kdf_composition.json")
+            or metadata.get("oracle_sources_sha256") != reference_sources):
+        raise ValueError("operation KDF original/native/oracle source identity differs")
+    entry = metadata["corpus"]
+    if entry.get("file") != "kdf_cases.jsonl.gz" or entry.get("cases") != 1364:
+        raise ValueError("operation KDF captured corpus identity differs")
+    packed = (folder / entry["file"]).read_bytes()
+    wire = gzip.decompress(packed)
+    if (hashlib.sha256(packed).hexdigest() != entry.get("gzip_sha256")
+            or hashlib.sha256(wire).hexdigest() != entry.get("raw_sha256")
+            or len(wire) != entry.get("raw_bytes") or not wire.endswith(b"\n")):
+        raise ValueError("operation KDF captured corpus bytes differ")
+    rows = wire.splitlines()
+    if len(rows) != entry["cases"] or len(rows) + counts["capacity_refusal_cases"] != counts["native_calls"]:
+        raise ValueError("operation KDF captured/native call accounting differs")
+    observed = {"standard_primitive_successes": 0, "original_binding_successes": 0, "refusals": 0}
+    output_hash = hashlib.sha256()
+    for encoded in rows:
+        row = json.loads(encoded)
+        request, returned = bytes.fromhex(row["input_hex"]), bytes.fromhex(row["output_hex"])
+        code = row["code"]
+        if (type(code) is not int or not 0 <= code <= 0xFFFFFFFF
+                or request.hex() != row["input_hex"] or returned.hex() != row["output_hex"]):
+            raise ValueError("operation KDF captured status or byte encoding differs")
+        if code in (0xFFFFFFFF, 0xFFFFFFFD):
+            if returned:
+                raise ValueError("operation KDF refusal contains output bytes")
+            observed["refusals"] += 1
+        else:
+            if code > 8160 or code != len(returned) or len(request) < 56 or request[:8] != b"HRKDF001":
+                raise ValueError("operation KDF captured success differs")
+            operation = int.from_bytes(request[8:16], "little")
+            if not 1 <= operation <= 9:
+                raise ValueError("operation KDF successful operation is unknown")
+            observed["standard_primitive_successes" if operation <= 4 else "original_binding_successes"] += 1
+        output_hash.update(f"{code}:{returned.hex()}\n".encode())
+    if observed != {"standard_primitive_successes": 871, "original_binding_successes": 391, "refusals": 102}:
+        raise ValueError("operation KDF captured reference domains differ")
+    if output_hash.hexdigest() != metadata.get("native_output_sha256"):
+        raise ValueError("operation KDF captured native output digest differs")
+    return {"status": "PASS", "counts": counts, "captured_native_cases": len(rows),
+            "captured_domains": observed, "native_cases_added_by_replay": 0,
+            "module_manifest_sha256": owner["sha256"], "source_sha256": module["source_sha256"],
+            "image_sha256": module["image_sha256"], "original_source": original,
+            "composition_sha256": metadata["composition_sha256"], "oracle_sources_sha256": reference_sources,
+            "corpus_metadata_sha256": sha(metadata_path), "corpus_sha256": entry["gzip_sha256"],
+            "input_sha256": entry["raw_sha256"], "native_output_sha256": output_hash.hexdigest(),
+            "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
+            "scope": "internal primitive and binding bytes with synthetic keys; no authentication or AEAD owner qualification",
+            "public_mcp_key_output": False, "complete_original_crypto_scope_parity": False}
+
+
 def native_composition_evidence(output: Path, report: dict) -> dict:
     """Recheck every image, fixed authority table and actual generic bridge suite."""
     owner = report["modules"]["local_service"]
@@ -569,6 +648,7 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_ENDPOINT_CORPUS_DIR": str(output / "endpoint-rust-oracle"),
             "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
             "HIA_CODEC_CORPUS_DIR": str(output / "codec-rust-oracle"),
+            "HIA_KDF_CORPUS_DIR": str(output / "operation-kdf-rust-oracle"),
             "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
             "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
             "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
@@ -599,6 +679,7 @@ def run(output: Path, hepta: Path) -> dict:
         report["original_python_comparisons"] = python_reference_evidence(output, report)
         report["native_composition_evidence"] = native_composition_evidence(output, report)
         report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
+        report["operation_kdf_evidence"] = operation_kdf_evidence(output, report)
         report["retained_python_comparison_status"] = "PASS"
         report["python_reference_inputs"] = {
             "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
@@ -627,6 +708,9 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update({
             "multi-read-rust-oracle/" + name: sha(output / "multi-read-rust-oracle" / name)
             for name in ("native-corpus.json", "requests.hex.gz", "native-output.txt.gz")})
+        report["rust_oracle_inputs"].update({
+            "operation-kdf-rust-oracle/" + name: sha(output / "operation-kdf-rust-oracle" / name)
+            for name in ("native-corpus.json", "kdf_cases.jsonl.gz")})
         builder.bootstrap()  # Revalidate the same compiler image after all tests.
         builder._recheck()
         if sources() != manifest:

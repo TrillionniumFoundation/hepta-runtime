@@ -40,6 +40,7 @@ continue to identify the language and are not filename extensions.
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
 | [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
 | [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
+| [operation_kdf.hepta](operation_kdf.hepta) | Internal HMAC/HKDF-SHA256, original token-key derivation, private binding bytes and per-record key derivation with cleared workspace |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
 | [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks and cleanup decisions |
@@ -56,6 +57,11 @@ The byte ABI and all eight operations are specified in
 [line_endpoint_abi.json](line_endpoint_abi.json). Delta operations, exact ordering
 and capacity rules are specified in [delta_abi.md](delta_abi.md). Hash/state layouts,
 binary bounds and Base64 policies are specified in [binary_codec_abi.md](binary_codec_abi.md).
+The internal key/binding frame and caller-owned secret boundary are specified in
+[operation_kdf_abi.md](operation_kdf_abi.md). This primitive is not an MCP tool and
+is not installed in the six-image local read service. Its key outputs require a
+trusted caller; token authentication and the original non-exportable crypto scope
+remain separate owners.
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -84,7 +90,7 @@ its own manifest, source, compiler and corpus inputs. Standalone suites retain
 their explicit development overrides; these cannot silently substitute an
 external loader or fault probe in the closed qualification.
 Python 3.11+ and a C toolchain are build/test dependencies for the initial seed.
-Independent comparison also requires Rust 1.95.0 and Cargo; endpoint and codec
+Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec and KDF
 reference dependencies are pinned in their Cargo.lock files.
 The read-only I/O fault tests also require Linux seccomp user notification for
 their own test child. The suite does not skip these controls when unavailable.
@@ -141,6 +147,8 @@ endpoint-rust-oracle/native-corpus.json
 delta-rust-oracle/native-corpus.json
 codec-rust-oracle/native-corpus.json
 codec-rust-oracle/codec_cases.jsonl.gz
+operation-kdf-rust-oracle/native-corpus.json
+operation-kdf-rust-oracle/kdf_cases.jsonl.gz
 policy-rust-oracle/native-corpus.json
 stat-version-python-reference/native-corpus.json
 stat-version-python-reference/stat-version-cases.jsonl.gz
@@ -160,7 +168,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all seven independent Rust comparisons succeed. The Python reference domain
+after all eight independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -305,6 +313,27 @@ also rejects nonzero pad bits. See
 These comparisons replay existing native calls and do not add new native
 coverage. Filesystem publication, file-version checks and upload state remain
 with their existing owners.
+
+The operation KDF component has passed **1,378 direct native calls** and **five
+standalone ELF executions**. Its independent Python comparisons comprise 867
+standard HMAC/HKDF cases, 388 original-binding projections and seven additional
+exact-capacity successes; 14 capacity refusals are checked separately. The
+captured 1,364-row corpus includes 102 other admission refusals. Native success
+clears the full 2,048-byte used workspace; refusal leaves mutable buffers intact.
+All nine imported SHA helper functions are checked against the codec source
+after reversing call relocation.
+
+A separate locked Rust execution matched all **1,364 captured rows**, including
+**405 calls into the complete unchanged original operation crypto module** and
+**28 comparisons through its opaque record-key AEAD result**. Those original
+owner calls include rejection cases. All inputs are synthetic keys/tokens, and
+replaying the corpus adds no native test coverage. The retained proof is
+[operation_kdf_original_rust_comparison.json](operation_kdf_original_rust_comparison.json).
+The current qualification repeats this recipe. It qualifies deterministic key
+and binding bytes; bearer verification, trusted context construction, native
+AEAD, entropy, nonce custody, scope lifecycle, replay and ledger persistence
+remain unfinished original owners. There is no public MCP key-output interface
+or constant-time/whole-process erasure qualification.
 
 The policy component has passed **11,655 valid native cases** covering first-error
 order, permission/protection precedence, environment checks, executable denial,

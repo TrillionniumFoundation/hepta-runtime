@@ -36,6 +36,7 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/server.rs": "90fe15fd6a998e9b165739bc27e6f3854022221d",
     "src/mcp/runtime/multi_read.rs": "95c3494d381dd25c8281c4881e44d3e6d49ac6fd",
     "src/mcp/runtime/multi_read_host.py": "ed5085977b19e3dce417ebfbfe18e23f2e7eea0d",
+    "src/mcp/runtime/operation_crypto.rs": "0c07318a6d85efb920069ce4f190c4f2ed56e84f",
 }
 
 

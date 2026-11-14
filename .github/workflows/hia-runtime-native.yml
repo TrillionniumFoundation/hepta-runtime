@@ -25,6 +25,7 @@ on:
       - 'src/mcp/runtime/ssh.rs'
       - 'src/mcp/runtime/multi_read.rs'
       - 'src/mcp/runtime/multi_read_host.py'
+      - 'src/mcp/runtime/operation_crypto.rs'
   pull_request:
     paths:
       - 'native/**'
@@ -48,6 +49,7 @@ on:
       - 'src/mcp/runtime/ssh.rs'
       - 'src/mcp/runtime/multi_read.rs'
       - 'src/mcp/runtime/multi_read_host.py'
+      - 'src/mcp/runtime/operation_crypto.rs'
   workflow_dispatch:
 
 permissions:
@@ -93,7 +95,7 @@ jobs:
             --hepta "$GITHUB_WORKSPACE/compiler" \
             --output "$RUNNER_TEMP/hia-runtime-native"
 
-      - name: Compare all seven original owners and Rust references
+      - name: Compare all eight original owners and Rust references
         run: |
           rustup toolchain install 1.95.0 --profile minimal
           python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \

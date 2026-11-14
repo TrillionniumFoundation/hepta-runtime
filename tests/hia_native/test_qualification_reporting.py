@@ -8,7 +8,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, io_reference_evidence, local_service_reference_evidence,
-                                       native_composition_evidence, qualification_env, record_check, sources)
+                                       native_composition_evidence, operation_kdf_evidence,
+                                       qualification_env, record_check, sources)
 from compare_hia_runtime_rust import run as compare_rust
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
 from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
@@ -145,11 +146,21 @@ class QualificationReportingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "fixed six-image authority table differs"):
             native_composition_evidence(self.output, report)
 
+    def test_kdf_reference_suite_cannot_drop_its_capacity_reference_domain(self):
+        summary = {"status": "PASS", "counts": {
+            "native_calls": 1378, "standard_reference_cases": 867, "original_binding_cases": 388,
+            "exact_capacity_reference_cases": 0, "capacity_refusal_cases": 14, "elf_requests": 5}}
+        record_check(self.output, self.report, name="test_operation_kdf.py", timeout=5,
+                     command=[sys.executable, "-I", "-c", "print(" + repr(json.dumps(summary)) + ")"])
+        with self.assertRaisesRegex(ValueError, "reference/capacity accounting differs"):
+            operation_kdf_evidence(self.output, self.report)
+
     def test_qualification_child_cannot_inherit_external_loader_source_or_probe(self):
         external = {"HIA_NATIVE_LOADER": "/external/loader.py",
                     "HIA_PROTOCOL_SOURCE": "/external/protocol.hepta",
                     "HIA_IO_PROBE_MANIFEST": "/external/probe/manifest.json",
                     "HIA_SERVICE_SOURCE": "/external/service.hepta",
+                    "HIA_KDF_SOURCE_ROOT": "/external/kdf-source",
                     "HIA_RUNTIME_REPO": "/external/repository",
                     "HIA_COMPOSITION_MANIFEST": "/external/composition/manifest.json",
                     "HIA_FUTURE_DEVELOPMENT_OVERRIDE": "/external/future",
