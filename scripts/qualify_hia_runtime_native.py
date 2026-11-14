@@ -145,7 +145,8 @@ MODULES = (
                           "test_file_info_guard.py", "test_native_deadline_probe.py")},
 )
 PACKERS = {"native/filter_packer.hepta", "native/stdio_packer.hepta"}
-EXTRA_TESTS = ("test_transport.py", "test_native_composition.py", "test_qualification_reporting.py")
+EXTRA_TESTS = ("test_transport.py", "test_native_composition.py", "test_qualification_reporting.py",
+               "test_native_pipeline.py")
 RUST_CORPUS_FILES = ("native-corpus.json", "input.bin.gz", "native-output.bin.gz")
 FILE_INFO_SUITES = (
     ("test_info_service.py", "file-info-python-reference.json", "hepta.runtime.native-info-service-test.v1",
@@ -202,7 +203,8 @@ def sources() -> dict:
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
-        "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "compare_hia_runtime_rust.py"))
+        "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py",
+        "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
@@ -1684,11 +1686,8 @@ def python_reference_evidence(output: Path, report: dict) -> dict:
             "multi_file_service": multi_service_reference_evidence(output, report)}
 
 
-def run(output: Path, hepta: Path) -> dict:
-    output.mkdir(parents=True, mode=0o700, exist_ok=False)
-    report_path = output / "result.json"
-    started = time.monotonic()
-    report = {
+def initial_report(hepta: Path) -> dict:
+    return {
         "schema": "hepta.runtime.hia-native-qualification.v1",
         "status": "RUNNING", "phase": "compiler_cold",
         "started_at": datetime.now(timezone.utc).isoformat(),
@@ -1701,255 +1700,293 @@ def run(output: Path, hepta: Path) -> dict:
         "compiler_cold_status": "PENDING", "native_components_status": "RUNNING",
         "retained_python_comparison_status": "PENDING", "rust_comparison_status": "PENDING", "checks": [],
     }
+
+
+def native_environment(output: Path, hepta: Path, report: dict) -> dict:
+    env = qualification_env()
+    env.update({
+        "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
+        "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
+        "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
+        "HIA_ENDPOINT_CORPUS_DIR": str(output / "endpoint-rust-oracle"),
+        "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
+        "HIA_EDITABLE_CORPUS_DIR": str(output / EDITABLE_FOLDER),
+        "HIA_LINE_VERIFY_CORPUS_DIR": str(output / LINE_VERIFY_FOLDER),
+        "HIA_BATCH_PLAN_CORPUS_DIR": str(output / BATCH_PLAN_FOLDER),
+        "HIA_VIEW_CORPUS_DIR": str(output / VIEW_FOLDER),
+        "HIA_CACHE_CORPUS_DIR": str(output / CACHE_FOLDER),
+        "HIA_CACHE_QUALIFICATION_OUTPUT": str(output),
+        "HIA_FENCE_JSON_CORPUS_DIR": str(output / JSON_COMPONENTS["fence_json"]["folder"]),
+        "HIA_SERDE_JSON_CORPUS_DIR": str(output / JSON_COMPONENTS["serde_json"]["folder"]),
+        "HIA_SERDE_JSON_TRANSPORT_REPORT": str(output / JSON_TRANSPORT_REPORT),
+        "HIA_JSON_QUALIFICATION_OUTPUT": str(output),
+        "HIA_HISTORY_CORPUS_DIR": str(output / HISTORY_FOLDER),
+        "HIA_HISTORY_QUALIFICATION_OUTPUT": str(output),
+        "HIA_CODEC_CORPUS_DIR": str(output / "codec-rust-oracle"),
+        "HIA_KDF_CORPUS_DIR": str(output / "operation-kdf-rust-oracle"),
+        "HIA_AEAD_CORPUS_DIR": str(output / "operation-aead-rust-oracle"),
+        "HIA_NONCE_CORPUS_DIR": str(output / "operation-nonce-rust-oracle"),
+        "HIA_RECORD_CORPUS_DIR": str(output / "operation-record-rust-oracle"),
+        "HIA_ENTROPY_BACKEND_REPORT": str(output / ENTROPY_FOLDER / "backend.json"),
+        "HIA_ENTROPY_PACKER_REPORT": str(output / ENTROPY_FOLDER / "packer.json"),
+        "HIA_ENTROPY_KERNEL_REPORT": str(output / ENTROPY_FOLDER / "kernel-native.json"),
+        "HIA_ENTROPY_TRANSPORT_REPORT": str(output / ENTROPY_FOLDER / "transport.json"),
+        "HIA_SCOPE_CORPUS_DIR": str(output / SCOPE_FOLDER),
+        "HIA_AUTHORITY_CORPUS_DIR": str(output / AUTHORITY_FOLDER / "controller"),
+        "HIA_AUTHORITY_TEST_REPORT": str(output / AUTHORITY_FOLDER / "controller.json"),
+        "HIA_AUTHORITY_KERNEL_CORPUS_DIR": str(output / AUTHORITY_FOLDER / "kernel"),
+        "HIA_AUTHORITY_TRANSPORT_CORPUS_DIR": str(output / AUTHORITY_FOLDER / "transport"),
+        "HIA_AUTHORITY_PACKER_REPORT": str(output / AUTHORITY_FOLDER / "packer.json"),
+        "HIA_AUTHORITY_EVIDENCE_REPORT": str(output / AUTHORITY_FOLDER / "evidence.json"),
+        "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
+        "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
+        "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
+        "HIA_MULTI_SERVICE_RESULT": str(output / "multi-service-python-reference.json"),
+        "HIA_INFO_SERVICE_RESULT": str(output / "file-info-python-reference.json"),
+        "HIA_FILE_INFO_RESULT": str(output / "file-info-controller.json"),
+        "HIA_INFO_IO_STATE_RESULT": str(output / "file-info-io-state.json"),
+        "HIA_INFO_DEADLINE_STATE_RESULT": str(output / "file-info-deadline-state.json"),
+        "HIA_INFO_IO_FAULT_RESULT": str(output / "file-info-io-faults.json"),
+        "HIA_INFO_GUARD_RESULT": str(output / "file-info-guard.json"),
+        "HIA_DEADLINE_PROBE_RESULT": str(output / "file-info-blocking-probe.json"),
+        "HIA_DEADLINE_PROBE_EXECUTABLE": str(output / "file-info-blocking-probe.elf"),
+        "HIA_MULTI_READ_CORPUS_DIR": str(output / "multi-read-rust-oracle"),
+        "HIA_REFERENCE_RUNTIME": str(ROOT),
+    })
+    env.update({variable: str(output / SCOPE_OS_FOLDER / receipt)
+                for _, variable, receipt, _, _ in SCOPE_OS_SUITES})
+    for item in MODULES:
+        built = output / report["modules"][item["key"]]["manifest"]
+        env[item["manifest_env"]] = str(built)
+        if item.get("builder") == "composition":
+            env["HIA_COMPOSITION_MANIFEST"] = str(built)
+        elif item.get("builder") == "authority_composition":
+            env["HIA_AUTHORITY_MANIFEST"] = str(built.parent / "module_00.json")
+            env["HIA_AUTHORITY_LOADER_MANIFEST"] = str(built.parent / "module_08.json")
+            env["HIA_AUTHORITY_PROBE_MANIFEST"] = str(output / report["modules"][item["key"]]["probe_manifest"])
+    env["HIA_NONCE_COMPOSITION_MANIFEST"] = str(output / report["nonce_composition"]["manifest"])
+    env["HIA_CACHE_ELF_MANIFEST"] = str(output / report["cache_composition"]["manifest"])
+    return env
+
+
+def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
+    report["source_sha256"] = sources()
+    report["checkout_head"] = git_head()
+    report["inventory"] = inspect(ROOT)
+    required = ({item["source"] for item in MODULES} | PACKERS
+                | {name for item in MODULES for name in item.get("companion_sources", ())})
+    if {item["path"] for item in report["inventory"]["native_sources"]} != required:
+        raise ValueError("every declared native source requires an executable qualification entry")
+    builder = NativeBuild(hepta, output / "build")
+    compiler = builder.bootstrap()
+    report["compiler_image_sha256"] = sha(compiler)
+    report["compiler_bootstrap_sha256"] = sha(output / "build/bootstrap/bootstrap.json")
+    report["compiler_cold_status"] = "RUNNING"
+    # This outer allowance lets the unchanged upstream 180 s owner finish
+    # its separate 3 s cleanup and write the original report on failures.
+    record_check(output, report, name="compiler-full-cold",
+                 command=[sys.executable, "-I", "-B", str(hepta / "tools/replay_hia_selfhost_cold.py"),
+                          "--output", str(output / "compiler-cold.json")], timeout=240)
+    report["compiler_cold_evidence"] = validate_cold_evidence(
+        output / "compiler-cold.json", dependency=builder.identity,
+        compiler_sha256=report["compiler_image_sha256"])
+    builder._recheck()
+    report["matching_source_full_cold_qualified"] = True
+    report["compiler_cold_status"] = "PASS"
+    report["phase"] = "native_components"
+    report["modules"] = {}
+    (output / ENTROPY_FOLDER).mkdir(mode=0o700)
+    (output / SCOPE_OS_FOLDER).mkdir(mode=0o700)
+    (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
+    for item in MODULES:
+        if item.get("builder") == "io":
+            from hia_native_io_build import build_io
+            built = build_io(hepta, output / "build")
+        elif item.get("builder") == "composition":
+            from hia_native_composition_build import build_local_read
+            built = build_local_read(hepta, output / "build")
+        elif item.get("builder") == "record_composition":
+            from hia_native_record_build import build_record
+            built = build_record(hepta, output / "build")
+        elif item.get("builder") == "entropy":
+            from hia_native_entropy_build import build_entropy
+            built = build_entropy(hepta, output / "build")
+        elif item.get("builder") == "scope_composition":
+            from hia_native_scope_build import build_scope
+            built = build_scope(hepta, output / "build")
+        elif item.get("builder") == "scope_os_composition":
+            from hia_native_scope_os_build import build_scope_os
+            built = build_scope_os(hepta, output / "build")
+        elif item.get("builder") == "authority_composition":
+            from hia_native_authority_build import build_authority
+            from hia_native_authority_probe_build import build_loader_probe
+            built = build_authority(hepta, output / "build", source_root=ROOT)
+            probe = build_loader_probe(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "history":
+            from hia_native_history_build import build_history
+            built = build_history(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "batch_apply":
+            from hia_native_batch_apply_build import build_batch_apply
+            built = build_batch_apply(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "batch_plan":
+            from hia_native_batch_plan_build import build_batch_plan
+            built = build_batch_plan(hepta, output / "build", source_root=ROOT)
+        else:
+            built = builder.compile(item["name"], ROOT / item["source"], standalone=item["standalone"],
+                                    buffer_profile=item.get("buffer_profile", "standard"))
+        report["modules"][item["key"]] = {
+            "manifest": str(built.relative_to(output)), "sha256": sha(built), "source": item["source"],
+            "builder": item.get("builder", "borrowed_bytes")}
+        if item.get("builder") == "authority_composition":
+            report["modules"][item["key"]].update(
+                probe_manifest=str(probe.relative_to(output)), probe_sha256=sha(probe))
+    from hia_native_composition_build import ModuleSpec, build_composition
+    nonce_fixture = build_composition(hepta, output / "build", [
+        ModuleSpec("nonce-hex-fixture", ROOT / "tests/hia_native/nonce_hex_transport.hepta",
+                   flags=1, call_mask=2, workspace_capacity=16 << 20),
+        ModuleSpec("operation-nonce", ROOT / "native/operation_nonce.hepta",
+                   input_capacity=164, output_capacity=64, workspace_capacity=1576960),
+    ])
+    report["nonce_composition"] = {"manifest": str(nonce_fixture.relative_to(output)),
+                                    "sha256": sha(nonce_fixture), "builder": "composition_fixture"}
+    from hia_native_view_cache_build import build_cache
+    cache_fixture = build_cache(hepta, output / "build")
+    report["cache_composition"] = {"manifest": str(cache_fixture.relative_to(output)),
+                                   "sha256": sha(cache_fixture), "builder": "composition_fixture"}
+    (output / "batch-apply").mkdir()
+    return builder
+
+
+def native_tests() -> tuple[str, ...]:
+    tests = tuple(name for item in MODULES for name in (item["test"], *item.get("additional_tests", ()))) + EXTRA_TESTS
+    if len(tests) != len(set(tests)):
+        raise ValueError("native suite registry contains duplicate entries")
+    return tests
+
+
+def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[str, list[str]]:
+    commands = batch_apply_test_commands(output, output / report["modules"]["batch_apply"]["manifest"])
+    return {name: command for name, command in commands.items() if name in tests}
+
+
+def collect_native_evidence(output: Path, report: dict) -> None:
+    report["original_python_comparisons"] = python_reference_evidence(output, report)
+    report["native_composition_evidence"] = native_composition_evidence(output, report)
+    report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
+    report["file_info_evidence"] = file_info_evidence(output, report)
+    report["operation_kdf_evidence"] = operation_kdf_evidence(output, report)
+    report["operation_aead_evidence"] = operation_aead_evidence(output, report)
+    report["operation_nonce_evidence"] = operation_nonce_evidence(output, report)
+    report["operation_record_evidence"] = operation_record_evidence(output, report)
+    capture_entropy_corpus(ROOT, output, report, completed_test_summary)
+    report["system_entropy_evidence"] = entropy_evidence(output, report)
+    report["operation_scope_evidence"] = operation_scope_evidence(output, report)
+    report["editable_content_evidence"] = editable_content_evidence(output, report)
+    report["line_verify_evidence"] = line_verify_evidence(output, report)
+    report["batch_plan_evidence"] = batch_plan_evidence(output, report)
+    report["batch_apply_evidence"] = batch_apply_evidence(output, report)
+    report["view_render_evidence"] = view_render_evidence(output, report)
+    report["view_cache_evidence"] = view_cache_evidence(output, report)
+    report["history_evidence"] = history_evidence(output, report)
+    report["json_evidence"] = json_evidence(output, report)
+    scope_os_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
+    capture_scope_os_corpus(ROOT, output / SCOPE_OS_FOLDER, scope_os_profile(ROOT, scope_os_manifest))
+    report["operation_scope_os_evidence"] = operation_scope_os_evidence(output, report)
+    report["caller_authority_evidence"] = caller_authority_evidence(output, report)
+    report["retained_python_comparison_status"] = "PASS"
+    report["python_reference_inputs"] = {
+        "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
+        for name in ("native-corpus.json", "stat-version-cases.jsonl.gz")}
+    report["python_reference_inputs"]["local-service-python-reference.json"] = sha(
+        output / "local-service-python-reference.json")
+    report["python_reference_inputs"]["multi-service-python-reference.json"] = sha(
+        output / "multi-service-python-reference.json")
+    for name in FILE_INFO_RECEIPTS:
+        report["python_reference_inputs"][name] = sha(output / name)
+    report["python_reference_inputs"]["file-info-blocking-probe.elf"] = sha(output / "file-info-blocking-probe.elf")
+    report["rust_oracle_inputs"] = {
+        "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
+    report["rust_oracle_inputs"].update({
+        ENTROPY_FOLDER + "/" + name: sha(output / ENTROPY_FOLDER / name) for name in ENTROPY_CORPUS_FILES})
+    report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update({
+        SCOPE_FOLDER + "/" + name: sha(output / SCOPE_FOLDER / name) for name in SCOPE_CORPUS_FILES})
+    for folder, names in ((EDITABLE_FOLDER, EDITABLE_CORPUS_FILES), (VIEW_FOLDER, VIEW_CORPUS_FILES),
+                          (LINE_VERIFY_FOLDER, LINE_VERIFY_CORPUS_FILES)):
+        report["rust_oracle_inputs"].update({folder + "/" + name: sha(output / folder / name) for name in names})
+    report["rust_oracle_inputs"].update(report["operation_scope_evidence"]["composition"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["composition"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["view_cache_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["view_cache_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["history_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["history_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["json_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["json_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["corpus_sha256"])
+    authority = report["caller_authority_evidence"]
+    for label in ("artifact", "probe"):
+        report["rust_oracle_inputs"].update({"build/" + name: expected
+            for name, expected in authority[label]["artifact_sha256"].items()})
+    report["rust_oracle_inputs"].update(authority["corpus_sha256"])
+    report["rust_oracle_inputs"].update({
+        "text-rust-oracle/" + name: sha(output / "text-rust-oracle" / name)
+        for name in ("native-corpus.json", "requests.hex", "native-output.txt")})
+    report["rust_oracle_inputs"].update({
+        "endpoint-rust-oracle/" + name: sha(output / "endpoint-rust-oracle" / name)
+        for name in ("native-corpus.json", "endpoint_cases.jsonl.gz")})
+    report["rust_oracle_inputs"].update({
+        "delta-rust-oracle/" + name: sha(output / "delta-rust-oracle" / name)
+        for name in ("native-corpus.json", "requests.hex", "native-output.txt")})
+    report["rust_oracle_inputs"].update({
+        "codec-rust-oracle/" + name: sha(output / "codec-rust-oracle" / name)
+        for name in ("native-corpus.json", "codec_cases.jsonl.gz")})
+    report["rust_oracle_inputs"].update({
+        "policy-rust-oracle/" + name: sha(output / "policy-rust-oracle" / name)
+        for name in ("native-corpus.json", "requests.hex", "native-output.txt")})
+    report["rust_oracle_inputs"].update({
+        "multi-read-rust-oracle/" + name: sha(output / "multi-read-rust-oracle" / name)
+        for name in ("native-corpus.json", "requests.hex.gz", "native-output.txt.gz")})
+    report["rust_oracle_inputs"].update({
+        "operation-kdf-rust-oracle/" + name: sha(output / "operation-kdf-rust-oracle" / name)
+        for name in ("native-corpus.json", "kdf_cases.jsonl.gz")})
+    report["rust_oracle_inputs"].update({
+        "operation-aead-rust-oracle/" + name: sha(output / "operation-aead-rust-oracle" / name)
+        for name in ("native-corpus.json", "aead_cases.jsonl.gz")})
+    report["rust_oracle_inputs"].update({
+        "operation-nonce-rust-oracle/" + name: sha(output / "operation-nonce-rust-oracle" / name)
+        for name in ("native-corpus.json", "nonce_cases.jsonl.gz")})
+    report["rust_oracle_inputs"].update({
+        "operation-record-rust-oracle/" + name: sha(output / "operation-record-rust-oracle" / name)
+        for name in ("native-corpus.json", "record_cases.jsonl.gz")})
+
+
+def finish_native(output: Path, report: dict, builder: NativeBuild) -> None:
+    builder.bootstrap()  # Revalidate the same compiler image after all tests.
+    builder._recheck()
+    if sources() != report["source_sha256"]:
+        raise RuntimeError("native source/test/inventory inputs changed during qualification")
+    report["native_components_status"] = "PASS"
+    report["status"] = "NATIVE_COMPONENTS_PASS"
+    report["phase"] = "awaiting_original_rust_comparison"
+
+
+def run(output: Path, hepta: Path) -> dict:
+    output.mkdir(parents=True, mode=0o700, exist_ok=False)
+    report_path = output / "result.json"
+    started = time.monotonic()
+    report = initial_report(hepta)
     save_report(report_path, report)
     try:
-        manifest = sources()
-        report["source_sha256"] = manifest
-        report["checkout_head"] = git_head()
-        report["inventory"] = inspect(ROOT)
-        required = ({item["source"] for item in MODULES} | PACKERS
-                    | {name for item in MODULES for name in item.get("companion_sources", ())})
-        if {item["path"] for item in report["inventory"]["native_sources"]} != required:
-            raise ValueError("every declared native source requires an executable qualification entry")
-        builder = NativeBuild(hepta, output / "build")
-        compiler = builder.bootstrap()
-        report["compiler_image_sha256"] = sha(compiler)
-        report["compiler_bootstrap_sha256"] = sha(output / "build/bootstrap/bootstrap.json")
-        report["compiler_cold_status"] = "RUNNING"
-        # This outer allowance lets the unchanged upstream 180 s owner finish
-        # its separate 3 s cleanup and write the original report on failures.
-        record_check(output, report, name="compiler-full-cold",
-                     command=[sys.executable, "-I", "-B", str(hepta / "tools/replay_hia_selfhost_cold.py"),
-                              "--output", str(output / "compiler-cold.json")], timeout=240)
-        report["compiler_cold_evidence"] = validate_cold_evidence(
-            output / "compiler-cold.json", dependency=builder.identity,
-            compiler_sha256=report["compiler_image_sha256"])
-        builder._recheck()
-        report["matching_source_full_cold_qualified"] = True
-        report["compiler_cold_status"] = "PASS"
-        report["phase"] = "native_components"
-        report["modules"] = {}
-        (output / ENTROPY_FOLDER).mkdir(mode=0o700)
-        (output / SCOPE_OS_FOLDER).mkdir(mode=0o700)
-        (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
-        env = qualification_env()
-        env.update({
-            "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
-            "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
-            "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
-            "HIA_ENDPOINT_CORPUS_DIR": str(output / "endpoint-rust-oracle"),
-            "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
-            "HIA_EDITABLE_CORPUS_DIR": str(output / EDITABLE_FOLDER),
-            "HIA_LINE_VERIFY_CORPUS_DIR": str(output / LINE_VERIFY_FOLDER),
-            "HIA_BATCH_PLAN_CORPUS_DIR": str(output / BATCH_PLAN_FOLDER),
-            "HIA_VIEW_CORPUS_DIR": str(output / VIEW_FOLDER),
-            "HIA_CACHE_CORPUS_DIR": str(output / CACHE_FOLDER),
-            "HIA_CACHE_QUALIFICATION_OUTPUT": str(output),
-            "HIA_FENCE_JSON_CORPUS_DIR": str(output / JSON_COMPONENTS["fence_json"]["folder"]),
-            "HIA_SERDE_JSON_CORPUS_DIR": str(output / JSON_COMPONENTS["serde_json"]["folder"]),
-            "HIA_SERDE_JSON_TRANSPORT_REPORT": str(output / JSON_TRANSPORT_REPORT),
-            "HIA_JSON_QUALIFICATION_OUTPUT": str(output),
-            "HIA_HISTORY_CORPUS_DIR": str(output / HISTORY_FOLDER),
-            "HIA_HISTORY_QUALIFICATION_OUTPUT": str(output),
-            "HIA_CODEC_CORPUS_DIR": str(output / "codec-rust-oracle"),
-            "HIA_KDF_CORPUS_DIR": str(output / "operation-kdf-rust-oracle"),
-            "HIA_AEAD_CORPUS_DIR": str(output / "operation-aead-rust-oracle"),
-            "HIA_NONCE_CORPUS_DIR": str(output / "operation-nonce-rust-oracle"),
-            "HIA_RECORD_CORPUS_DIR": str(output / "operation-record-rust-oracle"),
-            "HIA_ENTROPY_BACKEND_REPORT": str(output / ENTROPY_FOLDER / "backend.json"),
-            "HIA_ENTROPY_PACKER_REPORT": str(output / ENTROPY_FOLDER / "packer.json"),
-            "HIA_ENTROPY_KERNEL_REPORT": str(output / ENTROPY_FOLDER / "kernel-native.json"),
-            "HIA_ENTROPY_TRANSPORT_REPORT": str(output / ENTROPY_FOLDER / "transport.json"),
-            "HIA_SCOPE_CORPUS_DIR": str(output / SCOPE_FOLDER),
-            "HIA_AUTHORITY_CORPUS_DIR": str(output / AUTHORITY_FOLDER / "controller"),
-            "HIA_AUTHORITY_TEST_REPORT": str(output / AUTHORITY_FOLDER / "controller.json"),
-            "HIA_AUTHORITY_KERNEL_CORPUS_DIR": str(output / AUTHORITY_FOLDER / "kernel"),
-            "HIA_AUTHORITY_TRANSPORT_CORPUS_DIR": str(output / AUTHORITY_FOLDER / "transport"),
-            "HIA_AUTHORITY_PACKER_REPORT": str(output / AUTHORITY_FOLDER / "packer.json"),
-            "HIA_AUTHORITY_EVIDENCE_REPORT": str(output / AUTHORITY_FOLDER / "evidence.json"),
-            "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
-            "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
-            "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
-            "HIA_MULTI_SERVICE_RESULT": str(output / "multi-service-python-reference.json"),
-            "HIA_INFO_SERVICE_RESULT": str(output / "file-info-python-reference.json"),
-            "HIA_FILE_INFO_RESULT": str(output / "file-info-controller.json"),
-            "HIA_INFO_IO_STATE_RESULT": str(output / "file-info-io-state.json"),
-            "HIA_INFO_DEADLINE_STATE_RESULT": str(output / "file-info-deadline-state.json"),
-            "HIA_INFO_IO_FAULT_RESULT": str(output / "file-info-io-faults.json"),
-            "HIA_INFO_GUARD_RESULT": str(output / "file-info-guard.json"),
-            "HIA_DEADLINE_PROBE_RESULT": str(output / "file-info-blocking-probe.json"),
-            "HIA_DEADLINE_PROBE_EXECUTABLE": str(output / "file-info-blocking-probe.elf"),
-            "HIA_MULTI_READ_CORPUS_DIR": str(output / "multi-read-rust-oracle"),
-            "HIA_REFERENCE_RUNTIME": str(ROOT),
-        })
-        env.update({variable: str(output / SCOPE_OS_FOLDER / receipt)
-                    for _, variable, receipt, _, _ in SCOPE_OS_SUITES})
-        for item in MODULES:
-            if item.get("builder") == "io":
-                from hia_native_io_build import build_io
-                built = build_io(hepta, output / "build")
-            elif item.get("builder") == "composition":
-                from hia_native_composition_build import build_local_read
-                built = build_local_read(hepta, output / "build")
-                env["HIA_COMPOSITION_MANIFEST"] = str(built)
-            elif item.get("builder") == "record_composition":
-                from hia_native_record_build import build_record
-                built = build_record(hepta, output / "build")
-            elif item.get("builder") == "entropy":
-                from hia_native_entropy_build import build_entropy
-                built = build_entropy(hepta, output / "build")
-            elif item.get("builder") == "scope_composition":
-                from hia_native_scope_build import build_scope
-                built = build_scope(hepta, output / "build")
-            elif item.get("builder") == "scope_os_composition":
-                from hia_native_scope_os_build import build_scope_os
-                built = build_scope_os(hepta, output / "build")
-            elif item.get("builder") == "authority_composition":
-                from hia_native_authority_build import build_authority
-                from hia_native_authority_probe_build import build_loader_probe
-                built = build_authority(hepta, output / "build", source_root=ROOT)
-                probe = build_loader_probe(hepta, output / "build", source_root=ROOT)
-                env["HIA_AUTHORITY_MANIFEST"] = str(built.parent / "module_00.json")
-                env["HIA_AUTHORITY_LOADER_MANIFEST"] = str(built.parent / "module_08.json")
-                env["HIA_AUTHORITY_PROBE_MANIFEST"] = str(probe)
-            elif item.get("builder") == "history":
-                from hia_native_history_build import build_history
-                built = build_history(hepta, output / "build", source_root=ROOT)
-            elif item.get("builder") == "batch_apply":
-                from hia_native_batch_apply_build import build_batch_apply
-                built = build_batch_apply(hepta, output / "build", source_root=ROOT)
-            elif item.get("builder") == "batch_plan":
-                from hia_native_batch_plan_build import build_batch_plan
-                built = build_batch_plan(hepta, output / "build", source_root=ROOT)
-            else:
-                built = builder.compile(item["name"], ROOT / item["source"], standalone=item["standalone"],
-                                        buffer_profile=item.get("buffer_profile", "standard"))
-            report["modules"][item["key"]] = {
-                "manifest": str(built.relative_to(output)), "sha256": sha(built), "source": item["source"],
-                "builder": item.get("builder", "borrowed_bytes")}
-            if item.get("builder") == "authority_composition":
-                report["modules"][item["key"]].update(
-                    probe_manifest=str(probe.relative_to(output)), probe_sha256=sha(probe))
-            env[item["manifest_env"]] = str(built)
-        from hia_native_composition_build import ModuleSpec, build_composition
-        nonce_fixture = build_composition(hepta, output / "build", [
-            ModuleSpec("nonce-hex-fixture", ROOT / "tests/hia_native/nonce_hex_transport.hepta",
-                       flags=1, call_mask=2, workspace_capacity=16 << 20),
-            ModuleSpec("operation-nonce", ROOT / "native/operation_nonce.hepta",
-                       input_capacity=164, output_capacity=64, workspace_capacity=1576960),
-        ])
-        report["nonce_composition"] = {"manifest": str(nonce_fixture.relative_to(output)),
-                                        "sha256": sha(nonce_fixture), "builder": "composition_fixture"}
-        env["HIA_NONCE_COMPOSITION_MANIFEST"] = str(nonce_fixture)
-        from hia_native_view_cache_build import build_cache
-        cache_fixture = build_cache(hepta, output / "build")
-        report["cache_composition"] = {"manifest": str(cache_fixture.relative_to(output)),
-                                       "sha256": sha(cache_fixture), "builder": "composition_fixture"}
-        env["HIA_CACHE_ELF_MANIFEST"] = str(cache_fixture)
-        tests = tuple(dict.fromkeys(name for item in MODULES
-                                    for name in (item["test"], *item.get("additional_tests", ())))) + EXTRA_TESTS
-        (output / "batch-apply").mkdir()
-        run_native_checks(output, report, tests, env, timeout=180,
-            commands=batch_apply_test_commands(output, output / report["modules"]["batch_apply"]["manifest"]))
-        report["original_python_comparisons"] = python_reference_evidence(output, report)
-        report["native_composition_evidence"] = native_composition_evidence(output, report)
-        report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
-        report["file_info_evidence"] = file_info_evidence(output, report)
-        report["operation_kdf_evidence"] = operation_kdf_evidence(output, report)
-        report["operation_aead_evidence"] = operation_aead_evidence(output, report)
-        report["operation_nonce_evidence"] = operation_nonce_evidence(output, report)
-        report["operation_record_evidence"] = operation_record_evidence(output, report)
-        capture_entropy_corpus(ROOT, output, report, completed_test_summary)
-        report["system_entropy_evidence"] = entropy_evidence(output, report)
-        report["operation_scope_evidence"] = operation_scope_evidence(output, report)
-        report["editable_content_evidence"] = editable_content_evidence(output, report)
-        report["line_verify_evidence"] = line_verify_evidence(output, report)
-        report["batch_plan_evidence"] = batch_plan_evidence(output, report)
-        report["batch_apply_evidence"] = batch_apply_evidence(output, report)
-        report["view_render_evidence"] = view_render_evidence(output, report)
-        report["view_cache_evidence"] = view_cache_evidence(output, report)
-        report["history_evidence"] = history_evidence(output, report)
-        report["json_evidence"] = json_evidence(output, report)
-        scope_os_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
-        capture_scope_os_corpus(ROOT, output / SCOPE_OS_FOLDER, scope_os_profile(ROOT, scope_os_manifest))
-        report["operation_scope_os_evidence"] = operation_scope_os_evidence(output, report)
-        report["caller_authority_evidence"] = caller_authority_evidence(output, report)
-        report["retained_python_comparison_status"] = "PASS"
-        report["python_reference_inputs"] = {
-            "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
-            for name in ("native-corpus.json", "stat-version-cases.jsonl.gz")}
-        report["python_reference_inputs"]["local-service-python-reference.json"] = sha(
-            output / "local-service-python-reference.json")
-        report["python_reference_inputs"]["multi-service-python-reference.json"] = sha(
-            output / "multi-service-python-reference.json")
-        for name in FILE_INFO_RECEIPTS:
-            report["python_reference_inputs"][name] = sha(output / name)
-        report["python_reference_inputs"]["file-info-blocking-probe.elf"] = sha(output / "file-info-blocking-probe.elf")
-        report["rust_oracle_inputs"] = {
-            "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
-        report["rust_oracle_inputs"].update({
-            ENTROPY_FOLDER + "/" + name: sha(output / ENTROPY_FOLDER / name) for name in ENTROPY_CORPUS_FILES})
-        report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])
-        report["rust_oracle_inputs"].update({
-            SCOPE_FOLDER + "/" + name: sha(output / SCOPE_FOLDER / name) for name in SCOPE_CORPUS_FILES})
-        for folder, names in ((EDITABLE_FOLDER, EDITABLE_CORPUS_FILES), (VIEW_FOLDER, VIEW_CORPUS_FILES),
-                              (LINE_VERIFY_FOLDER, LINE_VERIFY_CORPUS_FILES)):
-            report["rust_oracle_inputs"].update({folder + "/" + name: sha(output / folder / name) for name in names})
-        report["rust_oracle_inputs"].update(report["operation_scope_evidence"]["composition"]["artifact_sha256"])
-        report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["corpus_sha256"])
-        report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["composition"]["artifact_sha256"])
-        report["rust_oracle_inputs"].update(report["view_cache_evidence"]["artifact_sha256"])
-        report["rust_oracle_inputs"].update(report["view_cache_evidence"]["corpus_sha256"])
-        report["rust_oracle_inputs"].update(report["history_evidence"]["artifact_sha256"])
-        report["rust_oracle_inputs"].update(report["history_evidence"]["corpus_sha256"])
-        report["rust_oracle_inputs"].update(report["json_evidence"]["artifact_sha256"])
-        report["rust_oracle_inputs"].update(report["json_evidence"]["corpus_sha256"])
-        report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
-        report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
-        report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["artifact_sha256"])
-        report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["corpus_sha256"])
-        authority = report["caller_authority_evidence"]
-        for label in ("artifact", "probe"):
-            report["rust_oracle_inputs"].update({"build/" + name: expected
-                for name, expected in authority[label]["artifact_sha256"].items()})
-        report["rust_oracle_inputs"].update(authority["corpus_sha256"])
-        report["rust_oracle_inputs"].update({
-            "text-rust-oracle/" + name: sha(output / "text-rust-oracle" / name)
-            for name in ("native-corpus.json", "requests.hex", "native-output.txt")})
-        report["rust_oracle_inputs"].update({
-            "endpoint-rust-oracle/" + name: sha(output / "endpoint-rust-oracle" / name)
-            for name in ("native-corpus.json", "endpoint_cases.jsonl.gz")})
-        report["rust_oracle_inputs"].update({
-            "delta-rust-oracle/" + name: sha(output / "delta-rust-oracle" / name)
-            for name in ("native-corpus.json", "requests.hex", "native-output.txt")})
-        report["rust_oracle_inputs"].update({
-            "codec-rust-oracle/" + name: sha(output / "codec-rust-oracle" / name)
-            for name in ("native-corpus.json", "codec_cases.jsonl.gz")})
-        report["rust_oracle_inputs"].update({
-            "policy-rust-oracle/" + name: sha(output / "policy-rust-oracle" / name)
-            for name in ("native-corpus.json", "requests.hex", "native-output.txt")})
-        report["rust_oracle_inputs"].update({
-            "multi-read-rust-oracle/" + name: sha(output / "multi-read-rust-oracle" / name)
-            for name in ("native-corpus.json", "requests.hex.gz", "native-output.txt.gz")})
-        report["rust_oracle_inputs"].update({
-            "operation-kdf-rust-oracle/" + name: sha(output / "operation-kdf-rust-oracle" / name)
-            for name in ("native-corpus.json", "kdf_cases.jsonl.gz")})
-        report["rust_oracle_inputs"].update({
-            "operation-aead-rust-oracle/" + name: sha(output / "operation-aead-rust-oracle" / name)
-            for name in ("native-corpus.json", "aead_cases.jsonl.gz")})
-        report["rust_oracle_inputs"].update({
-            "operation-nonce-rust-oracle/" + name: sha(output / "operation-nonce-rust-oracle" / name)
-            for name in ("native-corpus.json", "nonce_cases.jsonl.gz")})
-        report["rust_oracle_inputs"].update({
-            "operation-record-rust-oracle/" + name: sha(output / "operation-record-rust-oracle" / name)
-            for name in ("native-corpus.json", "record_cases.jsonl.gz")})
-        builder.bootstrap()  # Revalidate the same compiler image after all tests.
-        builder._recheck()
-        if sources() != manifest:
-            raise RuntimeError("native source/test/inventory inputs changed during qualification")
-        report["native_components_status"] = "PASS"
-        report["status"] = "NATIVE_COMPONENTS_PASS"
-        report["phase"] = "awaiting_original_rust_comparison"
+        builder = prepare_native(output, hepta, report)
+        tests = native_tests()
+        run_native_checks(output, report, tests, native_environment(output, hepta, report),
+                          timeout=180, commands=native_commands(output, report, tests))
+        collect_native_evidence(output, report)
+        finish_native(output, report, builder)
     except BaseException as exc:
         report["status"] = "FAIL"
         report["native_components_status"] = "FAIL"

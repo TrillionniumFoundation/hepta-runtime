@@ -89,9 +89,151 @@ concurrency:
   group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# The same fresh cold/build bytes feed all four complete native partitions.
+# Each job retains the original 15-minute limit; suite/owner limits are unchanged.
 jobs:
+  prepare:
+    name: Fresh full compiler cold gate and all native images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      prepared_sha256: ${{ steps.prepare.outputs.prepared_sha256 }}
+    steps:
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            .github
+
+      - name: Checkout pinned HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Install pinned independent Python reference libraries
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
+      - name: Verify exact source head
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+
+      - name: Replay full cold gate and seal all native build artifacts
+        id: prepare
+        run: |
+          python3 -I -B runtime/scripts/hia_native_pipeline.py prepare \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Retain fresh cold and native build, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-runtime-native/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
   native:
-    name: Full compiler cold gate, native HIA components and guarded inspection
+    name: Complete native partition (${{ matrix.group }})
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [batch, text, json, system]
+    steps:
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            .github
+
+      - name: Checkout pinned HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Install pinned independent Python reference libraries
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
+      - name: Verify exact source head
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+
+      - name: Download this invocation's sealed cold and native build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-runtime-native/
+
+      - name: Execute every declared suite in this partition
+        id: shard
+        run: |
+          python3 -I -B runtime/scripts/hia_native_pipeline.py shard \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --prepared-sha256 "${{ needs.prepare.outputs.prepared_sha256 }}" \
+            --group "${{ matrix.group }}" \
+            --export "$RUNNER_TEMP/hia-native-shard"
+
+      - name: Retain complete partition process and corpus evidence
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-${{ matrix.group }}
+          path: ${{ runner.temp }}/hia-native-shard/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain original failure bytes and prepared artifacts
+        if: ${{ always() && steps.shard.outcome != 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-failure-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-${{ matrix.group }}
+          path: ${{ runner.temp }}/hia-runtime-native/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  qualify:
+    name: All native evidence and complete original Rust comparisons
+    needs: [prepare, native]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -123,14 +265,32 @@ jobs:
             -r runtime/tests/hia_native/python-reference-requirements.txt
           echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
 
-      - name: Replay fresh full cold gate and test native executables
+      - name: Verify exact source head
         env:
           EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+
+      - name: Download this invocation's sealed cold and native build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-runtime-native/
+
+      - name: Download every completed partition separately
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: hia-native-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/hia-native-shards/
+          merge-multiple: false
+
+      - name: Verify complete source-bound native evidence
         run: |
-          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
-          python3 -I -B runtime/scripts/qualify_hia_runtime_native.py \
+          python3 -I -B runtime/scripts/hia_native_pipeline.py collect \
             --hepta "$GITHUB_WORKSPACE/compiler" \
-            --output "$RUNNER_TEMP/hia-runtime-native"
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --prepared-sha256 "${{ needs.prepare.outputs.prepared_sha256 }}" \
+            --shards "$RUNNER_TEMP/hia-native-shards"
 
       - name: Compare all declared original owners and Rust references
         env:
@@ -141,7 +301,7 @@ jobs:
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --rustc "$(rustup which --toolchain 1.95.0 rustc)"
 
-      - name: Retain original native results and executable identities
+      - name: Retain complete aggregate, originals and immutable shard receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

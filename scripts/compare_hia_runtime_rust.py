@@ -85,6 +85,9 @@ def executable(name: str) -> Path:
 def check_input_pins(output: Path, report: dict) -> None:
     if sources() != report["source_sha256"]:
         raise ValueError("source inputs differ from the completed native phase")
+    if "qualification_pipeline" in report:
+        from hia_native_pipeline import verify_pipeline_receipts
+        verify_pipeline_receipts(output, report)
     originals = check_original_sources(ROOT)
     if report.get("inventory", {}).get("original_sources") != originals:
         raise ValueError("original Rust reference inventory differs from the native phase")

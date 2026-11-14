@@ -205,10 +205,26 @@ python3 -m venv /absolute/path/to/hia-reference-environment
   --rustc /absolute/path/to/rustc
 ```
 
+CI executes the same gate as a fresh prepare job, four explicit native partitions
+and one aggregate/original-Rust job. The prepare job executes the full cold gate
+and builds every module once. Its exact SHA256 is passed through the workflow;
+every partition checks the full source, compiler, build and invocation identity
+before executing its complete suite list. Batch, text/history/view, JSON and
+system suites run on separate runners. Each job retains the original 15-minute
+limit; every native process retains 180 seconds and the cold/owner limits below
+are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
+The collector verifies every actual command, raw stdout/stderr, retained corpus,
+private process receipt and immutable build byte before running the existing
+native evidence checks and all 24 original Rust recipes. Artifact transport can
+strip executable permissions; only byte-verified owned regular files have their
+recorded ordinary permissions restored. The aggregate retains the original
+partition reports and rechecks them before and after the original comparisons.
+The standalone commands above still execute the complete gate sequentially.
+
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 58 native suite processes, the fresh compiler cold process,
-24 required original Rust recipes and one Rust-version process: 108 recorded
+The declared run has 59 native suite processes, the fresh compiler cold process,
+24 required original Rust recipes and one Rust-version process: 109 recorded
 checks in a complete successful aggregate. The two JSON recipes share one locked
 Cargo build and each perform a complete independent replay. A component's retained historical
 comparison is not a fresh aggregate invocation.
