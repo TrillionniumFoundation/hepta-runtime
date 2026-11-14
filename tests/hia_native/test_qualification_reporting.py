@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -42,6 +43,82 @@ class QualificationReportingTests(unittest.TestCase):
         self.addCleanup(self.folder.cleanup)
         self.output = Path(self.folder.name)
         self.report = {"phase": "reporting-regression", "checks": []}
+
+    def wait_fixture(self, programs):
+        root = self.output / "source"
+        folder = root / "tests/hia_native"
+        folder.mkdir(parents=True)
+        prefix = "from pathlib import Path\nimport json, os, sys, time\nroot=Path(__file__).resolve().parents[2]\n"
+        for name, program in programs.items():
+            (folder / name).write_text(prefix + program)
+        return root
+
+    def test_independent_wait_process_runs_during_sequential_work(self):
+        import qualify_hia_runtime_native as qualifier
+        root = self.wait_fixture({
+            "wait.py": "(root/'ready').write_text('ready')\n"
+                       "deadline=time.monotonic()+3\n"
+                       "while not (root/'release').exists():\n"
+                       " assert time.monotonic()<deadline\n time.sleep(.005)\n"
+                       "print(json.dumps({'owner':'wait','released':True}))\n",
+            "serial.py": "deadline=time.monotonic()+3\n"
+                         "while not (root/'ready').exists():\n"
+                         " assert time.monotonic()<deadline\n time.sleep(.005)\n"
+                         "(root/'release').write_text('release')\n"
+                         "print(json.dumps({'owner':'serial','observed_wait':True}))\n",
+        })
+        with patch.object(qualifier, "ROOT", root):
+            qualifier.run_native_checks(self.output, self.report, ("serial.py", "wait.py"),
+                                        {}, parallel_tests=("wait.py",), timeout=5)
+        self.assertEqual([row["name"] for row in self.report["checks"]], ["serial.py", "wait.py"])
+        self.assertEqual([row["exit_code"] for row in self.report["checks"]], [0, 0])
+        private = json.loads((self.output / "wait.py.execution.json").read_bytes())
+        self.assertEqual(private["checks"], [self.report["checks"][1]])
+        self.assertEqual(len(self.report["native_parallel_receipts"]), 1)
+        self.assertEqual(json.loads((self.output / "result.json").read_bytes()), self.report)
+
+    def test_independent_wait_failure_retains_the_actual_failed_process(self):
+        import qualify_hia_runtime_native as qualifier
+        root = self.wait_fixture({"serial.py": "print(json.dumps({'serial':True}))\n",
+                                  "failed.py": "print(json.dumps({'original_failure':True}))\nsys.exit(7)\n"})
+        with patch.object(qualifier, "ROOT", root), self.assertRaisesRegex(RuntimeError, "failed.py failed"):
+            qualifier.run_native_checks(self.output, self.report, ("serial.py", "failed.py"),
+                                        {}, parallel_tests=("failed.py",), timeout=5)
+        self.assertEqual([row["exit_code"] for row in self.report["checks"]], [0, 7])
+        self.assertFalse(self.report["checks"][1]["timed_out"])
+        self.assertEqual(json.loads((self.output / "failed.py.stdout").read_bytes()), {"original_failure": True})
+        self.assertEqual(json.loads((self.output / "failed.py.execution.json").read_bytes())["checks"],
+                         [self.report["checks"][1]])
+
+    def test_sequential_failure_drains_already_submitted_wait_process(self):
+        import qualify_hia_runtime_native as qualifier
+        root = self.wait_fixture({"serial.py": "(root/'release').write_text('release')\n"
+                                  "print(json.dumps({'original_failure':True}))\nsys.exit(9)\n",
+                                  "wait.py": "deadline=time.monotonic()+3\n"
+                                  "while not (root/'release').exists():\n"
+                                  " assert time.monotonic()<deadline\n time.sleep(.005)\n"
+                                  "print(json.dumps({'finished_after_sequential_failure':True}))\n"})
+        with patch.object(qualifier, "ROOT", root), self.assertRaisesRegex(RuntimeError, "serial.py failed"):
+            qualifier.run_native_checks(self.output, self.report, ("serial.py", "wait.py"),
+                                        {}, parallel_tests=("wait.py",), timeout=5)
+        self.assertEqual([row["exit_code"] for row in self.report["checks"]], [9, 0])
+        self.assertEqual(len(self.report["native_parallel_receipts"]), 1)
+        self.assertNotIn("native_parallel_drain_errors", self.report)
+        self.assertEqual(json.loads((self.output / "result.json").read_bytes()), self.report)
+
+    def test_independent_wait_timeout_is_not_reported_as_completion(self):
+        import qualify_hia_runtime_native as qualifier
+        root = self.wait_fixture({"serial.py": "print(json.dumps({'serial':True}))\n",
+                                  "timeout.py": "print(json.dumps({'entered':True}),flush=True)\ntime.sleep(60)\n"})
+        with patch.object(qualifier, "ROOT", root), self.assertRaisesRegex(RuntimeError, "timeout.py timed out"):
+            qualifier.run_native_checks(self.output, self.report, ("serial.py", "timeout.py"),
+                                        {}, parallel_tests=("timeout.py",), timeout=.4)
+        check = self.report["checks"][1]
+        self.assertTrue(check["timed_out"])
+        self.assertEqual(check["exit_code"], -9)
+        self.assertEqual(check["timeout_seconds"], .4)
+        self.assertEqual(json.loads((self.output / "timeout.py.stdout").read_bytes()), {"entered": True})
+        self.assertEqual(json.loads((self.output / "timeout.py.execution.json").read_bytes())["checks"], [check])
 
     def test_editable_defaults_follow_an_arbitrarily_named_checkout(self):
         import shutil
@@ -273,6 +350,37 @@ class QualificationReportingTests(unittest.TestCase):
                 self.assertFalse(domains[left] & domains[right])
         self.assertIn('file_info_service', PYTHON_REFERENCE_COMPONENTS)
         self.assertNotIn('file_info_service', RECIPES)
+
+    def test_json_registry_retains_two_original_domains_and_exact_named_profile(self):
+        from hia_native_json_qualification import COMPONENTS, source_inputs
+        declared = {item['key']: item for item in MODULES}
+        self.assertEqual(set(COMPONENTS), {'fence_json', 'serde_json'})
+        self.assertTrue(set(COMPONENTS) <= set(RECIPES))
+        self.assertEqual(declared['fence_json']['test'], 'test_fence_json.py')
+        entry = declared['serde_json']
+        self.assertEqual((entry['test'], *entry['additional_tests']),
+                         ('test_serde_json.py', 'test_serde_json_transport.py', 'test_json_evidence.py'))
+        self.assertEqual(entry['buffer_profile'], 'serde-json.v1')
+        self.assertEqual(entry['companion_sources'], ('native/serde_filter_packer.hepta',))
+        self.assertIn('src/mcp/runtime/effect_owner_fence.rs', ORIGINAL_RUNTIME_BLOBS)
+        self.assertTrue(set(source_inputs(ROOT)['files']) <= set(sources()))
+        inherited = {key: '/outside/fixture' for key in (
+            'HIA_FENCE_JSON_MANIFEST', 'HIA_SERDE_JSON_MANIFEST', 'HIA_FENCE_JSON_CORPUS_DIR',
+            'HIA_SERDE_JSON_CORPUS_DIR', 'HIA_JSON_QUALIFICATION_OUTPUT', 'HIA_JSON_REFERENCE_ROOT',
+            'HIA_SERDE_JSON_TRANSPORT_REPORT')}
+        self.assertEqual(qualification_env(dict(inherited, PATH='/usr/bin')), {'PATH': '/usr/bin'})
+
+    def test_json_original_build_rejects_inherited_flags_and_target_overrides(self):
+        from hia_native_json_qualification import REFERENCE_BUILD_VARIABLES, reference_environment
+        rustc = Path('/selected/toolchain/rustc')
+        inherited = {name: '/outside/custom-domain' for name in REFERENCE_BUILD_VARIABLES}
+        inherited.update(RUSTC='/unselected/compiler', HIA_JSON_REFERENCE_ROOT='/outside/source', PATH='/usr/bin')
+        selected, removed = reference_environment(qualification_env(inherited), rustc)
+        self.assertEqual(selected, {'RUSTC': str(rustc), 'PATH': '/usr/bin'})
+        self.assertEqual(removed, list(REFERENCE_BUILD_VARIABLES))
+        self.assertEqual(inherited['RUSTC'], '/unselected/compiler')
+        self.assertEqual(reference_environment({'PATH': '/usr/bin'}, rustc),
+                         ({'PATH': '/usr/bin', 'RUSTC': str(rustc)}, []))
 
     def test_authority_registry_preserves_all_suites_sources_and_original_owners(self):
         from hia_native_authority_qualification import SUITES, ORIGINAL_PINS

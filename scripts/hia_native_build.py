@@ -27,7 +27,9 @@ WORKSPACE_BYTES = 32 << 20
 BUFFER_PROFILES = {
     "standard": (INPUT_BYTES, OUTPUT_BYTES, WORKSPACE_BYTES),
     "view-render.v1": (16 << 20, 16 << 20, 256 << 20),
+    "serde-json.v1": (16 << 20, 64 << 20, 256 << 20),
     "batch-plan.v1": (512 << 20, 1024 << 20, 1152 << 20),
+    "history.v1": (128 << 20, 128 << 20, 256 << 20),
 }
 HERE = Path(__file__).resolve().parents[1]
 
@@ -184,6 +186,8 @@ class NativeBuild:
             raise ValueError("unknown native transport")
         if buffer_profile not in BUFFER_PROFILES:
             raise ValueError("unknown native buffer profile")
+        if buffer_profile == "history.v1" and standalone is not None:
+            raise ValueError("history profile is an image-only capacity declaration")
         if buffer_profile == "batch-plan.v1" and standalone is not None:
             raise ValueError("batch-plan profile is an image-only capacity declaration")
         if buffer_profile != "standard" and standalone == "stdio":
@@ -226,6 +230,8 @@ class NativeBuild:
             packer_name = "stdio_packer.hepta" if standalone == "stdio" else "filter_packer.hepta"
             if buffer_profile == "view-render.v1":
                 packer_name = "view_filter_packer.hepta"
+            if buffer_profile == "serde-json.v1":
+                packer_name = "serde_filter_packer.hepta"
             packer_source = HERE / "native" / packer_name
             packer_bytes = packer_source.read_bytes()
             packer_cache = self.root / "packers" / digest(packer_bytes)

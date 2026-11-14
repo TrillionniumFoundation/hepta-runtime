@@ -50,6 +50,10 @@ the production source inventory.
 | [view_render.hepta](view_render.hepta) | Original view range resolution, independent read snapshots, whole/ranged rendering, cache plan and result-size gate |
 | [view_filter_packer.hepta](view_filter_packer.hepta) | Static filter for the explicit view-render capacity profile, with exact compiled-image binding |
 | [view_cache.hepta](view_cache.hepta) | Persistent serial cache state, lifecycle, per-value limit, invalidation, poisoned-lock behavior and native view-plan application |
+| [history.hepta](history.hepta) | Persistent serial original undo snapshots, ten-entry per-file eviction, 64 MiB global budget, stale queue events and exact push/pop/lifecycle behavior |
+| [fence_json.hepta](fence_json.hepta) | Exact original typed owner/job serde projection, duplicate-known rejection and IgnoredAny grammar |
+| [serde_json.hepta](serde_json.hepta) | Locked Value ordering, integer/float classification and compact finite-number serialization |
+| [serde_filter_packer.hepta](serde_filter_packer.hepta) | Static filter for the explicit serde-json.v1 16/64/256 MiB profile |
 | [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
 | [operation_kdf.hepta](operation_kdf.hepta) | Internal HMAC/HKDF-SHA256, original token-key derivation, private binding bytes and per-record key derivation with cleared workspace |
 | [operation_aead.hepta](operation_aead.hepta) | Internal ChaCha20-Poly1305, full-tag authentication before plaintext output, exact refusal/capacity behavior and declared-workspace clearing |
@@ -128,6 +132,17 @@ of HTTP calls that lack the trusted extension. It does not install concurrent
 HTTP transport, metadata annotations or the production handlers. Its exact test
 and reference boundaries are in [authority_integration.md](authority_integration.md)
 and [authority_original_rust_comparison.json](authority_original_rust_comparison.json).
+The [history owner](history_abi.md) preserves the original snapshot and eviction
+order, including stale queue entries and the exception that retains one snapshot
+larger than the global budget. Its image profile admits complete 128 MiB request
+frames, with 256 MiB of private state; the separate persistent ELF fixture has an
+explicit smaller transport boundary. The full native corpus contains 6,198
+original-owner rows and is replayed against the exact original Rust methods.
+The retained observation is in
+[history_original_rust_comparison.json](history_original_rust_comparison.json).
+Shared file locks, canonical path keys, filesystem writes and production undo
+routing remain separate owners; a serial snapshot store alone does not replace
+the `undo_edit` handler.
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -191,10 +206,18 @@ python3 -m venv /absolute/path/to/hia-reference-environment
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 48 native suite processes, the fresh compiler cold process,
-20 required original Rust recipes and one Rust-version process: 92 recorded
-checks in a complete successful aggregate. A component's retained historical
+The declared run has 54 native suite processes, the fresh compiler cold process,
+23 required original Rust recipes and one Rust-version process: 103 recorded
+checks in a complete successful aggregate. The two JSON recipes share one locked
+Cargo build and each perform a complete independent replay. A component's retained historical
 comparison is not a fresh aggregate invocation.
+The OS-scope, authority-transport and file-info-guard suites run through two
+independent worker slots while the other native suites retain their declared
+order. Each suite keeps its original 180-second process limit and private
+execution receipt. The aggregate records every completed process, drains jobs
+already launched when another suite fails, and checks the receipt hashes again
+before accepting any original Rust replay. The file-info cancellation fixtures
+retain both fixed 30-second deadlines.
 The resulting B3 compiles the runtime sources and their HIA transport packers.
 Every invocation also runs the complete upstream cold replay in a new source-only
 export, retaining the upstream 180-second qualification and separate 3-second
@@ -809,6 +832,43 @@ execution, sealed RX code mappings and source/image/compiler drift refusal.
 The native source profile and its limitations are recorded in the build
 manifest and `result.json`. A passing component result is not a passing full
 runtime migration result.
+
+## Locked serde JSON owners
+
+`fence_json.hepta` implements the retained `OwnerDocument` and `LegacyJobKey`
+derived structures directly, including duplicate-known-field rejection,
+map/sequence differences, nullable fields, and the original `IgnoredAny` byte
+grammar. `serde_json.hepta` implements the separately declared `Value` and
+finite-number contract: last duplicate selection, BTree key order, exact
+integer/float classification, `float_roundtrip`, and the locked `zmij` output.
+The reference uses the original 11 registry dependency versions/checksums and
+unchanged derived definitions. The original serializer is `zmij`, not an
+assumed substitute.
+
+The complete eight-MiB JSON domain is retained. Its named `serde-json.v1`
+profile supplies 16/64/256 MiB input/output/workspace and a source-owned static
+filter; the maximum expansion fixture produces 31,876,700 bytes. The typed
+owner uses the ordinary profile. Neither component grants authority, performs
+OS effects, registers another MCP handler, or replaces a production call site.
+Raw lexical `RawValue` identity and arbitrary derived structures are outside
+these two declared ABIs.
+
+The three actual native suites execute **22,918 direct native calls and 13
+static ELF processes**, retaining **5,087 typed and 17,778 generic reference
+frames**. A fourth suite checks completed-process, source, compile/pack,
+rehashed-ELF, corpus, and transport receipt mutations; these synthetic evidence
+controls add no native cases. Aggregate admission binds each completed stdout
+and stderr, current source map, actual compiler and packer receipts, exact ELF
+prefix/embedded image, and complete corpus bytes. The two original-reference
+recipes share one actual locked Cargo build and independently execute every
+retained frame through that binary. The existing historical Rust comparisons
+remain historical; each aggregate run must perform its own two replays.
+
+See [fence_json_abi.md](fence_json_abi.md),
+[serde_json_abi.md](serde_json_abi.md),
+[serde_json_composition.json](serde_json_composition.json), and the retained
+[native](serde_json_native_proof.json) and
+[original Rust](serde_json_original_rust_comparison.json) observations.
 
 ## Remaining migration work and cleanup
 

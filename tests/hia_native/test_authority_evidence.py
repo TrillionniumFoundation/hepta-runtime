@@ -74,7 +74,7 @@ class EvidenceTests(unittest.TestCase):
             with path.open("xb") as stream: stream.write(raw)
         cls.artifact = q.composition_artifacts(ROOT, cls.build_root, cls.manifest, cls.compiler)
         cls.probe = q.probe_artifacts(ROOT, cls.build_root, cls.probe_manifest, cls.compiler)
-        cls.binary_hash = "b157e78536ee099c2bf9a684009227a637df5e11d940278af7ddaf881fcdbfa8"
+        cls.binary_hash = "68abfc7a171b8cb09778b16c8f59b7d86d21e61f44d5692193848eb2781c8a9b"
         cls.original_files = {str(p): q.sha(p) for p in
             (cls.manifest, cls.probe_manifest, cls.scope_manifest,
              cls.manifest.parent / "native-authority.elf")}

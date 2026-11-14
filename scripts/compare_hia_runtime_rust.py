@@ -21,8 +21,10 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
+                                       INDEPENDENT_WAIT_SUITES,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
                                        line_verify_evidence, batch_plan_evidence, caller_authority_evidence,
+                                       history_evidence, json_evidence,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        operation_record_evidence, operation_scope_evidence,
@@ -41,6 +43,9 @@ from hia_native_editable_qualification import FOLDER as EDITABLE_FOLDER, CASES a
 from hia_native_view_qualification import FOLDER as VIEW_FOLDER, CASES as VIEW_CASES, stream_identity as view_stream_identity
 from hia_native_view_cache_qualification import compare_original as compare_cache_original
 from hia_native_authority_qualification import compare_original as compare_authority_original
+from hia_native_history_qualification import compare_original as compare_history_original
+from hia_native_json_qualification import (compare_original as compare_json_original,
+                                           check_original_receipts as check_json_original_receipts)
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
                                                 REFERENCE_ROWS as BATCH_PLAN_ROWS)
@@ -123,6 +128,11 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required complete batch input/endpoint/large-result evidence differs")
     if report.get("view_render_evidence") != view_render_evidence(output, report):
         raise ValueError("required complete view byte-domain/cache-plan/transport evidence differs")
+    if report.get("json_evidence") != json_evidence(output, report):
+        raise ValueError("required JSON actual native/ELF/corpus evidence differs")
+    check_json_original_receipts(ROOT, output, report, completed_test_summary)
+    if report.get("history_evidence") != history_evidence(output, report):
+        raise ValueError("required history state/original-domain/static-image evidence differs")
     if report.get("view_cache_evidence") != view_cache_evidence(output, report):
         raise ValueError("required cache state/lifecycle/view-plan/transport evidence differs")
     if report.get("operation_scope_os_evidence") != operation_scope_os_evidence(output, report):
@@ -134,6 +144,17 @@ def check_input_pins(output: Path, report: dict) -> None:
             path = Path(relative)
             if path.is_absolute() or ".." in path.parts or sha(output / path) != expected:
                 raise ValueError("retained native reference corpus changed: " + relative)
+    if set(report.get("native_parallel_receipts", {})) != {
+            name + ".execution.json" for name in INDEPENDENT_WAIT_SUITES}:
+        raise ValueError("independent native process receipt inventory differs")
+    for relative, expected in report["native_parallel_receipts"].items():
+        if Path(relative).name != relative or sha(output / relative) != expected:
+            raise ValueError("independent native process receipt changed")
+        receipt = json.loads((output / relative).read_bytes())
+        rows = receipt.get("checks", [])
+        if (len(rows) != 1 or rows[0] not in report["checks"] or rows[0].get("exit_code") != 0
+                or rows[0].get("timed_out") is not False or rows[0].get("start_error")):
+            raise ValueError("independent native process did not finish successfully")
     declared = {item["key"]: item for item in MODULES}
     for key, item in report["modules"].items():
         expected = declared[key]
@@ -149,7 +170,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "history"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -844,6 +865,11 @@ def compare_operation_scope_os(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_history(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_history_original(ROOT, output, report, rustc, completed_test_summary,
+                                    record_check, qualification_env())
+
+
 def compare_view_cache(output: Path, report: dict, rustc: Path) -> dict:
     return compare_cache_original(ROOT, output, report, rustc, completed_test_summary,
                                   record_check, qualification_env())
@@ -1080,10 +1106,21 @@ def compare_caller_authority(output: Path, report: dict, rustc: Path) -> dict:
         completed_test_summary=completed_test_summary, qualification_env=environment, cargo=cargo)
 
 
+def compare_fence_json(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_json_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
+        "fence_json", completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
+def compare_serde_json(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_json_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
+        "serde_json", completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
-           "view_cache": compare_view_cache,
+           "view_cache": compare_view_cache, "history": compare_history,
+           "fence_json": compare_fence_json, "serde_json": compare_serde_json,
            "operation_scope_os": compare_operation_scope_os,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,

@@ -20,6 +20,7 @@ import subprocess
 import sys
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -50,6 +51,12 @@ from hia_native_authority_qualification import (FOLDER as AUTHORITY_FOLDER, SUIT
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 batch_plan_evidence as checked_batch_plan_evidence)
 
+from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
+                                              qualification_evidence as checked_history_evidence)
+
+from hia_native_json_qualification import (COMPONENTS as JSON_COMPONENTS, TRANSPORT_REPORT as JSON_TRANSPORT_REPORT,
+                                           qualification_evidence as checked_json_evidence)
+
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
@@ -78,6 +85,16 @@ MODULES = (
     {"key": "view_cache", "name": "view-cache", "source": "native/view_cache.hepta",
      "standalone": None, "manifest_env": "HIA_CACHE_MANIFEST", "test": "test_view_cache.py",
      "additional_tests": ("test_view_cache_evidence.py",)},
+    {"key": "history", "name": "history", "source": "native/history.hepta",
+     "builder": "history", "manifest_env": "HIA_HISTORY_BUNDLE", "test": "test_history.py",
+     "additional_tests": ("test_history_evidence.py",)},
+    {"key": "fence_json", "name": "fence-json", "source": "native/fence_json.hepta",
+     "standalone": "filter", "manifest_env": "HIA_FENCE_JSON_MANIFEST", "test": "test_fence_json.py"},
+    {"key": "serde_json", "name": "serde-json", "source": "native/serde_json.hepta",
+     "standalone": "filter", "buffer_profile": "serde-json.v1",
+     "companion_sources": ("native/serde_filter_packer.hepta",),
+     "manifest_env": "HIA_SERDE_JSON_MANIFEST", "test": "test_serde_json.py",
+     "additional_tests": ("test_serde_json_transport.py", "test_json_evidence.py")},
     {"key": "binary_codec", "name": "binary-codec", "source": "native/binary_codec.hepta",
      "standalone": "filter", "manifest_env": "HIA_CODEC_MANIFEST", "test": "test_binary_codec.py"},
     {"key": "operation_kdf", "name": "operation-kdf", "source": "native/operation_kdf.hepta",
@@ -173,6 +190,7 @@ def sources() -> dict:
         "hia_native_scope_build.py", "hia_native_scope_qualification.py",
         "hia_native_editable_qualification.py", "hia_native_view_qualification.py",
         "hia_native_view_cache_build.py", "hia_native_view_cache_qualification.py",
+        "hia_native_history_build.py", "hia_native_history_qualification.py", "hia_native_json_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
@@ -222,7 +240,8 @@ def process_summary(name: str, stdout: bytes) -> dict:
 
 def record_check(output: Path, report: dict, *, name: str, command: list[str],
                  timeout: float, env: dict | None = None,
-                 input_bytes: bytes | None = None) -> subprocess.CompletedProcess:
+                 input_bytes: bytes | None = None,
+                 report_path: Path | None = None) -> subprocess.CompletedProcess:
     """Retain completed, refused and timed-out checks before propagating failure."""
     started = time.monotonic()
     stdout, stderr = b"", b""
@@ -262,11 +281,85 @@ def record_check(output: Path, report: dict, *, name: str, command: list[str],
     except (ValueError, UnicodeDecodeError):
         pass
     report["checks"].append(check)
-    save_report(output / "result.json", report)
+    save_report(output / "result.json" if report_path is None else report_path, report)
     if start_error or timed_out or code != 0:
         reason = "timed out" if timed_out else "could not start" if start_error else "failed"
         raise RuntimeError(name + " " + reason + "; original stdout/stderr retained")
     return subprocess.CompletedProcess(command, code, stdout, stderr)
+
+
+INDEPENDENT_WAIT_SUITES = (
+    "test_scope_os.py", "test_authority_transport.py", "test_file_info_guard.py",
+)
+
+
+def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: dict,
+                      *, parallel_tests: tuple[str, ...] = INDEPENDENT_WAIT_SUITES,
+                      timeout: float = 180) -> None:
+    """Overlap independent OS waits; retain every process at its declared position.
+
+    Wide allocation/byte-domain suites stay on the sequential caller. The three
+    explicit suites use separate temporary directories and corpus destinations.
+    Their workers publish separate receipts and never mutate the aggregate.
+    Already submitted processes finish within their original per-process limits
+    even when the sequential caller fails; all their original bytes are retained.
+    """
+    if len(set(tests)) != len(tests) or any(Path(name).name != name for name in tests):
+        raise ValueError("native executable suite names must be unique basenames")
+    selected = tuple(name for name in tests if name in parallel_tests)
+    receipts, futures, collected = {}, {}, set()
+    report["native_parallel_receipts"] = {}
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="hia-native-waits") as pool:
+        try:
+            for name in selected:
+                private = {"phase": report.get("phase"), "checks": []}
+                path = output / (name + ".execution.json")
+                receipts[name] = (private, path)
+                futures[name] = pool.submit(record_check, output, private, name=name,
+                    command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)],
+                    timeout=timeout, env=env, report_path=path)
+
+            def collect(name):
+                failure = None
+                try:
+                    futures[name].result()
+                except Exception as error:
+                    failure = error
+                private, path = receipts[name]
+                if (len(private["checks"]) != 1 or private["checks"][0]["name"] != name
+                        or json.loads(path.read_bytes()) != private):
+                    raise ValueError("independent native invocation receipt is incomplete: " + name)
+                if name in collected or any(row["name"] == name for row in report["checks"]):
+                    raise ValueError("independent native invocation was recorded twice: " + name)
+                report["checks"].append(private["checks"][0])
+                report["native_parallel_receipts"][path.name] = sha(path)
+                collected.add(name)
+                save_report(output / "result.json", report)
+                return failure
+
+            for name in tests:
+                if name in futures:
+                    failure = collect(name)
+                    if failure is not None:
+                        raise failure
+                else:
+                    record_check(output, report, name=name,
+                        command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)],
+                        timeout=timeout, env=env)
+        finally:
+            # Do not abandon owned background process groups or discard their
+            # failure/timeout receipts when an earlier sequential suite fails.
+            for name in futures:
+                if name not in collected:
+                    try:
+                        failure = collect(name)
+                        if failure is not None:
+                            report.setdefault("native_parallel_drain_errors", []).append(
+                                {"name": name, "type": type(failure).__name__, "message": str(failure)})
+                    except Exception as error:
+                        report.setdefault("native_parallel_drain_errors", []).append(
+                            {"name": name, "type": type(error).__name__, "message": str(error)})
+            save_report(output / "result.json", report)
 
 
 def io_reference_evidence(output: Path, report: dict) -> dict:
@@ -435,6 +528,14 @@ def batch_plan_evidence(output: Path, report: dict) -> dict:
 
 def view_render_evidence(output: Path, report: dict) -> dict:
     return checked_view_evidence(ROOT, output, report, completed_test_summary)
+
+
+def json_evidence(output: Path, report: dict) -> dict:
+    return checked_json_evidence(ROOT, output, report, completed_test_summary)
+
+
+def history_evidence(output: Path, report: dict) -> dict:
+    return checked_history_evidence(ROOT, output, report, completed_test_summary)
 
 
 def view_cache_evidence(output: Path, report: dict) -> dict:
@@ -1531,6 +1632,12 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_VIEW_CORPUS_DIR": str(output / VIEW_FOLDER),
             "HIA_CACHE_CORPUS_DIR": str(output / CACHE_FOLDER),
             "HIA_CACHE_QUALIFICATION_OUTPUT": str(output),
+            "HIA_FENCE_JSON_CORPUS_DIR": str(output / JSON_COMPONENTS["fence_json"]["folder"]),
+            "HIA_SERDE_JSON_CORPUS_DIR": str(output / JSON_COMPONENTS["serde_json"]["folder"]),
+            "HIA_SERDE_JSON_TRANSPORT_REPORT": str(output / JSON_TRANSPORT_REPORT),
+            "HIA_JSON_QUALIFICATION_OUTPUT": str(output),
+            "HIA_HISTORY_CORPUS_DIR": str(output / HISTORY_FOLDER),
+            "HIA_HISTORY_QUALIFICATION_OUTPUT": str(output),
             "HIA_CODEC_CORPUS_DIR": str(output / "codec-rust-oracle"),
             "HIA_KDF_CORPUS_DIR": str(output / "operation-kdf-rust-oracle"),
             "HIA_AEAD_CORPUS_DIR": str(output / "operation-aead-rust-oracle"),
@@ -1592,6 +1699,9 @@ def run(output: Path, hepta: Path) -> dict:
                 env["HIA_AUTHORITY_MANIFEST"] = str(built.parent / "module_00.json")
                 env["HIA_AUTHORITY_LOADER_MANIFEST"] = str(built.parent / "module_08.json")
                 env["HIA_AUTHORITY_PROBE_MANIFEST"] = str(probe)
+            elif item.get("builder") == "history":
+                from hia_native_history_build import build_history
+                built = build_history(hepta, output / "build", source_root=ROOT)
             elif item.get("builder") == "batch_plan":
                 from hia_native_batch_plan_build import build_batch_plan
                 built = build_batch_plan(hepta, output / "build", source_root=ROOT)
@@ -1622,10 +1732,7 @@ def run(output: Path, hepta: Path) -> dict:
         env["HIA_CACHE_ELF_MANIFEST"] = str(cache_fixture)
         tests = tuple(dict.fromkeys(name for item in MODULES
                                     for name in (item["test"], *item.get("additional_tests", ())))) + EXTRA_TESTS
-        for name in tests:
-            record_check(output, report, name=name,
-                         command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)],
-                         env=env, timeout=180)
+        run_native_checks(output, report, tests, env, timeout=180)
         report["original_python_comparisons"] = python_reference_evidence(output, report)
         report["native_composition_evidence"] = native_composition_evidence(output, report)
         report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -1642,6 +1749,8 @@ def run(output: Path, hepta: Path) -> dict:
         report["batch_plan_evidence"] = batch_plan_evidence(output, report)
         report["view_render_evidence"] = view_render_evidence(output, report)
         report["view_cache_evidence"] = view_cache_evidence(output, report)
+        report["history_evidence"] = history_evidence(output, report)
+        report["json_evidence"] = json_evidence(output, report)
         scope_os_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
         capture_scope_os_corpus(ROOT, output / SCOPE_OS_FOLDER, scope_os_profile(ROOT, scope_os_manifest))
         report["operation_scope_os_evidence"] = operation_scope_os_evidence(output, report)
@@ -1672,6 +1781,10 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["composition"]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report["view_cache_evidence"]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report["view_cache_evidence"]["corpus_sha256"])
+        report["rust_oracle_inputs"].update(report["history_evidence"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report["history_evidence"]["corpus_sha256"])
+        report["rust_oracle_inputs"].update(report["json_evidence"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report["json_evidence"]["corpus_sha256"])
         report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
         authority = report["caller_authority_evidence"]

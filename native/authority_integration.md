@@ -183,18 +183,24 @@ operation_crypto source pin is reused; add missing original main, caller scope,
 caller scope tests, search jobs, Cargo manifest and Cargo lock pins, including
 their exact Git blobs from the baseline. Also include repository rustfmt.toml.
 
-## Historical capture and recovery evidence
+## Captured execution and recovery evidence
 
 authority_receipt_fixture.json.gz contains 107 exact fixture members: 104 raw
-v4 capture members, the two old controller corpus files, and the new actual
-packer receipt. Captured original evidence requires all 103 inventoried raw
+v5 capture members, two freshly generated controller corpus files, and the new
+actual packer receipt. Captured original evidence requires all 103 inventoried raw
 members plus their inventory file, complete stdout/stderr, original generated
 source bytes, real native ELF identities and the complete case/trace domain.
 It returns capture_only=true and new_executions=0.
 
-The actual historical original run uses Rust 1.99.1, and is separately identified
-in authority_original_rust_comparison.json. Rebuilding this helper does not
-constitute another Rust run. The new CI recipe must pass on its actual toolchain.
+The v5 refresh performed another locked original Rust 1.99.1 build, all 122
+controller rows, all 110 native/original kernel pairs, and the complete native
+transport suite after the shared loader/build profiles changed. Its current
+source map binds both shared files. The production HIA sources and ELF bytes
+are unchanged. The old v4 capture and the CI failure that identified its stale
+loader binding remain historical evidence. Exact new source, process and raw
+receipt identities are recorded in authority_original_rust_comparison.json.
+Reading this captured fixture does not constitute another Rust execution; the
+new CI recipe must still pass on its actual toolchain.
 
 The reconstructed test's initial cross-filesystem hardlink failure is retained.
 Only the owned-cache copy method changed to an ordinary copy; no production HIA,
