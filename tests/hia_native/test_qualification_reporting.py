@@ -39,6 +39,23 @@ class QualificationReportingTests(unittest.TestCase):
         self.output = Path(self.folder.name)
         self.report = {"phase": "reporting-regression", "checks": []}
 
+    def test_editable_defaults_follow_an_arbitrarily_named_checkout(self):
+        import shutil
+        import subprocess
+        checkout = self.output / "runtime"
+        for relative in ("tests/hia_native/test_editable_content.py",
+                         "tests/hia_native/editable_oracle_transport.rs",
+                         "src/mcp/fs/text_editing.rs"):
+            destination = checkout / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, destination)
+        oracle = self.output / "original-editable.rs"
+        completed = subprocess.run(
+            [sys.executable, "-I", "-B", str(checkout / "tests/hia_native/test_editable_content.py"),
+             "--emit-oracle", str(oracle)], cwd=self.output, capture_output=True, timeout=10)
+        self.assertEqual(completed.returncode, 0, completed.stderr.decode())
+        self.assertEqual(oracle.read_bytes(), (ROOT / "tests/hia_native/oracle_editable_content.rs").read_bytes())
+
     def test_editable_and_view_capture_domains_cannot_be_shortened_or_boolean(self):
         for expected, check in ((EDITABLE_COUNTS, editable_counts),
                                 (VIEW_COUNTS, lambda value: view_counts(value, VIEW_COUNTS)),

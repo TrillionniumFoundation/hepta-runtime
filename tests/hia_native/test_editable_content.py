@@ -15,7 +15,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME = ROOT.parent / 'hepta-runtime'
+RUNTIME = ROOT
 U64 = (1 << 64) - 1
 
 
