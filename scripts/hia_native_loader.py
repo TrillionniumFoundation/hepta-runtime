@@ -23,6 +23,7 @@ MAX_IMAGE = 1 << 20
 BUFFER_PROFILES = {
     "standard": (8 << 20, 8 << 20, 32 << 20),
     "view-render.v1": (16 << 20, 16 << 20, 256 << 20),
+    "batch-plan.v1": (512 << 20, 1024 << 20, 1152 << 20),
 }
 # Some CPython builds omit the Linux constants although the kernel API exists.
 F_ADD_SEALS = getattr(fcntl, "F_ADD_SEALS", 1033)

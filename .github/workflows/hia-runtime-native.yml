@@ -32,6 +32,13 @@ on:
       - 'src/mcp/runtime/multi_read.rs'
       - 'src/mcp/runtime/multi_read_host.py'
       - 'src/mcp/runtime/operation_crypto.rs'
+      - 'src/main.rs'
+      - 'src/mcp/runtime/caller_scope.rs'
+      - 'src/mcp/runtime/caller_scope_tests.rs'
+      - 'src/mcp/runtime/search_jobs.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rustfmt.toml'
   pull_request:
     paths:
       - 'native/**'
@@ -62,6 +69,13 @@ on:
       - 'src/mcp/runtime/multi_read.rs'
       - 'src/mcp/runtime/multi_read_host.py'
       - 'src/mcp/runtime/operation_crypto.rs'
+      - 'src/main.rs'
+      - 'src/mcp/runtime/caller_scope.rs'
+      - 'src/mcp/runtime/caller_scope_tests.rs'
+      - 'src/mcp/runtime/search_jobs.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rustfmt.toml'
   workflow_dispatch:
 
 permissions:
@@ -115,8 +129,10 @@ jobs:
             --output "$RUNNER_TEMP/hia-runtime-native"
 
       - name: Compare all declared original owners and Rust references
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
         run: |
-          rustup toolchain install 1.95.0 --profile minimal
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
           python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --rustc "$(rustup which --toolchain 1.95.0 rustc)"

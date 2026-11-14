@@ -11,6 +11,7 @@ from qualify_hia_runtime_native import (MODULES, file_info_evidence, io_referenc
                                        native_composition_evidence, nonce_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        operation_record_evidence, record_composition_evidence,
+                                       completed_test_summary, process_summary,
                                        qualification_env, record_check, sources)
 from qualify_hia_runtime_native import FILE_INFO_SUITES, validate_file_info_guard_times
 from compare_hia_runtime_rust import run as compare_rust
@@ -272,6 +273,224 @@ class QualificationReportingTests(unittest.TestCase):
                 self.assertFalse(domains[left] & domains[right])
         self.assertIn('file_info_service', PYTHON_REFERENCE_COMPONENTS)
         self.assertNotIn('file_info_service', RECIPES)
+
+    def test_authority_registry_preserves_all_suites_sources_and_original_owners(self):
+        from hia_native_authority_qualification import SUITES, ORIGINAL_PINS
+        entry = next(item for item in MODULES if item["key"] == "caller_authority")
+        self.assertEqual((entry["test"], *entry["additional_tests"]), tuple(row[0] for row in SUITES))
+        self.assertEqual([row[3] for row in SUITES], [8, 5, 6, 4, 7])
+        self.assertEqual(entry["builder"], "authority_composition")
+        self.assertEqual(entry["manifest_env"], "HIA_AUTHORITY_ELF_MANIFEST")
+        self.assertIn("caller_authority", RECIPES)
+        self.assertTrue(set(ORIGINAL_PINS) <= set(ORIGINAL_RUNTIME_BLOBS))
+        pinned = sources()
+        for name in (entry["source"], *entry["companion_sources"], *ORIGINAL_PINS,
+                     "rustfmt.toml", "scripts/hia_native_authority_build.py",
+                     "scripts/hia_native_authority_probe_build.py",
+                     "scripts/hia_native_authority_layout.py",
+                     "scripts/hia_native_authority_qualification.py"):
+            self.assertIn(name, pinned)
+
+    def test_batch_registry_requires_full_native_and_original_domains(self):
+        from hia_native_batch_plan_qualification import SOURCE_FILES, REFERENCE_FILES, ORIGINALS
+        entry = next(item for item in MODULES if item["key"] == "batch_plan")
+        self.assertEqual((entry["test"], *entry["additional_tests"]),
+                         ("test_batch_plan.py", "test_batch_plan_evidence.py"))
+        self.assertEqual(entry["builder"], "batch_plan")
+        self.assertEqual(entry["manifest_env"], "HIA_BATCH_PLAN_BUNDLE")
+        self.assertIn("batch_plan", RECIPES)
+        self.assertTrue(set(ORIGINALS) <= set(ORIGINAL_RUNTIME_BLOBS))
+        pinned = sources()
+        self.assertTrue(set(SOURCE_FILES) | set(REFERENCE_FILES) | set(ORIGINALS) <= set(pinned))
+        self.assertIn("native/batch_plan_original_rust_comparison.json", pinned)
+        inherited = {key: "/outside/fixture" for key in (
+            "HIA_BATCH_PLAN_BUNDLE", "HIA_BATCH_PLAN_MANIFEST", "HIA_BATCH_ENDPOINT_MANIFEST",
+            "HIA_BATCH_VERIFY_MANIFEST", "HIA_BATCH_PLAN_ELF_MANIFEST", "HIA_BATCH_PLAN_CORPUS_DIR",
+            "HIA_BATCH_PLAN_EVIDENCE_RESULT", "HIA_REFERENCE_RUNTIME")}
+        self.assertEqual(qualification_env(dict(inherited, PATH="/usr/bin")), {"PATH": "/usr/bin"})
+
+    def test_batch_complete_progress_is_bound_to_the_actual_process_stream(self):
+        progress = [
+            {"phase": "maximum_plain", "status": "PASS", "output_bytes": 524298089,
+             "workspace_bytes": 534831101},
+            {"phase": "maximum_stale", "status": "PASS", "output_bytes": 524301763,
+             "workspace_bytes": 534835575},
+        ]
+        # This is a reporting fixture, not a semantic batch execution.
+        final = {"fixture": "process framing only", "status": "PASS"}
+        wire = "\n".join(json.dumps(row) for row in [*progress, final]) + "\n"
+        record_check(self.output, self.report, name="test_batch_plan.py",
+                     command=[sys.executable, "-c", "import sys;sys.stdout.write(sys.argv[1])", wire],
+                     timeout=5)
+        _, observed = completed_test_summary(self.output, self.report, "test_batch_plan.py")
+        self.assertEqual(observed, final)
+        for rows in ([final], [progress[0], final], [*reversed(progress), final],
+                     [*progress, final, final],
+                     [dict(progress[0], status="FAIL"), progress[1], final],
+                     [dict(progress[0], output_bytes=524298088), progress[1], final]):
+            with self.subTest(rows=rows), self.assertRaises(ValueError):
+                process_summary("test_batch_plan.py", "\n".join(json.dumps(row) for row in rows).encode())
+        with self.assertRaises(ValueError):
+            process_summary("another-suite.py", wire.encode())
+
+    def test_batch_wide_profile_cannot_claim_a_standard_standalone_transport(self):
+        from unittest.mock import patch
+        from hia_native_build import BUFFER_PROFILES, NativeBuild
+        from hia_native_loader import BUFFER_PROFILES as LOADER_PROFILES
+        self.assertEqual(BUFFER_PROFILES, LOADER_PROFILES)
+        self.assertEqual(BUFFER_PROFILES["standard"], (8 << 20, 8 << 20, 32 << 20))
+        self.assertEqual(BUFFER_PROFILES["view-render.v1"], (16 << 20, 16 << 20, 256 << 20))
+        self.assertEqual(BUFFER_PROFILES["batch-plan.v1"], (512 << 20, 1024 << 20, 1152 << 20))
+        builder = object.__new__(NativeBuild)
+        with patch.object(builder, "bootstrap") as bootstrap:
+            for transport in ("filter", "stdio"):
+                with self.subTest(transport=transport), self.assertRaisesRegex(ValueError, "image-only"):
+                    builder.compile("capacity-refusal-fixture", self.output / "absent.hepta",
+                                    standalone=transport, buffer_profile="batch-plan.v1")
+            bootstrap.assert_not_called()
+
+    def test_batch_original_stream_is_complete_binary_and_bounded(self):
+        import gzip
+        import hashlib
+        from compare_hia_runtime_rust import batch_replay_stream_identity
+        raw = b"\x00\xff\r" * 349527  # More than one read chunk; no newline row grammar.
+        path = self.output / "binary-result.gz"
+        path.write_bytes(gzip.compress(raw, mtime=0))
+        self.assertEqual(batch_replay_stream_identity(path, len(raw)),
+                         (len(raw), hashlib.sha256(raw).hexdigest()))
+        with self.assertRaisesRegex(ValueError, "exceeds"):
+            batch_replay_stream_identity(path, len(raw) - 1)
+        link = self.output / "linked-result.gz"
+        link.symlink_to(path)
+        with self.assertRaisesRegex(ValueError, "regular"):
+            batch_replay_stream_identity(link, len(raw))
+
+    def test_batch_outer_timeout_kills_and_reaps_the_actual_reference_child(self):
+        import ctypes
+        import gzip
+        import hashlib
+        import os
+        import signal
+        import time
+        from hia_native_batch_plan_qualification import ORIGINALS
+        # The test invokes the real comparison lifecycle with a deliberately
+        # blocking executable. Typed source/corpus fixtures are explicitly
+        # substituted; this control adds no native or original semantic cases.
+        libc = ctypes.CDLL(None, use_errno=True)
+        previous = ctypes.c_int()
+        self.assertEqual(libc.prctl(37, ctypes.byref(previous), 0, 0, 0), 0)
+        self.assertEqual(libc.prctl(36, 1, 0, 0, 0), 0)
+        child = None
+        reaped = False
+        try:
+            marker = self.output / "reference-child.json"
+            binary = self.output / "blocking-reference"
+            binary.write_text("#!" + sys.executable + "\nimport json,os,signal\n"
+                              "from pathlib import Path\n"
+                              "Path(" + repr(str(marker)) + ").write_text(json.dumps({"
+                              "'pid':os.getpid(),'parent':os.getppid(),'group':os.getpgrp()}))\n"
+                              "signal.pause()\n")
+            binary.chmod(0o700)
+            corpus = self.output / "timeout-corpus"
+            corpus.mkdir()
+            metadata = {"report": {"reference_rows": 1}, "requests": {"file": "requests.bin.gz"},
+                        "native_output": {"file": "native-output.bin.gz", "raw_bytes": 0,
+                                          "raw_sha256": hashlib.sha256(b"").hexdigest()},
+                        "history": {"file": "history.jsonl.gz"}}
+            (corpus / "native-corpus.json").write_text(json.dumps(metadata))
+            for name in ("requests.bin.gz", "native-output.bin.gz", "history.jsonl.gz"):
+                (corpus / name).write_bytes(gzip.compress(b"", mtime=0))
+            source_map = {name: row["sha256"] for name, row in ORIGINALS.items()}
+            source_map.update({name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+                              for name in ("tests/hia_native/batch_plan_oracle/Cargo.toml",
+                                           "tests/hia_native/batch_plan_oracle/Cargo.lock")})
+            receipt = self.output / "fixture-build.json"
+            receipt.write_text(json.dumps({"schema": "hepta.runtime.batch-plan.original-build.v1",
+                "status": "PASS", "exit_code": 0, "timed_out": False,
+                "oracle_sha256": hashlib.sha256((ROOT / "tests/hia_native/oracle_batch_plan.rs").read_bytes()).hexdigest(),
+                "source_map": source_map, "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest()}))
+            program = "\n".join((
+                "import sys", "from pathlib import Path",
+                "sys.path.insert(0, sys.argv[1] + '/tests/hia_native')",
+                "import compare_batch_plan_original as owner",
+                "owner.source_bindings = lambda *args: {'fixture': 'process lifetime only'}",
+                "owner.stream_identity = lambda *args: None",
+                "owner.compare(Path(sys.argv[1]), Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), binary=Path(sys.argv[4]), build_receipt=Path(sys.argv[5]))",
+            ))
+            with self.assertRaisesRegex(RuntimeError, "timed out"):
+                record_check(self.output, self.report, name="batch-reference-timeout-control",
+                    command=[sys.executable, "-I", "-B", "-c", program, str(ROOT), str(corpus),
+                             str(self.output / "timeout-replay"), str(binary), str(receipt)], timeout=2)
+            observed = json.loads(marker.read_bytes())
+            child = observed["pid"]
+            self.assertEqual(observed["group"], observed["parent"])
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                waited, status = os.waitpid(child, os.WNOHANG)
+                if waited:
+                    reaped = True
+                    self.assertTrue(os.WIFSIGNALED(status))
+                    self.assertEqual(os.WTERMSIG(status), signal.SIGKILL)
+                    break
+                time.sleep(0.01)
+            self.assertTrue(reaped, "outer qualification timeout left its actual reference child alive")
+            self.assertTrue(self.report["checks"][-1]["timed_out"])
+            control_receipt = {"schema": "hepta.runtime.batch-reference-timeout-control.v1", "status": "PASS",
+                "native_semantic_calls_added": 0, "original_semantic_calls_added": 0,
+                "actual_child_processes": 1, "child": observed, "child_reaped": reaped,
+                "wait_status": status, "termination_signal": os.WTERMSIG(status),
+                "fixture_binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                "comparison_source_sha256": hashlib.sha256((ROOT / "tests/hia_native/compare_batch_plan_original.py").read_bytes()).hexdigest(),
+                "actual_outer_check": self.report["checks"][-1]}
+        finally:
+            if child is None and 'marker' in locals() and marker.is_file():
+                child = json.loads(marker.read_bytes())["pid"]
+            if child is not None and not reaped:
+                try:
+                    os.kill(child, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                try:
+                    os.waitpid(child, 0)
+                except ChildProcessError:
+                    pass
+            self.assertEqual(libc.prctl(36, previous.value, 0, 0, 0), 0)
+        print(json.dumps(control_receipt, sort_keys=True))
+
+    def test_authority_rust_format_uses_only_the_selected_toolchain(self):
+        from unittest.mock import patch
+        from compare_hia_runtime_rust import compare_caller_authority
+        selected = self.output / "selected-toolchain" / "bin"
+        selected.mkdir(parents=True)
+        for name in ("rustc", "cargo", "cargo-fmt", "rustfmt"):
+            path = selected / name
+            path.write_text("explicit command-selection fixture; never executed\n")
+            path.chmod(0o700)
+        captured = {}
+
+        def inspect_recipe(*args, **kwargs):
+            captured.update(kwargs)
+            captured["environment"] = kwargs["qualification_env"]()
+            return {"fixture": "command selection only"}
+
+        with patch.dict("os.environ", {"RUSTFMT": "/unrelated/formatter"}), \
+                patch("compare_hia_runtime_rust.compare_authority_original", side_effect=inspect_recipe):
+            self.assertEqual(compare_caller_authority(self.output, self.report, selected / "rustc"),
+                             {"fixture": "command selection only"})
+        self.assertEqual(captured["cargo"], selected / "cargo")
+        self.assertEqual(captured["environment"]["PATH"].split(":")[0], str(selected))
+        self.assertEqual(captured["environment"]["RUSTFMT"], str(selected / "rustfmt"))
+        for missing in ("cargo-fmt", "rustfmt", "cargo"):
+            path = selected / missing
+            saved = path.read_bytes()
+            path.unlink()
+            with self.subTest(missing=missing), \
+                    patch("compare_hia_runtime_rust.compare_authority_original") as recipe, \
+                    self.assertRaises(FileNotFoundError):
+                compare_caller_authority(self.output, self.report, selected / "rustc")
+            recipe.assert_not_called()
+            path.write_bytes(saved)
+            path.chmod(0o700)
 
     def test_every_copied_original_owner_is_pinned_to_baseline_bytes(self):
         fixture = self.output / "reference"

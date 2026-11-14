@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
-                                       line_verify_evidence,
+                                       line_verify_evidence, batch_plan_evidence, caller_authority_evidence,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        operation_record_evidence, operation_scope_evidence,
@@ -40,6 +40,10 @@ from hia_native_scope_qualification import FOLDER as SCOPE_FOLDER, ORACLE_COUNTS
 from hia_native_editable_qualification import FOLDER as EDITABLE_FOLDER, CASES as EDITABLE_CASES
 from hia_native_view_qualification import FOLDER as VIEW_FOLDER, CASES as VIEW_CASES, stream_identity as view_stream_identity
 from hia_native_view_cache_qualification import compare_original as compare_cache_original
+from hia_native_authority_qualification import compare_original as compare_authority_original
+from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
+                                                ORIGINALS as BATCH_PLAN_ORIGINALS,
+                                                REFERENCE_ROWS as BATCH_PLAN_ROWS)
 from hia_native_scope_os_qualification import (FOLDER as SCOPE_OS_FOLDER, PAIRED_RECEIPT as SCOPE_OS_PAIRED_RECEIPT,
                                               exact_profile as scope_os_profile, paired_evidence as scope_os_paired_evidence)
 
@@ -115,12 +119,16 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required editable state/byte-preservation/static-image evidence differs")
     if report.get("line_verify_evidence") != line_verify_evidence(output, report):
         raise ValueError("required line-ID verification/diagnostic/index evidence differs")
+    if report.get("batch_plan_evidence") != batch_plan_evidence(output, report):
+        raise ValueError("required complete batch input/endpoint/large-result evidence differs")
     if report.get("view_render_evidence") != view_render_evidence(output, report):
         raise ValueError("required complete view byte-domain/cache-plan/transport evidence differs")
     if report.get("view_cache_evidence") != view_cache_evidence(output, report):
         raise ValueError("required cache state/lifecycle/view-plan/transport evidence differs")
     if report.get("operation_scope_os_evidence") != operation_scope_os_evidence(output, report):
         raise ValueError("required actual OS entropy/scope/custody evidence differs")
+    if report.get("caller_authority_evidence") != caller_authority_evidence(output, report):
+        raise ValueError("required caller authority/source/image/OS/complete-corpus evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
         for relative, expected in report[collection].items():
             path = Path(relative)
@@ -141,7 +149,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -841,6 +849,105 @@ def compare_view_cache(output: Path, report: dict, rustc: Path) -> dict:
                                   record_check, qualification_env())
 
 
+def batch_replay_stream_identity(path: Path, maximum: int) -> tuple[int, str]:
+    if path.is_symlink() or not path.is_file() or path.resolve() != path.absolute():
+        raise ValueError("batch original output must be a regular unsymlinked stream")
+    size, identity = 0, hashlib.sha256()
+    with gzip.open(path, "rb") as stream:
+        while raw := stream.read(1 << 20):
+            size += len(raw)
+            if size > maximum:
+                raise ValueError("batch original output exceeds the complete native byte domain")
+            identity.update(raw)
+    return size, identity.hexdigest()
+
+
+def compare_batch_plan(output: Path, report: dict, rustc: Path) -> dict:
+    evidence = batch_plan_evidence(output, report)
+    if evidence != report.get("batch_plan_evidence"):
+        raise ValueError("batch native source, complete streams or actual artifacts changed before original replay")
+    folder = output / BATCH_PLAN_FOLDER
+    cargo = executable(str(rustc.with_name("cargo")))
+    cargo_hash = sha(cargo)
+    build_dir = folder / "original-build"
+    # The component's build routine creates the source-bound receipt from the
+    # actual locked Cargo invocation. It has its own retained stdout/stderr.
+    # This outer check records that completed process separately from replay.
+    build_program = "\n".join((
+        "import json, sys",
+        "from pathlib import Path",
+        "root, destination = Path(sys.argv[1]), Path(sys.argv[2])",
+        "sys.path.insert(0, str(root / 'tests/hia_native'))",
+        "from compare_batch_plan_original import build_original",
+        "destination.mkdir(parents=True, exist_ok=False)",
+        "binary, receipt = build_original(root, root, destination, cargo=sys.argv[3], rustc=sys.argv[4])",
+        "print(json.dumps(receipt, sort_keys=True))",
+    ))
+    env = qualification_env()
+    compiled = record_check(output, report, name="batch-plan-rust-compile",
+        command=[sys.executable, "-I", "-B", "-c", build_program,
+                 str(ROOT), str(build_dir), str(cargo), str(rustc)], env=env, timeout=180)
+    build = json.loads(compiled.stdout)
+    source_map = {name: row["sha256"] for name, row in BATCH_PLAN_ORIGINALS.items()}
+    source_map.update({name: sha(ROOT / name) for name in (
+        "tests/hia_native/oracle_batch_plan.rs", "tests/hia_native/batch_plan_oracle/Cargo.toml",
+        "tests/hia_native/batch_plan_oracle/Cargo.lock")})
+    binary = build_dir / "target/release/hia-batch-plan-reference"
+    expected_command = [str(cargo), "build", "--release", "--locked", "--manifest-path",
+                        str(ROOT / "tests/hia_native/batch_plan_oracle/Cargo.toml")]
+    if (compiled.stderr or build.get("schema") != "hepta.runtime.batch-plan.original-build.v1"
+            or build.get("status") != "PASS" or build.get("exit_code") != 0
+            or build.get("timed_out") is not False or build.get("command") != expected_command
+            or build.get("source_map") != source_map
+            or build.get("oracle_sha256") != source_map["tests/hia_native/oracle_batch_plan.rs"]
+            or build.get("binary_sha256") != sha(binary)
+            or build.get("stdout_sha256") != sha(build_dir / "build.stdout")
+            or build.get("stderr_sha256") != sha(build_dir / "build.stderr")
+            or json.loads((build_dir / "build.json").read_bytes()) != build):
+        raise ValueError("batch actual locked Cargo compilation receipt differs")
+    replay = folder / "original-replay"
+    row = record_check(output, report, name="batch-plan-rust-compare",
+        command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_batch_plan_original.py"),
+                 "--source-root", str(ROOT), "--runtime", str(ROOT), "--corpus", str(folder),
+                 "--output", str(replay), "--binary", str(binary),
+                 "--build-receipt", str(build_dir / "build.json")], env=env, timeout=180)
+    observed = json.loads(row.stdout)
+    if (row.stderr or observed.get("schema") != "hepta.runtime.batch-plan.original-comparison.v1"
+            or observed.get("status") != "PASS" or type(observed.get("original_rows")) is not int
+            or observed["original_rows"] != BATCH_PLAN_ROWS or observed.get("rows_expected") != BATCH_PLAN_ROWS
+            or observed.get("output_complete") is not True or observed.get("exit_code") != 0
+            or observed.get("stream_errors") != [] or observed.get("timeout_seconds") != 180
+            or observed.get("stdout_bytes") != evidence["native_output_bytes"]
+            or observed.get("stdout_sha256") != evidence["native_output_sha256"]
+            or observed.get("native_corpus_sha256") != evidence["corpus_metadata_sha256"]
+            or observed.get("binary_sha256") != build["binary_sha256"]
+            or observed.get("compilation") != "reused actual source-matched compiled binary; no fresh compilation claim"
+            or json.loads((replay / "comparison.json").read_bytes()) != observed
+            or json.loads((replay / "build.json").read_bytes()) != build
+            or batch_replay_stream_identity(replay / "original-output.bin.gz", evidence["native_output_bytes"]) != (
+                evidence["native_output_bytes"], evidence["native_output_sha256"])
+            or sha(binary) != build["binary_sha256"] or sha(cargo) != cargo_hash
+            or batch_plan_evidence(output, report) != evidence):
+        raise ValueError("original batch complete ordered responses or source custody differ")
+    result = {"schema": "hepta.runtime.batch-plan-rust-comparison.v1", "status": "PASS",
+              "cases": BATCH_PLAN_ROWS, "native_cases_added_by_replay": 0,
+              "reference_kind": "unchanged original batch preflight, operation parsing and endpoint planning blocks",
+              "compiled_by_qualification_recipe": True,
+              "replay_uses_this_recipe_binary": True,
+              "original_output_sha256": observed["stdout_sha256"],
+              "native_output_sha256": evidence["native_output_sha256"],
+              "output_bytes": evidence["native_output_bytes"],
+              "corpus_metadata_sha256": evidence["corpus_metadata_sha256"],
+              "oracle_executable_sha256": build["binary_sha256"], "cargo_executable_sha256": cargo_hash,
+              "original_build_receipt_sha256": sha(build_dir / "build.json"),
+              "original_replay_receipt_sha256": sha(replay / "comparison.json"),
+              "source_bindings": observed["source_bindings"],
+              "complete_original_tool_parity": False, "production_activated": False, "whole_runtime_replaced": False}
+    with (folder / "rust-comparison.json").open("x") as stream:
+        stream.write(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
 def compare_line_verify(output: Path, report: dict, rustc: Path) -> dict:
     evidence = line_verify_evidence(output, report)
     if evidence != report.get("line_verify_evidence"):
@@ -956,8 +1063,25 @@ def compare_view_render(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_caller_authority(output: Path, report: dict, rustc: Path) -> dict:
+    cargo = executable(str(rustc.with_name("cargo")))
+    executable(str(rustc.with_name("cargo-fmt")))
+    rustfmt = executable(str(rustc.with_name("rustfmt")))
+
+    def environment():
+        # Cargo can prefer its home-directory proxy over PATH. RUSTFMT pins
+        # the actual formatter even when that proxy dispatches cargo-fmt.
+        env = qualification_env()
+        env["PATH"] = str(cargo.parent) + os.pathsep + env.get("PATH", os.defpath)
+        env["RUSTFMT"] = str(rustfmt)
+        return env
+
+    return compare_authority_original(ROOT, output, report, rustc, record_check=record_check,
+        completed_test_summary=completed_test_summary, qualification_env=environment, cargo=cargo)
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
-           "line_verify": compare_line_verify,
+           "line_verify": compare_line_verify, "batch_plan": compare_batch_plan,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
            "view_cache": compare_view_cache,
            "operation_scope_os": compare_operation_scope_os,
@@ -965,7 +1089,8 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "policy": compare_policy, "multi_read_service": compare_multi_read,
            "operation_kdf": compare_operation_kdf, "operation_aead": compare_operation_aead,
            "operation_nonce": compare_operation_nonce, "operation_record": compare_operation_record,
-           "system_entropy": compare_system_entropy, "operation_scope": compare_operation_scope}
+           "system_entropy": compare_system_entropy, "operation_scope": compare_operation_scope,
+           "caller_authority": compare_caller_authority}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}

@@ -24,7 +24,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, inspect
-from hia_native_build import NativeBuild, HEPTA_COMMIT, HEPTA_TREE, json_bytes
+from hia_native_build import NativeBuild, HEPTA_COMMIT, HEPTA_TREE, check_dependency, json_bytes
 from hia_native_cold import validate_cold_evidence
 from hia_native_entropy_qualification import (CORPUS_FILES as ENTROPY_CORPUS_FILES,
                                              FOLDER as ENTROPY_FOLDER,
@@ -45,6 +45,10 @@ from hia_native_scope_os_qualification import (FOLDER as SCOPE_OS_FOLDER, SUITES
                                               exact_profile as scope_os_profile,
                                               write_corpus as capture_scope_os_corpus,
                                               native_evidence as checked_scope_os_evidence)
+from hia_native_authority_qualification import (FOLDER as AUTHORITY_FOLDER, SUITES as AUTHORITY_SUITES,
+                                               evidence as checked_authority_evidence)
+from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
+                                                batch_plan_evidence as checked_batch_plan_evidence)
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -59,6 +63,9 @@ MODULES = (
      "standalone": None, "manifest_env": "HIA_ENDPOINT_MANIFEST", "test": "test_line_endpoint.py"},
     {"key": "line_verify", "name": "line-verify", "source": "native/line_verify.hepta",
      "standalone": "filter", "manifest_env": "HIA_LINE_VERIFY_MANIFEST", "test": "test_line_verify.py"},
+    {"key": "batch_plan", "name": "batch-plan", "source": "native/batch_plan.hepta",
+     "builder": "batch_plan", "manifest_env": "HIA_BATCH_PLAN_BUNDLE", "test": "test_batch_plan.py",
+     "additional_tests": ("test_batch_plan_evidence.py",)},
     {"key": "delta", "name": "delta", "source": "native/delta.hepta",
      "standalone": "filter", "manifest_env": "HIA_DELTA_MANIFEST", "test": "test_delta.py"},
     {"key": "editable_content", "name": "editable-content", "source": "native/editable_content.hepta",
@@ -90,6 +97,12 @@ MODULES = (
     {"key": "operation_scope_os", "name": "operation-scope-os", "source": "native/operation_scope.hepta",
      "builder": "scope_os_composition", "manifest_env": "HIA_SCOPE_OS_MANIFEST", "test": "test_scope_os.py",
      "additional_tests": ("test_scope_os_packer.py", "test_scope_os_evidence.py")},
+    {"key": "caller_authority", "name": "caller-authority", "source": "native/caller_authority.hepta",
+     "companion_sources": ("native/authority_loader.hepta", "native/authority_packer.hepta"),
+     "builder": "authority_composition", "manifest_env": "HIA_AUTHORITY_ELF_MANIFEST",
+     "test": "test_caller_authority.py",
+     "additional_tests": ("test_authority_loader_kernel.py", "test_authority_transport.py",
+                          "test_authority_packer.py", "test_authority_evidence.py")},
     {"key": "policy", "name": "policy", "source": "native/policy.hepta",
      "standalone": "filter", "manifest_env": "HIA_POLICY_MANIFEST", "test": "test_policy.py"},
     {"key": "stat_version", "name": "stat-version", "source": "native/stat_version.hepta",
@@ -161,10 +174,13 @@ def sources() -> dict:
         "hia_native_editable_qualification.py", "hia_native_view_qualification.py",
         "hia_native_view_cache_build.py", "hia_native_view_cache_qualification.py",
         "hia_native_line_verify_qualification.py",
+        "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
+        "hia_native_authority_build.py", "hia_native_authority_layout.py",
+        "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
         "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
-                  ROOT / ".github/workflows/hia-runtime-native.yml"))
+                  ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
@@ -184,6 +200,24 @@ def save_report(path: Path, result: dict) -> None:
     temporary = path.with_suffix(".pending.json")
     temporary.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     os.replace(temporary, path)
+
+
+def process_summary(name: str, stdout: bytes) -> dict:
+    if name != "test_batch_plan.py":
+        return json.loads(stdout)
+    # This suite retains two complete-domain progress records before its final
+    # report. Admit exactly that framing; a trailing PASS cannot hide failures,
+    # omitted large cases, duplicate reports or other output.
+    rows = [json.loads(line) for line in stdout.splitlines()]
+    expected = [
+        {"phase": "maximum_plain", "status": "PASS", "output_bytes": 524298089,
+         "workspace_bytes": 534831101},
+        {"phase": "maximum_stale", "status": "PASS", "output_bytes": 524301763,
+         "workspace_bytes": 534835575},
+    ]
+    if len(rows) != 3 or json_bytes(rows[:2]) != json_bytes(expected):
+        raise ValueError("batch complete-domain progress evidence differs")
+    return rows[2]
 
 
 def record_check(output: Path, report: dict, *, name: str, command: list[str],
@@ -224,7 +258,7 @@ def record_check(output: Path, report: dict, *, name: str, command: list[str],
     if start_error:
         check["start_error"] = start_error
     try:
-        check["summary"] = json.loads(stdout)
+        check["summary"] = process_summary(name, stdout)
     except (ValueError, UnicodeDecodeError):
         pass
     report["checks"].append(check)
@@ -343,7 +377,7 @@ def completed_test_summary(output: Path, report: dict, name: str) -> tuple[dict,
     check = checks[0]
     stdout = (output / (name + ".stdout")).read_bytes()
     stderr = (output / (name + ".stderr")).read_bytes()
-    summary = json.loads(stdout)
+    summary = process_summary(name, stdout)
     if (check["exit_code"] != 0 or check["timed_out"] is not False or check.get("start_error")
             or hashlib.sha256(stdout).hexdigest() != check["stdout_sha256"]
             or hashlib.sha256(stderr).hexdigest() != check["stderr_sha256"]
@@ -356,6 +390,10 @@ def entropy_evidence(output: Path, report: dict) -> dict:
     return checked_entropy_evidence(ROOT, output, report, completed_test_summary)
 
 
+def caller_authority_evidence(output: Path, report: dict) -> dict:
+    return checked_authority_evidence(ROOT, output, report, completed_test_summary)
+
+
 def operation_scope_evidence(output: Path, report: dict) -> dict:
     return checked_scope_evidence(ROOT, output, report, completed_test_summary)
 
@@ -366,6 +404,33 @@ def editable_content_evidence(output: Path, report: dict) -> dict:
 
 def line_verify_evidence(output: Path, report: dict) -> dict:
     return checked_line_verify_evidence(ROOT, output, report, completed_test_summary)
+
+
+def batch_plan_evidence(output: Path, report: dict) -> dict:
+    hepta = Path(report["compiler_checkout"]).resolve(strict=True)
+    bootstrap = json.loads((output / "build/bootstrap/bootstrap.json").read_bytes())
+    if check_dependency(hepta) != bootstrap.get("dependency"):
+        raise ValueError("batch source parser differs from the actual pinned compiler checkout")
+    evidence = checked_batch_plan_evidence(ROOT, output, report, completed_test_summary, hepta=hepta)
+    bundle = output / report["modules"]["batch_plan"]["manifest"]
+    manifest = json.loads(bundle.read_bytes())
+    build = output / "build"
+    composition = build / manifest["composition"]["manifest"]
+    packed = json.loads(composition.read_bytes())
+    directories = {bundle.parent, composition.parent}
+    directories.update((build / row["manifest"]).parent for row in manifest["wide_modules"])
+    directories.update(build / "modules" / ("composition-" + row["source_sha256"][:24])
+                       for row in (packed["packer"], *packed["members"]))
+    artifacts = {}
+    for directory in sorted(directories):
+        for path in sorted(directory.iterdir()):
+            if path.is_symlink() or not path.is_file() or path.resolve() != path:
+                raise ValueError("batch retained artifact is not a regular owned file")
+            artifacts[path.relative_to(output).as_posix()] = sha(path)
+    corpus = {BATCH_PLAN_FOLDER + "/" + name: sha(output / BATCH_PLAN_FOLDER / name)
+              for name in ("native-corpus.json", "requests.bin.gz", "native-output.bin.gz",
+                           "history.jsonl.gz", "elf-observation.json")}
+    return {**evidence, "artifact_sha256": artifacts, "corpus_sha256": corpus}
 
 
 def view_render_evidence(output: Path, report: dict) -> dict:
@@ -1415,7 +1480,8 @@ def run(output: Path, hepta: Path) -> dict:
         "started_at": datetime.now(timezone.utc).isoformat(),
         "checkout_head": None, "source_identity_authority": "source_sha256", "source_sha256": {},
         "compiler_commit": HEPTA_COMMIT, "compiler_tree": HEPTA_TREE,
-        "scope": "native kernels, closed seven-image local MCP read profile, and Linux x86-64 stdio/read-only dependencies",
+        "compiler_checkout": str(hepta),
+        "scope": "native kernels, closed seven-image local MCP read profile, serial nine-image caller authority, and Linux x86-64 dependencies",
         "whole_runtime_replaced": False, "production_activated": False,
         "old_stack_removal_qualified": False, "matching_source_full_cold_qualified": False,
         "compiler_cold_status": "PENDING", "native_components_status": "RUNNING",
@@ -1451,6 +1517,7 @@ def run(output: Path, hepta: Path) -> dict:
         report["modules"] = {}
         (output / ENTROPY_FOLDER).mkdir(mode=0o700)
         (output / SCOPE_OS_FOLDER).mkdir(mode=0o700)
+        (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
         env = qualification_env()
         env.update({
             "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
@@ -1460,6 +1527,7 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
             "HIA_EDITABLE_CORPUS_DIR": str(output / EDITABLE_FOLDER),
             "HIA_LINE_VERIFY_CORPUS_DIR": str(output / LINE_VERIFY_FOLDER),
+            "HIA_BATCH_PLAN_CORPUS_DIR": str(output / BATCH_PLAN_FOLDER),
             "HIA_VIEW_CORPUS_DIR": str(output / VIEW_FOLDER),
             "HIA_CACHE_CORPUS_DIR": str(output / CACHE_FOLDER),
             "HIA_CACHE_QUALIFICATION_OUTPUT": str(output),
@@ -1473,6 +1541,12 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_ENTROPY_KERNEL_REPORT": str(output / ENTROPY_FOLDER / "kernel-native.json"),
             "HIA_ENTROPY_TRANSPORT_REPORT": str(output / ENTROPY_FOLDER / "transport.json"),
             "HIA_SCOPE_CORPUS_DIR": str(output / SCOPE_FOLDER),
+            "HIA_AUTHORITY_CORPUS_DIR": str(output / AUTHORITY_FOLDER / "controller"),
+            "HIA_AUTHORITY_TEST_REPORT": str(output / AUTHORITY_FOLDER / "controller.json"),
+            "HIA_AUTHORITY_KERNEL_CORPUS_DIR": str(output / AUTHORITY_FOLDER / "kernel"),
+            "HIA_AUTHORITY_TRANSPORT_CORPUS_DIR": str(output / AUTHORITY_FOLDER / "transport"),
+            "HIA_AUTHORITY_PACKER_REPORT": str(output / AUTHORITY_FOLDER / "packer.json"),
+            "HIA_AUTHORITY_EVIDENCE_REPORT": str(output / AUTHORITY_FOLDER / "evidence.json"),
             "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
             "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
             "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
@@ -1510,12 +1584,26 @@ def run(output: Path, hepta: Path) -> dict:
             elif item.get("builder") == "scope_os_composition":
                 from hia_native_scope_os_build import build_scope_os
                 built = build_scope_os(hepta, output / "build")
+            elif item.get("builder") == "authority_composition":
+                from hia_native_authority_build import build_authority
+                from hia_native_authority_probe_build import build_loader_probe
+                built = build_authority(hepta, output / "build", source_root=ROOT)
+                probe = build_loader_probe(hepta, output / "build", source_root=ROOT)
+                env["HIA_AUTHORITY_MANIFEST"] = str(built.parent / "module_00.json")
+                env["HIA_AUTHORITY_LOADER_MANIFEST"] = str(built.parent / "module_08.json")
+                env["HIA_AUTHORITY_PROBE_MANIFEST"] = str(probe)
+            elif item.get("builder") == "batch_plan":
+                from hia_native_batch_plan_build import build_batch_plan
+                built = build_batch_plan(hepta, output / "build", source_root=ROOT)
             else:
                 built = builder.compile(item["name"], ROOT / item["source"], standalone=item["standalone"],
                                         buffer_profile=item.get("buffer_profile", "standard"))
             report["modules"][item["key"]] = {
                 "manifest": str(built.relative_to(output)), "sha256": sha(built), "source": item["source"],
                 "builder": item.get("builder", "borrowed_bytes")}
+            if item.get("builder") == "authority_composition":
+                report["modules"][item["key"]].update(
+                    probe_manifest=str(probe.relative_to(output)), probe_sha256=sha(probe))
             env[item["manifest_env"]] = str(built)
         from hia_native_composition_build import ModuleSpec, build_composition
         nonce_fixture = build_composition(hepta, output / "build", [
@@ -1551,11 +1639,13 @@ def run(output: Path, hepta: Path) -> dict:
         report["operation_scope_evidence"] = operation_scope_evidence(output, report)
         report["editable_content_evidence"] = editable_content_evidence(output, report)
         report["line_verify_evidence"] = line_verify_evidence(output, report)
+        report["batch_plan_evidence"] = batch_plan_evidence(output, report)
         report["view_render_evidence"] = view_render_evidence(output, report)
         report["view_cache_evidence"] = view_cache_evidence(output, report)
         scope_os_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
         capture_scope_os_corpus(ROOT, output / SCOPE_OS_FOLDER, scope_os_profile(ROOT, scope_os_manifest))
         report["operation_scope_os_evidence"] = operation_scope_os_evidence(output, report)
+        report["caller_authority_evidence"] = caller_authority_evidence(output, report)
         report["retained_python_comparison_status"] = "PASS"
         report["python_reference_inputs"] = {
             "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
@@ -1582,6 +1672,13 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["composition"]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report["view_cache_evidence"]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report["view_cache_evidence"]["corpus_sha256"])
+        report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
+        authority = report["caller_authority_evidence"]
+        for label in ("artifact", "probe"):
+            report["rust_oracle_inputs"].update({"build/" + name: expected
+                for name, expected in authority[label]["artifact_sha256"].items()})
+        report["rust_oracle_inputs"].update(authority["corpus_sha256"])
         report["rust_oracle_inputs"].update({
             "text-rust-oracle/" + name: sha(output / "text-rust-oracle" / name)
             for name in ("native-corpus.json", "requests.hex", "native-output.txt")})

@@ -32,8 +32,8 @@ continue to identify the language and are not filename extensions.
 
 ## Native components
 
-Qualification covers 28 production HIA sources through 23 executable components
-and six HIA packers; the two scope profiles share their HIA scope owner.
+Qualification covers 32 production HIA sources through 25 executable components
+and seven HIA packers; the two scope profiles share their HIA scope owner.
 Test-only HIA fixtures are recorded separately from
 the production source inventory.
 
@@ -43,6 +43,7 @@ the production source inventory.
 | [runtime_protocol.hepta](runtime_protocol.hepta) | Strict JSON, JSON-RPC IDs/errors, protocol negotiation, initialization lifecycle, native tool responses and line hashing |
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
+| [batch_plan.hepta](batch_plan.hepta) | Original typed batch admission, operation parsing and endpoint planning, complete ordered diagnostics and full 50-operation / 5 MiB file domains |
 | [line_verify.hepta](line_verify.hepta) | Original stale line-ID verification, exact fresh context and nearest-three relocation hints, plus complete strict/clamped index results |
 | [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
 | [editable_content.hepta](editable_content.hepta) | Original ordered text state, per-line endings, insertion, normalized-byte replacement and trailing-newline preservation |
@@ -57,6 +58,9 @@ the production source inventory.
 | [entropy_policy.hepta](entropy_policy.hepta) | Serial Linux entropy fill for 0..128 bytes, default backend probe and descriptor caching, partial fills, retry/error rules and complete-output publication |
 | [entropy_packer.hepta](entropy_packer.hepta) | Fixed entropy syscall boundary and static ELF transport with checked continuations, opaque device descriptors and EOF cleanup |
 | [operation_scope.hepta](operation_scope.hepta) | Private serial scope construction, bindings, seal/open ordering, reference lifetime and joint key/nonce destruction in separately qualified fixture-entropy and real-OS-entropy profiles |
+| [caller_authority.hepta](caller_authority.hepta) | Serial origin/token admission, private authenticated scope selection, first-call session ownership and distinct trusted startup/reconnect lifetimes |
+| [authority_loader.hepta](authority_loader.hepta) | Account-owned private token admission and before/after descriptor checks, plus the original fixed-device stdio owner generation order |
+| [authority_packer.hepta](authority_packer.hepta) | Exact nine-image authority profile, startup-only token-path effects, private capability boundaries and shutdown cleanup |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
 | [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks, complete fingerprint/Linux metadata capture and typed deadline/finalizer decisions |
@@ -77,8 +81,8 @@ binary bounds and Base64 policies are specified in [binary_codec_abi.md](binary_
 The internal key/binding frame and caller-owned secret boundary are specified in
 [operation_kdf_abi.md](operation_kdf_abi.md). This primitive is not an MCP tool and
 is not installed in the seven-image local read service. Its key outputs require a
-trusted caller; token authentication and the original non-exportable crypto scope
-remain separate owners.
+trusted caller; the serial scope and caller-authority compositions below qualify
+those owners separately from the local read service.
 The AEAD byte frame and authentication-failure boundary are specified in
 [operation_aead_abi.md](operation_aead_abi.md). It is also internal and is not
 installed in the local read service. Nonce uniqueness, trusted scope state,
@@ -114,6 +118,16 @@ actual compiled-image hashes before admitting this effect. The original fixture
 profile remains mandatory for deterministic lifetime and fault comparisons.
 The OS profile does not install bearer authentication, concurrent capability
 sharing or a production MCP handler.
+The separate [caller-authority profile](authority_abi.md) binds private token
+loading and the original fixed-device stdio owner generation to trusted native
+startup events. Its nine-image table admits only the specified controller, scope,
+crypto, entropy and loader entries. Request data cannot select the token path or
+create an authenticated extension. The serial controller preserves Origin-first
+refusal, fixed-width token-digest comparison, first-call owner binding and refusal
+of HTTP calls that lack the trusted extension. It does not install concurrent
+HTTP transport, metadata annotations or the production handlers. Its exact test
+and reference boundaries are in [authority_integration.md](authority_integration.md)
+and [authority_original_rust_comparison.json](authority_original_rust_comparison.json).
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -147,7 +161,8 @@ its own manifest, source, compiler and corpus inputs. Standalone suites retain
 their explicit development overrides; these cannot silently substitute an
 external loader or fault probe in the closed qualification.
 Python 3.11+ and a C toolchain are build/test dependencies for the initial seed.
-Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec, KDF, AEAD, nonce, record, entropy and scope
+Independent comparison also requires Rust 1.95.0, Cargo and that toolchain's
+`rustfmt`; endpoint, batch planning, codec, KDF, AEAD, nonce, record, entropy, scope and authority
 reference dependencies are pinned in their Cargo.lock files.
 The independent Python AEAD reference uses the exact packages in
 `tests/hia_native/python-reference-requirements.txt`, installed in a test-only
@@ -176,6 +191,10 @@ python3 -m venv /absolute/path/to/hia-reference-environment
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
+The declared run has 48 native suite processes, the fresh compiler cold process,
+20 required original Rust recipes and one Rust-version process: 92 recorded
+checks in a complete successful aggregate. A component's retained historical
+comparison is not a fresh aggregate invocation.
 The resulting B3 compiles the runtime sources and their HIA transport packers.
 Every invocation also runs the complete upstream cold replay in a new source-only
 export, retaining the upstream 180-second qualification and separate 3-second
@@ -233,6 +252,22 @@ operation-scope-rust-oracle/scope_cases.jsonl.gz
 operation-scope-rust-oracle/scope_fault_sessions.jsonl.gz
 operation-scope-rust-oracle/scope_capacity_controls.jsonl.gz
 operation-scope-rust-oracle/rust-comparison.json
+caller-authority-rust-oracle/controller.json
+caller-authority-rust-oracle/controller/authority_cases.jsonl.gz
+caller-authority-rust-oracle/kernel/kernel-report.json
+caller-authority-rust-oracle/transport/transport-report.json
+caller-authority-rust-oracle/packer.json
+caller-authority-rust-oracle/evidence.json
+caller-authority-rust-oracle/rust-comparison.json
+batch-plan-rust-oracle/native-corpus.json
+batch-plan-rust-oracle/requests.bin.gz
+batch-plan-rust-oracle/native-output.bin.gz
+batch-plan-rust-oracle/history.jsonl.gz
+batch-plan-rust-oracle/elf-observation.json
+batch-plan-rust-oracle/original-build/build.json
+batch-plan-rust-oracle/original-replay/comparison.json
+batch-plan-rust-oracle/original-replay/original-output.bin.gz
+batch-plan-rust-oracle/rust-comparison.json
 policy-rust-oracle/native-corpus.json
 stat-version-python-reference/native-corpus.json
 stat-version-python-reference/stat-version-cases.jsonl.gz
@@ -260,7 +295,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all eighteen independent Rust comparisons succeed. The Python reference domain
+after all nineteen independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -571,6 +606,24 @@ See [scope_os_original_rust_comparison.json](scope_os_original_rust_comparison.j
 The paired comparison executes a fresh 37-process native side again; those
 additional 238 responses are reported separately from the native phase.
 
+The serial caller-authority profile has five mandatory suites and **30 native
+groups**: eight controller groups, five loader groups, six transport groups,
+four packer groups and seven evidence groups. Their retained domains include
+786 controller/leaf entries, 110 actual loader processes and 48 actual transport
+processes carrying 144 frames. All five require zero skips, failures and errors.
+The evidence suite rejects 37 changed receipts or artifacts, including two
+consistently rehashed substitutions of directly loaded leaf images. Production
+entropy and deterministic controller-fixture entropy remain separate evidence
+domains; the latter cannot establish OS behavior.
+
+Its mandatory original Rust recipe checks formatting with the selected
+toolchain, compiles the unchanged original owners with locked dependencies,
+replays 122 captured controller rows, and executes 110 original loader
+processes. The four completed subprocess checks retain their own streams and
+exact source/binary identities. Historical comparison receipts in
+[authority_original_rust_comparison.json](authority_original_rust_comparison.json)
+cannot substitute for that new execution or increase native coverage counts.
+
 The line-verification component compares **4,346 complete responses** with the
 unchanged original `verify_line_id`, relocation and strict/clamped index
 functions. It preserves the complete diagnostic text, two context lines on
@@ -584,6 +637,35 @@ The [ABI](line_verify_abi.json) and
 [original comparison](line_verify_original_rust_comparison.json) describe this
 internal owner. JSON parsing, file effects, edit locking and the public edit
 handlers remain separate.
+
+The batch-planning component has **3,339 direct requests**: **3,174 original
+reference rows** and 165 adapter, frame, child-contract and capacity controls.
+Those requests enter the HIA controller 53,301 times, the native endpoint owner
+40,630 times and the native verification owner 9,332 times. They preserve the
+original preflight and operation-error order, null/end/insert behavior, both
+endpoints and duplicated diagnostic text. A separate fixed four-image ELF
+executes 21 requests, including 20 original-compatible responses and one
+declared adapter-capacity refusal; it has no Python semantic dispatcher.
+
+The maximum cases use all 50 operations against a full 5 MiB line. One hundred
+plain diagnostics produce **524,298,089 bytes**; one hundred stale-ID diagnostics
+produce **524,301,763 bytes**. Pure repeated endpoint verification is memoized,
+while every original error copy remains in the output. The full corpus retains
+**1,066,976,665 output bytes** as complete compressed streams and compares every
+byte with the unchanged original Rust blocks. The named image-only
+`batch-plan.v1` capacity profile supports these tests without changing the
+standard or view transport limits. The static four-image fixture has its own
+smaller 2 MiB result boundary; it does not claim that large-result coverage.
+
+Qualification requires both native suites, 44 evidence-mutation refusals,
+source-checked imported HIA functions, actual compiler receipts and complete
+ELF/image-table binding. The independent recipe performs a fresh locked Cargo
+build and then streams all 3,174 rows through that newly built binary. Its
+build and replay each keep the 180-second budget. The
+[ABI](batch_plan_abi.md) and [captured original comparison](batch_plan_original_rust_comparison.json)
+describe the internal boundary. Public JSON/MCP admission, path authorization,
+conflict checks, edit application, history/cache effects and production routing
+remain separate owners.
 
 The editable-content component compares **8,749 complete ordered responses**
 with the unchanged original `EditableContent` methods. This includes mixed

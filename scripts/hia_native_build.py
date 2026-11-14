@@ -27,6 +27,7 @@ WORKSPACE_BYTES = 32 << 20
 BUFFER_PROFILES = {
     "standard": (INPUT_BYTES, OUTPUT_BYTES, WORKSPACE_BYTES),
     "view-render.v1": (16 << 20, 16 << 20, 256 << 20),
+    "batch-plan.v1": (512 << 20, 1024 << 20, 1152 << 20),
 }
 HERE = Path(__file__).resolve().parents[1]
 
@@ -183,6 +184,8 @@ class NativeBuild:
             raise ValueError("unknown native transport")
         if buffer_profile not in BUFFER_PROFILES:
             raise ValueError("unknown native buffer profile")
+        if buffer_profile == "batch-plan.v1" and standalone is not None:
+            raise ValueError("batch-plan profile is an image-only capacity declaration")
         if buffer_profile != "standard" and standalone == "stdio":
             raise ValueError("view-render profile has no stdio transport")
         input_bytes, output_bytes, workspace_bytes = BUFFER_PROFILES[buffer_profile]

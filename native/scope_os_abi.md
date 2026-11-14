@@ -122,21 +122,44 @@ records. Ordinary random bytes are not expected to match. Two real-random
 cross-owner opens instead authenticate plaintext from records sealed by the
 opposite owner.
 
-The original standard library additionally requests one 32-byte HashSet
-`RandomState` seed in each process. All 31 calls remain in raw evidence. Before
-fault injection or SystemEntropy counting, the supervisor identifies the
-owned child's actual libc/vDSO ELF symbol, checks size 32 and flags zero, and
-lets that auxiliary call reach the kernel unchanged. Every receipt retains
-its module hash, symbol bounds, instruction offset and exact position among
-SystemEntropy events. The qualifier requires all these records; output
-mismatches never select which calls are excluded.
+The original standard-library HashSet `RandomState` initialization additionally
+produces exactly one observed seed syscall per process. There are two admitted
+Linux/libc paths: a 16-byte `GRND_INSECURE` request (flags 4), and a 32-byte
+flags-zero refill through the public vDSO/libc random interface. These describe
+observed syscall profiles, not a mapping from Rust versions: the exact same
+Rust 1.95 executable exhibited the first profile on the Ubuntu CI runner and
+the second on ai395. Freshly compiled Rust 1.99.1 also exhibited the second.
+
+All 31 calls remain in each complete replay. Before fault injection or
+SystemEntropy counting, the supervisor checks the owned child's actual
+libc/vDSO ELF symbol and the exact length/flags pair, and lets the auxiliary
+call reach the kernel unchanged. Flags 4 can never enter a SystemEntropy
+controlled completion. Duplicate seed calls, unknown profiles,
+invalid symbol ownership and a mixture of seed profiles within one replay are
+refused. Each receipt retains its module hash, symbol bounds, instruction
+offset and exact position among SystemEntropy events. The separate 8-byte,
+flags-one process-runtime initialization call is recorded once, before any
+transport input and before any other random syscall. Every original getrandom
+notification must be accounted for: 236 SystemEntropy calls, 31 standard-library
+seed calls and 31 process-startup calls, for 298 per complete original replay.
+Unknown flags, late or duplicate startup requests and omitted notifications
+are refused. Output mismatches never select which owner calls are excluded.
 
 Six predefined native-only cases cover impossible errno, oversized completion
 and malformed/broken transport. They are not original Rust comparisons. The
 packer suite runs 103 actual calls: two valid packs, 99 admission refusals and
 two capacity refusals. It also rejects 37 consistently rehashed ELF mutations
-and verifies seven exact relocated SHA function bodies. Six evidence-control
-groups reject 33 corrupted receipts, adding zero native or Rust calls.
+and verifies seven exact relocated SHA function bodies. Nine evidence-control
+groups accept five complete actual reports, reject 49 corrupted receipts and
+25 classifier inputs, and check nine valid classifications. These controls
+add zero native or Rust calls.
+
+The seed-profile repair was replayed against the exact failed-run native ELF
+and Rust 1.95 binary in GitHub Actions run `43613933669`. All native and original
+cases passed under the unchanged 180-second suite limit. Independent ai395
+replays passed the complete native domain and both Rust 1.95 and freshly built
+Rust 1.99.1 originals. Native HIA sources, all eight images, the packer and ELF
+are unchanged. This component repair is not an aggregate runtime qualification.
 
 Initial local cleanup `EPERM`, early classifier failures, the first test
 sentinel mismatch and an archival-path failure remain separately retained.
