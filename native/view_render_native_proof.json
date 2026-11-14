@@ -1,8 +1,8 @@
 {
   "corpus": {
     "cases": 3125,
-    "image_sha256": "d0d133703dad92b8bc3f51bd9fc38f8496fdda471e6c50de3b70ab7abc892b00",
-    "manifest_sha256": "055ec610cbcbe372d3f297258201c68f38d185c4e249e3607a1d3d3ca465c45a",
+    "image_sha256": "089f3b64ad7df1e0cec496fa5f0b2f9be34b96c83aacb1ad2e314295526e49ee",
+    "manifest_sha256": "ece6774a98545ef196eccf9a650e77de0513c366cf3cf3270630d18458198ab6",
     "native_output_bytes": 139202296,
     "native_output_file": "native-output.txt.gz",
     "native_output_sha256": "3d432e0350eb351df875bcc8fa7d195fbefe2e64460a117a6e3c92c601417c17",
@@ -11,12 +11,47 @@
     "requests_file": "requests.hex.gz",
     "requests_sha256": "25ee9795db24913b4d2bb717711f613242b51b629203a1588e79bc7dba71a8db",
     "schema": "hepta.runtime.view-render-native-corpus.v1",
-    "source_sha256": "f8f2a8cf88527bbe2282d384f09069d4686da83a6f1f8d4b368ffd8670211237"
+    "source_sha256": "fe21cd3aa04cf81fd8a59480dcbf614de7ffddd8c9f25157007c2869bc7f0968"
   },
   "legacy_runtime_removal_allowed": false,
+  "measurement_reuse": {
+    "baseline_diagnostic_sha256": "9d88936262faf63a8e1992f9b504a5eafb90afa1137bc5c9922c6a8f8c291856",
+    "baseline_instrumented": true,
+    "buffer_profiles_changed": false,
+    "changed_hia_function": "f3 (publish)",
+    "ci_result_claimed_for_candidate": false,
+    "full_cold_executed_for_candidate": false,
+    "internal_bit": 1024,
+    "internal_bit_exported": false,
+    "loader_changed": false,
+    "original_test_changed": false,
+    "performance_limit": "Separate local observations with different timing instrumentation; no CI speedup or future deadline guarantee is asserted.",
+    "previous_native_proof_sha256": "73b80aa629043b7f232b0a1d1ea45f71b6e9ef82bc07d8420cd38d7e8e787cbc",
+    "previous_source_sha256": "f8f2a8cf88527bbe2282d384f09069d4686da83a6f1f8d4b368ffd8670211237",
+    "same_machine_baseline_diagnostic_seconds": 164.2714504780015,
+    "scratch_review": "Body measurement changes only output length, separator count and temporary number digits; append_hints does not consume separator count or those digits. The final rendering resets output state, and cache spans are restored before normalization.",
+    "semantics": "Reuse the first exact body length only while its kind and range remain unchanged. A body exceeding 8 MiB changes to kind 7 and receives its own measurement. Early-error and prepare bodies retain their previous measurement path. Final capacity admission still precedes every output write.",
+    "source_change": {
+      "authoring_patch_sha256": "fefc7fb02b4a571de73077825e08fca833fdcd20079642668c02db75be25134a",
+      "changed_functions": [
+        "f3"
+      ],
+      "composition_only_source_digest_changed": true,
+      "function_semantics": "f3 is publish; all 60 remaining functions remain byte-for-byte equal as parsed HIA objects",
+      "imported_functions_unchanged": 49,
+      "original_full_suite_counts_unchanged": true,
+      "private_measurement_bit": 1024,
+      "published_header_uses_only_original_masks": true,
+      "status": "PASS"
+    },
+    "suite_limit_seconds": 180,
+    "suite_wall_seconds": 145.4789787530026,
+    "unchanged_hia_functions": 60,
+    "unchanged_imported_functions": 49
+  },
   "native": {
     "complete_byte_bounds": true,
-    "composition_sha256": "ca7cd7c56c474f29a497aa8eb1eff5e1d28839898846cec9db6e4a2f1ae0aefe",
+    "composition_sha256": "af6e50cef5ca6705012197a79660aa5cb00217484dcf612c467dc3eaa1c57d5f",
     "counts": {
       "body_budget": 3,
       "cache_after_oversize": 1,
@@ -47,12 +82,12 @@
       "workspace_refusal_is_not_semantic_none": 1
     },
     "functions": 61,
-    "image_sha256": "d0d133703dad92b8bc3f51bd9fc38f8496fdda471e6c50de3b70ab7abc892b00",
-    "manifest_sha256": "055ec610cbcbe372d3f297258201c68f38d185c4e249e3607a1d3d3ca465c45a",
+    "image_sha256": "089f3b64ad7df1e0cec496fa5f0b2f9be34b96c83aacb1ad2e314295526e49ee",
+    "manifest_sha256": "ece6774a98545ef196eccf9a650e77de0513c366cf3cf3270630d18458198ab6",
     "oracle_sha256": "36efacf6a1d418c10251afed788f52b20127c62fa39a3f2534882461cce8d585",
     "scope": "typed view range/render/cache plan only",
-    "seconds": 158.19016217600438,
-    "source_sha256": "f8f2a8cf88527bbe2282d384f09069d4686da83a6f1f8d4b368ffd8670211237",
+    "seconds": 145.31540900000255,
+    "source_sha256": "fe21cd3aa04cf81fd8a59480dcbf614de7ffddd8c9f25157007c2869bc7f0968",
     "status": "PASS",
     "test_sha256": "5bd8ab04d2f70162a4f8978eb903786c1c123852f8016f035eaa69c284a58fff",
     "whole_view_migrated": false
@@ -99,8 +134,7 @@
       }
     }
   },
-  "schema": "hepta.runtime.view-render-native-proof.v1",
-  "source_only_review": {
+  "previous_source_only_review": {
     "agent": "/root/hia_capability",
     "executed_additional_tests": false,
     "findings": "No concrete buffer/state blocker found. Plan scratch is overwritten only after all values are captured as publish arguments. Output capacity is checked before publication; cache source spans are restored before normalized payload emission. The profile is explicit, the standard profile is unchanged and wide stdio is refused.",
@@ -108,6 +142,28 @@
     "scope": "range/plan/publish buffer custody; explicit 16/16/256 MiB transport profile",
     "source_sha256": "f8f2a8cf88527bbe2282d384f09069d4686da83a6f1f8d4b368ffd8670211237"
   },
+  "retained_original_comparison": {
+    "all_corpus_fields_equal": true,
+    "baseline_image_sha256": "d0d133703dad92b8bc3f51bd9fc38f8496fdda471e6c50de3b70ab7abc892b00",
+    "baseline_source_sha256": "f8f2a8cf88527bbe2282d384f09069d4686da83a6f1f8d4b368ffd8670211237",
+    "candidate_image_sha256": "089f3b64ad7df1e0cec496fa5f0b2f9be34b96c83aacb1ad2e314295526e49ee",
+    "candidate_source_sha256": "fe21cd3aa04cf81fd8a59480dcbf614de7ffddd8c9f25157007c2869bc7f0968",
+    "counts_equal": true,
+    "derivation": "The candidate reran the complete native corpus. Both decompressed input and output bytes match the retained actual Rust comparison; the original Rust process and source identity remain historical, and no new Rust compilation or execution is claimed.",
+    "full_domain": {
+      "cases": 3125,
+      "native_output_bytes": 139202296,
+      "native_output_sha256": "3d432e0350eb351df875bcc8fa7d195fbefe2e64460a117a6e3c92c601417c17",
+      "oracle_sha256": "36efacf6a1d418c10251afed788f52b20127c62fa39a3f2534882461cce8d585",
+      "requests_bytes": 237318931,
+      "requests_sha256": "25ee9795db24913b4d2bb717711f613242b51b629203a1588e79bc7dba71a8db"
+    },
+    "new_rust_execution": false,
+    "proof_path": "native/view_original_rust_comparison.json",
+    "retained_rust_comparison_sha256": "50bdc58be10868b31db6493fd9e0370b9ba854dde91e8d60842b50f36661b746",
+    "retained_rust_job": "1a1da2f383e-392-1554"
+  },
+  "schema": "hepta.runtime.view-render-native-proof.v1",
   "transport": {
     "builder_sha256": "f19a7a274a16fb610043057c8abef791628e1ad2dee5a6aa1f0a46533c981ba4",
     "counts": {
@@ -119,12 +175,12 @@
       "standalone_refusal": 3,
       "unsupported_transport_before_build": 2
     },
-    "elf_sha256": "0765ac45d9df993f6ebf1868a766b0969f666094fc4229fa3b2689ee01b8bd18",
-    "image_sha256": "d0d133703dad92b8bc3f51bd9fc38f8496fdda471e6c50de3b70ab7abc892b00",
+    "elf_sha256": "6de6d2d3d0d20fd2b70f9a13dc5bb40ae71b031a0de0a9105ebc12d08173a965",
+    "image_sha256": "089f3b64ad7df1e0cec496fa5f0b2f9be34b96c83aacb1ad2e314295526e49ee",
     "loader_sha256": "9d76458947570ff9393efecad06f853027703624157dcc8b06953cfce60b2feb",
-    "manifest_sha256": "055ec610cbcbe372d3f297258201c68f38d185c4e249e3607a1d3d3ca465c45a",
+    "manifest_sha256": "ece6774a98545ef196eccf9a650e77de0513c366cf3cf3270630d18458198ab6",
     "packer_sha256": "fc0911e275e5af7751b73be89c10a60df5ed4d6b7b2826b5e2f84d27bdc1ba52",
-    "source_sha256": "f8f2a8cf88527bbe2282d384f09069d4686da83a6f1f8d4b368ffd8670211237",
+    "source_sha256": "fe21cd3aa04cf81fd8a59480dcbf614de7ffddd8c9f25157007c2869bc7f0968",
     "status": "PASS",
     "test_sha256": "0a3ac78fa7b19750d1c7df8ffb6f0157a9c3d8e6232dfbb6a7ac54c40e2a58bd"
   },

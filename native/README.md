@@ -32,7 +32,7 @@ continue to identify the language and are not filename extensions.
 
 ## Native components
 
-Qualification covers 26 production HIA sources through 21 executable components
+Qualification covers 28 production HIA sources through 23 executable components
 and six HIA packers; the two scope profiles share their HIA scope owner.
 Test-only HIA fixtures are recorded separately from
 the production source inventory.
@@ -43,10 +43,12 @@ the production source inventory.
 | [runtime_protocol.hepta](runtime_protocol.hepta) | Strict JSON, JSON-RPC IDs/errors, protocol negotiation, initialization lifecycle, native tool responses and line hashing |
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
+| [line_verify.hepta](line_verify.hepta) | Original stale line-ID verification, exact fresh context and nearest-three relocation hints, plus complete strict/clamped index results |
 | [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
 | [editable_content.hepta](editable_content.hepta) | Original ordered text state, per-line endings, insertion, normalized-byte replacement and trailing-newline preservation |
 | [view_render.hepta](view_render.hepta) | Original view range resolution, independent read snapshots, whole/ranged rendering, cache plan and result-size gate |
 | [view_filter_packer.hepta](view_filter_packer.hepta) | Static filter for the explicit view-render capacity profile, with exact compiled-image binding |
+| [view_cache.hepta](view_cache.hepta) | Persistent serial cache state, lifecycle, per-value limit, invalidation, poisoned-lock behavior and native view-plan application |
 | [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
 | [operation_kdf.hepta](operation_kdf.hepta) | Internal HMAC/HKDF-SHA256, original token-key derivation, private binding bytes and per-record key derivation with cleared workspace |
 | [operation_aead.hepta](operation_aead.hepta) | Internal ChaCha20-Poly1305, full-tag authentication before plaintext output, exact refusal/capacity behavior and declared-workspace clearing |
@@ -258,7 +260,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all sixteen independent Rust comparisons succeed. The Python reference domain
+after all eighteen independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -569,6 +571,20 @@ See [scope_os_original_rust_comparison.json](scope_os_original_rust_comparison.j
 The paired comparison executes a fresh 37-process native side again; those
 additional 238 responses are reported separately from the native phase.
 
+The line-verification component compares **4,346 complete responses** with the
+unchanged original `verify_line_id`, relocation and strict/clamped index
+functions. It preserves the complete diagnostic text, two context lines on
+each side, nearest-three ordering with stable ties, full LP64 totals and
+`i64::MIN` behavior. Its compact typed line-slice frame covers a complete
+5 MiB file with **5,242,880 empty lines** and a full-size UTF-8 line. The actual
+original Rust replay matched all **12,105,180 captured output bytes**. Another
+92 malformed packets, four capacity refusals and one exact-capacity acceptance
+bring the direct native count to **4,443**; four static ELF calls are separate.
+The [ABI](line_verify_abi.json) and
+[original comparison](line_verify_original_rust_comparison.json) describe this
+internal owner. JSON parsing, file effects, edit locking and the public edit
+handlers remain separate.
+
 The editable-content component compares **8,749 complete ordered responses**
 with the unchanged original `EditableContent` methods. This includes mixed
 line endings, UTF-8 byte boundaries, full-u64 method errors, an empty final
@@ -596,6 +612,21 @@ comparisons are separate domains. See [view_render_abi.md](view_render_abi.md)
 and [view_original_rust_comparison.json](view_original_rust_comparison.json).
 This component returns a cache plan; actual cache storage, file effects,
 directory/search routing and a complete public view response remain separate.
+
+The cache component implements the original serial `ViewCache` state machine,
+including the **1 MiB per-value** limit, missing versus empty values, selective
+invalidation, poisoned-lock results, write/create normalization and cache plans
+produced by the actual view image. It compares **13,907 captured rows** with the
+unchanged original Rust owners: 13,875 state operations, 22 lifecycle operations,
+two real mutex-poison fixtures and eight view-plan adapters. The native domain
+executes **13,873 direct cache-image calls**, **66 persistent ELF requests** and
+**13 calls to the view image**. The 32 malformed, capacity and state refusals
+are separate from the original comparison rows. An exhausted native workspace
+refuses without mutating state; it does not introduce an eviction policy or an
+original total-cache limit. Dynamic allocation, concurrent `Arc`/`Mutex`
+ownership, lock-key canonicalization and the public file operations still need
+their own integration. See [view_cache_abi.md](view_cache_abi.md) and the
+[original comparison](view_cache_original_rust_comparison.json).
 
 The policy component has passed **11,655 valid native cases** covering first-error
 order, permission/protection precedence, environment checks, executable denial,

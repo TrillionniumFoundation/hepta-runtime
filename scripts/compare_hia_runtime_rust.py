@@ -21,7 +21,8 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
-                                       editable_content_evidence, view_render_evidence,
+                                       editable_content_evidence, view_render_evidence, view_cache_evidence,
+                                       line_verify_evidence,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        operation_record_evidence, operation_scope_evidence,
@@ -38,6 +39,7 @@ from hia_native_entropy_qualification import (FOLDER as ENTROPY_FOLDER, KERNEL_R
 from hia_native_scope_qualification import FOLDER as SCOPE_FOLDER, ORACLE_COUNTS as SCOPE_ORACLE_COUNTS
 from hia_native_editable_qualification import FOLDER as EDITABLE_FOLDER, CASES as EDITABLE_CASES
 from hia_native_view_qualification import FOLDER as VIEW_FOLDER, CASES as VIEW_CASES, stream_identity as view_stream_identity
+from hia_native_view_cache_qualification import compare_original as compare_cache_original
 from hia_native_scope_os_qualification import (FOLDER as SCOPE_OS_FOLDER, PAIRED_RECEIPT as SCOPE_OS_PAIRED_RECEIPT,
                                               exact_profile as scope_os_profile, paired_evidence as scope_os_paired_evidence)
 
@@ -111,8 +113,12 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required private scope lifetime/composition/reference-domain evidence differs")
     if report.get("editable_content_evidence") != editable_content_evidence(output, report):
         raise ValueError("required editable state/byte-preservation/static-image evidence differs")
+    if report.get("line_verify_evidence") != line_verify_evidence(output, report):
+        raise ValueError("required line-ID verification/diagnostic/index evidence differs")
     if report.get("view_render_evidence") != view_render_evidence(output, report):
         raise ValueError("required complete view byte-domain/cache-plan/transport evidence differs")
+    if report.get("view_cache_evidence") != view_cache_evidence(output, report):
+        raise ValueError("required cache state/lifecycle/view-plan/transport evidence differs")
     if report.get("operation_scope_os_evidence") != operation_scope_os_evidence(output, report):
         raise ValueError("required actual OS entropy/scope/custody evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
@@ -830,6 +836,44 @@ def compare_operation_scope_os(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_view_cache(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_cache_original(ROOT, output, report, rustc, completed_test_summary,
+                                  record_check, qualification_env())
+
+
+def compare_line_verify(output: Path, report: dict, rustc: Path) -> dict:
+    evidence = line_verify_evidence(output, report)
+    if evidence != report.get("line_verify_evidence"):
+        raise ValueError("line verification native evidence changed before original replay")
+    folder = output / "line-verify-rust-oracle"
+    source = ROOT / "tests/hia_native/oracle_line_verify.rs"
+    binary = folder / "oracle"
+    rust_compile(output, report, rustc, key="line-verify-rust", source=source, binary=binary,
+                 extra=("-C", "overflow-checks=off"))
+    binary_hash = sha(binary)
+    with gzip.open(folder / "requests.hex.gz", "rb") as handle:
+        wire = handle.read(evidence["input_bytes"] + 1)
+    with gzip.open(folder / "native-output.txt.gz", "rb") as handle:
+        expected = handle.read(evidence["native_output_bytes"] + 1)
+    if ((len(wire), digest(wire)) != (evidence["input_bytes"], evidence["input_sha256"])
+            or (len(expected), digest(expected)) != (evidence["native_output_bytes"], evidence["native_output_sha256"])):
+        raise ValueError("line verification original-domain corpus changed before replay")
+    row = record_check(output, report, name="line-verify-rust-compare", command=[str(binary)],
+                       input_bytes=wire, timeout=60)
+    if (row.stdout != expected or row.stderr or sha(binary) != binary_hash
+            or line_verify_evidence(output, report) != evidence):
+        raise ValueError("complete original line verification/diagnostic/index bytes differ")
+    result = {"status": "PASS", "rust_oracle_cases": evidence["captured_native_cases"],
+              "native_cases_added_by_replay": 0, "input_sha256": digest(wire),
+              "native_output_sha256": digest(expected), "rust_output_sha256": digest(row.stdout),
+              "oracle_source_sha256": sha(source), "oracle_executable_sha256": binary_hash,
+              "original_source_sha256": evidence["original_source_sha256"],
+              "scope": evidence["scope"], "complete_original_tool_parity": False,
+              "production_activated": False}
+    (folder / "rust-comparison.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
 def compare_editable_content(output: Path, report: dict, rustc: Path) -> dict:
     evidence = editable_content_evidence(output, report)
     if evidence != report.get("editable_content_evidence"):
@@ -913,7 +957,9 @@ def compare_view_render(output: Path, report: dict, rustc: Path) -> dict:
 
 
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
+           "line_verify": compare_line_verify,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
+           "view_cache": compare_view_cache,
            "operation_scope_os": compare_operation_scope_os,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,

@@ -27,6 +27,9 @@ from hia_native_scope_qualification import (COUNTS as SCOPE_COUNTS, SPECS as SCO
                                            test_coverage as scope_test_coverage)
 from hia_native_editable_qualification import (COUNTS as EDITABLE_COUNTS, exact_counts as editable_counts,
                                               exact_filter_image as editable_filter_image)
+from hia_native_line_verify_qualification import (COUNTS as LINE_VERIFY_COUNTS,
+                                                 exact_counts as line_verify_counts,
+                                                 exact_filter_image as line_verify_filter_image)
 from hia_native_view_qualification import (NATIVE_COUNTS as VIEW_COUNTS, TRANSPORT_COUNTS as VIEW_TRANSPORT_COUNTS,
                                           exact_counts as view_counts, exact_filter_image as view_filter_image,
                                           stream_identity as view_stream_identity)
@@ -58,6 +61,7 @@ class QualificationReportingTests(unittest.TestCase):
 
     def test_editable_and_view_capture_domains_cannot_be_shortened_or_boolean(self):
         for expected, check in ((EDITABLE_COUNTS, editable_counts),
+                                (LINE_VERIFY_COUNTS, line_verify_counts),
                                 (VIEW_COUNTS, lambda value: view_counts(value, VIEW_COUNTS)),
                                 (VIEW_TRANSPORT_COUNTS, lambda value: view_counts(value, VIEW_TRANSPORT_COUNTS))):
             check(dict(expected))
@@ -77,7 +81,7 @@ class QualificationReportingTests(unittest.TestCase):
             prefix[offset:offset + 8] = (len(prefix) + len(image)).to_bytes(8, "little")
         prefix[338:342] = (147).to_bytes(4, "little")
         candidate = prefix + image
-        for check in (editable_filter_image, view_filter_image):
+        for check in (editable_filter_image, view_filter_image, line_verify_filter_image):
             with self.assertRaisesRegex(ValueError, "transport|filter"):
                 check(candidate, image)
             with self.assertRaisesRegex(ValueError, "exact admitted native image"):

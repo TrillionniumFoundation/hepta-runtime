@@ -204,6 +204,15 @@ are appended only after successful execution, as in the original server.
 The tests include an exact-8-MiB ranged body whose appended hints take the
 final text above 8 MiB; this is preserved rather than silently trimmed.
 
+The publication path retains the first exact body measurement while the body
+kind and range remain unchanged. It then measures only the appended hints
+before admitting the complete output capacity. If the first body exceeds
+8 MiB, its kind changes to the original oversized-result error and that new
+body is measured separately. Prepare mode, early errors, cache actions and the
+final render-after-capacity-check order remain unchanged. This removes a
+repeated traversal of identical body bytes; it adds no output truncation or
+new admission rule.
+
 ## Required caller sequence for cache effects
 
 1. Keep the first snapshot, actual body, typed endpoints and previous cache
@@ -245,8 +254,11 @@ buffer controls, a 32-MiB workspace refusal distinct from Myers `None`, and
 three real static-ELF cases. A separate transport suite passed six HIA VM /
 native / independent-reference samples, explicit profile admission controls,
 exact fixed transport-prefix and embedded-image binding, and actual output-IO
-failure. Full corpus runtime was about 158.19 seconds on this local execution;
-this is a component measurement, not a cross-runner performance claim.
+failure. The current measurement-reuse source completed the unchanged full
+suite in 145.32 seconds (145.48 seconds including process startup and exit),
+under the existing 180-second suite limit. The loader, all 3,125 corpus rows,
+assertions and named buffer profiles were unchanged. These local observations
+do not establish a CI speedup or a future timing guarantee.
 
 `oracle_view_render.rs` contains the unchanged original function bodies and
 the original Apache-2.0 notices. The test recreates it from the pinned original
@@ -264,11 +276,16 @@ publication. Input source and compressed corpus identities were checked
 before and after. Detailed evidence is retained in
 `view_original_rust_comparison.json` and `view_render_native_proof.json`.
 
+The current native source reran the same full corpus and reproduced both
+complete decompressed hashes exactly. The original Rust process receipt is
+retained unchanged and is bound through those matching bytes; this
+optimization does not claim another Rust compilation or execution.
+
 | Artifact | SHA-256 |
 | --- | --- |
-| HIA source | `f8f2a8cf88527bbe2282d384f09069d4686da83a6f1f8d4b368ffd8670211237` |
-| Actual HIA image | `d0d133703dad92b8bc3f51bd9fc38f8496fdda471e6c50de3b70ab7abc892b00` |
-| Static ELF | `0765ac45d9df993f6ebf1868a766b0969f666094fc4229fa3b2689ee01b8bd18` |
+| HIA source | `fe21cd3aa04cf81fd8a59480dcbf614de7ffddd8c9f25157007c2869bc7f0968` |
+| Actual HIA image | `089f3b64ad7df1e0cec496fa5f0b2f9be34b96c83aacb1ad2e314295526e49ee` |
+| Static ELF | `6de6d2d3d0d20fd2b70f9a13dc5bb40ae71b031a0de0a9105ebc12d08173a965` |
 | Rust source | `36efacf6a1d418c10251afed788f52b20127c62fa39a3f2534882461cce8d585` |
 | Decompressed requests | `25ee9795db24913b4d2bb717711f613242b51b629203a1588e79bc7dba71a8db` |
 | Native and Rust output | `3d432e0350eb351df875bcc8fa7d195fbefe2e64460a117a6e3c92c601417c17` |

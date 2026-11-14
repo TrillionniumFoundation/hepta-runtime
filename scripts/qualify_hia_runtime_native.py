@@ -1,7 +1,7 @@
 """Build and test the declared HIA runtime profile from pinned source bytes.
 
 NATIVE_COMPONENTS_PASS records the fresh full compiler cold gate, native tests
-and their retained Python comparisons. Aggregate PASS also requires all sixteen
+and their retained Python comparisons. Aggregate PASS also requires all declared
 independent Rust comparisons. Neither phase qualifies the remaining 125
 production tool owners, production adoption, or removal of the old runtime.
 """
@@ -34,8 +34,13 @@ from hia_native_scope_qualification import (CORPUS_FILES as SCOPE_CORPUS_FILES,
                                            FOLDER as SCOPE_FOLDER, scope_evidence as checked_scope_evidence)
 from hia_native_editable_qualification import (CORPUS_FILES as EDITABLE_CORPUS_FILES,
                                               FOLDER as EDITABLE_FOLDER, editable_evidence as checked_editable_evidence)
+from hia_native_line_verify_qualification import (CORPUS_FILES as LINE_VERIFY_CORPUS_FILES,
+                                                 FOLDER as LINE_VERIFY_FOLDER,
+                                                 line_verify_evidence as checked_line_verify_evidence)
 from hia_native_view_qualification import (CORPUS_FILES as VIEW_CORPUS_FILES,
                                           FOLDER as VIEW_FOLDER, view_evidence as checked_view_evidence)
+from hia_native_view_cache_qualification import (FOLDER as CACHE_FOLDER,
+                                                qualification_evidence as checked_view_cache_evidence)
 from hia_native_scope_os_qualification import (FOLDER as SCOPE_OS_FOLDER, SUITES as SCOPE_OS_SUITES,
                                               exact_profile as scope_os_profile,
                                               write_corpus as capture_scope_os_corpus,
@@ -52,6 +57,8 @@ MODULES = (
      "standalone": "filter", "manifest_env": "HIA_TEXT_MANIFEST", "test": "test_text_budget.py"},
     {"key": "line_endpoint", "name": "line-endpoint", "source": "native/line_endpoint.hepta",
      "standalone": None, "manifest_env": "HIA_ENDPOINT_MANIFEST", "test": "test_line_endpoint.py"},
+    {"key": "line_verify", "name": "line-verify", "source": "native/line_verify.hepta",
+     "standalone": "filter", "manifest_env": "HIA_LINE_VERIFY_MANIFEST", "test": "test_line_verify.py"},
     {"key": "delta", "name": "delta", "source": "native/delta.hepta",
      "standalone": "filter", "manifest_env": "HIA_DELTA_MANIFEST", "test": "test_delta.py"},
     {"key": "editable_content", "name": "editable-content", "source": "native/editable_content.hepta",
@@ -61,6 +68,9 @@ MODULES = (
      "companion_sources": ("native/view_filter_packer.hepta",),
      "manifest_env": "HIA_VIEW_MANIFEST", "test": "test_view_render.py",
      "additional_tests": ("test_view_transport.py",)},
+    {"key": "view_cache", "name": "view-cache", "source": "native/view_cache.hepta",
+     "standalone": None, "manifest_env": "HIA_CACHE_MANIFEST", "test": "test_view_cache.py",
+     "additional_tests": ("test_view_cache_evidence.py",)},
     {"key": "binary_codec", "name": "binary-codec", "source": "native/binary_codec.hepta",
      "standalone": "filter", "manifest_env": "HIA_CODEC_MANIFEST", "test": "test_binary_codec.py"},
     {"key": "operation_kdf", "name": "operation-kdf", "source": "native/operation_kdf.hepta",
@@ -149,6 +159,8 @@ def sources() -> dict:
         "hia_native_entropy_build.py", "hia_native_entropy_qualification.py",
         "hia_native_scope_build.py", "hia_native_scope_qualification.py",
         "hia_native_editable_qualification.py", "hia_native_view_qualification.py",
+        "hia_native_view_cache_build.py", "hia_native_view_cache_qualification.py",
+        "hia_native_line_verify_qualification.py",
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
@@ -352,8 +364,16 @@ def editable_content_evidence(output: Path, report: dict) -> dict:
     return checked_editable_evidence(ROOT, output, report, completed_test_summary)
 
 
+def line_verify_evidence(output: Path, report: dict) -> dict:
+    return checked_line_verify_evidence(ROOT, output, report, completed_test_summary)
+
+
 def view_render_evidence(output: Path, report: dict) -> dict:
     return checked_view_evidence(ROOT, output, report, completed_test_summary)
+
+
+def view_cache_evidence(output: Path, report: dict) -> dict:
+    return checked_view_cache_evidence(ROOT, output, report, completed_test_summary)
 
 
 def operation_scope_os_evidence(output: Path, report: dict) -> dict:
@@ -1439,7 +1459,10 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_ENDPOINT_CORPUS_DIR": str(output / "endpoint-rust-oracle"),
             "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
             "HIA_EDITABLE_CORPUS_DIR": str(output / EDITABLE_FOLDER),
+            "HIA_LINE_VERIFY_CORPUS_DIR": str(output / LINE_VERIFY_FOLDER),
             "HIA_VIEW_CORPUS_DIR": str(output / VIEW_FOLDER),
+            "HIA_CACHE_CORPUS_DIR": str(output / CACHE_FOLDER),
+            "HIA_CACHE_QUALIFICATION_OUTPUT": str(output),
             "HIA_CODEC_CORPUS_DIR": str(output / "codec-rust-oracle"),
             "HIA_KDF_CORPUS_DIR": str(output / "operation-kdf-rust-oracle"),
             "HIA_AEAD_CORPUS_DIR": str(output / "operation-aead-rust-oracle"),
@@ -1504,6 +1527,11 @@ def run(output: Path, hepta: Path) -> dict:
         report["nonce_composition"] = {"manifest": str(nonce_fixture.relative_to(output)),
                                         "sha256": sha(nonce_fixture), "builder": "composition_fixture"}
         env["HIA_NONCE_COMPOSITION_MANIFEST"] = str(nonce_fixture)
+        from hia_native_view_cache_build import build_cache
+        cache_fixture = build_cache(hepta, output / "build")
+        report["cache_composition"] = {"manifest": str(cache_fixture.relative_to(output)),
+                                       "sha256": sha(cache_fixture), "builder": "composition_fixture"}
+        env["HIA_CACHE_ELF_MANIFEST"] = str(cache_fixture)
         tests = tuple(dict.fromkeys(name for item in MODULES
                                     for name in (item["test"], *item.get("additional_tests", ())))) + EXTRA_TESTS
         for name in tests:
@@ -1522,7 +1550,9 @@ def run(output: Path, hepta: Path) -> dict:
         report["system_entropy_evidence"] = entropy_evidence(output, report)
         report["operation_scope_evidence"] = operation_scope_evidence(output, report)
         report["editable_content_evidence"] = editable_content_evidence(output, report)
+        report["line_verify_evidence"] = line_verify_evidence(output, report)
         report["view_render_evidence"] = view_render_evidence(output, report)
+        report["view_cache_evidence"] = view_cache_evidence(output, report)
         scope_os_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
         capture_scope_os_corpus(ROOT, output / SCOPE_OS_FOLDER, scope_os_profile(ROOT, scope_os_manifest))
         report["operation_scope_os_evidence"] = operation_scope_os_evidence(output, report)
@@ -1544,11 +1574,14 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])
         report["rust_oracle_inputs"].update({
             SCOPE_FOLDER + "/" + name: sha(output / SCOPE_FOLDER / name) for name in SCOPE_CORPUS_FILES})
-        for folder, names in ((EDITABLE_FOLDER, EDITABLE_CORPUS_FILES), (VIEW_FOLDER, VIEW_CORPUS_FILES)):
+        for folder, names in ((EDITABLE_FOLDER, EDITABLE_CORPUS_FILES), (VIEW_FOLDER, VIEW_CORPUS_FILES),
+                              (LINE_VERIFY_FOLDER, LINE_VERIFY_CORPUS_FILES)):
             report["rust_oracle_inputs"].update({folder + "/" + name: sha(output / folder / name) for name in names})
         report["rust_oracle_inputs"].update(report["operation_scope_evidence"]["composition"]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["corpus_sha256"])
         report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["composition"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report["view_cache_evidence"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report["view_cache_evidence"]["corpus_sha256"])
         report["rust_oracle_inputs"].update({
             "text-rust-oracle/" + name: sha(output / "text-rust-oracle" / name)
             for name in ("native-corpus.json", "requests.hex", "native-output.txt")})
