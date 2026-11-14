@@ -34,6 +34,8 @@ MODULES = (
      "standalone": "filter", "manifest_env": "HIA_TEXT_MANIFEST", "test": "test_text_budget.py"},
     {"key": "line_endpoint", "name": "line-endpoint", "source": "native/line_endpoint.hepta",
      "standalone": None, "manifest_env": "HIA_ENDPOINT_MANIFEST", "test": "test_line_endpoint.py"},
+    {"key": "delta", "name": "delta", "source": "native/delta.hepta",
+     "standalone": "filter", "manifest_env": "HIA_DELTA_MANIFEST", "test": "test_delta.py"},
 )
 PACKERS = {"native/filter_packer.hepta", "native/stdio_packer.hepta"}
 EXTRA_TESTS = ("test_transport.py", "test_qualification_reporting.py")
@@ -156,6 +158,7 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
             "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
             "HIA_ENDPOINT_CORPUS_DIR": str(output / "endpoint-rust-oracle"),
+            "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
         })
         for item in MODULES:
             built = builder.compile(item["name"], ROOT / item["source"], standalone=item["standalone"])
@@ -175,6 +178,9 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update({
             "endpoint-rust-oracle/" + name: sha(output / "endpoint-rust-oracle" / name)
             for name in ("native-corpus.json", "endpoint_cases.jsonl.gz")})
+        report["rust_oracle_inputs"].update({
+            "delta-rust-oracle/" + name: sha(output / "delta-rust-oracle" / name)
+            for name in ("native-corpus.json", "requests.hex", "native-output.txt")})
         builder.bootstrap()  # Revalidate the same compiler image after all tests.
         if sources() != manifest:
             raise RuntimeError("native source/test/inventory inputs changed during qualification")

@@ -23,6 +23,7 @@ RUNTIME_BASE_TREE = "98d96c88d54082637c27f1cbfae61a66d0dd81e7"
 ORIGINAL_RUNTIME_BLOBS = {
     "src/utils/line_hash.rs": "0e521656ba24869dbc05afc51d62aa4af79b5e44",
     "src/utils/truncation.rs": "a14ad26adedbff7624c67f5b89672e54fe60918e",
+    "src/mcp/fs/delta.rs": "76681c01b571536e80f5bd1b93d79053d9df8985",
     "src/mcp/runtime/config.rs": "e55d9f536c069b7612f7a7cf81e691fd2394439c",
     "src/mcp/runtime/execution.rs": "541d7bf2ee069ae082b01ac10e0b1ed215927683",
     "src/mcp/runtime/jobs.rs": "7b9ca9d1c00f31411265c1dc26a18ead79907ec9",

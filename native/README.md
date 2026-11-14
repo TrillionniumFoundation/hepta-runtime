@@ -35,13 +35,15 @@ continue to identify the language and are not filename extensions.
 | [runtime_protocol.hepta](runtime_protocol.hepta) | Strict JSON, JSON-RPC IDs/errors, protocol negotiation, initialization lifecycle, native tool responses and line hashing |
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
+| [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
 | [stdio_packer.hepta](stdio_packer.hepta) | ELF construction and persistent newline-delimited input/output transport |
 | [filter_packer.hepta](filter_packer.hepta) | ELF construction for one complete binary input/output operation |
 
 The byte ABI and all eight operations are specified in
 [runtime_bytes_abi.md](runtime_bytes_abi.md). Text behavior is specified in
 [text_budget_abi.md](text_budget_abi.md), and the typed endpoint boundary in
-[line_endpoint_abi.json](line_endpoint_abi.json). No native component falls back to
+[line_endpoint_abi.json](line_endpoint_abi.json). Delta operations, exact ordering
+and capacity rules are specified in [delta_abi.md](delta_abi.md). No native component falls back to
 a Rust or Python implementation of its calculations. Endpoint JSON number
 classification and compact display bytes remain explicit caller inputs; the
 component does not claim to replace the serde parser itself.
@@ -95,6 +97,7 @@ rust-oracle/input.bin.gz
 rust-oracle/native-output.bin.gz
 text-rust-oracle/native-corpus.json
 endpoint-rust-oracle/native-corpus.json
+delta-rust-oracle/native-corpus.json
 ```
 
 The test driver runs actual native images and the standalone ELF. It retains
@@ -102,7 +105,7 @@ test stdout/stderr, source identities, compiler receipts and exact output
 corpora. The CI workflow also compiles the original Rust function bodies and
 compares their outputs against the retained native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after native tests and becomes `PASS` only
-after all three independent Rust comparisons succeed. Timeouts retain partial
+after all four independent Rust comparisons succeed. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
 ## MCP stdio service
@@ -158,6 +161,15 @@ Rust-generated vectors, 5,224 generated reference cases, invalid UTF-8, capacity
 atomicity and an 8 MiB boundary. A separate execution of the original, included
 `src/utils/line_hash.rs` with pinned serde dependencies matched **6,155 actual
 native calls**. See [endpoint_original_rust_comparison.json](endpoint_original_rust_comparison.json).
+
+The delta component has passed **9,101 valid native cases**, including exhaustive
+short repeated-line inputs, independently checked minimum edit distances, exact
+Myers tie ordering, context merging, Unicode, CRLF and distances 499/500/501.
+The unchanged original Rust functions produced the same **2,530,734 output
+bytes**; see [delta_original_rust_comparison.json](delta_original_rust_comparison.json).
+It also passed 90 malformed-record controls, capacity and semantic-`None`
+distinction, five VM cases and three standalone ELF calls. File access and
+per-session view-cache state remain original caller owners.
 
 The protocol tests cover randomized JSON formatting and field order, strict
 Unicode, duplicate decoded keys, ID echo, invalid envelopes, initialization

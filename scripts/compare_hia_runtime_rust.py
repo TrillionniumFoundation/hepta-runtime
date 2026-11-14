@@ -21,7 +21,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import MODULES, record_check, save_report, sha, sources
-from check_hia_native_inventory import check_original_sources
+from check_hia_native_inventory import RUNTIME_BASE_COMMIT, check_original_sources
 
 
 def digest(raw: bytes) -> str:
@@ -196,7 +196,53 @@ def compare_endpoint(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
-RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text, "line_endpoint": compare_endpoint}
+def compare_delta(output: Path, report: dict, rustc: Path) -> dict:
+    folder = output / "delta-rust-oracle"
+    corpus = json.loads((folder / "native-corpus.json").read_bytes())
+    wire = (folder / "requests.hex").read_bytes()
+    expected = (folder / "native-output.txt").read_bytes()
+    source = ROOT / "tests/hia_native/oracle_delta.rs"
+    if (corpus.get("schema") != "hepta.runtime.native-corpus.v1"
+            or corpus.get("component") != "delta"
+            or corpus.get("requests_file") != "requests.hex"
+            or corpus.get("native_output_file") != "native-output.txt"):
+        raise ValueError("unknown delta corpus schema")
+    if (digest(wire), len(wire), digest(expected), len(expected)) != (
+            corpus["requests_sha256"], corpus["requests_bytes"],
+            corpus["native_output_sha256"], corpus["native_output_bytes"]):
+        raise ValueError("delta corpus metadata mismatch")
+    count = len(wire.splitlines())
+    if count <= 0 or count != corpus["cases"] or len(expected.splitlines()) != count:
+        raise ValueError("delta corpus case accounting differs")
+    if corpus["source_sha256"] != sha(ROOT / "native/delta.hepta") or corpus["oracle_sha256"] != sha(source):
+        raise ValueError("delta corpus source identity differs")
+    module = json.loads((output / report["modules"]["delta"]["manifest"]).read_bytes())
+    if corpus["image_sha256"] != module["image_sha256"]:
+        raise ValueError("delta corpus belongs to a different native image")
+    if (corpus["original_commit"] != RUNTIME_BASE_COMMIT
+            or corpus["original_delta_sha256"] != sha(ROOT / "src/mcp/fs/delta.rs")
+            or corpus["original_line_hash_sha256"] != sha(ROOT / "src/utils/line_hash.rs")):
+        raise ValueError("original delta reference source identity differs")
+    if corpus["rust_compile_flags"] != ["--edition=2021", "-O", "-C", "overflow-checks=off"]:
+        raise ValueError("delta reference release semantics differ")
+    binary = folder / "oracle"
+    rust_compile(output, report, rustc, key="delta-rust", source=source, binary=binary,
+                 extra=("-C", "overflow-checks=off"))
+    row = record_check(output, report, name="delta-rust-compare",
+                       command=[str(binary)], input_bytes=wire, timeout=60)
+    result = {"status": "PASS" if row.stdout == expected and not row.stderr else "FAIL",
+              "rust_oracle_cases": count, "native_cases_added_by_replay": 0,
+              "input_sha256": digest(wire), "native_output_sha256": digest(expected),
+              "rust_output_sha256": digest(row.stdout), "oracle_source_sha256": sha(source),
+              "oracle_executable_sha256": sha(binary)}
+    (folder / "rust-comparison.json").write_text(json.dumps(result, indent=2) + "\n")
+    if result["status"] != "PASS":
+        raise ValueError("original Rust delta oracle disagrees with the native corpus")
+    return result
+
+
+RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
+           "line_endpoint": compare_endpoint, "delta": compare_delta}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}
