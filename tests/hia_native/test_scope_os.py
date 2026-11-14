@@ -127,11 +127,17 @@ class Session:
             assert owner['refusals'] == sum(row['code'] >= 0xffff0000 for row in self.rows)
             assert trace['native_cleanup'] is None and not trace['native_idle_snapshots']
             assert len(trace['original_auxiliary_entropy']) == 1
+            assert trace['original_startup_entropy'] == [{'kind':'process_runtime_startup','requested':8,'flags':1,
+                'completion':'kernel','before_input':True,'getrandom_index':0}]
             assert all(row['symbol']=='syscall' for row in trace['original_system_rng_callsites'])
+            assert trace['original_getrandom_syscalls'] == len(trace['original_system_rng_callsites']) + 2
             COUNTS['original_standard_library_seed_calls'] += len(trace['original_auxiliary_entropy'])
+            COUNTS['original_process_startup_rng_calls'] += 1
+            COUNTS['original_getrandom_syscalls'] += trace['original_getrandom_syscalls']
         else:
             assert err == b'', err.decode(errors='replace')
             assert not trace['original_auxiliary_entropy'] and not trace['original_system_rng_callsites']
+            assert not trace['original_startup_entropy'] and trace['original_getrandom_syscalls'] == 0
             cleanup = trace['native_cleanup']
             assert cleanup['private_workspaces_zero'] is True and cleanup['transport_output_zero'] is True
             assert cleanup['private_entropy_descriptors_retired'] is True and cleanup['module_count'] == 8
@@ -400,6 +406,7 @@ if __name__=='__main__':
                         original_opens=45,original_policy_bindings=18,original_processes=31,original_refusals=52,
                         original_releases=31,original_request_bindings=18,original_responses=226,original_seals=53,
                         original_standard_library_seed_calls=31,original_stdio_constructors=17,original_verified_constructors=18)
+        expected.update(original_process_startup_rng_calls=31,original_getrandom_syscalls=298)
     complete=complete and dict(COUNTS)==expected
     sources=getattr(ScopeOsTests,'sources',{})
     unchanged=all(digest((HERE/name).read_bytes())==value for name,value in sources.items())

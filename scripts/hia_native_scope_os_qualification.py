@@ -42,13 +42,15 @@ ORIGINAL_COUNTS={"actual_cross_owner_opens":2,"deterministic_byte_compared_respo
  "original_injected_completions":363,"original_kernel_completions":106,"original_last_releases":29,
  "original_opens":45,"original_policy_bindings":18,"original_processes":31,"original_refusals":52,
  "original_releases":31,"original_request_bindings":18,"original_responses":226,"original_seals":53,
- "original_standard_library_seed_calls":31,"original_stdio_constructors":17,"original_verified_constructors":18}
+ "original_standard_library_seed_calls":31,"original_stdio_constructors":17,"original_verified_constructors":18,
+ "original_process_startup_rng_calls":31,"original_getrandom_syscalls":298}
 PACKER_COUNTS={"native_packer_calls":103,"successful_packings":2,"native_admission_refusals":99,
  "native_capacity_refusals":2,"rehashed_elf_refusals":37,"exact_imported_functions":7}
-EVIDENCE_COUNTS={"accepted_reference_reports":2,"mutation_refusals":33,"native_calls_added":0,"original_calls_added":0}
+EVIDENCE_COUNTS={"accepted_reference_reports":5,"mutation_refusals":49,"classifier_admissions":9,
+ "classifier_refusals":25,"native_calls_added":0,"original_calls_added":0}
 SUITES=(("test_scope_os_packer.py","HIA_SCOPE_OS_PACKER_RESULT",PACKER_RECEIPT,6,PACKER_COUNTS),
         ("test_scope_os.py","HIA_SCOPE_OS_RESULT",NATIVE_RECEIPT,11,NATIVE_COUNTS),
-        ("test_scope_os_evidence.py","HIA_SCOPE_OS_EVIDENCE_RESULT",EVIDENCE_RECEIPT,6,EVIDENCE_COUNTS))
+        ("test_scope_os_evidence.py","HIA_SCOPE_OS_EVIDENCE_RESULT",EVIDENCE_RECEIPT,9,EVIDENCE_COUNTS))
 ORACLE_SOURCES=("oracle_scope_os.rs","scope_os_oracle/Cargo.toml","scope_os_oracle/Cargo.lock",
                 "scope_os_oracle/build.rs","scope_os_oracle/original_access.rs")
 KERNEL_SOURCES=("test_scope_os.py","scope_os_supervisor.py","scope_os_support.py","io_fault_supervisor.py",*ORACLE_SOURCES)
@@ -342,10 +344,17 @@ def trace_evidence(session,spec, *, original,binary_sha256):
     order=trace.get("entropy_event_order")
     auxiliary=trace.get("original_auxiliary_entropy")
     sites=trace.get("original_system_rng_callsites")
+    startup=trace.get("original_startup_entropy")
+    getrandom_calls=trace.get("original_getrandom_syscalls")
     require(type(order) is list and type(auxiliary) is list and type(sites) is list,
             "original auxiliary calls or complete domain order is missing")
     expected_order=[{"domain":"system_entropy","index":i} for i in range(len(events))]
     if original:
+        expected_startup=[{"kind":"process_runtime_startup","requested":8,"flags":1,
+                           "completion":"kernel","before_input":True,"getrandom_index":0}]
+        require(json_bytes(startup)==json_bytes(expected_startup),"process startup random request is missing, late or repeated")
+        require(type(getrandom_calls) is int and getrandom_calls==len(sites)+2,
+                "an original getrandom notification was omitted or duplicated")
         require(len(auxiliary)==1,"each original scope requires its separately observed HashSet seed")
         aux=auxiliary[0]
         require(type(aux) is dict and set(aux)=={"kind","requested","flags","completion","callsite"}
@@ -360,6 +369,8 @@ def trace_evidence(session,spec, *, original,binary_sha256):
         require(trace.get("native_cleanup") is None and trace.get("native_idle_snapshots")==[],
                 "native private cleanup was incorrectly attributed to the original owner")
     else:
+        require(startup==[] and type(getrandom_calls) is int and getrandom_calls==0,
+                "native trace contains original process-startup random calls")
         require(auxiliary==[] and sites==[],"native trace contains an original-only random domain")
         cleanup={"private_workspaces_zero":True,"transport_output_zero":True,
                  "private_entropy_descriptors_retired":True,"inspected_bytes":sum(row[-1] for row in SPECS)+(8<<20)+40,
@@ -392,7 +403,8 @@ def trace_evidence(session,spec, *, original,binary_sha256):
                     and last["entropy_cached_fd"]==int(spec["mode"]!="observe"),
                     "scope release reset the cached entropy backend or sequence")
     require(json_bytes(order)==json_bytes(expected_order),"original/native domain order was dropped or reordered")
-    return {"events":normalized,"auxiliary":auxiliary,"callsites":sites,"event_order":order}
+    return {"events":normalized,"auxiliary":auxiliary,"callsites":sites,"event_order":order,
+            "startup":startup,"getrandom_syscalls":getrandom_calls}
 
 
 def session_evidence(session,spec, *, original,binary_sha256):
@@ -438,6 +450,8 @@ def session_evidence(session,spec, *, original,binary_sha256):
         require(json_bytes(session.get("original_owner"))==json_bytes(owner),"actual original-owner call accounting differs")
         counts.update(expected)
         counts["original_standard_library_seed_calls"]=len(trace["auxiliary"])
+        counts["original_process_startup_rng_calls"]=len(trace["startup"])
+        counts["original_getrandom_syscalls"]=trace["getrandom_syscalls"]
     else: require(session.get("original_owner") is None,"original calls were attributed to a native-only process")
     return counts,trace
 
@@ -528,7 +542,7 @@ def packer_evidence(root,receipt,artifact):
 
 
 def refusal_evidence(root,receipt):
-    completion(receipt,6,EVIDENCE_COUNTS,"hepta.runtime.scope-os-evidence-test.v1")
+    completion(receipt,9,EVIDENCE_COUNTS,"hepta.runtime.scope-os-evidence-test.v1")
     for key,name in {"test_sha256":"tests/hia_native/test_scope_os_evidence.py",
                      "helper_sha256":"scripts/hia_native_scope_os_qualification.py",
                      "fixture_sha256":"tests/hia_native/scope_os_receipt_fixture.json.gz"}.items():

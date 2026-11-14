@@ -23,17 +23,22 @@ def device_for_fd(pid, fd):
     except FileNotFoundError:
         return None
 
-def original_rng_domain(site, requested, flags, *, seed_seen=False):
+def original_rng_domain(site, requested, flags, *, seed_seen=False,
+                        input_started=False, startup_seen=False, prior_rng_calls=0):
     """Keep observed HashSet seed profiles separate from SystemEntropy.
 
     Linux/libc may expose Rust's 16-byte GRND_INSECURE request directly or
     perform a 32-byte flags-zero vDSO refill. Neither auxiliary request may
-    receive a controlled SystemEntropy completion. The independently observed
-    allocator-startup 8-byte GRND_NONBLOCK call remains outside this owner
-    domain, as it was before this classification repair.
+    receive a controlled SystemEntropy completion. A separate, first 8-byte
+    GRND_NONBLOCK process-startup request must precede any transport input.
     """
     assert type(requested) is int and 0 <= requested <= 128
-    assert type(flags) is int and flags in (0, 4)
+    assert type(flags) is int and flags in (0, 1, 4)
+    if flags == 1:
+        assert requested == 8 and site is None, 'unknown process-startup random request'
+        assert not input_started and not startup_seen and prior_rng_calls == 0, 'late or repeated startup random request'
+        return 'process_runtime_startup'
+    assert type(site) is dict
     location = (site['module_kind'], site['symbol'])
     if location == ('libc', 'syscall'):
         assert flags == 0, 'SystemEntropy changed its getrandom flags'
@@ -330,6 +335,9 @@ def main():
     cleanup = None
     idle_snapshots = []
     original_auxiliary_entropy = []
+    original_startup_entropy = []
+    original_getrandom_syscalls = 0
+    original_input_started = False
     original_system_rng_callsites = []
     libc_symbols = {}
     entropy_event_order = []
@@ -354,6 +362,8 @@ def main():
             kind, address, size = None, None, None
             number = int(note.data.nr)
             values = list(map(int, note.data.args))
+            if not native and number == 0 and values[0] == 0:
+                original_input_started = True
             if native and number == 0 and values[0] == 0:
                 if native_base is None:
                     assert values[2] == 8388608 and values[1] % 4096 == 0
@@ -363,11 +373,18 @@ def main():
                 cleanup = verify_native_cleanup(libc, pid, native_base, descriptors)
                 cleanup['exit_code'] = values[0]
             auxiliary = False
-            if not native and number == 318 and values[2] in (0, 4):
-                site = original_rng_callsite(pid,int(note.data.ip),libc_symbols)
+            if not native and number == 318:
+                prior_rng_calls = original_getrandom_syscalls
+                original_getrandom_syscalls += 1
+                site = None if (values[1],values[2]) == (8,1) else original_rng_callsite(pid,int(note.data.ip),libc_symbols)
                 domain = original_rng_domain(site,values[1],values[2],
-                                             seed_seen=bool(original_auxiliary_entropy))
-                if domain == 'original_standard_library':
+                                             seed_seen=bool(original_auxiliary_entropy),
+                                             input_started=original_input_started,
+                                             startup_seen=bool(original_startup_entropy),prior_rng_calls=prior_rng_calls)
+                if domain == 'process_runtime_startup':
+                    original_startup_entropy.append({'kind':'process_runtime_startup','requested':8,'flags':1,
+                        'completion':'kernel','before_input':True,'getrandom_index':prior_rng_calls})
+                elif domain == 'original_standard_library':
                     # Keep this real standard-library request separate before
                     # applying faults or incrementing any SystemEntropy count.
                     original_auxiliary_entropy.append({'kind':'standard_library_hashset_seed',
@@ -439,6 +456,8 @@ def main():
                                        'native_idle_snapshots': idle_snapshots,
                                        'entropy_event_order': entropy_event_order,
                                        'original_auxiliary_entropy': original_auxiliary_entropy,
+                                       'original_startup_entropy': original_startup_entropy,
+                                       'original_getrandom_syscalls': original_getrandom_syscalls,
                                        'original_system_rng_callsites': original_system_rng_callsites,
                                        "executable_sha256": hashlib.sha256(raw).hexdigest()}, sort_keys=True) + "\n")
     raise SystemExit(os.waitstatus_to_exitcode(wait_status))
