@@ -21,7 +21,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, multi_read_controller_evidence, native_composition_evidence,
-                                       operation_kdf_evidence, python_reference_evidence, qualification_env,
+                                       operation_aead_evidence, operation_kdf_evidence, python_reference_evidence, qualification_env,
                                        record_check, save_report, sha, sources)
 from check_hia_native_inventory import RUNTIME_BASE_COMMIT, check_original_sources
 from hia_native_build import HEPTA_COMMIT
@@ -83,6 +83,8 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required multi-read controller evidence differs")
     if report.get("operation_kdf_evidence") != operation_kdf_evidence(output, report):
         raise ValueError("required operation KDF primitive/binding evidence differs")
+    if report.get("operation_aead_evidence") != operation_aead_evidence(output, report):
+        raise ValueError("required operation AEAD/authentication evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
         for relative, expected in report[collection].items():
             path = Path(relative)
@@ -483,10 +485,54 @@ def compare_operation_kdf(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_operation_aead(output: Path, report: dict, rustc: Path) -> dict:
+    """Replay native bytes through ring and the unchanged original seal/open owners."""
+    evidence = operation_aead_evidence(output, report)
+    if evidence != report.get("operation_aead_evidence"):
+        raise ValueError("operation AEAD native evidence changed before Rust replay")
+    folder = output / "operation-aead-rust-oracle"
+    wire = gzip.decompress((folder / "aead_cases.jsonl.gz").read_bytes())
+    if digest(wire) != evidence["input_sha256"]:
+        raise ValueError("operation AEAD input corpus changed before Rust replay")
+    manifest = ROOT / "tests/hia_native/aead_oracle/Cargo.toml"
+    target = folder / "target"
+    if target.exists():
+        raise ValueError("operation AEAD reference target directory already exists")
+    cargo = executable("cargo")
+    env = qualification_env()
+    env.update({"HIA_REFERENCE_RUNTIME": str(ROOT), "RUSTC": str(rustc)})
+    record_check(output, report, name="operation-aead-rust-compile",
+                 command=[str(cargo), "build", "--locked", "--release", "--manifest-path", str(manifest),
+                          "--target-dir", str(target)], env=env, timeout=180)
+    binary = target / "release/hia-operation-aead-reference"
+    row = record_check(output, report, name="operation-aead-rust-compare",
+                       command=[str(binary)], input_bytes=wire, env=env, timeout=60)
+    observed = json.loads(row.stdout)
+    expected = {"status": "PASS", "rust_oracle_cases": 1841, "encryption_cases": 684,
+                "decryption_cases": 684, "refusal_cases": 473,
+                "original_seal_calls": 33, "original_open_calls": 33,
+                "original_authentication_refusals": 11,
+                "output_sha256": evidence["native_output_sha256"], "native_cases_added_by_replay": 0}
+    result = {**observed, "status": "PASS" if observed == expected and not row.stderr else "FAIL",
+              "input_sha256": evidence["input_sha256"],
+              "native_output_sha256": evidence["native_output_sha256"],
+              "oracle_executable_sha256": sha(binary),
+              "oracle_sources_sha256": evidence["oracle_sources_sha256"],
+              "original_source": evidence["original_source"],
+              "composition_sha256": evidence["composition_sha256"],
+              "corpus_metadata_sha256": evidence["corpus_metadata_sha256"],
+              "reference_kind": "locked ring ChaCha20-Poly1305 and complete unchanged original seal/open owners",
+              "scope": "byte primitive interoperability with synthetic entropy; no native nonce custody or scope lifecycle qualification"}
+    (folder / "rust-comparison.json").write_text(json.dumps(result, indent=2) + "\n")
+    if result["status"] != "PASS":
+        raise ValueError("original Rust operation AEAD owner or output accounting differs")
+    return result
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,
-           "operation_kdf": compare_operation_kdf}
+           "operation_kdf": compare_operation_kdf, "operation_aead": compare_operation_aead}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}

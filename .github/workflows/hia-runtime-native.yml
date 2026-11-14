@@ -86,6 +86,13 @@ jobs:
           ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
           persist-credentials: false
 
+      - name: Install pinned independent Python reference libraries
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
       - name: Replay fresh full cold gate and test native executables
         env:
           EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -95,7 +102,7 @@ jobs:
             --hepta "$GITHUB_WORKSPACE/compiler" \
             --output "$RUNNER_TEMP/hia-runtime-native"
 
-      - name: Compare all eight original owners and Rust references
+      - name: Compare all nine original owners and Rust references
         run: |
           rustup toolchain install 1.95.0 --profile minimal
           python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \

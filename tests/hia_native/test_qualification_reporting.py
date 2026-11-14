@@ -8,7 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, io_reference_evidence, local_service_reference_evidence,
-                                       native_composition_evidence, operation_kdf_evidence,
+                                       native_composition_evidence, operation_aead_evidence, operation_kdf_evidence,
                                        qualification_env, record_check, sources)
 from compare_hia_runtime_rust import run as compare_rust
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
@@ -155,12 +155,23 @@ class QualificationReportingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "reference/capacity accounting differs"):
             operation_kdf_evidence(self.output, self.report)
 
+    def test_aead_reference_suite_cannot_drop_authentication_refusals(self):
+        summary = {"status": "PASS", "counts": {
+            "native_calls": 1856, "encryption_reference_cases": 671, "decryption_reference_cases": 671,
+            "authentication_refusals": 0, "admission_refusals": 119, "capacity_refusals": 15,
+            "exact_capacity_successes": 4, "original_record_projection_cases": 33, "elf_requests": 6}}
+        record_check(self.output, self.report, name="test_operation_aead.py", timeout=5,
+                     command=[sys.executable, "-I", "-c", "print(" + repr(json.dumps(summary)) + ")"])
+        with self.assertRaisesRegex(ValueError, "reference/authentication/capacity accounting differs"):
+            operation_aead_evidence(self.output, self.report)
+
     def test_qualification_child_cannot_inherit_external_loader_source_or_probe(self):
         external = {"HIA_NATIVE_LOADER": "/external/loader.py",
                     "HIA_PROTOCOL_SOURCE": "/external/protocol.hepta",
                     "HIA_IO_PROBE_MANIFEST": "/external/probe/manifest.json",
                     "HIA_SERVICE_SOURCE": "/external/service.hepta",
                     "HIA_KDF_SOURCE_ROOT": "/external/kdf-source",
+                    "HIA_AEAD_SOURCE_ROOT": "/external/aead-source",
                     "HIA_RUNTIME_REPO": "/external/repository",
                     "HIA_COMPOSITION_MANIFEST": "/external/composition/manifest.json",
                     "HIA_FUTURE_DEVELOPMENT_OVERRIDE": "/external/future",

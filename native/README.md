@@ -41,6 +41,7 @@ continue to identify the language and are not filename extensions.
 | [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
 | [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
 | [operation_kdf.hepta](operation_kdf.hepta) | Internal HMAC/HKDF-SHA256, original token-key derivation, private binding bytes and per-record key derivation with cleared workspace |
+| [operation_aead.hepta](operation_aead.hepta) | Internal ChaCha20-Poly1305, full-tag authentication before plaintext output, exact refusal/capacity behavior and declared-workspace clearing |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
 | [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks and cleanup decisions |
@@ -62,6 +63,10 @@ The internal key/binding frame and caller-owned secret boundary are specified in
 is not installed in the six-image local read service. Its key outputs require a
 trusted caller; token authentication and the original non-exportable crypto scope
 remain separate owners.
+The AEAD byte frame and authentication-failure boundary are specified in
+[operation_aead_abi.md](operation_aead_abi.md). It is also internal and is not
+installed in the local read service. Nonce uniqueness, trusted scope state,
+entropy and complete record ownership remain separate requirements.
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -90,8 +95,11 @@ its own manifest, source, compiler and corpus inputs. Standalone suites retain
 their explicit development overrides; these cannot silently substitute an
 external loader or fault probe in the closed qualification.
 Python 3.11+ and a C toolchain are build/test dependencies for the initial seed.
-Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec and KDF
+Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec, KDF and AEAD
 reference dependencies are pinned in their Cargo.lock files.
+The independent Python AEAD reference uses the exact packages in
+`tests/hia_native/python-reference-requirements.txt`, installed in a test-only
+virtual environment. Emitted HIA programs do not use those packages.
 The read-only I/O fault tests also require Linux seccomp user notification for
 their own test child. The suite does not skip these controls when unavailable.
 They are not dependencies of the emitted executable.
@@ -99,11 +107,15 @@ They are not dependencies of the emitted executable.
 From this runtime checkout:
 
 ```sh
-python3 -B scripts/qualify_hia_runtime_native.py \
+python3 -m venv /absolute/path/to/hia-reference-environment
+/absolute/path/to/hia-reference-environment/bin/python -m pip install --only-binary=:all: \
+  -r tests/hia_native/python-reference-requirements.txt
+
+/absolute/path/to/hia-reference-environment/bin/python -B scripts/qualify_hia_runtime_native.py \
   --hepta /absolute/path/to/pinned/Hepta \
   --output /absolute/path/to/new-native-result
 
-python3 -B scripts/compare_hia_runtime_rust.py \
+/absolute/path/to/hia-reference-environment/bin/python -B scripts/compare_hia_runtime_rust.py \
   --output /absolute/path/to/new-native-result \
   --rustc /absolute/path/to/rustc
 ```
@@ -149,6 +161,8 @@ codec-rust-oracle/native-corpus.json
 codec-rust-oracle/codec_cases.jsonl.gz
 operation-kdf-rust-oracle/native-corpus.json
 operation-kdf-rust-oracle/kdf_cases.jsonl.gz
+operation-aead-rust-oracle/native-corpus.json
+operation-aead-rust-oracle/aead_cases.jsonl.gz
 policy-rust-oracle/native-corpus.json
 stat-version-python-reference/native-corpus.json
 stat-version-python-reference/stat-version-cases.jsonl.gz
@@ -168,7 +182,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all eight independent Rust comparisons succeed. The Python reference domain
+after all nine independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -330,10 +344,32 @@ owner calls include rejection cases. All inputs are synthetic keys/tokens, and
 replaying the corpus adds no native test coverage. The retained proof is
 [operation_kdf_original_rust_comparison.json](operation_kdf_original_rust_comparison.json).
 The current qualification repeats this recipe. It qualifies deterministic key
-and binding bytes; bearer verification, trusted context construction, native
-AEAD, entropy, nonce custody, scope lifecycle, replay and ledger persistence
+and binding bytes; bearer verification, trusted context construction, AEAD
+scope integration, entropy, nonce custody, scope lifecycle, replay and ledger persistence
 remain unfinished original owners. There is no public MCP key-output interface
 or constant-time/whole-process erasure qualification.
+
+The operation AEAD component has passed **1,856 direct native calls** and **six
+standalone ELF executions**. The independent `cryptography` reference checks
+671 encryptions and 671 decryptions, including the published RFC 8439 known
+answer, padding/counter boundaries and maximum inputs. Separate domains cover
+354 authentication refusals, 119 malformed/over-bound refusals, 15 capacity
+refusals, four exact-capacity successes and 33 original record projections.
+The latter projections include both payload kinds, full 128-bit timestamps,
+empty through 1 MiB original payloads and corrupted tags. These domains overlap
+where a record projection is an authentication refusal; the total direct-call
+count is independent and exact.
+
+The locked Rust recipe must match all **1,841 exported rows**, including
+33 calls each to the complete unchanged original seal and open owners, with
+11 original authentication refusals. Deterministic synthetic entropy makes the
+original packets directly comparable with native output. The recipe adds no
+native-call coverage and cannot qualify aggregate PASS until actual execution
+matches every output and the recorded domain counts. Authentication failure
+leaves the entire output unchanged. Successful operations and authentication
+refusals wipe the declared 512-byte workspace. CPU register/stack erasure,
+constant-time behavior, nonce uniqueness and complete crypto scope ownership
+are not certified by these byte tests.
 
 The policy component has passed **11,655 valid native cases** covering first-error
 order, permission/protection precedence, environment checks, executable denial,
