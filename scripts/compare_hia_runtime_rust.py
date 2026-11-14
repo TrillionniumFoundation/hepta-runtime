@@ -20,14 +20,20 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from qualify_hia_runtime_native import (MODULES, file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
+from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
+                                       file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
-                                       operation_record_evidence,
+                                       operation_record_evidence, operation_scope_evidence,
                                        python_reference_evidence, qualification_env,
                                        record_check, save_report, sha, sources)
 from check_hia_native_inventory import RUNTIME_BASE_COMMIT, check_original_sources
 from hia_native_build import HEPTA_COMMIT
 from hia_native_cold import validate_cold_evidence
+from hia_native_entropy_qualification import (FOLDER as ENTROPY_FOLDER, KERNEL_RECEIPT,
+                                             ORIGINAL_SOURCE as ENTROPY_ORIGINAL_SOURCE,
+                                             normalized_kernel_report, object_at as entropy_object,
+                                             oracle_dependencies as entropy_dependencies)
+from hia_native_scope_qualification import FOLDER as SCOPE_FOLDER, ORACLE_COUNTS as SCOPE_ORACLE_COUNTS
 
 
 def digest(raw: bytes) -> str:
@@ -93,6 +99,10 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required operation record composition/reference evidence differs")
     if report.get("file_info_evidence") != file_info_evidence(output, report):
         raise ValueError("required file-info controller/metadata/deadline evidence differs")
+    if report.get("system_entropy_evidence") != entropy_evidence(output, report):
+        raise ValueError("required entropy compiler/effect/transport/trace evidence differs")
+    if report.get("operation_scope_evidence") != operation_scope_evidence(output, report):
+        raise ValueError("required private scope lifetime/composition/reference-domain evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
         for relative, expected in report[collection].items():
             path = Path(relative)
@@ -113,7 +123,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "entropy"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -626,11 +636,134 @@ def compare_operation_record(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_system_entropy(output: Path, report: dict, rustc: Path) -> dict:
+    """Build unchanged SystemEntropy and replay all owned-child Linux backend cases."""
+    evidence = entropy_evidence(output, report)
+    if evidence != report.get("system_entropy_evidence"):
+        raise ValueError("entropy native evidence changed before original replay")
+    folder = output / ENTROPY_FOLDER
+    manifest = ROOT / "tests/hia_native/entropy_oracle/Cargo.toml"
+    target = folder / "target"
+    if target.exists():
+        raise ValueError("entropy original reference target directory already exists")
+    env = qualification_env()
+    # Test the locked default Linux backend, without inherited custom cfg/target
+    # selection. Its actual Cargo fingerprint and syscall trace are checked too.
+    removed = sorted(key for key in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_TARGET") if key in env)
+    for key in removed:
+        env.pop(key)
+    env.update({"HIA_REFERENCE_RUNTIME": str(ROOT), "RUSTC": str(rustc)})
+    record_check(output, report, name="system-entropy-rust-compile",
+                 command=[str(executable("cargo")), "build", "--locked", "--release",
+                          "--manifest-path", str(manifest), "--target-dir", str(target)], env=env, timeout=180)
+    binary = target / "release/hia-system-entropy-reference"
+    binary_hash = sha(binary)
+    fingerprints = list((target / "release/.fingerprint").glob("getrandom-*/lib-getrandom.json"))
+    if len(fingerprints) != 1:
+        raise ValueError("entropy original requires exactly one default getrandom backend")
+    fingerprint = entropy_object(fingerprints[0])
+    if fingerprint.get("features") != "[]" or fingerprint.get("rustflags") != []:
+        raise ValueError("entropy original getrandom feature/cfg backend differs")
+    generated = list((target / "release/build").glob("hia-system-entropy-reference-*/out/original_operation_reference.rs"))
+    expected_source = (b"#[allow(dead_code)]\nmod original {\n"
+                       + (ROOT / ENTROPY_ORIGINAL_SOURCE).read_bytes() + b"\n"
+                       + (ROOT / "tests/hia_native/entropy_oracle/original_access.rs").read_bytes() + b"\n}\n")
+    if len(generated) != 1 or generated[0].read_bytes() != expected_source:
+        raise ValueError("entropy oracle did not retain the complete unchanged original module")
+    env.update({"HIA_ENTROPY_REFERENCE_BINARY": str(binary), "HIA_ENTROPY_REFERENCE_SHA256": binary_hash,
+                "HIA_ENTROPY_KERNEL_REPORT": str(folder / "kernel-original.json")})
+    record_check(output, report, name="system-entropy-rust-compare",
+                 command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/test_entropy_kernel_backend.py")],
+                 env=env, timeout=180)
+    check, observed = completed_test_summary(output, report, "system-entropy-rust-compare")
+    retained_original = entropy_object(folder / "kernel-original.json")
+    if {key: value for key, value in retained_original.items() if key != "traces"} != observed:
+        raise ValueError("entropy original full trace receipt differs from its completed process")
+    original = normalized_kernel_report(ROOT, retained_original, original=True, binary_sha256=binary_hash)
+    native = normalized_kernel_report(ROOT, entropy_object(folder / KERNEL_RECEIPT), original=False,
+                                       binary_sha256=evidence["artifacts"]["binary_sha256"], artifacts=evidence["artifacts"])
+    if original["traces"] != native["traces"] or original["sha256"] != native["sha256"]:
+        raise ValueError("entropy original and native Linux backend traces differ")
+    if sha(binary) != binary_hash or entropy_evidence(output, report) != evidence:
+        raise ValueError("entropy source, observed native corpus or original binary changed during replay")
+    result = {"schema": "hepta.runtime.system-entropy-rust-comparison.v1", "status": "PASS",
+              "reference_kind": "complete unchanged original SystemEntropy with locked default Linux ring/getrandom backend",
+              "tests_run": 8, "processes": 25, "request_frames": 56, "original_owner_calls": 56,
+              "successful_outputs": 46, "entropy_refusals": 10, "native_cases_added_by_replay": 0,
+              "normalized_trace_sha256": original["sha256"], "normalized_syscall_traces_match": True,
+              "normal_random_bytes_equality_claimed": False, "normalization": original["normalization"],
+              "native_counts": native["counts"], "original_counts": original["counts"],
+              "corpus_metadata_sha256": evidence["corpus_sha256"],
+              "native_report_sha256": sha(folder / KERNEL_RECEIPT),
+              "original_report_sha256": sha(folder / "kernel-original.json"),
+              "original_stdout_sha256": check["stdout_sha256"], "original_stderr_sha256": check["stderr_sha256"],
+              "oracle_executable_sha256": binary_hash, "source_sha256": evidence["source_sha256"],
+              "generated_original_module_sha256": sha(generated[0]),
+              "getrandom_fingerprint_sha256": sha(fingerprints[0]),
+              "getrandom_features": [], "getrandom_rustflags": [],
+              "oracle_dependencies": entropy_dependencies(ROOT), "cleared_backend_overrides": removed,
+              "original_runtime_lock_identical": False, "full_runtime_lock_build_claimed": False,
+              "thread_safe_workspace_claimed": False, "production_activated": False, "whole_runtime_replaced": False}
+    with (folder / "rust-comparison.json").open("x") as stream:
+        stream.write(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
+def compare_operation_scope(output: Path, report: dict, rustc: Path) -> dict:
+    """Replay complete live original scopes, clones and nonces on the declared domain."""
+    evidence = operation_scope_evidence(output, report)
+    if evidence != report.get("operation_scope_evidence"):
+        raise ValueError("scope native histories changed before original Rust replay")
+    folder = output / SCOPE_FOLDER
+    wire = gzip.decompress((folder / "scope_cases.jsonl.gz").read_bytes())
+    if digest(wire) != evidence["input_sha256"]:
+        raise ValueError("scope reference history changed before original Rust replay")
+    manifest = ROOT / "tests/hia_native/scope_oracle/Cargo.toml"
+    target = folder / "target"
+    if target.exists():
+        raise ValueError("scope original reference target directory already exists")
+    env = qualification_env()
+    env.update({"HIA_REFERENCE_RUNTIME": str(ROOT), "RUSTC": str(rustc)})
+    record_check(output, report, name="operation-scope-rust-compile",
+                 command=[str(executable("cargo")), "build", "--locked", "--release",
+                          "--manifest-path", str(manifest), "--target-dir", str(target)], env=env, timeout=180)
+    generated = list((target / "release/build").glob("hia-operation-scope-reference-*/out/original_operation_reference.rs"))
+    expected_source = (b"#[allow(dead_code)]\nmod original {\n"
+                       + (ROOT / "src/mcp/runtime/operation_crypto.rs").read_bytes() + b"\n"
+                       + (ROOT / "tests/hia_native/scope_oracle/original_access.rs").read_bytes() + b"\n}\n")
+    if len(generated) != 1 or generated[0].read_bytes() != expected_source:
+        raise ValueError("scope oracle did not retain the complete unchanged original module")
+    binary = target / "release/hia-operation-scope-reference"
+    binary_hash = sha(binary)
+    row = record_check(output, report, name="operation-scope-rust-compare",
+                       command=[str(binary)], input_bytes=wire, env=env, timeout=60)
+    observed = json.loads(row.stdout)
+    expected = {"status": "PASS", **SCOPE_ORACLE_COUNTS, "output_sha256": evidence["native_output_sha256"]}
+    if (row.stderr or observed != expected
+            or any(type(observed.get(key)) is not int for key in SCOPE_ORACLE_COUNTS)
+            or sha(binary) != binary_hash or operation_scope_evidence(output, report) != evidence):
+        raise ValueError("scope original owner, exact result, lifetime or exclusion-domain accounting differs")
+    result = {**observed, "schema": "hepta.runtime.operation-scope-rust-comparison.v1",
+              "input_sha256": evidence["input_sha256"], "oracle_executable_sha256": binary_hash,
+              "oracle_sources_sha256": evidence["oracle_sources_sha256"],
+              "generated_original_module_sha256": sha(generated[0]),
+              "original_source_sha256": evidence["original_source_sha256"],
+              "corpus_metadata_sha256": evidence["corpus_metadata_sha256"],
+              "native_domains": evidence["domains"],
+              "reference_kind": "complete unchanged original private scope, real live clones and nonce sets with deterministic entropy",
+              "real_os_entropy_connected": False, "concurrent_shared_capability_qualified": False,
+              "production_activated": False, "whole_runtime_replaced": False}
+    with (folder / "rust-comparison.json").open("x") as stream:
+        stream.write(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,
            "operation_kdf": compare_operation_kdf, "operation_aead": compare_operation_aead,
-           "operation_nonce": compare_operation_nonce, "operation_record": compare_operation_record}
+           "operation_nonce": compare_operation_nonce, "operation_record": compare_operation_record,
+           "system_entropy": compare_system_entropy, "operation_scope": compare_operation_scope}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}

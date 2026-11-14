@@ -1,7 +1,7 @@
 """Build and test the declared HIA runtime profile from pinned source bytes.
 
 NATIVE_COMPONENTS_PASS records the fresh full compiler cold gate, native tests
-and their retained Python comparisons. Aggregate PASS also requires all eleven
+and their retained Python comparisons. Aggregate PASS also requires all thirteen
 independent Rust comparisons. Neither phase qualifies the remaining 125
 production tool owners, production adoption, or removal of the old runtime.
 """
@@ -26,6 +26,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, inspect
 from hia_native_build import NativeBuild, HEPTA_COMMIT, HEPTA_TREE, json_bytes
 from hia_native_cold import validate_cold_evidence
+from hia_native_entropy_qualification import (CORPUS_FILES as ENTROPY_CORPUS_FILES,
+                                             FOLDER as ENTROPY_FOLDER,
+                                             capture_entropy_corpus,
+                                             entropy_evidence as checked_entropy_evidence)
+from hia_native_scope_qualification import (CORPUS_FILES as SCOPE_CORPUS_FILES,
+                                           FOLDER as SCOPE_FOLDER, scope_evidence as checked_scope_evidence)
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -50,6 +56,12 @@ MODULES = (
      "standalone": "filter", "manifest_env": "HIA_NONCE_MANIFEST", "test": "test_operation_nonce.py"},
     {"key": "operation_record", "name": "operation-record", "source": "native/operation_record.hepta",
      "builder": "record_composition", "manifest_env": "HIA_RECORD_MANIFEST", "test": "test_operation_record.py"},
+    {"key": "system_entropy", "name": "system-entropy", "source": "native/entropy_policy.hepta",
+     "companion_sources": ("native/entropy_packer.hepta",), "builder": "entropy",
+     "manifest_env": "HIA_ENTROPY_MANIFEST", "test": "test_entropy_backend.py",
+     "additional_tests": ("test_entropy_packer.py", "test_entropy_kernel_backend.py", "test_entropy_transport.py")},
+    {"key": "operation_scope", "name": "operation-scope", "source": "native/operation_scope.hepta",
+     "builder": "scope_composition", "manifest_env": "HIA_SCOPE_MANIFEST", "test": "test_operation_scope.py"},
     {"key": "policy", "name": "policy", "source": "native/policy.hepta",
      "standalone": "filter", "manifest_env": "HIA_POLICY_MANIFEST", "test": "test_policy.py"},
     {"key": "stat_version", "name": "stat-version", "source": "native/stat_version.hepta",
@@ -116,6 +128,8 @@ def sources() -> dict:
     paths.update(ROOT / "scripts" / name for name in (
         "hia_native_build.py", "hia_native_loader.py", "generate_hia_transport.py",
         "hia_native_io_build.py", "hia_native_composition_build.py", "hia_native_record_build.py", "hia_native_cold.py",
+        "hia_native_entropy_build.py", "hia_native_entropy_qualification.py",
+        "hia_native_scope_build.py", "hia_native_scope_qualification.py",
         "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-runtime-native.yml"))
@@ -304,6 +318,14 @@ def completed_test_summary(output: Path, report: dict, name: str) -> tuple[dict,
             or summary != check.get("summary")):
         raise ValueError(name + " test execution evidence differs")
     return check, summary
+
+
+def entropy_evidence(output: Path, report: dict) -> dict:
+    return checked_entropy_evidence(ROOT, output, report, completed_test_summary)
+
+
+def operation_scope_evidence(output: Path, report: dict) -> dict:
+    return checked_scope_evidence(ROOT, output, report, completed_test_summary)
 
 
 def full_io_reference_evidence(output: Path, report: dict) -> dict:
@@ -1368,6 +1390,7 @@ def run(output: Path, hepta: Path) -> dict:
         report["compiler_cold_status"] = "PASS"
         report["phase"] = "native_components"
         report["modules"] = {}
+        (output / ENTROPY_FOLDER).mkdir(mode=0o700)
         env = qualification_env()
         env.update({
             "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
@@ -1380,6 +1403,11 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_AEAD_CORPUS_DIR": str(output / "operation-aead-rust-oracle"),
             "HIA_NONCE_CORPUS_DIR": str(output / "operation-nonce-rust-oracle"),
             "HIA_RECORD_CORPUS_DIR": str(output / "operation-record-rust-oracle"),
+            "HIA_ENTROPY_BACKEND_REPORT": str(output / ENTROPY_FOLDER / "backend.json"),
+            "HIA_ENTROPY_PACKER_REPORT": str(output / ENTROPY_FOLDER / "packer.json"),
+            "HIA_ENTROPY_KERNEL_REPORT": str(output / ENTROPY_FOLDER / "kernel-native.json"),
+            "HIA_ENTROPY_TRANSPORT_REPORT": str(output / ENTROPY_FOLDER / "transport.json"),
+            "HIA_SCOPE_CORPUS_DIR": str(output / SCOPE_FOLDER),
             "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
             "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
             "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
@@ -1406,6 +1434,12 @@ def run(output: Path, hepta: Path) -> dict:
             elif item.get("builder") == "record_composition":
                 from hia_native_record_build import build_record
                 built = build_record(hepta, output / "build")
+            elif item.get("builder") == "entropy":
+                from hia_native_entropy_build import build_entropy
+                built = build_entropy(hepta, output / "build")
+            elif item.get("builder") == "scope_composition":
+                from hia_native_scope_build import build_scope
+                built = build_scope(hepta, output / "build")
             else:
                 built = builder.compile(item["name"], ROOT / item["source"], standalone=item["standalone"])
             report["modules"][item["key"]] = {
@@ -1436,6 +1470,9 @@ def run(output: Path, hepta: Path) -> dict:
         report["operation_aead_evidence"] = operation_aead_evidence(output, report)
         report["operation_nonce_evidence"] = operation_nonce_evidence(output, report)
         report["operation_record_evidence"] = operation_record_evidence(output, report)
+        capture_entropy_corpus(ROOT, output, report, completed_test_summary)
+        report["system_entropy_evidence"] = entropy_evidence(output, report)
+        report["operation_scope_evidence"] = operation_scope_evidence(output, report)
         report["retained_python_comparison_status"] = "PASS"
         report["python_reference_inputs"] = {
             "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
@@ -1449,6 +1486,12 @@ def run(output: Path, hepta: Path) -> dict:
         report["python_reference_inputs"]["file-info-blocking-probe.elf"] = sha(output / "file-info-blocking-probe.elf")
         report["rust_oracle_inputs"] = {
             "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
+        report["rust_oracle_inputs"].update({
+            ENTROPY_FOLDER + "/" + name: sha(output / ENTROPY_FOLDER / name) for name in ENTROPY_CORPUS_FILES})
+        report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update({
+            SCOPE_FOLDER + "/" + name: sha(output / SCOPE_FOLDER / name) for name in SCOPE_CORPUS_FILES})
+        report["rust_oracle_inputs"].update(report["operation_scope_evidence"]["composition"]["artifact_sha256"])
         report["rust_oracle_inputs"].update({
             "text-rust-oracle/" + name: sha(output / "text-rust-oracle" / name)
             for name in ("native-corpus.json", "requests.hex", "native-output.txt")})

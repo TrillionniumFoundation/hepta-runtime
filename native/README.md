@@ -32,8 +32,8 @@ continue to identify the language and are not filename extensions.
 
 ## Native components
 
-Qualification covers 20 production HIA sources through 16 executable components
-and their four HIA packers. Test-only HIA fixtures are recorded separately from
+Qualification covers 23 production HIA sources through 18 executable components
+and their five HIA packers. Test-only HIA fixtures are recorded separately from
 the production source inventory.
 
 | Source | Implemented behavior |
@@ -48,6 +48,9 @@ the production source inventory.
 | [operation_aead.hepta](operation_aead.hepta) | Internal ChaCha20-Poly1305, full-tag authentication before plaintext output, exact refusal/capacity behavior and declared-workspace clearing |
 | [operation_nonce.hepta](operation_nonce.hepta) | Internal serial nonce reservation, original 16,384-use scope budget, exact identity namespaces and persistent private-set lifecycle |
 | [operation_record.hepta](operation_record.hepta) | Internal original binding/AAD and bounded result seal/open composition, complete u128 timestamps, authenticated inner-record validation and private staging cleanup |
+| [entropy_policy.hepta](entropy_policy.hepta) | Serial Linux entropy fill for 0..128 bytes, default backend probe and descriptor caching, partial fills, retry/error rules and complete-output publication |
+| [entropy_packer.hepta](entropy_packer.hepta) | Fixed entropy syscall boundary and static ELF transport with checked continuations, opaque device descriptors and EOF cleanup |
+| [operation_scope.hepta](operation_scope.hepta) | Private serial scope construction, private bindings, seal/open ordering, shared reference lifetime and joint key/nonce destruction with a deterministic test entropy child |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
 | [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks, complete fingerprint/Linux metadata capture and typed deadline/finalizer decisions |
@@ -87,6 +90,16 @@ admits payload/binding before that controller requests entropy or reserves a non
 Its hexadecimal transport is a test fixture and is not installed as a public MCP tool.
 The 1,184-byte codec sanitation proof and record high-water cleanup are explicit;
 a fatal child-contract failure requires destruction of the whole composition.
+The native entropy boundary is specified in [entropy_abi.md](entropy_abi.md).
+It supplies the original Linux default backend behavior for serial requests of
+0..128 bytes. Its cached descriptor belongs to one private serial workspace;
+scope cloning, cross-thread serialization and production crypto call sites
+remain separate owners. It is not installed in the seven-image local read service.
+The private scope owner is specified in [operation_scope_abi.md](operation_scope_abi.md).
+Its eight-image fixture keeps keys behind the scope entry, shares a single nonce
+set across serial references and destroys both on last release. It still uses
+the deterministic entropy fixture; the standalone system entropy owner above
+has not been connected to this frozen scope profile.
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -120,7 +133,7 @@ its own manifest, source, compiler and corpus inputs. Standalone suites retain
 their explicit development overrides; these cannot silently substitute an
 external loader or fault probe in the closed qualification.
 Python 3.11+ and a C toolchain are build/test dependencies for the initial seed.
-Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec, KDF, AEAD, nonce and record
+Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec, KDF, AEAD, nonce, record, entropy and scope
 reference dependencies are pinned in their Cargo.lock files.
 The independent Python AEAD reference uses the exact packages in
 `tests/hia_native/python-reference-requirements.txt`, installed in a test-only
@@ -194,6 +207,18 @@ operation-nonce-rust-oracle/native-corpus.json
 operation-nonce-rust-oracle/nonce_cases.jsonl.gz
 operation-record-rust-oracle/native-corpus.json
 operation-record-rust-oracle/record_cases.jsonl.gz
+system-entropy-rust-oracle/native-corpus.json
+system-entropy-rust-oracle/backend.json
+system-entropy-rust-oracle/packer.json
+system-entropy-rust-oracle/kernel-native.json
+system-entropy-rust-oracle/transport.json
+system-entropy-rust-oracle/kernel-original.json
+system-entropy-rust-oracle/rust-comparison.json
+operation-scope-rust-oracle/native-corpus.json
+operation-scope-rust-oracle/scope_cases.jsonl.gz
+operation-scope-rust-oracle/scope_fault_sessions.jsonl.gz
+operation-scope-rust-oracle/scope_capacity_controls.jsonl.gz
+operation-scope-rust-oracle/rust-comparison.json
 policy-rust-oracle/native-corpus.json
 stat-version-python-reference/native-corpus.json
 stat-version-python-reference/stat-version-cases.jsonl.gz
@@ -221,7 +246,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all eleven independent Rust comparisons succeed. The Python reference domain
+after all thirteen independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -456,6 +481,65 @@ output digests, exact counts, original source, direct native image, both packed
 fixture images and their fixed authority table. The fixture does not qualify
 entropy, production concurrency, rollback resistance or complete crypto-scope
 replacement, and introduces no public MCP crypto tool.
+
+The entropy component has four mandatory suites, with exactly **11 backend,
+5 packer/cache, 8 kernel and 6 transport groups** and no skips, expected failures
+or unexpected successes. The backend suite performs **1,929 actual HIA calls**
+with **1,609 synthetic effect completions**; these are state-machine controls.
+The packer/cache suite makes **42 actual HIA packer calls**, executes **19 native
+images**, and verifies one admission plus two refusals against a copy of the
+real compiler/artifact cache when the top-level compiler pin is missing or wrong.
+The transport suite runs **13 native processes** for framing, CLI, output-error
+and invalid-kernel-success controls.
+
+The separate kernel suite executes **25 actual native processes and 56 request
+frames**. The same eight groups were replayed against the complete unchanged
+original `SystemEntropy`, making **56 original owner calls**. Each side produced
+46 successful fills and 10 entropy refusals. It covers real default Linux
+`getrandom` and device-fallback selection, cached probes/descriptors, interrupted
+and partial reads, failures and recovery. Native and original normalized syscall
+traces match. Normal random bytes are not compared for equality. The only
+normalization removes actual descriptor numbers and the native explicit cached
+descriptor close at EOF; the original cache is closed by process exit. See
+[entropy_original_rust_comparison.json](entropy_original_rust_comparison.json).
+
+Every qualification rebuilds and executes this twelfth Rust recipe. The gate
+binds all four complete suite receipts and streams, all kernel events and their
+provenance, current source bytes, compiled flat images, full compilation/packing
+receipts and the final static ELF. It verifies the unchanged original module
+inside the generated Rust source, locked dependencies, empty `getrandom` features
+and rustflags, actual original binary bytes, and all 25 paired traces. It never
+counts replayed cases as new native cases. A host unable to perform the owned
+child kernel controls fails the gate. The reference lock uses `libc 0.2.191`,
+while the pinned runtime lock uses `libc 0.2.189`; the ABI documents this
+difference. These results do not claim a rebuild of the complete original lock,
+thread-safe workspace sharing, production adoption or complete runtime replacement.
+
+The private scope component has passed **12 native groups** covering construction,
+all private binding methods, seal/open ordering, serial clone lifetime, the full
+16,384-reservation budget and joint destruction. It retains **17,021 direct
+requests**: 588 scope requests, 16,384 nonce-preparation requests and 49 fixture
+controls. A separate eight-image executable runs **27 requests in four processes**,
+producing 26 responses plus one deliberate fatal child-contract exit.
+
+The actual original Rust replay contains **16,944 rows across 24 complete sessions**.
+These include 16,384 nonce-preparation rows, 423 original scope rows and 137
+adapter-only rows. Original calls total 33,191: 32,768 nonce/binding preparation
+calls and 423 scope calls. This preserves four clones, 22 releases, 18 last
+releases and 92 synthetic entropy fills requesting 1,704 bytes. See
+[operation_scope_original_rust_comparison.json](operation_scope_original_rust_comparison.json).
+
+The gate retains all **74 rows from 25 predefined fault sessions**, including
+their 47 earlier rows and later release/refusal rows, plus **three capacity
+controls**. These domains are disjoint from Rust replay and reconstruct every
+direct native request in order. Installing a named fault selects its entire
+session before the result is observed. The checker binds each reason, ordinal,
+mutated completion record and resulting state to its complete retained history.
+Its thirteenth Rust recipe keeps real original scopes, clones and nonce sets
+alive across the admitted session histories and compares statuses, output bytes,
+reference counts, entropy-call counts and nonce counts. This frozen fixture does
+not establish an operating-system entropy connection, concurrent capability
+admission or production replacement.
 
 The policy component has passed **11,655 valid native cases** covering first-error
 order, permission/protection precedence, environment checks, executable denial,

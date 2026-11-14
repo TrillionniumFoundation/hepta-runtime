@@ -17,6 +17,14 @@ from compare_hia_runtime_rust import run as compare_rust
 from compare_hia_runtime_rust import RECIPES, NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
 from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
+from hia_native_entropy_qualification import (SUITES as ENTROPY_SUITES, completion as entropy_completion,
+                                             exact_counts as entropy_counts, kernel_cases,
+                                             native_receipt as entropy_native_receipt,
+                                             normalized_kernel_report)
+from hia_native_scope_qualification import (COUNTS as SCOPE_COUNTS, SPECS as SCOPE_SPECS,
+                                           check_row as check_scope_row,
+                                           composition_evidence as scope_composition_evidence,
+                                           test_coverage as scope_test_coverage)
 
 
 class QualificationReportingTests(unittest.TestCase):
@@ -25,6 +33,116 @@ class QualificationReportingTests(unittest.TestCase):
         self.addCleanup(self.folder.cleanup)
         self.output = Path(self.folder.name)
         self.report = {"phase": "reporting-regression", "checks": []}
+
+    def test_entropy_requires_all_four_exact_test_groups_without_skips(self):
+        self.assertEqual([row[3] for row in ENTROPY_SUITES], [11, 5, 8, 6])
+        for _, _, _, expected, counts in ENTROPY_SUITES:
+            complete = {"status": "PASS", "tests_run": expected, "expected_tests": expected,
+                        "failures": 0, "errors": 0, "skipped": 0,
+                        "expected_failures": 0, "unexpected_successes": 0}
+            entropy_completion(complete, expected)
+            entropy_counts(counts, counts)
+            for field, value in (("tests_run", expected - 1), ("expected_tests", expected - 1),
+                                 ("failures", 1), ("errors", 1), ("skipped", 1),
+                                 ("expected_failures", 1), ("unexpected_successes", 1),
+                                 ("errors", False), ("status", "FAIL")):
+                with self.subTest(expected=expected, field=field), self.assertRaises(ValueError):
+                    entropy_completion(dict(complete, **{field: value}), expected)
+            for field in counts:
+                with self.subTest(count=field), self.assertRaises(ValueError):
+                    entropy_counts(dict(counts, **{field: counts[field] - 1}), counts)
+
+    def test_entropy_receipt_cannot_detach_native_output_from_compiler_or_source(self):
+        import hashlib
+        sha = lambda raw: hashlib.sha256(raw).hexdigest()
+        image, source, produced, output = b"fixture compiler", b"fixture input", b"native bytes", b"native bytes\0\0"
+        receipt = {"status": "returned", "abi_status": 0, "core_u32": len(produced),
+                   "result_u64": len(produced), "source_unchanged": True, "input_bytes": len(source),
+                   "input_sha256": sha(source), "source_sha256": sha(source),
+                   "artifact_sha256": sha(image), "image_sha256": sha(image),
+                   "output_sha256": sha(output), "forbidden_compiler_modules_loaded": []}
+        args = dict(image=image, source=source, output=output, produced=produced)
+        entropy_native_receipt(receipt, **args)
+        for field, value in (("core_u32", len(produced) - 1), ("result_u64", 1 << 32),
+                             ("source_unchanged", 1), ("abi_status", False),
+                             ("artifact_sha256", "0" * 64), ("source_sha256", "0" * 64),
+                             ("output_sha256", "0" * 64), ("forbidden_compiler_modules_loaded", ["fallback"])):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                entropy_native_receipt(dict(receipt, **{field: value}), **args)
+        with self.assertRaises(ValueError):
+            entropy_native_receipt(receipt, **dict(args, produced=b"other bytes"))
+
+    def test_entropy_case_summary_does_not_replace_full_kernel_traces(self):
+        import hashlib
+        from hia_native_entropy_qualification import KERNEL_SOURCES
+        self.assertEqual(len(kernel_cases()), 25)
+        self.assertEqual(sum(len(sizes) for _, sizes, _ in kernel_cases()), 56)
+        pins = {name: hashlib.sha256((ROOT / "tests/hia_native" / name).read_bytes()).hexdigest()
+                for name in KERNEL_SOURCES}
+        summary = {"schema": ENTROPY_SUITES[2][2], "status": "PASS", "tests_run": 8, "expected_tests": 8,
+                   "failures": 0, "errors": 0, "skipped": 0, "expected_failures": 0, "unexpected_successes": 0,
+                   "counts": dict(ENTROPY_SUITES[2][4], original_owner_calls=56, kernel_completions=91),
+                   "source_sha256": pins, "source_unchanged": True,
+                   "provenance": {"owner": "original Rust SystemEntropy", "binary_sha256": "fixture"},
+                   "traces": []}
+        with self.assertRaisesRegex(ValueError, "trace coverage"):
+            normalized_kernel_report(ROOT, summary, original=True, binary_sha256="fixture")
+        with self.assertRaisesRegex(ValueError, "source"):
+            normalized_kernel_report(ROOT, dict(summary, source_sha256={}), original=True, binary_sha256="fixture")
+        with self.assertRaisesRegex(ValueError, "executable identity"):
+            normalized_kernel_report(ROOT, summary, original=True, binary_sha256="different")
+
+    def test_scope_requires_all_twelve_groups_and_complete_control_counts(self):
+        summary = {"native_scope_counts": SCOPE_COUNTS}
+        stderr = "\nRan 12 tests in 1.234s\n\nOK\n"
+        scope_test_coverage(summary, stderr)
+        for invalid in (stderr.replace("12", "11"), stderr.replace("OK", "OK (skipped=1)"),
+                        stderr.replace("OK", "OK (expected failures=1)"), stderr + stderr):
+            with self.assertRaises(ValueError):
+                scope_test_coverage(summary, invalid)
+        for field in ("direct_requests_6", "fault_sessions_excluded_from_rust",
+                      "fault_session_prefix_rows_excluded", "actual_elf_fatal_contract_controls"):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                scope_test_coverage({"native_scope_counts": dict(SCOPE_COUNTS, **{field: SCOPE_COUNTS[field] - 1})}, stderr)
+
+    def test_scope_fixture_cannot_grant_direct_raw_record_authority(self):
+        import hashlib
+        profile = [{"id": index, "name": name, "source_sha256": hashlib.sha256((ROOT / source).read_bytes()).hexdigest(),
+                    "flags": flags, "call_mask": mask, "input_capacity": inp, "output_capacity": out,
+                    "workspace_capacity": work}
+                   for index, (name, source, flags, mask, inp, out, work) in enumerate(SCOPE_SPECS)]
+        profile[0]["call_mask"] |= 2
+        manifest = self.output / "build/composition/fixture/manifest.json"
+        manifest.parent.mkdir(parents=True)
+        metadata = {"schema": "hepta.runtime.native-composition.v1", "target": "linux-x86_64", "transport": "newline-json",
+                    "compiler_commit": HEPTA_COMMIT, "compiler_sha256": "fixture", "executable": "native-local-read.elf",
+                    "runtime_python_required": False, "runtime_libc_required": False, "whole_runtime_replaced": False,
+                    "profile": profile, "members": [{} for _ in range(8)]}
+        manifest.write_text(json.dumps(metadata))
+        report = {"compiler_image_sha256": "fixture", "modules": {"operation_scope": {
+            "builder": "scope_composition", "source": "native/operation_scope.hepta",
+            "manifest": str(manifest.relative_to(self.output)), "sha256": hashlib.sha256(manifest.read_bytes()).hexdigest()}}}
+        with self.assertRaisesRegex(ValueError, "authority table"):
+            scope_composition_evidence(ROOT, self.output, report)
+
+    def test_scope_fault_records_must_retain_full_mutated_completion_words(self):
+        from copy import deepcopy
+        row = {"session": 4, "target": 6, "input_hex": "", "code": 0xffffffe8, "output_hex": "",
+               "scope_state": 4, "scope_references": 0, "entropy_calls": 0, "nonce_count": 0,
+               "native_ordinal": 16391, "output_capacity": 128, "export_requested": False,
+               "injected_fault_reason": "fixture completion fault",
+               "child_events": [{"caller": 6, "phase": 1, "target": 2, "input_bytes": 32,
+                                 "output_capacity": 128, "code": 128, "fixture_completion_words": [0] * 14}]}
+        check_scope_row(row, control=True)
+        missing = deepcopy(row)
+        del missing["child_events"][0]["fixture_completion_words"]
+        shortened = deepcopy(row)
+        shortened["child_events"][0]["fixture_completion_words"].pop()
+        granted = deepcopy(row)
+        granted["child_events"][0]["target"] = 0
+        for invalid in (missing, shortened, granted):
+            with self.assertRaises(ValueError):
+                check_scope_row(invalid, control=True)
 
     def test_success_retains_exact_streams(self):
         row = record_check(self.output, self.report, name="success", timeout=5,
