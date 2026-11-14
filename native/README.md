@@ -32,8 +32,9 @@ continue to identify the language and are not filename extensions.
 
 ## Native components
 
-Qualification covers 23 production HIA sources through 18 executable components
-and their five HIA packers. Test-only HIA fixtures are recorded separately from
+Qualification covers 26 production HIA sources through 21 executable components
+and six HIA packers; the two scope profiles share their HIA scope owner.
+Test-only HIA fixtures are recorded separately from
 the production source inventory.
 
 | Source | Implemented behavior |
@@ -43,6 +44,9 @@ the production source inventory.
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
 | [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
+| [editable_content.hepta](editable_content.hepta) | Original ordered text state, per-line endings, insertion, normalized-byte replacement and trailing-newline preservation |
+| [view_render.hepta](view_render.hepta) | Original view range resolution, independent read snapshots, whole/ranged rendering, cache plan and result-size gate |
+| [view_filter_packer.hepta](view_filter_packer.hepta) | Static filter for the explicit view-render capacity profile, with exact compiled-image binding |
 | [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
 | [operation_kdf.hepta](operation_kdf.hepta) | Internal HMAC/HKDF-SHA256, original token-key derivation, private binding bytes and per-record key derivation with cleared workspace |
 | [operation_aead.hepta](operation_aead.hepta) | Internal ChaCha20-Poly1305, full-tag authentication before plaintext output, exact refusal/capacity behavior and declared-workspace clearing |
@@ -50,7 +54,7 @@ the production source inventory.
 | [operation_record.hepta](operation_record.hepta) | Internal original binding/AAD and bounded result seal/open composition, complete u128 timestamps, authenticated inner-record validation and private staging cleanup |
 | [entropy_policy.hepta](entropy_policy.hepta) | Serial Linux entropy fill for 0..128 bytes, default backend probe and descriptor caching, partial fills, retry/error rules and complete-output publication |
 | [entropy_packer.hepta](entropy_packer.hepta) | Fixed entropy syscall boundary and static ELF transport with checked continuations, opaque device descriptors and EOF cleanup |
-| [operation_scope.hepta](operation_scope.hepta) | Private serial scope construction, private bindings, seal/open ordering, shared reference lifetime and joint key/nonce destruction with a deterministic test entropy child |
+| [operation_scope.hepta](operation_scope.hepta) | Private serial scope construction, bindings, seal/open ordering, reference lifetime and joint key/nonce destruction in separately qualified fixture-entropy and real-OS-entropy profiles |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
 | [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks, complete fingerprint/Linux metadata capture and typed deadline/finalizer decisions |
@@ -100,6 +104,14 @@ Its eight-image fixture keeps keys behind the scope entry, shares a single nonce
 set across serial references and destroys both on last release. It still uses
 the deterministic entropy fixture; the standalone system entropy owner above
 has not been connected to this frozen scope profile.
+The separate [OS scope profile](scope_os_abi.md) connects that same scope owner
+to the Linux entropy owner through a fixed eight-image table. Only the private
+scope can call the entropy slot; the hex test controller cannot call raw entropy,
+record or key primitives. The generic packer validates the complete profile and
+actual compiled-image hashes before admitting this effect. The original fixture
+profile remains mandatory for deterministic lifetime and fault comparisons.
+The OS profile does not install bearer authentication, concurrent capability
+sharing or a production MCP handler.
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -246,7 +258,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all thirteen independent Rust comparisons succeed. The Python reference domain
+after all sixteen independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -535,11 +547,55 @@ controls**. These domains are disjoint from Rust replay and reconstruct every
 direct native request in order. Installing a named fault selects its entire
 session before the result is observed. The checker binds each reason, ordinal,
 mutated completion record and resulting state to its complete retained history.
-Its thirteenth Rust recipe keeps real original scopes, clones and nonce sets
+Its dedicated Rust recipe keeps real original scopes, clones and nonce sets
 alive across the admitted session histories and compares statuses, output bytes,
 reference counts, entropy-call counts and nonce counts. This frozen fixture does
 not establish an operating-system entropy connection, concurrent capability
 admission or production replacement.
+
+The real OS scope profile separately passes **11 native kernel groups**, with
+**37 native processes and 238 responses**, plus four no-response contract or
+transport requests. Its paired original comparison retains **31 original
+processes and 226 responses**: 220 calls reach original owners and six are
+adapter-only state refusals. It compares 114 deterministic responses byte for
+byte and performs two real-random cross-owner decryptions. All 31 standard
+library `RandomState` seed calls remain in the trace with actual libc/vDSO
+identity, instruction position and event order; they are not counted as
+`SystemEntropy` calls or hidden by output filtering. Every native exit is checked
+for declared workspace/output clearing and cached-descriptor retirement.
+The packer suite performs 103 native calls and refuses 37 rehashed altered ELFs.
+The receipt suite rejects 33 damaged evidence cases without adding native calls.
+See [scope_os_original_rust_comparison.json](scope_os_original_rust_comparison.json).
+The paired comparison executes a fresh 37-process native side again; those
+additional 238 responses are reported separately from the native phase.
+
+The editable-content component compares **8,749 complete ordered responses**
+with the unchanged original `EditableContent` methods. This includes mixed
+line endings, UTF-8 byte boundaries, full-u64 method errors, an empty final
+unterminated line, 1,400 deterministic operation sequences and complete 5 MiB
+files. Its 5,242,880-line case executes both in-process HIA and the standalone
+ELF. Another 65 malformed frames, four capacity refusals and one exact-capacity
+acceptance are native-only controls. The final locked original Rust recipe was
+also executed directly and matched every captured byte. The
+[ABI](editable_content_abi.md) and [original comparison](editable_content_original_rust_comparison.json)
+describe the boundary: no file reads/writes, locks, history or production edit
+handler has been installed by this component.
+
+The view-render component compares **3,125 captured requests** with unchanged
+original range, file-render, cache, delta and result-gate methods: 2,721 render
+requests and 404 preparation requests. Its 237,318,931 request bytes and
+139,202,296 response bytes are retained in compressed corpora and checked as
+streams. It covers the complete 5 MiB file domain, 8 MiB result boundaries,
+different first/second read snapshots, cache updates before oversized-result
+refusal, full refresh and worst-case line counts. The explicit `view-render.v1`
+transport provides 16 MiB input/output and 256 MiB workspace; the existing
+standard profile remains 8/8/32 MiB. A 32 MiB workspace refusal is kept distinct
+from the original semantic decision to omit a delta. Its 135 malformed frames,
+capacity controls, three standalone executions and six VM/native/reference
+comparisons are separate domains. See [view_render_abi.md](view_render_abi.md)
+and [view_original_rust_comparison.json](view_original_rust_comparison.json).
+This component returns a cache plan; actual cache storage, file effects,
+directory/search routing and a complete public view response remain separate.
 
 The policy component has passed **11,655 valid native cases** covering first-error
 order, permission/protection precedence, environment checks, executable denial,

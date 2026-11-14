@@ -14,6 +14,12 @@ on:
       - 'src/utils/line_hash.rs'
       - 'src/utils/truncation.rs'
       - 'src/mcp/fs/delta.rs'
+      - 'src/mcp/fs/core.rs'
+      - 'src/mcp/fs/delta_tests.rs'
+      - 'src/mcp/fs/file_ops.rs'
+      - 'src/mcp/fs/fs_tests.rs'
+      - 'src/mcp/fs/text_editing.rs'
+      - 'src/mcp/request_ctx.rs'
       - 'src/mcp/runtime/config.rs'
       - 'src/mcp/runtime/execution.rs'
       - 'src/mcp/runtime/jobs.rs'
@@ -38,6 +44,12 @@ on:
       - 'src/utils/line_hash.rs'
       - 'src/utils/truncation.rs'
       - 'src/mcp/fs/delta.rs'
+      - 'src/mcp/fs/core.rs'
+      - 'src/mcp/fs/delta_tests.rs'
+      - 'src/mcp/fs/file_ops.rs'
+      - 'src/mcp/fs/fs_tests.rs'
+      - 'src/mcp/fs/text_editing.rs'
+      - 'src/mcp/request_ctx.rs'
       - 'src/mcp/runtime/config.rs'
       - 'src/mcp/runtime/execution.rs'
       - 'src/mcp/runtime/jobs.rs'
@@ -102,7 +114,7 @@ jobs:
             --hepta "$GITHUB_WORKSPACE/compiler" \
             --output "$RUNNER_TEMP/hia-runtime-native"
 
-      - name: Compare all thirteen original owners and Rust references
+      - name: Compare all sixteen original owners and Rust references
         run: |
           rustup toolchain install 1.95.0 --profile minimal
           python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \

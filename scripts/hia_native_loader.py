@@ -20,6 +20,10 @@ import threading
 ABI = "hepta.runtime.borrowed-bytes.linux-x86_64.v1"
 COMPILER_COMMIT = "d3e2c90173cf733e42b299d0c4274df4b593a12f"
 MAX_IMAGE = 1 << 20
+BUFFER_PROFILES = {
+    "standard": (8 << 20, 8 << 20, 32 << 20),
+    "view-render.v1": (16 << 20, 16 << 20, 256 << 20),
+}
 # Some CPython builds omit the Linux constants although the kernel API exists.
 F_ADD_SEALS = getattr(fcntl, "F_ADD_SEALS", 1033)
 F_GET_SEALS = getattr(fcntl, "F_GET_SEALS", 1034)
@@ -92,7 +96,11 @@ class NativeModule:
         for name in ("source_sha256", "image_sha256", "compiler_sha256"):
             if type(metadata.get(name)) is not str or not re.fullmatch("[0-9a-f]{64}", metadata[name]):
                 raise ValueError("native member hash is invalid")
-        for name, maximum in (("input_capacity", 8 << 20), ("output_capacity", 8 << 20), ("workspace_capacity", 32 << 20)):
+        profile = metadata.get("buffer_profile", "standard")
+        if type(profile) is not str or profile not in BUFFER_PROFILES:
+            raise ValueError("unknown native buffer profile")
+        for name, maximum in zip(("input_capacity", "output_capacity", "workspace_capacity"),
+                                 BUFFER_PROFILES[profile]):
             if type(metadata.get(name)) is not int or not 0 < metadata[name] <= maximum:
                 raise ValueError("native module declared buffer capacity is invalid")
         self.source_path = path.parent / metadata["source"]

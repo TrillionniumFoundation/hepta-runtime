@@ -59,6 +59,14 @@ including the root. An already active module cannot recur. At most 262144 native
 entries/effect resumptions are admitted for one root frame. This count bounds
 continuation churn; it does not add an instruction meter inside a HIA function.
 
+The admitted flag values are exactly 0, 1, 3 and 4. Flag 4 is reserved for the
+separate, complete eight-image private scope profile in `scope_os_abi.md`.
+That profile pins every actual source/image, table entry and capacity. Only
+entropy slot 7, immediately called by scope slot 6, may issue its fixed entropy
+effects. It grants no additional authority to the seven-image file service or
+generic fixtures. Undefined flag combinations and altered privileged profiles
+are refused by both the builder and native HIA packer.
+
 ## Call continuation
 
 Modules with flag bit 1 reserve the last 256 bytes of their workspace for a call
@@ -98,8 +106,9 @@ check the acknowledgement and status before using a child result.
 On an admitted child return, all domain results in `0xffff0000..0xffffffff`
 are preserved for the parent except the two reserved continuation codes. A
 normal result must fit the child's output capacity. The adapter checks the
-full native 64-bit return for dirty upper bits. IO yields are admitted only
-when flag bit 2 is set; call yields require flag bit 1. The combined IO owner
+full native 64-bit return for dirty upper bits. File IO effects require the
+fixed flag-3 IO owner. Entropy effects require the separate exact flag-4 scope
+profile; call yields require flag bit 1. The combined IO owner
 has its call footer at the end of its 8 MiB workspace, disjoint from the file
 and metadata buffers described in `file_info_io_abi.md`. The smaller standalone
 operation-1/2 IO transport retains its previous profile and does not supply

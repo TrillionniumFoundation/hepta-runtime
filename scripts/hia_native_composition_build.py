@@ -16,7 +16,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 
-from hia_native_build import NativeBuild, json_bytes, write_new
+from hia_native_build import HEPTA_COMMIT, NativeBuild, json_bytes, write_new
 from hia_native_loader import NativeModule
 
 
@@ -40,6 +40,8 @@ def _admit(manifest_path, compiler_sha, source_raw):
     metadata = json.loads(manifest_raw)
     if metadata.get('compiler_sha256') != compiler_sha or metadata.get('source_sha256') != sha(source_raw):
         raise ValueError('composition module compiler/source identity differs')
+    if metadata.get('compiler_commit') != HEPTA_COMMIT:
+        raise ValueError('composition module compiler commit differs')
     module = NativeModule(manifest_path, manifest_sha256=sha(manifest_raw))
     module.close()
     image = (manifest_path.parent / metadata['image']).read_bytes()
@@ -58,13 +60,27 @@ def build_composition(hepta: Path, build_root: Path, members: list[ModuleSpec], 
     packer_raw = packer_source.read_bytes()
     io_raw = (source_root / 'native/io_policy.hepta').read_bytes()
     snapshots = [(spec, spec.source.read_bytes()) for spec in members]
+    entropy_profile = None
+    entropy_profile_raw = None
+    entropy_profile_path = source_root / 'native/scope_os_profile.json'
+    if any(spec.flags == 4 for spec in members):
+        entropy_profile_raw = entropy_profile_path.read_bytes()
+        entropy_profile = json.loads(entropy_profile_raw)
+        provenance = json.loads((source_root / 'native/scope_os_packer_provenance.json').read_bytes())
+        if (entropy_profile.get('schema') != 'hepta.runtime.scope-os-profile.v1'
+                or entropy_profile.get('compiler_commit') != HEPTA_COMMIT
+                or entropy_profile.get('compiler_sha256') != compiler_sha
+                or len(members) != 8 or len(entropy_profile.get('members', [])) != 8
+                or provenance.get('profile_sha256') != sha(entropy_profile_raw)
+                or provenance.get('source_sha256') != sha(packer_raw)):
+            raise ValueError('privileged entropy profile or packer identity differs')
     for i, (spec, raw) in enumerate(snapshots):
         if type(spec.name) is not str or not spec.name or len(spec.name) > 128:
             raise ValueError('composition member name is invalid')
         if any(type(v) is not int for v in (spec.flags, spec.call_mask, spec.input_capacity,
                                            spec.output_capacity, spec.workspace_capacity)):
             raise ValueError('composition profile fields must be exact integers')
-        if (spec.flags not in (0, 1, 2, 3) or not 0 <= spec.call_mask < (1 << len(members))
+        if (spec.flags not in (0, 1, 3, 4) or not 0 <= spec.call_mask < (1 << len(members))
                 or ((spec.flags & 1) == 0 and spec.call_mask != 0)
                 or not 0 < spec.input_capacity <= 8 << 20
                 or not 0 < spec.output_capacity <= 8 << 20
@@ -76,6 +92,18 @@ def build_composition(hepta: Path, build_root: Path, members: list[ModuleSpec], 
             raise ValueError('OS effects are confined to the pinned IO owner in slot three')
         if i == 0 and (spec.flags != 1 or spec.input_capacity != 8 << 20 or spec.output_capacity != 8 << 20):
             raise ValueError('composition root must be a full-width continuation controller')
+        if spec.flags == 4 and (i != 7 or spec.call_mask != 0 or spec.input_capacity != 24
+                               or spec.output_capacity != 128 or spec.workspace_capacity != 1024):
+            raise ValueError('entropy effects are confined to the pinned owner in slot seven')
+        if entropy_profile is not None:
+            expected = entropy_profile['members'][i]
+            actual = {'id': i, 'name': spec.name, 'source_sha256': sha(raw), 'flags': spec.flags,
+                      'call_mask': spec.call_mask, 'input_capacity': spec.input_capacity,
+                      'output_capacity': spec.output_capacity, 'workspace_capacity': spec.workspace_capacity}
+            if (any(expected.get(key) != value or type(expected.get(key)) is not type(value)
+                    for key, value in actual.items())
+                    or spec.source.resolve() != (source_root / expected['source']).resolve()):
+                raise ValueError('entropy privilege requires the complete fixed scope composition')
     profile = [{'id': i, 'name': spec.name, 'source_sha256': sha(raw), 'flags': spec.flags,
                 'call_mask': spec.call_mask, 'input_capacity': spec.input_capacity,
                 'output_capacity': spec.output_capacity, 'workspace_capacity': spec.workspace_capacity}
@@ -89,6 +117,8 @@ def build_composition(hepta: Path, build_root: Path, members: list[ModuleSpec], 
             raise ValueError('composition packer source changed during build')
         if (source_root / 'native/io_policy.hepta').read_bytes() != io_raw:
             raise ValueError('composition IO source changed during build')
+        if entropy_profile_raw is not None and entropy_profile_path.read_bytes() != entropy_profile_raw:
+            raise ValueError('privileged entropy profile changed during build')
         for spec, raw in snapshots:
             if spec.source.read_bytes() != raw:
                 raise ValueError('composition member source changed during build')
@@ -98,7 +128,7 @@ def build_composition(hepta: Path, build_root: Path, members: list[ModuleSpec], 
         saved = json.loads(manifest_path.read_bytes())
         if (saved.get('schema') != 'hepta.runtime.native-composition.v1'
                 or saved.get('key') != key or saved.get('profile') != profile
-                or saved.get('compiler_sha256') != compiler_sha):
+                or saved.get('compiler_sha256') != compiler_sha or saved.get('compiler_commit') != HEPTA_COMMIT):
             raise ValueError('cached composition profile differs')
         if sha((destination / 'native-local-read.elf').read_bytes()) != saved.get('executable_sha256'):
             raise ValueError('cached composition executable differs')
@@ -112,7 +142,11 @@ def build_composition(hepta: Path, build_root: Path, members: list[ModuleSpec], 
             path = destination / basename
             if sha(path.read_bytes()) != row['manifest_sha256']:
                 raise ValueError('cached composition member manifest differs')
-            _admit(path, compiler_sha, raw)
+            child, image = _admit(path, compiler_sha, raw)
+            if entropy_profile is not None and index:
+                pinned = entropy_profile['members'][index - 1]
+                if child['image_sha256'] != pinned['image_sha256'] or len(image) != pinned['image_bytes']:
+                    raise ValueError('cached privileged scope image differs')
         recheck_sources()
         return manifest_path
 
@@ -124,6 +158,10 @@ def build_composition(hepta: Path, build_root: Path, members: list[ModuleSpec], 
             path = build.compile(name, source, standalone=None)
         metadata, image = _admit(path, compiler_sha, raw)
         compiled.append((path, metadata, image, raw))
+    if entropy_profile is not None:
+        for (_, metadata, image, _), expected in zip(compiled[1:], entropy_profile['members'], strict=True):
+            if metadata['image_sha256'] != expected['image_sha256'] or len(image) != expected['image_bytes']:
+                raise ValueError('privileged scope native image differs')
     frame = bytearray(b'HIABND01' + struct.pack('<3Q', len(members), 0, 0))
     for (spec, raw), (_, meta, image, _) in zip(snapshots, compiled[1:]):
         for field in ('input_capacity', 'output_capacity', 'workspace_capacity'):

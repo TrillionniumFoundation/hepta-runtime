@@ -1,7 +1,7 @@
 """Build and test the declared HIA runtime profile from pinned source bytes.
 
 NATIVE_COMPONENTS_PASS records the fresh full compiler cold gate, native tests
-and their retained Python comparisons. Aggregate PASS also requires all thirteen
+and their retained Python comparisons. Aggregate PASS also requires all sixteen
 independent Rust comparisons. Neither phase qualifies the remaining 125
 production tool owners, production adoption, or removal of the old runtime.
 """
@@ -32,6 +32,14 @@ from hia_native_entropy_qualification import (CORPUS_FILES as ENTROPY_CORPUS_FIL
                                              entropy_evidence as checked_entropy_evidence)
 from hia_native_scope_qualification import (CORPUS_FILES as SCOPE_CORPUS_FILES,
                                            FOLDER as SCOPE_FOLDER, scope_evidence as checked_scope_evidence)
+from hia_native_editable_qualification import (CORPUS_FILES as EDITABLE_CORPUS_FILES,
+                                              FOLDER as EDITABLE_FOLDER, editable_evidence as checked_editable_evidence)
+from hia_native_view_qualification import (CORPUS_FILES as VIEW_CORPUS_FILES,
+                                          FOLDER as VIEW_FOLDER, view_evidence as checked_view_evidence)
+from hia_native_scope_os_qualification import (FOLDER as SCOPE_OS_FOLDER, SUITES as SCOPE_OS_SUITES,
+                                              exact_profile as scope_os_profile,
+                                              write_corpus as capture_scope_os_corpus,
+                                              native_evidence as checked_scope_os_evidence)
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -46,6 +54,13 @@ MODULES = (
      "standalone": None, "manifest_env": "HIA_ENDPOINT_MANIFEST", "test": "test_line_endpoint.py"},
     {"key": "delta", "name": "delta", "source": "native/delta.hepta",
      "standalone": "filter", "manifest_env": "HIA_DELTA_MANIFEST", "test": "test_delta.py"},
+    {"key": "editable_content", "name": "editable-content", "source": "native/editable_content.hepta",
+     "standalone": "filter", "manifest_env": "HIA_EDITABLE_MANIFEST", "test": "test_editable_content.py"},
+    {"key": "view_render", "name": "view-render", "source": "native/view_render.hepta",
+     "standalone": "filter", "buffer_profile": "view-render.v1",
+     "companion_sources": ("native/view_filter_packer.hepta",),
+     "manifest_env": "HIA_VIEW_MANIFEST", "test": "test_view_render.py",
+     "additional_tests": ("test_view_transport.py",)},
     {"key": "binary_codec", "name": "binary-codec", "source": "native/binary_codec.hepta",
      "standalone": "filter", "manifest_env": "HIA_CODEC_MANIFEST", "test": "test_binary_codec.py"},
     {"key": "operation_kdf", "name": "operation-kdf", "source": "native/operation_kdf.hepta",
@@ -62,6 +77,9 @@ MODULES = (
      "additional_tests": ("test_entropy_packer.py", "test_entropy_kernel_backend.py", "test_entropy_transport.py")},
     {"key": "operation_scope", "name": "operation-scope", "source": "native/operation_scope.hepta",
      "builder": "scope_composition", "manifest_env": "HIA_SCOPE_MANIFEST", "test": "test_operation_scope.py"},
+    {"key": "operation_scope_os", "name": "operation-scope-os", "source": "native/operation_scope.hepta",
+     "builder": "scope_os_composition", "manifest_env": "HIA_SCOPE_OS_MANIFEST", "test": "test_scope_os.py",
+     "additional_tests": ("test_scope_os_packer.py", "test_scope_os_evidence.py")},
     {"key": "policy", "name": "policy", "source": "native/policy.hepta",
      "standalone": "filter", "manifest_env": "HIA_POLICY_MANIFEST", "test": "test_policy.py"},
     {"key": "stat_version", "name": "stat-version", "source": "native/stat_version.hepta",
@@ -130,6 +148,8 @@ def sources() -> dict:
         "hia_native_io_build.py", "hia_native_composition_build.py", "hia_native_record_build.py", "hia_native_cold.py",
         "hia_native_entropy_build.py", "hia_native_entropy_qualification.py",
         "hia_native_scope_build.py", "hia_native_scope_qualification.py",
+        "hia_native_editable_qualification.py", "hia_native_view_qualification.py",
+        "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-runtime-native.yml"))
@@ -326,6 +346,25 @@ def entropy_evidence(output: Path, report: dict) -> dict:
 
 def operation_scope_evidence(output: Path, report: dict) -> dict:
     return checked_scope_evidence(ROOT, output, report, completed_test_summary)
+
+
+def editable_content_evidence(output: Path, report: dict) -> dict:
+    return checked_editable_evidence(ROOT, output, report, completed_test_summary)
+
+
+def view_render_evidence(output: Path, report: dict) -> dict:
+    return checked_view_evidence(ROOT, output, report, completed_test_summary)
+
+
+def operation_scope_os_evidence(output: Path, report: dict) -> dict:
+    checks = {}
+    for name, _, receipt, _, _ in SCOPE_OS_SUITES:
+        check, summary = completed_test_summary(output, report, name)
+        retained = json.loads((output / SCOPE_OS_FOLDER / receipt).read_bytes())
+        if {key: value for key, value in retained.items() if key != "cases"} != summary:
+            raise ValueError("OS scope retained observations differ from completed suite stdout: " + name)
+        checks[name] = {key: check[key] for key in ("stdout_sha256", "stderr_sha256")}
+    return {**checked_scope_os_evidence(ROOT, output, report), "checks": checks}
 
 
 def full_io_reference_evidence(output: Path, report: dict) -> dict:
@@ -1391,6 +1430,7 @@ def run(output: Path, hepta: Path) -> dict:
         report["phase"] = "native_components"
         report["modules"] = {}
         (output / ENTROPY_FOLDER).mkdir(mode=0o700)
+        (output / SCOPE_OS_FOLDER).mkdir(mode=0o700)
         env = qualification_env()
         env.update({
             "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
@@ -1398,6 +1438,8 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
             "HIA_ENDPOINT_CORPUS_DIR": str(output / "endpoint-rust-oracle"),
             "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
+            "HIA_EDITABLE_CORPUS_DIR": str(output / EDITABLE_FOLDER),
+            "HIA_VIEW_CORPUS_DIR": str(output / VIEW_FOLDER),
             "HIA_CODEC_CORPUS_DIR": str(output / "codec-rust-oracle"),
             "HIA_KDF_CORPUS_DIR": str(output / "operation-kdf-rust-oracle"),
             "HIA_AEAD_CORPUS_DIR": str(output / "operation-aead-rust-oracle"),
@@ -1423,6 +1465,8 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_MULTI_READ_CORPUS_DIR": str(output / "multi-read-rust-oracle"),
             "HIA_REFERENCE_RUNTIME": str(ROOT),
         })
+        env.update({variable: str(output / SCOPE_OS_FOLDER / receipt)
+                    for _, variable, receipt, _, _ in SCOPE_OS_SUITES})
         for item in MODULES:
             if item.get("builder") == "io":
                 from hia_native_io_build import build_io
@@ -1440,8 +1484,12 @@ def run(output: Path, hepta: Path) -> dict:
             elif item.get("builder") == "scope_composition":
                 from hia_native_scope_build import build_scope
                 built = build_scope(hepta, output / "build")
+            elif item.get("builder") == "scope_os_composition":
+                from hia_native_scope_os_build import build_scope_os
+                built = build_scope_os(hepta, output / "build")
             else:
-                built = builder.compile(item["name"], ROOT / item["source"], standalone=item["standalone"])
+                built = builder.compile(item["name"], ROOT / item["source"], standalone=item["standalone"],
+                                        buffer_profile=item.get("buffer_profile", "standard"))
             report["modules"][item["key"]] = {
                 "manifest": str(built.relative_to(output)), "sha256": sha(built), "source": item["source"],
                 "builder": item.get("builder", "borrowed_bytes")}
@@ -1473,6 +1521,11 @@ def run(output: Path, hepta: Path) -> dict:
         capture_entropy_corpus(ROOT, output, report, completed_test_summary)
         report["system_entropy_evidence"] = entropy_evidence(output, report)
         report["operation_scope_evidence"] = operation_scope_evidence(output, report)
+        report["editable_content_evidence"] = editable_content_evidence(output, report)
+        report["view_render_evidence"] = view_render_evidence(output, report)
+        scope_os_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
+        capture_scope_os_corpus(ROOT, output / SCOPE_OS_FOLDER, scope_os_profile(ROOT, scope_os_manifest))
+        report["operation_scope_os_evidence"] = operation_scope_os_evidence(output, report)
         report["retained_python_comparison_status"] = "PASS"
         report["python_reference_inputs"] = {
             "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
@@ -1491,7 +1544,11 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])
         report["rust_oracle_inputs"].update({
             SCOPE_FOLDER + "/" + name: sha(output / SCOPE_FOLDER / name) for name in SCOPE_CORPUS_FILES})
+        for folder, names in ((EDITABLE_FOLDER, EDITABLE_CORPUS_FILES), (VIEW_FOLDER, VIEW_CORPUS_FILES)):
+            report["rust_oracle_inputs"].update({folder + "/" + name: sha(output / folder / name) for name in names})
         report["rust_oracle_inputs"].update(report["operation_scope_evidence"]["composition"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["corpus_sha256"])
+        report["rust_oracle_inputs"].update(report["operation_scope_os_evidence"]["composition"]["artifact_sha256"])
         report["rust_oracle_inputs"].update({
             "text-rust-oracle/" + name: sha(output / "text-rust-oracle" / name)
             for name in ("native-corpus.json", "requests.hex", "native-output.txt")})

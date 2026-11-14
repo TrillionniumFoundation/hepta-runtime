@@ -25,6 +25,11 @@ from hia_native_scope_qualification import (COUNTS as SCOPE_COUNTS, SPECS as SCO
                                            check_row as check_scope_row,
                                            composition_evidence as scope_composition_evidence,
                                            test_coverage as scope_test_coverage)
+from hia_native_editable_qualification import (COUNTS as EDITABLE_COUNTS, exact_counts as editable_counts,
+                                              exact_filter_image as editable_filter_image)
+from hia_native_view_qualification import (NATIVE_COUNTS as VIEW_COUNTS, TRANSPORT_COUNTS as VIEW_TRANSPORT_COUNTS,
+                                          exact_counts as view_counts, exact_filter_image as view_filter_image,
+                                          stream_identity as view_stream_identity)
 
 
 class QualificationReportingTests(unittest.TestCase):
@@ -33,6 +38,47 @@ class QualificationReportingTests(unittest.TestCase):
         self.addCleanup(self.folder.cleanup)
         self.output = Path(self.folder.name)
         self.report = {"phase": "reporting-regression", "checks": []}
+
+    def test_editable_and_view_capture_domains_cannot_be_shortened_or_boolean(self):
+        for expected, check in ((EDITABLE_COUNTS, editable_counts),
+                                (VIEW_COUNTS, lambda value: view_counts(value, VIEW_COUNTS)),
+                                (VIEW_TRANSPORT_COUNTS, lambda value: view_counts(value, VIEW_TRANSPORT_COUNTS))):
+            check(dict(expected))
+            for field in expected:
+                for value in (expected[field] - 1, True):
+                    with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                        check(dict(expected, **{field: value}))
+                missing = dict(expected)
+                del missing[field]
+                with self.subTest(missing=field), self.assertRaises(ValueError):
+                    check(missing)
+
+    def test_text_filter_metadata_cannot_authorize_a_different_image_or_prefix(self):
+        image = b"owned test image"
+        prefix = bytearray(489)
+        for offset in (96, 104):
+            prefix[offset:offset + 8] = (len(prefix) + len(image)).to_bytes(8, "little")
+        prefix[338:342] = (147).to_bytes(4, "little")
+        candidate = prefix + image
+        for check in (editable_filter_image, view_filter_image):
+            with self.assertRaisesRegex(ValueError, "transport|filter"):
+                check(candidate, image)
+            with self.assertRaisesRegex(ValueError, "exact admitted native image"):
+                check(candidate, b"changed test image")
+            with self.assertRaisesRegex(ValueError, "exact admitted native image"):
+                check(candidate + b"extra", image)
+
+    def test_view_streamed_corpus_requires_all_rows_within_its_byte_domain(self):
+        import gzip
+        path = self.output / "corpus.gz"
+        path.write_bytes(gzip.compress(b"OK 00\n" * 3124))
+        with self.assertRaisesRegex(ValueError, "row accounting"):
+            view_stream_identity(path, 1 << 20)
+        path.write_bytes(gzip.compress(b"OK 00\n" * 3125))
+        with self.assertRaisesRegex(ValueError, "exceeds"):
+            view_stream_identity(path, 100)
+        size, _ = view_stream_identity(path, 1 << 20)
+        self.assertEqual(size, 6 * 3125)
 
     def test_entropy_requires_all_four_exact_test_groups_without_skips(self):
         self.assertEqual([row[3] for row in ENTROPY_SUITES], [11, 5, 8, 6])

@@ -24,6 +24,10 @@ MAX_IMAGE = 1 << 20
 INPUT_BYTES = 8 << 20
 OUTPUT_BYTES = 8 << 20
 WORKSPACE_BYTES = 32 << 20
+BUFFER_PROFILES = {
+    "standard": (INPUT_BYTES, OUTPUT_BYTES, WORKSPACE_BYTES),
+    "view-render.v1": (16 << 20, 16 << 20, 256 << 20),
+}
 HERE = Path(__file__).resolve().parents[1]
 
 
@@ -170,12 +174,18 @@ class NativeBuild:
         self.compiler_sha256 = digest(generations[2])
         return previous
 
-    def compile(self, name: str, source_path: str | Path, *, standalone: str | None = "filter") -> Path:
+    def compile(self, name: str, source_path: str | Path, *, standalone: str | None = "filter",
+                buffer_profile: str = "standard") -> Path:
         """Return a manifest for a real HIA-compiled three-buffer component."""
         if type(name) is not str or not re.fullmatch("[A-Za-z][A-Za-z0-9_-]{0,63}", name):
             raise ValueError("invalid native module name")
         if standalone not in {None, "filter", "stdio"}:
             raise ValueError("unknown native transport")
+        if buffer_profile not in BUFFER_PROFILES:
+            raise ValueError("unknown native buffer profile")
+        if buffer_profile != "standard" and standalone == "stdio":
+            raise ValueError("view-render profile has no stdio transport")
+        input_bytes, output_bytes, workspace_bytes = BUFFER_PROFILES[buffer_profile]
         compiler = self.bootstrap()
         compiler_raw = compiler.read_bytes()
         original_path = Path(source_path).resolve(strict=True)
@@ -204,11 +214,16 @@ class NativeBuild:
             "abi": ABI, "target": "linux-x86_64", "compiler_commit": HEPTA_COMMIT,
             "compiler_sha256": digest(compiler_raw), "source": name + ".hepta",
             "source_sha256": digest(source), "image": image.name,
-            "image_sha256": digest(image_raw), "input_capacity": INPUT_BYTES,
-            "output_capacity": OUTPUT_BYTES, "workspace_capacity": WORKSPACE_BYTES,
+            "image_sha256": digest(image_raw), "input_capacity": input_bytes,
+            "output_capacity": output_bytes, "workspace_capacity": workspace_bytes,
             "qualification": "development_fixed_point", "standalone": None}
+        if buffer_profile != "standard":
+            manifest["buffer_profile"] = buffer_profile
         if standalone is not None:
-            packer_source = HERE / "native" / ("stdio_packer.hepta" if standalone == "stdio" else "filter_packer.hepta")
+            packer_name = "stdio_packer.hepta" if standalone == "stdio" else "filter_packer.hepta"
+            if buffer_profile == "view-render.v1":
+                packer_name = "view_filter_packer.hepta"
+            packer_source = HERE / "native" / packer_name
             packer_bytes = packer_source.read_bytes()
             packer_cache = self.root / "packers" / digest(packer_bytes)
             if packer_cache.exists():
@@ -262,12 +277,14 @@ def main():
     parser.add_argument("--source", type=Path)
     parser.add_argument("--name")
     parser.add_argument("--transport", choices=("filter", "stdio", "image"), default="filter")
+    parser.add_argument("--buffer-profile", choices=tuple(BUFFER_PROFILES), default="standard")
     args = parser.parse_args()
     if bool(args.source) != bool(args.name):
         parser.error("--source and --name are required together")
     builder = NativeBuild(args.hepta, args.build_root)
     result = builder.compile(args.name, args.source,
-        standalone=None if args.transport == "image" else args.transport) if args.source else builder.bootstrap()
+        standalone=None if args.transport == "image" else args.transport,
+        buffer_profile=args.buffer_profile) if args.source else builder.bootstrap()
     print(json.dumps({"result": str(result), "compiler_commit": HEPTA_COMMIT}))
 
 

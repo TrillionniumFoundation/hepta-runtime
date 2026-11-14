@@ -21,9 +21,11 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
+                                       editable_content_evidence, view_render_evidence,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        operation_record_evidence, operation_scope_evidence,
+                                       operation_scope_os_evidence,
                                        python_reference_evidence, qualification_env,
                                        record_check, save_report, sha, sources)
 from check_hia_native_inventory import RUNTIME_BASE_COMMIT, check_original_sources
@@ -34,6 +36,10 @@ from hia_native_entropy_qualification import (FOLDER as ENTROPY_FOLDER, KERNEL_R
                                              normalized_kernel_report, object_at as entropy_object,
                                              oracle_dependencies as entropy_dependencies)
 from hia_native_scope_qualification import FOLDER as SCOPE_FOLDER, ORACLE_COUNTS as SCOPE_ORACLE_COUNTS
+from hia_native_editable_qualification import FOLDER as EDITABLE_FOLDER, CASES as EDITABLE_CASES
+from hia_native_view_qualification import FOLDER as VIEW_FOLDER, CASES as VIEW_CASES, stream_identity as view_stream_identity
+from hia_native_scope_os_qualification import (FOLDER as SCOPE_OS_FOLDER, PAIRED_RECEIPT as SCOPE_OS_PAIRED_RECEIPT,
+                                              exact_profile as scope_os_profile, paired_evidence as scope_os_paired_evidence)
 
 
 def digest(raw: bytes) -> str:
@@ -103,6 +109,12 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required entropy compiler/effect/transport/trace evidence differs")
     if report.get("operation_scope_evidence") != operation_scope_evidence(output, report):
         raise ValueError("required private scope lifetime/composition/reference-domain evidence differs")
+    if report.get("editable_content_evidence") != editable_content_evidence(output, report):
+        raise ValueError("required editable state/byte-preservation/static-image evidence differs")
+    if report.get("view_render_evidence") != view_render_evidence(output, report):
+        raise ValueError("required complete view byte-domain/cache-plan/transport evidence differs")
+    if report.get("operation_scope_os_evidence") != operation_scope_os_evidence(output, report):
+        raise ValueError("required actual OS entropy/scope/custody evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
         for relative, expected in report[collection].items():
             path = Path(relative)
@@ -123,7 +135,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "entropy"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -758,7 +770,151 @@ def compare_operation_scope(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_operation_scope_os(output: Path, report: dict, rustc: Path) -> dict:
+    evidence = operation_scope_os_evidence(output, report)
+    if evidence != report.get("operation_scope_os_evidence"):
+        raise ValueError("OS scope native source or complete traces changed before original Rust comparison")
+    folder = output / SCOPE_OS_FOLDER
+    manifest = ROOT / "tests/hia_native/scope_os_oracle/Cargo.toml"
+    target = folder / "target"
+    if target.exists():
+        raise ValueError("OS scope original reference target directory already exists")
+    env = qualification_env()
+    removed = sorted(key for key in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_TARGET") if key in env)
+    for key in removed:
+        env.pop(key)
+    env.update({"HIA_REFERENCE_RUNTIME": str(ROOT), "RUSTC": str(rustc)})
+    record_check(output, report, name="operation-scope-os-rust-compile",
+                 command=[str(executable("cargo")), "build", "--locked", "--release",
+                          "--manifest-path", str(manifest), "--target-dir", str(target)], env=env, timeout=180)
+    generated = list((target / "release/build").glob("hia-operation-scope-os-reference-*/out/original_operation_reference.rs"))
+    expected_source = (b"#[allow(dead_code)]\nmod original {\n"
+                       + (ROOT / "src/mcp/runtime/operation_crypto.rs").read_bytes() + b"\n"
+                       + (ROOT / "tests/hia_native/scope_os_oracle/original_access.rs").read_bytes() + b"\n}\n")
+    if len(generated) != 1 or generated[0].read_bytes() != expected_source:
+        raise ValueError("OS scope oracle did not retain the complete unchanged original module")
+    fingerprints = list((target / "release/.fingerprint").glob("getrandom-*/lib-getrandom.json"))
+    if len(fingerprints) != 1:
+        raise ValueError("OS scope original requires exactly one default getrandom backend")
+    fingerprint = json.loads(fingerprints[0].read_bytes())
+    if fingerprint.get("features") != "[]" or fingerprint.get("rustflags") != []:
+        raise ValueError("OS scope original getrandom feature/cfg backend differs")
+    binary = target / "release/hia-operation-scope-os-reference"
+    binary_hash = sha(binary)
+    native_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
+    artifact = scope_os_profile(ROOT, native_manifest)
+    env.update({"HIA_SCOPE_OS_MANIFEST": str(native_manifest), "HIA_SCOPE_OS_REFERENCE_BINARY": str(binary),
+                "HIA_SCOPE_OS_REFERENCE_SHA256": binary_hash,
+                "HIA_SCOPE_OS_RESULT": str(folder / SCOPE_OS_PAIRED_RECEIPT)})
+    record_check(output, report, name="operation-scope-os-rust-compare",
+                 command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/test_scope_os.py")],
+                 env=env, timeout=180)
+    check, summary = completed_test_summary(output, report, "operation-scope-os-rust-compare")
+    retained = json.loads((folder / SCOPE_OS_PAIRED_RECEIPT).read_bytes())
+    if {key: value for key, value in retained.items() if key != "cases"} != summary:
+        raise ValueError("OS scope paired raw observations differ from completed process stdout")
+    paired = scope_os_paired_evidence(ROOT, folder, artifact, binary_hash)
+    if sha(binary) != binary_hash or operation_scope_os_evidence(output, report) != evidence:
+        raise ValueError("OS scope source, observed native corpus or original binary changed during comparison")
+    result = {**paired, "schema": "hepta.runtime.operation-scope-os-rust-comparison.v1",
+              "reference_kind": "complete unchanged original ResultCryptoScope with default Linux SystemEntropy and live original clones",
+              "native_corpus_sha256": evidence["corpus_sha256"],
+              "generated_original_module_sha256": sha(generated[0]),
+              "getrandom_fingerprint_sha256": sha(fingerprints[0]),
+              "getrandom_features": [], "getrandom_rustflags": [], "cleared_backend_overrides": removed,
+              "original_stdout_sha256": check["stdout_sha256"], "original_stderr_sha256": check["stderr_sha256"],
+              "real_os_entropy_connected": True, "original_runtime_lock_identical": False,
+              "concurrent_shared_capability_qualified": False, "production_activated": False, "whole_runtime_replaced": False}
+    with (folder / "rust-comparison.json").open("x") as stream:
+        stream.write(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
+def compare_editable_content(output: Path, report: dict, rustc: Path) -> dict:
+    evidence = editable_content_evidence(output, report)
+    if evidence != report.get("editable_content_evidence"):
+        raise ValueError("editable native state history changed before original Rust replay")
+    folder = output / EDITABLE_FOLDER
+    target = folder / "target"
+    if target.exists():
+        raise ValueError("editable original reference target already exists")
+    manifest = ROOT / "tests/hia_native/editable_oracle/Cargo.toml"
+    env = qualification_env()
+    env.update({"RUSTC": str(rustc), "RUSTFLAGS": "-C overflow-checks=off"})
+    record_check(output, report, name="editable-content-rust-compile",
+                 command=[str(executable("cargo")), "build", "--locked", "--release",
+                          "--manifest-path", str(manifest), "--target-dir", str(target)], env=env, timeout=180)
+    binary = target / "release/hia-editable-original-reference"
+    binary_hash = sha(binary)
+    row = record_check(output, report, name="editable-content-rust-compare",
+                       command=[str(binary)], input_bytes=(folder / "requests.hex").read_bytes(), env=env, timeout=60)
+    if (row.stderr or row.stdout != (folder / "native-output.txt").read_bytes()
+            or row.stdout.count(b"\n") != EDITABLE_CASES or sha(binary) != binary_hash
+            or editable_content_evidence(output, report) != evidence):
+        raise ValueError("original EditableContent complete ordered responses differ")
+    result = {"schema": "hepta.runtime.editable-rust-comparison.v1", "status": "PASS",
+              "cases": EDITABLE_CASES, "native_cases_added_by_replay": 0,
+              "reference_kind": "unchanged original EditableContent and incoming-line methods with typed test transport",
+              "input_sha256": evidence["input_sha256"], "native_output_sha256": evidence["native_output_sha256"],
+              "original_output_sha256": digest(row.stdout), "oracle_executable_sha256": binary_hash,
+              "oracle_sources_sha256": evidence["oracle_sources_sha256"],
+              "original_source_sha256": evidence["original_source_sha256"],
+              "corpus_metadata_sha256": evidence["corpus_metadata_sha256"],
+              "complete_original_tool_parity": False, "production_activated": False, "whole_runtime_replaced": False}
+    with (folder / "rust-comparison.json").open("x") as stream:
+        stream.write(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
+def compare_view_render(output: Path, report: dict, rustc: Path) -> dict:
+    evidence = view_render_evidence(output, report)
+    if evidence != report.get("view_render_evidence"):
+        raise ValueError("view native read snapshots or rendered bytes changed before original Rust replay")
+    folder = output / VIEW_FOLDER
+    source = ROOT / "tests/hia_native/oracle_view_render.rs"
+    binary = folder / "original-view.elf"
+    rust_compile(output, report, rustc, key="view-render-rust", source=source, binary=binary,
+                 extra=("-C", "overflow-checks=off"))
+    binary_hash = sha(binary)
+    replay = folder / "original-replay"
+    row = record_check(output, report, name="view-render-rust-compare",
+        command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_view_original.py"),
+                 "--source", str(source), "--binary", str(binary),
+                 "--requests", str(folder / "requests.hex.gz"),
+                 "--expected", str(folder / "native-output.txt.gz"),
+                 "--metadata", str(folder / "native-corpus.json"), "--output", str(replay)],
+        env=qualification_env(), timeout=60)
+    observed = json.loads(row.stdout)
+    if (row.stderr or observed.get("status") != "PASS" or type(observed.get("cases")) is not int
+            or observed["cases"] != VIEW_CASES or observed.get("run_exit_code") != 0
+            or observed.get("compiled_by_qualification_recipe") is not True
+            or observed.get("native_and_rust_output_sha256") != evidence["native_output_sha256"]
+            or observed.get("raw_output_bytes") != evidence["native_output_bytes"]
+            or observed.get("executable", {}).get("sha256") != binary_hash
+            or observed.get("inputs_before") != observed.get("inputs_after")
+            or json.loads((replay / "result.json").read_bytes()) != observed
+            or view_stream_identity(replay / "rust-output.txt.gz", evidence["native_output_bytes"]) != (
+                evidence["native_output_bytes"], evidence["native_output_sha256"])
+            or sha(binary) != binary_hash or view_render_evidence(output, report) != evidence):
+        raise ValueError("original view complete ordered responses or source custody differ")
+    result = {"schema": "hepta.runtime.view-render-rust-comparison.v1", "status": "PASS",
+              "cases": VIEW_CASES, "native_cases_added_by_replay": 0,
+              "reference_kind": "unchanged original range, file render, cache, delta and result gate methods with independent read fixtures",
+              "input_sha256": evidence["input_sha256"], "native_output_sha256": evidence["native_output_sha256"],
+              "original_output_sha256": observed["native_and_rust_output_sha256"],
+              "oracle_executable_sha256": binary_hash, "oracle_sources_sha256": evidence["oracle_sources_sha256"],
+              "original_sources_sha256": evidence["original_sources_sha256"],
+              "corpus_metadata_sha256": evidence["corpus_metadata_sha256"],
+              "original_replay_receipt_sha256": sha(replay / "result.json"),
+              "complete_original_tool_parity": False, "production_activated": False, "whole_runtime_replaced": False}
+    with (folder / "rust-comparison.json").open("x") as stream:
+        stream.write(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
+           "editable_content": compare_editable_content, "view_render": compare_view_render,
+           "operation_scope_os": compare_operation_scope_os,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,
            "operation_kdf": compare_operation_kdf, "operation_aead": compare_operation_aead,
