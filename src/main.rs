@@ -17,8 +17,7 @@ use clap::Parser;
 use tracing::Level;
 
 mod cli;
-pub mod mcp;
-pub mod utils;
+use hepta_runtime::mcp;
 
 use cli::{Cli, Commands};
 
