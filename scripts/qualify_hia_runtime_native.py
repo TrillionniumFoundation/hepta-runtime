@@ -1,7 +1,7 @@
 """Build and test the declared HIA runtime profile from pinned source bytes.
 
 NATIVE_COMPONENTS_PASS records the fresh full compiler cold gate, native tests
-and their retained Python comparisons. Aggregate PASS also requires all six
+and their retained Python comparisons. Aggregate PASS also requires all seven
 independent Rust comparisons. Neither phase qualifies the remaining 125
 production tool owners, production adoption, or removal of the old runtime.
 """
@@ -48,10 +48,14 @@ MODULES = (
      "standalone": "filter", "manifest_env": "HIA_STAT_VERSION_MANIFEST", "test": "test_stat_version.py"},
     {"key": "native_io", "name": "native-io", "source": "native/io_policy.hepta",
      "companion_sources": ("native/io_packer.hepta",), "builder": "io",
-     "manifest_env": "HIA_IO_MANIFEST", "test": "test_native_io.py"},
+     "manifest_env": "HIA_IO_MANIFEST", "test": "test_native_io.py",
+     "additional_tests": ("test_native_full_io.py",)},
+    {"key": "multi_read_service", "name": "multi-read-service", "source": "native/multi_read_service.hepta",
+     "standalone": None, "manifest_env": "HIA_MULTI_READ_MANIFEST", "test": "test_multi_read_controller.py"},
     {"key": "local_service", "name": "local-service", "source": "native/local_service.hepta",
      "companion_sources": ("native/composition_packer.hepta",), "builder": "composition",
-     "manifest_env": "HIA_SERVICE_MANIFEST", "test": "test_local_service.py"},
+     "manifest_env": "HIA_SERVICE_MANIFEST", "test": "test_local_service.py",
+     "additional_tests": ("test_multi_service.py",)},
 )
 PACKERS = {"native/filter_packer.hepta", "native/stdio_packer.hepta"}
 EXTRA_TESTS = ("test_transport.py", "test_native_composition.py", "test_qualification_reporting.py")
@@ -268,11 +272,31 @@ def completed_test_summary(output: Path, report: dict, name: str) -> tuple[dict,
     return check, summary
 
 
+def full_io_reference_evidence(output: Path, report: dict) -> dict:
+    """Retain operation-two filesystem comparisons separately from chunk reads."""
+    check, summary = completed_test_summary(output, report, "test_native_full_io.py")
+    counts = {"elf_requests": 123, "original_read_comparisons": 0, "original_full_read_comparisons": 63}
+    if summary.get("status") != "PASS" or summary.get("native_full_io") != counts:
+        raise ValueError("native full IO retained-reference coverage differs")
+    originals = report["inventory"]["original_sources"]
+    return {"status": "PASS", "reference_kind": "live original Python complete single-link file read",
+            "actual_elf_requests": 123, "original_full_read_comparisons": 63,
+            "valid_full_read_comparisons": 41, "invalid_utf8_comparisons": 22,
+            "chunk_read_comparisons_added": 0, "native_cases_added_by_replay": 0,
+            "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
+            "module_manifest_sha256": report["modules"]["native_io"]["sha256"],
+            "original_sources": {name: originals[name] for name in (
+                "src/mcp/runtime/multi_read_host.py", "src/mcp/runtime/binary_file.py",
+                "src/mcp/runtime/file_metadata.py")},
+            "scope": "operation-two complete UTF-8 reads, link/version checks and pathname confirmation",
+            "complete_original_remote_tool_parity": False}
+
+
 def local_service_reference_evidence(output: Path, report: dict) -> dict:
     """Account the live original helper comparisons at the actual MCP boundary."""
     check, summary = completed_test_summary(output, report, "test_local_service.py")
     counts = {"elf_requests": 234, "original_read_comparisons": 118,
-              "protocol_errors": 20, "domain_errors": 21, "native_controller_calls": 7}
+              "protocol_errors": 20, "domain_errors": 21, "native_controller_calls": 8}
     if (summary.get("schema") != "hepta.runtime.native-local-service-test.v1"
             or summary.get("status") != "pass" or summary.get("counts") != counts):
         raise ValueError("local service retained-reference coverage differs")
@@ -292,7 +316,7 @@ def local_service_reference_evidence(output: Path, report: dict) -> dict:
             "actual_elf_requests": counts["elf_requests"], "native_cases_added_by_replay": 0,
             "protocol_refusals": counts["protocol_errors"], "domain_refusals": counts["domain_errors"],
             "isolated_controller_calls": counts["native_controller_calls"],
-            "controller_startup_acknowledgement": "explicit lifecycle fixture; no file operation",
+            "controller_startup_acknowledgement": "two explicit lifecycle fixture acknowledgements; no file operation",
             "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
             "live_reference_receipt_sha256": sha(capture),
             "module_manifest_sha256": module["sha256"], "executable_sha256": metadata["executable_sha256"],
@@ -302,6 +326,70 @@ def local_service_reference_evidence(output: Path, report: dict) -> dict:
                 "src/mcp/runtime/inspect.rs", "src/mcp/runtime/ssh.rs", "src/mcp/server.rs")},
             "scope": "explicit administrator-owned native-local read-only profile; host_list and binary_read subset",
             "complete_original_remote_tool_parity": False, "production_activated": False}
+
+
+def multi_service_reference_evidence(output: Path, report: dict) -> dict:
+    """Bind real composed MCP batches to live original filesystem results."""
+    check, summary = completed_test_summary(output, report, "test_multi_service.py")
+    counts = {"elf_requests": 101, "all_actual_elf_responses": 108,
+              "original_batch_comparisons": 57, "original_failure_comparisons": 13,
+              "expected_domain_refusals": 33, "expected_parameter_refusals": 11,
+              "original_budget_boundary_pairs": 4}
+    if (summary.get("schema") != "hepta.runtime.native-multi-service-test.v1"
+            or summary.get("status") != "pass" or summary.get("counts") != counts):
+        raise ValueError("multi-file service retained-reference coverage differs")
+    capture = output / "multi-service-python-reference.json"
+    if json.loads(capture.read_bytes()) != summary:
+        raise ValueError("multi-file service live receipt differs from actual stdout")
+    module = report["modules"]["local_service"]
+    manifest = output / module["manifest"]
+    metadata = json.loads(manifest.read_bytes())
+    originals = report["inventory"]["original_sources"]
+    if (sha(manifest) != module["sha256"] or summary.get("manifest_sha256") != module["sha256"]
+            or summary.get("executable_sha256") != metadata.get("executable_sha256")
+            or summary.get("original_helper_sha256") != originals["src/mcp/runtime/multi_read_host.py"]["sha256"]):
+        raise ValueError("multi-file service executable or original helper identity differs")
+    return {"status": "PASS", "reference_kind": "live original Python multi-file results through actual native MCP",
+            "actual_elf_responses": 108, "batch_tool_calls": 101,
+            "original_batch_success_comparisons": 57, "original_batch_failure_comparisons": 13,
+            "original_budget_boundary_pairs": 4, "parameter_refusals": 11, "domain_refusals": 33,
+            "native_cases_added_by_replay": 0, "synthetic_io_comparisons": 0,
+            "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
+            "live_reference_receipt_sha256": sha(capture),
+            "module_manifest_sha256": module["sha256"], "executable_sha256": metadata["executable_sha256"],
+            "original_sources": {name: originals[name] for name in (
+                "src/mcp/runtime/multi_read.rs", "src/mcp/runtime/multi_read_host.py",
+                "src/mcp/runtime/binary_file.py", "src/mcp/runtime/file_metadata.py",
+                "src/mcp/runtime/config.rs", "src/mcp/server.rs")},
+            "scope": "native-local read_multiple_files; complete UTF-8 results and exact MCP result budget",
+            "complete_original_remote_tool_parity": False, "production_activated": False}
+
+
+def multi_read_controller_evidence(output: Path, report: dict) -> dict:
+    """Synthetic IO is a controller control, never real filesystem coverage."""
+    check, summary = completed_test_summary(output, report, "test_multi_read_controller.py")
+    counts = {"requests": 1747, "native_controller_calls": 1946, "native_leaf_calls": 137,
+              "fixture_io_calls": 53, "original_wire_size_calls": 1,
+              "original_rust_validation_cases": 1689, "actual_elf_requests": 0}
+    if (summary.get("status") != "PASS" or summary.get("counts") != counts
+            or summary.get("scope") != "native controller with explicitly synthetic IO completions"):
+        raise ValueError("multi-read controller fixture/reference accounting differs")
+    owner = report["modules"]["multi_read_service"]
+    manifest = output / owner["manifest"]
+    metadata = json.loads(manifest.read_bytes())
+    corpus_path = output / "multi-read-rust-oracle/native-corpus.json"
+    corpus = json.loads(corpus_path.read_bytes())
+    if (sha(manifest) != owner["sha256"] or corpus.get("cases") != 1689
+            or corpus.get("source_sha256") != metadata.get("source_sha256")
+            or corpus.get("image_sha256") != metadata.get("image_sha256")):
+        raise ValueError("multi-read controller corpus/image identity differs")
+    return {"status": "PASS", "reference_kind": "native controller with explicit synthetic IO fixtures",
+            "counts": counts, "native_cases_added_by_replay": 0,
+            "module_manifest_sha256": owner["sha256"], "corpus_metadata_sha256": sha(corpus_path),
+            "composition_provenance_sha256": sha(ROOT / "native/multi_read_service_composition.json"),
+            "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
+            "original_wire_size_source": report["inventory"]["original_sources"]["src/mcp/runtime/multi_read_host.py"],
+            "actual_filesystem_comparisons": 0, "complete_original_tool_parity": False}
 
 
 def native_composition_evidence(output: Path, report: dict) -> dict:
@@ -332,18 +420,19 @@ def native_composition_evidence(output: Path, report: dict) -> dict:
             or metadata.get("runtime_libc_required") is not False
             or metadata.get("whole_runtime_replaced") is not False):
         raise ValueError("native composition manifest identity or runtime ownership differs")
-    specs = (("local-service", "native/local_service.hepta", 1, 30, 32 << 20),
+    specs = (("local-service", "native/local_service.hepta", 1, 62, 32 << 20),
              ("policy", "native/policy.hepta", 0, 0, 32 << 20),
              ("codec", "native/binary_codec.hepta", 0, 0, 32 << 20),
-             ("io", "native/io_policy.hepta", 2, 0, 81920),
-             ("stat-version", "native/stat_version.hepta", 0, 0, 32 << 20))
+             ("io", "native/io_policy.hepta", 2, 0, 86016),
+             ("stat-version", "native/stat_version.hepta", 0, 0, 32 << 20),
+             ("multi-read-service", "native/multi_read_service.hepta", 1, 30, 32 << 20))
     profile = [{"id": index, "name": name, "source_sha256": sha(ROOT / source),
                 "flags": flags, "call_mask": mask, "input_capacity": 8 << 20,
                 "output_capacity": 8 << 20, "workspace_capacity": workspace}
                for index, (name, source, flags, mask, workspace) in enumerate(specs)]
     if (json_bytes(metadata.get("profile")) != json_bytes(profile) or type(metadata.get("members")) is not list
             or len(metadata["members"]) != len(specs)):
-        raise ValueError("native composition fixed five-image authority table differs")
+        raise ValueError("native composition fixed six-image authority table differs")
     frame = bytearray(b"HIABND01" + struct.pack("<3Q", len(specs), 0, 0))
     rows = [("packer", "native/composition_packer.hepta", metadata["packer"])]
     rows.extend((f"module_{index:02d}", spec[1], metadata["members"][index]) for index, spec in enumerate(specs))
@@ -368,6 +457,28 @@ def native_composition_evidence(output: Path, report: dict) -> dict:
                 or child.get("workspace_capacity") != 32 << 20):
             raise ValueError("native composition source/image artifact or capacity differs")
         if index:
+            tested_key = (None, "policy", "binary_codec", "native_io", "stat_version", "multi_read_service")[index - 1]
+            if tested_key is not None:
+                tested_owner = report["modules"][tested_key]
+                tested_relative = Path(tested_owner["manifest"])
+                if tested_relative.is_absolute() or ".." in tested_relative.parts:
+                    raise ValueError("tested composition child manifest is outside the retained result")
+                tested_path = output / tested_relative
+                tested_raw = raw_file(tested_path)
+                if digest(tested_raw) != tested_owner["sha256"]:
+                    raise ValueError("tested composition child manifest identity differs")
+                tested = json.loads(tested_raw)
+                if tested_key == "native_io":
+                    if tested.get("policy_manifest") != "policy.json":
+                        raise ValueError("tested IO policy manifest path differs")
+                    tested_raw = raw_file(tested_path.parent / "policy.json")
+                    if digest(tested_raw) != tested["policy_manifest_sha256"]:
+                        raise ValueError("tested IO policy manifest identity differs")
+                    tested = json.loads(tested_raw)
+                if (tested.get("image_sha256") != child["image_sha256"]
+                        or tested.get("source_sha256") != child["source_sha256"]
+                        or tested.get("compiler_sha256") != child["compiler_sha256"]):
+                    raise ValueError("packed child differs from its independently tested native image")
             p = profile[index - 1]
             frame.extend(struct.pack("<8Q", len(image), p["input_capacity"], p["output_capacity"],
                                      p["workspace_capacity"], p["flags"], p["call_mask"], 0, 0))
@@ -400,8 +511,10 @@ def native_composition_evidence(output: Path, report: dict) -> dict:
 
 def python_reference_evidence(output: Path, report: dict) -> dict:
     return {"native_io": io_reference_evidence(output, report),
+            "native_full_io": full_io_reference_evidence(output, report),
             "stat_version": stat_version_reference_evidence(output, report),
-            "local_service": local_service_reference_evidence(output, report)}
+            "local_service": local_service_reference_evidence(output, report),
+            "multi_file_service": multi_service_reference_evidence(output, report)}
 
 
 def run(output: Path, hepta: Path) -> dict:
@@ -414,7 +527,7 @@ def run(output: Path, hepta: Path) -> dict:
         "started_at": datetime.now(timezone.utc).isoformat(),
         "checkout_head": None, "source_identity_authority": "source_sha256", "source_sha256": {},
         "compiler_commit": HEPTA_COMMIT, "compiler_tree": HEPTA_TREE,
-        "scope": "native kernels, closed five-image local MCP read profile, and Linux x86-64 stdio/read-only dependencies",
+        "scope": "native kernels, closed six-image local MCP read profile, and Linux x86-64 stdio/read-only dependencies",
         "whole_runtime_replaced": False, "production_activated": False,
         "old_stack_removal_qualified": False, "matching_source_full_cold_qualified": False,
         "compiler_cold_status": "PENDING", "native_components_status": "RUNNING",
@@ -459,6 +572,8 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
             "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
             "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
+            "HIA_MULTI_SERVICE_RESULT": str(output / "multi-service-python-reference.json"),
+            "HIA_MULTI_READ_CORPUS_DIR": str(output / "multi-read-rust-oracle"),
             "HIA_REFERENCE_RUNTIME": str(ROOT),
         })
         for item in MODULES:
@@ -475,19 +590,23 @@ def run(output: Path, hepta: Path) -> dict:
                 "manifest": str(built.relative_to(output)), "sha256": sha(built), "source": item["source"],
                 "builder": item.get("builder", "borrowed_bytes")}
             env[item["manifest_env"]] = str(built)
-        tests = tuple(dict.fromkeys(item["test"] for item in MODULES)) + EXTRA_TESTS
+        tests = tuple(dict.fromkeys(name for item in MODULES
+                                    for name in (item["test"], *item.get("additional_tests", ())))) + EXTRA_TESTS
         for name in tests:
             record_check(output, report, name=name,
                          command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)],
                          env=env, timeout=180)
         report["original_python_comparisons"] = python_reference_evidence(output, report)
         report["native_composition_evidence"] = native_composition_evidence(output, report)
+        report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
         report["retained_python_comparison_status"] = "PASS"
         report["python_reference_inputs"] = {
             "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
             for name in ("native-corpus.json", "stat-version-cases.jsonl.gz")}
         report["python_reference_inputs"]["local-service-python-reference.json"] = sha(
             output / "local-service-python-reference.json")
+        report["python_reference_inputs"]["multi-service-python-reference.json"] = sha(
+            output / "multi-service-python-reference.json")
         report["rust_oracle_inputs"] = {
             "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
         report["rust_oracle_inputs"].update({
@@ -505,6 +624,9 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update({
             "policy-rust-oracle/" + name: sha(output / "policy-rust-oracle" / name)
             for name in ("native-corpus.json", "requests.hex", "native-output.txt")})
+        report["rust_oracle_inputs"].update({
+            "multi-read-rust-oracle/" + name: sha(output / "multi-read-rust-oracle" / name)
+            for name in ("native-corpus.json", "requests.hex.gz", "native-output.txt.gz")})
         builder.bootstrap()  # Revalidate the same compiler image after all tests.
         builder._recheck()
         if sources() != manifest:

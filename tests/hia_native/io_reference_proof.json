@@ -1,22 +1,23 @@
 {
   "artifact_sha256": {
-    "native/io.abi.json": "9f7cd69bc67ae704a883ea938398d41620df7b685b9b846a47e0fa7ac82ebdf4",
-    "native/io_packer.hepta": "a74f580a887f6b4cd7a7bfcca74292a4649327262c9369e8417260a8a1fd9f0e",
-    "native/io_policy.hepta": "7551fab5c709d359746c14b6bfd5fdd2434b5790778cd255718322bab219d473",
-    "scripts/hia_native_io_build.py": "3dbdadd2ea157a7c45418a3947d442e0965191c614c5f7858149fc58c60f7477",
-    "tests/hia_native/io_fault_supervisor.py": "9d96aabbd9667d6f84f1123b38fdd4c4f5d82caa9b183553bdad9aad33b952bf",
+    "native/io.abi.json": "90184fe1b0555c3419fccce228ef12944c45e368125070818b930c551eb7efdd",
+    "native/io_packer.hepta": "bae4106077c9b516654732159bc762ffb644878d6d28a38b4a8a1b805b8c41de",
+    "native/io_policy.hepta": "9c943bddf845ea3f913eb50c326acf36e7b6dd5b8414ccb60878aea5a717fca7",
+    "scripts/hia_native_io_build.py": "961899ef95b4acf4c086117fce80f06143ced6fc29228b99c74d5f387efdccae",
+    "tests/hia_native/io_fault_supervisor.py": "1496bc3abb9159717a1638d183c963e31a1edde1fd500670f86018eaedc36d1a",
     "tests/hia_native/io_invalid_effect_probe.hepta": "fecbb5f407618cb1cccc9e9fafe8efc34f7aba447b751d49edb5dad7b9b4b0df",
-    "tests/hia_native/test_native_io.py": "91b9415f351be99f296c18bcacaaf90e66bb4a022bdb2002bbfdcef141dca0b6"
+    "tests/hia_native/test_native_full_io.py": "c74bbdf12cd039a42b3ab5ee958f578668aaa12f0a439af79b3671849fbe2fa5",
+    "tests/hia_native/test_native_io.py": "4c4d9dfe36a4d18e89e97c43757721a57a1f7df871b4c22fcab6c8756b29ddc3"
   },
   "authorization_distinction": "Startup root inode custody is retained across requests; the original helper reopens parent pathnames each time. Root rename/replacement distinction is an explicit dependency profile and not a caller-authorization parity claim.",
   "compiler_qualification": "development_fixed_point_at_recorded_pin",
-  "fault_evidence": "An unprivileged seccomp notification supervisor applies only to its own child. Normal operations continue in the Linux kernel. It injects one errno or mutates a private test fixture before kernel pread. It never computes read bytes or protocol output. The injected close-EINTR case skips the actual close; the process exits immediately after its error response and kernel teardown releases the injected residue.",
+  "fault_evidence": "An unprivileged seccomp notification supervisor applies only to its own child. Normal operations continue in the Linux kernel. It injects one errno or mutates a private test fixture before kernel pread. It never computes read bytes or protocol output. The injected close-EINTR case skips the actual close; the process exits immediately after its error response and kernel teardown releases the injected residue. Full-read controls additionally grow/link the owned fixture before pread and replace its pathname immediately before the confirmation openat. Invalid UTF-8 is proven to return before that confirmation syscall.",
   "native": {
-    "compiler_commit": "f33d8da316de8fdf27b504371f1a5310997ff548",
+    "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
     "compiler_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
-    "executable_sha256": "28d348cf41e489d6bf3bfeab771bdfa21685b2ee3d2d0007457a3c466072afea",
+    "executable_sha256": "8903300aa4d4e4f61140539d20bc4c85e2fb2d245655c197b4af32cd8da8d2ae",
     "inspection": {
-      "bytes": 102877,
+      "bytes": 136491,
       "dynamic_loader": false,
       "elf_type": "ET_EXEC",
       "entry": 4194480,
@@ -27,11 +28,11 @@
         "PT_LOAD_RX",
         "PT_GNU_STACK_RW"
       ],
-      "sha256": "28d348cf41e489d6bf3bfeab771bdfa21685b2ee3d2d0007457a3c466072afea"
+      "sha256": "8903300aa4d4e4f61140539d20bc4c85e2fb2d245655c197b4af32cd8da8d2ae"
     },
-    "packer_image_sha256": "f96393edaf0b284d77cc9b58a359fe8656526178185b493c63cb79b016435359",
-    "packer_source_sha256": "a74f580a887f6b4cd7a7bfcca74292a4649327262c9369e8417260a8a1fd9f0e",
-    "policy_source_sha256": "7551fab5c709d359746c14b6bfd5fdd2434b5790778cd255718322bab219d473"
+    "packer_image_sha256": "874dd1ff718e4b3cbcac0aa4d510ed363e6d0a1a870644c531f262105a38ee2a",
+    "packer_source_sha256": "bae4106077c9b516654732159bc762ffb644878d6d28a38b4a8a1b805b8c41de",
+    "policy_source_sha256": "9c943bddf845ea3f913eb50c326acf36e7b6dd5b8414ccb60878aea5a717fca7"
   },
   "reference": {
     "binary_file.py_sha256": "c15e8900b0ab867b221ff08d5a10401c8b656c87676f57b478b9a21219f7fe12",
@@ -43,6 +44,15 @@
       "mode"
     ],
     "file_metadata.py_sha256": "24b9df89816536db16dd35a74d6460b1a215981a00798393a00853da6077f5d3",
+    "full_read_compared_fields": [
+      "complete UTF-8 bytes",
+      "offset and EOF",
+      "size",
+      "descriptor version",
+      "SHA256",
+      "invalid UTF-8 rejection"
+    ],
+    "multi_read_host.py_sha256": "6f83b3e1031642e9981310916181858941dec51bb1696a79087beeb60a6e3eb5",
     "not_full_original_tool_parity": true,
     "runtime_commit": "a0dcdda1991ec536d5e2d252c006a778993fa566"
   },
@@ -55,7 +65,10 @@
     ],
     "optional_manifest_environment": "HIA_IO_MANIFEST",
     "required_fault_test_capability": "unprivileged Linux seccomp user notification; no ptrace required",
-    "test": "tests/hia_native/test_native_io.py"
+    "tests": [
+      "tests/hia_native/test_native_io.py",
+      "tests/hia_native/test_native_full_io.py"
+    ]
   },
   "schema": "hepta.runtime.native-io-dependency-proof.v1",
   "scope": "Read-only descriptor capability and bounded byte continuation dependency. No MCP tool or complete filesystem runtime is replaced.",
@@ -66,17 +79,27 @@
     "ELF_only_linux_kernel": true,
     "EOF_and_truncated_frames": true,
     "SIGPIPE_and_dev_full": true,
-    "actual_elf_requests": 113,
+    "actual_elf_requests": 242,
     "cached_policy_image_tampering_rejected": true,
     "checked_pointer_offsets_and_handle_generations": true,
     "close_error_reported_without_retry": true,
+    "descriptor_path_confirmation_races": true,
     "empty_PATH": true,
+    "full_4096_byte_path_matches_original": true,
+    "full_limit_plus_one_actual_kernel_read": true,
+    "full_read_actual_requests": 123,
+    "full_read_groups": 7,
+    "full_read_utf8_rejection_comparisons": 22,
+    "full_read_valid_comparisons": 41,
     "malformed_native_effect_cases": 12,
     "persistent_mixed_success_failure_requests": 60,
     "read_error_cleanup_and_reuse": true,
     "real_partial_kernel_read_then_version_rejection": true,
+    "retained_full_read_comparisons": 63,
     "retained_read_comparisons": 8,
     "root_pathname_replacement_custody": true,
-    "test_groups": 13
+    "single_link_before_after_and_confirmation": true,
+    "strict_utf8_before_path_confirmation": true,
+    "test_groups": 21
   }
 }

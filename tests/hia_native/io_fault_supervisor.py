@@ -32,7 +32,7 @@ class Response(ctypes.Structure):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--log",required=True,type=Path)
-    parser.add_argument("--mode",required=True,choices=["eintr","change","close","read_error"])
+    parser.add_argument("--mode",required=True,choices=["eintr","change","close","read_error","grow","hardlink","confirm_replace","confirm_symlink"])
     parser.add_argument("--fixture",type=Path)
     parser.add_argument("--close-ordinal",type=int,default=0)
     parser.add_argument("command",nargs=argparse.REMAINDER)
@@ -46,7 +46,7 @@ def main():
         parent.close()
         try:
             if libc.prctl(38,1,0,0,0):raise OSError(ctypes.get_errno(),"PR_SET_NO_NEW_PRIVS")
-            instructions=(Filter*5)(Filter(0x20,0,0,0),Filter(0x15,1,0,17),Filter(0x15,0,1,3),
+            instructions=(Filter*6)(Filter(0x20,0,0,0),Filter(0x15,2,0,17),Filter(0x15,1,0,3),Filter(0x15,0,1,257),
                                     Filter(0x06,0,0,0x7fc00000),Filter(0x06,0,0,0x7fff0000))
             program=Program(len(instructions),instructions)
             listener=libc.syscall(317,1,8,ctypes.byref(program))
@@ -62,7 +62,7 @@ def main():
         raise RuntimeError("owned child could not install seccomp notification")
     message,ancillary,_,_=parent.recvmsg(1,socket.CMSG_SPACE(4));parent.close()
     descriptors=array.array("i");descriptors.frombytes(ancillary[0][2][:4]);listener=descriptors[0]
-    events=[];read_count=0;close_count=0;wait_status=None
+    events=[];read_count=0;close_count=0;open_count=0;wait_status=None
     try:
         while True:
             ended,status=os.waitpid(pid,os.WNOHANG)
@@ -86,6 +86,23 @@ def main():
                         args.fixture.write_bytes(b"shortened");event["mode"]="changed_fixture_before_kernel_read"
                     if args.mode=="read_error" and read_count==1:
                         answer.error=-errno.EIO;answer.flags=0;event["mode"]="injected_eio"
+                    if args.mode=="grow" and read_count==1:
+                        with args.fixture.open("ab") as file:
+                            file.write(b"A")
+                        event["mode"]="grew_fixture_before_kernel_read"
+                    if args.mode=="hardlink" and read_count==1:
+                        os.link(args.fixture,args.fixture.with_name(args.fixture.name+".extra-link"))
+                        event["mode"]="linked_fixture_before_kernel_read"
+                if note.data.nr==257:
+                    open_count+=1
+                    if args.mode in ("confirm_replace","confirm_symlink") and open_count==args.close_ordinal:
+                        previous=args.fixture.with_name(args.fixture.name+".previous")
+                        args.fixture.rename(previous)
+                        if args.mode=="confirm_replace":
+                            args.fixture.write_bytes(b"replacement")
+                        else:
+                            args.fixture.symlink_to(previous)
+                        event["mode"]="replaced_fixture_before_confirmation_open"
                 if note.data.nr==3:
                     close_count+=1
                     if args.mode=="close" and close_count==args.close_ordinal:

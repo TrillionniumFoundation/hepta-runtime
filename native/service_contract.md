@@ -9,7 +9,7 @@ controller never takes configuration from an MCP request.
 This service is an explicit `native-local` read-only Linux profile. The
 administrator supplies its absolute capability root at process startup, before
 stdin is read. It does not load an SSH alias or reinterpret an original remote
-host as the local machine. Its implementation owns `host_list` and `binary_read`
+host as the local machine. Its implementation owns `host_list`, `binary_read` and `read_multiple_files`
 for this declared profile; remote host transport and the complete original
 runtime remain separate migration owners.
 
@@ -24,6 +24,9 @@ All original bodies refer to `TrillionniumFoundation/hepta-runtime` at commit
   mode and remote path checks.
 - `src/mcp/runtime/binary.rs`: `BinaryReadParams`, operator-host admission,
   longest permitted root, default and clamped limit.
+- `src/mcp/runtime/multi_read.rs`: complete typed batch validation and ordering.
+- `src/mcp/runtime/multi_read_host.py`: strict complete UTF-8 reads, shared
+  escaped response budget and original redacted batch errors.
 - `src/mcp/runtime/binary_file.py`: descriptor-relative file admission, exact
   version comparison, cursor bounds, stable read, Base64 and SHA256.
 - `src/mcp/runtime/ssh.rs`: remote subprocess errors are wrapped with SSH target,
@@ -84,7 +87,40 @@ dispatches requests or computes results in the runtime executable.
 The IO owner pins the opened root inode for the process lifetime. The original
 Python helper reopens its root pathname per request. Root replacement semantics
 therefore belong to this explicit local profile, and are not claimed as exact
-remote transport parity. UTF-8 paths are limited to 4095 bytes by the IO boundary.
+remote transport parity. Administrator roots and `binary_read` paths are limited
+to 4095 UTF-8 bytes. `read_multiple_files` retains its original 4096-byte
+whole-path bound through component-relative opens.
+
+## Complete UTF-8 batches
+
+`read_multiple_files` requires `host: string` and `paths: array<string>`.
+Missing or null `max_file_bytes` and `max_response_bytes` use 16384 and 65536.
+Explicit bounds must be 1..65536 and 1024..262144; they are validated rather than
+clamped. After complete type decoding, original validation order is path count,
+file limit, response limit, non-aliased absolute paths and duplicate checks,
+configured host, and all per-file policy checks. Every path is authorized before
+any file is opened.
+
+IO operation 2 reads a complete single-link regular file, checks its version and
+length, validates strict UTF-8, and reopens its pathname through the retained
+root to confirm identity. Symlinks, hardlinks, invalid UTF-8, oversized/changed
+files and replaced paths refuse the batch. No earlier file content is published
+on failure. Transport/helper errors retain the original generic redacted text.
+
+Success text contains `files`, `atomic_snapshot: false`,
+`snapshot_scope: independent_file`, `encoding: utf-8`, and `truncated: false`.
+Files remain in request order; each has `path`, `size`, `version`, `sha256`,
+`text`, and `eof: true`. The shared budget counts the complete escaped
+`CallToolResult`, excluding the JSON-RPC ID envelope. Its boundary is compared
+with the original helper at exact size and one byte on either side.
+
+The catalog preserves title `Read Multiple UTF-8 Files` and
+`openWorldHint: false`. Main routing forwards the unchanged entire request via
+input region 0 and accepts the complete bounded response in output region 1.
+The child does not initialize or close the shared IO root. Ordinary scratch calls
+stay bounded at 131072 bytes; only unchanged-input forwarding permits 8 MiB.
+The new IO workspace is 86016 bytes. The bridge entry ceiling is 262144 per
+frame, covering the bounded deep walks of up to 16 files while remaining finite.
 
 ## HIA controller and continuation ABI
 
@@ -95,11 +131,12 @@ bridge table admits these component identities:
 
 | ID | Component | Calls it may request |
 |---|---|---|
-| 0 | Local service controller | 1, 2, 3, 4 |
+| 0 | Local service controller | 1, 2, 3, 4, 5 |
 | 1 | Native configuration policy | None |
 | 2 | Native binary codec | None |
 | 3 | Native descriptor IO | Its closed OS effects only |
 | 4 | Native stat-version codec | None |
+| 5 | Complete UTF-8 batch handler | 1, 2, 3, 4 |
 
 The controller returns `0xffffffe0` for a child call. Its descriptor starts at
 `B = length(workspace) - 256`; every field below is a little-endian u64:
@@ -114,7 +151,7 @@ The controller returns `0xffffffe0` for a child call. Its descriptor starts at
 | 72 | Reserved zero |
 | 80 | Returned child u32 status or output extent |
 | 88, 96, 104 | Completed sequence, completed flag, bridge status |
-| 120 | Bridge-owned invocation kind: 0 startup, 1 frame, 2 EOF |
+| 120 | Bridge-owned invocation kind: 0 startup, 1 frame, 2 EOF, 3 child |
 | 128, 136 | Bridge-owned current module ID and nesting depth |
 
 Input region 0 is the unchanged current input, 1 the current output, 2 the
@@ -133,8 +170,10 @@ administrator root at 26,214,400 (4,095 bytes). The final 4,096 workspace bytes
 hold persistent protocol state, per-request continuation state and the bridge
 footer. No parsed request is allowed to overwrite these spans.
 
-Startup asks module 3 to admit the immutable root and completes only after its
-descriptor custody is established. EOF asks module 3 to close that descriptor.
+Startup asks module 3 to admit the immutable root, then supplies the same
+immutable root to module 5 through input region 3. Both must acknowledge startup.
+Every nested invocation has kind 3; the batch handler retains its initialization
+state to distinguish later requests. Only module 0 owns IO startup and shutdown. EOF asks module 3 to close that descriptor.
 Per read, the controller calls policy operation 6, optional stat-version parsing,
 IO operation 1, stat-version formatting, codec operation 7 and codec operation 2.
 The additive IO expected-version flag 2 denotes a guaranteed mismatch, admitted
@@ -156,14 +195,18 @@ qualifier must supply its own admitted values. The controller manifest is read
 from the same composition manifest as the tested ELF. Optional
 `HIA_SERVICE_RESULT` records the exact observed manifest/executable identities.
 
-The first complete run passed six suites in 7.60 seconds: 234 actual static-ELF
-requests, 118 direct comparisons with the unchanged original Python read helper,
-20 protocol refusals, 21 tool-domain refusals, and seven direct native controller
-calls for initialization capacity and acknowledgement checks. Each actual ELF
-runs with an empty `PATH`. Tests cover whole binary data, chunking, exact result
-text, Unicode/control-character path escaping, hardlinks, symlink refusal,
-defaults/nulls, `u64` bounds, stale and noncanonical versions, open-error
-precedence, root replacement, fragmented transport, final EOF frames and clean
-shutdown. The isolated controller lifecycle test explicitly supplies a simulated
-startup acknowledgement; no simulated read is included in the filesystem
-coverage counts.
+The baseline suite preserves 234 actual ELF responses, 118 direct unchanged
+original binary-read comparisons, 20 protocol refusals and 21 tool-domain
+refusals. Its eight direct native controller calls cover both declared simulated
+startup acknowledgements, replay refusal and initialization capacity. Those
+simulations are not counted as file reads.
+
+The separate `test_multi_service.py` suite directly loads the unchanged
+`multi_read_host.py` and original descriptor helpers. It compares exact compact
+result text, actual helper failures and `_wire_size` boundaries using the same
+temporary files as the native ELF. It covers 16 files, 65536-byte ASCII/Unicode
+files, embedded controls, empty content, defaults/nulls, an actual 4096-byte
+component walk, policy-before-IO error order, redaction after an earlier good
+file, and interleaving the two IO callers in one persistent process. Optional
+`HIA_MULTI_SERVICE_RESULT` records its exact observed identities and counts.
+Final combined evidence is retained in `local_service_observation.json`.

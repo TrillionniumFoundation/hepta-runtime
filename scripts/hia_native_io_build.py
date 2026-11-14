@@ -10,10 +10,12 @@ import json
 import os
 from pathlib import Path
 import struct
-
-from hia_native_build import NativeBuild, json_bytes, write_new
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+
+from hia_native_build import NativeBuild, json_bytes, write_new
 
 def sha(raw):
     return hashlib.sha256(raw).hexdigest()

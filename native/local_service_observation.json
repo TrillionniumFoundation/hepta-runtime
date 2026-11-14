@@ -1,19 +1,64 @@
 {
+  "advertised_tools": [
+    "host_list",
+    "binary_read",
+    "read_multiple_files"
+  ],
+  "baseline_result": {
+    "counts": {
+      "domain_errors": 21,
+      "elf_requests": 234,
+      "native_controller_calls": 8,
+      "original_read_comparisons": 118,
+      "protocol_errors": 20
+    },
+    "executable_sha256": "ff47d047dac8d7eea5721cf5ed800c1c6a03f203caf0a51c2e7043807f68b5b7",
+    "manifest_sha256": "51e40ad0cde84ee8ba569e5919ee16e89a6a0735c238f8a7fe56c5fc70b2a046",
+    "original_helper_sha256": "c15e8900b0ab867b221ff08d5a10401c8b656c87676f57b478b9a21219f7fe12",
+    "schema": "hepta.runtime.native-local-service-test.v1",
+    "status": "pass"
+  },
+  "batch_result": {
+    "counts": {
+      "all_actual_elf_responses": 108,
+      "elf_requests": 101,
+      "expected_domain_refusals": 33,
+      "expected_parameter_refusals": 11,
+      "original_batch_comparisons": 57,
+      "original_budget_boundary_pairs": 4,
+      "original_failure_comparisons": 13
+    },
+    "executable_sha256": "ff47d047dac8d7eea5721cf5ed800c1c6a03f203caf0a51c2e7043807f68b5b7",
+    "manifest_sha256": "51e40ad0cde84ee8ba569e5919ee16e89a6a0735c238f8a7fe56c5fc70b2a046",
+    "original_helper_sha256": "6f83b3e1031642e9981310916181858941dec51bb1696a79087beeb60a6e3eb5",
+    "schema": "hepta.runtime.native-multi-service-test.v1",
+    "status": "pass"
+  },
   "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
   "compiler_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
-  "composition_provenance_sha256": "4ef126d732eca3509c0b99dc0d1ae432b045c4d0363e894c273f4dcfcc4b8f9c",
+  "composition_provenance_sha256": "10abef17d5c971472ebd5c271444e70b4d6b2f8c71a0cf03bfaecdcd72a2b919",
+  "corpus": "The unchanged original helper and native ELF operate on the same actual temporary files; inode/time-dependent results are not replaced by a static expected corpus.",
   "counts": {
     "domain_errors": 21,
     "elf_requests": 234,
-    "native_controller_calls": 7,
+    "native_controller_calls": 8,
     "original_read_comparisons": 118,
     "protocol_errors": 20
   },
   "declared_profile": "explicit administrator-owned native-local read-only Linux root; no SSH alias reinterpretation",
-  "executable_sha256": "8991eee8440a216db0faa783478bcf922e8705df4c135f5cb8420e5c4c1d61b6",
+  "deliverable_sha256": {
+    "native/local_service.hepta": "a6f2070983cd3f7d6e4dbb4c852997f193359b4849e703171c41f11bb1e8c0c9",
+    "native/local_service_composition.json": "10abef17d5c971472ebd5c271444e70b4d6b2f8c71a0cf03bfaecdcd72a2b919",
+    "native/service_contract.md": "66c0875ededec7b6894ed53337691d9ef999ecaaae7d0560e52b2aef7cbae58b",
+    "scripts/build_multi_service.py": "edde9a132c08901536e032f77e9ab6c56ab41c77f56301e408a2aadaf63a0308",
+    "scripts/hia_native_composition_build.py": "94b187b2eeafad1b02a9f96d2144f6415f024c09ff0cd36f3c1be79918f4f32b",
+    "tests/hia_native/test_local_service.py": "a784c046a75cc90fdb0a0393256252f29b025f67f19958f662afae2ed5118463",
+    "tests/hia_native/test_multi_service.py": "dde83ee2a36034ca9851309b4ce440526af2f2d57e1db827b18526d0eb48ae0b"
+  },
+  "executable_sha256": "ff47d047dac8d7eea5721cf5ed800c1c6a03f203caf0a51c2e7043807f68b5b7",
   "full_original_remote_tool_parity": false,
   "inspection": {
-    "bytes": 961072,
+    "bytes": 1405472,
     "dynamic_loader": false,
     "elf_type": "ET_EXEC",
     "entry": 4194480,
@@ -24,15 +69,15 @@
       "PT_LOAD_RX",
       "PT_GNU_STACK_RW"
     ],
-    "sha256": "8991eee8440a216db0faa783478bcf922e8705df4c135f5cb8420e5c4c1d61b6"
+    "sha256": "ff47d047dac8d7eea5721cf5ed800c1c6a03f203caf0a51c2e7043807f68b5b7"
   },
-  "manifest_sha256": "2dd4bc2c065bcf25fd40be4888f7f72fdeecc7adb351d434a56153f1e24c8261",
+  "manifest_sha256": "51e40ad0cde84ee8ba569e5919ee16e89a6a0735c238f8a7fe56c5fc70b2a046",
   "modules": [
     {
-      "image_sha256": "b1181a4cae335ef0099be9fda9e1f1bee3ce7d5e74725e9560c3b70d333cb722",
+      "image_sha256": "1b5d7b78c8bd6d52cb99476350146d74618ec1f17e34db49d81529c7baf7ba9c",
       "manifest": "module_00.json",
-      "manifest_sha256": "6b746895bf85c5edc602aa138c9ea843431bf35dec88eb581acb87307ee6c2e7",
-      "source_sha256": "3b6b86ded004fbe772f7833004e669f43454a3d232cb2eec27d5aeeeb0b62833"
+      "manifest_sha256": "090c05f377da2ed5b78e3ed5592edac2dd0130d5520687ebf3bfb0494f0b7d7e",
+      "source_sha256": "a6f2070983cd3f7d6e4dbb4c852997f193359b4849e703171c41f11bb1e8c0c9"
     },
     {
       "image_sha256": "9c98db6df5b235ec4026a6a860b51e6f33cb09140eb28443f5e0cb4bb317d155",
@@ -47,34 +92,40 @@
       "source_sha256": "f58ab824ecb47545f19cd1d0daded9e41fca5457110693677d84e393e3098f23"
     },
     {
-      "image_sha256": "bcb02d86fd4988c61b93f53a62b4abcefeab85ba02a47d31e37cb2515109066a",
+      "image_sha256": "7b3947f290c775105dab93401814f893fea02e362881cdb35727395b3c08bbd7",
       "manifest": "module_03.json",
-      "manifest_sha256": "3838345e8554f8e6ba35b989a3f7f6d8cf50362eb76cfa03cff11dcf4bbd2fb0",
-      "source_sha256": "239cab72da727e2e9c64bca6d7c0479f98aac86d36ded24574cc21bfd4f4836b"
+      "manifest_sha256": "1ae49fca5089bdb76a0013b82fd4708f5a9c01b78df95c50fd113240273a4d4d",
+      "source_sha256": "9c943bddf845ea3f913eb50c326acf36e7b6dd5b8414ccb60878aea5a717fca7"
     },
     {
       "image_sha256": "ba085e60df861dc2ba9baafb3c0a0860d977c93dad93463df0c35bc69b3e2f93",
       "manifest": "module_04.json",
       "manifest_sha256": "a07fb5728d23a915477a764ec7b7b84e18d99b65d21f26e1e251671808ce8c5b",
       "source_sha256": "d5fedc22505bed6a6f8b12dffcfa699be46aeffb890d8a821710c05f0aaf3a3f"
+    },
+    {
+      "image_sha256": "178b35bf2807543e651a910f47649609ebba26d8dc62c478f0d5fdbb5ba4dbd1",
+      "manifest": "module_05.json",
+      "manifest_sha256": "7189bb0cceeb007a3db454abb4355b52043a49ebb93349e71929ef669c12faca",
+      "source_sha256": "63b53454f82d26073f50db11c2007c29f0301611231386f0b7e6588e12ef570c"
     }
   ],
   "original_helper_sha256": "c15e8900b0ab867b221ff08d5a10401c8b656c87676f57b478b9a21219f7fe12",
   "packer": {
-    "image_sha256": "2578ec13f5890b1aff0597ef09cae65a5ba0b26b386599cf0e1a2bfc45d0fe38",
+    "image_sha256": "ca7ca7388f81e524f968d329f604656c155b724b2348db7870e407421dd5dca0",
     "manifest": "packer.json",
-    "manifest_sha256": "9166293d28fcd59434475038cb4bb777475ee2b911a71c94d56df5c57e8d5901",
-    "source_sha256": "22cabea4df5b0f594d1eea033dc1d5a9e23c6f394ce00fc8af8584eff1fa17b5"
+    "manifest_sha256": "a204bbcac2797ec464a9d52f126569cfa947cb7e81c3124342461a4d9810bf28",
+    "source_sha256": "97b496cd2b94d5a22a8979115c9ef3e4f6f24c47592588354b7e790c4daebea8"
   },
   "profile": [
     {
-      "call_mask": 30,
+      "call_mask": 62,
       "flags": 1,
       "id": 0,
       "input_capacity": 8388608,
       "name": "local-service",
       "output_capacity": 8388608,
-      "source_sha256": "3b6b86ded004fbe772f7833004e669f43454a3d232cb2eec27d5aeeeb0b62833",
+      "source_sha256": "a6f2070983cd3f7d6e4dbb4c852997f193359b4849e703171c41f11bb1e8c0c9",
       "workspace_capacity": 33554432
     },
     {
@@ -104,8 +155,8 @@
       "input_capacity": 8388608,
       "name": "io",
       "output_capacity": 8388608,
-      "source_sha256": "239cab72da727e2e9c64bca6d7c0479f98aac86d36ded24574cc21bfd4f4836b",
-      "workspace_capacity": 81920
+      "source_sha256": "9c943bddf845ea3f913eb50c326acf36e7b6dd5b8414ccb60878aea5a717fca7",
+      "workspace_capacity": 86016
     },
     {
       "call_mask": 0,
@@ -116,25 +167,45 @@
       "output_capacity": 8388608,
       "source_sha256": "d5fedc22505bed6a6f8b12dffcfa699be46aeffb890d8a821710c05f0aaf3a3f",
       "workspace_capacity": 33554432
+    },
+    {
+      "call_mask": 30,
+      "flags": 1,
+      "id": 5,
+      "input_capacity": 8388608,
+      "name": "multi-read-service",
+      "output_capacity": 8388608,
+      "source_sha256": "63b53454f82d26073f50db11c2007c29f0301611231386f0b7e6588e12ef570c",
+      "workspace_capacity": 33554432
     }
   ],
+  "result_sha256": {
+    "local-service-final-result.json": "44f5399c4637925fc455b4242c5ce98d8eedc5e4c9307d5c347313e068a0a24f",
+    "multi-service-final-result.json": "06b5ee143021d3483cf4c9e817575574438cb77beb78de06469604d1efab57de"
+  },
   "schema": "hepta.runtime.native-local-service-observation.v1",
-  "source_sha256": "3b6b86ded004fbe772f7833004e669f43454a3d232cb2eec27d5aeeeb0b62833",
+  "scoped_distinctions": [
+    "Explicit native-local profile instead of SSH targets",
+    "Pinned root inode retained for process lifetime",
+    "Local OS errors are scoped native diagnostics",
+    "Root and binary_read path limit 4095 UTF-8 bytes; complete UTF-8 batch path limit 4096 bytes"
+  ],
+  "source_sha256": "a6f2070983cd3f7d6e4dbb4c852997f193359b4849e703171c41f11bb1e8c0c9",
   "status": "pass",
-  "test_sha256": "eeb0c8a875d38ea3fb774ec745ce684e7bceea26346f474e3a17f425ff74e192",
+  "test_sha256": "a784c046a75cc90fdb0a0393256252f29b025f67f19958f662afae2ed5118463",
   "tests": {
-    "actual_elf_requests": 234,
-    "elapsed_seconds": 5.28,
+    "actual_elf_responses": 342,
     "elf_path_environment": "empty",
-    "lifecycle_startup_acknowledgement": "explicit test fixture, no file operation",
-    "native_controller_lifecycle_calls": 7,
-    "original_helper_read_comparisons": 118,
+    "lifecycle_startup_acknowledgement": "two explicit test fixture acknowledgements; no file operation",
+    "native_controller_lifecycle_calls": 8,
+    "original_batch_failure_comparisons": 13,
+    "original_batch_success_comparisons": 57,
+    "original_binary_read_comparisons": 118,
+    "original_budget_boundary_pairs": 4,
     "original_runtime_commit": "a0dcdda1991ec536d5e2d252c006a778993fa566",
     "process_exit_status": 0,
-    "protocol_refusals": 20,
     "stdout_status": "pass",
-    "suites": 6,
-    "tool_domain_refusals": 21
+    "suites": 11
   },
   "whole_runtime_replaced": false
 }

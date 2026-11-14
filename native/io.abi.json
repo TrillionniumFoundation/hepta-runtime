@@ -11,7 +11,7 @@
       "complete file_info or view behavior"
     ],
     "original_behavior_distinction": "The retained binary_file.py helper reopens parent directories from / for each request. This primitive intentionally pins startup root custody. Its root-replacement behavior is explicitly tested and must be reconciled by the eventual caller authorization owner before tool replacement.",
-    "path_profile": "Valid UTF-8 absolute paths of at most 4095 bytes, without NUL or any .. component. Dot and redundant slash components normalize like PurePosixPath, including its distinct exactly-two-leading-slash anchor. The root itself and final names beginning .hepta- are refused.",
+    "path_profile": "Valid UTF-8 absolute paths of at most 4096 bytes, without NUL or any .. component. Op1 normalizes dot and redundant slash components like PurePosixPath, including its exactly-two-leading-slash anchor. Op2 requires non-aliased paths: no empty, dot or dot-dot component. Startup root argv remains limited to 4095 bytes. The root itself and final names beginning .hepta- are refused.",
     "root_custody": "The startup directory is opened component by component with O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC and retained as an opaque descriptor capability until EOF. Requests use that same inode even if its old pathname is renamed or replaced.",
     "root_source": "Only startup argv from the administrator; no request field can change the root",
     "symlinks": "O_NOFOLLOW on every opened path component, including the final file"
@@ -28,7 +28,7 @@
     "buffer_admission": {
       "close": "All buffer/argument fields zero",
       "component": "Only workspace offset 12288, extent 2..4096 including terminal NUL; no earlier NUL, slash, . or .. component",
-      "pread": "A nonempty extent at most 4096 wholly inside workspace[16384,81920); signed nonnegative file offset",
+      "pread": "Nonempty extent at most 4096 wholly inside workspace[16384,81921); signed nonnegative file offset. The final byte is only the bounded full-read overflow sentinel.",
       "stat": "Only offset 512 or 656, exactly 144 bytes"
     },
     "cleanup": "HIA closes request file/intermediate directory handles before any response and closes its root on EOF. The adapter also closes every still-tracked handle on fatal exits. The kernel releases remaining descriptors on process teardown. Handles remain private to one process.",
@@ -36,7 +36,7 @@
     "interrupts": "openat/fstat/pread/read/write retry EINTR. close is issued once and its handle is retired before the syscall. SIGPIPE is ignored so output failure becomes exit 74.",
     "magic": "HIAFX001",
     "offset": 256,
-    "sequence": "Strictly increases across startup and all requests; the adapter independently checks it. At most 8192 effects may run for one startup/request/shutdown frame.",
+    "sequence": "Strictly increases across startup and all requests; independently checked by the adapter. Standalone IO allows at most 16384 effects per frame. The multi-image bridge permits 262144 native entry/effect resumptions per root frame, enough for 16 bounded full files with two component walks each.",
     "syscalls": [
       "openat",
       "fstat",
@@ -78,7 +78,7 @@
       "64": "invalid startup root or failed root admission",
       "74": "transport or shutdown IO failure"
     },
-    "input_transport": "Repeated u64 little-endian byte length followed by that many request bytes; 112..4207 bytes per request",
+    "input_transport": "Repeated u64 little-endian byte length followed by 112..4208 request bytes",
     "output_transport": "Repeated u64 little-endian byte length followed by a complete response; 128..65664 bytes per response",
     "runtime_dependencies": [
       "Linux kernel"
@@ -86,6 +86,7 @@
     "shutdown": "EOF at a frame boundary asks HIA to close the root handle; truncated frames fail. No response is published before file identity and close checks finish."
   },
   "policy_entry": {
+    "minimum_workspace": "Op1 checks 81920 minimum; op2 requires at least 81921 to read the one-byte overflow sentinel. Emitted adapters allocate 86016 bytes.",
     "output_bytes": 65664,
     "requests": "The adapter reenters with the same unchanged request until a complete response is returned. A zero-length input at an idle initialized state denotes transport-owned shutdown.",
     "returns": {
@@ -99,19 +100,20 @@
     },
     "signature": "f0(readbuf input, mutbuf output, mutbuf workspace)->u32",
     "startup": "A fresh zeroed workspace receives the administrator root UTF-8 bytes. The adapter reenters with unchanged input until HIA returns zero.",
-    "workspace_bytes": 81920
+    "workspace_bytes": 86016
   },
   "request": {
     "absent_version": "All seven version words must be zero when has_expected_version is 0 or 2",
     "fields_after_magic": [
       "request_id:u64",
-      "operation:u64=1",
+      "operation:u64=1|2",
       "offset:u64",
       "limit:u64=1..65536",
       "has_expected_version:u64=0|1|2",
       "expected_version:7*u64",
       "path_length:u64"
     ],
+    "full_file_operation": "Op2 requires offset 0, limit 1..65536, expected-version flag 0 and all-zero tuple. Initial nlink must equal 1 and size<=limit. The owner reads up to limit+1, verifies version/nlink/count, validates strict UTF-8, repeats the descriptor-relative walk, confirms version/nlink again, and closes both file descriptors before any response. Success has offset 0, next_offset=data_length=before.size, eof 1. Client request IDs are arbitrary u64 echoed unchanged; the private effect sequence is independent.",
     "guaranteed_mismatch": "Flag 2 represents a caller-proven noncanonical expected-version string. It returns status 6 after successful regular-file fstat admission, before cursor checks or file reads. Path/open/type errors still take precedence. Flags 0 and 1 are unchanged.",
     "header_bytes": 112,
     "magic": "HIARD001",
@@ -137,6 +139,10 @@
       "0": "success",
       "1": "invalid path or reserved target",
       "10": "malformed request",
+      "11": "initial hardlink count differs from 1",
+      "12": "full-file byte ceiling exceeded",
+      "13": "confirmation path identity or link count changed",
+      "14": "invalid strict UTF-8",
       "2": "outside configured root",
       "3": "open failed",
       "4": "not a regular nonnegative-size file",

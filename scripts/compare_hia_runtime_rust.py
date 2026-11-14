@@ -20,7 +20,7 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from qualify_hia_runtime_native import (MODULES, native_composition_evidence, python_reference_evidence,
+from qualify_hia_runtime_native import (MODULES, multi_read_controller_evidence, native_composition_evidence, python_reference_evidence,
                                        record_check, save_report, sha, sources)
 from check_hia_native_inventory import RUNTIME_BASE_COMMIT, check_original_sources
 from hia_native_build import HEPTA_COMMIT
@@ -78,6 +78,8 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required retained-Python IO/stat-version/local-service evidence differs")
     if report.get("native_composition_evidence") != native_composition_evidence(output, report):
         raise ValueError("required native composition evidence differs")
+    if report.get("multi_read_controller_evidence") != multi_read_controller_evidence(output, report):
+        raise ValueError("required multi-read controller evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
         for relative, expected in report[collection].items():
             path = Path(relative)
@@ -99,7 +101,7 @@ def check_input_pins(output: Path, report: dict) -> None:
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
         if item.get("builder") == "composition":
-            # The exact five-image authority table, all child source/image pairs,
+            # The exact six-image authority table, all child source/image pairs,
             # packer and executable were revalidated above, including the suite.
             continue
         if item.get("builder") == "io":
@@ -130,11 +132,11 @@ def check_input_pins(output: Path, report: dict) -> None:
 
 
 def rust_compile(output: Path, report: dict, rustc: Path, *, key: str,
-                 source: Path, binary: Path, extra: tuple[str, ...] = ()) -> None:
+                 source: Path, binary: Path, extra: tuple[str, ...] = (), edition: str = "2021") -> None:
     if binary.exists():
         raise ValueError("oracle executable already exists: " + str(binary))
     record_check(output, report, name=key + "-compile",
-                 command=[str(rustc), "-O", "--edition=2021", *extra, str(source), "-o", str(binary)],
+                 command=[str(rustc), "-O", "--edition=" + edition, *extra, str(source), "-o", str(binary)],
                  timeout=120)
 
 
@@ -392,9 +394,53 @@ def compare_policy(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_multi_read(output: Path, report: dict, rustc: Path) -> dict:
+    """Compare unchanged original typed validation, never synthetic file reads."""
+    folder = output / "multi-read-rust-oracle"
+    corpus = json.loads((folder / "native-corpus.json").read_bytes())
+    if (corpus.get("schema") != "hepta.runtime.multi-read-validation-corpus.v1"
+            or corpus.get("cases") != 1689
+            or corpus.get("original_source") != "src/mcp/runtime/multi_read.rs"
+            or corpus.get("original_source_sha256") != sha(ROOT / "src/mcp/runtime/multi_read.rs")
+            or corpus.get("source_sha256") != sha(ROOT / "native/multi_read_service.hepta")):
+        raise ValueError("multi-read validation corpus source or scope differs")
+    module_path = output / report["modules"]["multi_read_service"]["manifest"]
+    module = json.loads(module_path.read_bytes())
+    if corpus.get("image_sha256") != module["image_sha256"]:
+        raise ValueError("multi-read validation corpus belongs to a different image")
+    values = {}
+    for name in ("requests.hex.gz", "native-output.txt.gz"):
+        packed = (folder / name).read_bytes()
+        if digest(packed) != corpus["artifacts"].get(name):
+            raise ValueError("multi-read validation compressed corpus differs: " + name)
+        values[name] = gzip.decompress(packed)
+    wire, expected = values["requests.hex.gz"], values["native-output.txt.gz"]
+    if (digest(wire) != corpus.get("request_raw_sha256")
+            or digest(expected) != corpus.get("native_output_raw_sha256")
+            or len(expected) != corpus.get("native_output_bytes")
+            or not wire.endswith(b"\n") or not expected.endswith(b"\n")
+            or len(wire.splitlines()) != corpus["cases"] or len(expected.splitlines()) != corpus["cases"]):
+        raise ValueError("multi-read validation native case accounting differs")
+    source = ROOT / "tests/hia_native/oracle_multi_read.rs"
+    binary = folder / "oracle"
+    rust_compile(output, report, rustc, key="multi-read-rust", source=source, binary=binary, edition="2024")
+    row = record_check(output, report, name="multi-read-rust-compare", command=[str(binary)],
+                       input_bytes=wire, timeout=60)
+    result = {"status": "PASS" if row.stdout == expected and not row.stderr else "FAIL",
+              "rust_oracle_cases": corpus["cases"], "native_cases_added_by_replay": 0,
+              "actual_filesystem_cases": 0, "scope": "unchanged original validate after typed DTO admission",
+              "input_sha256": digest(wire), "native_output_sha256": digest(expected),
+              "rust_output_sha256": digest(row.stdout), "oracle_source_sha256": sha(source),
+              "oracle_executable_sha256": sha(binary)}
+    (folder / "rust-comparison.json").write_text(json.dumps(result, indent=2) + "\n")
+    if result["status"] != "PASS":
+        raise ValueError("original Rust multi-read validation disagrees with the native corpus")
+    return result
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
-           "policy": compare_policy}
+           "policy": compare_policy, "multi_read_service": compare_multi_read}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}

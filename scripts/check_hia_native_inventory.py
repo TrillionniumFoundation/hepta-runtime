@@ -34,6 +34,8 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/runtime/inspect.rs": "9cc9f7c799c45dd0cef98cef76094c338fc215c8",
     "src/mcp/runtime/ssh.rs": "35f54b9abb26e3f5c61750766168fa4084117362",
     "src/mcp/server.rs": "90fe15fd6a998e9b165739bc27e6f3854022221d",
+    "src/mcp/runtime/multi_read.rs": "95c3494d381dd25c8281c4881e44d3e6d49ac6fd",
+    "src/mcp/runtime/multi_read_host.py": "ed5085977b19e3dce417ebfbfe18e23f2e7eea0d",
 }
 
 

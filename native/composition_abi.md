@@ -41,16 +41,17 @@ does not claim an isolation mechanism for arbitrary hostile machine code.
 
 | ID in the local service | Owner | Flag | Allowed callees |
 |---|---|---|---|
-| 0 | MCP controller | 1: continuation | 1, 2, 3, 4 |
+| 0 | MCP controller | 1: continuation | 1, 2, 3, 4, 5 |
 | 1 | Policy | 0: leaf | None |
 | 2 | Binary codecs | 0: leaf | None |
 | 3 | Descriptor IO | 2: IO leaf | Typed OS effects only |
 | 4 | Stat-version codec | 0: leaf | None |
+| 5 | Full-file batch handler | 1: continuation | 1, 2, 3, 4 |
 
 Only ID 3 may carry the IO flag, and the production builder requires its source
 to equal the selected IO owner. Generic qualification fixtures use different
 fixed tables without obtaining that flag. The maximum active call depth is 8,
-including the root. An already active module cannot recur. At most 8192 native
+including the root. An already active module cannot recur. At most 262144 native
 entries/effect resumptions are admitted for one root frame. This count bounds
 continuation churn; it does not add an instruction meter inside a HIA function.
 
@@ -130,3 +131,15 @@ The compiler pin is `d3e2c90173cf733e42b299d0c4274df4b593a12f`. The native build
 and full upstream cold qualification remain separate evidence. A successful
 local read profile does not replace unsupported host/configuration, remote,
 write, execution, HTTP, or other runtime owners.
+
+## Full-file operation extension
+
+The IO owner now has 86016 private workspace bytes. Its typed pread span ends at
+81921, permitting exactly one overflow-sentinel byte beyond a 65536-byte full-file
+ceiling. Operation 2 performs single-link admission, complete bounded reading,
+strict UTF-8 validation and descriptor-path confirmation before returning bytes.
+Operation 1 keeps its chunk semantics. Both use the same independent IO effect
+sequence and may be called serially by different fixed HIA modules. The bridge
+call mask grants the IO module as a whole; the trusted source controller retains
+startup/shutdown sequencing authority. The 262144 entry budget accommodates
+16 files with two deep component walks, while active depth remains 8.

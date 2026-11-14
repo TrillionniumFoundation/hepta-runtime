@@ -122,7 +122,7 @@ class QualificationReportingTests(unittest.TestCase):
     def test_service_reference_suite_cannot_pass_without_live_comparisons(self):
         summary = {"schema": "hepta.runtime.native-local-service-test.v1", "status": "pass",
                    "counts": {"elf_requests": 234, "original_read_comparisons": 0,
-                              "protocol_errors": 20, "domain_errors": 21, "native_controller_calls": 7}}
+                              "protocol_errors": 20, "domain_errors": 21, "native_controller_calls": 8}}
         record_check(self.output, self.report, name="test_local_service.py", timeout=5,
                      command=[sys.executable, "-I", "-c", "print(" + repr(json.dumps(summary)) + ")"])
         with self.assertRaisesRegex(ValueError, "retained-reference coverage differs"):
@@ -142,7 +142,7 @@ class QualificationReportingTests(unittest.TestCase):
         (self.output / "manifest.json").write_bytes(raw)
         report = {"compiler_image_sha256": proof["compiler_sha256"], "modules": {"local_service": {
             "builder": "composition", "manifest": "manifest.json", "sha256": hashlib.sha256(raw).hexdigest()}}}
-        with self.assertRaisesRegex(ValueError, "fixed five-image authority table differs"):
+        with self.assertRaisesRegex(ValueError, "fixed six-image authority table differs"):
             native_composition_evidence(self.output, report)
 
     def test_qualification_child_cannot_inherit_external_loader_source_or_probe(self):

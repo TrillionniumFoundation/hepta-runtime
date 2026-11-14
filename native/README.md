@@ -9,7 +9,7 @@ The complete existing runtime has **not** been replaced. Its 125 registered MCP
 tool handlers and the durable/remote service owners remain in their original
 implementation. The diagnostic native service advertises `runtime_native_info`
 and `runtime_line_hash`. A separate, explicitly selected local read profile
-provides `host_list` and `binary_read` through five native HIA images. It has
+provides `host_list`, `binary_read` and `read_multiple_files` through six native HIA images. It has
 partial original-tool coverage; configured remote hosts and complete original
 authorization behavior remain outside that profile. Production activation and
 deletion of the original runtime remain incomplete.
@@ -42,9 +42,10 @@ continue to identify the language and are not filename extensions.
 | [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
-| [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded read continuations, file versions and error/cleanup decisions |
+| [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks and cleanup decisions |
 | [io_packer.hepta](io_packer.hepta) | Static ELF construction with checked syscall records, opaque handles and persistent binary I/O framing |
-| [local_service.hepta](local_service.hepta) | Persistent MCP controller for the explicit `native-local` profile, with `host_list` and bounded `binary_read` responses |
+| [local_service.hepta](local_service.hepta) | Persistent MCP controller for the explicit `native-local` profile, with `host_list`, `binary_read` and delegation to the batch owner |
+| [multi_read_service.hepta](multi_read_service.hepta) | Exact original batch validation order, policy-before-effects, complete UTF-8 file results, MCP text-result budget and redacted failures |
 | [composition_packer.hepta](composition_packer.hepta) | Closed native image tables, fixed call authority, private workspaces and bounded child/OS continuations in one static ELF |
 | [stdio_packer.hepta](stdio_packer.hepta) | ELF construction and persistent newline-delimited input/output transport |
 | [filter_packer.hepta](filter_packer.hepta) | ELF construction for one complete binary input/output operation |
@@ -61,6 +62,8 @@ The read-only OS dependency, startup-root custody and exact wire records are
 specified in [io.abi.json](io.abi.json).
 The explicit local MCP profile is defined in [service_contract.md](service_contract.md),
 and the closed native call boundary in [composition_abi.md](composition_abi.md).
+The batch owner and its independently checked validation/reference domains are
+defined in [multi_read_service_abi.md](multi_read_service_abi.md).
 No native component falls back to
 a Rust or Python implementation of its calculations. Endpoint JSON number
 classification and compact display bytes remain explicit caller inputs; the
@@ -142,6 +145,10 @@ policy-rust-oracle/native-corpus.json
 stat-version-python-reference/native-corpus.json
 stat-version-python-reference/stat-version-cases.jsonl.gz
 local-service-python-reference.json
+multi-service-python-reference.json
+multi-read-rust-oracle/native-corpus.json
+multi-read-rust-oracle/requests.hex.gz
+multi-read-rust-oracle/native-output.txt.gz
 build/composition/<source-key>/manifest.json
 build/composition/<source-key>/native-local-read.elf
 ```
@@ -152,8 +159,8 @@ corpora. The CI workflow compiles original Rust function bodies and independent
 locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
-native tests and retained-Python I/O/file-version/local-service comparisons. It becomes `PASS` only
-after all six independent Rust comparisons succeed. The Python reference domain
+native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
+after all seven independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -162,13 +169,14 @@ inode and timestamp values vary on each run. The original Python read helper
 runs against those same fixtures, and the test compares the native MCP result
 text byte for byte. This reference domain has no synthetic Rust recipe. The
 closed image table and its generic continuation controls are reported separately
-as new native adapter behavior. Qualification rechecks all five source/image
+as new native adapter behavior. Qualification rechecks all six source/image
 pairs, the HIA packer, exact call masks and capacities, packed-frame digest and
-final executable identity before accepting this evidence.
+final executable identity before accepting this evidence. Each packed child is
+also matched to the native image independently exercised by its component suite.
 
 ## Explicit native local read service
 
-Build the five-image service using the same pinned compiler:
+Build the six-image service using the same pinned compiler:
 
 ```sh
 python3 -I -B scripts/hia_native_composition_build.py \
@@ -194,17 +202,28 @@ envelope on the tested shared domain. A noncanonical expected-version string
 becomes a version mismatch after file/path/type admission and before cursor
 checks, preserving the original error order.
 
-The controller calls four fixed HIA owners: policy, binary codec, read-only I/O
-and stat version. The executable contains all five images and the native
+`read_multiple_files` accepts one to sixteen distinct absolute paths. It defaults
+to 16,384 bytes per file and a 65,536-byte result budget; explicit bounds must be
+1..65,536 and 1,024..262,144. It checks every path before opening any source,
+reads complete regular single-link files, verifies versions and path identity,
+and requires strict UTF-8. Its result states `atomic_snapshot: false` and
+`snapshot_scope: "independent_file"`. A failed file produces a redacted error
+without publishing earlier file content. The result limit covers the complete
+MCP text result, including nested escaping, and excludes the JSON-RPC envelope.
+
+The controller calls fixed HIA owners for policy, binary codec, read-only I/O,
+stat version and batch orchestration. The batch owner may call the same four
+leaves; it cannot call the main controller. The executable contains all six images and the native
 continuation adapter; it invokes no Python semantic dispatcher or dynamic module
 loader. Call masks and region bounds constrain child calls. Private mappings,
-an eight-level depth bound and a per-frame continuation budget constrain the
+an eight-level depth bound and a 262,144-entry per-frame continuation budget constrain the
 adapter. This is a closed set of trusted compiled HIA images, not a sandbox for
 arbitrary uploaded machine code.
 
 This profile deliberately retains root inode custody across requests, while the
 original Python helper reopens pathnames. It also has explicit native path and
-frame bounds. It does not replace configured host loading, SSH, remote platforms
+frame bounds. Binary-read paths are bounded to 4,095 UTF-8 bytes, while batch
+paths preserve the original 4,096-byte component-walk boundary. It does not replace configured host loading, SSH, remote platforms
 or the complete original authorization model. Those differences keep the 125
 production-handler migration rows and all completion/removal flags unchanged.
 
@@ -310,29 +329,51 @@ success and three native comparison inputs for the ELF checks are separately
 asserted. See [stat_version_original_python_comparison.json](stat_version_original_python_comparison.json).
 This is a representation boundary; it does not open files or replace a tool.
 
-The read-only I/O dependency has passed **14 test groups and 119 actual ELF
-requests**, including **8 direct comparisons** with the retained Python
-`binary_file.py` read helper. Both that helper and its `file_metadata.py`
-dependency are bound to their original Git blobs. Tests exercise real short
+The read-only I/O dependency has passed **21 test groups and 242 actual ELF
+requests**. The existing chunk domain has **119 requests and 8 direct original
+Python comparisons**. The complete-file domain adds **123 requests and 63
+original comparisons**, comprising 41 successful complete reads and 22 strict
+UTF-8 rejections. `multi_read_host.py`, `binary_file.py` and `file_metadata.py`
+are bound to their original Git blobs. Tests exercise real short
 reads, injected EINTR/EIO, version changes during reads, close failures, empty
 PATH execution, broken output pipes, descriptor reuse and rejection of malformed
 effect records. Its startup root inode remains in custody across requests;
 the old helper reopens pathnames on every request. That distinction is tested
 explicitly and prevents a claim of complete original authorization or tool
-parity. The original 113-request observation remains in
-[io_reference_proof.json](../tests/hia_native/io_reference_proof.json). The current
-119-request extension adds guaranteed expected-version mismatch precedence;
-its frozen observation is in [composition_observation.json](composition_observation.json).
+parity. The current observation is in
+[io_reference_proof.json](../tests/hia_native/io_reference_proof.json). Complete-file
+tests also cover an exact 4,096-byte path, one byte beyond the file ceiling,
+growth/hard-link changes during real reads, replacement before confirmation,
+strict UTF-8 before confirmation, and persistent mixed-request cleanup.
+[full_read_boundary_observation.json](full_read_boundary_observation.json) records
+the current adapter bounds. The earlier five-image/119-request observation in
+[composition_observation.json](composition_observation.json) is historical.
 
-The local service has passed **six suites with 234 actual ELF requests**,
-including **118 live original Python read comparisons**, 20 protocol refusals
-and 21 tool-domain refusals. Seven direct native controller calls separately
+The local service has passed **11 suites with 342 actual ELF responses**.
+The existing suite has 234 responses, **118 live original Python chunk-read
+comparisons**, 20 protocol refusals and 21 tool-domain refusals. The batch suite
+adds 108 actual responses, including 101 batch calls, **57 original successful
+batch comparisons**, **13 original failure comparisons**, four exact shared
+budget-boundary pairs, 11 parameter refusals and 33 domain refusals.
+Eight direct native controller calls separately
 exercise response capacity and continuation acknowledgement. Their synthetic
-startup acknowledgement isolates lifecycle state and is never counted as a
+startup acknowledgements isolate lifecycle state and are never counted as a
 filesystem read. All real service processes execute with an empty `PATH`.
 The frozen identities and counts are retained in
 [local_service_observation.json](local_service_observation.json); the current
 aggregate gate repeats them from its own source snapshot.
+
+The batch-controller suite separately runs **1,747 requests, 1,946 actual HIA
+controller calls and 137 native leaf calls** with **53 explicitly synthetic IO
+completions**. It directly checks the original Python `_wire_size` function
+once and captures **1,689 original Rust validation cases**. These fixtures add
+zero actual filesystem observations. The unchanged original Rust `validate`
+body produced the same 198,934 output bytes for all 1,689 cases; see
+[multi_read_original_rust_comparison.json](multi_read_original_rust_comparison.json).
+That retained proof predates the additional setup-only parser-provenance check;
+its historical test hash is preserved. The current suite verifies every imported
+parser function after call-index relocation and checks the original Rust body
+byte for byte. Neither structural check adds a native case or fixture IO count.
 
 The generic composition suite adds **10 groups, 26 actual ELF executions and
 39 frames**. It checks call-mask and depth refusal, recursion, overlapping

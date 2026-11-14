@@ -71,8 +71,8 @@ def build_composition(hepta: Path, build_root: Path, members: list[ModuleSpec], 
                 or not 0 < spec.workspace_capacity <= 32 << 20
                 or (spec.flags == 1 and spec.workspace_capacity < 4096)):
             raise ValueError('composition member profile is outside its ABI')
-        if spec.flags == 2 and (i != 3 or raw != io_raw or spec.workspace_capacity != 81920
-                               or spec.input_capacity < 4207 or spec.output_capacity < 65664):
+        if spec.flags == 2 and (i != 3 or raw != io_raw or spec.workspace_capacity != 86016
+                               or spec.input_capacity < 4208 or spec.output_capacity < 65664):
             raise ValueError('OS effects are confined to the pinned IO owner in slot three')
         if i == 0 and (spec.flags != 1 or spec.input_capacity != 8 << 20 or spec.output_capacity != 8 << 20):
             raise ValueError('composition root must be a full-width continuation controller')
@@ -172,11 +172,12 @@ def build_composition(hepta: Path, build_root: Path, members: list[ModuleSpec], 
 
 
 def build_local_read(hepta: Path, build_root: Path, *, source_root: Path = ROOT) -> Path:
-    members = [ModuleSpec('local-service', source_root / 'native/local_service.hepta', flags=1, call_mask=30),
+    members = [ModuleSpec('local-service', source_root / 'native/local_service.hepta', flags=1, call_mask=62),
                ModuleSpec('policy', source_root / 'native/policy.hepta'),
                ModuleSpec('codec', source_root / 'native/binary_codec.hepta'),
-               ModuleSpec('io', source_root / 'native/io_policy.hepta', flags=2, workspace_capacity=81920),
-               ModuleSpec('stat-version', source_root / 'native/stat_version.hepta')]
+               ModuleSpec('io', source_root / 'native/io_policy.hepta', flags=2, workspace_capacity=86016),
+               ModuleSpec('stat-version', source_root / 'native/stat_version.hepta'),
+               ModuleSpec('multi-read-service', source_root / 'native/multi_read_service.hepta', flags=1, call_mask=30)]
     return build_composition(hepta, build_root, members, source_root=source_root)
 
 
