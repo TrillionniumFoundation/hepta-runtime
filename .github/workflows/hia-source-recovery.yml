@@ -16,21 +16,7 @@ jobs:
           ref: be1b871ce482fec97e65664866731c0b145e79c3
           path: runtime
           persist-credentials: false
-      - name: Read pinned compiler-d3
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/Hepta
-          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
-          path: compiler-d3
-          persist-credentials: false
-      - name: Read pinned compiler-65179
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/Hepta
-          ref: 65179cc083c5b3d9e8530e98410aef4f943cf069
-          path: compiler-65179
-          persist-credentials: false
-      - name: Verify and export pinned source
+      - name: Verify and export runtime in bounded parts
         shell: bash
         run: |
           set -euo pipefail
@@ -40,46 +26,38 @@ jobs:
           test -z "$(git -C runtime status --porcelain)"
           if git -C runtime config --local --name-only --list | grep -Ei 'extraheader|credential|includeif'; then exit 1; fi
           tar -czf export/runtime.tar.gz runtime
-          test "$(git -C compiler-d3 rev-parse HEAD)" = "d3e2c90173cf733e42b299d0c4274df4b593a12f"
-          test "$(git -C compiler-d3 rev-parse 'HEAD^{tree}')" = "8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49"
-          test -z "$(git -C compiler-d3 status --porcelain)"
-          if git -C compiler-d3 config --local --name-only --list | grep -Ei 'extraheader|credential|includeif'; then exit 1; fi
-          tar -czf export/compiler-d3.tar.gz compiler-d3
-          test "$(git -C compiler-65179 rev-parse HEAD)" = "65179cc083c5b3d9e8530e98410aef4f943cf069"
-          test "$(git -C compiler-65179 rev-parse 'HEAD^{tree}')" = "e8a425ee788b2b10330ebfd83009d6a82fd311dc"
-          test -z "$(git -C compiler-65179 status --porcelain)"
-          if git -C compiler-65179 config --local --name-only --list | grep -Ei 'extraheader|credential|includeif'; then exit 1; fi
-          tar -czf export/compiler-65179.tar.gz compiler-65179
-          (cd export && sha256sum runtime.tar.gz compiler-d3.tar.gz compiler-65179.tar.gz > SHA256SUMS)
-      - name: Upload runtime
+          split -b 300M -d -a 2 export/runtime.tar.gz export/runtime.tar.gz.part
+          test "$(find export -name 'runtime.tar.gz.part*' | wc -l)" = 3
+          (cd export && sha256sum runtime.tar.gz runtime.tar.gz.part* > RUNTIME_SHA256SUMS)
+      - name: Upload runtime part 00
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: recovery-runtime-bd947
-          path: export/runtime.tar.gz
+          name: recovery-runtime-part00-bd947
+          path: export/runtime.tar.gz.part00
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
-      - name: Upload compiler-d3
+      - name: Upload runtime part 01
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: recovery-compiler-d3-bd947
-          path: export/compiler-d3.tar.gz
+          name: recovery-runtime-part01-bd947
+          path: export/runtime.tar.gz.part01
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
-      - name: Upload compiler-65179
+      - name: Upload runtime part 02
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: recovery-compiler-65179-bd947
-          path: export/compiler-65179.tar.gz
+          name: recovery-runtime-part02-bd947
+          path: export/runtime.tar.gz.part02
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
-      - name: Upload checksums
+      - name: Upload runtime checksums
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: recovery-checksums-bd947
-          path: export/SHA256SUMS
+          name: recovery-runtime-checksums-bd947
+          path: export/RUNTIME_SHA256SUMS
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
