@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
+                                       operation_record_evidence,
                                        python_reference_evidence, qualification_env,
                                        record_check, save_report, sha, sources)
 from check_hia_native_inventory import RUNTIME_BASE_COMMIT, check_original_sources
@@ -88,6 +89,8 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required operation AEAD/authentication evidence differs")
     if report.get("operation_nonce_evidence") != operation_nonce_evidence(output, report):
         raise ValueError("required operation nonce state/ELF evidence differs")
+    if report.get("operation_record_evidence") != operation_record_evidence(output, report):
+        raise ValueError("required operation record composition/reference evidence differs")
     for collection in ("rust_oracle_inputs", "python_reference_inputs"):
         for relative, expected in report[collection].items():
             path = Path(relative)
@@ -108,9 +111,9 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") == "composition":
-            # The exact six-image authority table, all child source/image pairs,
-            # packer and executable were revalidated above, including the suite.
+        if item.get("builder") in {"composition", "record_composition"}:
+            # The appropriate fixed table, all child source/image pairs,
+            # packer and executable were revalidated above, including its suite.
             continue
         if item.get("builder") == "io":
             if (module.get("schema") != "hepta.runtime.native-io.v1"
@@ -576,11 +579,56 @@ def compare_operation_nonce(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_operation_record(output: Path, report: dict, rustc: Path) -> dict:
+    """Replay the complete original binding/AAD and seal/open byte owners."""
+    evidence = operation_record_evidence(output, report)
+    if evidence != report.get("operation_record_evidence"):
+        raise ValueError("operation record native evidence changed before Rust replay")
+    folder = output / "operation-record-rust-oracle"
+    wire = gzip.decompress((folder / "record_cases.jsonl.gz").read_bytes())
+    if digest(wire) != evidence["input_sha256"]:
+        raise ValueError("operation record input corpus changed before Rust replay")
+    manifest = ROOT / "tests/hia_native/record_oracle/Cargo.toml"
+    target = folder / "target"
+    if target.exists():
+        raise ValueError("operation record reference target directory already exists")
+    cargo = executable("cargo")
+    env = qualification_env()
+    env.update({"HIA_REFERENCE_RUNTIME": str(ROOT), "RUSTC": str(rustc)})
+    record_check(output, report, name="operation-record-rust-compile",
+                 command=[str(cargo), "build", "--locked", "--release", "--manifest-path", str(manifest),
+                          "--target-dir", str(target)], env=env, timeout=180)
+    binary = target / "release/hia-operation-record-reference"
+    row = record_check(output, report, name="operation-record-rust-compare",
+                       command=[str(binary)], input_bytes=wire, env=env, timeout=60)
+    observed = json.loads(row.stdout)
+    expected = {"status": "PASS", "rust_oracle_cases": 823, "refusal_cases": 365,
+                "original_binding_constructor_calls": 164, "original_binding_aad_calls": 109,
+                "original_seal_calls": 177, "original_open_calls": 353,
+                "original_preflight_seal_calls": 8, "original_preflight_entropy_reached": 3,
+                "original_verified_scope_constructor_calls": 6, "original_owner_calls": 817,
+                "output_sha256": evidence["native_output_sha256"], "native_cases_added_by_replay": 0}
+    result = {**observed, "status": "PASS" if observed == expected and not row.stderr else "FAIL",
+              "input_sha256": evidence["input_sha256"],
+              "native_output_sha256": evidence["native_output_sha256"],
+              "oracle_executable_sha256": sha(binary), "oracle_sources_sha256": evidence["oracle_sources_sha256"],
+              "original_source": evidence["original_source"], "composition_sha256": evidence["composition_sha256"],
+              "composition_fixture": evidence["composition_fixture"],
+              "corpus_metadata_sha256": evidence["corpus_metadata_sha256"],
+              "original_domain_rows": 702, "adapter_only_rows": 121,
+              "reference_kind": "complete unchanged original TrustedResultBinding, AAD, seal_with_entropy and open",
+              "scope": "internal byte owner with fresh synthetic scope per row; persistent capability/entropy/nonce lifetime remains separate"}
+    (folder / "rust-comparison.json").write_text(json.dumps(result, indent=2) + "\n")
+    if result["status"] != "PASS":
+        raise ValueError("original Rust record owner, domain or output accounting differs")
+    return result
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,
            "operation_kdf": compare_operation_kdf, "operation_aead": compare_operation_aead,
-           "operation_nonce": compare_operation_nonce}
+           "operation_nonce": compare_operation_nonce, "operation_record": compare_operation_record}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}

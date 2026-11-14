@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, io_reference_evidence, local_service_reference_evidence,
                                        native_composition_evidence, nonce_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
+                                       operation_record_evidence, record_composition_evidence,
                                        qualification_env, record_check, sources)
 from compare_hia_runtime_rust import run as compare_rust
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
@@ -216,6 +217,8 @@ class QualificationReportingTests(unittest.TestCase):
                     "HIA_AEAD_SOURCE_ROOT": "/external/aead-source",
                     "HIA_NONCE_SOURCE_ROOT": "/external/nonce-source",
                     "HIA_NONCE_COMPOSITION_MANIFEST": "/external/nonce-composition/manifest.json",
+                    "HIA_RECORD_SOURCE_ROOT": "/external/record-source",
+                    "HIA_RECORD_MANIFEST": "/external/record-composition/manifest.json",
                     "HIA_RUNTIME_REPO": "/external/repository",
                     "HIA_COMPOSITION_MANIFEST": "/external/composition/manifest.json",
                     "HIA_FUTURE_DEVELOPMENT_OVERRIDE": "/external/future",
@@ -232,6 +235,55 @@ class QualificationReportingTests(unittest.TestCase):
                     self.assertNotIn(key, actual)
         self.assertEqual(actual["HIA_HEPTA_DIR"], "/qualifier-owned/compiler")
         self.assertEqual(actual["QUALIFICATION_HOST_MARKER"], "preserved")
+
+    def test_record_summary_cannot_replace_nine_executable_groups(self):
+        historical = json.loads((ROOT / "native/operation_record_original_rust_comparison.json").read_bytes())
+        counts = historical["native_observation"]["native_record_counts"]
+        record_check(self.output, self.report, name="test_operation_record.py", timeout=5,
+                     command=[sys.executable, "-I", "-c", "print(" + repr(json.dumps({"native_record_counts": counts})) + ")"])
+        with self.assertRaisesRegex(ValueError, "all nine completed executable test groups"):
+            operation_record_evidence(self.output, self.report)
+
+    def test_record_summary_cannot_drop_fatal_child_controls(self):
+        historical = json.loads((ROOT / "native/operation_record_original_rust_comparison.json").read_bytes())
+        counts = historical["native_observation"]["native_record_counts"]
+        counts["child_contract_refusals"] = 0
+        record_check(self.output, self.report, name="test_operation_record.py", timeout=5,
+                     command=[sys.executable, "-I", "-c", "print(" + repr(json.dumps({"native_record_counts": counts})) + ")"])
+        with self.assertRaisesRegex(ValueError, "refusal/capacity/continuation/ELF accounting differs"):
+            operation_record_evidence(self.output, self.report)
+
+    def test_record_fixture_cannot_grant_its_owner_root_recursion(self):
+        import hashlib
+        proof = json.loads((ROOT / "native/operation_record_composition.json").read_bytes())
+        profile = [{key: value for key, value in row.items() if key != "source"} for row in proof["members"]]
+        profile[1]["call_mask"] |= 1
+        metadata = {"schema": "hepta.runtime.native-composition.v1", "target": "linux-x86_64",
+                    "transport": "newline-json", "compiler_commit": HEPTA_COMMIT,
+                    "compiler_sha256": proof["compiler_sha256"], "executable": "native-local-read.elf",
+                    "runtime_python_required": False, "runtime_libc_required": False,
+                    "whole_runtime_replaced": False, "profile": profile, "members": [{}, {}, {}, {}, {}]}
+        raw = json.dumps(metadata).encode()
+        (self.output / "manifest.json").write_bytes(raw)
+        report = {"compiler_image_sha256": proof["compiler_sha256"], "modules": {"operation_record": {
+            "builder": "record_composition", "manifest": "manifest.json", "sha256": hashlib.sha256(raw).hexdigest()}}}
+        with self.assertRaisesRegex(ValueError, "fixed five-image authority table differs"):
+            record_composition_evidence(self.output, report)
+
+    def test_record_build_imports_ignore_inherited_reference_source_override(self):
+        external = self.output / "external"
+        (external / "scripts").mkdir(parents=True)
+        (external / "scripts/hia_native_composition_build.py").write_text(
+            "raise RuntimeError('external record build code was executed')\n")
+        env = qualification_env()
+        env["HIA_REFERENCE_RUNTIME"] = str(external)
+        program = ("import pathlib,sys; sys.path.insert(0," + repr(str(ROOT / "scripts")) + "); "
+                   "import hia_native_record_build,hia_native_composition_build; "
+                   "assert pathlib.Path(hia_native_composition_build.__file__).resolve()==pathlib.Path("
+                   + repr(str(ROOT / "scripts/hia_native_composition_build.py")) + ").resolve(); print('PASS')")
+        row = record_check(self.output, self.report, name="record-build-import-custody", timeout=5,
+                           command=[sys.executable, "-I", "-B", "-c", program], env=env)
+        self.assertEqual(row.stdout, b"PASS\n")
 
 
 if __name__ == "__main__":

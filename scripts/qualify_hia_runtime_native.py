@@ -1,7 +1,7 @@
 """Build and test the declared HIA runtime profile from pinned source bytes.
 
 NATIVE_COMPONENTS_PASS records the fresh full compiler cold gate, native tests
-and their retained Python comparisons. Aggregate PASS also requires all ten
+and their retained Python comparisons. Aggregate PASS also requires all eleven
 independent Rust comparisons. Neither phase qualifies the remaining 125
 production tool owners, production adoption, or removal of the old runtime.
 """
@@ -48,6 +48,8 @@ MODULES = (
      "standalone": "filter", "manifest_env": "HIA_AEAD_MANIFEST", "test": "test_operation_aead.py"},
     {"key": "operation_nonce", "name": "operation-nonce", "source": "native/operation_nonce.hepta",
      "standalone": "filter", "manifest_env": "HIA_NONCE_MANIFEST", "test": "test_operation_nonce.py"},
+    {"key": "operation_record", "name": "operation-record", "source": "native/operation_record.hepta",
+     "builder": "record_composition", "manifest_env": "HIA_RECORD_MANIFEST", "test": "test_operation_record.py"},
     {"key": "policy", "name": "policy", "source": "native/policy.hepta",
      "standalone": "filter", "manifest_env": "HIA_POLICY_MANIFEST", "test": "test_policy.py"},
     {"key": "stat_version", "name": "stat-version", "source": "native/stat_version.hepta",
@@ -87,7 +89,7 @@ def sources() -> dict:
     paths.update((ROOT / "tests/hia_native").rglob("*"))
     paths.update(ROOT / "scripts" / name for name in (
         "hia_native_build.py", "hia_native_loader.py", "generate_hia_transport.py",
-        "hia_native_io_build.py", "hia_native_composition_build.py", "hia_native_cold.py",
+        "hia_native_io_build.py", "hia_native_composition_build.py", "hia_native_record_build.py", "hia_native_cold.py",
         "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-runtime-native.yml"))
@@ -773,6 +775,255 @@ def operation_nonce_evidence(output: Path, report: dict) -> dict:
             "complete_original_crypto_scope_parity": False, "production_activated": False}
 
 
+def record_composition_evidence(output: Path, report: dict) -> dict:
+    """Bind the record fixture and all crypto leaves to their tested native images."""
+    owner = report["modules"]["operation_record"]
+    relative = Path(owner["manifest"])
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("record composition manifest is outside the retained result")
+    manifest = output / relative
+
+    def raw_file(path: Path) -> bytes:
+        if path.is_symlink() or not path.is_file() or path.resolve() != path.absolute():
+            raise ValueError("record composition artifact is not a regular owned file")
+        return path.read_bytes()
+
+    def digest(raw: bytes) -> str:
+        return hashlib.sha256(raw).hexdigest()
+
+    raw_manifest = raw_file(manifest)
+    metadata = json.loads(raw_manifest)
+    if (owner.get("builder") != "record_composition" or digest(raw_manifest) != owner["sha256"]
+            or metadata.get("schema") != "hepta.runtime.native-composition.v1"
+            or metadata.get("target") != "linux-x86_64" or metadata.get("transport") != "newline-json"
+            or metadata.get("compiler_commit") != HEPTA_COMMIT
+            or metadata.get("compiler_sha256") != report["compiler_image_sha256"]
+            or metadata.get("executable") != "native-local-read.elf"
+            or metadata.get("runtime_python_required") is not False
+            or metadata.get("runtime_libc_required") is not False
+            or metadata.get("whole_runtime_replaced") is not False):
+        raise ValueError("record composition manifest identity or ownership differs")
+    specs = (("record-hex-fixture", "tests/hia_native/record_hex_transport.hepta", 1, 2,
+              8 << 20, 8 << 20, 16 << 20),
+             ("operation-record", "native/operation_record.hepta", 1, 28,
+              8 << 20, 2 << 20, 3 << 20),
+             ("operation-kdf", "native/operation_kdf.hepta", 0, 0, 8 << 20, 32, 2048),
+             ("binary-codec", "native/binary_codec.hepta", 0, 0, 8 << 20, 32, 1184),
+             ("operation-aead", "native/operation_aead.hepta", 0, 0, 8 << 20, 1048640, 512))
+    profile = [{"id": i, "name": name, "source_sha256": sha(ROOT / source), "flags": flags,
+                "call_mask": mask, "input_capacity": inp, "output_capacity": out,
+                "workspace_capacity": work}
+               for i, (name, source, flags, mask, inp, out, work) in enumerate(specs)]
+    if (json_bytes(metadata.get("profile")) != json_bytes(profile)
+            or type(metadata.get("members")) is not list or len(metadata["members"]) != 5):
+        raise ValueError("record composition fixed five-image authority table differs")
+    provenance = json.loads((ROOT / "native/operation_record_composition.json").read_bytes())
+    provenance_sources = ("native/operation_kdf_composition.json", "native/binary_codec_composition.json",
+                          "native/operation_aead_composition.json")
+    if (provenance.get("schema") != "hepta.runtime.operation-record-composition.v1"
+            or provenance.get("source_sha256") != profile[1]["source_sha256"]
+            or provenance.get("members") != [dict(p, source=spec[1]) for p, spec in zip(profile, specs)]
+            or provenance.get("compiler_commit") != HEPTA_COMMIT
+            or provenance.get("compiler_sha256") != report["compiler_image_sha256"]
+            or provenance.get("packer_source_sha256") != sha(ROOT / "native/composition_packer.hepta")
+            or provenance.get("crypto_source_provenance") != {name: sha(ROOT / name) for name in provenance_sources}):
+        raise ValueError("record composition owner/dependency source provenance differs")
+    rows = [("packer", "native/composition_packer.hepta", metadata["packer"])]
+    rows.extend((f"module_{i:02d}", spec[1], metadata["members"][i]) for i, spec in enumerate(specs))
+    frame = bytearray(b"HIABND01" + struct.pack("<3Q", 5, 0, 0))
+    record = {}
+    for index, (stem, source_name, row) in enumerate(rows):
+        if row.get("manifest") != stem + ".json":
+            raise ValueError("record composition child manifest path differs")
+        raw = raw_file(manifest.parent / row["manifest"])
+        child = json.loads(raw)
+        if (digest(raw) != row.get("manifest_sha256")
+                or child.get("schema") != "hepta.runtime.native-module.v1"
+                or child.get("abi") != "hepta.runtime.borrowed-bytes.linux-x86_64.v1"
+                or child.get("target") != "linux-x86_64" or child.get("compiler_commit") != HEPTA_COMMIT
+                or child.get("compiler_sha256") != report["compiler_image_sha256"]
+                or child.get("source") != stem + ".hepta" or child.get("image") != stem + ".image.bin"
+                or child.get("standalone") is not None):
+            raise ValueError("record composition child manifest or compiler differs")
+        source = raw_file(manifest.parent / child["source"])
+        image = raw_file(manifest.parent / child["image"])
+        if (source != raw_file(ROOT / source_name) or digest(source) != child.get("source_sha256")
+                or digest(source) != row.get("source_sha256") or not 0 < len(image) <= 1 << 20
+                or digest(image) != child.get("image_sha256") or digest(image) != row.get("image_sha256")
+                or child.get("input_capacity") != 8 << 20 or child.get("output_capacity") != 8 << 20
+                or child.get("workspace_capacity") != 32 << 20):
+            raise ValueError("record composition source/image artifact or capacity differs")
+        if index == 2:
+            record = child
+        if index in (3, 4, 5):
+            tested_key = {3: "operation_kdf", 4: "binary_codec", 5: "operation_aead"}[index]
+            tested_owner = report["modules"][tested_key]
+            tested_relative = Path(tested_owner["manifest"])
+            if tested_relative.is_absolute() or ".." in tested_relative.parts:
+                raise ValueError("record primitive manifest is outside the retained result")
+            tested_path = output / tested_relative
+            tested_raw = raw_file(tested_path)
+            tested = json.loads(tested_raw)
+            if (digest(tested_raw) != tested_owner["sha256"]
+                    or any(child.get(key) != tested.get(key)
+                           for key in ("source_sha256", "image_sha256", "compiler_sha256"))):
+                raise ValueError("packed record crypto leaf differs from its directly tested native image")
+        if index:
+            p = profile[index - 1]
+            frame.extend(struct.pack("<8Q", len(image), p["input_capacity"], p["output_capacity"],
+                                     p["workspace_capacity"], p["flags"], p["call_mask"], 0, 0))
+            frame.extend(bytes.fromhex(digest(source)) + bytes.fromhex(digest(image)) + image)
+    key = digest(json_bytes({"compiler": report["compiler_image_sha256"], "members": profile,
+                             "packer": sha(ROOT / "native/composition_packer.hepta")}))
+    executable = raw_file(manifest.parent / "native-local-read.elf")
+    inspection = metadata["inspection"]
+    if (metadata.get("key") != key or metadata.get("frame_sha256") != digest(frame)
+            or metadata.get("frame_bytes") != len(frame) or len(frame) > 8 << 20
+            or digest(executable) != metadata.get("executable_sha256")
+            or inspection.get("sha256") != digest(executable) or inspection.get("bytes") != len(executable)
+            or inspection.get("dynamic_loader") is not False or inspection.get("libc") is not False
+            or inspection.get("interpreter") is not None
+            or metadata.get("packing") != {"owner": "HIA", "input_unchanged": True,
+                 "buffer_canaries_unchanged": True, "packer_image_sha256": metadata["packer"]["image_sha256"]}):
+        raise ValueError("record composition packed frame or executable identity differs")
+    return {"status": "PASS", "manifest_sha256": digest(raw_manifest),
+            "fixture_source_sha256": profile[0]["source_sha256"],
+            "source_sha256": record["source_sha256"], "image_sha256": record["image_sha256"],
+            "executable_sha256": digest(executable), "frame_sha256": digest(frame),
+            "profile": profile, "modules": metadata["members"], "packer": metadata["packer"],
+            "requests": 9, "processes": 1,
+            "scope": "test-only record/KDF/SHA/AEAD composition; trusted scope admission and entropy remain separate"}
+
+
+def operation_record_evidence(output: Path, report: dict) -> dict:
+    """Bind record refusal/cleanup controls, fixed images and original domains."""
+    check, summary = completed_test_summary(output, report, "test_operation_record.py")
+    counts = {"requests": 978, "native_controller_calls": 3071, "native_leaf_calls": 2093,
+              "aad_reference_cases": 106, "preflight_reference_cases": 3, "seal_reference_cases": 174,
+              "open_reference_cases": 175, "binding_refusals": 64, "integrity_refusals": 177,
+              "admission_refusals": 125, "capacity_refusals": 9, "child_contract_refusals": 140,
+              "exact_capacity_successes": 5, "codec_cleanup_reference_calls": 3, "actual_elf_requests": 9}
+    if summary != {"native_record_counts": counts}:
+        raise ValueError("operation record refusal/capacity/continuation/ELF accounting differs")
+    stderr = (output / "test_operation_record.py.stderr").read_text()
+    if stderr.count("\nRan 9 tests in ") != 1 or not stderr.endswith("\nOK\n"):
+        raise ValueError("operation record requires all nine completed executable test groups")
+    fixture = record_composition_evidence(output, report)
+    folder = output / "operation-record-rust-oracle"
+    metadata_path = folder / "native-corpus.json"
+    metadata = json.loads(metadata_path.read_bytes())
+    reference = {"distribution": "cryptography", "version": "50.0.0",
+                 "algorithms": ["ChaCha20Poly1305", "stdlib hmac SHA256", "stdlib hashlib SHA256"]}
+    if (metadata.get("schema") != "hepta.runtime.native-operation-record-corpus.v1"
+            or metadata.get("counts") != counts or metadata.get("python_reference") != reference):
+        raise ValueError("operation record corpus schema or independent reference differs")
+    original = report["inventory"]["original_sources"]["src/mcp/runtime/operation_crypto.rs"]
+    reference_names = ("oracle_operation_record.rs", "record_oracle/Cargo.toml", "record_oracle/Cargo.lock",
+                       "record_oracle/build.rs", "record_oracle/original_access.rs")
+    reference_sources = {name: sha(ROOT / "tests/hia_native" / name) for name in reference_names}
+    if (metadata.get("source_sha256") != fixture["source_sha256"]
+            or metadata.get("image_sha256") != fixture["image_sha256"]
+            or metadata.get("manifest_sha256") != fixture["manifest_sha256"]
+            or metadata.get("composition_sources") != [row["source_sha256"] for row in fixture["profile"]]
+            or metadata.get("original_source_sha256") != original["sha256"]
+            or metadata.get("composition_sha256") != sha(ROOT / "native/operation_record_composition.json")
+            or metadata.get("builder_sha256") != sha(ROOT / "scripts/hia_native_record_build.py")
+            or metadata.get("test_sha256") != sha(ROOT / "tests/hia_native/test_operation_record.py")
+            or metadata.get("oracle_sources_sha256") != reference_sources):
+        raise ValueError("operation record original/native/oracle source identity differs")
+    entry = metadata["corpus"]
+    if (entry.get("file") != "record_cases.jsonl.gz" or entry.get("cases") != 823
+            or entry.get("raw_bytes") != 53410414
+            or entry.get("raw_sha256") != "086e930fd70eb8e2a78dc1f1ff313fe3ca4e1eec7312cc97f33bc661018051ec"):
+        raise ValueError("operation record captured corpus identity differs")
+    packed = (folder / entry["file"]).read_bytes()
+    if hashlib.sha256(packed).hexdigest() != entry.get("gzip_sha256"):
+        raise ValueError("operation record captured corpus bytes differ")
+    wire = gzip.decompress(packed)
+    if (hashlib.sha256(wire).hexdigest() != entry["raw_sha256"]
+            or len(wire) != entry["raw_bytes"] or not wire.endswith(b"\n")):
+        raise ValueError("operation record captured corpus bytes differ")
+    rows = wire.splitlines()
+    if (len(rows) != entry["cases"]
+            or len(rows) + counts["capacity_refusals"] + counts["exact_capacity_successes"]
+               + counts["child_contract_refusals"] + 1 != counts["requests"]
+            or counts["native_controller_calls"] != counts["requests"] + counts["native_leaf_calls"]):
+        raise ValueError("operation record captured/native call accounting differs")
+    observed = {"aad_successes": 0, "preflight_successes": 0, "seal_successes": 0, "open_successes": 0,
+                "invalid_refusals": 0, "payload_refusals": 0, "binding_refusals": 0,
+                "integrity_refusals": 0, "verified_scope_rows": 0}
+    output_hash = hashlib.sha256()
+    for encoded in rows:
+        row = json.loads(encoded)
+        if set(row) not in ({"input_hex", "output_hex", "code"},
+                            {"input_hex", "output_hex", "code", "verified_token_hex"}):
+            raise ValueError("operation record captured row fields differ")
+        request, returned = bytes.fromhex(row["input_hex"]), bytes.fromhex(row["output_hex"])
+        code = row["code"]
+        if (type(code) is not int or not 0 <= code <= 0xFFFFFFFF
+                or request.hex() != row["input_hex"] or returned.hex() != row["output_hex"]):
+            raise ValueError("operation record captured status or byte encoding differs")
+        if code == 0xFFFFFFFF:
+            if returned:
+                raise ValueError("operation record malformed-frame refusal released bytes")
+            observed["invalid_refusals"] += 1
+        else:
+            if (len(request) < 96 or request[:8] != b"HRREC001" or request[16:24] != bytes(8)
+                    or int.from_bytes(request[8:16], "little") not in (1, 2, 3, 4)
+                    or int.from_bytes(request[24:32], "little") not in (1, 2)):
+                raise ValueError("operation record original-domain frame differs")
+            operation = int.from_bytes(request[8:16], "little")
+            at = 96
+            for index in range(6):
+                size = int.from_bytes(request[48 + index * 8:56 + index * 8], "little")
+                if size > len(request) - at:
+                    raise ValueError("operation record original-domain field span differs")
+                request[at:at + size].decode("utf-8", "strict")
+                at += size
+            if ((operation == 1 and at != len(request)) or (operation == 2 and len(request) - at < 44)
+                    or (operation == 3 and len(request) - at < 32)):
+                raise ValueError("operation record original-domain tail differs")
+            refusals = {0xFFFFFFFD: "payload_refusals", 0xFFFFFFFC: "binding_refusals", 0xFFFFFFFB: "integrity_refusals"}
+            if code in refusals:
+                if returned:
+                    raise ValueError("operation record semantic refusal released bytes")
+                observed[refusals[code]] += 1
+            else:
+                if code > 1048660 or code != len(returned):
+                    raise ValueError("operation record captured success length differs")
+                observed[{1: "aad_successes", 2: "seal_successes", 3: "open_successes", 4: "preflight_successes"}[operation]] += 1
+        if "verified_token_hex" in row:
+            token = bytes.fromhex(row["verified_token_hex"])
+            if (token.hex() != row["verified_token_hex"] or not 32 <= len(token) <= 4096
+                    or any(value < 33 or value > 126 for value in token)
+                    or len(request) < 96 or int.from_bytes(request[8:16], "little") not in (2, 3)):
+                raise ValueError("operation record verified-token fixture differs")
+            observed["verified_scope_rows"] += 1
+        output_hash.update(f"{code}:{returned.hex()}\n".encode())
+    expected = {"aad_successes": 106, "preflight_successes": 3, "seal_successes": 174, "open_successes": 175,
+                "invalid_refusals": 121, "payload_refusals": 4, "binding_refusals": 63,
+                "integrity_refusals": 177, "verified_scope_rows": 6}
+    if observed != expected:
+        raise ValueError("operation record captured original/adapter domains differ")
+    if (output_hash.hexdigest() != metadata.get("native_output_sha256")
+            or output_hash.hexdigest() != "38e6a6c2eae9e5748f9f7ddf3b0cc3519a78cb5642cecd00ae53cd050287621d"):
+        raise ValueError("operation record captured native output digest differs")
+    return {"status": "PASS", "counts": counts, "test_groups": 9, "captured_native_cases": len(rows),
+            "original_domain_rows": 702, "adapter_only_rows": 121, "captured_domains": observed,
+            "extra_non_utf8_byte_refusals": 1, "native_cases_added_by_replay": 0,
+            "module_manifest_sha256": fixture["manifest_sha256"],
+            "source_sha256": fixture["source_sha256"], "image_sha256": fixture["image_sha256"],
+            "original_source": original, "composition_sha256": metadata["composition_sha256"],
+            "oracle_sources_sha256": reference_sources, "composition_fixture": fixture,
+            "python_reference": reference, "corpus_metadata_sha256": sha(metadata_path),
+            "corpus_sha256": entry["gzip_sha256"], "input_sha256": entry["raw_sha256"],
+            "native_output_sha256": output_hash.hexdigest(),
+            "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
+            "scope": "internal binding/AAD and pure seal/open composition; scope capability and nonce lifetime remain separate",
+            "public_mcp_key_output": False, "complete_original_crypto_scope_parity": False,
+            "production_activated": False}
+
+
 def native_composition_evidence(output: Path, report: dict) -> dict:
     """Recheck every image, fixed authority table and actual generic bridge suite."""
     owner = report["modules"]["local_service"]
@@ -953,6 +1204,7 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_KDF_CORPUS_DIR": str(output / "operation-kdf-rust-oracle"),
             "HIA_AEAD_CORPUS_DIR": str(output / "operation-aead-rust-oracle"),
             "HIA_NONCE_CORPUS_DIR": str(output / "operation-nonce-rust-oracle"),
+            "HIA_RECORD_CORPUS_DIR": str(output / "operation-record-rust-oracle"),
             "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
             "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
             "HIA_SERVICE_RESULT": str(output / "local-service-python-reference.json"),
@@ -968,6 +1220,9 @@ def run(output: Path, hepta: Path) -> dict:
                 from hia_native_composition_build import build_local_read
                 built = build_local_read(hepta, output / "build")
                 env["HIA_COMPOSITION_MANIFEST"] = str(built)
+            elif item.get("builder") == "record_composition":
+                from hia_native_record_build import build_record
+                built = build_record(hepta, output / "build")
             else:
                 built = builder.compile(item["name"], ROOT / item["source"], standalone=item["standalone"])
             report["modules"][item["key"]] = {
@@ -996,6 +1251,7 @@ def run(output: Path, hepta: Path) -> dict:
         report["operation_kdf_evidence"] = operation_kdf_evidence(output, report)
         report["operation_aead_evidence"] = operation_aead_evidence(output, report)
         report["operation_nonce_evidence"] = operation_nonce_evidence(output, report)
+        report["operation_record_evidence"] = operation_record_evidence(output, report)
         report["retained_python_comparison_status"] = "PASS"
         report["python_reference_inputs"] = {
             "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
@@ -1033,6 +1289,9 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update({
             "operation-nonce-rust-oracle/" + name: sha(output / "operation-nonce-rust-oracle" / name)
             for name in ("native-corpus.json", "nonce_cases.jsonl.gz")})
+        report["rust_oracle_inputs"].update({
+            "operation-record-rust-oracle/" + name: sha(output / "operation-record-rust-oracle" / name)
+            for name in ("native-corpus.json", "record_cases.jsonl.gz")})
         builder.bootstrap()  # Revalidate the same compiler image after all tests.
         builder._recheck()
         if sources() != manifest:

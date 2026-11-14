@@ -1,0 +1,89 @@
+{
+  "child_call_mask": 28,
+  "cleanup": "All record scratch through monotonic high-water is zeroed. Every codec byte [0,1184) is overwritten by completed empty SHA; KDF [0,2048) and AEAD [0,512) clear on normal completion. Child-contract faults require bundle destruction.",
+  "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+  "compiler_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
+  "crypto_source_provenance": {
+    "native/binary_codec_composition.json": "6653572cb616c0bd821922dc6c187d32341db14a67a57ee53c9d6ff96a71cf11",
+    "native/operation_aead_composition.json": "8e4310213b323214738f30c3cde068ec29cf8aabf0d704521f3f4791177a0324",
+    "native/operation_kdf_composition.json": "a52bb9529f0b882e58f8a7dd5eaf39872401e36a9f973cf60e44f3eab911bf16"
+  },
+  "footer_bytes": 256,
+  "members": [
+    {
+      "call_mask": 2,
+      "flags": 1,
+      "id": 0,
+      "input_capacity": 8388608,
+      "name": "record-hex-fixture",
+      "output_capacity": 8388608,
+      "source": "tests/hia_native/record_hex_transport.hepta",
+      "source_sha256": "2cfbbd5cab05a3e30aff2b2944f037022e52bff219d037765667bae4d44cc1cf",
+      "workspace_capacity": 16777216
+    },
+    {
+      "call_mask": 28,
+      "flags": 1,
+      "id": 1,
+      "input_capacity": 8388608,
+      "name": "operation-record",
+      "output_capacity": 2097152,
+      "source": "native/operation_record.hepta",
+      "source_sha256": "21868a402b6f1dc957c94a5d3a6f7e30810105bc936968e90e8d0223683e423a",
+      "workspace_capacity": 3145728
+    },
+    {
+      "call_mask": 0,
+      "flags": 0,
+      "id": 2,
+      "input_capacity": 8388608,
+      "name": "operation-kdf",
+      "output_capacity": 32,
+      "source": "native/operation_kdf.hepta",
+      "source_sha256": "4bc99f1a2c5b0830fe2d2bc2b9bfd6dde2521ec0893d5103117af3a7243b8fb1",
+      "workspace_capacity": 2048
+    },
+    {
+      "call_mask": 0,
+      "flags": 0,
+      "id": 3,
+      "input_capacity": 8388608,
+      "name": "binary-codec",
+      "output_capacity": 32,
+      "source": "native/binary_codec.hepta",
+      "source_sha256": "f58ab824ecb47545f19cd1d0daded9e41fca5457110693677d84e393e3098f23",
+      "workspace_capacity": 1184
+    },
+    {
+      "call_mask": 0,
+      "flags": 0,
+      "id": 4,
+      "input_capacity": 8388608,
+      "name": "operation-aead",
+      "output_capacity": 1048640,
+      "source": "native/operation_aead.hepta",
+      "source_sha256": "0c63d15055cae3fa9217bc92bfdeece3455880121806b58d349546b2755d092b",
+      "workspace_capacity": 512
+    }
+  ],
+  "original_owners": [
+    "TrustedResultBinding::new",
+    "TrustedResultBinding::aad",
+    "ResultCryptoScope::seal_with_entropy",
+    "ResultCryptoScope::open"
+  ],
+  "original_runtime_commit": "a0dcdda1991ec536d5e2d252c006a778993fa566",
+  "original_source": "src/mcp/runtime/operation_crypto.rs",
+  "original_source_blob": "0c07318a6d85efb920069ce4f190c4f2ed56e84f",
+  "original_source_sha256": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633",
+  "packer_source": "native/composition_packer.hepta",
+  "packer_source_sha256": "97b496cd2b94d5a22a8979115c9ef3e4f6f24c47592588354b7e790c4daebea8",
+  "packet_maximum": 1048660,
+  "packet_minimum": 84,
+  "payload_limit": 1048576,
+  "record_workspace_bytes": 3145728,
+  "schema": "hepta.runtime.operation-record-composition.v1",
+  "scope": "Internal trusted-scope byte owner only. Caller-owned key/nonce inputs do not grant authentication or authorization. Entropy, nonce reservation, scope lifetime and production handlers remain separate.",
+  "source_sha256": "21868a402b6f1dc957c94a5d3a6f7e30810105bc936968e90e8d0223683e423a",
+  "test_transport": "Fixed HIA hexadecimal line adapter under tests/hia_native; not a public service."
+}

@@ -32,7 +32,7 @@ continue to identify the language and are not filename extensions.
 
 ## Native components
 
-Qualification covers 18 production HIA sources through 14 executable components
+Qualification covers 19 production HIA sources through 15 executable components
 and their four HIA packers. Test-only HIA fixtures are recorded separately from
 the production source inventory.
 
@@ -47,6 +47,7 @@ the production source inventory.
 | [operation_kdf.hepta](operation_kdf.hepta) | Internal HMAC/HKDF-SHA256, original token-key derivation, private binding bytes and per-record key derivation with cleared workspace |
 | [operation_aead.hepta](operation_aead.hepta) | Internal ChaCha20-Poly1305, full-tag authentication before plaintext output, exact refusal/capacity behavior and declared-workspace clearing |
 | [operation_nonce.hepta](operation_nonce.hepta) | Internal serial nonce reservation, original 16,384-use scope budget, exact identity namespaces and persistent private-set lifecycle |
+| [operation_record.hepta](operation_record.hepta) | Internal original binding/AAD and bounded result seal/open composition, complete u128 timestamps, authenticated inner-record validation and private staging cleanup |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
 | [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
 | [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded chunk/full-file continuations, file versions, single-link/UTF-8/confirmation checks and cleanup decisions |
@@ -71,13 +72,20 @@ remain separate owners.
 The AEAD byte frame and authentication-failure boundary are specified in
 [operation_aead_abi.md](operation_aead_abi.md). It is also internal and is not
 installed in the local read service. Nonce uniqueness, trusted scope state,
-entropy and complete record ownership remain separate requirements.
+entropy and trusted scope lifetime remain separate requirements; the record byte owner below composes this primitive.
 The serial nonce-set boundary is specified in [operation_nonce_abi.md](operation_nonce_abi.md).
 It requires one private persistent workspace per trusted scope; all scope clones
 must reach that same state. Its two-image hex transport is a qualification fixture
 under `tests/hia_native`, separate from the six-image local read service.
 Entropy, production serialization and destruction of the corresponding key
 capability remain caller-owned requirements.
+The internal record frame is specified in [operation_record_abi.md](operation_record_abi.md).
+Its fixed five-image fixture uses the already qualified KDF, codec and AEAD images.
+Keys and reserved nonces come only from a trusted scope controller; preflight
+admits payload/binding before that controller requests entropy or reserves a nonce.
+Its hexadecimal transport is a test fixture and is not installed as a public MCP tool.
+The 1,184-byte codec sanitation proof and record high-water cleanup are explicit;
+a fatal child-contract failure requires destruction of the whole composition.
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -106,7 +114,7 @@ its own manifest, source, compiler and corpus inputs. Standalone suites retain
 their explicit development overrides; these cannot silently substitute an
 external loader or fault probe in the closed qualification.
 Python 3.11+ and a C toolchain are build/test dependencies for the initial seed.
-Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec, KDF, AEAD and nonce
+Independent comparison also requires Rust 1.95.0 and Cargo; endpoint, codec, KDF, AEAD, nonce and record
 reference dependencies are pinned in their Cargo.lock files.
 The independent Python AEAD reference uses the exact packages in
 `tests/hia_native/python-reference-requirements.txt`, installed in a test-only
@@ -176,6 +184,8 @@ operation-aead-rust-oracle/native-corpus.json
 operation-aead-rust-oracle/aead_cases.jsonl.gz
 operation-nonce-rust-oracle/native-corpus.json
 operation-nonce-rust-oracle/nonce_cases.jsonl.gz
+operation-record-rust-oracle/native-corpus.json
+operation-record-rust-oracle/record_cases.jsonl.gz
 policy-rust-oracle/native-corpus.json
 stat-version-python-reference/native-corpus.json
 stat-version-python-reference/stat-version-cases.jsonl.gz
@@ -195,7 +205,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all ten independent Rust comparisons succeed. The Python reference domain
+after all eleven independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -208,6 +218,15 @@ as new native adapter behavior. Qualification rechecks all six source/image
 pairs, the HIA packer, exact call masks and capacities, packed-frame digest and
 final executable identity before accepting this evidence. Each packed child is
 also matched to the native image independently exercised by its component suite.
+
+The record receipt independently binds its fixed five-image call table, every
+source/image pair, the compiler, packer, packed frame and executable. Its three
+crypto leaves must match the native images exercised by their individual suites.
+The live corpus also binds the test and build driver source hashes. Qualification
+counts 823 replay rows separately from 702 rows reaching original semantic
+owners and 817 observed original-owner calls; the 121 malformed-frame rows are
+adapter coverage. Capacity, extra byte-domain and child-contract controls are
+not relabelled as original interface comparisons.
 
 ## Explicit native local read service
 
@@ -473,6 +492,19 @@ That retained proof predates the additional setup-only parser-provenance check;
 its historical test hash is preserved. The current suite verifies every imported
 parser function after call-index relocation and checks the original Rust body
 byte for byte. Neither structural check adds a native case or fixture IO count.
+
+The internal record owner has passed **978 logical native requests**, comprising
+**3,071 direct controller entries**, **2,093 direct crypto leaf entries**, and
+separately **9 actual composed ELF requests**. Its suite includes 140 fatal
+child-contract controls, 9 capacity refusals, 5 exact-capacity successes and a
+non-UTF-8 input outside the original Rust String domain. The known-secret SHA
+cleanup fixture compares every codec workspace byte and preserves untouched
+tail/canaries. A real locked Rust execution matched all **823 retained rows**,
+including **817 actual original-owner calls**, against the complete unchanged
+`operation_crypto.rs`. See
+[operation_record_original_rust_comparison.json](operation_record_original_rust_comparison.json).
+Each reference row uses a fresh synthetic scope; persistent scope cloning,
+concurrency, entropy and nonce lifetime remain separate qualification owners.
 
 The generic composition suite adds **10 groups, 26 actual ELF executions and
 39 frames**. It checks call-mask and depth refusal, recursion, overlapping
