@@ -1,0 +1,106 @@
+{
+  "schema": "hepta.audit-parent-binding-test-diagnosis.v1",
+  "date_utc": "2026-11-04",
+  "status": "TEST_FIXTURE_DEFECT_REPRODUCED; PROPOSED_PATCH_NOT_APPLIED_BY_DIAGNOSIS_AGENT",
+  "tested_binary_sha256": "53bcf513b99b402057f11db096b3c4b876688b78e7b3edfce72b70afc4724599",
+  "test": "mcp::runtime::jobs::start_io_tests::pending_publication_saves_frozen_intent_before_recoverable_identity",
+  "executions": 2,
+  "results": [
+    {
+      "index": 1,
+      "test": "mcp::runtime::jobs::start_io_tests::pending_publication_saves_frozen_intent_before_recoverable_identity",
+      "parent_namespace_mutation": false,
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_seconds": 0.16759689000900835,
+      "test_threads": 1,
+      "nofile": [
+        1024,
+        1048576
+      ],
+      "same_private_tmpdir_for_both_runs": true,
+      "tmpdir_mode": "0o700",
+      "tmpdir_inode_unchanged": true,
+      "controlled_mutations": null,
+      "log_sha256": "7c777c592828a563148e5b17d88f73a11a3b34266071eeff7e5785273e27c5fc",
+      "trace_sha256": "9e027a55c4cf75df4a32c136bfb1a50feb0a83752ceea669b7d4517840d502eb",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1731 filtered out; finished in 0.08s"
+      ]
+    },
+    {
+      "index": 2,
+      "test": "mcp::runtime::jobs::start_io_tests::pending_publication_saves_frozen_intent_before_recoverable_identity",
+      "parent_namespace_mutation": true,
+      "exit_code": 101,
+      "timed_out": false,
+      "wall_seconds": 0.304795567994006,
+      "test_threads": 1,
+      "nofile": [
+        1024,
+        1048576
+      ],
+      "same_private_tmpdir_for_both_runs": true,
+      "tmpdir_mode": "0o700",
+      "tmpdir_inode_unchanged": true,
+      "controlled_mutations": {
+        "pairs": 770,
+        "errors": [],
+        "maximum_simultaneous_marker_files": 1,
+        "pair_limit": 5000,
+        "seconds_limit": 3
+      },
+      "log_sha256": "aa488ffa5529e9525b7070d6eeab9696a78db290531319fdbebf2ecc88650e9c",
+      "trace_sha256": "2729336000bd052b03bc6a323a20872029ef8e3c66151e5ab2b96ce4ee062a87",
+      "result_lines": [
+        "thread 'mcp::runtime::jobs::start_io_tests::pending_publication_saves_frozen_intent_before_recoverable_identity' panicked at src/mcp/runtime/jobs_start_io_tests.rs:354:27:",
+        "called `Result::unwrap()` on an `Err` value: Operation intent audit unavailable; no remote operation submitted",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1731 filtered out; finished in 0.24s"
+      ]
+    }
+  ],
+  "causal_scope": {
+    "mechanism": "A flat temporary-root/audit.jsonl fixture binds state_path to its parent TMPDIR. Changes to unrelated siblings invalidate the state directory publication stamp.",
+    "binding_layers": {
+      "file": "TMPDIR/test_root/audit.jsonl",
+      "audit_path": "TMPDIR/test_root",
+      "state_path": "TMPDIR"
+    },
+    "controlled_variable": "Only the same private TMPDIR's unrelated marker file was repeatedly created and removed.",
+    "matching_panic": "jobs_start_io_tests.rs:354:27: Operation intent audit unavailable; no remote operation submitted",
+    "state_directory_inode_changed": false,
+    "state_directory_mtime_advance_ns": 582261,
+    "state_directory_ctime_advance_ns": 582261,
+    "state_directory_expected_stamp_trace_line": 36,
+    "state_directory_observed_stamp_trace_line": 57,
+    "audit_file_and_immediate_parent_identity_changed": false,
+    "syscall_emfile_count": 0,
+    "failure_phase": "AuditBinding::open initial validation before audit write or synchronization",
+    "failure_branch_source": "src/mcp/runtime/jobs.rs:2062-2065",
+    "initial_validation_source": "src/mcp/runtime/jobs.rs:2039",
+    "file_binding_failure_branch_taken": false,
+    "fdatasync_calls_in_perturbed_test": 0,
+    "fsync_calls_in_perturbed_test": 0,
+    "namespace_fingerprint_fallback_open_observed": false,
+    "source_inference_note": "Branch assignment combines syscall order, successful stat/open/watch operations, unchanged audit file and immediate-parent identity, and the recorded state-directory stamp mismatch. No internal error was exposed by the public wrapper.",
+    "original_full_suite_event": "The serial r4 log shows the same test failing. The untraced historical process cannot identify which unrelated TMPDIR mutation, if any, caused that instance.",
+    "original_full_suite_final_panic_status": "Pending complete harness output at report creation."
+  },
+  "source_sha256": {
+    "src/mcp/runtime/jobs.rs": "0fd54a135208a1bc492df5ff5d33a5b50e1075747d97ccb8b945bb09a3d8c642",
+    "src/mcp/runtime/jobs_start_io_tests.rs": "c4b791cc832ac7abd5d24315204866149909e7aa737e0adb4ae1bec6a1dc54d8",
+    "src/mcp/runtime/namespace_version.rs": "7dd63c53bc1a85995a353bedc9643e7e4eb864cc7a5603dc331f0b4dd12576db"
+  },
+  "limitations": [
+    "Exactly one quiet and one perturbed run were executed; this is a mechanism demonstration, not a flake-rate estimate.",
+    "Strace alters timing; reported durations are diagnostic, not performance benchmarks.",
+    "The proposed fixture patch has not been applied or executed by this diagnosis agent.",
+    "The original full serial run was not traced; this experiment does not establish the exact triggering event of that historical failure.",
+    "This result does not explain every failure of the earlier parallel suite."
+  ],
+  "production_code_changed": false,
+  "shared_test_source_changed": false,
+  "resource_limits_raised": false,
+  "poison_state_cleared": false,
+  "production_operations_submitted": false
+}

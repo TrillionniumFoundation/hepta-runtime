@@ -1,0 +1,204 @@
+{
+  "author_files": {
+    "exp8_math/base_model/Qwen3.5-0.8B-text/chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+    "exp8_math/base_model/Qwen3.5-0.8B-text/config.json": "3f56b6210db3c52e0bafb50da005eb52b6d340ab4ad980091879b397743675fc",
+    "exp8_math/base_model/Qwen3.5-0.8B-text/generation_config.json": "62153eb6c69f2e1f426beaa8002b7186437e949c7588167085df14e10e9c0a73",
+    "exp8_math/base_model/Qwen3.5-0.8B-text/tokenizer_config.json": "66e427c470fe580fe8c7b5725d857af23d8417e37fae62667ec698306a19987b",
+    "exp8_math/code/apply_edit.py": "d2b627a6cf344f309cca4bcab4ff6ccc6ad1c8f29cabda78d11f99c19d1b1c5d",
+    "exp8_math/code/st_numpy.py": "3c4e532fb8edf374e1a4636aa806a04d062f824943eaf4bca0d3af5b0e7dca40"
+  },
+  "base_repository": "Qwen/Qwen3.5-0.8B",
+  "base_revision": "2fc06364715b967f1860aea9cf38778875588b17",
+  "budget": {
+    "estimated_output_bytes": 3149744832,
+    "free_bytes_before": 162298474496,
+    "max_new_output_bytes": 5000000000,
+    "max_wall_seconds": 900,
+    "output_bytes_before_final_receipt": 3137427261
+  },
+  "checks": {
+    "all_15_mtp_tensors_unchanged": true,
+    "all_318_other_main_language_tensors_unchanged": true,
+    "all_333_other_export_tensors_unchanged": true,
+    "all_335_base_tensors_match_source": true,
+    "author_code_and_config_unchanged": true,
+    "both_edited_hashes_match_author_manifest": true,
+    "changed_bf16_entries": 130188,
+    "edited_tensors": 2,
+    "source_content_and_stat_unchanged": true
+  },
+  "driver_sha256": "4fe55f061d80a8cf58fad2ea6cc43b24a3ebc7b76e06ab450447bd74f2522da6",
+  "edit_run": "p50c",
+  "export_contract": {
+    "config_published_extra_top_level_keys": [
+      "architectures",
+      "bos_token_id",
+      "pad_token_id",
+      "partial_rotary_factor",
+      "transformers_version"
+    ],
+    "config_shared_fields_equal": true,
+    "excluded_visual_tensors": 153,
+    "original_author_full_text_export_file_identity_available": false,
+    "retained_language_tensors": 320,
+    "retained_mtp_tensors": 15,
+    "rule": "Remove only model.visual.*; retain all model.language_model.* and mtp.* with unchanged names.",
+    "tied_lm_head": "No standalone lm_head tensor in source; published tie_word_embeddings=true preserved."
+  },
+  "exports": {
+    "base": {
+      "bytes": 1545740112,
+      "sha256": "e9f6dd9e3636887f8bb04a467241c894af8828fd548c3d8f627a386ccf2a4765"
+    },
+    "p50c": {
+      "bytes": 1545740112,
+      "sha256": "6a211ed8a9b0b977c13889c3fd4f14dabeaee779ea001dd01f17c899877a0374"
+    }
+  },
+  "not_claimed": [
+    "vLLM or Transformers loading/generation compatibility",
+    "MATH/GSM8K/IFEval benchmark efficacy",
+    "independent Astra discovery",
+    "exact full-file identity of the author's unpublished text export",
+    "full evaluation environment reproducibility",
+    "training superiority"
+  ],
+  "original_apply_edit_stdout": [
+    "model.language_model.layers.15.mlp.down_proj.weight: rebuilt (sparse, 65,260 entries changed), hash OK",
+    "model.language_model.layers.19.mlp.down_proj.weight: rebuilt (sparse, 64,928 entries changed), hash OK",
+    "2 tensors -> <export>/p50c/model.safetensors"
+  ],
+  "runtime": {
+    "framework_model_instances": 0,
+    "generated_answers": 0,
+    "gpu_initialized": false,
+    "gradient_steps": 0,
+    "new_packages_installed": 0,
+    "numpy": "2.5.2",
+    "platform": "linux",
+    "python": "3.14.4",
+    "torch_imported": false
+  },
+  "schema": "hepta.mit_qwen.text_export_qualification.v1",
+  "source_commit": "4d09ba6d6a7e891dd8063974dfe81b3d78e3494f",
+  "source_files": {
+    "base/config.json": "b90b86f35c8e6925ef74ee04d0e758f0a845c83a42089ad82bbaa948de9b4204",
+    "base/merges.txt": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+    "base/model.safetensors-00001-of-00001.safetensors": "04b1c301231dd422b8860db31311ab2721511346a32cb1e079c4c4e5f1fe4696",
+    "base/tokenizer.json": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    "base/vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003",
+    "source/edit.npz": "e92a92aafd1f1068b4fd94aa0fbe081ba3ddea2047ee7bcac7161d861be299e7",
+    "source/manifest.json": "83185c1db46e3dafb34af645f8c5ce033c09cc99d4512b9e1b8e3aba9d269225"
+  },
+  "source_repository": "RikiyaT/lm_understand-logs",
+  "status": "passed_file_identity_only",
+  "tensor_manifest_sha256": "84bdcf921a6f9ccc5e5d1a6d447baf8efda9314d8dc199f5176ffc13582ecf62",
+  "text_assets": {
+    "base/chat_template.jinja": {
+      "bytes": 7755,
+      "sha256": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80"
+    },
+    "base/config.json": {
+      "bytes": 1790,
+      "sha256": "3f56b6210db3c52e0bafb50da005eb52b6d340ab4ad980091879b397743675fc"
+    },
+    "base/generation_config.json": {
+      "bytes": 116,
+      "sha256": "62153eb6c69f2e1f426beaa8002b7186437e949c7588167085df14e10e9c0a73"
+    },
+    "base/merges.txt": {
+      "bytes": 3353259,
+      "sha256": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d"
+    },
+    "base/tokenizer.json": {
+      "bytes": 12807982,
+      "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+    },
+    "base/tokenizer_config.json": {
+      "bytes": 1124,
+      "sha256": "66e427c470fe580fe8c7b5725d857af23d8417e37fae62667ec698306a19987b"
+    },
+    "base/vocab.json": {
+      "bytes": 6722759,
+      "sha256": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+    },
+    "p50c/chat_template.jinja": {
+      "bytes": 7755,
+      "sha256": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80"
+    },
+    "p50c/config.json": {
+      "bytes": 1790,
+      "sha256": "3f56b6210db3c52e0bafb50da005eb52b6d340ab4ad980091879b397743675fc"
+    },
+    "p50c/generation_config.json": {
+      "bytes": 116,
+      "sha256": "62153eb6c69f2e1f426beaa8002b7186437e949c7588167085df14e10e9c0a73"
+    },
+    "p50c/merges.txt": {
+      "bytes": 3353259,
+      "sha256": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d"
+    },
+    "p50c/tokenizer.json": {
+      "bytes": 12807982,
+      "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+    },
+    "p50c/tokenizer_config.json": {
+      "bytes": 1124,
+      "sha256": "66e427c470fe580fe8c7b5725d857af23d8417e37fae62667ec698306a19987b"
+    },
+    "p50c/vocab.json": {
+      "bytes": 6722759,
+      "sha256": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+    }
+  },
+  "timing": {
+    "child_cpu_seconds": 1.054033,
+    "child_peak_rss_kib_linux": 3061436,
+    "phases": {
+      "base_nonvisual_export": {
+        "self_cpu_seconds": 0.968899071,
+        "wall_seconds": 0.9689117209927645
+      },
+      "base_tensor_hashes": {
+        "self_cpu_seconds": 0.6751622380000004,
+        "wall_seconds": 0.6753698459942825
+      },
+      "copy_and_verify_text_assets": {
+        "self_cpu_seconds": 0.02764093600000006,
+        "wall_seconds": 0.02764661099354271
+      },
+      "edited_tensor_hashes": {
+        "self_cpu_seconds": 0.673008679,
+        "wall_seconds": 0.6733363310049754
+      },
+      "full_export_hashes": {
+        "self_cpu_seconds": 1.3423535560000004,
+        "wall_seconds": 1.3426409060048172
+      },
+      "original_apply_edit": {
+        "self_cpu_seconds": 0.0006529939999999623,
+        "wall_seconds": 1.054964643000858
+      },
+      "reverify_sources": {
+        "self_cpu_seconds": 0.7737396070000004,
+        "wall_seconds": 0.7741411489987513
+      },
+      "source_tensor_hashes": {
+        "self_cpu_seconds": 0.7667412530000002,
+        "wall_seconds": 0.7671549980004784
+      },
+      "verify_pinned_author_files": {
+        "self_cpu_seconds": 0.00010138000000003977,
+        "wall_seconds": 0.00010098901111632586
+      },
+      "verify_pinned_sources": {
+        "self_cpu_seconds": 0.774176866,
+        "wall_seconds": 0.7976645549933892
+      }
+    },
+    "self_cpu_seconds": 6.070490411,
+    "self_peak_rss_kib_linux": 3057252,
+    "total_cpu_seconds": 7.124525695,
+    "wall_seconds_before_receipt": 7.113290498004062
+  }
+}

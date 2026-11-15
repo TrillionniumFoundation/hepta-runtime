@@ -1,0 +1,48 @@
+{
+  "schema": "hepta.native-bellman-journal-local-protocol.v1",
+  "declared_public_parent_commit": "e7a2688acc5504412d45160a08d2bf864be6b650",
+  "declared_public_parent_tree": "db33fe0df3156a0d024488b715f1a645dbe9468f",
+  "scope": "Unified qualification of journal r2, previously qualified trust-budget code and the new finite-DAG Bellman module; no scientific efficacy claim.",
+  "runner_sha256": "bc9d96d16baabf34181c515211ccec5661ff77ea7b040ba0c472795e1f530eca",
+  "source_identity": "All 14 named Rust files measured before formatting, after formatting and after every command; final compiled binary SHA measured after successful build.",
+  "commands": [
+    "cargo fmt --all",
+    "cargo test --locked --offline --all-features --lib weight_ -- --test-threads=1 --nocapture",
+    "cargo clippy --locked --offline --all-features --all-targets -- -D warnings",
+    "cargo test --locked --offline --no-default-features --lib weight_ -- --test-threads=1 --nocapture",
+    "cargo build --locked --offline --all-features --bin hepta-runtime",
+    "cargo fmt --all -- --check"
+  ],
+  "resources": {
+    "cargo_build_jobs": 2,
+    "test_threads": 1,
+    "per_command_wall_timeout_seconds": 1200,
+    "per_process_address_space_bytes": 8589934592,
+    "per_process_nofile": 1024,
+    "temporary_directory": "private 0700 outside checkout"
+  },
+  "prior_attempts": "Journal-only attempt 1 was review-invalidated and intentionally terminated before testing; preserve its partial records separately. This is the first unified Bellman+journal attempt.",
+  "bellman_contract": {
+    "fixed_actions": [
+      "STOP",
+      "WAIT",
+      "READ",
+      "REPAIR",
+      "SUBMIT_0",
+      "SUBMIT_1"
+    ],
+    "max_states": 4096,
+    "max_branches": 24576,
+    "max_continuing_actions_per_state": 2,
+    "max_branches_per_action": 3,
+    "max_canonical_request_bytes": 8388608,
+    "probability_sum_absolute_tolerance": 1e-12,
+    "recurrence": "ordered total += p * ((V_child + reward) - fee); skip p == 0",
+    "selection": "first legal strict maximum",
+    "planner_permits": 2,
+    "permit_scope": "independent Bellman pool, not a shared Runtime-wide concurrency ceiling",
+    "deadline_seconds": 30
+  },
+  "next_phases": "Only after source/build freeze, replay the old actual trust MCP protocol under the final binary for journal compatibility, then execute the separately frozen 320-graph Bellman corpus. Native graph replay is checked against already-exposed scientific worlds; not a new holdout.",
+  "failures": "Stop at a failed local gate and preserve the attempt, exact source, log hashes and measured costs; do not replace it with a passing retry."
+}

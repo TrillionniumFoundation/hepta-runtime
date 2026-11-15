@@ -14,7 +14,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use super::weight_tensor::{self, ExactElementEdit, PatchTensorParams, TensorPatch};
+use super::weight_tensor::{self, ByteChange, ExactElementEdit, PatchTensorParams, TensorPatch};
+
+#[path = "weight_artifact_cohort.rs"]
+pub mod cohort;
 
 const MAX_MODEL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_STORE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
@@ -217,15 +220,24 @@ async fn copy_bytes(
 
 async fn transform(
 	input: &mut tokio::fs::File,
-	mut output: Option<&mut tokio::fs::File>,
+	output: Option<&mut tokio::fs::File>,
 	patch: &TensorPatch,
+) -> Result<(String, String, u64)> {
+	transform_changes(input, output, &patch.changes, patch.source_size_bytes).await
+}
+
+async fn transform_changes(
+	input: &mut tokio::fs::File,
+	mut output: Option<&mut tokio::fs::File>,
+	changes: &[ByteChange],
+	source_size_bytes: u64,
 ) -> Result<(String, String, u64)> {
 	input.seek(std::io::SeekFrom::Start(0)).await?;
 	let mut source = Sha256::new();
 	let mut target = Sha256::new();
 	let mut position = 0u64;
 	let mut changed = 0u64;
-	for change in &patch.changes {
+	for change in changes {
 		let before = weight_tensor::unhex(&change.expected_hex)?;
 		let after = weight_tensor::unhex(&change.replacement_hex)?;
 		let gap = change
@@ -256,8 +268,7 @@ async fn transform(
 	copy_bytes(
 		input,
 		&mut output,
-		patch
-			.source_size_bytes
+		source_size_bytes
 			.checked_sub(position)
 			.ok_or_else(|| anyhow!("patch exceeds admitted source"))?,
 		&mut source,
@@ -331,6 +342,9 @@ pub(super) async fn open_pinned_artifact(
 	id: &str,
 	state: &Path,
 ) -> Result<(tokio::fs::File, std::fs::Metadata, String)> {
+	if cohort::valid_id(id) {
+		return cohort::open_pinned(id, state).await;
+	}
 	let root = state.join("weight-artifacts-v1");
 	verify_private_directory(&root).await?;
 	let manifest = read_manifest_metadata(&root, id).await?;
@@ -366,7 +380,7 @@ async fn find_reusable(
 			.file_name()
 			.into_string()
 			.map_err(|_| anyhow!("invalid artifact filename"))?;
-		if name.starts_with(".pending-") {
+		if name.starts_with(".pending-") || cohort::valid_id(&name) {
 			continue;
 		}
 		let saved = read_manifest_metadata(root, &name).await?;
@@ -386,9 +400,14 @@ async fn rename_exclusive(from: &Path, to: &Path) -> Result<()> {
 	#[cfg(target_os = "linux")]
 	{
 		use std::os::unix::ffi::OsStrExt;
+		#[cfg(test)]
+		let test_paths = (from.to_owned(), to.to_owned());
 		let from = std::ffi::CString::new(from.as_os_str().as_bytes())?;
 		let to = std::ffi::CString::new(to.as_os_str().as_bytes())?;
 		tokio::task::spawn_blocking(move || {
+			#[cfg(test)]
+			cohort::before_rename_test_hook(&test_paths.0, &test_paths.1)
+				.map_err(std::io::Error::other)?;
 			let result = unsafe {
 				libc::renameat2(
 					libc::AT_FDCWD,
@@ -417,7 +436,7 @@ fn receipt(root: &Path, manifest: &Manifest, reused: bool) -> Value {
 	json!({"schema":"hepta.weight.native-artifact-receipt.v1","artifact_id":manifest.artifact_id,"kind":manifest.kind,"artifact_path":root.join(&manifest.artifact_id).join("model.safetensors"),"manifest_path":root.join(&manifest.artifact_id).join("manifest.json"),"source_sha256":manifest.source_sha256,"sha256":manifest.target_sha256,"byte_length":manifest.patch.source_size_bytes,"changed_bytes":manifest.changed_bytes,"exact_no_op":manifest.no_op,"reused":reused,"source_modified":false,"production_eligible":false,"behavior_evaluated":false})
 }
 
-async fn apply_with_roots(
+pub(super) async fn apply_with_roots(
 	params: PatchTensorParams,
 	roots: &[PathBuf],
 	state: &Path,
@@ -555,7 +574,7 @@ pub async fn patch(params: PatchTensorParams) -> Result<String> {
 	Ok(serde_json::to_string(&result)?)
 }
 
-async fn restore_with_state(id: &str, state: &Path) -> Result<Value> {
+pub(super) async fn restore_with_state(id: &str, state: &Path) -> Result<Value> {
 	let root = store_root(state).await?;
 	let saved = read_manifest(&root, id).await?;
 	if saved.kind != "patch" {

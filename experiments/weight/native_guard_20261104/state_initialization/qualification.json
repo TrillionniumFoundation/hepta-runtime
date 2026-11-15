@@ -1,0 +1,753 @@
+{
+  "schema": "hepta.runtime.private-state-first-start-qualification.v1",
+  "status": "FOCUSED_FIRST_START_FIX_VALIDATED",
+  "scope": "Production initialization of a newly absent runtime state directory under umask 0022; unchanged external REA tests, focused configuration regressions and exact-mode admission controls.",
+  "complete_suite_pass_claimed": false,
+  "source_fix": {
+    "file": "src/mcp/runtime/config.rs",
+    "before": {
+      "bytes": 24254,
+      "sha256": "b772110a05c16204928144a900c75b609f296b4c7e26f216b293810d481c31e2"
+    },
+    "before_byte_identical_to_local_commit": "bdb2eaa675757502be19647b11a83f03bb972a11",
+    "tree_equivalent_published_before_head": "f63aa5c750ec7d2d537e50c22ef0b1bc8cc6814d",
+    "before_tree_sha": "93191effdf4e60213b22d03e823df4ffe9651da8",
+    "after": {
+      "bytes": 24580,
+      "sha256": "f2f37d2b5b7f25a704a75651ae0e0a9044796dbfebd33dd72f901c259850c3f9"
+    },
+    "change": "Replace create_dir_all with a recursive DirBuilder; set creation mode 0700 through DirBuilderExt only under cfg(unix).",
+    "existing_directory_permissions_changed": false,
+    "production_audit_or_owner_checks_relaxed": false,
+    "canonicalization_preserved": true,
+    "external_test_source_unchanged": {
+      "bytes": 11520,
+      "sha256": "53a53d5da2877274bb9c75ddf6fbde9371f5d38b56d90bde4376f90de5c8d0cd"
+    },
+    "configuration_regression_source_unchanged": {
+      "bytes": 13500,
+      "sha256": "533962981326e05fbfc1b7f6ce1986df804916c88ff67c0cbe38926d3d2a5f69"
+    },
+    "independent_source_review": true
+  },
+  "source_supported_chain": [
+    {
+      "file": "tests/rea_mcp_external.rs",
+      "lines": "33-44;137-186;263-292",
+      "fact": "The existing integration tests start the shipped controller with an explicit missing state path, clear its environment, and reach their first positive tool calls with JSON-RPC IDs 3 and 20."
+    },
+    {
+      "file": "src/main.rs",
+      "lines": "52-63",
+      "fact": "Normal configured MCP startup calls config load and init_runtime. The existing external tests do not request the optional prewarm or group-commit flags."
+    },
+    {
+      "file": "src/mcp/runtime/config.rs",
+      "source_version": "before fix",
+      "lines": "170-176;179-182;309-393",
+      "fact": "Missing state_dir is created during startup. The root check rejects group/world writable directories; mode 0700 is explicitly applied only to the jobs and audit subdirectories. The owner-lock claim does not chmod the state root."
+    },
+    {
+      "file": "src/mcp/runtime/config_tests.rs",
+      "lines": "143-151",
+      "fact": "An existing successful startup regression deliberately supplies a previously absent normalization/../state path and verifies its canonical state path. Caller precreation is not the tested contract."
+    },
+    {
+      "file": "src/mcp/runtime/request_audit.rs",
+      "lines": "699-709;736-801;1601-1612;1677-1709",
+      "fact": "First-call audit admission uses runtime_config.state_dir as its root and requires the final directory mode to be exactly 0700. Inner errors are normalized before returning."
+    },
+    {
+      "file": "src/mcp/server.rs",
+      "lines": "2934-2974;3002-3004",
+      "fact": "The request-audit error is returned before the canonical tool handler is dispatched."
+    }
+  ],
+  "historical_failures_preserved": {
+    "local_r8": {
+      "status": "FAILED_R8_COMPLETE",
+      "cargo_exit_code": 101,
+      "library": {
+        "passed": 1694,
+        "failed": 2,
+        "ignored": 36
+      },
+      "qualification_sha256": "2503cc83f20aa174e01d0fe3dc241a5a76d1484566157a14371db40cd8e9f616",
+      "not_explained_by_this_initializer_fix": true
+    },
+    "old_base_ci": {
+      "head": "1f2d3d782e8803e769989234e7902ca5c04eff97",
+      "job_url": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/41692021906/job/126112746047",
+      "decoded_log": {
+        "bytes": 430011,
+        "sha256": "5dfd8f3f7b578733bd6d30908fc5a7c7f0236b572a52199278ae2e3a073a042e"
+      },
+      "same_two_external_first_call_errors": true
+    },
+    "first_exact_head_ci": {
+      "head": "f63aa5c750ec7d2d537e50c22ef0b1bc8cc6814d",
+      "job_url": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/41794981838/job/126456845758",
+      "status": "FAIL",
+      "nextest_exit_code": 100,
+      "run_tests": 1764,
+      "passed": 1762,
+      "failed": 2,
+      "skipped": 40,
+      "test_seconds": 187.957,
+      "decoded_log": {
+        "bytes": 431584,
+        "sha256": "03827d8d640f7b339b9054664756df69d1a863546c08f17bb7797d6b9db15e4c"
+      },
+      "same_two_external_first_call_errors": true
+    },
+    "post_fix_official_ci": "NOT_INCLUDED_IN_THIS_RECEIPT"
+  },
+  "baseline": {
+    "status": "BASELINE_COMMAND_FAILED",
+    "started_utc": "2026-11-04T08:17:04.527013+00:00",
+    "ended_utc": "2026-11-04T08:17:05.447297+00:00",
+    "test_binary_invocations": 1,
+    "command": [
+      "<unchanged-external-test-binary>",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "test_command_exit_code": 101,
+    "harness": {
+      "passed": 0,
+      "failed": 2,
+      "ignored": 0,
+      "measured": 0,
+      "filtered_out": 0,
+      "reported_seconds": 0.04
+    },
+    "test_command_wall_seconds": 0.06508524692617357,
+    "runner_wall_seconds_including_metadata": 0.9202678920701146,
+    "test_command_time_limit_seconds": 300,
+    "umask": "0022",
+    "nofile": [
+      1024,
+      1048576
+    ],
+    "temporary_directory": {
+      "outside_worktree": true,
+      "mode": "0700",
+      "path_bytes": 16
+    },
+    "source_fixture": {
+      "bytes": 11520,
+      "sha256": "53a53d5da2877274bb9c75ddf6fbde9371f5d38b56d90bde4376f90de5c8d0cd"
+    },
+    "external_test_binary": {
+      "bytes": 1540904,
+      "sha256": "f2da4ae78f302b61330a4e82231e4a46fde33b12eba7f9d0d055ab794ae49284"
+    },
+    "controller_binary": {
+      "bytes": 35765960,
+      "sha256": "61170e9ba6c6cd17d907f11e2c3e3b01e59d3855ca3ab11de26205c8ba996228"
+    },
+    "all_13_source_hashes_unchanged_during_baseline": true,
+    "all_binary_hashes_unchanged": true,
+    "stdout": {
+      "bytes": 409,
+      "sha256": "938116e5d7b564e19609a03626ea03ff465e00316cbf225f124a7ae0e11e0063"
+    },
+    "stderr": {
+      "bytes": 596,
+      "sha256": "19cf2a859d82599cc88c6ff3760cc10cc43c717298760113481c0735b821aca2"
+    },
+    "failures": [
+      {
+        "test": "external_mcp_policy_worker_and_controller_restart",
+        "location": "tests/rea_mcp_external.rs:88:13",
+        "method": "tools/call",
+        "request_id": 3,
+        "tool": "rea_inspect_artifact",
+        "error_code": -32603,
+        "error_message": "request audit unavailable; dispatch refused"
+      },
+      {
+        "test": "model_pages_ranges_and_archive_roles_use_the_shipped_mcp_workers",
+        "location": "tests/rea_mcp_external.rs:88:13",
+        "method": "tools/call",
+        "request_id": 20,
+        "tool": "rea_inspect_model",
+        "error_code": -32603,
+        "error_message": "request audit unavailable; dispatch refused"
+      }
+    ]
+  },
+  "controlled_before_fix_observation": {
+    "schema": "hepta.runtime.missing-state-mode-observation.v1",
+    "started_utc": "2026-11-04T08:21:12.957333+00:00",
+    "umask": "0022",
+    "state_directory_initially_absent": true,
+    "fixture_root_mode": "0700",
+    "controller_sha256": "61170e9ba6c6cd17d907f11e2c3e3b01e59d3855ca3ab11de26205c8ba996228",
+    "time_limit_seconds": 30,
+    "production_services_changed": false,
+    "source_edits": false,
+    "synthetic_artifact_only": true,
+    "ambient_controller_environment": "cleared to match existing integration fixture",
+    "initialize_succeeded": true,
+    "state_directory_mode_before_first_tool": "0755",
+    "state_directory_owned_by_observer_user": true,
+    "first_tool": {
+      "id": 3,
+      "canonical_tool": "rea_inspect_artifact",
+      "error_code": -32603,
+      "error_message": "request audit unavailable; dispatch refused"
+    },
+    "observed_startup_mode_incompatible_with_exact_0700_audit_gate": true,
+    "status": "OBSERVATION_COMPLETE",
+    "owned_controller_exit_code_after_cleanup": -9,
+    "owned_controller_reaped": true,
+    "wall_seconds": 0.04442134406417608,
+    "ended_utc": "2026-11-04T08:21:13.001782+00:00",
+    "original_controller_hash_unchanged": true,
+    "logs": {
+      "controller.stdout.log": {
+        "bytes": 746,
+        "sha256": "7ce76745f6552f39da9e25b61bac8b8aac6bd93bb966a8f537e82017e334f968"
+      },
+      "controller.stderr.log": {
+        "bytes": 22,
+        "sha256": "d1f0b5384f9cdc5c987409c09807927fba28dea3f035f37c407de9b888ea4bb3"
+      }
+    },
+    "interpretation": "Direct metadata observation on a separate synthetic startup, plus its first-call audit refusal; original CI private state metadata was not retained."
+  },
+  "focused_after_fix_validation": {
+    "schema": "hepta.runtime.state-initializer-focused-validation.v1",
+    "status": "FOCUSED_TESTS_FORMAT_AND_CLIPPY_PASS_MODE_CONTROLS_PENDING",
+    "started_utc": "2026-11-04T08:27:13.871152+00:00",
+    "steps": [
+      {
+        "name": "format-before",
+        "command": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "command_exit_code": 0,
+        "wall_seconds": 2.722781346994452,
+        "time_limit_seconds": 60,
+        "timed_out": false,
+        "log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test_result_lines": []
+      },
+      {
+        "name": "build-focused",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "--all-features",
+          "--lib",
+          "--test",
+          "rea_mcp_external",
+          "--no-run",
+          "--message-format=json"
+        ],
+        "command_exit_code": 0,
+        "wall_seconds": 166.542417182005,
+        "time_limit_seconds": 600,
+        "timed_out": false,
+        "log": {
+          "bytes": 236538,
+          "sha256": "2017041c55e008f7d06f6291d04e8f50fb6a26b1f28cdfa84536aafff5aab228"
+        },
+        "test_result_lines": []
+      },
+      {
+        "name": "external-two-fixed",
+        "command": [
+          "<fixed-external-test-binary>",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "command_exit_code": 0,
+        "wall_seconds": 3.925748461042531,
+        "time_limit_seconds": 120,
+        "timed_out": false,
+        "log": {
+          "bytes": 252,
+          "sha256": "aa3d7fefb335d938356c4122dd5ef17c3eb8be4dbb9d7ecb7c04fa5482161bc2"
+        },
+        "test_result_lines": [
+          "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.90s"
+        ]
+      },
+      {
+        "name": "config-regression",
+        "command": [
+          "<fixed-library-test-binary>",
+          "mcp::runtime::config::tests::",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "command_exit_code": 0,
+        "wall_seconds": 0.03281464194878936,
+        "time_limit_seconds": 120,
+        "timed_out": false,
+        "log": {
+          "bytes": 1951,
+          "sha256": "0aa69de124d572222e4e7706a62389c14606e6d7e772137831fae9e3bc322cd8"
+        },
+        "test_result_lines": [
+          "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 1712 filtered out; finished in 0.02s"
+        ]
+      },
+      {
+        "name": "strict-clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "--locked",
+          "--offline",
+          "--all-features",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "command_exit_code": 0,
+        "wall_seconds": 46.9912134060869,
+        "time_limit_seconds": 300,
+        "timed_out": false,
+        "log": {
+          "bytes": 139,
+          "sha256": "7fd641775dbf1936b61cdc13393b70f276fb78857f98281af2d7d441a9bb7b8c"
+        },
+        "test_result_lines": []
+      },
+      {
+        "name": "format-after",
+        "command": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "command_exit_code": 0,
+        "wall_seconds": 2.673145049950108,
+        "time_limit_seconds": 60,
+        "timed_out": false,
+        "log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test_result_lines": []
+      }
+    ],
+    "whole_suite_executed": false,
+    "automatic_retry": false,
+    "source_file_modified": "src/mcp/runtime/config.rs",
+    "config_before": {
+      "bytes": 24254,
+      "sha256": "b772110a05c16204928144a900c75b609f296b4c7e26f216b293810d481c31e2"
+    },
+    "config_after": {
+      "bytes": 24580,
+      "sha256": "f2f37d2b5b7f25a704a75651ae0e0a9044796dbfebd33dd72f901c259850c3f9"
+    },
+    "external_fixture": {
+      "bytes": 11520,
+      "sha256": "53a53d5da2877274bb9c75ddf6fbde9371f5d38b56d90bde4376f90de5c8d0cd"
+    },
+    "config_regression_source": {
+      "bytes": 13500,
+      "sha256": "533962981326e05fbfc1b7f6ce1986df804916c88ff67c0cbe38926d3d2a5f69"
+    },
+    "test_process_umask": "0022",
+    "nofile": [
+      1024,
+      1048576
+    ],
+    "all_51_published_files_unchanged": true,
+    "temporary_directory": {
+      "outside_worktree": true,
+      "mode": "0700",
+      "path_bytes": 16
+    },
+    "fixed_test_binaries": {
+      "external": {
+        "bytes": 1540904,
+        "sha256": "f2da4ae78f302b61330a4e82231e4a46fde33b12eba7f9d0d055ab794ae49284"
+      },
+      "library": {
+        "bytes": 63365536,
+        "sha256": "3cfd3316ebd0b9b9fddb0009b7375968a0a36891da0c59ac05c5eba68d77725d"
+      }
+    },
+    "fixed_controller_binary": {
+      "bytes": 35766024,
+      "sha256": "c60edb53b18c6781f227b51f00b1c049dd997fe8d3a430a12b819f982910f9f6"
+    },
+    "fixed_test_binaries_after": {
+      "external": {
+        "bytes": 1540904,
+        "sha256": "f2da4ae78f302b61330a4e82231e4a46fde33b12eba7f9d0d055ab794ae49284"
+      },
+      "library": {
+        "bytes": 63365536,
+        "sha256": "3cfd3316ebd0b9b9fddb0009b7375968a0a36891da0c59ac05c5eba68d77725d"
+      }
+    },
+    "fixed_controller_binary_after": {
+      "bytes": 35766024,
+      "sha256": "c60edb53b18c6781f227b51f00b1c049dd997fe8d3a430a12b819f982910f9f6"
+    },
+    "ended_utc": "2026-11-04T08:30:58.377257+00:00",
+    "completed_command_wall_seconds": 222.8881200880278
+  },
+  "controlled_after_fix_observations": {
+    "schema": "hepta.runtime.private-first-start-mode-controls.v1",
+    "started_utc": "2026-11-04T08:32:05.052343+00:00",
+    "controller_sha256": "c60edb53b18c6781f227b51f00b1c049dd997fe8d3a430a12b819f982910f9f6",
+    "umask": "0022",
+    "nofile": [
+      1024,
+      1048576
+    ],
+    "case_time_limit_seconds": 30,
+    "cases": [
+      {
+        "case": "new_absent_state",
+        "mode_before_startup": null,
+        "new_synthetic_root": true,
+        "fixture_root_mode": "0700",
+        "state_directory_initially_absent": true,
+        "initialize_succeeded": true,
+        "mode_after_startup": "0700",
+        "state_owned_by_observer_user": true,
+        "first_tool": {
+          "id": 3,
+          "canonical_tool": "rea_inspect_artifact",
+          "error_code": null,
+          "error_message": null
+        },
+        "tool_is_error": false,
+        "inspected_format": "wasm",
+        "expected_boundary_observed": true,
+        "mode_after_first_tool": "0700",
+        "owned_controller_exit_code_after_cleanup": -9,
+        "owned_controller_reaped": true,
+        "wall_seconds": 0.3128090499667451,
+        "logs": {
+          "stdout": {
+            "bytes": 1620,
+            "sha256": "8a3f6ca3123b3f419a1af34fec3806ae8e2ca59540da08ad3df20f911ea27aad"
+          },
+          "stderr": {
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      {
+        "case": "preexisting_0755_state",
+        "mode_before_startup": "0755",
+        "new_synthetic_root": true,
+        "fixture_root_mode": "0700",
+        "state_directory_initially_absent": false,
+        "initialize_succeeded": true,
+        "mode_after_startup": "0755",
+        "state_owned_by_observer_user": true,
+        "first_tool": {
+          "id": 3,
+          "canonical_tool": "rea_inspect_artifact",
+          "error_code": -32603,
+          "error_message": "request audit unavailable; dispatch refused"
+        },
+        "expected_boundary_observed": true,
+        "mode_after_first_tool": "0755",
+        "owned_controller_exit_code_after_cleanup": -9,
+        "owned_controller_reaped": true,
+        "wall_seconds": 0.017781042028218508,
+        "logs": {
+          "stdout": {
+            "bytes": 746,
+            "sha256": "7ce76745f6552f39da9e25b61bac8b8aac6bd93bb966a8f537e82017e334f968"
+          },
+          "stderr": {
+            "bytes": 22,
+            "sha256": "d1f0b5384f9cdc5c987409c09807927fba28dea3f035f37c407de9b888ea4bb3"
+          }
+        }
+      }
+    ],
+    "source_edits": false,
+    "production_services_changed": false,
+    "whole_suite_executed": false,
+    "test_fixture_changed": false,
+    "automatic_retry": false,
+    "ended_utc": "2026-11-04T08:32:05.853297+00:00",
+    "case_wall_sum_seconds": 0.3305900919949636,
+    "all_51_published_files_unchanged": true,
+    "fixed_config_and_external_fixture_unchanged": true,
+    "status": "BOTH_MODE_CONTROLS_PASS"
+  },
+  "evidence_identity": {
+    "baseline_receipt": {
+      "bytes": 7520,
+      "sha256": "dca4cc774ac8700a772d9ceb73dd5d3d18130f61d401419a1732c2e36add5433"
+    },
+    "before_fix_mode_receipt": {
+      "bytes": 1625,
+      "sha256": "2bd37579c7d8b697611de442105a244b22610dd86f0397fd525bb4ced0fd72eb"
+    },
+    "pre_edit_identity_receipt": {
+      "bytes": 10155,
+      "sha256": "d80ad464ca2db4a1ae98928e5b8f9ac469b098956c8335daf386f78257734246"
+    },
+    "focused_validation_receipt": {
+      "bytes": 5242,
+      "sha256": "21a654fa0303580cd790895996843776424cffce5c238aff6dd8ec55234c4358"
+    },
+    "post_fix_mode_receipt": {
+      "bytes": 2822,
+      "sha256": "976de77b7d08b6edf5703fb9301aec2d908b6361fc2fd9f719971f2b688db20b"
+    }
+  },
+  "frozen_publication_preserved_through_validation": {
+    "prepublication_manifest": "experiments/weight/native_guard_20261104/publication_manifest.json",
+    "prepublication_manifest_sha256": "4e26013f7fb0b3223a1fbedc4212c9a231739a41143896d41b1b7e50a78a21ea",
+    "original_payload_files": 50,
+    "original_files_including_manifest": 51,
+    "all_51_unchanged_before_fix_and_after_all_validation": true,
+    "original_file_identities": {
+      "docs/native-weight-guard.md": {
+        "bytes": 13732,
+        "sha256": "00495d2b0f48658b7ed4b6c4222615c80653cf10121d25aa599e4449e46b4244"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/.gitignore": {
+        "bytes": 91,
+        "sha256": "b622f82a2b6f9c7faeb195f05f16427ef29767a10ebbf6154cedd1a6eb3890e0"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/README.md": {
+        "bytes": 8405,
+        "sha256": "b882953e0f3f6fca664656c18799b0d15919e193bc03be2f675e3133c99a20c7"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/acquire.py": {
+        "bytes": 5213,
+        "sha256": "ed6ea4bef393d9c66e0d13705bf32cb76bfa26028302b4b366d5b7e979e1a51a"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/acquire_manifest.json": {
+        "bytes": 11346,
+        "sha256": "20cdeb2c87ffabe08ff230888e7c4010d75a5f3d7b99f27ee3707fed59cfb037"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/aggregate.json": {
+        "bytes": 8520,
+        "sha256": "86f193036664151b0f9657a9202562527269451ce0794f9f5806584d74220e66"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/audit_and_replay.py": {
+        "bytes": 8057,
+        "sha256": "3e1641463d4cae2607084083ff672034046557bd7f4636a5f6a90d6d17ae40f0"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/README.md": {
+        "bytes": 10592,
+        "sha256": "b5185713a450e3e37e78f227084138f450e531f352de04f85893961eacd67e48"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/closure_protocol.md": {
+        "bytes": 6733,
+        "sha256": "595d6b8d37779753cf39ced5ab18aa1812b55bfd85d831a5641245a6d55283df"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/export_qualification/README.md": {
+        "bytes": 8015,
+        "sha256": "9f62a2d0c0e7a8083379f9d0865a2b89fb82e19dc06d0ee376932dca540c1ece"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/export_qualification/author_source_manifest.json": {
+        "bytes": 2613,
+        "sha256": "3019f47d9b64a9e377c04f6d5c5a57628ab4426ec81dab394eb16d2b6d918001"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/export_qualification/export_qualify.py": {
+        "bytes": 15840,
+        "sha256": "4fe55f061d80a8cf58fad2ea6cc43b24a3ebc7b76e06ab450447bd74f2522da6"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/export_qualification/qualification.json": {
+        "bytes": 1573,
+        "sha256": "7007b7d0e8833089da7b1847d9de67e1d0a40ba478255ed40399e15a7a48a346"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/export_qualification/receipt.json": {
+        "bytes": 8084,
+        "sha256": "87ae658c7bee2d89a16cb7a828347a36d474ff485c870fe629e1753cc2b92768"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/export_qualification/tensor_manifest.json": {
+        "bytes": 157467,
+        "sha256": "84bdcf921a6f9ccc5e5d1a6d447baf8efda9314d8dc199f5176ffc13582ecf62"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/framework_qualification/README.md": {
+        "bytes": 8962,
+        "sha256": "85b4a58f67a6ea550944a4e1c30ac06f33a9d51865c9e8a742af4408ebbcc4f0"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/framework_qualification/mapping_manifest.json": {
+        "bytes": 232451,
+        "sha256": "df892a3746e7c1f96a896b27f3f858967d35fba7687560de412e6d032d9047e2"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/framework_qualification/qualification.json": {
+        "bytes": 2183,
+        "sha256": "49aa671da2bfc8ca1ffbd717fff3e083ecb7ebc023d5848cd4bb027191132312"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/framework_qualification/qualify_framework.py": {
+        "bytes": 15995,
+        "sha256": "d4ff765d249b6fee60e619ea90af3f2b00e54468c9601006ed962dc1e7c994f0"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/framework_qualification/receipt.json": {
+        "bytes": 8787,
+        "sha256": "8cd96da30ae00a4fe8c327db646ece3f7a6e65fe8ba17da502b2fdb27a73d5e1"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/inventory.json": {
+        "bytes": 9562,
+        "sha256": "a4d0c0e6fcd324a07e57ccb1683c7bba8b46f2372c087c18f80e117efe67241c"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/qwen_feasibility/source_manifest.json": {
+        "bytes": 4795,
+        "sha256": "0320de7f3d6e8480bf5f8a695b9be294e386915512a47f7603a4e9145bb659c9"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/requirements.txt": {
+        "bytes": 13,
+        "sha256": "7bd6b8946940b79948c548c8048e545684b91c8edc9444d8dfc0c8f76a97c0a7"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/results/new_replay.json": {
+        "bytes": 35014,
+        "sha256": "9d2fbf84d712e71821be0c5657fb1f47f5202c6cd9f744697f45a0d6a9450085"
+      },
+      "experiments/weight/mit_wsp_replay_20261104/verify.py": {
+        "bytes": 4516,
+        "sha256": "1f36429b00a556e751e2bb7acd4e3c58b48eaa2ae39c6cb9008cfc4efc50c157"
+      },
+      "experiments/weight/native_guard_20261104/README.md": {
+        "bytes": 19033,
+        "sha256": "239219a8b094ac702a345f188f5a1ea413a7a9eab9790e58f3b18c1a3a89fe21"
+      },
+      "experiments/weight/native_guard_20261104/isolation/README.md": {
+        "bytes": 5534,
+        "sha256": "940c4de3cac4d91356f60694c7b36b3123d6a491c21cf2266a627d126c81ba02"
+      },
+      "experiments/weight/native_guard_20261104/isolation/manifest.json": {
+        "bytes": 503,
+        "sha256": "011301366f16af80f428bcc492deaaaef9bc81cf84127e864b2bbe1264439d92"
+      },
+      "experiments/weight/native_guard_20261104/isolation/qualification.json": {
+        "bytes": 6896,
+        "sha256": "d783cd560f6fdb0a2c9027118b8b1b377414a85597d0307c183e7cf079a8329e"
+      },
+      "experiments/weight/native_guard_20261104/maintenance_isolation.patch": {
+        "bytes": 2298,
+        "sha256": "1840e7f0966512ac6e11e4d918aa5fbc92850977415ba9338c452fa9f5b2b1e9"
+      },
+      "experiments/weight/native_guard_20261104/manifest.json": {
+        "bytes": 1198,
+        "sha256": "74dd89f2afbb19052a453b43d2a206b24212b7332d1ce5e8d29a50392c6ccd81"
+      },
+      "experiments/weight/native_guard_20261104/parent_binding/README.md": {
+        "bytes": 4925,
+        "sha256": "1f9c9dd1fd4719e224bbe5b7228c7169421e18bbf65ac1702cdee93e0f10c752"
+      },
+      "experiments/weight/native_guard_20261104/parent_binding/manifest.json": {
+        "bytes": 890,
+        "sha256": "dfe28e44984b017244bd7e192910e49ece0b7c6a80fa4a1668e999d7040ad53f"
+      },
+      "experiments/weight/native_guard_20261104/parent_binding/minimal-fixture.patch": {
+        "bytes": 806,
+        "sha256": "b19225281002c98248c023ce0f7a0cb9a375e4494f88dd08006148998c266201"
+      },
+      "experiments/weight/native_guard_20261104/parent_binding/qualification.json": {
+        "bytes": 5574,
+        "sha256": "3b8960742e5ee78c5dbaf8ba303f97660ce0bc2284e2e72895b0f2e388163890"
+      },
+      "experiments/weight/native_guard_20261104/parent_binding/source-excerpts.txt": {
+        "bytes": 6748,
+        "sha256": "d71369ba8869e2bd841323ecc43dfe2850ecbffa63bca4595be6e9c0554bdda3"
+      },
+      "experiments/weight/native_guard_20261104/qualification.json": {
+        "bytes": 113942,
+        "sha256": "2503cc83f20aa174e01d0fe3dc241a5a76d1484566157a14371db40cd8e9f616"
+      },
+      "experiments/weight/native_guard_20261104/verify_publication.py": {
+        "bytes": 2690,
+        "sha256": "faff738d99af186f2362e6764787735375a4795047c001d93c319da832ee6786"
+      },
+      "src/mcp/mod.rs": {
+        "bytes": 2405,
+        "sha256": "ec94920d4b785c974a74e59e19cbd378ee93bd08465b307209719fdd3e3e24fb"
+      },
+      "src/mcp/runtime/effect_owner_fence_tests.rs": {
+        "bytes": 21893,
+        "sha256": "a76304a451a628e2aada68b0ba13c08fe6c05ecf7c921d699c9f2853b4ff1bdf"
+      },
+      "src/mcp/runtime/jobs_start_io_tests.rs": {
+        "bytes": 16553,
+        "sha256": "acb1749d69728f15646a436be0aad78e6e2d90ba442c35db399c0ba5f2919339"
+      },
+      "src/mcp/runtime/ssh_observation_maintenance_tests.rs": {
+        "bytes": 20650,
+        "sha256": "b6436f27e6697b2aa26f91b4e976e16823540e6c4883b86bdf11f910802d5e8c"
+      },
+      "src/mcp/server.rs": {
+        "bytes": 138402,
+        "sha256": "8c19d4cceaa1e4548bd9897037756191888240ed4cc8f1bd2d04a93d0694fbcf"
+      },
+      "src/mcp/weight_artifact.rs": {
+        "bytes": 19182,
+        "sha256": "99cd59fefec7bf9196764331af3d1dfde56d3a4963cc915d9eac799e33cfc12a"
+      },
+      "src/mcp/weight_forward.rs": {
+        "bytes": 9780,
+        "sha256": "6574efb9b4ab38321d7af9bc338c0a85dd05c1f467ffd362ce98ac52720f1f3d"
+      },
+      "src/mcp/weight_guard.rs": {
+        "bytes": 12714,
+        "sha256": "d8aa5fafee4faeb4d947523011a6b244e171c2bc3aa4b8dcd75d5ab069189e33"
+      },
+      "src/mcp/weight_guard_tests.rs": {
+        "bytes": 8069,
+        "sha256": "4cb0c4a182c9a6e36f1a31a4dd8d71b4fe93f528f2a3a7a8e295709377b24241"
+      },
+      "src/mcp/weight_ridge.rs": {
+        "bytes": 13240,
+        "sha256": "9e381a3489a7ad31300828cc25071e5920d861f6a09a40beb1a6db89ae25ae4e"
+      },
+      "src/mcp/weight_ridge_tests.rs": {
+        "bytes": 8523,
+        "sha256": "0d979666b70d4e146ad223a515652d1cbf652e97968973e6b1516fbc4ff5634e"
+      },
+      "tests/weight_forward_external.rs": {
+        "bytes": 12126,
+        "sha256": "856726f52efd71e548f5393145b6b1d61541bd4939c88b9f047e09b6e66660c5"
+      },
+      "experiments/weight/native_guard_20261104/publication_manifest.json": {
+        "bytes": 9593,
+        "sha256": "4e26013f7fb0b3223a1fbedc4212c9a231739a41143896d41b1b7e50a78a21ea"
+      }
+    },
+    "notice": "The enclosing publication owner may subsequently add this followup and update the publication manifest. These are the preserved identities through validation, not a claim that the later manifest has the same content."
+  },
+  "cost": {
+    "baseline_test_command_seconds": 0.06508524692617357,
+    "before_fix_controlled_observation_seconds": 0.04442134406417608,
+    "focused_build_test_format_clippy_command_seconds": 222.8881200880278,
+    "after_fix_controlled_observation_seconds": 0.3305900919949636,
+    "recorded_command_and_observation_wall_sum_seconds": 223.3282167710131,
+    "baseline_runner_seconds_recorded_separately_not_double_added": 0.9202678920701146,
+    "interpretation": "Sum of the recorded focused command timers and bounded controller-observation timers. Includes the focused rebuild. Not CPU/GPU consumption, project elapsed time or a model-training benchmark; source review, metadata transfer and unmeasured setup costs are not added."
+  },
+  "limits": [
+    "The original CI processes' directory metadata and discarded controller stderr were not preserved. The exact directory mode was directly observed in a separate controlled reproduction of the same valid first-start input.",
+    "The unchanged local external test binary failed against the old controller and passed against the fixed controller under the same explicit umask, NOFILE and temporary-directory constraints. This supports the reproduced initialization defect and fix.",
+    "The original r8 index-test failures and first official CI failure remain intact. These focused validations are not a complete-suite pass.",
+    "The two earlier test-only fixture repairs do not change the external controller's initialization path; this followup changes production initialization instead of masking the first-start input.",
+    "Existing non-private roots are not automatically repaired. The pre-existing 0755 negative control preserves its mode and continues to receive the audit refusal.",
+    "Raw controller and test logs, temporary paths and process identities remain private. No trading actions, broker requests or model-training/evaluation experiments were executed."
+  ],
+  "all_authorized_followup_gates_closed": true,
+  "component_receipt_status_note": "The focused build/test/lint receipt ended before the two separate mode controls and retained a pending qualifier at that time. The completed BOTH_MODE_CONTROLS_PASS record resolves that qualifier; both original component receipt identities are preserved."
+}

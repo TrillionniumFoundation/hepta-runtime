@@ -235,6 +235,9 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"rea_static_cancel",
 		"weight_artifact_patch",
 		"weight_artifact_restore",
+		"weight_cohort_patch",
+		"weight_cohort_restore",
+		"weight_guarded_linear_patch",
 		"weight_open",
 		"weight_call",
 		"weight_close",
@@ -316,6 +319,9 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 			),
 		),
 	];
+	let cohort_native: BTreeSet<&str> = ["weight_cohort_patch", "weight_cohort_restore"]
+		.into_iter()
+		.collect();
 	let mut actual = BTreeSet::new();
 	for capture in matcher.captures_iter(server_source) {
 		if !capture[1].contains("read_only_hint = false") {
@@ -338,6 +344,11 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 					.collect::<String>(),
 				format!("{{self.dispatch_hia(\"{name}\",arguments,&context).await}}"),
 				"{name} must transfer to the audited native HIA route"
+			);
+		} else if cohort_native.contains(name) {
+			assert!(
+				body.contains("weight_artifact::cohort::"),
+				"{name} must delegate to the retained cohort owner"
 			);
 		} else if !direct_native.contains(name) {
 			assert!(
@@ -388,7 +399,11 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual, expected,
 		"MCP mutation contract expanded without owner audit"
 	);
-	assert_eq!(actual.difference(&retained).count(), 49);
+	assert_eq!(actual.difference(&retained).count(), 52);
+	let cohort = include_str!("../weight_artifact_cohort.rs");
+	assert!(cohort.contains("runtime::effect_owner_fence::admit_new_effect().await?"));
+	assert_eq!(cohort.matches("let guards = owner_guards().await?;").count(), 2);
+	assert_eq!(cohort.matches("retained_transaction(guards, operation)").count(), 2);
 	let jobs = include_str!("jobs.rs");
 	let pty = include_str!("pty.rs");
 	assert!(jobs

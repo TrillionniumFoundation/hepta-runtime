@@ -187,7 +187,7 @@ fn calculate(
 	Ok(result)
 }
 
-async fn forward_with_roots(
+pub(super) async fn forward_with_roots(
 	params: ForwardLinearParams,
 	roots: &[PathBuf],
 	state: &Path,

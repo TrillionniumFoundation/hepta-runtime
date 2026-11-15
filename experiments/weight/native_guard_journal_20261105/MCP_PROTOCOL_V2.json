@@ -1,0 +1,17 @@
+{
+  "schema": "hepta.guard-journal-mcp-contract-protocol.v2",
+  "frozen_before_execution": true,
+  "preceding_journal_protocol_sha256": "0d5741727b5cdd5abd63431b3382f108874e08613d20e90dfd3c919d72f45b23",
+  "reason_for_revision": "Parent review found that first-call guard input errors must retain the established MCP tool isError contract. The first compilation attempt was stopped before tests ran; it is not a test pass or a model result.",
+  "fresh_negative_cases": ["over_budget", "forged_old_bytes", "duplicate_address", "bad_labels"],
+  "fresh_requirement": "Actual tools/call response has isError=true and retains the original guard reason plus journal identity; no completed model artifact is published",
+  "identical_retry_requirement": "Existing-intent retry returns structured accepted=false, outcome=rejected_recovery_unverified, recovery_verified=false; still no artifact publication",
+  "positive_fixture": "Synthetic single F32 tensor [[1,-3]], exact edit index 0 from 1 to 2, radius 1, fixed three rows and exact known targets",
+  "positive_requirement": "Fresh acceptance preserves original top-level candidate/accepted/score/constraint/budget fields and writes a durable completion; identical completed retry performs full current revalidation",
+  "completed_tampering_requirement": "After altering only the isolated accepted artifact's last byte, an identical tools/call must return accepted=false and recovery_verified=false, never cached acceptance",
+  "expected_tools_call_count": 11,
+  "binary_binding": "Require externally supplied full SHA-256, copy to new owned mode0500 executable, verify copied full content before and after execution",
+  "runtime_state": "New private temporary research directory and disabled host execution; source models are synthetic fixtures",
+  "cost_scope": "Driver wall/CPU and child runtime CPU; excludes compilation, previous aborted attempt, source development, transfers, agent usage and energy",
+  "result_scope": "Real MCP compatibility and authentication qualification only; unit SIGKILL qualification is separate, and no trading/model efficacy claim is made"
+}
