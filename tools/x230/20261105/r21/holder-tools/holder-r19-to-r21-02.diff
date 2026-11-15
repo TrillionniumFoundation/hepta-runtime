@@ -1,0 +1,41 @@
+--- R19 held_agent_campaign.py
++++ R21 held_agent_campaign_02.py
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env python3
+ # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+-"""Mac-owned temporary SSH agent and one foreground R19 campaign connection.
++"""Mac-owned temporary SSH agent and one foreground R21 campaign connection.
+ 
+ Configured key material stays on the Mac. No key bytes, full environment or SSH
+ configuration dump is retained. Only this invocation's agent and foreground SSH
+@@ -48,7 +48,7 @@
+         raise ValueError("Mac evidence output must be a fresh direct directory")
+     output.mkdir(mode=0o700)
+     (output / "remote-script.py").write_bytes(source)
+-    report = {"schema": "hepta-x230-r19-held-agent-campaign/v1", "started_utc": utc(),
++    report = {"schema": "hepta-x230-r21-held-agent-campaign/v1", "started_utc": utc(),
+               "holder_script_sha256": sha(Path(__file__)), "remote_script_sha256": source_sha,
+               "timeout_seconds": args.timeout_seconds, "automatic_ssh_retries": 0,
+               "services_modified": False, "remote_returncode": None, "passed": False,
+@@ -104,6 +104,8 @@
+         save()
+         with tempfile.TemporaryDirectory(prefix="hr19a-", dir="/tmp") as temporary:
+             socket = Path(temporary) / "agent.sock"
++            report["owned_agent_directory"] = temporary
++            report["owned_agent_socket"] = str(socket)
+             with (output / "owned-agent.stderr").open("xb") as agent_stderr:
+                 agent = subprocess.Popen(["/usr/bin/ssh-agent", "-D", "-a", str(socket)],
+                                          stdout=subprocess.DEVNULL, stderr=agent_stderr)
+@@ -174,6 +176,12 @@
+         report["error"] = {"type": type(error).__name__, "reason": str(error)}
+         (output / "holder.error.txt").write_text(traceback.format_exc())
+     finally:
++        if "owned_agent_directory" in report:
++            report["owned_agent_directory_absent_after_context"] = not os.path.lexists(report["owned_agent_directory"])
++            report["owned_agent_socket_absent_after_context"] = not os.path.lexists(report["owned_agent_socket"])
++            if not (report["owned_agent_directory_absent_after_context"] and report["owned_agent_socket_absent_after_context"]):
++                report["passed"] = False
++                report.setdefault("error", {"type": "OwnedAgentCleanupIncomplete", "reason": "owned agent temporary directory or socket still exists after its context exited"})
+         report["finished_utc"] = utc()
+         report["log_files"] = [evidence(path) for path in sorted(output.iterdir()) if path.is_file()
+                                and path.name not in {"report.json", "report.next"}]

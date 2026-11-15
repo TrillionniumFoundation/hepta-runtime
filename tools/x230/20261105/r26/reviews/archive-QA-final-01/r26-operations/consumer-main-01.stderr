@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-export-04/verify_export_archives_04.py", line 215, in <module>
+    main()
+  File "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-export-04/verify_export_archives_04.py", line 86, in main
+    identity = helper.read(path)[0]
+               ^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-export-04/stable_archive.py", line 144, in read
+    stream = StableReader(path, expected, scan_private_markers)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-export-04/stable_archive.py", line 82, in __init__
+    self.path = direct(path)
+                ^^^^^^^^^^^^
+  File "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-export-04/stable_archive.py", line 46, in direct
+    need(path.is_absolute() and path.resolve(strict=True) == path,
+  File "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-export-04/stable_archive.py", line 33, in need
+    raise RuntimeError(reason)
+RuntimeError: direct absolute existing path required: benchmark-r26/verified-full-export-02/ci-01.tar.gz

@@ -1,0 +1,107 @@
+{
+  "schema": "hepta-r23-failed-campaign-performance-diagnostic/v1",
+  "candidate_adopted": false,
+  "lifecycle_passed": false,
+  "native_verified": true,
+  "native_analysis_sha256": "2152e04e2ef01bf839b40e880004288525484bc0f3c8bcb3aa4fe5580f9efaac",
+  "counts": {
+    "measured_calls": 2304,
+    "warmup_calls": 288,
+    "preflight_restart_calls": 72,
+    "total_calls": 2664,
+    "failed_calls": 0
+  },
+  "cases": [
+    {
+      "concurrency": 1,
+      "A": {
+        "calls_per_second": 7.850803203760547,
+        "controller_cpu_ms_per_call": 39.37500000000001,
+        "p50_ms": 122.284961,
+        "p95_ms": 186.932064,
+        "p99_ms": 223.200014
+      },
+      "B": {
+        "calls_per_second": 7.774255270070757,
+        "controller_cpu_ms_per_call": 29.453124999999996,
+        "p50_ms": 122.166565,
+        "p95_ms": 186.691697,
+        "p99_ms": 212.075918
+      },
+      "change_percent": {
+        "calls_per_second": -0.9750331488773467,
+        "controller_cpu_ms_per_call": -25.19841269841272,
+        "p50_ms": -0.0968197552927097,
+        "p95_ms": -0.1285852169267132,
+        "p99_ms": -4.983913665883555
+      }
+    },
+    {
+      "concurrency": 8,
+      "A": {
+        "calls_per_second": 46.46621332941441,
+        "controller_cpu_ms_per_call": 28.984374999999996,
+        "p50_ms": 166.065698,
+        "p95_ms": 225.349749,
+        "p99_ms": 262.624734
+      },
+      "B": {
+        "calls_per_second": 54.95237958584938,
+        "controller_cpu_ms_per_call": 19.739583333333332,
+        "p50_ms": 137.994204,
+        "p95_ms": 206.517446,
+        "p99_ms": 235.80483
+      },
+      "change_percent": {
+        "calls_per_second": 18.26308977724034,
+        "controller_cpu_ms_per_call": -31.89577717879605,
+        "p50_ms": -16.90384849976664,
+        "p95_ms": -8.356922110439092,
+        "p99_ms": -10.212253656199788
+      }
+    },
+    {
+      "concurrency": 16,
+      "A": {
+        "calls_per_second": 44.74033330274609,
+        "controller_cpu_ms_per_call": 29.140625,
+        "p50_ms": 340.70734,
+        "p95_ms": 437.587373,
+        "p99_ms": 487.152282
+      },
+      "B": {
+        "calls_per_second": 58.224934539821305,
+        "controller_cpu_ms_per_call": 20.494791666666668,
+        "p50_ms": 262.901914,
+        "p95_ms": 329.829258,
+        "p99_ms": 359.418535
+      },
+      "change_percent": {
+        "calls_per_second": 30.139697766282737,
+        "controller_cpu_ms_per_call": -29.669347631814112,
+        "p50_ms": -22.836439625867765,
+        "p95_ms": -24.625508332481072,
+        "p99_ms": -26.22049648943243
+      }
+    }
+  ],
+  "rss": {
+    "A_peak_kib": 18864,
+    "B_peak_kib": 19344,
+    "extra_kib": 480,
+    "ceiling_kib": 19376,
+    "passed": true
+  },
+  "boundary": {
+    "evidence_verified": true,
+    "diagnostic_passed": true,
+    "counts": {
+      "success": 32,
+      "capacity_rejection": 32,
+      "other_error": 0
+    },
+    "drain_and_recovery_passed": true,
+    "total_tool_calls": 202
+  },
+  "limitation": "Arithmetic over completed observation/capacity stages only. Overall campaign failed lifecycle; no adoption or complete correctness claim."
+}

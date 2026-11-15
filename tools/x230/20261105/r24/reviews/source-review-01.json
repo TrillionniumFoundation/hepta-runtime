@@ -1,0 +1,92 @@
+{
+  "adoption_authorized_by_this_review": false,
+  "basis": "Record of the independent review already communicated to /root; this recording step only reads digests and the frozen manifest, and does not repeat the source review.",
+  "diff": {
+    "bytes": 5203,
+    "path": "/workspace/scratch/806ba5f52f94/r24-candidate/r23-to-r24.diff",
+    "sha256": "d8a36bbfaba40e9fb577db8216a4279e1924c803d6f2cb9c050d40f3e8f488d4"
+  },
+  "digests_match_frozen_manifest": true,
+  "findings": [
+    {
+      "detail": "ChildLiveness::Terminal is returned only when try_wait on the same locked original Child produces Some(status). try_wait I/O errors and process identity errors remain errors; startup verify_live preserves the original terminal error.",
+      "id": "terminal-proof",
+      "result": "pass_static"
+    },
+    {
+      "detail": "ActiveMaster exists before the awaited liveness check. Terminal drops that guard exactly once, then drops the host and global permits before entering existing generation-checked single-flight renewal. Error propagation releases the same values by RAII.",
+      "id": "ownership-and-capacity",
+      "result": "pass_static"
+    },
+    {
+      "detail": "Existing admission profile, cancellation and deadline checks precede liveness as before. On the Live path, root, socket, peer, captured-command and response-authority code is unchanged. The terminal path uses existing renewal checks and repeats admission checks before any slave creation.",
+      "id": "authority-ordering",
+      "result": "pass_static"
+    },
+    {
+      "detail": "The renewal loop is entirely before captured(). Generic liveness, identity, socket, peer or post-submission errors do not trigger command replay.",
+      "id": "no-command-replay",
+      "result": "pass_static"
+    },
+    {
+      "detail": "renew-terminal starts with accepting=true, a reaped original Child, no maintenance pass, and 60 seconds of remaining master lifetime covering the 15-second request deadline. Its sentinel active count prevents new-master creation while assertions check one new generation, the original host semaphore, released global capacity, cancellation completion and existing cleanup.",
+      "id": "regression-fixture",
+      "result": "pass_static"
+    }
+  ],
+  "implementation_author": "/root/runtime_source_audit",
+  "limitations": [
+    "Static review does not establish compilation, formatting, Clippy, libtest or six-host lifecycle acceptance; those gates are owned by the root agent.",
+    "The change covers terminal original masters already observable before slave submission. A master can still exit after a successful liveness check; the review does not claim arbitrary transport failures recover automatically.",
+    "The synthetic regression fixture checks admission renewal and cancellation before a new master connects. Real six-host failure recovery remains a separate execution gate.",
+    "This record does not adopt R23 or R24 and does not override the original R23 cancel-recovery failure."
+  ],
+  "recorded_utc": "2026-11-05T05:15:22.167569+00:00",
+  "remote_qualification_results_included": false,
+  "review_status": "no_static_blocker_found",
+  "reviewer": "/root/observation_hotpath",
+  "schema": "hepta-r24-independent-static-review/v1",
+  "scope": {
+    "compiler_or_test_execution": false,
+    "remote_commands_or_load": false,
+    "reviewed": [
+      "Typed original-child liveness and unchanged strict startup wrapper",
+      "Pre-slave admission renewal, active ownership and host/global capacity release",
+      "Cancellation, deadline, profile and error ordering",
+      "No replay after captured command submission",
+      "Renew-terminal regression fixture and its bounded cleanup assertions"
+    ],
+    "runtime_execution": false,
+    "source_mutations": false,
+    "static_only": true
+  },
+  "source_files": [
+    {
+      "bytes": 63329,
+      "path": "/workspace/scratch/806ba5f52f94/r24-candidate/source/src/mcp/runtime/ssh_observation_pool.rs",
+      "r23_before": {
+        "bytes": 62857,
+        "mode": 384,
+        "sha256": "018828a4f686aff1692e6f3fb09846ed22714239252149825ba25e4978612ed2"
+      },
+      "relative_path": "src/mcp/runtime/ssh_observation_pool.rs",
+      "sha256": "92592431b6f4f0d3561c039ed86d9129f3942fb677ba9a336f639003b16b71d9"
+    },
+    {
+      "bytes": 91734,
+      "path": "/workspace/scratch/806ba5f52f94/r24-candidate/source/src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "r23_before": {
+        "bytes": 90870,
+        "mode": 384,
+        "sha256": "4a5b3aea1d52177a5f76c2febdb47fb296a5c83097fb69ac0692cea2bcb3e177"
+      },
+      "relative_path": "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "sha256": "5e12d5fa158c8a2c5ec6abc433245398ac9276fa2e21256d10ef7262c92f8c2e"
+    }
+  ],
+  "source_manifest": {
+    "bytes": 3840,
+    "path": "/workspace/scratch/806ba5f52f94/r24-candidate/source-manifest.json",
+    "sha256": "af101ad813149f1b0346a204e14f0740b7d6b71e520109dc0fba42e96af35225"
+  }
+}

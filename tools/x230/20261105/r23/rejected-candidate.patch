@@ -1,0 +1,195 @@
+--- a/src/mcp/runtime/ssh_observation_profile.rs
++++ b/src/mcp/runtime/ssh_observation_profile.rs
+@@ -17,7 +17,7 @@
+ 
+ const MAX_PROFILE_BYTES: usize = 256 * 1024;
+ const MAX_AGENT_BYTES: usize = 64 * 1024;
+-const MAX_SSH_REFERENCE_BYTES: usize = 2 * 1024 * 1024;
++const MAX_EXECUTABLE_REFERENCE_BYTES: usize = 2 * 1024 * 1024;
+ const VERIFY_BUFFER_BYTES: usize = 16 * 1024;
+ const DIRECTIVES: &[&str] = &[
+ 	"batchmode",
+@@ -236,10 +236,9 @@
+ 	Ok(result)
+ }
+ 
+-fn bounded_ssh_reference(bytes: Vec<u8>) -> Option<Arc<[u8]>> {
+-	if bytes.len() > MAX_SSH_REFERENCE_BYTES {
+-		return None;
+-	}
++fn bounded_executable_reference(bytes: Vec<u8>, remaining: &mut usize) -> Option<Arc<[u8]>> {
++	let next = (*remaining).checked_sub(bytes.len())?;
++	*remaining = next;
+ 	Some(bytes.into())
+ }
+ 
+@@ -287,7 +286,7 @@
+ 		if stamp != self.stamp {
+ 			bail!("observation profile changed");
+ 		}
+-		// Every check still reads every byte. Only the fixed SSH executable can
++		// Every check still reads every byte. Only the fixed public executables can
+ 		// use a bounded startup-pin-verified reference instead of rehashing.
+ 		// The same descriptor and path stamps still fence the complete read.
+ 		let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
+@@ -455,9 +454,11 @@
+ 	target: PinnedFile,
+ }
+ impl PinnedShell {
+-	fn load(expected: &str) -> Result<Self> {
++	fn load(expected: &str, reference_budget: &mut usize) -> Result<Self> {
+ 		let (path, components) = fixed_shell_resolution()?;
+-		let (target, _) = PinnedFile::load(&path, Some(expected), 16 * 1024 * 1024, false, true)?;
++		let (mut target, bytes) =
++			PinnedFile::load(&path, Some(expected), 16 * 1024 * 1024, false, true)?;
++		target.reference = bounded_executable_reference(bytes, reference_budget);
+ 		let result = Self { components, target };
+ 		result.verify()?;
+ 		Ok(result)
+@@ -752,6 +753,7 @@
+ 			false,
+ 		)?;
+ 		validate_config(&raw, &spec.known_hosts)?;
++		let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
+ 		let (mut ssh, ssh_bytes) = PinnedFile::load(
+ 			Path::new("/usr/bin/ssh"),
+ 			Some(&spec.ssh_sha256),
+@@ -759,17 +761,18 @@
+ 			false,
+ 			true,
+ 		)?;
+-		// Only this fixed, public executable retains its already-verified bytes.
+-		// Oversized files keep the original SHA path without retaining the Vec.
+-		ssh.reference = bounded_ssh_reference(ssh_bytes);
+-		let (false_program, _) = PinnedFile::load(
++		// Only fixed public executables share this profile's reference byte budget.
++		// Files that do not fit keep SHA and leave the remaining budget unchanged.
++		ssh.reference = bounded_executable_reference(ssh_bytes, &mut reference_budget);
++		let (mut false_program, false_bytes) = PinnedFile::load(
+ 			Path::new("/usr/bin/false"),
+ 			Some(&spec.false_sha256),
+ 			1024 * 1024,
+ 			false,
+ 			true,
+ 		)?;
+-		let shell = PinnedShell::load(&spec.shell_sha256)?;
++		false_program.reference = bounded_executable_reference(false_bytes, &mut reference_budget);
++		let shell = PinnedShell::load(&spec.shell_sha256, &mut reference_budget)?;
+ 		let runtime = crate::mcp::runtime::config::runtime_config()?;
+ 		let hosts: BTreeMap<_, _> = runtime
+ 			.hosts
+--- a/src/mcp/runtime/ssh_observation_profile_tests.rs
++++ b/src/mcp/runtime/ssh_observation_profile_tests.rs
+@@ -160,9 +160,10 @@
+ 		.iter()
+ 		.map(|v| format!("{v:02x}"))
+ 		.collect::<String>();
+-	let shell = PinnedShell::load(&hash).unwrap();
++	let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
++	let shell = PinnedShell::load(&hash, &mut reference_budget).unwrap();
+ 	shell.verify().unwrap();
+-	assert!(PinnedShell::load(&"0".repeat(64)).is_err());
++	assert!(PinnedShell::load(&"0".repeat(64), &mut reference_budget).is_err());
+ 	assert!(
+ 		open_absolute(Path::new("/bin/sh"), false).is_err()
+ 			|| std::fs::symlink_metadata("/bin/sh").unwrap().is_file()
+--- a/src/mcp/runtime/ssh_observation_reference_tests.rs
++++ b/src/mcp/runtime/ssh_observation_reference_tests.rs
+@@ -1,6 +1,6 @@
+ // Copyright 2026 Muvon Un Limited
+ // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+-//! Differential checks for bounded SSH references and complete fresh reads.
++//! Differential checks for bounded executable references and complete fresh reads.
+ 
+ use super::*;
+ use std::cell::Cell;
+@@ -21,9 +21,10 @@
+ 	let (mut reference, loaded) =
+ 		PinnedFile::load(&path, Some(&pin_hex(bytes)), maximum, true, false).unwrap();
+ 	assert!(reference.reference.is_none());
+-	// Production opts in only for /usr/bin/ssh. A private test file permits
++	// Production opts in only for fixed public executables. A private test file permits
+ 	// differential mutation tests without touching a system executable.
+-	reference.reference = bounded_ssh_reference(loaded);
++	let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
++	reference.reference = bounded_executable_reference(loaded, &mut reference_budget);
+ 	let mut sha = reference.clone();
+ 	sha.reference = None;
+ 	(root, sha, reference)
+@@ -95,15 +96,15 @@
+ #[test]
+ fn reference_budget_preserves_initial_pins_and_sha_fallback() {
+ 	for length in [
+-		MAX_SSH_REFERENCE_BYTES - 1,
+-		MAX_SSH_REFERENCE_BYTES,
+-		MAX_SSH_REFERENCE_BYTES + 1,
++		MAX_EXECUTABLE_REFERENCE_BYTES - 1,
++		MAX_EXECUTABLE_REFERENCE_BYTES,
++		MAX_EXECUTABLE_REFERENCE_BYTES + 1,
+ 	] {
+ 		let mut bytes = vec![37; length];
+ 		let (_root, mut sha, mut reference) = pin_pair(&bytes, length);
+ 		assert_eq!(
+ 			reference.reference.is_some(),
+-			length <= MAX_SSH_REFERENCE_BYTES
++			length <= MAX_EXECUTABLE_REFERENCE_BYTES
+ 		);
+ 		assert_eq!(sha.digest, reference.digest);
+ 		sha.verify().unwrap();
+@@ -125,6 +126,27 @@
+ }
+ 
+ #[test]
++fn executable_references_share_one_budget_without_spending_on_rejected_files() {
++	let mut remaining = MAX_EXECUTABLE_REFERENCE_BYTES;
++	let first =
++		bounded_executable_reference(vec![59; MAX_EXECUTABLE_REFERENCE_BYTES - 8], &mut remaining)
++			.unwrap();
++	assert_eq!(remaining, 8);
++	assert!(bounded_executable_reference(vec![61; 9], &mut remaining).is_none());
++	assert_eq!(remaining, 8);
++	let second = bounded_executable_reference(vec![67; 7], &mut remaining).unwrap();
++	assert_eq!(remaining, 1);
++	let third = bounded_executable_reference(vec![71; 1], &mut remaining).unwrap();
++	assert_eq!(remaining, 0);
++	assert_eq!(
++		first.len() + second.len() + third.len(),
++		MAX_EXECUTABLE_REFERENCE_BYTES
++	);
++	assert!(bounded_executable_reference(vec![73; 1], &mut remaining).is_none());
++	assert_eq!(remaining, 0);
++}
++
++#[test]
+ fn references_share_owned_bytes_without_following_later_file_writes() {
+ 	let bytes = vec![19; VERIFY_BUFFER_BYTES + 7];
+ 	let (_root, sha, reference) = pin_pair(&bytes, bytes.len());
+@@ -156,7 +178,8 @@
+ 			if expected.len() == length {
+ 				continue;
+ 			}
+-			reference.reference = bounded_ssh_reference(expected);
++			let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
++			reference.reference = bounded_executable_reference(expected, &mut reference_budget);
+ 			assert_eq!(
+ 				reference.verify().unwrap_err().to_string(),
+ 				"observation profile changed"
+@@ -346,7 +369,8 @@
+ 	let (mut reference, bytes) =
+ 		PinnedFile::load(path, Some(&expected), maximum, false, true).unwrap();
+ 	let length = bytes.len();
+-	reference.reference = bounded_ssh_reference(bytes);
++	let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
++	reference.reference = bounded_executable_reference(bytes, &mut reference_budget);
+ 	assert!(
+ 		reference.reference.is_some(),
+ 		"SSH executable exceeds the reference budget"
+@@ -372,7 +396,7 @@
+ 			"path": path,
+ 			"sha256": expected,
+ 			"bytes": length,
+-			"reference_limit_bytes": MAX_SSH_REFERENCE_BYTES,
++			"reference_limit_bytes": MAX_EXECUTABLE_REFERENCE_BYTES,
+ 			"read_buffer_bytes": VERIFY_BUFFER_BYTES,
+ 			"iterations_per_arm": ITERATIONS,
+ 			"blocks": BLOCKS,

@@ -1,0 +1,241 @@
+{
+  "schema": "hepta-r15-frontier-and-report-plan/v1",
+  "status": "pending-formal-r15-results",
+  "reviewer": "optimization_frontier",
+  "candidate_qualified": false,
+  "global_optimum_proven": false,
+  "new_workload_started": false,
+  "rust_source_modified": false,
+  "inputs": [
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/report-data.json",
+      "sha256": "ffa94324ddc72f4a7fe1976621d22e9fe052990b9697eded9917667e52b4c0fd"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/diagnostic-summary.json",
+      "sha256": "053996e41ebb0b29d9e76f92ed381bb7af0c9db5a22298ae2d92cb6803586020"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/build-preflight-01.json",
+      "sha256": "aeca0ebb729285a24befa0e120e410c7c5edb40f2e84d0a9797d10220128a4d8"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/configuration/configuration-ready.json",
+      "sha256": "fb4a2e8eab0bfafb0c272c4c3e259cd1d68dffbaa479796854a73a1100fcc947"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/independent-audit-tools/allocator-tooling-review.json",
+      "sha256": "8c87efb5b5aaa0e347bcc3f8beaa61d7c66d21011daf006550a41367b30f7cbb"
+    }
+  ],
+  "source_bindings": {
+    "jobs_rs_sha256": "694a4e4dcbc2be499879abd837f0b5e399f9cad95caab34716907de15cbbe82f",
+    "operation_record_rs_sha256": "be0197dc5036d45bae33f6c2926b890e14cb05ab5270a6b846c9af9e74ecaf23",
+    "record_projection_rs_sha256": "876f146fd27ebcdfd4e22e0fca4b88977c8f3587af6ac2ee5c9005099605c083",
+    "interpretation": "Previously reviewed frozen R14 sources, bound by implementation-ready and source qualification; no new source mutation."
+  },
+  "required_comparisons": [
+    {
+      "id": "same_binary_allocator",
+      "baseline": "qualified R14 runtime, all MALLOC_* and GLIBC_TUNABLES absent",
+      "candidate": "the identical R14 runtime SHA, MALLOC_ARENA_MAX=1 and other allocator controls absent",
+      "attribution": "Controlled allocator configuration comparison within this finite ABBA campaign.",
+      "guard": "A and B executable SHA must both equal 51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d."
+    },
+    {
+      "id": "r11_to_final",
+      "baseline": "qualified R11 runtime with clean allocator environment",
+      "candidate": "qualified R14 runtime with arena1 execution profile",
+      "attribution": "Combined code plus configuration outcome versus R11, not an isolated allocator effect."
+    }
+  ],
+  "no_cross_campaign_pooling": "Keep each comparison's raw calls, CPU, wall durations and percentiles separate. Do not multiply percentage gains across campaigns or label R11-to-final as allocator-only improvement.",
+  "cancellation_report": {
+    "cases": [
+      {
+        "workers": 1,
+        "receipt_bytes": 1024
+      },
+      {
+        "workers": 1,
+        "receipt_bytes": 4194272
+      },
+      {
+        "workers": 2,
+        "receipt_bytes": 1024
+      },
+      {
+        "workers": 2,
+        "receipt_bytes": 4194272
+      }
+    ],
+    "fixture": "Escaped JSON receipt; 8 expected wrong-host cancellation refusals plus one successful host_list per wave. Not successful remote cancellation throughput.",
+    "expected_counts_if_unchanged": {
+      "processes": 16,
+      "measured_mixed_replies": 3456,
+      "warmup_mixed_replies": 288,
+      "per_case_per_arm_measured_mixed": 432,
+      "per_case_per_arm_cancel": 384,
+      "per_case_per_arm_host_list": 48
+    },
+    "arm_columns": [
+      "actual binary SHA and environment fingerprint",
+      "two process identities and both raw values",
+      "sum measured CPU seconds",
+      "sum measured wall seconds",
+      "CPU milliseconds per mixed RPC",
+      "mixed replies per second",
+      "host_list p50/p95/p99/max",
+      "process_cancel p50/p95/p99/max",
+      "VmHWM after: both samples and median",
+      "VmRSS before and after: both samples and median",
+      "all errors and no-effect/receipt invariants"
+    ],
+    "aggregation": "CPU_ms=1000*sum(measured controller CPU)/sum(measured mixed replies). Rate=sum(measured mixed replies)/sum(measured wall). Percentiles pool all measured raw latencies within one arm/case/tool and use nearest rank ceil(p*N). Never average per-process p95 or take median rates as the primary metric.",
+    "warmup": "Exclude two warmup waves from formal CPU/wall/latency denominators. The earlier allocator diagnostics included warmup and must remain separately labeled.",
+    "p99_resolution": "With 48 host_list samples per arm/case, nearest-rank p99 is the maximum; with 384 cancellation samples it is sorted rank 381. These are weak finite-tail summaries, not stable population tail estimates.",
+    "memory_scope": "VmHWM is whole child since exec, including initialize and warmup; not request incremental memory. VmRSS before/after is a point sample, not an RSS peak or a 12-second idle reading. Keep all missing/error values; no conversion of unavailable to zero.",
+    "source_gap": "Frozen cancel analyzer emits p95 and HWM; independent reporting may compute p99 and RSS before/after from retained raw records without changing the measurement code."
+  },
+  "native_report": {
+    "cases": [
+      1,
+      4,
+      8
+    ],
+    "host_tool_balance": "Six original jobs; equal process_status and process_read counts for every host.",
+    "expected_counts_if_96_per_cell": {
+      "rounds": 4,
+      "measured_calls": 1152,
+      "warmup_calls": 288,
+      "preflight_and_restart_calls": 72,
+      "all_calls": 1512,
+      "per_case_per_arm_measured_calls": 192,
+      "live_controller_environment_observations": 8
+    },
+    "arm_columns": [
+      "sum measured CPU and wall",
+      "pooled calls/second",
+      "controller CPU milliseconds/call",
+      "pooled p50/p95/p99/max",
+      "both per-process rates and CPU/call",
+      "per-round rate spread",
+      "per-host/tool distributions if a concrete regression needs localization",
+      "all response/identity/complete-output invariants"
+    ],
+    "aggregation": "Pool only raw measured calls within an arm/concurrency; rate=sum(calls)/sum(seconds), CPU=1000*sum(synchronous same-PID/start-ticks CPU deltas)/sum(calls). Do not use sampled tree CPU as performance numerator. Exclude warmup, preflight and restart checks.",
+    "p99_resolution": "At 192 measured calls per arm/C, nearest-rank p99 is sorted rank 191; one or two tail samples can move it materially.",
+    "memory_scope": "Report first-controller whole-lifetime kernel VmHWM and sampled VmRSS peak, each with both process samples/median. This spans preflight, warmup and all C1/C4/C8 cells, so it is not per-C or per-call memory. Report restart controller separately. Tree RSS/fd are nonsimultaneous sampled sums; controller RSS peak is a sampled lower bound, not an exact global peak.",
+    "metric_errors": "Retain metric_sample counts and FD/permission errors. Zero with zero samples is unavailable. Missing FD does not erase independently available CPU/RSS. Sampled tree CPU endpoint error can have either sign.",
+    "response_proof_scope": "Native observation rows retain DTO/response hashes and validation flags, not all JSON-RPC bodies; do not claim independent transport-envelope rehash. Recovery has separate retained full reply evidence."
+  },
+  "qualification_and_recovery_report": {
+    "qualification": "Bind unchanged 219 R14 compile inputs, retained artifact SHA, selected arena1, exact passed/failed/ignored identities and zero retries. R14 expected inventory is 1670 selected/1637 pass/33 ignored; actual R15 result remains pending.",
+    "environment": "Report all explicit Popen environments, verified versus unavailable_process_exited counts; preferably separate listing commands from actual tests. At least one live observation is a gate, not a claim that all short tests were live-observed. Top-level isolated metadata binary_sha is null; per-test executable SHA and original inventory/audit chain carry the binary binding.",
+    "native_environment": "Two live environment observations per ABBA round (first and normal restart), eight per complete native campaign; cancel has one per process.",
+    "recovery_environment": "Exactly three controller starts: first, after intentional controller crash, after successful cancellation/restart; all must show selected env and unchanged held SSH agent.",
+    "recovery": "Validate six owned new jobs, same-key reuse, concurrent cancellation, persisted receipts/output/exit witnesses, independent SSH readback and zero automatic retries. Signal ACK with termination_confirmed=false is not terminal proof; later status/exit/witness establishes termination.",
+    "limits": "Controlled controller crash/restart and owned transport interruption do not establish physical power-loss durability, target reboot safety or arbitrary WAN partition/failover coverage."
+  },
+  "known_r14_tradeoff": [
+    {
+      "workers": 1,
+      "receipt_bytes": 4194272,
+      "r13": {
+        "cpu_seconds": 15.7,
+        "wall_seconds": 4.727246624883264,
+        "average_logical_cpu_time": 3.321172184535157,
+        "rate": 91.38511998211388,
+        "cpu_ms_per_mixed_rpc": 36.342592592592595
+      },
+      "r14": {
+        "cpu_seconds": 10.86,
+        "wall_seconds": 5.517940967809409,
+        "average_logical_cpu_time": 1.9681254408764286,
+        "rate": 78.29007278624468,
+        "cpu_ms_per_mixed_rpc": 25.13888888888889
+      },
+      "change_percent": {
+        "cpu_ms_per_mixed_rpc": -30.828025477707012,
+        "mixed_rpc_per_second": -14.329517976703643,
+        "host_list_p95_ms": -58.00342973992956,
+        "cancel_p95_ms": 12.09882207968247,
+        "vmhwm_kib_median": -16.415814087114743,
+        "vmrss_after_kib_median": -10.893312914752428
+      }
+    },
+    {
+      "workers": 2,
+      "receipt_bytes": 4194272,
+      "r13": {
+        "cpu_seconds": 15.600000000000001,
+        "wall_seconds": 4.615146217867732,
+        "average_logical_cpu_time": 3.3801745954665416,
+        "rate": 93.60483495138115,
+        "cpu_ms_per_mixed_rpc": 36.111111111111114
+      },
+      "r14": {
+        "cpu_seconds": 11.21,
+        "wall_seconds": 5.72984223254025,
+        "average_logical_cpu_time": 1.9564238499164044,
+        "rate": 75.39474604494974,
+        "cpu_ms_per_mixed_rpc": 25.949074074074073
+      },
+      "change_percent": {
+        "cpu_ms_per_mixed_rpc": -28.141025641025653,
+        "mixed_rpc_per_second": -19.45421827397038,
+        "host_list_p95_ms": -57.19689033310975,
+        "cancel_p95_ms": 32.298102793724915,
+        "vmhwm_kib_median": -26.370650749745227,
+        "vmrss_after_kib_median": -21.377938067404557
+      }
+    }
+  ],
+  "factual_observations": [
+    "R14 build-preflight records four logical CPUs. The parent task identifies this X230 as two physical cores; logical CPU time must not be confused with physical core throughput.",
+    "In the already audited large-refusal campaign, R14 used about 1.96 logical CPU-seconds per wall-second, versus 3.32-3.38 for R13. Rate fell 14.33-19.45%, CPU/RPC fell 28.14-30.83%, host_list p95 fell 57.20-58.00%, while cancellation p95 rose 12.10-32.30%.",
+    "Those refusal cases stop before cancellation audit-intent append or remote dispatch. They do not directly demonstrate waiting on the successful cancellation fsync path.",
+    "R14 preparation=2 includes synchronous prepare plus durable append, releases at true closure exit, and does not span remote/completion waits. Publication remains 8. Native read-only status/read does not acquire this cancellation preparation semaphore.",
+    "Arena diagnostics removed most retained RSS without reducing observed thread peak; R15 Rust remains exactly R14."
+  ],
+  "frontier_assessment": {
+    "recommendation_if_formal_r15_is_good": "Accept arena1/preparation2 as a measured engineering stopping point if qualification/recovery pass and all formal tradeoffs are acceptable. Do not automatically expand the parameter matrix. This is not a proof of global or even preparation-count Pareto optimality.",
+    "preparation_2_to_4": {
+      "proven": "No arena1/preparation4 candidate has been measured. Two physical cores alone cannot prove preparation4 useless, especially with four logical CPUs.",
+      "plausible_upside": "Four preparations could use SMT or overlap actual filesystem/append waits and recover part of the observed cancellation rate loss. This is a concrete hypothesis, not a predicted gain.",
+      "evidence_against_automatic_test": "Current large refusal data already uses about two logical CPUs continuously. It does not show an obvious idle CPU gap that a larger prep bound would fill. The observed preparation8-to2 exchange bought substantial CPU and host_list responsiveness at the cost of refusal rate and cancellation tail.",
+      "plausible_costs": "More simultaneous large input/scratch buffers can raise transient HWM even with one arena; one allocator arena can add contention; more CPU/scheduler/SMT competition may give back CPU efficiency or host_list latency. None of these tradeoffs is measured for preparation4.",
+      "when_worth_revisiting": "Only if final formal evidence leaves a concrete throughput or tail objective unmet and evidence localizes it to cancellation preparation rather than native read-only work. Then a separately qualified, bounded preparation4 comparison with the same selected allocator is appropriate.",
+      "validation_required": "A new source candidate and ownership/queue/cancel/panic qualification are required; retain publication8, physical guard lifetime, cancelled queued work ownership and all public-entry assertions. Do not simply relabel the preparation2 tests or silently change the tested bound.",
+      "not_a_reason": "Do not test solely because 4 is an untried parameter or because allocator arenas and preparation workers share numeric labels."
+    },
+    "arena2_trigger": {
+      "proceed_only_if": "The same-binary arena1 campaign shows a coherent material C8 cost across both B processes relative to both A processes, preferably with higher CPU/call and lower rate/tail degradation rather than a lone p99 outlier. Compare individual process spread and shared-host conditions; two runs do not prove significance.",
+      "next_step_if_triggered": "Use a targeted arena1-versus2 comparison of the affected native dimension with the same binary, explicit environments and retained negatives. Do not rerun an entire matrix by default.",
+      "inference_limit": "Performance evidence can be consistent with allocator contention without proving its lock-level mechanism. Avoid claiming measured futex contention when no such trace was collected."
+    },
+    "deferred_options": [
+      {
+        "option": "Permanent preparation worker pool",
+        "reason": "Arena1 directly targets the demonstrated retention without new Rust scheduling semantics. A two-level dedicated-worker design adds threads/handoffs and requires panic, partial initialization, queued ownership and Tokio graceful-shutdown evidence. No demonstrated remaining benefit yet."
+      },
+      {
+        "option": "Cross-call pin cache or skip complete content rehash",
+        "reason": "Existing phase-boundary change detection depends on content revalidation. Metadata/inode/mtime reuse is not equivalent; eliminating checks changes the contract rather than being a safe local speedup."
+      },
+      {
+        "option": "Custom allocation-free escaped JSON parser",
+        "reason": "The current ValidatedJobString visitor already discards decoded text without a second String copy. A new scanner/parser requires independent Unicode, escaping, malformed-input and refusal equivalence evidence; there is no simple duplicate-copy fix left."
+      },
+      {
+        "option": "Remote snapshot/protocol rewrite",
+        "reason": "Requires a separate consistency, ownership, pin and recovery design with new correctness evidence; not a low-risk continuation of the current allocator setting change."
+      },
+      {
+        "option": "Weaken audit/fsync/acknowledgement boundaries",
+        "reason": "Would change persistence or cancellation safety semantics and does not explain the wrong-host benchmark hot path, which rejects before intent append."
+      }
+    ],
+    "statement_for_final_report": "The optimization stops at a validated resource/throughput tradeoff under the measured X230 workloads. Preparation4, larger protocol changes and other allocators remain untested; absolute optimality is not established."
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "schema": "hepta-r21-final-report-peer/v1",
+  "reviewer": "/root/profile_cpu_review",
+  "finished_utc": "2026-11-05T03:04:31.857061+00:00",
+  "passed": true,
+  "scope": "Read-only editorial and numerical consistency review of the complete final report and README against closed campaign metrics, boundary audit, qualification closure and holder receipts. Existing auditors and workloads were not rerun.",
+  "inputs": [
+    {
+      "path": "r21/publication/docs/X230_OPTIMIZATION_20261105_R21.md",
+      "size": 38739,
+      "sha256": "bb146f2a684bc5d02be928009fafb6161f8cdbd108beee5b89b383414cbe0e2c"
+    },
+    {
+      "path": "r21/publication/README.md",
+      "size": 7629,
+      "sha256": "be737c81fe2f72d647df4724e85250fdedf7b528a17f9c78566a1ee2dd9252cf"
+    },
+    {
+      "path": "r21/campaign-metrics-02/METRICS.md",
+      "size": 10550,
+      "sha256": "702349b41f4699e70dbe58a202ed7d799da93f775dd045dee0f40e03d31137c2"
+    },
+    {
+      "path": "r21/campaign-metrics-02/metrics-01.json",
+      "size": 324284,
+      "sha256": "113299b455ac6fc8f3d49132bd1713c11d5c58f417ad3fd7b79ca64821d8707a"
+    },
+    {
+      "path": "r21/campaign-replay-01/boundary.json",
+      "size": 5027,
+      "sha256": "70838a999468acc180429f0323b92052dfede44210575eb32b022f63dddea32c"
+    },
+    {
+      "path": "r20/audit-python/r21-qualification-download-01/closure-01.json",
+      "size": 7241,
+      "sha256": "01a3d29fc897b4af034ed90a936a225fcc4ed41c82f4e566a358dd9f50c1c34d"
+    },
+    {
+      "path": "r21/publication/reviews/qualification-raw-replay-summary-01.json",
+      "size": 6568,
+      "sha256": "85b59e90e4c2cc1ee097963e2166ed600cd8c0c34c97c531b5d3a356f8abe129"
+    },
+    {
+      "path": "r21/publication/reviews/orchestration-final-01.json",
+      "size": 19057,
+      "sha256": "45cb128fc023f964689cd6cd5b046656321a3b6a153f96a74dafcbd1fd9d6c9f"
+    },
+    {
+      "path": "r21/audit-harness/mac-holder-download-01/independent-verification-01.json",
+      "size": 11547,
+      "sha256": "f38356e2a9e16e97cefd8ea4a507e62095b3c88eebc4b867aa570f87a39dfc44"
+    },
+    {
+      "path": "r21/production.diff",
+      "size": 2369,
+      "sha256": "1057780ea68caedec152e64bec0cad1753e4bd97b7790b75e4515935d3f21906"
+    }
+  ],
+  "checks": {
+    "native_aggregate_rates_cpu_and_p50_p95_p99_match_reported_rounding": true,
+    "native_pair_direction_and_aggregate_screen_are_distinct": true,
+    "native_denominators_2304_measured_288_warmup_72_other_2664_total_are_explicit": true,
+    "slow_successful_samples_retained_without_causal_attribution": true,
+    "lifecycle_22_wall_and_cpu_table_rows_match_metrics_and_44_phase_scope": true,
+    "boundary_success_refusal_denominators_p95_202_calls_204_frames_match": true,
+    "native_resource_table_explicitly_scoped_outside_c32_and_missing_samples_not_zero": true,
+    "qualification_1637_passed_33_ignored_0_failed_1670_selected_match": true,
+    "qualification_3364_payloads_8_elf_witnesses_1647_commands_3294_streams_match": true,
+    "elf_remote_witness_scope_and_inherited_git_source_associations_are_not_local_byte_claims": true,
+    "component_chain_and_qualified_rejected_source_are_distinct_from_retained_r19": true,
+    "mac_28_payloads_29_members_15653_bytes_24_checks_and_footer_scope_match": true,
+    "readme_rejection_decision_and_native_failed_screen_match_final_report": true,
+    "no_unresolved_todo_tbd_fixme_or_pending_result_placeholders": true,
+    "no_global_optimum_sustained_capacity_or_stable_memory_saving_claim": true
+  },
+  "resolved_findings": [
+    {
+      "severity": "minor",
+      "topic": "Resource table scope",
+      "finding": "The native ABBA RSS/FD table appeared under the C32 section without an explicit origin label.",
+      "resolution": "The reviewed 38,739-byte revision explicitly labels the table as native observation four-round ABBA and separates primary and restart controllers.",
+      "final_location": "Main report paragraph before the eight-row resource table",
+      "remaining_issue": false
+    }
+  ],
+  "unresolved_findings": [],
+  "decision": {
+    "candidate_adopted": false,
+    "native_regression_screen_passed": false,
+    "retain_r19_compiled_source": true
+  },
+  "limitations": [
+    "This receipt checks reporting consistency; it is not another performance or correctness run.",
+    "Finite ABBA ratios do not establish causation, confidence intervals, a global optimum or sustainable maximum throughput.",
+    "Publication tree, commit and ref are outside this review and require the separate actual Git receipt.",
+    "Archive member contents and ELF witnesses rely on the closed independent audit receipts; ELF bodies were not read locally during this review."
+  ],
+  "remote_calls": 0,
+  "tests_or_workloads_started": false,
+  "auditors_rerun": false,
+  "reviewed_files_modified_by_reviewer": false,
+  "writes_in_this_task": [
+    "r21/publication-verification/final-report-peer-01.json"
+  ],
+  "writers_stopped_after_receipt": true
+}
