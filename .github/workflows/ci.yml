@@ -36,6 +36,10 @@ permissions:
 # debug/test semantics while avoiding duplicate CI incremental caches.
 env:
   CARGO_INCREMENTAL: '0'
+  # The integrated library and test harness are both large; compiling them
+  # together was killed during consolidation. Preserve the declared profiles
+  # while serializing build jobs (test execution is independently isolated).
+  CARGO_BUILD_JOBS: '1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
