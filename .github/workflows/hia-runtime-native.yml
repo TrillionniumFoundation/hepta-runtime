@@ -366,6 +366,16 @@ jobs:
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --rustc "$(rustup which --toolchain 1.95.0 rustc)"
 
+      - name: Reject altered configuration and regex evidence
+        run: |
+          timeout --signal=KILL 180 python3 -I -B runtime/tests/hia_native/check_regex_evidence.py \
+            --repo "$GITHUB_WORKSPACE/runtime" \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --report "$RUNNER_TEMP/hia-runtime-native/result.json" \
+            --receipt "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.json" \
+            > "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.stdout" \
+            2> "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.stderr"
+
       - name: Capture failed aggregate diagnostics outside effect fixtures
         if: failure()
         run: |

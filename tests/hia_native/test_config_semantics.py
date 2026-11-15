@@ -1,20 +1,22 @@
 """Native RuntimeConfig validation, public projections and exact policy identity.
 
 The retained reference is the observed unchanged Rust closure, compiled with
-the original versions/checksums. Regex-dependent cases are explicit incomplete
-results and are never counted as successful configuration validation.
+the original versions/checksums. Regex-dependent validation executes the fixed
+seven-image HIA child chain; the old four pending cases now require exact results.
 """
 from pathlib import Path
-import argparse,collections,gzip,hashlib,json,os,struct,subprocess,sys,time,unittest
+import argparse,collections,ctypes,gzip,hashlib,json,os,struct,subprocess,sys,time,unittest
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path[:0]=[str(ROOT/'scripts'),str(ROOT/'tests')]
-from hia_native_loader import NativeModule,NativeRejected
+from hia_native_loader import NativeModule,NativeRejected,NativeCapacityError
+from config_regex_session import NativeValidator
 from config_semantics_cases import cases,base,variants
 
 sha=lambda raw:hashlib.sha256(raw).hexdigest()
 COUNTS=collections.Counter()
 MANIFESTS={}
+VALIDATION_ELF=None
 ORIGINAL_OUTPUT_SHA='f749e18917afe6cc798749dd09418bd0682bec2dde92863c4548b26a4f583cbc'
 REQUEST_SHA='b817774c48233e843a9b7b5f3f1577a0306846946694ca9f6be1c4e0517ddee2'
 
@@ -34,7 +36,7 @@ class ConfigSemantics(unittest.TestCase):
             assert m.metadata['source_sha256']==sha((ROOT/'native'/('config_'+name+'.hepta')).read_bytes())
             cls.modules[name]=m
         cls.parser=cls.modules['json'].session(output_capacity=16<<20,workspace_capacity=32<<20)
-        cls.validation=cls.modules['validation'].session(output_capacity=16<<20,workspace_capacity=1<<20)
+        cls.validation=NativeValidator(VALIDATION_ELF,ROOT)
         cls.identity=cls.modules['identity'].session(output_capacity=16<<20,workspace_capacity=32<<20)
     @classmethod
     def tearDownClass(cls):
@@ -43,9 +45,18 @@ class ConfigSemantics(unittest.TestCase):
     def call(self,session,wire):
         COUNTS['native_calls']+=1
         return session.invoke(wire)
-    def raw(self,name,wire,output=4096,workspace=1<<20):
+    def raw(self,name,wire,output=4096,workspace=None):
         COUNTS['native_calls']+=1
-        return self.modules[name].invoke_raw(wire,output_capacity=output,workspace_capacity=workspace,output_fill=0xa5,workspace_fill=0x5a)
+        if name!='validation' or workspace is not None:
+            return self.modules[name].invoke_raw(wire,output_capacity=output,workspace_capacity=1<<20 if workspace is None else workspace,output_fill=0xa5,workspace_fill=0x5a)
+        # The continuation owns the declared 256 MiB carrier. These controls
+        # inspect the complete output but never consume a full workspace copy.
+        with self.modules[name].session(output_capacity=output,workspace_capacity=256<<20)as session:
+            ctypes.memset(ctypes.addressof(session._workspace),0x5a,256<<20)
+            ctypes.memset(ctypes.addressof(session._output),0xa5,output)
+            try:code=len(session.invoke(wire))
+            except(NativeRejected,NativeCapacityError)as error:code=error.code
+            return code,ctypes.string_at(ctypes.addressof(session._output),output),b''
     def arena(self,value,default=b'/default-state'):
         return self.call(self.parser,request(value,default))
     def result(self,arena,op):
@@ -72,20 +83,12 @@ class ConfigSemantics(unittest.TestCase):
                 outputs.append('00000000:'+digest.hex()+'\n');COUNTS['original_digest_cases']+=1
             else:
                 status,code,payload=self.result(arena,op)
-                if status==2:
-                    self.assertEqual(category,'regex_boundary');self.assertEqual(code,65534)
-                    host,hostn,action,actionn,pattern,patternn=struct.unpack('<6Q',payload)
-                    original_frame=frame(arena,op)
-                    self.assertEqual(original_frame[host:host+hostn],b'h')
-                    self.assertEqual(original_frame[action:action+actionn],b'act')
-                    self.assertIn(original_frame[pattern:pattern+patternn],[b'x',b'(',b'(?u)\\p{Greek}+'])
-                    pending.append(index);outputs.append('fffffffc:'+payload.hex()+'\n')
-                    COUNTS['explicit_regex_dependency_cases']+=1
-                else:
-                    self.assertEqual((f'{status:08x}',payload.hex()),(rc,rp),(index,category))
-                    outputs.append(f'{status:08x}:'+payload.hex()+'\n')
-                    COUNTS['original_semantic_cases']+=1
-        self.assertEqual(pending,[450,451,452,454])
+                self.assertIn(status,[0,1])
+                self.assertEqual((f'{status:08x}',payload.hex()),(rc,rp),(index,category))
+                outputs.append(f'{status:08x}:'+payload.hex()+'\n')
+                COUNTS['original_semantic_cases']+=1
+                if index in [450,451,452,454]:COUNTS['previous_regex_dependency_cases_closed']+=1
+        self.assertEqual(pending,[])
         folder=os.environ.get('HIA_CONFIG_SEMANTICS_CORPUS_DIR')
         if folder:
             folder=Path(folder);folder.mkdir(parents=True,exist_ok=False)
@@ -121,7 +124,7 @@ class ConfigSemantics(unittest.TestCase):
             for value in corrupt:
                 code,out,_=self.raw(name,frame(value,1,name=='identity'),output=64)
                 self.assertEqual(code,0xffffffff);self.assertEqual(out,b'\xa5'*64)
-            with self.modules[name].session(output_capacity=4096,workspace_capacity=1<<20) as session:
+            with self.modules[name].session(output_capacity=4096,workspace_capacity=(256<<20 if name=='validation'else 1<<20)) as session:
                 for _ in range(3):
                     with self.assertRaises(NativeRejected):self.call(session,frame(corrupt[0],1,name=='identity'))
                     self.call(session,frame(arena,1,name=='identity'))
@@ -146,25 +149,36 @@ class ConfigSemantics(unittest.TestCase):
     def test_06_real_static_elf_outputs(self):
         arena=self.arena(variants()['all'])
         for name,op in [('validation',1),('validation',2),('validation',3),('identity',1),('identity',2)]:
-            m=self.modules[name];meta=m.metadata['standalone'];binary=MANIFESTS[name].parent/meta['path']
-            self.assertFalse(meta['runtime_python_required']);self.assertFalse(meta['runtime_libc_required']);self.assertEqual(sha(binary.read_bytes()),meta['sha256'])
+            m=self.modules[name]
+            if name=='validation':
+                meta=json.loads(VALIDATION_ELF.read_bytes());binary=VALIDATION_ELF.parent/meta['executable']
+                self.assertFalse(meta['runtime_python_required']);self.assertFalse(meta['runtime_libc_required']);self.assertEqual(sha(binary.read_bytes()),meta['executable_sha256'])
+            else:
+                meta=m.metadata['standalone'];binary=MANIFESTS[name].parent/meta['path']
+                self.assertFalse(meta['runtime_python_required']);self.assertFalse(meta['runtime_libc_required']);self.assertEqual(sha(binary.read_bytes()),meta['sha256'])
             wire=frame(arena,op,name=='identity');session=self.identity if name=='identity' else self.validation
             expected=self.call(session,wire)
-            proc=subprocess.run([str(binary)],input=wire,capture_output=True,env={'PATH':'','LC_ALL':'C'},timeout=10)
+            proc=subprocess.run([str(binary)],input=(struct.pack('<Q',len(wire))+wire if name=='validation'else wire),capture_output=True,env={'PATH':'','LC_ALL':'C'},timeout=10)
+            if name=='validation':
+                self.assertGreaterEqual(len(proc.stdout),16);code,n=struct.unpack_from('<2Q',proc.stdout);self.assertEqual((code,n),(0,len(proc.stdout)-16));proc.stdout=proc.stdout[16:]
             self.assertEqual((proc.returncode,proc.stdout,proc.stderr),(0,expected,b''));COUNTS['real_static_elf_runs']+=1
 
 def main():
+    global VALIDATION_ELF
     parser=argparse.ArgumentParser()
+    parser.add_argument('--validation-elf-manifest',type=Path,default=os.environ.get('HIA_CONFIG_VALIDATION_ELF_MANIFEST'))
     for name in ['json','validation','identity']:
         parser.add_argument('--'+name+'-manifest',type=Path,default=os.environ.get('HIA_CONFIG_'+name.upper()+'_MANIFEST'))
     args=parser.parse_args()
+    assert args.validation_elf_manifest,'compiled validation chain required'
+    VALIDATION_ELF=args.validation_elf_manifest.resolve(strict=True)
     for name in ['json','validation','identity']:
         value=getattr(args,name+'_manifest');assert value,'compiled manifests required';MANIFESTS[name]=value.resolve()
     start=time.monotonic();result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(ConfigSemantics))
     print(json.dumps({'schema':'hepta.runtime.config-semantics-native-tests.v1','status':'PASS' if result.wasSuccessful() else 'FAIL',
                      'test_groups':result.testsRun,'counts':dict(COUNTS),'elapsed_seconds':time.monotonic()-start,
                      'complete_config_owner':False,'regex_compilation_closed':False,'os_installation_closed':False,
-                     'manifests':{n:sha(p.read_bytes()) for n,p in MANIFESTS.items()}},sort_keys=True),flush=True)
+                     'manifests':{n:sha(p.read_bytes()) for n,p in MANIFESTS.items()},'validation_elf_manifest_sha256':sha(VALIDATION_ELF.read_bytes())},sort_keys=True),flush=True)
     raise SystemExit(0 if result.wasSuccessful() else 1)
 
 if __name__=='__main__':main()

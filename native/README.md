@@ -86,35 +86,48 @@ tool and old-stack-removal declarations therefore remain incomplete.
 
 ## Installed configuration and MCP composition
 
-The [configuration scope](config_scope.md) and [private owner contract](config_owner_abi.md)
-cover six native semantic owners and four fixed HIA packers. The ten-image static
-stdio profile provides `host_list`, `effective_config` and `execution_shadow_admit`.
-Startup owns configuration installation, actual lock descriptors and immutable
-host identity; tool input cannot install a configuration or supply an authority
-receipt. Its fixed call table connects generic JSON Value parsing, typed schemas,
-installed exact-host lookup and the native shadow controller.
+The [configuration scope](config_scope.md), [private owner contract](config_owner_abi.md)
+and [regex ABI](regex_abi.md) bind the installed configuration to native Unicode
+data/query, syntax, HIR, NFA, matching and continuation owners. The fixed
+sixteen-image stdio profile provides `host_list`, `effective_config` and
+`execution_shadow_admit`. Startup owns installation, retained lock descriptors
+and immutable host identity. The eleven-image installed-owner profile and the
+MCP profile both execute the configured regex dependencies through checked
+source/image identities and fixed calls.
 
-Six mandatory native suites cover 35 test groups. The focused observed version
-passes 6,580 typed calls, 4,049 semantic calls, 61 filesystem requests, 73 owner
-requests, 60 actual MCP responses and 38 continuation-receipt controls. The
-aggregate executes these as six separately retained processes under the existing
-180-second limits. Its original reference recipe performs one locked Cargo build
-of four entries, compares 6,491 typed inputs, 2,063 semantic inputs, 62 installed
-owner scenarios and 1,119 complete SDK protocol responses. The latter two domains
-execute both native and original binaries on identical fixture paths.
+Fifteen mandatory native processes retain the original six configuration suites
+and add nine complete regex suites. NFA construction is split into two fixed
+halves covering all 3,584 cases; each process retains its existing 180-second
+limit. Native evidence admission checks every actual process, source/image pair,
+ELF stream and complete corpus before creating compatibility results.
 
-Four semantic corpus entries still require complete regular-expression
-compilation. They are explicitly recorded as pending, separately from exact
-comparisons, and prevent a complete configuration-owner claim. The original
-owner comparison also documents excluded diagnostic categories and opaque node
-identity. The original recipe now permits fetching its exact locked dependencies
-on a fresh CI runner; `--offline` remains an explicit development option. Both
-paths use the selected Rust compiler. Historical focused runs cannot qualify
-changed recipe bytes or the fresh repository aggregate.
+Two fresh original processes run inside the existing configuration recipe.
+The configuration process compiles four entries with 100 locked dependencies and
+compares 13,460 typed, semantic, installed-owner, MCP and startup-refusal cases,
+including 3,694 extended semantic inputs. The regex process compiles its locked
+five-dependency reference and replays 6,560 Unicode, 18,976 AST, 34,130 HIR,
+3,584 NFA and 65,440 matching cases: 128,690 complete inputs plus the capture-name
+predicate projection. Original Rust 1.95 is selected explicitly. Both original
+results and the unchanged native evidence are re-admitted after execution.
+
+After every original recipe finishes, a separate check runs against the inactive
+qualification directory. Its 14 altered-evidence cases cover missing or changed
+actual processes, timeout/SIGKILL, source/ELF changes, duplicate NFA cases after
+rehashing, incomplete original replay and missing startup-failure observations.
+It restores all changed bytes and performs six complete baseline admissions.
+These checks add no native or original semantic calls.
+
+The frozen focused run passed all fifteen native processes and both fresh
+original recipes, followed by the evidence controls. That observation belongs
+to the exact preserved handoff; the repository integration requires a fresh
+complete aggregate. Unconstrained regex arena/resource equivalence, original
+meta-engine resource optimizations, complete configuration-owner parity and
+public production routing remain unqualified. The complete-runtime and
+old-stack-removal declarations remain false.
 
 ## Native components
 
-Qualification covers 64 native HIA sources through 36 executable component
+Qualification covers 76 native HIA sources through 36 executable component
 entries; the two scope profiles share their HIA scope owner. The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
@@ -151,15 +164,27 @@ These counts do not count migrated production MCP handlers.
 | [execution_json.hepta](execution_json.hepta) | Original execution serde types, direct and canonical Value admission, strict unknown-field rules and exact typed error messages |
 | [execution_controller.hepta](execution_controller.hepta) | Fixed typed admission, installed-host lookup and core validation order, with checked private child continuations |
 | [config_json.hepta](config_json.hepta) | Original typed configuration schemas and defaults |
-| [config_validation.hepta](config_validation.hepta) | Configuration validation order and normalization; four regex cases remain pending |
+| [config_validation.hepta](config_validation.hepta) | Original validation order and immutable configuration normalization, with fixed resumable calls into native regex syntax, HIR, NFA and matching. Unconstrained regex resource equivalence and complete production routing remain unqualified. |
 | [config_identity.hepta](config_identity.hepta) | Effective configuration serialization and installed identity digest |
 | [config_fs.hepta](config_fs.hepta) | Actual startup file/state operations and retained lock descriptors |
 | [config_owner.hepta](config_owner.hepta) | Private installed configuration, exact host lookup and immutable cached responses |
 | [config_mcp.hepta](config_mcp.hepta) | Persistent stdio controller for the three configured tools |
 | [config_fs_packer.hepta](config_fs_packer.hepta) | Static filesystem qualification executable |
-| [config_owner_packer.hepta](config_owner_packer.hepta) | Static startup owner with five fixed images |
-| [config_owner_fixture_packer.hepta](config_owner_fixture_packer.hepta) | Immutable test profile for reinstallation controls |
-| [config_mcp_packer.hepta](config_mcp_packer.hepta) | Static MCP executable with ten fixed native images |
+| [config_owner_packer.hepta](config_owner_packer.hepta) | Fixed eleven-image static startup owner, including six regex dependency images and preserving private configuration installation and actual descriptor lifetime. |
+| [config_owner_fixture_packer.hepta](config_owner_fixture_packer.hepta) | Fixed eleven-image qualification-only startup reinstallation profile with the complete regex dependency chain; never enabled by public MCP input. |
+| [config_mcp_packer.hepta](config_mcp_packer.hepta) | Fixed sixteen-image static MCP executable. Validation image 3 calls regex controller 15; syntax 10, HIR 12, NFA 13 and matcher 14 use immutable Unicode image 11 through checked call targets. Only the filesystem image owns OS effects. |
+| [config_regex_packer.hepta](config_regex_packer.hepta) | Fixed native configuration-validation profile joining the original validation owner to all required regex children. |
+| [regex_controller.hepta](regex_controller.hepta) | Native continuation controller composing syntax, HIR, NFA and matching with checked child receipts and resource/domain refusals. |
+| [regex_hir.hepta](regex_hir.hepta) | Native regex HIR lowering, flags and class semantics through checked Unicode queries; complete 34,130-row original HIR domain. |
+| [regex_hir_packer.hepta](regex_hir_packer.hepta) | Fixed static native HIR executable with checked Unicode data calls and retained framing/resource refusals. |
+| [regex_match.hepta](regex_match.hepta) | Native regex matching through fixed NFA and Unicode dependencies, covering the complete 65,440 original pattern/haystack cases. |
+| [regex_nfa.hepta](regex_nfa.hepta) | Native regex NFA construction and observed original budget boundaries; two unchanged halves cover all 3,584 original cases. Unconstrained resource equivalence remains unqualified. |
+| [regex_pipeline_packer.hepta](regex_pipeline_packer.hepta) | Fixed static native regex pipeline joining syntax, HIR, NFA, matching and immutable Unicode data. |
+| [regex_syntax.hepta](regex_syntax.hepta) | Native regex AST parsing, original diagnostics and typed continuation to immutable Unicode data; complete 18,976-row original syntax domain. |
+| [regex_syntax_packer.hepta](regex_syntax_packer.hepta) | Fixed static native syntax executable with checked Unicode data calls and retained framing/receipt refusals. |
+| [regex_unicode.hepta](regex_unicode.hepta) | Native Unicode class/property admission and range serialization, with complete 6,560-row original domain and Rust 1.95 capture-identifier predicate projection. |
+| [regex_unicode_data.hepta](regex_unicode_data.hepta) | Immutable original Unicode tables encoded in native HIA, supplying checked private range queries to syntax, HIR and matching owners. |
+| [regex_unicode_packer.hepta](regex_unicode_packer.hepta) | Fixed static native Unicode query executable generated by HIA; includes the immutable Unicode data dependency. |
 | [effect_owner_fence.hepta](effect_owner_fence.hepta) | Original owner/state/predecessor admission and exact semantic results |
 | [effect_fence_fs.hepta](effect_fence_fs.hepta) | Descriptor custody, filesystem validation and real Linux failure/race controls |
 | [effect_fence_manager.hepta](effect_fence_manager.hepta) | Private asynchronous acquisition, worker cancellation and live permit lifetime |
@@ -384,9 +409,11 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 89 native suite processes, the fresh compiler cold process,
-31 required original Rust recipes and one Rust-version process: 153 recorded
-checks in a complete successful aggregate. The two JSON recipes share one locked
+The declared run has 98 native suite processes, the fresh compiler cold process,
+31 required original Rust recipes and one Rust-version process: 163 recorded
+checks in a complete successful aggregate. The configuration recipe retains two
+fresh original processes. Fourteen evidence controls then run against the inactive
+complete aggregate and preserve a separate receipt without adding semantic calls. The two JSON recipes share one locked
 Cargo build and each perform a complete independent replay. A component's retained historical
 comparison is not a fresh aggregate invocation.
 The OS-scope, authority-transport and file-info-guard suites run through two

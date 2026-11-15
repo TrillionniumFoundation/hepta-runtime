@@ -1298,7 +1298,8 @@ def compare_execution(output: Path, report: dict, rustc: Path) -> dict:
 
 def retained_config_original(output: Path, report: dict) -> dict:
     import hia_native_config_qualification as q
-    return q.original_evidence(ROOT, output, report, completed_test_summary)
+    return {"configuration": q.original_evidence(ROOT, output, report, completed_test_summary),
+            "regex": q.regex_original_evidence(ROOT, output, report, completed_test_summary)}
 
 
 def compare_config(output: Path, report: dict, rustc: Path) -> dict:
@@ -1310,6 +1311,11 @@ def compare_config(output: Path, report: dict, rustc: Path) -> dict:
                "--repo", str(ROOT), "--native-results", str(output / "config-native/result.json"),
                "--output", str(output / "config-original"), "--cargo", str(cargo), "--rustc", str(rustc)]
     record_check(output, report, name="config-rust-compare", command=command, timeout=180,
+                 env=qualification_env())
+    regex_command = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_regex_original.py"),
+                     "--repo", str(ROOT), "--native-results", str(output / "regex-native/result.json"),
+                     "--output", str(output / "regex-original"), "--cargo", str(cargo), "--rustc", str(rustc)]
+    record_check(output, report, name="regex-rust-compare", command=regex_command, timeout=180,
                  env=qualification_env())
     result = retained_config_original(output, report)
     if config_evidence(output, report) != before:

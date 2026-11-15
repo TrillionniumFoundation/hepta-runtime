@@ -162,6 +162,35 @@ class QualificationReportingTests(unittest.TestCase):
                 q.run_native_checks(self.output, self.report, ("one.py",), {}, **settings)
         self.assertEqual(self.report["checks"], [])
 
+    def test_config_registry_and_retained_original_require_complete_regex_dependency(self):
+        import qualify_hia_runtime_native as q
+        import compare_hia_runtime_rust as comparison
+        helper = q.config_qualification
+        entry = {row["key"]: row for row in MODULES}["runtime_config"]
+        self.assertEqual((entry["test"], *entry["additional_tests"]), helper.TESTS)
+        self.assertEqual(len(helper.CONFIG_TESTS), 6)
+        self.assertEqual(len(helper.regex_qualification.TESTS), 9)
+        native_sources = {entry["source"], *entry["companion_sources"]}
+        for row in helper.MODULES.values():
+            self.assertIn(row["source"], native_sources | {"native/serde_json.hepta",
+                          "native/execution_shadow.hepta", "native/execution_json.hepta",
+                          "native/execution_controller.hepta"})
+        pinned = sources()
+        for name in helper.regex_qualification.OWN:
+            self.assertIn(name, pinned)
+        self.assertIn("tests/hia_native/check_regex_evidence.py", pinned)
+        with patch.object(helper, "original_evidence", return_value={"config": "actual-completed"}), \
+                patch.object(helper, "regex_original_evidence", return_value={"regex": "actual-completed"}):
+            self.assertEqual(comparison.retained_config_original(self.output, self.report),
+                             {"configuration": {"config": "actual-completed"},
+                              "regex": {"regex": "actual-completed"}})
+        for missing in ("original_evidence", "regex_original_evidence"):
+            with patch.object(helper, "original_evidence", return_value={}), \
+                    patch.object(helper, "regex_original_evidence", return_value={}), \
+                    patch.object(helper, missing, side_effect=ValueError("missing complete replay")), \
+                    self.assertRaisesRegex(ValueError, "missing complete replay"):
+                comparison.retained_config_original(self.output, self.report)
+
     def test_config_launcher_requires_the_complete_source_owned_command(self):
         import qualify_hia_runtime_native as q
         helper = q.config_qualification

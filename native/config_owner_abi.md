@@ -2,12 +2,12 @@
 
 This is the internal ABI of `config_owner.hepta`, SHA-256
 `5f9e4cbaf8b8652a3a9eb05bdeccb90149258c9851a5fd8095465ea6cd12e5eb`.
-The five-image static executable has executed actual configuration reads,
+The eleven-image static executable has executed actual configuration reads,
 normalization, validation, two retained locks, immutable installation, lazy
 digest caching, host lookup and cached public summaries. This document freezes
 the query and host-lookup contract for composition. The MCP transport is a
 separate controller. The full original configuration domain is not closed:
-Rust regular-expression compilation, unconstrained source resources and the
+Unconstrained regex/source resources and the
 original general concurrent installation API remain outside this profile.
 
 ## Authority and lifetime
@@ -72,8 +72,7 @@ Neither lookup grants execution, filesystem, network or write permission.
 | 24 | 8 | Payload length |
 | 32 | payload length | Exact result or error bytes |
 
-Status 0 is success; status 1 is an original error string; status 2 reports the
-explicit unimplemented regex dependency; status 3 reports a finite native
+Status 0 is success; status 1 is an original error string; status 2 is the legacy dependency-refusal code and is not emitted by the current regex validator; status 3 reports a finite native
 resource bound. Diagnostic categories are not original Rust values. A successful
 name lookup is observable only as status 0 plus a well-formed internal record.
 Consumers must retain the original first-error ordering: resolve the configured

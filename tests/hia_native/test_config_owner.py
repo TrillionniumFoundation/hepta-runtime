@@ -69,10 +69,11 @@ class ConfigurationOwner(unittest.TestCase):
             m=json.loads(path.read_bytes());b=path.parent/m['executable']
             assert sha(b.read_bytes())==m['elf_sha256'] and m['fixture_admin_reinstallation']==fixture
             assert sha((ROOT/'scripts/config_owner_adapter.S').read_bytes())==m['adapter_base_sha256']
+            assert [item['id'] for item in m['members']]==[0,1,2,3,4,10,11,12,13,14,15]
             for item in m['members']:
                 p=Path(item['manifest']);data=json.loads(p.read_bytes())
                 assert sha(p.read_bytes())==item['manifest_sha256']
-                assert sha((ROOT/('native/config_'+item['name']+'.hepta')).read_bytes())==item['source_sha256']
+                assert sha((ROOT/item['source']).read_bytes())==item['source_sha256']
                 image=(p.parent/data['image']).read_bytes();assert sha(image)==item['image_sha256']
                 assert b.read_bytes()[item['offset']:item['offset']+len(image)]==image
             cls.manifests.append(m)
@@ -152,13 +153,13 @@ class ConfigurationOwner(unittest.TestCase):
                 self.write(path,config(first));status,code,error=s.call(startup(path));self.assertEqual(status,1);self.assertIn(b'lock acquisition failed because the operation would block',error)
                 self.assertEqual([self.ok(s,op) for op in [1,2,3,6]],before);self.assertEqual(s.fd_count(),fds)
                 COUNTS['failed_reinstallation_controls']+=3
-    def test_06_failure_contexts_and_no_incomplete_regex_installation(self):
+    def test_06_failure_contexts_and_regex_failure_precedes_installation(self):
         with tempfile.TemporaryDirectory(prefix='hia-config-reject-') as td:
             root=Path(td);path=root/'config';state=root/'state'
             self.failed_start(path,b'failed to read runtime config '+os.fsencode(path))
             path.write_bytes(b'{"hosts":');self.failed_start(path,b'invalid runtime config JSON '+os.fsencode(path))
-            bad=config(state);bad['hosts']['h']['privileged_actions']={'act':{'executable':'/bin/x','allow_extra_args':True,'extra_arg_patterns':['x']}}
-            self.write(path,bad);self.failed_start(path,b'native configuration regex compilation is not implemented');self.assertFalse(state.exists())
+            bad=config(state);bad['hosts']['h']['privileged_actions']={'act':{'executable':'/bin/x','allow_extra_args':True,'extra_arg_patterns':['(']}}
+            self.write(path,bad);self.failed_start(path,b'host `h` privileged action `act` has invalid argument regex');self.assertFalse(state.exists())
             self.write(path,config(state));state.mkdir(mode=0o755);os.chmod(state,0o755)
             self.failed_start(path,b'controller state directory must be owned by the current user with mode 0700');self.assertEqual(list(state.iterdir()),[])
             os.chmod(state,0o700);target=root/'target';target.mkdir(mode=0o755);os.chmod(target,0o755);os.symlink(target,state/'jobs')
@@ -174,6 +175,29 @@ class ConfigurationOwner(unittest.TestCase):
             s.process.wait(timeout=15);self.assertEqual((s.process.returncode,s.process.stdout.read(),s.process.stderr.read()),(111,b'',b''))
             self.assertTrue(unlocked(state/'controller.owner.lock'));self.assertTrue(unlocked(state/'controller.lock'))
             COUNTS['production_install_authority_refusals']+=1
+    def test_08_regex_installation_and_failed_reinstallation_keep_authority(self):
+        with tempfile.TemporaryDirectory(prefix='hia-config-regex-owner-') as td:
+            root=Path(td);path=root/'config';state=root/'state'
+            value=config(state);value['hosts']['h']['privileged_actions']={'act':{'executable':'/bin/x','allow_extra_args':True,'extra_arg_patterns':['x',r'\p{Greek}+',r')|foo(?:']}}
+            self.write(path,value)
+            with Session(self.fixture,path) as s:
+                before=[self.ok(s,op) for op in [1,2,3,6]];fds=s.fd_count()
+                self.assertFalse(unlocked(state/'controller.owner.lock'));self.assertFalse(unlocked(state/'controller.lock'))
+                newstate=root/'not-created';value['state_dir']=str(newstate)
+                for pattern in ['(',r'\w{500}','a{327675}',r'(?-u:\xFF)']:
+                    value['hosts']['h']['privileged_actions']['act']['extra_arg_patterns']=[pattern];self.write(path,value)
+                    status,code,error=s.call(startup(path))
+                    self.assertEqual((status,error),(1,b'host `h` privileged action `act` has invalid argument regex'))
+                    self.assertFalse(newstate.exists());self.assertEqual(s.fd_count(),fds)
+                    self.assertEqual([self.ok(s,op) for op in [1,2,3,6]],before)
+                    COUNTS['regex_failed_reinstallation_controls']+=1
+                value['hosts']['h']['privileged_actions']['act']['extra_arg_patterns']=['x'];self.write(path,value)
+                self.assertEqual(s.call(startup(path))[::2],(1,b'runtime config was already initialized'))
+                self.assertEqual(s.fd_count(),fds);self.assertEqual([self.ok(s,op) for op in [1,2,3,6]],before)
+                self.assertTrue((newstate/'jobs').is_dir());self.assertTrue((newstate/'audit').is_dir())
+                self.assertTrue(unlocked(newstate/'controller.owner.lock'));self.assertTrue(unlocked(newstate/'controller.lock'))
+                COUNTS['regex_valid_reinstallation_effect_controls']+=1
+            self.assertTrue(unlocked(state/'controller.owner.lock'));self.assertTrue(unlocked(state/'controller.lock'))
 
 def main():
     global MANIFEST,FIXTURE

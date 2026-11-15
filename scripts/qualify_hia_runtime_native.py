@@ -129,11 +129,32 @@ MODULES = (
     {"key": "runtime_config", "name": "runtime-config", "source": "native/config_owner.hepta",
      "builder": "runtime_config", "manifest_env": "HIA_CONFIG_BUILD", "test": "test_config_json.py",
      "additional_tests": ("test_config_semantics.py", "test_config_fs.py", "test_config_owner.py",
-                          "test_config_mcp.py", "test_config_mcp_receipts.py"),
+                          "test_config_mcp.py", "test_config_mcp_receipts.py",
+                          "test_regex_unicode.py",
+                          "test_regex_syntax.py",
+                          "test_regex_hir.py",
+                          "test_regex_nfa_0.py",
+                          "test_regex_nfa_1.py",
+                          "test_regex_match.py",
+                          "test_regex_pipeline.py",
+                          "test_regex_controls.py",
+                          "test_config_regex.py"),
      "companion_sources": ("native/config_json.hepta", "native/config_validation.hepta",
                            "native/config_identity.hepta", "native/config_fs.hepta", "native/config_mcp.hepta",
                            "native/config_fs_packer.hepta", "native/config_owner_packer.hepta",
-                           "native/config_owner_fixture_packer.hepta", "native/config_mcp_packer.hepta")},
+                           "native/config_owner_fixture_packer.hepta", "native/config_mcp_packer.hepta",
+                           "native/config_regex_packer.hepta",
+                           "native/regex_controller.hepta",
+                           "native/regex_hir.hepta",
+                           "native/regex_hir_packer.hepta",
+                           "native/regex_match.hepta",
+                           "native/regex_nfa.hepta",
+                           "native/regex_pipeline_packer.hepta",
+                           "native/regex_syntax.hepta",
+                           "native/regex_syntax_packer.hepta",
+                           "native/regex_unicode.hepta",
+                           "native/regex_unicode_data.hepta",
+                           "native/regex_unicode_packer.hepta")},
     {"key": "execution_shadow", "name": "execution-shadow", "source": "native/execution_shadow.hepta",
      "builder": "execution_shadow", "manifest_env": "HIA_EXECUTION_BUNDLE",
      "companion_sources": ("native/execution_json.hepta", "native/execution_controller.hepta"),
@@ -256,6 +277,14 @@ def sources() -> dict:
         'config_schema.py',
         'hia_native_config_reference.py',
         'hia_native_config_qualification.py',
+        "build_regex_probe.py",
+        "config_regex_adapter.S",
+        "hia_native_regex_qualification.py",
+        "hia_native_regex_reference.py",
+        "regex_hir_adapter.S",
+        "regex_pipeline_adapter.S",
+        "regex_syntax_adapter.S",
+        "regex_unicode_adapter.S",
         "hia_native_execution_build.py", "hia_native_execution_qualification.py",
         "hia_native_session_build.py", "hia_native_session_qualification.py",
         "hia_native_file_lock_build.py", "hia_native_file_lock_qualification.py",
@@ -2068,6 +2097,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_FENCE_QUALIFICATION_OUTPUT": str(output),
         "HIA_CONFIG_JSON_CORPUS_DIR": str(output / "config-native/typed-corpus"),
         "HIA_CONFIG_SEMANTICS_CORPUS_DIR": str(output / "config-native/semantics-corpus"),
+        "HIA_REGEX_OUTPUT_DIR": str(output / "regex-native"),
     })
     env.update({variable: str(output / SCOPE_OS_FOLDER / receipt)
                 for _, variable, receipt, _, _ in SCOPE_OS_SUITES})
@@ -2198,6 +2228,7 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / "batch-apply").mkdir()
     (output / "atomic-write").mkdir()
     (output / "config-native").mkdir()
+    (output / "regex-native").mkdir()
     (output / "file-locks").mkdir()
     (output / "file-lock-service").mkdir()
     return builder

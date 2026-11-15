@@ -1,4 +1,4 @@
-# Administrator configuration and the ten-image MCP profile
+# Administrator configuration and the sixteen-image MCP profile
 
 This profile is an actual static Linux x86-64 executable. It reads an
 administrator-selected configuration at startup, retains the original two
@@ -8,10 +8,7 @@ It contains no interpreter, Rust runtime, dynamic linker, libc, or semantic
 fallback. Python and the assembler are build/test tools only.
 
 **The complete original configuration and runtime domains are not closed.**
-Compilation of administrator `extra_arg_patterns` using the original Rust
-`regex` language remains an explicit dependency refusal, including otherwise
-valid patterns. The finite native resource profile and serial installation
-entry also differ from the unrestricted original API. None of the 125 existing
+Administrator `extra_arg_patterns` now execute the pinned HIA syntax, Unicode, HIR and forward/reverse NFA owners. Valid patterns are accepted and original syntax/10 MiB compiled-size failures preserve the first-error order. The finite native AST/HIR resource profile and serial installation entry still differ from the unrestricted original API. None of the 125 existing
 handler owners may be removed on this evidence. The profile does not grant a
 local filesystem capability for an SSH alias or expose a public config setter.
 
@@ -50,13 +47,19 @@ record validation, matching the original first-error order.
 | 0 | `config_owner.hepta` | 1, 2, 3, 4 | None |
 | 1 | `config_fs.hepta` | None | Enumerated configuration filesystem effects |
 | 2 | `config_json.hepta` | None | None |
-| 3 | `config_validation.hepta` | None | None |
+| 3 | `config_validation.hepta` | 15 | None |
 | 4 | `config_identity.hepta` | None | None |
 | 5 | `config_mcp.hepta` | 0, 6, 9 | None |
 | 6 | `execution_controller.hepta` | 0, 7, 8 | None |
 | 7 | `execution_json.hepta` | None | None |
 | 8 | `execution_shadow.hepta` | None | None |
 | 9 | `serde_json.hepta` | None | None |
+| 10 | `regex_syntax.hepta` | 11 | None |
+| 11 | `regex_unicode_data.hepta` | None | None |
+| 12 | `regex_hir.hepta` | 11 | None |
+| 13 | `regex_nfa.hepta` | None | None |
+| 14 | `regex_match.hepta` | 11 | None |
+| 15 | `regex_controller.hepta` | 10, 12, 13, 14 | None |
 
 The builder verifies every actual embedded image, the immutable adapter prefix,
 relative call displacements, native HIA packer output, compiler identity, and
@@ -66,7 +69,7 @@ route retains the current caller context and separate monotonic call sequences.
 Only image 1 may yield a syscall effect. The fixed boundary is not a general
 foreign function interface.
 
-The executable lazily maps 2,600,472,576 bytes of virtual address space. It does
+The executable lazily maps 3,707,834,368 bytes of virtual address space. It does
 not clear all image workspaces eagerly. Regions above 2 GiB use zero-extended
 register arithmetic. All borrowed child buffers, persistent configuration,
 controller workspaces and call footers have disjoint fixed spans. The standard,
@@ -102,10 +105,7 @@ structure before use. Failed admission or output capacity does not publish a
 partial result.
 
 Validation op 1 validates, op 2 renders host_list, and op 3 renders effective
-config. Regex status 2 / diagnostic 65534 identifies the first unresolved
-pattern and preserves the original preceding-error order. Four original corpus
-cases are explicitly incomplete rather than counted as equivalent validation.
-Identity refuses non-UTF-8 PathBuf serialization with `0xfffffffd`; installation
+config. The validation owner calls child 15 for each pattern in original map/vector order. Syntax and original NFA size-limit errors become the original ACTION_REGEX diagnostic and public error text. A private arena/output refusal remains a distinct native capacity failure. All four former dependency-refusal cases now require exact original results. Identity refuses non-UTF-8 PathBuf serialization with `0xfffffffd`; installation
 does not eagerly convert that deferred digest failure into startup failure.
 
 Filesystem op 1 prepares/canonicalizes state and returns both retained locks;
@@ -160,30 +160,10 @@ installation API. Those remain follow-up owners.
 
 ## Reproduction and original comparison
 
-`scripts/build_hia_config_service.py` compiles the components and packs four
-executables: the filesystem probe, production installed owner, trusted reinstall
-fixture, and ten-image MCP service. `tests/hia_native/run_config_native.py`
-executes six actual native suites (35 groups) and exports full typed/semantic
-corpora. It is focused evidence and does not replace the repository cold gate.
+`scripts/build_hia_config_service.py` compiles 18 distinct components (19 manifest names including the unchanged validation alias), and packs nine executables: the filesystem probe, eleven-image installed owner and trusted fixture, sixteen-image MCP service, and five fixed dependency probes. `run_config_native.py` executes six original configuration suites plus nine dependency suites, each with its unchanged 180-second process limit and three-second cleanup bound. It retains actual stdout, complete corpus bytes and embedded-image bindings. This does not replace the repository compiler cold gate.
 
-`scripts/hia_native_config_reference.py` prepares a four-bin Cargo project from
-the final test archive, verifies all 48 template files, 54 unchanged original
-source blocks and exactly 100 original registry dependencies. No Rust is run by
-that preparation. `tests/hia_native/compare_config_original.py` is executed only
-on ai395 or CI. One Cargo build is shared; all four original programs execute
-their complete domains separately. RUSTFLAGS, encoded flags and alternate target
-selection are cleared, and the target directory is owned by that project.
+The original configuration recipe prepares the existing four-bin project, verifies 54 unchanged original source blocks and exactly 100 locked registry packages, and shares one Cargo build across complete typed, semantic, installed-owner and actual rmcp domains. The additional configuration/regex domain contains 3,694 cases; the former four regex refusals are exact comparisons. All 62 baseline owner scenarios and 1,119 baseline SDK responses remain, plus three regex owner profiles/42 response pairs, four MCP profiles/24 response pairs, and four startup-failure pairs.
 
-The domains are 6,491 typed records, 2,063 semantic records (four explicit regex
-dependency cases), 62 installed-owner scenarios / 490 binary requests, and
-1,119 actual SDK tool responses. Typed parse rejection compares admission codes;
-successful serialization and remaining semantic result/error bytes are exact.
-Native diagnostic categories and process-local host node offsets are not
-original Rust values. Installed-owner and MCP comparisons reconstruct the same
-absolute fixture paths so policy digest bytes are comparable without rewriting.
+The separate regex recipe compiles the exact five-package original dependency closure once, then executes every one of 128,690 Unicode/AST/HIR/NFA/match requests and the full Rust 1.95 identifier-predicate projection. Full original output is retained, including parser diagnostics that the component ABI intentionally represents only by error class. AST/HIR success bytes, original forward/reverse NFA minimum allocation limits, capture counts and Boolean match results compare exactly.
 
-The original MCP run already observed on ai395 completed all 1,119 comparisons,
-including an exact 8 MiB frame and canonicalized arguments larger than 8 MiB.
-The final helper packaging is distinct from that historical execution and must
-pass its own next fresh reference recipe. No historical Rust build is relabeled
-as a new compile. The runtime compiler dependency remains unchanged.
+Original Rust runs only on ai395 or CI. The runtime compiler pin and all process deadlines remain unchanged. Completed historical original comparisons and the fresh portable execution are separate records; no prior compilation is relabeled as a new build. See `regex_abi.md` for exact component records, limits and remaining resource gaps.
