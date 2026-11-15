@@ -48,7 +48,8 @@ use super::McpToolCall;
 use super::{hia_contract, hia_provider};
 use super::{
 	rea, rea_artifact_zip, rea_asar, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
-	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_guard, weight_ridge, weight_tensor,
+	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_guard,
+	weight_ridge, weight_tensor,
 };
 use super::{rea_analysis_view, rea_analysis_view_mcp_input};
 use super::{rea_apk_evidence, rea_apk_mcp_input, rea_evidence_export, rea_evidence_import};

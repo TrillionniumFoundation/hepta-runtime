@@ -402,8 +402,18 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 	assert_eq!(actual.difference(&retained).count(), 52);
 	let cohort = include_str!("../weight_artifact_cohort.rs");
 	assert!(cohort.contains("runtime::effect_owner_fence::admit_new_effect().await?"));
-	assert_eq!(cohort.matches("let guards = owner_guards().await?;").count(), 2);
-	assert_eq!(cohort.matches("retained_transaction(guards, operation)").count(), 2);
+	assert_eq!(
+		cohort
+			.matches("let guards = owner_guards().await?;")
+			.count(),
+		2
+	);
+	assert_eq!(
+		cohort
+			.matches("retained_transaction(guards, operation)")
+			.count(),
+		2
+	);
 	let jobs = include_str!("jobs.rs");
 	let pty = include_str!("pty.rs");
 	assert!(jobs
