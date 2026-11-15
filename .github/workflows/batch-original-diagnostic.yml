@@ -1,0 +1,141 @@
+name: Temporary retained Batch original diagnostic
+
+on:
+  push:
+    paths:
+      - '.github/workflows/batch-original-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  retained-batch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Read exact failed Batch archive without executing retained code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNNER_TEMP_DIR: ${{ runner.temp }}
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib, json, os, tarfile, urllib.error, urllib.parse, urllib.request, zipfile
+          base = Path(os.environ['RUNNER_TEMP_DIR']) / 'batch-original-diagnostic'
+          base.mkdir(mode=0o700)
+          artifact_id, run_id, job_id = 14186220851, 43771354313, 132994043727
+          expected_size = 1450089901
+          expected_sha = '6e8bb0b62b6f37e22b686f846a032187e9441d9ef83e0f4862b4ad4e3ed0db03'
+          def pin(raw):
+              return {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
+          def save(path, obj):
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(json.dumps(obj, sort_keys=True, indent=2) + '\n')
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                     'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          api = 'https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/' + str(artifact_id)
+          with urllib.request.urlopen(urllib.request.Request(api, headers=headers), timeout=60) as response:
+              metadata = json.load(response)
+          assert metadata['id'] == artifact_id and metadata['size_in_bytes'] == expected_size and not metadata['expired']
+          assert metadata['name'] == 'hia-native-failure-9b30b58c9973ae339f934809bddd0ac77f683511-1-aggregate'
+          assert metadata['workflow_run']['id'] == run_id
+          assert metadata['workflow_run']['head_sha'] == '9b30b58c9973ae339f934809bddd0ac77f683511'
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+          request = urllib.request.Request(api + '/zip', headers=headers)
+          try:
+              urllib.request.build_opener(NoRedirect).open(request, timeout=60)
+              raise AssertionError('expected GitHub artifact redirect')
+          except urllib.error.HTTPError as error:
+              assert error.code == 302
+              location = error.headers['Location']
+              parsed = urllib.parse.urlsplit(location)
+              assert parsed.scheme == 'https' and parsed.hostname and parsed.hostname.endswith('.blob.core.windows.net')
+          archive = base.parent / 'batch-failed-14186220851.zip'
+          digest, length = hashlib.sha256(), 0
+          with urllib.request.urlopen(location, timeout=60) as response, archive.open('xb') as out:
+              while True:
+                  raw = response.read(1 << 20)
+                  if not raw:
+                      break
+                  length += len(raw)
+                  assert length <= expected_size
+                  digest.update(raw)
+                  out.write(raw)
+          assert length == expected_size and digest.hexdigest() == expected_sha
+          receipt = {'schema': 'hepta.runtime.retained-batch-ci-diagnostic.v1',
+                     'artifact_id': artifact_id, 'run_id': run_id, 'failed_job_id': job_id,
+                     'archive': {'bytes': length, 'sha256': digest.hexdigest()},
+                     'diagnostic_only': True, 'qualification_admitted': False,
+                     'selected': {}, 'tar_scan_error': None, 'tar_members_seen': 0,
+                     'fixture_retirements': [], 'original_code_executed': False}
+          selected_bytes = 0
+          def retain(name, raw, label):
+              global selected_bytes
+              relative = PurePosixPath(name)
+              assert not relative.is_absolute() and '..' not in relative.parts
+              selected_bytes += len(raw)
+              assert selected_bytes <= 256 << 20
+              target = base / label / relative
+              target.parent.mkdir(parents=True, exist_ok=True)
+              with target.open('xb') as stream:
+                  stream.write(raw)
+              receipt['selected'][label + ':' + name] = pin(raw)
+              if relative.name == 'rust-comparison-failure.txt':
+                  assert len(raw) <= 65536
+                  print('RETAINED_BATCH_FAILURE_TRACE ' + json.dumps(raw.decode('utf-8'), ensure_ascii=True), flush=True)
+              if relative.name == 'fixture-renames.jsonl':
+                  assert len(raw) <= 1 << 20 and raw.endswith(b'\n')
+                  rows = [json.loads(line) for line in raw.splitlines()]
+                  receipt['fixture_retirements'].append({'path': name, 'pin': pin(raw), 'rows': rows})
+                  print('RETAINED_BATCH_FIXTURE_IDENTITIES ' + json.dumps({'path': name, 'rows': rows}, ensure_ascii=True, sort_keys=True), flush=True)
+          with zipfile.ZipFile(archive) as package:
+              receipt['zip_members'] = [{'name': i.filename, 'bytes': i.file_size, 'crc': i.CRC} for i in package.infolist()]
+              exact = {'manifest.json', 'diagnostics.json', 'tar.process.json', 'tar.stderr',
+                       'diagnostics/rust-comparison-failure.txt', 'diagnostics/result.json'}
+              for item in package.infolist():
+                  if item.filename in exact:
+                      assert not item.is_dir() and item.file_size <= 192 << 20
+                      raw = package.read(item)
+                      assert len(raw) == item.file_size
+                      retain(item.filename, raw, 'package-metadata')
+              for item in package.infolist():
+                  if not item.filename.endswith('.tar'):
+                      continue
+                  try:
+                      with package.open(item) as stream, tarfile.open(fileobj=stream, mode='r|') as tar:
+                          for member in tar:
+                              receipt['tar_members_seen'] += 1
+                              name = member.name.removeprefix('./')
+                              relative = PurePosixPath(name)
+                              assert not relative.is_absolute() and '..' not in relative.parts
+                              selected = (member.isfile() and
+                                          (relative.name == 'fixture-renames.jsonl' or
+                                           ('batch-call' in name and relative.name in
+                                            {'RESULT.json', 'PROCESS.json', 'SOURCE-FILES.json', 'NATIVE-PREDECESSOR.json'})))
+                              if selected:
+                                  assert member.size <= 16 << 20
+                                  raw = tar.extractfile(member).read()
+                                  assert len(raw) == member.size
+                                  retain(name, raw, 'retained')
+                  except (tarfile.TarError, EOFError, OSError) as error:
+                      receipt['tar_scan_error'] = {'type': type(error).__name__, 'message': str(error)}
+          save(base / 'RECEIPT.json', receipt)
+          print('RETAINED_BATCH_DIAGNOSTIC ' + json.dumps({
+              'selected_files': len(receipt['selected']), 'selected_bytes': selected_bytes,
+              'fixture_retirement_files': len(receipt['fixture_retirements']),
+              'tar_scan_error': receipt['tar_scan_error'], 'qualification_admitted': False}, sort_keys=True), flush=True)
+          assert any(name.endswith('rust-comparison-failure.txt') for name in receipt['selected'])
+          assert receipt['fixture_retirements'], 'actual fixture permission observation was not available in partial archive'
+          PY
+      - name: Preserve exact retained Batch diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: batch-original-9b30-retained-diagnostic
+          path: ${{ runner.temp }}/batch-original-diagnostic/
+          if-no-files-found: error
+          retention-days: 7
