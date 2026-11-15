@@ -96,6 +96,52 @@ class ArtifactBundleTests(unittest.TestCase):
     def restore(self, digest):
         return b.restore(self.bundle, self.artifacts, self.root / 'restored', digest)
 
+    def pending(self):
+        report = b.p.read_json(self.output / 'result.json')
+        report.update(status=b.r.COLLECTED_STATUS, phase=b.r.COLLECTED_PHASE,
+            rust_comparison_status='PARTIAL', checks=[], original_collection_assembly_elapsed_seconds=0.1)
+        save(self.output / 'result.json', report)
+        (self.output / 'regex-evidence-controls.json').unlink()
+        for name in b.r.CONTROLS:
+            (self.output / (name + '.stdout')).unlink()
+            (self.output / (name + '.stderr')).unlink()
+
+    def test_nonpass_collection_preserves_all_bytes_without_claiming_complete_qualification(self):
+        self.pending()
+        with self.assertRaisesRegex(ValueError, 'exact collection stage'):
+            self.export()
+        result = b.export(self.output, self.bundle, self.head, self.invocation,
+                          self.native_sha, self.shards, collection=True)
+        self.assertEqual(result['status'], 'COLLECTION_BUNDLE_EXPORTED')
+        self.assertEqual(result['semantic_checks_executed'], 0)
+        with self.assertRaisesRegex(ValueError, 'qualification stage differs'):
+            self.restore(result['sha256'])
+        self.assertFalse((self.root / 'restored').exists())
+        restored = b.restore(self.bundle, self.artifacts, self.root / 'restored',
+                             result['sha256'], collection=True)
+        self.assertEqual(restored['status'], 'COLLECTION_BUNDLE_RESTORED')
+        self.assertEqual(b.p.inventory(self.output), b.p.inventory(self.root / 'restored'))
+        self.assertEqual(b.p.read_json(self.root / 'restored/result.json')['status'], b.r.COLLECTED_STATUS)
+
+    def test_complete_report_cannot_be_exported_or_restored_as_pending_collection(self):
+        with self.assertRaisesRegex(ValueError, 'exact collection stage'):
+            b.export(self.output, self.bundle, self.head, self.invocation,
+                     self.native_sha, self.shards, collection=True)
+        result = self.export()
+        with self.assertRaisesRegex(ValueError, 'qualification stage differs'):
+            b.restore(self.bundle, self.artifacts, self.root / 'restored', result['sha256'], collection=True)
+        self.assertFalse((self.root / 'restored').exists())
+
+    def test_pending_report_cannot_import_control_results(self):
+        self.pending()
+        report = b.p.read_json(self.output / 'result.json')
+        report['checks'].append({'name': b.r.CONTROLS[0]})
+        save(self.output / 'result.json', report)
+        with self.assertRaisesRegex(ValueError, 'pending collection cannot import'):
+            b.export(self.output, self.bundle, self.head, self.invocation,
+                     self.native_sha, self.shards, collection=True)
+        self.assertFalse(self.bundle.exists())
+
     def test_exact_full_byte_mode_and_empty_directory_reconstruction(self):
         result = self.export()
         self.assertEqual(result['status'], 'BUNDLE_EXPORTED')

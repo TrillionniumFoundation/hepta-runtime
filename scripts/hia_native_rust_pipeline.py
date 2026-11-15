@@ -27,7 +27,10 @@ import compare_hia_runtime_rust as r
 
 GROUPS = {
     "audit": (tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS)),
-    "storage": tuple(r.storage_pipeline.KEYS),
+    "storage_types": tuple(key for key, domain in r.storage_pipeline.KEYS.items()
+                           if domain in r.storage_pipeline.q.PURE),
+    "storage_files": tuple(key for key, domain in r.storage_pipeline.KEYS.items()
+                           if domain not in r.storage_pipeline.q.PURE),
     "bytes": ("runtime_bytes", "text_budget", "line_verify", "editable_content", "line_endpoint",
               "delta", "binary_codec", "policy", "view_render"),
     "state": ("view_cache", "history", "session_workdir", "file_locks", "file_lock_service"),
@@ -44,11 +47,14 @@ NATIVE_REPORT = "original-native-report.json"
 SHARD_SEAL = "original-shard.json"
 SHARD_REPORT = "original-shard-report.json"
 CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls", "result-storage-evidence-controls", "audit-readiness-evidence-controls", "audit-activity-evidence-controls")
+COLLECTED_STATUS = "ORIGINALS_COLLECTED"
+COLLECTED_PHASE = "awaiting_quiescent_evidence_controls"
 
 
 def groups() -> dict[str, tuple[str, ...]]:
     flat = tuple(key for keys in GROUPS.values() for key in keys)
-    if (set(GROUPS) != {"bytes", "state", "services", "json", "config", "system", "batch", "storage", "audit"}
+    if (set(GROUPS) != {"bytes", "state", "services", "json", "config", "system", "batch",
+                      "storage_types", "storage_files", "audit"}
             or len(flat) != len(set(flat)) or set(flat) != set(r.RECIPES)):
         raise ValueError("every original recipe must belong to exactly one declared group")
     for together in (("fence_json", "serde_json"), tuple(r.result_qualification.KEYS),
@@ -57,8 +63,13 @@ def groups() -> dict[str, tuple[str, ...]]:
             raise ValueError("a shared build or evidence lifetime crosses original groups")
     if GROUPS["config"] != ("runtime_config",):
         raise ValueError("configuration and regex require their complete independent recipe")
-    if GROUPS["storage"] != tuple(r.storage_pipeline.KEYS):
-        raise ValueError("storage originals require their complete independent group")
+    # Each storage recipe owns its Cargo target, replay and retained output.
+    # Both groups read the same sealed native inputs; no writable build is shared.
+    if (GROUPS["storage_types"] != tuple(key for key, domain in r.storage_pipeline.KEYS.items()
+                                        if domain in r.storage_pipeline.q.PURE)
+            or GROUPS["storage_files"] != tuple(key for key, domain in r.storage_pipeline.KEYS.items()
+                                               if domain not in r.storage_pipeline.q.PURE)):
+        raise ValueError("storage originals require every independent type and filesystem recipe")
     if GROUPS["audit"] != (tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS)):
         raise ValueError("audit originals require their complete independent group")
     return GROUPS
@@ -353,7 +364,7 @@ def verify_collected_receipts(output: Path, report: dict) -> None:
 
 
 def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
-            shards: Path, expected: dict) -> dict:
+            shards: Path, expected: dict, *, stage_only: bool = False) -> dict:
     expected_shards(expected)
     seal, baseline = admit_native(output, hepta, native_sha, invocation, exact=True)
     report, started = copy.deepcopy(baseline), time.monotonic()
@@ -363,7 +374,7 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
     try:
         folders = sorted(shards.iterdir())
         if len(folders) != len(groups()) or any(path.is_symlink() or not path.is_dir() for path in folders):
-            raise ValueError("collector requires exactly nine complete original shard artifacts")
+            raise ValueError("collector requires exactly every declared original shard artifact")
         parts, files, copies, directories = {}, {}, {}, set()
         for folder in folders:
             if set(path.name for path in folder.iterdir()) != {"data", SHARD_SEAL, SHARD_REPORT}:
@@ -416,35 +427,91 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
             group: parts[group][2]["original_shard_elapsed_seconds"] for group in groups()}
         q.save_report(output / "result.json", report)
         verify_collected_receipts(output, report)
-        # Every source and artifact was admitted above against the current
-        # successful workflow seals. Run the complete semantic readmission once,
-        # after all mutations and restorations, before publishing PASS. Repeating
-        # it here replays the same retained corpora without adding an assertion.
-        # All original jobs have terminated successfully; no Cargo tree or
-        # parallel reference worker is active during these mutation controls.
-        r.run_result_values_controls(output, report)
-        r.run_public_registry_controls(output, report)
-        r.run_result_storage_controls(output, report)
-        r.run_audit_readiness_controls(output, report)
-        r.run_audit_activity_controls(output, report)
-        report.update(status="PASS", phase="complete", rust_comparison_status="PASS")
-        # This also verifies all collected workflow receipts and requires the
-        # full control tail in PASS state. No PASS report is written until every
-        # original source, current native/original byte and restored mode passes.
-        r.check_input_pins(output, report)
-        report.update(original_collection_elapsed_seconds=time.monotonic() - started,
-                      finished_at=datetime.now(timezone.utc).isoformat())
-        q.save_report(output / "result.json", report)
-        return {"status": "PASS", "recipes": len(report["original_rust_comparisons"]),
-                "checks": len(report["checks"]), "whole_runtime_replaced": False}
+        if stage_only:
+            report.update(status=COLLECTED_STATUS, phase=COLLECTED_PHASE,
+                          rust_comparison_status="PARTIAL",
+                          original_collection_assembly_elapsed_seconds=time.monotonic() - started)
+            q.save_report(output / "result.json", report)
+            return {"status": COLLECTED_STATUS, "recipes": len(report["original_rust_comparisons"]),
+                    "checks": len(report["checks"]), "whole_runtime_replaced": False}
+        return finish_collection(output, report, started)
     except BaseException as error:
         fail(output, report, error, "original_collect")
         raise
 
 
+def finish_collection(output: Path, report: dict, started: float) -> dict:
+    # All original jobs have terminated. The separately retained collection is
+    # not a qualification PASS; every mutation and final admission remains here.
+    r.run_result_values_controls(output, report)
+    r.run_public_registry_controls(output, report)
+    r.run_result_storage_controls(output, report)
+    r.run_audit_readiness_controls(output, report)
+    r.run_audit_activity_controls(output, report)
+    report.update(status="PASS", phase="complete", rust_comparison_status="PASS")
+    # No PASS report is written until the complete control tail, workflow
+    # receipts, source, all native/original bytes and restored modes pass.
+    r.check_input_pins(output, report)
+    elapsed = time.monotonic() - started
+    report.update(original_collection_elapsed_seconds=elapsed +
+                  report.get("original_collection_assembly_elapsed_seconds", 0),
+                  finished_at=datetime.now(timezone.utc).isoformat())
+    if "original_collection_assembly_elapsed_seconds" in report:
+        report["original_collection_completion_elapsed_seconds"] = elapsed
+    q.save_report(output / "result.json", report)
+    return {"status": "PASS", "recipes": len(report["original_rust_comparisons"]),
+            "checks": len(report["checks"]), "whole_runtime_replaced": False}
+
+
+def complete_collection(output: Path, hepta: Path, native_sha: str, invocation: str,
+                        expected: dict, bundle: Path, collection_sha: str,
+                        source_artifacts: Path) -> dict:
+    # The new job receives the collection digest from the successful producer,
+    # not from the transported report. Restore every byte from that manifest
+    # and the independently retained native/original workflow artifacts.
+    import hia_native_artifact_bundle as transport
+    expected_shards(expected)
+    started = time.monotonic()
+    manifest_path = p.owned(bundle, transport.MANIFEST)
+    if (type(collection_sha) is not str or not p.SHA256.fullmatch(collection_sha)
+            or p.digest(manifest_path) != collection_sha):
+        raise ValueError("collection differs from its successful workflow job SHA256")
+    manifest = p.read_json(manifest_path)
+    transport.validate_manifest(manifest)
+    wanted_sources = {"native": native_sha, **expected}
+    if (manifest["schema"] != transport.COLLECTION_SCHEMA
+            or manifest["head"] != q.git_head(q.ROOT) or manifest["invocation"] != invocation
+            or {key: value["seal_sha256"] for key, value in manifest["sources"].items()} != wanted_sources):
+        raise ValueError("collection belongs to another head, invocation or source seal")
+    transport.restore(bundle, source_artifacts, output, collection_sha, collection=True)
+    report = p.read_json(p.owned(output, "result.json"))
+    try:
+        elapsed = report.get("original_collection_assembly_elapsed_seconds")
+        pipeline = {"schema": "hepta.runtime.original-pipeline.v1", "invocation": invocation,
+            "native_sha256": native_sha, "shards": expected,
+            "recipes": [key for keys in groups().values() for key in keys]}
+        if (report.get("status") != COLLECTED_STATUS or report.get("phase") != COLLECTED_PHASE
+                or report.get("rust_comparison_status") != "PARTIAL"
+                or report.get("native_components_status") != "PASS"
+                or report.get("compiler_checkout") != str(hepta)
+                or report.get("original_qualification_pipeline") != pipeline
+                or type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0
+                or any(row.get("name") in CONTROLS for row in report.get("checks", []))
+                or any(report.get(key) is not False for key in
+                       ("production_activated", "whole_runtime_replaced", "old_stack_removal_qualified"))):
+            raise ValueError("collection is not the complete pending source-bound aggregate")
+        verify_collected_receipts(output, report)
+        report.update(status="RUNNING", phase="original_rust_comparison", rust_comparison_status="RUNNING")
+        q.save_report(output / "result.json", report)
+        return finish_collection(output, report, started)
+    except BaseException as error:
+        fail(output, report, error, "original_complete")
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=("prepare", "shard", "collect"))
+    parser.add_argument("phase", choices=("prepare", "shard", "collect", "complete"))
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--hepta", required=True, type=Path)
     parser.add_argument("--invocation", required=True)
@@ -455,8 +522,15 @@ def main() -> int:
     parser.add_argument("--shard-sha256", action="append", default=[], metavar="GROUP=SHA256")
     parser.add_argument("--rustc", default="rustc")
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument("--stage-only", action="store_true")
+    parser.add_argument("--collection-bundle", type=Path)
+    parser.add_argument("--collection-sha256")
+    parser.add_argument("--source-artifacts", type=Path)
     args = parser.parse_args()
-    output, hepta = args.output.resolve(strict=True), args.hepta.resolve(strict=True)
+    if args.stage_only and args.phase != "collect":
+        parser.error("--stage-only is valid only for original collection")
+    output = args.output.absolute() if args.phase == "complete" else args.output.resolve(strict=True)
+    hepta = args.hepta.resolve(strict=True)
     if args.phase == "prepare":
         result = prepare(output, hepta, args.invocation)
         key = "native_sha256"
@@ -467,7 +541,7 @@ def main() -> int:
                        args.export.absolute(), args.rustc)
         key = "sha256"
     else:
-        if args.shards is None:
+        if args.phase == "collect" and args.shards is None:
             parser.error("collect requires --shards")
         identities = {}
         for value in args.shard_sha256:
@@ -475,8 +549,15 @@ def main() -> int:
             if separator != "=" or name in identities:
                 parser.error("each original group SHA256 must be supplied exactly once")
             identities[name] = digest
-        result = collect(output, hepta, args.native_sha256, args.invocation,
-                         args.shards.resolve(strict=True), identities)
+        if args.phase == "complete":
+            if args.collection_bundle is None or args.collection_sha256 is None or args.source_artifacts is None:
+                parser.error("complete requires the collection bundle, workflow SHA256 and source artifacts")
+            result = complete_collection(output, hepta, args.native_sha256, args.invocation, identities,
+                args.collection_bundle.resolve(strict=True), args.collection_sha256,
+                args.source_artifacts.resolve(strict=True))
+        else:
+            result = collect(output, hepta, args.native_sha256, args.invocation,
+                             args.shards.resolve(strict=True), identities, stage_only=args.stage_only)
         key = None
     if key and args.github_output:
         with args.github_output.open("a") as stream:

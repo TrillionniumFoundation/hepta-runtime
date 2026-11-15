@@ -21,6 +21,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_rust_pipeline as p
+import hia_native_artifact_bundle as bundle_transport
 import hia_native_pipeline as native
 import qualify_hia_runtime_native as q
 import compare_hia_runtime_rust as r
@@ -35,7 +36,7 @@ class OriginalPipelineTests(unittest.TestCase):
         cls.compiler = cls.root / "compiler"; cls.compiler.mkdir()
         cls.output = cls.root / "output"; cls.output.mkdir()
         cls.shards = cls.root / "shards"; cls.shards.mkdir()
-        cls.invocation = "actual-python-reporting-fixtures-only"
+        cls.invocation = "12345-1"
         cls.source_file = cls.source / "owner.py"
         cls.source_file.write_text("print('actual fixture, no Rust or HIA')\n")
         cls.source_map = {"owner.py": native.digest(cls.source_file)}
@@ -54,7 +55,7 @@ class OriginalPipelineTests(unittest.TestCase):
             if "original_qualification_pipeline" in report:
                 p.verify_collected_receipts(output, report)
         cls.patches = [patch.object(q, "ROOT", cls.source), patch.object(q, "sources", return_value=cls.source_map),
-                      patch.object(q, "git_head", return_value="reporting-fixture"),
+                      patch.object(q, "git_head", return_value="a" * 40),
                       patch.object(r, "check_input_pins", side_effect=fixture_admission),
                       patch.object(r.service_pipeline, "original_fixture_transport", return_value={"fixture_only": True})]
         for item in cls.patches:
@@ -107,9 +108,15 @@ class OriginalPipelineTests(unittest.TestCase):
         cls.temporary.cleanup()
 
     def setUp(self):
-        shutil.rmtree(self.output); shutil.copytree(self.native_copy, self.output)
+        if self.output.exists():
+            shutil.rmtree(self.output)
+        shutil.copytree(self.native_copy, self.output)
         shutil.rmtree(self.shards); shutil.copytree(self.shards_copy, self.shards)
         self.expected = dict(type(self).expected)
+        for name in ("stage-bundle", "stage-artifacts"):
+            path = self.root / name
+            if path.exists():
+                shutil.rmtree(path)
 
     def control(self, name):
         def run(output, report):
@@ -118,13 +125,43 @@ class OriginalPipelineTests(unittest.TestCase):
             report[name.replace("-", "_")] = {"actual_python_process_fixture_only": True}
         return run
 
-    def collect(self):
+    def collect(self, **kwargs):
         with patch.object(r, "run_result_values_controls", self.control(p.CONTROLS[0])), \
              patch.object(r, "run_public_registry_controls", self.control(p.CONTROLS[1])), \
              patch.object(r, "run_result_storage_controls", self.control(p.CONTROLS[2])), \
              patch.object(r, "run_audit_readiness_controls", self.control(p.CONTROLS[3])), \
              patch.object(r, "run_audit_activity_controls", self.control(p.CONTROLS[4])):
-            return p.collect(self.output, self.compiler, self.native_sha, self.invocation, self.shards, self.expected)
+            return p.collect(self.output, self.compiler, self.native_sha, self.invocation,
+                             self.shards, self.expected, **kwargs)
+
+    def prepare_collection(self):
+        result = self.collect(stage_only=True)
+        self.assertEqual(result["status"], p.COLLECTED_STATUS)
+        pending = native.read_json(self.output / "result.json")
+        self.assertEqual(pending["rust_comparison_status"], "PARTIAL")
+        self.assertFalse(set(p.CONTROLS) & {row["name"] for row in pending["checks"]})
+        artifact_root, bundle = self.root / "stage-artifacts", self.root / "stage-bundle"
+        artifact_root.mkdir()
+        name = bundle_transport.source_name("a" * 40, self.invocation, "native")
+        shutil.copytree(self.native_copy, artifact_root / name)
+        for group in p.groups():
+            name = bundle_transport.source_name("a" * 40, self.invocation, group)
+            shutil.copytree(self.shards / group, artifact_root / name)
+        exported = bundle_transport.export(self.output, bundle, "a" * 40, self.invocation,
+            self.native_sha, self.expected, collection=True)
+        self.assertEqual(exported["status"], "COLLECTION_BUNDLE_EXPORTED")
+        self.assertEqual(exported["semantic_checks_executed"], 0)
+        shutil.rmtree(self.output)
+        return bundle, exported["sha256"], artifact_root
+
+    def complete(self, args, **kwargs):
+        with patch.object(r, "run_result_values_controls", self.control(p.CONTROLS[0])), \
+             patch.object(r, "run_public_registry_controls", self.control(p.CONTROLS[1])), \
+             patch.object(r, "run_result_storage_controls", self.control(p.CONTROLS[2])), \
+             patch.object(r, "run_audit_readiness_controls", self.control(p.CONTROLS[3])), \
+             patch.object(r, "run_audit_activity_controls", self.control(p.CONTROLS[4])):
+            return p.complete_collection(self.output, self.compiler, self.native_sha,
+                kwargs.get("invocation", self.invocation), kwargs.get("expected", self.expected), *args)
 
     def change_report(self, group, mutation, *, update_workflow=False):
         folder = self.shards / group
@@ -143,7 +180,12 @@ class OriginalPipelineTests(unittest.TestCase):
         self.assertEqual(set(flat), set(r.RECIPES))
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(p.GROUPS["config"], ("runtime_config",))
-        self.assertEqual(p.GROUPS["storage"], tuple(r.storage_pipeline.KEYS))
+        self.assertEqual(p.GROUPS["storage_types"], ("request_storage_json", "request_record_validation",
+                                                   "request_safe_dto", "request_retention"))
+        self.assertEqual(p.GROUPS["storage_files"], ("request_record_io", "request_store_directory",
+                                                   "request_archive_metadata", "request_archive_publish",
+                                                   "request_archive_store"))
+        self.assertEqual(p.GROUPS["storage_types"] + p.GROUPS["storage_files"], tuple(r.storage_pipeline.KEYS))
         self.assertEqual(p.GROUPS["audit"], tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS))
         self.assertTrue(set(r.result_qualification.KEYS) <= set(p.GROUPS["json"]))
         self.assertTrue(set(r.PARALLEL_RUST_RECIPES) <= set(p.GROUPS["system"]))
@@ -166,6 +208,118 @@ class OriginalPipelineTests(unittest.TestCase):
         self.assertNotIn("Compare all declared original owners", workflow)
         self.assertNotIn("Retain original failure bytes and prepared artifacts", workflow)
         self.assertIn("Retain immutable original failure diagnostics\n        if:", reusable)
+
+    def test_collection_and_completion_jobs_keep_independent_external_seals_and_limits(self):
+        text = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        stage = text.split("\n  original_collect:\n", 1)[1].split("\n  qualify:\n", 1)[0]
+        final = text.split("\n  qualify:\n", 1)[1]
+        self.assertIn("hia_native_rust_pipeline.py collect --stage-only", stage)
+        self.assertIn("hia_native_artifact_bundle.py export-collection", stage)
+        self.assertIn("collection_sha256: ${{ steps.bundle.outputs.sha256 }}", stage)
+        self.assertNotIn("id: regex", stage)
+        self.assertIn("original_collect]", final)
+        self.assertIn("hia_native_rust_pipeline.py complete", final)
+        self.assertIn('--collection-sha256 "${{ needs.original_collect.outputs.collection_sha256 }}"', final)
+        self.assertIn('--source-artifacts "$RUNNER_TEMP/hia-retained-inputs"', final)
+        for section in (stage, final):
+            self.assertIn("timeout-minutes: 15", section)
+            for group in p.groups():
+                self.assertIn('--shard-sha256 "' + group + '=${{ needs.original_' + group + '.outputs.sha256 }}"', section)
+
+    def test_staged_actual_process_merge_completes_every_control_before_one_final_admission(self):
+        args = self.prepare_collection()
+        observed = []
+        def admit(output, report):
+            observed.append(report["status"])
+            self.assertNotEqual(native.read_json(output / "result.json")["status"], "PASS")
+            self.assertEqual([row["name"] for row in report["checks"]][-len(p.CONTROLS):], list(p.CONTROLS))
+            p.verify_collected_receipts(output, report)
+        with patch.object(r, "check_input_pins", side_effect=admit):
+            self.assertEqual(self.complete(args)["status"], "PASS")
+        self.assertEqual(observed, ["PASS"])
+        report = native.read_json(self.output / "result.json")
+        self.assertEqual(set(report["original_rust_comparisons"]), set(r.RECIPES))
+        self.assertGreater(report["original_collection_elapsed_seconds"],
+                           report["original_collection_completion_elapsed_seconds"])
+
+    def test_staged_completion_requires_workflow_digest_and_same_head_invocation_and_sources(self):
+        bundle, digest, artifacts = self.prepare_collection()
+        with self.assertRaisesRegex(ValueError, "successful workflow job SHA256"):
+            self.complete((bundle, "f" * 64, artifacts))
+        with self.assertRaisesRegex(ValueError, "another head, invocation or source seal"):
+            self.complete((bundle, digest, artifacts), invocation="12345-2")
+        with patch.object(q, "git_head", return_value="b" * 40):
+            with self.assertRaisesRegex(ValueError, "another head, invocation or source seal"):
+                self.complete((bundle, digest, artifacts))
+        changed = dict(self.expected); changed["audit"] = "c" * 64
+        with self.assertRaisesRegex(ValueError, "another head, invocation or source seal"):
+            self.complete((bundle, digest, artifacts), expected=changed)
+        self.assertFalse(self.output.exists())
+
+    def test_staged_completion_refuses_changed_retained_bytes_before_creating_output(self):
+        bundle, digest, artifacts = self.prepare_collection()
+        name = bundle_transport.source_name("a" * 40, self.invocation, "native")
+        (artifacts / name / "immutable-native.bin").write_bytes(b"modified during transfer")
+        with self.assertRaises(ValueError):
+            self.complete((bundle, digest, artifacts))
+        self.assertFalse(self.output.exists())
+
+    def test_rehashed_stage_report_cannot_change_the_original_workflow_receipts(self):
+        bundle, digest, artifacts = self.prepare_collection()
+        path = bundle / "data/result.json"
+        report = native.read_json(path)
+        report["original_rust_comparisons"].pop("delta")
+        q.save_report(path, report)
+        manifest = native.read_json(bundle / bundle_transport.MANIFEST)
+        old = manifest["files"]["result.json"]["bytes"]
+        manifest["files"]["result.json"].update(native.file_identity(path))
+        manifest["full_evidence_bytes"] += path.stat().st_size - old
+        q.save_report(bundle / bundle_transport.MANIFEST, manifest)
+        digest = native.digest(bundle / bundle_transport.MANIFEST)
+        with self.assertRaisesRegex(ValueError, "differs from all actual original"):
+            self.complete((bundle, digest, artifacts))
+        self.assertEqual(native.read_json(self.output / "result.json")["status"], "FAIL")
+
+    def test_staged_final_semantic_failure_cannot_leave_a_published_pass(self):
+        args = self.prepare_collection()
+        with patch.object(r, "check_input_pins", side_effect=ValueError("final staged admission refusal")):
+            with self.assertRaisesRegex(ValueError, "final staged admission refusal"):
+                self.complete(args)
+        report = native.read_json(self.output / "result.json")
+        self.assertEqual((report["status"], report["phase"]), ("FAIL", "original_complete"))
+
+    def test_changed_native_bytes_during_staged_controls_are_refused(self):
+        args = self.prepare_collection()
+        original = self.control
+        def control(name):
+            run = original(name)
+            def changed(output, report):
+                run(output, report)
+                if name == p.CONTROLS[-1]:
+                    (output / "immutable-native.bin").write_bytes(b"changed after restored stage")
+            return changed
+        with patch.object(self, "control", side_effect=control):
+            with self.assertRaises(ValueError):
+                self.complete(args)
+        self.assertEqual(native.read_json(self.output / "result.json")["status"], "FAIL")
+
+    def test_storage_type_and_filesystem_recipe_swap_is_refused(self):
+        changed = dict(p.GROUPS)
+        left, right = list(changed["storage_types"]), list(changed["storage_files"])
+        left[0], right[0] = right[0], left[0]
+        changed.update(storage_types=tuple(left), storage_files=tuple(right))
+        with patch.dict(p.GROUPS, changed, clear=True):
+            with self.assertRaisesRegex(ValueError, "independent type and filesystem"):
+                p.groups()
+
+    def test_either_complete_storage_group_is_required_by_final_merge(self):
+        for group in ("storage_types", "storage_files"):
+            with self.subTest(group=group):
+                expected = dict(self.expected)
+                del expected[group]
+                with self.assertRaises(ValueError):
+                    p.collect(self.output, self.compiler, self.native_sha, self.invocation,
+                              self.shards, expected)
 
     def test_unshared_group_executes_only_the_selected_actual_recipe(self):
         report = copy.deepcopy(self.baseline)
@@ -272,7 +426,7 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_missing_group_cannot_become_complete(self):
         shutil.rmtree(self.shards / "config")
-        with self.assertRaisesRegex(ValueError, "exactly nine"):
+        with self.assertRaisesRegex(ValueError, "every declared"):
             self.collect()
 
     def test_duplicate_group_cannot_replace_another_group(self):

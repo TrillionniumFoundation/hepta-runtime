@@ -199,10 +199,10 @@ concurrency:
   group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# The same fresh cold/build bytes feed all five complete native partitions.
+# The same fresh cold/build bytes feed all seven complete native partitions.
 # Each job retains the original 15-minute limit; suite/owner limits are unchanged.
 # The batch partition includes all four atomic-write suites and its full 505 MiB case.
-# Seven original groups retain all recipes and fixed Rust 1.95.0; the final job admits every group.
+# Ten original groups retain all recipes and fixed Rust 1.95.0; the final job admits every group.
 jobs:
   prepare:
     name: Fresh full compiler cold gate and all native images
@@ -520,12 +520,22 @@ jobs:
       invocation: ${{ github.run_id }}-${{ github.run_attempt }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
 
-  original_storage:
-    name: Complete original storage recipes
+  original_storage_types:
+    name: Complete original storage type recipes
     needs: native_collect
     uses: ./.github/workflows/hia-runtime-original-shard.yml
     with:
-      group: storage
+      group: storage_types
+      runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+
+  original_storage_files:
+    name: Complete original storage filesystem recipes
+    needs: native_collect
+    uses: ./.github/workflows/hia-runtime-original-shard.yml
+    with:
+      group: storage_files
       runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       invocation: ${{ github.run_id }}-${{ github.run_attempt }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
@@ -540,11 +550,13 @@ jobs:
       invocation: ${{ github.run_id }}-${{ github.run_attempt }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
 
-  qualify:
-    name: All native evidence and complete original Rust comparisons
-    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage, original_audit]
+  original_collect:
+    name: Collect every original result without aggregate qualification
+    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      collection_sha256: ${{ steps.bundle.outputs.sha256 }}
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -593,13 +605,13 @@ jobs:
           path: ${{ runner.temp }}/hia-original-shards/
           merge-multiple: false
 
-      - name: Verify every original group and run quiescent evidence controls
+      - name: Admit every original group as a pending collection
         id: collect
         env:
           RUSTUP_TOOLCHAIN: 1.95.0
         run: |
           rustup toolchain install 1.95.0 --profile minimal --component rustfmt
-          python3 -I -B runtime/scripts/hia_native_rust_pipeline.py collect \
+          python3 -I -B runtime/scripts/hia_native_rust_pipeline.py collect --stage-only \
             --hepta "$GITHUB_WORKSPACE/compiler" \
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
@@ -612,7 +624,140 @@ jobs:
             --shard-sha256 "config=${{ needs.original_config.outputs.sha256 }}" \
             --shard-sha256 "system=${{ needs.original_system.outputs.sha256 }}" \
             --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
-            --shard-sha256 "storage=${{ needs.original_storage.outputs.sha256 }}" \
+            --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
+            --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
+            --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}"
+
+      - name: Bind the pending collection to all retained source artifacts
+        id: bundle
+        run: |
+          python3 -I -B runtime/scripts/hia_native_artifact_bundle.py export-collection \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --destination "$RUNNER_TEMP/hia-original-collection-bundle" \
+            --head "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
+            --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}" \
+            --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
+            --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
+            --shard-sha256 "bytes=${{ needs.original_bytes.outputs.sha256 }}" \
+            --shard-sha256 "state=${{ needs.original_state.outputs.sha256 }}" \
+            --shard-sha256 "services=${{ needs.original_services.outputs.sha256 }}" \
+            --shard-sha256 "json=${{ needs.original_json.outputs.sha256 }}" \
+            --shard-sha256 "config=${{ needs.original_config.outputs.sha256 }}" \
+            --shard-sha256 "system=${{ needs.original_system.outputs.sha256 }}" \
+            --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Capture failed collection diagnostics outside live caches
+        if: ${{ always() && (steps.collect.outcome != 'success' || steps.bundle.outcome != 'success') }}
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure.py \
+            --source "$RUNNER_TEMP/hia-runtime-native" \
+            --destination "$RUNNER_TEMP/hia-native-diagnostics"
+
+      - name: Retain readable collection failure diagnostics
+        if: ${{ always() && (steps.collect.outcome != 'success' || steps.bundle.outcome != 'success') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-original-collect
+          path: ${{ runner.temp }}/hia-native-diagnostics/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain the complete non-PASS collection index and new bytes
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-original-collection-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-original-collection-bundle/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  qualify:
+    name: All native evidence and complete original Rust comparisons
+    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_collect]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            .github
+
+      - name: Checkout pinned HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Install pinned independent Python reference libraries
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
+      - name: Verify exact source head
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+
+
+      - name: Download this invocation's admitted complete native evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: hia-native-complete-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-retained-inputs/hia-native-complete-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}/
+
+      - name: Download every successful original group separately
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: hia-original-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/hia-retained-inputs/
+          merge-multiple: false
+
+      - name: Download the source-bound non-PASS collection
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: hia-original-collection-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-original-collection-bundle/
+
+      - name: Restore all bytes and complete quiescent controls and final admission
+        id: collect
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          python3 -I -B runtime/scripts/hia_native_rust_pipeline.py complete \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
+            --collection-bundle "$RUNNER_TEMP/hia-original-collection-bundle" \
+            --collection-sha256 "${{ needs.original_collect.outputs.collection_sha256 }}" \
+            --source-artifacts "$RUNNER_TEMP/hia-retained-inputs" \
+            --shard-sha256 "bytes=${{ needs.original_bytes.outputs.sha256 }}" \
+            --shard-sha256 "state=${{ needs.original_state.outputs.sha256 }}" \
+            --shard-sha256 "services=${{ needs.original_services.outputs.sha256 }}" \
+            --shard-sha256 "json=${{ needs.original_json.outputs.sha256 }}" \
+            --shard-sha256 "config=${{ needs.original_config.outputs.sha256 }}" \
+            --shard-sha256 "system=${{ needs.original_system.outputs.sha256 }}" \
+            --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
+            --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
+            --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
             --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}"
 
       - name: Reject altered configuration and regex evidence
@@ -637,7 +782,8 @@ jobs:
             --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
             --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
             --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}" \
-            --shard-sha256 "storage=${{ needs.original_storage.outputs.sha256 }}" \
+            --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
+            --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
             --shard-sha256 "bytes=${{ needs.original_bytes.outputs.sha256 }}" \
             --shard-sha256 "state=${{ needs.original_state.outputs.sha256 }}" \
             --shard-sha256 "services=${{ needs.original_services.outputs.sha256 }}" \
