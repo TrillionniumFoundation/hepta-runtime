@@ -1,0 +1,71 @@
+{
+  "schema": "hepta-d1-c1-preparation-transport-independent-static-review/v1",
+  "reviewer": "evidence_review",
+  "result": "no_blocking_issue_in_source_only_installation",
+  "source_review": {
+    "git_blob": "11965cd600d8dbcfdc1dd3b2d497b3b766866ffa",
+    "sha256": "ff0b558b62f4a55151c20ac6a2f866c37533f8628ac0f1696387e45fd867e116"
+  },
+  "independent_checks": {
+    "installer": {
+      "bytes": 9443,
+      "sha256": "166f6f9df734065a6bc9fd1565da3c596de3c4d62c97b295309c87cd12b0af35",
+      "git_blob": "b528256167ffb1e5bb278ad7aaba9982edd20838"
+    },
+    "transport": {
+      "bytes": 4056,
+      "sha256": "59914524efc81465f8f42b0a4e8b317615a8be534cf14d352f15208a5fbce57c",
+      "git_blob": "211e8c1c2bfd8c737b23b97fdc2aa430edf53373"
+    },
+    "helpers": {
+      "need": true,
+      "canonical": true,
+      "identity": true,
+      "stamp": true,
+      "regular": true,
+      "directory": true,
+      "sync_directory": true,
+      "write_new": true
+    },
+    "fixed_source_only_dest": true,
+    "fixed_receipt": true,
+    "no_target_execution_call": true
+  },
+  "inspected_logic": {
+    "exact_archive_bytes_and_sha_before_tar_parse": true,
+    "bounded_gzip_memory_expansion": true,
+    "only_normal_regular_tar_members": true,
+    "normalized_relative_names_no_duplicates_or_links": true,
+    "exact_manifest_and_all_43_member_hashes_before_mutation": true,
+    "manifest_requires_unsealed_revision05_source_only_no_future_result": true,
+    "fixed_new_destination_and_receipt_absent_before_mutation": true,
+    "create_only_private_directories_and_files": true,
+    "stable_original_archive_reread_after_installation": true,
+    "complete_member_readback_and_fsync": true,
+    "partial_failure_preserves_originals_without_retry": true,
+    "no_mutation_of_live_source_ordinary_ci_or_c1_runtime_inputs": true,
+    "does_not_run_sealer_compiler_or_holder": true
+  },
+  "bounds": {
+    "payload": 16777216,
+    "file": 4194304,
+    "files": 128
+  },
+  "declared_archive": {
+    "bytes": 158613,
+    "sha256": "ad6778f31e7b10caaad3913e8c6368cc09fa6ef6b34c411cdf54a15d8a4e2faf",
+    "members": 43,
+    "payload_bytes": 564059
+  },
+  "binary_archive_validation_scope": "Implementation author audit_acceptance reports actual local bounded memory roundtrip for all43 members. This reviewer did not fetch/decompress/re-hash the binary tar and does not present that author's check as an independent execution.",
+  "limits": {
+    "target_imports": 0,
+    "target_functions": 0,
+    "own_python_ast": 0,
+    "host_requests": 0,
+    "git_ref_changes": 0,
+    "actual_ordinary_result": null,
+    "actual_c1_result": null,
+    "source_only_installation_is_not_measurement_authorization": true
+  }
+}

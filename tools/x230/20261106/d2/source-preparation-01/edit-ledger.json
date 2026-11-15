@@ -1,0 +1,86 @@
+{
+  "schema": "hepta-d2-source-edit-ledger/v1",
+  "source_parent": "8eb1a0af7a85768e374717d24848fd9798871cc9",
+  "qualified_map": {
+    "bytes": 24368,
+    "sha256": "98824381ae2009e909fc28e07087d8646d3131229e146c04ecd9f58c60a14133",
+    "git_blob": "ca1f2acef593ba9a38362eefd5a6732403db11e9"
+  },
+  "source_edits": [
+    {
+      "label": "identity_method_guard",
+      "before": "\tfn verify_identity(&self) -> Result<()> {\n",
+      "after": "\tfn verify_identity(&self) -> Result<()> {\n\t\t#[cfg(all(feature = \"phase-cost-diagnostics\", target_os = \"linux\"))]\n\t\tlet _phase_cost_identity = crate::mcp::runtime::phase_cost::sync_span(\n\t\t\tcrate::mcp::runtime::phase_cost::Phase::FileIdentity,\n\t\t);\n"
+    },
+    {
+      "label": "initial_checked_file_guard",
+      "before": "\t\tlet (mut file, stamp) =\n\t\t\tchecked_file(&self.path, self.maximum, self.private, self.executable)?;\n",
+      "after": "\t\t#[cfg(all(feature = \"phase-cost-diagnostics\", target_os = \"linux\"))]\n\t\tlet diagnostic_file_checked = crate::mcp::runtime::phase_cost::sync_span(\n\t\t\tcrate::mcp::runtime::phase_cost::Phase::FileChecked,\n\t\t);\n\t\tlet (mut file, stamp) =\n\t\t\tchecked_file(&self.path, self.maximum, self.private, self.executable)?;\n\t\t#[cfg(all(feature = \"phase-cost-diagnostics\", target_os = \"linux\"))]\n\t\tdrop(diagnostic_file_checked);\n"
+    },
+    {
+      "label": "whole_read_loop_guard_start",
+      "before": "\t\tlet mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);\n",
+      "after": "\t\tlet mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);\n\t\t#[cfg(all(feature = \"phase-cost-diagnostics\", target_os = \"linux\"))]\n\t\tlet diagnostic_file_read = crate::mcp::runtime::phase_cost::sync_span(\n\t\t\tif self.reference.is_some() {\n\t\t\t\tcrate::mcp::runtime::phase_cost::Phase::FileReadReference\n\t\t\t} else {\n\t\t\t\tcrate::mcp::runtime::phase_cost::Phase::FileReadHash\n\t\t\t},\n\t\t);\n"
+    },
+    {
+      "label": "whole_read_end_and_final_verify_read",
+      "before": "\t\t}\n\t\tcheck_current()?;\n\t\tverify_read(&self.path, &file, &stamp, length, self.maximum)?;\n",
+      "after": "\t\t}\n\t\t#[cfg(all(feature = \"phase-cost-diagnostics\", target_os = \"linux\"))]\n\t\tdrop(diagnostic_file_read);\n\t\tcheck_current()?;\n\t\t#[cfg(all(feature = \"phase-cost-diagnostics\", target_os = \"linux\"))]\n\t\tlet diagnostic_file_final = crate::mcp::runtime::phase_cost::sync_span(\n\t\t\tcrate::mcp::runtime::phase_cost::Phase::FileFinalCheck,\n\t\t);\n\t\tverify_read(&self.path, &file, &stamp, length, self.maximum)?;\n\t\t#[cfg(all(feature = \"phase-cost-diagnostics\", target_os = \"linux\"))]\n\t\tdrop(diagnostic_file_final);\n"
+    },
+    {
+      "label": "shell_resolution_method_guard",
+      "before": "\tfn verify_resolution(&self) -> Result<()> {\n",
+      "after": "\tfn verify_resolution(&self) -> Result<()> {\n\t\t#[cfg(all(feature = \"phase-cost-diagnostics\", target_os = \"linux\"))]\n\t\tlet _phase_cost_shell_resolution = crate::mcp::runtime::phase_cost::sync_span(\n\t\t\tcrate::mcp::runtime::phase_cost::Phase::ShellResolution,\n\t\t);\n"
+    },
+    {
+      "label": "policy_method_guard",
+      "before": "\tfn verify_policy(&self) -> Result<()> {\n",
+      "after": "\tfn verify_policy(&self) -> Result<()> {\n\t\t#[cfg(all(feature = \"phase-cost-diagnostics\", target_os = \"linux\"))]\n\t\tlet _phase_cost_profile_policy = crate::mcp::runtime::phase_cost::sync_span(\n\t\t\tcrate::mcp::runtime::phase_cost::Phase::ProfilePolicy,\n\t\t);\n"
+    },
+    {
+      "label": "event_capacity",
+      "before": "const EVENT_CAPACITY: usize = 32_768;",
+      "after": "const EVENT_CAPACITY: usize = 131_072;"
+    },
+    {
+      "label": "seven_phase_variants",
+      "before": "\tBinding,\n}",
+      "after": "\tBinding,\n\tFileChecked,\n\tFileReadReference,\n\tFileReadHash,\n\tFileFinalCheck,\n\tFileIdentity,\n\tShellResolution,\n\tProfilePolicy,\n}"
+    },
+    {
+      "label": "trace_preparation_revision",
+      "before": "\"preparation_revision\": \"recovery-02\"",
+      "after": "\"preparation_revision\": \"validation-cost-d2-01\""
+    }
+  ],
+  "parser_derivation": {
+    "original": {
+      "bytes": 15057,
+      "sha256": "f6e65c2e206d4aa90143a17893e5e57c158bca9f8eec5f74897b19c3596e32c5",
+      "git_blob": "064cd62dd7f60ee11d538b4b21f4674283591572"
+    },
+    "replacements": [
+      {
+        "before": "32768",
+        "after": "131072",
+        "count": 2
+      },
+      {
+        "before": "32767",
+        "after": "131071",
+        "count": 1
+      },
+      {
+        "before": "\"preparation_revision\": \"recovery-02\"",
+        "after": "\"preparation_revision\": \"validation-cost-d2-01\"",
+        "count": 1
+      }
+    ]
+  },
+  "source_state": {
+    "formatted": false,
+    "compiled": false,
+    "executed": false,
+    "host_calls": 0
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema": "hepta-d1-exact-ci-installer-independent-static-review/v1",
+  "verdict": "no blocking issue found",
+  "scope": "Read-only local source and zero-filesystem-extraction transport inspection; no installer, CI, compiler, binder, archive program or host request executed.",
+  "checks": {
+    "all_eleven_sealed_members_identical": true,
+    "archive": {
+      "bytes": 35344,
+      "sha256": "9c278ca931af69a0ae40a31b1ca09c2ff61ce8d00d1712004e666a5dd019fef0"
+    },
+    "deployment_manifest": {
+      "bytes": 2273,
+      "sha256": "cd072178f930fff0f31135feb7129a2f8423ae8d420eecd837ca4cbb45a31b97"
+    },
+    "expanded_tar_bytes": 153600,
+    "filesystem_extraction": false,
+    "installer": {
+      "bytes": 7117,
+      "sha256": "f8f96165c454209999670bea0ebda162d01619c51509cb5bdc0e69f71920e035"
+    },
+    "member_bytes": 136003,
+    "members": 12,
+    "passed": true,
+    "target_execution": false
+  },
+  "reviewed_properties": [
+    "Installer requires normal assertion-enabled Python, Linux uid1000 and an owned non-group/world-writable fixed qualified ROOT.",
+    "The transport archive is pinned by exact35344 bytes and SHA256, read with nofollow/nonblock and stable before/open/after/lstat identities.",
+    "Gzip expansion is bounded at1MiB; tar is only read into memory. Each member must be a fixed unique plain file, no link or absolute/traversal name; twelve names and136003 total member bytes are exact.",
+    "All eleven source-sealed payload members are byte-identical to the separately reviewed actual sealed CI package; the twelfth is its pinned deployment manifest.",
+    "All member hashes, fixed destination absence and no-existing-CI result namespaces are checked before any write.",
+    "An O_EXCL installation-started claim prevents duplicate installer ownership. New tool directories and twelve fixed payload files use create-only writes, file fsync and exact readback; final directory fsync and a new installation receipt complete the path.",
+    "Failure leaves original archive, native installer output and all partial files in place. No in-place replay, overwrite or cleanup is performed.",
+    "The only destinations are new exact-CI tools, separate prerequisite module, Q-only foundation and deployment metadata. Existing source, qualification results and cache are not modified.",
+    "No compiler, qualifier, CI runner, remote request or benchmark is launched by the installer."
+  ],
+  "prior_tool_review": {
+    "git_blob": "b68722475210dbeac16ec39de45e38079b0e3c22",
+    "bytes": 8088,
+    "sha256": "ff5473f6d7073ecca7eb71eec69fe4871952d1683af575225b567e0909c03815"
+  },
+  "limitations": [
+    "Static checks do not certify future installation or CI success. Root retains original actual native start/status/read receipts.",
+    "Memory tar reads do not execute any included program or create extracted member files."
+  ],
+  "target_execution": 0,
+  "remote_requests": 0,
+  "ref_mutations": 0
+}

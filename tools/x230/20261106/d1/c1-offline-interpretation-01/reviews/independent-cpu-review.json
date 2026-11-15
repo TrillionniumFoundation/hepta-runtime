@@ -1,0 +1,95 @@
+{
+  "schema": "hepta-d1-c1-offline-interpretation-cpu-static-review/v1",
+  "reviewer": "evidence_review",
+  "conclusion": "no_blocking_issue_in_reviewed_cpu_and_phase_arithmetic",
+  "source": {
+    "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-offline-interpretation-01/interpret_c1.py",
+    "bytes": 41876,
+    "sha256": "7857a1f8960e82cbb1ba7700c1e805b87f7363cf5d8c3fecf32c5ebbf0dfa870"
+  },
+  "original_parser": {
+    "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-parent-template-05/reference/summarize_trace.py",
+    "bytes": 15057,
+    "sha256": "f6e65c2e206d4aa90143a17893e5e57c158bca9f8eec5f74897b19c3596e32c5",
+    "git_blob": "064cd62dd7f60ee11d538b4b21f4674283591572",
+    "same_identity_as_interpreter_pin": true
+  },
+  "scope": {
+    "full_functions": [
+      "phase_values",
+      "aggregate",
+      "measured_counter"
+    ],
+    "context_read": [
+      "original_module",
+      "interpret",
+      "main"
+    ],
+    "transport_identity_correlation_and_failure_custody_primary_reviewer": "audit_acceptance"
+  },
+  "reviewed_function_identities": {
+    "phase_values": {
+      "bytes": 2805,
+      "sha256": "b7a7cb3494cd22f8e8b2911932b2b457df1a6c16f08597a9e1b507d3248e0e1b"
+    },
+    "aggregate": {
+      "bytes": 1413,
+      "sha256": "39b49bac8c18e27c7e10e34d101b43f6476aa50fc168123e0aa5b62a41989e71"
+    },
+    "measured_counter": {
+      "bytes": 1796,
+      "sha256": "386bc6820074fba798850d24d186f82b9e8859a47b974db73c0be6f0d69b27ba"
+    }
+  },
+  "findings": [
+    {
+      "topic": "unchanged_parser",
+      "finding": "The pinned original parser is loaded as a non-main module. Each entire raw trace is passed to its original summarize before selective arithmetic. Its exact local bytes and the new source pin agree. This review did not load or call either module."
+    },
+    {
+      "topic": "exclusive_cpu",
+      "finding": "Each synchronous span uses thread_cpu_end_ns minus thread_cpu_start_ns, then subtracts inclusive CPU of immediate parent_sync_span children only. The original parser first validates same-thread nesting and non-overlapping children. The selective pass reproduces all three full-trace phase distributions, every original per-request exclusive total, and the original complete exclusive total before selecting measured requests."
+    },
+    {
+      "topic": "category_separation",
+      "finding": "Each ON first controller requires 222 requests separated into 6 preflight, 24 warmup and 192 measured. Each ON restart requires 12 restart requests. Four ON controllers account for 468 correlated requests; only the two first-controller measured groups enter the 384-request aggregate. Each of six hosts and two operations has 32 measured ON requests. OFF traces supply no phase observations and are not reported as zero runtime CPU."
+    },
+    {
+      "topic": "phase_distributions",
+      "finding": "Per-phase request distributions use the unchanged parser distribution function. Missing phases are zero-filled over all requests in the selected category; event counts remain explicit. Inclusive CPU and nested wall values can overlap and are not additive cost shares. Exclusive synchronous CPU is the additive recorded quantity."
+    },
+    {
+      "topic": "controller_comparison",
+      "finding": "For each measured group of 192, controller user+system tick delta is bound to the same PID/birth identity and the original counter window containing the cell interval. The original tick delta, tick frequency and raw timing remain in output. The counter-minus-recorded synchronous CPU residual keeps its sign; a zero controller denominator produces null, not a fabricated ratio."
+    },
+    {
+      "topic": "limits",
+      "finding": "Only synchronous same-thread recorded CPU is attributed. Uninstrumented and background work, diagnostic bookkeeping, and the wider quantized controller-counter window remain in the signed residual. It is explicitly not identified as SSH, remote or network CPU. Nested wall spans are nonadditive. The derived interpretation preserves the original failed workflow and makes no optimization-benefit, statistical-significance, acceptance or adoption claim."
+    }
+  ],
+  "resolved_metadata_issue": {
+    "initial_field": "zero_per_request_phase_value_means_no_such_recorded_phase",
+    "reason": "A present wall-only phase has no synchronous CPU observation, and a recorded synchronous phase can also have zero measured CPU. Zero does not imply absence.",
+    "final_fields": [
+      "missing_recorded_phase_is_zero_filled_for_per_request_distribution",
+      "cpu_event_count_zero_means_no_synchronous_cpu_observation"
+    ],
+    "correction_confirmed_in_exact_reviewed_source": true,
+    "new_acceptance_gate_added": false
+  },
+  "performed": [
+    "read source text",
+    "parse AST without executing module",
+    "hash exact source and original parser",
+    "review arithmetic and category/control-flow source"
+  ],
+  "not_performed": [
+    "import or execution of interpreter, adapter or parser",
+    "trace parsing or empirical arithmetic recomputation",
+    "workload, auditor, compiler or test execution",
+    "host or controller APIs",
+    "Git tree, commit or ref mutation"
+  ],
+  "actual_derived_result_verified": false,
+  "source_review_does_not_establish_actual_interpretation_success": true
+}

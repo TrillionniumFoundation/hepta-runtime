@@ -1,0 +1,422 @@
+{
+  "schema": "hepta-d2-c1-recovery02-independent-review/v1",
+  "reviewer": "audit_acceptance",
+  "disposition": "no_blocking_issue_in_the_corrected_source_preparation_and_fixed_fixture_transport",
+  "scope": "Narrow static review of C1-only namespace and input recovery, corrected compiler-policy binding, and the exact seven-fixture mirror. This is not installation, sealing, host-state verification or measurement acceptance.",
+  "repository": "TrillionniumFoundation/hepta-runtime",
+  "exact_reviewed_outputs": {
+    "parent": {
+      "git_blob": "3d373419528ff1252346161ebae5a353d39612c7",
+      "bytes": 47093,
+      "sha256": "fc798275355a0cf002b37b4b2e7843f19d8aabc3f3689adda552064dc16ccfa6"
+    },
+    "adapter_template": {
+      "git_blob": "a6aa06c4ab8c6006ed28d81de129e7597d6f6785",
+      "bytes": 30442,
+      "sha256": "47231fbab97c6d5b83ae2ccbb5a375c098c31f7191091be498b36f3f52659b17"
+    },
+    "sealer": {
+      "git_blob": "54a94b6bfb82b6df1c0c83cd9e7af6dedecc053e",
+      "bytes": 17290,
+      "sha256": "36ff95c5707854fbee72b6720e4b54242dbb9370dd087face642ec76be815c46"
+    },
+    "runtime_installer": {
+      "git_blob": "8bb8e677665d3b619b27a2bcac1f4bb93341b2d8",
+      "bytes": 12402,
+      "sha256": "005938492aad65ceb6de90b4f1318cf32b5e24105f99a252cbd3aaeea012d689"
+    },
+    "preparation_manifest": {
+      "git_blob": "22af08e2b6c878929810ca8801586823d318adcd",
+      "bytes": 14932,
+      "sha256": "cade99b39f0e5ddfaff207efb50550a0ea58b7cc0ea407663b3d6a332979f613"
+    },
+    "source_preparation_installer": {
+      "git_blob": "e8e5fd94b39a4a6542f7cee7b1befde843725954",
+      "bytes": 11633,
+      "sha256": "85f85824ed83ca368a75f98fbe1d89c2473df2e92fdbdfa2edb2c55f767a7582"
+    },
+    "recovery_edit_ledger": {
+      "git_blob": "4d612f02e7f24046d67c5eef43924a53e7e3ef5c",
+      "bytes": 11010,
+      "sha256": "6eed6e6a985a6c199690ca89e818c39d77d2ca01fa24e245747d9f0d87c32a19"
+    },
+    "fixture_deployment": {
+      "git_blob": "dd62e952f2cef366986853eb010b8a82b3f798af",
+      "bytes": 2967,
+      "sha256": "4c3ee384763f97f5604c0a55152360dd8efc98d7cde85a9f9a3aa9cc28a824d9"
+    },
+    "relocation_source_proof": {
+      "git_blob": "89cc8d202514b815c8ea955315ef6172e80ca77f",
+      "bytes": 4012,
+      "sha256": "055f6ac6c289d405175a997e5fcffd932340ba68c0251f8b2ab70dd1f4687f7a"
+    },
+    "recovery_provenance": {
+      "git_blob": "c01945ef41e76b2b071c355c4aa3c7b11458689e",
+      "bytes": 7954,
+      "sha256": "478eb16b6c22143a1b1f9b1e03421d34ed2c0c3916e74c904e762f72850ef4a6"
+    },
+    "author_parse_only_checks": {
+      "git_blob": "25d34d68dbf9e778b6a33e267c85fb067e96a05a",
+      "bytes": 5637,
+      "sha256": "b7331424ed8dbccd77307af2eecd958bf1f045bed2c9d680180842279c195546"
+    },
+    "preparation_catalog": {
+      "git_blob": "10d17eef571680a50887ad62c7c414a35669a2f4",
+      "bytes": 18643,
+      "sha256": "651a3554574b61b32fafbd96347d59eacb81ab29b2168d79065ac4c6f160161a"
+    }
+  },
+  "original_core_references": {
+    "parent": {
+      "git_blob": "951c23dec754859f16e2dbfbaebb397518398273",
+      "bytes": 47093,
+      "sha256": "ee13bca3dc1660e373c558e665c2d51967f7973b70221af20c41a95090c9660c"
+    },
+    "adapter": {
+      "git_blob": "5587f8f2e4a6a2affca0091e171aa58bac3c28a1",
+      "bytes": 30442,
+      "sha256": "ba2cd36aa4755888fe01be6a5e0487fb6bf6d7fb0d486618b046e2c166778740"
+    },
+    "sealer": {
+      "git_blob": "a2285b3483a883651730f655643b63e4b2eecb01",
+      "bytes": 17407,
+      "sha256": "e9af9b320da52ac6a4fe45768816fff32c8ced159d6ce0e4486cb481b154740c"
+    },
+    "installer": {
+      "git_blob": "717148a3ed5a25860fb21a0d07b03f2e41150c3a",
+      "bytes": 12402,
+      "sha256": "bd6e33588cb938a15ffc6ca68bed3f6e11c2df1a1e51da743202dd1a9941faba"
+    }
+  },
+  "resolved_finding": {
+    "severity": "pre-execution_blocker_resolved",
+    "original_unexecuted_parent": {
+      "git_blob": "99c12082d987b7b1c33d459bedeaee67a0369dc3",
+      "bytes": 47093,
+      "sha256": "f679bfaab9fef7d04720bb37f3f16872cb8f5fac117b53f3d989a9d76842c644"
+    },
+    "location": "COMPILER_MONITOR_POLICY.runtime_attempt; original full-object equality in bind_compiler_monitor_inputs",
+    "issue": "The initial recovery draft set this frozen policy field to 02, while the original policy JSON remains 01. The existing equality check would reject the draft before measurement.",
+    "fixed_parent": {
+      "git_blob": "3d373419528ff1252346161ebae5a353d39612c7",
+      "bytes": 47093,
+      "sha256": "fc798275355a0cf002b37b4b2e7843f19d8aabc3f3689adda552064dc16ccfa6"
+    },
+    "exact_fix": "One line only: the embedded compiler-policy runtime_attempt 02 is restored to 01. The outer input/report attempt 02 and all C1-specific 02 destinations remain unchanged.",
+    "original_policy": {
+      "git_blob": "446e7875cdea2e3f582b98cc86ee26b8476950fa",
+      "bytes": 1001,
+      "sha256": "ddb2e03d4a1a1610466a5dc2d1a544f554ad12fc31412483101b48a235402368"
+    },
+    "independent_one_line_diff": {
+      "line": 77,
+      "before": "    \"runtime_attempt\": \"02\",",
+      "after": "    \"runtime_attempt\": \"01\","
+    },
+    "complete_policy_source_matches_original": true,
+    "original_policy_body_unchanged": true,
+    "superseded_objects_retained": {
+      "revision": "02",
+      "original_unexecuted_draft_catalog": {
+        "git_blob": "e87ffa10e45124dafbac6789443d159959d3ab2d",
+        "bytes": 18508,
+        "sha256": "f474c37875327be443236f3292341084796acefad6de06f2250efcb45639d977"
+      },
+      "original_unexecuted_draft_package_manifest": {
+        "git_blob": "22c0b1770f2b2f7c4e5176ca4645a8d1d75c385b",
+        "bytes": 14499,
+        "sha256": "1fc96864278c7b1996aba3fba69bb3293d2c12d952d19bc0e8098fe5424dea90"
+      },
+      "original_unexecuted_draft_archive": {
+        "git_blob": "4d90f690ea3fe7c1d18063c431f38200c737b6a5",
+        "bytes": 614468,
+        "sha256": "802d7eae498a4945b45b04eb3afa06b40bc3d1cb50f4ddc498406aac2ef50950"
+      },
+      "found_by": "audit_acceptance static review before any recovery02 installation or target execution",
+      "problem": "Parent COMPILER_MONITOR_POLICY.runtime_attempt was changed to \"02\", but the unchanged original policy JSON requires \"01\" under the complete JSON equality guard.",
+      "fix": "Restore that single parent policy literal to \"01\". Outer input/report attempt \"02\", all C1-only02 paths, raw policy file, monitor sources and limits remain unchanged.",
+      "revised_parent": {
+        "git_blob": "3d373419528ff1252346161ebae5a353d39612c7",
+        "bytes": 47093,
+        "sha256": "fc798275355a0cf002b37b4b2e7843f19d8aabc3f3689adda552064dc16ccfa6"
+      },
+      "prior_draft_retained_unchanged": true,
+      "workload_rerun": false
+    },
+    "deployment_status_source": "Root explicitly reported no recovery02 upload or execution of the rejected draft; this review did not query hosts."
+  },
+  "core_delta": {
+    "exact_replay": {
+      "run_c1_phase_cost.unsealed.py": {
+        "fixed_replacements": 1,
+        "whole_source_exact": true
+      },
+      "d2_campaign.unsealed.py": {
+        "fixed_replacements": 8,
+        "whole_source_exact": true
+      },
+      "seal_campaign.py": {
+        "fixed_replacements": 15,
+        "whole_source_exact": true
+      },
+      "install_campaign.py": {
+        "fixed_replacements": 11,
+        "whole_source_exact": true
+      }
+    },
+    "total_replacement_operations": 35,
+    "original_protocol_control_flow_unchanged": true,
+    "c1_only_namespace": "02",
+    "socket_parent": "/home/qian/hd2c02",
+    "reused_successful_namespaces": [
+      "qualification-01",
+      "rust-ci-01",
+      "ordinary-01",
+      "ordinary-postflight-01.json",
+      "full-prerequisites-01"
+    ],
+    "root": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+    "canonical_foundation": {
+      "path": "/home/qian/hepta-runtime-validation-cost-20261106-d2/full-prerequisites-01/d2_prerequisites.py",
+      "bytes": 59048,
+      "sha256": "2a04eb862c4efe1377a3b78dad33b99f43573d7c91dc66503ad5f08690b17da9",
+      "git_blob": "4cea64c49abfc2afe8a69f4faedaf4d9714d0942"
+    },
+    "ordinary_verifier": {
+      "path": "/home/qian/hepta-runtime-validation-cost-20261106-d2/ordinary-tools-01/verify_ordinary_01.py",
+      "bytes": 21169,
+      "sha256": "22ca3cba02fa1a1f7f224ec4134d8626fb5825eb3deeed52cdc3d25434527535",
+      "git_blob": "ed9a4f960c79a48d71dda059c91584f1749672ff"
+    },
+    "qualifications_and_ordinary_results_not_fabricated": true,
+    "parent_ACTUAL_is_None": true,
+    "adapter_SPEC_is_None": true,
+    "unchanged_protocol": {
+      "original_held_agent_bytes": {
+        "path": "held_agent_campaign_02.py",
+        "bytes": 11374,
+        "sha256": "715e996217c7d33a7483354f16f2d39c9a033f51f3a20a52484495a00262dd65",
+        "git_blob": "c642b45500ed44abee56ba45614932855cd29892"
+      },
+      "quiet_seconds": 90,
+      "stages": [
+        "native-observation",
+        "native-audit"
+      ],
+      "modes": [
+        "off",
+        "on",
+        "on",
+        "off"
+      ],
+      "same_qualified_feature_elf": true,
+      "original_controller_Popen_and_cleanup": true,
+      "planned_native_calls": 936,
+      "planned_measured_calls": 768,
+      "planned_on_requests": 468,
+      "planned_on_measured_requests": 384,
+      "planned_controller_closes": 8,
+      "event_capacity": 131072,
+      "per_trace_output_bytes": 33554432,
+      "dimensions_are_not_execution_results": true,
+      "original_compiler_monitor_policy_limits_and_tools": true,
+      "new_performance_gate": false
+    }
+  },
+  "private_seed_and_topology": {
+    "seed": {
+      "path": "/home/qian/hepta-runtime-phase-cost-20261106-d1/c1-observation-01/profile/profile.json",
+      "bytes": 792,
+      "sha256": "ed680dc1613e4aea4de99336d21009c73e71554694edbe23f9dc3a433b586e89",
+      "body_not_packaged": true
+    },
+    "new_topology": {
+      "git_blob": "d6ea6ba25dcaa7e5edee98749161c46df76a71e0",
+      "bytes": 796,
+      "sha256": "c131f12bd145d53bd2c26d0917411a41e6e85d19a6273fc19d0ef3744d23658e"
+    },
+    "original_topology": {
+      "git_blob": "5444a80dc2a03eeef6f5b80feb194822f165a437",
+      "bytes": 796,
+      "sha256": "8c0767d3318131a7d470d9cde8e327a59ce18adf022c8bc1b1d5a0fa9a865287"
+    },
+    "exact_topology_difference": "One 64-byte profile_template_sha256 replacement; all other bytes are equal.",
+    "original_benchmark": {
+      "git_blob": "19c429f682afdf24112f579e7717155cc005dd53",
+      "bytes": 37006,
+      "sha256": "4d96f0bf2da2562e788f48be7c37589ab3a513be5f9d8b2d741afe5c08ea9eed"
+    },
+    "function_reviewed": "fresh_profile",
+    "source_review_result": "The function verifies schema and the exact bool, bounded referenced file contents and their hashes; it rewrites explicit known-hosts directives to the new output, copies known_hosts bytes, and writes a new profile using current binary hashes, current agent and current socket parent.",
+    "content_equivalence": "Under the preserved guards, fixed direct paths without whitespace, unchanged referenced content, and the same final current inputs, applying the original relocation twice yields the same final config/known_hosts/profile content projection as applying it directly to the final output.",
+    "limitations": [
+      "The template receipt intentionally changes: it records the real 792-byte seed hash instead of the missing historical seed hash.",
+      "No claim is made that the new seed is the old missing 836-byte body, or that filesystem inode/time identities are equal.",
+      "The private seed, SSH configuration and known_hosts bodies were not read, copied or published by this reviewer.",
+      "Current private-file existence and host state are not reverified here; original runtime binding remains responsible."
+    ]
+  },
+  "fixture_review": {
+    "manifest": {
+      "git_blob": "dd62e952f2cef366986853eb010b8a82b3f798af",
+      "bytes": 2967,
+      "sha256": "4c3ee384763f97f5604c0a55152360dd8efc98d7cde85a9f9a3aa9cc28a824d9"
+    },
+    "exact_files": [
+      {
+        "source": "fixtures/topology.json",
+        "destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-fixtures-02/topology.json",
+        "bytes": 796,
+        "sha256": "c131f12bd145d53bd2c26d0917411a41e6e85d19a6273fc19d0ef3744d23658e",
+        "git_blob": "d6ea6ba25dcaa7e5edee98749161c46df76a71e0"
+      },
+      {
+        "source": "fixtures/jobs/1a16a4035ad-b1270-1.json",
+        "destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-fixtures-02/jobs/1a16a4035ad-b1270-1.json",
+        "bytes": 880,
+        "sha256": "a8982325aea4833461e2b6a76ca83f846b80b99a227298e97a0b279e2d9dfdb8",
+        "git_blob": "63fc148938d5692275ca3d705b2e8db21ce78d84"
+      },
+      {
+        "source": "fixtures/jobs/1a16a403e55-b1270-2.json",
+        "destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-fixtures-02/jobs/1a16a403e55-b1270-2.json",
+        "bytes": 877,
+        "sha256": "bbb8a86161837ff0f197b345c25bc66224e3404473dea2ac46d1f44f3af43609",
+        "git_blob": "caefd6724c51f91bb283ff2c47a30a7c383ec453"
+      },
+      {
+        "source": "fixtures/jobs/1a16a4046ac-b1270-3.json",
+        "destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-fixtures-02/jobs/1a16a4046ac-b1270-3.json",
+        "bytes": 881,
+        "sha256": "4badc323518a6db1567162a2d7ef5d1209aa88375aba201ec6f3aab34bec61a8",
+        "git_blob": "6fdfde1d5b51d1b26fb6b4f65f040b43fe469ba3"
+      },
+      {
+        "source": "fixtures/jobs/1a16a40534e-b1270-4.json",
+        "destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-fixtures-02/jobs/1a16a40534e-b1270-4.json",
+        "bytes": 890,
+        "sha256": "79e18b1a42d84f8024b692dfd98a9f06fa1d6886bf5dc230248cfbde674f011c",
+        "git_blob": "4812016dd9646332213b78332c88f30dd56db6a2"
+      },
+      {
+        "source": "fixtures/jobs/1a16a405d21-b1270-5.json",
+        "destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-fixtures-02/jobs/1a16a405d21-b1270-5.json",
+        "bytes": 877,
+        "sha256": "9c89c598f35f6bc94572852fcc03feed6e8c798ee34db5095bd3b48813562dc6",
+        "git_blob": "a9d57701312528461e761fd6207ee8f0f4e64ffa"
+      },
+      {
+        "source": "fixtures/jobs/1a16a40671b-b1270-6.json",
+        "destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-fixtures-02/jobs/1a16a40671b-b1270-6.json",
+        "bytes": 878,
+        "sha256": "5b737330fa5a75a458138e1848a044d2a77c062175d8eb9694a510ff20b53cde",
+        "git_blob": "1197b0e7dcf8d6c398a4cc8805c9d32af6962fcf"
+      }
+    ],
+    "new_fixture_root": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-fixtures-02",
+    "count": 7,
+    "payload_bytes": 6079,
+    "all_seven_raw_bodies_independently_fetched_and_sha256_and_git_blob_checked": true,
+    "six_job_identities_match_original_sealed_C1_SPEC": true,
+    "six_original_job_bodies_unchanged": true,
+    "no_third_fixture_destination": true
+  },
+  "transport_review": {
+    "original_installer": {
+      "git_blob": "b528256167ffb1e5bb278ad7aaba9982edd20838",
+      "bytes": 9443,
+      "sha256": "166f6f9df734065a6bc9fd1565da3c596de3c4d62c97b295309c87cd12b0af35"
+    },
+    "first_recovery_transport": {
+      "git_blob": "064965032c8763e551c68efc4d864877c964acd0",
+      "bytes": 11633,
+      "sha256": "9aaa51c013c768e030546952d90bea04ac5c321fdd4a9c610c6d4090c499ef6a"
+    },
+    "final_transport": {
+      "git_blob": "e8e5fd94b39a4a6542f7cee7b1befde843725954",
+      "bytes": 11633,
+      "sha256": "85f85824ed83ca368a75f98fbe1d89c2473df2e92fdbdfa2edb2c55f767a7582"
+    },
+    "first_recovery_exact_18_replacements_to_original": true,
+    "original_functions_byte_exact": [
+      "need",
+      "canonical",
+      "identity",
+      "stamp",
+      "regular",
+      "directory",
+      "sync_directory",
+      "write_new",
+      "main"
+    ],
+    "final_change_only_three_identity_assignments": [
+      {
+        "name": "EXPECTED_MANIFEST",
+        "old": "EXPECTED_MANIFEST = {\"bytes\": 14499, \"sha256\": \"1fc96864278c7b1996aba3fba69bb3293d2c12d952d19bc0e8098fe5424dea90\"}",
+        "current": "EXPECTED_MANIFEST = {\"bytes\": 14932, \"sha256\": \"cade99b39f0e5ddfaff207efb50550a0ea58b7cc0ea407663b3d6a332979f613\"}"
+      },
+      {
+        "name": "EXPECTED_PAYLOAD_BYTES",
+        "old": "EXPECTED_PAYLOAD_BYTES = 568655",
+        "current": "EXPECTED_PAYLOAD_BYTES = 571661"
+      },
+      {
+        "name": "EXPECTED_ARCHIVE",
+        "old": "EXPECTED_ARCHIVE = {'bytes': 614468, 'sha256': '802d7eae498a4945b45b04eb3afa06b40bc3d1cb50f4ddc498406aac2ef50950'}",
+        "current": "EXPECTED_ARCHIVE = {'bytes': 624708, 'sha256': '6c9298dac0a1ca2633f5b70fab97b0ab64b0e5491e176947501d03288c936de7'}"
+      }
+    ],
+    "destinations": [
+      "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-parent-preparation-02",
+      "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-fixtures-02"
+    ],
+    "receipt": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-preparation-install-02.json",
+    "archive": {
+      "path": "/home/qian/hepta-runtime-d2-c1-recovery-preparation-02.tar.gz",
+      "git_blob": "f0c77142f7dc457c532b9efab7d457ac65f98771",
+      "bytes": 624708,
+      "sha256": "6c9298dac0a1ca2633f5b70fab97b0ab64b0e5491e176947501d03288c936de7"
+    },
+    "package_file_count": 55,
+    "package_payload_bytes": 571661,
+    "listed_manifest_rows": 54,
+    "listed_payload_bytes": 556729,
+    "all_four_core_and_changed_metadata_rows_match_current_read_bodies": true,
+    "complete_manifest_name_set_same_as_prior_55_file_package": true,
+    "original_bounds_unchanged": {
+      "single_file_bytes": 4194304,
+      "total_payload_bytes": 16777216,
+      "max_files": 128
+    },
+    "guards": [
+      "Exact archive identity and complete bounded tar members are checked before mutations.",
+      "Every manifest member body and the complete exact inventory are checked before mutations.",
+      "The fixed seven source names and fixed mirror destinations are checked before mutations.",
+      "Both new destination leaves and the new receipt must all be absent.",
+      "Original protected owned-directory checks, O_EXCL/NOFOLLOW 0600 writes, stable readback and fsync remain.",
+      "All partial originals are preserved on failure; no delete, overwrite, implicit retry or packaged execution is introduced."
+    ],
+    "private_seed_or_configuration_read_or_written": false,
+    "archive_binary_retrieved_or_reexpanded_by_this_reviewer": false,
+    "binary_tar_integrity_scope": "The author reports deterministic USTAR/gzip construction and all-member byte checks. This review independently inspected source/manifest identities and fixed paths, but does not claim to have repeated that binary check."
+  },
+  "verification_boundary": {
+    "independent_git_raw_byte_hashes": true,
+    "independent_exact_string_inverse_and_whole_source_equality": true,
+    "independent_json_metadata_checks": true,
+    "author_actual_AST_parse_report": {
+      "git_blob": "25d34d68dbf9e778b6a33e267c85fb067e96a05a",
+      "bytes": 5637,
+      "sha256": "b7331424ed8dbccd77307af2eecd958bf1f045bed2c9d680180842279c195546"
+    },
+    "independent_target_import_or_execution": false,
+    "independent_AST_execution_in_this_review": false,
+    "Rust_compile_or_test": false,
+    "host_API_calls": false,
+    "existing_results_modified": false,
+    "Git_tree_commit_or_ref_changes": false,
+    "future_C1_result": null,
+    "original_attempt01_failure_retained": true,
+    "original_failure_outcome_not_relabelled": true
+  }
+}

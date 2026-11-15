@@ -1,0 +1,116 @@
+{
+  "schema": "hepta-d2-validation-instrumentation-independent-review/v1",
+  "reviewer": "/root/audit_acceptance",
+  "disposition": "no_static_blocker_identified",
+  "scope": "Read-only local source/diff/AST/hash review. No Rust compilation, parser invocation, target helper import, host request, workload or qualification execution.",
+  "source_parent": "8eb1a0af7a85768e374717d24848fd9798871cc9",
+  "qualified_parent_map": {
+    "bytes": 24368,
+    "sha256": "98824381ae2009e909fc28e07087d8646d3131229e146c04ecd9f58c60a14133",
+    "git_blob": "ca1f2acef593ba9a38362eefd5a6732403db11e9"
+  },
+  "source_directory": "/tmp/hepta-runtime-recovery-20261106/d2-source-preparation-01",
+  "exact_static_check": {
+    "source_files": {
+      "ssh_observation_profile.rs": {
+        "original_bytes": 25093,
+        "original_sha256": "a62169343c2a08c38d69925f33fdc7551cf4be7b4b7f50cf89683f652a8f853a",
+        "original_git_blob": "b3cca3455cd695c6a3570ff768d5dd97ef8c7ad4",
+        "candidate_bytes": 26772,
+        "candidate_sha256": "36c81fdaed51a957d1b87f9f3ae9035cc29d1b6dca19112297070d9262ea4717",
+        "inverse_edit_ledger_exact": true
+      },
+      "phase_cost.rs": {
+        "original_bytes": 23949,
+        "original_sha256": "06e5fc3892290fa5ab9d034c7d5bef041a18105a2808342eb51fc9c82e69e882",
+        "original_git_blob": "1bb1a0567d8571a650a2aaa373faa50d968b4c44",
+        "candidate_bytes": 24075,
+        "candidate_sha256": "54bda97a2776494927599877728f122f2f26ba3492f9963cbc76f39cf02bb8d5",
+        "inverse_edit_ledger_exact": true
+      }
+    },
+    "parser": {
+      "bytes": 15070,
+      "sha256": "ca0e7e0d7c670daec20e54c6703bc1849f80138224570ef5366abd60079c7927",
+      "only_three_capacity_values_and_revision_changed": true,
+      "ast_parsed": true
+    },
+    "compile_input_count": 222,
+    "changed_paths": [
+      "src/mcp/runtime/phase_cost.rs",
+      "src/mcp/runtime/ssh_observation_profile.rs"
+    ],
+    "other_compile_input_hashes_unchanged": 220,
+    "target_or_Rust_executed": false
+  },
+  "edit_ledger": {
+    "bytes": 4873,
+    "sha256": "a3134b6033076640daa66bbe1e2ab85448de15db10ae6f06656a6af7f8e6a532"
+  },
+  "candidate_map": {
+    "bytes": 24368,
+    "sha256": "268e260d777f7cede272c798068c5c765b17052895423eb909d97d3c923921ae"
+  },
+  "findings": [
+    {
+      "id": "source_scope",
+      "conclusion": "Both complete maps contain the same 222 paths. Only phase_cost.rs and ssh_observation_profile.rs differ; the other 220 source hashes are identical. Reversing each explicit edit against candidate bytes exactly reconstructs the pinned, qualified D1 parent source."
+    },
+    {
+      "id": "default_cfg",
+      "conclusion": "All added profile statements are guarded by all(feature = phase-cost-diagnostics, target_os = linux). The reference.is_some() label selection occurs inside a guarded let initializer. Removing those statements reconstructs the original profile bytes, so ordinary builds do not evaluate the new label selection."
+    },
+    {
+      "id": "three_file_segments",
+      "conclusion": "FileChecked surrounds only the original checked_file call. FileReadReference or FileReadHash surrounds the unchanged whole read loop. FileFinalCheck surrounds only the original verify_read call. Explicit guarded drops end each selected span before the following original check_current call."
+    },
+    {
+      "id": "read_and_error_contract",
+      "conclusion": "The original 16 KiB buffer, bounded reader, full-byte loop, Interrupted branch, before/after check_current calls, reference comparison or ring digest update, length accounting and absence of early mismatch termination remain byte-identical. The original final verify_read short-circuit expression, metadata reads and fresh nofollow path open are unchanged. Content comparison/final hash completion remains after that call and is not given a new child span."
+    },
+    {
+      "id": "method_guards",
+      "conclusion": "FileIdentity, ShellResolution and ProfilePolicy cover their original synchronous methods. Their method bodies, return values and error order are unchanged. Early returns naturally drop the active diagnostic guard; no new closure, await, FD owner, child reaper, lease, cache or authority decision is introduced."
+    },
+    {
+      "id": "guard_lifetimes",
+      "conclusion": "The added synchronous guards do not borrow the File or path object. All new guards stay inside synchronous methods with no await. The existing SyncSpan !Send design is unchanged. This is static reasoning, not a compiler result."
+    },
+    {
+      "id": "module_scope",
+      "conclusion": "The diagnostic module delta is limited to EVENT_CAPACITY 32768 to 131072, seven appended Phase variants and the preparation revision. REQUEST_CAPACITY 2048, 32 MiB output bound, overflow/incomplete handling and sidecar finalization remain unchanged."
+    },
+    {
+      "id": "parser_scope",
+      "conclusion": "The separately named D2 parser is exactly the original 15057-byte parser with two capacity literals 32768 to 131072, the event-slot maximum 32767 to 131071, and the preparation revision changed. AST parsing succeeded; the parser was not executed. Original D1 parser bytes remain preserved."
+    }
+  ],
+  "measurement_interpretation": [
+    "ValidationOwner and ValidationWorker inclusive CPU remain their whole original validation scopes. Their exclusive CPU becomes the remainder after the newly measured direct children; inclusive parent values must not be added to child values.",
+    "FileReadReference means the entire original read/check/reference-comparison loop. FileReadHash means the entire original read/check/hash-update loop. These labels do not separately measure read syscalls, comparison instructions or SHA256.",
+    "FileChecked and FileFinalCheck combine the original path traversal, open/metadata and validation operations inside the wrapped calls. No per-component or per-chunk attribution is claimed.",
+    "Content_matches and hash.finish stay in the original parent-exclusive remainder. This deliberately preserves the selected three-segment design.",
+    "Enabled instrumentation adds timing and memory overhead; unchanged control flow does not imply zero timing perturbation. D2 is diagnostic preparation, not a production optimization or acceptance result."
+  ],
+  "capacity_boundary": {
+    "event_capacity": 131072,
+    "request_capacity": 2048,
+    "output_limit_bytes": 33554432,
+    "planned_complete_first_controller_requests": 222,
+    "estimated_events_per_complete_request": 361,
+    "estimated_first_controller_events": 80142,
+    "estimates_are_actual_D2_measurements": false,
+    "prior_D1_observed_event_slot_bytes": 136,
+    "conditional_added_event_slot_payload_bytes": 13369344,
+    "layout_assumption": "12.75 MiB is arithmetic using the observed D1 136-byte slot size and assumes unchanged layout; the D2 binary has not been compiled here.",
+    "output_limit_unchanged": true,
+    "overflow_must_remain_incomplete": true
+  },
+  "pending": [
+    "D2 formatter/compiler and original qualification stages",
+    "Actual final source map, ELF identity and trace results",
+    "Independent integration review of the separately prepared D2 C1 adapter"
+  ],
+  "blockers": [],
+  "no_new_gate_added": true
+}

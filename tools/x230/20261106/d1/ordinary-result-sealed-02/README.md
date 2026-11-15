@@ -1,0 +1,9 @@
+# D1 ordinary attempt 02: actual result input seal
+
+This package binds the already completed ordinary feature-off supplement to the reviewed read-only verifier. It was prepared after original native job `1a1b04c6cd1-fc05-6f94` completed successfully. The actual five stages were clippy, test-build, isolated-tests, audit-isolated-tests, and release. The original summary reports 1645 passed, 0 failed, 34 ignored, 1679 selected, and 0 retries.
+
+The seven source originals were read byte-for-byte from the root agent's immutable local mirror. Each length, SHA-256, and Git blob identity was recomputed before the existing reviewed `seal_ordinary.py` was run once locally with `purpose=result`. That sealer produced the four files listed in its own seal manifest. The additional execution receipt records this local data-sealing process.
+
+No host API, compiler, test runner, auditor, prerequisite binder, or runtime verifier was executed by this sealing operation. The verification launch command is a future root-owned action. Its input explicitly requires the runtime verifier to check the original native streams, source maps, tests and logs, previous failed preflight, full Q/CI prerequisites, and the three preserved feature plus three ordinary release programs. At the time this package was sealed, the ordinary postflight result and its native job remained unknown.
+
+The successful ordinary build does not establish a performance improvement or acceptance of D1. D1 remains an opt-in diagnostic candidate on the accepted R24 source. The original failed ordinary attempt 01, the unexecuted earlier preparation revisions, and the rejected transport 03 remain preserved under their original identities. This result seal refers to the actual attempt 02 and does not retry the failed preflight or alter its evidence.

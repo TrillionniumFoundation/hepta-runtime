@@ -1,0 +1,12 @@
+{
+  "host": "x230",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-B",
+    "-c",
+    "import json,os,subprocess\nroot='/home/qian/hepta-runtime-validation-cost-20261106-d2'\njob='1a1b10c5cce-fc05-755c'\npaths=['/home/qian/.local/state/hepta-runtime-mac-worker/jobs/'+job,root+'/rust-ci-evidence-01.tar.gz',root+'/rust-ci-evidence-01.manifest.json',root+'/rust-ci-evidence-01.compact.json']\nresult={'kind':'ci_archive_launch_unknown_read_only_reconciliation','original_job':job,'paths':{}}\nfor path in paths:\n try:\n  s=os.lstat(path);result['paths'][path]={'exists':True,'mode':s.st_mode,'size':s.st_size,'mtime_ns':s.st_mtime_ns}\n except FileNotFoundError: result['paths'][path]={'exists':False}\np=subprocess.run(['/usr/bin/systemctl','--user','show','hepta-runtime-job-'+job,'--property=LoadState,ActiveState,SubState,InvocationID,MainPID'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=20)\nresult['systemctl']={'exit_code':p.returncode,'stdout':p.stdout,'stderr':p.stderr}\nprint(json.dumps(result,sort_keys=True))\n"
+  ],
+  "cwd": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+  "idempotency_key": "x230-d2-ci-archive-launch-unknown-inspection-20261106-01",
+  "timeout_seconds": 40
+}

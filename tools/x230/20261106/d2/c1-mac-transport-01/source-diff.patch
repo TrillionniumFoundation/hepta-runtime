@@ -1,0 +1,175 @@
+--- D1/import_sealed_payloads_01.py
++++ D2/hepta-runtime-d2-c1-importer-01.py
+@@ -12,39 +12,35 @@
+ import stat
+ import sys
+ 
+-ROOT = Path('/Users/qianqi/work/hepta-runtime-d1-c1-sealed-staging-01')
+-ARCHIVE_NAME = 'sealed-payloads-01.tar.gz'
+-IMPORTER_NAME = 'import_sealed_payloads_01.py'
+-ARCHIVE_BYTES = 174654
+-ARCHIVE_SHA256 = 'efe412bd28dd0e2fa6935f57a699e3742eb91c2d064bb1861f7c63a9282ac760'
++ROOT = Path('/Users/qianqi/work/hepta-runtime-d2-c1-sealed-staging-01')
++ARCHIVE_NAME = 'hepta-runtime-d2-c1-sealed-payloads-01.tar.gz'
++IMPORTER_NAME = 'hepta-runtime-d2-c1-importer-01.py'
++ARCHIVE_BYTES = 174945
++ARCHIVE_SHA256 = '523b4e1003eb1cd6f55764a64e4479fe9c4be37e706057fcecc0deed89d53565'
+ EXPECTED = {
+     "install_campaign.py": {
+-        "bytes": 12349,
+-        "sha256": "0045ac1a119727260a99f4aab98c554e033f3486d16ae45cca9464e0c811d40a"
+-    },
+-    "mac/d1_campaign.py": {
+-        "bytes": 51545,
+-        "sha256": "8b2a53ebc08627d46885c85ef7639abbe73d14b12a513e3b2f9b0fa528097977"
++        "bytes": 12402,
++        "sha256": "bd6e33588cb938a15ffc6ca68bed3f6e11c2df1a1e51da743202dd1a9941faba"
++    },
++    "mac/d2_campaign.py": {
++        "bytes": 52431,
++        "sha256": "bd7a98cb9c7f40fa2e461dc442954235bd7b6ac54d1c9aac1713c3783628e00e"
+     },
+     "mac/held_agent_campaign_02.py": {
+         "bytes": 11374,
+         "sha256": "715e996217c7d33a7483354f16f2d39c9a033f51f3a20a52484495a00262dd65"
+     },
+-    "operator-argv.json": {
+-        "bytes": 359,
+-        "sha256": "ea227201c9fba1fd8ea63f9cc29513f371731ed7df669cc36143e1ddd7fefb4e"
+-    },
+     "seal-manifest.json": {
+-        "bytes": 328810,
+-        "sha256": "4f0b9447c24788c856c1bbb4664c3ab483e27803ff09c84e9192424f34f69f6b"
++        "bytes": 325264,
++        "sha256": "2f14f87be47957240dc54c99e64d98f346a44822b878936df05060950cd46b0d"
+     },
+     "x230/c1-campaign-inputs-01.json": {
+-        "bytes": 2503,
+-        "sha256": "1b99ae9549aa2306973281542c89dbcc8b25517181d79c7288e0d5d5998dbb03"
++        "bytes": 2553,
++        "sha256": "99a947ccc75353980cef10eed9ec1eca16e218f8f605f66554cd81deee3400da"
+     },
+     "x230/c1-prerequisites-01.json": {
+-        "bytes": 5063,
+-        "sha256": "9d5ca9b3d4e276d8f7b830cf028eac9eded76ab3b0f560758279451989c966cb"
++        "bytes": 7538,
++        "sha256": "39ee58937fdb05bd97bde4dc7c9ef1033b5744c7d52b6613bc0368f9af54ed63"
+     },
+     "x230/c1-tools-01/compiler-monitor-policy-01.json": {
+         "bytes": 1001,
+@@ -58,13 +54,13 @@
+         "bytes": 6243,
+         "sha256": "9da718654db04a646e081d2d719a2d6d4655ffe337bc0e3f906e736e4d77a251"
+     },
+-    "x230/c1-tools-01/d1_campaign.py": {
+-        "bytes": 51545,
+-        "sha256": "8b2a53ebc08627d46885c85ef7639abbe73d14b12a513e3b2f9b0fa528097977"
+-    },
+-    "x230/c1-tools-01/d1_prerequisites.py": {
+-        "bytes": 58168,
+-        "sha256": "623c8678fe2ed89dae7fb8cdf188e34e009e8d73fee10275f51b753fe3d41b98"
++    "x230/c1-tools-01/d2_campaign.py": {
++        "bytes": 52431,
++        "sha256": "bd7a98cb9c7f40fa2e461dc442954235bd7b6ac54d1c9aac1713c3783628e00e"
++    },
++    "x230/c1-tools-01/d2_prerequisites.py": {
++        "bytes": 59048,
++        "sha256": "2a04eb862c4efe1377a3b78dad33b99f43573d7c91dc66503ad5f08690b17da9"
+     },
+     "x230/c1-tools-01/pre-execution-clarification-01.json": {
+         "bytes": 3821,
+@@ -86,6 +82,10 @@
+         "bytes": 17065,
+         "sha256": "b69f6902d2de81eab41b21506f024c002d2f8264d60e86df6b1086623a77fd28"
+     },
++    "x230/c1-tools-01/reference/correlate_trace.py": {
++        "bytes": 15615,
++        "sha256": "891f511e80273c5fb4a1a76ff3606b7de90827c3eab5d01bb3e283dba952cd84"
++    },
+     "x230/c1-tools-01/reference/observation_resources.py": {
+         "bytes": 12382,
+         "sha256": "f3402d51cb37b2fe20f4351b3a81ec5990a9fdaff93a846d21c07ccd557cb894"
+@@ -95,16 +95,16 @@
+         "sha256": "7606648c99b2ff2bbf0bba58384e8cab609ac3899f838c0b80ba54d6288d20bb"
+     },
+     "x230/c1-tools-01/reference/summarize_trace.py": {
+-        "bytes": 15057,
+-        "sha256": "f6e65c2e206d4aa90143a17893e5e57c158bca9f8eec5f74897b19c3596e32c5"
++        "bytes": 15070,
++        "sha256": "ca0e7e0d7c670daec20e54c6703bc1849f80138224570ef5366abd60079c7927"
+     },
+     "x230/c1-tools-01/reference/x230_observation_benchmark.py": {
+         "bytes": 37006,
+         "sha256": "4d96f0bf2da2562e788f48be7c37589ab3a513be5f9d8b2d741afe5c08ea9eed"
+     },
+     "x230/c1-tools-01/run_c1_phase_cost.py": {
+-        "bytes": 34274,
+-        "sha256": "0902f5a9bf4c085172a61010deb54c74d7b89516fb9cfe1255722ad97b25dea9"
++        "bytes": 33630,
++        "sha256": "34662059cf28bed06f8871352d5175df872574c4540cde9088ac89034c81b544"
+     },
+     "x230/c1-tools-01/validate_compiler_monitor.py": {
+         "bytes": 7055,
+@@ -223,7 +223,7 @@
+         cursor = next_header
+     require(terminated and set(files) == set(EXPECTED) and len(files) == 23,
+             'tar member set or termination differs')
+-    require(total == 692705, 'frozen payload total differs')
++    require(total == 709014, 'frozen payload total differs')
+     return files
+ 
+ 
+@@ -236,7 +236,6 @@
+ 
+ def inventory(dirs, complete):
+     allowed = {key: set(value) for key, value in DIRECTORY_CHILDREN.items()}
+-    allowed[''].update((ARCHIVE_NAME, IMPORTER_NAME))
+     if complete:
+         for name in EXPECTED:
+             parent, _, leaf = name.rpartition('/')
+@@ -248,7 +247,7 @@
+ 
+ def main():
+     require(sys.platform == 'darwin' and os.geteuid() != 0, 'requires the non-root Mac owner')
+-    require(len(sys.argv) == 1 and Path(__file__).absolute() == ROOT / IMPORTER_NAME,
++    require(len(sys.argv) == 1 and Path(__file__).absolute() == ROOT.parent / IMPORTER_NAME,
+             'fixed importer path or arguments differ')
+     require(isinstance(EXPECTED, dict) and len(EXPECTED) == 23, 'unsealed transport importer')
+     os.umask(0o077)
+@@ -273,6 +272,7 @@
+             checks.append((fd, name, child, identity))
+             fd = child
+         dirs[''] = fd
++        transport_directory = checks[-1][0]
+         for relative in DIRECTORIES[1:]:
+             parent, _, name = relative.rpartition('/')
+             before = os.stat(name, dir_fd=dirs[parent], follow_symlinks=False)
+@@ -286,8 +286,8 @@
+             dirs[relative] = child
+         check_directories(checks)
+         inventory(dirs, False)
+-        archive = read_regular(dirs[''], ARCHIVE_NAME, MAX_ARCHIVE)
+-        importer = read_regular(dirs[''], IMPORTER_NAME, MAX_FILE)
++        archive = read_regular(transport_directory, ARCHIVE_NAME, MAX_ARCHIVE)
++        importer = read_regular(transport_directory, IMPORTER_NAME, MAX_FILE)
+         files = parse_archive(archive)
+         # Every identity and every absent output is checked before the first write.
+         check_directories(checks)
+@@ -319,13 +319,13 @@
+             raw = read_regular(dirs[parent], leaf, MAX_FILE)
+             require(len(raw) == identity['bytes'] and sha(raw) == identity['sha256'],
+                     'final payload identity differs: ' + name)
+-        require(read_regular(dirs[''], ARCHIVE_NAME, MAX_ARCHIVE) == archive, 'archive changed')
+-        require(read_regular(dirs[''], IMPORTER_NAME, MAX_FILE) == importer, 'importer changed')
++        require(read_regular(transport_directory, ARCHIVE_NAME, MAX_ARCHIVE) == archive, 'archive changed')
++        require(read_regular(transport_directory, IMPORTER_NAME, MAX_FILE) == importer, 'importer changed')
+         for directory in dirs.values():
+             os.fsync(directory)
+         check_directories(checks)
+-        print(json.dumps({'schema': 'hepta-d1-c1-mac-transport-import/v1', 'imported': True,
+-                          'files': 23, 'payload_bytes': 692705, 'archive_sha256': ARCHIVE_SHA256,
++        print(json.dumps({'schema': 'hepta-d2-c1-mac-transport-import/v1', 'imported': True,
++                          'files': 23, 'payload_bytes': 709014, 'archive_sha256': ARCHIVE_SHA256,
+                           'seal_manifest_sha256': EXPECTED['seal-manifest.json']['sha256'],
+                           'target_code_executed': False, 'measurement_started': False}, sort_keys=True))
+     finally:

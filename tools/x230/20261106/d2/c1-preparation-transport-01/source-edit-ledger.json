@@ -1,0 +1,67 @@
+[
+  {
+    "after": "exact unsealed D2 C1 preparation",
+    "before": "exact unsealed D1 C1 preparation",
+    "label": "documented namespace"
+  },
+  {
+    "after": "ROOT = Path(\"/home/qian/hepta-runtime-validation-cost-20261106-d2\")",
+    "before": "ROOT = Path(\"/home/qian/hepta-runtime-phase-cost-20261106-d1\")",
+    "label": "D2 root"
+  },
+  {
+    "after": "DEST = ROOT / \"c1-parent-preparation-01\"",
+    "before": "DEST = ROOT / \"c1-parent-preparation-05\"",
+    "label": "first preparation destination"
+  },
+  {
+    "after": "RECEIPT = ROOT / \"c1-preparation-install-01.json\"",
+    "before": "RECEIPT = ROOT / \"c1-preparation-install-05.json\"",
+    "label": "first install receipt"
+  },
+  {
+    "after": "ARCHIVE = Path(\"/home/qian/hepta-runtime-d2-c1-parent-preparation-01.tar.gz\")",
+    "before": "ARCHIVE = ROOT / \"c1-parent-preparation-05.tar.gz\"",
+    "label": "fixed archive staging outside ROOT"
+  },
+  {
+    "after": "EXPECTED_MANIFEST = {\"bytes\": 10577, \"sha256\": \"9fcf4d95387e5b5fdb124acaf273c807ca59cf8d78c4fdc9f73577166e6e44f7\"}",
+    "before": "EXPECTED_MANIFEST = {\"bytes\": 13228, \"sha256\": \"40693bc863122eff6c554aa18e4c4394e9a6c17a90753b2761deaa920382c38e\"}",
+    "label": "original D2 preparation manifest"
+  },
+  {
+    "after": "EXPECTED_MEMBERS = 40",
+    "before": "EXPECTED_MEMBERS = 43",
+    "label": "fixed original member count"
+  },
+  {
+    "after": "EXPECTED_PAYLOAD_BYTES = 514838",
+    "before": "EXPECTED_PAYLOAD_BYTES = 564059",
+    "label": "fixed original total bytes"
+  },
+  {
+    "after": "EXPECTED_ARCHIVE = {\"bytes\":138598,\"sha256\":\"78fb352cae7e77cc34cef6be84059a38c423668e48a0dc5014ea012ebad38cdc\"}",
+    "before": "EXPECTED_ARCHIVE = {'bytes': 158613, 'sha256': 'ad6778f31e7b10caaad3913e8c6368cc09fa6ef6b34c411cdf54a15d8a4e2faf'}",
+    "label": "actual deterministic tar"
+  },
+  {
+    "after": "\"hepta-d2-c1-outer-preparation/v1\"",
+    "before": "\"hepta-d1-c1-outer-preparation/v1\"",
+    "label": "actual original manifest schema"
+  },
+  {
+    "after": "manifest.get(\"revision\") == \"02\"",
+    "before": "manifest.get(\"revision\") == \"05\"",
+    "label": "actual original D2 source revision"
+  },
+  {
+    "after": "manifest.get(\"source_package_only\") is True",
+    "before": "manifest.get(\"source_only\") is True",
+    "label": "actual D2 source-only field"
+  },
+  {
+    "after": "\"hepta-d2-c1-source-preparation-install/v1\"",
+    "before": "\"hepta-d1-c1-source-preparation-install/v1\"",
+    "label": "D2 installation receipt schema"
+  }
+]

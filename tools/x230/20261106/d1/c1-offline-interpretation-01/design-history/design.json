@@ -1,0 +1,192 @@
+{
+  "schema": "hepta-d1-c1-offline-interpretation-design/v1",
+  "status": "design-only; original frame and trace demonstration pending",
+  "root": "/home/qian/hepta-runtime-phase-cost-20261106-d1",
+  "original_workflow_success": false,
+  "original_failure_must_remain_unchanged": true,
+  "runtime_source_changed": false,
+  "host_calls": 0,
+  "target_code_executed": false,
+  "measured_cost_result": null,
+  "failure": {
+    "adapter_source_sha256": "0902f5a9bf4c085172a61010deb54c74d7b89516fb9cfe1255722ad97b25dea9",
+    "function": "select_trace",
+    "function_lines": [
+      359,
+      458
+    ],
+    "predicate_lines": [
+      394,
+      398
+    ],
+    "error": "unique original native request identity missing",
+    "actual_adapter_report_sha256": "0f2c2c504e2768b879ab3a2cfa56e21d3b1d28b6f5d7fce4d446e4d3f6abc8e2",
+    "raw_frame_failure_cause_confirmed": false
+  },
+  "source_contract": {
+    "runtime_request_results": {
+      "path": "src/mcp/runtime/request_results.rs",
+      "bytes": 47927,
+      "sha256": "5090ea015457c77f7f37641e3dbdff3185eb9a24881974a60d5f396b8cdbf281",
+      "git_blob": "2b89dcef481fd204988cb10b362c3e28281dd253"
+    },
+    "eligible_tools": [
+      "host_list",
+      "host_health",
+      "effective_config"
+    ],
+    "additional_exposed_tools": [
+      "request_status",
+      "request_result",
+      "request_start",
+      "request_cancel"
+    ],
+    "status_read_public_marker_expected": false,
+    "internal_trace_native_id_source": "actual request_audit ticket; formatted server.rs line2509; public attachment conditional at2550-2553"
+  },
+  "source_evidence": [
+    {
+      "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-actual-originals-01/c1-observation-01/report.json",
+      "bytes": 1254435,
+      "sha256": "58303fa9ccc4f9dcb9c4ca4587761ecfdb2f7789fc68446512d163a264667da9",
+      "git_blob": "1f95992d15998a07419de222057c66d02d150344"
+    },
+    {
+      "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-actual-originals-01/c1-adapter-evidence-01/adapter-report.json",
+      "bytes": 14034,
+      "sha256": "0f2c2c504e2768b879ab3a2cfa56e21d3b1d28b6f5d7fce4d446e4d3f6abc8e2",
+      "git_blob": "5296d37fb1e6dc7a6298f78c90dd925c95331972"
+    },
+    {
+      "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-actual-originals-01/c1-campaign-01/report.json",
+      "bytes": 460195,
+      "sha256": "9634d62d7bfd4ded40831306953f7c7cd69d105aedc3087755288069a0ea2990",
+      "git_blob": "63ac921ebdc3f102c77449efad9a758bf228f006"
+    },
+    {
+      "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-actual-sealed-01/x230/c1-tools-01/run_c1_phase_cost.py",
+      "bytes": 34274,
+      "sha256": "0902f5a9bf4c085172a61010deb54c74d7b89516fb9cfe1255722ad97b25dea9",
+      "git_blob": "20bcb27c7d8f8b80557e5374a53486039982057b"
+    },
+    {
+      "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-parent-template-05/reference/analyze_native_observation.py",
+      "bytes": 8708,
+      "sha256": "cc7f6884d581cd1ced430437350e808de51931c50d12441797205501b20cae66",
+      "git_blob": "f00a7f7f81621912318b7d585e1ffc02d6e96c3f"
+    },
+    {
+      "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-parent-template-05/reference/audit_native_evidence.py",
+      "bytes": 17065,
+      "sha256": "b69f6902d2de81eab41b21506f024c002d2f8264d60e86df6b1086623a77fd28",
+      "git_blob": "3cb7037cd5911a2aaf82307f0abf1713f7d8f0b9"
+    },
+    {
+      "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-parent-template-05/reference/allocator_environment_audit.py",
+      "bytes": 6709,
+      "sha256": "4b082ce343ae3943e3098baa58af2f5def7198881b9c087d63d88360e9763727",
+      "git_blob": "8eda67e0f6196770b18df69457f852c93765c66f"
+    },
+    {
+      "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-parent-template-05/reference/allocator_environment.py",
+      "bytes": 5879,
+      "sha256": "f5c8e879c540b3f7cb1b7d3a7a0f5002c2f40c1a87963174b0b00470fa3a4525",
+      "git_blob": "0189ecb9d3dc0a8ba907be42d11848d6a054bc98"
+    },
+    {
+      "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-parent-template-05/reference/summarize_trace.py",
+      "bytes": 15057,
+      "sha256": "f6e65c2e206d4aa90143a17893e5e57c158bca9f8eec5f74897b19c3596e32c5",
+      "git_blob": "064cd62dd7f60ee11d538b4b21f4674283591572"
+    }
+  ],
+  "expected_counts_from_original_native_report": {
+    "round_order": "ABBA",
+    "modes": {
+      "A": "off",
+      "B": "on"
+    },
+    "controllers": 8,
+    "first": {
+      "preflight": 6,
+      "warmup": 24,
+      "measured": 192,
+      "total": 222
+    },
+    "restart": {
+      "total": 12
+    },
+    "all_calls": 936,
+    "measured_calls": 768,
+    "expected_on_requests": 468,
+    "expected_on_measured_requests": 384,
+    "actual_trace_request_counts": null
+  },
+  "proposed_outputs": {
+    "directory": "/home/qian/hepta-runtime-phase-cost-20261106-d1/c1-offline-interpretation-01",
+    "original_native_auditor_output": "native-independent-summary.json",
+    "new_join_output": "trace-rpc-correspondence.json",
+    "new_phase_output": "phase-cost-summary.json",
+    "original_missing_auditor_path_must_remain_absent": "/home/qian/hepta-runtime-phase-cost-20261106-d1/c1-observation-01/independent-summary.json"
+  },
+  "preconditions": [
+    "Original failed campaign and all raw files archived and byte-verified; complete caller/holder and compiler-monitor custody is retained.",
+    "Pin every imported analysis source and preserve the original relative source dependencies.",
+    "Execute unchanged native auditor once against original report/tree into a fresh output; record actual command/native terminal/logs separately.",
+    "Use unchanged raw trace parser; every original header/footer/slot/clock/parent/nesting condition must pass."
+  ],
+  "bijection_rule": {
+    "controller_key": [
+      "boot_id",
+      "pid",
+      "start_ticks"
+    ],
+    "scope": "each original controller independently; request slot uniqueness is namespaced by controller",
+    "candidate_conditions": [
+      "same controller identity",
+      "exact process_status/process_read operation",
+      "exact configured host alias",
+      "entire trace request wall interval contained in original RPC interval",
+      "original RPC interval contained in its original call interval and applicable measured/warmup cell interval"
+    ],
+    "require_unique_each_direction": true,
+    "require_all_report_requests_used_exactly_once": true,
+    "require_all_trace_requests_used_exactly_once": true,
+    "require_global_trace_native_id_uniqueness": true,
+    "on_first_expected": 222,
+    "on_restart_expected": 12,
+    "off_expected_request_and_event_rows": 0,
+    "missing_ambiguous_extra_policy": "retain unmatched original references and reject interpretation; never choose nearest or positional match",
+    "wire_native_request_id": null,
+    "native_id_publicly_observed": false,
+    "native_id_origin": "original trace, not a fabricated response marker"
+  },
+  "boot_evidence": {
+    "original_adapter_observed_boot_unchanged_before_interpretation": true,
+    "original_adapter_persisted_boot_value": false,
+    "new_analysis_must_not_read_current_boot_as_historical_substitute": true,
+    "required": "Eight original trace header boot IDs agree; retain source-backed already executed before/after boot check and any additional original historical boot receipt actually present; do not invent missing values."
+  },
+  "scientific_limits": [
+    "A valid trace/RPC correspondence does not turn the original failed workflow into success.",
+    "No native ID is claimed to have appeared on public status/read responses.",
+    "Two ON rounds do not establish statistical significance or a lifecycle performance benefit.",
+    "Use measured request groups only, exclusive synchronous CPU, and same-window controller counters; keep unmatched residual signed and unattributed.",
+    "No thresholds, no retry policy, no original records and no runtime behavior are changed."
+  ],
+  "future_execution": {
+    "authorized_here": false,
+    "original_auditor_previously_ran": false,
+    "new_analysis_implemented": false,
+    "new_analysis_executed": false,
+    "original_auditor_argv": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-phase-cost-20261106-d1/c1-tools-01/reference/analyze_native_observation.py",
+      "--report",
+      "/home/qian/hepta-runtime-phase-cost-20261106-d1/c1-observation-01/report.json",
+      "--output",
+      "/home/qian/hepta-runtime-phase-cost-20261106-d1/c1-offline-interpretation-01/native-independent-summary.json"
+    ]
+  }
+}
