@@ -886,15 +886,41 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
-        self.assertEqual(len(MODULES), 49)
-        self.assertEqual(len(migration["native_components"]), 116)
-        self.assertEqual(len(q.native_tests()), 132)
-        self.assertEqual(len(RECIPES), 44)
+        self.assertEqual(len(MODULES), 50)
+        self.assertEqual(len(migration["native_components"]), 117)
+        self.assertEqual(len(q.native_tests()), 133)
+        self.assertEqual(len(RECIPES), 45)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
         self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
                             for row in migration["legacy_tool_handlers"]))
         for key in ("whole_runtime_replaced", "production_activated", "old_stack_removal_qualified"):
             self.assertIs(migration[key], False)
+
+    def test_batch_params_registration_preserves_component_and_original_boundaries(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_batch_edit_params_pipeline as params
+        item = next(row for row in q.MODULES if row['key'] == params.KEY)
+        self.assertEqual(item['source'], 'native/batch_edit_params.hepta')
+        self.assertEqual(item['builder'], params.KEY)
+        self.assertEqual((item['test'], *item.get('additional_tests', ())), (params.NATIVE_TEST,))
+        self.assertIn(params.KEY, RECIPES)
+        self.assertNotIn(params.KEY, NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+        pinned = q.sources()
+        for name in ('native/batch_edit_params.hepta', 'native/batch_edit_params_abi.md',
+                     'native/batch_edit_params_composition.json', params.PIPELINE_SOURCE,
+                     'scripts/hia_native_batch_edit_params_build.py',
+                     'scripts/hia_native_batch_edit_params_qualification.py',
+                     'tests/hia_native/' + params.NATIVE_TEST, 'tests/hia_native/' + params.CONTROLS_TEST,
+                     'tests/hia_native/batch_edit_params_oracle/src/original.rs',
+                     'tests/hia_native/batch_edit_params_oracle/source_manifest.json'):
+            self.assertIn(name, pinned)
+        output = self.output / 'uncreated-batch-params'
+        for bad in ('/outside/bundle.json', '../outside/bundle.json'):
+            report = {'modules': {params.KEY: {'manifest': bad, 'source': item['source'], 'builder': params.KEY}}}
+            with self.subTest(path=bad), self.assertRaises(ValueError):
+                params.environment(ROOT, output, report)
+        self.assertFalse(output.exists())
+        self.assertNotIn(params.CONTROLS_TEST, q.native_tests())
 
     def test_config_span_registry_requires_native_capture_and_fresh_original(self):
         import qualify_hia_runtime_native as q

@@ -106,6 +106,9 @@ MODULES = (
      "standalone": None, "manifest_env": "HIA_ENDPOINT_MANIFEST", "test": "test_line_endpoint.py"},
     {"key": "line_verify", "name": "line-verify", "source": "native/line_verify.hepta",
      "standalone": "filter", "manifest_env": "HIA_LINE_VERIFY_MANIFEST", "test": "test_line_verify.py"},
+    {"key": "batch_edit_params", "name": "batch-edit-params", "source": "native/batch_edit_params.hepta",
+     "builder": "batch_edit_params", "manifest_env": "HIA_BATCH_EDIT_PARAMS_BUNDLE",
+     "test": "test_batch_edit_params.py", "companion_sources": ("native/serde_json_span.hepta",)},
     {"key": "batch_plan", "name": "batch-plan", "source": "native/batch_plan.hepta",
      "builder": "batch_plan", "manifest_env": "HIA_BATCH_PLAN_BUNDLE", "test": "test_batch_plan.py",
      "additional_tests": ("test_batch_plan_evidence.py",)},
@@ -414,6 +417,8 @@ def sources() -> dict:
         "hia_native_effect_fence_build.py", "hia_native_effect_fence_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
+        "hia_native_batch_edit_params_build.py", "hia_native_batch_edit_params_qualification.py",
+        "hia_native_batch_edit_params_pipeline.py",
         "hia_native_batch_apply_build.py", "hia_native_batch_apply_qualification.py",
         "hia_native_atomic_write_build.py", "hia_native_atomic_write_qualification.py",
         "hia_native_filesystem_parity_build.py", "hia_native_filesystem_parity_reference.py",
@@ -618,6 +623,12 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                             {"name": name, "type": type(error).__name__, "message": str(error)})
             save_report(output / "result.json", report)
 
+    if "test_batch_edit_params.py" in tests:
+        # Preserve a byte-identical component view of this actual main receipt.
+        # Pure readers subsequently require it; they never recreate a missing file.
+        from hia_native_batch_edit_params_pipeline import native_evidence
+        native_evidence(ROOT, output, report, completed_test_summary, create=True)
+
 
 def io_reference_evidence(output: Path, report: dict) -> dict:
     """Admit the direct retained-Python comparisons, never a dummy Rust recipe."""
@@ -783,6 +794,11 @@ def editable_content_evidence(output: Path, report: dict) -> dict:
 
 def line_verify_evidence(output: Path, report: dict) -> dict:
     return checked_line_verify_evidence(ROOT, output, report, completed_test_summary)
+
+
+def batch_edit_params_evidence(output: Path, report: dict) -> dict:
+    from hia_native_batch_edit_params_pipeline import native_evidence
+    return native_evidence(ROOT, output, report, completed_test_summary)
 
 
 def batch_plan_evidence(output: Path, report: dict) -> dict:
@@ -2365,6 +2381,9 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         env[item["manifest_env"]] = str(built)
         if item.get("builder") == "composition":
             env["HIA_COMPOSITION_MANIFEST"] = str(built)
+        elif item.get("builder") == "batch_edit_params":
+            from hia_native_batch_edit_params_pipeline import environment
+            env.update(environment(ROOT, output, report))
         elif item.get("builder") == "effect_fence":
             bundle = json.loads(built.read_bytes())
             env["HIA_FENCE_ASYNC_MANIFEST"] = str(
@@ -2499,6 +2518,11 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "filesystem_parity":
             from hia_native_filesystem_parity_build import build_filesystem_parity
             built = build_filesystem_parity(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "batch_edit_params":
+            from hia_native_batch_edit_params_build import build_batch_edit_params
+            nested = output / "batch-edit-params/build"
+            shutil.copytree(output / "build/bootstrap", nested / "bootstrap")
+            built = build_batch_edit_params(hepta, nested, source_root=ROOT)
         elif item.get("builder") == "batch_plan":
             from hia_native_batch_plan_build import build_batch_plan
             built = build_batch_plan(hepta, output / "build", source_root=ROOT)
@@ -2606,6 +2630,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["operation_scope_evidence"] = operation_scope_evidence(output, report)
     report["editable_content_evidence"] = editable_content_evidence(output, report)
     report["line_verify_evidence"] = line_verify_evidence(output, report)
+    report["batch_edit_params_evidence"] = batch_edit_params_evidence(output, report)
     report["batch_plan_evidence"] = batch_plan_evidence(output, report)
     report["batch_apply_evidence"] = batch_apply_evidence(output, report)
     atomic = atomic_write_evidence(output, report)
@@ -2700,6 +2725,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["config_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["config_span_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["config_span_fixture_retirement"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_edit_params_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["artifact_sha256"])

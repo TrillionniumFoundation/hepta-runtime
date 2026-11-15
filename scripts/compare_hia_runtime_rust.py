@@ -151,6 +151,13 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required editable state/byte-preservation/static-image evidence differs")
     if report.get("line_verify_evidence") != line_verify_evidence(output, report):
         raise ValueError("required line-ID verification/diagnostic/index evidence differs")
+    from hia_native_batch_edit_params_pipeline import native_evidence as batch_params_native
+    from hia_native_batch_edit_params_pipeline import retained_original as batch_params_original
+    if batch_params_native(ROOT, output, report, completed_test_summary) != report.get("batch_edit_params_evidence"):
+        raise ValueError("registered batch parameter native evidence differs")
+    if "batch_edit_params" in report.get("original_rust_comparisons", {}):
+        if batch_params_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["batch_edit_params"]:
+            raise ValueError("registered batch parameter original evidence differs")
     if report.get("batch_plan_evidence") != batch_plan_evidence(output, report):
         raise ValueError("required complete batch input/endpoint/large-result evidence differs")
     if report.get("batch_apply_evidence") != batch_apply_evidence(output, report):
@@ -350,7 +357,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get(compiler_field) != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "filesystem_parity", "history", "execution_shadow", "effect_fence", "runtime_config", "runtime_config_span", "result_publication", "session_workdir", "request_scope", "file_locks", "file_lock_service", "view_read", "runtime_mcp"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_edit_params", "batch_apply", "atomic_write", "filesystem_parity", "history", "execution_shadow", "effect_fence", "runtime_config", "runtime_config_span", "result_publication", "session_workdir", "request_scope", "file_locks", "file_lock_service", "view_read", "runtime_mcp"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1823,6 +1830,12 @@ def retained_filesystem_parity(output: Path, report: dict, rustc: Path) -> dict:
     return q.decode(q.canonical(value))
 
 
+def compare_batch_edit_params(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_batch_edit_params_pipeline import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check=record_check,
+                            completed=completed_test_summary, qualification_env=qualification_env)
+
+
 def compare_config_span(output: Path, report: dict, rustc: Path) -> dict:
     from hia_native_config_span_pipeline import execute_original
     return execute_original(ROOT, output, report, rustc, record_check, completed_test_summary)
@@ -1834,6 +1847,7 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "result_publication": compare_result_publication,
            "request_scope_lifecycle": compare_request_scope,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
+           "batch_edit_params": compare_batch_edit_params,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
            "view_render_growth": compare_view_render_growth,

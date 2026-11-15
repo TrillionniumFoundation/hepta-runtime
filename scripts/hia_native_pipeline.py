@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qualify_hia_runtime_native as q
 
 PARTITIONS = {
-    "batch": ("batch_plan", "batch_apply", "atomic_write"),
+    "batch": ("batch_edit_params", "batch_plan", "batch_apply", "atomic_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
              "delta", "editable_content", "file_locks", "file_lock_service"),
