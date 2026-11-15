@@ -674,25 +674,26 @@ pub async fn execute_extract_lines(call: &McpToolCall) -> Result<String> {
 	let target_lines: Vec<&str> = target_content.lines().collect();
 
 	// Resolve append_line: line id → verified line number, or keep integer as-is (0/-1/N).
-	let append_line: i64 =
-		match append_line_ep {
-			Endpoint::Number(n) => {
-				if n < -1 {
-					bail!(
+	let append_line: i64 = match append_line_ep {
+		Endpoint::Number(n) => {
+			if n < -1 {
+				bail!(
 					"Invalid append_line {n}: use 0 (beginning), -1 (end), N (after line N), or a line id"
 				);
-				}
-				n
 			}
-			Endpoint::Id { line, hash } => {
-				if target_content.is_empty() {
-					bail!("Cannot use a line id for append_line on an empty or non-existent target file");
-				}
-				let line = line_hash::verify_line_id(line, &hash, &target_lines)
-					.map_err(|e| anyhow::anyhow!("Invalid append_line: {e}"))?;
-				line as i64
+			n
+		}
+		Endpoint::Id { line, hash } => {
+			if target_content.is_empty() {
+				bail!(
+					"Cannot use a line id for append_line on an empty or non-existent target file"
+				);
 			}
-		};
+			let line = line_hash::verify_line_id(line, &hash, &target_lines)
+				.map_err(|e| anyhow::anyhow!("Invalid append_line: {e}"))?;
+			line as i64
+		}
+	};
 
 	let insert_after = if append_line == -1 {
 		target_lines.len()

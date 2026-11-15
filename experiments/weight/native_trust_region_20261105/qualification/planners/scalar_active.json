@@ -1,0 +1,85 @@
+{
+  "case": "scalar_active",
+  "report": {
+    "base_f32_rounding_max_absolute": 0.0,
+    "candidate_f32_rounding_max_absolute": 0.0,
+    "constraint": "one joint L2/Frobenius ball across all outputs around the exact F32 anchor",
+    "diagnostics": [
+      {
+        "f32_objective_strictly_improved": true,
+        "objective_after_f32": 3.125,
+        "objective_after_f64": 3.125,
+        "objective_before_f32": 4.0,
+        "objective_before_f64": 4.0,
+        "output": 0,
+        "positive_weight_rows": 1,
+        "relative_shifted_stationarity_residual_f64": 0.0
+      }
+    ],
+    "f32_edit_count": 1,
+    "f32_element_edits": [
+      {
+        "expected_hex": "0000803f",
+        "index": 0,
+        "replacement_hex": "0000a03f"
+      }
+    ],
+    "f32_lowering": "toward_anchor_then_exact_dyadic_joint_budget_check",
+    "f32_optimality_certified": false,
+    "f32_tensor_layout": "[outputs,features], row-major little endian",
+    "f32_update_budget": {
+      "arithmetic": "exact_576_bit_integer_F32_differences_and_exact_F64_radius_square",
+      "elements_checked": 1,
+      "maximum_update_l2_norm": 0.25,
+      "radius_f64_bits": "3fd0000000000000",
+      "squared_update_unit_exponent": -298,
+      "squared_update_units_hex": "40000000000000000000000000000000000000000000000000000000000000000000000000",
+      "within_budget": true
+    },
+    "features": 1,
+    "gradient_steps": 0,
+    "independent_holdout_verified": false,
+    "lambda": 1.0,
+    "max_update_l2_norm": 0.25,
+    "method": "supervised_proximal_weighted_ridge_joint_l2_trust_region_f64",
+    "native_operation_wall_seconds": 0.000127485,
+    "objective": "sum_j sum_i sample_weights[i][j]*(features[i] dot weights[j]-targets[i][j])^2 + lambda*sum_j||weights[j]-base_weights[j]||^2; no row normalization",
+    "operation_budget_units": 5949,
+    "operation_charged_units": 1441,
+    "outputs": 1,
+    "production_eligible": false,
+    "request_bytes": 125,
+    "request_sha256": "e87dd169a9178c25e436667a6773e3054dd43f1c67380fadb188c4b2c87106a1",
+    "requires_pinned_source_and_guarded_evaluation": true,
+    "rows": 1,
+    "schema": "hepta.weight.proximal-ridge-plan.v1",
+    "scope": "bounded convex F64 supervised fitting with exact represented-F32 update feasibility; no F32 optimum, authenticated source, task-value improvement or activation claim",
+    "source_weights_verified": false,
+    "training_targets_used": true,
+    "trust_region": {
+      "bisection_steps": 2,
+      "bracket_steps": 1,
+      "constraint_active": true,
+      "f64_global_optimality_certified": false,
+      "f64_update_l2_norm": 0.25,
+      "frank_wolfe_gap_f64_diagnostic": 0.0,
+      "maximum_relative_stationarity_residual_f64": 0.0,
+      "numerical_kkt_checks_passed": true,
+      "relative_radius_slack_f64": 0.0,
+      "shared_multiplier": 6.0,
+      "shift_solve_batches": 4,
+      "singleton": false,
+      "singleton_feasibility_verified": false
+    },
+    "weights_f32": [
+      [
+        1.25
+      ]
+    ],
+    "weights_f64": [
+      [
+        1.25
+      ]
+    ]
+  }
+}

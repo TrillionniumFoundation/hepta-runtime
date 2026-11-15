@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! MCP schemas, tool routing and the shared runtime request-audit boundary.
+
 //! MCP server handlers, session state, and tool parameter schemas.
 
 use std::sync::{Arc, RwLock};
@@ -38,11 +40,16 @@ use super::rea_evidence_readback;
 use super::rea_source_map;
 use super::request_ctx;
 use super::runtime;
+use super::weight_bellman;
+use super::weight_certificate;
+use super::weight_semantic;
+use super::weight_semantic_certificate;
 use super::McpToolCall;
 use super::{hia_contract, hia_provider};
 use super::{
 	rea, rea_artifact_zip, rea_asar, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
-	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_tensor,
+	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_guard,
+	weight_ridge, weight_tensor,
 };
 use super::{rea_analysis_view, rea_analysis_view_mcp_input};
 use super::{rea_apk_evidence, rea_apk_mcp_input, rea_evidence_export, rea_evidence_import};
@@ -291,7 +298,15 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"weight_profiles",
 	"weight_artifact_patch",
 	"weight_artifact_restore",
+	"weight_cohort_patch",
+	"weight_cohort_restore",
 	"weight_linear_forward",
+	"weight_guarded_linear_patch",
+	"weight_linear_ridge_plan",
+	"weight_bellman_plan",
+	"weight_continuation_certificate",
+	"weight_semantic_replay",
+	"weight_semantic_certificate",
 	"weight_open",
 	"weight_call",
 	"weight_status",
@@ -2695,6 +2710,46 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Create Native Weight Cohort",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Create one immutable safetensors candidate for 1..32 unique tensors and at most 1024 total exact element edits. Requires one complete checkpoint SHA, data/code/tensor-map/dependency/objective identities, exact per-member and global L2 budgets, and an explicit inference-only or fresh stateless optimizer contract. Reuses the existing private weight owner, shared storage quota and owner fence. Durable intent and outcome records reconcile interruption; candidate and all reverse edits publish together and receive full readback. Does not modify a production incumbent, run training, migrate optimizer state or establish behavioral quality."
+	)]
+	async fn weight_cohort_patch(
+		&self,
+		Parameters(params): Parameters<weight_artifact::cohort::PatchParams>,
+	) -> Result<String, String> {
+		// The retained cohort owner task holds admission through actual publication.
+		weight_artifact::cohort::patch(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Restore Native Weight Cohort",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Restore an entire verified native weight cohort into a new immutable artifact. Requires a fresh stable request key and exact cohort artifact ID. Every recorded edit is reversed together and the complete result must equal the original checkpoint SHA. Never adopts or overwrites a production model."
+	)]
+	async fn weight_cohort_restore(
+		&self,
+		Parameters(params): Parameters<weight_artifact::cohort::RestoreCohortParams>,
+	) -> Result<String, String> {
+		// The retained cohort owner task holds admission through actual publication.
+		weight_artifact::cohort::restore(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "Native F32 Linear Forward",
 		annotations(
 			read_only_hint = true,
@@ -2709,6 +2764,123 @@ impl OctofsServer {
 		Parameters(params): Parameters<weight_forward::ForwardLinearParams>,
 	) -> Result<String, String> {
 		weight_forward::forward(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Plan a Native Proximal Linear Head Edit",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Solve a bounded supervised proximal weighted-ridge problem for frozen features in Rust using F64 Cholesky, optionally solve a joint L2 trust region with a bounded shared-multiplier search, then expose F32 lowering and exact element-edit proposals. A budgeted plan requires exact F32 anchors and independently verifies represented-F32 feasibility; it does not certify a F32 optimum. Targets and sample weights are explicit training data, not model inputs. Reports numerical residuals; publishes no files. Caller-supplied initial weights are not authenticated to a checkpoint until a subsequent hash-pinned exact patch. No gradient steps, whole-task optimality or production eligibility claim."
+	)]
+	async fn weight_linear_ridge_plan(
+		&self,
+		Parameters(params): Parameters<weight_ridge::RidgePlanParams>,
+	) -> Result<String, String> {
+		weight_ridge::plan(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Plan a Bounded Finite-DAG Value Policy",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Compute Q values and first-maximum actions for a caller-declared finite DAG in Rust. At most 4096 topologically ordered states, six fixed action slots, two continuing actions per state and three branches per action. Keeps each fee and reward inside the ordered branch multiplication, skips zero probabilities, and never normalizes probabilities. Reports numerical consistency and tie diagnostics, canonical request and implementation identities, and bounded work. No file access, parameter editing, verification of the true environment law or checkpoint, real-arithmetic certificate, held-out task-value claim, or production activation."
+	)]
+	async fn weight_bellman_plan(
+		&self,
+		Parameters(params): Parameters<weight_bellman::BellmanPlanParams>,
+	) -> Result<String, String> {
+		weight_bellman::plan(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Verify an Exact Continuation Ordering Certificate",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Verify a fixed-representation continuation-ordering separation witness using exact binary64 integer arithmetic. Checks a caller-pinned joint-policy-v1 checkpoint, extracts its 147 continuation coefficients, verifies supplied hidden bytes and first-max labels, then checks ideal and conservative binary64-relaxed infeasibility separately. At most 8192 rows, 1 MiB checkpoint and 8 MiB request; bounded workers with cooperative deadlines. The SHA values bind supplied bytes, not authenticated provenance: hidden features and teacher programs are not reexecuted. No file access, weight edit, witness search, task-value improvement, whole-network impossibility or production eligibility."
+	)]
+	async fn weight_continuation_certificate(
+		&self,
+		Parameters(params): Parameters<weight_certificate::CertificateParams>,
+	) -> Result<String, String> {
+		weight_certificate::verify(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Replay a Native Endpoint Policy and Teacher",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Reconstruct causal decision states, 85 input features, 49 hidden coefficients, network scores, legal masks and finite-horizon Bellman teacher Q for one explicit renewal endpoint profile in Rust. Requires exact request, compiled core-source and target-contract SHA256 values; checks checkpoint and public schedule bytes internally. At most 2 MiB request, 128 traces of six steps, 8192 cache states and a 30-second cooperative core deadline. One non-queued worker retains its permit after caller cancellation. Uses supplied transition tables, current-at-due observations and sensor-only repair; this is not First-Passage/Reset or a general NDU optimizer. Rounded binary64 results do not authenticate external sources or extend an existing certificate. No file or process access by the replay, parameter editing, independent holdout, task-value improvement or production eligibility."
+	)]
+	async fn weight_semantic_replay(
+		&self,
+		Parameters(params): Parameters<weight_semantic::SemanticReplayParams>,
+	) -> Result<String, String> {
+		weight_semantic::replay(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Replay and Verify a Native Continuation Witness",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Execute the fixed native endpoint semantic core and join its causal states, hidden bytes, legal masks and first-maximum teacher targets directly to the exact continuation checker. One checkpoint and public schedule, 1..128 traces, 1..256 source-row/competitor/multiplier comparisons; every trace must be covered. Caller-supplied hidden vectors, Q scores, masks, targets and states are forbidden. Compiled join/adapter/core/contract/checker/arithmetic source identities are pinned, not the complete executable. One worker shared with semantic replay retains admission through parsing, replay, join, proof and bounded serialization, even after caller cancellation. The 30-second outer cooperative cutoff is passed to both semantic replay and the exact checker; neither phase renews it, and late serialized results are refused. This is not a hard wall-clock process kill. At most 3 MiB canonical request and 1 MiB result. Checks the original fixed 147-coefficient ball without witness search. No file/process access, model edit, external-source authentication, general First-Passage/Reset or NDU, independent holdout, task-value improvement or production eligibility."
+	)]
+	async fn weight_semantic_certificate(
+		&self,
+		Parameters(params): Parameters<weight_semantic_certificate::SemanticCertificateParams>,
+	) -> Result<String, String> {
+		weight_semantic_certificate::verify(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Evaluate Native Weight Edit With Exact Recovery",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Evaluate one exact F32 linear-head edit on fixed supplied rows in Rust. With max_update_l2_norm, independently enforce an exact numeric budget on this patch's authenticated F32 differences before publication; this excludes supplied bias, environment changes and cumulative drift. Requires strict negative-MSE or realized-action-value improvement plus all declared probability, terminal-Q and preservation constraints. On failure, automatically publishes the reverse patch and verifies original hash and predictions; recovery errors remain explicit. At most 64 input rows and 1 MiB per request. Original weights remain unchanged. Supplied rows are not independently verified holdout data; no production activation or global optimization claim."
+	)]
+	async fn weight_guarded_linear_patch(
+		&self,
+		Parameters(params): Parameters<weight_guard::GuardedPatchParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		weight_guard::evaluate(params)
 			.await
 			.map_err(|error| error.to_string())
 	}

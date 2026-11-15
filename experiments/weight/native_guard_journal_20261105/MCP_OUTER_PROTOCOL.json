@@ -1,0 +1,16 @@
+{
+  "schema": "hepta.guard-journal-mcp-outer-protocol.v1",
+  "frozen_before_execution": true,
+  "inner_driver_sha256": "f725928b2c5dd9aeb53166907ec277f17f6ad7f30f63ad322fb978fd1b40fb26",
+  "inner_protocol_sha256": "f06634e9e73182c149d8a94bd5771648f39ce0516c79dbfa64332a7376c7bd76",
+  "measurement": "Use wait4 on the owned complete Python driver process, whose waited-for MCP runtime child is included by Linux child accounting; includes Python imports, input/binary checks, all RPCs, final receipt writes and shutdown",
+  "observed_wall_timeout_seconds": 240,
+  "wait_poll_interval_seconds": 0.02,
+  "per_process_address_space_limit_bytes": 8589934592,
+  "nofile_limit": 1024,
+  "failure_handling": "Retain failed exit and existing partial output; terminate only the owned child process group if the outer deadline is exceeded",
+  "source_binding": "Verify frozen driver/protocol and externally supplied qualified binary hash before execution; recheck driver/protocol after complete child exit",
+  "overlap": "Inner driver and inner child CPU/wall timers are nested within wait4/outer observations and must not be added to them",
+  "rss_scope": "wait4 maximum resident-set high-water field, not a sum of concurrent process RSS",
+  "excludes": ["Rust compilation", "previous cancelled compilation", "outer-wrapper startup and final persistence", "remote dispatch", "transfers", "agent work", "energy"]
+}

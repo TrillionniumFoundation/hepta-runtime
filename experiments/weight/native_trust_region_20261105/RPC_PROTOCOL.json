@@ -1,0 +1,51 @@
+{
+  "schema": "hepta.native-wsp-trust-region-rpc-protocol.v1",
+  "scope": "Fixed numerical, exact F32 feasibility and normal-return restoration cases; no model-policy evaluation.",
+  "files": [
+    {
+      "path": "run_native_qualification.py",
+      "bytes": 17401,
+      "sha256": "ff6213f3c46f6de8e2c0cea0843eab633e5e1cadb7f9493ba6078eecf1e5b8bf"
+    },
+    {
+      "path": "prepare_reference.py",
+      "bytes": 8316,
+      "sha256": "79e87fff338733506605936f52a8d9ced0310b1495cf4943382ab87c249a045c"
+    },
+    {
+      "path": "mcp_fixture_client.py",
+      "bytes": 4053,
+      "sha256": "29a7d46b608bbfd7879a3e89162bbb0df049984366932f49bceed8042bfa30ca"
+    },
+    {
+      "path": "fixtures/derived_public_fixture.json",
+      "bytes": 98651,
+      "sha256": "55e0dd2460f0e5a705b9ebc6c8e0012598ea367c3f6a45b372540685e2cc1f64"
+    },
+    {
+      "path": "fixtures/reference_cases.json",
+      "bytes": 259181,
+      "sha256": "7faf834ecc3c8eb43131c66fdb4d02075110fb75fe3e6e31981b269614556e00"
+    },
+    {
+      "path": "fixtures/norm_cases.json",
+      "bytes": 87198,
+      "sha256": "bf7a5b00add950fdcccc3a1089de3b9acd22c657ffd2fbf0d33cfbe816044ba5"
+    }
+  ],
+  "planning_cases": 7,
+  "optional_identity_planner_calls": 2,
+  "norm_families": 22,
+  "norm_checks": 60,
+  "negative_controls": 4,
+  "public_head_radius_fractions": [
+    0.05,
+    0.5
+  ],
+  "public_head_radius_definition": "fraction times F64 norm of explicitly F32-lowered first three output rows",
+  "public_head_forced_failure": "Append exact output-zero preservation to force rejection of the same candidate; not a natural model failure.",
+  "f64_reference_error_tolerance": "1e-8*(1+max abs reference parameter)",
+  "f32_feasibility_tolerance": "none: exact Python Fraction squared norms",
+  "passed_if": "All fixed cases executed and their numerical, identity, rejection and restoration assertions passed.",
+  "allow_dropped_failures": false
+}
