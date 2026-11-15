@@ -22,6 +22,8 @@ use super::search;
 use crate::utils::line_hash::line_id_at;
 use crate::utils::truncation::format_content_with_line_numbers;
 use anyhow::{anyhow, bail, Result};
+use std::path::Path;
+use tokio::io::AsyncWriteExt;
 
 /// Refuse to load files larger than this into memory for viewing.
 pub(crate) const MAX_VIEW_FILE_BYTES: u64 = 5 * 1024 * 1024;
@@ -143,6 +145,19 @@ pub async fn view_file_with_content_search(
 	Ok(parts.join("\n"))
 }
 
+/// Reserve the new pathname in the same operation that opens its writer.
+/// The earlier existence check is only a helpful error; it cannot authorize
+/// truncating a file another caller creates before this request reaches I/O.
+async fn create_local_file(path: &Path, content: &[u8]) -> std::io::Result<()> {
+	let mut file = tokio::fs::OpenOptions::new()
+		.write(true)
+		.create_new(true)
+		.open(path)
+		.await?;
+	file.write_all(content).await?;
+	file.flush().await
+}
+
 // Create a new file.
 pub async fn create_file_spec(source: &PathSource, content: &str) -> Result<String> {
 	// Check if file already exists — guide the AI toward the right edit tool instead of retrying create
@@ -163,9 +178,14 @@ pub async fn create_file_spec(source: &PathSource, content: &str) -> Result<Stri
 	}
 
 	// Write the content to the file
-	io_write(source, content.as_bytes())
-		.await
-		.map_err(|e| anyhow!("Permission denied. Cannot write to file: {}", e))?;
+	match source {
+		PathSource::Local(path) => create_local_file(path, content.as_bytes())
+			.await
+			.map_err(|e| anyhow!("Permission denied. Cannot write to file: {}", e))?,
+		PathSource::Remote { .. } => io_write(source, content.as_bytes())
+			.await
+			.map_err(|e| anyhow!("Permission denied. Cannot write to file: {}", e))?,
+	}
 	super::delta::note_create(source, content);
 
 	Ok(format!(
@@ -173,3 +193,7 @@ pub async fn create_file_spec(source: &PathSource, content: &str) -> Result<Stri
 		content.len()
 	))
 }
+
+#[cfg(test)]
+#[path = "file_ops_tests.rs"]
+mod tests;
