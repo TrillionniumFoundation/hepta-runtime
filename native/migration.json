@@ -41,6 +41,11 @@
       "legacy_call_sites_replaced": false
     },
     {
+      "source": "native/batch_plan_input.hepta",
+      "scope": "Native bridge from the complete canonical BatchEditParams and EditableContent frames to the exact typed Planner request. Preserves Rust str.lines, signed endpoint type distinctions, compact JSON value formatting, canonical ULEB line spans, checked u64 extents and explicit workspace/output growth; invokes the real native Planner and endpoint owners. Qualified against unchanged original typed structs, EditableContent and independent Rust request encoding. Filesystem effects, effect permits, session/policy admission, locking, history/cache, diff/hints and production routing remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
       "source": "native/batch_plan.hepta",
       "scope": "Typed original batch preflight, operation parsing and endpoint planning, including ordered error aggregation, exact null/end/insert semantics and full 50-operation / 5 MiB file domains. Native endpoint and stale-ID owners are called through fixed identities. The named image-only capacity profile retains complete repeated diagnostics; the static four-image fixture declares its smaller adapter boundary. JSON/MCP admission, path authorization, conflict checks, edits, history/cache effects and production routing remain separate owners.",
       "legacy_call_sites_replaced": false
@@ -48,6 +53,11 @@
     {
       "source": "native/batch_apply.hepta",
       "scope": "Complete original pure batch application over the full 50-operation and five-MiB content domains, exact ordered conflicts/duplicate/noise errors and Rust Unicode Debug formatting. Calls the fixed EditableContent owner and joins native planning through a six-image static ELF. Canonical file locking, writes, history/cache effects, path/config authorization and production routing remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/batch_diff.hepta",
+      "scope": "Original pure post-application annotated batch diff and ordered cumulative line shifts, with exact line IDs, deletion ranges, inserted/replaced content and complete u64 output spans. The fixed three-image qualification applies each request through the existing native batch application and EditableContent owners before independently replaying unchanged original Rust blocks. File writes, history/cache effects, response publication and production batch routing remain separate owners.",
       "legacy_call_sites_replaced": false
     },
     {
@@ -412,12 +422,12 @@
     },
     {
       "source": "native/runtime_mcp.hepta",
-      "scope": "Persistent public stdio composition of 46 fixed HIA images: configuration tools, SDK metadata admission, typed local ordinary/literal/regex file view, workdir/session/path policy, actual filesystem/cache ownership and complete growing response publication. Frontend input and reply storage use checked growing spans; configuration/execution and regex resource profiles, full 125-tool catalog, HTTP/concurrent services and all View variants remain unfinished.",
+      "scope": "Persistent public stdio composition of 58 fixed HIA images for the three configuration tools, local ordinary/literal/regex view, workdir, directory_create, file_move and directory_move. Typed metadata admission, installed path policy, same-session request/cache lifetime, actual local effects, fence custody and growing publication are connected. The separate two-session observer is qualification-only. Remaining execution and regex resource profiles, complete 125-tool catalog, HTTP/concurrent services, remote I/O and all View variants remain unfinished.",
       "legacy_call_sites_replaced": false
     },
     {
       "source": "native/runtime_mcp_catalog.hepta",
-      "scope": "HIA-native five-tool configuration/view/workdir catalog, original cleaned ViewParams and WorkdirParams schemas, initialization and discovery assets. The five-tool public profile remains distinct from the original complete 125-tool catalog; SDK fixture projections are separate from complete response comparisons.",
+      "scope": "HIA-native eight-tool configuration/view/workdir/local-filesystem catalog using the actual cleaned original SDK schemas, initialization and discovery assets. This explicit eight-tool profile remains distinct from the complete original 125-tool catalog; SDK fixture projections remain separate from complete method-response comparisons.",
       "legacy_call_sites_replaced": false
     },
     {
@@ -527,7 +537,7 @@
     },
     {
       "source": "native/view_regex.hepta",
-      "scope": "Raw-byte file-search regex controller using the shared syntax, Unicode, HIR, NFA and match images, full original diagnostics, strict UTF-8/lossy offsets and post-admission literal acceleration. Integrated into the local view caller and the 39-image MCP development profile. Existing carrier profiles and unconstrained original regex resources remain unqualified.",
+      "scope": "Raw-byte file-search regex controller using the shared syntax, Unicode, HIR, NFA and match images, full original diagnostics, strict UTF-8/lossy offsets and post-admission literal acceleration. Integrated into the local view caller and the 58-image MCP development profile. Existing carrier profiles and unconstrained original regex resources remain unqualified.",
       "legacy_call_sites_replaced": false
     },
     {
@@ -537,7 +547,7 @@
     },
     {
       "source": "native/runtime_mcp_image_packer.hepta",
-      "scope": "HIA image-table packaging of the fixed 46-image public stdio graph. Preserves the compiled syscall boundary and source-owned selectors; it does not interpret runtime request semantics or qualify the complete legacy tool catalog.",
+      "scope": "HIA image-table packaging of the fixed 58-image public stdio graph. Preserves the compiled syscall boundary and source-owned selectors; it does not interpret runtime request semantics or qualify the complete legacy tool catalog.",
       "legacy_call_sites_replaced": false
     },
     {
@@ -572,7 +582,7 @@
     },
     {
       "source": "native/config_directory_owner_span.hepta",
-      "scope": "Installed configuration owner over growing u64 output and workspace spans, retaining child completion, repeated installed reads and lock lifetime. The former fixed configuration ABI remains separately qualified. Complete production runtime replacement remains unqualified.",
+      "scope": "Installed configuration owner over growing u64 output and workspace spans, retaining child completion, repeated installed reads and lock lifetime. The former fixed configuration ABI remains separately qualified. Complete production runtime replacement remains unqualified. Remote policy op8 borrows the complete request and grows its retained error output before mutation; its legacy u32 success return remains an explicit resource boundary.",
       "legacy_call_sites_replaced": false
     },
     {
@@ -593,6 +603,31 @@
     {
       "source": "native/directory_move_guard.hepta",
       "scope": "Directory move guard using the shared installed configuration and canonical path owners. Full source/root ordering, configured-root protection and uninstalled behavior cover 81 original absolute-path cases; 11 raw or relative private original domains remain explicitly excluded from the installed JSON ABI. Public filesystem routing is qualified separately.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/filesystem_gateway.hepta",
+      "scope": "Public directory_create, file_move and directory_move method entry over typed parameters, actual fence acquisition, shared session and installed path policy. Its public stdio graph and distinct two-session observer preserve their separate qualification domains. Production activation and complete legacy router migration remain unqualified.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/filesystem_params.hepta",
+      "scope": "Exact original SDK typed extraction for DirectoryCreateParams, FileMoveParams and DirectoryMoveParams over growing JSON spans, with full original diagnostics and checked output extents.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/filesystem_call.hepta",
+      "scope": "Ordered local filesystem caller joining the actual request scope, installed configuration, path policy, canonical cache keys, low-level effects and post-success cache transitions. No remote I/O or general asynchronous dispatcher is supplied.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/filesystem_render.hepta",
+      "scope": "Full original local directory-create and file/directory-move success and error text over caller-owned growing output spans, followed by the shared result publisher.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/filesystem_fence.hepta",
+      "scope": "Private HIA effect-fence controller for the three local filesystem methods. Acquires the installed configuration identity and real five-image fence lease, retains the permit across the method, and releases it on terminal completion; it is not a production-wide effect dispatcher.",
       "legacy_call_sites_replaced": false
     }
   ],

@@ -109,6 +109,12 @@ MODULES = (
     {"key": "batch_edit_params", "name": "batch-edit-params", "source": "native/batch_edit_params.hepta",
      "builder": "batch_edit_params", "manifest_env": "HIA_BATCH_EDIT_PARAMS_BUNDLE",
      "test": "test_batch_edit_params.py", "companion_sources": ("native/serde_json_span.hepta",)},
+    {"key": "batch_plan_input", "name": "batch-plan-input", "source": "native/batch_plan_input.hepta",
+     "builder": "batch_plan_input", "manifest_env": "HIA_BATCH_PLAN_INPUT_MEMBERS",
+     "test": "test_batch_plan_input.py",
+     "companion_sources": ("native/serde_json_span.hepta", "native/batch_edit_params.hepta",
+                           "native/editable_content.hepta", "native/batch_plan.hepta",
+                           "native/line_endpoint.hepta", "native/line_verify.hepta")},
     {"key": "batch_plan", "name": "batch-plan", "source": "native/batch_plan.hepta",
      "builder": "batch_plan", "manifest_env": "HIA_BATCH_PLAN_BUNDLE", "test": "test_batch_plan.py",
      "additional_tests": ("test_batch_plan_evidence.py",)},
@@ -116,6 +122,10 @@ MODULES = (
      "builder": "batch_apply", "manifest_env": "HIA_APPLY_BUNDLE", "test": "test_batch_apply.py",
      "additional_tests": ("test_batch_apply_contract.py", "test_batch_apply_artifacts.py",
                           "test_batch_apply_evidence.py")},
+    {"key": "batch_diff", "name": "batch-diff", "source": "native/batch_diff.hepta",
+     "builder": "batch_diff", "manifest_env": "HIA_BATCH_DIFF_BUNDLE", "test": "test_batch_diff.py",
+     "companion_sources": ("native/batch_apply.hepta", "native/editable_content.hepta",
+                           "native/text_budget.hepta", "native/result_publication.hepta")},
     {"key": "atomic_write", "name": "atomic-write", "source": "native/atomic_write.hepta",
      "builder": "atomic_write", "manifest_env": "HIA_ATOMIC_MANIFEST", "test": "test_atomic_write_policy.py",
      "additional_tests": ("test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
@@ -161,32 +171,77 @@ MODULES = (
                           "test_view_regex_search.py", "test_view_regex_search_native_evidence.py")},
     {"key": "runtime_mcp", "name": "runtime-mcp", "source": "native/runtime_mcp.hepta",
      "builder": "runtime_mcp", "manifest_env": "HIA_RUNTIME_MCP_MANIFEST",
-     "companion_sources": ("native/config_directory_owner.hepta", "native/config_fs.hepta",
-                           "native/config_json.hepta", "native/config_validation.hepta",
-                           "native/config_identity.hepta", "native/execution_controller.hepta",
-                           "native/execution_json.hepta", "native/execution_shadow.hepta",
-                           "native/serde_json.hepta", "native/result_publication.hepta",
-                           "native/runtime_mcp_catalog.hepta", "native/runtime_mcp_admission.hepta",
-                           "native/config_mcp.hepta", "native/runtime_mcp_image_packer.hepta",
-                           "native/runtime_mcp_protocol.hepta", "native/serde_json_span.hepta",
-                           "native/workdir_gateway.hepta", "native/workdir_params.hepta",
-                           "native/workdir_io.hepta", "native/workdir_render.hepta",
-                           "native/view_gateway.hepta", "native/client_context.hepta",
-                           "native/view_params.hepta", "native/session_context.hepta",
-                           "native/session_workdir.hepta", "native/local_path_policy.hepta",
-                           "native/canonical_path.hepta", "native/path_source.hepta",
-                           "native/view_call.hepta", "native/view_read.hepta", "native/line_endpoint.hepta",
-                           "native/file_lock_key.hepta", "native/request_scope_lifecycle.hepta",
-                           "native/request_cache_lease.hepta", "native/view_cache.hepta",
-                           "native/view_render.hepta", "native/request_context.hepta", "native/view_error.hepta",
-                           "native/regex_syntax.hepta", "native/regex_unicode_data.hepta",
-                           "native/regex_hir.hepta", "native/regex_nfa.hepta",
-                           "native/regex_match.hepta", "native/regex_controller.hepta",
-                           "native/view_regex.hepta", "native/view_regex_diagnostic.hepta"),
+     "companion_sources": (
+         'native/config_directory_owner_span.hepta',
+         'native/config_fs_span.hepta',
+         'native/config_json_span.hepta',
+         'native/config_validation_span.hepta',
+         'native/config_identity.hepta',
+         'native/config_mcp.hepta',
+         'native/execution_controller.hepta',
+         'native/execution_json.hepta',
+         'native/execution_shadow.hepta',
+         'native/serde_json.hepta',
+         'native/result_publication.hepta',
+         'native/regex_syntax.hepta',
+         'native/regex_unicode_data.hepta',
+         'native/regex_hir.hepta',
+         'native/regex_nfa.hepta',
+         'native/regex_match.hepta',
+         'native/regex_controller.hepta',
+         'native/runtime_mcp_catalog.hepta',
+         'native/runtime_mcp_admission.hepta',
+         'native/view_gateway.hepta',
+         'native/client_context.hepta',
+         'native/view_params.hepta',
+         'native/session_context.hepta',
+         'native/session_workdir.hepta',
+         'native/local_path_policy.hepta',
+         'native/canonical_path.hepta',
+         'native/path_source.hepta',
+         'native/serde_json_span.hepta',
+         'native/workdir_gateway.hepta',
+         'native/workdir_params.hepta',
+         'native/workdir_io.hepta',
+         'native/workdir_render.hepta',
+         'native/view_error.hepta',
+         'native/runtime_mcp_protocol.hepta',
+         'native/view_call.hepta',
+         'native/line_endpoint.hepta',
+         'native/view_read.hepta',
+         'native/file_lock_key.hepta',
+         'native/request_scope_lifecycle.hepta',
+         'native/request_cache_lease.hepta',
+         'native/view_cache.hepta',
+         'native/view_render.hepta',
+         'native/request_context.hepta',
+         'native/view_regex.hepta',
+         'native/view_regex_diagnostic.hepta',
+         'native/filesystem_gateway.hepta',
+         'native/filesystem_params.hepta',
+         'native/filesystem_call.hepta',
+         'native/filesystem_parity.hepta',
+         'native/filesystem_render.hepta',
+         'native/directory_move_guard.hepta',
+         'native/filesystem_fence.hepta',
+         'native/effect_owner_fence.hepta',
+         'native/effect_fence_fs.hepta',
+         'native/fence_json.hepta',
+         'native/binary_codec.hepta',
+         'native/effect_fence_manager.hepta',
+         'native/runtime_mcp_image_packer.hepta',
+     ),
      "test": "test_runtime_mcp.py", "additional_tests": ("test_runtime_mcp_evidence.py",
                                                          "test_view_search_public.py",
                                                          "test_view_regex_search_public.py",
                                                          "test_view_regex_search_public_evidence.py")},
+    {"key": "filesystem_public", "name": "filesystem-public", "source": "native/filesystem_gateway.hepta",
+     "builder": "filesystem_public", "manifest_env": "HIA_FILESYSTEM_PUBLIC_MANIFEST",
+     "test": "test_filesystem_public.py",
+     "companion_sources": ("native/filesystem_params.hepta", "native/filesystem_call.hepta",
+                           "native/filesystem_parity.hepta", "native/filesystem_render.hepta",
+                           "native/filesystem_fence.hepta", "native/directory_move_guard.hepta",
+                           "native/runtime_mcp_image_packer.hepta")},
     {"key": "view_cache", "name": "view-cache", "source": "native/view_cache.hepta",
      "standalone": None, "manifest_env": "HIA_CACHE_MANIFEST", "test": "test_view_cache.py",
      "additional_tests": ("test_view_cache_evidence.py",)},
@@ -374,6 +429,12 @@ def sources() -> dict:
         "hia_native_runtime_mcp_adapter.py", "hia_native_runtime_mcp_pack.py",
         "hia_native_runtime_mcp_pipeline.py", "hia_native_runtime_mcp_fixtures.py",
         "hia_native_public_exchange_qualification.py",
+        "hia_native_filesystem_public_build.py", "hia_native_filesystem_public_pipeline.py",
+        "hia_native_filesystem_public_fixtures.py", "hia_native_filesystem_public_reference_source.py",
+        "runtime_mcp_filesystem_fence_bridge.S", "runtime_mcp_filesystem_fence_native.S",
+        "runtime_mcp_filesystem_fixture.S", "runtime_mcp_filesystem_front_fixture.S",
+        "runtime_mcp_filesystem_io_bridge.S", "runtime_mcp_filesystem_observer.S",
+        "runtime_mcp_filesystem_view_bridge.S",
         "hia_native_workdir_reference.py", "runtime_mcp_extra_engine.S", "runtime_mcp_canonical_bridge.S",
         "runtime_mcp_transport.S", "runtime_mcp_execution_bridge.S",
         "runtime_mcp_view_bridge.S", "runtime_mcp_workdir_io_bridge.S",
@@ -419,7 +480,11 @@ def sources() -> dict:
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
         "hia_native_batch_edit_params_build.py", "hia_native_batch_edit_params_qualification.py",
         "hia_native_batch_edit_params_pipeline.py",
+        "hia_native_batch_plan_input_build.py", "hia_native_batch_plan_input_qualification.py",
+        "hia_native_batch_plan_input_pipeline.py",
         "hia_native_batch_apply_build.py", "hia_native_batch_apply_qualification.py",
+        "hia_native_batch_diff_build.py", "hia_native_batch_diff_qualification.py",
+        "hia_native_batch_diff_pipeline.py",
         "hia_native_atomic_write_build.py", "hia_native_atomic_write_qualification.py",
         "hia_native_filesystem_parity_build.py", "hia_native_filesystem_parity_reference.py",
         "hia_native_filesystem_parity_qualification.py",
@@ -473,16 +538,18 @@ def process_summary(name: str, stdout: bytes) -> dict:
 def record_check(output: Path, report: dict, *, name: str, command: list[str],
                  timeout: float, env: dict | None = None,
                  input_bytes: bytes | None = None,
-                 report_path: Path | None = None) -> subprocess.CompletedProcess:
+                 report_path: Path | None = None,
+                 record_identity: bool = False) -> subprocess.CompletedProcess:
     """Retain completed, refused and timed-out checks before propagating failure."""
     started = time.monotonic()
     stdout, stderr = b"", b""
-    code, start_error = None, None
+    code, start_error, pid = None, None, None
     timed_out = False
     try:
         process = subprocess.Popen(command, cwd=ROOT, env=env, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    start_new_session=True)
+        pid = process.pid
         try:
             stdout, stderr = process.communicate(input=input_bytes, timeout=timeout)
         except subprocess.TimeoutExpired as exc:
@@ -506,6 +573,8 @@ def record_check(output: Path, report: dict, *, name: str, command: list[str],
              "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
              "stderr_sha256": hashlib.sha256(stderr).hexdigest(),
              "stdout_bytes": len(stdout), "stderr_bytes": len(stderr)}
+    if record_identity:
+        check.update(pid=pid, cwd=str(ROOT))
     if start_error:
         check["start_error"] = start_error
     try:
@@ -609,7 +678,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                     if failure is not None:
                         raise failure
                 else:
-                    record_check(output, report, name=name, command=invocation[name], timeout=timeout, env=env)
+                    record_check(output, report, name=name, command=invocation[name], timeout=timeout, env=env,
+                                 record_identity=name == "test_batch_plan_input.py")
         finally:
             for name in futures:
                 if name not in collected:
@@ -627,6 +697,14 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
         # Preserve a byte-identical component view of this actual main receipt.
         # Pure readers subsequently require it; they never recreate a missing file.
         from hia_native_batch_edit_params_pipeline import native_evidence
+        native_evidence(ROOT, output, report, completed_test_summary, create=True)
+
+    if "test_batch_plan_input.py" in tests:
+        from hia_native_batch_plan_input_pipeline import native_evidence
+        native_evidence(ROOT, output, report, completed_test_summary, create=True)
+
+    if "test_batch_diff.py" in tests:
+        from hia_native_batch_diff_pipeline import native_evidence
         native_evidence(ROOT, output, report, completed_test_summary, create=True)
 
 
@@ -772,6 +850,18 @@ def filesystem_parity_retirement(output: Path, report: dict, *, create: bool = F
     return filesystem_parity_qualification.decode(filesystem_parity_qualification.canonical(value))
 
 
+def filesystem_public_evidence(output: Path, report: dict) -> dict:
+    from hia_native_filesystem_public_pipeline import native_evidence
+    return native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def filesystem_public_retirement(output: Path, report: dict, *, create: bool = False,
+                                 native: dict | None = None) -> dict:
+    from hia_native_filesystem_public_pipeline import native_fixture_evidence
+    return native_fixture_evidence(ROOT, output, report, completed_test_summary,
+                                   create=create, native=native)
+
+
 def shell_evidence(output: Path, report: dict) -> dict:
     return shell_qualification.qualification_evidence(ROOT, output, report, completed_test_summary)
 
@@ -799,6 +889,17 @@ def line_verify_evidence(output: Path, report: dict) -> dict:
 def batch_edit_params_evidence(output: Path, report: dict) -> dict:
     from hia_native_batch_edit_params_pipeline import native_evidence
     return native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def batch_plan_input_evidence(output: Path, report: dict) -> dict:
+    from hia_native_batch_plan_input_pipeline import native_evidence
+    return native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def batch_diff_evidence(output: Path, report: dict) -> dict:
+    from hia_native_batch_diff_pipeline import native_evidence
+    return native_evidence(ROOT, output, report, completed_test_summary)
+
 
 
 def batch_plan_evidence(output: Path, report: dict) -> dict:
@@ -2384,6 +2485,12 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         elif item.get("builder") == "batch_edit_params":
             from hia_native_batch_edit_params_pipeline import environment
             env.update(environment(ROOT, output, report))
+        elif item.get("builder") == "batch_plan_input":
+            from hia_native_batch_plan_input_pipeline import environment
+            env.update(environment(ROOT, output, report))
+        elif item.get("builder") == "batch_diff":
+            from hia_native_batch_diff_pipeline import environment
+            env.update(environment(ROOT, output, report))
         elif item.get("builder") == "effect_fence":
             bundle = json.loads(built.read_bytes())
             env["HIA_FENCE_ASYNC_MANIFEST"] = str(
@@ -2503,6 +2610,17 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
             else:
                 from hia_native_runtime_mcp_build import build_runtime_mcp
                 built = build_runtime_mcp(hepta, nested, source_root=ROOT)
+        elif item.get("builder") == "filesystem_public":
+            # The separately linked two-session observer consumes the exact
+            # public graph's already fresh members. It compiles no new owner.
+            from hia_native_runtime_mcp_build import build_runtime_mcp
+            public_manifest = output / report["modules"]["runtime_mcp"]["manifest"]
+            public = json.loads(public_manifest.read_bytes())
+            nested = output / "build/filesystem-public-bundle"
+            shutil.copytree(output / "build/bootstrap", nested / "bootstrap")
+            reused = {row["name"]: Path(row["manifest"]) for row in public["members"]}
+            built = build_runtime_mcp(hepta, nested, source_root=ROOT, manifests=reused,
+                                      private_fixture=True)
         elif item.get("builder") == "execution_shadow":
             from hia_native_execution_build import build_execution
             built = build_execution(hepta, output / "build", source_root=ROOT)
@@ -2523,6 +2641,14 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
             nested = output / "batch-edit-params/build"
             shutil.copytree(output / "build/bootstrap", nested / "bootstrap")
             built = build_batch_edit_params(hepta, nested, source_root=ROOT)
+        elif item.get("builder") == "batch_plan_input":
+            from hia_native_batch_plan_input_build import build_batch_plan_input
+            nested = output / "batch-plan-input/build"
+            shutil.copytree(output / "build/bootstrap", nested / "bootstrap")
+            built = build_batch_plan_input(hepta, nested, source_root=ROOT)
+        elif item.get("builder") == "batch_diff":
+            from hia_native_batch_diff_pipeline import build as build_batch_diff
+            built = build_batch_diff(hepta, output, source_root=ROOT)
         elif item.get("builder") == "batch_plan":
             from hia_native_batch_plan_build import build_batch_plan
             built = build_batch_plan(hepta, output / "build", source_root=ROOT)
@@ -2605,6 +2731,9 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(session_qualification.test_commands(ROOT, output, report))
     commands.update(file_lock_pipeline.test_commands(ROOT, output, report))
     commands.update(filesystem_parity_qualification.test_commands(ROOT, output, report))
+    from hia_native_filesystem_public_pipeline import test_commands as filesystem_public_commands
+    if "test_filesystem_public.py" in tests:
+        commands.update(filesystem_public_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
@@ -2631,6 +2760,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["editable_content_evidence"] = editable_content_evidence(output, report)
     report["line_verify_evidence"] = line_verify_evidence(output, report)
     report["batch_edit_params_evidence"] = batch_edit_params_evidence(output, report)
+    report["batch_plan_input_evidence"] = batch_plan_input_evidence(output, report)
+    report["batch_diff_evidence"] = batch_diff_evidence(output, report)
     report["batch_plan_evidence"] = batch_plan_evidence(output, report)
     report["batch_apply_evidence"] = batch_apply_evidence(output, report)
     atomic = atomic_write_evidence(output, report)
@@ -2646,6 +2777,9 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["view_regex_search_evidence"] = view_regex_search_evidence(output, report)
     report["view_resource_evidence"] = view_resource_evidence(output, report)
     report["runtime_mcp_evidence"] = runtime_mcp_evidence(output, report)
+    report["filesystem_public_evidence"] = filesystem_public_evidence(output, report)
+    report["filesystem_public_fixture_retirement"] = filesystem_public_retirement(
+        output, report, create=True, native=report["filesystem_public_evidence"])
     report["view_search_public_evidence"] = view_search_public_evidence(output, report)
     report["view_regex_search_public_evidence"] = view_regex_search_public_evidence(output, report)
     report["view_fixture_retirement"] = view_fixture_retirement(output, report, create=True,
@@ -2696,6 +2830,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["view_regex_search_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_resource_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["runtime_mcp_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["filesystem_public_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["filesystem_public_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_search_public_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_regex_search_public_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_fixture_retirement"]["artifact_sha256"])
@@ -2726,6 +2862,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["config_span_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["config_span_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_edit_params_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_plan_input_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_diff_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["artifact_sha256"])

@@ -154,14 +154,22 @@ class NativePipelineTests(unittest.TestCase):
             positions = [partitions["view"].index(name) for name in ordered]
             self.assertEqual(positions, sorted(positions))
         self.assertEqual(tuple(partitions["batch"]),
-            ("test_batch_edit_params.py", "test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
+            ("test_batch_edit_params.py", "test_batch_plan_input.py", "test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
              "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
+             "test_batch_diff.py",
              "test_atomic_write_policy.py", "test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
              "test_atomic_write_evidence.py"))
         self.assertEqual(partitions["system"][:3],
                          ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py",
                           "test_filesystem_parity_kernel.py"))
-        self.assertEqual(len(flat), 133)
+        self.assertEqual(len(flat), 136)
+        self.assertEqual({name: len(tests) for name, tests in partitions.items()},
+                         {'batch': 13, 'text': 29, 'view': 26, 'json': 16, 'config': 17, 'system': 35})
+        self.assertLess(partitions['view'].index('test_runtime_mcp.py'),
+                        partitions['view'].index('test_filesystem_public.py'))
+        self.assertNotIn('test_filesystem_public_original_evidence.py', flat)
+        workflow = (q.ROOT / '.github/workflows/hia-runtime-native.yml').read_text()
+        self.assertIn("if: matrix.group == 'system' || matrix.group == 'config' || matrix.group == 'view'", workflow)
         self.assertEqual(partitions['config'][-2:], ('test_config_span.py', 'test_config_span_evidence.py'))
         for bad in ("missing", "duplicate", "unknown", "new_module", "split_ordered"):
             changed = copy.deepcopy(p.PARTITIONS)

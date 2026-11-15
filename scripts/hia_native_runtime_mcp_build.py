@@ -22,7 +22,7 @@ from hia_native_runtime_mcp_adapter import combine
 from hia_native_runtime_mcp_pack import pack
 
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
-BASE = 'scripts/config_mcp_adapter.S'
+BASE = 'scripts/config_mcp_grow_adapter.S'
 BOUNDARIES = [
     'scripts/runtime_mcp_extra_engine.S',
     'scripts/view_call_engine.S',
@@ -34,7 +34,14 @@ BOUNDARIES = [
     'scripts/view_call_scope_bridge.S',
     'scripts/view_call_regex_bridge.S',
     'scripts/runtime_mcp_execution_bridge.S',
+    'scripts/runtime_mcp_filesystem_io_bridge.S',
+    'scripts/runtime_mcp_filesystem_view_bridge.S',
+    'scripts/runtime_mcp_filesystem_fence_native.S',
+    'scripts/runtime_mcp_filesystem_fence_bridge.S',
 ]
+FIXTURE_BOUNDARIES = ['scripts/runtime_mcp_filesystem_fixture.S',
+                      'scripts/runtime_mcp_filesystem_observer.S',
+                      'scripts/runtime_mcp_filesystem_front_fixture.S']
 TRANSPORT = 'scripts/runtime_mcp_transport.S'
 HELPERS = ['scripts/hia_native_runtime_mcp_build.py',
            'scripts/hia_native_runtime_mcp_adapter.py',
@@ -43,10 +50,10 @@ HELPERS = ['scripts/hia_native_runtime_mcp_build.py',
 # are specified separately. The configuration Value ABI remains an actual,
 # separately compiled dependency while the public Value interface uses spans.
 MEMBERS = [
-    ('owner', 'config_directory_owner', 'history.v1'),
-    ('fs', 'config_fs', 'history.v1'),
-    ('json', 'config_json', 'history.v1'),
-    ('validation', 'config_validation', 'history.v1'),
+    ('owner', 'config_directory_owner_span', 'history.v1'),
+    ('fs', 'config_fs_span', 'history.v1'),
+    ('json', 'config_json_span', 'history.v1'),
+    ('validation', 'config_validation_span', 'history.v1'),
     ('identity', 'config_identity', 'history.v1'),
     ('config_mcp', 'config_mcp', 'history.v1'),
     ('execution', 'execution_controller', 'history.v1'),
@@ -89,7 +96,20 @@ MEMBERS = [
     ('request_context', 'request_context', 'history.v1'),
     ('view_regex', 'view_regex', 'history.v1'),
     ('view_regex_diagnostic', 'view_regex_diagnostic', 'history.v1'),
+    ('fs_gateway', 'filesystem_gateway', 'history.v1'),
+    ('fs_params', 'filesystem_params', 'history.v1'),
+    ('fs_caller', 'filesystem_call', 'history.v1'),
+    ('fs_io', 'filesystem_parity', 'history.v1'),
+    ('fs_render', 'filesystem_render', 'history.v1'),
+    ('fs_guard', 'directory_move_guard', 'history.v1'),
+    ('fs_fence', 'filesystem_fence', 'history.v1'),
+    ('rf_owner', 'effect_owner_fence', 'standard'),
+    ('rf_fs', 'effect_fence_fs', 'standard'),
+    ('rf_json', 'fence_json', 'standard'),
+    ('rf_sha', 'binary_codec', 'standard'),
+    ('rf_manager', 'effect_fence_manager', 'standard'),
 ]
+FENCE = ['rf_owner', 'rf_fs', 'rf_json', 'rf_sha', 'rf_manager']
 CONFIG = ['owner', 'fs', 'json', 'validation', 'identity', 'config_mcp',
           'execution', 'execution_json', 'execution_core', 'value', 'publication',
           'regex_syntax', 'regex_unicode_data', 'regex_hir', 'regex_nfa',
@@ -101,7 +121,9 @@ CONFIG_SYMBOLS = ['owner', 'fs', 'json', 'validation', 'identity', 'mcp',
 EXTRA = ['catalog', 'admission', 'gateway', 'client', 'params', 'session_context',
          'session_state', 'policy', 'canonical', 'path_source', 'wide_value',
          'owner', None, 'workdir_gateway', 'workdir_params', 'workdir_io',
-         'workdir_render', 'view_error', 'mcp', 'protocol', 'execution']
+         'workdir_render', 'view_error', 'mcp', 'protocol', 'execution',
+         'fs_gateway', 'fs_params', 'fs_caller', 'fs_io', 'fs_render',
+         'fs_guard', 'fs_fence', None, None, None, None, None]
 VIEW = ['view', 'read', 'read', 'read', 'endpoint', 'key', 'scope', 'lease',
         'cache', 'render', 'request_context', 'view_error', 'view_regex',
         'regex_syntax', 'regex_hir', 'regex_nfa', 'regex_match',
@@ -120,7 +142,7 @@ def source_check(root: Path) -> dict:
         raise ValueError('public source-closure schema differs')
     if type(binding.get('sources')) is not dict:
         raise ValueError('public source list must be an object')
-    required = {BASE, TRANSPORT, *BOUNDARIES, *HELPERS,
+    required = {BASE, TRANSPORT, *BOUNDARIES, *FIXTURE_BOUNDARIES, *HELPERS,
                 'native/runtime_mcp_image_packer.hepta',
                 *('native/' + source + '.hepta' for _, source, _ in MEMBERS)}
     if not required <= binding['sources'].keys():
@@ -140,10 +162,11 @@ def source_check(root: Path) -> dict:
     return {'manifest_sha256': sha(raw), 'files': binding['sources']}
 
 
-def adapter_source(root: Path, images=None) -> str:
+def adapter_source(root: Path, images=None, *, private_fixture=False) -> str:
     # images is accepted for older evidence-reader callers; this prefix embeds
     # no image bytes. All fixed addresses are filled by the executed HIA packer.
-    fixed = combine((root / BASE).read_text(), (root / TRANSPORT).read_text())
+    transport = '\n'.join((root / name).read_text() for name in FIXTURE_BOUNDARIES) if private_fixture else (root / TRANSPORT).read_text()
+    fixed = combine((root / BASE).read_text(), transport)
     source = '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed
     for name in re.findall(r'^\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):
         if name == '_start':
@@ -178,7 +201,8 @@ def checked_member(build, root, name, source, profile, manifest):
 
 
 def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
-                      source_root: Path = ROOT, manifests: dict | None = None) -> Path:
+                      source_root: Path = ROOT, manifests: dict | None = None,
+                      private_fixture: bool = False) -> Path:
     root = source_root.resolve(strict=True)
     binding = source_check(root)
     build = NativeBuild(hepta, output)
@@ -195,7 +219,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         row, images[member] = checked_member(build, root, member, source, profile, manifest)
         row['fresh_compile'] = not reused
         members.append(row)
-    assembly = adapter_source(root)
+    assembly = adapter_source(root, private_fixture=private_fixture)
     write_new(folder / 'combined.S', assembly.encode())
 
     def execute(out, label, command, timeout):
@@ -220,25 +244,21 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
 
     processes.append(execute(folder, 'assemble', ['as', '--64', '-o', str(folder / 'bridge.o'), str(folder / 'combined.S')], 60))
     configuration = {symbol: images[member] for symbol, member in zip(CONFIG_SYMBOLS, CONFIG)}
-    # Preserve the actually tested physical layout: shared owner/execution,
-    # unique extra members, remaining config members, then unique view members.
-    extra = {11: images['owner'], 20: images['execution']}
-    extra.update({slot: images[member] for slot, member in enumerate(EXTRA)
-                  if member is not None and slot not in (11, 20)})
+    configuration.update({name: images[name] for name in FENCE})
+    extra = {slot: images[member] for slot, member in enumerate(EXTRA) if member is not None}
     view_images = {member: images[member] for member in VIEW}
     physical = {}
     for slot, image in extra.items():
         physical.setdefault(image, []).append('grow_image_' + str(slot))
-    for member, image in configuration.items():
-        physical.setdefault(image, []).append('grow_config_' + member)
-    for member, source, profile in MEMBERS[35:]:
-        physical.setdefault(images[member], []).append('wide_view_image_' + member)
-    if len(physical) != len(MEMBERS) or len(MEMBERS) != 46:
-        raise ValueError('fixed public graph physical image count differs')
+    for member, source, profile in MEMBERS:
+        physical.setdefault(images[member], []).append('member_' + member)
+    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 58
+        or list(physical)[-5:] != [images[name] for name in FENCE]):
+        raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
                                     view_images, VIEW, execute, root)
     processes.extend(steps)
-    binary = folder / 'runtime-mcp.elf'
+    binary = folder / ('filesystem-fixture.elf' if private_fixture else 'runtime-mcp.elf')
     write_new(binary, elf, 0o500)
     processes.append(execute(folder, 'readelf', ['readelf', '-lW', str(binary)], 30))
     headers = (folder / 'readelf.stdout').read_bytes()
@@ -258,16 +278,27 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'compiler_commit': build.identity['commit'], 'compiler_image_sha256': build.compiler_sha256,
               'source_root': str(root), 'build_root': str(output.resolve()), 'manifest_path': str(manifest.resolve()),
               'elf': binary.name, 'elf_sha256': sha(elf), 'elf_bytes': len(elf),
-              'source_binding': binding, 'boundary_sources': {path: binding['files'][path]['sha256'] for path in [BASE, TRANSPORT, *BOUNDARIES]},
+              'source_binding': binding, 'boundary_sources': {path: binding['files'][path]['sha256'] for path in [BASE, *(FIXTURE_BOUNDARIES if private_fixture else [TRANSPORT]), *BOUNDARIES]},
               'assembled_source_sha256': sha(assembly.encode()), 'object_sha256': sha((folder / 'bridge.o').read_bytes()),
               'link': link, 'pack': packed, 'boundary_processes': processes,
-              'config_table': CONFIG, 'extra_table': EXTRA, 'view_table': VIEW,
+              'config_table': CONFIG, 'extra_table': EXTRA, 'view_table': VIEW, 'fence_table': FENCE,
+              'private_instance_fixture': private_fixture, 'fixture_sessions': 2 if private_fixture else None,
+              'fixture_pseudo_selectors': [33, 34] if private_fixture else [],
+              'filesystem_gateway_slot': 21, 'filesystem_caller_slot': 23, 'filesystem_io_slot': 24,
+              'filesystem_fence_slot': 27, 'native_fence_slot': 28,
+              'view_scope_cache_alias_slots': {'29': 6, '30': 5, '31': 7, '32': 8},
+              'config_span_owner_control_offsets': [1024, 1032],
+              'config_span_footer_from_capacity': 256,
               'physical_image_members': [next(member for member, image in images.items() if image == path) for path in physical],
               'shared_session_slot': 6, 'shared_installed_config_owner_slot': 11,
               'public_frontend_slot': 18, 'protocol_slot': 19,
               'frontend_transport_fixed_input_limit': None, 'frontend_reply_fixed_byte_limit': None,
               'json_nesting_depth_policy': 128, 'result_publication_grows': True,
               'public_configuration_from_stdin': False, 'public_private_instance_selectors': False,
+              'actual_fixture_private_selectors': private_fixture,
+              'implemented_tools': ['host_list', 'effective_config', 'execution_shadow_admit', 'view', 'workdir',
+                                    'directory_create', 'file_move', 'directory_move'],
+              'filesystem_sdk_semantic_qualification': 'NOT_RUN',
               'runtime_host_semantics': False, 'semantic_qualification': 'NOT_RUN',
               'elapsed_seconds': time.monotonic() - started,
               **{flag: False for flag in FALSE_FLAGS}}
@@ -281,6 +312,8 @@ if __name__ == '__main__':
     parser.add_argument('--build', type=Path, required=True)
     parser.add_argument('--name', default='runtime-mcp')
     parser.add_argument('--member-manifests-json', type=Path)
+    parser.add_argument('--private-filesystem-fixture', action='store_true')
     args = parser.parse_args()
     reused = json.loads(args.member_manifests_json.read_bytes()) if args.member_manifests_json else None
-    print(build_runtime_mcp(args.hepta.resolve(), args.build.resolve(), name=args.name, manifests=reused))
+    print(build_runtime_mcp(args.hepta.resolve(), args.build.resolve(), name=args.name, manifests=reused,
+                            private_fixture=args.private_filesystem_fixture))

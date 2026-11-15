@@ -100,7 +100,8 @@ class EvidenceControls(unittest.TestCase):
 
     def test_02_sources_and_actual_two_stage_build(self):
         for label,name in [('source-frontend','native/runtime_mcp.hepta'),('source-view-schema','native/view_input_schema.json'),
-                           ('source-nfa','native/regex_nfa.hepta'),('source-wide-protocol','native/runtime_mcp_protocol.hepta')]:
+                           ('source-nfa','native/regex_nfa.hepta'),('source-wide-protocol','native/runtime_mcp_protocol.hepta'),
+                           ('source-filesystem-public-schema','native/filesystem_public_tools.json')]:
             path=self.source/name;raw=path.read_bytes()
             try:
                 path.write_bytes(raw+b' ')
@@ -113,7 +114,14 @@ class EvidenceControls(unittest.TestCase):
             ('build-member-origin',lambda v:v['members'][0].__setitem__('manifest','/another/modules/member/manifest.json')),
             ('build-shared-session',lambda v:v['extra_table'].__setitem__(6,'session_context')),
             ('build-shared-view-read',lambda v:v['view_table'].__setitem__(2,'endpoint')),
-            ('build-publication-slot',lambda v:v['config_table'].__setitem__(10,'owner'))]:
+            ('build-publication-slot',lambda v:v['config_table'].__setitem__(10,'owner')),
+            ('build-span-owner-borrow',lambda v:v['config_span_owner_control_offsets'].__setitem__(0,1040)),
+            ('build-span-footer',lambda v:v.__setitem__('config_span_footer_from_capacity',128)),
+            ('build-native-fence-order',lambda v:v['fence_table'].__setitem__(0,'rf_manager')),
+            ('build-scope-cache-alias',lambda v:v['view_scope_cache_alias_slots'].__setitem__('29',8)),
+            ('build-public-fixture-switch',lambda v:v.__setitem__('private_instance_fixture',True)),
+            ('build-public-fixture-selector',lambda v:v.__setitem__('fixture_pseudo_selectors',[33,34])),
+            ('build-public-fence-child',lambda v:v.__setitem__('native_fence_slot',11))]:
             value=copy.deepcopy(self.bundle);change(value);raw=encoded(value)
             report=copy.deepcopy(self.report);report['modules']['runtime_mcp']['sha256']=q.sha(raw)
             capture=copy.deepcopy(self.captured['report']);capture['manifest_sha256']=q.sha(raw)

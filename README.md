@@ -11,6 +11,13 @@ stdio protocol owner, and Linux ELF transport packers. The produced executables 
 libc, or a dynamic loader. A pinned Hepta compiler and explicit Python build
 and test drivers produce and verify those executables.
 
+The explicitly selected native stdio service now advertises eight tools:
+`host_list`, `effective_config`, `execution_shadow_admit`, `view`, `workdir`,
+`directory_create`, `file_move` and `directory_move`. Its local filesystem
+methods use the same installed configuration and Session state as the other
+native calls. The separate two-session observer and complete original-reference
+checks are described in the [public filesystem contract](native/filesystem_public_abi.md).
+
 The existing production runtime still owns the 125 registered tool handlers,
 durable processes, host authorization, SSH, HTTP, documents, REA and model
 workers. [The source coverage inventory](native/migration.json) records these

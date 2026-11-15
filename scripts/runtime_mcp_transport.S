@@ -5,6 +5,8 @@
 .type public_span_start, @function
 public_span_start:
     cld
+    mov rax, [rsp]
+    lea r14, [rsp + rax * 8 + 16]
     sub rsp, 256
     mov r12, rsp
     mov [r12 + 248], r15
@@ -12,6 +14,11 @@ public_span_start:
     mov rdi, r12
     mov ecx, 240
     rep stosb
+    mov rdi, r14
+    call runtime_filesystem_hub_create
+    cmp rax, -4095
+    jae public_span_fail
+    mov [r12 + 232], rax
     xor ebx, ebx
     xor ebp, ebp
     lea rdi, [rip + grow_fixture_images]
@@ -21,6 +28,10 @@ public_span_start:
     jae public_span_fail
     mov r15, rax
     mov [r12 + 240], rax
+    mov rdi, [r12 + 232]
+    call runtime_filesystem_hub_bind
+    test rax, rax
+    jnz public_span_fail
     /* SIGPIPE is an I/O result, including before the first publication. */
     mov qword ptr [r12 + 160], 1
     mov edi, 13
@@ -215,6 +226,9 @@ public_span_silent:
     jnz public_span_fail
     jmp public_span_next
 public_span_finish:
+    call runtime_grow_fence_release
+    test rax, rax
+    jnz public_span_fail
     call runtime_grow_view_release
     test rax, rax
     jnz public_span_fail
@@ -222,6 +236,11 @@ public_span_finish:
     test rax, rax
     jnz public_span_fail
     mov qword ptr [r12 + 240], 0
+    mov rdi, [r12 + 232]
+    call runtime_filesystem_hub_destroy
+    test rax, rax
+    jnz public_span_fail
+    mov qword ptr [r12 + 232], 0
     mov rdi, rbx
     lea rsi, [rbp + 4096]
     mov eax, 11
@@ -297,4 +316,4 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 168
+    .zero 264

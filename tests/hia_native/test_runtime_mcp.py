@@ -80,7 +80,7 @@ class NativeRuntime(unittest.TestCase):
         cls.manifest=json.loads(MANIFEST.read_bytes());cls.exe=MANIFEST.parent/cls.manifest['elf'];elf=cls.exe.read_bytes()
         assert sha(elf)==cls.manifest['elf_sha256'] and len(elf)==cls.manifest['elf_bytes']
         cls.members={row['name']:row for row in cls.manifest['members']}
-        assert list(cls.members)==[row[0] for row in MEMBERS] and len(cls.members)==46
+        assert list(cls.members)==[row[0] for row in MEMBERS] and len(cls.members)==58
         for row in cls.members.values():
             path=Path(row['manifest']);data=json.loads(path.read_bytes());image=(path.parent/data['image']).read_bytes()
             assert sha(path.read_bytes())==row['manifest_sha256'] and sha(image)==row['image_sha256']
@@ -88,7 +88,7 @@ class NativeRuntime(unittest.TestCase):
             assert sha((ROOT/row['source']).read_bytes())==row['source_sha256'] and elf.count(image)==1
         for path,digest in cls.manifest['boundary_sources'].items():assert sha((ROOT/path).read_bytes())==digest
         cls.files=OUTPUT/'files';cls.files.mkdir();(cls.files/'file').write_bytes(b'alpha\n')
-        COUNTS['actual_embedded_hia_images']=46
+        COUNTS['actual_embedded_hia_images']=58
 
     def view(self,session,arguments,*,identifier=2,metadata=None):
         response,raw=session.call(sdk.call(identifier,arguments,metadata));self.assertEqual(response['id'],identifier);result=response['result']
@@ -131,7 +131,7 @@ class NativeRuntime(unittest.TestCase):
                         if version not in {'2024-11-05','2025-03-26','2025-06-18','2025-11-25'}:version='2025-11-25'
                         self.assertEqual(result,dict(protocolVersion=version,**server['initialize']))
                     elif message['method']=='tools/list':
-                        self.assertEqual([tool['name'] for tool in result['tools']],['host_list','effective_config','execution_shadow_admit','view','workdir']);self.assertEqual(result['tools'][3]['inputSchema'],schema);self.assertEqual(result['tools'][4]['inputSchema'],json.loads((ROOT/'native/workdir_input_schema.json').read_bytes()))
+                        self.assertEqual([tool['name'] for tool in result['tools']],['host_list','effective_config','execution_shadow_admit','view','workdir','directory_create','file_move','directory_move']);self.assertEqual(result['tools'][3]['inputSchema'],schema);self.assertEqual(result['tools'][4]['inputSchema'],json.loads((ROOT/'native/workdir_input_schema.json').read_bytes()));self.assertEqual(result['tools'][5:],json.loads((ROOT/'native/filesystem_public_tools.json').read_bytes()))
                         header={k:v for k,v in result.items() if k!='tools'};modern=message['params'].get('_meta',{}).get(VERSION)=='2026-07-28';self.assertEqual(header,server['modern_tools_list'] if modern else {})
                     else:self.assertEqual(message['method'],'server/discover');self.assertEqual(result,server['discover'])
                 records.append(dict(case_id=row['case_id'],name=row['name'],session=session.name,
@@ -319,7 +319,7 @@ def main():
     sources_after=source_identity();assert sources_after==sources
     report=dict(schema='hepta.runtime.mcp-view-native-tests.v2',status='PASS' if result.wasSuccessful() else 'FAIL',groups=result.testsRun,elapsed_seconds=time.monotonic()-start,counts=dict(COUNTS),manifest_sha256=sha(MANIFEST.read_bytes()),processes=RECORDS,source_binding=sources,sources_unchanged=True,
         execution=dict(runtime_root=str(ROOT),corpus_root=str(OUTPUT),manifest_path=str(MANIFEST)),
-        complete_sdk_frontend=False,complete_original_tool_catalog=False,original_tool_count=125,implemented_catalog_names=['host_list','effective_config','execution_shadow_admit','view','workdir'],
+        complete_sdk_frontend=False,complete_original_tool_catalog=False,original_tool_count=125,implemented_catalog_names=['host_list','effective_config','execution_shadow_admit','view','workdir','directory_create','file_move','directory_move'],
         directory_content_remote_background_routes_replaced=False,whole_view_replaced=False,response_storage_globally_unbounded=False,full_http_dispatcher_replaced=False,
         current_protocol_error_reference_compared=False,current_original_view_reference_compared=False)
     (OUTPUT/'result.json').write_bytes(json.dumps(report,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode()+b'\n');print(json.dumps({k:v for k,v in report.items() if k!='processes'},sort_keys=True));raise SystemExit(0 if result.wasSuccessful() else 1)

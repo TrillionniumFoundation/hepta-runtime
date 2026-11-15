@@ -19,8 +19,8 @@ SOURCE_PINS=json.loads(r'''{
     "sha256": "8bc481de311ccc10e5370823d4b1d462eec07c57368eb9a77573c92de15b6cfb"
   },
   "native/config_directory_owner_span.hepta": {
-    "bytes": 286227,
-    "sha256": "c9167832011ca2e448a3998e1acea8d9f7c339f7d76642e5db44017a4bd3b4b0"
+    "bytes": 288259,
+    "sha256": "6a0e7817013c32bd7189864c91dc768764ae44988cabe4391446ceafea9b5d81"
   },
   "native/config_fs_span.hepta": {
     "bytes": 78118,
@@ -116,7 +116,7 @@ SOURCE_PINS=json.loads(r'''{
   },
   "tests/hia_native/config_span/graph_sources.json": {
     "bytes": 2749,
-    "sha256": "25f8a734258ae7fe516fffee5d39119ecd038b448666206bec88002b48e50673"
+    "sha256": "5e94d1ae1d4280e96ac43d834f9c5fc7a3f1ad5a97e43c857c483942a8272356"
   },
   "tests/hia_native/config_span/grow_bridge.S": {
     "bytes": 24444,
@@ -129,7 +129,7 @@ SOURCE_PINS=json.loads(r'''{
 }''')
 PROFILE_PIN=json.loads(r'''{
   "bytes": 4634,
-  "sha256": "3d03408b426638a7b1a8af05eae891737ca44c3eecbe0d04ec7ee86ed0f136e9"
+  "sha256": "695632fc92b6b30b37bc0e6d9e6b9b56d4d63945198efcdcdcceed9294c52edd"
 }''')
 PRODUCER_PINS=json.loads(r'''{
   "guard.py": {

@@ -217,7 +217,7 @@ jobs:
         group: [batch, text, view, json, config, system]
     steps:
       - name: Install filesystem syscall trace observer
-        if: matrix.group == 'system' || matrix.group == 'config'
+        if: matrix.group == 'system' || matrix.group == 'config' || matrix.group == 'view'
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y strace

@@ -26,12 +26,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qualify_hia_runtime_native as q
 
 PARTITIONS = {
-    "batch": ("batch_edit_params", "batch_plan", "batch_apply", "atomic_write"),
+    "batch": ("batch_edit_params", "batch_plan_input", "batch_plan", "batch_apply", "batch_diff", "atomic_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
              "delta", "editable_content", "file_locks", "file_lock_service"),
     "view": ("view_render", "view_render_growth", "view_read", "view_params", "view_call",
-             "runtime_mcp", "view_cache", "history", "session_workdir"),
+             "runtime_mcp", "filesystem_public", "view_cache", "history", "session_workdir"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence"),
     "config": ("runtime_config", "runtime_config_span"),
     "system": ("filesystem_parity", "binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
@@ -316,6 +316,11 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         q.filesystem_parity_retirement(output, report, create=True)
     if any(row.get("name") == "test_config_span.py" for row in report.get("checks", ())):
         q.config_span_fixture_retirement(output, report, create=True)
+    if any(row.get("name") == "test_filesystem_public.py" for row in report.get("checks", ())):
+        # The SDK producer must be admitted without reading original responses.
+        # Preserve complete bytes and link/FIFO identities before transport.
+        native = q.filesystem_public_evidence(output, report)
+        q.filesystem_public_retirement(output, report, create=True, native=native)
     files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
     for name in directories:
         if name not in seal.get("directories", ()):

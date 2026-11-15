@@ -1,23 +1,25 @@
 # Public HIA MCP composition
 
 The executable accepts newline-delimited JSON-RPC on standard input. Arguments
-are empty or `--runtime-config PATH`. Its working directory initializes the
-single private SessionWorkdir instance. Public JSON cannot choose a private
-child, workspace, capability, continuation, lease, or descriptor table.
+are empty or `--runtime-config PATH`. Its working directory initializes one
+private SessionWorkdir instance. Public JSON cannot choose a private child,
+workspace, capability, continuation, lease, session, or descriptor table.
 
 The catalog contains `host_list`, `effective_config`, `execution_shadow_admit`,
-`view`, and `workdir`. This is a partial replacement of the original 125-tool
-server. View and Workdir schemas use independently generated and cleaned
-assets; schema advertising does not replace actual Serde parameter rules.
+`view`, `workdir`, `directory_create`, `file_move`, and `directory_move`. It is a
+partial replacement of the original 125-tool server. Published schemas are
+independently generated and cleaned assets. Schema advertising does not
+replace the original parameter-deserialization rules.
 
 ## Build and ownership
 
-`scripts/hia_native_runtime_mcp_build.py` declares 46 compiled HIA members.
-Default builds freshly compile all members, the pinned upstream HIA ELF
+`scripts/hia_native_runtime_mcp_build.py` declares 58 compiled HIA members.
+Default builds freshly compile all 58 members, the pinned upstream HIA ELF
 linker, and `runtime_mcp_image_packer.hepta`. The linker first produces the
-mechanical prefix. The HIA packer then appends every complete image and fills
-17 configuration calls, 20 nonempty public-engine slots, and 19 View-engine
-slots. Repeated slots share the same image and private authority.
+mechanical prefix. The HIA packer appends every complete image and fills 68
+fixed addresses: 17 configuration, five native effect-fence, 27 nonempty public
+engine, and 19 View engine entries. Repeated entries share an image and their
+source-selected private authority; physical image indexes are not selectors.
 
 `native/runtime_mcp_sources.json` binds build inputs, public input generators,
 schemas, and the native producer. The evidence reader and refusal suite are
@@ -25,9 +27,13 @@ separately bound by qualification receipts, avoiding a manifest self-reference.
 The ELF has RX code, an empty RW segment, and a non-executable stack, with no
 interpreter or libc. Compiler cold qualification is a separate prerequisite.
 
-## Public engine selectors
+The four separately named configuration span images use the same installed
+configuration instance. Every borrow reads control+1024/+1032, and computes
+the footer from the current capacity minus 256. The native effect-fence hub is
+a separate allocation; it does not overlap that configuration control area.
+Configuration installation and shutdown retain their actual lock lease.
 
-These are source-bound private selectors, never public request arguments.
+## Private selectors
 
 | Slot | Owner |
 | --- | --- |
@@ -52,30 +58,52 @@ These are source-bound private selectors, never public request arguments.
 | 18 | MCP frontend |
 | 19 | Wide JSON-RPC protocol owner |
 | 20 | Installed execution controller |
+| 21 | Filesystem gateway |
+| 22 | Filesystem parameters |
+| 23 | Filesystem caller |
+| 24 | Actual filesystem effect owner |
+| 25 | Filesystem result renderer |
+| 26 | Directory-move configured-root guard |
+| 27 | Filesystem admission and effect-fence controller |
+| 28 | Mechanical call into the actual five-image fence engine |
+| 29 | Borrow of this session's View scope |
+| 30 | Borrow of this session's canonical cache key owner |
+| 31 | Borrow of this session's cache lease owner |
+| 32 | Borrow of this session's View cache |
 
 The 19-slot View engine retains read/cache/scope/lease, literal search, and
 regex search. Configuration and View reuse the same syntax, HIR, NFA, matcher,
-and Unicode images. Each graph's selectors are distinct from physical indexes.
+and Unicode images. Filesystem scope and cache access borrow that same View
+engine; they do not install a second cache for the public session.
+
+A separate, explicit build option emits a private two-session fixture instead
+of the public transport. It adds fixture selectors 33/34 and actual state
+observations while sharing the same installed configuration and fence hub.
+These selectors are absent from public JSON and public transport dispatch.
+Its ABI, counter domains, raw state extents, and complete trace formats are in
+`native/filesystem_public_abi.md`. A fixture's closed flag is not an observed
+public BrokenPipe; the ordinary stdio executable supplies that evidence.
 
 ## Wide calls and result ownership
 
 The frontend accepts complete raw JSON. State magic is `HRMCFS02`; its
-112-byte `HRMCFA02` action begins at workspace offset 256. All lengths,
-offsets, capacities, and sequence fields are `u64`. Eight 32-byte region rows
-begin at offset 512; arena extent, requested workspace capacity, and growth
-kind occupy 384, 392, and 400. Its fixed local children map to public slots
-`[19, 1, 0, 10, 2, 13, 11, 20]`.
+112-byte `HRMCFA02` action begins at workspace offset 256. Lengths, offsets,
+capacities, and sequence fields are u64. Eight 32-byte region rows begin at
+512; arena extent, requested workspace capacity, and growth kind occupy
+384, 392, and 400. Its fixed local children map to public slots
+`[19, 1, 0, 10, 2, 13, 11, 20, 21]`.
 
 Return `0xfffffff0` yields an admitted child. The bridge retains a completed
 child result. If the parent needs space, `0xffffffcd` acknowledges delivery
-only: parent growth does not execute that child again.
+only: growing the parent does not execute that child again. Each completed
+filesystem effect is acknowledged once by its source continuation.
 
-Successful frontend return is fixed 64 with `HRCMFR02`: magic, kind,
-reserved, prefix length, body length, isError, sequence, reserved. Kind 0 is
-silent, 1 is raw JSON-RPC, and 2 transfers prefix/body to the actual result
-publisher. Extent is 64 plus both lengths, independent of the u32 return.
-Publication imports both full spans before START. PULL/write/ACK never
-retain a borrow into a reusable frontend buffer.
+Successful frontend return is fixed 64 with `HRCMFR02`: magic, kind, reserved,
+prefix length, body length, isError, sequence, reserved. Kind 0 is silent,
+1 is raw JSON-RPC, and 2 transfers prefix/body to the actual result publisher.
+Extent is 64 plus both lengths, independent of the u32 return. Publication
+imports both full spans before START. PULL/write/ACK retain no borrow into a
+reusable frontend buffer.
 
 Protocol input is `HRJPRQ02` plus mode, JSON length, reserved zero, then JSON.
 Output is fixed 192 with `HRJPRR02`, followed by full ID/name/version spans.
@@ -84,29 +112,41 @@ existing nesting-depth policy of 128 remains.
 
 `HGRWS002` is a 32-byte header: magic, kind, required capacity, reserved zero.
 Return is `0xffffffd0`. Kind 1 requests workspace, 2 output, and 3 denotes
-an unrepresentable resource boundary. Bridges check arithmetic, preserve live
-bytes, and retry only a source-authorized operation. Completed effects are
-delivered without replay.
+an unrepresentable resource boundary. Bridges check arithmetic and real
+allocation failure, preserve live bytes, and retry only a source-authorized
+operation. Completed effects are delivered without replay.
 
 Strict Workdir I/O retains its separate growth ABI. Return `0xffffffef`
 requests logical C at workspace offset 40, requiring physical extent
 `1,049,600 + 5*C`; `0xffffffee` requests output extent at offset 48. A terminal
 RUN is followed by its actual generation-bound DROP before reuse.
 
+Configuration op8 borrows its complete input without reserving seven copies
+inside the installed-state arena. It computes the complete reply length with
+checked arithmetic and requests exact output growth before writing its body.
+This legacy query still reports successful complete size through a u32 return
+below reserved control codes. This repair does not establish an unbounded
+result channel; its explicit representation boundary remains documented.
+
 ## Qualification and unfinished domains
 
-The native producer retains complete wire bytes, stderr, each request's
-60-second deadline, and actual private-control buffers. Inputs cover 54 SDK
-adapter cases, 13 information cases, 31 ordinary View calls, a 19 MB error,
-a 67 MB input/output case, 262,146 JSON values, and 42 local Workdir scenarios
-with 336 public calls. It does not read original results. Complete original
-comparison is a separate qualification step.
+The established native producer retains complete wire bytes, stderr, each
+request's 60-second deadline, and actual private-control buffers. Its inputs
+include 54 SDK adapter cases, 13 information cases, 31 ordinary View calls,
+a 19 MB error, a 67 MB input/output case, 262,146 JSON values, and 42 local
+Workdir scenarios with 336 public calls. It does not read original results.
 
-Transport/frontend/gateway byte windows grow dynamically. This does not close
-all resource dimensions. Configuration/execution still have legacy capacity
-limits, including independently observed failures for wide configuration
-roots. Regex retains its workspace/frame profiles. Directory, remote and
-background View, HTTP concurrency/cancellation, and remaining public handlers
-are incomplete. SDK fixture bodies and empty catalogs are compared only by
-explicit protocol/schema projections, never claimed as full original handler
-or catalog equivalence.
+Filesystem SDK qualification is separate: complete native public and private
+streams, the two actual session/cache states, filesystem observations, and
+mechanical trace order must be compared with their actual original execution.
+Reused original executables and fresh original builds are counted separately.
+An image build or an earlier graph's passing result does not qualify a new
+graph's runtime behavior.
+
+Transport/frontend/gateway byte windows grow dynamically. Configuration and
+execution retain some legacy result conventions; regex has remaining workspace
+and frame profiles. Directory, remote and background View, HTTP concurrency
+and cancellation, and the remaining public handlers are incomplete. SDK
+fixture bodies and empty catalogs are compared only by explicit protocol and
+schema projections. No evidence here claims full original catalog equivalence
+or whole-runtime replacement.

@@ -146,9 +146,9 @@ def compare_reference(root: Path, native_corpus: Path, original_output: Path, *,
     for row in native['rows']['info']:
         for reply in native['sessions'][row['session']]['replies']:
             if 'result' not in reply or 'tools' not in reply['result']:continue
-            tools=reply['result']['tools'];exact([tool['name'] for tool in tools],['host_list','effective_config','execution_shadow_admit','view','workdir'],'limited public catalog differs')
-            exact(tools[-2]['inputSchema'],schema,'actual tools/list did not publish original cleaned schema')
-            exact(tools[-1]['inputSchema'],decode(workdir_schema),'actual tools/list Workdir schema differs');advertised+=1
+            tools=reply['result']['tools'];exact([tool['name'] for tool in tools],['host_list','effective_config','execution_shadow_admit','view','workdir','directory_create','file_move','directory_move'],'limited public catalog differs')
+            exact(tools[3]['inputSchema'],schema,'actual tools/list did not publish original cleaned schema')
+            exact(tools[4]['inputSchema'],decode(workdir_schema),'actual tools/list Workdir schema differs');advertised+=1
     counts['schema']=dict(raw_bytes=len(raw_schema),raw_sha256=sha(raw_schema),public_bytes=len(published_schema),
                           public_sha256=sha(published_schema),actual_native_tools_list_responses=advertised,
                           original_schema_and_two_cleanup_functions_executed=True,

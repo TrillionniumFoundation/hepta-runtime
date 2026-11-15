@@ -164,10 +164,48 @@ meta-engine resource optimizations, complete configuration-owner parity and
 public production routing remain unqualified. The complete-runtime and
 old-stack-removal declarations remain false.
 
+## Public local filesystem composition
+
+The explicitly selected [58-image public stdio profile](filesystem_public_abi.md)
+advertises eight tools: `host_list`, `effective_config`,
+`execution_shadow_admit`, `view`, `workdir`, `directory_create`, `file_move` and
+`directory_move`. The three local filesystem methods call the actual typed,
+fence, shared Session, installed configuration, path-policy, request-scope,
+canonical-key, descriptor-effect, cache and publication owners. JSON fields do
+not select private state or internal child instances. The real fence permit is
+held across each admitted method and released after its terminal completion.
+
+A separately linked observer executable shares exactly the same 58 freshly
+compiled images. It has two real Session/cache instances and one shared installed
+configuration/fence owner. This private observer is never selected by public
+stdin. The mandatory native producer runs 28 observed processes for all 323
+public attempts plus nine explicit cache/filesystem controls. A separate 26
+ordinary-stdio processes cover 317 public attempts and five filesystem controls,
+including real EOF and BrokenPipe. These two domains overlap and their totals
+must not be added as independent semantic cases.
+
+Native admission reads complete source, compiler, linker/packer, both ELF images,
+all 68 fixed patches, actual streams, state snapshots and syscall/continuation
+records before the unchanged Rust reference runs. Only then are the owned test
+files archived with their full bytes, raw Unix names, modes, attributes, hardlink
+relationships, symbolic-link targets and FIFOs. The original stage reconstructs
+the same absolute paths, runs the fresh fixed-Rust-1.95 reference and requires
+complete response/state/filesystem comparison plus six groups of 42 physical
+evidence refusals. Pure retained readers never restore paths or start HIA/Rust.
+
+The configuration span owner also serves these public methods. Its remote-policy
+op8 borrows the complete input and grows an error response before changing state;
+it no longer expands unrelated work regions for a long path. Its legacy u32
+success channel remains an explicit representability boundary. Configured-fence
+focused observations and larger remote-policy errors are separate evidence from
+the 323-attempt SDK domain. Remote filesystem execution, general concurrent HTTP
+routing, unconstrained regex resources, the full 125-tool catalog and production
+activation remain unfinished. The original implementations stay in place.
+
 ## Native components
 
-Qualification covers 102 native HIA sources through 47 executable component
-entries, including 26 HIA packers. Shared owners are compiled in the explicitly
+Qualification covers 124 native HIA sources through 53 executable component
+entries, including 28 HIA packers. Shared owners are compiled in the explicitly
 declared component profiles; they are not counted as additional source files.
 The complete source inventory binds implementation, contracts, builders, tests
 and the retained original references. The shadow entry
@@ -189,8 +227,10 @@ These counts do not count migrated production MCP handlers.
 | [response_hints.hepta](response_hints.hepta) | Exact original response text composition from a complete drained hint list, including empty hints and every valid Unicode scalar |
 | [result_publication.hepta](result_publication.hepta) | Growable private result construction, incremental original hint/JSON serialization and partial-ACK publication lifecycle |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
+| [batch_plan_input.hepta](batch_plan_input.hepta) | Complete typed BatchEditParams and EditableContent frames to the original Planner request, preserving Rust line iteration, signed endpoint distinctions and growable u64 spans |
 | [batch_plan.hepta](batch_plan.hepta) | Original typed batch admission, operation parsing and endpoint planning, complete ordered diagnostics and full 50-operation / 5 MiB file domains |
 | [batch_apply.hepta](batch_apply.hepta) | Original ordered batch conflicts, duplicate/noise diagnostics, full application through EditableContent, Rust Debug escaping and fixed plan-to-apply composition |
+| [batch_diff.hepta](batch_diff.hepta) | Original annotated post-application diff, cumulative line shifts, exact line IDs and complete output bytes through explicit capacity growth |
 | [atomic_write.hepta](atomic_write.hepta) | Complete original Linux Local atomic-write policy, exact Unix temporary paths, metadata/permission behavior, retries, cleanup and cancellation ordering |
 | [atomic_write_packer.hepta](atomic_write_packer.hepta) | Fixed native write syscall boundary, descriptor custody, owned worker, cancellation/drain and parent-death cleanup |
 | [line_verify.hepta](line_verify.hepta) | Original stale line-ID verification, exact fresh context and nearest-three relocation hints, plus complete strict/clamped index results |
@@ -442,8 +482,8 @@ and one aggregate/original-Rust job. The prepare job executes the full cold gate
 and builds every module once. Its exact SHA256 is passed through the workflow;
 every partition checks the full source, compiler, build and invocation identity
 before executing its complete suite list. Batch, text, view/history/session, JSON,
-configuration/regex and system suites run on separate runners with 10, 29, 25,
-16, 15 and 32 native suites, respectively. The view partition keeps the caller,
+configuration/regex and system suites run on separate runners with 13, 29, 26,
+16, 17 and 35 native suites, respectively. The view partition keeps the caller,
 public MCP and their evidence together; text keeps the ordered file-lock chain.
 Configuration and regex remain together
 with all their evidence dependencies. Prepare and native partition jobs retain
@@ -457,7 +497,7 @@ is separate from the unchanged test result. The successful workflow requires
 the full archive and diagnostics, with original bytes and the tar receipt.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
-native evidence checks and all 42 original Rust recipe entries. Artifact transport can
+native evidence checks and all 48 original Rust recipe entries. Artifact transport can
 strip executable permissions; only byte-verified owned regular files have their
 recorded ordinary permissions restored. The aggregate retains the original
 partition reports and rechecks them before and after the original comparisons.
@@ -481,8 +521,8 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 127 native suite processes, the fresh compiler cold process,
-42 required original Rust recipe entries and one Rust-version process. Aggregate
+The declared run has 136 native suite processes, the fresh compiler cold process,
+48 required original Rust recipe entries and one Rust-version process. Aggregate
 process records, nested original processes, direct native calls and actual ELF
 processes are reported separately by the completed execution. Recipe entries
 can share a fresh build and are not a process count. The two JSON recipes share one locked
@@ -499,9 +539,14 @@ three-process reference and a required post-reference evidence-control process.
 Regex file search independently adds the same three-process recipe structure
 and its own required six-group, 42-control post-reference process. Each search
 domain executes once and is shared by the existing view recipe entries.
-The public MCP reference entry strictly reads those completed executions,
-adding no original process. It distinguishes
-complete view/error bodies from explicit SDK fixture projections. The two
+The public MCP reference entry strictly reads those completed view and search
+executions, then requires the source-bound Workdir reference and actual original
+replays for the complete over-64-MiB error and 42 Workdir scenarios. It distinguishes
+complete view/error bodies from explicit SDK fixture projections. The public
+filesystem entry has its own fresh locked SDK build and 28 original scenario
+replays. Its three tool/version observations, one build and 28 replays are 32
+nested processes, distinct from the native suite and the two outer original and
+evidence-control invocations. The two
 renderer domains each retain their own fresh original compilation and replay.
 The configuration recipe retains two fresh original processes. Fourteen evidence
 controls then run against the inactive complete aggregate and preserve a separate
@@ -962,6 +1007,31 @@ The [ABI](line_verify_abi.json) and
 internal owner. JSON parsing, file effects, edit locking and the public edit
 handlers remain separate.
 
+The [batch Planner input bridge](batch_plan_input_abi.md) consumes complete
+native typed-parameter and EditableContent responses. Its preflight mode has no
+file input; its post-read mode encodes normalized Rust `str.lines()` slices,
+canonical ULEB lengths and every operation's exact endpoint/content type. It
+does not impose an extra operation-count limit or an eight-MiB semantic cap.
+Malformed borrowed frames leave output unchanged, and valid requests report
+the exact required workspace or output size before publication.
+
+Its seven freshly compiled owners execute **463 inputs in both modes**, retaining
+**926 complete results, 7,027 actual HIA entries and 64 private controls**.
+Selected requests continue into the real native Planner, endpoint and stale-ID
+owners. The independent recipe freshly compiles unchanged original typed structs
+and EditableContent, then uses Rust Value and line iteration to encode the same
+requests. It compares all **100,386,031 result bytes** after native execution.
+The mandatory post-original suite includes 12 physical or re-signed refusals and
+two new offline reader processes, with a separate virtual environment for the
+second. Every complete evidence object must remain equal after relocation.
+
+The ordinary build, batch partition and fresh-original aggregate register this
+owner. Compile, native, original and control processes retain separate immutable
+receipts; adding an original comparison cannot alter the native phase seal.
+Each actual process keeps its 180-second deadline. The bridge performs no
+filesystem, permission, locking, history/cache or public routing effects;
+integrating those owners into the complete production handler remains separate.
+
 The batch-planning component has **3,339 direct requests**: **3,174 original
 reference rows** and 165 adapter, frame, child-contract and capacity controls.
 Those requests enter the HIA controller 53,301 times, the native endpoint owner
@@ -1005,6 +1075,32 @@ The EditableContent LF scan and bulk operations have changed f3/f5/f8; all other
 twenty functions retain their exact source and the complete original Editable
 recipe remains mandatory. Canonical locks, file writes, history/cache updates,
 configuration, authorization and production routing remain separate owners.
+
+The [batch diff owner](batch_diff_abi.md) covers the original pure annotated diff
+after ordered application, including cumulative line shifts, exact line IDs,
+deleted ranges and inserted/replaced text. Its three-image fixture calls the
+actual batch application and EditableContent owners before capturing the entire
+diff. The fixed corpus contains **804 requests**, including **802 successful
+diffs** and **two application errors**. It preserves **17,261,188 diff bytes**,
+with two results larger than 8 MiB, and keeps **45 private controls** separate
+from those original semantic cases. Across the application, independent editable
+and diff calls, the native suite executes **8,875 HIA entries** and retains
+**6,467 complete call records**. The named `batch-plan.v1` image profile is a
+qualification carrier capacity; the owner does not add a semantic output quota.
+
+The `batch_diff` recipe executes after native capture. It records three fresh
+Rust processes for the fixed 1.95.0 compiler identity, compilation of unchanged
+original diff/application blocks, and complete replay. All **74,495,241 output
+bytes** are compared, including the application/error and editable projections;
+the diff byte count above is a separate subset. The original wrapper and the
+subsequent two-group evidence suite are actual required aggregate checks. Twelve
+physical or re-signed corruption controls and two isolated reader relocations
+must pass without adding semantic calls. The pipeline binds the three complete
+member builds, all original source slices, complete process streams and retained
+main-process receipts. Pure readers never recreate a missing receipt. File
+writes, history/cache updates, final response publication and the public batch
+handler remain separate; this component does not change any production migration
+declaration.
 
 The [local atomic-write owner](atomic_write_abi.md) runs the complete original
 Linux Local `atomic_write` ordering through a fixed syscall-only native boundary.

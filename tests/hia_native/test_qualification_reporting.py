@@ -886,10 +886,10 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
-        self.assertEqual(len(MODULES), 50)
-        self.assertEqual(len(migration["native_components"]), 117)
-        self.assertEqual(len(q.native_tests()), 133)
-        self.assertEqual(len(RECIPES), 45)
+        self.assertEqual(len(MODULES), 53)
+        self.assertEqual(len(migration["native_components"]), 124)
+        self.assertEqual(len(q.native_tests()), 136)
+        self.assertEqual(len(RECIPES), 48)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
         self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
                             for row in migration["legacy_tool_handlers"]))
@@ -921,6 +921,100 @@ class QualificationReportingTests(unittest.TestCase):
                 params.environment(ROOT, output, report)
         self.assertFalse(output.exists())
         self.assertNotIn(params.CONTROLS_TEST, q.native_tests())
+
+    def test_batch_input_registration_preserves_native_and_original_phase_boundaries(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_batch_plan_input_pipeline as bridge
+        item = next(row for row in q.MODULES if row['key'] == bridge.KEY)
+        self.assertEqual(item['source'], 'native/batch_plan_input.hepta')
+        self.assertEqual(item['builder'], bridge.KEY)
+        self.assertEqual((item['test'], *item.get('additional_tests', ())), (bridge.NATIVE_TEST,))
+        self.assertEqual(set(item['companion_sources']), {
+            'native/serde_json_span.hepta', 'native/batch_edit_params.hepta', 'native/editable_content.hepta',
+            'native/batch_plan.hepta', 'native/line_endpoint.hepta', 'native/line_verify.hepta'})
+        self.assertIn(bridge.KEY, RECIPES)
+        self.assertNotIn(bridge.KEY, NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+        pinned = q.sources()
+        for name in ('native/batch_plan_input.hepta', 'native/batch_plan_input_abi.md',
+                     'native/batch_plan_input_composition.json', 'native/batch_plan_input_sources.json',
+                     bridge.PIPELINE_SOURCE, 'scripts/hia_native_batch_plan_input_build.py',
+                     'scripts/hia_native_batch_plan_input_qualification.py',
+                     'tests/hia_native/' + bridge.NATIVE_TEST, 'tests/hia_native/' + bridge.CONTROLS_TEST,
+                     'tests/hia_native/batch_plan_input_cases.py',
+                     'tests/hia_native/batch_plan_input_oracle/src/original.rs',
+                     'tests/hia_native/batch_plan_input_oracle/src/editable_original.rs',
+                     'tests/hia_native/batch_plan_input_oracle/source_manifest.json'):
+            self.assertIn(name, pinned)
+        output = self.output / 'uncreated-batch-input'
+        for bad in ('/outside/bundle.json', '../outside/bundle.json'):
+            report = {'modules': {bridge.KEY: {'manifest': bad, 'source': item['source'], 'builder': bridge.KEY}}}
+            with self.subTest(path=bad), self.assertRaises(ValueError):
+                bridge.environment(ROOT, output, report)
+        self.assertFalse(output.exists())
+        self.assertNotIn(bridge.CONTROLS_TEST, q.native_tests())
+
+    def test_batch_diff_registration_requires_complete_native_and_original_evidence(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_batch_diff_pipeline as diff
+        import hia_native_batch_diff_qualification as evidence
+        item = next(row for row in q.MODULES if row['key'] == diff.KEY)
+        self.assertEqual(item['source'], 'native/batch_diff.hepta')
+        self.assertEqual(item['builder'], diff.KEY)
+        self.assertEqual(item['manifest_env'], 'HIA_BATCH_DIFF_BUNDLE')
+        self.assertEqual((item['test'], *item.get('additional_tests', ())), (diff.NATIVE_TEST,))
+        self.assertEqual(set(item['companion_sources']),
+                         {'native/batch_apply.hepta', 'native/editable_content.hepta',
+                          'native/text_budget.hepta', 'native/result_publication.hepta'})
+        self.assertIn(diff.KEY, RECIPES)
+        self.assertNotIn(diff.KEY, NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+        self.assertEqual(diff.ORIGINAL_CHECKS, ('batch_diff_original', diff.CONTROLS_TEST))
+        self.assertNotIn(diff.CONTROLS_TEST, q.native_tests())
+        pinned = q.sources()
+        for name in (*evidence.NATIVE_SOURCES, diff.PIPELINE_SOURCE,
+                     'scripts/hia_native_batch_diff_qualification.py',
+                     'tests/hia_native/' + diff.CONTROLS_TEST,
+                     'tests/hia_native/batch_diff_oracle/assemble.py',
+                     'tests/hia_native/batch_diff_oracle/run.py',
+                     'tests/hia_native/batch_diff_oracle/src/carrier.rs',
+                     'tests/hia_native/oracle_batch_apply.rs', 'src/mcp/fs/delta.rs',
+                     'src/mcp/fs/text_editing.rs', 'src/utils/line_hash.rs'):
+            self.assertIn(name, pinned)
+        output = self.output / 'uncreated-batch-diff'
+        for bad in ('/outside/bundle.json', '../outside/bundle.json'):
+            report = {'modules': {diff.KEY: {'manifest': bad, 'source': item['source'], 'builder': diff.KEY}}}
+            with self.subTest(path=bad), self.assertRaises(ValueError):
+                diff.environment(ROOT, output, report)
+        self.assertFalse(output.exists())
+
+
+    def test_batch_diff_main_receipts_require_complete_actual_streams(self):
+        import copy
+        import hia_native_batch_diff_pipeline as diff
+        command = [sys.executable, '-I', '-B', '-c', 'print("{\\"mechanical_receipt\\":true}")']
+        expected = {'mechanical_receipt': True}
+        record_check(self.output, self.report, name=diff.ORIGINAL_CHECK,
+                     command=command, timeout=180)
+        row, streams, artifacts = diff._check(self.output, self.report, completed_test_summary,
+                                              diff.ORIGINAL_CHECK, command, expected)
+        self.assertEqual(set(artifacts), {diff.ORIGINAL_CHECK + '.stdout', diff.ORIGINAL_CHECK + '.stderr'})
+        for change in ({'exit_code': False}, {'timed_out': True}, {'timeout_seconds': 181},
+                       {'command': [*command, 'extra']}, {'start_error': {'type': 'OSError'}},
+                       {'stdout_bytes': row['stdout_bytes'] + 1}, {'summary': {'mechanical_receipt': False}}):
+            altered = copy.deepcopy(self.report)
+            altered['checks'][0].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                diff._check(self.output, altered, completed_test_summary,
+                            diff.ORIGINAL_CHECK, command, expected)
+        base = self.output / 'retained'
+        base.mkdir()
+        record = diff._record(row, ROOT, 'original')
+        diff._retain_process(base, record, streams, create=True)
+        diff._retain_process(base, record, streams, create=False)
+        (base / 'original.stdout').unlink()
+        with self.assertRaises(ValueError):
+            diff._retain_process(base, record, streams, create=False)
+        self.assertFalse((base / 'original.stdout').exists())
+
 
     def test_config_span_registry_requires_native_capture_and_fresh_original(self):
         import qualify_hia_runtime_native as q
@@ -1005,6 +1099,237 @@ class QualificationReportingTests(unittest.TestCase):
             self.assertEqual(q.filesystem_parity_retirement(self.output, self.report), stored)
         retirement.assert_called_once_with(ROOT, self.output, self.report, q.completed_test_summary, create=False)
         self.assertIsInstance(result["native_trace_time_extent"], tuple)
+
+    def test_public_filesystem_registration_keeps_real_pair_and_original_stages(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_filesystem_public_pipeline as fs
+        from hia_native_runtime_mcp_build import MEMBERS, BOUNDARIES, FIXTURE_BOUNDARIES
+        entries = {row['key']: row for row in q.MODULES}
+        order = [row['key'] for row in q.MODULES]
+        self.assertLess(order.index('runtime_mcp'), order.index(fs.KEY))
+        self.assertEqual(entries[fs.KEY]['builder'], fs.KEY)
+        self.assertEqual(entries[fs.KEY]['source'], 'native/filesystem_gateway.hepta')
+        self.assertEqual(entries[fs.KEY]['test'], fs.NATIVE_TEST)
+        self.assertIn(fs.KEY, RECIPES)
+        self.assertNotIn(fs.CONTROLS_TEST, q.native_tests())
+        self.assertNotIn('test_filesystem_public_original.py', q.native_tests())
+        members = {'native/' + name + '.hepta' for _, name, _ in MEMBERS}
+        self.assertEqual(len(members), 58)
+        self.assertEqual(set(entries['runtime_mcp']['companion_sources']) | {entries['runtime_mcp']['source']},
+                         members | {'native/runtime_mcp_image_packer.hepta'})
+        self.assertTrue({'native/config_directory_owner_span.hepta', 'native/config_fs_span.hepta',
+                         'native/config_json_span.hepta', 'native/config_validation_span.hepta'} <= members)
+        self.assertFalse({'native/config_directory_owner.hepta', 'native/config_fs.hepta',
+                          'native/config_json.hepta', 'native/config_validation.hepta'} & members)
+        pinned = q.sources()
+        for name in (*fs.SOURCE_FILES, *BOUNDARIES, *FIXTURE_BOUNDARIES,
+                     'native/runtime_mcp_filesystem_composition.json',
+                     'native/filesystem_public_tools_provenance.json'):
+            self.assertEqual(pinned[name], q.sha(ROOT / name))
+        report = {'modules': {'runtime_mcp': {'manifest': fs.PUBLIC_MANIFEST},
+                             fs.KEY: {'manifest': fs.FIXTURE_MANIFEST, 'source': entries[fs.KEY]['source'], 'builder': fs.KEY}}}
+        commands = fs.test_commands(ROOT, self.output, report, strace='/selected/strace')
+        self.assertEqual(set(commands), {fs.NATIVE_TEST})
+        self.assertEqual(commands[fs.NATIVE_TEST], [sys.executable, '-I', '-B',
+            str(ROOT / 'tests/hia_native' / fs.NATIVE_TEST), '--output', str(self.output),
+            '--public-manifest', str(self.output / fs.PUBLIC_MANIFEST),
+            '--fixture-manifest', str(self.output / fs.FIXTURE_MANIFEST), '--strace', '/selected/strace'])
+
+    def test_public_filesystem_original_sources_are_exact_runtime_materializations(self):
+        import hia_native_filesystem_public_reference_source as source
+        document, original, sources = source.source_evidence(ROOT)
+        self.assertEqual(len(original), 17)
+        self.assertEqual(len(source.ORIGINALS), 11)
+        self.assertFalse((ROOT / source.ORACLE / 'oracle/original').exists())
+        for name, location in source.ORIGINALS.items():
+            self.assertEqual(original['oracle/original/' + name], (ROOT / location).read_bytes())
+            self.assertIn(location, ORIGINAL_RUNTIME_BLOBS)
+        before = source.materialize(ROOT, self.output)
+        self.assertEqual(source.verify_materialized(ROOT, self.output), before)
+        self.assertIs(before['original_semantics_executed'], False)
+        self.assertEqual(before['new_rust_processes'], 0)
+        path = self.output / source.FOLDER / 'oracle/original/server.rs'
+        raw = path.read_bytes()
+        path.write_bytes(raw + b'\n')
+        with self.assertRaisesRegex(ValueError, 'materialized original changed'):
+            source.verify_materialized(ROOT, self.output)
+        path.write_bytes(raw)
+        extra = self.output / source.FOLDER / 'unbound-original.rs'
+        extra.write_bytes(b'not an admitted original source')
+        with self.assertRaisesRegex(ValueError, 'unexpected materialized input file'):
+            source.verify_materialized(ROOT, self.output)
+
+    def test_public_filesystem_recipe_records_only_actual_original_and_controls(self):
+        import compare_hia_runtime_rust as comparison
+        import hia_native_filesystem_public_pipeline as fs
+        selected = Path('/selected/1.95/bin/rustc')
+        sentinel = {'orchestration_fixture_only': True}
+        with patch.object(fs, 'execute_original', return_value=sentinel) as execute:
+            self.assertEqual(comparison.RECIPES[fs.KEY](self.output, self.report, selected), sentinel)
+        execute.assert_called_once_with(ROOT, self.output, self.report, selected,
+                                        comparison.record_check, comparison.completed_test_summary)
+
+    def test_public_filesystem_wrapper_rechecks_phase_deadline_and_complete_streams(self):
+        import copy
+        import hia_native_filesystem_public_pipeline as fs
+        expected = {'mechanical_process_fixture_only': True}
+        command = [sys.executable, '-I', '-B', '-c', 'print(\'{"mechanical_process_fixture_only":true}\')']
+        self.report['phase'] = 'native_components'
+        record_check(self.output, self.report, name=fs.NATIVE_TEST, command=command, timeout=180)
+        row, files = fs.wrapper(self.output, self.report, completed_test_summary,
+                                fs.NATIVE_TEST, command, expected)
+        self.assertEqual(row, self.report['checks'][0])
+        self.assertEqual(set(files), {fs.NATIVE_TEST + '.stdout', fs.NATIVE_TEST + '.stderr'})
+        for key, value in (('phase', 'original_rust_comparison'), ('timeout_seconds', 181),
+                           ('exit_code', False), ('elapsed_seconds', float('nan')),
+                           ('stdout_bytes', row['stdout_bytes'] + 1)):
+            changed = copy.deepcopy(self.report)
+            changed['checks'][0][key] = value
+            with self.subTest(field=key), self.assertRaises(ValueError):
+                fs.wrapper(self.output, changed, completed_test_summary, fs.NATIVE_TEST, command, expected)
+        changed = copy.deepcopy(self.report)
+        changed['checks'].append(copy.deepcopy(changed['checks'][0]))
+        with self.assertRaisesRegex(ValueError, 'one actual complete wrapper'):
+            fs.wrapper(self.output, changed, completed_test_summary, fs.NATIVE_TEST, command, expected)
+
+    def test_public_filesystem_relocation_preserves_all_shared_source_roles(self):
+        """Mechanical alias regression; no HIA or original semantic execution."""
+        import hia_native_filesystem_public_pipeline as fs
+        source = self.output / 'role-source'
+        producer = source / 'tests/producer'
+        native = self.output / 'role-native'
+        producer.mkdir(parents=True)
+        native.mkdir()
+        for name in ('strict_native.py', 'strict_native_provenance.py', 'strict_observations.py',
+                     'strict_trace.py', 'strict_original.py', 'strict_fixture.py', 'strict_transport.py',
+                     'test_native_evidence.py', 'capture_common.py'):
+            (producer / name).write_bytes(('mechanical source: ' + name).encode())
+        for name in ('scripts/build.py', 'scripts/primitive.py', 'native/runtime_mcp_sources.json'):
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(name.encode())
+        original_reader = self.output / 'role-original-reader.py'
+        original_reader.write_bytes(b'unchanged reference reader fixture')
+        (native / 'NATIVE.json').write_bytes(b'{"fixture":true}')
+        plan = dict(native_source=str(source), producer_source=str(producer),
+                    original_driver_source=str(producer), native_capture=str(native),
+                    original_capture=str(self.output / 'role-original'),
+                    reference_source=str(self.output / 'role-reference'),
+                    original_reader=str(original_reader), build_reader=str(source / 'scripts/build.py'),
+                    build_primitive=str(source / 'scripts/primitive.py'))
+        full = dict(provenance={'exact_artifact_names': []}, build={'artifacts': {}},
+                    comparison={'original_evidence': {'artifact_sha256': {'producer-source/capture_common.py': 'fixture'}}})
+        native_source = dict(driver_sources={'capture_common.py': 'fixture'}, native_source_files={})
+        mapping, copies = fs.relocation_inventory(plan, full, native_source, Path.read_bytes)
+        origin = str(producer / 'capture_common.py')
+        first, second = 'native-producer/capture_common.py', 'original-producer/capture_common.py'
+        self.assertEqual(mapping['files'][origin], first)
+        self.assertEqual(copies[first], origin)
+        self.assertEqual(copies[second], origin)
+        self.assertEqual(mapping['copy_pins'][first], mapping['copy_pins'][second])
+        self.assertEqual(len(mapping['copy_pins']), len(mapping['files']) + 1)
+        self.assertEqual(set(mapping['copy_pins']), set(copies))
+
+    def public_filesystem_archive_fixture(self):
+        """Mechanical archive fixture; no native or original semantic claim."""
+        import os
+        import stat
+        import hia_native_filesystem_public_fixtures as fixtures
+        from hia_native_filesystem_public_reference_source import canonical
+        owned = self.output / fixtures.ROOTS[0]
+        allowed, outside = owned / 'allowed/s-000', owned / 'outside/s-000'
+        allowed.mkdir(parents=True)
+        outside.mkdir(parents=True)
+        (allowed / 'empty').mkdir()
+        raw_name = os.fsencode(allowed) + b'/raw-\xff'
+        fd = os.open(raw_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, b'complete\x00archive\n')
+        finally:
+            os.close(fd)
+        os.link(raw_name, os.fsencode(allowed / 'hard'))
+        os.symlink(b'raw-\xff', os.fsencode(outside / 'link'))
+        os.mkfifo(allowed / 'pipe', 0o600)
+        entries = fixtures.archive.snapshot(self.output, fixtures.ROOTS)
+        trees = []
+        kinds = {'directory': stat.S_IFDIR, 'file': stat.S_IFREG,
+                 'symlink': stat.S_IFLNK, 'fifo': stat.S_IFIFO}
+        for target in (allowed, outside):
+            relative = os.fsencode(target.relative_to(self.output))
+            nodes = []
+            for row in entries:
+                path = bytes.fromhex(row['path_hex'])
+                if path != relative and not path.startswith(relative + b'/'):
+                    continue
+                suffix = b'' if path == relative else path[len(relative) + 1:]
+                node = dict(relative_hex=suffix.hex(), mode=kinds[row['kind']] | row['mode'],
+                            uid=row['uid'], gid=row['gid'], device=row['source_device'],
+                            inode=row['source_inode'], links=row['nlink'])
+                if row['kind'] == 'file':
+                    node['content_hex'] = (self.output / os.fsdecode(path)).read_bytes().hex()
+                elif row['kind'] == 'symlink':
+                    node['target_hex'] = row['target_hex']
+                nodes.append(node)
+            trees.append(dict(root_hex=os.fsencode(target).hex(), nodes=nodes))
+        capture = self.output / 'filesystem-public/native'
+        record = capture / 'public/scenario-000/records.jsonl'
+        record.parent.mkdir(parents=True)
+        record.write_bytes(canonical(dict(kind='scenario_end', scenario_id=0, filesystem=trees)))
+        info = owned.lstat()
+        (capture / 'HOST.json').write_bytes(canonical(dict(fixture_identity=[info.st_dev, info.st_ino, info.st_uid])))
+        scene = dict(scenario_id=0, sessions=[0], observed_roots=[tree['root_hex'] for tree in trees])
+        (capture / 'INPUTS.json').write_bytes(canonical(dict(groups=[dict(scenarios=[scene])])))
+        (capture / 'NATIVE.json').write_bytes(canonical(dict(all_processes_terminated=True,
+                                                          mechanical_archive_fixture_only=True)))
+        binding = dict(execution_output_root=str(self.output), mechanical_archive_fixture_only=True)
+        return fixtures, binding
+
+    def test_public_filesystem_archive_reconstructs_and_retires_owned_complete_tree(self):
+        fixtures, binding = self.public_filesystem_archive_fixture()
+        retired = fixtures.retirement(ROOT, self.output, binding, create=True)
+        self.assertEqual((retired['files'], retired['symlinks'], retired['fifos']), (2, 1, 1))
+        self.assertFalse((self.output / fixtures.ROOTS[0]).exists())
+        self.assertEqual(fixtures.retirement(ROOT, self.output, binding), retired)
+        with fixtures.original_fixture(ROOT, self.output, binding, retired) as path:
+            self.assertEqual(list(path.iterdir()), [])
+            self.assertTrue((self.output / fixtures.HELD / 'allowed/s-000/hard').is_file())
+            (path / 'actual-original-fixture').write_bytes(b'actual separate fixture bytes')
+            report = self.output / 'filesystem-public/original/ORIGINAL.json'
+            report.parent.mkdir()
+            report.write_text('{"mechanical_archive_fixture_only":true}\n')
+        proof = fixtures.retained_original(self.output, binding, retired)
+        self.assertIs(proof['reconstructed_native_inode_preserved'], True)
+        self.assertIs(proof['reconstructed_original_inodes'], False)
+        self.assertIs(proof['original_fixture_retired'], True)
+        self.assertEqual(proof['original_archive']['retained_file_bytes'], len(b'actual separate fixture bytes'))
+        self.assertFalse((self.output / fixtures.ROOTS[0]).exists())
+        self.assertFalse((self.output / fixtures.HELD).exists())
+        self.assertEqual(fixtures.retirement(ROOT, self.output, binding), retired)
+        receipt = self.output / fixtures.RESTORE
+        saved = receipt.read_bytes()
+        value = json.loads(saved)
+        value['reconstructed_native_inode_preserved'] = False
+        receipt.write_text(json.dumps(value))
+        with self.assertRaisesRegex(ValueError, 'complete retained fixture reconstruction'):
+            fixtures.retained_original(self.output, binding, retired)
+        receipt.write_bytes(saved)
+        archive = self.output / fixtures.NATIVE_ARCHIVE
+        archive.write_bytes(archive.read_bytes() + b'changed')
+        with self.assertRaises(ValueError):
+            fixtures.retirement(ROOT, self.output, binding)
+
+    def test_public_filesystem_failed_original_keeps_both_owned_trees(self):
+        fixtures, binding = self.public_filesystem_archive_fixture()
+        retired = fixtures.retirement(ROOT, self.output, binding, create=True)
+        with self.assertRaisesRegex(RuntimeError, 'actual replay failed'):
+            with fixtures.original_fixture(ROOT, self.output, binding, retired) as path:
+                (path / 'partial-output').write_bytes(b'preserved failed replay')
+                raise RuntimeError('actual replay failed')
+        journal = json.loads((self.output / fixtures.RESTORE).read_bytes())
+        self.assertEqual(journal['status'], 'FAIL')
+        self.assertEqual((self.output / fixtures.ROOTS[0] / 'partial-output').read_bytes(), b'preserved failed replay')
+        self.assertEqual((self.output / fixtures.HELD / 'allowed/s-000/hard').read_bytes(), b'complete\x00archive\n')
+        self.assertFalse((self.output / fixtures.ORIGINAL_RECEIPT).exists())
 
     def test_json_registry_retains_two_original_domains_and_exact_named_profile(self):
         from hia_native_json_qualification import COMPONENTS, source_inputs
