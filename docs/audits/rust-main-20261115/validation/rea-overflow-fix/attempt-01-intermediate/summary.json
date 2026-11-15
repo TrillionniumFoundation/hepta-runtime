@@ -1,0 +1,44 @@
+{
+  "base": "7f3c795b1dcbf22fd88f0bf8fe94e31fe019c0e9",
+  "files": {
+    "src/mcp/rea_contract.rs": "9c8a0d503d6c90b281f6667a52fca7349b01fb1f8dc5eab281a7f65750fd319b",
+    "src/mcp/rea_contract_overflow_tests.rs": "73008f7202efcc2271c86280824765b58f30b0662e032bc2935668a046ad2a42"
+  },
+  "environment": {
+    "CARGO_TARGET_DIR": "/workspace/scratch/d72683e5e62a/runtime-validation-target",
+    "CARGO_BUILD_JOBS": "1",
+    "CARGO_INCREMENTAL": "0"
+  },
+  "commands": [
+    {
+      "label": "fmt-check",
+      "argv": [
+        "/home/agent/.cargo/bin/cargo",
+        "+1.95.0",
+        "fmt",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 2.354,
+      "log": "fmt-check.log"
+    },
+    {
+      "label": "clippy-all-targets",
+      "argv": [
+        "/home/agent/.cargo/bin/cargo",
+        "+1.95.0",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 104.122,
+      "log": "clippy-all-targets.log"
+    }
+  ]
+}
