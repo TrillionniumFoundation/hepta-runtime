@@ -1,0 +1,322 @@
+{
+  "started_at_utc": "2026-11-15T12:45:14.670865+00:00",
+  "finished_at_utc": "2026-11-15T12:45:16.476484+00:00",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    ".github/scripts",
+    "-p",
+    "test_rea_browser_session.py",
+    "-v"
+  ],
+  "exit_code": 0,
+  "case_count": 7,
+  "cases": [
+    {
+      "case": "test_rea_browser_session.BrowserSessionTests.test_cancellation_cleans_descendants_and_retains_signal_status",
+      "cleanup": {
+        "cleanup_error": null,
+        "cleanup_exit_status": 0,
+        "escalated_to_kill": true,
+        "final_exit_status": 143,
+        "lifecycle_error": null,
+        "owned_sessions": [
+          {
+            "pgid": 9,
+            "pid": 9,
+            "sid": 9
+          },
+          {
+            "pgid": 10,
+            "pid": 10,
+            "sid": 10
+          },
+          {
+            "pgid": 11,
+            "pid": 11,
+            "sid": 11
+          }
+        ],
+        "owner_pid": 8,
+        "probe_exit_status": 143,
+        "profile_removed": true,
+        "reaped_pids": [
+          9,
+          10,
+          11,
+          12
+        ],
+        "remaining_live_children": [],
+        "term_used": true
+      },
+      "result": "PASS"
+    },
+    {
+      "case": "test_rea_browser_session.BrowserSessionTests.test_exited_parent_session_escaping_writer_is_killed_and_reaped",
+      "cleanup": {
+        "cleanup_error": null,
+        "cleanup_exit_status": 0,
+        "escalated_to_kill": true,
+        "final_exit_status": 0,
+        "lifecycle_error": null,
+        "owned_sessions": [
+          {
+            "pgid": 15,
+            "pid": 15,
+            "sid": 15
+          },
+          {
+            "pgid": 16,
+            "pid": 16,
+            "sid": 16
+          },
+          {
+            "pgid": 17,
+            "pid": 17,
+            "sid": 17
+          }
+        ],
+        "owner_pid": 14,
+        "probe_exit_status": 0,
+        "profile_removed": true,
+        "reaped_pids": [
+          15,
+          16,
+          17,
+          18
+        ],
+        "remaining_live_children": [],
+        "term_used": true
+      },
+      "result": "PASS"
+    },
+    {
+      "case": "test_rea_browser_session.BrowserSessionTests.test_new_orphan_after_dead_snapshot_is_signaled_before_reap",
+      "cleanup": {
+        "cleanup_error": null,
+        "cleanup_exit_status": 0,
+        "escalated_to_kill": true,
+        "final_exit_status": 0,
+        "lifecycle_error": null,
+        "owned_sessions": [
+          {
+            "pgid": 21,
+            "pid": 21,
+            "sid": 21
+          },
+          {
+            "pgid": 22,
+            "pid": 22,
+            "sid": 22
+          },
+          {
+            "pgid": 23,
+            "pid": 23,
+            "sid": 23
+          }
+        ],
+        "owner_pid": 20,
+        "probe_exit_status": 0,
+        "profile_removed": true,
+        "reaped_pids": [
+          21,
+          22,
+          23,
+          24
+        ],
+        "remaining_live_children": [],
+        "term_used": true
+      },
+      "result": "PASS"
+    },
+    {
+      "case": "test_rea_browser_session.BrowserSessionTests.test_probe_failure_is_preserved_after_cleanup",
+      "cleanup": {
+        "cleanup_error": null,
+        "cleanup_exit_status": 0,
+        "escalated_to_kill": true,
+        "final_exit_status": 37,
+        "lifecycle_error": null,
+        "owned_sessions": [
+          {
+            "pgid": 27,
+            "pid": 27,
+            "sid": 27
+          },
+          {
+            "pgid": 28,
+            "pid": 28,
+            "sid": 28
+          },
+          {
+            "pgid": 29,
+            "pid": 29,
+            "sid": 29
+          }
+        ],
+        "owner_pid": 26,
+        "probe_exit_status": 37,
+        "profile_removed": true,
+        "reaped_pids": [
+          27,
+          28,
+          29,
+          30
+        ],
+        "remaining_live_children": [],
+        "term_used": true
+      },
+      "result": "PASS"
+    },
+    {
+      "case": "test_rea_browser_session.BrowserSessionTests.test_probe_failure_wins_over_removal_failure",
+      "cleanup": {
+        "cleanup_error": "injected profile removal failure",
+        "cleanup_exit_status": 1,
+        "escalated_to_kill": true,
+        "final_exit_status": 37,
+        "lifecycle_error": null,
+        "owned_sessions": [
+          {
+            "pgid": 33,
+            "pid": 33,
+            "sid": 33
+          },
+          {
+            "pgid": 34,
+            "pid": 34,
+            "sid": 34
+          },
+          {
+            "pgid": 35,
+            "pid": 35,
+            "sid": 35
+          }
+        ],
+        "owner_pid": 32,
+        "probe_exit_status": 37,
+        "profile_removed": false,
+        "reaped_pids": [
+          33,
+          34,
+          35,
+          36
+        ],
+        "remaining_live_children": [],
+        "term_used": true
+      },
+      "result": "PASS"
+    },
+    {
+      "case": "test_rea_browser_session.BrowserSessionTests.test_removal_failure_turns_probe_success_into_failure",
+      "cleanup": {
+        "cleanup_error": "injected profile removal failure",
+        "cleanup_exit_status": 1,
+        "escalated_to_kill": true,
+        "final_exit_status": 1,
+        "lifecycle_error": null,
+        "owned_sessions": [
+          {
+            "pgid": 39,
+            "pid": 39,
+            "sid": 39
+          },
+          {
+            "pgid": 40,
+            "pid": 40,
+            "sid": 40
+          },
+          {
+            "pgid": 41,
+            "pid": 41,
+            "sid": 41
+          }
+        ],
+        "owner_pid": 38,
+        "probe_exit_status": 0,
+        "profile_removed": false,
+        "reaped_pids": [
+          39,
+          40,
+          41,
+          42
+        ],
+        "remaining_live_children": [],
+        "term_used": true
+      },
+      "result": "PASS"
+    },
+    {
+      "case": "test_rea_browser_session.BrowserSessionTests.test_term_cooperative_orphan_needs_no_kill",
+      "cleanup": {
+        "cleanup_error": null,
+        "cleanup_exit_status": 0,
+        "escalated_to_kill": false,
+        "final_exit_status": 0,
+        "lifecycle_error": null,
+        "owned_sessions": [
+          {
+            "pgid": 45,
+            "pid": 45,
+            "sid": 45
+          },
+          {
+            "pgid": 46,
+            "pid": 46,
+            "sid": 46
+          },
+          {
+            "pgid": 47,
+            "pid": 47,
+            "sid": 47
+          }
+        ],
+        "owner_pid": 44,
+        "probe_exit_status": 0,
+        "profile_removed": true,
+        "reaped_pids": [
+          45,
+          46,
+          47,
+          48
+        ],
+        "remaining_live_children": [],
+        "term_used": true
+      },
+      "result": "PASS"
+    }
+  ],
+  "log_sha256": "994a1bf575c2d1346c41520a21753f2d876b95ebfde276f122988681815c0d66",
+  "sources": {
+    ".github/scripts/rea_browser_session.py": "04042bc8f42ba1c8cd12ad5129e11fb301525f064ed750c5304c254551fa5664",
+    ".github/scripts/test_rea_browser_session.py": "6502011fa0b5bbf96e5ace51489958a44aebca1efa28af62c8f5bcf5be14002e",
+    ".github/workflows/rea-browser-real.yml": "102364f8e9af438c2e7f607c89846101c485a2cc14166294b6686d8231cd0cb3"
+  },
+  "environment_note": "Local Linux procfs omits task/PID/children. Real process fixtures exercise PPID-filtered stat fallback; hosted Ubuntu verifies native children fast path.",
+  "earlier_attempts": [
+    {
+      "attempt": 1,
+      "tests": 6,
+      "exit_code": 1,
+      "reason": "Missing procfs task/PID/children; no owned browser/server/probe started"
+    },
+    {
+      "attempt": 2,
+      "tests": 6,
+      "exit_code": 1,
+      "reason": "Same missing procfs entry, stderr diagnostic added"
+    },
+    {
+      "attempt": 3,
+      "tests": 6,
+      "exit_code": 0,
+      "reason": "PPID-filtered stat fallback added; all six real process fixtures passed"
+    }
+  ],
+  "final_run_reason": "Freeze final source with lifecycle_error forcing nonzero status while preserving known nonzero probe code.",
+  "previous_seven_case_receipt": "pre-lifecycle-error-lifecycle-fixtures.json"
+}

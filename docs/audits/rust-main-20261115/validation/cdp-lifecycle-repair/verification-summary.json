@@ -1,0 +1,33 @@
+{
+  "base_revision": "737acf6f901e46c57b0b4374e323e0d1132e0d49",
+  "patch": {
+    "path": "cdp-cleanup-fix.patch",
+    "sha256": "95ad09b2762f444743868ee3445df0feda8d1362341325c33f4dec27342f9ae0"
+  },
+  "sources": {
+    ".github/workflows/rea-browser-real.yml": "102364f8e9af438c2e7f607c89846101c485a2cc14166294b6686d8231cd0cb3",
+    ".github/scripts/rea_browser_session.py": "196b63ffd0b5d721dd62061608f53946054480c894dfb203482a0bfc6e06cbd1",
+    ".github/scripts/test_rea_browser_session.py": "a06db8b25a1781707d3687e034550b130a14132c17063ae6d86ffeaeac862a85"
+  },
+  "validation": {
+    "real_process_fixtures": {
+      "passed": 8,
+      "failed": 0,
+      "exit_code": 0,
+      "receipt": "lifecycle-fixtures.json",
+      "receipt_sha256": "3465a5830e9048eed1a4c54ac8f9e867123beeb978b223665d067e0d47f2c19f"
+    },
+    "original_cdp_javascript_unchanged": true,
+    "original_five_assertions_unchanged": true,
+    "workflow_and_probe_bash_syntax": "PASS",
+    "root_worktree_modified": false,
+    "rust_runtime_hia_sources_modified": false,
+    "git_index_or_commits_modified": false,
+    "remote_operations": 0
+  },
+  "limitations": [
+    "Local Linux lacks task/PID/children; local real process checks use the PPID-filtered stat fallback.",
+    "The native procfs children fast path and real Chrome remain for the targeted hosted workflow run.",
+    "An uncatchable owner kill, runner loss, or an uninterruptible child can prevent successful userspace cleanup; bounded failure retains the profile."
+  ]
+}

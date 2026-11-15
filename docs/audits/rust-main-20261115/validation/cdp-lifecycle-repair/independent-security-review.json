@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "reviewed_at_utc": "2026-11-15T12:49:04.714128+00:00",
+  "reviewer": "/root/security_audit",
+  "status": "PASS_STATIC_REVIEW_HOSTED_REAL_CHROME_VALIDATION_REQUIRED",
+  "scope": "Only the CI Chrome CDP temporary-process lifecycle patch, its fixture, and workflow integration.",
+  "base_commit": "737acf6f901e46c57b0b4374e323e0d1132e0d49",
+  "sources_sha256": {
+    ".github/scripts/rea_browser_session.py": "196b63ffd0b5d721dd62061608f53946054480c894dfb203482a0bfc6e06cbd1",
+    ".github/scripts/test_rea_browser_session.py": "a06db8b25a1781707d3687e034550b130a14132c17063ae6d86ffeaeac862a85",
+    ".github/workflows/rea-browser-real.yml": "102364f8e9af438c2e7f607c89846101c485a2cc14166294b6686d8231cd0cb3"
+  },
+  "evidence_sha256": {
+    "lifecycle-fixtures.json": "3465a5830e9048eed1a4c54ac8f9e867123beeb978b223665d067e0d47f2c19f",
+    "lifecycle-fixtures.log": "e87f578b863ec85a8a91708d160dd21d30e02a59975168babbb960a09bc8f888",
+    "source-and-shell-checks.json": "ddccd26546bb1110fce2592e18e6d648ea582e31c4438cc959521ea82f10e74c",
+    "cdp-cleanup-fix.patch": "95ad09b2762f444743868ee3445df0feda8d1362341325c33f4dec27342f9ae0"
+  },
+  "independent_readonly_checks": {
+    "changed_path_set_exactly_three": true,
+    "original_cdp_javascript_and_five_assertions": {
+      "cdp_js": {
+        "byte_identical": true,
+        "bytes": 3684,
+        "sha256": "6a7cfe04049a5f96190e1c46e1d719a1a3c163bb410bc529589bb79f6460d18b"
+      },
+      "five_python_assertions": {
+        "byte_identical": true,
+        "bytes": 428,
+        "sha256": "b70ba04eb3ddc4082be999d350955fc60318dadf474031d4bda1cf0f8f9bda19"
+      }
+    },
+    "source_block_hashes_include_original_yaml_indentation": true,
+    "workflow_paths_include_both_helper_and_fixture": true,
+    "workflow_fixture_step_executes_the_reviewed_eight_case_module": true,
+    "action_pins_permissions_runner_branch_triggers_and_artifact_step_unchanged": true,
+    "runtime_rust_lockfile_frozen_fixture_and_hia_sources_unchanged": true,
+    "all_source_and_receipt_hash_bindings_recomputed": true
+  },
+  "process_ownership_review": [
+    {
+      "scope": "rea_browser_session.py:21-62",
+      "result": "Dedicated single-threaded owner refuses pre-existing children, checks its procfs PID namespace, enables subreaper, and selects only direct children by PPID. Missing task/children falls back only on FileNotFoundError to stat metadata; no argv or environment is read."
+    },
+    {
+      "scope": "rea_browser_session.py:64-90,162-167",
+      "result": "HTTP, Chrome and probe acquire independent sessions with PID=PGID=SID. Popen leaders remain unreaped; probe and liveness observations use WNOWAIT. Group signals retain their original owned anchors."
+    },
+    {
+      "scope": "rea_browser_session.py:92-140",
+      "result": "Bounded TERM then KILL follows newly adopted session-escaping descendants. A stable second child snapshot prevents premature final reap. No signals follow reaping, which terminates only on ECHILD."
+    },
+    {
+      "scope": "rea_browser_session.py:143-200",
+      "result": "Profile removal occurs only after all owned children have exited and been reaped. Known nonzero probe status takes priority; otherwise lifecycle, cleanup or evidence failures return nonzero. Inspection failure is recorded as null plus an error, not an invented empty live set."
+    }
+  ],
+  "review_findings_resolved": [
+    {
+      "id": "late-adoption-snapshot",
+      "previous_gap": "A child list sampled before reparenting could become an all-zombie snapshot while an escaped writer was newly adopted; entering the no-further-signal reap phase could leave it alive.",
+      "resolution": "Require two identical child PID/state snapshots after non-reaping waitable-exit confirmation. Remain in the bounded signal loop on any difference.",
+      "regression": "test_new_orphan_after_dead_snapshot_is_signaled_before_reap",
+      "fixture_nature": "One stale list is injected; orphan process, ownership, signals, final reap, and unrelated sibling survival are real."
+    },
+    {
+      "id": "zombie-thread-leader",
+      "previous_gap": "A process leader in procfs Z state can still have writer threads alive, so Z/X alone is insufficient to skip KILL.",
+      "resolution": "Use waitid(P_PID, WEXITED|WNOHANG|WNOWAIT) for liveness, preserving child identity; None remains live even if leader state is Z.",
+      "regression": "test_zombie_thread_leader_with_live_writer_is_not_treated_as_dead",
+      "fixture_nature": "Actual pthread_exit leaves a Z leader while another thread continues updating the profile; fixture verifies TERM/KILL/reap and unrelated sibling survival."
+    }
+  ],
+  "fixture_evidence": {
+    "reviewed_not_rerun_by_this_reviewer": true,
+    "exit_code": 0,
+    "cases": 8,
+    "all_passed": true,
+    "case_names": [
+      "test_rea_browser_session.BrowserSessionTests.test_cancellation_cleans_descendants_and_retains_signal_status",
+      "test_rea_browser_session.BrowserSessionTests.test_exited_parent_session_escaping_writer_is_killed_and_reaped",
+      "test_rea_browser_session.BrowserSessionTests.test_new_orphan_after_dead_snapshot_is_signaled_before_reap",
+      "test_rea_browser_session.BrowserSessionTests.test_probe_failure_is_preserved_after_cleanup",
+      "test_rea_browser_session.BrowserSessionTests.test_probe_failure_wins_over_removal_failure",
+      "test_rea_browser_session.BrowserSessionTests.test_removal_failure_turns_probe_success_into_failure",
+      "test_rea_browser_session.BrowserSessionTests.test_term_cooperative_orphan_needs_no_kill",
+      "test_rea_browser_session.BrowserSessionTests.test_zombie_thread_leader_with_live_writer_is_not_treated_as_dead"
+    ],
+    "coverage": "Escaped orphan, cooperative TERM, required KILL, early leader PID retention, late adoption, live threads behind Z leader, cancellation status, original probe failure precedence, removal failure, and unrelated sentinel survival.",
+    "local_environment": "The actual fixture run exercised the PPID-filtered /proc stat fallback because task/PID/children is unavailable in this environment."
+  },
+  "remaining_validation": [
+    "A fresh hosted workflow run must pass the actual Chrome CDP probe, the unchanged five assertions, all lifecycle fixtures, and cleanup. This static review and fake-browser process fixtures do not substitute for that run.",
+    "The native task/children fast path is statically reviewed; the local eight-case receipt exercises the fallback.",
+    "The prior main-push ENOTEMPTY failure remains original evidence. These fixtures do not identify the specific residual writer in that hosted failure and do not qualify a production browser adapter."
+  ],
+  "reviewer_actions": {
+    "source_and_log_reads": true,
+    "local_hash_and_byte_comparisons": true,
+    "tests_or_builds_executed": false,
+    "driver_or_fixture_executed": false,
+    "remote_requests_or_mutations": false,
+    "worktree_or_repository_modified": false,
+    "only_output_written": "/workspace/scratch/d72683e5e62a/cdp-cleanup-validation/independent-security-review.json"
+  }
+}

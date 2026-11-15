@@ -1,0 +1,132 @@
+{
+  "schema": "hepta.chrome_cdp.failure_source_binding.v1",
+  "created_at": "2026-11-15T12:31:09.703745+00:00",
+  "failed_run": 43709528201,
+  "failed_job": 132797850509,
+  "failed_source_head": "737acf6f901e46c57b0b4374e323e0d1132e0d49",
+  "candidate_head_with_other_ci_success": "e425d92b6a0dedf13eb3e484e76419ee756804c0",
+  "workflow_path": ".github/workflows/rea-browser-real.yml",
+  "workflow_bytes": 8189,
+  "workflow_sha256": "17c8511deb9909430a2ce2e6ea199c8e317fe41c80dc26b845cfd35ae7d74884",
+  "same_workflow_bytes_in_both_commits": true,
+  "workflow_fixture_copy": "source-rea-browser-real.yml",
+  "source_anchors": {
+    "push_only_paths": [
+      {
+        "line": 9,
+        "source": "    paths:"
+      }
+    ],
+    "node_pin": [
+      {
+        "line": 33,
+        "source": "          node-version: '24.22.1'"
+      }
+    ],
+    "chrome_launch": [
+      {
+        "line": 60,
+        "source": "          google-chrome --headless=new --no-sandbox --disable-gpu \\"
+      }
+    ],
+    "direct_pid_capture": [
+      {
+        "line": 66,
+        "source": "          chrome_pid=$!"
+      }
+    ],
+    "cleanup_function": [
+      {
+        "line": 67,
+        "source": "          cleanup() {"
+      }
+    ],
+    "direct_pid_kill": [
+      {
+        "line": 68,
+        "source": "            kill \"$chrome_pid\" \"$http_pid\" 2>/dev/null || true"
+      }
+    ],
+    "direct_pid_wait": [
+      {
+        "line": 69,
+        "source": "            wait \"$chrome_pid\" 2>/dev/null || true"
+      }
+    ],
+    "profile_remove": [
+      {
+        "line": 71,
+        "source": "            rm -rf \"$profile\""
+      }
+    ],
+    "exit_trap": [
+      {
+        "line": 73,
+        "source": "          trap cleanup EXIT"
+      }
+    ],
+    "node_entry": [
+      {
+        "line": 162,
+        "source": "          node \"$evidence/cdp-test.mjs\" \"$cdp_port\" \"$port\" \\"
+      }
+    ],
+    "python_validation": [
+      {
+        "line": 164,
+        "source": "          python3 - \"$evidence/real-cdp-observation.json\" <<'PY'"
+      }
+    ]
+  },
+  "artifact_node_script_matches_workflow_inline_bytes": true,
+  "artifact_node_script_sha256": "8667a7cdffa74b316344519016fea30436dc5de28192bf9c660d32961eeacb74",
+  "artifact_observation_satisfies_all_five_original_python_assertions": {
+    "provider": true,
+    "text": true,
+    "title": true,
+    "navigation_frame_id": true,
+    "production_adapter_not_qualified": true
+  },
+  "raw_log_sha256": "5de120240df3ac695549e341846bef1d88eae4699a1a32d243f0a2d788507ab3",
+  "actual_error_lines": [
+    {
+      "line": 377,
+      "text": "2026-11-15T11:34:32.2909493Z rm: cannot remove '/home/runner/work/_temp/rea-cdp-chrome-profile/Default': Directory not empty"
+    },
+    {
+      "line": 378,
+      "text": "2026-11-15T11:34:32.2934830Z ##[error]Process completed with exit code 1."
+    }
+  ],
+  "checkout_lines": [
+    {
+      "line": 102,
+      "text": "2026-11-15T11:33:54.3907946Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +737acf6f901e46c57b0b4374e323e0d1132e0d49:refs/remotes/origin/main"
+    },
+    {
+      "line": 104,
+      "text": "2026-11-15T11:34:17.1131750Z  * [new ref]           737acf6f901e46c57b0b4374e323e0d1132e0d49 -> origin/main"
+    },
+    {
+      "line": 108,
+      "text": "2026-11-15T11:34:17.1219707Z 737acf6f901e46c57b0b4374e323e0d1132e0d49"
+    },
+    {
+      "line": 186,
+      "text": "2026-11-15T11:34:21.8089514Z 737acf6f901e46c57b0b4374e323e0d1132e0d49"
+    }
+  ],
+  "local_git_workflow_history": [
+    "3032267baba363dcde82e36f6385cb0973831203 ci: validate consolidated Rust main across qualification workflows",
+    "14a5b75d6575649ec99949f224f7bb55fb2db2cc ci(rea): exercise real loopback Chrome CDP navigation and DOM under ephemeral profile"
+  ],
+  "caveat": "This workflow is push/manual only; candidate e425 passed Rust+Cloud PR checks, not this Chrome workflow. Same source does not imply this workflow had previously passed.",
+  "cleanup_provenance": {
+    "original_workflow_commit": "14a5b75d6575649ec99949f224f7bb55fb2db2cc",
+    "cleanup_and_trap_bytes_unchanged_in_failed_source": true,
+    "cleanup_sha256": "303c614722412e1578b9841fee001d309eee8d7853e214186e1e352e8d74632b",
+    "cleanup_source": "          cleanup() {\n            kill \"$chrome_pid\" \"$http_pid\" 2>/dev/null || true\n            wait \"$chrome_pid\" 2>/dev/null || true\n            wait \"$http_pid\" 2>/dev/null || true\n            rm -rf \"$profile\"\n          }\n          trap cleanup EXIT\n",
+    "later_workflow_commit": "3032267baba363dcde82e36f6385cb0973831203",
+    "later_workflow_change": "Adds main to push.branches only; cleanup body unchanged."
+  }
+}

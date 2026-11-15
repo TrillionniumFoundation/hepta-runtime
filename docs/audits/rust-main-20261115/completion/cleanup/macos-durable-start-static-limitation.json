@@ -1,0 +1,422 @@
+{
+  "schema": "hepta.cleanup.macos_durable_start_static_limitation.v1",
+  "created_at": "2026-11-15T12:08:23.621428+00:00",
+  "review_type": "local_read_only_source_review_no_host_calls",
+  "source_binding": {
+    "repository": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+    "current_commit": "b8f3c7c9eceb0e7c40d140ac043a8364dd7a1645",
+    "previous_read_only_review_commit": "b8f3c7c9eceb0e7c40d140ac043a8364dd7a1645",
+    "published_ci_head": "e425d92b6a0dedf13eb3e484e76419ee756804c0",
+    "all_listed_files_equal_published_head": true,
+    "scope": "Byte identity verified for the listed source files only, not a claim that whole commit trees are identical."
+  },
+  "reported_observations": {
+    "provenance": "Messages supplied by the root agent; this subagent did not independently call the host or retrieve the runtime request logs.",
+    "facts_reported": [
+      "New h_process_start requests have timed out at the MCP layer.",
+      "An earlier exact retry with the same idempotency key recovered a readonly job with reused=true.",
+      "h_process_list_page returned durable inventory source entry bound exceeded.",
+      "The root agent reports h_file_info succeeded immediately for the helper physical /private/var/... path, confirming the helper transfer completed despite the uncertain original response.",
+      "The root agent reports the /var/... alias was rejected by the file API as a macOS symlink path while the physical path was readable."
+    ],
+    "limits": "No timeout duration, deployed runtime binary/source identity, job cardinality, actual scan timing, or exact timeout stage was measured by this static review. A completed helper transfer does not establish which phase delayed the original response."
+  },
+  "static_findings": [
+    {
+      "id": "process_start_full_registry_scan",
+      "status": "source_confirmed_mechanism",
+      "evidence": "jobs.rs: registry_has_content_watch, find_idempotent_in_with_probe, scan_registry_records_observed, scan_idempotent_binding_once, start_job_with_policy",
+      "conclusion": "For a macOS controller build, registry_has_content_watch is false; the positive hit cache is cleared. Exact-key lookup scans every existing JSON record in the local jobs directory and validates decoded records, even across unrelated hosts. Without a content watch it performs a second complete scan and compares the decoded-binding digest before accepting the result.",
+      "cost": "Linear filesystem/parse/hash work in the number and size of durable records for each scan. Registry generation changes can repeat this within MAX_IDEMPOTENCY_SCAN_ATTEMPTS=3. The lookup has no local wall-clock timeout wrapper.",
+      "qualification": "The platform gate is the controller compilation target, not the configured destination host platform. Linux may use content-watch-validated hot positive reuse; new keys and applicable cold paths still scan."
+    },
+    {
+      "id": "request_waiting_and_executor_liveness",
+      "status": "source_confirmed_mechanism",
+      "evidence": "jobs.rs: start_lock_in, find_idempotent, run_registry_lookup, start_job_with_policy",
+      "conclusion": "The blocking scan is submitted with spawn_blocking, preserving async executor responsiveness without removing scan latency. Same host/key requests serialize while the original key guard remains held. Registry readers also share the local registry read fence; local record publications must wait for those reads.",
+      "qualification": "These mechanisms make slow start/retry responses plausible but do not locate the observed MCP timeout. Remote status, launch acknowledgement, audit/transport and shared admission remain other stages of the request."
+    },
+    {
+      "id": "shell_start_same_lookup",
+      "status": "source_confirmed",
+      "evidence": "operator.rs: shell_start",
+      "conclusion": "shell_start converts the shell source into ProcessStartParams and calls jobs::start_job, retaining the same durable job idempotency lookup and its scaling behavior."
+    },
+    {
+      "id": "operator_pty_independent_identity_and_daemon",
+      "status": "source_confirmed",
+      "evidence": "pty.rs: start_pty; terminal.rs: directory, record_path, start; terminal_host.py: start, daemon; effect_owner_fence.rs: require_new_pty_identity",
+      "conclusion": "Operator PTY uses SHA256(host + NUL + key) for its deterministic dpty session ID and directly reads state_dir/terminals/<id>.json. The target uses remote_state_dir/terminals/<id>/request.json under that session launch.lock, with a target-account daemon owning the PTY, local Unix socket and output archive. It does not scan the durable jobs registry to resolve the terminal key. The predecessor terminal guard also uses direct deterministic identity lookup.",
+      "qualification": "The PTY path still shares owner admission and remote transport and is not guaranteed immediate. Its separate namespace does not resolve or recover a process_start job identity. Isolated-host PTYs instead remain controller-scoped and reject idempotency keys."
+    },
+    {
+      "id": "inventory_bound_distinct_from_exact_lookup",
+      "status": "source_confirmed_scope",
+      "evidence": "jobs_inventory_source.rs: bounded enumeration error; jobs.rs: scan_registry_records_observed",
+      "conclusion": "The observed source entry bound is an inventory enumeration limit. The exact-key start lookup is a separate validation path; the inventory error alone does not establish the number of valid JSON job records or the exact start latency. No attempt was made to bypass that bound or enumerate the registry."
+    }
+  ],
+  "inference": {
+    "possible_mechanism": "If the deployed controller uses the reviewed macOS implementation, a large durable registry can delay new process_start requests and same-key retries because complete historical validation remains on their awaited path.",
+    "causality_status": "plausible_static_mechanism_not_confirmed_cause_of_this_timeout",
+    "execution_status": "MCP response timeout must not be treated as proof of no effect; the separately reported helper readback is consistent with an effect completing without its original response being delivered."
+  },
+  "sources": [
+    {
+      "path": "src/mcp/runtime/jobs.rs",
+      "absolute_path": "/workspace/scratch/d72683e5e62a/hepta-runtime/src/mcp/runtime/jobs.rs",
+      "bytes": 178684,
+      "sha256": "11a9ee285231c15b150bca5081ac028bc37021a755df93c54e8d4e71fd805393",
+      "working_bytes_equal_current_commit": true,
+      "current_commit_bytes_equal_published_e425": true,
+      "anchors": [
+        {
+          "name": "scan_attempt_limit",
+          "line_numbers": [
+            52
+          ],
+          "matching_lines": [
+            "const MAX_IDEMPOTENCY_SCAN_ATTEMPTS: usize = 3;"
+          ]
+        },
+        {
+          "name": "key_lock",
+          "line_numbers": [
+            230
+          ],
+          "matching_lines": [
+            "fn start_lock_in("
+          ]
+        },
+        {
+          "name": "content_watch_platform_gate",
+          "line_numbers": [
+            521
+          ],
+          "matching_lines": [
+            "fn registry_has_content_watch(epoch: &RegistryEpoch) -> bool {"
+          ]
+        },
+        {
+          "name": "scan_all_records",
+          "line_numbers": [
+            1113
+          ],
+          "matching_lines": [
+            "fn scan_registry_records_observed("
+          ]
+        },
+        {
+          "name": "scan_directory_loop",
+          "line_numbers": [
+            881,
+            1128,
+            4573
+          ],
+          "matching_lines": [
+            "\tfor entry in std::fs::read_dir(dir)? {",
+            "\tfor entry in std::fs::read_dir(dir)? {",
+            "\tfor entry in std::fs::read_dir(dir)? {"
+          ]
+        },
+        {
+          "name": "scan_twice_without_content_watch",
+          "line_numbers": [
+            1212
+          ],
+          "matching_lines": [
+            "\t\tlet (verified, second) = scan_registry_records(dir, host, key, true)?;"
+          ]
+        },
+        {
+          "name": "cache_invalidation",
+          "line_numbers": [
+            793,
+            1396
+          ],
+          "matching_lines": [
+            "\t\tif !registry_has_content_watch(&epoch) {",
+            "\t\tif !registry_has_content_watch(&epoch) {"
+          ]
+        },
+        {
+          "name": "spawn_blocking_lookup",
+          "line_numbers": [
+            1637
+          ],
+          "matching_lines": [
+            "async fn run_registry_lookup("
+          ]
+        },
+        {
+          "name": "exact_start_policy",
+          "line_numbers": [
+            4227
+          ],
+          "matching_lines": [
+            "async fn start_job_with_policy<F, G>("
+          ]
+        },
+        {
+          "name": "lookup_before_new_job",
+          "line_numbers": [
+            4261
+          ],
+          "matching_lines": [
+            "\t\tif let Some(mut existing) = find_idempotent_async(&params.host, key).await? {"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/mcp/runtime/operator.rs",
+      "absolute_path": "/workspace/scratch/d72683e5e62a/hepta-runtime/src/mcp/runtime/operator.rs",
+      "bytes": 11409,
+      "sha256": "36583618c7b1974b18309825498da698b32bd296310e307c51441b06c2860737",
+      "working_bytes_equal_current_commit": true,
+      "current_commit_bytes_equal_published_e425": true,
+      "anchors": [
+        {
+          "name": "shell_uses_process_start",
+          "line_numbers": [
+            46
+          ],
+          "matching_lines": [
+            "pub async fn shell_start(params: ShellStartParams) -> Result<String> {"
+          ]
+        },
+        {
+          "name": "same_native_entry",
+          "line_numbers": [
+            51
+          ],
+          "matching_lines": [
+            "\tstart_job(ProcessStartParams {"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/mcp/runtime/pty.rs",
+      "absolute_path": "/workspace/scratch/d72683e5e62a/hepta-runtime/src/mcp/runtime/pty.rs",
+      "bytes": 21129,
+      "sha256": "84d2e20fcf6ff4e47eedd0fc5a2497d505ffadce36a42a5a79fe9fa15bcf4e33",
+      "working_bytes_equal_current_commit": true,
+      "current_commit_bytes_equal_published_e425": true,
+      "anchors": [
+        {
+          "name": "pty_admission_and_mode_routing",
+          "line_numbers": [
+            347
+          ],
+          "matching_lines": [
+            "pub async fn start_pty(params: PtyStartParams) -> Result<String> {"
+          ]
+        },
+        {
+          "name": "operator_terminal_entry",
+          "line_numbers": [
+            362
+          ],
+          "matching_lines": [
+            "\t\treturn super::terminal::start(&params).await;"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/mcp/runtime/terminal.rs",
+      "absolute_path": "/workspace/scratch/d72683e5e62a/hepta-runtime/src/mcp/runtime/terminal.rs",
+      "bytes": 11612,
+      "sha256": "0568b96df8b161d14fd2234627247ef76c483505152653f60aefde86637a6ce4",
+      "working_bytes_equal_current_commit": true,
+      "current_commit_bytes_equal_published_e425": true,
+      "anchors": [
+        {
+          "name": "separate_controller_registry",
+          "line_numbers": [
+            66
+          ],
+          "matching_lines": [
+            "fn directory() -> Result<PathBuf> {"
+          ]
+        },
+        {
+          "name": "direct_record_lookup",
+          "line_numbers": [
+            70
+          ],
+          "matching_lines": [
+            "fn record_path(id: &str) -> Result<PathBuf> {"
+          ]
+        },
+        {
+          "name": "bounded_terminal_rpc",
+          "line_numbers": [
+            105
+          ],
+          "matching_lines": [
+            "\tlet mut output: Value = run_python_json(host, &code, &input, Duration::from_secs(25)).await?;"
+          ]
+        },
+        {
+          "name": "persistent_terminal_start",
+          "line_numbers": [
+            203
+          ],
+          "matching_lines": [
+            "pub async fn start(params: &PtyStartParams) -> Result<String> {"
+          ]
+        },
+        {
+          "name": "deterministic_key_identity",
+          "line_numbers": [
+            216
+          ],
+          "matching_lines": [
+            "\t\t\tSha256::digest(format!(\"{}\\0{key}\", params.host).as_bytes())"
+          ]
+        },
+        {
+          "name": "direct_exists_check",
+          "line_numbers": [
+            236
+          ],
+          "matching_lines": [
+            "\tif tokio::fs::try_exists(&path).await? {"
+          ]
+        },
+        {
+          "name": "separate_target_terminal_directory",
+          "line_numbers": [
+            259
+          ],
+          "matching_lines": [
+            "\t\tjob_dir: format!(\"{}/terminals/{id}\", host.remote_state_dir),"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/mcp/runtime/terminal_host.py",
+      "absolute_path": "/workspace/scratch/d72683e5e62a/hepta-runtime/src/mcp/runtime/terminal_host.py",
+      "bytes": 15784,
+      "sha256": "efd2222278a9ceb237f1ad733b182f9eeee2f4b83a281b0b396504275275e939",
+      "working_bytes_equal_current_commit": true,
+      "current_commit_bytes_equal_published_e425": true,
+      "anchors": [
+        {
+          "name": "target_daemon_rpc",
+          "line_numbers": [
+            81
+          ],
+          "matching_lines": [
+            "def request_daemon(job, q):"
+          ]
+        },
+        {
+          "name": "target_terminal_start",
+          "line_numbers": [
+            151
+          ],
+          "matching_lines": [
+            "def start(job, q, source):"
+          ]
+        },
+        {
+          "name": "per_terminal_launch_lock",
+          "line_numbers": [
+            154
+          ],
+          "matching_lines": [
+            "        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)"
+          ]
+        },
+        {
+          "name": "direct_original_request_read",
+          "line_numbers": [
+            155
+          ],
+          "matching_lines": [
+            "        old = load(job / 'request.json')"
+          ]
+        },
+        {
+          "name": "target_owned_daemon",
+          "line_numbers": [
+            189
+          ],
+          "matching_lines": [
+            "def daemon(job):"
+          ]
+        },
+        {
+          "name": "real_pty_fork",
+          "line_numbers": [
+            200
+          ],
+          "matching_lines": [
+            "    pid, master = pty.fork()"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/mcp/runtime/effect_owner_fence.rs",
+      "absolute_path": "/workspace/scratch/d72683e5e62a/hepta-runtime/src/mcp/runtime/effect_owner_fence.rs",
+      "bytes": 24059,
+      "sha256": "30115bd9eb36f8b42fdf6015471327f9b0d1903913df2f71e7b1b65e499fb52e",
+      "working_bytes_equal_current_commit": true,
+      "current_commit_bytes_equal_published_e425": true,
+      "anchors": [
+        {
+          "name": "direct_predecessor_terminal_identity",
+          "line_numbers": [
+            536
+          ],
+          "matching_lines": [
+            "\tpub fn require_new_pty_identity(&self, host: &str, key: Option<&str>) -> Result<()> {"
+          ]
+        },
+        {
+          "name": "shared_owner_admission",
+          "line_numbers": [
+            641
+          ],
+          "matching_lines": [
+            "pub async fn admit_new_effect() -> Result<AdmissionPermit> {"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/mcp/runtime/jobs_inventory_source.rs",
+      "absolute_path": "/workspace/scratch/d72683e5e62a/hepta-runtime/src/mcp/runtime/jobs_inventory_source.rs",
+      "bytes": 12827,
+      "sha256": "6b49a67cc11f00d122c3545ce64a4543dde963257f615780895a01bcf0ec5ec7",
+      "working_bytes_equal_current_commit": true,
+      "current_commit_bytes_equal_published_e425": true,
+      "anchors": [
+        {
+          "name": "independent_inventory_entry_bound",
+          "line_numbers": [
+            236
+          ],
+          "matching_lines": [
+            "\t\t\t\tbail!(\"durable inventory source entry bound exceeded\");"
+          ]
+        }
+      ]
+    }
+  ],
+  "actions": {
+    "host_calls": 0,
+    "runtime_changes": false,
+    "code_changes": false,
+    "configuration_changes": false,
+    "limit_changes": false,
+    "ci_evidence_modified": false,
+    "only_created_file": "/workspace/scratch/d72683e5e62a/root-cleanup-execution/macos-durable-start-static-limitation.json"
+  }
+}

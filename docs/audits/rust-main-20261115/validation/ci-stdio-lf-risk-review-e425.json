@@ -1,0 +1,871 @@
+{
+  "schema": "hepta.ci-stdio-lf-static-risk-review.v1",
+  "reviewed_at_utc": "2026-11-15T10:06:15.415208+00:00",
+  "reviewer": "security_audit",
+  "candidate": "e425d92b6a0dedf13eb3e484e76419ee756804c0",
+  "tree": "76652098f4b5bcad487071f2eaefd82d7fed219c",
+  "local_head_at_review": "b8f3c7c9eceb0e7c40d140ac043a8364dd7a1645",
+  "local_head_tree_matches_candidate": true,
+  "status": "NO_UNTERMINATED_MCP_TAIL_DEPENDENCY_FOUND_IN_REVIEWED_CI_PATHS",
+  "finding_count": 0,
+  "basis": "Read-only inspection of the current CI Python entrypoints, discovered unittest module names, and their concrete MCP send/close paths. No script was imported or executed for the review. Source grep/AST inspection is a bounded static review, not a formal reachability proof or test result.",
+  "scope": {
+    "workflow": ".github/workflows/ci.yml",
+    "explicit_and_discovered_python_entry_count": 60,
+    "entry_paths": [
+      "deploy/maintenance_20261017/native_rollout_tests.py",
+      "deploy/maintenance_20261017/recover_control_channel_tests.py",
+      "scripts/rea_compatibility_ledger.py",
+      "scripts/test_local_qualification.py",
+      "scripts/test_qualification_path_fence.py",
+      "scripts/test_runtime_ci_contract.py",
+      "scripts/test_source_byte_boundary.py",
+      "tests/chatgpt_bridge_http_tests.py",
+      "tests/chatgpt_bridge_stdio_tests.py",
+      "tests/chatgpt_request_identity_tests.py",
+      "tests/chatgpt_v10_single_v4_effect_tests.py",
+      "tests/chatgpt_v10_stream_custody_tests.py",
+      "tests/chatgpt_v11_layered_read_tests.py",
+      "tests/chatgpt_v11_process_start_concurrency_tests.py",
+      "tests/chatgpt_v11_v4_session_binding_tests.py",
+      "tests/dc_readonly_inventory_collector_tests.py",
+      "tests/file_capabilities.py",
+      "tests/full_operator_cancel_tests.py",
+      "tests/full_operator_facade_tests.py",
+      "tests/full_operator_session_recovery_tests.py",
+      "tests/rea_analysis_view_qualification_tests.py",
+      "tests/rea_apk_export_qualification_tests.py",
+      "tests/rea_apk_path_alias_qualification_tests.py",
+      "tests/rea_browser_capture_tests.py",
+      "tests/rea_build_evidence_tests.py",
+      "tests/rea_compatibility_ledger_tests.py",
+      "tests/rea_elf_evidence_family_evidence_tests.py",
+      "tests/rea_elf_evidence_family_qualification_tests.py",
+      "tests/rea_engine_owner_tests.py",
+      "tests/rea_evidence_checkpoint_upgrade_tests.py",
+      "tests/rea_evidence_import_qualification_tests.py",
+      "tests/rea_frame_mcp_qualification_tests.py",
+      "tests/rea_ghidra_analysis_external_tests.py",
+      "tests/rea_ghidra_mcp_client_tests.py",
+      "tests/rea_javascript_cancellation_external.py",
+      "tests/rea_lifecycle_parallel_tests.py",
+      "tests/rea_lifecycle_qualification_tests.py",
+      "tests/rea_multihost_recovery_tests.py",
+      "tests/rea_operation_evidence_tests.py",
+      "tests/rea_operation_qualification_tests.py",
+      "tests/rea_source_binding_tests.py",
+      "tests/runtime_http_probe_tests.py",
+      "tests/runtime_registry_page_tests.py",
+      "tests/runtime_workflow_owner_tests.py",
+      "tests/search_worker_tests.py",
+      "tests/test_computer_http.py",
+      "tests/test_native_canary_resume.py",
+      "tests/tunnel_client_patch_tests.py",
+      "tests/tunnel_deployment_config_tests.py",
+      "tools/x230/20261028/audit_isolated_tests.py",
+      "tools/x230/20261028/audit_isolated_tests_tests.py",
+      "tools/x230/20261028/forwarded_validation_lease_tests.py",
+      "tools/x230/20261028/run_extended_file_soak_tests.py",
+      "tools/x230/20261028/run_isolated_tests.py",
+      "tools/x230/20261028/run_native_validation_tests.py",
+      "tools/x230/20261028/run_registry_cohort_abba_tests.py",
+      "tools/x230/20261028/run_registry_microbench_abba_tests.py",
+      "tools/x230/20261029/run_record_idle_abba_tests.py",
+      "tools/x230/20261030/run_inventory_rss_abba_tests.py",
+      "tools/x230/20261030/run_paired_native_validation_tests.py"
+    ],
+    "discovery_patterns": [
+      {
+        "directory": "scripts",
+        "pattern": "test_runtime_ci_contract.py"
+      },
+      {
+        "directory": "scripts",
+        "pattern": "test_source_byte_boundary.py"
+      },
+      {
+        "directory": "scripts",
+        "pattern": "test_qualification_path_fence.py"
+      },
+      {
+        "directory": "scripts",
+        "pattern": "test_local_qualification.py"
+      },
+      {
+        "directory": "tests",
+        "pattern": "rea_*tests.py"
+      },
+      {
+        "directory": "tools/x230/20261028",
+        "pattern": "*_tests.py"
+      },
+      {
+        "directory": "tools/x230/20261029",
+        "pattern": "*_tests.py"
+      },
+      {
+        "directory": "tools/x230/20261030",
+        "pattern": "*_tests.py"
+      }
+    ],
+    "excluded_scope": [
+      "archives/rust-branches and historical qualification source variants",
+      "uninvoked arbitrary historical files",
+      "new live host or provider qualification tasks",
+      "running tests/builds/CI/remote tools"
+    ],
+    "method": [
+      "Extract currently referenced script paths and the exact unittest discovery patterns from ci.yml",
+      "Inspect stdin.write, writer.write, os.write, subprocess input and close/communicate sites in those entries",
+      "Trace the actual shared client send implementations and differentiate HTTP, worker artifact input and one-document Python helpers from MCP STDIO",
+      "Verify every retained inspected-source hash against the exact e425 candidate Git blob"
+    ]
+  },
+  "mcp_sender_findings": [
+    {
+      "path": "tests/rea_javascript_cancellation_external.py",
+      "entry_chain": [
+        ".github/workflows/ci.yml:177-190 and 431-444",
+        "Mcp.request/call or Mcp.send",
+        "json_bytes(message)",
+        "child.stdin.write(encoded)"
+      ],
+      "send_lines": [
+        41,
+        42,
+        155,
+        158,
+        161,
+        162
+      ],
+      "close_lines": [
+        203,
+        206
+      ],
+      "lf_evidence": "json_bytes serializes compact JSON and appends literal LF before encoding; every request/notification uses send and flush. close only closes the stream and does not construct a tail request.",
+      "ci_reachability": "Both Rust CI release-cancellation steps launch the actual release runtime in mcp mode."
+    },
+    {
+      "path": "scripts/rea_operation_qualification.py",
+      "entry_chain": [
+        "tests/rea_operation_qualification_tests.py and imported REA qualification tests",
+        "Mcp.begin/request/initialize/call",
+        "Mcp.send"
+      ],
+      "send_lines": [
+        401,
+        406,
+        408,
+        410,
+        411,
+        413,
+        414
+      ],
+      "close_lines": [
+        478,
+        482
+      ],
+      "lf_evidence": "Ordinary serialization ends in b\"\\n\"; raw_params branch ends in b\"}\\n\". Both use the sole process.stdin.write and flush. close adds no request.",
+      "ci_reachability": "The CI REA unittest discovery exercises this concrete client using controlled local children and mocks; shared production qualification-client implementation inspected without running qualification."
+    },
+    {
+      "path": "scripts/rea_frame_mcp_qualification.py",
+      "entry_chain": [
+        "tests/rea_frame_mcp_qualification_tests.py",
+        "CompressedMcp(q.Mcp)",
+        "inherited q.Mcp.send"
+      ],
+      "send_lines": [
+        41,
+        43,
+        45,
+        64
+      ],
+      "lf_evidence": "call_bytes measurement includes LF; CompressedMcp only changes durable _log and retains inherited LF send/close.",
+      "ci_reachability": "Imported and exercised by active REA discovery tests."
+    },
+    {
+      "path": "tests/rea_ghidra_mcp_client.py",
+      "entry_chain": [
+        "tests/rea_ghidra_mcp_client_tests.py",
+        "Mcp._request",
+        "CompressedMcp.begin",
+        "q.Mcp.send"
+      ],
+      "send_lines": [
+        18,
+        19,
+        52,
+        67
+      ],
+      "close_lines": [
+        99,
+        104
+      ],
+      "lf_evidence": "Uses the shared CompressedMcp client; no replacement stdin sender. Close delegates to the same client.",
+      "ci_reachability": "Active tests use controlled fake local MCP child to verify the real wrapper."
+    },
+    {
+      "path": "tools/x230/20261030/run_inventory_rss_abba.py",
+      "entry_chain": [
+        "tools/x230/20261030/run_inventory_rss_abba_tests.py",
+        "owned client start/send"
+      ],
+      "send_lines": [
+        399,
+        415,
+        422,
+        424
+      ],
+      "close_lines": [
+        489,
+        500
+      ],
+      "lf_evidence": "encoded(message) + b\"\\n\"; checks complete write; Popen uses bufsize=0. close only closes already-framed input.",
+      "ci_reachability": "The specified X230 CI unittest discovery imports and tests this concrete client with local fixtures, not a new live X230 qualification."
+    },
+    {
+      "path": "tests/chatgpt_bridge_stdio_tests.py",
+      "entry_chain": [
+        "CI Unbounded ingress and collector regressions",
+        "Stdio.send",
+        "Python bridge --stdio",
+        "HTTP native upstream"
+      ],
+      "send_lines": [
+        149,
+        150
+      ],
+      "close_lines": [
+        225
+      ],
+      "lf_evidence": "json.dumps(...) + \"\\n\", followed by flush. EOF test closes after all read_hosts requests used send.",
+      "ci_reachability": "Exact-head CI explicit script; also imported by HTTP bridge tests. Receiver is the Python bridge, whose upstream is HTTP."
+    },
+    {
+      "path": "tests/full_operator_facade_tests.py",
+      "entry_chain": [
+        "CI Control-plane regression",
+        "stdio facade subprocess"
+      ],
+      "send_lines": [
+        176
+      ],
+      "close_lines": [
+        180
+      ],
+      "lf_evidence": "canonical(message)+b\"\\n\" and flush before stdin.close.",
+      "ci_reachability": "Both CI lanes explicit control-plane tests; native calls use HTTP."
+    },
+    {
+      "path": "tests/full_operator_cancel_tests.py",
+      "entry_chain": [
+        "CI Control-plane regression",
+        "Stream.send / subprocess stdin"
+      ],
+      "send_lines": [
+        115,
+        376,
+        378,
+        386,
+        387,
+        498,
+        524
+      ],
+      "close_lines": [
+        501,
+        524
+      ],
+      "lf_evidence": "Valid messages always append b\"\\n\"; intentionally malformed test messages also end in LF. The 600-message EOF-pressure case writes b\"not-json\\n\"*600, so it does not rely on an unterminated tail.",
+      "ci_reachability": "Both CI lanes explicit tests of Python stdio facade and HTTP upstream."
+    },
+    {
+      "path": "tests/chatgpt_request_identity_tests.py",
+      "entry_chain": [
+        "CI Control-plane regression",
+        "LiveStdio.call",
+        "assert_complete_write",
+        "proxy.serve"
+      ],
+      "send_lines": [
+        240,
+        241,
+        255,
+        256
+      ],
+      "close_lines": [
+        260,
+        261
+      ],
+      "lf_evidence": "canonical(value)+b\"\\n\" with a complete-write assertion before closing the pipe.",
+      "ci_reachability": "Both CI lanes explicit identity regression tests with real pipes and in-process facade."
+    }
+  ],
+  "non_mcp_inputs_not_misclassified": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "lines": [
+        210,
+        214,
+        218,
+        267,
+        281,
+        295
+      ],
+      "classification": "rea-worker binary input, not MCP",
+      "reason": "WASM/ELF printf and ZIP cat feed the rea-worker subcommand, not mcp or rmcp AsyncRwTransport. No LF is appropriate for these raw artifact bytes."
+    },
+    {
+      "path": "tests/file_capabilities.py",
+      "lines": [
+        5,
+        11
+      ],
+      "classification": "one-document Python fileio helper",
+      "receiver": "src/mcp/runtime/fileio.py:5",
+      "reason": "subprocess input=json.dumps(...) is consumed by json.load(sys.stdin), not an MCP framing decoder."
+    },
+    {
+      "path": "tests/search_worker_tests.py",
+      "lines": [
+        17,
+        46
+      ],
+      "classification": "one-document native search Python worker",
+      "receiver": "src/mcp/runtime/search_worker.py:745",
+      "reason": "The worker uses json.load(sys.stdin) for a single action document; EOF is its intended input delimiter and is unaffected by rmcp."
+    },
+    {
+      "path": "tests/rea_engine_owner_tests.py",
+      "lines": [
+        19,
+        28,
+        33,
+        80,
+        95
+      ],
+      "classification": "embedded lifecycle helper and controlled worker request",
+      "reason": "Python -c receives JSON for jobs lifecycle helpers; the owned fixture worker uses json.load. These are not JSON-RPC STDIO requests to the mcp command."
+    },
+    {
+      "path": "deploy/dc_readonly_inventory.py",
+      "lines": [
+        53,
+        58,
+        90,
+        242,
+        245
+      ],
+      "classification": "bounded SSH/helper byte transport",
+      "reason": "Caller argv targets SSH/helper commands, and the CI echo fixture is a Python byte echo. No MCP endpoint is supplied on this tested call path."
+    },
+    {
+      "path": "deploy/chatgpt_full_operator.py",
+      "lines": [
+        264
+      ],
+      "classification": "native upstream HTTP POST",
+      "reason": "Control-plane native JSON-RPC body need not carry a line delimiter because it is sent in an HTTP request, not to the SDK STDIO reader."
+    },
+    {
+      "path": "scripts/rea_multihost_recovery.py",
+      "lines": [
+        378,
+        625
+      ],
+      "classification": "HTTP MCP and no stdio input",
+      "reason": "The imported recovery module sends RPC by HTTP POST; its runtime child stdin is DEVNULL. run_command input elsewhere is host/bootstrap helper data, not an MCP final line."
+    }
+  ],
+  "peer_review": {
+    "reviewer": "branch_scope",
+    "scope": "Release/recovery entrypoints and direct MCP writes; source only, no execution",
+    "conclusion": "No unterminated MCP tail sender found. Confirmed release cancellation JSON+LF, shared q.Mcp LF sending and HTTP-only recovery routes."
+  },
+  "source_bindings": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "9bfe3095eaa98e5566f5c68c2a94efd120dcf3baa2fc5a14648fa6459c9eb13a",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/chatgpt_computer_http.py",
+      "sha256": "9d8b4a8150c155ed5c550a6a101eecd01f0f9f79f9adf6c86e02909613b30ac1",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/chatgpt_computer_operator.py",
+      "sha256": "6477d2a6cde99781d36b7b76c240291460833b1eedce08c2e7ae72b0d5f0fabf",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/chatgpt_full_operator.py",
+      "sha256": "7d0482be022d09e2c4d4dd766d79466ea9fca9e582ea5306ee32a2ca93d4acf9",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/chatgpt_mcp_bridge.py",
+      "sha256": "69efe77eb0620648fcd3c6fd545ae162c9b9e62e99bd2acf249f03e12443918b",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/chatgpt_v10_dual_read.py",
+      "sha256": "0f839ecb34385c38e95b741af99a6f48186d1e38bf9d9ca22b527677d243ee27",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/chatgpt_v11_layered_read.py",
+      "sha256": "b95ce28d9216cfd167a0a4e7f35ba9492b11a4831045937f544faaae9208ba80",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/dc_compat/engine.py",
+      "sha256": "089387321c115feede183d92c81de407f9536d5b5c0804eba5ec82f23fde8c8c",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/dc_compat/http_server.py",
+      "sha256": "0f258bb106a2e25ae330fac52b5430963e9218f58614cf29ad06ab6394da7f3a",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/dc_compat/registry.py",
+      "sha256": "35a01d0bbc85fcaef32bd861f435a514fffe26fb5d451fbfb1b8e9cadc3a30ba",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/dc_compat/server.py",
+      "sha256": "6585bf3581d2a05a1faa20e48bd4226acf8021ab6a55635de8bb8277bca3844c",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/dc_readonly_inventory.py",
+      "sha256": "e319f5e1b77dd88b9a0120545f5f6ce2c0353e79f819598f217205dce096ad53",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/maintenance_20261017/native_rollout_tests.py",
+      "sha256": "c10df0fcdc6ecead2814a506239aaa52a7eba5ab51b2edca60e84fe6728bd3df",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/maintenance_20261017/recover_control_channel_tests.py",
+      "sha256": "06c08ac179483113a29ffeb78f832883811b5b5b471c825af0757cd34551cd79",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/readonly-bridge/bridge.py",
+      "sha256": "69efe77eb0620648fcd3c6fd545ae162c9b9e62e99bd2acf249f03e12443918b",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "deploy/runtime_http_probe.py",
+      "sha256": "687902a67abbddcb65a1d0edd60fa546750b717ddd77de9e741421cc9af22a65",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_analysis_view_qualification.py",
+      "sha256": "4cb9e88cc408dff94649e089a8e1e75d06c8a1521cba7ad98ea073e1a396aa7b",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_apk_export_qualification.py",
+      "sha256": "cbeed73f0592383d062f201feef894fdccf28f664b219baf6e4bb81ec2e3756b",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_apk_path_alias_qualification.py",
+      "sha256": "6032d3f2a8063feba62380156d2513aa8e094a38cc6f3d87bca3fda4b6d552c8",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_compatibility_ledger.py",
+      "sha256": "3e6ccb06e7a41f39e7a5ce1d27adff62e37fc3302ee585f514de350d7113478a",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_elf_evidence_family_qualification.py",
+      "sha256": "8cc1f88805370bce55ec5cd3bea890431cb55338ee3ad3f09a17736fbb3bfed6",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_evidence_import_qualification.py",
+      "sha256": "c1748126e13671f3c247302dfd6f5a8927a6abd10d99aee0d154dfcff26271e7",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_frame_mcp_qualification.py",
+      "sha256": "48db5a8559a9ad6c992a9ec30f9f80b56b4dd609711c6f9f1cf163c0be6b61d3",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_full_qualification.py",
+      "sha256": "8a6594e1e146d5f841539c125a83c6aed88e175586f2ecf81d022da43bd8a0ed",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_lifecycle_qualification.py",
+      "sha256": "7a80f5d540dba41fe9201c3dadd9acae4dc8b0828d674f079fd201d0d723bdb5",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_multihost_recovery.py",
+      "sha256": "6c0c7a2788355d34e20eeac6b4c55f2435adcf9adfec2fff6c944c980d2a0af2",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/rea_operation_qualification.py",
+      "sha256": "ee12a6101e296d1af00ce4a7014ae9a10a089b38808959aa55e7e91607711b58",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/test_local_qualification.py",
+      "sha256": "8693a85c8a973879a693918118450d94457f549a4b3b311920a1b66c4eecb3d1",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/test_qualification_path_fence.py",
+      "sha256": "fbd8e18e3f13e73740fa820fe2e58c1dd57663a209328e6e717eca65bde25135",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/test_runtime_ci_contract.py",
+      "sha256": "1256f3cc28533792159e459114a17e92da46a0c9d097d743caad8a5f7bffdfec",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "scripts/test_source_byte_boundary.py",
+      "sha256": "d0bf4a811ac425a41b3b2b88a6a6e00103602b9c420c699b2ecd57be49b767b7",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "src/mcp/runtime/fileio.py",
+      "sha256": "1f815244fe381067e3e1a7e6c7b43535990cc4655ca6715085f6bdc8f45c59f8",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "src/mcp/runtime/search_worker.py",
+      "sha256": "a09ebdc8febe682b4527efc3de58f8f4b481a4eed8654693d440f168b232cac5",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/chatgpt_bridge_http_tests.py",
+      "sha256": "80b11241727214a7f2d31bf0bdb97c7d08eaf6f1e243c9386d58437a527167cc",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/chatgpt_bridge_stdio_tests.py",
+      "sha256": "193212e35cc342506317b73e60eaed2e38706b7ff324768f6ea68ab3321f5973",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/chatgpt_request_identity_tests.py",
+      "sha256": "a62ff853033c895589dc751a4e7d944ad0a663a2a9af8a3df347e5caf266e21b",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/chatgpt_v10_single_v4_effect_tests.py",
+      "sha256": "05ab249cee44788c4802c9bc2fe898a517a6d0c2e808cb7d3153dacb1287b605",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/chatgpt_v10_stream_custody_tests.py",
+      "sha256": "41f80d99b3c82e0e21340946414a3462e0dd1ffaae02619baf1c8a149e6f310c",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/chatgpt_v11_layered_read_tests.py",
+      "sha256": "fc24dfbd9656bc3dbca3d67ccbf331190ef96f6f83517ad4da8a3246b149b3d5",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/chatgpt_v11_process_start_concurrency_tests.py",
+      "sha256": "97ec745c00c19a17a22564154237a3ec8411f582add09de09b1748a91b0f0d6c",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/chatgpt_v11_v4_session_binding_tests.py",
+      "sha256": "bf47407d77425e75bac731ebbebbb644de27bdb5d5cb135c2269322d4b69adf8",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/dc_readonly_inventory_collector_tests.py",
+      "sha256": "cfef6474799031dd2d2c741b304e8b433f8c2edf46fe22bef43a62c69f4ae1e0",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/file_capabilities.py",
+      "sha256": "332064d5a0f823533b84ae0b26c78511cd64af8ff2122704523eec37c3b60086",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/full_operator_cancel_tests.py",
+      "sha256": "bca6f4181f116c0dec7b98eb67c37e345cc5a2e40f920754a416e7d4bd8a5898",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/full_operator_facade_tests.py",
+      "sha256": "f44b2099acf6c4456bb81e14eb6c2a43eba3588dcb4c8fdf821b5727d44c83f6",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/full_operator_session_recovery_tests.py",
+      "sha256": "7aae6924a609d843eb66e86fbf87e9f42c291b35d52f5960382b7fd76b63454d",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_analysis_view_qualification_tests.py",
+      "sha256": "457977d2f92ae103f913feeaa047534d2beed2794302bd5133b0c83222ad021d",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_apk_export_qualification_tests.py",
+      "sha256": "c537c84b6624dbe19e3a526f7d63922432ca1c4353f22cb4cac4459b6c9094eb",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_apk_path_alias_qualification_tests.py",
+      "sha256": "83c74a4cb478c5aed42e61880c8fcc8c319b8a85484791abd123c9b3e28ce4a3",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_browser_capture_tests.py",
+      "sha256": "8efa3aa1da2e257a7275f354bcaa22ad65d6e53dcab2dac5907b767ec6f3699f",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_browser_external.py",
+      "sha256": "108b7a0ee5cfeeb4ee28100109ef9e3d7d4c117f733796ca43c41d60f4e0d08d",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_build_evidence_tests.py",
+      "sha256": "f8292f32732f0feff231d9d704e037c258279dfdb603b5310b47a322fdcb8153",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_compatibility_ledger_tests.py",
+      "sha256": "e3de52b9e725ecca0f4a7206de2869d60d60fbec1ade1432cbe51eccc11c568c",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_elf_evidence_family_evidence_tests.py",
+      "sha256": "149243571ed67b2c9dd369c6cf6896d7dbb5b41a78f9e5b461593e5db0b56e4d",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_elf_evidence_family_qualification_tests.py",
+      "sha256": "5d279bc2c7a5b79d8dccf28bdeb6633425e825feb4cd222e8406f3c9359b256f",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_engine_owner_tests.py",
+      "sha256": "5b4db0b1e8856d2be77c08bd4edba696113c31bf78a75481c61e4219c5265d82",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_evidence_checkpoint_upgrade_tests.py",
+      "sha256": "1b070b2480276f9b9beb4cf11394cbf019b9d04afc6c5978aaf5ee6239cc30e0",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_evidence_import_qualification_tests.py",
+      "sha256": "4f4d31f84cdaec6aa2359200ddbd2deca7c8f3085dcc76e174f733f2301b7cb5",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_frame_mcp_qualification_tests.py",
+      "sha256": "55d942389a23486d902358e38bd57cabc5b4316a566a5426673e137b1e29da35",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_ghidra_analysis_external.py",
+      "sha256": "81bee053a5469a54f7962e69adf76a878f8d0608f41ec527b418165aa78abadf",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_ghidra_analysis_external_tests.py",
+      "sha256": "1671e16474d85ff2ca7c65b506b385ce826bfdb52603793b7ca6acbeaf8caa94",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_ghidra_mcp_client.py",
+      "sha256": "f01e8441815f0a8a86ed1e6a8f3039f4ffa3cdbd63401439d69edb592fb05927",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_ghidra_mcp_client_tests.py",
+      "sha256": "89c02be8b872afd9240049423f95bcfdd65b4dec8ab61684e508153f11119076",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_javascript_cancellation_external.py",
+      "sha256": "7c7e504f2227846d6434ba1306454455aea1c3178799def379e5c37f1f54735d",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_lifecycle_parallel_tests.py",
+      "sha256": "8608e5109d231410826342b1bd5b34fe233b2973a8634216d20c810532fb46f2",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_lifecycle_qualification_tests.py",
+      "sha256": "6d90bc8ce3541397bd421be4b4479d78c43c0776076a46286d24797dac5e7fd0",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_multihost_recovery_tests.py",
+      "sha256": "bb4a473e13c21945aa06717f33c27d643a8de8ec5ee9b6062bdf554d1843527f",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_operation_evidence_tests.py",
+      "sha256": "d9b9ff534b5ccf3c529631c47ab237d63bdb5a5941abb74ed9dae5b6d4920d5a",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_operation_qualification_tests.py",
+      "sha256": "04b3ef858663716523cf82cb45d774aa0d8c7803a77b0877f2ca6f30d3a1e45c",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/rea_source_binding_tests.py",
+      "sha256": "c7d69ecc1a26f1fadb0f865a6eb048df1242a3cc7542af9fdbdc6b88189c7f5f",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/runtime_http_probe_tests.py",
+      "sha256": "27d9e58eb67469a082988327d6571ecc5de643942674095a6c3a9bd582aa3e8a",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/runtime_registry_page_tests.py",
+      "sha256": "434d0afaa609fcb180cd07ddb19ecd8d5ddb9fbd370390047e4dd3e019582ed4",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/runtime_workflow_owner_tests.py",
+      "sha256": "1eab8e5dea71d990868223e3fccad3605bbe6724a7fe5b0eea03455a4ac228dc",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/search_worker_tests.py",
+      "sha256": "111fcecbca4e33415f8fab4c63d1abd4370f03c5b34bd23318d72411d3038bd0",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/test_computer_http.py",
+      "sha256": "69e3e1095b74a3539dad287fe011b2cb5c36a51d8bedd196b37f7a6c8076c0bd",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/test_native_canary_resume.py",
+      "sha256": "d04161b6f223e662c19805288b66dc15b7d7fa3fa5877e9d83adcab86832b328",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/tunnel_client_patch_tests.py",
+      "sha256": "72fdc0208e10d6403b940733709e9c5851a295b4c0e80e36ba49d4c31e1d8807",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tests/tunnel_deployment_config_tests.py",
+      "sha256": "5025f02a649652baa1da002b099eb0e116081d70ccdbb9d04acefda1f4efd6cd",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/audit_isolated_tests.py",
+      "sha256": "736b2dcc85fbd5214b855813b6c1f0ceed3dedc1cc0957e709a9ee6cb0110c40",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/audit_isolated_tests_tests.py",
+      "sha256": "00901b875e6642d79353954ae5bd78aff9d4f0e2a2a2ea28c5416b11bad19207",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/forwarded_validation_lease_tests.py",
+      "sha256": "e7113c43849f5d2fb66a4e6466f5fbc8d60ae93e787b5c17e61957a499660090",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/run_extended_file_soak.py",
+      "sha256": "30c3ed04a24d718a9cf777fbf5c01b7f77aba2af3fd0b58276b6f4bc0fe82a14",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/run_extended_file_soak_tests.py",
+      "sha256": "86c8169852af9190cd3a33aef4e8395cece7865f73aa17ebe7090c11659f9821",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/run_isolated_tests.py",
+      "sha256": "9e1439b27e630aa8a00aa34f02248800dd929314fa0041532294df106f189c62",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/run_native_validation.py",
+      "sha256": "309afefe719d63e52377930db5d997b3ac3c244873fbb83055e9950b956903f6",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/run_native_validation_tests.py",
+      "sha256": "8ca4b7e72dcb79dcd169bd236332248cf4bd1f1f8a6c60bc2255f11a067844b9",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/run_registry_cohort_abba.py",
+      "sha256": "637f5ef973ff58c3dbad62ef14a3fce27d75337e090811992e38b5b57d489cea",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/run_registry_cohort_abba_tests.py",
+      "sha256": "1384b672b959f483beb181a45d9d075c5cc21b374a818fc29f27d62d81e82298",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/run_registry_microbench_abba.py",
+      "sha256": "268bc954ebe0366c602402b938c0d1986a7d34ba1309bff3ba398281ca947d21",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261028/run_registry_microbench_abba_tests.py",
+      "sha256": "922428cc053ed1de58fa07c23d1b188e2a6f77cc039f3fa0d8ae7fe4415de94b",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261029/run_record_idle_abba.py",
+      "sha256": "e7984e22b27d439e25a664f4a653d9f08a461d450af7b158d9416e7169a9729c",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261029/run_record_idle_abba_tests.py",
+      "sha256": "728bd56f03523778f5cf757045e3ddf1fd78b651c53b2d90c8cdfb6af27ad553",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261030/run_inventory_rss_abba.py",
+      "sha256": "a9f840198a8d153862dd17732146039a50b45c969dad679173e5c447a79801ba",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261030/run_inventory_rss_abba_tests.py",
+      "sha256": "9bafd07ab92c210cbe4cc0e47000bcbb3afb5aa1e9aefbdf1b8b6ddf10856395",
+      "matches_candidate_blob": true
+    },
+    {
+      "path": "tools/x230/20261030/run_paired_native_validation_tests.py",
+      "sha256": "3db0e88c646ce09e4ba6367b36fb9435eb76a1cbe5bacbec8025880cce6782fa",
+      "matches_candidate_blob": true
+    }
+  ],
+  "compatibility_limit": "This review does not restore rmcp3.4 EOF leniency. External or unreviewed clients must terminate each JSON-RPC STDIO frame with LF. Actual final hosted CI remains required.",
+  "actions": {
+    "tests_run": 0,
+    "builds_run": 0,
+    "network_calls": 0,
+    "repository_source_changes": 0,
+    "remote_mutations": 0,
+    "artifact_written_only": true
+  }
+}

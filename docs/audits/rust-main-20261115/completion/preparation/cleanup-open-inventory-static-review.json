@@ -1,0 +1,39 @@
+{
+  "schema": "hepta.cleanup-open-inventory-static-bundle-review.v1",
+  "prepared_utc": "2026-11-15T12:24:25.851656+00:00",
+  "status": "PASS_STATIC_ARCHIVE_INTEGRITY_ONLY",
+  "selected_script_sha256": "ae47f1cb3ef42c3246733cd66e432efd1d3a3fa4f272b05c81d3e522cf059c29",
+  "original_script_sha256": "1a831f61f030035218d01dabe4c81539e23b8d11114d0ed1ed8ef3b0647d2d16",
+  "minimal_change": "Only open_pull_requests changed; CI100/20 pagination and all other source bytes remain identical. A non-full first state=open page with fewer than100 records is required; every row must be open and original identity/dependency checks remain.",
+  "fixtures": {
+    "original_safety_checks": 19,
+    "open_inventory_boundary_groups": 6,
+    "all_passed": true,
+    "network_calls": 0,
+    "remote_mutations": 0
+  },
+  "reviews": {
+    "reviews/implementation-change-review.json": "e471de6472a1b6a1ea4752829c1e82dcc694272b0742d8b706bc680f22ba7db5",
+    "reviews/branch-scope-independent-review.json": "d690168048bc4b1b5a5530493f7e00e42f2528054c92665e223a85102acff821",
+    "reviews/root-independent-review.json": "21134af73af2634d44d939e2a27e9b1088c165acbb428a6642a3bac75db7ba05"
+  },
+  "superseded_variant": {
+    "script_sha256": "75e38dd588ef6cc8251615c5b5639308a8894590d7176aeb418056e040b8d8a4",
+    "status": "Preserved but not selected or run after the root-directed design change. Its copied fixture is also unexecuted.",
+    "reason": "The authenticated Mac read-only page25 probe succeeded but took52.056seconds for one page. Full historical state=all pagination multiplied latency and exposed repeated snapshots to ongoing HIA advances. The selected complete single open page took14.538seconds and returned PR121/122/124. Complete fixed93closed verification remains separate; this change does not replace it.",
+    "probe_files": [
+      "probes/pr-page25-probe.json",
+      "probes/pr-open-page-probe.json"
+    ]
+  },
+  "fixture_input_plan": {
+    "sha256": "251e227cbd977cae5ac6b2b28aec1e4b5ba97d3a390d430b1bebe064ec5a1d6b",
+    "included_if_current_bytes_match": true,
+    "note": "Original receipt paths are preserved as evidence. This archive is a static custody bundle, not a claim that a current live plan or environment is reusable without fresh validation."
+  },
+  "not_execution_evidence": [
+    "Root is separately executing or observing cleanup; this static bundle does not claim any default switch, atomic deletion, HIA post-state or ROG restoration result.",
+    "No source code, fixture, review, existing bundle, repository, ref, PR, workflow setting or host was modified by packaging.",
+    "No tests were rerun while packaging; existing complete PASS receipts and their exact source bytes are retained."
+  ]
+}

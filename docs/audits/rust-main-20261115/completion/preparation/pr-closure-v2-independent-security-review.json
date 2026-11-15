@@ -1,0 +1,124 @@
+{
+  "schema": "hepta.pr-closure-caller-v2-independent-security-review.v1",
+  "reviewed_utc": "2026-11-15T11:41:05.466789+00:00",
+  "status": "PASS_READ_ONLY_REVIEW_NO_UNRESOLVED_CODE_BLOCKER_ROOT_EXPLICIT_V2_GO_STILL_REQUIRED",
+  "bindings": {
+    "executor": {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/reviewed-inputs/close_rust_pr_batch.js",
+      "sha256": "d17a1c85118810e3caff578d59cfb54f2a156bb86753a5a6f3d5606c0c54cd6a"
+    },
+    "helper": {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/closure_journal.py",
+      "sha256": "ce1ed33dbd3075bbf9774f98c063411af2b6be7285045649480d3789c8e8deb1"
+    },
+    "caller": {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/run_rust_pr_closure.js",
+      "sha256": "616daac6fe9ffbde1700fe0a36bad8e2a12f432c49b4bb9abb9a629776baa764"
+    },
+    "identities": {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/reviewed-inputs/pr-close-exact-identities.json",
+      "sha256": "7de95f9fb6f72218d87e469f801bfacf5ff9bb8ffd849a88679f1fced3d26b31"
+    }
+  },
+  "unchanged_original_bindings": {
+    "executor": "50a9079b7089f519e465a68dd10937061146500964d888a919391e45fb42877e",
+    "helper": "c5f7dacf6f92e230db87b9de388f7f0fdebd878d542b9c975287999f6a820e80",
+    "caller": "ce8b64201edfa17b1a635096572cb7934bd38db1d7fca6f7c714a56c4360c735",
+    "identities": "7de95f9fb6f72218d87e469f801bfacf5ff9bb8ffd849a88679f1fced3d26b31"
+  },
+  "reviewed_diff": {
+    "executor": "Only decode function changed. All remaining bytes, including fixed93 identities, protected exclusions, PR125/main/tree checks, per-item read/intent/state-only-PATCH/post ordering and failure behavior are byte-identical.",
+    "helper": "Only fixed asset directory, fixed v2 journal path and executor hash changed. All durability, exclusive writes, locks, receipt validation, stopped-state refusal and no-retry behavior are byte-identical.",
+    "caller": "Only fixed helper path and helper/executor hashes changed. Execute=false default, exact rootGo/proof gates, shell quoting, JSON heredoc, batch limit5 and complete/STOP behavior are byte-identical.",
+    "identities": "All93 identities byte-identical; PR121/122/124/125 excluded, PR120 head retained.",
+    "safe_decoding": "Outer/nested isError is still rejected before payload acceptance. Structured REST JSON takes precedence over display-only acknowledgment. Exact known banner may be skipped only in text-block fallback. Missing JSON/unknown text/malformed structured JSON fails closed without fallback to a different payload."
+  },
+  "fixture_review": {
+    "decoder": {
+      "passed": 13,
+      "failed": 0,
+      "real_network_calls": 0,
+      "real_mutations": 0,
+      "coverage": "Actual captured PR125 and independent main envelopes; legacy string/text compatibility; outer/nested structured; banner-only/unknown text/malformed structured; outer/nested isError."
+    },
+    "caller": {
+      "passed": 17,
+      "failed": 0,
+      "real_network_calls": 0,
+      "real_mutations": 0,
+      "coverage": "All93 across bounded batches under new observed two-level wrapper; existing durable/concurrent/crash/lost-ack protections; two new bad-wrapper failures leave zero close mutations and block retries."
+    },
+    "live_readonly_peer_receipt": {
+      "GETs": 1,
+      "mutations": 0,
+      "default_status": "PREPARED_LOCAL_INSPECTION_ONLY / NOT_STARTED"
+    },
+    "independent_reviewer_reran_tests_or_invoked_caller": false
+  },
+  "reviewed_evidence": [
+    {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/v2-minimal-production.diff",
+      "sha256": "a7f565618e3520eb7e21d7f8bdd37a266a2c42a88fa973408f6f85d61d2919e6"
+    },
+    {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/v2-diff-binding.json",
+      "sha256": "97dd5ad59ce0dff0af20246d4fbae4b3449739976331facaef3c833c17785feb"
+    },
+    {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/fixture_decoder.cjs",
+      "sha256": "b7579aeccc78ce458dee19c9197ea3423ed3f648170b4ec08793feb25f6e6411"
+    },
+    {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/decoder-fixture-results.json",
+      "sha256": "35d05a6ca1559c6075f973852e3e2f1917d7639465a45b7c94eeb3aa1490caf6"
+    },
+    {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/fixture_caller.cjs",
+      "sha256": "69a830f0900a9d03f1464e274354479a32ef6974875088a5e70dc7524872a59a"
+    },
+    {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/caller-fixture-results.json",
+      "sha256": "482bdc2bc9aac214efe919430d66f751fded5b10f92caedaaf5fb1535839fa49"
+    },
+    {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/actual-readonly-validation.json",
+      "sha256": "2f681ad8f874262959565bf92c3db9203599160ec6aec6d3fe169af835b8f34b"
+    }
+  ],
+  "captured_envelopes": [
+    {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-wrapper-diagnostic-20261115/actual-pr125-tool-wrapper.json",
+      "sha256": "4140a407775bc55f694a07c784d1edc86a5ae7aa964dece9c2e25288abc6f19b"
+    },
+    {
+      "path": "/workspace/scratch/d72683e5e62a/independent-postmerge-security-20261115/github-fetch-main-envelope-observed.json",
+      "sha256": "13601885304eccd0bcdddc3d9c92b9328fb6603c7cf051837c0af4b6a0fcffbe"
+    }
+  ],
+  "original_stopped_attempt": {
+    "journal": "/workspace/scratch/d72683e5e62a/rust-pr-closure-receipts-e425",
+    "file_hashes": {
+      "journal-lock.json": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "operation.json": "4772d23355c354838714abf6138a5ac1d32473f604c3df518b479e6cee7801a4",
+      "batch-000/stopped.json": "840f80ee5d6ccd4ca8a6054a736cd8dd8736ea631b377dee8d0567dcb1232c77",
+      "batch-000/started.json": "9971b344dd18c4f10dfc8474e5a763f7b5c78d6f95392661d6fa4e7a7c58bc61",
+      "batch-000/batch-0-root-proof.json": "c733a6b7ba74a6fff2e39d22538f88f25bd796c255a5936ec0eb038aee71d3db"
+    },
+    "no_pr_before_intent_outcome_files": true,
+    "all_original_files_unchanged": true,
+    "note": "journal-lock.json is the intentionally empty flock file, not a receipt JSON document. Original STOP is preserved; no automatic reset or restart is authorized."
+  },
+  "v2_execution_boundary": {
+    "journal": "/workspace/scratch/d72683e5e62a/rust-pr-closure-receipts-e425-v2",
+    "journal_exists_at_review": false,
+    "new_execute_authorization_supplied_by_this_review": false,
+    "required": "Root must separately authorize this exact v2 caller/helper/executor binding and record the new attempt boundary. Existing rootGo literal and proof schema remain unchanged by explicit root direction; a code review is not the v2 go.",
+    "root_final_merge_proof_path": "/workspace/scratch/d72683e5e62a/root-merge-operation/root-final-main-merge-proof.json",
+    "root_final_merge_proof_sha256": "848fcb3df8ed841f40266c0ec583bf04ca62d01a3d545bdba045293c58b582e2"
+  },
+  "residual_boundaries": [
+    "GitHub PR metadata PATCH has no identity CAS; pre/post checks and state-only write remain the existing reviewed boundary.",
+    "Root must independently verify all fixed93 closed and protected HIA PR/ref snapshots before atomic branch deletion.",
+    "No PR/ref/default/source changes or new tests/builds/remote calls were performed by this independent reviewer during this v2 review."
+  ]
+}

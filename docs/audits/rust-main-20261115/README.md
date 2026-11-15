@@ -2,6 +2,30 @@
 
 日期：2026-11-15（America/New_York）。
 
+## 已完成的结果
+
+Rust 分支收拢已经完成：汇总 [PR #125](https://github.com/TrillionniumFoundation/hepta-runtime/pull/125)
+合并为 `737acf6f901e46c57b0b4374e323e0d1132e0d49`；149 个原始 Rust 分支头全部保留在
+main 的真实父链中。默认分支已切换为 **main**，149 个旧 Rust 引用与临时汇总引用共
+**150 个分支已删除**，固定 **93 个旧 PR 已关闭**。操作后精确保留 main 与六个 HIA／迁移
+依赖引用；HIA PR 121、122、124 保持原关系，后续外部 HIA 提交继续保留。
+
+最终集成候选 `e425d92b6a0dedf13eb3e484e76419ee756804c0` 的 Rust 两个 PR 任务均成功：
+各自 all-features 2,633 passed／44 skipped，no-default-features 2,592 passed／32 skipped。
+Cloud PR 191/191 passed，三个任务的 59 个已报告步骤全部成功。实际 main 合并树与该候选
+完全相同；这些计数是不同任务/模式的执行次数，不是不重复用例数量。
+
+main push 另暴露了旧 Chrome CDP workflow 的 profile 清理失败。追加修复
+[`14fc20aa`](https://github.com/TrillionniumFoundation/hepta-runtime/commit/14fc20aabd0650784664fc9659f53936430622df)
+仅修改三个 CI 文件，原 JavaScript 与五项 CDP 断言保持原字节。真实 Chrome 修复 run
+[43715911837](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43715911837)
+已成功，八项生命周期回归及九个步骤全部通过，产物确认 18 个本次 PID 已回收、无活子进程、
+profile 已删除。Rust runtime、Cargo.lock 与其他路径的 mode/blob 保持候选原样。
+
+[最终完成记录](completion/README.md)提供完整 CI、PR 关闭、150 项原子删除、HIA 保护、
+ROG 历史工作流临时暂停及恢复、源码保全与独立回读证据。此次文档补充只写审计目录。
+后续新触发且仍运行的 CI 不预先记为通过；部署和生产资格的原有 HOLD 仍保留。
+
 ## 任务与证据范围
 
 用户要求审计整个仓库，将 Rust 开发分支合入 `main` 并清理已整合的
@@ -83,6 +107,7 @@ R33/R34/R35/R36 的原始性能拒绝，以及 R27/router-cache 的未完成验�
 | SEC-04 | 本地 CREATE 的 exists-then-write 竞态可能覆盖另一调用刚创建的文件或跟随 dangling symlink | 使用 `create_new` 原子占有目标；成功后才更新 delta cache；确定性双调用测试验证恰好一个成功 |
 | CI-01 | 当前主 CI 不识别 `main` | 补齐 push/PR 分支过滤，保持 exact-head 与 prospective-merge、两种 feature 模式和隔离测试 |
 | CI-02 | 少数旧工作流使用可移动 action tag，且一处 checkout 保留凭据 | 15 个工作流的 40 个外部 action 调用全部固定完整提交 SHA；17 个 checkout 全部关闭凭据持久化；保留原事件、测试范围和历史源码固定值 |
+| CI-03 | 旧 Chrome CDP trap 只等待直接 PID，真实 main run 在删除 profile 时失败 | 新 CI owner 保管并回收本次后代及线程组；保留原断言和失败码，八项进程回归及真实 Chrome 验收通过 |
 | SUPPLY-01 | vendored ruzstd 来源清单只列最初两个补丁文件，遗漏后来三次已提交修补 | 补全六个已修改文件的 patched hash 和原始提交映射；全部 64 个上游文件记录、归档校验值和原基线不变；未修改 decoder 代码 |
 
 SEC-03 已用实际嵌入的 Python supervisor 做临时目录实验：允许目录退出 0；
@@ -141,7 +166,8 @@ HTTP 服务无界 schema 缓存涉及当前启用路径；loopback/token 只限�
 [修复与本地检查](validation/dependency-repair/README.md)及
 [独立依赖和注册表复核](validation/dependency-registry-1509860c/dependency-verification-summary.md)。
 两种特性模式的全部 target check、严格 Clippy 与格式检查均通过；这轮本地
-检查未执行 Rust 测试，完整行为仍交由新提交的托管 CI 验证。
+检查未执行 Rust 测试；后续完整行为验证已由 e425 的托管 CI 完成，见
+[最终 CI 记录](validation/github-pr125-e425d92b/README.md)。
 
 ### SDK 分帧升级的兼容性边界
 
@@ -193,6 +219,10 @@ Python 直接依赖虽固定版本，但未提供完整带 hash 的传递依赖�
    信任验证。operator runtime 的 OpenSSH 执行路径另有
    `StrictHostKeyChecking=yes`，两者不能混为一谈。
 
+8. **macOS durable job 查找仍有随历史增长的成本。** 控制器没有 Linux content-watch
+   快路时会完整校验历史记录；本次观察到的 MCP 响应超时尚未定位到确切阶段。
+   原结果与静态机制分开记录，未通过重启、清空历史或新 key 重放不确定动作来掩盖。
+
 ## 验证与清理记录
 
 本目录的 `validation/` 和 `verification.json` 保存实际结果；远端合并、
@@ -224,7 +254,7 @@ overflow 分派的冻结 ELF 原文回归。原始 fixture、四份 frame 哈希
 46/46 通过。REA 最终修复的格式及生产库/二进制严格 Clippy 通过；all-targets
 Clippy 的 lib-test 元数据编译被 SIGKILL，零项 Rust 测试执行，详见
 [修复检查证据](validation/rea-overflow-fix/README.md)。修复后的完整托管测试
-仍须由新 head 的实际结果确认，不能把首次 CI 或本地生产编译写成通过。
+由后续 e425 的完整托管结果确认；首次失败与本地生产编译仍分别记录，不混记为通过。
 
 由于终端无 Git 写入凭据，85 个新集成提交通过 GitHub 插件按原拓扑发布。
 其文件树逐项相等；原有分支提交 ID 不变，新集成提交的 SHA 对照与完整原始
@@ -244,6 +274,11 @@ Cloud 两次全部通过；Rust 预合并全特性完成 2,630 passed、44 skipp
 96 个文件树及有序父关系全部一致，95 个原始消息字节完全相同；早期审计包装
 `7f3c795b` 的消息比本地版本仅多一个末尾 LF，该差异单独记录。原始分支提交
 身份全部保持，不把这一审计消息差异称为源代码或原始历史改写。
+
+最新的 [98 个候选发布提交读回](publication/complete-98-commit-readback.json)继续验证全部文件树和
+有序父关系；97 个消息原字节相同，唯一既有包装消息末尾 LF 差异保持单独记录。
+后续 Chrome CI 三文件修复的 [独立发布与源码差异](publication/cdp-lifecycle-repair/runtime-source-unchanged.json)
+另行保存；实际引用清理和最终审计文档都不重写原始分支提交。
 
 
 关键只读复核命令：

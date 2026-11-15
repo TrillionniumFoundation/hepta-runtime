@@ -1,0 +1,136 @@
+{
+  "schema": "hepta.pr-closure-caller-independent-security-review.v1",
+  "reviewed_at_utc": "2026-11-15T10:39:30.258512+00:00",
+  "reviewer": "security_audit",
+  "status": "PASS_READ_ONLY_REVIEW_NO_UNRESOLVED_CODE_BLOCKER",
+  "candidate_sha": "e425d92b6a0dedf13eb3e484e76419ee756804c0",
+  "tree_sha": "76652098f4b5bcad487071f2eaefd82d7fed219c",
+  "binding_hashes": {
+    "caller": {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller/run_rust_pr_closure.js",
+      "sha256": "ce8b64201edfa17b1a635096572cb7934bd38db1d7fca6f7c714a56c4360c735"
+    },
+    "helper": {
+      "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller/closure_journal.py",
+      "sha256": "c5f7dacf6f92e230db87b9de388f7f0fdebd878d542b9c975287999f6a820e80"
+    },
+    "executor": {
+      "path": "/workspace/scratch/d72683e5e62a/rust-close-refresh-e425-20261115/close_rust_pr_batch.js",
+      "sha256": "50a9079b7089f519e465a68dd10937061146500964d888a919391e45fb42877e"
+    },
+    "identities": {
+      "path": "/workspace/scratch/d72683e5e62a/rust-close-refresh-e425-20261115/pr-close-exact-identities.json",
+      "sha256": "7de95f9fb6f72218d87e469f801bfacf5ff9bb8ffd849a88679f1fced3d26b31"
+    }
+  },
+  "reviewed_fixture_receipt": {
+    "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller/caller-fixture-results.json",
+    "sha256": "62bd4e67a912e5df3b65b5834acda8a31a04f7cb16a01641597c308b7a20ae33",
+    "fixture_source": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller/fixture_caller.cjs",
+    "fixture_source_sha256": "108340cb7738fd5d4489cd9571ff6706875c4c4572375450c9118a6d9e6a37b1",
+    "passed": 15,
+    "failed": 0,
+    "real_network_calls": 0,
+    "real_remote_mutations": 0,
+    "method": "Read the synthetic GitHub fixture implementation, real temporary-directory persistence adapter and the retained result; reviewer did not rerun fixtures.",
+    "coverage": [
+      "fixed93in19batches,last3",
+      "already-closedskip",
+      "update-acklost",
+      "post-readlost",
+      "intent-acklost",
+      "headidentitychange",
+      "crashafterallocation",
+      "twointerleavedcallers",
+      "lostcompletionack",
+      "exclusivewrites",
+      "per-itemreceiptvalidation",
+      "corruptedoutcomeblockscontinuation",
+      "journal-final-symlinkrefusal",
+      "file-before-directoryfsync",
+      "defaultlocal-onlyandproof/go refusal"
+    ]
+  },
+  "reviewed_real_default_invocation_receipt": {
+    "path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller/default-invocation-receipt.json",
+    "sha256": "7c996170624b2b20be8676159ded46d59bda8360520d80ff46ae3f9dbb5e281c",
+    "observed_by_preparing_agent": true,
+    "reviewer_did_not_invoke": true,
+    "status": "PREPARED_LOCAL_INSPECTION_ONLY",
+    "journal_status": "NOT_STARTED",
+    "proof_supplied": false,
+    "explicit_go_supplied": false,
+    "remote_reads": 0,
+    "remote_mutations": 0
+  },
+  "real_operation_journal_present_at_review": false,
+  "review_findings": [
+    {
+      "id": "scope",
+      "assessment": "PASS",
+      "detail": "Caller invokes only hash-fixed executor;93embedded identities match external pinned file. ProtectedPR121/122/124/125excluded;PR120retains protected head. No branch/default/retarget/title/body/comment operation is introduced."
+    },
+    {
+      "id": "authorization_and_batching",
+      "assessment": "PASS",
+      "detail": "Default is local inspection with no GitHub calls. Execute requires actual fixed-candidate root merge proof plus separate explicit root go. Caller accepts no start/count override;helper computes cursor and allocates exactly5or final3."
+    },
+    {
+      "id": "crash_and_concurrency",
+      "assessment": "PASS",
+      "detail": "Local flock serializes allocation/persistence commands. Operation manifest and exclusive batch allocation are fsynced before returning ownership token. A persistent unfinished allocation prevents another invocation from starting a batch even after the allocating process has exited."
+    },
+    {
+      "id": "pre_effect_persistence",
+      "assessment": "PASS",
+      "detail": "Before/intent receipts use O_CREAT|O_EXCL|O_NOFOLLOW and file flush/fsync followed by directory fsync. Executor waits for PERSISTED_AND_FSYNCED before attempting the PR state change;lost local acknowledgment stops before continuation."
+    },
+    {
+      "id": "uncertain_outcomes",
+      "assessment": "PASS",
+      "detail": "Update-ackloss,post-readfailure,identitychange,persistencefailure,or crash leave an incomplete/stopped batch. No automatic reset,skip,force,retry,or second PATCH path is available. Subsequent begin rejects before GitHub calls."
+    },
+    {
+      "id": "completed_batch_resume",
+      "assessment": "PASS",
+      "detail": "Only fully validated batch proof,merge readback,before/intent/outcome records and exact aggregate result can yield complete.json and advance cursor. Every later begin revalidates all earlier completed batches. Lost completion acknowledgment can advance to the next verified batch without repeating earlier PRs."
+    },
+    {
+      "id": "shell_and_json_transport",
+      "assessment": "PASS_STATIC_REVIEW_WITH_DEFAULT_PATH_RECEIPT",
+      "detail": "Each shell argument is single-quote escaped;payload is one JSON.stringify line passed via a single-quoted heredoc delimiter. Embedded text cannot terminate the heredoc with an actual LF or expand shell syntax. Python isolated mode checks and compiles the verified helper bytes;helper verifies executor and identities. Real default invocation receipt confirms the actual exec interface path;remote mutation calls remain synthetic in fixture."
+    },
+    {
+      "id": "diagnostic_completion_label",
+      "assessment": "DOCUMENTED_NON_BLOCKING_LIMIT",
+      "detail": "stop reports BATCH_ALREADY_DURABLY_COMPLETE on completion-file presence without validating contents. Caller still throws the original stop and never advances from this diagnostic. A subsequent begin parses/revalidates the full completion chain,so malformed/truncated completion blocks progress. README now explicitly says this stop label alone is not success proof."
+    }
+  ],
+  "preserved_limits": [
+    "GitHub PR GET/PATCH has no expected-head CAS;pre/post identity checks detect drift but cannot make that interval atomic.",
+    "Fresh final merge/API readbacks occur at each batch;root must supply actual evidence,not a fixture main SHA.",
+    "A matching already-closed PR is recorded without mutation.",
+    "Local fsync protects process-crash persistence on this workspace filesystem;it is not permanent archival storage across workspace loss. Preserve final receipts separately.",
+    "Shared workspace and its trusted ancestors are the local trust boundary;review does not claim protection against an equally privileged actor rewriting the journal.",
+    "Actual final93closed and protectedHIA state still require independent fresh readback before branch cleanup."
+  ],
+  "documentation_review": {
+    "readme_path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller/README.md",
+    "readme_sha256": "ceeb744221c03e850bb13f48406875be4df34acb7e187331239c686b62f80bcb",
+    "post_closure_refresh_path": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller/POST_CLOSURE_REFRESH.json",
+    "post_closure_refresh_sha256": "bf6de372c85cd81e8c8b19d3afc5e3aec0f284fcfa84e52ec003ee2b0e7ded33",
+    "diagnostic_label_and_transient_workspace_limits_explicit": true
+  },
+  "execution_readiness": "Code review approval only. Final full CI success,observed ordinary main merge/tree/parents proof and root explicit go remain mandatory. No real closure is authorized by fixture/default receipts.",
+  "reviewer_actions": {
+    "executed_caller": false,
+    "executed_helper": false,
+    "executed_fixtures": false,
+    "tests_run": 0,
+    "builds_run": 0,
+    "remote_calls": 0,
+    "remote_mutations": 0,
+    "code_modified": false,
+    "only_written_artifact": "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller/independent-security-review.json"
+  }
+}

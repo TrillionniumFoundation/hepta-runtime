@@ -1,0 +1,21 @@
+{
+  "schema": "hepta.independent_chrome_cdp_static_review.v1",
+  "recorded_at": "2026-11-15T12:35:16.349945+00:00",
+  "reviewer_agent": "/root/security_audit",
+  "source": "Collaboration message following independent read-only review; no new tests or host calls.",
+  "conclusion": "AGREE_WITH_FAILURE_ANALYSIS",
+  "verified": [
+    "Read complete workflow and original full-log lines377/378; actual failing command is EXIT-trap rm ENOTEMPTY.",
+    "Read original ZIP directly and confirmed all five original observation predicates are true.",
+    "ZIP SHA256 bb11bfb0d4c79567d71a82d278be7c29502588a61dff4f6ec0d6d233bb309b12 matches.",
+    "e425 and failed main737 workflow bytes match SHA25617c8511deb9909430a2ce2e6ea199c8e317fe41c80dc26b845cfd35ae7d74884."
+  ],
+  "cause_boundary": "A Chrome descendant still writing the profile is a likely mechanism, not a demonstrated writer/interleaving; the analysis correctly states the missing process-tree evidence.",
+  "fix_scope": "CI launch/teardown only. Preserve five assertions and strict cleanup failure. Waiting only for the parent is insufficient. A separate process group must also verify actual owned descendants exited; do not assume every child remains in the group. No global pkill or swallowing rm errors.",
+  "reviewer_actions": {
+    "files_modified": false,
+    "tests_run": false,
+    "host_calls": false,
+    "remote_mutations": false
+  }
+}

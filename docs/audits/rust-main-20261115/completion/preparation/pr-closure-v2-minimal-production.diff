@@ -1,0 +1,53 @@
+--- v1/executor
++++ v2/executor
+@@ -35,16 +35,19 @@
+     if (typeof value === "string") return decode(JSON.parse(value));
+     if (!value || typeof value !== "object") return value;
+     require(!value.isError, "GitHub connector reported a failed operation");
++    // Connector acknowledgments are display text; structuredContent carries REST JSON.
++    if (value.structuredContent) return decode(value.structuredContent);
+     if (typeof value.content === "string") return decode(value.content);
+     if (Array.isArray(value.content)) {
+       for (const block of value.content) {
+         if (block.type === "text") {
++          if (typeof block.text === "string" && block.text.trim() === "Action completed.") continue;
+           const decoded = decode(block.text);
+           if (decoded && typeof decoded === "object") return decoded;
+         }
+       }
++      require(false, "GitHub text wrapper contained no JSON payload");
+     }
+-    if (value.structuredContent) return decode(value.structuredContent);
+     return value;
+   }
+   async function get(path) {
+--- v1/helper
++++ v2/helper
+@@ -14,9 +14,9 @@
+ 
+ HERE = Path(__file__).resolve().parent
+ WORKSPACE = HERE.parent
+-ASSETS = WORKSPACE / "rust-close-refresh-e425-20261115"
+-JOURNAL = WORKSPACE / "rust-pr-closure-receipts-e425"
+-EXECUTOR_SHA = "50a9079b7089f519e465a68dd10937061146500964d888a919391e45fb42877e"
++ASSETS = HERE / "reviewed-inputs"
++JOURNAL = WORKSPACE / "rust-pr-closure-receipts-e425-v2"
++EXECUTOR_SHA = "d17a1c85118810e3caff578d59cfb54f2a156bb86753a5a6f3d5606c0c54cd6a"
+ IDENTITIES_SHA = "7de95f9fb6f72218d87e469f801bfacf5ff9bb8ffd849a88679f1fced3d26b31"
+ REPOSITORY = "TrillionniumFoundation/hepta-runtime"
+ CANDIDATE = "e425d92b6a0dedf13eb3e484e76419ee756804c0"
+--- v1/caller
++++ v2/caller
+@@ -5,9 +5,9 @@
+ (async function runPreparedRustPRClosure(options = {}) {
+   const { tools, execute = false, rootGo = null, proof = null,
+           progress = () => {} } = options;
+-  const HELPER = "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller/closure_journal.py";
+-  const HELPER_SHA = "c5f7dacf6f92e230db87b9de388f7f0fdebd878d542b9c975287999f6a820e80";
+-  const EXECUTOR_SHA = "50a9079b7089f519e465a68dd10937061146500964d888a919391e45fb42877e";
++  const HELPER = "/workspace/scratch/d72683e5e62a/rust-pr-closure-caller-v2/closure_journal.py";
++  const HELPER_SHA = "ce1ed33dbd3075bbf9774f98c063411af2b6be7285045649480d3789c8e8deb1";
++  const EXECUTOR_SHA = "d17a1c85118810e3caff578d59cfb54f2a156bb86753a5a6f3d5606c0c54cd6a";
+   const IDENTITIES_SHA = "7de95f9fb6f72218d87e469f801bfacf5ff9bb8ffd849a88679f1fced3d26b31";
+   const CANDIDATE = "e425d92b6a0dedf13eb3e484e76419ee756804c0";
+   const TREE = "76652098f4b5bcad487071f2eaefd82d7fed219c";
