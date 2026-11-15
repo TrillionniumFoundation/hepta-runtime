@@ -107,6 +107,36 @@ fn original_elf_evidence_failure_text_matches_without_normalizing_the_oracle() {
 }
 
 #[test]
+fn original_elf_overflow_text_survives_specialized_overflow_dispatch() {
+	let reference = fixture();
+	let case = reference["cases"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.find(|case| case["id"] == "producer/body-overflow")
+		.unwrap();
+	let failure = failure_from_public_constructor(case);
+	assert_eq!(failure.0["details"]["operation"], "inspect_elf_notes");
+	// The production response-budget path selects the specialized overflow
+	// dispatcher even when the original ELF encoder owns this error family.
+	let result = failure.wire_overflow();
+	assert_eq!(result.is_error, Some(true));
+	assert!(result.structured_content.is_none());
+	assert_eq!(
+		result.content[0].as_text().unwrap().text.as_bytes(),
+		case["original_text"].as_str().unwrap().as_bytes()
+	);
+	assert_eq!(
+		serde_json::to_value(&result.content).unwrap(),
+		case["original_result"]["content"]
+	);
+	assert_eq!(
+		serde_json::to_value(&result.meta).unwrap(),
+		case["original_result"]["_meta"]
+	);
+}
+
+#[test]
 fn unknown_members_at_each_admitted_level_preserve_the_complete_fallback() {
 	let reference = fixture();
 	let cases = reference["cases"].as_array().unwrap();

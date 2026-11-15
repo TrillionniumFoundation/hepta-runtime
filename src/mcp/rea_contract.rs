@@ -162,8 +162,12 @@ impl Failure {
 	}
 
 	fn wire_overflow(self) -> CallToolResult {
-		let ordered = overflow_order::text(&self.0);
-		self.wire_with_text(ordered)
+		match overflow_order::text(&self.0) {
+			Some(text) => self.wire_with_text(Some(text)),
+			// An unobserved overflow shape must retain the current ELF/Evidence
+			// projection, including its complete fallback for unknown members.
+			None => self.wire(),
+		}
 	}
 
 	/// Only independently observed Evidence import error shapes have an

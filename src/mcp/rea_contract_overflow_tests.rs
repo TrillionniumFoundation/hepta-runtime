@@ -57,6 +57,8 @@ fn legacy_public_result(result: &CallToolResult) -> Value {
 }
 
 fn prior_projection(value: Value) {
+	// Fallback follows today's generic wire contract, not the historical
+	// native serializer captured before the independent error-order fixes.
 	let prior = Failure(value.clone()).wire();
 	let actual = Failure(value).wire_overflow();
 	assert_eq!(
@@ -163,7 +165,10 @@ fn observed_overflow_factory_matches_original_complete_error_text() {
 			case["bundle_summary"].as_bool().unwrap(),
 		);
 		assert_eq!(failure.0, error(case), "{}", case["id"]);
-		let prior = failure.clone().wire();
+		// The frozen native capture predates the ELF/Evidence error-order fix.
+		// Recreate that historical sorted serializer explicitly; wire() now
+		// preserves the original bundle error order and is not this baseline.
+		let prior = failure.clone().wire_with_text(None);
 		let actual = failure.wire_overflow();
 		let expected = response(&case["reference"]);
 		let observed_native = response(&case["native"]);
