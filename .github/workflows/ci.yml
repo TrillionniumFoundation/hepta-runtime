@@ -68,6 +68,14 @@ jobs:
           rustc --version
           cargo --version
 
+      - name: Local qualification guard regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_source_byte_boundary.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_qualification_path_fence.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_local_qualification.py' -v
+
       - name: Format
         run: cargo fmt --all -- --check
 
@@ -323,6 +331,14 @@ jobs:
           rustup default 1.95.0
           rustc --version
           cargo --version
+
+      - name: Local qualification guard regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_source_byte_boundary.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_qualification_path_fence.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_local_qualification.py' -v
 
       - name: Format
         run: cargo fmt --all -- --check

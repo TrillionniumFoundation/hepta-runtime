@@ -6,6 +6,22 @@ durable process owner, receipt store, SSH execution and recovery logic. It adds
 no model provider, conversation store, FinalUse issuer or independent effect
 owner. A successful shadow-intent digest remains non-authorizing.
 
+## Scope of recorded qualification
+
+The source IDs, test counts, and canary receipts below describe their recorded
+historical compositions. They do not automatically qualify a later consolidated
+commit or binary. Current source acceptance must identify and test the actual
+candidate. The CLI and library still share `src/lib.rs`; the public native
+facade is implemented in `src/native.rs` and `src/native_observation.rs`.
+
+For local exact-head and GitHub-merge checks, see
+[Local Rust qualification](LOCAL_QUALIFICATION.md). That helper preserves the
+current isolated nextest feature matrix and records local evidence without
+granting production authority. Current native Rust regressions live beside the
+implementation in `src/native_tests.rs`, `src/native_entry_tests.rs`, and the
+observation test module; there is no requirement to restore the obsolete
+`tests/native_library_boundary.rs` from an earlier branch.
+
 ## Exact source composition
 
 | Input | Exact source | Role in this integration |
@@ -35,6 +51,11 @@ The public facade is `hepta_runtime::native`:
 
 - `execute_or_observe(ProcessStartParams)` requires an explicit nonblank stable
   idempotency key and delegates to the existing durable `jobs::start_job`.
+- `execute_or_observe_with_entry(ProcessStartParams, enter)` carries the
+  embedding host's effect-entry callback through the existing durable owner.
+  The callback is delayed until local transport spawn; an existing job remains
+  observation-only. Its guard stays owned by the transport worker through
+  cancellation until the original local child is reaped.
 - `observe_request(ProcessStartParams)` resolves the original host/key and full
   request binding when the start acknowledgement and job ID were lost. It returns
   the original record and status without any launch, including pending jobctl
@@ -48,8 +69,13 @@ The public facade is `hepta_runtime::native`:
 - `cancel(ProcessCancelParams)` requests cancellation of the original stored job;
   the caller still observes its authoritative terminal status.
 
-Responses are the original backend JSON strings. The facade does not reissue
-receipts, allocate a second journal or turn an ambiguous result into a new job.
+The facade also exposes `observe_terminal_output` and `cancel_request` for
+bounded observation and cancellation through the original request binding.
+Their typed results preserve the distinction between observations and authority.
+
+The basic process operations return the original backend JSON strings. The
+facade does not reissue receipts, allocate a second journal or turn an ambiguous
+result into a new job.
 The embedding host must retain the run, turn, generation, operation key and
 canonical payload binding that its existing owner admitted. It supplies
 configured host, executable and working-directory choices after its existing
