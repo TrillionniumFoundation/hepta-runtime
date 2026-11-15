@@ -26,6 +26,9 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/fs/background_tests.rs": "6ab06ae4c8eb673bbc15a8aa9a3de799810a42fe",
     "src/mcp/fs/shell.rs": "3a232a5b5cbaa5693ccfcf6c5d1c5d686f20df9f",
     "src/mcp/fs/shell_tests.rs": "aaf5477c6435a7ef30402535a0ddf36762d093ad",
+    "src/mcp/mod.rs": "31e9867c660929950f0ae3b4fc7de1d03efa0d43",
+    'src/mcp/runtime/request_results.rs': '10bd49baff3482643322e77966ed9449fa7d9f4e',
+    'src/mcp/runtime/request_audit.rs': '984668cfdfcee0a7eb00de14e02086f5ad90bcc0',
     'src/mcp/hia_contract.rs': 'f5a17e918d7b4fedf0bbc220c5e9fa8f42c69f09',
     'src/mcp/hia_provider.rs': '8753395459a5b1b9ead73d7f5607d8f9928803bc',
     'src/mcp/hia_tool_catalog.json': '5d69d45291559cc17c17b50581ee006dedda644f',
@@ -77,6 +80,8 @@ ORIGINAL_RUNTIME_BLOBS = {
 
 ORIGINAL_RUNTIME_COPIES = {
     "tests/hia_native/filesystem_parity/oracle/original_parity_ops.rs": "src/mcp/fs/parity_ops.rs",
+    "tests/hia_native/config_span/guard_original/original/config.rs": "src/mcp/runtime/config.rs",
+    "tests/hia_native/config_span/guard_original/original/runtime.Cargo.lock": "Cargo.lock",
 }
 
 

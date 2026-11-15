@@ -6,8 +6,10 @@ production HIA image or stand in for a compiler cold replay.
 from __future__ import annotations
 
 import copy
+import fnmatch
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import sys
@@ -22,6 +24,7 @@ import hia_native_failure as failure
 import qualify_hia_runtime_native as q
 import hia_native_view_fixture_qualification as fixtures
 import hia_native_runtime_mcp_fixtures as public_fixtures
+import hia_native_service_pipeline as service
 
 
 class NativePipelineTests(unittest.TestCase):
@@ -142,6 +145,90 @@ class NativePipelineTests(unittest.TestCase):
                     self.fail("relocated evidence started original execution")
         self.assertFalse(output.exists())
         self.assertFalse((moved / "runtime-mcp/files").exists())
+    def test_ci_path_filters_cover_every_required_source_for_push_and_pull_request(self):
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        events = workflow.split("\npermissions:", 1)[0]
+        push, pull_request = events.split("  pull_request:\n", 1)
+        parse = lambda text: re.findall(r"^      - '([^']+)'$", text, re.MULTILINE)
+        push, pull_request = parse(push), parse(pull_request)
+        self.assertEqual(push, pull_request)
+        self.assertEqual(len(push), len(set(push)))
+        uncovered = [name for name in q.sources() if not any(fnmatch.fnmatchcase(name, pattern) for pattern in push)]
+        self.assertEqual(uncovered, [], "required source changes must trigger the actual native gate")
+
+    def test_service_original_inventory_keeps_streams_outside_all_workdir_fixtures(self):
+        output = self.root / "actual"; output.mkdir()
+        outside = self.root / "outside"; outside.mkdir()
+        sentinel = outside / "keep"; sentinel.write_bytes(b"external fixture target")
+        folder = output / "workdir-original"; folder.mkdir()
+        streams = {}
+        for domain in ("probe-v1", "public", "regex"):
+            fixture = folder / domain / "fixture"; fixture.mkdir(parents=True)
+            (fixture / "link").symlink_to(outside, target_is_directory=True)
+            (fixture / "ordinary").write_bytes(b"transient live state")
+            retained = folder / domain / "stdout.bin"
+            retained.write_bytes(domain.encode())
+            streams[retained.relative_to(output).as_posix()] = service.sha(domain.encode())
+        target = folder / "target"; target.mkdir()
+        (target / "generated-link").symlink_to(outside, target_is_directory=True)
+        result = service.retained_files(output, folder, service.WORKDIR_ORIGINAL_FIXTURES + ("workdir-original/target",))
+        self.assertEqual(result, streams)
+        self.assertEqual(sentinel.read_bytes(), b"external fixture target")
+
+    def test_service_original_inventory_refuses_unknown_or_replaced_fixture_links(self):
+        output = self.root / "actual"; output.mkdir()
+        folder = output / "workdir-original"; folder.mkdir()
+        outside = self.root / "outside"; outside.mkdir()
+        unknown = folder / "undeclared-link"
+        unknown.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "directory is not owned"):
+            service.retained_files(output, folder, service.WORKDIR_ORIGINAL_FIXTURES)
+        unknown.unlink()
+        declared = folder / "probe-v1/fixture"; declared.parent.mkdir()
+        declared.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "directory is not owned"):
+            service.retained_files(output, folder, service.WORKDIR_ORIGINAL_FIXTURES)
+        self.assertTrue(declared.is_symlink())
+
+    def test_service_fixture_retirement_preserves_external_targets_and_exact_receipt(self):
+        output = self.root / "actual"; output.mkdir()
+        folder = output / "workdir-native/regex"; folder.mkdir(parents=True)
+        fixture = folder / "fixture"; fixture.mkdir()
+        denied = fixture / "denied"; denied.mkdir()
+        (denied / "state").write_bytes(b"closed fixture")
+        outside = self.root / "outside"; outside.mkdir()
+        sentinel = outside / "keep"; sentinel.write_bytes(b"must remain")
+        (fixture / "directory-link").symlink_to(outside, target_is_directory=True)
+        (fixture / "file-link").symlink_to(sentinel)
+        denied.chmod(0)
+        self.addCleanup(lambda: denied.chmod(0o700) if denied.exists() else None)
+        receipt = output / "workdir-native/retired-fixtures.json"
+        evidence = {"status": "PASS", "actual_corpus_sha256": "a" * 64}
+        fixtures = ("workdir-native/regex/fixture",)
+        result = service.retire_fixtures(output, fixtures, receipt, evidence, create=True)
+        self.assertFalse(fixture.exists())
+        self.assertEqual(sentinel.read_bytes(), b"must remain")
+        self.assertEqual(result, service.retire_fixtures(output, fixtures, receipt, evidence))
+        with self.assertRaisesRegex(ValueError, "evidence differs"):
+            service.retire_fixtures(output, fixtures, receipt, dict(evidence, actual_corpus_sha256="b" * 64))
+        fixture.mkdir()
+        with self.assertRaisesRegex(ValueError, "reappeared"):
+            service.retire_fixtures(output, fixtures, receipt, evidence)
+
+    def test_service_fixture_retirement_checks_every_target_before_removal(self):
+        output = self.root / "actual"; output.mkdir()
+        fixture = output / "safe/fixture"; fixture.mkdir(parents=True)
+        sentinel = fixture / "keep"; sentinel.write_bytes(b"not admitted")
+        with self.assertRaisesRegex(ValueError, "path escaped"):
+            service.retire_fixtures(output, ("safe/fixture", "../outside/fixture"), output / "receipt.json", {}, create=True)
+        self.assertEqual(sentinel.read_bytes(), b"not admitted")
+        outside = self.root / "outside/fixture"; outside.mkdir(parents=True)
+        link = output / "replaced/fixture"; link.parent.mkdir()
+        link.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "not an owned directory"):
+            service.retire_fixtures(output, ("safe/fixture", "replaced/fixture"), output / "receipt.json", {}, create=True)
+        self.assertEqual(sentinel.read_bytes(), b"not admitted")
+        self.assertFalse((output / "receipt.json").exists())
 
     def test_partition_is_complete_unique_and_keeps_evidence_dependencies(self):
         partitions = p.partition_tests()
@@ -154,15 +241,26 @@ class NativePipelineTests(unittest.TestCase):
                          "test_runtime_mcp_raw_value.py", "test_runtime_mcp_raw_value_evidence.py")):
             positions = [partitions["view"].index(name) for name in ordered]
             self.assertEqual(positions, sorted(positions))
+        config = next(row for row in q.MODULES if row["key"] == "runtime_config")
+        span = next(row for row in q.MODULES if row["key"] == "runtime_config_span")
+        self.assertEqual(partitions["config"],
+                         (config["test"], *config["additional_tests"],
+                          span["test"], *span["additional_tests"]))
+        self.assertTrue(set(partitions["config"]).isdisjoint(partitions["json"]))
         self.assertEqual(tuple(partitions["batch"]),
-            ("test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
+            ("test_batch_edit_params.py", "test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
              "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
              "test_atomic_write_policy.py", "test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
-             "test_atomic_write_evidence.py"))
+             "test_atomic_write_evidence.py", "test_shared_atomic.py", "test_write_chain_controller.py",
+             "test_write_chain_files.py", "test_write_chain_kernel.py", "test_write_chain_concurrency.py",
+             "test_write_chain_evidence.py", "test_batch_write_controller.py", "test_batch_render.py",
+             "test_utf8_probe.py", "test_batch_write_files.py", "test_batch_write_kernel.py",
+             "test_batch_write_concurrency.py", "test_batch_write_wide.py", "test_batch_write_evidence.py"))
         self.assertEqual(partitions["system"][:3],
                          ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py",
                           "test_filesystem_parity_kernel.py"))
-        self.assertEqual(len(flat), 154)
+        self.assertEqual(len(flat), 198)
+        self.assertEqual(partitions['config'][-2:], ('test_config_span.py', 'test_config_span_evidence.py'))
         for bad in ("missing", "duplicate", "unknown", "new_module", "split_ordered"):
             changed = copy.deepcopy(p.PARTITIONS)
             modules = q.MODULES
@@ -235,6 +333,40 @@ class NativePipelineTests(unittest.TestCase):
                 p.export_shard(output, self.root / (name + "-export"), {"files": {}}, selected)
                 called.assert_not_called()
 
+    def test_public_view_chain_stays_complete_before_fixture_retirement(self):
+        partitions = p.partition_tests()
+        self.assertEqual(partitions["view_components"], (
+            "test_view_render.py", "test_view_transport.py", "test_view_render_growth.py",
+            "test_view_render_growth_evidence.py", "test_view_cache.py", "test_view_cache_evidence.py",
+            "test_history.py", "test_history_evidence.py", "test_session_workdir.py", "test_session_evidence.py"))
+        self.assertEqual(len(partitions["view"]), 17)
+        self.assertTrue(set(partitions["view_components"]).isdisjoint(partitions["view"]))
+        public = ("view_read", "view_params", "view_call", "runtime_mcp")
+        for moved in public:
+            changed = copy.deepcopy(p.PARTITIONS)
+            changed["view"] = tuple(key for key in changed["view"] if key != moved)
+            changed["view_components"] += (moved,)
+            with self.subTest(moved=moved), self.assertRaisesRegex(ValueError, "public View"):
+                p.partition_tests(changed)
+        changed = copy.deepcopy(p.PARTITIONS)
+        changed["view"] = tuple(reversed(changed["view"]))
+        with self.assertRaisesRegex(ValueError, "public View"):
+            p.partition_tests(changed)
+
+    def test_workflow_requires_all_partitions_with_unchanged_process_and_job_limits(self):
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        block = workflow.split("\n  native:\n", 1)[1].split("\n  native_collect:\n", 1)[0]
+        groups = re.search(r"^        group: \[([^\]]+)\]$", block, re.MULTILINE)
+        self.assertIsNotNone(groups)
+        self.assertEqual(tuple(value.strip() for value in groups[1].split(",")), tuple(p.PARTITIONS))
+        self.assertEqual(block.count("    timeout-minutes: 15\n"), 1)
+        self.assertIn("      fail-fast: false\n", block)
+        changed = copy.deepcopy(p.PARTITIONS)
+        changed["json"] += changed["config"]
+        changed["config"] = ()
+        with self.assertRaisesRegex(ValueError, "independent partition"):
+            p.partition_tests(changed)
+
     def test_failure_diagnostics_survive_denied_fixtures_without_mutation(self):
         source = self.root / "failed"; source.mkdir()
         denied = source / "atomic-write-original/native-kernel/0012-denied-parent/fixture/denied"
@@ -274,6 +406,31 @@ class NativePipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "separate"):
             failure.capture(source, source / "nested-diagnostics")
 
+    def test_original_failure_capture_keeps_raw_domains_and_excludes_live_cargo_cache(self):
+        source = self.root / "partial-original"; source.mkdir()
+        target = source / "connection-original/target/release/deps"
+        target.mkdir(parents=True)
+        (target / "rmetaFZWET8").symlink_to(self.root / "already-retired-cargo-temporary")
+        retained = {
+            "connection-original/project/src/main.rs": b"// exact original source\n",
+            "connection-original/project/Cargo.lock": b"version = 4\n",
+            "connection-original/requests.bin": b"\x00\xff\x80\n",
+            "connection-original/partial-output.bin.gz": b"complete captured gzip bytes\x00",
+            "connection-original/build.stderr.log": b"actual interrupted compiler log\xff",
+        }
+        for name, raw in retained.items():
+            path = source / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
+        destination = self.root / "stable-diagnostics"
+        receipt = failure.capture(source, destination)
+        self.assertEqual(receipt["capture_errors"], 0)
+        self.assertEqual(set(receipt["files"]), set(retained))
+        for name, raw in retained.items():
+            self.assertEqual((destination / "data" / name).read_bytes(), raw)
+            self.assertEqual((source / name).read_bytes(), raw)
+        self.assertTrue(any(row["path"] == "connection-original/target" for row in receipt["skipped"]))
+        self.assertFalse((destination / "data/connection-original/target").exists())
+        self.assertTrue((target / "rmetaFZWET8").is_symlink())
+
     def test_transport_mode_restore_requires_all_exact_owned_bytes(self):
         folder = self.root / "data"; folder.mkdir()
         for name in ("a.elf", "b.bin"):
@@ -305,6 +462,46 @@ class NativePipelineTests(unittest.TestCase):
                                         for key in changed["text"])
             with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, "file-lock"):
                 p.partition_tests(changed)
+
+    def test_diagnostic_capture_resources_and_controls_stay_in_order(self):
+        suites = p.partition_tests()["json"]
+        expected = q.serde_error_pipeline.TESTS
+        self.assertEqual(tuple(name for name in suites if name in expected), expected)
+        for changed in (expected[::-1], (expected[0], expected[2], expected[1])):
+            modules = tuple(dict(row, test=changed[0], additional_tests=changed[1:])
+                            if row["key"] == "serde_error" else row for row in q.MODULES)
+            with self.subTest(order=changed), patch.object(q, "MODULES", modules), \
+                    self.assertRaisesRegex(ValueError, "producer and evidence"):
+                p.partition_tests()
+
+    def test_diagnostic_launcher_and_completed_outer_receipt_are_exact(self):
+        source = self.root / "source"; source.mkdir()
+        output = self.root / "output"; output.mkdir()
+        launcher = source / "fixed_launcher.py"
+        launcher.write_text("import json,sys\nassert sys.argv[1:]==['--phase','base']\n"
+                            "print(json.dumps({'reporting_fixture':True}))\n")
+        name = q.serde_error_pipeline.TESTS[0]
+        command = [sys.executable, "-I", "-B", str(launcher), "--phase", "base"]
+        report = {"phase": "native_components", "checks": []}
+        with patch.object(q, "ROOT", source), \
+                patch.object(q.serde_error_pipeline, "test_commands", return_value={name: command}):
+            for changed in (command + ["--skip"], command[:-1] + ["controls"],
+                            [sys.executable, "-I", "-B", str(source / "tests/hia_native" / name)]):
+                with self.subTest(command=changed), self.assertRaisesRegex(ValueError, "source-owned"):
+                    q.run_native_checks(output, report, (name,), q.qualification_env(),
+                        parallel_tests=(), ordered_groups=(), commands={name: changed})
+                self.assertEqual(report["checks"], [])
+            q.run_native_checks(output, report, (name,), q.qualification_env(),
+                parallel_tests=(), ordered_groups=(), commands={name: command})
+        row, summary = q.serde_error_pipeline.complete(source, output, report, name,
+                                                       command, q.completed_test_summary)
+        self.assertEqual(summary, {"reporting_fixture": True})
+        for field, changed in (("command", command + ["extra"]), ("timeout_seconds", 181),
+                               ("elapsed_seconds", 180.01), ("timed_out", True), ("exit_code", 1)):
+            broken = copy.deepcopy(report); broken["checks"][0][field] = changed
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                q.serde_error_pipeline.complete(source, output, broken, name,
+                                                command, q.completed_test_summary)
 
     def test_artifact_path_symlink_and_special_mode_refusals(self):
         folder = self.root / "data"; folder.mkdir()
@@ -635,9 +832,9 @@ class ShellProcessPipelineTests(unittest.TestCase):
     def test_shell_registry_keeps_process_text_and_original_domains_distinct(self):
         import compare_hia_runtime_rust as original
         from check_hia_native_inventory import inspect
-        self.assertEqual(len(q.MODULES), 60)
-        self.assertEqual(len(q.native_tests()), 154)
-        self.assertEqual(len(original.RECIPES), 54)
+        self.assertEqual(len(q.MODULES), 73)
+        self.assertEqual(len(q.native_tests()), 198)
+        self.assertEqual(len(original.RECIPES), 67)
         self.assertEqual(q.SHELL_PROCESS_TESTS, (
             "shell_process_state.py", "shell_process_transport.py",
             "hia_native_shell_process_qualification.py", "shell_process_evidence_controls.py"))
@@ -660,7 +857,7 @@ class ShellProcessPipelineTests(unittest.TestCase):
         self.assertNotIn("shell_foreground", original.NEW_COMPONENTS)
         self.assertIs(original.RECIPES["shell_foreground"], original.compare_shell_foreground)
         inventory = inspect(ROOT)
-        self.assertEqual(len(inventory["native_sources"]), 129)
+        self.assertEqual(len(inventory["native_sources"]), 169)
         self.assertEqual(inventory["legacy_tool_count"], 125)
         self.assertEqual(inventory["native_production_tool_count"], 0)
         self.assertIs(inventory["whole_runtime_replaced"], False)

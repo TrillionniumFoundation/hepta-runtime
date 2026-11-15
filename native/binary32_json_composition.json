@@ -1,0 +1,54 @@
+{
+  "actual_original_qualified": false,
+  "all_binary32_bit_patterns_defined": true,
+  "authoring_pin": "dee2d6ec42dab0a09cba8e8e8917464d3a79cff9e217a5668833a56bf1b4f784",
+  "bulk_fixture_sha256": "df23c57ee37d75f7862fe8716f46d2dbb5f640301265486142fad38636aea3c0",
+  "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+  "exact_bulk_formatter_functions": 15,
+  "exact_helper_ast": {
+    "add_big": "2fcd377e9c567691e85af34c5852672c600270b878a2fc8874f6d629b548c21c",
+    "bits": "7f9ac1e43a7dd154765e6129f58c431e2ce21cad3e4e506fe81b64ca83acf28e",
+    "compare_big": "d3f055a2c5a3d02fdf98dda4a2f97cb4abe088cf680f939641f354420f151c2d",
+    "copy_big": "fa1e917d796be7bf5f2941151cc75034600a3f02ca4684c0fb778e743881cfd7",
+    "emit": "5ccd77b88388f6530a8848a7e22dcae23496dfb32d7f17077977e8ee61019002",
+    "multiply": "0c5ad5f7229355f4f9546a3c8a181bd3a7a8533484e367e275e69e121847c74a",
+    "normalize": "2ed4bd660f89128cefe8c478edea5e3c053d0bfec9666400837138f66fea3edc",
+    "order_relation": "950d7db26380a034170dccee7edce7847cf6fd187f9bc3ef568b3cdfce8662f0",
+    "set64": "cba4a1d82e6dd172de9b7b300b9b0dec50c60336df39e24e034d570539d3df5a",
+    "shift": "3982115f99369cedbcea6749551ad111a88054c65c655a712cacfa96c9696f72",
+    "subtract": "57d376a053e8039405cfd8d92365b5a69913c3591416bccc689b0281e05ab1b7"
+  },
+  "exponent_bias": 127,
+  "fixed_decimal_exponents": [
+    -6,
+    12
+  ],
+  "local_word_helpers": {
+    "authoring_source": "def get(w:mutbuf, at:u64) -> u64:\n    value = byte(w, at)\n    value = value | (byte(w, at + 1) << 8)\n    value = value | (byte(w, at + 2) << 16)\n    value = value | (byte(w, at + 3) << 24)\n    value = value | (byte(w, at + 4) << 32)\n    value = value | (byte(w, at + 5) << 40)\n    value = value | (byte(w, at + 6) << 48)\n    value = value | (byte(w, at + 7) << 56)\n    return value\n\ndef read64(s:readbuf, at:u64) -> u64:\n    value = byte(s, at)\n    value = value | (byte(s, at + 1) << 8)\n    value = value | (byte(s, at + 2) << 16)\n    value = value | (byte(s, at + 3) << 24)\n    value = value | (byte(s, at + 4) << 32)\n    value = value | (byte(s, at + 5) << 40)\n    value = value | (byte(s, at + 6) << 48)\n    value = value | (byte(s, at + 7) << 56)\n    return value\n\ndef put(w:mutbuf, at:u64, value:u64) -> u64:\n    store(w, at + 0, value >> 0)\n    store(w, at + 1, value >> 8)\n    store(w, at + 2, value >> 16)\n    store(w, at + 3, value >> 24)\n    store(w, at + 4, value >> 32)\n    store(w, at + 5, value >> 40)\n    store(w, at + 6, value >> 48)\n    store(w, at + 7, value >> 56)\n    return 0\n",
+    "authoring_source_sha256": "bf36384525d36d05f29f21937c712b477b643456f907bcba73ef7460b281614e",
+    "baseline_source_sha256": "2f44dc27744129ce56a2ce5bb835594f48aaca02ab75615fefd84e860a31f4b1",
+    "functions": {
+      "f14": {
+        "after": "2145efcbf9dd8aa3401dab33257d0a856fad1281efc82a69225ad642e17c6452",
+        "before": "af852f0d755fe549c717d930685a7147f9b83f80045adf6bec0b60c9bea196cb"
+      },
+      "f15": {
+        "after": "85a579aaab4ea13ba86d67f3e8c6efb72d086fe1e445c02c82c1a9650a3e88c2",
+        "before": "c19d4741ac2927a559a1d0af8444653f7c6361f6015bdb01a49ed331e7761485"
+      },
+      "f6": {
+        "after": "64e95f8b18727896edeabb2b21c3244e9b0be05d62221f8c6df5e3ab22bb901f",
+        "before": "d3248715ece02aede9ab45a005acd2a33e65adda9fae003bb3c8b298a68d0bec"
+      }
+    }
+  },
+  "mantissa_bits": 23,
+  "maximum_significant_digits": 9,
+  "minimum_subnormal_power": -149,
+  "nonfinite": "null",
+  "production_activated": false,
+  "schema": "hepta.binary32.integer-interval-composition.v1",
+  "signed_zero_preserved": true,
+  "source_sha256": "12c13ecc1cfa4bdfebf34fca69e990740f1a3c4d76e947d551f32e818fe7e341",
+  "whole_runtime_replaced": false
+}

@@ -1,0 +1,124 @@
+"""Create-only full original batch_edit_spec project and exact source closure."""
+from pathlib import Path
+import argparse
+import hashlib
+import json
+import tomllib
+
+ROOT = Path(__file__).resolve().parents[1]
+PINS = {
+    'src/mcp/fs/core.rs': '51c9a864c6b18ac43957cf3e6c74b07d8ee8952e0589b68e1051e976c1dd09ec',
+    'src/mcp/fs/text_editing.rs': 'e55ce4df73d6e0b70e4065900d317f6b7329670ab6fcba44979ca69dcac80590',
+    'src/mcp/fs/remote.rs': 'd87cae1d18cfaf3479cc94e0df8c8c6eefe5d2eec34f62b7ba0f0c4693704d8c',
+    'src/mcp/request_ctx.rs': '81ebf6e68bcf8c119c83274a090b5e4796d00b3ca6d889c92e9922be0612e943',
+    'src/mcp/fs/delta.rs': 'a21e86bc959ce79f35cb7695e908fa37d5fd5fb56e00673ecf4a8cd291c080e1',
+    'src/utils/line_hash.rs': '904bc9a70e1ade3802213cd067ab7b75bce4dd075e4ab4965f32e9964293ba57',
+    'src/mcp/mod.rs': '9e9b7933372418ef361f85d64a1d36567618b13ae77c45d16df16799231b690c',
+}
+QUALIFICATION_PINS = {'tests/hia_native/file_lock_service_oracle/Cargo.lock': 'f9511f4ccf9300cc5e0203570948e8c97a5998c00c50aed2700a76bc100133d0', 'tests/hia_native/serde_json_oracle/Cargo.lock': 'a78daedaf1beebcd6d497e68c3f3838c6ac609f311dd1bd7923a486d1b4f1545'}
+sha = lambda raw: hashlib.sha256(raw).hexdigest()
+
+
+def cut(raw, first, last):
+    assert raw.count(first) == 1, first
+    start = raw.index(first)
+    return raw[start:raw.index(last, start)]
+
+
+def inputs(reference, source_root=ROOT):
+    reference=Path(reference);source_root=Path(source_root)
+    raw, identity, files = {}, {}, {}
+    for name, want in PINS.items():
+        data = (reference / name).read_bytes()
+        assert sha(data) == want
+        raw[name] = data
+        identity[name] = {'bytes': len(data), 'sha256': want}
+        files['baseline/' + name] = data
+    for name, want in QUALIFICATION_PINS.items():
+        assert sha((reference/name).read_bytes()) == want, name
+    call_raw = raw['src/mcp/mod.rs']
+    remote, core, delta = (raw['src/mcp/fs/' + name + '.rs'] for name in ('remote', 'core', 'delta'))
+    fragments = {
+        'path_source.rs': cut(remote, b'#[derive(Debug, Clone)]\npub enum PathSource {', '\n// ── SFTP connection pool'.encode()),
+        'remote_metadata.rs': cut(remote, b'#[derive(Debug, Clone)]\npub struct RemoteMetadata {', b'\n#[cfg(feature = "remote-fs")]\nmod sftp'),
+        'io_metadata_type.rs': cut(remote, b'#[derive(Debug, Clone)]\npub struct IoMetadata {', b'\n/// Read a file as a string'),
+        'io_read.rs': cut(remote, b'pub async fn io_read_to_string(', b'\n/// Read a file as raw bytes.'),
+        'io_write.rs': cut(remote, b'pub async fn io_write(', b'\n/// Check if a path exists.'),
+        'io_exists.rs': cut(remote, b'pub async fn io_exists(', b'\n/// Check if a path is a directory.'),
+        'io_metadata.rs': cut(remote, b'pub async fn io_metadata(', b'\n/// Create directories recursively.'),
+        'io_remove.rs': cut(remote, b'pub async fn io_remove_file(', b'\n/// Canonicalize a path.'),
+        'history.rs': cut(core, b'// Undo history:', b'// Main execution functions'),
+        'view_cache.rs': cut(delta, b'/// Files above this size', b'\n/// Invalidate the directory'),
+        'removed_marker.rs': cut(delta, b'pub fn removed_marker(', b'\n/// One step of a line diff;'),
+        'mcp_call.rs': cut(call_raw, b'#[derive(Debug, Clone, Serialize, Deserialize)]\npub struct McpToolCall {', b'\nimpl McpToolCall'),
+        'text_editing.rs': raw['src/mcp/fs/text_editing.rs'],
+        'line_hash.rs': raw['src/utils/line_hash.rs'],
+        'request_ctx.rs': raw['src/mcp/request_ctx.rs'],
+    }
+    files.update({'original/' + name: value for name, value in fragments.items()})
+    files['src/main.rs'] = (source_root / 'tests/hia_native/oracle_batch_write.rs').read_bytes()
+    # Dependency blocks come from two locked, already-qualified owners. Cargo
+    # must still accept this exact union under --locked on the actual host.
+    package_blocks, lock_inputs = {}, {}
+    for name in ('file_lock_service_oracle', 'serde_json_oracle'):
+        path = reference / 'tests/hia_native' / name / 'Cargo.lock'
+        contents = path.read_text()
+        lock_inputs[str(path.relative_to(reference))] = {'bytes': path.stat().st_size, 'sha256': sha(path.read_bytes())}
+        for block in contents.split('[[package]]\n')[1:]:
+            record = tomllib.loads('[[package]]\n' + block)['package'][0]
+            if 'source' not in record: continue
+            key = (record['name'], record['version'])
+            if key in package_blocks: assert package_blocks[key] == block
+            package_blocks[key] = block
+    root = '[[package]]\nname = "hia-batch-write-body-original"\nversion = "0.1.0"\ndependencies = [\n "anyhow",\n "libc",\n "serde",\n "serde_json",\n "tokio",\n]\n\n'
+    blocks = {(name, version): '[[package]]\n' + block for (name, version), block in package_blocks.items()}
+    blocks[('hia-batch-write-body-original', '0.1.0')] = root
+    files['Cargo.lock'] = ('# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n'
+                           + ''.join(blocks[key] for key in sorted(blocks))).encode()
+    files['Cargo.toml'] = b'''[package]
+name = "hia-batch-write-body-original"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "hia-batch-write-body-original"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "=1.0.104"
+libc = "=0.2.189"
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "fs", "time", "sync"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip", "raw_value"] }
+
+[workspace]
+'''
+    report = {'schema': 'hepta.runtime.batch-body-original-inputs.v1',
+              'original_commit': 'a0dcdda1991ec536d5e2d252c006a778993fa566',
+              'source_files': identity, 'locked_dependency_inputs': lock_inputs,
+              'original_fragments': {name: {'bytes': len(data), 'sha256': sha(data)} for name, data in fragments.items()},
+              'envelope': {'bytes': len(files['src/main.rs']), 'sha256': sha(files['src/main.rs'])},
+              'cargo_lock_sha256': sha(files['Cargo.lock']),
+              'domain': 'complete unchanged batch_edit_spec with actual Local resolver, async I/O, FILE_LOCKS, history and note_write',
+              'whole_text_editing_module_copied': True, 'remote_sftp_qualified': False,
+              'public_sdk_or_admission_qualified': False, 'actual_execution': 'PENDING'}
+    files['inputs.json'] = (json.dumps(report, sort_keys=True, indent=2) + '\n').encode()
+    return files, report
+
+
+def prepare(reference, destination, source_root=ROOT):
+    files, report = inputs(reference, source_root)
+    destination.mkdir(parents=True, exist_ok=False)
+    for name, data in files.items():
+        path = destination / name; path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('xb') as handle: handle.write(data)
+    return report
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--reference', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    args = parser.parse_args()
+    print(json.dumps(prepare(args.reference.resolve(strict=True), args.output), sort_keys=True))

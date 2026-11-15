@@ -23,6 +23,11 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+import hia_native_service_pipeline as service_pipeline
+import hia_native_public_registry_qualification as public_registry_qualification
+import hia_native_result_qualification as result_qualification
+import hia_native_serde_error_pipeline as serde_error_pipeline
+import hia_native_batch_write_pipeline as batch_write_pipeline
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
                                        PARALLEL_NATIVE_SUITES,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
@@ -33,15 +38,13 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        runtime_mcp_fixture_retirement,
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
                                        history_evidence, json_evidence, request_context_evidence, result_publication_evidence,
-                                       request_scope_evidence, shell_evidence,
-                                       shell_process_evidence, shell_background_evidence, shell_outcome_evidence,
-                                       shell_output_evidence, shell_foreground_evidence,
-                                       shell_completed_process, shell_retained_files,
-                                       execution_evidence, effect_fence_evidence, config_evidence,
-                                       session_evidence,
-                                       file_locks_evidence, file_lock_service_evidence,
-                                       filesystem_parity_evidence, filesystem_parity_retirement,
-                                       atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
+                                       request_scope_evidence, shell_evidence, shell_process_evidence, shell_background_evidence,
+                                       shell_outcome_evidence, shell_output_evidence, shell_foreground_evidence, shell_completed_process,
+                                       shell_retained_files, execution_evidence, effect_fence_evidence, config_evidence,
+                                       session_evidence, file_locks_evidence, file_lock_service_evidence, filesystem_parity_evidence,
+                                       filesystem_parity_retirement, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
+                                       write_chain_evidence, directory_service_evidence, workdir_service_evidence, sdk_connection_evidence,
+                                       public_registry_evidence, result_values_evidence, serde_error_evidence, batch_write_evidence,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
@@ -76,6 +79,7 @@ import hia_native_shell_qualification as shell_qualification
 import hia_native_shell_capture_gate as capture_gate
 import hia_native_bellman_qualification as bellman_qualification
 import hia_native_bellman_commitment_qualification as bellman_commitment_qualification
+import hia_native_local_create_qualification as local_create_qualification
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
                                                 REFERENCE_ROWS as BATCH_PLAN_ROWS)
@@ -116,6 +120,9 @@ def check_input_pins(output: Path, report: dict) -> None:
     if "qualification_pipeline" in report:
         from hia_native_pipeline import verify_pipeline_receipts
         verify_pipeline_receipts(output, report)
+    if "original_qualification_pipeline" in report:
+        from hia_native_rust_pipeline import verify_collected_receipts
+        verify_collected_receipts(output, report)
     originals = check_original_sources(ROOT)
     if report.get("inventory", {}).get("original_sources") != originals:
         raise ValueError("original Rust reference inventory differs from the native phase")
@@ -132,6 +139,12 @@ def check_input_pins(output: Path, report: dict) -> None:
             or report.get("compiler_cold_status") != "PASS"
             or report.get("compiler_cold_evidence") != cold):
         raise ValueError("required matching-source full cold evidence differs")
+    if report.get("local_create_file_evidence") != local_create_qualification.native_evidence(output, report):
+        raise ValueError("required local-create source/native evidence differs")
+    if "local_create_file" in report.get("original_rust_comparisons", {}):
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        if report["original_rust_comparisons"]["local_create_file"] != local_create_qualification.original_evidence(output, report, rustc):
+            raise ValueError("required current-target local-create replay differs")
     if report.get("bellman_evidence") != bellman_qualification.native_evidence(output, report):
         raise ValueError("required Bellman native hardware/corpus/static evidence differs")
     if report.get("bellman_commitment_evidence") != bellman_commitment_qualification.native_evidence(output, report):
@@ -169,6 +182,13 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required editable state/byte-preservation/static-image evidence differs")
     if report.get("line_verify_evidence") != line_verify_evidence(output, report):
         raise ValueError("required line-ID verification/diagnostic/index evidence differs")
+    from hia_native_batch_edit_params_pipeline import native_evidence as batch_params_native
+    from hia_native_batch_edit_params_pipeline import retained_original as batch_params_original
+    if batch_params_native(ROOT, output, report, completed_test_summary) != report.get("batch_edit_params_evidence"):
+        raise ValueError("registered batch parameter native evidence differs")
+    if "batch_edit_params" in report.get("original_rust_comparisons", {}):
+        if batch_params_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["batch_edit_params"]:
+            raise ValueError("registered batch parameter original evidence differs")
     if report.get("batch_plan_evidence") != batch_plan_evidence(output, report):
         raise ValueError("required complete batch input/endpoint/large-result evidence differs")
     if report.get("batch_apply_evidence") != batch_apply_evidence(output, report):
@@ -313,6 +333,17 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required effect fence actual process/lifetime/kernel evidence differs")
     if report.get("config_evidence") != config_evidence(output, report):
         raise ValueError("required configuration native evidence differs")
+    from hia_native_config_span_pipeline import qualification_evidence as span_native
+    from hia_native_config_span_pipeline import native_fixture_evidence as span_retired
+    from hia_native_config_span_pipeline import retained_original as span_original
+    span = span_native(ROOT, output, report, completed_test_summary)
+    if span != report.get("config_span_evidence"):
+        raise ValueError("required native configuration span evidence differs")
+    if span_retired(ROOT, output, report, completed_test_summary, native=span) != report.get("config_span_fixture_retirement"):
+        raise ValueError("required configuration span fixture retirement differs")
+    if "runtime_config_span" in report.get("original_rust_comparisons", {}):
+        if report["original_rust_comparisons"]["runtime_config_span"] != span_original(ROOT, output, report, completed_test_summary):
+            raise ValueError("required fresh configuration span original comparison differs")
     if "runtime_config" in report.get("original_rust_comparisons", {}):
         if report["original_rust_comparisons"]["runtime_config"] != retained_config_original(output, report):
             raise ValueError("required complete original configuration evidence differs")
@@ -333,6 +364,56 @@ def check_input_pins(output: Path, report: dict) -> None:
                 raise ValueError("required actual file-lock original invocation changed: " + key)
     if report.get("session_evidence") != session_evidence(output, report):
         raise ValueError("required session state, latch, full corpus and executable evidence differs")
+    import hia_native_write_chain_pipeline as write_chain_pipeline
+    for key, inspect in (("write_chain", write_chain_evidence), ("directory_service", directory_service_evidence),
+                         ("workdir_service", workdir_service_evidence), ("sdk_connection", sdk_connection_evidence)):
+        if report.get(key + "_evidence") != inspect(output, report):
+            raise ValueError("required complete service native evidence differs: " + key)
+        if key in report.get("original_rust_comparisons", {}):
+            rustc = Path(report["rust_compiler"]["invocation_path"])
+            actual = (write_chain_pipeline.retained_original(ROOT, output, report, rustc, completed_test_summary)
+                      if key == "write_chain" else service_pipeline.retained_original(
+                          ROOT, output, report, rustc, completed_test_summary, key))
+            if report["original_rust_comparisons"][key] != actual:
+                raise ValueError("required actual service original invocation changed: " + key)
+    if report.get("batch_write_evidence") != batch_write_evidence(output, report):
+        raise ValueError("complete batch-write native evidence changed")
+    if "batch_write" in report.get("original_rust_comparisons", {}):
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        actual = batch_write_pipeline.retained_original(ROOT, output, report, rustc, completed_test_summary)
+        if report["original_rust_comparisons"]["batch_write"] != actual:
+            raise ValueError("complete original batch-write replay changed")
+    if report.get("serde_error_evidence") != serde_error_evidence(output, report):
+        raise ValueError("complete diagnostic native evidence changed")
+    if "serde_error" in report.get("original_rust_comparisons", {}):
+        actual = serde_error_pipeline.original_evidence(ROOT, output, report, completed_test_summary)
+        if report["original_rust_comparisons"]["serde_error"] != actual:
+            raise ValueError("complete diagnostic original replay changed")
+    if report.get("result_values_evidence") != result_values_evidence(output, report):
+        raise ValueError("complete typed result native evidence changed")
+    for key, domain in result_qualification.KEYS.items():
+        if key in report.get("original_rust_comparisons", {}):
+            if report["original_rust_comparisons"][key] != result_qualification.original_evidence(ROOT, output, report, completed_test_summary, domain):
+                raise ValueError("complete typed result original evidence changed: " + key)
+    if "result_values_evidence_controls" in report:
+        if report["result_values_evidence_controls"] != result_values_control_evidence(output, report):
+            raise ValueError("typed result original controls changed")
+    if report.get("public_registry_evidence") != public_registry_evidence(output, report):
+        raise ValueError("required public registry native process evidence differs")
+    if "public_registry" in report.get("original_rust_comparisons", {}):
+        actual = public_registry_qualification.original_evidence(ROOT, output, report, completed_test_summary)
+        if report["original_rust_comparisons"]["public_registry"] != actual:
+            raise ValueError("required actual public registry original replay differs")
+    if "public_registry_evidence_controls" in report:
+        if report["public_registry_evidence_controls"] != public_registry_control_evidence(output, report):
+            raise ValueError("actual public registry evidence controls differ")
+    elif report.get("status") == "PASS":
+        raise ValueError("completed aggregate omitted public registry evidence controls")
+    if "service_original_fixture_retirement" in report:
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        actual = service_pipeline.original_fixture_transport(ROOT, output, report, rustc, completed_test_summary)
+        if report["service_original_fixture_retirement"] != actual:
+            raise ValueError("service original fixture retirement differs")
     if "session_workdir" in report.get("original_rust_comparisons", {}):
         import hia_native_session_qualification as session_qualification
         rustc = Path(report["rust_compiler"]["invocation_path"])
@@ -363,10 +444,12 @@ def check_input_pins(output: Path, report: dict) -> None:
             raise ValueError("independent native process did not finish successfully")
     if report.get("original_rust_comparisons"):
         receipts = report.get("rust_parallel_receipts", {})
-        expected_receipts = {value[0] for value in PARALLEL_RUST_RECIPES.values()}
+        completed_parallel = {key: value for key, value in PARALLEL_RUST_RECIPES.items()
+                              if key in report["original_rust_comparisons"]}
+        expected_receipts = {value[0] for value in completed_parallel.values()}
         if set(receipts) != expected_receipts:
             raise ValueError("independent original reference receipt inventory differs")
-        for key, (name, expected) in PARALLEL_RUST_RECIPES.items():
+        for key, (name, expected) in completed_parallel.items():
             path = output / name
             if sha(path) != receipts[name]:
                 raise ValueError("independent original reference receipt changed")
@@ -397,7 +480,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (compiler.get("compiler_commit") != HEPTA_COMMIT
                 or compiler.get(compiler_field) != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "filesystem_parity", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "file_locks", "file_lock_service", "view_read", "runtime_mcp", "shell_process", "shell_outcome", "shell_output", "shell_foreground", *capture_gate.KEYS}:
+        if item.get("builder") in {'composition', 'record_composition', 'scope_composition', 'scope_os_composition', 'entropy', 'authority_composition', 'batch_plan', 'batch_edit_params', 'batch_apply', 'atomic_write', 'filesystem_parity', 'history', 'execution_shadow', 'effect_fence', 'runtime_config', 'runtime_config_span', 'result_publication', 'session_workdir', 'request_scope', 'file_locks', 'file_lock_service', 'view_read', 'runtime_mcp', 'shell_process', 'shell_outcome', 'shell_output', 'shell_foreground', *capture_gate.KEYS, 'write_chain', 'directory_service', 'workdir_service', 'sdk_connection', 'public_registry', 'result_values', 'batch_write'}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1249,7 +1332,9 @@ def atomic_write_original_evidence(output: Path, report: dict, rustc: Path) -> d
             raise ValueError("atomic original compiler or Cargo executable changed")
     fixtures = tuple(f"atomic-write-original/{kind}-kernel/{index:04d}-{case['name']}/fixture"
                      for kind in ("native", "original") for index, case in enumerate(q.case_module.cases()))
-    atomic_write_retire_fixtures(output, fixtures, folder / "retired-fixtures.json", evidence)
+    # The original driver retires these only after complete native and Rust
+    # kernel evidence is admitted, including when their semantic comparison fails.
+    # original_comparison_evidence above verifies that exact retained receipt.
     return {"schema": "hepta.runtime.atomic-write-required-original.v1", "status": "PASS",
         "reference_kind": "complete unchanged Linux Local atomic_write, actual std::Path and std::io properties",
         "compiled_by_qualification_recipe": True, "completed_process": completed, "reference_evidence": evidence,
@@ -1272,9 +1357,6 @@ def compare_atomic_write(output: Path, report: dict, rustc: Path) -> dict:
     completed = q.original_comparison_evidence(folder, output / report["modules"]["atomic_write"]["manifest"],
         output / "atomic-write/policy", source_root=ROOT, reference_root=ROOT,
         stdout=output / "atomic-write-rust-compare.stdout")
-    fixtures = tuple(f"atomic-write-original/{kind}-kernel/{index:04d}-{case['name']}/fixture"
-                     for kind in ("native", "original") for index, case in enumerate(q.case_module.cases()))
-    atomic_write_retire_fixtures(output, fixtures, folder / "retired-fixtures.json", completed, create=True)
     result = atomic_write_original_evidence(output, report, rustc)
     if atomic_write_evidence(output, report) != native:
         raise ValueError("atomic native execution evidence changed during original replay")
@@ -2199,7 +2281,226 @@ def compare_shell_capture_prepare(output: Path, report: dict, rustc: Path) -> di
     return capture_gate.compare(output, report, "shell_capture_prepare", rustc)
 
 
-RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
+def compare_write_chain(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_write_chain_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary, record_check, qualification_env())
+
+
+def compare_directory_service(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_service_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                              record_check, qualification_env(), "directory_service")
+
+
+def compare_workdir_service(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_service_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                              record_check, qualification_env(), "workdir_service")
+
+
+def compare_sdk_connection(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_service_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                              record_check, qualification_env(), "sdk_connection")
+
+
+def compare_serde_error(output: Path, report: dict, rustc: Path) -> dict:
+    before = serde_error_evidence(output, report)
+    if before != report.get("serde_error_evidence"):
+        raise ValueError("diagnostic native evidence changed before original replay")
+    for name, command in serde_error_pipeline.original_commands(ROOT, output, report, rustc).items():
+        record_check(output, report, name=name, command=command, timeout=180, env=qualification_env())
+    actual = serde_error_pipeline.original_evidence(ROOT, output, report, completed_test_summary)
+    if serde_error_evidence(output, report) != before:
+        raise ValueError("diagnostic native corpus changed during original replay")
+    return actual
+
+
+def compare_result_values(output: Path, report: dict, rustc: Path, domain: str) -> dict:
+    before = result_values_evidence(output, report)
+    if before != report.get("result_values_evidence"):
+        raise ValueError("native result evidence changed before original execution")
+    cargo = executable(str(rustc.with_name("cargo")))
+    command = result_qualification.original_command(ROOT, output, report, rustc, cargo, domain)
+    record_check(output, report, name="result-" + domain + "-rust-compare", command=command,
+                 timeout=180, env=qualification_env())
+    actual = result_qualification.original_evidence(ROOT, output, report, completed_test_summary, domain)
+    if result_values_evidence(output, report) != before:
+        raise ValueError("native result corpus changed during complete original replay")
+    return actual
+
+
+def compare_binary32_json(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_result_values(output, report, rustc, "binary32")
+
+
+def compare_typed_result_json(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_result_values(output, report, rustc, "typed")
+
+
+def compare_request_result(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_result_values(output, report, rustc, "request")
+
+
+RESULT_VALUE_CONTROL_LABELS = (
+    "actual-original-nonzero", "actual-original-timeout", "actual-original-limit", "actual-original-command",
+    "original-environment", "missing-actual-compile", "compiled-original-image", "original-function-custody",
+    "incomplete-original-domain", "fresh-replay-timeout", "complete-original-output", "large-original-output-truncated",
+    "locked-registry-archive",
+)
+
+
+def result_values_control_command(output: Path) -> list[str]:
+    return [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/check_result_value_evidence.py"),
+            "--repo", str(ROOT), "--output", str(output),
+            "--report", str(output / "result-values-controls-input.json"),
+            "--result", str(output / "result-values-evidence-controls.json")]
+
+
+def result_values_control_evidence(output: Path, report: dict) -> dict:
+    helper, name = result_qualification, "result-values-evidence-controls"
+    snapshot = helper.object_at(output / "result-values-controls-input.json")
+    indices = [i for i, row in enumerate(report["checks"]) if row.get("name") == name]
+    if len(indices) != 1 or snapshot.get("checks") != report["checks"][:indices[0]]:
+        raise ValueError("result controls did not observe the complete prior process set")
+    for key in ("source_sha256", "modules", "result_values_evidence", "original_rust_comparisons",
+                "compiler_checkout", "compiler_commit", "compiler_image_sha256"):
+        if snapshot.get(key) != report.get(key):
+            raise ValueError("result control input changed: " + key)
+    row, summary = completed_test_summary(output, report, name)
+    out, err = helper.completed(output, name, row, result_values_control_command(output), ROOT, 180, aggregate=True)
+    value = helper.object_at(output / "result-values-evidence-controls.json")
+    baseline = {domain: helper.original_evidence(ROOT, output, snapshot, completed_test_summary, domain)
+                for domain in helper.DOMAINS}
+    expected = helper.sha(helper.encoded(baseline))
+    if (err or json.loads(out) != summary or summary != value or row.get("phase") != "original_rust_comparison"
+            or value.get("schema") != "hepta.result-values.original-controls.v1" or value.get("status") != "PASS"
+            or value.get("rejections") != 13 or value.get("restorations") != 14
+            or value.get("complete_original_admissions") != 6
+            or value.get("actual_native_calls_added") != 0 or value.get("actual_rust_calls_added") != 0
+            or value.get("restored_file_bytes_and_modes") is not True
+            or value.get("report_sha256") != sha(output / "result-values-controls-input.json")
+            or value.get("baseline_evidence_sha256") != expected or value.get("final_evidence_sha256") != expected
+            or tuple(item.get("label") for item in value.get("controls", ())) != RESULT_VALUE_CONTROL_LABELS
+            or any(item.get("rejected") is not True or not item.get("exception") for item in value["controls"])):
+        raise ValueError("result complete evidence corruption/restoration domain differs")
+    helper.duration(value.get("elapsed_seconds"), 180)
+    names = ("result-values-controls-input.json", "result-values-evidence-controls.json", name + ".stdout", name + ".stderr")
+    return {"schema": "hepta.result-values.aggregate-controls.v1", "status": "PASS",
+            "artifact_sha256": {item: sha(output / item) for item in names}, "rejections": 13,
+            "actual_native_calls_added": 0, "actual_rust_calls_added": 0}
+
+
+def run_result_values_controls(output: Path, report: dict) -> None:
+    # All original workers are drained before temporarily damaging evidence.
+    with (output / "result-values-controls-input.json").open("xb") as stream:
+        stream.write(result_qualification.encoded(report))
+    record_check(output, report, name="result-values-evidence-controls",
+                 command=result_values_control_command(output), timeout=180, env=qualification_env())
+    report["result_values_evidence_controls"] = result_values_control_evidence(output, report)
+
+
+def compare_public_registry(output: Path, report: dict, rustc: Path) -> dict:
+    before = public_registry_evidence(output, report)
+    if before != report.get("public_registry_evidence"):
+        raise ValueError("public registry native evidence changed before original replay")
+    command = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_public_registry_original.py"),
+               "--repo", str(ROOT), "--build", str(output / "build/public-registry-build.json"),
+               "--output", str(output / "public-registry-original"),
+               "--cargo", str(executable(str(rustc.with_name("cargo")))),
+               "--rustc", str(rustc), "--rustfmt", str(executable(str(rustc.with_name("rustfmt"))))]
+    record_check(output, report, name="public-registry-rust-compare", command=command,
+                 timeout=180, env=qualification_env())
+    result = public_registry_qualification.original_evidence(ROOT, output, report, completed_test_summary)
+    if public_registry_evidence(output, report) != before:
+        raise ValueError("public registry native evidence changed during original replay")
+    return result
+
+
+PUBLIC_REGISTRY_CONTROL_LABELS = (
+    "missing-actual-native-completion", "nonzero-native-exit", "native-timeout",
+    "changed-actual-native-command", "nonzero-original-exit", "changed-original-deadline",
+    "incomplete-native-session-report", "omitted-native-response-session",
+    "changed-actual-native-request-custody", "changed-actual-embedded-router-image",
+    "changed-compiled-router-image", "rehashed-empty-native-compiler-observer",
+    "changed-native-packer-input", "changed-executed-HIA-source", "missing-private-receipt-control",
+    "omitted-original-response-session", "missing-actual-original-build", "changed-original-executable",
+    "changed-whole-original-wrapper", "changed-locked-SDK-source",
+)
+
+
+def public_registry_control_command(output: Path) -> list[str]:
+    return [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/check_public_registry_evidence.py"),
+            "--repo", str(ROOT), "--output", str(output),
+            "--report", str(output / "public-registry-controls-input.json"),
+            "--result", str(output / "public-registry-evidence-controls.json")]
+
+
+def public_registry_control_evidence(output: Path, report: dict) -> dict:
+    """Admit the real quiescent corruption process and its unchanged evidence."""
+    helper = public_registry_qualification
+    name = "public-registry-evidence-controls"
+    snapshot = helper.object_at(output / "public-registry-controls-input.json")
+    prior = [row for row in report["checks"] if row.get("name") != name]
+    if snapshot.get("checks") != prior:
+        raise ValueError("public evidence controls did not observe the complete prior process set")
+    for key in ("source_sha256", "modules", "public_registry_evidence", "original_rust_comparisons",
+                "compiler_checkout", "compiler_commit", "compiler_image_sha256"):
+        if snapshot.get(key) != report.get(key):
+            raise ValueError("public evidence control input changed: " + key)
+    row, summary = completed_test_summary(output, report, name)
+    out, err = helper.completed(output, name, row, public_registry_control_command(output), ROOT, 180, aggregate=True)
+    value = helper.object_at(output / "public-registry-evidence-controls.json")
+    baseline = helper.original_evidence(ROOT, output, snapshot, completed_test_summary)
+    expected = helper.sha(helper.encoded(baseline))
+    if (err or json.loads(out) != summary or summary != value
+            or row.get("phase") != "original_rust_comparison"
+            or value.get("schema") != "hepta.public-registry.evidence-controls.v1"
+            or value.get("status") != "PASS" or value.get("rejections") != 20
+            or value.get("full_baseline_admissions") != 22
+            or value.get("actual_native_calls_added") != 0 or value.get("actual_rust_calls_added") != 0
+            or value.get("restored_file_bytes_and_modes") is not True
+            or value.get("report_sha256") != sha(output / "public-registry-controls-input.json")
+            or value.get("baseline_evidence_sha256") != expected or value.get("final_evidence_sha256") != expected
+            or tuple(item.get("label") for item in value.get("controls", ())) != PUBLIC_REGISTRY_CONTROL_LABELS
+            or any(item.get("rejected") is not True or not item.get("exception") for item in value["controls"])):
+        raise ValueError("public evidence corruption/restoration domain is incomplete")
+    helper.duration(value.get("elapsed_seconds"), 180)
+    names = ("public-registry-controls-input.json", "public-registry-evidence-controls.json",
+             name + ".stdout", name + ".stderr")
+    return {"schema": "hepta.public-registry.aggregate-controls.v1", "status": "PASS",
+            "artifact_sha256": {item: sha(output / item) for item in names},
+            "rejections": 20, "full_baseline_admissions": 22,
+            "actual_native_calls_added": 0, "actual_rust_calls_added": 0}
+
+
+def run_public_registry_controls(output: Path, report: dict) -> None:
+    # Every original recipe, including the two parallel OS workers, is already
+    # drained. The separate immutable input avoids a self-referential report SHA.
+    with (output / "public-registry-controls-input.json").open("xb") as stream:
+        stream.write(public_registry_qualification.encoded(report))
+    record_check(output, report, name="public-registry-evidence-controls",
+                 command=public_registry_control_command(output), timeout=180, env=qualification_env())
+    report["public_registry_evidence_controls"] = public_registry_control_evidence(output, report)
+
+
+def compare_batch_write(output: Path, report: dict, rustc: Path) -> dict:
+    return batch_write_pipeline.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                                                  record_check, qualification_env())
+
+
+def compare_batch_edit_params(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_batch_edit_params_pipeline import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check=record_check,
+                            completed=completed_test_summary, qualification_env=qualification_env)
+
+
+def compare_config_span(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_config_span_pipeline import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check, completed_test_summary)
+
+
+RECIPES = {"serde_error": compare_serde_error, "batch_write": compare_batch_write, "runtime_bytes": compare_bytes, "text_budget": compare_text,
            "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
            "shell_process": compare_shell_process, "shell_background_text": compare_shell_background,
            "shell_outcome": compare_shell_outcome,
@@ -2213,6 +2514,7 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "result_publication": compare_result_publication,
            "request_scope_lifecycle": compare_request_scope,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
+           "batch_edit_params": compare_batch_edit_params,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
            "view_render_growth": compare_view_render_growth,
@@ -2220,8 +2522,14 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "view_call": compare_view_call_group, "runtime_mcp": compare_runtime_mcp,
            "view_cache": compare_view_cache, "history": compare_history, "session_workdir": compare_session_workdir,
            "file_locks": compare_file_locks, "file_lock_service": compare_file_lock_service,
+           "write_chain": compare_write_chain, "directory_service": compare_directory_service,
+           "workdir_service": compare_workdir_service, "sdk_connection": compare_sdk_connection,
+           "public_registry": compare_public_registry,
+           "binary32_json": compare_binary32_json, "typed_result_json": compare_typed_result_json,
+           "request_result": compare_request_result,
            "fence_json": compare_fence_json, "serde_json": compare_serde_json, "execution_shadow": compare_execution,
            "effect_fence": compare_effect_fence, "runtime_config": compare_config,
+           "runtime_config_span": compare_config_span,
            "operation_scope_os": compare_operation_scope_os,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,
@@ -2231,7 +2539,8 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "caller_authority": compare_caller_authority,
            "filesystem_parity": compare_filesystem_parity,
            "bellman_core": bellman_qualification.compare_original,
-           "bellman_commitment": bellman_commitment_qualification.compare_original}
+           "bellman_commitment": bellman_commitment_qualification.compare_original,
+           "local_create_file": local_create_qualification.compare_original}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}
@@ -2253,11 +2562,57 @@ PARALLEL_RUST_RECIPES = {
 }
 
 
+SHARED_RUST_PROCESS_RECIPES = {
+    "response_hints": "request_context",
+    "view_params": "view_read",
+    "view_call": "view_read",
+}
+
+# These are the existing owners' complete fresh-build/replay wrapper limits.
+# Every other original process remains subject to the 180-second ceiling.
+RUST_PROCESS_DEADLINES = {
+    "shell-process-rust-build": ("shell_process", 900),
+    "shell-background-rust-compare": ("shell_background_text", 300),
+    "shell-outcome-rust-compare": ("shell_outcome", 300),
+    "shell-output-rust-compare": ("shell_output_io", 300),
+    "shell-foreground-rust-compare": ("shell_foreground", 300),
+}
+
+
 RUST_RECIPE_DEPENDENCIES = {"runtime_mcp": ("view_call",),
+                            **{key: (owner,) for key, owner in SHARED_RUST_PROCESS_RECIPES.items()},
                             "shell_background_text": ("shell_process",),
                             "shell_outcome": ("shell_process",),
                             "shell_output_io": ("shell_process", "shell_outcome"),
                             "shell_foreground": ("shell_process", "shell_outcome", "shell_output_io")}
+
+
+def original_process_attribution(report: dict, keys: tuple[str, ...]) -> dict[str, str]:
+    """Return each physical process once; declared consumers retain its owner."""
+    mapping = report.get("rust_recipe_processes")
+    wanted = {key: owner for key, owner in SHARED_RUST_PROCESS_RECIPES.items() if key in keys}
+    positions = {key: index for index, key in enumerate(keys)}
+    if (type(mapping) is not dict or set(mapping) != set(keys)
+            or report.get("rust_recipe_shared_processes") != wanted
+            or any(owner not in positions or positions[owner] >= positions[key]
+                   for key, owner in wanted.items())):
+        raise ValueError("original shared process attribution differs from its declared producer")
+    owners = {}
+    for key in keys:
+        names = mapping[key]
+        if (type(names) is not list or not names or any(type(name) is not str or not name for name in names)
+                or len(names) != len(set(names))):
+            raise ValueError("original recipe omitted its unique actual process records")
+        if key == "local_create_file" and names != list(local_create_qualification.PROCESS_NAMES):
+            raise ValueError("local-create requires its exact seven ordered original processes")
+        if key in wanted:
+            if names != mapping[wanted[key]]:
+                raise ValueError("shared original recipe does not retain its producer's complete process set")
+        else:
+            if set(names) & set(owners):
+                raise ValueError("original processes are omitted, duplicated or attributed to another recipe")
+            owners.update((name, key) for name in names)
+    return owners
 
 
 def rust_recipe_order(report: dict) -> tuple[str, ...]:
@@ -2279,7 +2634,7 @@ def rust_recipe_order(report: dict) -> tuple[str, ...]:
     return ordered
 
 
-def run_rust_recipes(output: Path, report: dict, rustc: Path) -> None:
+def run_rust_recipes(output: Path, report: dict, rustc: Path, *, recipe_keys: tuple[str, ...] | None = None) -> None:
     """Overlap the two independent OS references with private report writers.
 
     Their Cargo targets, native corpus and raw process files are distinct. JSON
@@ -2288,12 +2643,22 @@ def run_rust_recipes(output: Path, report: dict, rustc: Path) -> None:
     completed check in declaration order, including failures during draining.
     """
     ordered = rust_recipe_order(report)
-    selected = {key: value for key, value in PARALLEL_RUST_RECIPES.items()
-                if key in report["modules"] and key in RECIPES}
-    if not selected:
+    keys = ordered if recipe_keys is None else recipe_keys
+    if (not keys or len(keys) != len(set(keys)) or set(keys) - set(ordered)
+            or keys != tuple(key for key in ordered if key in keys)):
+        raise ValueError("original recipe selection is empty, duplicated, undeclared or out of source order")
+    positions = {key: index for index, key in enumerate(keys)}
+    for consumer, dependencies in RUST_RECIPE_DEPENDENCIES.items():
+        if consumer in positions and any(producer not in positions or positions[producer] >= positions[consumer]
+                                         for producer in dependencies):
+            raise ValueError("original recipe selection omits or reorders its producer: " + consumer)
+    selected = {key: value for key, value in PARALLEL_RUST_RECIPES.items() if key in keys}
+    if recipe_keys is None and not selected:
         raise ValueError("independent OS reference recipes are missing")
     receipts, futures, collected = {}, {}, set()
     report["rust_parallel_receipts"] = {}
+    report["rust_recipe_processes"] = {}
+    report["rust_recipe_shared_processes"] = {}
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="hia-original-os") as pool:
         for key, (name, expected) in selected.items():
             private = copy.deepcopy(report)
@@ -2317,6 +2682,7 @@ def run_rust_recipes(output: Path, report: dict, rustc: Path) -> None:
                     or json.loads(path.read_bytes()) != private):
                 raise ValueError("independent original reference process receipts differ: " + key)
             report["checks"].extend(checks)
+            report["rust_recipe_processes"][key] = names
             if failure is None:
                 if (len(checks) != len(expected)
                         or any(row["exit_code"] != 0 or row["timed_out"] is not False for row in checks)):
@@ -2327,14 +2693,36 @@ def run_rust_recipes(output: Path, report: dict, rustc: Path) -> None:
             save_report(output / "result.json", report)
             return failure
         try:
-            for key in ordered:
+            for key in keys:
                 if key in futures:
                     failure = collect(key)
                     if failure is not None:
                         raise failure
                 else:
-                    report["original_rust_comparisons"][key] = RECIPES[key](output, report, rustc)
-                    save_report(output / "result.json", report)
+                    before = copy.deepcopy(report["checks"])
+                    first = len(report["checks"])
+                    owner = SHARED_RUST_PROCESS_RECIPES.get(key)
+                    if owner is not None and (owner not in report["original_rust_comparisons"]
+                                              or owner not in report["rust_recipe_processes"]):
+                        raise ValueError("shared original recipe has no completed producer: " + key)
+                    try:
+                        report["original_rust_comparisons"][key] = RECIPES[key](output, report, rustc)
+                    finally:
+                        if report["checks"][:first] != before:
+                            raise ValueError("original recipe changed a completed process record: " + key)
+                        rows = report["checks"][first:]
+                        names = [row["name"] for row in rows]
+                        if owner is not None:
+                            if names:
+                                raise ValueError("shared original recipe invented a second execution: " + key)
+                            names = list(report["rust_recipe_processes"][owner])
+                            report["rust_recipe_shared_processes"][key] = owner
+                        elif (not names or len(names) != len(set(names))
+                              or set(names) & {row["name"] for row in before}):
+                            raise ValueError("original recipe did not retain unique actual process records: " + key)
+                        report["rust_recipe_processes"][key] = names
+                        save_report(output / "result.json", report)
+            original_process_attribution(report, keys)
         finally:
             for key in futures:
                 if key not in collected:
@@ -2378,6 +2766,11 @@ def run(output: Path, rustc_name: str) -> dict:
         run_rust_recipes(output, report, rustc)
         if set(report["original_rust_comparisons"]) != RECIPES.keys():
             raise ValueError("not all required Rust reference recipes completed")
+        report["service_original_fixture_retirement"] = service_pipeline.original_fixture_transport(
+            ROOT, output, report, rustc, completed_test_summary, create=True)
+        check_input_pins(output, report)
+        run_result_values_controls(output, report)
+        run_public_registry_controls(output, report)
         check_input_pins(output, report)
         if sha(rustc) != compiler_sha:
             raise ValueError("original Rust compiler executable changed during comparison")

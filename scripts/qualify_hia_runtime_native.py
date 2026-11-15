@@ -57,6 +57,7 @@ from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 batch_plan_evidence as checked_batch_plan_evidence)
 
 import hia_native_batch_apply_qualification as batch_apply_qualification
+import hia_native_batch_write_pipeline as batch_write_pipeline
 import hia_native_atomic_write_qualification as atomic_write_qualification
 import hia_native_filesystem_parity_qualification as filesystem_parity_qualification
 from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
@@ -76,12 +77,38 @@ import hia_native_shell_qualification as shell_qualification
 import hia_native_shell_capture_gate as capture_gate
 import hia_native_bellman_qualification as bellman_qualification
 import hia_native_bellman_commitment_qualification as bellman_commitment_qualification
+import hia_native_local_create_qualification as local_create_qualification
+import hia_native_connection_qualification as connection_qualification
+import hia_native_public_registry_qualification as public_registry_qualification
+import hia_native_result_qualification as result_qualification
+import hia_native_serde_error_pipeline as serde_error_pipeline
+import hia_native_service_pipeline as service_pipeline
+import hia_native_write_chain_pipeline as write_chain_pipeline
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
+    local_create_qualification.MODULE,
     *bellman_qualification.MODULES,
     bellman_commitment_qualification.MODULE,
+    {"key": "serde_error", "name": "serde-error", "source": "native/serde_error.hepta",
+     "standalone": "filter", "buffer_profile": "serde-json.v1",
+     "manifest_env": "HIA_SERDE_ERROR_MANIFEST", "test": "test_serde_error.py",
+     "additional_tests": ("test_serde_error_resources.py", "test_serde_error_evidence.py")},
+    {"key": "batch_write", "name": "batch-write", "source": "native/batch_write.hepta",
+     "builder": "batch_write", "manifest_env": "HIA_BATCH_WRITE_BUNDLE",
+     "test": "test_batch_write_controller.py",
+     "additional_tests": ("test_batch_render.py", "test_utf8_probe.py", "test_batch_write_files.py",
+                          "test_batch_write_kernel.py", "test_batch_write_concurrency.py",
+                          "test_batch_write_wide.py", "test_batch_write_evidence.py"),
+     "companion_sources": ("native/batch_render.hepta", "native/batch_write_packer.hepta")},
+    {"key": "binary32_json", "name": "binary32-json", "source": "native/binary32_json.hepta",
+     "builder": "result_values", "manifest_env": "HIA_RESULT_BUILD", "test": "test_binary32_json.py"},
+    {"key": "typed_result_json", "name": "typed-result-json", "source": "native/typed_result_json.hepta",
+     "builder": "result_values", "manifest_env": "HIA_RESULT_BUILD", "test": "test_typed_result_json.py"},
+    {"key": "request_result", "name": "request-result", "source": "native/request_result.hepta",
+     "builder": "result_values", "manifest_env": "HIA_RESULT_BUILD", "test": "test_request_result.py",
+     "additional_tests": ("test_result_value_evidence.py",)},
     {"key": "runtime_bytes", "name": "runtime-bytes", "source": "native/runtime_bytes.hepta",
      "standalone": "filter", "manifest_env": "HIA_BYTES_MANIFEST", "test": "test_runtime_bytes.py"},
     {"key": "runtime_protocol", "name": "runtime-protocol", "source": "native/runtime_protocol.hepta",
@@ -131,6 +158,9 @@ MODULES = (
      "standalone": None, "manifest_env": "HIA_ENDPOINT_MANIFEST", "test": "test_line_endpoint.py"},
     {"key": "line_verify", "name": "line-verify", "source": "native/line_verify.hepta",
      "standalone": "filter", "manifest_env": "HIA_LINE_VERIFY_MANIFEST", "test": "test_line_verify.py"},
+    {"key": "batch_edit_params", "name": "batch-edit-params", "source": "native/batch_edit_params.hepta",
+     "builder": "batch_edit_params", "manifest_env": "HIA_BATCH_EDIT_PARAMS_BUNDLE",
+     "test": "test_batch_edit_params.py", "companion_sources": ("native/serde_json_span.hepta",)},
     {"key": "batch_plan", "name": "batch-plan", "source": "native/batch_plan.hepta",
      "builder": "batch_plan", "manifest_env": "HIA_BATCH_PLAN_BUNDLE", "test": "test_batch_plan.py",
      "additional_tests": ("test_batch_plan_evidence.py",)},
@@ -230,6 +260,41 @@ MODULES = (
      "test": "test_file_lock_service.py",
      "additional_tests": ("test_file_lock_service_contract.py", "test_file_lock_service_evidence.py"),
      "companion_sources": ("native/file_lock_service_packer.hepta",)},
+    {"key": "write_chain", "name": "write-chain", "source": "native/write_chain.hepta",
+     "builder": "write_chain", "manifest_env": "HIA_WRITE_CHAIN_BUNDLE", "test": "test_shared_atomic.py",
+     "additional_tests": ("test_write_chain_controller.py", "test_write_chain_files.py",
+                          "test_write_chain_kernel.py", "test_write_chain_concurrency.py",
+                          "test_write_chain_evidence.py"),
+     "companion_sources": ("native/atomic_write_shared.hepta", "native/local_read.hepta",
+                           "native/write_chain_packer.hepta")},
+    {"key": "directory_service", "name": "directory-service", "source": "native/directory_caller.hepta",
+     "builder": "directory_service", "manifest_env": "HIA_DIRECTORY_BUNDLE", "test": "test_directory_service.py",
+     "additional_tests": ("directory_service_faults.py", "test_directory_service_transport.py",
+                          "test_directory_service_build.py", "test_directory_service_regex.py"),
+     "companion_sources": ("native/canonical_path.hepta", "native/client_context.hepta",
+                           "native/config_directory_owner.hepta", "native/directory_create.hepta",
+                           "native/directory_errno.hepta", "native/directory_fence_fs.hepta",
+                           "native/directory_fence_packer.hepta", "native/directory_fence_queue_fixture_packer.hepta",
+                           "native/directory_service_packer.hepta", "native/directory_service_prefix.hepta",
+                           "native/effect_fence_caller_manager.hepta", "native/effect_fence_caller_owner.hepta",
+                           "native/local_path_policy.hepta", "native/path_source.hepta",
+                           "native/session_request_context.hepta")},
+    {"key": "workdir_service", "name": "workdir-service", "source": "native/workdir_caller.hepta",
+     "builder": "workdir_service", "manifest_env": "HIA_WORKDIR_BUNDLE", "test": "test_workdir_params.py",
+     "additional_tests": ("test_workdir_caller_controls.py", "test_workdir_service_regex.py"),
+     "companion_sources": ("native/local_canonical.hepta", "native/workdir_params.hepta",
+                           "native/workdir_service_packer.hepta", "native/workdir_service_prefix.hepta")},
+    {"key": "sdk_connection", "name": "sdk-connection", "source": "native/sdk_connection.hepta",
+     "builder": "sdk_connection", "manifest_env": "HIA_CONNECTION_BUILD", "test": "test_sdk_message.py",
+     "additional_tests": ("test_sdk_transport.py", "test_sdk_connection.py",
+                          "test_sdk_connection_elf.py", "test_sdk_connection_controls.py"),
+     "companion_sources": ("native/sdk_message.hepta", "native/sdk_default_fixture.hepta",
+                           "native/sdk_connection_packer.hepta")},
+    {"key": "public_registry", "name": "public-registry", "source": "native/public_tool_dispatch.hepta",
+     "builder": "public_registry", "manifest_env": "HIA_PUBLIC_REGISTRY_BUILD",
+     "test": "run_public_registry_cases.py",
+     "additional_tests": ("test_public_registry_controls.py", "test_public_registry_elf.py"),
+     "companion_sources": ("native/public_runtime_packer.hepta",)},
     {"key": "fence_json", "name": "fence-json", "source": "native/fence_json.hepta",
      "standalone": "filter", "manifest_env": "HIA_FENCE_JSON_MANIFEST", "test": "test_fence_json.py"},
     {"key": "serde_json", "name": "serde-json", "source": "native/serde_json.hepta",
@@ -238,6 +303,11 @@ MODULES = (
      "manifest_env": "HIA_SERDE_JSON_MANIFEST", "test": "test_serde_json.py",
      "additional_tests": ("test_serde_json_transport.py", "test_serde_json_raw_value.py",
                           "test_json_evidence.py", "test_serde_json_raw_value_evidence.py")},
+    {"key": "runtime_config_span", "name": "runtime-config-span", "source": "native/config_directory_owner_span.hepta",
+     "builder": "runtime_config_span", "manifest_env": "HIA_CONFIG_SPAN_BUILD", "test": "test_config_span.py",
+     "additional_tests": ("test_config_span_evidence.py",),
+     "companion_sources": ("native/config_fs_span.hepta", "native/config_json_span.hepta",
+                           "native/config_validation_span.hepta", "native/directory_move_guard.hepta")},
     {"key": "runtime_config", "name": "runtime-config", "source": "native/config_owner.hepta",
      "builder": "runtime_config", "manifest_env": "HIA_CONFIG_BUILD", "test": "test_config_json.py",
      "additional_tests": ("test_config_semantics.py", "test_config_fs.py", "test_config_owner.py",
@@ -329,7 +399,7 @@ MODULES = (
 )
 PACKERS = {"native/filter_packer.hepta", "native/stdio_packer.hepta"}
 EXTRA_TESTS = ("test_transport.py", "test_native_composition.py", "test_qualification_reporting.py",
-               "test_native_pipeline.py")
+               "test_native_pipeline.py", "test_original_pipeline.py")
 RUST_CORPUS_FILES = ("native-corpus.json", "input.bin.gz", "native-output.bin.gz")
 FILE_INFO_SUITES = (
     ("test_info_service.py", "file-info-python-reference.json", "hepta.runtime.native-info-service-test.v1",
@@ -376,6 +446,8 @@ def sources() -> dict:
         "hia_native_build.py", "hia_native_loader.py", "generate_hia_transport.py",
         "hia_native_bellman_build.py", "hia_native_bellman_qualification.py",
         "hia_native_bellman_commitment_build.py", "hia_native_bellman_commitment_qualification.py",
+        "hia_native_local_create_build.py", "hia_native_local_create_qualification.py",
+        "local_create_adapter.S",
         "hia_native_io_build.py", "hia_native_composition_build.py", "hia_native_record_build.py", "hia_native_cold.py",
         "hia_native_entropy_build.py", "hia_native_entropy_qualification.py",
         "hia_native_scope_build.py", "hia_native_scope_qualification.py",
@@ -418,6 +490,11 @@ def sources() -> dict:
         'config_schema.py',
         'hia_native_config_reference.py',
         'hia_native_config_qualification.py',
+        'hia_native_config_span_build.py',
+        'hia_native_config_span_qualification.py',
+        'hia_native_config_span_pipeline.py',
+        'hia_native_config_span_fixtures.py',
+        'config_mcp_grow_adapter.S',
         "build_regex_probe.py",
         "config_regex_adapter.S",
         "hia_native_regex_qualification.py",
@@ -444,6 +521,8 @@ def sources() -> dict:
         "hia_native_effect_fence_build.py", "hia_native_effect_fence_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
+        "hia_native_batch_edit_params_build.py", "hia_native_batch_edit_params_qualification.py",
+        "hia_native_batch_edit_params_pipeline.py",
         "hia_native_batch_apply_build.py", "hia_native_batch_apply_qualification.py",
         "hia_native_atomic_write_build.py", "hia_native_atomic_write_qualification.py",
         "hia_native_filesystem_parity_build.py", "hia_native_filesystem_parity_reference.py",
@@ -451,16 +530,21 @@ def sources() -> dict:
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
-        "check_hia_native_inventory.py", "check_hia_native_target.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py", "hia_native_failure.py", "hia_native_failure_evidence.py",
+        "check_hia_native_inventory.py", "check_hia_native_target.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py", "hia_native_rust_pipeline.py", "hia_native_failure.py", "hia_native_failure_evidence.py",
         "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-migration-target.yml", ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / ".github/workflows/hia-runtime-shell.yml",
                   ROOT / ".github/workflows/hia-runtime-shell-process.yml",
                   ROOT / ".github/workflows/hia-runtime-bellman.yml",
-                  ROOT / "rustfmt.toml"))
+                  ROOT / ".github/workflows/hia-runtime-original-shard.yml", ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
     paths.update(ROOT / "scripts" / name for name in capture_gate.SCRIPTS)
     paths.update(ROOT / name for name in capture_gate.ORACLE_SOURCES)
+    paths.update(ROOT / name for name in service_pipeline.sources(ROOT))
+    paths.update(ROOT / name for name in public_registry_qualification.source_pins(ROOT))
+    paths.update(ROOT / name for name in result_qualification.source_pins(ROOT))
+    paths.update(ROOT / name for name in serde_error_pipeline.sources(ROOT))
+    paths.update(ROOT / name for name in batch_write_pipeline.q.pins(ROOT))
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
 
@@ -586,6 +670,18 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
         raise ValueError("native command override names an undeclared suite")
     config_commands = (config_qualification.test_commands(ROOT, output, report)
                        if set(tests) & set(config_qualification.TESTS) else {})
+    service_commands = (service_pipeline.test_commands(ROOT, output, report)
+                        if set(tests) & set(service_pipeline.DIRECTORY_TESTS) else {})
+    config_commands.update({name: command for name, command in service_commands.items()
+                            if name in service_pipeline.DIRECTORY_TESTS})
+    if set(tests) & set(public_registry_qualification.TESTS):
+        config_commands.update(public_registry_qualification.test_commands(ROOT, output, report))
+    if set(tests) & set((*result_qualification.TESTS, result_qualification.CONTROL_TEST)):
+        config_commands.update(result_qualification.test_commands(ROOT, output, report))
+    if set(tests) & set(serde_error_pipeline.TESTS):
+        config_commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
+    if set(tests) & set(batch_write_pipeline.q.SUITES):
+        config_commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     shell_commands = (shell_process_test_commands(output, report)
                       if set(tests) & {*SHELL_PROCESS_TESTS, SHELL_BACKGROUND_TEST} else {})
     outcome_commands = (shell_outcome_test_commands(output, report)
@@ -672,6 +768,12 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                         report.setdefault("native_parallel_drain_errors", []).append(
                             {"name": name, "type": type(error).__name__, "message": str(error)})
             save_report(output / "result.json", report)
+
+    if "test_batch_edit_params.py" in tests:
+        # Preserve a byte-identical component view of this actual main receipt.
+        # Pure readers subsequently require it; they never recreate a missing file.
+        from hia_native_batch_edit_params_pipeline import native_evidence
+        native_evidence(ROOT, output, report, completed_test_summary, create=True)
 
 
 def io_reference_evidence(output: Path, report: dict) -> dict:
@@ -1270,6 +1372,11 @@ def line_verify_evidence(output: Path, report: dict) -> dict:
     return checked_line_verify_evidence(ROOT, output, report, completed_test_summary)
 
 
+def batch_edit_params_evidence(output: Path, report: dict) -> dict:
+    from hia_native_batch_edit_params_pipeline import native_evidence
+    return native_evidence(ROOT, output, report, completed_test_summary)
+
+
 def batch_plan_evidence(output: Path, report: dict) -> dict:
     hepta = Path(report["compiler_checkout"]).resolve(strict=True)
     bootstrap = json.loads((output / "build/bootstrap/bootstrap.json").read_bytes())
@@ -1439,49 +1546,8 @@ def atomic_write_retained_files(output: Path, directory: Path, *, fixtures: tupl
 
 def atomic_write_retire_fixtures(output: Path, fixtures: tuple[str, ...], receipt: Path,
                                  evidence: dict, *, create: bool = False) -> dict:
-    """Retire only owned live targets after their complete evidence is admitted."""
-    expected = {"schema": "hepta.runtime.atomic-write-fixture-retirement.v1", "status": "PASS",
-        "fixture_directories": list(fixtures), "complete_evidence_sha256":
-            atomic_write_qualification.sha(atomic_write_qualification.canonical(evidence)),
-        "semantic_invocations_added": 0}
-    if receipt.exists():
-        if receipt.is_symlink() or atomic_write_qualification.obj(receipt) != expected:
-            raise ValueError("atomic fixture retirement receipt differs")
-    elif create:
-        if output.is_symlink() or output.resolve(strict=True) != output:
-            raise ValueError("atomic fixture retirement root differs")
-        paths = []
-        for name in fixtures:
-            relative = Path(name)
-            if relative.is_absolute() or ".." in relative.parts or relative.name != "fixture":
-                raise ValueError("atomic fixture retirement path escaped its owner")
-            path = output / relative
-            info = path.lstat()
-            if path.resolve() != path or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
-                raise ValueError("atomic live fixture is not an owned real directory")
-            paths.append(path)
-        # Children have already been reaped. Make only owned directories
-        # traversable; leave symlinks untouched and use fd-based rmtree.
-        if not shutil.rmtree.avoids_symlink_attacks:
-            raise ValueError("atomic fixture retirement requires descriptor-based removal")
-        for path in paths:
-            path.chmod(0o700)
-            for base, dirs, _ in os.walk(path, followlinks=False):
-                for name in dirs:
-                    child = Path(base) / name
-                    info = child.lstat()
-                    if stat.S_ISDIR(info.st_mode):
-                        if info.st_uid != os.getuid():
-                            raise ValueError("atomic live fixture contains an unowned directory")
-                        child.chmod(0o700, follow_symlinks=False)
-            shutil.rmtree(path)
-        with receipt.open("x") as stream:
-            stream.write(json.dumps(expected, sort_keys=True, indent=2) + "\n")
-    else:
-        raise ValueError("completed atomic fixture retirement receipt is missing")
-    if any((output / name).exists() or (output / name).is_symlink() for name in fixtures):
-        raise ValueError("retired atomic live fixture reappeared")
-    return expected
+    """Share the same checked target retirement with the original replay driver."""
+    return atomic_write_qualification.retire_fixtures(output, fixtures, receipt, evidence, create=create)
 
 
 def atomic_write_completed_process(output: Path, report: dict, name: str, command: list[str],
@@ -1616,12 +1682,54 @@ def config_evidence(output: Path, report: dict, *, create: bool = False) -> dict
     return config_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
 
 
+def config_span_evidence(output: Path, report: dict) -> dict:
+    from hia_native_config_span_pipeline import qualification_evidence
+    return qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def config_span_fixture_retirement(output: Path, report: dict, *, create=False, native=None) -> dict:
+    from hia_native_config_span_pipeline import native_fixture_evidence
+    return native_fixture_evidence(ROOT, output, report, completed_test_summary, create=create, native=native)
+
+
 def file_locks_evidence(output: Path, report: dict) -> dict:
     return file_lock_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary, "file_locks")
 
 
 def file_lock_service_evidence(output: Path, report: dict) -> dict:
     return file_lock_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary, "file_lock_service")
+
+
+def write_chain_evidence(output: Path, report: dict) -> dict:
+    return write_chain_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def directory_service_evidence(output: Path, report: dict) -> dict:
+    return service_pipeline.native_evidence(ROOT, output, report, completed_test_summary, "directory_service")
+
+
+def workdir_service_evidence(output: Path, report: dict) -> dict:
+    return service_pipeline.native_evidence(ROOT, output, report, completed_test_summary, "workdir_service")
+
+
+def sdk_connection_evidence(output: Path, report: dict, *, create=False) -> dict:
+    return connection_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def batch_write_evidence(output: Path, report: dict) -> dict:
+    return batch_write_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def serde_error_evidence(output: Path, report: dict) -> dict:
+    return serde_error_pipeline.native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def result_values_evidence(output: Path, report: dict) -> dict:
+    return result_qualification.native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def public_registry_evidence(output: Path, report: dict, *, create=False) -> dict:
+    return public_registry_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
 
 
 def session_evidence(output: Path, report: dict) -> dict:
@@ -2747,6 +2855,8 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
         "HIA_BELLMAN_QUALIFICATION_OUTPUT": str(output),
         "HIA_BELLMAN_COMMITMENT_QUALIFICATION_OUTPUT": str(output),
+        "HIA_LOCAL_CREATE_OUTPUT": str(output / "local-create"),
+        "HIA_LOCAL_CREATE_QUALIFICATION_OUTPUT": str(output),
         "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
         "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
         "HIA_TERMINAL_CORPUS_DIR": str(output / "terminal-clean"),
@@ -2843,6 +2953,9 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         env[item["manifest_env"]] = str(built)
         if item.get("builder") == "composition":
             env["HIA_COMPOSITION_MANIFEST"] = str(built)
+        elif item.get("builder") == "batch_edit_params":
+            from hia_native_batch_edit_params_pipeline import environment
+            env.update(environment(ROOT, output, report))
         elif item.get("builder") == "effect_fence":
             bundle = json.loads(built.read_bytes())
             env["HIA_FENCE_ASYNC_MANIFEST"] = str(
@@ -2865,6 +2978,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
     env["HIA_VIEW_PARAMS_VALUE_MANIFEST"] = env["HIA_SERDE_JSON_MANIFEST"]
     env["HIA_VIEW_SEARCH_FIXTURE_MANIFEST"] = env["HIA_VIEW_CALL_FIXTURE_MANIFEST"]
     env["HIA_VIEW_REGEX_SEARCH_FIXTURE_MANIFEST"] = env["HIA_VIEW_CALL_FIXTURE_MANIFEST"]
+    env.update(connection_qualification.test_environment(output))
     return env
 
 
@@ -2899,7 +3013,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
     (output / "filesystem-parity/native").mkdir(mode=0o700, parents=True)
     for item in MODULES:
-        if item.get("builder") == "io":
+        if item.get("builder") == "result_values":
+            built = result_qualification.build_result_values(hepta, output / "build", ROOT)
+        elif item.get("builder") == "io":
             from hia_native_io_build import build_io
             built = build_io(hepta, output / "build")
         elif item.get("builder") == "composition":
@@ -2908,6 +3024,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "record_composition":
             from hia_native_record_build import build_record
             built = build_record(hepta, output / "build")
+        elif item.get("builder") == "local_create":
+            from hia_native_local_create_build import build_local_create
+            built = build_local_create(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "entropy":
             from hia_native_entropy_build import build_entropy
             built = build_entropy(hepta, output / "build")
@@ -2934,8 +3053,26 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "file_lock_service":
             from hia_native_file_lock_service_build import build_file_lock_service
             built = build_file_lock_service(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "write_chain":
+            from hia_native_write_chain_build import build_write_chain
+            built = build_write_chain(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "directory_service":
+            from hia_native_directory_service_build import build_directory_service
+            built = build_directory_service(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "workdir_service":
+            from hia_native_workdir_service_build import build_workdir_service
+            built = build_workdir_service(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "sdk_connection":
+            built = connection_qualification.build_connection(hepta, output / "build", ROOT)
+        elif item.get("builder") == "public_registry":
+            built = public_registry_qualification.build_public_registry(hepta, output / "build", ROOT)
         elif item.get("builder") == "runtime_config":
             built = config_qualification.build_config(hepta, output / "build", ROOT)
+        elif item.get("builder") == "runtime_config_span":
+            from hia_native_config_span_build import build_config_span
+            nested = output / "build/config-span-bundle"
+            shutil.copytree(output / "build/bootstrap", nested / "build/bootstrap")
+            built = build_config_span(hepta, nested, source_root=ROOT)
         elif item.get("builder") == "result_publication":
             from hia_native_result_publication_build import build_result_publication
             built = build_result_publication(hepta, output / "build", source_root=ROOT)
@@ -2963,6 +3100,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "effect_fence":
             from hia_native_effect_fence_build import build_effect_fence_bundle
             built = build_effect_fence_bundle(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "batch_write":
+            from hia_native_batch_write_build import build_batch_write
+            built = build_batch_write(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "batch_apply":
             from hia_native_batch_apply_build import build_batch_apply
             built = build_batch_apply(hepta, output / "build", source_root=ROOT)
@@ -2989,6 +3129,11 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "filesystem_parity":
             from hia_native_filesystem_parity_build import build_filesystem_parity
             built = build_filesystem_parity(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "batch_edit_params":
+            from hia_native_batch_edit_params_build import build_batch_edit_params
+            nested = output / "batch-edit-params/build"
+            shutil.copytree(output / "build/bootstrap", nested / "bootstrap")
+            built = build_batch_edit_params(hepta, nested, source_root=ROOT)
         elif item.get("builder") == "batch_plan":
             from hia_native_batch_plan_build import build_batch_plan
             built = build_batch_plan(hepta, output / "build", source_root=ROOT)
@@ -3048,9 +3193,12 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / "batch-apply").mkdir()
     (output / "atomic-write").mkdir()
     (output / "config-native").mkdir()
+    (output / "config-span").mkdir()
     (output / "regex-native").mkdir()
     (output / "file-locks").mkdir()
     (output / "file-lock-service").mkdir()
+    (output / "write-chain").mkdir()
+    (output / "workdir-native").mkdir()
     return builder
 
 
@@ -3065,9 +3213,18 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands = batch_apply_test_commands(output, output / report["modules"]["batch_apply"]["manifest"])
     commands.update(execution_test_commands(output, report))
     commands.update(config_qualification.test_commands(ROOT, output, report))
+    from hia_native_config_span_pipeline import test_commands as config_span_commands
+    commands.update(config_span_commands(ROOT, output, report))
     commands.update(session_qualification.test_commands(ROOT, output, report))
     commands.update(file_lock_pipeline.test_commands(ROOT, output, report))
     commands.update(filesystem_parity_qualification.test_commands(ROOT, output, report))
+    commands.update(write_chain_pipeline.test_commands(ROOT, output, report))
+    commands.update(service_pipeline.test_commands(ROOT, output, report))
+    commands.update(connection_qualification.test_commands(ROOT, output, report))
+    commands.update(public_registry_qualification.test_commands(ROOT, output, report))
+    commands.update(result_qualification.test_commands(ROOT, output, report))
+    commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
+    commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     if set(tests) & {*SHELL_PROCESS_TESTS, SHELL_BACKGROUND_TEST}:
@@ -3084,6 +3241,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
 
 
 def collect_native_evidence(output: Path, report: dict) -> None:
+    report["local_create_file_evidence"] = local_create_qualification.native_evidence(output, report)
     report["bellman_evidence"] = bellman_qualification.native_evidence(output, report)
     report["bellman_commitment_evidence"] = bellman_commitment_qualification.native_evidence(output, report)
     report["request_context_evidence"] = request_context_evidence(output, report)
@@ -3112,6 +3270,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["operation_scope_evidence"] = operation_scope_evidence(output, report)
     report["editable_content_evidence"] = editable_content_evidence(output, report)
     report["line_verify_evidence"] = line_verify_evidence(output, report)
+    report["batch_edit_params_evidence"] = batch_edit_params_evidence(output, report)
     report["batch_plan_evidence"] = batch_plan_evidence(output, report)
     report["batch_apply_evidence"] = batch_apply_evidence(output, report)
     atomic = atomic_write_evidence(output, report)
@@ -3142,10 +3301,22 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["session_evidence"] = session_evidence(output, report)
     report["file_locks_evidence"] = file_locks_evidence(output, report)
     report["file_lock_service_evidence"] = file_lock_service_evidence(output, report)
+    report["write_chain_evidence"] = write_chain_evidence(output, report)
+    report["directory_service_evidence"] = directory_service_evidence(output, report)
+    report["workdir_service_evidence"] = workdir_service_evidence(output, report)
+    report["sdk_connection_evidence"] = sdk_connection_evidence(output, report, create=True)
+    report["public_registry_evidence"] = public_registry_evidence(output, report, create=True)
+    report["result_values_evidence"] = result_values_evidence(output, report)
+    report["serde_error_evidence"] = serde_error_evidence(output, report)
+    report["batch_write_evidence"] = batch_write_evidence(output, report)
+    service_pipeline.prepare_transport(ROOT, output, report, completed_test_summary)
     report["json_evidence"] = json_evidence(output, report)
     report["execution_evidence"] = execution_evidence(output, report)
     report["effect_fence_evidence"] = effect_fence_evidence(output, report)
     report["config_evidence"] = config_evidence(output, report, create=True)
+    report["config_span_evidence"] = config_span_evidence(output, report)
+    report["config_span_fixture_retirement"] = config_span_fixture_retirement(
+        output, report, create=True, native=report["config_span_evidence"])
     scope_os_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
     capture_scope_os_corpus(ROOT, output / SCOPE_OS_FOLDER, scope_os_profile(ROOT, scope_os_manifest))
     report["operation_scope_os_evidence"] = operation_scope_os_evidence(output, report)
@@ -3163,6 +3334,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["python_reference_inputs"]["file-info-blocking-probe.elf"] = sha(output / "file-info-blocking-probe.elf")
     report["rust_oracle_inputs"] = {
         "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
+    report["rust_oracle_inputs"].update(report["local_create_file_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["request_context_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["result_publication_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
@@ -3199,6 +3371,15 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["view_cache_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["history_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["history_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["result_values_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["result_values_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["serde_error_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["serde_error_evidence"]["corpus_sha256"])
+    # The complete batch corpus is also inspected by batch_write_evidence on
+    # every admission; preserve the actual completed process and bundle roots.
+    batch_names = [report["modules"]["batch_write"]["manifest"]] + [
+        name + suffix for name in batch_write_pipeline.q.SUITES for suffix in (".stdout", ".stderr")]
+    report["rust_oracle_inputs"].update({name: sha(output / name) for name in batch_names})
     report["rust_oracle_inputs"].update(report["json_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["json_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["execution_evidence"]["artifact_sha256"])
@@ -3206,12 +3387,21 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["effect_fence_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["config_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["config_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["config_span_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["config_span_fixture_retirement"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_edit_params_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["corpus_sha256"])
+    for key in ("directory_service", "workdir_service", "sdk_connection", "public_registry"):
+        report["rust_oracle_inputs"].update(report[key + "_evidence"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report[key + "_evidence"]["corpus_sha256"])
+    write_manifest = write_chain_pipeline.bundle(output, report)
+    report["rust_oracle_inputs"].update(service_pipeline.retained_files(output, write_manifest.parent))
+    report["rust_oracle_inputs"].update(service_pipeline.retained_files(output, output / "write-chain"))
     authority = report["caller_authority_evidence"]
     for label in ("artifact", "probe"):
         report["rust_oracle_inputs"].update({"build/" + name: expected

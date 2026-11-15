@@ -210,6 +210,125 @@ class QualificationReportingTests(unittest.TestCase):
                         ordered_groups=(), commands={name: argv}, timeout=5)
         self.assertEqual(len(self.report["checks"]), 1)
 
+    def test_public_registry_declares_full_frozen_source_and_reference_domains(self):
+        import qualify_hia_runtime_native as q
+        import compare_hia_runtime_rust as comparison
+        import hia_native_pipeline as pipeline
+        helper = q.public_registry_qualification
+        entry = {row["key"]: row for row in MODULES}["public_registry"]
+        self.assertEqual((entry["test"], *entry["additional_tests"]), helper.TESTS)
+        self.assertEqual(entry["source"], "native/public_tool_dispatch.hepta")
+        self.assertEqual(entry["companion_sources"], ("native/public_runtime_packer.hepta",))
+        self.assertEqual(len(helper.source_pins(ROOT)), 72)
+        self.assertTrue(set(helper.source_pins(ROOT)) <= set(sources()))
+        self.assertIs(comparison.RECIPES["public_registry"], comparison.compare_public_registry)
+        self.assertTrue(set(helper.TESTS) <= set(pipeline.partition_tests()["text"]))
+        self.assertEqual(len(set(comparison.PUBLIC_REGISTRY_CONTROL_LABELS)), 20)
+        self.assertEqual(comparison.public_registry_control_command(self.output)[-2:],
+                         ["--result", str(self.output / "public-registry-evidence-controls.json")])
+
+    def test_public_registry_launcher_rejects_changed_binary_or_appended_arguments(self):
+        import qualify_hia_runtime_native as q
+        helper = q.public_registry_qualification
+        name = helper.TESTS[0]
+        root = self.wait_fixture({name: "print(json.dumps({'actual_public_launcher':True}))\n"})
+        expected = [sys.executable, "-I", "-B", str(root / "tests/hia_native" / name),
+                    "--binary", str(root / "declared.elf")]
+        with patch.object(q, "ROOT", root), patch.object(helper, "test_commands", return_value={name: expected}):
+            q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                ordered_groups=(), commands={name: expected}, timeout=5)
+            self.assertEqual(self.report["checks"][0]["command"], expected)
+            self.assertEqual(json.loads((self.output / (name + ".stdout")).read_bytes()),
+                             {"actual_public_launcher": True})
+            for argv in (expected + ["--not-executed"], expected[:-1] + ["/foreign.elf"], expected[:4]):
+                with self.subTest(command=argv), self.assertRaises(ValueError):
+                    q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                        ordered_groups=(), commands={name: argv}, timeout=5)
+        self.assertEqual(len(self.report["checks"]), 1)
+
+    def test_result_value_domains_preserve_original_counts_and_shared_reference(self):
+        import qualify_hia_runtime_native as q
+        import compare_hia_runtime_rust as comparison
+        import hia_native_pipeline as pipeline
+        import hia_native_result_reference as reference
+        helper = q.result_qualification
+        entries = {row["key"]: row for row in MODULES}
+        for key, domain in helper.KEYS.items():
+            self.assertEqual(entries[key]["source"], helper.MODULES[domain][0])
+            self.assertEqual(entries[key]["builder"], "result_values")
+            self.assertIn(key, comparison.RECIPES)
+        self.assertEqual(sum(sum(values.values()) for values in helper.COUNTS.values()), 548914)
+        self.assertEqual(len(reference.reference_inputs(ROOT)["blocks"]), 11)
+        self.assertTrue(set(helper.source_pins(ROOT)) <= set(sources()))
+        self.assertTrue(set((*helper.TESTS, helper.CONTROL_TEST)) <= set(pipeline.partition_tests()["json"]))
+        self.assertEqual(len(set(comparison.RESULT_VALUE_CONTROL_LABELS)), 13)
+        self.assertEqual(comparison.result_values_control_command(self.output)[-2:],
+            ["--result", str(self.output / "result-values-evidence-controls.json")])
+
+    def test_result_value_launcher_refuses_changed_manifest_and_appended_flags(self):
+        import qualify_hia_runtime_native as q
+        helper, name = q.result_qualification, q.result_qualification.TESTS[0]
+        root = self.wait_fixture({name: "print(json.dumps({'actual_result_launcher':True}))\n"})
+        expected = [sys.executable, "-I", "-B", str(root / "tests/hia_native" / name),
+                    "--manifest", str(root / "declared.json")]
+        with patch.object(q, "ROOT", root), patch.object(helper, "test_commands", return_value={name: expected}):
+            q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                ordered_groups=(), commands={name: expected}, timeout=5)
+            self.assertEqual(self.report["checks"][0]["command"], expected)
+            self.assertEqual(json.loads((self.output / (name + ".stdout")).read_bytes()),
+                {"actual_result_launcher": True})
+            for argv in (expected + ["--not-executed"], expected[:-1] + ["/foreign.json"], expected[:4]):
+                with self.subTest(command=argv), self.assertRaises(ValueError):
+                    q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                        ordered_groups=(), commands={name: argv}, timeout=5)
+        self.assertEqual(len(self.report["checks"]), 1)
+
+    def test_registry_archive_inventory_rejects_nonregular_duplicate_and_escaping_members(self):
+        import io
+        import tarfile
+        from hia_native_result_reference import archive_files
+        from result_value_registry import sha
+
+        def packed(names):
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+                for name, kind in names:
+                    item = tarfile.TarInfo(name)
+                    if kind == "link":
+                        item.type = tarfile.SYMTYPE
+                        item.linkname = "Cargo.toml"
+                        archive.addfile(item)
+                    else:
+                        item.size = 4
+                        archive.addfile(item, io.BytesIO(b"data"))
+            return buffer.getvalue()
+
+        good = [("fixture-1.0/Cargo.toml", "file"), ("fixture-1.0/src/lib.rs", "file")]
+        expected = {name.split("/", 1)[1]: {"bytes": 4, "sha256": sha(b"data")} for name, _ in good}
+        self.assertEqual(archive_files(packed(good), "fixture-1.0"), expected)
+        for extra in (("fixture-1.0/Cargo.toml", "file"), ("/fixture-1.0/outside", "file"),
+                      ("fixture-1.0/../outside", "file"), ("other-1.0/lib.rs", "file"),
+                      ("fixture-1.0/link", "link"), ("fixture-1.0//duplicate", "file")):
+            with self.subTest(member=extra), self.assertRaises(ValueError):
+                archive_files(packed(good + [extra]), "fixture-1.0")
+
+    def test_registry_source_inventory_excludes_only_root_cargo_markers(self):
+        from hia_native_result_reference import files
+        root = self.output / "package"
+        root.mkdir()
+        (root / "Cargo.toml").write_bytes(b"original")
+        baseline = files(root)
+        for name in (".cargo-ok", ".cargo-checksum.json"):
+            (root / name).write_bytes(b"Cargo-owned metadata")
+        self.assertEqual(files(root), baseline)
+        nested = root / "extra"
+        nested.mkdir()
+        (nested / ".cargo-ok").write_bytes(b"unexpected source")
+        self.assertIn("extra/.cargo-ok", files(root))
+        (nested / "external").symlink_to(root / "Cargo.toml")
+        with self.assertRaises(ValueError):
+            files(root)
+
     def original_worker_fixture(self, *, serial_code=0, worker_code=0, blocked=False):
         import compare_hia_runtime_rust as comparison
         root = self.wait_fixture({
@@ -328,6 +447,11 @@ class QualificationReportingTests(unittest.TestCase):
                     timeout=5, report_path=report_path)
             return {"fixture": "independent-worker"}
 
+        def public_original_fixture(root, output, report, *args):
+            record_check(output, report, name="fixture-public-original",
+                command=[sys.executable, "-I", "-c", "print('{}')"], timeout=5)
+            return {"fixture": "public-original"}
+
         def serial(key):
             def execute(output, report, rustc):
                 result = actual[key](output, report, rustc)
@@ -347,7 +471,7 @@ class QualificationReportingTests(unittest.TestCase):
              patch.object(view, "_original_evidence", return_value={"original_output": "view-call-original"}), \
              patch.object(comparison, "_view_search_original_evidence", side_effect=lambda *args, regex=False:
                           regex_original if regex else search_original), \
-             patch.object(public, "execute_original", return_value={"fixture": "public-original"}), \
+             patch.object(public, "execute_original", side_effect=public_original_fixture), \
              patch.object(public, "retained_original", return_value={"fixture": "public-original"}), \
              patch.object(span, "compare_original", return_value={"fixture": "span-original"}) as span_original, \
              patch.object(public_search, "compare_public_reference", return_value={"fixture": "public-search-original"}), \
@@ -376,6 +500,12 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertEqual([self.report["original_rust_comparisons"][key] for key in providers],
                          [{"original_output": "view-call-original"}] * 3)
         self.assertEqual(set(self.report["original_rust_comparisons"]), selected)
+        self.assertEqual(self.report["rust_recipe_shared_processes"],
+                         {"view_params": "view_read", "view_call": "view_read"})
+        for key in ("view_params", "view_call"):
+            self.assertEqual(self.report["rust_recipe_processes"][key],
+                             self.report["rust_recipe_processes"]["view_read"])
+        self.assertEqual(self.report["rust_recipe_processes"]["runtime_mcp"], ["fixture-public-original"])
         span_original.assert_called_once()
         self.assertEqual(self.report["original_rust_comparisons"]["runtime_mcp"],
                          {"fixture": "public-original", "span_raw_value": {"fixture": "span-original"}})
@@ -583,6 +713,118 @@ class QualificationReportingTests(unittest.TestCase):
         (self.output / "atomic-reporting.stdout").write_bytes(b"{}\n")
         with self.assertRaises(ValueError):
             q.atomic_write_completed_process(self.output, self.report, "atomic-reporting", command)
+
+    def test_atomic_inode_custody_distinguishes_replacements_and_closes_every_pin(self):
+        import errno
+        import os
+        import stat
+        import hia_native_atomic_write_qualification as owner
+        from atomic_write_cases import PinnedIdentities, snapshot, semantic_snapshot
+        fixture = self.output / "fixture"; fixture.mkdir()
+        target = fixture / "target"; target.write_bytes(b"original object")
+        unchanged = fixture / "unchanged"; unchanged.write_bytes(b"retained object")
+        os.link(unchanged, fixture / "hardlink")
+        (fixture / "symlink").symlink_to("target")
+        denied = fixture / "denied"; denied.mkdir(); (denied / "inside").write_bytes(b"private")
+        denied.chmod(0)
+        receipt_path = self.output / "identity-custody.json"
+        try:
+            with PinnedIdentities(receipt_path) as pins:
+                before = snapshot(fixture, self.output / "before", identity_pins=pins)
+                self.assertEqual(stat.S_IMODE(denied.stat().st_mode), 0)
+                original = next(p for p in pins.receipt["pins"] if p["path"] == b"target".hex())
+                for value in (b"first replacement", b"second replacement"):
+                    temporary = fixture / "replacement"; temporary.write_bytes(value)
+                    temporary.replace(target)
+                self.assertEqual(os.fstat(original["fd"]).st_nlink, 0)
+                self.assertNotEqual(os.fstat(original["fd"]).st_ino, target.stat().st_ino)
+                self.assertTrue(all(not os.get_inheritable(fd) for fd in pins.handles))
+                after = snapshot(fixture, self.output / "after")
+                pins.after_snapshot(before)
+                handles = list(pins.handles)
+            owner.identity_custody(pins.receipt, before)
+            self.assertEqual(json.loads(receipt_path.read_bytes()), pins.receipt)
+            states = {bytes.fromhex(r["path"]): r for r in semantic_snapshot(before, after)}
+            self.assertFalse(states[b"target"]["identity_retained"])
+            self.assertTrue(states[b"unchanged"]["identity_retained"])
+            self.assertTrue(states[b"symlink"]["identity_retained"])
+            self.assertEqual(states[b"hardlink"]["same_inode_paths"], [b"hardlink".hex(), b"unchanged".hex()])
+            for fd in handles:
+                with self.assertRaises(OSError) as closed:
+                    os.fstat(fd)
+                self.assertEqual(closed.exception.errno, errno.EBADF)
+        finally:
+            denied.chmod(0o700)
+
+    def test_atomic_inode_custody_rejects_missing_lifetimes_and_preserves_failure(self):
+        import copy
+        import errno
+        import os
+        import hia_native_atomic_write_qualification as owner
+        from atomic_write_cases import PinnedIdentities, snapshot
+        fixture = self.output / "fixture"; fixture.mkdir(); (fixture / "target").write_bytes(b"object")
+        with PinnedIdentities(self.output / "good.json") as pins:
+            before = snapshot(fixture, identity_pins=pins)
+            snapshot(fixture); pins.after_snapshot(before)
+        bad_receipts = []
+        for key, value in (("flags", os.O_RDONLY), ("pins", []), ("observed_after_snapshot", False),
+                           ("all_closes_verified", False), ("closed_fds", []),
+                           ("close_errors", [{"fd": 0, "error": "close failed"}]), ("body_error", "failed")):
+            bad = copy.deepcopy(pins.receipt); bad[key] = value; bad_receipts.append(bad)
+        for change in (lambda r: r["pins"][0].update(inheritable=True),
+                       lambda r: r["pins"][0]["after"].update(inode=0),
+                       lambda r: r["pins"][0]["before"].update(inode=0),
+                       lambda r: r["pins"][0].update(fd=True),
+                       lambda r: r["pins"][1].update(fd=r["pins"][0]["fd"])):
+            bad = copy.deepcopy(pins.receipt); change(bad); bad_receipts.append(bad)
+        for bad in bad_receipts:
+            with self.subTest(receipt=bad), self.assertRaises(ValueError):
+                owner.identity_custody(bad, before)
+        failed_path = self.output / "failed.json"
+        with self.assertRaisesRegex(RuntimeError, "original observation failure"):
+            with PinnedIdentities(failed_path) as failed:
+                snapshot(fixture, identity_pins=failed)
+                handles = list(failed.handles)
+                raise RuntimeError("original observation failure")
+        retained = json.loads(failed_path.read_bytes())
+        self.assertIn("original observation failure", retained["body_error"])
+        self.assertTrue(retained["all_closes_verified"])
+        for fd in handles:
+            with self.assertRaises(OSError) as closed:
+                os.fstat(fd)
+            self.assertEqual(closed.exception.errno, errno.EBADF)
+        with self.assertRaises(ValueError):
+            owner.identity_custody(retained, before)
+
+    def test_atomic_original_retirement_preserves_mismatch_and_both_writer_evidence(self):
+        import hia_native_atomic_write_qualification as owner
+        folder = self.output / "original"; folder.mkdir()
+        outside = self.output / "outside"; outside.mkdir(); (outside / "sentinel").write_bytes(b"outside")
+        receipts = {kind: {"reporting_fixture_only": True, "writer": kind} for kind in ("native", "original")}
+        for kind in receipts:
+            for index, case in enumerate(owner.case_module.cases()):
+                entry = folder / (kind + "-kernel") / f"{index:04d}-{case['name']}"
+                fixture = entry / "fixture"; fixture.mkdir(parents=True)
+                (fixture / "outside").symlink_to(outside, target_is_directory=True)
+                denied = fixture / "denied"; denied.mkdir(); (denied / "target").write_bytes(b"owned live target")
+                denied.chmod(0)
+                (entry / "observation.json").write_bytes(b"complete retained observation fixture\n")
+        mismatch = [{"name": "reporting-fixture", "field": "semantic_snapshot", "native": True, "original": False}]
+        (folder / "mismatches.json").write_text(json.dumps(mismatch))
+        record = owner.original_fixture_retirement(folder, receipts, create=True)
+        self.assertEqual(len(record["fixture_directories"]), 302)
+        self.assertEqual(owner.original_fixture_retirement(folder, receipts), record)
+        self.assertEqual(json.loads((folder / "mismatches.json").read_bytes()), mismatch)
+        self.assertEqual((outside / "sentinel").read_bytes(), b"outside")
+        for path in record["fixture_directories"]:
+            fixture = folder / path
+            self.assertFalse(fixture.exists())
+            self.assertEqual((fixture.parent / "observation.json").read_bytes(), b"complete retained observation fixture\n")
+        with self.assertRaises(ValueError):
+            owner.original_fixture_retirement(folder, {"native": receipts["native"]})
+        changed = dict(receipts, original={"reporting_fixture_only": True, "writer": "changed"})
+        with self.assertRaises(ValueError):
+            owner.original_fixture_retirement(folder, changed)
 
     def test_atomic_live_target_retirement_preserves_full_evidence_and_outside_paths(self):
         import qualify_hia_runtime_native as q
@@ -812,6 +1054,19 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn("module inventory differs", result["error"]["message"])
         self.assertTrue((self.output / "rust-comparison-failure.txt").is_file())
 
+    def test_local_create_registers_all_native_and_original_custody(self):
+        import hia_native_local_create_qualification as create
+        import hia_native_pipeline as pipeline
+        import qualify_hia_runtime_native as q
+        self.assertIs(RECIPES["local_create_file"], create.compare_original)
+        self.assertEqual(next(item for item in MODULES if item["key"] == "local_create_file"), create.MODULE)
+        self.assertEqual(create.MODULE["companion_sources"], ("native/local_create_packer.hepta",))
+        self.assertTrue(set(create.TESTS) <= set(pipeline.partition_tests()["system"]))
+        self.assertEqual(len(create.PROCESS_NAMES), 7)
+        self.assertEqual(len(set(create.PROCESS_NAMES)), 7)
+        self.assertTrue(set(create.SOURCE_FILES) <= set(q.sources()))
+        self.assertTrue(all(value is False for value in create.SCOPE.values()))
+
     def test_every_component_has_one_explicit_reference_domain(self):
         declared = {item['key'] for item in MODULES}
         domains = (set(RECIPES), NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS, HARDWARE_REFERENCE_COMPONENTS)
@@ -822,101 +1077,9 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn('file_info_service', PYTHON_REFERENCE_COMPONENTS)
         self.assertNotIn('file_info_service', RECIPES)
 
-    def test_bellman_commitment_registers_its_own_complete_reference_domain(self):
-        import hia_native_bellman_commitment_qualification as b
-        import hia_native_pipeline as pipeline
-        import qualify_hia_runtime_native as q
-        self.assertIs(RECIPES["bellman_commitment"], b.compare_original)
-        self.assertEqual(next(item for item in MODULES if item["key"] == "bellman_commitment"), b.MODULE)
-        self.assertEqual(b.MODULE["buffer_profile"], "serde-json.v1")
-        self.assertIn(b.TEST, pipeline.partition_tests()["system"])
-        self.assertTrue(set(b.FILES) <= set(q.sources()))
-        self.assertEqual(len(b.original_commands(self.output, Path("/selected/rustc"))), 8)
-        for name, (command, timeout) in b.original_commands(self.output, Path("/selected/rustc")).items():
-            if "-build-" in name:
-                self.assertEqual(command[0], "/selected/cargo")
-                self.assertIn('--locked', command)
-                self.assertIn('build.rustc="/selected/rustc"', command)
-                self.assertIn('--target-dir', command)
-                self.assertEqual('--release' in command, name.endswith('release'))
-                self.assertEqual(timeout, 180)
-        for name, value in b.SCOPE.items():
-            self.assertEqual(value, 0 if name == 'native_cases_added_by_reference' else False)
 
-    def test_bellman_commitment_reference_cargo_cannot_drift_with_refreshed_file_hashes(self):
-        import hashlib
-        import shutil
-        import hia_native_bellman_commitment_qualification as b
-        fixture = self.output / "commitment-source"
-        names = (*b.FILES, 'native/bellman_commitment_component.json',
-                 'native/migration.json', 'native/migration_target.json')
-        for name in names:
-            target = fixture / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / name, target)
-        self.assertEqual(len(b.source_evidence(fixture)['target_files']), 3)
-        relative = b.REFERENCE + '/Cargo.lock'
-        original = (fixture / relative).read_bytes()
-        (fixture / relative).write_bytes(original + b'\n')
-        component_path = fixture / 'native/bellman_commitment_component.json'
-        component = json.loads(component_path.read_bytes())
-        component['files'][relative] = b.identity(original + b'\n')
-        component_path.write_text(json.dumps(component))
-        with self.assertRaisesRegex(ValueError, 'exact original reference differs'):
-            b.source_evidence(fixture)
-        (fixture / relative).write_bytes(original)
-        shutil.copyfile(ROOT / 'native/bellman_commitment_component.json', component_path)
-        snapshot = fixture / 'native/migration_target.json'
-        target = json.loads(snapshot.read_bytes())
-        next(row for row in target['source_files'] if row['path'] == 'Cargo.lock')['git_blob'] = '0' * 40
-        snapshot.write_text(json.dumps(target))
-        inventory = fixture / 'native/migration.json'
-        data = json.loads(inventory.read_bytes())
-        data['migration_target']['sha256'] = hashlib.sha256(snapshot.read_bytes()).hexdigest()
-        inventory.write_text(json.dumps(data))
-        with self.assertRaisesRegex(ValueError, 'current target Git blob'):
-            b.source_evidence(fixture)
 
-    def test_bellman_commitment_rejects_registry_and_compiler_environment_substitution(self):
-        import hia_native_bellman_commitment_qualification as b
-        target = (ROOT / b.REFERENCE / 'Cargo.lock').read_bytes()
-        locked = (ROOT / b.DRIVERS / 'reference.Cargo.lock').read_bytes()
-        self.assertEqual(len(b.checked_registry(target, locked)), 27)
-        package = b.checked_registry(target, locked)[0]
-        altered = locked.replace(package['checksum'].encode(), b'0' * 64, 1)
-        with self.assertRaisesRegex(ValueError, 'version/checksum differs'):
-            b.checked_registry(target, altered)
-        inherited = {'PATH': '/bin', 'RUSTC': '/unselected/rustc', 'RUSTFLAGS': '--cfg changed',
-                     'CARGO_PROFILE_RELEASE_OPT_LEVEL': '0', 'RUSTC_WORKSPACE_WRAPPER': '/wrapper',
-                     'CARGO_BUILD_RUSTFLAGS': '--cfg build_override',
-                     'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS': '--cfg target_override'}
-        env, receipt = b.reference_environment(inherited, Path('/selected/rustc'))
-        self.assertEqual(env, {'PATH': '/bin', 'RUSTC': '/selected/rustc', 'CARGO_ENCODED_RUSTFLAGS': ''})
-        self.assertEqual(receipt['removed_inherited_variables'],
-                         ['CARGO_BUILD_RUSTFLAGS', 'CARGO_PROFILE_RELEASE_OPT_LEVEL',
-                          'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS', 'RUSTC_WORKSPACE_WRAPPER', 'RUSTFLAGS'])
-        self.assertEqual(inherited['RUSTC'], '/unselected/rustc')
 
-    def test_bellman_commitment_cargo_feature_receipt_requires_roundtrip_and_original_versions(self):
-        import copy
-        import hia_native_bellman_commitment_qualification as b
-        component = json.loads((ROOT / 'native/bellman_commitment_component.json').read_bytes())
-        packages = [{'id': 'root', 'name': 'hia-bellman-commitment-reference', 'version': '0.1.0', 'source': None}]
-        nodes = [{'id': 'root', 'features': []}]
-        for key, features in component['reference_features'].items():
-            name, version = key.split('@')
-            packages.append({'id': key, 'name': name, 'version': version, 'source': 'registry'})
-            nodes.append({'id': key, 'features': features})
-        fixture = {'packages': packages, 'resolve': {'nodes': nodes}}
-        self.assertEqual(b.metadata_evidence(json.dumps(fixture).encode(), component), component['reference_features'])
-        changed = copy.deepcopy(fixture)
-        next(row for row in changed['resolve']['nodes'] if row['id'] == 'serde_json@1.0.151')['features'].remove('float_roundtrip')
-        with self.assertRaisesRegex(ValueError, 'feature closure differs'):
-            b.metadata_evidence(json.dumps(changed).encode(), component)
-        changed = copy.deepcopy(fixture)
-        next(row for row in changed['packages'] if row['id'] == 'sha2@0.11.0')['version'] = '0.11.1'
-        with self.assertRaisesRegex(ValueError, 'feature closure differs'):
-            b.metadata_evidence(json.dumps(changed).encode(), component)
 
     def test_bellman_registers_three_actual_suites_and_distinct_reference_domains(self):
         import hia_native_bellman_qualification as b
@@ -1074,29 +1237,93 @@ class QualificationReportingTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
         self.assertEqual(workflow.count("      - 'src/mcp/fs/parity_ops.rs'"), 2)
         before_native, native_and_qualify = workflow.split("\n  native:\n", 1)
-        native_job, qualify_job = native_and_qualify.split("\n  qualify:\n", 1)
+        native_and_original, qualify_job = native_and_qualify.split("\n  qualify:\n", 1)
+        native_job, collect_and_original = native_and_original.split("\n  native_collect:\n", 1)
+        native_collect_job = collect_and_original.split("\n  original_bytes:\n", 1)[0]
+        original_workflow = (ROOT / ".github/workflows/hia-runtime-original-shard.yml").read_text()
         install = "sudo apt-get install --no-install-recommends -y strace"
         self.assertNotIn(install, before_native)
         self.assertEqual(native_job.count(install), 1)
-        self.assertIn("if: matrix.group == 'system'", native_job)
-        self.assertEqual(qualify_job.count(install), 1)
+        self.assertIn("if: matrix.group == 'system' || matrix.group == 'shell' || matrix.group == 'config'", native_job)
+        self.assertEqual(native_collect_job.count(install), 1)
+        self.assertEqual(original_workflow.count(install), 1)
+        self.assertIn("if: inputs.group == 'batch' || inputs.group == 'config'", original_workflow)
+        self.assertNotIn(install, qualify_job)
+        for source_job in (before_native, native_job, native_collect_job, qualify_job, original_workflow):
+            self.assertIn("            tests/oracles\n", source_job)
         filesystem_controls = "runtime/tests/hia_native/filesystem_parity/qualify_pipeline.py"
-        self.assertNotIn(filesystem_controls, before_native + native_job)
+        self.assertNotIn(filesystem_controls, before_native + native_and_original + original_workflow)
         self.assertEqual(qualify_job.count(filesystem_controls), 1)
-        self.assertLess(qualify_job.index("runtime/scripts/compare_hia_runtime_rust.py"),
+        self.assertLess(qualify_job.index("runtime/scripts/hia_native_rust_pipeline.py collect"),
                         qualify_job.index(filesystem_controls))
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
-        self.assertEqual(len(MODULES), 60)
-        self.assertEqual(len(migration["native_components"]), 129)
-        self.assertEqual(len(q.native_tests()), 154)
-        self.assertEqual(len(RECIPES), 54)
+        self.assertEqual(len(MODULES), 73)
+        self.assertEqual(len(migration["native_components"]), 169)
+        self.assertEqual(len(q.native_tests()), 198)
+        self.assertEqual(len(RECIPES), 67)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
         self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
                             for row in migration["legacy_tool_handlers"]))
         for key in ("whole_runtime_replaced", "production_activated", "old_stack_removal_qualified"):
             self.assertIs(migration[key], False)
+
+    def test_batch_params_registration_preserves_component_and_original_boundaries(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_batch_edit_params_pipeline as params
+        item = next(row for row in q.MODULES if row['key'] == params.KEY)
+        self.assertEqual(item['source'], 'native/batch_edit_params.hepta')
+        self.assertEqual(item['builder'], params.KEY)
+        self.assertEqual((item['test'], *item.get('additional_tests', ())), (params.NATIVE_TEST,))
+        self.assertIn(params.KEY, RECIPES)
+        self.assertNotIn(params.KEY, NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+        pinned = q.sources()
+        for name in ('native/batch_edit_params.hepta', 'native/batch_edit_params_abi.md',
+                     'native/batch_edit_params_composition.json', params.PIPELINE_SOURCE,
+                     'scripts/hia_native_batch_edit_params_build.py',
+                     'scripts/hia_native_batch_edit_params_qualification.py',
+                     'tests/hia_native/' + params.NATIVE_TEST, 'tests/hia_native/' + params.CONTROLS_TEST,
+                     'tests/hia_native/batch_edit_params_oracle/src/original.rs',
+                     'tests/hia_native/batch_edit_params_oracle/source_manifest.json'):
+            self.assertIn(name, pinned)
+        output = self.output / 'uncreated-batch-params'
+        for bad in ('/outside/bundle.json', '../outside/bundle.json'):
+            report = {'modules': {params.KEY: {'manifest': bad, 'source': item['source'], 'builder': params.KEY}}}
+            with self.subTest(path=bad), self.assertRaises(ValueError):
+                params.environment(ROOT, output, report)
+        self.assertFalse(output.exists())
+        self.assertNotIn(params.CONTROLS_TEST, q.native_tests())
+
+    def test_config_span_registry_requires_native_capture_and_fresh_original(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_config_span_pipeline as span
+        from check_hia_native_inventory import ORIGINAL_RUNTIME_COPIES
+        item = next(row for row in q.MODULES if row['key'] == 'runtime_config_span')
+        owners = {'native/config_directory_owner_span.hepta', 'native/config_fs_span.hepta',
+                  'native/config_json_span.hepta', 'native/config_validation_span.hepta',
+                  'native/directory_move_guard.hepta'}
+        self.assertEqual({item['source'], *item['companion_sources']}, owners)
+        self.assertEqual((item['test'], *item['additional_tests']), span.TESTS)
+        self.assertIn('runtime_config_span', RECIPES)
+        self.assertNotIn('runtime_config_span', NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+        report = {'modules': {'runtime_config_span': {'manifest': span.MANIFEST}}}
+        output = self.output / 'uncreated-config-span'
+        commands = span.test_commands(ROOT, output, report)
+        self.assertEqual(set(commands), set(span.TESTS))
+        self.assertIn(str(output / span.MANIFEST), commands[span.TESTS[0]])
+        self.assertIn(str(output / 'config-span/native'), commands[span.TESTS[1]])
+        self.assertFalse(output.exists())
+        for path in ('/outside/result.json', '../outside/result.json'):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                span.test_commands(ROOT, output, {'modules': {'runtime_config_span': {'manifest': path}}})
+        self.assertEqual(ORIGINAL_RUNTIME_COPIES['tests/hia_native/config_span/guard_original/original/config.rs'],
+                         'src/mcp/runtime/config.rs')
+        pinned = q.sources()
+        for name in (*owners, *span.SOURCE_FILES, 'native/config_span_sources.json',
+                     'scripts/config_mcp_grow_adapter.S',
+                     'tests/hia_native/config_span/guard_original/strict_reference.py'):
+            self.assertIn(name, pinned)
 
     def test_public46_registration_retains_all_build_read_and_original_inputs(self):
         import qualify_hia_runtime_native as q
@@ -1719,6 +1946,106 @@ class QualificationReportingTests(unittest.TestCase):
         for invalid in mutations:
             with self.subTest(value=invalid), self.assertRaises(ValueError):
                 validate_file_info_guard_times(invalid)
+
+
+    def test_bellman_commitment_registers_its_own_complete_reference_domain(self):
+        import hia_native_bellman_commitment_qualification as b
+        import hia_native_pipeline as pipeline
+        import qualify_hia_runtime_native as q
+        self.assertIs(RECIPES["bellman_commitment"], b.compare_original)
+        self.assertEqual(next(item for item in MODULES if item["key"] == "bellman_commitment"), b.MODULE)
+        self.assertEqual(b.MODULE["buffer_profile"], "serde-json.v1")
+        self.assertIn(b.TEST, pipeline.partition_tests()["system"])
+        self.assertTrue(set(b.FILES) <= set(q.sources()))
+        self.assertEqual(len(b.original_commands(self.output, Path("/selected/rustc"))), 8)
+        for name, (command, timeout) in b.original_commands(self.output, Path("/selected/rustc")).items():
+            if "-build-" in name:
+                self.assertEqual(command[0], "/selected/cargo")
+                self.assertIn('--locked', command)
+                self.assertIn('build.rustc="/selected/rustc"', command)
+                self.assertIn('--target-dir', command)
+                self.assertEqual('--release' in command, name.endswith('release'))
+                self.assertEqual(timeout, 180)
+        for name, value in b.SCOPE.items():
+            self.assertEqual(value, 0 if name == 'native_cases_added_by_reference' else False)
+
+
+    def test_bellman_commitment_reference_cargo_cannot_drift_with_refreshed_file_hashes(self):
+        import hashlib
+        import shutil
+        import hia_native_bellman_commitment_qualification as b
+        fixture = self.output / "commitment-source"
+        names = (*b.FILES, 'native/bellman_commitment_component.json',
+                 'native/migration.json', 'native/migration_target.json')
+        for name in names:
+            target = fixture / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
+        self.assertEqual(len(b.source_evidence(fixture)['target_files']), 3)
+        relative = b.REFERENCE + '/Cargo.lock'
+        original = (fixture / relative).read_bytes()
+        (fixture / relative).write_bytes(original + b'\n')
+        component_path = fixture / 'native/bellman_commitment_component.json'
+        component = json.loads(component_path.read_bytes())
+        component['files'][relative] = b.identity(original + b'\n')
+        component_path.write_text(json.dumps(component))
+        with self.assertRaisesRegex(ValueError, 'exact original reference differs'):
+            b.source_evidence(fixture)
+        (fixture / relative).write_bytes(original)
+        shutil.copyfile(ROOT / 'native/bellman_commitment_component.json', component_path)
+        snapshot = fixture / 'native/migration_target.json'
+        target = json.loads(snapshot.read_bytes())
+        next(row for row in target['source_files'] if row['path'] == 'Cargo.lock')['git_blob'] = '0' * 40
+        snapshot.write_text(json.dumps(target))
+        inventory = fixture / 'native/migration.json'
+        data = json.loads(inventory.read_bytes())
+        data['migration_target']['sha256'] = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+        inventory.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, 'current target Git blob'):
+            b.source_evidence(fixture)
+
+
+    def test_bellman_commitment_rejects_registry_and_compiler_environment_substitution(self):
+        import hia_native_bellman_commitment_qualification as b
+        target = (ROOT / b.REFERENCE / 'Cargo.lock').read_bytes()
+        locked = (ROOT / b.DRIVERS / 'reference.Cargo.lock').read_bytes()
+        self.assertEqual(len(b.checked_registry(target, locked)), 27)
+        package = b.checked_registry(target, locked)[0]
+        altered = locked.replace(package['checksum'].encode(), b'0' * 64, 1)
+        with self.assertRaisesRegex(ValueError, 'version/checksum differs'):
+            b.checked_registry(target, altered)
+        inherited = {'PATH': '/bin', 'RUSTC': '/unselected/rustc', 'RUSTFLAGS': '--cfg changed',
+                     'CARGO_PROFILE_RELEASE_OPT_LEVEL': '0', 'RUSTC_WORKSPACE_WRAPPER': '/wrapper',
+                     'CARGO_BUILD_RUSTFLAGS': '--cfg build_override',
+                     'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS': '--cfg target_override'}
+        env, receipt = b.reference_environment(inherited, Path('/selected/rustc'))
+        self.assertEqual(env, {'PATH': '/bin', 'RUSTC': '/selected/rustc', 'CARGO_ENCODED_RUSTFLAGS': ''})
+        self.assertEqual(receipt['removed_inherited_variables'],
+                         ['CARGO_BUILD_RUSTFLAGS', 'CARGO_PROFILE_RELEASE_OPT_LEVEL',
+                          'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS', 'RUSTC_WORKSPACE_WRAPPER', 'RUSTFLAGS'])
+        self.assertEqual(inherited['RUSTC'], '/unselected/rustc')
+
+
+    def test_bellman_commitment_cargo_feature_receipt_requires_roundtrip_and_original_versions(self):
+        import copy
+        import hia_native_bellman_commitment_qualification as b
+        component = json.loads((ROOT / 'native/bellman_commitment_component.json').read_bytes())
+        packages = [{'id': 'root', 'name': 'hia-bellman-commitment-reference', 'version': '0.1.0', 'source': None}]
+        nodes = [{'id': 'root', 'features': []}]
+        for key, features in component['reference_features'].items():
+            name, version = key.split('@')
+            packages.append({'id': key, 'name': name, 'version': version, 'source': 'registry'})
+            nodes.append({'id': key, 'features': features})
+        fixture = {'packages': packages, 'resolve': {'nodes': nodes}}
+        self.assertEqual(b.metadata_evidence(json.dumps(fixture).encode(), component), component['reference_features'])
+        changed = copy.deepcopy(fixture)
+        next(row for row in changed['resolve']['nodes'] if row['id'] == 'serde_json@1.0.151')['features'].remove('float_roundtrip')
+        with self.assertRaisesRegex(ValueError, 'feature closure differs'):
+            b.metadata_evidence(json.dumps(changed).encode(), component)
+        changed = copy.deepcopy(fixture)
+        next(row for row in changed['packages'] if row['id'] == 'sha2@0.11.0')['version'] = '0.11.1'
+        with self.assertRaisesRegex(ValueError, 'feature closure differs'):
+            b.metadata_evidence(json.dumps(changed).encode(), component)
 
 
 if __name__ == "__main__":

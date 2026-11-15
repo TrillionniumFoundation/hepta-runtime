@@ -29,6 +29,7 @@ BUFFER_PROFILES = {
     "view-render.v1": (16 << 20, 16 << 20, 256 << 20),
     "serde-json.v1": (16 << 20, 64 << 20, 256 << 20),
     "batch-plan.v1": (512 << 20, 1024 << 20, 1152 << 20),
+    "batch-write.v1": (512 << 20, 2048 << 20, 3072 << 20),
     "history.v1": (128 << 20, 128 << 20, 256 << 20),
 }
 HERE = Path(__file__).resolve().parents[1]
@@ -188,6 +189,8 @@ class NativeBuild:
             raise ValueError("unknown native buffer profile")
         if buffer_profile == "history.v1" and standalone is not None:
             raise ValueError("history profile is an image-only capacity declaration")
+        if buffer_profile == "batch-write.v1" and standalone is not None:
+            raise ValueError("batch-write profile is an image-only capacity declaration")
         if buffer_profile == "batch-plan.v1" and standalone is not None:
             raise ValueError("batch-plan profile is an image-only capacity declaration")
         if buffer_profile != "standard" and standalone == "stdio":

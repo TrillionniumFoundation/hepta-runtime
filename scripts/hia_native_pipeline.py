@@ -1,6 +1,6 @@
 """Run the complete native gate across source-bound, independently retained jobs.
 
-One fresh cold/build artifact is admitted by its workflow-produced SHA256. Seven
+One fresh cold/build artifact is admitted by its workflow-produced SHA256. Eight
 explicit partitions execute every registered suite once. Collection rechecks all
 raw process bytes, immutable build inputs and complete shard inventories before
 the unchanged evidence owners can advance to the original Rust comparisons.
@@ -26,21 +26,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qualify_hia_runtime_native as q
 
 PARTITIONS = {
-    "batch": ("batch_plan", "batch_apply", "atomic_write"),
+    "batch": ("batch_edit_params", "batch_plan", "batch_apply", "atomic_write", "write_chain", "batch_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
-             "delta", "editable_content", "file_locks", "file_lock_service"),
+             "delta", "editable_content", "file_locks", "file_lock_service",
+             "workdir_service", "sdk_connection", "public_registry"),
     "shell": ("terminal_clean", "shell_gate", "shell_process", "shell_background_text", "shell_outcome",
               "shell_output_io", "shell_foreground", "shell_capture_path", "shell_capture_mkdir",
               "shell_capture_file", "shell_capture_prepare"),
-    "view": ("view_render", "view_render_growth", "view_read", "view_params", "view_call",
-             "runtime_mcp", "view_cache", "history", "session_workdir"),
-    "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence"),
-    "config": ("runtime_config",),
+    "view_components": ("view_render", "view_render_growth", "view_cache", "history", "session_workdir"),
+    "view": ("view_read", "view_params", "view_call", "runtime_mcp"),
+    "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence",
+             "binary32_json", "typed_result_json", "request_result", "serde_error"),
+    "config": ("runtime_config", "runtime_config_span"),
     "system": ("filesystem_parity", "binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
                "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service",
-               "finite_binary64", "bellman_core", "bellman_commitment"),
+               "finite_binary64", "bellman_core", "bellman_commitment", "local_create_file", "directory_service"),
 }
 BUILD_SEAL = "native-build.json"
 BUILD_REPORT = "prepared-report.json"
@@ -149,8 +151,17 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "shell", "view", "json", "config", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if set(partitions) != {"batch", "text", "shell", "view_components", "view", "json", "config", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
         raise ValueError("every native module must belong to exactly one explicit partition")
+    if partitions["config"] != ("runtime_config", "runtime_config_span"):
+        raise ValueError("the complete configuration and regex owner requires its independent partition")
+    # Public View readers share the local-call and search captures. Their full
+    # producer/consumer chain must finish before export retires those fixtures.
+    public_view = ("view_read", "view_params", "view_call", "runtime_mcp")
+    if not any(all(key in keys for key in public_view)
+               and [keys.index(key) for key in public_view] == sorted(keys.index(key) for key in public_view)
+               for keys in partitions.values()):
+        raise ValueError("public View producers, consumers and fixture retirement must stay ordered in one partition")
     result = {group: tuple(name for key in keys for name in
                          (modules[key]["test"], *modules[key].get("additional_tests", ())))
               for group, keys in partitions.items()}
@@ -166,6 +177,12 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
                and [names.index(name) for name in ordered_locks] == sorted(names.index(name) for name in ordered_locks)
                for names in result.values()):
         raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
+    for group in (q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS),
+                  q.batch_write_pipeline.q.SUITES, q.serde_error_pipeline.TESTS):
+        if not any(all(name in names for name in group)
+                   and [names.index(name) for name in group] == sorted(names.index(name) for name in group)
+                   for names in result.values()):
+            raise ValueError("service producer and evidence suites must stay ordered in one partition")
     return result
 
 
@@ -331,6 +348,9 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
     for item in q.capture_gate.MODULES:
         if any(row.get("name") == item["test"] for row in report.get("checks", ())):
             q.capture_gate.native_evidence(output, report, item["key"])
+    q.service_pipeline.prepare_transport(q.ROOT, output, report, q.completed_test_summary)
+    if any(row.get("name") == "test_config_span.py" for row in report.get("checks", ())):
+        q.config_span_fixture_retirement(output, report, create=True)
     files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
     for name in directories:
         if name not in seal.get("directories", ()):

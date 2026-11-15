@@ -62,7 +62,7 @@ def main():
             for name, digest in source_pins.items(): q.same(q.pin(q.owned(root,name))['sha256'], digest, 'unchanged source '+name)
             for name, digest in output_pins.items(): q.same(q.pin(q.owned(output,name))['sha256'], digest, 'unchanged artifact '+name)
         frozen(args.repo,args.output)
-        moved = []
+        moved = []; blocked_probes = []
         for label in ('moved-one', 'moved-two'):
             home=args.controls/label; home.mkdir(mode=0o700)
             root, output=home/'source',home/'output'; root.mkdir(); output.mkdir()
@@ -75,20 +75,42 @@ def main():
         origin=q.read_json(args.output/q.FOLDER/'native/captures-v1','SOURCE.json')
         original_origin=q.read_json(args.output/q.FOLDER/'original/captures-v1','SOURCE.json')
         blocked.extend(Path(value['cross_root']) for value in (origin,original_origin))
-        def guard(fn):
+        def guard(fn,*,metadata=False):
             def call(path,*pos,**kw):
                 if isinstance(path,(str,bytes,os.PathLike)):
-                    current=Path(os.fsdecode(path)).absolute()
-                    q.need(not any(current==home or current.is_relative_to(home) for home in blocked),
+                    current=Path(os.path.abspath(os.fsdecode(path)))
+                    current_copy=any(current==home or current.is_relative_to(home) for home in allowed)
+                    # Path resolution observes ancestor metadata. It must never
+                    # read a producer file or the other relocated copy.
+                    traversal=metadata and any(home.is_relative_to(current) for home in allowed)
+                    forbidden=any(current==home or current.is_relative_to(home) for home in blocked_now)
+                    q.need(not forbidden or current_copy or traversal,
                            'relocated reader touched a producer path: '+str(current))
                 return fn(path,*pos,**kw)
             return call
         for root,output in moved:
+            frozen(root,output)
+            allowed=(root,output)
+            blocked_now=blocked+[home for pair in moved for home in pair if home not in allowed]
             reader=load(root/'scripts/hia_native_filesystem_parity_qualification.py','_fs_pipeline_moved_reader')
             saved=[(builtins,'open',builtins.open),(io,'open',io.open),(os,'open',os.open),
                    (os,'stat',os.stat),(os,'lstat',os.lstat)]
-            for owner,name,fn in saved: setattr(owner,name,guard(fn))
-            try: q.same(admitted(reader,root,output,report),baseline,'relocated complete phase evidence')
+            for owner,name,fn in saved: setattr(owner,name,guard(fn,metadata=owner is os and name in ('stat','lstat')))
+            try:
+                other_output=next(pair[1] for pair in moved if pair[1]!=output)
+                targets=[args.repo/q.relative(sorted(source_pins)[0]),
+                         args.output/q.relative(sorted(output_pins)[0]),
+                         other_output/q.relative(sorted(output_pins)[0])]
+                for target in targets:
+                    for kind,operation in [('open',lambda path:path.open('rb')),('stat',os.stat)]:
+                        try: observed=operation(target)
+                        except ValueError as error:
+                            q.need('relocated reader touched a producer path:' in str(error),'unexpected path refusal')
+                            blocked_probes.append({'path':str(target),'operation':kind,'status':'REJECTED'})
+                        else:
+                            if kind=='open':observed.close()
+                            raise AssertionError('relocation guard admitted a foreign path: '+str(target))
+                q.same(admitted(reader,root,output,report),baseline,'relocated complete phase evidence')
             finally:
                 for owner,name,fn in saved: setattr(owner,name,fn)
             frozen(root,output)
@@ -183,6 +205,7 @@ def main():
         result={'schema':'hepta.runtime.filesystem-parity-pipeline-controls.v1','status':'PASS',
             'controls':len(events),'events':events,'physical_relocations':2,
             'producer_paths_blocked_during_relocation':True,'copied_live_fixtures':False,
+            'actual_foreign_path_refusals':len(blocked_probes),'foreign_path_refusals':blocked_probes,
             'new_native_calls':0,'new_rust_processes':0,'new_processes':0,
             'source_files':len(source_pins),'artifacts':len(output_pins),
             'all_source_and_artifacts_unchanged':True,

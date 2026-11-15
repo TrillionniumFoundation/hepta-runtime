@@ -16,7 +16,9 @@ import stat
 
 EXCLUDED_DIRECTORIES = frozenset(("fixture", "owned-mutation-fixture", "target", "build"))
 DIAGNOSTIC_SUFFIXES = (".json", ".jsonl", ".json.gz", ".jsonl.gz", ".stdout", ".stderr",
-                      ".stdout.log", ".stderr.log", ".stdout.gz", ".stderr.gz", ".log")
+                      ".stdout.log", ".stderr.log", ".stdout.gz", ".stderr.gz", ".log",
+                      ".gz", ".bin", ".hex", ".txt", ".input", ".output", ".wire",
+                      ".rs", ".hepta", ".py", ".S", ".toml", ".lock")
 
 
 def capture(source: Path, destination: Path) -> dict:

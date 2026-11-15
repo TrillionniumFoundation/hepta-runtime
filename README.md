@@ -19,6 +19,12 @@ and its [exact target snapshot](native/migration_target.json) record these
 remaining owners. The native profile's passing component tests do not qualify
 removal of those owners or production activation.
 
+The executable registry declares 169 HIA sources, 73 component builds, 198
+native suites and 67 original Rust comparison recipes. CI preserves their
+complete domains across eight native partitions and seven original comparison
+partitions. These registry counts do not change the production qualification
+status recorded in the migration inventory.
+
 ## Concurrent execution
 
 Independent requests have no Hepta Runtime execution-count ceiling. SSH,

@@ -33,7 +33,7 @@ ABI and composition manifests define each owner's scope:
 
 | Domain | Native owners and compositions |
 | --- | --- |
-| Text and files | Byte/protocol primitives, line endpoints, text budgets, batch planning/application, atomic writes, filesystem parity, delta, editable content, history and locks |
+| Text and files | Byte/protocol primitives, line endpoints, text budgets, batch planning/application, atomic writes, exclusive local creation, filesystem parity, delta, editable content, history and locks |
 | Read services | Path policy/canonicalization, stat/version, local I/O, multi-read, file-info, view parameters/calls/rendering/cache and literal/regex search |
 | JSON and numbers | Locked serde-compatible JSON/number behavior, private RawValue expansion at typed boundaries, finite binary64 arithmetic, private Bellman numerical core and canonical commitment |
 | Identity and requests | Caller authority, KDF/AEAD/nonce/records, entropy, operation/request scope, request context and result publication |
@@ -60,6 +60,15 @@ original public comparisons and the additional typed-boundary Rust replays
 are independently required; the shared-parser comparison alone does not
 qualify the frontend. [The public ABI](runtime_mcp_abi.md) records the exact
 scope, capacity continuation and error precedence.
+
+The private [Local Create owner](local_create_file_abi.md) preserves exclusive
+pathname creation, 2 MiB write chunks, partial writes, interrupted syscalls,
+WriteZero and one-close descriptor retirement. Three registered suites cover
+its complete state, actual filesystem behavior, build provenance and evidence
+refusals. Its seven recorded original processes freshly build the locked
+Rust reference and replay all kernel, competing-create and file-size fault
+inputs. Full create orchestration, asynchronous cancellation, cache publication
+and public admission retain their separate qualification boundaries.
 
 ## Inventory and target checks
 
@@ -105,10 +114,20 @@ python3 -m venv /absolute/path/to/hia-reference-environment
   --rustc /absolute/path/to/rustc
 ```
 
-Both phases are required. CI uses a fresh cold/build job, native partitions and
-an aggregate/original-reference job. Executable registries list required modules,
-suites and recipes. Missing, failed, duplicated or altered evidence cannot
-qualify the combined tree. Earlier branch results cannot qualify new sources.
+Both phases are required. CI uses one fresh cold/build job, eight native
+partitions, a native collector, seven original comparison partitions and the
+final collector. The registry contains 73 component builds, 198 native suites,
+67 original Rust recipes and 169 HIA sources. The ten independent rendering,
+cache, history and session suites occupy `view_components`; the seventeen
+read, parameter, caller and public MCP suites retain their producer order and
+fixture retirement together in `view`. Each suite and original recipe still
+executes exactly once under its existing process and job deadline.
+
+Original receipts preserve shared process attribution and the two fresh typed
+span reference builds, including their compiler version, materialized source,
+executables and complete input/output bindings. Missing, failed, duplicated or
+altered evidence cannot qualify the combined tree. Earlier branch results
+cannot qualify new sources.
 
 ## Repository and evidence retention
 

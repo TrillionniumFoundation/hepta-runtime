@@ -116,12 +116,66 @@ def setup(root,case):
         else:raise ValueError('unknown fixture kind')
     for path,mode in reversed(later):os.chmod(path,mode)
 
-def snapshot(root,contents=None):
+class PinnedIdentities:
+    """Keep each observed inode alive until the complete after-snapshot exists.
+
+    Path descriptors never reach the tested writer. Holding them prevents a
+    deleted inode number from being recycled and mistaken for retained identity.
+    """
+    def __init__(self,receipt_path):
+        self.path=Path(receipt_path);self.handles=[]
+        self.receipt={'schema':'hepta.runtime.atomic-identity-custody.v1',
+          'flags':os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,'pins':[],
+          'observed_after_snapshot':False,'closed_fds':[],'close_errors':[],
+          'all_closes_verified':False,'body_error':None}
+    def __enter__(self):return self
+    def pin(self,path,relative,observed):
+        fd=os.open(path,self.receipt['flags'])
+        try:
+            current=os.fstat(fd)
+            assert (current.st_dev,current.st_ino,stat.S_IFMT(current.st_mode))==(
+                observed.st_dev,observed.st_ino,stat.S_IFMT(observed.st_mode))
+            assert not os.get_inheritable(fd)
+        except BaseException:
+            os.close(fd);raise
+        self.handles.append(fd)
+        self.receipt['pins'].append({'path':relative.hex(),'fd':fd,
+          'before':{'dev':current.st_dev,'inode':current.st_ino,'file_type':stat.S_IFMT(current.st_mode)},
+          'inheritable':False})
+    def after_snapshot(self,before):
+        assert [p['path'] for p in self.receipt['pins']]==[r['path'] for r in before]
+        for pin,fd in zip(self.receipt['pins'],self.handles,strict=True):
+            current=os.fstat(fd);assert not os.get_inheritable(fd)
+            identity={'dev':current.st_dev,'inode':current.st_ino,'file_type':stat.S_IFMT(current.st_mode)}
+            assert identity==pin['before']
+            pin['after']={**identity,'nlink':current.st_nlink}
+        self.receipt['observed_after_snapshot']=True
+    def __exit__(self,kind,error,traceback):
+        self.receipt['body_error']=repr(error) if error is not None else None
+        for fd in self.handles:
+            try:
+                os.close(fd)
+                try:os.fstat(fd)
+                except OSError as closed:
+                    if closed.errno!=errno.EBADF:raise
+                else:raise AssertionError('closed identity pin remained open')
+                self.receipt['closed_fds'].append(fd)
+            except BaseException as failure:
+                self.receipt['close_errors'].append({'fd':fd,'error':repr(failure)})
+        self.handles.clear()
+        self.receipt['all_closes_verified']=not self.receipt['close_errors']
+        self.path.write_text(json.dumps(self.receipt,sort_keys=True,separators=(',',':'))+'\n')
+        if self.receipt['close_errors']:raise RuntimeError('identity pin cleanup failed')
+        return False
+
+
+def snapshot(root,contents=None,*,identity_pins=None):
     root=os.fsencode(root);rows=[]
     if contents is not None:
         contents=Path(contents);contents.mkdir(mode=0o700)
     def walk(path,relative):
         st=os.lstat(path)
+        if identity_pins is not None:identity_pins.pin(path,relative,st)
         row={'path':relative.hex(),'mode':st.st_mode,'uid':st.st_uid,'gid':st.st_gid,'size':st.st_size,'nlink':st.st_nlink,
           'dev':st.st_dev,'inode':st.st_ino,'mtime_ns':st.st_mtime_ns,'ctime_ns':st.st_ctime_ns,'atime_ns':st.st_atime_ns}
         rows.append(row)

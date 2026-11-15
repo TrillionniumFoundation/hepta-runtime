@@ -1,0 +1,317 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(w) < 268435456:
+        return CAPACITY
+    if valid_admission(s) == False:
+        return INVALID
+    phase = get(w, 0)
+    if phase > 1:
+        return INVALID
+    if phase == 1:
+        return resumed(s, o, w)
+    action = read64(s, 8)
+    if action != 2:
+        return 0
+    install_literals(w)
+    projection = read64(s, 80)
+    put(w, PLAN, projection + read64(s, projection + 80))
+    put(w, PLAN + 8, read64(s, projection + 88))
+    put(w, PLAN + 16, projection + read64(s, projection + 64))
+    put(w, PLAN + 24, read64(s, projection + 72))
+    put(w, PLAN + 32, read64(s, projection + 16))
+    put(w, PLAN + 40, read64(s, 32))
+    put(w, PLAN + 48, 0)
+    put(w, PLAN + 56, 0)
+    put(w, PLAN + 64, 0)
+    if read64(s, projection + 16) == 14:
+        return dispatch_tool(s, o, w, projection)
+    return response(s, o, w)
+
+def valid_admission(s:readbuf) -> bool:
+    n = length(s)
+    if n < 512 or n > 134217728 or read64(s, 0) != ADMISSION_MAGIC:
+        return False
+    action = read64(s, 8)
+    if action < 2 or action > 5 or read64(s, 16) != 0:
+        return False
+    if read64(s, 24) > 1 or read64(s, 32) > 1 or read64(s, 40) > 1 or read64(s, 48) > 1 or read64(s, 56) > 3:
+        return False
+    index = 64
+    while index < 160:
+        at = read64(s, index)
+        size = read64(s, index + 8)
+        if at == 0:
+            if size != 0:
+                return False
+        else:
+            if at < 256 or at > n or size > n - at:
+                return False
+        index = index + 16
+    index = 160
+    while index < 256:
+        if read64(s, index) != 0:
+            return False
+        index = index + 8
+    p = read64(s, 80)
+    size = read64(s, 88)
+    if p < 256 or size < 256 or size > 67108864 or read64(s, p) != PROJECTION_MAGIC:
+        return False
+    disposition = read64(s, p + 8)
+    if disposition != action - 1:
+        return False
+    variant = read64(s, p + 16)
+    if disposition == 1:
+        if variant < 1 or variant > 19 or read64(s, p + 40) < 1 or read64(s, p + 40) > 2:
+            return False
+    else:
+        if disposition == 2:
+            if variant < 101 or variant > 105 or read64(s, p + 40) != 0:
+                return False
+        else:
+            if variant != 0:
+                return False
+    if read64(s, p + 24) > 3 or read64(s, p + 32) > 1 or read64(s, p + 56) != 0:
+        return False
+    index = 64
+    while index < 224:
+        at = read64(s, p + index)
+        count = read64(s, p + index + 8)
+        if at == 0:
+            if count != 0:
+                return False
+        else:
+            if at < 256 or at > size or count > size - at:
+                return False
+        index = index + 16
+    index = 224
+    while index < 256:
+        if read64(s, p + index) != 0:
+            return False
+        index = index + 8
+    if disposition == 1:
+        if read64(s, p + 64) == 0 or read64(s, p + 80) == 0 or read64(s, p + 88) == 0:
+            return False
+    return True
+
+def dispatch_tool(s:readbuf, o:mutbuf, w:mutbuf, p:u64) -> u32:
+    name = p + read64(s, p + 192)
+    size = read64(s, p + 200)
+    which = 0
+    if match_literal(s, w, name, size, 60):
+        which = 1
+    if match_literal(s, w, name, size, 61):
+        which = 2
+    if match_literal(s, w, name, size, 62):
+        which = 3
+    if which == 0:
+        put(w, PLAN + 48, 2)
+        return response(s, o, w)
+    start = read64(s, p + 208)
+    size = read64(s, p + 216)
+    if size > 67108832:
+        return CAPACITY
+    if start == 0:
+        size = 2
+        store(w, CANONICAL_DATA, 123)
+        store(w, CANONICAL_DATA + 1, 125)
+    else:
+        copy_range(w, s, CANONICAL_DATA, p + start, size)
+        if size == 4 and byte(w, CANONICAL_DATA) == 110 and byte(w, CANONICAL_DATA + 1) == 117 and byte(w, CANONICAL_DATA + 2) == 108 and byte(w, CANONICAL_DATA + 3) == 108:
+            size = 2
+            store(w, CANONICAL_DATA, 123)
+            store(w, CANONICAL_DATA + 1, 125)
+    if size < 2 or byte(w, CANONICAL_DATA) != 123 or byte(w, CANONICAL_DATA + size - 1) != 125:
+        return INVALID
+    put(w, 16, length(s))
+    put(w, 24, length(o))
+    if which == 3:
+        put(w, CANONICAL_FRAME, EXECUTION_MAGIC)
+        put(w, CANONICAL_FRAME + 8, 1)
+        put(w, CANONICAL_FRAME + 16, size)
+        return bridge_call(w, 6, CANONICAL_FRAME, size + 24)
+    if size != 2:
+        return bad_arguments(s, o, w, size)
+    put(w, CHILD_REQUEST, OWNER_QUERY)
+    put(w, CHILD_REQUEST + 8, which)
+    put(w, CHILD_REQUEST + 16, 0)
+    return bridge_call(w, 0, CHILD_REQUEST, 24)
+
+def bridge_call(w:mutbuf, target:u64, at:u64, size:u64) -> u64:
+    seq = get(w, 8)
+    if seq == 18446744073709551615:
+        return INVALID
+    seq = seq + 1
+    put(w, 8, seq)
+    put(w, 0, 1)
+    put(w, 32, target)
+    put(w, 40, at)
+    put(w, 48, size)
+    footer = length(w) - 256
+    fill_range(w, footer, 112, 0)
+    put(w, footer, CALL_MAGIC)
+    put(w, footer + 8, seq)
+    put(w, footer + 16, target)
+    put(w, footer + 24, 2)
+    put(w, footer + 32, at)
+    put(w, footer + 40, size)
+    put(w, footer + 48, 2)
+    put(w, footer + 56, CHILD_RESULT)
+    put(w, footer + 64, 67108864)
+    return CALL
+
+def resumed(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    footer = length(w) - 256
+    seq = get(w, 8)
+    if get(w, 16) != length(s) or get(w, 24) != length(o) or read64(s, 8) != 2:
+        return INVALID
+    if get(w, footer) != CALL_MAGIC or get(w, footer + 8) != seq or get(w, footer + 88) != seq or seq == 0:
+        return INVALID
+    if get(w, footer + 16) != get(w, 32) or get(w, footer + 24) != 2 or get(w, footer + 32) != get(w, 40):
+        return INVALID
+    if get(w, footer + 40) != get(w, 48) or get(w, footer + 48) != 2 or get(w, footer + 56) != CHILD_RESULT:
+        return INVALID
+    if get(w, footer + 64) != 67108864 or get(w, footer + 72) != 0 or get(w, footer + 96) != 1 or get(w, footer + 104) != 0:
+        return INVALID
+    result = get(w, footer + 80)
+    if result == CAPACITY:
+        put(w, 0, 0)
+        return CAPACITY
+    if result < 32 or result > 67108864 or get(w, CHILD_RESULT) != OWNER_RESULT:
+        return INVALID
+    if get(w, CHILD_RESULT + 8) > 3 or get(w, CHILD_RESULT + 24) != result - 32:
+        return INVALID
+    put(w, PLAN + 48, 1)
+    put(w, PLAN + 56, choose(get(w, CHILD_RESULT + 8) == 0, 0, 1))
+    put(w, PLAN + 64, result - 32)
+    code = response(s, o, w)
+    put(w, 0, 0)
+    return code
+
+def bad_arguments(s:readbuf, o:mutbuf, w:mutbuf, total:u64) -> u32:
+    if total < 4 or byte(w, CANONICAL_DATA + 1) != 34:
+        return INVALID
+    prefix = literal_size(63)
+    copy_range(w, w, CHILD_RESULT + 32, literal_start(63), prefix)
+    size = 0
+    index = 2
+    done = False
+    while done == False:
+        if index >= total:
+            return INVALID
+        ch = byte(w, CANONICAL_DATA + index)
+        index = index + 1
+        if ch == 34:
+            done = True
+        else:
+            if ch == 92:
+                if index >= total:
+                    return INVALID
+                ch = byte(w, CANONICAL_DATA + index)
+                index = index + 1
+                if ch == 98:
+                    ch = 8
+                else:
+                    if ch == 102:
+                        ch = 12
+                    else:
+                        if ch == 110:
+                            ch = 10
+                        else:
+                            if ch == 114:
+                                ch = 13
+                            else:
+                                if ch == 116:
+                                    ch = 9
+                                else:
+                                    if ch == 117:
+                                        if total - index < 4 or byte(w, CANONICAL_DATA + index) != 48 or byte(w, CANONICAL_DATA + index + 1) != 48:
+                                            return INVALID
+                                        hi = hex_digit(byte(w, CANONICAL_DATA + index + 2))
+                                        lo = hex_digit(byte(w, CANONICAL_DATA + index + 3))
+                                        if hi > 15 or lo > 15:
+                                            return INVALID
+                                        ch = hi * 16 + lo
+                                        if ch >= 32:
+                                            return INVALID
+                                        index = index + 4
+                                    else:
+                                        if ch != 34 and ch != 92:
+                                            return INVALID
+            store(w, CHILD_RESULT + 32 + prefix + size, ch)
+            size = size + 1
+    suffix = literal_size(64)
+    copy_range(w, w, CHILD_RESULT + 32 + prefix + size, literal_start(64), suffix)
+    put(w, PLAN + 48, 1)
+    put(w, PLAN + 56, 1)
+    put(w, PLAN + 64, prefix + size + suffix)
+    return response(s, o, w)
+
+def hex_digit(ch:u64) -> u64:
+    if ch >= 48 and ch <= 57:
+        return ch - 48
+    if ch >= 97 and ch <= 102:
+        return ch - 87
+    return 256
+
+def match_literal(s:readbuf, w:mutbuf, at:u64, size:u64, code:u64) -> bool:
+    if size != literal_size(code):
+        return False
+    start = literal_start(code)
+    index = 0
+    while index < size:
+        if byte(s, at + index) != byte(w, start + index):
+            return False
+        index = index + 1
+    return True
+
+def response(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    put(w, CURSOR, 0)
+    put(w, WRITING, 0)
+    render(s, o, w)
+    needed = get(w, CURSOR)
+    if needed > length(o):
+        return CAPACITY
+    put(w, CURSOR, 0)
+    put(w, WRITING, 1)
+    render(s, o, w)
+    return needed
+
+def render(s:readbuf, o:mutbuf, w:mutbuf) -> u64:
+    literal(o, w, 11)
+    append_span(s, o, w, 1, get(w, PLAN), get(w, PLAN + 8))
+    kind = get(w, PLAN + 48)
+    if kind == 1:
+        literal(o, w, 12)
+        literal(o, w, choose(get(w, PLAN + 40) == 0, 50, 51))
+        quoted(s, o, w, 2, CHILD_RESULT + 32, get(w, PLAN + 64))
+        literal(o, w, choose(get(w, PLAN + 56) == 0, 52, 53))
+    else:
+        if kind == 2:
+            literal(o, w, 13)
+            literal(o, w, 54)
+        else:
+            variant = get(w, PLAN + 32)
+            code = 0
+            if variant == 1:
+                code = 30
+            if variant == 4:
+                code = 31
+            if variant == 7:
+                code = 32
+            if variant == 8:
+                code = 33
+            if variant == 9:
+                code = 34
+            if variant == 15:
+                code = 35
+            if code != 0:
+                literal(o, w, 12)
+                if get(w, PLAN + 40) != 0:
+                    code = code + 10
+                literal(o, w, code)
+            else:
+                literal(o, w, 13)
+                literal(o, w, 25)
+                quoted(s, o, w, 1, get(w, PLAN + 16), get(w, PLAN + 24))
+                emit(o, w, 125)
+    emit(o, w, 125)
+    return 0
