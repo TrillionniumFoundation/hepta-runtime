@@ -25,3 +25,11 @@ Rust 源码错误诊断，**零个测试执行**。这不是一次成功测试�
 关闭增量编译、debug info 和优化；这与托管 CI 的声明 dev/test profile 不同。
 没有删除测试或增加重试来隐藏失败。托管 CI 保留声明的 profile，也将编译
 并发设为 1，并分别检查 PR exact HEAD 与 prospective merge。
+
+## 可独立编译的 HTTP 主程序测试
+
+`nextest-http-bin-result.json` 与相应日志记录 `271039c6` 的主程序 harness：
+14 项全部通过、无跳过，包含 8 项新增 HTTP 安全回归。命令显式选择
+`--bin hepta-runtime`，所以没有编译或执行大型 lib test；此结果不替代上面的
+全量 nextest 失败。编译 profile 与该全量本地尝试相同，具体覆盖及源码身份
+见记录。

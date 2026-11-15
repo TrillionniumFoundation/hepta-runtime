@@ -144,6 +144,18 @@ RustSec/CVE clearance。Python 直接依赖虽固定版本，但未提供完整�
 只将 exit 0 的对应命令记为通过；失败、skip、环境不支持和未执行分别记录。
 早期子分支的成功不代替最终组合源码的检查。
 
+本地验证的具体结果：两种 feature 模式的全部 target 编译和严格 Clippy
+通过；HTTP 主程序 harness 14/14 通过（包含 8 个新增安全回归）。35 条 Python
+命令原始 31 条通过、4 条失败，执行 1,135 个外层用例；其中一处断言文案缺陷
+已最小修复并 33/33 复跑通过。其余受阻位置为 AF_UNIX、`/proc` 接口，另外有
+Landlock 与可选 pypdf 的两项 skip。完整 Rust nextest 在大型 lib test 编译
+阶段被 SIGKILL，零项执行，未记为通过。详细计数、命令、源码和环境观察见
+各 `validation/` 子目录。托管 CI 以汇总 PR 的实际 check run 为准。
+
+由于终端无 Git 写入凭据，85 个新集成提交通过 GitHub 插件按原拓扑发布。
+其文件树逐项相等；原有分支提交 ID 不变，新集成提交的 SHA 对照与完整原始
+commit 字节保存在 [publication/](publication/README.md)。
+
 `verification.json` 是其 `revision` 字段指定提交的只读复核：149 个原始 Rust
 分支头均为祖先，六个保留引用单独列出，五个重写分支头均未并入；42 份归档
 共验证 5,244 个原始 blob 路径，45 个独立研究文件也保持原字节。
