@@ -45,6 +45,9 @@ class OriginalPipelineTests(unittest.TestCase):
         cls.version.write_text("#!" + sys.executable + "\nprint('rustc reporting fixture\\nrelease: 1.95.0\\n"
             "commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860')\n")
         cls.version.chmod(0o700)
+        cls.json_build = {"schema": "hepta.runtime.json-reference-build.v1",
+                          "actual_python_process_fixture_only": True,
+                          "fixture_identity": "one shared build, two separately completed replays"}
         cls.patches = [patch.object(q, "ROOT", cls.source), patch.object(q, "sources", return_value=cls.source_map),
                       patch.object(q, "git_head", return_value="reporting-fixture"),
                       patch.object(r, "check_input_pins"),
@@ -75,7 +78,11 @@ class OriginalPipelineTests(unittest.TestCase):
                     q.record_check(output, report, name=name,
                         command=[sys.executable, "-I", str(cls.recipe), key], timeout=180, report_path=report_path)
                 (output / ("fixture-original-" + key + ".bin")).write_bytes(key.encode())
-                return {"status": "PASS", "actual_python_process_fixture_only": True, "key": key}
+                result = {"status": "PASS", "actual_python_process_fixture_only": True, "key": key}
+                if key in ("fence_json", "serde_json"):
+                    report.setdefault("json_reference_build", copy.deepcopy(cls.json_build))
+                    result["reference_build"] = copy.deepcopy(report["json_reference_build"])
+                return result
             return run
 
         cls.expected = {}
@@ -175,7 +182,45 @@ class OriginalPipelineTests(unittest.TestCase):
         self.assertTrue(all(item["actual_python_process_fixture_only"]
                             for item in report["original_rust_comparisons"].values()))
         self.assertEqual([row["name"] for row in report["checks"]][-2:], list(p.CONTROLS))
+        self.assertEqual(report["json_reference_build"], self.json_build)
         p.verify_collected_receipts(self.output, report)
+
+    def test_json_shared_build_is_required_even_with_a_rehashed_shard(self):
+        self.change_report("json", lambda part: part.pop("json_reference_build"), update_workflow=True)
+        with self.assertRaisesRegex(ValueError, "incomplete or changed"):
+            self.collect()
+
+    def test_json_shared_build_cannot_differ_from_either_actual_replay(self):
+        self.change_report("json", lambda part: part["json_reference_build"].update(
+            fixture_identity="unexecuted replacement"), update_workflow=True)
+        with self.assertRaisesRegex(ValueError, "shared Cargo build differs"):
+            self.collect()
+
+    def test_one_json_replay_cannot_claim_another_shared_build(self):
+        self.change_report("json", lambda part: part["original_rust_comparisons"]["serde_json"][
+            "reference_build"].update(fixture_identity="another build"), update_workflow=True)
+        with self.assertRaisesRegex(ValueError, "shared Cargo build differs"):
+            self.collect()
+
+    def test_other_groups_and_unknown_json_fields_remain_rejected(self):
+        self.change_report("bytes", lambda part: part.update(
+            json_reference_build=copy.deepcopy(self.json_build)), update_workflow=True)
+        with self.assertRaisesRegex(ValueError, "incomplete or changed"):
+            self.collect()
+        self.setUp()
+        self.change_report("json", lambda part: part.update(unexecuted_extra_receipt={}), update_workflow=True)
+        with self.assertRaisesRegex(ValueError, "incomplete or changed"):
+            self.collect()
+
+    def test_shared_build_is_still_bound_after_collection(self):
+        self.collect()
+        report = native.read_json(self.output / "result.json")
+        report["json_reference_build"]["fixture_identity"] = "changed after collection"
+        with self.assertRaisesRegex(ValueError, "differs from all actual"):
+            p.verify_collected_receipts(self.output, report)
+        report.pop("json_reference_build")
+        with self.assertRaisesRegex(ValueError, "differs from all actual"):
+            p.verify_collected_receipts(self.output, report)
 
     def test_missing_group_cannot_become_complete(self):
         shutil.rmtree(self.shards / "config")

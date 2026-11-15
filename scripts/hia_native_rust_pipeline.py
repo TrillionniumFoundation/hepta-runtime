@@ -211,6 +211,17 @@ def validate_process(data: Path, row: dict) -> None:
     p.validate_check(data, row, name, command, timeout, "original_rust_comparison")
 
 
+def shared_json_build(report: dict) -> dict:
+    """Retain the one actual Cargo build used by both complete JSON replays."""
+    build = report.get("json_reference_build")
+    results = report.get("original_rust_comparisons", {})
+    if (type(build) is not dict or build.get("schema") != "hepta.runtime.json-reference-build.v1"
+            or any(type(results.get(key)) is not dict or results[key].get("reference_build") != build
+                   for key in ("fence_json", "serde_json"))):
+        raise ValueError("JSON shared Cargo build differs from its two complete original replays")
+    return build
+
+
 def admit_shard(data: Path, seal_path: Path, report_path: Path, baseline: dict, native_sha: str,
                 invocation: str, group: str, expected_sha: str, *, exact: bool):
     if (type(expected_sha) is not str or not p.SHA256.fullmatch(expected_sha)
@@ -234,6 +245,8 @@ def admit_shard(data: Path, seal_path: Path, report_path: Path, baseline: dict, 
                  "rust_recipe_processes", "original_shard_elapsed_seconds", "original_shard_finished_at"}
     if group == "services":
         additions.add("service_original_fixture_retirement")
+    if group == "json":
+        additions.add("json_reference_build")
     keys = groups()[group]
     if (set(part) != set(baseline) | additions
             or any(q.json_bytes(part.get(k)) != q.json_bytes(v) for k, v in baseline.items() if k not in changed)
@@ -243,6 +256,8 @@ def admit_shard(data: Path, seal_path: Path, report_path: Path, baseline: dict, 
             or set(part.get("rust_recipe_processes", {})) != set(keys)
             or q.json_bytes(part.get("checks", [])[:len(baseline["checks"])]) != q.json_bytes(baseline["checks"])):
         raise ValueError("original shard is incomplete or changed the completed native phase")
+    if group == "json":
+        shared_json_build(part)
     elapsed = part["original_shard_elapsed_seconds"]
     if type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0:
         raise ValueError("original shard elapsed observation is malformed")
@@ -302,7 +317,7 @@ def verify_collected_receipts(output: Path, report: dict) -> None:
     expected = expected_shards(pipeline["shards"])
     _, baseline = admit_native(output, Path(report["compiler_checkout"]), pipeline["native_sha256"],
                                pipeline["invocation"], exact=False)
-    rows, comparisons, mapping, parallel, compilers, service = [], {}, {}, {}, [], None
+    rows, comparisons, mapping, parallel, compilers, service, json_build = [], {}, {}, {}, [], None, None
     for group in groups():
         folder = output / "original-qualification-shards" / group
         _, part = admit_shard(output, p.owned(folder, SHARD_SEAL), p.owned(folder, SHARD_REPORT),
@@ -314,6 +329,8 @@ def verify_collected_receipts(output: Path, report: dict) -> None:
         compilers.append(part["rust_compiler"])
         if group == "services":
             service = part["service_original_fixture_retirement"]
+        if group == "json":
+            json_build = shared_json_build(part)
     prefix = baseline["checks"] + rows
     tail = report.get("checks", [])[len(prefix):]
     if (q.json_bytes(report.get("checks", [])[:len(prefix)]) != q.json_bytes(prefix)
@@ -322,7 +339,8 @@ def verify_collected_receipts(output: Path, report: dict) -> None:
             or report.get("rust_recipe_processes") != mapping or report.get("rust_parallel_receipts") != parallel
             or any(item != compilers[0] for item in compilers)
             or report.get("rust_compiler") != compilers[0]
-            or report.get("service_original_fixture_retirement") != service):
+            or report.get("service_original_fixture_retirement") != service
+            or report.get("json_reference_build") != json_build):
         raise ValueError("aggregate differs from all actual original shard completions")
     if report.get("status") == "PASS" and len(tail) != len(CONTROLS):
         raise ValueError("complete original aggregate omitted quiescent evidence controls")
@@ -380,6 +398,8 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
             compilers.append(part["rust_compiler"])
             if group == "services":
                 report["service_original_fixture_retirement"] = part["service_original_fixture_retirement"]
+            if group == "json":
+                report["json_reference_build"] = copy.deepcopy(shared_json_build(part))
         if any(item != compilers[0] for item in compilers):
             raise ValueError("original groups executed different compiler bytes or versions")
         report["rust_compiler"] = compilers[0]
