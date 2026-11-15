@@ -212,6 +212,26 @@
     ],
     "independent_deletion_and_source_comparison": "PASS; every deletion and every original blob, mode and byte count checked independently of the project verifier",
     "complete_candidate_custody": "PASS on the assembled local continuation; final published commit verification and hosted results are recorded separately.",
+    "published_cleanup_checkpoint": "b27890bf2e4be06feea5729a57731ed071eb31bc",
+    "complete_checkpoint_custody": "PASS with all 46 required manifests and 17,110 original source rows",
+    "retention_inventory_baseline": "b27890bf2e4be06feea5729a57731ed071eb31bc",
+    "new_checkpoint_refusal_probes": [
+      {
+        "operation": "delete_directory_manifest",
+        "status": "REFUSED",
+        "reason": "Required custody manifests are missing: ['archives/repository-history/historical-sources-20261115.json']"
+      },
+      {
+        "operation": "omit_directory_source_row",
+        "status": "REFUSED",
+        "reason": "Custody inventory source rows changed: archives/repository-history/historical-sources-20261115.json"
+      },
+      {
+        "operation": "shrink_exact_file_selection",
+        "status": "REFUSED",
+        "reason": "Custody inventory retired files changed: archives/repository-history/obsolete-entrypoints-20261115.json"
+      }
+    ],
     "whole_runtime_ci": "Consult the exact published head; no ancestor pass is promoted to this source.",
     "historical_workflows": [
       {

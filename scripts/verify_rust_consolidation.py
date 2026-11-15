@@ -12,10 +12,10 @@ import re
 import subprocess
 
 
-# This complete cleanup checkpoint includes both retirement waves. Later work
+# This complete cleanup checkpoint includes all current retirement waves. Later work
 # may change disposition or add a new manifest, but cannot erase an existing
 # source row merely to avoid checking its original object.
-RETENTION_INVENTORY_BASELINE = "cc18b5b399cfa594dfbaa9e4046ba2c376dbc6d3"
+RETENTION_INVENTORY_BASELINE = "b27890bf2e4be06feea5729a57731ed071eb31bc"
 
 
 def git(root, *args, check=True, input_bytes=None):

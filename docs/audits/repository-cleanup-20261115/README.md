@@ -11,7 +11,7 @@ evidence-reader paths and original-source retention.
 | Metric | Original baseline | Current tree |
 | --- | ---: | ---: |
 | Tracked files | 17,673 | 5,636 |
-| Tracked-file bytes | 1,864,002,891 | 170,882,966 |
+| Tracked-file bytes | 1,864,002,891 | 170,884,233 |
 | Python files | 1,986 | 609 |
 
 **12,048 historical files / 1,696,849,279 original bytes** have
@@ -105,7 +105,8 @@ the allowed storage disposition of 119 historical source/documentation rows.
 Its 70 Markdown links and three directory references point to exact original
 commits. Historical JSON provenance, failure status and evidence pins are unchanged.
 
-Inventory continuity is bound to an immutable cleanup checkpoint in the verifier.
+Inventory continuity now binds all **46 manifests / 17,110 original source rows**
+to the immutable [b27890bf checkpoint](https://github.com/TrillionniumFoundation/hepta-runtime/commit/b27890bf2e4be06feea5729a57731ed071eb31bc).
 It must survive as an ancestor: use a merge commit or fast-forward, without
 squashing/rebasing the checkpoint history. The v2 schema additionally supports
 precisely named individual files. Removing a required manifest, shrinking its
