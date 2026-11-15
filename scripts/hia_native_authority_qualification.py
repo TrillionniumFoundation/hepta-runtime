@@ -938,7 +938,7 @@ def _capture_process(directory, name, timeout):
 
 
 def captured_original_evidence(root, directory, controller_directory, artifact, probe):
-    """Verify the immutable v5 observation, explicitly without a new execution."""
+    """Verify the immutable v6 observation, explicitly without a new execution."""
     inventory = object_at(directory / "retained-files.json")
     require(len(inventory) == 103 and set(inventory) | {"retained-files.json"} ==
             {path.relative_to(directory).as_posix() for path in directory.rglob("*") if path.is_file()},
@@ -959,7 +959,7 @@ def captured_original_evidence(root, directory, controller_directory, artifact, 
             and comparison["normalized_logical_trace_pairs"] == 26, "captured original comparison scope differs")
     source_map = object_at(directory / "source-map.json")
     require(sha(directory / "source-map.json") == comparison.get("source_map_sha256")
-            == "67a18dc87dd33c9ee869f27aa8900ca3bf30626be5283f23836fd08951b927c7",
+            == "8b1f1ade6a39ac2e38b6ef2ea910152581c7565cbdba2dc80958b85dac9f2365",
             "captured exact source map differs")
     names = {row[1] for row in SPECS} | set(ORACLE_SOURCES)
     names.update({"native/authority_packer.hepta", "native/authority_profile.json",
@@ -1003,8 +1003,8 @@ def captured_original_evidence(root, directory, controller_directory, artifact, 
     dependency = oracle_dependencies(root)
     build = object_at(directory / "original-build.json")
     same(build, comparison.get("original_build"), "captured build reports disagree")
-    expected_build = {"status": "PASS", "binary_bytes": 4223696,
-        "binary_sha256": "68abfc7a171b8cb09778b16c8f59b7d86d21e61f44d5692193848eb2781c8a9b",
+    expected_build = {"status": "PASS", "binary_bytes": 3894536,
+        "binary_sha256": "be401beb51bbce2840b6065d31586578739918dc1e95ee1ae8038f2195352fc9",
         "cargo_lock_sha256": dependency["cargo_lock_sha256"], "locked_package_count": 133,
         "all_registry_versions_and_checksums_match_baseline": True, "test_recipe_has_reduced_feature_closure": True,
         "generated_source_byte_exact": True, "generated_module_sha256": digest(generated["original_authority_reference.rs"]),
@@ -1015,7 +1015,7 @@ def captured_original_evidence(root, directory, controller_directory, artifact, 
     same({key: build.get(key) for key in expected_build}, expected_build, "captured unchanged Rust build identity differs")
     processes = {}
     streams = {}
-    for name, timeout in (("rustc-version", 20), ("rustfmt-check", 30), ("cargo-build", 600),
+    for name, timeout in (("rustc-version", 20), ("rustfmt-check", 30), ("cargo-build", 180),
                            ("original-controller-replay", 120), ("native-kernel-replay", 120),
                            ("original-kernel-replay", 120), ("native-authority-transport", 120)):
         processes[name], streams[name] = _capture_process(directory, name, timeout)

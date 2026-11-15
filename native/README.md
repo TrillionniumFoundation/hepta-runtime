@@ -190,11 +190,11 @@ and symlinks outside those exact fixture roots remain an admission error.
 
 ## Native components
 
-Qualification covers 105 native HIA sources through 40 executable component
+Qualification covers 113 native HIA sources through 45 executable component
 entries; the two scope profiles share their HIA scope owner. The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
-as qualification-only. The 16 other test HIA fixtures are recorded separately.
+as qualification-only. The 19 test HIA fixtures are recorded separately.
 These counts do not count migrated production MCP handlers.
 
 | Source | Implemented behavior |
@@ -205,6 +205,9 @@ These counts do not count migrated production MCP handlers.
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
 | [batch_plan.hepta](batch_plan.hepta) | Original typed batch admission, operation parsing and endpoint planning, complete ordered diagnostics and full 50-operation / 5 MiB file domains |
 | [batch_apply.hepta](batch_apply.hepta) | Original ordered batch conflicts, duplicate/noise diagnostics, full application through EditableContent, Rust Debug escaping and fixed plan-to-apply composition |
+| [batch_render.hepta](batch_render.hepta) | Complete original Local batch diff/result rendering, original line IDs, clipping and removed markers |
+| [batch_write.hepta](batch_write.hepta) | Complete private Local batch_edit_spec composition through validation, reads, locks, writes, history, cache and full result rendering |
+| [batch_write_packer.hepta](batch_write_packer.hepta) | Fixed fourteen-image Local batch effect carrier with explicit wide byte bounds |
 | [atomic_write.hepta](atomic_write.hepta) | Complete original Linux Local atomic-write policy, exact Unix temporary paths, metadata/permission behavior, retries, cleanup and cancellation ordering |
 | [atomic_write_packer.hepta](atomic_write_packer.hepta) | Fixed native write syscall boundary, descriptor custody, owned worker, cancellation/drain and parent-death cleanup |
 | [line_verify.hepta](line_verify.hepta) | Original stale line-ID verification, exact fresh context and nearest-three relocation hints, plus complete strict/clamped index results |
@@ -285,6 +288,9 @@ These counts do not count migrated production MCP handlers.
 | [file_info_service.hepta](file_info_service.hepta) | Original typed file-info admission and exact compact Linux fingerprint/metadata results, checked IO response and version formatting |
 | [composition_packer.hepta](composition_packer.hepta) | Closed native image tables, fixed call authority, private workspaces and bounded child/OS continuations and fixed owned-worker inspection deadline in one static ELF |
 | [stdio_packer.hepta](stdio_packer.hepta) | ELF construction and persistent newline-delimited input/output transport |
+| [binary32_json.hepta](binary32_json.hepta) | Integer-only exact locked binary32 JSON formatting |
+| [typed_result_json.hepta](typed_result_json.hepta) | Original typed Complete CallToolResult/ErrorData field order and scalar serialization |
+| [request_result.hepta](request_result.hepta) | Original identity, ack, exact typed wire budget and completion-classification byte decisions |
 | [filter_packer.hepta](filter_packer.hepta) | ELF construction for one complete binary input/output operation |
 
 The byte ABI and all eight operations are specified in
@@ -461,35 +467,58 @@ python3 -m venv /absolute/path/to/hia-reference-environment
   --rustc /absolute/path/to/rustc
 ```
 
-CI executes the same gate as a fresh prepare job, four explicit native partitions
-and one aggregate/original-Rust job. The prepare job executes the full cold gate
-and builds every module once. Its exact SHA256 is passed through the workflow;
-every partition checks the full source, compiler, build and invocation identity
-before executing its complete suite list. Batch, text/history/view, JSON and
-system suites run on separate runners. Each job retains the original 15-minute
-limit; every native process retains 180 seconds and the cold/owner limits below
-are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
-The collector verifies every actual command, raw stdout/stderr, retained corpus,
-private process receipt and immutable build byte before running the existing
-native evidence checks and all 35 original Rust recipes. Artifact transport can
-strip executable permissions; only byte-verified owned regular files have their
-recorded ordinary permissions restored. The aggregate retains the original
-partition reports and rechecks them before and after the original comparisons.
-The shard receipt also binds its complete directory inventory, preserving empty
-content snapshots through artifact ZIP transport. The atomic writer's live
-effect targets are retired only after complete snapshots, full content gzips,
-raw traces and all actual process outputs pass their evidence checks. Retirement
-records bind that accepted evidence; no semantic call is added or reconstructed.
-The standalone commands above still execute the complete gate sequentially.
+CI executes the complete gate through one fresh prepare job, five native
+partitions, seven original-reference groups and a final evidence collector. The
+prepare job executes the full cold gate and builds every module once. Each
+native partition admits that workflow-produced SHA256 and the full source,
+compiler, build and invocation identity before running its complete suite list.
+Batch, text/history/view, JSON, configuration/regex and system suites run on
+separate runners. Configuration keeps all fifteen existing suites in their
+original order; the three result byte owners remain in the JSON partition.
+Each job retains 15 minutes, each native suite retains 180 seconds, and every
+original recipe and compiler cold deadline remains unchanged.
+
+A separate native collector admits all five completed partitions and seals the
+whole native corpus. Every original group starts from those exact bytes. The
+forty required recipes are assigned once to bytes, state, services, JSON,
+configuration, system and batch groups. The two generic JSON recipes share one
+fresh locked build; the three result recipes share another. Workdir and Write
+stay together through their original fixture retirement, and the two independent
+OS reference workers retain their separate concurrent process receipts.
+
+Each successful original job publishes its own seal SHA256 through a dedicated
+workflow output. The final collector requires all seven supplied identities,
+every recipe, every actual completed process and all retained source, binary,
+input/output and compiler bytes. A partial group cannot claim aggregate PASS.
+The final mutation controls run only after every reference job has completed.
+Both native and original shard reports remain retained and are rechecked at
+later evidence admission. ZIP-lost executable modes are restored only after all
+owned regular-file bytes pass; directory inventories preserve empty snapshots.
+
+Failed jobs upload a separately captured diagnostic tree, including raw inputs,
+outputs, original source and receipts. Active Cargo target/build trees and live
+effect fixtures are excluded from that diagnostic subset, so a disappearing
+compiler temporary cannot break the upload. This does not turn partial output
+into complete evidence or qualify cleanup after an outer SIGKILL. Successful
+shards retain their full artifact inventory. The original cancelled CI runs and
+their exact failures remain separate observations.
+
+Live effect fixtures are retired only after complete snapshots, full content
+gzips, traces and actual process outputs pass their owner checks. Their receipts
+bind that accepted evidence; no semantic call is reconstructed. The standalone
+commands above remain available for the complete sequential gate.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 117 native suite processes, the fresh compiler cold process,
-35 required original Rust recipes and one Rust-version process: 186 recorded
-checks in a complete successful aggregate. The configuration recipe retains two
-fresh original processes. Fourteen evidence controls then run against the inactive
-complete aggregate and preserve a separate receipt without adding semantic calls. The two JSON recipes share one locked
-Cargo build and each perform a complete independent replay. A component's retained historical
+The declared gate has 133 native suite processes, one fresh compiler cold
+process and 40 required original recipes. The CI groups additionally retain
+seven actual Rust-version observations; the sequential entry retains one.
+Each recipe may contain several actual compile/replay checks, all counted from
+completed records. The configuration recipe retains both complete original
+processes. Twelve result controls, twenty public-registry controls and fourteen
+configuration/regex controls then re-admit the inactive evidence without adding
+semantic calls. Each shared JSON build still performs every complete replay.
+A component's retained historical
 comparison is not a fresh aggregate invocation.
 The OS-scope, authority-transport and file-info-guard suites run through two
 independent worker slots. The JSON Value and JSON transport suites execute in
@@ -603,7 +632,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all 35 required original Rust recipes succeed. The Python reference domain
+after all 40 required original Rust recipes succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -1241,3 +1270,37 @@ runtime and historical regression inputs remain: active workflows and tests
 still read files under `docs/qualification` and `tools/x230`. Their cleanup must
 follow replacement of those dependencies; their historical Git identities and
 original failure results must remain traceable.
+
+## Typed result serialization and final wire budgets
+
+The `binary32_json`, `typed_result_json`, and `request_result` image-only owners
+cover the original typed serialization and result metadata byte seam. Their
+complete native domains and three fresh, ordered Rust replay recipes are
+documented in [result_values_qualification.md](result_values_qualification.md).
+The one-hundred-package Cargo reference build is shared, while every domain
+executes its full original input set. Typed results preserve original field
+order and f32 formatting; canonical Value bytes are not substituted for typed
+result bytes when calculating the final wire budget.
+
+These private owners do not complete public caller binding, request admission,
+audit durability, result storage or acknowledgement ordering. No existing
+production handler is replaced by this registration.
+
+
+## Complete private Local batch write
+
+The [batch-write integration contract](batch_write_integration.md) registers one
+component, eight native suites and one required fresh original recipe. Its
+fourteen-image executable composes the existing Local write foundation with
+exact batch admission, line resolution, conflict/application and complete diff
+rendering. The wide domain retains every byte of the 50-by-5-MiB response and
+filesystem result. The locked original recipe builds both unchanged body and
+renderer references and executes all 7,909 calls in 84 processes.
+
+The explicit `batch-write.v1` borrowed profile provides 512 MiB input, 2 GiB
+output and 3 GiB workspace, and cannot be packaged as an automatic standalone
+filter. Existing profiles retain their capacities. Dependent owners that bind
+the common build/loader source need actual source-matched refreshes; historical
+proofs keep their prior hashes. This component does not migrate public
+`batch_edit` parameters, authorization, remote SFTP, audit or durable results.
+All 125 production handler records and removal flags remain unchanged.

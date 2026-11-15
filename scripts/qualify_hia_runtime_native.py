@@ -54,6 +54,7 @@ from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 batch_plan_evidence as checked_batch_plan_evidence)
 
 import hia_native_batch_apply_qualification as batch_apply_qualification
+import hia_native_batch_write_pipeline as batch_write_pipeline
 import hia_native_atomic_write_qualification as atomic_write_qualification
 from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
                                               qualification_evidence as checked_history_evidence)
@@ -67,12 +68,27 @@ import hia_native_session_qualification as session_qualification
 import hia_native_file_lock_pipeline as file_lock_pipeline
 import hia_native_connection_qualification as connection_qualification
 import hia_native_public_registry_qualification as public_registry_qualification
+import hia_native_result_qualification as result_qualification
 import hia_native_service_pipeline as service_pipeline
 import hia_native_write_chain_pipeline as write_chain_pipeline
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
+    {"key": "batch_write", "name": "batch-write", "source": "native/batch_write.hepta",
+     "builder": "batch_write", "manifest_env": "HIA_BATCH_WRITE_BUNDLE",
+     "test": "test_batch_write_controller.py",
+     "additional_tests": ("test_batch_render.py", "test_utf8_probe.py", "test_batch_write_files.py",
+                          "test_batch_write_kernel.py", "test_batch_write_concurrency.py",
+                          "test_batch_write_wide.py", "test_batch_write_evidence.py"),
+     "companion_sources": ("native/batch_render.hepta", "native/batch_write_packer.hepta")},
+    {"key": "binary32_json", "name": "binary32-json", "source": "native/binary32_json.hepta",
+     "builder": "result_values", "manifest_env": "HIA_RESULT_BUILD", "test": "test_binary32_json.py"},
+    {"key": "typed_result_json", "name": "typed-result-json", "source": "native/typed_result_json.hepta",
+     "builder": "result_values", "manifest_env": "HIA_RESULT_BUILD", "test": "test_typed_result_json.py"},
+    {"key": "request_result", "name": "request-result", "source": "native/request_result.hepta",
+     "builder": "result_values", "manifest_env": "HIA_RESULT_BUILD", "test": "test_request_result.py",
+     "additional_tests": ("test_result_value_evidence.py",)},
     {"key": "runtime_bytes", "name": "runtime-bytes", "source": "native/runtime_bytes.hepta",
      "standalone": "filter", "manifest_env": "HIA_BYTES_MANIFEST", "test": "test_runtime_bytes.py"},
     {"key": "runtime_protocol", "name": "runtime-protocol", "source": "native/runtime_protocol.hepta",
@@ -255,7 +271,7 @@ MODULES = (
 )
 PACKERS = {"native/filter_packer.hepta", "native/stdio_packer.hepta"}
 EXTRA_TESTS = ("test_transport.py", "test_native_composition.py", "test_qualification_reporting.py",
-               "test_native_pipeline.py")
+               "test_native_pipeline.py", "test_original_pipeline.py")
 RUST_CORPUS_FILES = ("native-corpus.json", "input.bin.gz", "native-output.bin.gz")
 FILE_INFO_SUITES = (
     ("test_info_service.py", "file-info-python-reference.json", "hepta.runtime.native-info-service-test.v1",
@@ -337,13 +353,16 @@ def sources() -> dict:
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
-        "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py", "hia_native_failure.py",
+        "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py", "hia_native_rust_pipeline.py", "hia_native_failure.py",
         "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
-                  ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / "rustfmt.toml"))
+                  ROOT / ".github/workflows/hia-runtime-native.yml",
+                  ROOT / ".github/workflows/hia-runtime-original-shard.yml", ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
     paths.update(ROOT / name for name in service_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in public_registry_qualification.source_pins(ROOT))
+    paths.update(ROOT / name for name in result_qualification.source_pins(ROOT))
+    paths.update(ROOT / name for name in batch_write_pipeline.q.pins(ROOT))
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
 
@@ -468,6 +487,10 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                             if name in service_pipeline.DIRECTORY_TESTS})
     if set(tests) & set(public_registry_qualification.TESTS):
         config_commands.update(public_registry_qualification.test_commands(ROOT, output, report))
+    if set(tests) & set((*result_qualification.TESTS, result_qualification.CONTROL_TEST)):
+        config_commands.update(result_qualification.test_commands(ROOT, output, report))
+    if set(tests) & set(batch_write_pipeline.q.SUITES):
+        config_commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     def command(name):
         prefix = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
         argv = commands.get(name, prefix)
@@ -939,6 +962,14 @@ def workdir_service_evidence(output: Path, report: dict) -> dict:
 
 def sdk_connection_evidence(output: Path, report: dict, *, create=False) -> dict:
     return connection_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def batch_write_evidence(output: Path, report: dict) -> dict:
+    return batch_write_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def result_values_evidence(output: Path, report: dict) -> dict:
+    return result_qualification.native_evidence(ROOT, output, report, completed_test_summary)
 
 
 def public_registry_evidence(output: Path, report: dict, *, create=False) -> dict:
@@ -2178,7 +2209,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / SCOPE_OS_FOLDER).mkdir(mode=0o700)
     (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
     for item in MODULES:
-        if item.get("builder") == "io":
+        if item.get("builder") == "result_values":
+            built = result_qualification.build_result_values(hepta, output / "build", ROOT)
+        elif item.get("builder") == "io":
             from hia_native_io_build import build_io
             built = build_io(hepta, output / "build")
         elif item.get("builder") == "composition":
@@ -2234,6 +2267,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "effect_fence":
             from hia_native_effect_fence_build import build_effect_fence_bundle
             built = build_effect_fence_bundle(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "batch_write":
+            from hia_native_batch_write_build import build_batch_write
+            built = build_batch_write(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "batch_apply":
             from hia_native_batch_apply_build import build_batch_apply
             built = build_batch_apply(hepta, output / "build", source_root=ROOT)
@@ -2293,6 +2329,8 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(service_pipeline.test_commands(ROOT, output, report))
     commands.update(connection_qualification.test_commands(ROOT, output, report))
     commands.update(public_registry_qualification.test_commands(ROOT, output, report))
+    commands.update(result_qualification.test_commands(ROOT, output, report))
+    commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
@@ -2331,6 +2369,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["workdir_service_evidence"] = workdir_service_evidence(output, report)
     report["sdk_connection_evidence"] = sdk_connection_evidence(output, report, create=True)
     report["public_registry_evidence"] = public_registry_evidence(output, report, create=True)
+    report["result_values_evidence"] = result_values_evidence(output, report)
+    report["batch_write_evidence"] = batch_write_evidence(output, report)
     service_pipeline.prepare_transport(ROOT, output, report, completed_test_summary)
     report["json_evidence"] = json_evidence(output, report)
     report["execution_evidence"] = execution_evidence(output, report)
@@ -2368,6 +2408,13 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["view_cache_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["history_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["history_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["result_values_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["result_values_evidence"]["corpus_sha256"])
+    # The complete batch corpus is also inspected by batch_write_evidence on
+    # every admission; preserve the actual completed process and bundle roots.
+    batch_names = [report["modules"]["batch_write"]["manifest"]] + [
+        name + suffix for name in batch_write_pipeline.q.SUITES for suffix in (".stdout", ".stderr")]
+    report["rust_oracle_inputs"].update({name: sha(output / name) for name in batch_names})
     report["rust_oracle_inputs"].update(report["json_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["json_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["execution_evidence"]["artifact_sha256"])

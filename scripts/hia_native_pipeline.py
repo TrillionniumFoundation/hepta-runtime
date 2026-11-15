@@ -1,6 +1,6 @@
 """Run the complete native gate across source-bound, independently retained jobs.
 
-One fresh cold/build artifact is admitted by its workflow-produced SHA256. Four
+One fresh cold/build artifact is admitted by its workflow-produced SHA256. Five
 explicit partitions execute every registered suite once. Collection rechecks all
 raw process bytes, immutable build inputs and complete shard inventories before
 the unchanged evidence owners can advance to the original Rust comparisons.
@@ -26,11 +26,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qualify_hia_runtime_native as q
 
 PARTITIONS = {
-    "batch": ("batch_plan", "batch_apply", "atomic_write", "write_chain"),
+    "batch": ("batch_plan", "batch_apply", "atomic_write", "write_chain", "batch_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "line_endpoint", "line_verify",
              "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir",
              "file_locks", "file_lock_service", "workdir_service", "sdk_connection", "public_registry"),
-    "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
+    "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence",
+             "binary32_json", "typed_result_json", "request_result"),
+    "config": ("runtime_config",),
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
                "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service", "directory_service"),
@@ -142,8 +144,10 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "json", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if set(partitions) != {"batch", "text", "json", "config", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
         raise ValueError("every native module must belong to exactly one explicit partition")
+    if partitions["config"] != ("runtime_config",):
+        raise ValueError("the complete configuration and regex owner requires its independent partition")
     result = {group: tuple(name for key in keys for name in
                          (modules[key]["test"], *modules[key].get("additional_tests", ())))
               for group, keys in partitions.items()}
@@ -159,7 +163,8 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
                and [names.index(name) for name in ordered_locks] == sorted(names.index(name) for name in ordered_locks)
                for names in result.values()):
         raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
-    for group in (q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS)):
+    for group in (q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS),
+                  q.batch_write_pipeline.q.SUITES):
         if not any(all(name in names for name in group)
                    and [names.index(name) for name in group] == sorted(names.index(name) for name in group)
                    for names in result.values()):
@@ -423,7 +428,7 @@ def collect(output: Path, hepta: Path, expected: str, invocation: str, shards: P
     try:
         folders = sorted(shards.iterdir())
         if len(folders) != len(PARTITIONS) or any(p.is_symlink() or not p.is_dir() for p in folders):
-            raise ValueError("collector requires exactly four complete shard artifacts")
+            raise ValueError("collector requires exactly five complete shard artifacts")
         parts, copies, all_files, all_directories = {}, {}, {}, set()
         for folder in folders:
             receipt_path, report_path = owned(folder, "shard.json"), owned(folder, "shard-report.json")

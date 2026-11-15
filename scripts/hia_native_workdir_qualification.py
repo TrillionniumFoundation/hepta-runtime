@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_workdir_service_build as native
 
 SOURCE_INDEX = "native/workdir_qualification_sources.json"
-SOURCE_INDEX_SHA256 = "1fd708aab5a483e8c088e4aba8d09806216a9b0d62dc0487f12ee0e33e65800f"
+SOURCE_INDEX_SHA256 = "c79ca3c7737b4ad04f0c6cb63fddc356a35460417353cd498ee0d893509aae71"
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 require = native.require
 FLAGS = ("whole_runtime_replaced", "production_activated", "old_stack_removal_qualified")

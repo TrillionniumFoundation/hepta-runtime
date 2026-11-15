@@ -121,13 +121,19 @@ class NativePipelineTests(unittest.TestCase):
         flat = [name for tests in partitions.values() for name in tests]
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(set(flat), set(q.native_tests()))
+        self.assertEqual(set(partitions), {"batch", "text", "json", "config", "system"})
+        config = next(row for row in q.MODULES if row["key"] == "runtime_config")
+        self.assertEqual(partitions["config"], (config["test"], *config["additional_tests"]))
+        self.assertTrue(set(partitions["config"]).isdisjoint(partitions["json"]))
         self.assertEqual(tuple(partitions["batch"]),
             ("test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
              "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
              "test_atomic_write_policy.py", "test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
              "test_atomic_write_evidence.py", "test_shared_atomic.py", "test_write_chain_controller.py",
              "test_write_chain_files.py", "test_write_chain_kernel.py", "test_write_chain_concurrency.py",
-             "test_write_chain_evidence.py"))
+             "test_write_chain_evidence.py", "test_batch_write_controller.py", "test_batch_render.py",
+             "test_utf8_probe.py", "test_batch_write_files.py", "test_batch_write_kernel.py",
+             "test_batch_write_concurrency.py", "test_batch_write_wide.py", "test_batch_write_evidence.py"))
         for bad in ("missing", "duplicate", "unknown", "new_module", "split_ordered"):
             changed = copy.deepcopy(p.PARTITIONS)
             modules = q.MODULES
@@ -145,6 +151,20 @@ class NativePipelineTests(unittest.TestCase):
                                 if row["key"] == "runtime_bytes" else row for row in modules)
             with self.subTest(bad=bad), patch.object(q, "MODULES", modules), self.assertRaises(ValueError):
                 p.partition_tests(changed)
+
+    def test_workflow_requires_all_five_partitions_with_unchanged_process_and_job_limits(self):
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        block = workflow.split("\n  native:\n", 1)[1].split("\n  aggregate:\n", 1)[0]
+        groups = re.search(r"^        group: \[([^\]]+)\]$", block, re.MULTILINE)
+        self.assertIsNotNone(groups)
+        self.assertEqual(tuple(value.strip() for value in groups[1].split(",")), tuple(p.PARTITIONS))
+        self.assertIn("    timeout-minutes: 15\n", block)
+        self.assertIn("      fail-fast: false\n", block)
+        changed = copy.deepcopy(p.PARTITIONS)
+        changed["json"] += changed["config"]
+        changed["config"] = ()
+        with self.assertRaisesRegex(ValueError, "independent partition"):
+            p.partition_tests(changed)
 
     def test_failure_diagnostics_survive_denied_fixtures_without_mutation(self):
         source = self.root / "failed"; source.mkdir()
@@ -184,6 +204,31 @@ class NativePipelineTests(unittest.TestCase):
             failure.capture(source, destination)
         with self.assertRaisesRegex(ValueError, "separate"):
             failure.capture(source, source / "nested-diagnostics")
+
+    def test_original_failure_capture_keeps_raw_domains_and_excludes_live_cargo_cache(self):
+        source = self.root / "partial-original"; source.mkdir()
+        target = source / "connection-original/target/release/deps"
+        target.mkdir(parents=True)
+        (target / "rmetaFZWET8").symlink_to(self.root / "already-retired-cargo-temporary")
+        retained = {
+            "connection-original/project/src/main.rs": b"// exact original source\n",
+            "connection-original/project/Cargo.lock": b"version = 4\n",
+            "connection-original/requests.bin": b"\x00\xff\x80\n",
+            "connection-original/partial-output.bin.gz": b"complete captured gzip bytes\x00",
+            "connection-original/build.stderr.log": b"actual interrupted compiler log\xff",
+        }
+        for name, raw in retained.items():
+            path = source / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
+        destination = self.root / "stable-diagnostics"
+        receipt = failure.capture(source, destination)
+        self.assertEqual(receipt["capture_errors"], 0)
+        self.assertEqual(set(receipt["files"]), set(retained))
+        for name, raw in retained.items():
+            self.assertEqual((destination / "data" / name).read_bytes(), raw)
+            self.assertEqual((source / name).read_bytes(), raw)
+        self.assertTrue(any(row["path"] == "connection-original/target" for row in receipt["skipped"]))
+        self.assertFalse((destination / "data/connection-original/target").exists())
+        self.assertTrue((target / "rmetaFZWET8").is_symlink())
 
     def test_transport_mode_restore_requires_all_exact_owned_bytes(self):
         folder = self.root / "data"; folder.mkdir()
@@ -367,7 +412,7 @@ class NativePipelineTests(unittest.TestCase):
     def test_missing_or_duplicate_shards_cannot_reach_evidence_owners(self):
         source, prepared, report, destination = self.actual_fixture()
         shards = self.root / "shards"; shards.mkdir()
-        for group in ("one", "two", "three", "four"):
+        for group in ("one", "two", "three", "four", "five"):
             shutil.copytree(destination, shards / group)
         output = self.root / "collect"; output.mkdir()
         with patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())), \
@@ -377,12 +422,12 @@ class NativePipelineTests(unittest.TestCase):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
             self.assertEqual(p.read_json(output / "result.json")["status"], "FAIL")
-            shutil.rmtree(shards / "four")
-            with self.assertRaisesRegex(ValueError, "exactly four"):
+            shutil.rmtree(shards / "five")
+            with self.assertRaisesRegex(ValueError, "exactly five"):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
 
-    def test_four_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
+    def test_five_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
         from contextlib import ExitStack
         from datetime import datetime, timezone
         source = self.root / "source"
@@ -402,7 +447,7 @@ class NativePipelineTests(unittest.TestCase):
             run = self.root / group; run.mkdir()
             report = copy.deepcopy(prepared)
             report.update(status="RUNNING", phase="native_components", native_components_status="RUNNING",
-                qualification_shard={"group": group, "invocation": "four-actual-processes",
+                qualification_shard={"group": group, "invocation": "five-actual-processes",
                                      "prepared_sha256": "b" * 64, "tests": [name]})
             with patch.object(q, "ROOT", source):
                 q.run_native_checks(run, report, (name,), q.qualification_env(), parallel_tests=(),
@@ -420,8 +465,8 @@ class NativePipelineTests(unittest.TestCase):
             stack.enter_context(patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())))
             evidence = stack.enter_context(patch.object(q, "collect_native_evidence"))
             stack.enter_context(patch.object(q, "finish_native", side_effect=finish))
-            result = p.collect(output, self.root / "compiler", "b" * 64, "four-actual-processes", artifacts)
-            self.assertEqual(result["checks"], 5)
+            result = p.collect(output, self.root / "compiler", "b" * 64, "five-actual-processes", artifacts)
+            self.assertEqual(result["checks"], 6)
             evidence.assert_called_once()
             report = p.read_json(output / "result.json")
             self.assertEqual([row["name"] for row in report["checks"][1:]], list(names))

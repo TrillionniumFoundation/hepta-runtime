@@ -246,6 +246,89 @@ class QualificationReportingTests(unittest.TestCase):
                         ordered_groups=(), commands={name: argv}, timeout=5)
         self.assertEqual(len(self.report["checks"]), 1)
 
+    def test_result_value_domains_preserve_original_counts_and_shared_reference(self):
+        import qualify_hia_runtime_native as q
+        import compare_hia_runtime_rust as comparison
+        import hia_native_pipeline as pipeline
+        import hia_native_result_reference as reference
+        helper = q.result_qualification
+        entries = {row["key"]: row for row in MODULES}
+        for key, domain in helper.KEYS.items():
+            self.assertEqual(entries[key]["source"], helper.MODULES[domain][0])
+            self.assertEqual(entries[key]["builder"], "result_values")
+            self.assertIn(key, comparison.RECIPES)
+        self.assertEqual(sum(sum(values.values()) for values in helper.COUNTS.values()), 548914)
+        self.assertEqual(len(reference.reference_inputs(ROOT)["blocks"]), 11)
+        self.assertTrue(set(helper.source_pins(ROOT)) <= set(sources()))
+        self.assertTrue(set((*helper.TESTS, helper.CONTROL_TEST)) <= set(pipeline.partition_tests()["json"]))
+        self.assertEqual(len(set(comparison.RESULT_VALUE_CONTROL_LABELS)), 13)
+        self.assertEqual(comparison.result_values_control_command(self.output)[-2:],
+            ["--result", str(self.output / "result-values-evidence-controls.json")])
+
+    def test_result_value_launcher_refuses_changed_manifest_and_appended_flags(self):
+        import qualify_hia_runtime_native as q
+        helper, name = q.result_qualification, q.result_qualification.TESTS[0]
+        root = self.wait_fixture({name: "print(json.dumps({'actual_result_launcher':True}))\n"})
+        expected = [sys.executable, "-I", "-B", str(root / "tests/hia_native" / name),
+                    "--manifest", str(root / "declared.json")]
+        with patch.object(q, "ROOT", root), patch.object(helper, "test_commands", return_value={name: expected}):
+            q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                ordered_groups=(), commands={name: expected}, timeout=5)
+            self.assertEqual(self.report["checks"][0]["command"], expected)
+            self.assertEqual(json.loads((self.output / (name + ".stdout")).read_bytes()),
+                {"actual_result_launcher": True})
+            for argv in (expected + ["--not-executed"], expected[:-1] + ["/foreign.json"], expected[:4]):
+                with self.subTest(command=argv), self.assertRaises(ValueError):
+                    q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                        ordered_groups=(), commands={name: argv}, timeout=5)
+        self.assertEqual(len(self.report["checks"]), 1)
+
+    def test_registry_archive_inventory_rejects_nonregular_duplicate_and_escaping_members(self):
+        import io
+        import tarfile
+        from hia_native_result_reference import archive_files
+        from result_value_registry import sha
+
+        def packed(names):
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+                for name, kind in names:
+                    item = tarfile.TarInfo(name)
+                    if kind == "link":
+                        item.type = tarfile.SYMTYPE
+                        item.linkname = "Cargo.toml"
+                        archive.addfile(item)
+                    else:
+                        item.size = 4
+                        archive.addfile(item, io.BytesIO(b"data"))
+            return buffer.getvalue()
+
+        good = [("fixture-1.0/Cargo.toml", "file"), ("fixture-1.0/src/lib.rs", "file")]
+        expected = {name.split("/", 1)[1]: {"bytes": 4, "sha256": sha(b"data")} for name, _ in good}
+        self.assertEqual(archive_files(packed(good), "fixture-1.0"), expected)
+        for extra in (("fixture-1.0/Cargo.toml", "file"), ("/fixture-1.0/outside", "file"),
+                      ("fixture-1.0/../outside", "file"), ("other-1.0/lib.rs", "file"),
+                      ("fixture-1.0/link", "link"), ("fixture-1.0//duplicate", "file")):
+            with self.subTest(member=extra), self.assertRaises(ValueError):
+                archive_files(packed(good + [extra]), "fixture-1.0")
+
+    def test_registry_source_inventory_excludes_only_root_cargo_markers(self):
+        from hia_native_result_reference import files
+        root = self.output / "package"
+        root.mkdir()
+        (root / "Cargo.toml").write_bytes(b"original")
+        baseline = files(root)
+        for name in (".cargo-ok", ".cargo-checksum.json"):
+            (root / name).write_bytes(b"Cargo-owned metadata")
+        self.assertEqual(files(root), baseline)
+        nested = root / "extra"
+        nested.mkdir()
+        (nested / ".cargo-ok").write_bytes(b"unexpected source")
+        self.assertIn("extra/.cargo-ok", files(root))
+        (nested / "external").symlink_to(root / "Cargo.toml")
+        with self.assertRaises(ValueError):
+            files(root)
+
     def original_worker_fixture(self, *, serial_code=0, worker_code=0, blocked=False):
         import compare_hia_runtime_rust as comparison
         root = self.wait_fixture({

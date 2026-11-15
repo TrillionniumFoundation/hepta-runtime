@@ -65,8 +65,8 @@ def source_contract(root=ROOT,reference=None,hepta=None):
             exact(f,old[name],'atomic imported function body changed')
             exact(sha(canonical(f)),row['functions'][name],'atomic imported function digest differs');count+=1
     exact(count,5,'atomic imported function count differs')
-    exact(sha(read(root/'scripts/hia_native_build.py')),'7b01d602d50835f2b73a2b7b39761c0cef08a372493985161d59184d52c0dcb2','atomic compiler driver changed')
-    exact(sha(read(root/'scripts/hia_native_loader.py')),'331b1fdc693df44847723f7171a1338918d1558f1cdc48f558cd29b32f2971e2','actual atomic loader changed')
+    exact(sha(read(root/'scripts/hia_native_build.py')),'02cc0f23764d3a2bc6c1325e2ed5beb7986a6b64b22827c6ddcb10d2799de7d1','atomic compiler driver changed')
+    exact(sha(read(root/'scripts/hia_native_loader.py')),'58e2fe0492379340d7471a7857e1aa5de1a9a5d1e37a118852278b131bb1fe06','actual atomic loader changed')
     lock=tomllib.loads(read(root/'tests/hia_native/atomic_write_oracle/Cargo.lock').decode())
     dependencies={}
     expected={'tokio':('1.53.1','202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed'),
