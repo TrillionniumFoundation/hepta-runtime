@@ -1,0 +1,137 @@
+{
+  "compiled_projection": "src/projection.rs",
+  "files": {
+    "Cargo.toml": {
+      "bytes": 4157,
+      "git_blob_sha1": "246f38e394de474fa0d55297b6b93cea40b77393",
+      "sha256": "377e7dca547f0ff0d832fb28cf01862a6d84b4b6ed42c8b36dae9075cbbbb78f"
+    },
+    "src/mcp/fs/background.rs": {
+      "bytes": 9434,
+      "git_blob_sha1": "32d887d98269d9db2b3adf979567c417a2e38db6",
+      "sha256": "826394f843a0891dfbe8b0b6986dad40d85b53e20a497cb4ddb04838a185f065"
+    }
+  },
+  "original_spans": {
+    "jobs_dir": {
+      "bytes": 103,
+      "end": 2633,
+      "sha256": "9474e8a695e5b8e9a7d765d2e2aad907cdca76d9718c35d890115affa20fd519",
+      "source": "src/mcp/fs/background.rs",
+      "start": 2530
+    },
+    "next_id": {
+      "bytes": 118,
+      "end": 2960,
+      "sha256": "755107d3e6618c29a43f662cfc7f3212c0cd30265fce5e00d8b693c3e21259b4",
+      "source": "src/mcp/fs/background.rs",
+      "start": 2842
+    },
+    "stderr_join": {
+      "bytes": 57,
+      "end": 4692,
+      "sha256": "693e732f187ebb1af4b9c2e6f2046db492bef932418041c56c7a92fb4ac342d4",
+      "source": "src/mcp/fs/background.rs",
+      "start": 4635
+    },
+    "stdout_join": {
+      "bytes": 57,
+      "end": 4635,
+      "sha256": "2a6f0defdec01fbfb2ef8c8e2b3a258854ec292f45b3e1efed6840bfb0725dbe",
+      "source": "src/mcp/fs/background.rs",
+      "start": 4578
+    }
+  },
+  "original_test_count": 0,
+  "projection_template": "src/projection.rs.in",
+  "projections": {
+    "ORIGINAL_JOBS_DIR": {
+      "edits": [
+        {
+          "count": 1,
+          "from": "std::env::temp_dir()",
+          "to": "projected_temp_dir()"
+        },
+        {
+          "count": 1,
+          "from": "std::process::id()",
+          "to": "observed_pid()"
+        }
+      ],
+      "span": "jobs_dir"
+    },
+    "ORIGINAL_LINUX_TEMP_DIR": {
+      "edits": [
+        {
+          "count": 1,
+          "from": "pub fn temp_dir()",
+          "to": "fn projected_temp_dir()"
+        },
+        {
+          "count": 1,
+          "from": "crate::env::var_os(\"TMPDIR\")",
+          "to": "observed_tmpdir()"
+        },
+        {
+          "count": 1,
+          "from": "cfg_select! {\n            all(target_vendor = \"apple\", not(miri)) => darwin_temp_dir(),\n            target_os = \"android\" => PathBuf::from(\"/data/local/tmp\"),\n            _ => PathBuf::from(\"/tmp\"),\n        }",
+          "to": "PathBuf::from(\"/tmp\")"
+        }
+      ],
+      "source": "src/std_temp_dir.rs.in"
+    },
+    "ORIGINAL_NEXT_ID": {
+      "edits": [
+        {
+          "count": 1,
+          "from": "std::process::id()",
+          "to": "observed_pid()"
+        }
+      ],
+      "span": "next_id"
+    },
+    "ORIGINAL_STDERR_JOIN": {
+      "edits": [],
+      "span": "stderr_join"
+    },
+    "ORIGINAL_STDOUT_JOIN": {
+      "edits": [],
+      "span": "stdout_join"
+    }
+  },
+  "required_rust_version": "1.95.0",
+  "required_target": "x86_64-unknown-linux-gnu",
+  "reviewed_standard_library_sources": {
+    "path": {
+      "bytes": 134544,
+      "git_blob_sha1": "bf27df7b0428169a4308ebf413e732f3479754fe",
+      "sha256": "2c41294523392663a73fa3da08864427a05bdd8ff0fff0bd157c0236680593bf",
+      "url": "https://github.com/rust-lang/rust/blob/1.95.0/library/std/src/path.rs"
+    },
+    "temp_dir": {
+      "bytes": 18923,
+      "git_blob_sha1": "494d94433db34c5fafcd8aad6dad2e948acad642",
+      "retained_span": {
+        "bytes": 329,
+        "end": 16193,
+        "sha256": "9de00da9aa607892c15b0f629cb2bb87bd2a19adb63d9328861ea29d746200e0",
+        "source": "src/std_temp_dir.rs.in",
+        "start": 15864
+      },
+      "sha256": "86437b5b0c1d14a2fc95629f680ddfb291af2bbf7b59e4c76a9dc6c726c2f7c1",
+      "url": "https://github.com/rust-lang/rust/blob/1.95.0/library/std/src/sys/pal/unix/os.rs"
+    }
+  },
+  "schema": "hepta.runtime.shell-capture-path-original-source.v1",
+  "source_commit": "93f320a8e02b522e4bafd4a2cf346d68069ec74b",
+  "source_repository": "https://github.com/TrillionniumFoundation/hepta-runtime",
+  "substitution_scope": [
+    "TMPDIR is a fixture Option<raw Unix OsString>; raw NUL is a typed projection only.",
+    "Linux cfg_select fallback is fixed explicitly; Apple/Android are not compiled.",
+    "PID is a u32 observation; the projected helpers do not acquire a real PID.",
+    "JOB_SEQ is seeded before each sequential case; original AtomicU64 fetch_add Relaxed executes unchanged.",
+    "Path equality and Path.parent call the linked Rust standard library directly.",
+    "Capture formatting and PathBuf joins retain original statements; no filesystem or process spawn executes."
+  ],
+  "whole_prepare_or_registry_executed": false
+}

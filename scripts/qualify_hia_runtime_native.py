@@ -68,6 +68,7 @@ import hia_native_effect_fence_qualification as effect_fence_qualification
 import hia_native_config_qualification as config_qualification
 import hia_native_session_qualification as session_qualification
 import hia_native_shell_qualification as shell_qualification
+import hia_native_shell_capture_gate as capture_gate
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -102,6 +103,7 @@ MODULES = (
      "builder": "shell_foreground", "manifest_env": "HIA_SHELL_FOREGROUND_MANIFEST",
      "test": "shell_foreground_controller.py", "additional_tests": ("shell_foreground_io.py",),
      "companion_sources": ("native/shell_foreground_packer.hepta",)},
+    *capture_gate.MODULES,
     {"key": "request_context", "name": "request-context", "source": "native/request_context.hepta",
      "standalone": None, "manifest_env": "HIA_REQUEST_CONTEXT_MANIFEST", "test": "test_request_context.py"},
     {"key": "response_hints", "name": "response-hints", "source": "native/response_hints.hepta",
@@ -319,6 +321,8 @@ def sources() -> dict:
                   ROOT / ".github/workflows/hia-runtime-shell-process.yml",
                   ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
+    paths.update(ROOT / "scripts" / name for name in capture_gate.SCRIPTS)
+    paths.update(ROOT / name for name in capture_gate.ORACLE_SOURCES)
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
 
@@ -340,6 +344,8 @@ def save_report(path: Path, result: dict) -> None:
 
 
 def process_summary(name: str, stdout: bytes) -> dict:
+    if capture_gate.process_kind(name) is not None:
+        return capture_gate.progress_records(name, stdout)[-1]
     if name in ("hia_native_shell_process_qualification.py", "shell-process-rust-compare"):
         return shell_process_progress_summary(stdout, original=name == "shell-process-rust-compare")
     if name in ("shell_output_io.py", "shell-output-native", "shell_foreground_io.py", "shell-foreground-native"):
@@ -449,8 +455,10 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                        if SHELL_OUTPUT_TEST in tests else {})
     foreground_commands = (shell_foreground_test_commands(output, report)
                            if set(tests) & set(SHELL_FOREGROUND_TESTS) else {})
+    capture_commands = (capture_gate.test_commands(output, report)
+                        if set(tests) & set(capture_gate.TESTS) else {})
     exact_commands = {**config_commands, **shell_commands, **outcome_commands,
-                      **output_commands, **foreground_commands}
+                      **output_commands, **foreground_commands, **capture_commands}
     def command(name):
         prefix = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
         argv = commands.get(name, prefix)
@@ -2697,6 +2705,8 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
                 process_manifest=output / report["modules"]["shell_process"]["manifest"],
                 output_manifest=output / report["modules"]["shell_output_io"]["manifest"],
                 outcome_manifest=output / report["modules"]["shell_outcome"]["manifest"])
+        elif item.get("builder") in capture_gate.KEYS:
+            built = capture_gate.build(item["key"], hepta, output / "build")
         elif item.get("builder") == "atomic_write":
             from hia_native_atomic_write_build import build_atomic_write
             built = build_atomic_write(hepta, output / "build", source_root=ROOT)
@@ -2759,6 +2769,8 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
         commands.update(shell_output_test_commands(output, report))
     if set(tests) & set(SHELL_FOREGROUND_TESTS):
         commands.update(shell_foreground_test_commands(output, report))
+    if set(tests) & set(capture_gate.TESTS):
+        commands.update(capture_gate.test_commands(output, report))
     return {name: command for name, command in commands.items() if name in tests}
 
 
@@ -2772,6 +2784,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["shell_outcome_evidence"] = shell_outcome_evidence(output, report)
     report["shell_output_evidence"] = shell_output_evidence(output, report)
     report["shell_foreground_evidence"] = shell_foreground_evidence(output, report)
+    for key in capture_gate.KEYS:
+        report[key + "_evidence"] = capture_gate.native_evidence(output, report, key)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
     report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -2823,7 +2837,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["shell_evidence"]["artifact_sha256"])
     for key in ("shell_process_evidence", "shell_background_evidence", "shell_outcome_evidence",
-                "shell_output_evidence", "shell_foreground_evidence"):
+                "shell_output_evidence", "shell_foreground_evidence",
+                *(key + "_evidence" for key in capture_gate.KEYS)):
         report["rust_oracle_inputs"].update(report[key]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report[key]["corpus_sha256"])
     report["rust_oracle_inputs"].update({

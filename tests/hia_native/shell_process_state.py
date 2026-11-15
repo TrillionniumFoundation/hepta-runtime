@@ -147,16 +147,43 @@ class BoundarySession:
         self.output_capacity, self.workspace_capacity = output_capacity, workspace_capacity
         self.native = None
         if boundary.native is None:
-            self._output = ctypes.create_string_buffer(output_capacity + 16)
-            self._workspace = ctypes.create_string_buffer(workspace_capacity + 16)
+            self._output = bytearray(output_capacity + 16)
+            self._workspace = bytearray(workspace_capacity + 16)
         else:
             self.native = boundary.native.session(
                 output_capacity=output_capacity, workspace_capacity=workspace_capacity)
             self._output, self._workspace = self.native._output, self.native._workspace
 
+    def fill_output(self, value, size):
+        if self.native is None:
+            need(0 <= size <= self.output_capacity, "replay output fill extent")
+            self._output[:size] = bytes([value]) * size
+        else:
+            ctypes.memset(self._output, value, size)
+
+    def fill_workspace(self, value, size):
+        if self.native is None:
+            need(0 <= size <= self.workspace_capacity, "replay workspace fill extent")
+            self._workspace[:size] = bytes([value]) * size
+        else:
+            ctypes.memset(self._workspace, value, size)
+
+    def put_workspace(self, at, raw):
+        if self.native is None:
+            need(0 <= at <= self.workspace_capacity and len(raw) <= self.workspace_capacity - at,
+                 "replay workspace write extent")
+            self._workspace[at:at + len(raw)] = raw
+        else:
+            ctypes.memmove(ctypes.addressof(self._workspace) + at, raw, len(raw))
+
     def invoke_raw(self, wire):
-        before = ctypes.string_at(self._output, self.output_capacity)
-        previous = ctypes.string_at(self._workspace, self.workspace_capacity)
+        # Replay reconstructs ordinary bytes; only actual native runs use FFI.
+        if self.native is None:
+            before = bytes(self._output[:self.output_capacity])
+            previous = bytes(self._workspace[:self.workspace_capacity])
+        else:
+            before = ctypes.string_at(self._output, self.output_capacity)
+            previous = ctypes.string_at(self._workspace, self.workspace_capacity)
         number = len(self.boundary.records) + 1
         if self.native is not None:
             returned, after, work = self.native.invoke_raw(wire)
@@ -199,8 +226,10 @@ class BoundarySession:
             work = bytes(changed)
             need(row["workspace_after_sha256"] == digest(work), "workspace after entry differs")
             returned, after = row["return_u64"], hx(row["output_after_hex"])
-            ctypes.memmove(self._output, after, len(after))
-            ctypes.memmove(self._workspace, work, len(work))
+            need(len(after) == self.output_capacity and len(work) == self.workspace_capacity,
+                 "replay result buffer extent")
+            self._output[:self.output_capacity] = after
+            self._workspace[:self.workspace_capacity] = work
         check_publication(row)
         if returned == PENDING:
             words = struct.unpack("<12Q", work[256:352])
@@ -227,8 +256,8 @@ class Boundary:
     def invoke_raw(self, wire, *, output_capacity, workspace_capacity, output_fill, workspace_fill):
         session = self.session(output_capacity=output_capacity, workspace_capacity=workspace_capacity)
         try:
-            ctypes.memset(session._output, output_fill, output_capacity)
-            ctypes.memset(session._workspace, workspace_fill, workspace_capacity)
+            session.fill_output(output_fill, output_capacity)
+            session.fill_workspace(workspace_fill, workspace_capacity)
             return session.invoke_raw(wire)
         finally:
             session.close()
@@ -244,7 +273,7 @@ class Session:
     def __init__(self,module,wire=None):
         self.s=module.session(output_capacity=128,workspace_capacity=1<<20)
         self.wire=wire if wire is not None else frame()
-        ctypes.memset(self.s._output,0xa7,128)
+        self.s.fill_output(0xa7,128)
         self.out=bytes([0xa7])*128
         self.calls=0
         self.actions=[]
@@ -266,7 +295,7 @@ class Session:
             self.actions.append(u64(self.work,272))
         return self.ret
     def put(self,at,raw):
-        ctypes.memmove(ctypes.addressof(self.s._workspace)+at,raw,len(raw))
+        self.s.put_workspace(at,raw)
     def complete(self,result=0,error=0,aux=0):
         assert self.ret==PENDING
         self.put(312,Q(result)+Q(error)+Q(aux)+Q(1))

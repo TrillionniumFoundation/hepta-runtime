@@ -23,6 +23,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import qualify_hia_runtime_native as q
+import hia_native_shell_capture_gate as capture_gate
 import hia_native_shell_process_build as process_build
 import hia_native_shell_process_evidence as process_evidence
 import hia_native_shell_process_reference as original
@@ -186,6 +187,24 @@ def run(args) -> dict:
                 raise ValueError("native output/outcome uses a different compiler artifact")
 
         report["phase"] = "native_suites"
+        for item in capture_gate.MODULES:
+            key, name = item["key"], item["name"]
+            report["phase"] = "native_build"
+            check(name + "-build", python_script("scripts/hia_native_" + key + "_build.py") + [
+                "--hepta", str(hepta), "--build", str(build_root), "--source-root", str(ROOT)]
+                + capture_gate.build_child_arguments(key, build_root))
+            capture_manifest = build_root / name / "manifest.json"
+            report["modules"][key] = {"manifest": str(capture_manifest), "sha256": q.sha(capture_manifest)}
+            metadata = capture_gate.compiler_identity(output, report, key)
+            if (metadata["compiler_commit"] != HEPTA_COMMIT
+                    or metadata["compiler_sha256"] != report["compiler_image_sha256"]):
+                raise ValueError("capture owner uses a different compiler artifact")
+        report["phase"] = "native_components"
+        for name, command in capture_gate.test_commands(output, report).items():
+            check(name, command)
+        for key in capture_gate.KEYS:
+            report[key + "_evidence"] = capture_gate.native_evidence(output, report, key)
+        report["phase"] = "native_suites"
         state_output = output / "shell-process/state"
         transport_output = output / "shell-process/transport"
         native_os_output = output / "shell-process/native-os"
@@ -299,7 +318,18 @@ def run(args) -> dict:
                 "--original-manifest", str(original_result),
                 "--output", str(output / "shell-process/original-evidence-controls")])
 
+            report["phase"] = "original_rust_comparison"
+            for key in capture_gate.KEYS:
+                report["readers"][key + "_original"] = capture_gate.compare(output, report, key, rustc)
+
         report["phase"] = "fixture_retirement_and_final_readback"
+        for key in capture_gate.KEYS:
+            capture_gate.exact(report[key + "_evidence"], capture_gate.native_evidence(output, report, key),
+                               "capture native evidence changed during focused gate")
+            if not args.native_only:
+                capture_gate.exact(report["readers"][key + "_original"],
+                    capture_gate.original_evidence(output, report, key, rustc),
+                    "capture original evidence changed during focused gate")
         report["retired_fixtures"]["native_os"] = json_data(process_evidence.retire_fixtures(native_os_output, process_manifest))
         report["readers"]["native_os"] = process_evidence.read_native_evidence(native_os_output, process_manifest)
         if compared_output is not None:

@@ -262,7 +262,7 @@ def trace_records(directory):
         pending = None
         for number, line in enumerate(lines, 1):
             original_line = line
-            detached_stdin = re.fullmatch(r"(\d+\.\d+) read\((0<[^>]+>) <unfinished \.\.\.>\) = \?", line)
+            detached_stdin = re.fullmatch(r"(\d+\.\d+) read\((0<[^>]+>)(?: |, +)<unfinished \.\.\.>\) = \?", line)
             if detached_stdin:
                 # The unchanged fixture deliberately leaves its detached stdin
                 # reader blocked while main exits. This is an observed aborted

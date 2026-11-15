@@ -304,25 +304,44 @@ class ShellProcessPipelineTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
 
     def registry_report(self):
+        captures = {}
+        for item in q.capture_gate.MODULES:
+            relative = "build/" + item["name"] + "/manifest.json"
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('{"qualification_unit_fixture": true}\n')
+            captures[item["key"]] = {"manifest": relative, "sha256": q.sha(path)}
+        prepare = self.root / captures["shell_capture_prepare"]["manifest"]
+        top = {"children": {}, "child_origins": {child: "provided" for child in q.capture_gate.LEAF_KINDS}}
+        for child in q.capture_gate.LEAF_KINDS:
+            path = self.root / captures["shell_capture_" + child]["manifest"]
+            top[child + "_manifest"] = str(path)
+            top[child + "_manifest_sha256"] = q.sha(path)
+            top["children"][child] = {"manifest": str(path),
+                "manifest_pin": {"bytes": path.stat().st_size, "sha256": q.sha(path)}}
+        prepare.write_text(json.dumps(top) + "\n")
+        captures["shell_capture_prepare"]["sha256"] = q.sha(prepare)
         return {"phase": "native_components", "checks": [], "modules": {
             "shell_process": {"manifest": "build/shell-process/manifest.json"},
             "shell_background_text": {"manifest": "build/modules/shell-background-text/manifest.json"},
             "shell_outcome": {"manifest": "build/shell-outcome/manifest.json"},
             "shell_output_io": {"manifest": "build/shell-output/manifest.json"},
-            "shell_foreground": {"manifest": "build/shell-foreground/manifest.json"}}}
+            "shell_foreground": {"manifest": "build/shell-foreground/manifest.json"},
+            **captures}}
 
     def test_shell_registry_keeps_process_text_and_original_domains_distinct(self):
         import compare_hia_runtime_rust as original
         from check_hia_native_inventory import inspect
-        self.assertEqual(len(q.MODULES), 45)
-        self.assertEqual(len(q.native_tests()), 104)
-        self.assertEqual(len(original.RECIPES), 40)
+        self.assertEqual(len(q.MODULES), 49)
+        self.assertEqual(len(q.native_tests()), 111)
+        self.assertEqual(len(original.RECIPES), 44)
         self.assertEqual(q.SHELL_PROCESS_TESTS, (
             "shell_process_state.py", "shell_process_transport.py",
             "hia_native_shell_process_qualification.py", "shell_process_evidence_controls.py"))
         text = p.partition_tests()["text"]
         required = (*q.SHELL_PROCESS_TESTS, q.SHELL_BACKGROUND_TEST,
-                    q.SHELL_OUTCOME_TEST, q.SHELL_OUTPUT_TEST, *q.SHELL_FOREGROUND_TESTS)
+                    q.SHELL_OUTCOME_TEST, q.SHELL_OUTPUT_TEST, *q.SHELL_FOREGROUND_TESTS,
+                    *q.capture_gate.TESTS)
         self.assertEqual(tuple(name for name in text if name in required), required)
         self.assertNotIn("shell_process", original.NEW_COMPONENTS)
         self.assertNotIn("shell_background_text", original.NEW_COMPONENTS)
@@ -335,7 +354,7 @@ class ShellProcessPipelineTests(unittest.TestCase):
         self.assertNotIn("shell_foreground", original.NEW_COMPONENTS)
         self.assertIs(original.RECIPES["shell_foreground"], original.compare_shell_foreground)
         inventory = inspect(ROOT)
-        self.assertEqual(len(inventory["native_sources"]), 74)
+        self.assertEqual(len(inventory["native_sources"]), 81)
         self.assertEqual(inventory["legacy_tool_count"], 125)
         self.assertEqual(inventory["native_production_tool_count"], 0)
         self.assertIs(inventory["whole_runtime_replaced"], False)
@@ -378,7 +397,8 @@ class ShellProcessPipelineTests(unittest.TestCase):
         report = self.registry_report()
         commands = {**q.shell_outcome_test_commands(self.root, report),
                     **q.shell_output_test_commands(self.root, report),
-                    **q.shell_foreground_test_commands(self.root, report)}
+                    **q.shell_foreground_test_commands(self.root, report),
+                    **q.capture_gate.test_commands(self.root, report)}
         for name, command in commands.items():
             variants = [command + ["--case", "normal"], command + ["--verify", "/foreign"]]
             for option in ("--native-manifest", "--outcome-manifest", "--output"):
@@ -395,6 +415,129 @@ class ShellProcessPipelineTests(unittest.TestCase):
                             parallel_tests=(), ordered_groups=(), commands={name: mutated})
                     run.assert_not_called()
         self.assertEqual(report["checks"], [])
+
+    def test_capture_source_and_original_recipes_are_mandatory(self):
+        import compare_hia_runtime_rust as original
+        source = q.sources()
+        for item in q.capture_gate.MODULES:
+            key = item["key"]
+            self.assertIn(key, original.RECIPES)
+            self.assertNotIn(key, original.NEW_COMPONENTS)
+            self.assertIn(key, p.PARTITIONS["text"])
+            for relative in (item["source"], *item.get("companion_sources", ())):
+                self.assertEqual(source.get(relative), q.sha(ROOT / relative))
+        for name in q.capture_gate.SCRIPTS:
+            relative = "scripts/" + name
+            self.assertEqual(source.get(relative), q.sha(ROOT / relative))
+        for relative in q.capture_gate.ORACLE_SOURCES:
+            self.assertEqual(source.get(relative), q.sha(ROOT / relative))
+        for name in (*q.capture_gate.TESTS, "shell_capture_path_cases.py"):
+            relative = "tests/hia_native/" + name
+            self.assertEqual(source.get(relative), q.sha(ROOT / relative))
+
+    def test_capture_manifest_is_bound_to_this_run_and_its_actual_bytes(self):
+        gate = q.capture_gate
+        report = self.registry_report()
+        for key in gate.KEYS:
+            expected = self.root / report["modules"][key]["manifest"]
+            self.assertEqual(gate.manifest_for(self.root, report, key), expected)
+            absolute = json.loads(json.dumps(report))
+            absolute["modules"][key]["manifest"] = str(expected)
+            self.assertEqual(gate.manifest_for(self.root, absolute, key), expected)
+            for field, value, reason in (("sha256", "0" * 64, "identity differs"),
+                    ("manifest", str(self.root / "foreign/manifest.json"), "registered build")):
+                altered = json.loads(json.dumps(report)); altered["modules"][key][field] = value
+                with self.subTest(key=key, field=field), patch.object(gate, "suite") as load:
+                    with self.assertRaisesRegex(ValueError, reason):
+                        gate.native_evidence(self.root, altered, key)
+                    load.assert_not_called()
+                    with self.assertRaisesRegex(ValueError, reason):
+                        gate.test_commands(self.root, altered)
+                    with self.assertRaisesRegex(ValueError, reason):
+                        gate.original_commands(self.root, altered, key, Path("/selected/rustc"))
+    def test_capture_progress_requires_every_case_and_exact_protocol(self):
+        gate = q.capture_gate
+        for kind in ("mkdir", "file", "prepare"):
+            specs = gate.original_case_specs(kind)
+            rows = [{"case": spec["name"], "status": "ORIGINAL_PAIR_PASS", "syscalls": 0}
+                    for spec in specs] + [{"status": "PASS"}]
+            name = "shell-capture-" + kind + "-rust-compare"
+            encoded = lambda values: b"\n".join(json.dumps(row).encode() for row in values) + b"\n"
+            self.assertEqual(q.process_summary(name, encoded(rows)), {"status": "PASS"})
+            wrong_type = json.loads(json.dumps(rows)); wrong_type[0]["syscalls"] = False
+            wrong_order = json.loads(json.dumps(rows)); wrong_order[:2] = reversed(wrong_order[:2])
+            extra_field = json.loads(json.dumps(rows)); extra_field[0]["hidden_error"] = "failed"
+            for variant in (rows[1:], rows[:-1], rows + [rows[-1]], [rows[0], *rows],
+                            wrong_type, wrong_order, extra_field):
+                with self.subTest(kind=kind), self.assertRaises(ValueError):
+                    q.process_summary(name, encoded(variant))
+
+    def test_prepare_rejects_rehashed_foreign_leaf_bindings(self):
+        gate = q.capture_gate
+        report = self.registry_report()
+        key = "shell_capture_prepare"
+        path = self.root / report["modules"][key]["manifest"]
+        original = json.loads(path.read_bytes())
+        for child in gate.LEAF_KINDS:
+            foreign = self.root / "another-gate/build" / ("shell-capture-" + child) / "manifest.json"
+            foreign.parent.mkdir(parents=True)
+            foreign.write_bytes((self.root / report["modules"]["shell_capture_" + child]["manifest"]).read_bytes())
+            for mutation in ("coherent_foreign_child", "child_pin", "unregistered_child", "fresh_child"):
+                altered = json.loads(json.dumps(original))
+                if mutation == "coherent_foreign_child":
+                    altered[child + "_manifest"] = str(foreign)
+                    altered["children"][child]["manifest"] = str(foreign)
+                elif mutation == "child_pin":
+                    altered["children"][child]["manifest_pin"]["bytes"] += 1
+                elif mutation == "unregistered_child":
+                    del altered["children"][child]
+                else:
+                    altered["child_origins"][child] = "fresh"
+                path.write_text(json.dumps(altered) + "\n")
+                report["modules"][key]["sha256"] = q.sha(path)
+                with self.subTest(child=child, mutation=mutation), patch.object(gate, "suite") as load:
+                    with self.assertRaises(ValueError):
+                        gate.test_commands(self.root, report)
+                    with self.assertRaises(ValueError):
+                        gate.original_commands(self.root, report, key, Path("/selected/rustc"))
+                    load.assert_not_called()
+        path.write_text(json.dumps(original) + "\n")
+        report["modules"][key]["sha256"] = q.sha(path)
+        self.assertEqual(gate.manifest_for(self.root, report, key), path)
+
+    def test_prepare_native_progress_retains_every_count_record(self):
+        gate = q.capture_gate
+        specs = gate.suite("shell_capture_prepare_io.py").case_specs()
+        self.assertEqual(len(specs), 15)
+        self.assertEqual(len(gate.original_case_specs("prepare")), 14)
+        rows = [{"name": spec["name"], "status": "PASS", "counts": {"entries": 1}}
+                for spec in specs] + [{"status": "PASS"}]
+        encode = lambda values: b"\n".join(json.dumps(row).encode() for row in values) + b"\n"
+        name = "shell_capture_prepare_io.py"
+        self.assertEqual(gate.progress_records(name, encode(rows)), rows)
+        changed = json.loads(json.dumps(rows)); changed[0]["result"] = changed[0].pop("counts")
+        reordered = json.loads(json.dumps(rows)); reordered[:2] = reversed(reordered[:2])
+        for variant in (rows[1:], rows[:-1], rows + [rows[-1]], changed, reordered):
+            with self.subTest(variant=variant[:1]), self.assertRaises(ValueError):
+                gate.progress_records(name, encode(variant))
+
+    def test_capture_final_output_is_bound_to_independently_read_results(self):
+        gate = q.capture_gate
+        name = "shell_capture_path.py"
+        expected = [{"status": "PASS", "counts": {"semantic_cases": 49075},
+                     "whole_runtime_replaced": False}]
+        target = self.root / (name + ".stdout")
+        target.write_text(json.dumps(expected[0]) + "\n")
+        gate.bind_process_output(self.root, name, expected)
+        for altered in ({**expected[0], "whole_runtime_replaced": 0},
+                        {**expected[0], "counts": {"semantic_cases": 1}}):
+            target.write_text(json.dumps(altered) + "\n")
+            with self.assertRaisesRegex(ValueError, "independent evidence"):
+                gate.bind_process_output(self.root, name, expected)
+        for raw in (b'{"status":"FAIL","status":"PASS"}\n',
+                    b'{"status":"PASS","count":NaN}\n', b'{"status":"PASS"}\n{}\n'):
+            with self.assertRaises(ValueError):
+                q.process_summary(name, raw)
 
     def test_shell_output_original_recipe_requires_same_gate_process_and_outcome(self):
         import compare_hia_runtime_rust as original

@@ -1,0 +1,118 @@
+{
+  "files": {
+    "Cargo.lock": {
+      "bytes": 90148,
+      "git_blob_sha1": "dec7d4e88dbae3e9e2415e98a55400bc1f81f939",
+      "sha256": "7f39704b92d5fc762a98a5313949034db464ca9485827b19b5dde7aa69902d43"
+    },
+    "Cargo.toml": {
+      "bytes": 4157,
+      "git_blob_sha1": "246f38e394de474fa0d55297b6b93cea40b77393",
+      "sha256": "377e7dca547f0ff0d832fb28cf01862a6d84b4b6ed42c8b36dae9075cbbbb78f"
+    },
+    "src/mcp/fs/background.rs": {
+      "bytes": 9434,
+      "git_blob_sha1": "32d887d98269d9db2b3adf979567c417a2e38db6",
+      "sha256": "826394f843a0891dfbe8b0b6986dad40d85b53e20a497cb4ddb04838a185f065"
+    }
+  },
+  "original_test_count": 0,
+  "required_rust_version": "1.95.0",
+  "required_target": "x86_64-unknown-linux-gnu",
+  "reviewed_standard_library_sources": {
+    "fs": {
+      "bytes": 123250,
+      "git_blob_sha1": "cf6f9594c0027af9755a4518b1460a7db92a36ff",
+      "sha256": "bac06d50380e9bc8e7a95a89d209cd9aabe0970e4ec589e5d265ccc44a70f9c4",
+      "url": "https://github.com/rust-lang/rust/blob/1.95.0/library/std/src/fs.rs"
+    },
+    "owned_fd": {
+      "bytes": 18517,
+      "git_blob_sha1": "8a39fe073bf95f9f7c216d354eecc818e325811c",
+      "sha256": "7dfc471fedb90c0ac426845f2fe584216b5d1af27bc846d05fc5631d93f8319d",
+      "source": "review/rust_owned_fd.rs",
+      "url": "https://github.com/rust-lang/rust/blob/1.95.0/library/std/src/os/fd/owned.rs"
+    },
+    "unix": {
+      "bytes": 88655,
+      "git_blob_sha1": "7db474544f04abc75e2d66ec007ebe4799a491d3",
+      "sha256": "77c6419ee048c348d9ed4bef226ce6ceb735d6077d0eb9f6bcac0ef46fa7b86d",
+      "url": "https://github.com/rust-lang/rust/blob/1.95.0/library/std/src/sys/fs/unix.rs"
+    }
+  },
+  "runtime_calls": {
+    "discard": {
+      "bytes": 156,
+      "end": 5679,
+      "sha256": "1a817f0e61fa7392de494449183290c879150346c3315c8d1ae7e710ed2d2ef9",
+      "source": "src/mcp/fs/background.rs",
+      "start": 5523
+    },
+    "stderr_and_cleanup": {
+      "bytes": 282,
+      "end": 5133,
+      "sha256": "b9015fd3dc215214c8c6f484af7b71c5c7c526102ef2c2a96c2578c6ae39f784",
+      "source": "src/mcp/fs/background.rs",
+      "start": 4851
+    },
+    "stdout": {
+      "bytes": 158,
+      "end": 4850,
+      "sha256": "6c84d8c8640268efff098fb06fa8cb6739d27069c1720371cf7531f90ca1945e",
+      "source": "src/mcp/fs/background.rs",
+      "start": 4692
+    }
+  },
+  "schema": "hepta.runtime.shell-capture-file-original-source.v1",
+  "scope": [
+    "Direct fixed linked standard-library File::create and remove_file, plus genuine owned file drop or ownership move.",
+    "The complete Tokio sources and exact runtime spans are provenance, not execution of an async Tokio runtime.",
+    "Only the reference consumer may hold a successful TAKE descriptor; no raw descriptor or foreign token is admitted as input.",
+    "The TAKE receiver retains the same owned descriptor until process::exit; kernel exit cleanup is not an additional semantic DROP.",
+    "Original descriptor numbers and native capability tokens are separate namespaces bound to each actual trace.",
+    "Native replay and invalid lifecycle controls do not imply additional Rust API calls.",
+    "No injected file errno, substituted local error, preliminary file metadata, or widened process deadline.",
+    "Original tests, async cancellation, into_std inflight behavior, complete capture preparation, registry, production and whole runtime remain unqualified."
+  ],
+  "source_commit": "93f320a8e02b522e4bafd4a2cf346d68069ec74b",
+  "source_repository": "https://github.com/TrillionniumFoundation/hepta-runtime",
+  "tokio_bridges": {
+    "file": {
+      "bytes": 36700,
+      "git_blob_sha1": "3829b609d4d5edf5f14780ad921ca06a3cf00375",
+      "sha256": "8a50f8dbe3563dec59fd6362f6ceabe75963e0e4006174805c745ed5f2aad02b",
+      "source": "review/tokio_file.rs",
+      "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/fs/file.rs"
+    },
+    "open_options": {
+      "bytes": 28872,
+      "git_blob_sha1": "99073a9d185cd97a12722b3aa6974d2b36491fcb",
+      "sha256": "8b0a91d002c691bb5ff3e162cc6a4ee3ca5cc658f18f53d3e378ecbade732d39",
+      "source": "review/tokio_open_options.rs",
+      "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/fs/open_options.rs"
+    },
+    "remove_file": {
+      "bytes": 504,
+      "git_blob_sha1": "4018802547eeadb41c130f1fdb1920cb8a28bd8a",
+      "sha256": "283d7ef67b53668810daed6aad23cc90466d359423f97ab01c1ae58c111feb12",
+      "source": "review/tokio_remove_file.rs",
+      "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/fs/remove_file.rs"
+    }
+  },
+  "tokio_package": {
+    "checksum": "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed",
+    "dependencies": [
+      "bytes",
+      "libc",
+      "mio",
+      "pin-project-lite",
+      "signal-hook-registry",
+      "socket2",
+      "tokio-macros",
+      "windows-sys 0.61.2"
+    ],
+    "name": "tokio",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "version": "1.53.1"
+  }
+}

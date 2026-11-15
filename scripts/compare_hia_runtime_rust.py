@@ -63,6 +63,7 @@ from hia_native_result_publication_reference import (compare_original as compare
 from hia_native_request_scope_reference import (compare_original as compare_request_scope_original,
                                                 check_original_receipts as check_request_scope_original_receipts)
 import hia_native_shell_qualification as shell_qualification
+import hia_native_shell_capture_gate as capture_gate
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
                                                 REFERENCE_ROWS as BATCH_PLAN_ROWS)
@@ -179,7 +180,15 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required native shell output IO/outcome evidence changed")
     if report.get("shell_foreground_evidence") != shell_foreground_evidence(output, report):
         raise ValueError("required native foreground process/IO/outcome evidence changed")
+    for key in capture_gate.KEYS:
+        capture_gate.exact(report.get(key + "_evidence"), capture_gate.native_evidence(output, report, key),
+                           "required native capture evidence changed")
     comparisons = report.get("original_rust_comparisons", {})
+    for key in capture_gate.KEYS:
+        if key in comparisons:
+            rustc = Path(report["rust_compiler"]["invocation_path"])
+            capture_gate.exact(comparisons[key], capture_gate.original_evidence(output, report, key, rustc),
+                               "required original capture evidence changed")
     if "shell_process" in comparisons:
         rustc = Path(report["rust_compiler"]["invocation_path"])
         if comparisons["shell_process"] != shell_process_original_evidence(output, report, rustc):
@@ -279,10 +288,11 @@ def check_input_pins(output: Path, report: dict) -> None:
         if sha(manifest) != item["sha256"]:
             raise ValueError("compiled module manifest changed")
         module = json.loads(manifest.read_bytes())
-        if (module.get("compiler_commit") != HEPTA_COMMIT
-                or module.get("compiler_sha256") != report["compiler_image_sha256"]):
+        compiler = capture_gate.compiler_identity(output, report, key) if key in capture_gate.KEYS else module
+        if (compiler.get("compiler_commit") != HEPTA_COMMIT
+                or compiler.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "shell_process", "shell_outcome", "shell_output", "shell_foreground"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "shell_process", "shell_outcome", "shell_output", "shell_foreground", *capture_gate.KEYS}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1721,12 +1731,32 @@ def compare_shell_foreground(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_shell_capture_path(output: Path, report: dict, rustc: Path) -> dict:
+    return capture_gate.compare(output, report, "shell_capture_path", rustc)
+
+
+def compare_shell_capture_mkdir(output: Path, report: dict, rustc: Path) -> dict:
+    return capture_gate.compare(output, report, "shell_capture_mkdir", rustc)
+
+
+def compare_shell_capture_file(output: Path, report: dict, rustc: Path) -> dict:
+    return capture_gate.compare(output, report, "shell_capture_file", rustc)
+
+
+def compare_shell_capture_prepare(output: Path, report: dict, rustc: Path) -> dict:
+    return capture_gate.compare(output, report, "shell_capture_prepare", rustc)
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
            "shell_process": compare_shell_process, "shell_background_text": compare_shell_background,
            "shell_outcome": compare_shell_outcome,
            "shell_output_io": compare_shell_output,
            "shell_foreground": compare_shell_foreground,
+           "shell_capture_path": compare_shell_capture_path,
+           "shell_capture_mkdir": compare_shell_capture_mkdir,
+           "shell_capture_file": compare_shell_capture_file,
+           "shell_capture_prepare": compare_shell_capture_prepare,
            "request_context": compare_request_context, "response_hints": compare_response_hints,
            "result_publication": compare_result_publication,
            "request_scope_lifecycle": compare_request_scope,

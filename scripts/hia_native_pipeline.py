@@ -27,7 +27,7 @@ import qualify_hia_runtime_native as q
 
 PARTITIONS = {
     "batch": ("batch_plan", "batch_apply", "atomic_write"),
-    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "shell_process", "shell_background_text", "shell_outcome", "shell_output_io", "shell_foreground", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
+    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "shell_process", "shell_background_text", "shell_outcome", "shell_output_io", "shell_foreground", "shell_capture_path", "shell_capture_mkdir", "shell_capture_file", "shell_capture_prepare", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
              "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
@@ -297,6 +297,9 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         q.shell_output_evidence(output, report)
     if any(row.get("name") in q.SHELL_FOREGROUND_TESTS for row in report.get("checks", ())):
         q.shell_foreground_evidence(output, report)
+    for item in q.capture_gate.MODULES:
+        if any(row.get("name") == item["test"] for row in report.get("checks", ())):
+            q.capture_gate.native_evidence(output, report, item["key"])
     files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
     for name in directories:
         if name not in seal.get("directories", ()):
