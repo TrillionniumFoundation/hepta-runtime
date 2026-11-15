@@ -82,8 +82,12 @@ jobs:
           import json, os
           from pathlib import Path
           paths = (Path(os.environ['RUNNER_TEMP']) / 'cargo-package-files.txt').read_text().splitlines()
-          retired = json.loads(Path('archives/repository-history/20261115.json').read_text())
-          unexpected = [p for p in paths if p.startswith(tuple(retired['retired_roots']))]
+          manifests = sorted(Path('archives/repository-history').glob('*.json'))
+          retired_roots = tuple(root for manifest in manifests
+                                for root in json.loads(manifest.read_text())['retired_roots'])
+          if not retired_roots:
+              raise SystemExit('Missing repository history inventory')
+          unexpected = [p for p in paths if p.startswith(retired_roots)]
           if unexpected:
               raise SystemExit('Retired package paths: ' + repr(unexpected))
           required = [str(p) for p in Path('src').rglob('*') if p.is_file()]

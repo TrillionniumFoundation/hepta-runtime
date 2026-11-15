@@ -156,8 +156,8 @@ The following seven new functional tests are included in that completed qualific
 | inventory_borrowed_tests | `borrowed_inventory_source_keeps_owned_responses_and_restart_cursor_bytes` | Owned response, digest, and retained cursor byte compatibility |
 | inventory_borrowed_tests | `both_inventory_paths_validate_unselected_private_fields_before_filtering` | Bad type, missing field, and duplicate field remain refusals |
 
-Sources: [observation tests](../src/mcp/runtime/jobs_observation_read_tests.rs) and
-[inventory projection tests](../src/mcp/runtime/jobs_inventory_borrowed_tests.rs).
+Sources: [observation tests](https://github.com/TrillionniumFoundation/hepta-runtime/blob/fe7d2b8afba882d06b607ec00b8756eed62f6a1f/src/mcp/runtime/jobs_observation_read_tests.rs) and
+[inventory projection tests](https://github.com/TrillionniumFoundation/hepta-runtime/blob/fe7d2b8afba882d06b607ec00b8756eed62f6a1f/src/mcp/runtime/jobs_inventory_borrowed_tests.rs).
 The inventory tests require Unix; the observation tests also exercise a current-thread executor.
 
 ## Comparative benchmark results and method

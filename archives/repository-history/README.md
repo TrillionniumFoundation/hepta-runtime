@@ -11,6 +11,14 @@ records **9,708 historical files and 1,521,911,966 bytes**, including each origi
 path, Git blob, mode and byte count. The separate [Rust branch index](../rust-branches/README.md)
 retains the identities of another 215 duplicate source copies.
 
+The [October 28 X230 follow-up manifest](x230-20261028-20261115.json) records
+**80 additional historical files and 54,051,755 bytes** from the exact
+[`136ff99783d48d67a6bb1babfba4ad1631310257` snapshot](https://github.com/TrillionniumFoundation/hepta-runtime/tree/136ff99783d48d67a6bb1babfba4ad1631310257).
+These are complete original-evidence collections, including their raw archives,
+diagnostics and refused attempts. Both manifests together retain **9,788 historical
+files and 1,575,963,721 bytes** outside the current checkout. Active harnesses and
+the generic evidence packer/analyzer remain available.
+
 ## What moved out of the current checkout
 
 | Historical group | Retained snapshot path |
@@ -21,6 +29,7 @@ retains the identities of another 215 duplicate source copies.
 | Earlier X230 A-series campaigns | `tools/x230/a26/`, `a38/`, `a40/`, `a43/`, and `a46/` through `a55/` |
 | Earlier REA qualification campaigns | `docs/qualification/rea-p0p5-679ccf-20261106/`, `rea-family-20261106-r1/`, and `rea-audit-ext4-20261103-r1/` |
 | Earlier DC replacement and rollback campaigns | `docs/qualification/dc-functional-v7-integrated-evidence-20261013/`, `dc-functional-v7-six-rollback-20261013-r1/`, `dc-functional-v8-integrated-evidence-20261013/`, and `dc-functional-v9-integrated-evidence-20261013/` |
+| October 28 X230 original evidence collections (follow-up snapshot) | `tests/evidence/20261028-x230/` and `tools/x230/20261028/evidence/` |
 
 The October 28–30 X230 regression harnesses remain in the current checkout.
 `tools/x230/a27/` also remains because the October 28 throughput harness defaults
@@ -30,11 +39,19 @@ original-source baseline remain available at their current paths or refs.
 
 ## Read or reproduce the original work
 
-Append any path from the manifest to the pinned snapshot URL above to inspect it
-on GitHub. To restore all original relative paths together in an isolated checkout:
+Append a path from either manifest to that manifest's pinned snapshot URL above
+to inspect it on GitHub. To restore the first retirement's original relative paths
+together in an isolated checkout:
 
 ```sh
 git worktree add --detach ../hepta-runtime-history a404d4f1bf540fb94f65ef3707145eed07eef183
+```
+
+For the October 28 X230 evidence and its corresponding current harness paths,
+use the follow-up manifest's source revision:
+
+```sh
+git worktree add --detach ../hepta-runtime-x230-history 136ff99783d48d67a6bb1babfba4ad1631310257
 ```
 
 If the checkout is shallow and lacks the snapshot, fetch its history explicitly
