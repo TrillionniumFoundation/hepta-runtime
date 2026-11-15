@@ -846,7 +846,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
             private, path = receipts[name]
             try:
                 record_check(output, private, name=name, command=invocation[name],
-                             timeout=timeout, env=env, report_path=path)
+                             timeout=timeout, env=env, report_path=path,
+                             record_identity=name == "test_bellman_commitment.py")
                 failures[name] = None
             except Exception as error:
                 failures[name] = error
@@ -882,7 +883,7 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                     if name == "shell_process_evidence_controls.py":
                         retire_shell_process_native(output, report)
                     record_check(output, report, name=name, command=invocation[name], timeout=timeout, env=env,
-                                 record_identity=name in ("test_batch_plan_input.py", "test_text_editor_params.py"))
+                                 record_identity=name in ("test_batch_plan_input.py", "test_text_editor_params.py", "test_bellman_commitment.py"))
         finally:
             for name in futures:
                 if name not in collected:

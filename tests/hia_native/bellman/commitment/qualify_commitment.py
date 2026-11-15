@@ -6,6 +6,7 @@ import importlib.util
 import itertools
 import json
 import math
+import os, signal, shutil, subprocess
 from pathlib import Path
 import random
 import struct
@@ -135,19 +136,21 @@ def corpus(core):
         yield 'zero-fields-' + str(index), [[core.continuation(core.branch(values[0],0,values[1],values[2]))]*6], None, False
     yield from exact_budget_graphs(core)
 
-def qualify(runtime, manifest, output, core_corpus):
+def qualify_worker(runtime, manifest, output, core_corpus, group):
     sys.dont_write_bytecode = True
     sys.path.insert(0, str(runtime / 'scripts'))
     from hia_native_loader import NativeModule
     core = load_core(core_corpus)
     module = NativeModule(manifest, manifest_sha256=SHA(manifest.read_bytes()))
-    output.mkdir()
+    assert output.is_dir() and not output.is_symlink()
+    assert group in GROUPS
     rows = []
     start = time.monotonic()
     with module.session(output_capacity=LIMIT+128, workspace_capacity=LIMIT+16384) as session, \
          (output/'inputs.bin').open('xb') as inputs, (output/'native.bin').open('xb') as native:
         previous_result = None
-        for name, graph, expected_size, refusal in corpus(core):
+        selected = itertools.islice(corpus(core), 0, 1139) if group == "ordinary" else itertools.islice(corpus(core), 1139, None)
+        for name, graph, expected_size, refusal in selected:
             wire = encode(graph, core)
             before = time.monotonic()
             if not refusal:
@@ -167,48 +170,53 @@ def qualify(runtime, manifest, output, core_corpus):
                          'wall_seconds':time.monotonic()-before})
             if name.startswith('byte-budget-'):
                 print(json.dumps(rows[-1]), flush=True)
-        # The same workspace must recover from a sticky budget refusal.
-        graph = [[core.terminal(-0.)] + [None]*5]
-        recovered = session.invoke(encode(graph, core))
-        verify_result(recovered, graph)
-    controls = []
-    graph = [[core.terminal(1.)] + [None]*5]
-    base = encode(graph, core)
-    valid = module.invoke(base, output_capacity=4096, workspace_capacity=32768)
-    malformed = [('empty',b''), ('short',base[:55]), ('bad-magic',b'X'+base[1:]),
-                 ('short-body',base[:-1]), ('trailing',base+b'X')]
-    for name, at, value in [('graph-magic',40,0), ('count',48,4097), ('kind',56,3),
-                            ('terminal-padding',72,1), ('null-padding',184,1),
-                            ('infinity',64,0x7ff0000000000000), ('nan',64,0x7ff8000000000001)]:
-        wire=bytearray(base);struct.pack_into('<Q',wire,at,value);malformed.append((name,bytes(wire)))
-    continuation = encode([[core.continuation(core.branch(1.,0))]+[None]*5],core)
-    for name, at, value in [('continue-reserved',64,1), ('branches',72,4), ('unused-branch',112,1),
-                            ('successor-width',88,1<<32), ('probability-nan',80,0x7ff8000000000000),
-                            ('reward-infinity',96,0x7ff0000000000000), ('fee-infinity',104,0xfff0000000000000)]:
-        wire=bytearray(continuation);struct.pack_into('<Q',wire,at,value);malformed.append((name,bytes(wire)))
-    for name, wire in malformed:
-        code, out, work = module.invoke_raw(wire, output_capacity=4096, workspace_capacity=32768,
-                                            output_fill=0xcc, workspace_fill=0xa7)
-        assert code == 0xffffffff and out == bytes([0xcc])*4096, name
-        assert work == bytes([0xa7])*32768, ('invalid frame mutated scratch', name)
-        controls.append({'name':name,'code':code})
-    for outcap, workcap in [(127,32768), (4096,16383), (len(valid)-1,32768), (4096,16384+len(valid)-129)]:
-        code, out, work = module.invoke_raw(base, output_capacity=outcap, workspace_capacity=workcap,
-                                            output_fill=0xcc, workspace_fill=0xa7)
-        assert code == 0xfffffffd and out == bytes([0xcc])*outcap, (outcap,workcap,code)
-        controls.append({'name':'capacity','output_capacity':outcap,'workspace_capacity':workcap,'code':code})
-    trusted_inputs = []
-    for index in range(33):
-        source = bytes(32) if index == 32 else bytes([0xff if i==index else 0 for i in range(32)])
-        result=module.invoke(encode(graph,core,source.hex()), output_capacity=4096, workspace_capacity=32768)
-        verify_result(result, graph, source.hex())
-        assert result[128:] == valid[128:] and result[16:48] == valid[16:48]
-        trusted_inputs.append({'source_sha256':source.hex(),'plan_sha256':result[80:112].hex()})
+        if group == "budget":
+            # The same workspace must recover from a sticky budget refusal.
+            graph = [[core.terminal(-0.)] + [None]*5]
+            recovered = session.invoke(encode(graph, core))
+            verify_result(recovered, graph)
+    controls, trusted_inputs = [], []
+    if group == "ordinary":
+        controls = []
+        graph = [[core.terminal(1.)] + [None]*5]
+        base = encode(graph, core)
+        valid = module.invoke(base, output_capacity=4096, workspace_capacity=32768)
+        malformed = [('empty',b''), ('short',base[:55]), ('bad-magic',b'X'+base[1:]),
+                     ('short-body',base[:-1]), ('trailing',base+b'X')]
+        for name, at, value in [('graph-magic',40,0), ('count',48,4097), ('kind',56,3),
+                                ('terminal-padding',72,1), ('null-padding',184,1),
+                                ('infinity',64,0x7ff0000000000000), ('nan',64,0x7ff8000000000001)]:
+            wire=bytearray(base);struct.pack_into('<Q',wire,at,value);malformed.append((name,bytes(wire)))
+        continuation = encode([[core.continuation(core.branch(1.,0))]+[None]*5],core)
+        for name, at, value in [('continue-reserved',64,1), ('branches',72,4), ('unused-branch',112,1),
+                                ('successor-width',88,1<<32), ('probability-nan',80,0x7ff8000000000000),
+                                ('reward-infinity',96,0x7ff0000000000000), ('fee-infinity',104,0xfff0000000000000)]:
+            wire=bytearray(continuation);struct.pack_into('<Q',wire,at,value);malformed.append((name,bytes(wire)))
+        for name, wire in malformed:
+            code, out, work = module.invoke_raw(wire, output_capacity=4096, workspace_capacity=32768,
+                                                output_fill=0xcc, workspace_fill=0xa7)
+            assert code == 0xffffffff and out == bytes([0xcc])*4096, name
+            assert work == bytes([0xa7])*32768, ('invalid frame mutated scratch', name)
+            controls.append({'name':name,'code':code})
+        for outcap, workcap in [(127,32768), (4096,16383), (len(valid)-1,32768), (4096,16384+len(valid)-129)]:
+            code, out, work = module.invoke_raw(base, output_capacity=outcap, workspace_capacity=workcap,
+                                                output_fill=0xcc, workspace_fill=0xa7)
+            assert code == 0xfffffffd and out == bytes([0xcc])*outcap, (outcap,workcap,code)
+            controls.append({'name':'capacity','output_capacity':outcap,'workspace_capacity':workcap,'code':code})
+        trusted_inputs = []
+        for index in range(33):
+            source = bytes(32) if index == 32 else bytes([0xff if i==index else 0 for i in range(32)])
+            result=module.invoke(encode(graph,core,source.hex()), output_capacity=4096, workspace_capacity=32768)
+            verify_result(result, graph, source.hex())
+            assert result[128:] == valid[128:] and result[16:48] == valid[16:48]
+            trusted_inputs.append({'source_sha256':source.hex(),'plan_sha256':result[80:112].hex()})
     report = {'status':'NATIVE_TYPED_COMMITMENT_PASS_RUST_REPLAY_REQUIRED',
               'source_sha256':module.metadata['source_sha256'], 'manifest_sha256':SHA(manifest.read_bytes()),
               'core_fixture_sha256':SHA(core_corpus.read_bytes()), 'cases':rows, 'native_cases':len(rows),
               'refusal_controls':controls, 'trusted_installation_digest_controls':trusted_inputs,
-              'same_session_refusal_recovery':True, 'wall_seconds':time.monotonic()-start,
+              'same_session_refusal_recovery':group == 'budget', 'wall_seconds':time.monotonic()-start,
+              'worker_identity':dict(group=group,pid=os.getpid(),parent_pid=os.getppid(),process_group=os.getpgrp(),
+                  source_inputs=source_inputs(runtime,core_corpus)),
               'files':{name:{'bytes':(output/name).stat().st_size,'sha256':SHA((output/name).read_bytes())}
                        for name in ('inputs.bin','native.bin')},
               'public_handler_qualified':False,'whole_runtime_replaced':False,
@@ -217,8 +225,209 @@ def qualify(runtime, manifest, output, core_corpus):
     print(json.dumps({key:report[key] for key in ('status','native_cases','wall_seconds','files')}),flush=True)
     return report
 
+PROCESS_TIMEOUT = 180
+GROUPS = ('ordinary', 'budget')
+GROUP_COUNTS = {'ordinary':1139, 'budget':3}
+
+def pin(raw):
+    return {'bytes':len(raw),'sha256':SHA(raw)}
+
+def source_inputs(runtime,core_corpus):
+    names=('tests/hia_native/bellman/commitment/qualify_commitment.py',
+           'tests/hia_native/bellman/qualify_bellman.py','scripts/hia_native_loader.py')
+    result={name:pin((runtime/name).read_bytes()) for name in names}
+    assert core_corpus==runtime/'tests/hia_native/bellman/qualify_bellman.py'
+    assert (runtime/names[0]).read_bytes()==Path(__file__).read_bytes()
+    return result
+
+def worker_command(runtime,manifest,folder,core_corpus,group):
+    return [sys.executable,'-I','-B',str(runtime/'tests/hia_native/bellman/commitment/qualify_commitment.py'),
+        '--runtime',str(runtime),'--manifest',str(manifest),'--output',str(folder),
+        '--core-corpus',str(core_corpus),'--group',group]
+
+def summary(report):
+    return {key:report[key] for key in ('status','native_cases','wall_seconds','files')}
+
+def joined_report(workers):
+    assert set(workers)==set(GROUPS)
+    first=workers['ordinary'];common=('status','source_sha256','manifest_sha256','core_fixture_sha256',
+        'public_handler_qualified','whole_runtime_replaced','scope')
+    for name,worker in workers.items():
+        assert all(worker[key]==first[key] for key in common)
+        assert worker['native_cases']==len(worker['cases'])==GROUP_COUNTS[name]
+        assert worker['same_session_refusal_recovery'] is (name=='budget')
+        assert len(worker['refusal_controls'])==(23 if name=='ordinary' else 0)
+        assert len(worker['trusted_installation_digest_controls'])==(33 if name=='ordinary' else 0)
+        assert all(row['name'].startswith('byte-budget-') is (name=='budget') for row in worker['cases'])
+    result={key:first[key] for key in common}
+    result.update(cases=first['cases']+workers['budget']['cases'],native_cases=1142,
+        refusal_controls=first['refusal_controls'],
+        trusted_installation_digest_controls=first['trusted_installation_digest_controls'],
+        same_session_refusal_recovery=True)
+    return result
+
+def capture_evidence(runtime,folder,manifest_sha,*,outer_pid=None):
+    """Reread two actual source-bound workers; never start a semantic owner."""
+    from hia_native_bellman_qualification import read,decode,exact
+    def need(value,reason):
+        if not value:raise ValueError('Bellman commitment workers: '+reason)
+    runtime,folder=Path(runtime).resolve(),Path(folder).resolve()
+    report=decode(read(folder/'report.json'));execution=report.get('execution',{})
+    need(execution.get('schema')=='hepta.bellman-commitment.worker-execution.v1'
+        and execution.get('max_parallel_workers')==2 and execution.get('timeout_seconds')==180
+        and execution.get('groups') is not None and [row.get('name') for row in execution['groups']]==list(GROUPS),
+        'complete fixed worker domain is missing')
+    parent=execution.get('parent_pid');need(type(parent)is int and parent>0 and execution.get('process_group')==parent,'owning parent/group')
+    if outer_pid is not None:need(type(outer_pid)is int and parent==outer_pid,'parent is not the actual outer Popen PID')
+    begin,end=execution.get('start_monotonic_ns'),execution.get('end_monotonic_ns')
+    need(type(begin)is int and type(end)is int and 0<begin<=end
+        and (end-begin)/1e9==report.get('wall_seconds')<=180,'unchanged parent deadline')
+    original=execution.get('capture_root');need(type(original)is str and Path(original).is_absolute()
+        and '..' not in Path(original).parts and '\x00' not in original,'captured path')
+    original=Path(original);manifest=execution.get('manifest')
+    need(type(manifest)is str and Path(manifest).is_absolute() and '..' not in Path(manifest).parts,
+        'actual module path')
+    need(execution.get('manifest_sha256')==manifest_sha==report.get('manifest_sha256'),'module source custody')
+    inputs=source_inputs(runtime,runtime/'tests/hia_native/bellman/qualify_bellman.py')
+    need(execution.get('source_inputs')==inputs,'complete worker source inputs')
+    workers={};pids=set();seals={}
+    for group in execution['groups']:
+        name=group['name'];root=folder/'workers'/name
+        process_raw=read(root/'process.json');worker_raw=read(root/'report.json')
+        exact(group,dict(name=name,cases=GROUP_COUNTS[name],process=pin(process_raw),result=pin(worker_raw)),
+            'worker completion seal differs')
+        process=decode(process_raw);worker=decode(worker_raw)
+        need(process.get('schema')=='hepta.bellman-commitment.worker-process.v1'
+            and process.get('command')==worker_command(runtime,Path(manifest),original/'workers'/name,
+                runtime/'tests/hia_native/bellman/qualify_bellman.py',name)
+            and process.get('cwd')==str(runtime) and process.get('parent_pid')==parent
+            and process.get('process_group')==parent and process.get('timeout_seconds')==180
+            and type(process.get('pid'))is int and process['pid']>0
+            and process['pid']!=parent and process['pid']not in pids
+            and process.get('exit_code')==0 and process.get('reaped')is True
+            and process.get('timed_out')is False and process.get('start_error')is None,
+            'actual worker process custody/completion')
+        pids.add(process['pid']);start,finish=process.get('start_monotonic_ns'),process.get('end_monotonic_ns')
+        need(type(start)is int and type(finish)is int and begin<=start<=finish<=end
+            and (finish-start)/1e9==process.get('elapsed_seconds')<=180
+            and type(worker.get('wall_seconds'))in (int,float)
+            and math.isfinite(worker['wall_seconds']) and 0<=worker['wall_seconds']<=process['elapsed_seconds'],
+            'actual worker lifetime differs')
+        exact(worker.get('worker_identity'),dict(group=name,pid=process['pid'],parent_pid=parent,
+            process_group=parent,source_inputs=inputs),'executed worker identity/domain/source')
+        stdout,stderr=read(root/'stdout'),read(root/'stderr')
+        need(process.get('stdout')==pin(stdout) and process.get('stderr')==pin(stderr) and not stderr,
+            'complete worker streams')
+        expected=[*worker['cases'],summary(worker)] if name=='budget' else [summary(worker)]
+        exact([decode(line) for line in stdout.splitlines()],expected,'actual worker stdout differs')
+        exact(worker.get('files'),{n:pin(read(root/n))for n in ('inputs.bin','native.bin')},'complete worker corpus differs')
+        workers[name]=worker;seals[name]=group
+    try:expected=joined_report(workers)
+    except (AssertionError,KeyError,TypeError)as error:raise ValueError('Bellman commitment fixed worker domain')from error
+    for name in ('inputs.bin','native.bin'):
+        actual=read(folder/name)
+        need(actual==b''.join(read(folder/'workers'/group/name)for group in GROUPS),'ordered complete corpus join')
+    expected.update(wall_seconds=report['wall_seconds'],execution=execution,
+        files={n:pin(read(folder/n))for n in ('inputs.bin','native.bin')})
+    exact(report,expected,'complete joined worker report')
+    return dict(status='PASS',max_parallel_workers=2,timeout_seconds=180,parent_pid=parent,
+        ordinary_cases=1139,budget_cases=3,budget_and_recovery_same_session=True,groups=seals)
+
+def qualify(runtime,manifest,output,core_corpus):
+    """Schedule two independent arenas; the budget refusal/recovery stays one session."""
+    runtime,manifest,output,core_corpus=map(lambda p:Path(p).resolve(),(runtime,manifest,output,core_corpus))
+    output.mkdir();(output/'workers').mkdir()
+    if os.getpgrp()!=os.getpid():os.setpgid(0,0)
+    assert os.getpgrp()==os.getpid()
+    source=source_inputs(runtime,core_corpus);manifest_sha=SHA(manifest.read_bytes())
+    begin=time.monotonic_ns();live=[];workers={};passed=False
+    try:
+        for name in GROUPS:
+            folder=output/'workers'/name;folder.mkdir()
+            command=worker_command(runtime,manifest,folder,core_corpus,name)
+            stdout=(folder/'stdout').open('xb');stderr=(folder/'stderr').open('xb')
+            process=None;row=dict(schema='hepta.bellman-commitment.worker-process.v1',command=command,
+                cwd=str(runtime),parent_pid=os.getpid(),process_group=os.getpgrp(),timeout_seconds=180,
+                start_monotonic_ns=time.monotonic_ns(),pid=None,exit_code=None,reaped=False,timed_out=False,start_error=None)
+            try:
+                process=subprocess.Popen(command,cwd=runtime,stdin=subprocess.DEVNULL,stdout=stdout,stderr=stderr,start_new_session=False)
+                row['pid']=process.pid
+            except BaseException as error:row['start_error']=repr(error);raise
+            finally:
+                live.append((name,folder,process,stdout,stderr,row))
+                (folder/'process.json').write_text(json.dumps(row,sort_keys=True,indent=2)+'\n')
+        for name,folder,process,stdout,stderr,row in live:
+            remaining=180-(time.monotonic_ns()-begin)/1e9
+            try:
+                if remaining<=0:raise subprocess.TimeoutExpired(row['command'],180)
+                process.wait(timeout=remaining)
+            except subprocess.TimeoutExpired:row['timed_out']=True;raise
+            row.update(exit_code=process.returncode,reaped=True,end_monotonic_ns=time.monotonic_ns())
+            row['elapsed_seconds']=(row['end_monotonic_ns']-row['start_monotonic_ns'])/1e9
+            stdout.close();stderr.close()
+            for channel in ('stdout','stderr'):row[channel]=pin((folder/channel).read_bytes())
+            (folder/'process.json').write_text(json.dumps(row,sort_keys=True,indent=2)+'\n')
+            assert row['exit_code']==0 and row['stderr']['bytes']==0,row
+            workers[name]=json.loads((folder/'report.json').read_bytes())
+        report=joined_report(workers)
+        for name in ('inputs.bin','native.bin'):
+            with (output/name).open('xb')as target:
+                for group in GROUPS:
+                    with (output/'workers'/group/name).open('rb')as source_stream:shutil.copyfileobj(source_stream,target)
+        end=time.monotonic_ns();report['wall_seconds']=(end-begin)/1e9;assert report['wall_seconds']<=180
+        assert source==source_inputs(runtime,core_corpus) and manifest_sha==SHA(manifest.read_bytes())
+        report['files']={n:pin((output/n).read_bytes())for n in ('inputs.bin','native.bin')}
+        report['execution']=dict(schema='hepta.bellman-commitment.worker-execution.v1',max_parallel_workers=2,
+            timeout_seconds=180,parent_pid=os.getpid(),process_group=os.getpgrp(),capture_root=str(output),
+            manifest=str(manifest),manifest_sha256=manifest_sha,source_inputs=source,start_monotonic_ns=begin,end_monotonic_ns=end,
+            groups=[dict(name=n,cases=GROUP_COUNTS[n],process=pin((output/'workers'/n/'process.json').read_bytes()),
+                result=pin((output/'workers'/n/'report.json').read_bytes()))for n in GROUPS])
+        (output/'report.json').write_text(json.dumps(report,sort_keys=True,indent=2)+'\n')
+        capture_evidence(runtime,output,manifest_sha,outer_pid=os.getpid())
+        passed=True
+    finally:
+        retire_owned_workers(live, failed=not passed)
+    for row in report['cases'][-3:]:print(json.dumps(row),flush=True)
+    print(json.dumps(summary(report)),flush=True)
+    return report
+
+
+def retire_owned_workers(live, *, failed):
+    """A failed evidence write cannot skip child retirement or the group kill."""
+    if not failed:
+        for _,_,_,stdout,stderr,_ in live:
+            stdout.close();stderr.close()
+        return
+    try:
+        # First retire every directly owned worker, even if one kill/wait races.
+        for _,_,process,_,_,_ in live:
+            if process is None:continue
+            try:
+                if process.poll() is None:process.kill()
+            except BaseException:
+                pass
+            try:process.wait(timeout=3)
+            except BaseException:pass
+    finally:
+        try:
+            for _,folder,process,stdout,stderr,row in live:
+                for stream in (stdout,stderr):
+                    try:stream.close()
+                    except BaseException:pass
+                try:
+                    if process is not None:row.update(exit_code=process.returncode,reaped=process.returncode is not None)
+                    for channel in ('stdout','stderr'):row[channel]=pin((folder/channel).read_bytes())
+                    (folder/'process.json').write_text(json.dumps(row,sort_keys=True,indent=2)+'\n')
+                except BaseException:
+                    # Preserve what is writable; ENOSPC must not strand peers.
+                    pass
+        finally:
+            os.killpg(os.getpid(),signal.SIGKILL)
+
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--runtime',type=Path,required=True);parser.add_argument('--manifest',type=Path,required=True)
-    parser.add_argument('--core-corpus',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
-    a=parser.parse_args();qualify(a.runtime.resolve(),a.manifest.resolve(),a.output.resolve(),a.core_corpus.resolve())
+    for name in ('runtime','manifest','core-corpus','output'):parser.add_argument('--'+name,type=Path,required=True)
+    parser.add_argument('--group',choices=GROUPS)
+    a=parser.parse_args();args=[a.runtime.resolve(),a.manifest.resolve(),a.output.resolve(),a.core_corpus.resolve()]
+    if a.group:qualify_worker(*args,a.group)
+    else:qualify(*args)

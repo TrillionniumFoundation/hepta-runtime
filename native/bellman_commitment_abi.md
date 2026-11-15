@@ -171,3 +171,21 @@ deadline, enforce the two-planner semaphore, hold a permit after caller
 cancellation, decode arbitrary JSON-RPC parameters, or render the full public
 response. Those obligations remain explicit before public activation or old
 stack removal can be qualified.
+
+## Qualification scheduling
+
+The ordinary aggregate retains its 180-second deadline. Its typed commitment
+suite runs two owned worker processes: all 1,139 ordinary rows and their 23
+refusal/33 trusted-digest controls occupy one native arena; the three exact
+8 MiB boundary rows and the subsequent refusal recovery remain in one other
+session. Every original native call still executes. The collector joins the
+complete input/output streams in their original 1,142-row order and checks the
+unchanged fixed SHA256 values before unchanged Rust debug/release replay.
+
+Both workers inherit the actual outer process group. Receipts bind their PID,
+parent PID, command, source inputs, native manifest, complete streams and reaped
+exit state; the strict reader cross-checks the parent against the aggregate's
+actual Popen record. Eleven owned-copy mutation controls exercise those
+bindings. A timeout or failure retains partial receipts and retires the owned
+group. This scheduling change does not change the HIA source, capacity or
+public-handler qualification.

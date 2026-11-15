@@ -2564,5 +2564,36 @@ class QualificationReportingTests(unittest.TestCase):
             b.metadata_evidence(json.dumps(changed).encode(), component)
 
 
+    def test_bellman_workers_retire_before_fallible_evidence_writes(self):
+        import errno
+        from unittest.mock import Mock
+        import hia_native_bellman_commitment_qualification as qualification
+        probe = qualification.driver('qualify_commitment.py')
+        live = []
+        for number in range(2):
+            folder = self.output / str(number)
+            folder.mkdir()
+            (folder / 'stdout').write_bytes(b'partial completed output')
+            (folder / 'stderr').write_bytes(b'')
+            process = Mock()
+            process.poll.return_value = None
+            process.returncode = -9
+            if number == 0:
+                process.kill.side_effect = ProcessLookupError('concurrent exit')
+            stdout, stderr = Mock(), Mock()
+            stdout.close.side_effect = OSError(errno.ENOSPC, 'no disk space')
+            live.append((str(number), folder, process, stdout, stderr, {}))
+        with patch.object(Path, 'write_text', side_effect=OSError(errno.ENOSPC, 'no disk space')), \
+                patch.object(probe.os, 'killpg') as group_kill, \
+                patch.object(probe.os, 'getpid', return_value=12345):
+            probe.retire_owned_workers(live, failed=True)
+        for _, _, process, stdout, stderr, _ in live:
+            process.kill.assert_called_once_with()
+            process.wait.assert_called_once_with(timeout=3)
+            stdout.close.assert_called_once_with()
+            stderr.close.assert_called_once_with()
+        group_kill.assert_called_once_with(12345, probe.signal.SIGKILL)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

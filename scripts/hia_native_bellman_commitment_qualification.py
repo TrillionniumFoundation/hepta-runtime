@@ -39,6 +39,7 @@ FILES = (
         "make_commitment_oracle.py","qualify_commitment.py","reference.Cargo.lock")),
     *(REFERENCE+"/"+Path(name).name for name in TARGET_PINS), CORE_CORPUS,
     "native/serde_json.hepta", "native/binary_codec.hepta", "native/serde_filter_packer.hepta",
+    "tests/hia_native/evidence_snapshot.py",
 )
 
 def driver(name):
@@ -66,6 +67,10 @@ def checked_registry(reference, resolved):
 def source_evidence(root=ROOT):
     root=Path(root).resolve()
     raw=read(root/"native/bellman_commitment_component.json");component=decode(raw)
+    exact(component.get("native_scheduling"), {"max_parallel_workers":2,"ordinary_cases":1139,
+        "budget_cases":3,"budget_recovery_same_session":True,"timeout_seconds":180,
+        "worker_evidence_controls":11,"complete_corpus_sha256_unchanged":True},
+        "commitment fixed worker schedule differs")
     actual={name:identity(read(root/name)) for name in FILES}
     exact(component.get("files"),actual,"commitment component source closure differs")
     from hia_native_build import HEPTA_COMMIT
@@ -159,6 +164,7 @@ def corpus_evidence(output, manifest_sha):
     if packet_counts(inputs,output=False)!=(1142,0) or packet_counts(outputs,output=True)!=(1142,1):
         raise ValueError("commitment input/output packet domain differs")
     probe=driver("qualify_commitment.py");core=probe.load_core(ROOT/CORE_CORPUS)
+    scheduling=probe.capture_evidence(ROOT,folder,manifest_sha)
     names=[name for name,_,_,_ in probe.corpus(core)]
     rows=report.get("cases",[])
     if len(rows)!=1142 or [row["name"] for row in rows]!=names: raise ValueError("commitment case order differs")
@@ -179,7 +185,8 @@ def corpus_evidence(output, manifest_sha):
     summary={key:report[key] for key in ("status","native_cases","wall_seconds","files")}
     exact(progress,[*rows[-3:],summary],"commitment complete native driver stdout differs")
     return {"status":"PASS","cases":1142,"budget_refusals":1,"report_sha256":digest(raw),"files":actual,
-            "refusal_controls":23,"trusted_installation_digest_controls":33,"same_session_refusal_recovery":True}
+            "refusal_controls":23,"trusted_installation_digest_controls":33,"same_session_refusal_recovery":True,
+            "scheduling":scheduling}
 
 def static_cases():
     probe=driver("qualify_commitment.py");core=probe.load_core(ROOT/CORE_CORPUS)
@@ -225,7 +232,9 @@ def suite_summary(output, report):
     return {"schema":"hepta.runtime.hia-bellman-commitment-native-suite.v1","status":"PASS","suite":TEST,
             "source":source,"module":module,"source_proof":proof_evidence(output),
             "corpus":corpus_evidence(output,module["manifest_sha256"]),
-            "static_executions":static_evidence(output,module),"original_rust_replay_required":True,**SCOPE}
+            "static_executions":static_evidence(output,module),
+            "parallel_controls":parallel_controls(output,module["manifest_sha256"]),
+            "original_rust_replay_required":True,**SCOPE}
 
 def run_native():
     output=Path(os.environ["HIA_BELLMAN_COMMITMENT_QUALIFICATION_OUTPUT"]).resolve()
@@ -241,6 +250,7 @@ def run_native():
             driver("qualify_commitment.py").qualify(ROOT,manifest,base/"corpus",ROOT/CORE_CORPUS)
     finally:
         (base/"driver.stdout").write_text(captured.getvalue())
+    parallel_controls(output,module["manifest_sha256"],execute=True)
     static_evidence(output,module,execute=True)
     summary=suite_summary(output,report)
     (base/"suite.json").write_text(json.dumps(summary,indent=2)+"\n")
@@ -253,6 +263,11 @@ def native_evidence(output, report):
     exact(decode(read(Path(output)/FOLDER/"suite.json")),expected,"commitment retained native suite differs")
     exact(decode(stdout),expected,"commitment complete native process stdout differs")
     row=next(row for row in report["checks"] if row["name"]==TEST)
+    pid=row.get("pid")
+    if type(pid) is not int or pid<=0 or row.get("cwd")!=str(ROOT):
+        raise ValueError("commitment outer Popen identity is missing")
+    driver("qualify_commitment.py").capture_evidence(ROOT,Path(output)/FOLDER/"corpus",
+        expected["module"]["manifest_sha256"],outer_pid=pid)
     exact(row.get("summary"),expected,"commitment native process summary differs")
     return {"status":"PASS","suite":expected,"process":process,**SCOPE}
 
@@ -406,3 +421,82 @@ def original_evidence(output, report, rustc):
             "build_environment":binding,"processes":processes,
             "binaries":{label:identity(read(folder/"target"/label/"hia-bellman-commitment-reference"))
                         for label in ("debug","release")},**SCOPE}
+
+
+PARALLEL_CONTROLS = ('worker-count','missing-budget-worker','extended-deadline',
+    'wrong-outer-parent','wrong-cwd','not-reaped','worker-parent-mismatch',
+    'worker-source-mismatch','missing-same-session-recovery','budget-case-domain',
+    'complete-worker-output-mutation')
+
+def parallel_controls(output,manifest_sha,*,execute=False):
+    """Mutate owned byte copies; retain results without changing original captures."""
+    import tempfile
+    sys.path.insert(0,str(ROOT/"tests/hia_native"))
+    from evidence_snapshot import copy_evidence_files
+    probe=driver('qualify_commitment.py');base=Path(output)/FOLDER
+    corpus=base/'corpus';report=decode(read(corpus/'report.json'))
+    parent=report['execution']['parent_pid'];probe.capture_evidence(ROOT,corpus,manifest_sha,outer_pid=parent)
+    target=base/'parallel-controls.json'
+    if not execute:
+        value=decode(read(target))
+        if (value.get('schema')!='hepta.bellman-commitment.worker-controls.v1' or value.get('status')!='PASS'
+                or value.get('source_sha256')!=digest(read(ROOT/DRIVERS/'qualify_commitment.py'))
+                or value.get('original_report_sha256')!=digest(read(corpus/'report.json'))
+                or value.get('semantic_processes_started')!=0
+                or [r.get('name')for r in value.get('refused',[])]!=list(PARALLEL_CONTROLS)
+                or any(r.get('status')!='REFUSED' or r.get('exception')!='ValueError'
+                    or not isinstance(r.get('reason'),str) or not r['reason'] for r in value['refused'])):
+            raise ValueError('commitment worker control evidence differs')
+        return value
+    rows=[]
+    def save(path,value):
+        path.unlink();path.write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+    names=['report.json','inputs.bin','native.bin']
+    names += ['workers/'+group+'/'+name for group in probe.GROUPS
+        for name in ('process.json','report.json','stdout','stderr','inputs.bin','native.bin')]
+    admitted={name:digest(read(corpus/name))for name in names}
+    with tempfile.TemporaryDirectory(prefix='commitment-control-',dir=base)as temporary:
+        clone=Path(temporary)/'corpus'
+        copy_evidence_files(corpus,clone,admitted)
+        for name in PARALLEL_CONTROLS:
+            observed=decode(read(clone/'report.json'));execution=observed['execution'];outer=parent
+            group='budget' if name in ('missing-same-session-recovery','budget-case-domain')else 'ordinary'
+            worker_root=clone/'workers'/group
+            process=decode(read(worker_root/'process.json'));worker=decode(read(worker_root/'report.json'))
+            if name=='worker-count':execution['max_parallel_workers']=3
+            elif name=='missing-budget-worker':execution['groups']=execution['groups'][:1]
+            elif name=='extended-deadline':execution['timeout_seconds']=181
+            elif name=='wrong-outer-parent':outer=parent+1
+            elif name=='wrong-cwd':process['cwd']=str(ROOT.parent)
+            elif name=='not-reaped':process['reaped']=False
+            elif name=='worker-parent-mismatch':worker['worker_identity']['parent_pid']+=1
+            elif name=='worker-source-mismatch':worker['worker_identity']['source_inputs']['scripts/hia_native_loader.py']['sha256']='0'*64
+            elif name=='missing-same-session-recovery':worker['same_session_refusal_recovery']=False
+            elif name=='budget-case-domain':worker['cases'][0]['name']='ordinary-case-moved-to-budget'
+            elif name=='complete-worker-output-mutation':
+                path=worker_root/'native.bin';raw=bytearray(read(path));raw[-1]^=1;path.unlink();path.write_bytes(raw)
+            else:raise AssertionError(name)
+            # Rehash changed receipts so semantic custody checks, not only the
+            # first stored hash, reject consistently rewritten metadata.
+            save(worker_root/'process.json',process);save(worker_root/'report.json',worker)
+            for row in execution['groups']:
+                if row['name']==group:
+                    row['process']=identity(read(worker_root/'process.json'))
+                    row['result']=identity(read(worker_root/'report.json'))
+            save(clone/'report.json',observed)
+            try:probe.capture_evidence(ROOT,clone,manifest_sha,outer_pid=outer)
+            except ValueError as error:
+                rows.append(dict(name=name,status='REFUSED',exception=type(error).__name__,reason=str(error),
+                    mutated_report_sha256=digest(read(clone/'report.json')),
+                    mutated_process_sha256=digest(read(worker_root/'process.json')),
+                    mutated_worker_sha256=digest(read(worker_root/'report.json'))))
+            else:raise ValueError('commitment worker mutation was accepted: '+name)
+            for relative in ('report.json','workers/'+group+'/report.json','workers/'+group+'/process.json'):
+                (clone/relative).write_bytes(read(corpus/relative))
+            if name=='complete-worker-output-mutation':
+                (worker_root/'native.bin').write_bytes(read(corpus/'workers'/group/'native.bin'))
+    value=dict(schema='hepta.bellman-commitment.worker-controls.v1',status='PASS',
+        source_sha256=digest(read(ROOT/DRIVERS/'qualify_commitment.py')),
+        original_report_sha256=digest(read(corpus/'report.json')),refused=rows,semantic_processes_started=0)
+    target.write_text(json.dumps(value,indent=2)+'\n')
+    return parallel_controls(output,manifest_sha)

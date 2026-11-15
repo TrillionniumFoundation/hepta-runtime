@@ -5,6 +5,8 @@ import gzip
 import hashlib
 import json
 import os
+import queue
+import threading
 import struct
 import sys
 import unittest
@@ -37,6 +39,11 @@ class Recorder:
         self.expected=(self.output/'native-results.bin').open('xb')
         self.original=(self.output/'original-input.jsonl').open('xb')
         self.index=[];self.rows=[];self.controls=[];self.offset=0;self.current_case=0;self.current_label=''
+        # Native calls remain serial; one bounded evidence writer overlaps only
+        # compression and hashes of complete immutable byte snapshots.
+        self.capture_calls=0;self.capture_error=None
+        self.capture_queue=queue.Queue(maxsize=2)
+        self.capture_worker=threading.Thread(target=self.write_records,name='hia-batch-evidence',daemon=True)
         self.sources={str(ROOT/name):pin(ROOT/name)['sha256'] for name in (
             'scripts/hia_native_loader.py','tests/hia_native/batch_plan_harness.py',
             'tests/hia_native/test_batch_plan_input.py','tests/hia_native/batch_plan_input_cases.py',
@@ -56,14 +63,38 @@ class Recorder:
                 self.record(target+4,self.current_case,self.current_label,wire,before,old,code,ctypes.string_at(output,capacity),ctypes.string_at(work,amount))
                 return code
             module._entry=captured
+        self.capture_worker.start()
     def record(self,owner,case_id,label,wire,before,old,code,out,after):
-        index=len(self.index)+1;header=struct.pack('<8Q',index,owner,case_id,code,len(wire),len(old),len(before),0)
-        digest=hashlib.sha256();size=0
-        for part in [header,wire,before,old,out,after]:self.stream.write(part);digest.update(part);size+=len(part)
+        if self.capture_error is not None:raise RuntimeError('complete evidence writer failed') from self.capture_error
+        if not all(type(part)is bytes for part in (wire,before,old,out,after)):
+            raise TypeError('capture requires complete immutable native snapshots')
+        index=self.capture_calls+1
+        header=struct.pack('<8Q',index,owner,case_id,code,len(wire),len(old),len(before),0)
+        size=sum(map(len,(header,wire,before,old,out,after)))
         row={'call':index,'owner':owner,'case_id':case_id,'label':label,'offset':self.offset,'bytes':size,'return_code':code,
-             'input_bytes':len(wire),'output_capacity':len(old),'workspace_capacity':len(before),'input_sha256':sha(wire),
-             'before_sha256':sha(before),'output_before_sha256':sha(old),'output_sha256':sha(out),'after_sha256':sha(after),'record_sha256':digest.hexdigest()}
-        self.index.append(row);self.offset+=size;return index
+             'input_bytes':len(wire),'output_capacity':len(old),'workspace_capacity':len(before)}
+        self.capture_queue.put((row,header,wire,before,old,out,after))
+        self.capture_calls=index;self.offset+=size
+        return index
+    def write_records(self):
+        while True:
+            item=self.capture_queue.get()
+            try:
+                if item is None:return
+                if self.capture_error is not None:continue
+                row,header,wire,before,old,out,after=item
+                digest=hashlib.sha256();size=0
+                for part in (header,wire,before,old,out,after):
+                    self.stream.write(part);digest.update(part);size+=len(part)
+                if size!=row['bytes'] or row['call']!=len(self.index)+1:
+                    raise ValueError('complete capture record order or extent differs')
+                row.update(input_sha256=sha(wire),before_sha256=sha(before),output_before_sha256=sha(old),
+                           output_sha256=sha(out),after_sha256=sha(after),record_sha256=digest.hexdigest())
+                self.index.append(row)
+            except BaseException as error:
+                self.capture_error=error
+            finally:
+                self.capture_queue.task_done()
     def invoke(self,owner,case_id,label,wire,work,capacity):
         with self.modules[owner].session(workspace_capacity=len(work),output_capacity=capacity) as session:
             if work:ctypes.memmove(session._workspace,work,len(work))
@@ -102,7 +133,7 @@ class Recorder:
             assert size<=cap and out[size:]==b'\xa5'*(cap-size)
             return out[:size],calls
     def plan(self,case_id,wire):
-        start=len(self.index);capacity=32768;attempts=[]
+        start=self.capture_calls;capacity=32768;attempts=[]
         self.current_case=case_id;self.current_label='planner'
         while True:
             result=self.planner.invoke(wire,capacity)
@@ -111,11 +142,16 @@ class Recorder:
                 assert capacity<self.planner.modules[1].metadata['output_capacity']
                 capacity=min(capacity*2,self.planner.modules[1].metadata['output_capacity']);continue
             assert result['code']<0xffff0000 and result['output'][:8]==b'HBPLR001',result
-            return {'calls':list(range(start+1,len(self.index)+1)),'attempts':attempts,
+            return {'calls':list(range(start+1,self.capture_calls+1)),'attempts':attempts,
                     'response_bytes':len(result['output']),'response_sha256':sha(result['output'])}
     def finish(self,success):
+        self.capture_queue.put(None)
+        self.capture_queue.join()
+        self.capture_worker.join()
         self.stream.close();self.expected.close();self.original.close();self.planner.close()
         for module in self.modules.values():module.close()
+        if self.capture_error is not None:raise RuntimeError('complete evidence writer failed') from self.capture_error
+        if len(self.index)!=self.capture_calls:raise ValueError('native calls omitted from complete capture')
         assert self.sources=={p:pin(p)['sha256'] for p in self.sources}
         assert self.artifacts=={p:pin(p)['sha256'] for p in self.artifacts}
         for name,rows in [('calls.jsonl',self.index),('native-cases.jsonl',self.rows),('controls.jsonl',self.controls)]:
