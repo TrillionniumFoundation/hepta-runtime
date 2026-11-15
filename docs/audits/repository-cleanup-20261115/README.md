@@ -1,251 +1,154 @@
 # Repository cleanup audit — 2026-11-15
 
-## Scope and result
+## Result and scope
 
-Baseline: `a404d4f1bf540fb94f65ef3707145eed07eef183`, tree
-`0984578f72d2a4291b5954d1fd93914dc116e3e6` on main. The complete tracked inventory
-contained **17,673 files / 1,864,002,891 bytes**, including **1,986 Python files**.
-The audit combines complete path/blob/mode accounting, Cargo/module reachability,
-embedded-helper callers, CI/deployment dependencies and historical source custody.
-It is a repository cleanup audit, not a complete security or runtime qualification.
+The audit started from `a404d4f1bf540fb94f65ef3707145eed07eef183` (tree
+`0984578f72d2a4291b5954d1fd93914dc116e3e6`) and continued from
+`151d74efcf252314e57cb6e1a5542401ff68f362`. It covers every tracked path, source-language roles, the Rust module
+graph, Cargo declarations, embedded helpers, CI/deployment callers, actual
+evidence-reader paths and original-source retention.
 
-Hepta Runtime is a Rust application with active Python and Java engine boundaries.
-Historical experiments and repeated source snapshots inflated the checkout and
-language counts. The cleanup removes **10,003 historical files / 1,582,599,717 bytes**
-from the current tree, including **1,256 Python files**, with every original
-preserved in reachable Git history. It also consolidates a genuinely duplicated
-bridge implementation. [inventory.json](inventory.json) records exact metrics.
-
-## Language and dependency findings
-
-| Baseline Python area | Files | Bytes | Role |
-| --- | ---: | ---: | --- |
-| Whole repository | 1,986 | 41,557,159 | Production, tests and historical copies combined |
-| tools/x230 | 1,200 | 27,249,379 | Hardware experiments, source snapshots and active qualification harnesses |
-| docs/qualification | 213 | 5,065,948 | Frozen producer/reference code and evidence |
-| tests | 249 | 4,343,496 | Maintained regressions and independent references |
-| deploy | 74 | 1,368,109 | Operator/gateway/install interfaces |
-| scripts | 44 | 1,041,296 | Qualification, evidence admission and differential oracles |
-| experiments/weight | 58 | 717,267 | Separately scoped model research |
-| tools/cloud-compute | 24 | 476,134 | Colab/Kaggle dispatch, recovery and offline CI |
-| workers/weight | 25 | 259,206 | Actual model computation and tests |
-| src/mcp/runtime | 17 | 237,180 | All seventeen are live Rust include inputs |
-
-The static module graph reaches **all 429 src Rust files** from the library and
-three binary roots, with no unresolved external modules or orphan paths; 208 are
-named `*_tests.rs`. Cargo resolves two examples and fourteen integration tests.
-All **474 src files** remain unchanged.
-
-The 17 Python helpers implement document parsing/calculation/security,
-descriptor-relative and binary file operations, metadata preservation, remote
-search, services, operator processes, persistent streams, PTYs and checkpoints.
-See [documents.rs](../../../src/mcp/runtime/documents.rs),
-[binary.rs](../../../src/mcp/runtime/binary.rs),
-[search_jobs.rs](../../../src/mcp/runtime/search_jobs.rs) and
-[terminal.rs](../../../src/mcp/runtime/terminal.rs). Removing them breaks Rust
-`include_str!` inputs or the corresponding routes. Roughly 70 KB of Python also
-remains inside jobs.rs for macOS/operator paths; Linux isolated system_jobctl
-serves a different boundary.
-
-Rust's native weight client supplies transport, not model computation, so the
-Python worker remains necessary. Nine Java sources remain active revision-specific
-Ghidra/JADX bridges. JavaScript/TypeScript, C, APK and JAR fixtures support native
-parsers/provider/observer regressions. The 134-file fixture directory (7,241,333
-bytes) and pinned independent Node REA reference scripts remain unchanged.
-
-## Concrete cleanup
-
-| Current-tree retirement | Files | Original bytes |
+| Metric | Original baseline | Current tree |
 | --- | ---: | ---: |
-| Historical material in 29 complete roots | 9,788 | 1,575,963,721 |
-| Duplicate branch source files under archives/rust-branches/*/files | 215 | 6,635,996 |
-| Total | 10,003 | 1,582,599,717 |
+| Tracked files | 17,673 | 5,636 |
+| Tracked-file bytes | 1,864,002,891 | 170,882,966 |
+| Python files | 1,986 | 609 |
 
-The [initial history manifest](../../../archives/repository-history/20261115.json)
-and [October 28 follow-up manifest](../../../archives/repository-history/x230-20261028-20261115.json)
-record every original path, blob, mode and length. Their roots cover historical
-source recovery, older HIA review artifacts, November 3–6 and selected A-series
-X230 campaigns, and seven self-contained old REA/DC evidence collections. Original
-successes, failures, partial attempts and raw outputs retain their exact bytes and
-classifications. No Git history or protected HIA branch was rewritten.
+**12,048 historical files / 1,696,849,279 original bytes** have
+left the current tree, including **1,378 Python
+files**. New audit/verification files account for the difference between gross
+retirements and net file counts. These are tracked-file measurements, not Git
+compressed-pack sizes or GitHub Linguist percentages.
 
-Forty-two [Rust variant manifests](../../../archives/rust-branches/README.md)
-preserve their original inventories and previous dispositions. They retain 5,107
-pure history-only rows and 118 exact original files in the current tree. Nineteen
-additional Markdown originals remain in history while explicitly pinned live
-versions update only evidence links;
-33 historical already_identical rows also require original blob availability.
-The verifier checks 5,277 original branch-source rows in total.
+The current Rust runtime, model workers and cloud-compute inputs keep their
+original bytes. No additional safely removable active implementation was found
+after the final dependency and source-role review. That conclusion does not
+classify required non-Rust interfaces or independent reference programs as dead
+code.
 
-The October 28–30 X230 suites remain in CI. The complete A27 subtree remains:
-run_reuse_throughput.py loads its resource sampler by a relative path and pinned
-hash. The v9-harness-drafts baseline remains because current workflows/tests pin
-and read it. Current REA mapping inputs and independent fixtures remain.
+## Why the repository contains other languages
 
-### One bridge source
+| Retained Python scope | Files | Purpose |
+| --- | ---: | --- |
+| `src/` | 17 | Rust-embedded runtime helpers |
+| `workers/` | 25 | Model computation workers and worker tests |
+| `tools/cloud-compute/` | 24 | Colab/Kaggle routing, recovery and offline tests |
+| `tools/x230/` | 66 | Maintained qualification harnesses and frozen sampler inputs |
+| `deploy/` | 74 | Operator, gateway, installation and recovery interfaces |
+| `tests/` | 248 | Regression tests, independent references and fixtures |
+| `scripts/` | 45 | Qualification, evidence admission and independent differential oracles |
+| `experiments/` | 58 | Independent model studies and reproducible evaluation |
+| `qualification/` | 1 | Frozen standalone Rust study verifier |
+| `docs/` | 49 | Currently bound reference bundles and reproducible audit evidence |
+| `.github/` | 2 | Current browser qualification bootstrap and tests |
+| Total | 609 | |
 
-The two 467-line bridge implementations were byte-identical. The standalone
-`deploy/readonly-bridge/bridge.py` stays unchanged, SHA-256
-`69efe77eb0620648fcd3c6fd545ae162c9b9e62e99bd2acf249f03e12443918b`.
-`deploy/chatgpt_mcp_bridge.py` becomes a short fixed-path loader in the original
-module namespace. This preserves CLI/import/global-patching behavior without a
-symlink or duplicate maintained implementation. Two focused regressions cover
-patched module globals and an independently copied standalone deployment file.
+All **17** Python helpers under `src/mcp/runtime` are actual Rust embedded inputs.
+They implement configured document, worksheet, binary-file, metadata, process,
+service, terminal, stream and checkpoint operations. The Python model worker
+performs model computation; the native Rust client supplies transport and
+ownership. The **24** Colab/Kaggle files remain active dispatch/recovery tools and
+offline tests. Nine Java sources serve revision-specific Ghidra/JADX bridges.
+JavaScript/TypeScript/C fixtures and Node reference implementations provide
+independent parser, provider and differential checks.
 
-### Documentation and ongoing checks
+All **429 `src/*.rs` files** are reachable from Cargo roots and explicit module
+paths. All **37 dependency declarations**, including target/development entries,
+have actual source uses. There are no unresolved module paths or unused whole
+Rust source files in that graph. `Cargo.toml`, `Cargo.lock` and `vendor/ruzstd`
+remain unchanged; the manifest participates in persistent request identity.
 
-README now presents actual Hepta ownership and current directory roles. Repeated
-Octofs installation/marketing content is replaced by a link to the imported
-upstream revision; attribution and source copyright remain. CONTRIBUTING uses
-the pinned Rust/nextest process-isolated workflow.
+The remaining 49 Python files under docs are individually accounted for:
+39 belong to currently bound REA reference bundles, four to A27 public
+recalculation/publication evidence and six to the current Rust integration audit.
+The 58 model-study scripts and the frozen standalone study verifier remain
+reproducible research inputs. [inventory.json](inventory.json) contains their
+per-root paths and binding/reader reasons.
 
-**345 existing Markdown links** now point to exact original GitHub evidence paths;
-two additional plain v9 paths became pinned links. Historical provenance JSONs
-remain unchanged. The new Repository Hygiene workflow checks archive custody,
-refusal regressions, both bridge entries, retained X230/REA consumers and Cargo's
-source-file closure. Existing workflows remain unchanged.
+## Changes made
 
-## Production identity preserved
+| Retirement wave | Files removed | Original bytes |
+| --- | ---: | ---: |
+| Initial historical collections and branch-source copies | 9,923 | 1,528,547,962 |
+| Remaining October 28 X230 evidence | 80 | 54,051,755 |
+| Continued historical directory review | 2,039 | 114,186,765 |
+| Expired workflows/script and standalone harness snapshots | 6 | 62,797 |
+| Total | 12,048 | 1,696,849,279 |
 
-Independent byte/mode comparison covers **608 inputs** across src, vendor,
-Cargo.toml, Cargo.lock, config, workers and tools/cloud-compute. There are no
-changes or extra files in those scopes. Other deployment code and service files
-remain unchanged except for the bridge entry. The standalone weightspace study
-and existing HIA refs remain preserved.
+The continued directory review removes forty complete X230, DC and REA history
+roots, the withdrawn native checkpoint prototype and an obsolete source recovery
+bundle. The checkpoint prototype was never compiled into the current runtime;
+its failed automatic-continuation result remains a failure in the original.
+The two expired workflows only targeted branches already retired in the earlier
+Rust consolidation. Their observed historical runs were terminal; source cleanup
+does not operate any hardware or service.
 
-Cargo originally listed 6,728 package paths /846,236,238 existing-file bytes.
-Historical retirement reduces the list without changing Cargo metadata; current
-values are recorded in inventory.json. The list is not a supported release
-contract: ordinary registry packaging omits the local ruzstd patch and nested
-crate. The private Git-checkout release remains the documented build path.
+The first cleanup replaced one of two identical 467-line read-only MCP bridges
+with a fixed-path loader while retaining the standalone implementation unchanged.
+Its import/global-patching and standalone deployment behavior has focused tests.
+The continued review changes no active runtime implementation.
 
-A packaging-only Cargo edit was considered, then reverted during review:
-weight_guard_journal.rs embeds the complete manifest in persistent request
-identity. Even changing exclude/publish metadata changes journal selection after
-rebuilding. **Cargo.toml and Cargo.lock stay byte-identical.** A future packaging
-redesign requires a separate identity-compatibility assessment.
+The three remaining byte-identical active Python pairs have specific contracts:
+the DC V10 acceptance aliases must match under an existing test; the October 31
+RSS helper is opened adjacent to its caller with `O_NOFOLLOW` and a fixed hash;
+the October 28 and A27 samplers have separate pinned caller paths. Replacing them
+with wrappers would alter those source/admission contracts. The independent Rust
+weightspace study also retains its exact frozen compilation inputs.
 
-REA qualification intentionally hashes a broader source selection including
-tools paths. The smaller tree has a new qualification source identity. No old
-source pin was changed and no old receipt was represented as a current pass.
+## Original-source retention
 
-## Validation and limits
+[Four repository history manifests](../../../archives/repository-history/README.md)
+and [42 Rust variant manifests](../../../archives/rust-branches/README.md) preserve
+every original source identity. The continued review retains all previous
+**15,065 original rows**, adds **2,045 exact original file rows**, and changes only
+the allowed storage disposition of 119 historical source/documentation rows.
+Its 70 Markdown links and three directory references point to exact original
+commits. Historical JSON provenance, failure status and evidence pins are unchanged.
 
-[validation.json](validation.json) records actual observations. Sixteen real-Git
-tests cover exact recovery, invalid tree/blob/mode/path, unknown/non-ancestor
-source, shallow history, missing original objects, incomplete/duplicate inventories
-and old-schema compatibility. The complete candidate verifier checks 149 merged
-Rust refs, 42 branch manifests, 5,277 original paths and all 9,708 historical paths.
-Independent diff verification accounts for exactly 9,923 deletions with no extras.
+Inventory continuity is bound to an immutable cleanup checkpoint in the verifier.
+It must survive as an ancestor: use a merge commit or fast-forward, without
+squashing/rebasing the checkpoint history. The v2 schema additionally supports
+precisely named individual files. Removing a required manifest, shrinking its
+file list, changing an original blob or reintroducing a retired file must fail.
+The package check covers both retired directories and exact file names.
 
-Both all-feature and no-default-feature target checks and formatting passed on
-the unchanged production inputs before a local environment reset. Clippy then
-failed because the shared disk was full; that failure is not a code-quality pass.
-The candidate was reconstructed from the exact original commit and rechecked;
-no unverifiable temporary commit identity is used as the published source.
+## Validation
 
-Fresh reconstructed bridge checks pass 9 unit, 16 stdio and 1 legacy-import test.
-The 4 HTTP tests fail both before and after because local AF_UNIX creation is
-denied. Unchanged X230 suites previously yielded 88 passes and 10 AF_UNIX setup
-errors. REA mapping passed; 362 regression tests yielded 361 passes and 1 missing
-/proc child-observation error. These are failed local suites, not complete passes.
-GitHub's exact-commit Repository Hygiene workflow runs those host-dependent paths
-independently; consult the run attached to the published commit for its result.
+Independent comparison confirms **608 unchanged core inputs**, including all
+474 current runtime source inputs, Cargo, config, model workers, cloud-compute
+tools and the patched decoder. All **214 Rust include references / 141 unique
+embedded inputs** remain present and unchanged. Each of this continuation's
+2,045 deletions matches its original path/blob/mode/size, with no unlisted deletion.
 
-No full runtime-suite pass, deployment, HIA activation, model improvement or
-performance improvement is inferred from cleanup/source custody alone.
+The actual local checks include **34 real-Git custody tests** (23 previous and 11
+new v2 cases), **23 DC receipt/ledger regression tests**, REA mapping verification
+and the independent deletion/source comparison. Four existing evidence consumers
+were traced while executing; none opened any retired path. Their original
+qualification results remain unchanged: REA mapping integrity passes while its
+parity gate stays OPEN, and DC receipt integrity passes while full replacement
+qualification stays false.
 
-### Independent review and inventory continuity
+Repository Hygiene now also runs the three retained DC receipt suites and checks
+their input paths. The full runtime workflow still covers pinned Rust 1.95.0,
+both feature configurations, Clippy, process-isolated nextest and release builds.
+Read the GitHub run attached to the exact published commit for its terminal result;
+an ancestor's successful run does not qualify a new commit.
 
-An independent review reproduced the full tracked-file inventory, all 9,923
-deletions, the 429-file Rust module closure and the 608 unchanged core inputs.
-All 214 Rust `include_str!` / `include_bytes!` inputs remain present. The active
-code and workflow scan found no direct references to the 27 retired roots.
-
-The review found a gap in the ongoing custody check: deleting a complete manifest
-or an archive source row could remove its original object from the verification
-scope. The verifier now binds the required 43 manifests and 14,985 source rows
-to the first complete cleanup commit,
-`a7a80a18b40a34aaaf2a41b1b19e82eac36ed336`. Existing source identities and retired
-roots must remain complete; new manifests may be added. Seven additional real-Git
-regressions cover these failures and the supported historical-revision boundary.
-All 23 custody tests passed locally, as did the complete verifier for the cleanup
-commit and the original main revision. This continuity contract requires keeping
-the cleanup commit in ancestry: use a merge commit or fast-forward, not a squash
-or rebase of the cleanup history.
-
-The exact cleanup commit also passed the complete hosted
-[Repository Hygiene run](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43727225157):
-16 original custody tests, 9 bridge unit tests, 16 stdio tests, all 4 HTTP tests,
-98 X230 regressions, the REA mapping check and 362 REA regressions. Cargo listed
-1,443 package paths / 118,329,328 existing-file bytes and retained all 474 runtime
-source inputs. These hosted observations resolve the earlier host-capability
-failures for that commit; the earlier local failures remain recorded.
-
-The root `AGENTS.md` now uses the actual Hepta Runtime identity and the pinned
-process-isolated nextest commands. Existing permission and release instructions
-are preserved. See [validation.json](validation.json) for the exact observations;
-the follow-up commit's CI is reported separately from its cleanup ancestor.
-
-## Follow-up review and complete retirement
-
-The independently reviewed first cleanup is merged as
-[`110c7355`](https://github.com/TrillionniumFoundation/hepta-runtime/commit/110c73556ebab3ca589bbe5485150deb67167711),
-with the same tree as `136ff997`. A further complete inventory retired the
-remaining October 28 X230 evidence collections: 47 files / 34,526,828 bytes in
-`tools/x230/20261028/evidence/` and 33 files / 19,524,927 bytes in
-`tests/evidence/20261028-x230/`. All 80 originals, including nine Python diagnostic
-scripts, are bound to reachable source `136ff997` in the second history manifest.
-The 19 top-level October 28 harness inputs and the October 29–30 harnesses stay
-unchanged. Their source enumeration does not include the retired nested evidence;
-current tests construct temporary evidence and the packer/analyzer accepts an
-explicit input path. Forty-four report links and two directory mentions now point
-to the exact originals. Failure, partial and success records retain their bytes.
-
-The follow-up also updates the architecture guide to the actual runtime modules,
-uses process-isolated nextest for `make coverage`, and repairs three preexisting
-source links in the live R11/R12 reports. The two corresponding current-document
-blob pins are updated while their original source identities stay unchanged.
-Cargo's hygiene check now uses every repository-history manifest, so later
-retirements cannot escape its package-path check. Coverage itself was not run.
-
-The active-language review found no byte-identical duplicate source file under
-`src`, `workers`, `deploy`, `scripts` or `tools/cloud-compute`, and no duplicate
-Python AST function of at least ten lines after normalizing its name/docstring.
-The deployment versions remain a live import chain:
-`chatgpt_computer_operator` → `chatgpt_v11_layered_read` →
-`chatgpt_v10_dual_read` → `chatgpt_full_operator`.
-Two duplicate-looking harness pairs remain for a concrete reason: the DC v10
-acceptance pair is explicitly required byte-identical by its contract test, and
-the October 31 concurrency harness opens its adjacent RSS helper with
-`O_NOFOLLOW` and verifies its pinned bytes. Wrappers or symlinks would violate
-those maintained input contracts.
-
-The second immutable inventory checkpoint is
-[`cc18b5b3`](https://github.com/TrillionniumFoundation/hepta-runtime/commit/cc18b5b399cfa594dfbaa9e4046ba2c376dbc6d3).
-The current verifier binds all **44 manifests / 15,065 original source rows** to
-that ancestor, including the new 80-file inventory. Removing its complete manifest
-or any source row must fail verification. Both cleanup checkpoints remain in Git
-ancestry; use a merge commit or fast-forward, without squashing/rebasing them.
-
-All 608 core inputs remain unchanged from the original baseline, including all
-474 runtime source inputs and the complete model-worker/cloud-compute code.
-`inventory.json` contains cumulative current-tree metrics; earlier per-commit
-observations in this document remain identified by their original commits.
-The follow-up's local October 28–30 checks returned 88 passes and ten AF_UNIX
-setup errors; exact hosted validation must be read for the published follow-up
-commit, independently of successful ancestor checks.
+[validation.json](validation.json) retains previous failed local checks, hosted
+observations, exact source identities and the current review. Prior AF_UNIX,
+process-observation and disk-space failures remain recorded. Cleanup alone does
+not establish a new runtime, HIA, model-quality or deployment qualification.
 
 ## Recovery
 
-```bash
-git worktree add --detach /your/isolated/hepta-runtime-history \
-  a404d4f1bf540fb94f65ef3707145eed07eef183
-python3 scripts/verify_rust_consolidation.py
+```sh
+git worktree add --detach ../hepta-runtime-history SOURCE_COMMIT
+git show SOURCE_COMMIT:ORIGINAL_PATH
+python3 -B scripts/verify_rust_consolidation.py
 ```
 
-Use the cleanup checkout's verifier and the separate historical tree for original
-reproduction. Missing history/objects require explicit fetching; the verifier
-never fetches or executes archived code. The change reduces the current tree and
-new shallow checkouts. Full Git clones retain the original objects and storage
-cost; Git history was deliberately preserved.
+Select `SOURCE_COMMIT` from the manifest containing the path. Use the separate
+historical tree to reproduce original relative paths and the current verifier to
+check retention. Missing history requires explicit fetching. Full Git clones keep
+the historical object storage; this cleanup reduces the current tree and shallow
+checkouts without rewriting history.

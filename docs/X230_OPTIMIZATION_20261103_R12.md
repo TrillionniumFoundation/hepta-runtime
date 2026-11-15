@@ -42,17 +42,17 @@ ignored; this report does not claim that every ignored test was exercised or
 count them as isolated-test passes.
 
 Primary bindings:
-[source map](../tests/evidence/20261103-x230-r12/source-map.json),
-[baseline binding](../tests/evidence/20261103-x230-r12/baseline-binding.json),
-[isolated summary](../tests/evidence/20261103-x230-r12/isolated-summary.json), and
-[original qualification](../tests/evidence/20261103-x230-r12/qualification.json.gz).
+[source map](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/source-map.json),
+[baseline binding](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/baseline-binding.json),
+[isolated summary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/isolated-summary.json), and
+[original qualification](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/qualification.json.gz).
 
 The original X230 workspace is
 /home/qian/hepta-runtime-optimization-20261103-r12; qualification used
-qualification-02. The [original evidence archive](../tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz)
+qualification-02. The [original evidence archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz)
 retains the earlier experiment history and main campaigns. The independent C1
 follow-up was produced after that archive and is supplied separately as
-[native-c1-followup.json.gz](../tests/evidence/20261103-x230-r12/native-c1-followup.json.gz).
+[native-c1-followup.json.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/native-c1-followup.json.gz).
 
 ## Production changes and execution boundaries
 
@@ -123,7 +123,7 @@ or introduce a new recovery/ownership protocol.
 ## Cancellation-pressure responsiveness and resource cost
 
 Source: cancel-responsiveness-01/report.json in the
-[original archive](../tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz).
+[original archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz).
 The [driver](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/run_cancel_responsiveness.py) starts fresh
 local native MCP controllers with identical escaped JSON receipts, eight
 concurrent wrong-host cancellation requests per wave, and one host_list request.
@@ -163,8 +163,8 @@ and retention.
 ## Six-host native release observations
 
 Sources: native-observation-01/report.json in the
-[original archive](../tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz),
-the separate [C1 follow-up](../tests/evidence/20261103-x230-r12/native-c1-followup.json.gz),
+[original archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz),
+the separate [C1 follow-up](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/native-c1-followup.json.gz),
 the [measurement wrapper](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/run_native_observation.py),
 and the [independent analyzer](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/analyze_native_observation.py).
 
@@ -244,7 +244,7 @@ complete controller-plus-descendant resource budget.
 ## Qualified single-pass persistence experiment
 
 The separately exposed
-[persistence-qualified.json.gz](../tests/evidence/20261103-x230-r12/persistence-qualified.json.gz)
+[persistence-qualified.json.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/persistence-qualified.json.gz)
 is original qualified-matrix-01/persistence-cargo.json. Its uncompressed SHA256
 is db7be7966e8fc4e9c5861e2d9838293951bc43fc27bf25c2c5d69e9342807afe.
 The [persistence analyzer](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/analyze_persistence.py)
@@ -324,7 +324,7 @@ writer v1/v2; the initial compile failure is a separate historical event.
 
 Sources: baseline-cancel-recovery-01/report.json and
 candidate-cancel-recovery-01/report.json in the
-[original archive](../tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz).
+[original archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz).
 Reproduction and verification:
 [run_six_host_cancel_recovery.py](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/run_six_host_cancel_recovery.py)
 and [verify_cancel_recovery.py](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/verify_cancel_recovery.py).

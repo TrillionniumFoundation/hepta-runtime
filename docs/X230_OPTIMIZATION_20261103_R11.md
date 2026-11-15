@@ -29,10 +29,10 @@ This is a bounded, evidence-based stopping decision, not proof of an absolute op
 | R11 tested source/binary binding | 213 source entries; runtime SHA256 `660d64674fe3422006c0c2a82bc31f3f36edf19baf6613df7cdce51e8f3f8e4c` |
 | R11 publication binding | Branch `perf/x230-r11-20261103`; the commit containing this report has the R10e snapshot above as its direct parent |
 
-The [R10e source map](../tests/evidence/20261103-x230-r11/r10e-source-map.json)
+The [R10e source map](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/r10e-source-map.json)
 matches all 210 files in the immutable baseline used for this source comparison.
 It also matches the input, tested, and after-run source maps in the retained
-[R10e qualification record](../tests/evidence/20261103-x230-r11/r10e-qualification.json.gz).
+[R10e qualification record](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/r10e-qualification.json.gz).
 The runtime digest above is recorded in that qualification artifact.
 The historical R9 anchor does not substitute for this actual R10e source/binary identity.
 The [R10e snapshot report](X230_OPTIMIZATION_20261103_R10E_SNAPSHOT.md) records that baseline's
@@ -134,14 +134,14 @@ Unchanged SSH routing and host bindings must not be described as a new multi-hos
 
 ## Qualification and added functional coverage
 
-The [R11 qualification](../tests/evidence/20261103-x230-r11/r11-qualification.json.gz) reports
+The [R11 qualification](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/r11-qualification.json.gz) reports
 `qualified: true`: format, format check, harness tests, strict Clippy, test build, isolated
 tests, independent test audit, and release all exited zero. Release took 329.938 seconds.
-The [isolated summary](../tests/evidence/20261103-x230-r11/r11-isolated-summary.json) records
+The [isolated summary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/r11-isolated-summary.json) records
 **1,621 passed, 0 failed, 31 ignored, and 1,652 selected**, with zero automatic retries.
-The [test archive](../tests/evidence/20261103-x230-r11/r11-tests.tar.gz) retains the exact-case
+The [test archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/r11-tests.tar.gz) retains the exact-case
 logs, inventories, original artifact/source manifests, and independent audit.
-The [213-entry source map](../tests/evidence/20261103-x230-r11/r11-source-map.json) equals
+The [213-entry source map](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/r11-source-map.json) equals
 `source_tested`, `source_after`, and all current local compiler inputs. Initial `source_input`
 differs only in the benchmark module formatted by qualification; it is not claimed identical.
 The following seven new functional tests are included in that completed qualification.
@@ -169,8 +169,8 @@ calls, zero failed calls, and zero automatic retries**. Every case used one ABBA
 with two independent processes per arm. An independent calculation matched all 580
 reported statistical fields exactly. Full cases, raw-source identities, all directional
 regressions and dispersion are in the
-[inventory analysis](../tests/evidence/20261103-x230-r11/inventory-campaign-02-summary.json)
-and [complete tables](../tests/evidence/20261103-x230-r11/inventory-campaign-02-tables.md).
+[inventory analysis](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/inventory-campaign-02-summary.json)
+and [complete tables](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/inventory-campaign-02-tables.md).
 
 These are **opt-level 1 libtest** measurements of the actual guarded local inventory and
 wire serialization paths, with two Tokio workers and four physical inventory permits.
@@ -184,7 +184,7 @@ All four fixture manifests and every per-case response digest match across A/B.
 | Qualified R11 libtest B | `664e821762647be2bea2224aa566be2fb9d9983131c77af22f6f085cb556668b` |
 | Identical benchmark module | `e0bd1eb185404122773c11415413e631d21bd04970ed1fb2764d654bdd3d1f56` |
 
-The [baseline rebuild receipt](../tests/evidence/20261103-x230-r11/baseline-build-v2-receipt.json.gz)
+The [baseline rebuild receipt](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/baseline-build-v2-receipt.json.gz)
 binds 211 unchanged compiler inputs and exact profile/features equality with B. Only the
 benchmark module and its test hook differ from the qualified R10e source.
 The following table shows C4; A is R10e and B is R11.
@@ -218,7 +218,7 @@ measurements without a statistical-significance claim.
 
 The original full-process RSS columns remain in the immutable reports. Their medians are
 identical in 19/20 cases (plain typically 25,320 KiB, escaped 20,464 KiB); they do not
-establish broad RSS savings. A [small accounting probe](../tests/evidence/20261103-x230-r11/rss-floor-probe.json.gz)
+establish broad RSS savings. A [small accounting probe](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/rss-floor-probe.json.gz)
 confirmed inherited pre-exec high-water contamination: after a Python parent touched
 32 MiB, both a direct true process and a fresh Python interpreter reported 49,408 KiB.
 Running the same interpreter as GNU time's direct child instead gave 9,344 KiB internally
@@ -230,13 +230,13 @@ qualified Rust binaries and benchmark module. The Python runner optionally launc
 the Rust test as GNU time's direct child, pins the launcher's SHA256 before and after,
 retains the native usage text/hash and wrapper wait4 RSS separately, and checks both exit
 statuses. Original evidence is in the
-[follow-up campaign](../tests/evidence/20261103-x230-r11/inventory-rss-campaign-03.json.gz),
-[plain samples](../tests/evidence/20261103-x230-r11/inventory-rss-plain.json.gz), and
-[escaped samples](../tests/evidence/20261103-x230-r11/inventory-rss-escaped.json.gz).
-The [independent analysis](../tests/evidence/20261103-x230-r11/inventory-rss-campaign-03-summary.json)
+[follow-up campaign](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/inventory-rss-campaign-03.json.gz),
+[plain samples](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/inventory-rss-plain.json.gz), and
+[escaped samples](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/inventory-rss-escaped.json.gz).
+The [independent analysis](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/inventory-rss-campaign-03-summary.json)
 reproduces all 132 numeric statistical fields exactly and verifies all 20 native usage
 receipts (16 measurement children and four enumeration children). The
-[complete RSS tables](../tests/evidence/20261103-x230-r11/inventory-rss-campaign-03-tables.md)
+[complete RSS tables](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/inventory-rss-campaign-03-tables.md)
 also retain every individual peak, latency reversal and host-environment limitation.
 
 | C4 payload | Mode | Median whole-child peak RSS KiB A → B | RSS change | CPU ms/call A → B | Calls/s A → B |
@@ -264,7 +264,7 @@ all successful, across ai395/mac/main/pocket4/rog/x230. Each cell has 96 calls, 
 by host and status/read operation. Each arm also performs a normal controller restart
 and checks the same original jobs and outputs. Source records and executable hashes
 remain unchanged. Original evidence is in the
-[native report](../tests/evidence/20261103-x230-r11/native-observation-abba.json.gz).
+[native report](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/native-observation-abba.json.gz).
 
 | Concurrency | Calls/s A → B | Rate change | Controller CPU ms/call A → B | p95 ms A → B |
 |---:|---:|---:|---:|---:|
@@ -280,9 +280,9 @@ The independent C4 recheck completed **384 measurement calls and 456 total tool 
 all successful. It used the same qualified A/B runtimes, original jobs, native stdio
 transport, two Tokio workers, 96 calls per cell, and ABBA order. Each version contributes
 192 measurement calls within each campaign. The
-[recheck report](../tests/evidence/20261103-x230-r11/native-observation-abba-c4-recheck.json.gz),
-[independent summary](../tests/evidence/20261103-x230-r11/native-observation-summary-c4-recheck.json),
-and [comparison tables](../tests/evidence/20261103-x230-r11/native-observation-results-c4-recheck.md)
+[recheck report](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/native-observation-abba-c4-recheck.json.gz),
+[independent summary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/native-observation-summary-c4-recheck.json),
+and [comparison tables](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/native-observation-results-c4-recheck.md)
 retain all four new rounds alongside the first campaign's unchanged evidence.
 
 | C4 campaign | Calls/s A → B | Rate change | Controller CPU ms/call A → B | CPU change |
@@ -323,8 +323,8 @@ or distributed ownership transfer was tested by this read-only workload.
 
 `inventory-campaign-01` was refused by `ValueError: benchmark modules differ` before any
 measurement process ran. All 72 planned entries remained unexecuted. The
-[failed receipt](../tests/evidence/20261103-x230-r11/inventory-preflight-01.json.gz) and
-[original baseline module](../tests/evidence/20261103-x230-r11/inventory-preflight-01-baseline-benchmark.rs)
+[failed receipt](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/inventory-preflight-01.json.gz) and
+[original baseline module](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/inventory-preflight-01-baseline-benchmark.rs)
 are retained. Differences were parity spelling in expected-row construction before timing
 and a cache-description field emitted after timing. The identical-source gate was kept.
 The baseline was rebuilt in a fresh source directory in 748.389 seconds; no production
@@ -337,7 +337,7 @@ The candidate counted pretty-JSON bytes before any filesystem effect, then seria
 through a 16 KiB BufWriter, explicitly flushed, and used `into_parts` to avoid Drop retries.
 It retained oversize-before-temp behavior and file-sync/rename/directory-sync ordering.
 The [probe report](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/experiments/persistence-probe.md) and
-[raw evidence](../tests/evidence/20261103-x230-r11/persistence-probe.json) preserve all samples.
+[raw evidence](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/persistence-probe.json) preserve all samples.
 
 This used fixed JobRecord-like `serde_json::Value` data, not the production JobRecord type.
 A global System allocator wrapper was present; counters were enabled only for separate
@@ -381,11 +381,11 @@ contains the required 2026 copyright and Apache-2.0 header; its executed hash is
 
 ## Recovery evidence and scope
 
-The retained [baseline recovery summary](../tests/evidence/20261103-x230-r11/recovery-baseline-summary.json)
-and [original archive](../tests/evidence/20261103-x230-r11/recovery-baseline.json.gz)
+The retained [baseline recovery summary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/recovery-baseline-summary.json)
+and [original archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/recovery-baseline.json.gz)
 cover six private jobs and owned-controller/transport interruption. The completed
-[candidate summary](../tests/evidence/20261103-x230-r11/recovery-candidate-summary.json) and
-[original archive](../tests/evidence/20261103-x230-r11/recovery-candidate.json.gz) bind the run
+[candidate summary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/recovery-candidate-summary.json) and
+[original archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/recovery-candidate.json.gz) bind the run
 to the qualified runtime SHA256 above and record **58/58 native calls and 31/31 independent SSH calls successful**.
 The proved private ROG SSH master was killed; other hosts progressed and ROG reconnected to
 its original job. After the separate controller SIGKILL/restart, all six original jobs were
@@ -415,7 +415,7 @@ The source/evidence snapshot is bound to branch `perf/x230-r11-20261103` and dir
 version under review; its tree must preserve the 213 compiler-input hashes above.
 The GitHub branch and PR head provide the publication reference without embedding a
 self-referential commit hash in this document.
-The [execution ledger](../tests/evidence/20261103-x230-r11/execution-ledger.json) records the
+The [execution ledger](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/execution-ledger.json) records the
 source, executable, experiment and publication evidence bindings as they are established.
 Performance statements remain specific to the measured workload, build, host conditions,
 concurrency and resource metric; native observations and inventory microbenchmarks are

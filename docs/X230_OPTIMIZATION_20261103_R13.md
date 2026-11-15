@@ -318,15 +318,15 @@ All 219 project inputs match the qualified compiler-input manifest by Git blob
 SHA and mode, with no missing or extra input. Adding reports and evidence later
 does not alter those source subtrees. The standalone qualification, performance,
 recovery and Git-source verification JSON records are published under
-`tests/evidence/20261103-x230-r13/`.
+[tests/evidence/20261103-x230-r13/](https://github.com/TrillionniumFoundation/hepta-runtime/tree/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r13/).
 
 Original evidence:
-[`r13-original-evidence-01.tar.gz`](../tests/evidence/20261103-x230-r13/r13-original-evidence-01.tar.gz),
+[`r13-original-evidence-01.tar.gz`](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r13/r13-original-evidence-01.tar.gz),
 6,065,688 bytes, SHA-256
 `f0dd8d28b2d4cc56d1bcca8efeff0f2778efad20cf75465ab74297411fab6635`.
 
 Compressed selection and per-file hash manifest:
-[`archive-selection-01.json.gz`](../tests/evidence/20261103-x230-r13/archive-selection-01.json.gz),
+[`archive-selection-01.json.gz`](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r13/archive-selection-01.json.gz),
 1,652,643 bytes, SHA-256
 `1e1e9e4ff95035d7621c5f26888f618d2fefceb829dc34152788999d471fa319`.
 

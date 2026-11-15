@@ -98,6 +98,17 @@ class ArchiveCustodyTests(unittest.TestCase):
         }]
         self.save()
 
+    def retire_documentation_as_file(self):
+        self.history["schema"] = "hepta.repository-history-retention.v2"
+        self.history["retired_files"] = [self.documentation_path]
+        self.history["paths"].append({
+            "path": self.documentation_path, "source_blob": self.documentation_blob,
+            "source_mode": "100644", "bytes": len(self.original_documentation)})
+        self.history["file_count"] += 1
+        self.history["byte_count"] += len(self.original_documentation)
+        (self.root / self.documentation_path).unlink()
+        self.save()
+
     def test_history_recovers_exact_original_source_and_failure_bytes(self):
         report = self.verify_archive()
         self.assertEqual(report["history_retained_blob_paths"], 1)
@@ -242,6 +253,155 @@ class ArchiveCustodyTests(unittest.TestCase):
                 self.save()
                 with self.assertRaises(RuntimeError):
                     self.verify_history()
+
+    def test_repository_v2_recovers_root_and_individual_file_originals(self):
+        self.retire_documentation_as_file()
+        report = self.verify_history()
+        self.assertEqual(report["repository_history_files"], 2)
+        self.assertEqual(report["repository_history_bytes"],
+                         len(self.failure) + len(self.original_documentation))
+        self.assertEqual(self.command("show", self.source + ":" + self.documentation_path),
+                         self.original_documentation)
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        self.assertEqual(self.verify_continuity(baseline)["retention_inventory_source_rows"], 3)
+
+    def test_repository_v2_supports_only_individual_files(self):
+        self.retire_documentation_as_file()
+        self.history["retired_roots"] = []
+        self.history["paths"] = self.history["paths"][1:]
+        self.history["file_count"] = 1
+        self.history["byte_count"] = len(self.original_documentation)
+        self.save()
+        self.assertEqual(self.verify_history()["repository_history_files"], 1)
+
+    def test_repository_v2_requires_explicit_file_list_and_nonempty_selection(self):
+        self.retire_documentation_as_file()
+        original = copy.deepcopy(self.history)
+        for files in (None, "docs/evidence.md", {}):
+            with self.subTest(files=files):
+                self.history = copy.deepcopy(original)
+                self.history["retired_files"] = files
+                self.save()
+                with self.assertRaisesRegex(RuntimeError, "retired files must be a list"):
+                    self.verify_history()
+        self.history = copy.deepcopy(original)
+        self.history.pop("retired_files")
+        self.save()
+        with self.assertRaisesRegex(RuntimeError, "retired files must be a list"):
+            self.verify_history()
+        self.history = copy.deepcopy(original)
+        self.history.update(retired_roots=[], retired_files=[])
+        self.save()
+        with self.assertRaisesRegex(RuntimeError, "retirement selection is empty"):
+            self.verify_history()
+
+    def test_repository_v1_cannot_silently_ignore_individual_files(self):
+        self.retire_documentation_as_file()
+        self.history["schema"] = "hepta.repository-history-retention.v1"
+        self.save()
+        with self.assertRaisesRegex(RuntimeError, "Retired files require repository history schema v2"):
+            self.verify_history()
+
+    def test_repository_v2_rejects_unsafe_or_nonexistent_individual_files(self):
+        self.retire_documentation_as_file()
+        for name in ("", "../outside", "/absolute", "a//b", "./file", "a\\b", "a\0b",
+                     "docs/evidence.md/"):
+            with self.subTest(path=name):
+                self.history["retired_files"] = [name]
+                self.save()
+                with self.assertRaisesRegex(RuntimeError, "Invalid repository path"):
+                    self.verify_history()
+        for name in ("docs/missing.md", "docs"):
+            with self.subTest(path=name):
+                self.history["retired_files"] = [name]
+                self.save()
+                with self.assertRaisesRegex(RuntimeError, "retired file is absent from the source"):
+                    self.verify_history()
+
+    def test_repository_v2_rejects_duplicate_files_or_overlapping_roots(self):
+        self.retire_documentation_as_file()
+        original = copy.deepcopy(self.history)
+        for roots, files in ((["historical/"], [self.documentation_path] * 2),
+                             (["historical/", "docs/"], [self.documentation_path]),
+                             (["historical/"], [self.documentation_path,
+                                                "historical/run/failure.json"]),
+                             (["historical/"], ["historical"])):
+            with self.subTest(roots=roots, files=files):
+                self.history = copy.deepcopy(original)
+                self.history.update(retired_roots=roots, retired_files=files)
+                self.save()
+                with self.assertRaisesRegex(RuntimeError, "Duplicate or overlapping.*retired files"):
+                    self.verify_history()
+
+    def test_repository_v2_individual_file_rows_cannot_be_omitted_or_duplicated(self):
+        self.retire_documentation_as_file()
+        original = copy.deepcopy(self.history)
+        for rows in (original["paths"][:1], original["paths"] + original["paths"][1:]):
+            with self.subTest(rows=len(rows)):
+                self.history = copy.deepcopy(original)
+                self.history["paths"] = rows
+                self.history["file_count"] = len(rows)
+                self.history["byte_count"] = sum(row["bytes"] for row in rows)
+                self.save()
+                with self.assertRaisesRegex(RuntimeError, "inventory is incomplete|Duplicate repository history path"):
+                    self.verify_history()
+
+    def test_repository_v2_individual_file_blob_mode_and_size_are_bound(self):
+        self.retire_documentation_as_file()
+        original = copy.deepcopy(self.history)
+        for field, value in (("bytes", len(self.original_documentation) + 1),
+                             ("bytes", True), ("source_mode", "100755"),
+                             ("source_blob", self.blob)):
+            with self.subTest(field=field, value=value):
+                self.history = copy.deepcopy(original)
+                self.history["paths"][1][field] = value
+                self.history["byte_count"] = sum(row["bytes"] for row in self.history["paths"])
+                self.save()
+                with self.assertRaises(RuntimeError):
+                    self.verify_history()
+
+    def test_repository_v2_individual_files_cannot_stay_materialized(self):
+        self.retire_documentation_as_file()
+        for raw in (self.original_documentation, b"modified replacement\n"):
+            with self.subTest(raw=raw):
+                self.write(self.documentation_path, raw)
+                self.commit()
+                with self.assertRaisesRegex(RuntimeError, "Retired repository path is still materialized"):
+                    self.verify_history()
+
+    def test_inventory_continuity_rejects_consistent_individual_file_removal(self):
+        self.retire_documentation_as_file()
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        self.history["retired_files"] = []
+        self.history["paths"] = self.history["paths"][:1]
+        self.history["file_count"] = 1
+        self.history["byte_count"] = len(self.failure)
+        self.save()
+        # The smaller selection is internally consistent, but erases a complete
+        # previously required original from custody without continuity checking.
+        self.assertEqual(self.verify_history()["repository_history_files"], 1)
+        with self.assertRaisesRegex(RuntimeError, "Custody inventory retired files changed"):
+            self.verify_continuity(baseline)
+
+    def test_inventory_continuity_rejects_missing_or_substituted_individual_files(self):
+        self.retire_documentation_as_file()
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        original = copy.deepcopy(self.history)
+        self.history.pop("retired_files")
+        self.save()
+        with self.assertRaisesRegex(RuntimeError, "Custody inventory retired files changed"):
+            self.verify_continuity(baseline)
+        self.history = copy.deepcopy(original)
+        self.history["retired_files"] = ["src/legacy.rs"]
+        self.history["paths"][1] = {
+            "path": "src/legacy.rs", "source_blob": self.blob,
+            "source_mode": "100644", "bytes": len(self.original)}
+        self.history["byte_count"] = len(self.failure) + len(self.original)
+        (self.root / "src/legacy.rs").unlink()
+        self.save()
+        self.assertEqual(self.verify_history()["repository_history_files"], 2)
+        with self.assertRaisesRegex(RuntimeError, "Custody inventory retired files changed"):
+            self.verify_continuity(baseline)
 
     def test_missing_blob_objects_cannot_be_reported_as_recoverable(self):
         with self.assertRaisesRegex(RuntimeError, "blob is unavailable"):

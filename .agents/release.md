@@ -34,9 +34,15 @@ filters remain significant when changing CI.
 
 Historical `operator-parity.yml` retains source-specific evidence pins and its
 original branch filters. It is not a `main` gate. Do not replace an expected
-source digest solely to make a historical qualification pass. The historical
-ROG SMU workflow requires its dedicated ops branch and actor before using its
-self-hosted runner; it is not a `main` deployment workflow.
+source digest solely to make a historical qualification pass. The retired
+[ROG SMU workflow](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/.github/workflows/rog-smu-ab-20261002.yml)
+and its [experiment script](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/ops/rog-smu-ab-20261002.py)
+remain in Git history. They required the dedicated ops branch and actor before
+using the self-hosted runner; they were not a `main` deployment workflow. The
+[runner-allocation diagnostic](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/.github/workflows/runtime-runner-availability.yml)
+also remains in history: its only trigger was a push to its retired diagnostic
+branch. Removing these expired entries does not change host services or runner
+configuration.
 
 ## Manual private release artifact
 
