@@ -269,6 +269,23 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Capture failure diagnostics outside effect fixtures
+        if: ${{ always() && steps.shard.outcome != 'success' }}
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure.py \
+            --source "$RUNNER_TEMP/hia-runtime-native" \
+            --destination "$RUNNER_TEMP/hia-native-diagnostics"
+
+      - name: Retain readable partition failure diagnostics
+        if: ${{ always() && steps.shard.outcome != 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-${{ matrix.group }}
+          path: ${{ runner.temp }}/hia-native-diagnostics/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Retain original failure bytes and prepared artifacts
         if: ${{ always() && steps.shard.outcome != 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -348,6 +365,23 @@ jobs:
           python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --rustc "$(rustup which --toolchain 1.95.0 rustc)"
+
+      - name: Capture failed aggregate diagnostics outside effect fixtures
+        if: failure()
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure.py \
+            --source "$RUNNER_TEMP/hia-runtime-native" \
+            --destination "$RUNNER_TEMP/hia-native-diagnostics"
+
+      - name: Retain readable aggregate failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-aggregate
+          path: ${{ runner.temp }}/hia-native-diagnostics/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Retain complete aggregate, originals and immutable shard receipts
         if: always()

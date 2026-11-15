@@ -269,7 +269,7 @@ def sources() -> dict:
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
-        "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py",
+        "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py", "hia_native_failure.py",
         "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / "rustfmt.toml"))

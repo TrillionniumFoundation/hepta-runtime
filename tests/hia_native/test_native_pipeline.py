@@ -18,6 +18,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_pipeline as p
+import hia_native_failure as failure
 import qualify_hia_runtime_native as q
 
 
@@ -54,6 +55,45 @@ class NativePipelineTests(unittest.TestCase):
                                 if row["key"] == "runtime_bytes" else row for row in modules)
             with self.subTest(bad=bad), patch.object(q, "MODULES", modules), self.assertRaises(ValueError):
                 p.partition_tests(changed)
+
+    def test_failure_diagnostics_survive_denied_fixtures_without_mutation(self):
+        source = self.root / "failed"; source.mkdir()
+        denied = source / "atomic-write-original/native-kernel/0012-denied-parent/fixture/denied"
+        denied.mkdir(parents=True)
+        (denied / "private.json").write_bytes(b"not diagnostic evidence")
+        denied.chmod(0)
+        self.addCleanup(denied.chmod, 0o700)
+        report = {"status": "FAIL", "failure": "original comparison refused",
+                  "checks": [{"name": "atomic-write-rust-compare", "exit_code": 1, "timed_out": False}]}
+        (source / "result.json").write_text(json.dumps(report))
+        nested = source / "atomic-write-original/result.json"
+        nested.write_text('{"status":"FAIL","failure":"kernel observation mismatch"}')
+        raw = b"actual stderr: \xff\x00\n"
+        (source / "atomic-write-rust-compare.stderr").write_bytes(raw)
+        outside = self.root / "outside.json"; outside.write_bytes(b"outside")
+        (source / "escape.json").symlink_to(outside)
+        (source / "escape-directory").symlink_to(self.root, target_is_directory=True)
+        before = {path: path.read_bytes() for path in
+                  (source / "result.json", nested, source / "atomic-write-rust-compare.stderr", outside)}
+        destination = self.root / "diagnostics"
+        receipt = failure.capture(source, destination)
+        self.assertEqual(receipt["original_status"], "FAIL")
+        self.assertEqual(receipt["failed_checks"][0]["name"], "atomic-write-rust-compare")
+        self.assertFalse(receipt["qualification_admitted"])
+        self.assertTrue(receipt["diagnostic_subset_only"])
+        self.assertEqual((destination / "data/atomic-write-rust-compare.stderr").read_bytes(), raw)
+        self.assertEqual((destination / "data/atomic-write-original/result.json").read_bytes(), before[nested])
+        self.assertFalse((destination / "data/escape.json").exists())
+        self.assertFalse((destination / "data/escape-directory").exists())
+        self.assertFalse((destination / "data/atomic-write-original/native-kernel/0012-denied-parent/fixture").exists())
+        self.assertEqual(denied.stat().st_mode & 0o7777, 0)
+        self.assertEqual(before, {path: path.read_bytes() for path in before})
+        self.assertTrue(any(row["path"].endswith("/fixture") for row in receipt["skipped"]))
+        self.assertTrue(any(row["path"] == "escape.json" for row in receipt["errors"]))
+        with self.assertRaises(FileExistsError):
+            failure.capture(source, destination)
+        with self.assertRaisesRegex(ValueError, "separate"):
+            failure.capture(source, source / "nested-diagnostics")
 
     def test_transport_mode_restore_requires_all_exact_owned_bytes(self):
         folder = self.root / "data"; folder.mkdir()
