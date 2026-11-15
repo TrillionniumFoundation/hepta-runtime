@@ -26,7 +26,7 @@ import qualify_hia_runtime_native as q
 import compare_hia_runtime_rust as r
 
 GROUPS = {
-    "audit": tuple(r.audit_pipeline.KEYS),
+    "audit": (tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS)),
     "storage": tuple(r.storage_pipeline.KEYS),
     "bytes": ("runtime_bytes", "text_budget", "line_verify", "editable_content", "line_endpoint",
               "delta", "binary_codec", "policy", "view_render"),
@@ -43,7 +43,7 @@ NATIVE_SEAL = "original-native.json"
 NATIVE_REPORT = "original-native-report.json"
 SHARD_SEAL = "original-shard.json"
 SHARD_REPORT = "original-shard-report.json"
-CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls", "result-storage-evidence-controls", "audit-readiness-evidence-controls")
+CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls", "result-storage-evidence-controls", "audit-readiness-evidence-controls", "audit-activity-evidence-controls")
 
 
 def groups() -> dict[str, tuple[str, ...]]:
@@ -59,7 +59,7 @@ def groups() -> dict[str, tuple[str, ...]]:
         raise ValueError("configuration and regex require their complete independent recipe")
     if GROUPS["storage"] != tuple(r.storage_pipeline.KEYS):
         raise ValueError("storage originals require their complete independent group")
-    if GROUPS["audit"] != tuple(r.audit_pipeline.KEYS):
+    if GROUPS["audit"] != (tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS)):
         raise ValueError("audit originals require their complete independent group")
     return GROUPS
 
@@ -416,18 +416,24 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
             group: parts[group][2]["original_shard_elapsed_seconds"] for group in groups()}
         q.save_report(output / "result.json", report)
         verify_collected_receipts(output, report)
-        r.check_input_pins(output, report)
+        # Every source and artifact was admitted above against the current
+        # successful workflow seals. Run the complete semantic readmission once,
+        # after all mutations and restorations, before publishing PASS. Repeating
+        # it here replays the same retained corpora without adding an assertion.
         # All original jobs have terminated successfully; no Cargo tree or
         # parallel reference worker is active during these mutation controls.
         r.run_result_values_controls(output, report)
         r.run_public_registry_controls(output, report)
         r.run_result_storage_controls(output, report)
         r.run_audit_readiness_controls(output, report)
+        r.run_audit_activity_controls(output, report)
+        report.update(status="PASS", phase="complete", rust_comparison_status="PASS")
+        # This also verifies all collected workflow receipts and requires the
+        # full control tail in PASS state. No PASS report is written until every
+        # original source, current native/original byte and restored mode passes.
         r.check_input_pins(output, report)
-        report.update(status="PASS", phase="complete", rust_comparison_status="PASS",
-                      original_collection_elapsed_seconds=time.monotonic() - started,
+        report.update(original_collection_elapsed_seconds=time.monotonic() - started,
                       finished_at=datetime.now(timezone.utc).isoformat())
-        verify_collected_receipts(output, report)
         q.save_report(output / "result.json", report)
         return {"status": "PASS", "recipes": len(report["original_rust_comparisons"]),
                 "checks": len(report["checks"]), "whole_runtime_replaced": False}

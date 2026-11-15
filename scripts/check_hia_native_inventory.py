@@ -21,6 +21,7 @@ from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
 RUNTIME_BASE_COMMIT = "a0dcdda1991ec536d5e2d252c006a778993fa566"
 RUNTIME_BASE_TREE = "98d96c88d54082637c27f1cbfae61a66d0dd81e7"
 ORIGINAL_RUNTIME_BLOBS = {
+    "src/mcp/runtime/namespace_version.rs": "4672d33a9ede7470a469f619da4dae91f89fcecd",
     "src/mcp/mod.rs": "31e9867c660929950f0ae3b4fc7de1d03efa0d43",
     'src/mcp/runtime/request_results.rs': '10bd49baff3482643322e77966ed9449fa7d9f4e',
     'src/mcp/runtime/request_audit.rs': '984668cfdfcee0a7eb00de14e02086f5ad90bcc0',

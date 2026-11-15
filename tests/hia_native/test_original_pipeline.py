@@ -48,9 +48,14 @@ class OriginalPipelineTests(unittest.TestCase):
         cls.json_build = {"schema": "hepta.runtime.json-reference-build.v1",
                           "actual_python_process_fixture_only": True,
                           "fixture_identity": "one shared build, two separately completed replays"}
+        def fixture_admission(output, report):
+            # Semantic owners are explicit fixtures here. Keep the real current
+            # workflow receipt join exercised when the collector delegates it.
+            if "original_qualification_pipeline" in report:
+                p.verify_collected_receipts(output, report)
         cls.patches = [patch.object(q, "ROOT", cls.source), patch.object(q, "sources", return_value=cls.source_map),
                       patch.object(q, "git_head", return_value="reporting-fixture"),
-                      patch.object(r, "check_input_pins"),
+                      patch.object(r, "check_input_pins", side_effect=fixture_admission),
                       patch.object(r.service_pipeline, "original_fixture_transport", return_value={"fixture_only": True})]
         for item in cls.patches:
             item.start()
@@ -117,7 +122,8 @@ class OriginalPipelineTests(unittest.TestCase):
         with patch.object(r, "run_result_values_controls", self.control(p.CONTROLS[0])), \
              patch.object(r, "run_public_registry_controls", self.control(p.CONTROLS[1])), \
              patch.object(r, "run_result_storage_controls", self.control(p.CONTROLS[2])), \
-             patch.object(r, "run_audit_readiness_controls", self.control(p.CONTROLS[3])):
+             patch.object(r, "run_audit_readiness_controls", self.control(p.CONTROLS[3])), \
+             patch.object(r, "run_audit_activity_controls", self.control(p.CONTROLS[4])):
             return p.collect(self.output, self.compiler, self.native_sha, self.invocation, self.shards, self.expected)
 
     def change_report(self, group, mutation, *, update_workflow=False):
@@ -133,12 +139,12 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_registry_covers_every_recipe_once_and_keeps_shared_builds_together(self):
         flat = [key for keys in p.groups().values() for key in keys]
-        self.assertEqual(len(flat), 59)
+        self.assertEqual(len(flat), 62)
         self.assertEqual(set(flat), set(r.RECIPES))
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(p.GROUPS["config"], ("runtime_config",))
         self.assertEqual(p.GROUPS["storage"], tuple(r.storage_pipeline.KEYS))
-        self.assertEqual(p.GROUPS["audit"], tuple(r.audit_pipeline.KEYS))
+        self.assertEqual(p.GROUPS["audit"], tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS))
         self.assertTrue(set(r.result_qualification.KEYS) <= set(p.GROUPS["json"]))
         self.assertTrue(set(r.PARALLEL_RUST_RECIPES) <= set(p.GROUPS["system"]))
         self.assertTrue({"write_chain", "workdir_service"} <= set(p.GROUPS["services"]))
@@ -188,6 +194,44 @@ class OriginalPipelineTests(unittest.TestCase):
         self.assertEqual([row["name"] for row in report["checks"]][-len(p.CONTROLS):], list(p.CONTROLS))
         self.assertEqual(report["json_reference_build"], self.json_build)
         p.verify_collected_receipts(self.output, report)
+
+    def test_full_readmission_occurs_once_after_all_controls_before_publishing_pass(self):
+        observed = []
+        def admit(output, report):
+            observed.append(report["status"])
+            self.assertEqual(report["phase"], "complete")
+            self.assertEqual([row["name"] for row in report["checks"]][-len(p.CONTROLS):], list(p.CONTROLS))
+            self.assertNotEqual(native.read_json(output / "result.json")["status"], "PASS")
+            p.verify_collected_receipts(output, report)
+        with patch.object(r, "check_input_pins", side_effect=admit):
+            self.assertEqual(self.collect()["status"], "PASS")
+        self.assertEqual(observed, ["PASS"])
+
+    def test_changed_native_bytes_during_controls_refuse_final_admission(self):
+        original = self.control
+        def control(name):
+            run = original(name)
+            def changed(output, report):
+                run(output, report)
+                if name == p.CONTROLS[-1]:
+                    (output / "immutable-native.bin").write_bytes(b"damaged after current seal admission")
+            return changed
+        with patch.object(self, "control", side_effect=control):
+            with self.assertRaises(ValueError):
+                self.collect()
+        self.assertEqual(native.read_json(self.output / "result.json")["status"], "FAIL")
+
+    def test_final_semantic_refusal_cannot_leave_a_published_pass(self):
+        def refuse(output, report):
+            self.assertEqual(report["status"], "PASS")
+            self.assertEqual(len(report["checks"][-len(p.CONTROLS):]), len(p.CONTROLS))
+            raise ValueError("explicit final semantic fixture refusal")
+        with patch.object(r, "check_input_pins", side_effect=refuse):
+            with self.assertRaisesRegex(ValueError, "final semantic fixture refusal"):
+                self.collect()
+        report = native.read_json(self.output / "result.json")
+        self.assertEqual(report["status"], "FAIL")
+        self.assertEqual(report["phase"], "original_collect")
 
     def test_json_shared_build_is_required_even_with_a_rehashed_shard(self):
         self.change_report("json", lambda part: part.pop("json_reference_build"), update_workflow=True)

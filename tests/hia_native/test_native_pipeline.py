@@ -123,7 +123,7 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(set(flat), set(q.native_tests()))
         self.assertEqual(set(partitions), {"batch", "text", "json", "config", "system", "storage", "audit"})
         self.assertEqual(partitions["storage"], q.storage_pipeline.TESTS)
-        self.assertEqual(partitions["audit"], q.audit_pipeline.TESTS)
+        self.assertEqual(partitions["audit"], q.audit_pipeline.TESTS + q.activity_pipeline.TESTS)
         config = next(row for row in q.MODULES if row["key"] == "runtime_config")
         self.assertEqual(partitions["config"], (config["test"], *config["additional_tests"]))
         self.assertTrue(set(partitions["config"]).isdisjoint(partitions["json"]))
