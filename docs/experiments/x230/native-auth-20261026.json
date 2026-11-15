@@ -1,0 +1,85 @@
+{
+  "schema": "hepta-x230-native-access-blocker/v1",
+  "status": "blocked_current_agent_authentication",
+  "scope": "X230 native multihost validation using the existing pinned profile and current-agent preflight; does not block local build, local archive benchmarks, or local owner lifecycle tests.",
+  "evidence": {
+    "current": {
+      "provenance": "Parent agent's successful same-idempotency-key reconciliation of the original diagnostic.",
+      "operator_job_id": "1a17637f098-96a-a8f",
+      "idempotency_key": "x230-a46-agent-metadata-20261026-multihost-r01",
+      "ssh_auth_sock_present": true,
+      "socket_is_socket": true,
+      "socket_mode": "0600",
+      "socket_device": 79,
+      "socket_inode": 82,
+      "ssh_add_l_returncode": 1,
+      "identity_count": null,
+      "identity_count_recorded_this_attempt": false,
+      "interpretation": "The current socket exists, but this attempt did not establish a usable agent identity. Exit 1 is retained as the actual observed result; it is not converted into an exact identity count."
+    },
+    "historical": {
+      "provenance": "Parent agent's readback of current-agent-metadata-diagnostic-r01.json.",
+      "reported_identity_count": 0,
+      "socket_device": 79,
+      "socket_inode": 82,
+      "same_socket_identity_as_current_reported": true,
+      "scope": "Historical exact count; not a replacement for this attempt's missing count."
+    },
+    "profile": {
+      "provenance": "Parent agent's readback of the original A40 SSH profile/configuration; this child did not read credentials or remote configuration.",
+      "configured_host_aliases": [
+        "ai395",
+        "mac",
+        "main",
+        "pocket4",
+        "rog",
+        "x230"
+      ],
+      "options_reported": {
+        "BatchMode": "yes",
+        "ConnectTimeout": "8",
+        "ForwardAgent": "no",
+        "StrictHostKeyChecking": "yes"
+      },
+      "full_config_sha256_recorded_here": false,
+      "old_agent_path_reused": false
+    }
+  },
+  "local_code_review": {
+    "driver_path": "runtime-tools/run_a41_native_validation_r07.py",
+    "driver_original_remote_sha256": "6123660947b4b205d7f70d901c4e78b74395df065226a27937730b8c4cdd2ec9",
+    "findings": [
+      "input_manifest requires hepta-observation-ssh-pool/v1 with allow_bounded_cached_authentication=true and verifies exact ssh_config and known_hosts hashes.",
+      "Before building the native stage plan, main requires the current SSH_AUTH_SOCK to be an absolute path to a Unix socket and records its filesystem identity.",
+      "check_agent rechecks the same socket identity before/after stage execution and at final integrity verification.",
+      "The native driver's CLI exposes profile_template and socket_parent; it has no IdentityFile replacement flag.",
+      "The native driver itself checks socket existence/identity, not the count of agent keys. The current identity-list failure is a separate preflight result.",
+      "The six-host stage plan passes the pinned profile template to the inherited-pipe, running-recovery, file-pool ABBA and soak helpers.",
+      "x230_small_archive_benchmark.py explicitly implements a local controller without SSH or profile configuration."
+    ],
+    "review_limits": [
+      "The local copies of resume_native_validation_r07.py and x230_file_pool_benchmark.py were not available for this follow-up. Their complete identity-enumeration and authentication code was not independently re-read here.",
+      "This review does not establish that all underlying runtime or OpenSSH modes prohibit IdentityFile.",
+      "The socket/profile requirements are the current validation contract. An alternative authentication mechanism would require a separately explicit source/profile binding and fresh acceptance, not a silent substitution."
+    ]
+  },
+  "decision": {
+    "same_profile_native_validation_ready": false,
+    "identity_file_drop_in_replacement_for_current_contract": false,
+    "no_agent_override_or_dummy_socket": true,
+    "no_private_key_search_or_copy": true,
+    "no_authentication_requirement_relaxed": true,
+    "next_normal_path": "Restore a usable, already-authorized current agent in the existing operator session; verify its available identities, bind a fresh profile to that current socket and the pinned configuration/known_hosts, then run the original bounded native validation. This report does not claim that restoration has been performed.",
+    "continue_local_work": true
+  },
+  "actions_this_followup": {
+    "remote_tool_calls": 0,
+    "credential_file_searches": 0,
+    "credential_copies": 0,
+    "config_changes": 0,
+    "service_changes": 0,
+    "remote_ssh_attempts": 0,
+    "local_reports_created": 2
+  }
+}
+

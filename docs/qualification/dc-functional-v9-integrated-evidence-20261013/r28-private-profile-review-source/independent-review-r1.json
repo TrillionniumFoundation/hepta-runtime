@@ -1,0 +1,144 @@
+{
+  "schema": "hepta-private-profile-review-independent-audit-v1",
+  "review_id": "r28-20261013-r1-final",
+  "reviewer": "independent token_reader_review subagent",
+  "review_mode": "read-only source audit and read-only inspection of saved offline evidence",
+  "scope": {
+    "checkout": "/home/qian-qi/hepta-runtime-dc-functional-20261013",
+    "source": "deploy/preflight_dc_successor.py",
+    "tests": "tests/dc_successor_preflight_tests.py",
+    "source_sha256": "e3bf754dbcf58219994af79f935f9166d9ff39534ae8b55b4d6593446c843fec",
+    "tests_sha256": "35ca6e4d3993d834ce84899a929e7605ccbaed02d8769b076d94629ce4fdfdde",
+    "hash_provenance": "Exact full-file pins read from controlled-source-manifest-r1.json and tests-report-r1.json; reviewer independently read source blocks but did not independently recompute file hashes.",
+    "evidence_directory": "docs/qualification/dc-functional-v9-integrated-evidence-20261013/r28-private-profile-review-source",
+    "inspected_blocks": [
+      "preflight helpers627-837",
+      "prepare integration946-1021",
+      "publish1074-1102",
+      "parser1126-1136",
+      "new PrivateProfileReview fixture class1257-1609",
+      "public r26 preparation-driver.py schema and merge logic"
+    ]
+  },
+  "outcome": {
+    "status": "accepted_for_stated_optional_JSON_profile_proof_scope",
+    "blocking_findings": 0,
+    "unresolved_findings": 0,
+    "findings": [],
+    "production_qualification": false,
+    "administrator_authorization_granted": false,
+    "activation_performed": false
+  },
+  "verified_source_boundaries": [
+    {
+      "property": "Optional arguments and default behavior",
+      "evidence": "Manifest path and SHA must both be supplied or both absent. getattr compatibility supports original args. Absent proof returnsNone, omits report.private_profile_review and retains PRIVATE_PROFILE_MERGE_UNPREPARED; no private proof files are opened on that branch."
+    },
+    {
+      "property": "Private packet isolation and fixed schema",
+      "evidence": "Manifest is fixed review.json; packet is outside source/publication/backup paths and Git checkouts, with exactly review.json, candidate-profile.yaml and candidate-installed.json. Manifest keys must exactly equal PROFILE_REVIEW_KEYS."
+    },
+    {
+      "property": "Credential alias refusal before private artifact read/hash",
+      "evidence": "Path/inode aliases are refused; token lstat must be current-owner private single-link regular0400/0600. Initial token dev/ino is retained. Opened candidateFD and current token lstat are compared before rawread, then token identity is checked again before artifact digest. Token is never opened/read/hashed by the private artifact helper. Symlink token references are refused."
+    },
+    {
+      "property": "Private artifact FD constraints",
+      "evidence": "Immediate parent must be current-owner exact0700 before artifact open. Open uses O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK via S.open_parent. Artifact must be current-owner exact0600 single-link regular. Bounded read, sameFD before/after, linked-name dev/ino/size/mtime/ctime/uid/nlink/fullmode and parent dev/ino/uid/fullmode checks precede hashing. Both FDs close in finally."
+    },
+    {
+      "property": "Strict JSON and type preservation",
+      "evidence": "All private JSON roles require an object. object_pairs_hook rejects duplicate fields at every nesting level; parse_constant rejects NaN/Infinity; allow_nan=False serialization also rejects1e999 overflow. Canonical sorted JSON comparison distinguishes bool/int/float and preserves unknown field values/types. YAML parsing is unsupported; no PyYAML dependency is added."
+    },
+    {
+      "property": "Exact stage/source/current input binding",
+      "evidence": "Proof stage path/SHA and full source object must type-sensitively equal validated stage values. Input profile/installed refs must equal stage baseline refs; their private files are re-read against current exact pins. Candidate filenames, path, SHA, exact0600 mode and bounded integer byte count are verified."
+    },
+    {
+      "property": "Profile command authority and single allowed change",
+      "evidence": "Current profile requires a single main command with string command and exact old rollback facade argv. Candidate facade argv matches exact staged facade/contract/fixed loopback/token references. Expected candidate is deepcopy(current) with only mcp.commands[0].command replaced by shlex.join(exact staged argv), then compared type-sensitively to candidate."
+    },
+    {
+      "property": "Installed manifest five-field derivation",
+      "evidence": "release, facade_sha256, contract_sha256, tool_contract_catalog_sha256 and tools are independently derived from validated stage. Activation-plan updates must equal that exact map. Candidate installed manifest must equal deepcopy(current)+derived updates, preserving all other field types/values."
+    },
+    {
+      "property": "Metadata cannot authorize administration",
+      "evidence": "Administrator review, candidate start, live changes, restart, Refresh, token read/copy and full qualification assertions must be exactlyFalse; integer0/1 are refused. Preservation flags must be exactlyTrue and actual semantic comparisons still execute. A validated packet returns preparedTrue but administrator_review_completedFalse, statusHOLD and PRIVATE_PROFILE_REVIEW_REQUIRED; other holds remain."
+    },
+    {
+      "property": "Preflight and publication revalidation",
+      "evidence": "Proof is validated before inventory and again after slower probes; canonical summaries must match. Prepared pins bind proof path/SHA. publish refuses optional args introduced/removed/changed since preparation, revalidates full stage and proof, and compares current summary before output creation."
+    },
+    {
+      "property": "Public summary excludes private configuration",
+      "evidence": "Returned summary is a constructed whitelist of prepared/review status, format, artifact metadata and stage/source identifiers. Neither raw profile/installed JSON nor arbitrary proof.services_before is returned. No service control, candidate execution, live pointer modification or Refresh capability is added."
+    }
+  ],
+  "offline_evidence": {
+    "parent_reported_runner": "1a1377f0a00-b2f-9d9",
+    "tests_report_file": "tests-report-r1.json",
+    "all_cohort_exit_codes": 0,
+    "new_profile_fixture_methods": 22,
+    "full_preflight_methods": 82,
+    "original_preflight_methods": 60,
+    "new_methods_subset_of_full": true,
+    "stage_methods": 26,
+    "reviewer_read_raw_summaries": [
+      {
+        "file": "new-private-profile-fixtures-r1.stderr.log",
+        "result": "Ran22 tests; OK"
+      },
+      {
+        "file": "full-preflight-regression-r1.stderr.log",
+        "result": "Ran82 tests; OK"
+      },
+      {
+        "file": "full-stage-regression-r1.stderr.log",
+        "result": "Ran26 tests; OK"
+      }
+    ],
+    "four_input_before_after_pins_equal": true,
+    "source_inputs_stable": true,
+    "original_60_method_AST_preservation": "Parent-produced controlled-source manifest states unchanged. Reviewer did not independently execute AST comparison.",
+    "reviewer_executed_tests": false,
+    "coverage_review": [
+      "prepared-but-HOLD and defaultUNPREPARED",
+      "paired args",
+      "all contradictory authorization flags and0/1",
+      "stage/source/current pins",
+      "unknown/private settings and bool/int/float type drift",
+      "argv/channel/cardinality",
+      "all five installed updates",
+      "live drift",
+      "duplicate/nonfinite/exponent overflow",
+      "YAML refusal",
+      "private modes",
+      "hardlink/symlink/FIFO",
+      "token alias and open-time token replacement before digest",
+      "symlink token reference",
+      "typed/bounded/local candidate metadata",
+      "unknown keys/extra packet entries",
+      "Git isolation",
+      "slow-probe drift",
+      "publish SHA/argument and candidate drift",
+      "metadata-only publication without candidate execution"
+    ],
+    "interpretation": "Owned synthetic fixtures are regression evidence for this optional validator. They are not live private-profile review, production HTTP/SSH/service inventory, authorized activation, Refresh, cutover or full DC replacement qualification."
+  },
+  "limits": [
+    "No actual token, private packet, candidate raw actual profile or actual installed private profile was read by reviewer.",
+    "Private ownership is not a security boundary against code running under the same UID or higher privilege. FD/metadata/pin checks are consistency controls rather than atomic protection against arbitrary concurrent writers.",
+    "S.open_parent rejects symlink ancestry but does not establish every ancestor's trusted owner/mode or revalidate all ancestor pathname bindings after rename.",
+    "Checks cannot prevent changes after their final checkpoint; publication remains isolated and HOLD rather than live activation.",
+    "JSON-only handling deliberately rejects YAML input despite the legacy candidate-profile.yaml filename. No live packet compatibility was claimed or exercised."
+  ],
+  "reviewer_actions": {
+    "source_modifications": [],
+    "artifact_writes_for_r28": [],
+    "runtime_execution": [],
+    "actual_HTTP_or_SSH": [],
+    "actual_private_data_access": [],
+    "final_receipt_delivery": "Complete JSON collaboration message for parent create-only persistence."
+  }
+}

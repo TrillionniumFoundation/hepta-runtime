@@ -11,21 +11,41 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//! Runtime startup, private-store preparation, transports and graceful shutdown.
 
 use anyhow::Result;
 use clap::Parser;
 use tracing::Level;
 
 mod cli;
-pub mod mcp;
-pub mod utils;
+use hepta_runtime::mcp;
 
 use cli::{Cli, Commands};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
 	let cli = Cli::parse();
+	if matches!(&cli.command, Commands::ReaRecordedCoreWorker) {
+		let code = mcp::rea_recorded_core_worker::run_worker()?;
+		if code != 0 {
+			std::process::exit(code);
+		}
+		return Ok(());
+	}
+	if let Commands::ReaBrowserCapture(args) = &cli.command {
+		return mcp::rea_browser::run_cli(args.clone());
+	}
+	// Parser/client helpers run one bounded task. Creating a host-sized thread
+	// pool before a parser's address-space limit would consume its budget on
+	// large machines before any artifact is inspected.
+	let mut builder = if matches!(&cli.command, Commands::Mcp { .. }) {
+		tokio::runtime::Builder::new_multi_thread()
+	} else {
+		tokio::runtime::Builder::new_current_thread()
+	};
+	builder.enable_all().build()?.block_on(run(cli))
+}
 
+async fn run(cli: Cli) -> Result<()> {
 	match cli.command {
 		Commands::Mcp {
 			path,
@@ -33,12 +53,30 @@ async fn main() -> Result<()> {
 			ssh_key,
 			ssh_timeout,
 			runtime_config,
+			runtime_private_config_receipt,
 			auth_token_file,
+			runtime_prewarm,
+			runtime_audit_group_commit,
+			runtime_observation_pool_profile,
+			runtime_file_observation_pool,
 		} => {
 			let runtime_enabled = runtime_config.is_some();
 			if let Some(config_path) = runtime_config.as_ref() {
-				let config = mcp::runtime::RuntimeConfig::load(config_path)?;
-				mcp::runtime::init_runtime(config)?;
+				if runtime_private_config_receipt {
+					let loaded = mcp::runtime::config::LoadedRuntimeConfig::load(config_path)?;
+					mcp::runtime::search_jobs::init_search_interpreters(loaded.config())?;
+					mcp::runtime::config::init_runtime_with_private_receipt(loaded)?;
+				} else {
+					let config = mcp::runtime::RuntimeConfig::load(config_path)?;
+					mcp::runtime::search_jobs::init_search_interpreters(&config)?;
+					mcp::runtime::init_runtime(config)?;
+				}
+				if runtime_prewarm || runtime_audit_group_commit {
+					mcp::runtime::prepare_durable_stores().await?;
+				}
+				if runtime_audit_group_commit {
+					mcp::runtime::request_audit::enable_group_commit()?;
+				}
 			}
 
 			// Resolve working directory
@@ -61,16 +99,100 @@ async fn main() -> Result<()> {
 			// Set the session root directory for all tool calls
 			mcp::set_session_root_directory(working_directory.clone());
 
-			match bind {
+			let direct_transport = if runtime_enabled {
+				Some(mcp::runtime::ssh::start_direct_transport()?)
+			} else {
+				None
+			};
+			let observation_pool = match mcp::runtime::ssh::start_observation_pool(
+				runtime_observation_pool_profile.as_deref(),
+				runtime_file_observation_pool,
+			)
+			.await
+			{
+				Ok(pool) => pool,
+				Err(error) => {
+					if let Some(owner) = direct_transport {
+						owner.shutdown().await?;
+					}
+					return Err(error);
+				}
+			};
+			let transport = match bind {
 				Some(addr) => {
 					// HTTP mode with Streamable HTTP transport.
-					run_http_server(&addr, auth_token_file.as_deref(), runtime_enabled).await?;
+					run_http_server(&addr, auth_token_file.as_deref()).await
 				}
 				None => {
 					// STDIO mode (default)
-					run_stdio_server(mcp::server::OctofsServer::new()).await?;
+					run_stdio_server(mcp::server::OctofsServer::new()).await
 				}
+			};
+			// Join both original transport owners before propagating either error.
+			let direct_cleanup = async {
+				if let Some(owner) = direct_transport {
+					owner.shutdown().await
+				} else {
+					Ok(())
+				}
+			};
+			let observation_cleanup = async {
+				if let Some(pool) = observation_pool {
+					pool.shutdown().await
+				} else {
+					Ok(())
+				}
+			};
+			let (direct_cleanup, observation_cleanup) =
+				tokio::join!(direct_cleanup, observation_cleanup);
+			direct_cleanup?;
+			observation_cleanup?;
+			transport?;
+		}
+		Commands::ReaWorker {
+			selected_path,
+			sandbox_probe,
+		} => {
+			mcp::rea_worker::serve_once(&selected_path, sandbox_probe)?;
+		}
+		Commands::ReaModelWorker { request } => {
+			mcp::rea_model::serve_once(&request)?;
+		}
+		Commands::WeightClient(args) => {
+			let code = mcp::weight_native::run_cli(args).await?;
+			if code != 0 {
+				std::process::exit(code);
 			}
+		}
+		Commands::ReaBrowserCapture(_) => {
+			anyhow::bail!("browser capture must run before Tokio initialization");
+		}
+		Commands::ReaRecordedCoreWorker => {
+			anyhow::bail!("recorded-core worker must run before Tokio initialization");
+		}
+		Commands::ReaElfNotesWorker => {
+			mcp::rea_elf_notes::run_worker()?;
+		}
+		Commands::ReaSourceMapWorker => {
+			mcp::rea_source_map::serve_once()?;
+		}
+		Commands::ReaApkSignatureWorker => {
+			mcp::rea_apk_signature::serve_once()?;
+		}
+		Commands::ReaApkStaticWorker => {
+			mcp::rea_apk_evidence::run_worker()?;
+		}
+		Commands::ReaJavascriptWorker => {
+			mcp::rea_javascript_graph::serve_once()?;
+		}
+		Commands::ReaStaticWorker => {
+			mcp::rea_static::serve_once().await?;
+		}
+		Commands::ReaArchiveWorker { request } => {
+			mcp::rea_artifact_zip::serve_once(&request)?;
+		}
+		Commands::ReaAsarWorker { request } => {
+			mcp::rea_asar::serve_once(&request)?;
 		}
 	}
 
@@ -87,9 +209,14 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 
 	tracing::info!("Starting MCP server (STDIO mode)");
 
-	let service = server.serve(stdio()).await.inspect_err(|e| {
-		tracing::error!("serving error: {:?}", e);
-	})?;
+	let rea_cleanup = server.clone();
+	let (input, output) = stdio();
+	let service = mcp::ReaFramedService::new(server)
+		.serve(mcp::ReaMcpTransport::new(input, output))
+		.await
+		.inspect_err(|e| {
+			tracing::error!("serving error: {:?}", e);
+		})?;
 
 	// `waiting()` blocks until the transport closes naturally (EOF on stdin).
 	// For SIGTERM we cancel via the service's cancellation token so the task
@@ -117,8 +244,8 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 
 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
 	// are deliberately independent and remain queryable after this process restarts.
-	mcp::fs::shell::kill_all_shell_children();
-	mcp::runtime::pty::close_all_ptys();
+	mcp::runtime::shutdown_request_scoped().await;
+	rea_cleanup.close_rea_exports().await?;
 
 	Ok(())
 }
@@ -126,48 +253,32 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 #[derive(Clone)]
 struct HttpAuth {
 	token_hash: [u8; 32],
+	scope: mcp::runtime::caller_scope::AuthenticatedOperatorScope,
 }
 
-fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Option<HttpAuth>> {
+fn load_http_auth(path: Option<&std::path::Path>) -> Result<HttpAuth> {
 	use sha2::{Digest, Sha256};
 	let Some(path) = path else {
-		if required {
-			anyhow::bail!("runtime HTTP mode requires --auth-token-file");
-		}
-		return Ok(None);
+		anyhow::bail!("HTTP MCP requires --auth-token-file");
 	};
-	let metadata = std::fs::metadata(path)?;
-	if !metadata.is_file() {
-		anyhow::bail!(
-			"HTTP auth token path is not a regular file: {}",
-			path.display()
-		);
-	}
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::PermissionsExt;
-		if metadata.permissions().mode() & 0o007 != 0 {
-			anyhow::bail!("HTTP auth token file must not be accessible to other users");
-		}
-	}
-	let token = std::fs::read(path)?;
-	let token = token.strip_suffix(b"\n").unwrap_or(&token);
-	if token.len() < 32 || token.len() > 4096 {
-		anyhow::bail!("HTTP auth token must contain 32..4096 bytes");
-	}
-	Ok(Some(HttpAuth {
-		token_hash: Sha256::digest(token).into(),
-	}))
+	let token = mcp::runtime::caller_scope::read_private_token(path)?;
+	Ok(HttpAuth {
+		token_hash: Sha256::digest(&token).into(),
+		scope: mcp::runtime::caller_scope::AuthenticatedOperatorScope::from_verified_token(&token),
+	})
 }
 
 async fn require_http_auth(
 	axum::extract::State(auth): axum::extract::State<HttpAuth>,
-	request: axum::extract::Request,
+	mut request: axum::extract::Request,
 	next: axum::middleware::Next,
 ) -> axum::response::Response {
 	use axum::response::IntoResponse;
 	use sha2::{Digest, Sha256};
 	use subtle::ConstantTimeEq;
+	if request.headers().contains_key("origin") {
+		return axum::http::StatusCode::FORBIDDEN.into_response();
+	}
 	let valid = request
 		.headers()
 		.get("x-hepta-runtime-token")
@@ -178,19 +289,30 @@ async fn require_http_auth(
 	if !valid {
 		return axum::http::StatusCode::UNAUTHORIZED.into_response();
 	}
+	request.extensions_mut().insert(auth.scope.clone());
 	next.run(request).await
 }
 
-/// Run the MCP server over HTTP with Streamable HTTP transport.
-async fn run_http_server(
-	bind_addr: &str,
-	auth_token_file: Option<&std::path::Path>,
-	auth_required: bool,
-) -> Result<()> {
+/// HTTP exposes privileged local tools even without a runtime configuration.
+/// Require a loopback listener and an encrypted tunnel for remote access.
+fn parse_loopback_http_bind(bind_addr: &str) -> Result<std::net::SocketAddr> {
+	let addr = bind_addr
+		.parse::<std::net::SocketAddr>()
+		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
+	if !addr.ip().is_loopback() {
+		anyhow::bail!("HTTP MCP must bind to loopback; use an SSH or TLS tunnel for remote access");
+	}
+	Ok(addr)
+}
+
+/// Run the MCP server over authenticated Streamable HTTP in every tool mode.
+async fn run_http_server(bind_addr: &str, auth_token_file: Option<&std::path::Path>) -> Result<()> {
 	use rmcp::transport::streamable_http_server::{
 		session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 	};
 
+	let addr = parse_loopback_http_bind(bind_addr)?;
+	let auth = load_http_auth(auth_token_file)?;
 	let ct = tokio_util::sync::CancellationToken::new();
 
 	// Each HTTP session gets a fresh server instance with isolated workdir state.
@@ -201,22 +323,22 @@ async fn run_http_server(
 		StreamableHttpServerConfig::default().with_cancellation_token(ct.child_token()),
 	);
 
-	let auth = load_http_auth(auth_token_file, auth_required)?;
-	let mut protected = axum::Router::new().nest_service("/mcp", service);
-	if let Some(auth) = auth {
-		protected = protected.layer(axum::middleware::from_fn_with_state(
-			auth,
-			require_http_auth,
-		));
-	}
+	let protected = axum::Router::new().nest_service("/mcp", service).layer(
+		axum::middleware::from_fn_with_state(auth, require_http_auth),
+	);
 	let router = axum::Router::new()
 		.route("/healthz", axum::routing::get(|| async { "ok\n" }))
-		.route("/readyz", axum::routing::get(|| async { "ready\n" }))
+		.route(
+			"/readyz",
+			axum::routing::get(|| async {
+				if mcp::runtime::request_audit::group_commit_ready() {
+					(axum::http::StatusCode::OK, "ready\n")
+				} else {
+					(axum::http::StatusCode::SERVICE_UNAVAILABLE, "not ready\n")
+				}
+			}),
+		)
 		.merge(protected);
-	let addr = bind_addr
-		.parse::<std::net::SocketAddr>()
-		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
-
 	let tcp_listener = tokio::net::TcpListener::bind(&addr)
 		.await
 		.map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
@@ -242,8 +364,7 @@ async fn run_http_server(
 		.await;
 
 	// Same orphan cleanup as STDIO shutdown. Durable runtime jobs are unaffected.
-	mcp::fs::shell::kill_all_shell_children();
-	mcp::runtime::pty::close_all_ptys();
+	mcp::runtime::shutdown_request_scoped().await;
 
 	Ok(())
 }
@@ -305,3 +426,7 @@ impl tracing::field::Visit for MessageVisitor<'_> {
 		}
 	}
 }
+
+#[cfg(test)]
+#[path = "main_http_tests.rs"]
+mod http_tests;

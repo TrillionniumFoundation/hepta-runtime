@@ -1,0 +1,81 @@
+--- original/run_six_host_cancel_recovery.py
++++ r21/run_six_host_cancel_recovery_timed.py
+@@ -32,7 +32,7 @@
+ import x230_six_running_recovery_canary as original
+ import owned_ssh_interruption as interruption
+ 
+-DEV_ROOT = Path("/home/qian/hepta-runtime-optimization-20261104-r16")
++DEV_ROOT = Path("/home/qian/hepta-runtime-optimization-20261105-r21/lifecycle-abba-01")
+ HOSTS = original.HOSTS
+ REMOTE = original.REMOTE.replace(
+     '("exit.json", 1048576), ("exit.witness.json", 4096)]',
+@@ -173,18 +173,57 @@
+     def parallel(phase, operation):
+         checkpoint(phase)
+         failed = []
+-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+-            futures = {pool.submit(operation, host): host for host in HOSTS}
+-            for future in concurrent.futures.as_completed(futures):
+-                host = futures[future]
+-                try:
+-                    report["hosts"][host][phase] = future.result()
+-                except BaseException as error:
+-                    report["hosts"][host][phase] = {"error": type(error).__name__ + ": " + str(error)[:1500]}
+-                    failed.append(host)
+-                checkpoint()
+-        bench.need(not failed, phase + " failed on " + ",".join(failed))
+-
++        measurement = {"schema": "hepta-r21-lifecycle-phase/v1", "phase": phase,
++                       "hosts": list(HOSTS), "concurrency": 6,
++                       "operation_sequence_before": serial,
++                       "controller_before": None, "controller_after": None,
++                       "counter_before": None, "counter_after": None,
++                       "measurement_errors": []}
++
++        def sample(label):
++            try:
++                if active is not None:
++                    measurement["controller_" + label] = {
++                        "pid": active.child.pid, "birth_ticks": active.birth,
++                        "directory": str(active.directory.relative_to(out))}
++                    measurement["counter_" + label] = bench.counters(active.child.pid)
++            except Exception as error:
++                measurement["measurement_errors"].append({"stage": label,
++                    "type": type(error).__name__, "reason": str(error)[:1500]})
++
++        sample("before")
++        measurement["start_realtime_ns"] = time.time_ns()
++        measurement["start_monotonic_ns"] = time.monotonic_ns()
++        try:
++            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
++                futures = {pool.submit(operation, host): host for host in HOSTS}
++                for future in concurrent.futures.as_completed(futures):
++                    host = futures[future]
++                    try:
++                        report["hosts"][host][phase] = future.result()
++                    except BaseException as error:
++                        report["hosts"][host][phase] = {"error": type(error).__name__ + ": " + str(error)[:1500]}
++                        failed.append(host)
++                    checkpoint()
++            bench.need(not failed, phase + " failed on " + ",".join(failed))
++        finally:
++            measurement["end_monotonic_ns"] = time.monotonic_ns()
++            measurement["end_realtime_ns"] = time.time_ns()
++            sample("after")
++            measurement["operation_sequence_after"] = serial
++            measurement["failed_hosts"] = failed
++            measurement["successful_host_count"] = sum(
++                phase in report["hosts"][host] and "error" not in report["hosts"][host][phase]
++                for host in HOSTS)
++            # Persist only after the measured interval; old report/checkpoints
++            # keep their original schema, raw data and in-phase write volume.
++            try:
++                bench.create_file(out / ("phase-" + phase + ".json"), bench.canonical(measurement))
++            except Exception as error:
++                # Preserve a primary workload failure and the original cleanup.
++                # A missing/error sidecar fails the independent aggregate gate.
++                report.setdefault("phase_measurement_write_errors", []).append({
++                    "phase": phase, "type": type(error).__name__, "reason": str(error)[:1500]})
+     def controller(directory):
+         directory.mkdir(mode=0o700)
+         return bench.Controller(args.candidate, config, profile, directory, args.workers,

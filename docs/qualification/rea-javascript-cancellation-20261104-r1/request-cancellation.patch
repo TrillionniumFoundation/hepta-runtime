@@ -1,0 +1,273 @@
+--- a/src/mcp/rea_javascript_graph.rs
++++ b/src/mcp/rea_javascript_graph.rs
+@@ -25,6 +25,7 @@
+ use std::fmt::Write as _;
+ use std::path::{Path, PathBuf};
+ use std::sync::{Arc, OnceLock};
++use tokio_util::sync::CancellationToken;
+ 
+ #[path = "rea_javascript_ast.rs"]
+ mod ast;
+@@ -258,21 +259,37 @@
+ 	}))?))
+ }
+ 
++fn ensure_not_cancelled(cancellation: &CancellationToken) -> Result<()> {
++	if cancellation.is_cancelled() {
++		bail!("JavaScript AST inspection cancelled");
++	}
++	Ok(())
++}
++
+ async fn inspect_with_roots(
+ 	params: InspectJavascriptGraphParams,
+ 	roots: &[PathBuf],
++	cancellation: &CancellationToken,
+ ) -> Result<String> {
++	ensure_not_cancelled(cancellation)?;
+ 	validate(&params)?;
++	ensure_not_cancelled(cancellation)?;
+ 	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
+ 	let permit = Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
+ 		.try_acquire_owned()
+ 		.context("JavaScript graph parser is busy; retry after another inspection finishes")?;
++	ensure_not_cancelled(cancellation)?;
+ 	let mut sources = Vec::with_capacity(params.sources.len());
+ 	let mut total = 0;
+ 	for source in params.sources {
++		ensure_not_cancelled(cancellation)?;
++		// Admission uses blocking file operations internally. Retain the slot and
++		// finish this read before honoring cancellation, rather than detach it.
+ 		let bytes =
+ 			super::rea_files::read_bounded(Path::new(&source.path), roots, MAX_SOURCE_BYTES as u64)
+-				.await?;
++				.await;
++		ensure_not_cancelled(cancellation)?;
++		let bytes = bytes?;
+ 		total += bytes.len();
+ 		if total > MAX_TOTAL_BYTES {
+ 			bail!("JavaScript selected source bytes exceed 4 MiB");
+@@ -308,10 +325,12 @@
+ 	{
+ 		bail!("JavaScript source set changed; obtain a new first-page graph identity");
+ 	}
++	ensure_not_cancelled(cancellation)?;
+ 	#[cfg(not(test))]
+-	let result = worker::inspect_isolated(&request).await?;
++	let result = worker::inspect_isolated(&request, cancellation).await?;
+ 	#[cfg(test)]
+ 	let result = graph::report(&request)?;
++	ensure_not_cancelled(cancellation)?;
+ 	if result["graph_sha256"] != expected_graph || result["sources"] != json!(identities) {
+ 		bail!("JavaScript worker report is not bound to the controller-admitted source set");
+ 	}
+@@ -320,13 +339,18 @@
+ 		bail!("JavaScript graph response exceeds 1 MiB; reduce the selected page");
+ 	}
+ 	drop(permit);
++	ensure_not_cancelled(cancellation)?;
+ 	Ok(output)
+ }
+ 
+-pub async fn inspect_graph(params: InspectJavascriptGraphParams) -> Result<String> {
++pub async fn inspect_graph(
++	params: InspectJavascriptGraphParams,
++	cancellation: CancellationToken,
++) -> Result<String> {
++	ensure_not_cancelled(&cancellation)?;
+ 	validate(&params)?;
+ 	let roots = &super::runtime::runtime_config()?.controller_workspace_roots;
+-	inspect_with_roots(params, roots).await
++	inspect_with_roots(params, roots, &cancellation).await
+ }
+ 
+ /// Internal one-shot worker entry point; consumes only controller-supplied stdin.
+--- a/src/mcp/rea_javascript_graph_worker.rs
++++ b/src/mcp/rea_javascript_graph_worker.rs
+@@ -97,17 +97,23 @@
+ }
+ 
+ #[cfg(not(test))]
+-pub(super) async fn inspect_isolated(request: &WorkerRequest) -> Result<serde_json::Value> {
++pub(super) async fn inspect_isolated(
++	request: &WorkerRequest,
++	cancellation: &tokio_util::sync::CancellationToken,
++) -> Result<serde_json::Value> {
+ 	use anyhow::anyhow;
+ 	use std::process::Stdio;
+ 	use std::time::Duration;
+ 	use tokio::io::AsyncWriteExt;
+ 	use tokio::process::Command;
++	super::ensure_not_cancelled(cancellation)?;
+ 	let encoded = serde_json::to_vec(request)?;
+ 	if encoded.len() > MAX_REQUEST_BYTES {
+ 		bail!("JavaScript AST worker request exceeds 32 MiB");
+ 	}
+ 	let binary = std::env::current_exe().context("cannot locate JavaScript AST worker binary")?;
++	super::ensure_not_cancelled(cancellation)?;
++	let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+ 	let mut child = Command::new(binary)
+ 		.arg("rea-javascript-worker")
+ 		.env_clear()
+@@ -118,45 +124,48 @@
+ 		.kill_on_drop(true)
+ 		.spawn()
+ 		.context("cannot spawn bounded JavaScript AST worker")?;
+-	let mut stdin = child
+-		.stdin
+-		.take()
+-		.ok_or_else(|| anyhow!("AST worker stdin unavailable"))?;
+-	let stdout = child
+-		.stdout
+-		.take()
+-		.ok_or_else(|| anyhow!("AST worker stdout unavailable"))?;
+-	let stderr = child
+-		.stderr
+-		.take()
+-		.ok_or_else(|| anyhow!("AST worker stderr unavailable"))?;
+-	let collected = tokio::time::timeout(Duration::from_secs(20), async {
+-		tokio::try_join!(
+-			async move {
+-				stdin.write_all(&encoded).await?;
+-				stdin.shutdown().await?;
+-				// Tokio's Unix pipe shutdown is a no-op. Closing the owned write
+-				// endpoint delivers EOF to the worker before we await its output.
+-				drop(stdin);
+-				Ok::<_, anyhow::Error>(())
+-			},
+-			read_capped(stdout, MAX_RESPONSE_BYTES + 1),
+-			read_capped(stderr, 64 * 1024),
+-			async { child.wait().await.map_err(anyhow::Error::from) }
+-		)
+-	})
+-	.await;
++	let (Some(mut stdin), Some(stdout), Some(stderr)) =
++		(child.stdin.take(), child.stdout.take(), child.stderr.take())
++	else {
++		let _ = child.kill().await;
++		child
++			.wait()
++			.await
++			.context("cannot reap AST worker after missing pipe")?;
++		bail!("JavaScript AST worker pipes unavailable");
++	};
++	// rmcp signals the request token without dropping the handler. Keep ownership
++	// of this Child so cancellation, output refusal and the deadline all reap it.
++	let collected = tokio::select! {
++		biased;
++		_ = cancellation.cancelled() => Err(anyhow!("JavaScript AST inspection cancelled")),
++		collected = tokio::time::timeout_at(deadline, async {
++			tokio::try_join!(
++				async move {
++					stdin.write_all(&encoded).await?;
++					stdin.shutdown().await?;
++					// Tokio's Unix pipe shutdown is a no-op. Closing the owned write
++					// endpoint delivers EOF to the worker before we await its output.
++					drop(stdin);
++					Ok::<_, anyhow::Error>(())
++				},
++				read_capped(stdout, MAX_RESPONSE_BYTES + 1),
++				read_capped(stderr, 64 * 1024),
++				async { child.wait().await.map_err(anyhow::Error::from) }
++			)
++		}) => match collected {
++			Ok(result) => result,
++			Err(_) => Err(anyhow!("JavaScript AST worker exceeded 20 second wall-clock deadline")),
++		},
++	};
+ 	let ((), stdout, stderr, status) = match collected {
+-		Ok(Ok(result)) => result,
+-		Ok(Err(error)) => {
++		Ok(result) => result,
++		Err(error) => {
+ 			let _ = child.kill().await;
+-			let _ = child.wait().await;
++			child.wait().await.with_context(|| {
++				format!("cannot reap JavaScript AST worker after inspection failure: {error:#}")
++			})?;
+ 			return Err(error);
+-		}
+-		Err(_) => {
+-			let _ = child.kill().await;
+-			let _ = child.wait().await;
+-			bail!("JavaScript AST worker exceeded 20 second wall-clock deadline");
+ 		}
+ 	};
+ 	if !status.success() {
+--- a/src/mcp/rea_javascript_graph_tests.rs
++++ b/src/mcp/rea_javascript_graph_tests.rs
+@@ -279,8 +279,9 @@
+ 		limit: 64,
+ 	};
+ 	let roots = [root.path().to_owned()];
++	let cancellation = CancellationToken::new();
+ 	let inspected: Value = serde_json::from_str(
+-		&inspect_with_roots(params.clone(), &roots)
++		&inspect_with_roots(params.clone(), &roots, &cancellation)
+ 			.await
+ 			.expect("admitted analysis"),
+ 	)
+@@ -290,7 +291,9 @@
+ 		.await
+ 		.expect("marker absence"));
+ 	params.sources[0].expected_sha256 = Some("0".repeat(64));
+-	assert!(inspect_with_roots(params.clone(), &roots).await.is_err());
++	assert!(inspect_with_roots(params.clone(), &roots, &cancellation)
++		.await
++		.is_err());
+ 	let external = outside.path().join("external.js");
+ 	tokio::fs::write(&external, bytes).await.expect("outside");
+ 	let link = root.path().join("linked.js");
+@@ -298,6 +301,35 @@
+ 	for rejected in [external, link] {
+ 		params.sources[0].path = rejected.to_string_lossy().into_owned();
+ 		params.sources[0].expected_sha256 = None;
+-		assert!(inspect_with_roots(params.clone(), &roots).await.is_err());
+-	}
+-}
++		assert!(inspect_with_roots(params.clone(), &roots, &cancellation)
++			.await
++			.is_err());
++	}
++}
++
++#[tokio::test]
++async fn cancelled_request_is_rejected_before_runtime_or_source_admission() {
++	let cancellation = CancellationToken::new();
++	cancellation.cancel();
++	let params = InspectJavascriptGraphParams {
++		sources: vec![JavascriptSource {
++			id: "cancelled.js".into(),
++			path: "/must-not-open/cancelled.js".into(),
++			syntax: JavascriptSyntax::Javascript,
++			module_kind: JavascriptModuleKind::Module,
++			expected_sha256: None,
++		}],
++		expected_graph_sha256: None,
++		collection: JavascriptGraphCollection::Summary,
++		offset: 0,
++		limit: 64,
++	};
++	let error = inspect_graph(params.clone(), cancellation.clone())
++		.await
++		.expect_err("cancel before runtime configuration");
++	assert_eq!(error.to_string(), "JavaScript AST inspection cancelled");
++	let error = inspect_with_roots(params, &[], &cancellation)
++		.await
++		.expect_err("cancel before source admission");
++	assert_eq!(error.to_string(), "JavaScript AST inspection cancelled");
++}
+--- a/src/mcp/server.rs
++++ b/src/mcp/server.rs
+@@ -1666,8 +1666,9 @@
+ 	async fn rea_inspect_javascript_graph(
+ 		&self,
+ 		Parameters(params): Parameters<rea_javascript_graph::InspectJavascriptGraphParams>,
+-	) -> Result<String, String> {
+-		rea_javascript_graph::inspect_graph(params)
++		context: RequestContext<RoleServer>,
++	) -> Result<String, String> {
++		rea_javascript_graph::inspect_graph(params, context.ct.clone())
+ 			.await
+ 			.map_err(|error| error.to_string())
+ 	}

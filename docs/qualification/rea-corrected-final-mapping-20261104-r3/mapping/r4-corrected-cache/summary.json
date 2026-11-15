@@ -1,0 +1,95 @@
+{
+  "schema": "hepta.rea.final-mapping-validation.v1",
+  "created_at": "2026-11-04T16:36:04.846730+00:00",
+  "head": "2623fad7a42e66ead9b4bc254a99d06a900e331b",
+  "stages": [
+    {
+      "name": "cached",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check",
+        "--cache",
+        "/home/qian-qi/rea-ledger-inputs-20261104-r1"
+      ],
+      "expected_exit_code": 0,
+      "exit_code": 0,
+      "duration_seconds": 1.6859840989345685,
+      "logs": {
+        "stdout": {
+          "path": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/final-mapping-validation-r4/cached.stdout.log",
+          "bytes": 1338,
+          "sha256": "5bd601d78d1c031fa62a79b0e2d059424fc41aebb724c458c00b3b25260f5443"
+        },
+        "stderr": {
+          "path": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/final-mapping-validation-r4/cached.stderr.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "offline",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check-mapping"
+      ],
+      "expected_exit_code": 0,
+      "exit_code": 0,
+      "duration_seconds": 0.15594759804662317,
+      "logs": {
+        "stdout": {
+          "path": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/final-mapping-validation-r4/offline.stdout.log",
+          "bytes": 1329,
+          "sha256": "e6e257a769fd693e9091f1b6b135e531b66848fb382b4211b14e6d65adaa8a21"
+        },
+        "stderr": {
+          "path": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/final-mapping-validation-r4/offline.stderr.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "strict",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check-mapping",
+        "--require-parity"
+      ],
+      "expected_exit_code": 3,
+      "exit_code": 3,
+      "duration_seconds": 0.1580123440362513,
+      "logs": {
+        "stdout": {
+          "path": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/final-mapping-validation-r4/strict.stdout.log",
+          "bytes": 1329,
+          "sha256": "e6e257a769fd693e9091f1b6b135e531b66848fb382b4211b14e6d65adaa8a21"
+        },
+        "stderr": {
+          "path": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/final-mapping-validation-r4/strict.stderr.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ],
+  "before": {
+    "docs/rea-native/compatibility/REA_6_8_0_CAPABILITY_MAP.json": "99e07b5ab23877f8b2665de27bbdd83c5e9fe813e9e303be93e8522813de15d3",
+    "docs/rea-native/compatibility/REA_6_8_0_LEDGER.json": "a571d19af36edea73bd0585291eee85649dc4728741cbc7fd67f8ac6cba2b9f9",
+    "scripts/rea_compatibility_ledger.py": "4edb317e16166b569469323fb2963197a010e59902063640964db41eae7dce4e"
+  },
+  "after": {
+    "docs/rea-native/compatibility/REA_6_8_0_CAPABILITY_MAP.json": "99e07b5ab23877f8b2665de27bbdd83c5e9fe813e9e303be93e8522813de15d3",
+    "docs/rea-native/compatibility/REA_6_8_0_LEDGER.json": "a571d19af36edea73bd0585291eee85649dc4728741cbc7fd67f8ac6cba2b9f9",
+    "scripts/rea_compatibility_ledger.py": "4edb317e16166b569469323fb2963197a010e59902063640964db41eae7dce4e"
+  },
+  "unchanged": true,
+  "mapping_valid": true,
+  "full_upstream_parity": false
+}

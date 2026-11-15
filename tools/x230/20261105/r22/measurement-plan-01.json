@@ -1,0 +1,45 @@
+{
+  "schema": "hepta-x230-r22-measurement-plan/v1",
+  "baseline_commit": "e85f869e48e643a3e94cb7220d27181ad82c8562",
+  "baseline_runtime_sha256": "adab5f27f89b3cac6adaec916110a48d80697db9667e3bd7ee0fc713fe770a09",
+  "candidate_change": "Keep all fresh file/authority checks; compare the fixed SSH executable against its startup-pin-verified immutable bytes when its size is at most 2 MiB.",
+  "maximum_reference_payload_bytes": 2097152,
+  "ssh_observed_size_bytes": 846888,
+  "measurement": {
+    "order": "ABBA",
+    "calls_per_cell": 192,
+    "warmup_calls_per_cell": 24,
+    "concurrency": [
+      1,
+      8,
+      16
+    ],
+    "workers": 2,
+    "malloc_arena_max": 1,
+    "primary_concurrency": 8,
+    "host_identity": "Use existing frozen six-host topology; do not substitute current connector main alias."
+  },
+  "adoption": {
+    "all_concurrency_success_rate_b_over_a_min": 0.95,
+    "all_concurrency_p95_b_over_a_max": 1.1,
+    "c8_success_rate_b_over_a_min": 1.1,
+    "c8_controller_cpu_per_call_b_over_a_max": 0.9,
+    "controller_sampled_peak_rss_extra_max_bytes": 2097152,
+    "controller_sampled_peak_rss_b_over_a_max": 1.15,
+    "all_native_calls_correct": true,
+    "capacity_refusals_separate_from_successes": true,
+    "cancellation_and_controller_restart_recovery_required": true
+  },
+  "secondary_metrics": [
+    "p50",
+    "p99",
+    "controller CPU/call",
+    "sampled controller/tree RSS",
+    "FD",
+    "threads",
+    "host load and frequency"
+  ],
+  "retries": "No automatic performance retries. Failed attempts remain recorded. A changed candidate or resolved concrete measurement failure gets a separately labelled run.",
+  "build": "Exact pinned source/dependencies with reused unchanged dependency cache; root crate rebuilt. No claim of a completely empty target build.",
+  "production_controller_service_change": false
+}

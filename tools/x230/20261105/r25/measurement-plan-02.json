@@ -1,0 +1,201 @@
+{
+  "schema": "hepta-r25-observation-measurement-plan/v1",
+  "prepared_utc": "2026-11-05T07:40:44.430511+00:00",
+  "purpose": "Normal observation nonregression for bounded cancellation-control availability candidate",
+  "baseline": {
+    "binaries": {
+      "hepta-runtime": {
+        "bytes": 14373416,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime",
+        "sha256": "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13"
+      },
+      "hepta-runtime-jobctl": {
+        "bytes": 739016,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime-jobctl",
+        "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62"
+      },
+      "native_process_driver": {
+        "bytes": 2896456,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/native_process_driver",
+        "sha256": "51165c1e38409248f5fdb7da2036ebe5e05eec7576035e95bd4b8e2a5c675530"
+      }
+    },
+    "campaign_report": {
+      "bytes": 100033,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/campaign-01/report.json",
+      "sha256": "066952f12414e8f7291e21e58a77d53d4cd712104557bd6bdfdd7c383f9f1e2a"
+    },
+    "publication_readback": {
+      "bytes": 1022,
+      "commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/final-publication-readback.json",
+      "sha256": "38866c01fac54133c8a88e25bee90ea4a551e7273614f493bf44522a8273d3ca"
+    },
+    "qualification_reports": [
+      {
+        "bytes": 83365,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/report.json",
+        "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971",
+        "success_field": "qualified"
+      }
+    ],
+    "source": "/home/qian/hepta-runtime-optimization-20261105-r24/source"
+  },
+  "baseline_adopted_source_inputs_sha256": "e449e138216242c89b2ceff69babafe658411a42c73df0c66b222899540bdff7",
+  "candidate": {
+    "qualified": false,
+    "binary_pins": {
+      "hepta-runtime": {
+        "bytes": null,
+        "sha256": null
+      },
+      "hepta-runtime-jobctl": {
+        "bytes": null,
+        "sha256": null
+      },
+      "native_process_driver": {
+        "bytes": null,
+        "sha256": null
+      }
+    },
+    "qualification_reports": [
+      {
+        "bytes": null,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r25/qualification-02/report.json",
+        "sha256": null,
+        "success_field": "qualified"
+      }
+    ],
+    "source_manifest_pending": true
+  },
+  "entrypoints": [
+    {
+      "file": "prepare_and_qualify_r25_02_final.py",
+      "bytes": 9473,
+      "sha256": "b509cba2e49daed1e894d573d46b1913d39a2a7fcfc8db5146fd9077a8c6ba00"
+    },
+    {
+      "file": "prepare_campaign_inputs.py",
+      "bytes": 4354,
+      "sha256": "980f1628a4e3b8bb4c84f7c9c4760924ac119f102a6041ae87b4de67e30f5271"
+    },
+    {
+      "file": "r25_campaign.py",
+      "bytes": 38105,
+      "sha256": "304d3af82dc3f544dd25fc6f576af288852b7b46b7532aebe73f1351d4788ddc"
+    },
+    {
+      "file": "summarize_r25_campaign.py",
+      "bytes": 14456,
+      "sha256": "2418bad36fe4aef75d52c5a00c898ff93fef9bb4b6efb10028105143106a1864"
+    }
+  ],
+  "observation_gates": {
+    "all_concurrency": [
+      1,
+      8,
+      16
+    ],
+    "throughput_b_over_a_min": 0.95,
+    "p95_b_over_a_max": 1.1,
+    "primary_concurrency": 8,
+    "controller_cpu_b_over_a_max": 1.1,
+    "controller_rss_extra_kib_max": 512,
+    "controller_rss_b_over_a_max": 1.05,
+    "rss_combination": "both limits; B <= min(A + 512 KiB, A * 1.05)",
+    "rss_aggregation": "maximum sampled controller RSS across all four native controllers per arm, including restarts",
+    "ssh_cache_target": "/usr/bin/ssh",
+    "ssh_cache_target_bytes": 846888,
+    "ssh_cache_hard_cap_bytes": 2097152,
+    "cache_cap_evidence_scope": "source and qualification; RSS gate measures the actual process"
+  },
+  "native_protocol": {
+    "arena_max": 1,
+    "automatic_rpc_retries": 0,
+    "calls_per_cell": 192,
+    "concurrency": [
+      1,
+      8,
+      16
+    ],
+    "effect_starts": 0,
+    "measured_calls": 2304,
+    "order": "ABBA",
+    "preflight_restart_calls": 72,
+    "profile_template_sha256": "fe1e9551b5b8812ad6ed3da018c282b7261f7caeb2f49e4dcfefba7ff784ab08",
+    "tokio_workers": 2,
+    "topology_sha256": "8c0767d3318131a7d470d9cde8e327a59ce18adf022c8bc1b1d5a0fa9a865287",
+    "total_calls": 2664,
+    "warmup_calls": 288,
+    "warmup_calls_per_cell": 24
+  },
+  "correctness_protocol": {
+    "capacity": {
+      "attempts_per_burst": 32,
+      "bursts": 2,
+      "candidate_only": true,
+      "fixed_refusal_count_required": false,
+      "original_auditor_required": true,
+      "other_errors_allowed": 0
+    },
+    "lifecycle": {
+      "cancellations": 12,
+      "candidate_only": true,
+      "concurrency": 6,
+      "interrupt_host": "rog",
+      "new_fixture_jobs": 6,
+      "original_auditor_required": true,
+      "performance_ABBA_claim": false,
+      "same_key_lookups": 12
+    }
+  },
+  "budgets": {
+    "SIGINT_grace_seconds": 120,
+    "SIGKILL_grace_seconds": 10,
+    "SIGTERM_grace_seconds": 10,
+    "campaign_seconds": 3300,
+    "cleanup_reserve_seconds": 160,
+    "holder_seconds": 3600,
+    "quiescence_seconds": 90
+  },
+  "original_harness_pins": {
+    "allocator_environment.py": "f5c8e879c540b3f7cb1b7d3a7a0f5002c2f40c1a87963174b0b00470fa3a4525",
+    "allocator_environment_audit.py": "4b082ce343ae3943e3098baa58af2f5def7198881b9c087d63d88360e9763727",
+    "analyze_native_observation.py": "cc7f6884d581cd1ced430437350e808de51931c50d12441797205501b20cae66",
+    "audit_native_evidence.py": "b69f6902d2de81eab41b21506f024c002d2f8264d60e86df6b1086623a77fd28",
+    "observation_resources.py": "f3402d51cb37b2fe20f4351b3a81ec5990a9fdaff93a846d21c07ccd557cb894",
+    "owned_ssh_interruption.py": "1989c57f0b944afae1ed759d6529b8f1cc26197e269e2c34c4fd49e43a32aa7b",
+    "run_native_observation.py": "7606648c99b2ff2bbf0bba58384e8cab609ac3899f838c0b80ba54d6288d20bb",
+    "run_six_host_cancel_recovery.py": "698eb7801cde3f2bd5ff202412c0833fc218fd7e912c3c949d2b37fde7a56a12",
+    "test_native_harness.py": "2b450175b9e6122248ac1bcb51860aa8a6d3eff55f6ac8c877c0a905e3dd7d00",
+    "verify_cancel_recovery.py": "0116652a0b489dc462f005e01d7c943feda9ba784563d7317c92bb5beb9a701c",
+    "x230_observation_benchmark.py": "4d96f0bf2da2562e788f48be7c37589ab3a513be5f9d8b2d741afe5c08ea9eed",
+    "x230_six_running_recovery_canary.py": "6219bc556b0ac6d142bd4c731466b959e8a410f0b4b55f3d8b303f8fdbfbaaf4"
+  },
+  "original_boundary_pins": {
+    "run_native_boundary.py": "2af83ebba8b7ea5550e7549da795556eb8328622bcfbf563019654e202a53329",
+    "audit_native_boundary.py": "8ad8f6d97a5bd2e4850b02cd66fa5d2ac7d237ea0eef043daf9c88d3c9c152ee",
+    "test_native_boundary.py": "cda0bbef1704c374b49cc3cf5ea7b9a873687e547eed5c927bed801cf15156bd",
+    "harness-freeze.json": "77ea90d5d2f45ed4d724f087353a3c8e603abcd0a8bd1d4bceb31179bef174b1",
+    "capacity-policy.json": "206d1a99abc328948d8df893daa77a862b25de878a8b97379090da7ce84393d3"
+  },
+  "gate_change_rationale": "R24 required 3 percent observation throughput/CPU improvement for a hash-work optimization. R25 targets saturated cancellation admission; only observation nonregression is required, while real saturated cancellation and normal lifecycle ABBA must independently pass before adoption. Gates are set before any R25 measurement.",
+  "not_final_adoption": true,
+  "final_adoption_also_requires": [
+    "actual full qualification and source binding",
+    "normal six-host lifecycle ABBA gates",
+    "ordinary-saturation real cancellation and bounded resource proof",
+    "original-child lifecycle and cleanup proof",
+    "actual CI steps closure"
+  ],
+  "remote_operations": 0,
+  "original_qualification_retries": 0,
+  "revision": "02",
+  "qualification_attempt": "02",
+  "prior_failed_qualification": {
+    "job_id": "1a1aa7fa690-fc05-43af",
+    "report_sha256": "3a376fe209f8721530b104434d9e602c7251290f4be0b932c45a525ec3543228",
+    "fix": "only required operator allow_job_network=true in new test fixture",
+    "test_replay_without_source_change": false
+  }
+}

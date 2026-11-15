@@ -1,0 +1,387 @@
+--- r20/audit-transport/campaign-tools/run_six_host_campaign_02.py
++++ r21/campaign-tools/run_six_host_campaign_01.py
+@@ -1,8 +1,8 @@
+ #!/usr/bin/env python3
+ # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+-"""Run one fixed R20 six-host campaign after accepted qualification has ended.
+-
+-Only new R20 evidence and private fixture resources are written. The immutable
++"""Run one fixed R21 six-host campaign after accepted qualification has ended.
++
++Only new R21 evidence and private fixture resources are written. The immutable
+ R16 harness stays unchanged. Actual qualification/acceptance/control/runtime
+ hashes arrive via CLI; no future candidate binary identity is hardcoded.
+ The Mac stdin bootstrap validates this installed file before exec. Its transport
+@@ -27,35 +27,35 @@
+ sys.dont_write_bytecode = True
+ R16 = Path('/home/qian/hepta-runtime-optimization-20261104-r16')
+ R19 = Path('/home/qian/hepta-runtime-optimization-20261104-r19')
+-R20 = Path('/home/qian/hepta-runtime-optimization-20261105-r20')
+-SOURCE = R20 / 'source'
+-TARGET = R20 / 'target-fresh-01'
++R21 = Path('/home/qian/hepta-runtime-optimization-20261105-r21')
++SOURCE = R21 / 'source'
++TARGET = R21 / 'target-fresh-01'
+ TOOLS = R16 / 'measurement-tools'
+-BOUNDARY_TOOLS = R20 / 'boundary-tools'
++BOUNDARY_TOOLS = R21 / 'boundary-tools'
+ ORIGINAL_BOUNDARY_TOOLS = R16 / 'boundary-tools'
+-CONTROL = R20 / 'campaign-control-01'
+-NATIVE_OUT = R20 / 'native-observation-01'
+-BOUNDARY_OUT = R20 / 'native-boundary-01'
+-LIFECYCLE_OUT = R20 / 'lifecycle-abba-01'
+-NATIVE_SOCKET = Path('/home/qian/h20n1')
+-BOUNDARY_SOCKET = Path('/home/qian/h20b1')
+-LIFECYCLE_SOCKET_PREFIX = Path('/home/qian/h20lc1')
++CONTROL = R21 / 'campaign-control-01'
++NATIVE_OUT = R21 / 'native-observation-01'
++BOUNDARY_OUT = R21 / 'native-boundary-01'
++LIFECYCLE_OUT = R21 / 'lifecycle-abba-01'
++NATIVE_SOCKET = Path('/home/qian/h21n1')
++BOUNDARY_SOCKET = Path('/home/qian/h21b1')
++LIFECYCLE_SOCKET_PREFIX = Path('/home/qian/h21lc1')
+ PROFILE = Path('/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json')
+ TOPOLOGY = R16 / 'benchmark-topology.json'
+ FROZEN_JOBS = Path('/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01')
+ BASELINE = R19 / 'qualification-02/hepta-runtime'
+-CANDIDATE = R20 / 'qualification-01/hepta-runtime'
+-PROGRAM = R20 / 'campaign-tools/run_six_host_campaign_02.py'
+-PLAN = R20 / 'measurement-plan-01.json'
+-PLAN_SHA = 'f6ffad624beb654701fd179abd0b3f0ad21e5edc1367b070ccb1632927dc06ea'
++CANDIDATE = R21 / 'qualification-01/hepta-runtime'
++PROGRAM = R21 / 'campaign-tools/run_six_host_campaign_01.py'
++PLAN = R21 / 'measurement-plan-01.json'
++PLAN_SHA = 'aa4ad30b746b267d005c675f81ba634c43cd81a6f5893963445949abaa6e82f6'
+ BASELINE_SHA = 'adab5f27f89b3cac6adaec916110a48d80697db9667e3bd7ee0fc713fe770a09'
+ BASELINE_JOBS_SHA = 'c9080de8aa9a35f7495aa2822a1495d297903900ae0f0de26d7b0c86d043d3c9'
+ JOBCTL_SHA = '61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62'
+ JOBCTL_SOURCE_SHA = 'c22fdcd5bafad3a2123d5817c27fd73e7b5c26001bf1a8bdd6f8dbacabc8b562'
+ QUALIFIER_SHA = '95717717fd5421f2e31dbce24e2f8821696f57d779ce93e988ed66764159552d'
+-QUALIFICATION_TOOLS_MANIFEST_SHA = 'a827290f1706a3ae5dd66478feab993193cf408a1f31710bf12b864eceeb2d8d'
+-LIFECYCLE_TOOLS = R20 / 'lifecycle-tools'
+-LIFECYCLE_MANIFEST_SHA = '1418eae54d13ce0907926615927b7cb51fae38f4f1329aad4b4ae14040dcf9bb'
++QUALIFICATION_TOOLS_MANIFEST_SHA = '126976a5005fbbb5b09360d6999c85fd46d14e96e9b7d037c55ea2d40b40cc8d'
++LIFECYCLE_TOOLS = R21 / 'lifecycle-tools'
++LIFECYCLE_MANIFEST_SHA = '445a325931f2a9147401ea241782a29617480c2047c6d5b760f2e59f9037cb1f'
+ BASELINE_PINS = {
+     'source-freeze-02.json': '31f90b50d22ff8c8ac3a188f1bad47c844b4e2e68784277a87a671c916f7cb6a',
+     'qualification-02/report.json': '44a352c14bb83d093058ccbbc2c99fab913ef9af0b3400b00750dc46ad69cc16',
+@@ -64,10 +64,7 @@
+     'qualification-02/hepta-runtime-jobctl': JOBCTL_SHA,
+     'qualification-02/native_process_driver': '51165c1e38409248f5fdb7da2036ebe5e05eec7576035e95bd4b8e2a5c675530',
+ }
+-QUALIFICATION_FILES = {
+-    'qualify_candidate_01.py': 'afbaa71ddc6843ce96006695954ac7148908591a8e7da6e849a29feb89696ad2',
+-    'verify_qualification_01.py': 'd6f10197dd0f5712366e786c5464f63afa2de4e089443ef28bdbaea8f8294b28',
+-}
++QUALIFICATION_FILES = {'create_component_chain_01.py': '4a0a72aa649c44d83299eb8bb85ce7d3aa40c3b961ca9b5b0e2cf8ef56a4a610', 'qualify_candidate_01.py': '81b226f6e7d3a529ff2d0040124e661cb5e3316017e5b9c748b58d75bf4aa4c5', 'verify_qualification_01.py': '216eb5e0cb922263d748f6dfefc8db00da88d00e8d021690246d7ab8e7183c95'}
+ HEX = re.compile(r'[0-9a-f]{64}\Z')
+ QUIESCENCE_SECONDS = 90
+ 
+@@ -300,8 +297,8 @@
+         identities.append({'pid': expected['pid'], 'expected_start_ticks': expected['start_ticks'],
+                            'current': current, 'original_identity_absent': not same})
+     exact_python = {os.fsencode(path) for path in (
+-        SOURCE / 'tools/x230/20261028/qualify.py', R20 / 'tools/qualify_candidate_01.py',
+-        R20 / 'tools/verify_qualification_01.py')}
++        SOURCE / 'tools/x230/20261028/qualify.py', R21 / 'tools/qualify_candidate_01.py',
++        R21 / 'tools/verify_qualification_01.py', R21 / 'tools/create_component_chain_01.py')}
+     checked = 0
+     for directory in Path('/proc').iterdir():
+         if not directory.name.isdecimal():
+@@ -330,10 +327,131 @@
+             'scope': 'readable process snapshot, not continuous proof of whole-machine inactivity'}
+ 
+ 
++def component_chain_gate(acceptance, freeze, launch, control, plan, inputs):
++    """Bind the qualified two-step source chain and its exact retained inputs.
++
++    The final source was directly exercised by the CANCEL component. The STATUS
++    component exercised its preceding source; this chain does not relabel that
++    earlier measurement as a new final-source cold-process run.
++    """
++    intermediate = Path('/home/qian/hepta-runtime-optimization-20261105-r20')
++    status_sha = '2f751c09a9a29bebb0cda0a9bd2bb522d145ee8183740ed1442d77666ee44aa7'
++    final_sha = '1f1f086e3bc0fc62184ed51949964e1f82e337b87d330225097ae38722e4ac8c'
++    status_report_sha = '7223fafebacd13d5debe05f113f314b550f3896156d59e44837225a63f1a7631'
++    need(plan['component_chain_schema'] == 'hepta-r21-component-chain/v1'
++         and plan['candidate_jobs_sha256'] == plan['cancelprocess']['candidate_jobs_sha256'] == final_sha
++         and plan['cancelprocess']['baseline_jobs_sha256'] == status_sha
++         and inputs['src/mcp/runtime/jobs.rs'] == final_sha
++         and plan['superseded_r20_formal_campaign']['executed'] is False
++         and plan['rejected_hash_directions'] == [
++             {'buffer_bytes': 4096, 'mechanism_screen_passed': False,
++              'report_sha256': 'c8b96746a42c7a70f332be0afd1263093e6e6528d9cc9a2e7275245505dafde1'},
++             {'buffer_bytes': 64, 'mechanism_screen_passed': False,
++              'report_sha256': '347626e60c950bcaeacafaaa6c863834d9dac0c75524372612cc93f402800d4b'}],
++         'final source or superseded/rejected direction contract differs')
++    binding = acceptance['component_chain']
++    path = R21 / 'component-chain-01.json'
++    need(binding['path'] == str(path)
++         and binding == freeze['component_chain'] == launch['component_chain'] == control['component_chain'],
++         'qualified component-chain bindings differ')
++    chain, chain_id = document(path, binding['sha256'])
++    need(binding['size'] == chain_id['bytes']
++         and binding['schema'] == chain['schema'] == 'hepta-r21-component-chain/v1'
++         and chain['root'] == str(R21)
++         and binding['baseline_source_sha256'] == chain['baseline_source_sha256'] == BASELINE_JOBS_SHA
++         and binding['final_source_sha256'] == chain['final_source_sha256'] == final_sha
++         and binding['producer_chain_verified'] is chain['producer_chain_verified'] is True
++         and binding['final_was_directly_coldprocess_tested'] is chain['final_was_directly_coldprocess_tested'] is False
++         and binding['independent_raw_audits_required_before_adoption'] is chain['independent_raw_audits_required_before_adoption'] is True
++         and chain['adoption_assessed'] is False,
++         'component-chain identity, validation or measurement scope differs')
++    checked_bool_map(chain['checks'], 'component-chain source/producer checks failed')
++    baseline_path = R19 / 'source/src/mcp/runtime/jobs.rs'
++    status_path = intermediate / 'source/src/mcp/runtime/jobs.rs'
++    cancel_path = intermediate / 'cancel-candidate-01/jobs.rs'
++    final_path = SOURCE / 'src/mcp/runtime/jobs.rs'
++    status_report_path = intermediate / 'coldprocess-probe-01/semantics.json'
++    cancel_report_path = intermediate / 'cancelprocess-probe-01/semantics.json'
++    status_tool_path = intermediate / 'tools/coldprocess_probe_02.py'
++    cancel_tool_path = intermediate / 'cancel-tools-01/cancelprocess_probe_01.py'
++    cancel_plan_path = intermediate / 'cancel-tools-01/measurement-plan-01.json'
++    expected_refs = {
++        baseline_path: BASELINE_JOBS_SHA, status_path: status_sha,
++        cancel_path: final_sha, final_path: final_sha,
++        status_report_path: status_report_sha,
++        cancel_report_path: plan['cancelprocess']['semantics_sha256'],
++        status_tool_path: plan['coldprocess_probe_sha256'],
++        cancel_tool_path: plan['cancelprocess']['probe_sha256'],
++        cancel_plan_path: plan['cancelprocess']['plan_sha256'],
++    }
++    refs = {str(item): {'path': str(item), **sized_identity(fingerprint(item, expected))}
++            for item, expected in sorted(expected_refs.items(), key=lambda row: str(row[0]))}
++    need(chain['referenced_files'] == binding['referenced_files'] == list(refs.values())
++         and chain['final_source'] == refs[str(final_path)]
++         and refs[str(final_path)]['size'] == refs[str(cancel_path)]['size'] == 186546,
++         'actual component source/report/tool references differ')
++    expected_steps = [
++        ('status_lazy_import', 'STATUS_CODE', baseline_path, status_path, status_report_path, status_tool_path),
++        ('cancel_lazy_import', 'CANCEL_CODE', status_path, cancel_path, cancel_report_path, cancel_tool_path),
++    ]
++    need(len(chain['steps']) == 2, 'component-chain transition count differs')
++    step_bindings = []
++    constant_names = {'PRIVATE_DIRECTORY_CODE', 'BOUND_OBSERVATION_CODE', 'START_CODE',
++                      'STATUS_CODE', 'READ_CODE', 'CANCEL_CODE'}
++    for row, (name, constant, before_path, after_path, report_path, tool_path) in zip(chain['steps'], expected_steps):
++        need(row['name'] == name and row['input_source'] == refs[str(before_path)]
++             and row['output_source'] == refs[str(after_path)]
++             and row['semantics_report'] == refs[str(report_path)] and row['probe_tool'] == refs[str(tool_path)],
++             'component-chain step identities differ')
++        delta = row['source_delta']
++        need(delta['changed_constant'] == constant and delta['outside_constant_bytes_equal'] is True
++             and delta['all_six_nonimport_asts_equal'] is True and set(delta['constants']) == constant_names
++             and all(value['nonimport_ast_identical'] is True
++                     and value['byte_identical'] is (key != constant) for key, value in delta['constants'].items()),
++             'component transition changes beyond permitted imports')
++        if name == 'cancel_lazy_import':
++            need(row['plan'] == refs[str(cancel_plan_path)], 'CANCEL component plan differs')
++        step_bindings.append({'name': name, 'input_source_sha256': refs[str(before_path)]['sha256'],
++                              'output_source_sha256': refs[str(after_path)]['sha256'],
++                              'semantics_report_sha256': refs[str(report_path)]['sha256']})
++    need(binding['steps'] == step_bindings, 'flattened qualification chain differs')
++    status_report, _ = document(status_report_path, status_report_sha)
++    cancel_report, _ = document(cancel_report_path, plan['cancelprocess']['semantics_sha256'])
++    need(status_report['schema'] == 'hepta-r20-coldprocess-semantics/v1'
++         and status_report['passed'] is status_report['source_stable'] is True
++         and status_report['baseline_source_sha256'] == BASELINE_JOBS_SHA
++         and status_report['candidate_source_sha256'] == status_sha
++         and status_report['probe_tool_sha256'] == plan['coldprocess_probe_sha256']
++         and status_report['semantic_cases']['total'] == status_report['semantic_cases']['passed'] == 15
++         and status_report['semantic_cases']['failed'] == 0 and status_report['fresh_process_count'] == 352,
++         'original STATUS component producer report differs')
++    checked_bool_map(status_report['checks'], 'original STATUS semantic checks failed')
++    need(cancel_report['schema'] == 'hepta-r20-cancel-mechanism-semantics/v1'
++         and cancel_report['passed'] is cancel_report['source_stable'] is cancel_report['complete_required_coverage'] is True
++         and cancel_report['baseline_source_sha256'] == status_sha and cancel_report['candidate_source_sha256'] == final_sha
++         and cancel_report['probe_tool_sha256'] == plan['cancelprocess']['probe_sha256']
++         and cancel_report['plan_sha256'] == plan['cancelprocess']['plan_sha256']
++         and cancel_report['mode'] == 'full' and len(cancel_report['cases']) == 17
++         and all(row['passed'] is True for row in cancel_report['cases'])
++         and cancel_report['actual_fresh_helper_processes'] == cancel_report['actual_helper_records'] == 228
++         and cancel_report['actual_owned_target_records'] == cancel_report['real_targets_created'] == 66
++         and cancel_report['automatic_retries'] == 0 and cancel_report['error'] is None,
++         'original CANCEL component producer report differs')
++    return {'chain_file': chain_id, 'qualified_binding': binding,
++            'referenced_files': list(refs.values()), 'steps': step_bindings,
++            'final_was_directly_coldprocess_tested': False,
++            'independent_raw_audits_required_before_adoption': True,
++            'hash_buffer_in_final_source': False,
++            'superseded_r20_formal_campaign_executed': False}
++
++
+ def gate(args):
+-    """Bind accepted R20 proof to actual bytes without replaying R19 rejected attempts."""
++    """Bind accepted R21 proof to actual bytes without replaying R19 rejected attempts."""
++    need(isinstance(QUALIFICATION_TOOLS_MANIFEST_SHA, str) and HEX.fullmatch(QUALIFICATION_TOOLS_MANIFEST_SHA)
++         and set(QUALIFICATION_FILES) == {'qualify_candidate_01.py', 'verify_qualification_01.py', 'create_component_chain_01.py'},
++         'R21 qualification tool identities are not frozen; draft cannot run')
+     plan, plan_id = document(PLAN, PLAN_SHA)
+-    need(plan['schema'] == 'hepta-r20-measurement-plan/v1'
++    need(plan['schema'] == 'hepta-r21-measurement-plan/v1'
+          and plan['baseline_commit'] == 'acdd07363cbff335e50c2944e02143d44ab03d6b'
+          and plan['baseline_runtime_sha256'] == BASELINE_SHA
+          and plan['automatic_performance_retries'] == 0 and plan['production_service_changes'] is False,
+@@ -350,24 +468,24 @@
+          and plan['lifecycle']['preserve_original_recovery_canary_behaviour'] is True,
+          'fixed campaign dimensions or thresholds differ')
+ 
+-    acceptance, acceptance_id = document(R20 / 'independent-acceptance-01.json', args.expected_acceptance_sha256)
+-    control, control_id = document(R20 / 'qualification-control-01/report.json', args.expected_control_report_sha256)
+-    qualification, qualification_id = document(R20 / 'qualification-01/report.json', args.expected_qualification_report_sha256)
+-    freeze, freeze_id = document(R20 / 'source-freeze-01.json')
+-    middle, middle_id = document(R20 / 'source-middle-01.json')
+-    after, after_id = document(R20 / 'source-after-01.json')
+-    launch, launch_id = document(R20 / 'qualification-launch-01.json')
+-    outcome, outcome_id = document(R20 / 'qualification-exit-01.json')
++    acceptance, acceptance_id = document(R21 / 'independent-acceptance-01.json', args.expected_acceptance_sha256)
++    control, control_id = document(R21 / 'qualification-control-01/report.json', args.expected_control_report_sha256)
++    qualification, qualification_id = document(R21 / 'qualification-01/report.json', args.expected_qualification_report_sha256)
++    freeze, freeze_id = document(R21 / 'source-freeze-01.json')
++    middle, middle_id = document(R21 / 'source-middle-01.json')
++    after, after_id = document(R21 / 'source-after-01.json')
++    launch, launch_id = document(R21 / 'qualification-launch-01.json')
++    outcome, outcome_id = document(R21 / 'qualification-exit-01.json')
+     need(acceptance['schema'] == 'hepta-x230-independent-acceptance/v2'
+-         and acceptance['root'] == str(R20) and acceptance['attempt'] == 1 and acceptance['accepted'] is True,
++         and acceptance['root'] == str(R21) and acceptance['attempt'] == 1 and acceptance['accepted'] is True,
+          'candidate was not independently accepted')
+     checked_bool_map(acceptance['checks'], 'independent qualification checks did not all pass')
+-    need(control['schema'] == 'hepta-x230-qualification-control/v1' and control['root'] == str(R20)
++    need(control['schema'] == 'hepta-x230-qualification-control/v1' and control['root'] == str(R21)
+          and control['attempt'] == 1 and control['passed'] is True and control['current_stage'] == 'completed'
+          and control.get('finished_utc') and control['automatic_retries'] == 0
+          and control['source_full_before_middle_after_equal'] is True
+-         and control['qualification_report'] == {'path': str(R20 / 'qualification-01/report.json'), **sized_identity(qualification_id)}
+-         and control['independent_acceptance'] == {'path': str(R20 / 'independent-acceptance-01.json'), **sized_identity(acceptance_id)},
++         and control['qualification_report'] == {'path': str(R21 / 'qualification-01/report.json'), **sized_identity(qualification_id)}
++         and control['independent_acceptance'] == {'path': str(R21 / 'independent-acceptance-01.json'), **sized_identity(acceptance_id)},
+          'qualification controller is not terminal or does not bind actual proof')
+     need(qualification['qualified'] is True and qualification['source'] == str(SOURCE)
+          and qualification['jobs'] == 2 and qualification['automatic_test_retries'] == 0
+@@ -410,7 +528,7 @@
+              'qualification owned child not normally reaped')
+         recorded.append({'pid': row['pid'], 'start_ticks': row['start_ticks']})
+         for stream in ('stdout', 'stderr'):
+-            path = R20 / 'qualification-control-01' / (row['name'] + '.' + stream)
++            path = R21 / 'qualification-control-01' / (row['name'] + '.' + stream)
+             actual = fingerprint(path)
+             need(row[stream] == {'path': str(path), **sized_identity(actual)}, 'qualification control raw stream differs')
+             control_streams.append(actual)
+@@ -441,34 +559,23 @@
+          and inputs['src/bin/jobctl.rs'] == JOBCTL_SOURCE_SHA
+          and acceptance['source_full_count'] == 281 and acceptance['source_input_count'] == 219
+          and acceptance['changed_paths'] == ['src/mcp/runtime/jobs.rs'], 'candidate changed beyond the frozen one-file scope')
+-    source_map, source_map_id = document(R20 / 'qualification-01/source-map.json')
++    source_map, source_map_id = document(R21 / 'qualification-01/source-map.json')
+     need(source_map == inputs, 'original qualifier source map differs')
+ 
+-    tools_manifest, tools_manifest_id = document(R20 / 'tools/qualification-tools-manifest-01.json', QUALIFICATION_TOOLS_MANIFEST_SHA)
+-    qualification_tools = {name: fingerprint(R20 / 'tools' / name, expected) for name, expected in QUALIFICATION_FILES.items()}
++    tools_manifest, tools_manifest_id = document(R21 / 'tools/qualification-tools-manifest-01.json', QUALIFICATION_TOOLS_MANIFEST_SHA)
++    qualification_tools = {name: fingerprint(R21 / 'tools' / name, expected) for name, expected in QUALIFICATION_FILES.items()}
+     need(tools_manifest['files'] == {name: sized_identity(row) for name, row in qualification_tools.items()}
+          and freeze['qualifier_sha256'] == launch['qualifier_sha256'] == QUALIFIER_SHA,
+          'protected qualification tools differ')
+     qualifier = fingerprint(SOURCE / 'tools/x230/20261028/qualify.py', QUALIFIER_SHA)
+-    semantic_binding = acceptance['semantic']
+-    semantic_path = Path(semantic_binding['path'])
+-    need(semantic_path.is_relative_to(R20), 'semantic report outside R20')
+-    semantic, semantic_id = document(semantic_path, semantic_binding['sha256'])
+-    need(acceptance['semantic'] == freeze['semantic'] == launch['semantic'] == control['semantic']
+-         and semantic_binding['size'] == semantic_id['bytes']
+-         and semantic['schema'] == 'hepta-r20-coldprocess-semantics/v1'
+-         and semantic['passed'] is semantic['source_stable'] is True
+-         and semantic['baseline_source_sha256'] == BASELINE_JOBS_SHA
+-         and semantic['candidate_source_sha256'] == inputs['src/mcp/runtime/jobs.rs']
+-         and semantic['probe_tool_sha256'] == plan['coldprocess_probe_sha256'], 'cold-process semantic proof differs')
+-    checked_bool_map(semantic['checks'], 'cold-process semantic checks failed')
++    component_chain = component_chain_gate(acceptance, freeze, launch, control, plan, inputs)
+ 
+     names = {'hepta-runtime', 'hepta-runtime-jobctl', 'native_process_driver'}
+     need(set(qualification['binaries']) == set(acceptance['binaries']) == set(control['binaries']) == names,
+          'qualified binary set differs')
+     binaries, release = {}, {}
+     for name in sorted(names):
+-        path = R20 / 'qualification-01' / name
++        path = R21 / 'qualification-01' / name
+         reviewed = acceptance['binaries'][name]
+         need(qualification['binaries'][name]['path'] == reviewed['path'] == str(path)
+              and qualification['binaries'][name]['sha256'] == reviewed['sha256']
+@@ -509,7 +616,7 @@
+             'baseline_full_map_sha256': canonical_digest(original),
+             'baseline': baseline, 'binaries': binaries, 'target_release_binaries': release,
+             'qualification_tool_manifest': tools_manifest_id, 'qualification_tools': qualification_tools,
+-            'qualifier': qualifier, 'semantic_report': semantic_id,
++            'qualifier': qualifier, 'component_chain': component_chain,
+             'profile': profile, 'topology': topology, 'measurement_tools': measurement,
+             'boundary_tools': boundary, 'original_boundary_tools': original_boundary,
+             'lifecycle_tools': lifecycle, 'frozen_jobs': frozen_jobs, 'workers': 2, 'arena_max': 1}
+@@ -542,7 +649,7 @@
+     need(isinstance(LIFECYCLE_MANIFEST_SHA, str) and HEX.fullmatch(LIFECYCLE_MANIFEST_SHA),
+          'lifecycle tools are not frozen; draft launcher cannot run')
+     manifest, manifest_id = document(LIFECYCLE_TOOLS / 'lifecycle-tools-manifest-01.json', LIFECYCLE_MANIFEST_SHA)
+-    need(manifest['schema'] == 'hepta-r20-lifecycle-tools/v1' and isinstance(manifest['files'], dict)
++    need(manifest['schema'] == 'hepta-r21-lifecycle-tools/v1' and isinstance(manifest['files'], dict)
+          and {'run_lifecycle_abba_01.py', 'summarize_lifecycle_abba_01.py'} <= set(manifest['files']),
+          'lifecycle tool manifest schema/set differs')
+     actual = {}
+@@ -570,14 +677,14 @@
+     control, control_id = document(LIFECYCLE_OUT / 'report.json')
+     summary, summary_id = document(LIFECYCLE_OUT / 'summary.json')
+     index_id = fingerprint(LIFECYCLE_OUT / 'round-index.json')
+-    need(control['schema'] == 'hepta-r20-lifecycle-abba-control/v1' and control['passed'] is True
++    need(control['schema'] == 'hepta-r21-lifecycle-abba-control/v1' and control['passed'] is True
+          and control['order'] == 'ABBA' and control['round_count'] == 4
+          and control['inputs_unchanged'] is True and control['automatic_retries'] == 0
+          and control['baseline'] == fingerprint(BASELINE, BASELINE_SHA)
+          and control['candidate'] == fingerprint(CANDIDATE, args.expected_candidate_sha256)
+          and control['round_index'] == index_id and control['summary'] == summary_id,
+          'lifecycle control or closed index/summary binding differs')
+-    need(summary['schema'] == 'hepta-r20-lifecycle-abba-summary/v1' and summary['verified'] is True
++    need(summary['schema'] == 'hepta-r21-lifecycle-abba-summary/v1' and summary['verified'] is True
+          and summary['order'] == 'ABBA' and summary['round_count'] == 4
+          and summary['total_new_starts'] == 24 and summary['total_same_key_lookups'] == 48
+          and summary['total_cancellations'] == 48
+@@ -699,10 +806,10 @@
+     args = parser.parse_args()
+     need(all(HEX.fullmatch(value) for value in vars(args).values()), 'all startup identities must be lowercase SHA256')
+     need(sys.platform == 'linux' and os.geteuid() == 1000, 'wrong execution platform/account')
+-    need(R20.is_dir() and R20.resolve() == R20, 'reserved R20 root unavailable')
++    need(R21.is_dir() and R21.resolve() == R21, 'reserved R21 root unavailable')
+     need(CONTROL.resolve() == CONTROL and not os.path.lexists(CONTROL), 'fresh direct control directory required')
+     CONTROL.mkdir(mode=0o700)
+-    report = {'schema': 'hepta-r20-six-host-campaign/v1', 'started_utc': utc(), 'passed': False,
++    report = {'schema': 'hepta-r21-six-host-campaign/v1', 'started_utc': utc(), 'passed': False,
+               'current_stage': 'initial-gate', 'qualification_attempt': 1,
+               'mac_stdin_source_sha256': args.launcher_sha256,
+               'launcher_identity_scope': 'Mac holder receipt for stdin bootstrap; bootstrap verifies fixed installed launcher bytes before exec; not an independent remote self-hash',
+@@ -716,7 +823,7 @@
+ 
+     def save():
+         atomic_json(CONTROL / 'report.json', report)
+-        atomic_json(CONTROL / 'progress.json', {'schema': 'hepta-r20-campaign-progress/v1',
++        atomic_json(CONTROL / 'progress.json', {'schema': 'hepta-r21-campaign-progress/v1',
+                     'updated_utc': utc(), 'current_stage': report['current_stage'], 'passed': report['passed'],
+                     'stage_count': len(report['stages']), 'stage_pid': report.get('stage_pid'),
+                     'stage_elapsed_seconds': report.get('stage_elapsed_seconds'),
+@@ -841,12 +948,12 @@
+         report['gate'] = initial
+         for label, path in (
+             ('measurement-plan-01.json', PLAN),
+-            ('qualification-acceptance-input.json', R20 / 'independent-acceptance-01.json'),
+-            ('qualification-control-input.json', R20 / 'qualification-control-01/report.json'),
+-            ('qualification-report-input.json', R20 / 'qualification-01/report.json'),
+-            ('source-freeze-input.json', R20 / 'source-freeze-01.json'),
+-            ('source-middle-input.json', R20 / 'source-middle-01.json'),
+-            ('source-after-input.json', R20 / 'source-after-01.json')):
++            ('qualification-acceptance-input.json', R21 / 'independent-acceptance-01.json'),
++            ('qualification-control-input.json', R21 / 'qualification-control-01/report.json'),
++            ('qualification-report-input.json', R21 / 'qualification-01/report.json'),
++            ('source-freeze-input.json', R21 / 'source-freeze-01.json'),
++            ('source-middle-input.json', R21 / 'source-middle-01.json'),
++            ('source-after-input.json', R21 / 'source-after-01.json')):
+             _, raw = stable_file(path, maximum=16 * 1024 * 1024, retain=True)
+             write_new(CONTROL / label, raw)
+         report['boundary_copy_contract'] = {'original': initial['original_boundary_tools'],

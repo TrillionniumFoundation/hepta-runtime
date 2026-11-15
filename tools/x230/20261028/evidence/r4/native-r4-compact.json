@@ -1,0 +1,1464 @@
+{
+  "schema": "hepta-x230-composed-native-validation/v1",
+  "nonce": "6ba8382fa4028afa6fa0c4b3",
+  "passed": true,
+  "complete": true,
+  "started_utc": "2026-10-29T04:11:48.730595+00:00",
+  "finished_utc": "2026-10-29T04:18:40.776784+00:00",
+  "elapsed_seconds": null,
+  "automatic_retries": 0,
+  "final_input_integrity_passed": true,
+  "failed_stage": null,
+  "unexecuted": [],
+  "report_sha256": "711970e679e04cfcac60daa86d859c70f1fd2e6a1078c20dcf8414377542b09d",
+  "report_path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/report.json",
+  "qualification_report_sha256": "3d5d618eae594f2aa1b7e5902230d4600e32b1b163c2e759914c61bddda7997b",
+  "runtime_sha256": "8469fe7afdf560f4c501e5162cd7926957fade695118e9b9b72f1594ed861248",
+  "test_audit_sha256": "69123251e571b140683e90dceb49c0746e07b91ca86ff7bd00d3f67c974eaf16",
+  "descriptive_file_abba": {
+    "concurrency": {
+      "1": {
+        "baseline": {
+          "calls": 192,
+          "calls_per_second": 3.920673927665852,
+          "cell_seconds": 48.9711726969108
+        },
+        "candidate": {
+          "calls": 192,
+          "calls_per_second": 3.919355320420599,
+          "cell_seconds": 48.98764830012806
+        },
+        "candidate_rate_change_percent": -0.033632157878482616
+      },
+      "4": {
+        "baseline": {
+          "calls": 192,
+          "calls_per_second": 15.527799494351413,
+          "cell_seconds": 12.364920095074922
+        },
+        "candidate": {
+          "calls": 192,
+          "calls_per_second": 15.40804074382377,
+          "cell_seconds": 12.461026238976046
+        },
+        "candidate_rate_change_percent": -0.7712538442501637
+      },
+      "8": {
+        "baseline": {
+          "calls": 192,
+          "calls_per_second": 22.050160567170074,
+          "cell_seconds": 8.707419586135074
+        },
+        "candidate": {
+          "calls": 192,
+          "calls_per_second": 21.61108531765797,
+          "cell_seconds": 8.884329369757324
+        },
+        "candidate_rate_change_percent": -1.9912564725983573
+      }
+    },
+    "limits": "one short ABBA block; local load sampled every 2s; remote/background load uncontrolled; tiny immutable files",
+    "method": "sum of measured calls divided by sum of original cell wall times; all ABBA cells retained",
+    "performance_improvement_claimed": false
+  },
+  "stages": [
+    {
+      "name": "small-archive-abba",
+      "status": "passed",
+      "executed": true,
+      "execution_count": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "original_child_reaped": true,
+      "custody_retained_until_reap": true,
+      "elapsed_seconds": null,
+      "original_report": {
+        "bytes": 3517012,
+        "identity": [
+          2053,
+          869255,
+          33152,
+          1000,
+          1000,
+          1,
+          3517012,
+          1793247148280373883,
+          1793247148291374160
+        ],
+        "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/small-archive-abba/report.json",
+        "sha256": "7b99c86b2939aadb0bc61e8793341f74909c39552c9240a6b69880bdb9b85497"
+      },
+      "validation": {
+        "assertions": {
+          "binary_binding": true,
+          "complete_comparison": true,
+          "fixed_abba": true,
+          "full_4096_coverage": true,
+          "original_calls_journal": true,
+          "report_has_no_error": true,
+          "round_0": true,
+          "round_1": true,
+          "round_2": true,
+          "round_3": true,
+          "schema": true,
+          "unchanged_inputs": true
+        },
+        "details": {
+          "concurrency": 1,
+          "measured_calls": 4096,
+          "records_per_round": 64,
+          "scope": "native stdio MCP hot small-archive guard; not large-archive/C4 performance",
+          "total_tool_calls": 4424
+        },
+        "passed": true
+      },
+      "hostload_gates": {
+        "hostload_before_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_after_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_samples": {
+          "clear": true,
+          "errors": [],
+          "interval_seconds": 2,
+          "report": {
+            "bytes": 751492,
+            "identity": [
+              2053,
+              869074,
+              33152,
+              1000,
+              1000,
+              1,
+              751492,
+              1793247150646433424,
+              1793247150646433424
+            ],
+            "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/small-archive-abba.hostload-samples.jsonl",
+            "sha256": "e711830555639b2ab5bb660ecef1f5b135d3ec37a31164aee3a93aac2ae758e7"
+          },
+          "samples": 19,
+          "unclear_samples": 0
+        }
+      }
+    },
+    {
+      "name": "inherited-pipes",
+      "status": "passed",
+      "executed": true,
+      "execution_count": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "original_child_reaped": true,
+      "custody_retained_until_reap": true,
+      "elapsed_seconds": null,
+      "original_report": {
+        "bytes": 218482,
+        "identity": [
+          2053,
+          4722675,
+          33152,
+          1000,
+          1000,
+          1,
+          218482,
+          1793247177134077963,
+          1793247177138078057
+        ],
+        "path": "/home/qian/hepta-runtime-optimization-20261023/x230-20261028-6ba8382fa4028afa6fa0c4b3-pipes/report.json",
+        "sha256": "e2a07697f69b664e166fd9fca3c9f443f6dd0b7d6207a84f6a335ff20cbdb28f"
+      },
+      "validation": {
+        "assertions": {
+          "exact_case_coverage": true,
+          "exact_originals": true,
+          "fixture_only_effects": true,
+          "passed": true,
+          "report_has_no_error": true,
+          "schema": true,
+          "shutdown": true,
+          "single_fixture_cancel": true
+        },
+        "details": {
+          "cases": [
+            [
+              "x230",
+              "natural"
+            ],
+            [
+              "x230",
+              "staggered"
+            ],
+            [
+              "x230",
+              "timeout"
+            ],
+            [
+              "mac",
+              "natural"
+            ],
+            [
+              "mac",
+              "staggered"
+            ],
+            [
+              "mac",
+              "timeout"
+            ],
+            [
+              "x230",
+              "cancel"
+            ]
+          ],
+          "original_job_ids": [
+            "1a185dc12fd-4df1b-1",
+            "1a185dc1a0b-4df1b-2",
+            "1a185dc2986-4df1b-3",
+            "1a185dc37ab-4df1b-4",
+            "1a185dc4065-4df1b-5",
+            "1a185dc50d5-4df1b-6",
+            "1a185dc5fd6-4df1b-7"
+          ]
+        },
+        "passed": true
+      },
+      "hostload_gates": {
+        "hostload_before_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_after_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_samples": {
+          "clear": true,
+          "errors": [],
+          "interval_seconds": 2,
+          "report": {
+            "bytes": 526138,
+            "identity": [
+              2053,
+              869258,
+              33152,
+              1000,
+              1000,
+              1,
+              526138,
+              1793247178082100298,
+              1793247178082100298
+            ],
+            "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/inherited-pipes.hostload-samples.jsonl",
+            "sha256": "6e1bf36a10b19059462481b4d83807d60b5422134df1cd864e0355de9fc36cec"
+          },
+          "samples": 13,
+          "unclear_samples": 0
+        }
+      }
+    },
+    {
+      "name": "six-running-recovery",
+      "status": "passed",
+      "executed": true,
+      "execution_count": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "original_child_reaped": true,
+      "custody_retained_until_reap": true,
+      "elapsed_seconds": null,
+      "original_report": {
+        "bytes": 299079,
+        "identity": [
+          2053,
+          4722954,
+          33152,
+          1000,
+          1000,
+          1,
+          299079,
+          1793247191529411751,
+          1793247191533411842
+        ],
+        "path": "/home/qian/hepta-runtime-optimization-20261023/x230-20261028-6ba8382fa4028afa6fa0c4b3-recovery/report.json",
+        "sha256": "d9ea3d7fad131819fec720b95142b28d86924efacd69c4ef76998f60d05430d5"
+      },
+      "validation": {
+        "assertions": {
+          "all_original_calls_passed": true,
+          "exact_launch_reuse_count": true,
+          "no_retry_cleanup_or_service_change": true,
+          "originals_preserved": true,
+          "owned_controller_crash_and_shutdown": true,
+          "passed": true,
+          "report_has_no_error": true,
+          "schema": true,
+          "six_original_hosts": true
+        },
+        "details": {
+          "original_job_ids": {
+            "ai395": "1a185dc83f0-4e26e-4",
+            "mac": "1a185dc83ea-4e26e-1",
+            "main": "1a185dc83f1-4e26e-5",
+            "pocket4": "1a185dc83ee-4e26e-2",
+            "rog": "1a185dc83f1-4e26e-6",
+            "x230": "1a185dc83ee-4e26e-3"
+          }
+        },
+        "passed": true
+      },
+      "hostload_gates": {
+        "hostload_before_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_after_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_samples": {
+          "clear": true,
+          "errors": [],
+          "interval_seconds": 2,
+          "report": {
+            "bytes": 245305,
+            "identity": [
+              2053,
+              869264,
+              33152,
+              1000,
+              1000,
+              1,
+              245305,
+              1793247192275428742,
+              1793247192275428742
+            ],
+            "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/six-running-recovery.hostload-samples.jsonl",
+            "sha256": "00d8e988509e7a83e8624f3cee2c8beae54a70f6b39038c0e71790cc0a774c96"
+          },
+          "samples": 6,
+          "unclear_samples": 0
+        }
+      },
+      "recovery": {
+        "schema": "hepta-six-running-controller-recovery/v1",
+        "new_start_call_count": 6,
+        "same_key_lookup_call_count": 6,
+        "intentional_crash": {
+          "exit_code": -9,
+          "observed_descendant_survivors": [],
+          "reader_error": null,
+          "resources": {
+            "errors": [
+              "PermissionError: [Errno 13] Permission denied: '/proc/320238/fd'"
+            ],
+            "peaks": {
+              "controller_fd": 68,
+              "controller_hwm_kib": 16996,
+              "controller_rss_kib": 16996,
+              "descendants": 8,
+              "tree_fd": 108,
+              "tree_rss_kib": 72704
+            },
+            "sample_interval_seconds": 0.1,
+            "sampled_peaks_and_tree_cpu_are_lower_bounds": true,
+            "sampled_process_generations": 18,
+            "sampled_tree_cpu_seconds": 3.88,
+            "samples": 32
+          },
+          "shutdown_method": "already_exited",
+          "unmatched_responses": 0
+        },
+        "shutdown": {
+          "exit_code": 0,
+          "observed_descendant_survivors": [],
+          "reader_error": null,
+          "resources": {
+            "errors": [],
+            "peaks": {
+              "controller_fd": 85,
+              "controller_hwm_kib": 16812,
+              "controller_rss_kib": 16812,
+              "descendants": 12,
+              "tree_fd": 148,
+              "tree_rss_kib": 110820
+            },
+            "sample_interval_seconds": 0.1,
+            "sampled_peaks_and_tree_cpu_are_lower_bounds": true,
+            "sampled_process_generations": 29,
+            "sampled_tree_cpu_seconds": 4.2,
+            "samples": 41
+          },
+          "shutdown_method": "stdin_eof",
+          "unmatched_responses": 0
+        },
+        "final_controller_record_errors": [],
+        "source_originals_unchanged": true,
+        "binary_unchanged": true,
+        "current_agent_unchanged": true,
+        "distinct_reported_hostnames": true,
+        "controller_records_unchanged_after_shutdown": true,
+        "automatic_rpc_retries": 0,
+        "remote_cleanup_operations": 0,
+        "production_service_mutations": 0,
+        "hosts": {
+          "ai395": {
+            "job_id": "1a185dc83f0-4e26e-4"
+          },
+          "mac": {
+            "job_id": "1a185dc83ea-4e26e-1"
+          },
+          "main": {
+            "job_id": "1a185dc83f1-4e26e-5"
+          },
+          "pocket4": {
+            "job_id": "1a185dc83ee-4e26e-2"
+          },
+          "rog": {
+            "job_id": "1a185dc83f1-4e26e-6"
+          },
+          "x230": {
+            "job_id": "1a185dc83ee-4e26e-3"
+          }
+        },
+        "native_calls": {
+          "count": 42,
+          "okay": 42,
+          "not_okay": 0
+        },
+        "ssh_calls": {
+          "count": 30,
+          "okay": 30,
+          "not_okay": 0
+        }
+      }
+    },
+    {
+      "name": "file-abba-0-baseline",
+      "status": "passed",
+      "executed": true,
+      "execution_count": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "original_child_reaped": true,
+      "custody_retained_until_reap": true,
+      "elapsed_seconds": null,
+      "original_report": {
+        "bytes": 12848,
+        "identity": [
+          2053,
+          4270401,
+          33152,
+          1000,
+          1000,
+          1,
+          12848,
+          1793247238852431743,
+          1793247238854431784
+        ],
+        "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/file-abba-0-baseline/report.json",
+        "sha256": "714492e8c7c1cc78b27841f20c5058cfd8ba32786afcc8a92375e4285c59ca02"
+      },
+      "validation": {
+        "assertions": {
+          "exact_balanced_calls": true,
+          "fixed_inventory": true,
+          "one_fixed_iteration": true,
+          "original_calls_hash_and_count": true,
+          "owned_shutdown": true,
+          "pool_on_only": true,
+          "read_only_unchanged": true,
+          "schema_complete_binary": true,
+          "trace_disabled": true,
+          "warmup_and_negative_coverage": true
+        },
+        "details": {
+          "cells": [
+            {
+              "calls": 96,
+              "concurrency": 1,
+              "cpu_ms_per_call": 133.95833333333334,
+              "iteration": 0,
+              "p50_ms": 247.1223579486832,
+              "p95_ms": 325.2878258936107,
+              "p99_ms": 393.31545191816986,
+              "seconds": 24.625028965994716,
+              "success": 96,
+              "successful_calls_per_second": 3.898472571649303
+            },
+            {
+              "calls": 96,
+              "concurrency": 4,
+              "cpu_ms_per_call": 76.87500000000003,
+              "iteration": 0,
+              "p50_ms": 255.52107102703303,
+              "p95_ms": 340.7153319567442,
+              "p99_ms": 356.76916199736297,
+              "seconds": 6.302655389998108,
+              "success": 96,
+              "successful_calls_per_second": 15.231675232053075
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.125,
+              "iteration": 0,
+              "p50_ms": 349.37940957024693,
+              "p95_ms": 439.2634220421314,
+              "p99_ms": 476.7301350366324,
+              "seconds": 4.312760571017861,
+              "success": 96,
+              "successful_calls_per_second": 22.259524594323327
+            }
+          ],
+          "configured_soak_seconds": null,
+          "measured_calls": 288,
+          "measured_cell_seconds": 35.240444927010685,
+          "resource_observation_error_count": 5,
+          "resource_scope": "original controller and observed local descendants; remote CPU excluded; RSS peaks are sampled",
+          "sampled_resource_peaks": {
+            "controller_fd": 78,
+            "controller_hwm_kib": 17184,
+            "controller_rss_kib": 17184,
+            "tree_fd": 210,
+            "tree_hwm_kib": 105520,
+            "tree_rss_kib": 105520
+          },
+          "waited_process_tree_cpu_seconds": 34.252324,
+          "workload_scope": "six immutable 44-48 byte synthetic outputs; file_info/binary_read, not bulk bandwidth"
+        },
+        "passed": true
+      },
+      "hostload_gates": {
+        "hostload_before_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_after_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_samples": {
+          "clear": true,
+          "errors": [],
+          "interval_seconds": 2,
+          "report": {
+            "bytes": 937923,
+            "identity": [
+              2053,
+              869270,
+              33152,
+              1000,
+              1000,
+              1,
+              937923,
+              1793247241198479350,
+              1793247241198479350
+            ],
+            "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/file-abba-0-baseline.hostload-samples.jsonl",
+            "sha256": "71e9bea1ecbb589bfd87f86fdb5e2efce853da713d2c17360e758d636fa30ea7"
+          },
+          "samples": 23,
+          "unclear_samples": 0
+        }
+      },
+      "original_resource_observations": {
+        "error_count": 5,
+        "errors_preview_count": 5,
+        "observed_master_generations_total": null,
+        "generation_scope": "sampled local master-process total only; no per-host rotation proof",
+        "resource_keys": [
+          "errors",
+          "peaks",
+          "sample_interval_seconds",
+          "sampled_peaks_are_not_exhaustive_limits",
+          "sampled_tree_cpu_seconds",
+          "samples"
+        ]
+      }
+    },
+    {
+      "name": "file-abba-1-candidate",
+      "status": "passed",
+      "executed": true,
+      "execution_count": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "original_child_reaped": true,
+      "custody_retained_until_reap": true,
+      "elapsed_seconds": null,
+      "original_report": {
+        "bytes": 11412,
+        "identity": [
+          2053,
+          4271130,
+          33152,
+          1000,
+          1000,
+          1,
+          11412,
+          1793247286106340011,
+          1793247286108340047
+        ],
+        "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/file-abba-1-candidate/report.json",
+        "sha256": "3343c19138b0eb12ceb2b1580e18970da98b16b9c21bb989cf0ea79dd83a0da7"
+      },
+      "validation": {
+        "assertions": {
+          "exact_balanced_calls": true,
+          "fixed_inventory": true,
+          "one_fixed_iteration": true,
+          "original_calls_hash_and_count": true,
+          "owned_shutdown": true,
+          "pool_on_only": true,
+          "read_only_unchanged": true,
+          "schema_complete_binary": true,
+          "trace_disabled": true,
+          "warmup_and_negative_coverage": true
+        },
+        "details": {
+          "cells": [
+            {
+              "calls": 96,
+              "concurrency": 1,
+              "cpu_ms_per_call": 132.60416666666666,
+              "iteration": 0,
+              "p50_ms": 248.9558089291677,
+              "p95_ms": 313.0370699800551,
+              "p99_ms": 384.3905390240252,
+              "seconds": 24.369334432063624,
+              "success": 96,
+              "successful_calls_per_second": 3.9393771819097894
+            },
+            {
+              "calls": 96,
+              "concurrency": 4,
+              "cpu_ms_per_call": 75.31249999999999,
+              "iteration": 0,
+              "p50_ms": 253.05260554887354,
+              "p95_ms": 336.85516007244587,
+              "p99_ms": 366.9990950729698,
+              "seconds": 6.227956558112055,
+              "success": 96,
+              "successful_calls_per_second": 15.414365707955657
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.75000000000001,
+              "iteration": 0,
+              "p50_ms": 357.709159492515,
+              "p95_ms": 466.0948459059,
+              "p99_ms": 504.84574981965125,
+              "seconds": 4.429295579902828,
+              "success": 96,
+              "successful_calls_per_second": 21.673875285177086
+            }
+          ],
+          "configured_soak_seconds": null,
+          "measured_calls": 288,
+          "measured_cell_seconds": 35.02658657007851,
+          "resource_observation_error_count": 1,
+          "resource_scope": "original controller and observed local descendants; remote CPU excluded; RSS peaks are sampled",
+          "sampled_resource_peaks": {
+            "controller_fd": 82,
+            "controller_hwm_kib": 17752,
+            "controller_rss_kib": 17752,
+            "tree_fd": 156,
+            "tree_hwm_kib": 112472,
+            "tree_rss_kib": 112472
+          },
+          "waited_process_tree_cpu_seconds": 33.916212,
+          "workload_scope": "six immutable 44-48 byte synthetic outputs; file_info/binary_read, not bulk bandwidth"
+        },
+        "passed": true
+      },
+      "hostload_gates": {
+        "hostload_before_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_after_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_samples": {
+          "clear": true,
+          "errors": [],
+          "interval_seconds": 2,
+          "report": {
+            "bytes": 898800,
+            "identity": [
+              2053,
+              869276,
+              33152,
+              1000,
+              1000,
+              1,
+              898800,
+              1793247286632349536,
+              1793247286632349536
+            ],
+            "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/file-abba-1-candidate.hostload-samples.jsonl",
+            "sha256": "63619bfac32d96b639db615d1d8b8376e00c36af905e3f78c93c8c563b8481a6"
+          },
+          "samples": 22,
+          "unclear_samples": 0
+        }
+      },
+      "original_resource_observations": {
+        "error_count": 1,
+        "errors_preview_count": 1,
+        "observed_master_generations_total": null,
+        "generation_scope": "sampled local master-process total only; no per-host rotation proof",
+        "resource_keys": [
+          "errors",
+          "peaks",
+          "sample_interval_seconds",
+          "sampled_peaks_are_not_exhaustive_limits",
+          "sampled_tree_cpu_seconds",
+          "samples"
+        ]
+      }
+    },
+    {
+      "name": "file-abba-2-candidate",
+      "status": "passed",
+      "executed": true,
+      "execution_count": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "original_child_reaped": true,
+      "custody_retained_until_reap": true,
+      "elapsed_seconds": null,
+      "original_report": {
+        "bytes": 12454,
+        "identity": [
+          2053,
+          4271859,
+          33152,
+          1000,
+          1000,
+          1,
+          12454,
+          1793247333628152159,
+          1793247333631152207
+        ],
+        "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/file-abba-2-candidate/report.json",
+        "sha256": "e2665b7be7884d3b338320dec1185837621ae1e9832fa47dbb1e3da9f32d5f30"
+      },
+      "validation": {
+        "assertions": {
+          "exact_balanced_calls": true,
+          "fixed_inventory": true,
+          "one_fixed_iteration": true,
+          "original_calls_hash_and_count": true,
+          "owned_shutdown": true,
+          "pool_on_only": true,
+          "read_only_unchanged": true,
+          "schema_complete_binary": true,
+          "trace_disabled": true,
+          "warmup_and_negative_coverage": true
+        },
+        "details": {
+          "cells": [
+            {
+              "calls": 96,
+              "concurrency": 1,
+              "cpu_ms_per_call": 134.37499999999997,
+              "iteration": 0,
+              "p50_ms": 247.99994949717075,
+              "p95_ms": 345.987806096673,
+              "p99_ms": 375.982949975878,
+              "seconds": 24.618313868064433,
+              "success": 96,
+              "successful_calls_per_second": 3.8995359517506962
+            },
+            {
+              "calls": 96,
+              "concurrency": 4,
+              "cpu_ms_per_call": 76.25000000000001,
+              "iteration": 0,
+              "p50_ms": 247.36156244762242,
+              "p95_ms": 350.5846739280969,
+              "p99_ms": 433.72971983626485,
+              "seconds": 6.233069680863991,
+              "success": 96,
+              "successful_calls_per_second": 15.401720968197655
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 74.58333333333333,
+              "iteration": 0,
+              "p50_ms": 357.5303429970518,
+              "p95_ms": 442.8509441204369,
+              "p99_ms": 500.54343696683645,
+              "seconds": 4.455033789854497,
+              "success": 96,
+              "successful_calls_per_second": 21.548658108637017
+            }
+          ],
+          "configured_soak_seconds": null,
+          "measured_calls": 288,
+          "measured_cell_seconds": 35.30641733878292,
+          "resource_observation_error_count": 3,
+          "resource_scope": "original controller and observed local descendants; remote CPU excluded; RSS peaks are sampled",
+          "sampled_resource_peaks": {
+            "controller_fd": 74,
+            "controller_hwm_kib": 17692,
+            "controller_rss_kib": 17692,
+            "tree_fd": 132,
+            "tree_hwm_kib": 97256,
+            "tree_rss_kib": 97256
+          },
+          "waited_process_tree_cpu_seconds": 34.347813,
+          "workload_scope": "six immutable 44-48 byte synthetic outputs; file_info/binary_read, not bulk bandwidth"
+        },
+        "passed": true
+      },
+      "hostload_gates": {
+        "hostload_before_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_after_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_samples": {
+          "clear": true,
+          "errors": [],
+          "interval_seconds": 2,
+          "report": {
+            "bytes": 932838,
+            "identity": [
+              2053,
+              869282,
+              33152,
+              1000,
+              1000,
+              1,
+              932838,
+              1793247335915188844,
+              1793247335915188844
+            ],
+            "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/file-abba-2-candidate.hostload-samples.jsonl",
+            "sha256": "2b4101f3c6dcf0b624790bfdfc4dbc4c64fe8b1a1083205c8b636c82d7778b09"
+          },
+          "samples": 23,
+          "unclear_samples": 0
+        }
+      },
+      "original_resource_observations": {
+        "error_count": 3,
+        "errors_preview_count": 3,
+        "observed_master_generations_total": null,
+        "generation_scope": "sampled local master-process total only; no per-host rotation proof",
+        "resource_keys": [
+          "errors",
+          "peaks",
+          "sample_interval_seconds",
+          "sampled_peaks_are_not_exhaustive_limits",
+          "sampled_tree_cpu_seconds",
+          "samples"
+        ]
+      }
+    },
+    {
+      "name": "file-abba-3-baseline",
+      "status": "passed",
+      "executed": true,
+      "execution_count": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "original_child_reaped": true,
+      "custody_retained_until_reap": true,
+      "elapsed_seconds": null,
+      "original_report": {
+        "bytes": 11634,
+        "identity": [
+          2053,
+          4272590,
+          33152,
+          1000,
+          1000,
+          1,
+          11634,
+          1793247380518862765,
+          1793247380521862808
+        ],
+        "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/file-abba-3-baseline/report.json",
+        "sha256": "7badd87590961d96c496150762a8202ccf7b41a93bee6735a25f6de3856c9508"
+      },
+      "validation": {
+        "assertions": {
+          "exact_balanced_calls": true,
+          "fixed_inventory": true,
+          "one_fixed_iteration": true,
+          "original_calls_hash_and_count": true,
+          "owned_shutdown": true,
+          "pool_on_only": true,
+          "read_only_unchanged": true,
+          "schema_complete_binary": true,
+          "trace_disabled": true,
+          "warmup_and_negative_coverage": true
+        },
+        "details": {
+          "cells": [
+            {
+              "calls": 96,
+              "concurrency": 1,
+              "cpu_ms_per_call": 134.47916666666666,
+              "iteration": 0,
+              "p50_ms": 242.49286053236574,
+              "p95_ms": 335.86170710623264,
+              "p99_ms": 387.90273293852806,
+              "seconds": 24.346143730916083,
+              "success": 96,
+              "successful_calls_per_second": 3.943129600360236
+            },
+            {
+              "calls": 96,
+              "concurrency": 4,
+              "cpu_ms_per_call": 74.37500000000001,
+              "iteration": 0,
+              "p50_ms": 245.5279619898647,
+              "p95_ms": 343.9822958316654,
+              "p99_ms": 364.90368796512485,
+              "seconds": 6.062264705076814,
+              "success": 96,
+              "successful_calls_per_second": 15.835666152882647
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.02083333333336,
+              "iteration": 0,
+              "p50_ms": 352.1262148860842,
+              "p95_ms": 497.30878905393183,
+              "p99_ms": 555.8993958402425,
+              "seconds": 4.394659015117213,
+              "success": 96,
+              "successful_calls_per_second": 21.84469822795558
+            }
+          ],
+          "configured_soak_seconds": null,
+          "measured_calls": 288,
+          "measured_cell_seconds": 34.80306745111011,
+          "resource_observation_error_count": 1,
+          "resource_scope": "original controller and observed local descendants; remote CPU excluded; RSS peaks are sampled",
+          "sampled_resource_peaks": {
+            "controller_fd": 80,
+            "controller_hwm_kib": 17588,
+            "controller_rss_kib": 17588,
+            "tree_fd": 161,
+            "tree_hwm_kib": 118888,
+            "tree_rss_kib": 118888
+          },
+          "waited_process_tree_cpu_seconds": 33.853685,
+          "workload_scope": "six immutable 44-48 byte synthetic outputs; file_info/binary_read, not bulk bandwidth"
+        },
+        "passed": true
+      },
+      "hostload_gates": {
+        "hostload_before_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_after_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_samples": {
+          "clear": true,
+          "errors": [],
+          "interval_seconds": 2,
+          "report": {
+            "bytes": 895537,
+            "identity": [
+              2053,
+              869288,
+              33152,
+              1000,
+              1000,
+              1,
+              895537,
+              1793247381406875406,
+              1793247381406875406
+            ],
+            "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/file-abba-3-baseline.hostload-samples.jsonl",
+            "sha256": "8b71b917d386289adda5b030603d6be030f739c71d0ed1ad532cf7f5d1fa1c17"
+          },
+          "samples": 22,
+          "unclear_samples": 0
+        }
+      },
+      "original_resource_observations": {
+        "error_count": 1,
+        "errors_preview_count": 1,
+        "observed_master_generations_total": null,
+        "generation_scope": "sampled local master-process total only; no per-host rotation proof",
+        "resource_keys": [
+          "errors",
+          "peaks",
+          "sample_interval_seconds",
+          "sampled_peaks_are_not_exhaustive_limits",
+          "sampled_tree_cpu_seconds",
+          "samples"
+        ]
+      }
+    },
+    {
+      "name": "candidate-c8-soak-120s",
+      "status": "passed",
+      "executed": true,
+      "execution_count": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "original_child_reaped": true,
+      "custody_retained_until_reap": true,
+      "elapsed_seconds": null,
+      "original_report": {
+        "bytes": 69024,
+        "identity": [
+          2053,
+          4275302,
+          33152,
+          1000,
+          1000,
+          1,
+          69024,
+          1793247514194461174,
+          1793247514195461184
+        ],
+        "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/candidate-c8-soak-120s/report.json",
+        "sha256": "adcb74a2cabc63f3b160a77c4d8aff136596aaed75e5c18181d1890aeeb5e91e"
+      },
+      "validation": {
+        "assertions": {
+          "configured_120_second_soak_finished": true,
+          "exact_balanced_calls": true,
+          "fixed_inventory": true,
+          "original_calls_hash_and_count": true,
+          "owned_shutdown": true,
+          "pool_on_only": true,
+          "read_only_unchanged": true,
+          "schema_complete_binary": true,
+          "trace_disabled": true,
+          "warmup_and_negative_coverage": true
+        },
+        "details": {
+          "cells": [
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.54166666666667,
+              "iteration": 0,
+              "p50_ms": 358.7365635903552,
+              "p95_ms": 453.87168996967375,
+              "p99_ms": 489.88259793259203,
+              "seconds": 4.4079432531725615,
+              "success": 96,
+              "successful_calls_per_second": 21.778864764401224
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.95833333333336,
+              "iteration": 1,
+              "p50_ms": 356.8974594818428,
+              "p95_ms": 462.54988200962543,
+              "p99_ms": 485.0438740104437,
+              "seconds": 4.47180692688562,
+              "success": 96,
+              "successful_calls_per_second": 21.467832035149826
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.43750000000001,
+              "iteration": 2,
+              "p50_ms": 363.6038814438507,
+              "p95_ms": 456.30312780849636,
+              "p99_ms": 502.3228428326547,
+              "seconds": 4.459502193145454,
+              "success": 96,
+              "successful_calls_per_second": 21.52706643973811
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 72.81249999999999,
+              "iteration": 3,
+              "p50_ms": 357.9444665228948,
+              "p95_ms": 455.9338840190321,
+              "p99_ms": 470.5130651127547,
+              "seconds": 4.386761687928811,
+              "success": 96,
+              "successful_calls_per_second": 21.88402444203117
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 74.37499999999997,
+              "iteration": 4,
+              "p50_ms": 360.67748407367617,
+              "p95_ms": 441.62600114941597,
+              "p99_ms": 464.33369908481836,
+              "seconds": 4.43588084098883,
+              "success": 96,
+              "successful_calls_per_second": 21.641699459762776
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 72.81250000000001,
+              "iteration": 5,
+              "p50_ms": 351.52840649243444,
+              "p95_ms": 444.0661119297147,
+              "p99_ms": 484.1762220021337,
+              "seconds": 4.348644549958408,
+              "success": 96,
+              "successful_calls_per_second": 22.075844299787203
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 72.29166666666664,
+              "iteration": 6,
+              "p50_ms": 361.7187364725396,
+              "p95_ms": 438.4160239715129,
+              "p99_ms": 466.2170521914959,
+              "seconds": 4.371794518083334,
+              "success": 96,
+              "successful_calls_per_second": 21.95894605817109
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.95833333333336,
+              "iteration": 7,
+              "p50_ms": 356.7371644312516,
+              "p95_ms": 460.35995916463435,
+              "p99_ms": 497.178812045604,
+              "seconds": 4.452646213816479,
+              "success": 96,
+              "successful_calls_per_second": 21.560212824031197
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.8541666666667,
+              "iteration": 8,
+              "p50_ms": 359.93819253053516,
+              "p95_ms": 433.9732809457928,
+              "p99_ms": 466.87730494886637,
+              "seconds": 4.393383051967248,
+              "success": 96,
+              "successful_calls_per_second": 21.851042548410064
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.8541666666667,
+              "iteration": 9,
+              "p50_ms": 372.26227950304747,
+              "p95_ms": 457.63918198645115,
+              "p99_ms": 466.76689689047635,
+              "seconds": 4.4782286998815835,
+              "success": 96,
+              "successful_calls_per_second": 21.437047197374824
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.95833333333327,
+              "iteration": 10,
+              "p50_ms": 363.39502211194485,
+              "p95_ms": 468.2544250972569,
+              "p99_ms": 546.8217800371349,
+              "seconds": 4.444412004901096,
+              "success": 96,
+              "successful_calls_per_second": 21.600157657331398
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 74.47916666666673,
+              "iteration": 11,
+              "p50_ms": 356.255407910794,
+              "p95_ms": 449.6825421229005,
+              "p99_ms": 602.2145908791572,
+              "seconds": 4.446139342151582,
+              "success": 96,
+              "successful_calls_per_second": 21.59176593721949
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 74.99999999999989,
+              "iteration": 12,
+              "p50_ms": 373.12337453477085,
+              "p95_ms": 454.5298230368644,
+              "p99_ms": 497.2622930072248,
+              "seconds": 4.5046315980143845,
+              "success": 96,
+              "successful_calls_per_second": 21.311398704017492
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 74.89583333333346,
+              "iteration": 13,
+              "p50_ms": 365.5232118908316,
+              "p95_ms": 450.55582211352885,
+              "p99_ms": 483.90848096460104,
+              "seconds": 4.456550014903769,
+              "success": 96,
+              "successful_calls_per_second": 21.541326739058924
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.85416666666656,
+              "iteration": 14,
+              "p50_ms": 360.2262365166098,
+              "p95_ms": 467.0125141274184,
+              "p99_ms": 493.4684280306101,
+              "seconds": 4.416544080013409,
+              "success": 96,
+              "successful_calls_per_second": 21.73645236202613
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 75.62500000000006,
+              "iteration": 15,
+              "p50_ms": 363.31335140857846,
+              "p95_ms": 440.1507389266044,
+              "p99_ms": 467.7009810693562,
+              "seconds": 4.510659103048965,
+              "success": 96,
+              "successful_calls_per_second": 21.282920701125278
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.95833333333327,
+              "iteration": 16,
+              "p50_ms": 358.7617964949459,
+              "p95_ms": 443.19074507802725,
+              "p99_ms": 452.4620689917356,
+              "seconds": 4.407247836934403,
+              "success": 96,
+              "successful_calls_per_second": 21.78230123468068
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.1250000000001,
+              "iteration": 17,
+              "p50_ms": 360.3285939898342,
+              "p95_ms": 440.24473219178617,
+              "p99_ms": 454.2727468069643,
+              "seconds": 4.377555429004133,
+              "success": 96,
+              "successful_calls_per_second": 21.930047844497405
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 74.5833333333333,
+              "iteration": 18,
+              "p50_ms": 369.30993595160544,
+              "p95_ms": 459.9569449201226,
+              "p99_ms": 493.966749869287,
+              "seconds": 4.504961504135281,
+              "success": 96,
+              "successful_calls_per_second": 21.309838033438872
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 80.31250000000009,
+              "iteration": 19,
+              "p50_ms": 369.57076098769903,
+              "p95_ms": 913.3226010017097,
+              "p99_ms": 961.1324272118509,
+              "seconds": 5.3322024720255286,
+              "success": 96,
+              "successful_calls_per_second": 18.00381746635603
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 76.24999999999993,
+              "iteration": 20,
+              "p50_ms": 364.31966500822455,
+              "p95_ms": 526.2387939728796,
+              "p99_ms": 960.0957359652966,
+              "seconds": 4.675920344190672,
+              "success": 96,
+              "successful_calls_per_second": 20.530717577186632
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 74.79166666666674,
+              "iteration": 21,
+              "p50_ms": 368.0150305153802,
+              "p95_ms": 484.27240899764,
+              "p99_ms": 513.984183082357,
+              "seconds": 4.540601832093671,
+              "success": 96,
+              "successful_calls_per_second": 21.142571744885725
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.43749999999982,
+              "iteration": 22,
+              "p50_ms": 360.42345000896603,
+              "p95_ms": 466.6163211222738,
+              "p99_ms": 491.71343399211764,
+              "seconds": 4.480503421043977,
+              "success": 96,
+              "successful_calls_per_second": 21.426163754079127
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.75000000000013,
+              "iteration": 23,
+              "p50_ms": 359.1993114678189,
+              "p95_ms": 471.30354098044336,
+              "p99_ms": 499.69567195512354,
+              "seconds": 4.468207203783095,
+              "success": 96,
+              "successful_calls_per_second": 21.485127171076517
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 76.3541666666665,
+              "iteration": 24,
+              "p50_ms": 373.88495390769094,
+              "p95_ms": 469.7453249245882,
+              "p99_ms": 557.2027571033686,
+              "seconds": 4.620249004801735,
+              "success": 96,
+              "successful_calls_per_second": 20.778100898940526
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 74.27083333333358,
+              "iteration": 25,
+              "p50_ms": 361.4543449366465,
+              "p95_ms": 451.504013966769,
+              "p99_ms": 488.84097300469875,
+              "seconds": 4.446151629788801,
+              "success": 96,
+              "successful_calls_per_second": 21.59170626498857
+            },
+            {
+              "calls": 96,
+              "concurrency": 8,
+              "cpu_ms_per_call": 73.95833333333327,
+              "iteration": 26,
+              "p50_ms": 368.818539660424,
+              "p95_ms": 461.00893593393266,
+              "p99_ms": 489.4461070653051,
+              "seconds": 4.495954913087189,
+              "success": 96,
+              "successful_calls_per_second": 21.352527295270562
+            }
+          ],
+          "configured_soak_seconds": 120,
+          "measured_calls": 2592,
+          "measured_cell_seconds": 121.33508366975002,
+          "resource_observation_error_count": 27,
+          "resource_scope": "original controller and observed local descendants; remote CPU excluded; RSS peaks are sampled",
+          "sampled_resource_peaks": {
+            "controller_fd": 88,
+            "controller_hwm_kib": 18584,
+            "controller_rss_kib": 18584,
+            "tree_fd": 172,
+            "tree_hwm_kib": 122036,
+            "tree_rss_kib": 122036
+          },
+          "waited_process_tree_cpu_seconds": 224.164964,
+          "workload_scope": "six immutable 44-48 byte synthetic outputs; file_info/binary_read, not bulk bandwidth"
+        },
+        "passed": true
+      },
+      "hostload_gates": {
+        "hostload_before_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_after_gate": {
+          "clear": true,
+          "matching_live_processes": [],
+          "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+        },
+        "hostload_samples": {
+          "clear": true,
+          "errors": [],
+          "interval_seconds": 2,
+          "report": {
+            "bytes": 2640235,
+            "identity": [
+              2053,
+              869294,
+              33152,
+              1000,
+              1000,
+              1,
+              2640235,
+              1793247515569474696,
+              1793247515569474696
+            ],
+            "path": "/home/qian/hepta-runtime-optimization-20261028/native-r4-r01/candidate-c8-soak-120s.hostload-samples.jsonl",
+            "sha256": "467178ff69e38a7ed0c7618401833d1b05971398f2297d88ac15bfd5695f988b"
+          },
+          "samples": 65,
+          "unclear_samples": 0
+        }
+      },
+      "original_resource_observations": {
+        "error_count": 27,
+        "errors_preview_count": 27,
+        "observed_master_generations_total": null,
+        "generation_scope": "sampled local master-process total only; no per-host rotation proof",
+        "resource_keys": [
+          "errors",
+          "peaks",
+          "sample_interval_seconds",
+          "sampled_peaks_are_not_exhaustive_limits",
+          "sampled_tree_cpu_seconds",
+          "samples"
+        ]
+      }
+    }
+  ]
+}

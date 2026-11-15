@@ -1,0 +1,134 @@
+set -euo pipefail
+{
+  cargo fmt --all --check
+  cargo clippy --locked --all-features --all-targets -- -D warnings
+  cargo test --locked --all-features --all-targets
+  cargo build --locked --bin hepta-runtime
+  # Contract loader intentionally rejects group/other-writable files.
+  # Runner/worktree umask must not change the exact frozen test bytes.
+  chmod go-w deploy/contracts/hepta-runtime-full-operator-v{1,2,3,4,5,6,7,8,9,10}.json
+  # V9-only reviewed source pins. Exact constants come from the accepted source review,
+  # not a self-declared JSON approval; old V7/V8 scripts stay immutable.
+  sha256sum --check <<'HEPTA_REVIEWED_V9_INPUTS'
+0b039e2d667314fec32bde7827fd0f9ad01d35b8d3199e73a1e036c7b1eb3dde  tests/dc_successor_contract.py
+ac6dbe8a29c9a1e1d31712f4862d3895962bd92e3dbf5d805bee15b5466b7059  tests/dc_functional_v9_version_pin.py
+e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216  deploy/mcp_tool_contract.py
+8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba  tests/runtime_http_acceptance.py
+b35313888a70a90dc72be44dc45d3f20be45337d7c2353556a382564299d649a  deploy/chatgpt_full_operator.py
+11b63309855d41f6001bdc985537152c89fbb50ac87562999953351323cc37c8  tests/dc_functional_v9_catalog_acceptance.py
+c213903f862e2b952d2d0e46432d1b9f2417c2bfd32d629e09ea59abe111f782  tests/dc_functional_v9_request_results_acceptance.py
+340279bf402b9975e2877a83f4c59a4dd386fbe872ab51bda7a7e045c5ef00fa  tests/dc_functional_v9_request_async_acceptance.py
+9c19eace90ac21ae70949e7f3718500f44a07f19edbf47350d398cef80c0858a  tests/dc_functional_v9_signal_audit_acceptance.py
+6cd20cc16d3982150e0dca549ed4e1440409798bf60e218145b053addd785c77  tests/dc_functional_v9_health_multiread_acceptance.py
+3ce68843d494b969e8c3f0808e1e25aca4516c28c5440b053d35a6b4081f4558  tests/dc_functional_v9_signal_fixture_safety_tests.py
+90c65b28c913a4d1a51a568782383eddad65472396a296ee13dd96491b046794  tests/dc_functional_v9_health_multiread_safety_tests.py
+ae4958001986b56e26871d7f1c2f3e7f543e6bda37fbc3d1b832c8435e84870e  tests/fixtures/dc_successor_contract_v8_ae495800.py
+4ef7eb288773b1e7f073ac07573669b2097c95187ebcf7eecb0ad38c10b98811  docs/qualification/v9-harness-drafts-20261013/original-active-script-baseline-r1.json
+b64769210b9913fbdab28f7d0e95b7ef300d8710b3f1eeea74afcfac25b08318  deploy/contracts/hepta-runtime-full-operator-v8.json
+3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761  deploy/contracts/hepta-runtime-full-operator-v9.json
+HEPTA_REVIEWED_V9_INPUTS
+  # V10 exact full66 and immutable old62 definitions; not DC qualification.
+  sha256sum --check <<'HEPTA_REVIEWED_V10_INPUTS'
+460555ec2afb81c1fc419ca24d48de1abbdc0f7233f897d2fdee3cef008038cf  tests/dc_functional_v10_catalog_acceptance.py
+b1162c9195712b7f0ca3a354a1c37738ab43ac19c36d652c99e74da0042dc7d5  tests/dc_functional_v10_contract_approval_tests.py
+ab25e3f5de58864eb94e7aba1616e360421a2e5eea087b193c8a5fc42d27baba  tests/dc_functional_v10_legacy_concurrent_text_acceptance.py
+0bd70cd9bda80bbca1fa1a360d3471ed76d922d0ce45c556f3d6a4c78a8a331e  tests/dc_functional_v10_legacy_directory_move_acceptance.py
+e248aa72a564dc785162999e5c08681ad998e6064cd119d30b0e3f658679c021  tests/dc_functional_v10_legacy_native_acceptance.py
+268bcc0da78ca52ba2586221f847b463274a921b0484dd1740a8bbec3ec83a16  tests/dc_functional_v10_legacy_workspace_root_guard_acceptance.py
+3c3e53a1f9e63954e251580ed643be743da4add4702b166faece762b4486b5fa  tests/dc_functional_v10_operation_acceptance.py
+1b86c28ed4bceec363b0c8f470dc67ce415086f89ba281202be0a8a4690dac84  tests/dc_functional_v10_request_async_acceptance.py
+184f54f084f0df87a94cd61c8fee55baba1f72f0e38637e61bc908f92abcb1ab  tests/dc_functional_v10_request_results_acceptance.py
+399bb9767e84e3d97de0abfd25e38fed31a006ddd9f2e0e1ff21f4c39fd413b0  tests/dc_functional_v10_version_pin.py
+4623c4da9493dccfc4bcef18c7267ba96ba7f5f1ddd799441214948c9da161fe  tests/dc_successor_contract_v10.py
+12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553  deploy/contracts/hepta-runtime-full-operator-v10.json
+a198944235a8b71763a612d077bf41c8915028487beb96888da003868e24e5c9  deploy/dc_successor_inventory.py
+3e0431497a23d56b5f8aeb81c4035173a819134ca44cae48d802b9972849876f  tests/dc_successor_inventory_tests.py
+HEPTA_REVIEWED_V10_INPUTS
+  BINARY_SHA256="$(sha256sum target/debug/hepta-runtime | cut -d' ' -f1)"
+  SOURCE_FINGERPRINT="$(python3 -c 'import hashlib,json,pathlib; r=pathlib.Path("."); paths=set(r.glob("src/**/*.rs"))|set(r.glob("src/**/*.py"))|{r/"Cargo.toml",r/"Cargo.lock"}; assert all(p.is_file() and not p.is_symlink() for p in paths); entries={p.as_posix():{"bytes":p.stat().st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(paths)}; print(hashlib.sha256(json.dumps(entries,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest())')"
+  test -z "$(git status --porcelain --untracked-files=all -- src Cargo.toml Cargo.lock)"
+  python3 tests/dc_functional_v10_catalog_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v10-catalog-ci.json --contract deploy/contracts/hepta-runtime-full-operator-v10.json --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-http-helper-sha256 8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba --expected-contract-helper-sha256 e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216 --expected-approval-loader-sha256 4623c4da9493dccfc4bcef18c7267ba96ba7f5f1ddd799441214948c9da161fe --expected-facade-sha256 b35313888a70a90dc72be44dc45d3f20be45337d7c2353556a382564299d649a
+  # Private fixed-health emulation proves local result-recovery/async protocol only;
+  # it invokes no actual SSH target and does not qualify six-host health or DC cutover.
+  python3 tests/dc_functional_v10_request_results_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --out /tmp/hepta-dc-v10-request-results-ci.json --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-http-helper-sha256 8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba --expected-contract-helper-sha256 e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216 --expected-approval-loader-sha256 4623c4da9493dccfc4bcef18c7267ba96ba7f5f1ddd799441214948c9da161fe
+  python3 tests/dc_functional_v10_request_async_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --out /tmp/hepta-dc-v10-request-async-ci.json --expected-contract-sha256 12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553 --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT"
+  python3 tests/dc_functional_v10_legacy_native_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v10-legacy-native-ci.json --verify-contract deploy/contracts/hepta-runtime-full-operator-v4.json --allow-v4-directory-move --successor-contract deploy/contracts/hepta-runtime-full-operator-v10.json
+  python3 tests/dc_functional_v10_legacy_directory_move_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v10-legacy-directory-move-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v10.json
+  python3 tests/dc_functional_v10_legacy_workspace_root_guard_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v10-legacy-root-guard-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v10.json
+  python3 tests/dc_functional_v10_legacy_concurrent_text_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --waves 3 --contenders 6 --out /tmp/hepta-dc-v10-legacy-concurrency-ci.json
+  # Generated local native read operations only; six-host/model/business remain unqualified.
+  python3 -B tests/dc_functional_v10_operation_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --expected-contract-sha256 12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553 --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-head "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" --previous-contract deploy/contracts/hepta-runtime-full-operator-v9.json --expected-previous-contract-sha256 3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761 --out /tmp/hepta-dc-v10-operation-ci.json
+  python3 -B tests/dc_functional_v10_contract_approval_tests.py 2>&1 | tee /tmp/hepta-dc-v10-contract-approval-ci.log
+  python3 -B tests/dc_successor_inventory_tests.py --results-dir /tmp/hepta-dc-v10-inventory-offline-ci > /tmp/hepta-dc-v10-inventory-offline-ci.log 2>&1
+  python3 tests/dc_parity_v4_staging_tests.py
+  python3 tests/dc_parity_v4_deployment_tests.py
+  python3 -m py_compile deploy/activate_dc_parity_v4.py deploy/rollback_dc_parity_v4.py
+  python3 -m py_compile deploy/stage_dc_parity_v4.py tests/dc_parity_release_six_host_acceptance.py
+  python3 tests/dc_parity_full_facade_pins_tests.py
+  python3 -m py_compile tests/dc_parity_full_facade_six_host_acceptance.py
+  python3 tests/process_ops_tests.py
+  python3 tests/operator_job_identity_tests.py
+  python3 tests/dc_successor_stage_tests.py
+  python3 -m py_compile deploy/stage_dc_successor.py tests/operator_job_identity_real_acceptance.py tests/operator_job_identity_mac_acceptance.py
+  python3 -m py_compile tests/dc_functional_v7_rollback_acceptance.py tests/dc_functional_v7_real_facade_cancel_acceptance.py tests/dc_functional_v7_search_six_host_acceptance.py tests/dc_functional_v7_job_inventory_snapshot_acceptance.py
+  python3 -m py_compile tests/dc_functional_v7_rollback_host_acceptance.py tests/dc_functional_v8_search_six_host_acceptance.py tests/dc_functional_v8_real_facade_cancel_acceptance.py tests/dc_functional_v8_credential_scope_acceptance.py tests/search_effects_native_acceptance.py deploy/preflight_dc_successor.py
+  python3 tests/dc_successor_preflight_tests.py
+  # Preserve the V8 18/24 test sources; run only these V9 named, source-pinned copies.
+  python3 -B tests/dc_functional_v9_signal_fixture_safety_tests.py --expected-signal-harness-sha256 9c19eace90ac21ae70949e7f3718500f44a07f19edbf47350d398cef80c0858a --expected-health-harness-sha256 6cd20cc16d3982150e0dca549ed4e1440409798bf60e218145b053addd785c77 --expected-version-helper-sha256 ac6dbe8a29c9a1e1d31712f4862d3895962bd92e3dbf5d805bee15b5466b7059 --expected-loader-sha256 0b039e2d667314fec32bde7827fd0f9ad01d35b8d3199e73a1e036c7b1eb3dde --expected-tool-helper-sha256 e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216 --expected-http-helper-sha256 8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba 2>&1 | tee /tmp/hepta-dc-v9-signal-safety-ci.log
+  python3 -B tests/dc_functional_v9_health_multiread_safety_tests.py --expected-signal-harness-sha256 9c19eace90ac21ae70949e7f3718500f44a07f19edbf47350d398cef80c0858a --expected-health-harness-sha256 6cd20cc16d3982150e0dca549ed4e1440409798bf60e218145b053addd785c77 --expected-version-helper-sha256 ac6dbe8a29c9a1e1d31712f4862d3895962bd92e3dbf5d805bee15b5466b7059 --expected-loader-sha256 0b039e2d667314fec32bde7827fd0f9ad01d35b8d3199e73a1e036c7b1eb3dde --expected-tool-helper-sha256 e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216 --expected-http-helper-sha256 8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba 2>&1 | tee /tmp/hepta-dc-v9-health-safety-ci.log
+  python3 -m py_compile tests/dc_functional_v9_*.py tests/fixtures/dc_successor_contract_v8_ae495800.py
+  python3 -m py_compile tests/dc_functional_v8_signal_audit_acceptance.py tests/dc_functional_v8_job_inventory_snapshot_acceptance.py tests/dc_functional_v8_rollback_host_acceptance.py tests/dc_functional_v8_health_multiread_acceptance.py
+  python3 tests/privileged_action_python_tests.py
+  python3 tests/maintenance_inventory_tests.py
+  python3 tests/maintenance_readiness_tests.py
+  python3 tests/independent_observer_tests.py
+  python3 tests/stream_handoff_tests.py
+  python3 tests/dc_owner_uncertain_tests.py
+  python3 tests/chatgpt_bridge_tests.py
+  python3 tests/chatgpt_bridge_stdio_tests.py
+  python3 tests/full_operator_facade_tests.py
+  python3 tests/full_operator_cancel_tests.py
+  python3 tests/chatgpt_support_snapshot_tests.py
+  python3 tests/cloud_gateway_https_tests.py
+  python3 tests/cloud_gateway_policy_tests.py
+  python3 tests/cloud_gateway_mcp_catalog_tests.py
+  python3 tests/cloud_gateway_authenticated_catalog_tests.py
+  /tmp/hepta-document-worker/bin/python tests/cloud_gateway_jwt_verifier_tests.py
+  /tmp/hepta-document-worker/bin/python tests/cloud_gateway_mtls_tests.py
+  python3 -m py_compile deploy/cloud_gateway_https.py
+  python3 -m py_compile deploy/cloud_gateway_mcp_catalog.py
+  python3 -m py_compile deploy/cloud_gateway_policy.py
+  python3 -m py_compile deploy/cloud_gateway_jwt_verifier.py
+  python3 -m py_compile deploy/cloud_gateway_mtls.py
+  python3 tests/dc_model_origin_ledger_tests.py
+  python3 tests/model_origin_tool_ledger_tests.py
+  python3 tests/multi_read_tests.py
+  python3 tests/search_worker_tests.py
+  python3 -m py_compile tests/host_health_acceptance.py tests/multi_read_six_host_acceptance.py tests/search_six_host_acceptance.py tests/dc_successor_contract.py tests/dc_functional_v6_operator_six_host_acceptance.py tests/dc_functional_v6_metadata_acceptance.py tests/dc_functional_v6_real_facade_cancel_acceptance.py tests/dc_functional_v6_signal_audit_acceptance.py tests/dc_functional_v7_catalog_acceptance.py tests/dc_functional_v7_credential_scope_acceptance.py tests/dc_functional_v8_catalog_acceptance.py tests/dc_functional_v8_request_results_acceptance.py
+  python3 tests/dc_replacement_gate_tests.py
+  python3 deploy/dc_replacement_gate.py > /tmp/hepta-dc-replacement-gate-ci.json
+  python3 -m py_compile deploy/chatgpt_support_snapshot.py
+  python3 -m py_compile deploy/chatgpt_full_operator.py deploy/mcp_tool_contract.py tests/full_operator_acceptance.py
+  python3 -m py_compile deploy/chatgpt_mcp_bridge.py tests/chatgpt_bridge_installed_acceptance.py
+  python3 tests/stream_handoff_acceptance.py test /tmp/hepta-stream-handoff-ci.json
+  python3 -m py_compile src/mcp/runtime/stream_broker.py deploy/dc_handoff_owner.py tests/stream_native_acceptance.py
+  python3 tests/stream_broker_tests.py
+  python3 tests/stream_history_tests.py
+  python3 tests/dc_owner_history_acceptance.py
+  python3 -m py_compile tests/dc_installed_history_acceptance.py tests/dc_owner_fixture_app.py
+  python3 tests/checkpoint_lifecycle_tests.py
+  python3 tests/supervisor_tests.py
+  python3 tests/file_capabilities.py
+  python3 tests/binary_file_tests.py
+  python3 tests/inode_patch_tests.py
+  python3 tests/metadata_preservation_tests.py
+  python3 tests/parser_configuration_tests.py
+  python3 tests/output_capture_tests.py
+  python3 tests/terminal_host_tests.py
+  /tmp/hepta-document-worker/bin/python tests/document_local_tests.py
+  /tmp/hepta-document-worker/bin/python tests/document_extended_tests.py
+  OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/hepta-document-worker/bin/python tests/format_completion_tests.py
+  OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/hepta-document-worker/bin/python tests/complex_worksheet_tests.py
+  /tmp/hepta-document-worker/bin/python tests/pdf_security_prototype_tests.py
+  /tmp/hepta-document-worker/bin/python tests/pdf_policy_tests.py
+} 2>&1 | tee /tmp/operator-tests.log

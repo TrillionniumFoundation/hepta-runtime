@@ -1,0 +1,227 @@
+{
+  "binary_pin": {
+    "binary_bytes": 44369480,
+    "binary_sha256": "4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0",
+    "copied_stream_sha256": "4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0",
+    "harness_path": "/home/qian-qi/hepta-runtime-rea-next-root-20261104-r1/tests/rea_javascript_cancellation_external.py",
+    "harness_sha256": "7c7e504f2227846d6434ba1306454455aea1c3178799def379e5c37f1f54735d",
+    "private_binary": "/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1/hepta-runtime-combined-debug",
+    "qualification_kind": "combined-debug-not-final-release",
+    "schema": "hepta.rea.combined-debug-freeze.v1",
+    "source_after_sha256": "4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0",
+    "source_before_sha256": "4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0",
+    "source_binary": "/home/qian-qi/work/hepta-rea-next-root-20261104-target/debug/hepta-runtime",
+    "source_identity": [
+      2050,
+      3991050,
+      44369480,
+      1793773755025570470,
+      1793773755167566108
+    ],
+    "source_manifest_groups": 295,
+    "source_manifest_sha256": "4d2682eda938c49bdbbab45eed4117bbec0a2374477479246716fe749dbadacf",
+    "target_path_after_sha256": "4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0",
+    "utc": "2026-11-04T07:36:15Z",
+    "verification_manifest_groups": 613,
+    "verification_manifest_sha256": "b783c4f05a5c7f614ee7150ecc66bb4fe25f1cfd8ed548723e405e4612b6baa4"
+  },
+  "bindings": {
+    "08-test-all.log": {
+      "bytes": 289039,
+      "original_path": "/home/qian-qi/work/hepta-rea-next-root-20261104-evidence/integrated-build-r1/08-test-all.log",
+      "retained_path": "/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1/evidence/08-test-all.log",
+      "sha256": "95fd8e44c1e602fe2327b7837e95feafbe4355b74f2ab775d8b19affe324b939"
+    },
+    "inputs-before.json": {
+      "bytes": 168715,
+      "original_path": "/home/qian-qi/work/hepta-rea-next-root-20261104-evidence/integrated-build-r1/inputs-before.json",
+      "retained_path": "/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1/evidence/inputs-before.json",
+      "sha256": "2bb7baf4e2c97c3927661b4b0a0c2f5b135c148cd8422ea39c8e2c3469448adb"
+    },
+    "rea_javascript_cancellation_external.py": {
+      "bytes": 25130,
+      "original_path": "/home/qian-qi/hepta-runtime-rea-next-root-20261104-r1/tests/rea_javascript_cancellation_external.py",
+      "retained_path": "/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1/evidence/rea_javascript_cancellation_external.py",
+      "sha256": "7c7e504f2227846d6434ba1306454455aea1c3178799def379e5c37f1f54735d"
+    }
+  },
+  "freeze_job_id": "1a1a57ca74c-fc05-1e8e",
+  "freeze_request_result": {
+    "audit_recorded": true,
+    "job": {
+      "args": [
+        "-u",
+        "-c",
+        "from pathlib import Path\nimport hashlib,json,os,stat,time\nsrc=Path(\"/home/qian-qi/work/hepta-rea-next-root-20261104-target/debug/hepta-runtime\")\ndst_dir=Path(\"/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1\")\nscript=Path(\"/home/qian-qi/hepta-runtime-rea-next-root-20261104-r1/tests/rea_javascript_cancellation_external.py\")\nexpected_script=\"7c7e504f2227846d6434ba1306454455aea1c3178799def379e5c37f1f54735d\"\nsha=lambda b:hashlib.sha256(b).hexdigest()\nif sha(script.read_bytes())!=expected_script:raise RuntimeError(\"fixed cancellation harness hash mismatch\")\ndst_dir.mkdir(mode=0o700)\ndst=dst_dir/\"hepta-runtime-combined-debug\"\nwith src.open(\"rb\") as f:\n    before=os.fstat(f.fileno())\n    if not stat.S_ISREG(before.st_mode):raise RuntimeError(\"source binary is not a regular file\")\n    before_hash=hashlib.file_digest(f,\"sha256\").hexdigest()\n    f.seek(0)\n    copied_hash=hashlib.sha256()\n    with dst.open(\"xb\") as out:\n        while True:\n            b=f.read(1048576)\n            if not b:break\n            copied_hash.update(b);out.write(b)\n        out.flush();os.fsync(out.fileno())\n    after=os.fstat(f.fileno())\n    f.seek(0);after_hash=hashlib.file_digest(f,\"sha256\").hexdigest()\n    final=os.fstat(f.fileno())\nidentity=lambda s:(s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns)\nif identity(before)!=identity(after) or identity(before)!=identity(final):raise RuntimeError(\"source descriptor changed during private freeze\")\nif before_hash!=copied_hash.hexdigest() or before_hash!=after_hash:raise RuntimeError(\"source/copy hash mismatch\")\nwith dst.open(\"rb\") as f:dst_hash=hashlib.file_digest(f,\"sha256\").hexdigest()\nif dst_hash!=before_hash:raise RuntimeError(\"private binary hash mismatch\")\nos.chmod(dst,0o500)\ncurrent=src.stat()\ncurrent_hash=None\nwith src.open(\"rb\") as f:current_hash=hashlib.file_digest(f,\"sha256\").hexdigest()\nif identity(current)!=identity(before) or current_hash!=before_hash:raise RuntimeError(\"target path replaced before freeze completed\")\nrecord={\"schema\":\"hepta.rea.combined-debug-freeze.v1\",\"qualification_kind\":\"combined-debug-not-final-release\",\"source_binary\":str(src),\"private_binary\":str(dst),\"binary_bytes\":before.st_size,\"binary_sha256\":before_hash,\"source_before_sha256\":before_hash,\"copied_stream_sha256\":copied_hash.hexdigest(),\"source_after_sha256\":after_hash,\"target_path_after_sha256\":current_hash,\"source_identity\":list(identity(before)),\"harness_path\":str(script),\"harness_sha256\":expected_script,\"source_manifest_groups\":295,\"source_manifest_sha256\":\"4d2682eda938c49bdbbab45eed4117bbec0a2374477479246716fe749dbadacf\",\"verification_manifest_groups\":613,\"verification_manifest_sha256\":\"b783c4f05a5c7f614ee7150ecc66bb4fe25f1cfd8ed548723e405e4612b6baa4\",\"utc\":time.strftime(\"%Y-%m-%dT%H:%M:%SZ\",time.gmtime())}\ndata=(json.dumps(record,indent=2,sort_keys=True)+\"\\n\").encode()\nwith (dst_dir/\"freeze.json\").open(\"xb\") as f:f.write(data);f.flush();os.fsync(f.fileno())\nfd=os.open(dst_dir,os.O_RDONLY|os.O_DIRECTORY)\nos.fsync(fd);os.close(fd)\nprint(json.dumps(record,sort_keys=True))\nprint(json.dumps({\"freeze_json\":str(dst_dir/\"freeze.json\"),\"freeze_json_sha256\":sha(data)}))\n"
+      ],
+      "created_unix_ms": 1793777772364,
+      "cwd": "/home/qian-qi/work",
+      "env_keys": [],
+      "executable": "/usr/bin/python3",
+      "execution_mode": "operator",
+      "host": "desktop",
+      "id": "1a1a57ca74c-fc05-1e8e",
+      "idempotency_key": "rea-js-cancellation-combined-debug-freeze-20261104-r1",
+      "launch_error": null,
+      "launch_state": "launched",
+      "remote_job_dir": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1a57ca74c-fc05-1e8e",
+      "request_digest": "e76df0b6d374b8299670784f862fd487d1b331dc1924b6ed8d1b4d35661a96ba",
+      "request_fingerprint": 16676249663245170000,
+      "ssh_target": "desktop-ts",
+      "system_jobctl": false,
+      "unit": "hepta-runtime-job-1a1a57ca74c-fc05-1e8e"
+    },
+    "launch": {
+      "backend": "systemd",
+      "launcher_pid": null,
+      "ok": true,
+      "unit": "hepta-runtime-job-1a1a57ca74c-fc05-1e8e"
+    },
+    "local_record_pending": false,
+    "reused": false
+  },
+  "freeze_stderr": "",
+  "freeze_stdout": "{\"binary_bytes\": 44369480, \"binary_sha256\": \"4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0\", \"copied_stream_sha256\": \"4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0\", \"harness_path\": \"/home/qian-qi/hepta-runtime-rea-next-root-20261104-r1/tests/rea_javascript_cancellation_external.py\", \"harness_sha256\": \"7c7e504f2227846d6434ba1306454455aea1c3178799def379e5c37f1f54735d\", \"private_binary\": \"/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1/hepta-runtime-combined-debug\", \"qualification_kind\": \"combined-debug-not-final-release\", \"schema\": \"hepta.rea.combined-debug-freeze.v1\", \"source_after_sha256\": \"4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0\", \"source_before_sha256\": \"4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0\", \"source_binary\": \"/home/qian-qi/work/hepta-rea-next-root-20261104-target/debug/hepta-runtime\", \"source_identity\": [2050, 3991050, 44369480, 1793773755025570470, 1793773755167566108], \"source_manifest_groups\": 295, \"source_manifest_sha256\": \"4d2682eda938c49bdbbab45eed4117bbec0a2374477479246716fe749dbadacf\", \"target_path_after_sha256\": \"4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0\", \"utc\": \"2026-11-04T07:36:15Z\", \"verification_manifest_groups\": 613, \"verification_manifest_sha256\": \"b783c4f05a5c7f614ee7150ecc66bb4fe25f1cfd8ed548723e405e4612b6baa4\"}\n{\"freeze_json\": \"/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1/freeze.json\", \"freeze_json_sha256\": \"f2147aaca9cc896b27a7e2cc62dfa62251a582cebf1bedf2447310a5d6cd7bae\"}\n",
+  "freeze_terminal": {
+    "at_unix_ms": 1793777775350,
+    "audit_recorded": true,
+    "automatic_retry": false,
+    "cancelled": false,
+    "exit_code": 0,
+    "job_id": "1a1a57ca74c-fc05-1e8e",
+    "launch_nonce": "7d3da6446b13a262d60ed140ec9ac665",
+    "log_bytes": {
+      "stderr": {
+        "seen": 0,
+        "stored": 0
+      },
+      "stdout": {
+        "seen": 1599,
+        "stored": 1599
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_synced": {
+      "stderr": true,
+      "stdout": true
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "output_durable": true,
+    "state": "succeeded",
+    "terminal_publication_confirmed": true,
+    "terminal_publication_protocol": 1,
+    "timed_out": false
+  },
+  "input_manifest_top_level_keys": [
+    "source",
+    "verification"
+  ],
+  "qualification": {
+    "path": "/home/qian-qi/work/rea-js-cancellation-combined-debug-20261104-r1/qualification.json",
+    "sha256": "5fda0c7112924c9b2bcff944ac928583f93e596fe21287ed82641666a60d7fd5"
+  },
+  "qualification_kind": "combined-debug-not-final-release",
+  "schema": "hepta.rea.combined-debug-cancellation-run.v1",
+  "scope": "Debug combined candidate; same fixed 5-second script as negative v6; final release requalification still required.",
+  "test_argv": [
+    "-u",
+    "/home/qian-qi/hepta-runtime-rea-next-root-20261104-r1/tests/rea_javascript_cancellation_external.py",
+    "--runtime",
+    "/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1/hepta-runtime-combined-debug",
+    "--expected-runtime-sha256",
+    "4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0",
+    "--workspace",
+    "/home/qian-qi/work/rea-js-cancellation-combined-debug-20261104-r1",
+    "--allow-owned-child-signals",
+    "--allow-local-mcp"
+  ],
+  "test_executable": "/usr/bin/python3",
+  "test_job_id": "1a1a57e64fb-fc05-1e9a",
+  "test_request_result": {
+    "audit_recorded": true,
+    "job": {
+      "args": [
+        "-u",
+        "/home/qian-qi/hepta-runtime-rea-next-root-20261104-r1/tests/rea_javascript_cancellation_external.py",
+        "--runtime",
+        "/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1/hepta-runtime-combined-debug",
+        "--expected-runtime-sha256",
+        "4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0",
+        "--workspace",
+        "/home/qian-qi/work/rea-js-cancellation-combined-debug-20261104-r1",
+        "--allow-owned-child-signals",
+        "--allow-local-mcp"
+      ],
+      "created_unix_ms": 1793777886459,
+      "cwd": "/home/qian-qi/hepta-runtime-rea-next-root-20261104-r1",
+      "env_keys": [],
+      "executable": "/usr/bin/python3",
+      "execution_mode": "operator",
+      "host": "desktop",
+      "id": "1a1a57e64fb-fc05-1e9a",
+      "idempotency_key": "rea-js-cancellation-combined-debug-20261104-r1",
+      "launch_error": null,
+      "launch_state": "launched",
+      "remote_job_dir": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1a57e64fb-fc05-1e9a",
+      "request_digest": "e18861a161e7a81ac02890e9e53d4abc7fc48517dc8d55bf921459b1d547f508",
+      "request_fingerprint": 16251346601126636000,
+      "ssh_target": "desktop-ts",
+      "system_jobctl": false,
+      "unit": "hepta-runtime-job-1a1a57e64fb-fc05-1e9a"
+    },
+    "launch": {
+      "backend": "systemd",
+      "launcher_pid": null,
+      "ok": true,
+      "unit": "hepta-runtime-job-1a1a57e64fb-fc05-1e9a"
+    },
+    "local_record_pending": false,
+    "reused": false
+  },
+  "test_stderr": "",
+  "test_stdout": "{\"phase\":\"runtime_copy_verified\",\"unix_ns\":1793777890172637237,\"monotonic_ns\":855556164950400,\"sha256\":\"4bac765313559a34933ee1885792dd61db18223bba402bcb7c6918a7eedcf0c0\"}\n{\"phase\":\"baseline_mcp_worker_succeeded\",\"unix_ns\":1793777890668916505,\"monotonic_ns\":855556661229611,\"owner_pid\":969191}\n{\"phase\":\"owned_worker_sigstop_confirmed\",\"unix_ns\":1793777890812463197,\"monotonic_ns\":855556804775856,\"worker_pid\":969215,\"worker_start_ticks\":85555680}\n{\"phase\":\"cancellation_observed\",\"unix_ns\":1793777890835231571,\"monotonic_ns\":855556827543656,\"passed\":true,\"elapsed_seconds\":0.022687002}\n{\"phase\":\"same_owner_recovery_succeeded\",\"unix_ns\":1793777891012362552,\"monotonic_ns\":855557004675574}\n{\"qualified\":true,\"qualification\":\"/home/qian-qi/work/rea-js-cancellation-combined-debug-20261104-r1/qualification.json\",\"qualification_sha256\":\"5fda0c7112924c9b2bcff944ac928583f93e596fe21287ed82641666a60d7fd5\",\"cleanup\":{\"worker_present_before_harness_cleanup\":false,\"manual_worker_sigkill_sent\":false,\"worker_proc_absent_before_parent_close\":true,\"parent_alive_before_close\":true,\"owner_children_before_close\":[],\"parent\":{\"owner_pid\":969191,\"shutdown\":\"stdin_eof\",\"exit_code\":0,\"owner_reaped\":true,\"reader_threads_joined\":true,\"reader_errors\":[]},\"observed_worker_absent_at_end\":true}}\n",
+  "test_terminal": {
+    "at_unix_ms": 1793777891307,
+    "audit_recorded": true,
+    "automatic_retry": false,
+    "cancelled": false,
+    "exit_code": 0,
+    "job_id": "1a1a57e64fb-fc05-1e9a",
+    "launch_nonce": "e2f0d51fece79be5e02eff40db6592f1",
+    "log_bytes": {
+      "stderr": {
+        "seen": 0,
+        "stored": 0
+      },
+      "stdout": {
+        "seen": 1278,
+        "stored": 1278
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_synced": {
+      "stderr": true,
+      "stdout": true
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "output_durable": true,
+    "state": "succeeded",
+    "terminal_publication_confirmed": true,
+    "terminal_publication_protocol": 1,
+    "timed_out": false
+  }
+}

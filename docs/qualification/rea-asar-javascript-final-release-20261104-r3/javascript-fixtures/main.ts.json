@@ -1,0 +1,8 @@
+{
+  "schema": "hepta.raw-byte-evidence.v1",
+  "source_path": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/main.ts",
+  "bytes": 671,
+  "sha256": "b234b10d31dd5ca6e05f29c72e59f7376dbcf826a0a80af27aa784c63c4bfe84",
+  "encoding": "utf-8",
+  "text": "import { ipcMain as main, BrowserWindow } from \"electron\";\nimport type { Payload } from \"./types\";\nimport { answer } from \"./util.js\";\nexport { answer as reexported } from \"./util.js\";\nexport const apiVersion: number = 1;\nmain.handle(\"cfg:get\", (_event: unknown, key: string): Payload => ({ key, value: answer }));\nmain.on(\"cfg:set\", (_event: unknown, value: number) => value);\nconst window = new BrowserWindow({ webPreferences: { preload: \"./preload.cjs\" } });\nwindow.webContents.send(\"cfg:changed\", { value: answer });\nfunction shadow(main: { handle: Function }) {\n  main.handle(\"shadowed-channel\", () => true);\n}\nexport default function start() { return apiVersion; }\n"
+}

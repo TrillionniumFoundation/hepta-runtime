@@ -1,0 +1,346 @@
+{
+  "candidate_label": "A40r02",
+  "inputs_unchanged_after_analysis": true,
+  "interpretation": {
+    "budget_conclusion": "The maximum measured whole call is 14.411153833 seconds, below the 30-second file-observation transport budget. These samples therefore do not show a breach of that overall budget. The 1-second and 5-second thresholds classify the observed tail; they are not deadlines promised by these tool paths. Overall elapsed times cannot establish individual agent-lookup or master-start stage durations.",
+    "follow_up_design_only": "A later investigation can record per-request queue, authority-check, master-wait and capture durations without weakening complete-file, policy or credential validation. No instrumentation or further load was run for this analysis.",
+    "observed_30_second_budget_violation": false,
+    "scope_limits": [
+      "All successful results and the full long tail remain in the denominator; successful requests are not evidence of uniformly low latency.",
+      "One on-only soak does not quantify a regression against an equally long off-mode baseline.",
+      "Unique logical harness slots and automatic_retry=false do not establish RPC wire exactly-once delivery.",
+      "No claim of a universal 30-second end-to-end hard real-time bound: client dispatch/parsing and synchronous OS operations have separate timing scope."
+    ],
+    "synchronous_wait_risk": "Source-level risk, not a diagnosed cause: the synchronous complete-file verification can occupy the pool owner without yielding. Slow blocking filesystem syscalls cannot be interrupted by its cooperative checks and can delay other pool work or timer processing on that owner. Checks between read chunks and before acceptance prevent stale authority from being accepted once control returns; they do not make blocking I/O preemptible. The outer reply timeout runs in the calling context and can still expire independently of a stalled owner, so this is not proof of unbounded client RPC duration.",
+    "tail_cause": "Unknown. No per-stage timing, trace, matched off-mode soak or network/filesystem fault record in these rows identifies why rog and pocket4 clustered at iteration 14. Do not attribute the tail to the static synchronization risk, agent forwarding, master renewal, host saturation, or network conditions from these records alone."
+  },
+  "observations": {
+    "all_130_report_cell_counts_success_rates_and_latency_quantiles_match_raw": true,
+    "all_at_least_5000_ms_rows": [
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 8734.298571012914,
+        "host": "pocket4",
+        "index": 54,
+        "iteration": 14,
+        "okay": true,
+        "tool": "file_info"
+      },
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 8666.531456867233,
+        "host": "pocket4",
+        "index": 55,
+        "iteration": 14,
+        "okay": true,
+        "tool": "binary_read"
+      },
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 14407.452200073749,
+        "host": "rog",
+        "index": 56,
+        "iteration": 14,
+        "okay": true,
+        "tool": "file_info"
+      },
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 14411.153833149001,
+        "host": "rog",
+        "index": 57,
+        "iteration": 14,
+        "okay": true,
+        "tool": "binary_read"
+      },
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 5917.759150965139,
+        "host": "pocket4",
+        "index": 66,
+        "iteration": 14,
+        "okay": true,
+        "tool": "file_info"
+      },
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 5920.800713123754,
+        "host": "pocket4",
+        "index": 67,
+        "iteration": 14,
+        "okay": true,
+        "tool": "binary_read"
+      },
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 11564.722726121545,
+        "host": "rog",
+        "index": 68,
+        "iteration": 14,
+        "okay": true,
+        "tool": "file_info"
+      },
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 11609.107230091467,
+        "host": "rog",
+        "index": 69,
+        "iteration": 14,
+        "okay": true,
+        "tool": "binary_read"
+      },
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 5451.563203940168,
+        "host": "rog",
+        "index": 80,
+        "iteration": 14,
+        "okay": true,
+        "tool": "file_info"
+      },
+      {
+        "automatic_retry": false,
+        "elapsed_ms": 5433.465108042583,
+        "host": "rog",
+        "index": 81,
+        "iteration": 14,
+        "okay": true,
+        "tool": "binary_read"
+      }
+    ],
+    "all_measured_okay": true,
+    "all_measured_rows_retained": true,
+    "all_raw_automatic_retry_false": true,
+    "at_least_1000_ms": {
+      "by_host": {
+        "mac": 9,
+        "main": 10,
+        "pocket4": 4,
+        "rog": 10
+      },
+      "by_iteration": {
+        "14": 16,
+        "36": 4,
+        "56": 1,
+        "76": 4,
+        "96": 6,
+        "98": 2
+      },
+      "by_tool": {
+        "binary_read": 17,
+        "file_info": 16
+      },
+      "count": 33,
+      "percent_of_measured": 0.2644230769230769
+    },
+    "at_least_5000_ms": {
+      "by_host": {
+        "pocket4": 4,
+        "rog": 6
+      },
+      "by_iteration": {
+        "14": 10
+      },
+      "by_tool": {
+        "binary_read": 5,
+        "file_info": 5
+      },
+      "count": 10,
+      "percent_of_measured": 0.08012820512820513
+    },
+    "calls_per_iteration": 96,
+    "concurrency": 8,
+    "every_iteration_host_tool_cell_has_8_rows": true,
+    "iteration_14_cell": {
+      "calls": 96,
+      "concurrency": 8,
+      "cpu_ms_per_call": 85.4166666666667,
+      "iteration": 14,
+      "p50_ms": 335.0228490307927,
+      "p95_ms": 8734.298571012914,
+      "p99_ms": 14411.153833149001,
+      "seconds": 17.154614137951285,
+      "success": 96,
+      "successful_calls_per_second": 5.596162013788375
+    },
+    "iteration_range_inclusive": [
+      0,
+      129
+    ],
+    "iterations": 130,
+    "latency_buckets": {
+      "at_least_1000_below_5000_ms": 23,
+      "at_least_30000_ms": 0,
+      "at_least_5000_ms": 10,
+      "less_than_1000_ms": 12447
+    },
+    "latency_measurement": "Client monotonic time starts immediately before controller.rpc and ends after response parsing and content/version validation. It includes write-lock/stdio dispatch and response wait; it excludes ThreadPoolExecutor waiting before call() starts. Rows contain no pool-stage timing or causal trace.",
+    "latency_measurement_source": [
+      "tools/x230/a40/x230_file_pool_benchmark.py:137-178",
+      "tools/x230/a40/x230_file_pool_benchmark.py:258-266",
+      "tools/x230/a40/x230_observation_benchmark.py:352-367"
+    ],
+    "latency_ms": {
+      "max": 14411.153833149001,
+      "p50": 364.4013801822439,
+      "p95": 454.74299998022616,
+      "p99": 591.8566279578954
+    },
+    "measured_by_host": {
+      "ai395": 2080,
+      "mac": 2080,
+      "main": 2080,
+      "pocket4": 2080,
+      "rog": 2080,
+      "x230": 2080
+    },
+    "measured_by_tool": {
+      "binary_read": 6240,
+      "file_info": 6240
+    },
+    "measured_logical_slots_unique": true,
+    "measured_rows": 12480,
+    "measured_successes": 12480,
+    "mode": "on",
+    "phase_counts": {
+      "measured": 12480,
+      "negative": 12,
+      "warmup": 12
+    },
+    "quantile_method": "nearest rank: sorted values[ceil(n*p)-1]; all measured rows included",
+    "raw_rows": 12504,
+    "round": 0
+  },
+  "provenance": {
+    "bundle": {
+      "bytes": 2612169,
+      "path": "docs/evidence/x230-a40/final-evidence.tar.gz",
+      "sha256": "2fd95f6ab697ddda7d746752e5c3083eb96e2e23d9933a05ebf1093976c8a0e4"
+    },
+    "calls": {
+      "bytes": 5785603,
+      "matches_report_calls_sha256": true,
+      "sha256": "64a1b2723ca49d5f32acef4bc362bdaeec877bb2121b5b8544db04a8312b5067",
+      "tar_member": "a40-staggered-output-recovery-20261025-r02/file-pool-soak-r01/calls.jsonl"
+    },
+    "harness_files": {
+      "x230_file_pool_benchmark.py": {
+        "bytes": 16498,
+        "sha256": "b733091aa1b73df60ba5dc2c3a3febdc9313c56bb2166acc282e113ee13fa7e9"
+      },
+      "x230_observation_benchmark.py": {
+        "bytes": 30767,
+        "sha256": "fe33910ee709e227001338de3ca9a32cd01309efa3f406fcb2a2f2b54d2742cb"
+      }
+    },
+    "qualification_sha256": "1a72fbc56c4659a42416baddfaba66c17c39bdd74aeb8d12793b8789a6398719",
+    "qualified_binary_sha256": "3238c9d4bb2f8dc4dbb86e591ce774bea70c6785c159cf27b70003f00623540c",
+    "report": {
+      "bytes": 797715,
+      "sha256": "1ecb30ac4918ec4db39b0eb50176f28718f871128abc83fefa4c4eb81a694ec6",
+      "tar_member": "a40-staggered-output-recovery-20261025-r02/file-pool-soak-r01/report.json"
+    },
+    "source_files": {
+      "src/mcp/runtime/binary.rs": {
+        "bytes": 7672,
+        "matches_qualification_source_tested_and_after": true,
+        "sha256": "7748d11581b9be88089bf45c7fca20968615ec3f6f136179b286fddc13dfa78d"
+      },
+      "src/mcp/runtime/ssh.rs": {
+        "bytes": 16015,
+        "matches_qualification_source_tested_and_after": true,
+        "sha256": "db45ea4efbc2820efdf18d69a2ba83d490f67cc756fb108b1cff3cd0c3ff32c6"
+      },
+      "src/mcp/runtime/ssh_observation_pool.rs": {
+        "bytes": 55535,
+        "matches_qualification_source_tested_and_after": true,
+        "sha256": "ce2b89bd0725493182d3b6f4234e541607a66a061fdd2e18503bab95558e8835"
+      },
+      "src/mcp/runtime/ssh_observation_profile.rs": {
+        "bytes": 23591,
+        "matches_qualification_source_tested_and_after": true,
+        "sha256": "9980401568d157ea8ae9c48a14ab3c67e772a37502daac8d8fbd762c956c90e6"
+      },
+      "src/mcp/runtime/ssh_observation_validation.rs": {
+        "bytes": 5169,
+        "matches_qualification_source_tested_and_after": true,
+        "sha256": "65fb35aaf7cafc8f561bf7cce5fcd0ffb3ad98b2328245ed88d5dfce45b3a056"
+      },
+      "src/mcp/server.rs": {
+        "bytes": 118008,
+        "matches_qualification_source_tested_and_after": true,
+        "sha256": "2632fe90da81094efd95b811f4e20f6d4a862bd157624b00b55ce7a6d8347380"
+      }
+    }
+  },
+  "schema": "hepta-x230-file-soak-tail-analysis/v1",
+  "scope": "Local complete-row reanalysis and static source review only. On-only C8 six-host soak of synthetic completed-job outputs; not a matched off/on soak or a new product test.",
+  "source_facts": {
+    "capacity": {
+      "admission_when_full": "try_acquire_owned returns error; no fallback or automatic retry",
+      "channel_capacity": 8,
+      "global_expensive_preflight_or_capture_budgets": 8,
+      "host_waiters": "Initial global preflight permit is released before waiting for a host; capture reacquires global capacity after host/master readiness. No added capacity or reset deadline.",
+      "masters": 8,
+      "per_host_sessions": 2,
+      "sources": [
+        "src/mcp/runtime/ssh_observation_pool.rs:32-42",
+        "src/mcp/runtime/ssh_observation_pool.rs:300-332",
+        "src/mcp/runtime/ssh_observation_pool.rs:1341-1415",
+        "src/mcp/runtime/ssh_observation_validation.rs:12-15,104-129"
+      ],
+      "total_logical_admission": 16,
+      "validation_workers": 2
+    },
+    "file_observation_deadline": {
+      "preserved_through": [
+        "channel admission",
+        "pending queue expiry",
+        "initial profile validation",
+        "per-host capacity and master readiness",
+        "global capture capacity",
+        "SSH socket/capture",
+        "final authority validation"
+      ],
+      "seconds": 30,
+      "sources": [
+        "src/mcp/runtime/ssh.rs:181-192",
+        "src/mcp/runtime/ssh_observation_pool.rs:267-332",
+        "src/mcp/runtime/ssh_observation_pool.rs:1332-1483",
+        "src/mcp/runtime/ssh_observation_pool.rs:1606-1695"
+      ],
+      "starts": "capture(): Instant::now() + duration, before queue admission"
+    },
+    "public_tool_description": "file_info and binary_read descriptions promise no 1-second or 5-second latency bound; direct binary RPC also uses 30 seconds.",
+    "public_tool_sources": [
+      "src/mcp/server.rs:1686-1722",
+      "src/mcp/runtime/binary.rs:143,163-195"
+    ],
+    "suboperation_budgets": {
+      "agent_lookup_seconds": 2,
+      "bounded_by_original_request_deadline": true,
+      "harness_response_wait_seconds": 50,
+      "harness_wait_scope": "queue.Queue.get timeout after write-lock and stdio write/flush; not a product deadline or whole-call hard bound",
+      "master_start_seconds": 12,
+      "sources": [
+        "src/mcp/runtime/ssh_observation_pool.rs:663-688",
+        "src/mcp/runtime/ssh_observation_pool.rs:1192-1199,1324-1329",
+        "tools/x230/a40/x230_observation_benchmark.py:352-367"
+      ]
+    },
+    "sync_owner_validation": {
+      "behavior": "A bounded blocking worker performs complete-file validation, then its retained ticket runs a second complete-file rehash plus boundary validation synchronously on the owner thread. Synchronous file read/open/stat/hash work has deadline/cancel checks before and after individual steps; the rehash buffer is 16 KiB.",
+      "owner_runtime": "dedicated current-thread Tokio runtime",
+      "sources": [
+        "src/mcp/runtime/ssh_observation_pool.rs:166-174,639-662",
+        "src/mcp/runtime/ssh_observation_profile.rs:19,271-309,779-808",
+        "src/mcp/runtime/ssh_observation_validation.rs:49-67,104-147"
+      ]
+    },
+    "timeout_policy": "Queue/capture deadlines and cancellation return errors without fallback/retry. Failed captured children are stopped and reaped. Validation rechecks the original deadline before authority acceptance; an expired result is rejected. Request-scoped agent lookup deadline discards that result without automatically retrying or substituting a credential snapshot.",
+    "timeout_policy_sources": [
+      "src/mcp/runtime/ssh_observation_pool.rs:267-332,663-688,949-981",
+      "src/mcp/runtime/ssh_observation_validation.rs:49-67,122-147"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "findings": [
+    {
+      "code": "START_CODE outer helper",
+      "decision": "No further import change proposed: new Python launches use subprocess.run/CompletedProcess/Popen; the apparent early-return optimization does not address the ordinary same-key path.",
+      "observation": "The early request.json reuse branch precedes subprocess use, but normal repeated operator starts are handled in Rust before launch_record. reconcile_retry_allowed explicitly permits only isolated system_jobctl pending/launch_failed records; the Python operator helper is not replayed for normal existing identities."
+    },
+    {
+      "code": "START_CODE embedded supervisor",
+      "decision": "Keep the import; no unused module removal at the successful launch path.",
+      "observation": "The supervisor unconditionally needs subprocess.DEVNULL, PIPE and Popen for the admitted workload."
+    },
+    {
+      "code": "READ_CODE",
+      "decision": "No analogous import optimization remains.",
+      "observation": "The source has no subprocess import or subprocess call. Its byte-identical A/B measurements serve as controls."
+    },
+    {
+      "code": "STATUS_CODE and CANCEL_CODE",
+      "decision": "Use the already measured source; retain required subprocess behaviour in the fallback branches.",
+      "observation": "Final candidate moves subprocess imports only into the non-Linux ps and STATUS systemd fallback branches which use it. Native Linux proc/pidfd fast paths avoid those imports."
+    }
+  ],
+  "next_gate": "Full fresh R21 qualification and fixed six-host R19-to-R21 regression campaign.",
+  "other_directions": {
+    "request_hash_4096_bytes": "rejected by fixed small/plain CPU regression gate",
+    "request_hash_64_bytes": "rejected by same small CPU regression gate; no further size sweep",
+    "unchanged_safety_boundaries": [
+      "full request digest",
+      "nonce and supervisor identity",
+      "UID and pidfd validation",
+      "durable cancellation publication",
+      "file and registry provenance",
+      "admission/capacity policy"
+    ]
+  },
+  "schema": "hepta-r21-remaining-helper-import-review/v1",
+  "scope": "Static source review of the remaining subprocess imports; no workload was run and no maximum/global optimality claim is made.",
+  "source_sha256": "1f1f086e3bc0fc62184ed51949964e1f82e337b87d330225097ae38722e4ac8c"
+}

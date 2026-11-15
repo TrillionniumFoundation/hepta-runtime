@@ -1,0 +1,240 @@
+{
+  "base_harness_sha256": "8ed769c4ca6a44cfd4c38ab31a6b378025f4e84ab13f77e564bbd70a1e594f7a",
+  "business_launches": 0,
+  "checks": [
+    "out_of_order_replies_route_to_original_ids",
+    "duplicate_reply_refused",
+    "unknown_reply_refused",
+    "boolean_id_refused",
+    "fragmented_stream_out_of_order_decoder",
+    "short_child_success_original_wait4_and_no_adoption",
+    "short_child_deadline_original_pidfd_kill_and_wait4",
+    "pidfd_setup_failure_retains_original_popen_and_reaps",
+    "pending_admission_rejected_before_fixture"
+  ],
+  "harness_sha256": "bf8433ea822bf0ee66c6f85f966da95692b1d370eba11e8b1941cdb92a14cbf8",
+  "linux_child_custody_supported": true,
+  "network_connections": 0,
+  "original_local_children": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import sys;v=sys.stdin.buffer.read();sys.stdout.buffer.write(v);sys.stderr.write('OWNED-LOCAL-ERR\\n')"
+      ],
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "finished_monotonic_ns": 1720019683108793,
+      "identity": {
+        "birth_ticks": 172001966,
+        "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+        "pgid": 2736481,
+        "pid": 2736481,
+        "ppid": 2736478,
+        "sid": 2736481,
+        "state": "R",
+        "uid": 1000
+      },
+      "observed_bytes": {
+        "stderr": 16,
+        "stdout": 18
+      },
+      "original_wait4": {
+        "exit_code": 0,
+        "maxrss_kib": 23060,
+        "pid": 2736481,
+        "raw_status": 0,
+        "system_seconds": 0.002859,
+        "user_seconds": 0.010484
+      },
+      "signals": [],
+      "started_monotonic_ns": 1720019668608122,
+      "stderr_eof": true,
+      "stderr_original_hex": "4f574e45442d4c4f43414c2d4552520a",
+      "stderr_receipt": {
+        "bytes": 16,
+        "identity": [
+          2053,
+          9183914,
+          1000,
+          33152,
+          1,
+          16,
+          1793017958850362059,
+          1793017958850362059
+        ],
+        "path": "/tmp/hepta-concurrency-selfcheck-z2bcexuo/success.stderr.original",
+        "sha256": "eca293fc4034c5ef6e532af4b6815906608cc81f88cc6184e78b75bbdacb6eda"
+      },
+      "stdin_bytes_written": 18,
+      "stdout_eof": true,
+      "stdout_original_hex": "4f574e45442d4c4f43414c2d494e5055540a",
+      "stdout_receipt": {
+        "bytes": 18,
+        "identity": [
+          2053,
+          9183913,
+          1000,
+          33152,
+          1,
+          18,
+          1793017958849361955,
+          1793017958849361955
+        ],
+        "path": "/tmp/hepta-concurrency-selfcheck-z2bcexuo/success.stdout.original",
+        "sha256": "b618c1cf0b5051520f1f5436fb8e40171d9cee7921ce02220679a28e15116dca"
+      }
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import time;time.sleep(5)"
+      ],
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "error": "RuntimeError: short SSH deadline",
+      "finished_monotonic_ns": 1720019787943134,
+      "identity": {
+        "birth_ticks": 172001968,
+        "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+        "pgid": 2736482,
+        "pid": 2736482,
+        "ppid": 2736478,
+        "sid": 2736482,
+        "state": "R",
+        "uid": 1000
+      },
+      "observed_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "original_wait4": {
+        "exit_code": -9,
+        "maxrss_kib": 23060,
+        "pid": 2736482,
+        "raw_status": 9,
+        "system_seconds": 0.00394,
+        "user_seconds": 0.0059099999999999995
+      },
+      "signals": [
+        "SIGKILL_original_pidfd"
+      ],
+      "started_monotonic_ns": 1720019686764526,
+      "stderr_eof": true,
+      "stderr_original_hex": "",
+      "stderr_receipt": {
+        "bytes": 0,
+        "identity": [
+          2053,
+          9183920,
+          1000,
+          33152,
+          1,
+          0,
+          1793017958957373201,
+          1793017958957373201
+        ],
+        "path": "/tmp/hepta-concurrency-selfcheck-z2bcexuo/deadline.stderr.original",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdin_bytes_written": 0,
+      "stdout_eof": true,
+      "stdout_original_hex": "",
+      "stdout_receipt": {
+        "bytes": 0,
+        "identity": [
+          2053,
+          9183919,
+          1000,
+          33152,
+          1,
+          0,
+          1793017958954372888,
+          1793017958954372888
+        ],
+        "path": "/tmp/hepta-concurrency-selfcheck-z2bcexuo/deadline.stdout.original",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import time;time.sleep(5)"
+      ],
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "error": "OSError: selfcheck: pidfd setup unavailable",
+      "finished_monotonic_ns": 1720019795883152,
+      "observed_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "original_wait4": {
+        "exit_code": -9,
+        "maxrss_kib": 23060,
+        "pid": 2736483,
+        "raw_status": 9,
+        "system_seconds": 0.0,
+        "user_seconds": 0.0005189999999999999
+      },
+      "signals": [
+        "SIGKILL_original_unreaped_Popen"
+      ],
+      "started_monotonic_ns": 1720019795083469,
+      "stderr_eof": true,
+      "stderr_original_hex": "",
+      "stderr_receipt": {
+        "bytes": 0,
+        "identity": [
+          2053,
+          9183925,
+          1000,
+          33152,
+          1,
+          0,
+          1793017958962373721,
+          1793017958962373721
+        ],
+        "path": "/tmp/hepta-concurrency-selfcheck-z2bcexuo/pidfd-failure.stderr.original",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdin_bytes_written": 0,
+      "stdout_eof": true,
+      "stdout_original_hex": "",
+      "stdout_receipt": {
+        "bytes": 0,
+        "identity": [
+          2053,
+          9183924,
+          1000,
+          33152,
+          1,
+          0,
+          1793017958961373617,
+          1793017958961373617
+        ],
+        "path": "/tmp/hepta-concurrency-selfcheck-z2bcexuo/pidfd-failure.stdout.original",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "passed": true,
+  "remote_calls": 0,
+  "schema": "hepta-native-concurrency-local-selfcheck/v1",
+  "selfcheck_sha256": "37968e650763d004b54fd50153bf3806d8ec8105ec387f629ab39cf60f5f80f9",
+  "unexecuted": []
+}

@@ -1,0 +1,39 @@
+{
+  "schema": "hepta.native-canary-single-case-diagnostic.v1",
+  "purpose": "diagnosis only; original failed Python21 r1 gate remains failed",
+  "test_body_unchanged": true,
+  "total_timeout_seconds": 10,
+  "driver_timeout_seconds": 2,
+  "instrumentation": "Outside-ROOT subclass inherits the original test body/run_helper, wrapping calls only to record after-call state and adding a pre-cleanup fixture copy; strace adds observational overhead if available.",
+  "strace": "/usr/bin/strace",
+  "argv": [
+    "/usr/bin/strace",
+    "-f",
+    "-ttt",
+    "-T",
+    "-yy",
+    "-e",
+    "trace=%process,fsync,fdatasync,rename,renameat,renameat2",
+    "-o",
+    "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/canary-diagnostic-r1/syscall.trace",
+    "/usr/bin/python3",
+    "-B",
+    "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/canary-diagnostic-r1/run_single_case.py",
+    "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+    "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/canary-diagnostic-r1"
+  ],
+  "pins": {
+    "tests/test_native_canary_resume.py": "d04161b6f223e662c19805288b66dc15b7d7fa3fa5877e9d83adcab86832b328",
+    "tests/native_canary_resume.py": "310e201f084ea0a95bb86f89701084cb7c3e57d956dd219cc9f5763bda6429a3"
+  },
+  "harness_sha256": "f3080a4e71097eb97c2a402bf6ce0e05b66be13abccc9109c5eb669e43de35d8",
+  "root": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+  "tmpdir": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/canary-diagnostic-r1/tmp",
+  "before": {
+    "/proc/loadavg": "9.40 9.56 8.83 5/5696 2438813\n",
+    "/proc/pressure/cpu": "some avg10=0.00 avg60=0.01 avg300=0.04 total=6046107188\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n",
+    "/proc/pressure/io": "some avg10=8.30 avg60=9.90 avg300=12.56 total=40617431251\nfull avg10=8.00 avg60=9.62 avg300=12.19 total=38021224906\n",
+    "/proc/pressure/memory": "some avg10=0.00 avg60=0.00 avg300=0.00 total=1501965074\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=1437742024\n"
+  },
+  "started_unix_ns": 1793800444936937884
+}

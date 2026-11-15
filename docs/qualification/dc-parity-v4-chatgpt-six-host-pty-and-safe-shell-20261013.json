@@ -1,0 +1,126 @@
+{
+  "schema": "hepta-v4-model-origin-four-more-pty-and-safe-pipeline-v1",
+  "at_utc": "2026-10-12T18:10:28.765672+00:00",
+  "source_head": "b0e6f6828635b31906bc78d41f2a3c27732672a8",
+  "native_live_tool_count": 50,
+  "origin": "Direct Hepta plugin calls from the current ChatGPT session; independent SSH readback from Desktop Commander; no signed ChatGPT-origin attestation",
+  "new_pty_hosts": [
+    {
+      "host": "main",
+      "sid": "dpty-0bfc12b25de9ad57e03f017024bb8370f0db47f8b387d4f7cfe81c734cacbc2e",
+      "marker": "MAIN_PTY_MODEL_ORIGIN_OK 42",
+      "size": 87,
+      "sha256": "487e9e2c7b106a30dbdc11f66a97814b05e7303967a2c3b8d1f28e96f268c3ec",
+      "model_origin_pty_start": true,
+      "model_origin_pty_write": true,
+      "model_origin_pty_read": true,
+      "model_origin_pty_close": "already_exited",
+      "output_complete": true,
+      "exit_code": 0,
+      "capture_error": null,
+      "independent_ssh_readonly_verified": true
+    },
+    {
+      "host": "rog",
+      "sid": "dpty-c2f0517b6907eb0b721273158c577a8bf22a26d99402a34b9f45d226d39aa095",
+      "marker": "ROG_PTY_MODEL_ORIGIN_OK 42",
+      "size": 4224,
+      "sha256": "34bb38500836752bc8f62d727973e0efb54bda53863348d8aac20635198dfc0b",
+      "model_origin_pty_start": true,
+      "model_origin_pty_write": true,
+      "model_origin_pty_read": true,
+      "model_origin_pty_close": "already_exited",
+      "output_complete": true,
+      "exit_code": 0,
+      "capture_error": null,
+      "independent_ssh_readonly_verified": true
+    },
+    {
+      "host": "x230",
+      "sid": "dpty-e0313fb7330949e7b307fb39f18917e4e728b9e41710fb3906ebd9d22e5f8323",
+      "marker": "X230_PTY_MODEL_ORIGIN_OK 42",
+      "size": 87,
+      "sha256": "0802c50fe9bd28dd61f0616ac89be2f28da18d9966435efb4fe4e095109883b5",
+      "model_origin_pty_start": true,
+      "model_origin_pty_write": true,
+      "model_origin_pty_read": true,
+      "model_origin_pty_close": "already_exited",
+      "output_complete": true,
+      "exit_code": 0,
+      "capture_error": null,
+      "independent_ssh_readonly_verified": true
+    },
+    {
+      "host": "ai395",
+      "sid": "dpty-7775bc63f7ece7ffca6c18fa23f30a0978acf4a9382bf85e47b3d55a7a79c280",
+      "marker": "AI395_PTY_MODEL_ORIGIN_OK 42",
+      "size": 4455,
+      "sha256": "7b791310a7f8cfd8f7f8b2cf86aac848112d8d390f6f3def5043e5c163ce1feb",
+      "model_origin_pty_start": true,
+      "model_origin_pty_write": true,
+      "model_origin_pty_read": true,
+      "model_origin_pty_close": "already_exited",
+      "output_complete": true,
+      "exit_code": 0,
+      "capture_error": null,
+      "independent_ssh_readonly_verified": true
+    }
+  ],
+  "previously_qualified_pty_hosts": [
+    "pocket4",
+    "mac"
+  ],
+  "prior_receipt_sha256": {
+    "dc-parity-v4-chatgpt-multihost-execution-20261013.json": "ba8a5262b5b1347a444dfe4d93e82d638ac7edec871038a2f2eb103b46c5758d",
+    "dc-parity-v4-chatgpt-multihost-write-20261013.json": "d538fa9728e8cd7e45000a069676930f7f60f8630bad540b8dd532120868eef3"
+  },
+  "new_interactive_pty_count": 4,
+  "combined_qualified_host_count": 6,
+  "safe_shell_pipeline": {
+    "host": "main",
+    "tool": "shell_start",
+    "command": "printf 'HEPTA_SAFE_PIPELINE_OK\\n' | grep '^HEPTA_SAFE_PIPELINE_OK$'",
+    "job_id": "1a1314c5a15-1f807d-9",
+    "exit_code": 0,
+    "output_complete": true,
+    "stdout_bytes": 23,
+    "stdout_sha256": "e795fe0867c7c9f5b027fda17232f8ea3f9d508e27e38462eb67a876c4f1a70a",
+    "stderr_bytes": 0,
+    "independent_native_job_archive_verified": true,
+    "no_file_write": true,
+    "no_sudo": true
+  },
+  "services_after": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2064509",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "2064582",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    }
+  },
+  "tunnel": {
+    "ready": true,
+    "control_plane": "ok",
+    "dispatcher_completed": 170,
+    "dispatcher_failures": 0
+  },
+  "hosted_CI_before_evidence": {
+    "head": "b0e6f6828635b31906bc78d41f2a3c27732672a8",
+    "run_id": 38287221561,
+    "conclusion": "success"
+  },
+  "explicit_limits": [
+    "No blanket approval of arbitrary shell commands, sudo, arbitrary PID signals or all 50 tools is claimed.",
+    "PTY actions used only a harmless normal-user Python REPL; host archive receipts are not a model-origin signature.",
+    "ROG and AI395 PTY output includes terminal control sequences, so literal exit() echo is not required; authoritative terminal exit=0 and output_complete confirmed.",
+    "No native runtime, Desktop Commander, tunnel, workspace action settings or public Gateway changed."
+  ],
+  "secret_content_logged": false,
+  "production_write_performed": false
+}

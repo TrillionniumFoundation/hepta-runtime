@@ -1,0 +1,163 @@
+{
+  "adopted": false,
+  "baseline": "A19 jobs::RequestHashWriter(sha2::Sha256)",
+  "candidate": "Blanket replacement with ring::digest::Context; identical JSON serialization and full SHA256 representation",
+  "cases": [
+    {
+      "case": "small",
+      "cycles_ring_slower_cpu": 6,
+      "cycles_ring_slower_wall": 6,
+      "full_digest_preflight_and_postflight_passed": true,
+      "iterations_per_cell": 100000,
+      "paired_cpu_speedup_sha2_over_ring": {
+        "max": 0.9067625534506416,
+        "median": 0.8867219525723338,
+        "min": 0.8795499328813992
+      },
+      "paired_wall_speedup_sha2_over_ring": {
+        "max": 0.9068039778375149,
+        "median": 0.8867010349266082,
+        "min": 0.8794862867346168
+      },
+      "ring_cpu_time_change_percent_from_medians": 12.77827,
+      "ring_median_cpu_us_per_call": 1.647362905,
+      "ring_median_wall_us_per_call": 1.6474348124999998,
+      "ring_wall_time_change_percent_from_medians": 12.782452,
+      "serialization_writes_per_call": 72,
+      "serialized_bytes": 176,
+      "sha2_median_cpu_us_per_call": 1.4607095075,
+      "sha2_median_wall_us_per_call": 1.4607191,
+      "stdin_bytes": 0
+    },
+    {
+      "case": "one_mib_plain",
+      "cycles_ring_slower_cpu": 0,
+      "cycles_ring_slower_wall": 0,
+      "full_digest_preflight_and_postflight_passed": true,
+      "iterations_per_cell": 64,
+      "paired_cpu_speedup_sha2_over_ring": {
+        "max": 1.5064993738804622,
+        "median": 1.449218634920634,
+        "min": 1.3863636466616736
+      },
+      "paired_wall_speedup_sha2_over_ring": {
+        "max": 1.5065996187452544,
+        "median": 1.449158247258246,
+        "min": 1.3863814783110031
+      },
+      "ring_cpu_time_change_percent_from_medians": -30.918983,
+      "ring_median_cpu_us_per_call": 4213.7007890625,
+      "ring_median_wall_us_per_call": 4213.98651171875,
+      "ring_wall_time_change_percent_from_medians": -30.918913,
+      "serialization_writes_per_call": 74,
+      "serialized_bytes": 1048750,
+      "sha2_median_cpu_us_per_call": 6099.65078515625,
+      "sha2_median_wall_us_per_call": 6100.058234375,
+      "stdin_bytes": 1048576
+    },
+    {
+      "case": "one_mib_heavily_escaped",
+      "cycles_ring_slower_cpu": 0,
+      "cycles_ring_slower_wall": 0,
+      "full_digest_preflight_and_postflight_passed": true,
+      "iterations_per_cell": 8,
+      "paired_cpu_speedup_sha2_over_ring": {
+        "max": 1.1480209345753094,
+        "median": 1.1246414686902098,
+        "min": 1.1159409202417967
+      },
+      "paired_wall_speedup_sha2_over_ring": {
+        "max": 1.148118900253716,
+        "median": 1.124592032909503,
+        "min": 1.115921551808154
+      },
+      "ring_cpu_time_change_percent_from_medians": -11.183459,
+      "ring_median_cpu_us_per_call": 20970.3985,
+      "ring_median_wall_us_per_call": 20971.48840625,
+      "ring_wall_time_change_percent_from_medians": -11.183215,
+      "serialization_writes_per_call": 1048649,
+      "serialized_bytes": 3145902,
+      "sha2_median_cpu_us_per_call": 23610.91565625,
+      "sha2_median_wall_us_per_call": 23612.077750000004,
+      "stdin_bytes": 1048576
+    }
+  ],
+  "decision": "do_not_merge",
+  "evidence": {
+    "benchmark_source": {
+      "artifact": "request_hash_benchmark.rs",
+      "sha256": "1f784dc3b01e096d11b405cdadcf37acf567622dfde3903555aafba57e61b8f4",
+      "sha256_verified_locally": true
+    },
+    "compile_log_sha256_reported_by_run_owner": "4e7324450075848463201fd7dd3a3e792c2242a4f61ae465d2c40b37140b67d2",
+    "execution_reported_by_run_owner": {
+      "a19_release_completed_before_run": true,
+      "benchmark_exit_code": 0,
+      "build_exit_code": 0,
+      "other_compilation_or_timed_work_overlap": false
+    },
+    "independent_review": {
+      "all_paired_results_recomputed": true,
+      "all_summary_distributions_recomputed": true,
+      "new_benchmark_execution": false,
+      "raw_sample_order_counts_and_timings_verified": true
+    },
+    "raw_report": {
+      "artifact": "request-hash-abba-r01.jsonl",
+      "bytes": 36003,
+      "jsonl_records": 97,
+      "record_counts": {
+        "method": 1,
+        "paired_cycle": 18,
+        "preflight": 3,
+        "sample": 72,
+        "summary": 3
+      },
+      "sha256": "3b107446cca06ed20f5beab0c367671b396afedbb002e1dcb8bab00c4193dc17",
+      "sha256_verified_locally": true
+    }
+  },
+  "future_threshold_candidate": {
+    "description": "A future size-aware backend choice is optional investigation only. No crossover threshold is inferred from the small and 1 MiB endpoints.",
+    "required_evidence": "Measure intermediate sizes, escaping density and args/env content, branch overhead on small requests, and complete digest equivalence across selection boundaries before considering adoption.",
+    "status": "not_implemented_not_validated"
+  },
+  "limitations": {
+    "large_file_sha256_gain_generalizes_to_small_messages": false,
+    "overall_runtime_speedup_measured": false,
+    "process_start_tps_measured": false,
+    "production_request_size_distribution_measured": false
+  },
+  "method": {
+    "case_order": "forward on even cycles, reverse on odd cycles",
+    "cpu_clock": "CLOCK_PROCESS_CPUTIME_ID",
+    "cycles_per_case": 6,
+    "excluded": [
+      "parameter construction",
+      "equality checks",
+      "reporting",
+      "filesystem",
+      "audit",
+      "SSH",
+      "job launch"
+    ],
+    "full_digest_checks": "All three cases pass independent full 256-bit preflight and postflight checks; equality assertions are outside timed cells.",
+    "host": "x230",
+    "order_per_case_per_cycle": [
+      "sha2",
+      "ring",
+      "ring",
+      "sha2"
+    ],
+    "platform": "linux/x86_64",
+    "ratio_definition": "Paired speedup is sha2 time divided by ring time for each ABBA cycle. Reported speedup median is the median of cycle ratios, not the ratio of per-backend medians. Negative time change means ring used less time.",
+    "statistical_scope": "Descriptive results from one isolated six-cycle run; no cross-machine, workload-mix, or confidence-interval claim.",
+    "timed_scope": "borrowed JSON serialization + streamed SHA256 + same 64-char hex allocation/drop",
+    "wall_clock": "std::time::Instant"
+  },
+  "reason": "The 176-byte small-binding fixture regressed in CPU and wall time in all six ABBA cycles: median CPU time rose 12.778270%. Both 1 MiB fixtures improved, but that does not justify imposing a consistent small-request regression through an unconditional backend replacement. These results reject this candidate and do not establish an overall runtime improvement.",
+  "retain_current_request_hash_writer": true,
+  "reviewed_utc": "2026-10-23T22:08:46.742290+00:00",
+  "runtime_source_changed_by_this_review": false,
+  "schema": "hepta-x230-request-hash-decision/v1"
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "hepta-r36-cold-only-transport-independent-review/v1",
+  "outcome": "No blocking issue in the reviewed actual-input and transport-constant delta.",
+  "scope": "Git full-byte identities and exact textual/JSON comparison only; no transport execution, tar re-extraction, host call, or qualifier execution.",
+  "source_review": "7975bcd2eba08abdc1b0bb1f35431e4656126c58",
+  "artifacts": {
+    "input": {
+      "git_blob": "163b5e8e09618755198832db5551f781d3a6a4c7",
+      "bytes": 4250,
+      "sha256": "a4c41f869095f5aeb32c7e26020bd36cf849048198b7f9cbf39ffc3bba24d305"
+    },
+    "closure": {
+      "git_blob": "a82d5a3b5566a76437ee40733c0428c2ab3f7b89",
+      "bytes": 8522,
+      "sha256": "9f4ad0dc2da45e10fad64da62beb92b5fbdc68b776d7ea15990f7690a18c6ddd"
+    },
+    "manifest": {
+      "git_blob": "869d2b42bd5af1f3f911dd57ec5941e76200f320",
+      "bytes": 3701,
+      "sha256": "c1f079f194243caa8dd34c37a8de100c7afc50815f9514a92ec7c75ae6e0962f"
+    },
+    "installer": {
+      "git_blob": "f3af1dc3c639d8ee2537bb53e393643a1036c869",
+      "bytes": 6877,
+      "sha256": "9a6e88c70384b7b4677c5a641cc0deb9ff2b7ba6fcdc24157d2946126f57efa7"
+    }
+  },
+  "checks": {
+    "closure_exact_expected_delta": true,
+    "sidecar_paths": 6,
+    "inputs_future": {
+      "actual_r36_formatted_map": null,
+      "actual_r36_qualification": null,
+      "actual_r36_release_programs": null,
+      "actual_r36_test_counts": null
+    },
+    "manifest_count": 21,
+    "total": 283156,
+    "installer_changed_constants": [
+      "ROOT",
+      "ARCHIVE_BYTES",
+      "ARCHIVE_SHA256",
+      "MANIFEST_SHA256",
+      "DEPLOYMENT_TOTAL_BYTES"
+    ]
+  },
+  "details": [
+    "Installer differs from d426c636edf43ea57a132c223ee983a0adaf90e5 only in ROOT, archive length/SHA, manifest SHA and deployment total.",
+    "Cold closure keeps all 28 previous bytes/SHA identities; only six sidecar destination prefixes and the declared cold-only/null-cache fields change.",
+    "Input changes only preparation tool identity, closure digest, cache rule and source rule.",
+    "Manifest has 21 payload rows totaling 279455 bytes; adding its 3701 bytes gives 283156.",
+    "Four future R36 qualification/map/binary/count fields remain null."
+  ]
+}

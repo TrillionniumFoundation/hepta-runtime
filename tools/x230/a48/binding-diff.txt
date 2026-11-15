@@ -1,0 +1,436 @@
+--- retained-A46
++++ run_small_archive_a48_r01.py
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env python3
+ # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+-"""Two fixed r07/A42 local small-archive blocks; no SSH, Cargo or retries.
++"""Two fixed r07/A48 local small-archive blocks; no SSH, Cargo or retries.
+ 
+ The existing small native helper is unchanged. Qualification identities must be
+ frozen before execution. All 8192 measured and 8848 total requests belong to
+@@ -21,22 +21,31 @@
+ 
+ DEV_ROOT = Path('/home/qian/hepta-runtime-optimization-20261023')
+ BASE = DEV_ROOT / 'a41-phase-timing-20261025-r01'
+-EXPECTED_OUT = BASE / 'a46-small-archive-comparison-r01'
++EXPECTED_OUT = BASE / 'a48-small-archive-comparison-r01'
+ FINAL_BINDINGS_READY = True
+ NATIVE_SHA = 'd35bfe354d405b6efb2d2ca28e06bb6469016cc6cf0c611ca3c107b043ea0d32'
+-PROTOCOL_SHA = '3c51e1a579df39327022bc879de4b4d8e799555c15ba3839f2ed80227cea64ff'
++PROTOCOL_SHA = 'abca1770b8eb27c489d30f52427439f0efc76f7bad969aeee20ae22dad409a5e'
++ENTRY_PATH = BASE / 'a48-page-fullscan-entry-r01/entry-report.json'
++ENTRY_SHA = '871814ec2e5d3b870623fd6496a044626292efbc9b5658f488a6470e2a2cf851'
++ENTRY_BYTES = 309398
++ENTRY_SCHEMA = 'hepta-a48-page-fullscan-qualification-entry/v1'
++WORKER_PATH = BASE / 'a48-page-fullscan-entry-r01/worker-report.json'
++WORKER_SHA = '758785ba8ecbaef30818cb21e7daa62ce45f3b86c575436c870c1e5f52dea940'
++WORKER_BYTES = 22281
++WORKER_SCHEMA = 'hepta-a48-page-fullscan-guarded-qualifier-worker/v1'
++
+ QUALIFICATION_CHAIN = BASE / 'tools/load_a46_qualification_chain_r01.py'
+ QUALIFICATION_CHAIN_SHA = '55a19e9e5d5bd2d514025fefe2cdf037b9a21f0fae1ed3f750c6b9af086cf7e0'
+ QUALIFICATIONS = {
+     'r07': BASE / 'qualification-r07-recovery-only/report.json',
+-    'A42': BASE / 'qualification-a46-a42-release-completion-r01/report.json',
++    'A48': BASE / 'qualification-a48-page-fullscan-r01/report.json',
+ }
+ CLEAR_ENV = ('SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'HEPTA_ARCHIVE_INDEX_TRACE',
+              'HEPTA_REQUEST_AUDIT_TRACE', 'HEPTA_OBSERVATION_TRACE',
+              'HEPTA_TEST_ARCHIVE_PAGE_SELECTOR_CHILD', 'HEPTA_A41_ARCHIVE_ROOT',
+              'RUST_LOG', 'RUST_TEST_NOCAPTURE', 'PYTHONPATH', 'PYTHONHOME')
+ FROZEN_NATIVE = None
+-BLOCK_NAMES = ('block-0-r07-A42', 'block-1-A42-r07')
++BLOCK_NAMES = ('block-0-r07-A48', 'block-1-A48-r07')
+ 
+ 
+ def need(condition, message):
+@@ -97,12 +106,12 @@
+     global FROZEN_NATIVE
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument('--out', type=Path, default=EXPECTED_OUT)
+-    parser.add_argument('--protocol', type=Path, default=Path(__file__).absolute().with_name('small-archive-a46-composed-r01.protocol.json'))
++    parser.add_argument('--protocol', type=Path, default=Path(__file__).absolute().with_name('small-archive-a48-r01.protocol.json'))
+     args = parser.parse_args(argv)
+     need(FINAL_BINDINGS_READY and isinstance(QUALIFICATION_CHAIN_SHA, str)
+          and len(QUALIFICATION_CHAIN_SHA) == 64
+          and all(c in '0123456789abcdef' for c in QUALIFICATION_CHAIN_SHA),
+-         'A42 explicit qualification-chain/release binding pending; experiment not started')
++         'A48 explicit qualification-chain/release binding pending; experiment not started')
+     os.umask(0o077)
+     driver_path = BASE / 'tools/run_a41_native_validation.py'
+     driver_raw = pinned_bootstrap(driver_path, NATIVE_SHA)
+@@ -116,11 +125,11 @@
+     exec(compile(chain_raw, str(QUALIFICATION_CHAIN), 'exec'), qualification_chain.__dict__)
+     need(sys.platform == 'linux' and hasattr(os, 'pidfd_open') and hasattr(os, 'WNOWAIT')
+          and hasattr(signal, 'pidfd_send_signal'), 'reviewed Linux child-custody APIs required')
+-    need(args.out == EXPECTED_OUT, 'only the fixed fresh A42 comparison output is admitted')
++    need(args.out == EXPECTED_OUT, 'only the fixed fresh A48 comparison output is admitted')
+     out = native.direct(args.out, exists=False)
+     out.mkdir(mode=0o700)
+     report_path = out / 'report.json'
+-    report = {'schema': 'hepta-a42-small-archive-comparison/v1', 'phase': 'preflight',
++    report = {'schema': 'hepta-a48-small-archive-comparison/v1', 'phase': 'preflight',
+         'started_utc': native.utc(), 'passed': False, 'complete': False, 'automatic_retries': 0,
+         'performance_adoption_claimed': False, 'numeric_regression_threshold_preregistered': True,
+         'multihost_acceptance_established': False, 'ssh_or_agent_used': False,
+@@ -149,7 +158,7 @@
+     try:
+         protocol_raw = pinned_bootstrap(args.protocol, PROTOCOL_SHA)
+         protocol = json.loads(protocol_raw)
+-        need(protocol.get('bindings_ready') is True, 'A42 final binding is not frozen')
++        need(protocol.get('bindings_ready') is True, 'A48 final binding is not frozen')
+         need(protocol['qualification_chain_loader_sha256'] == QUALIFICATION_CHAIN_SHA,
+              'explicit qualification-chain validator binding differs')
+         report['qualification_chain_loader'], _ = pin(QUALIFICATION_CHAIN, QUALIFICATION_CHAIN_SHA,
+@@ -164,9 +173,23 @@
+         report['historical_experiments_kept_separate'] = protocol['historical_experiments_kept_separate']
+         report['regression_gates'] = protocol['regression_gates']
+         report['regression_decision_scope'] = 'No gate result is inferred from functional pass; apply frozen gates to all original new calls and controller observations offline.'
++        report['qualification_entry'], entry_raw = pin(ENTRY_PATH, ENTRY_SHA, 'qualification-entry.original.json')
++        report['qualification_worker'], worker_raw = pin(WORKER_PATH, WORKER_SHA, 'qualification-worker.original.json')
++        need(len(entry_raw) == ENTRY_BYTES and len(worker_raw) == WORKER_BYTES, 'original guardian length differs')
++        entry, worker = json.loads(entry_raw), json.loads(worker_raw)
++        need(entry['schema'] == ENTRY_SCHEMA and entry['qualified'] is True
++             and entry['passed'] is True and entry['guarded_qualification_complete'] is True
++             and entry['parent_unchanged_after_attempt'] is True
++             and entry['reused_dependencies_unchanged'] is True
++             and not entry.get('error') and not entry.get('errors'), 'original A48 guardian is incomplete')
++        need(worker['schema'] == WORKER_SCHEMA and worker['passed'] is True
++             and worker['strict_fresh_artifacts_verified'] is True
++             and worker['required_test_coverage_verified'] is True
++             and worker['reused_dependencies_unchanged'] is True
++             and not worker.get('error') and not worker.get('errors'), 'original A48 worker postchecks are incomplete')
+         for version, path in QUALIFICATIONS.items():
+             expected = protocol['bindings'][version]
+-            pin(path, expected['qualification_sha256'])
++            qualified_receipt, qualified_raw = pin(path, expected['qualification_sha256'])
+             bundle = qualification_chain.load_qualification(native, path, version, out)
+             compact = json.dumps(bundle['source_map'], sort_keys=True, separators=(',', ':')).encode()
+             need(bundle['qualification_schema'] == expected['qualification_schema']
+@@ -174,6 +197,21 @@
+                  and hashlib.sha256(compact).hexdigest() == expected['source_map_compact_sha256']
+                  and bundle['binary']['sha256'] == expected['release_sha256'], 'qualified source/release binding differs')
+             need(not out.is_relative_to(Path(bundle['source'])), 'output would alter qualified source')
++            if version == 'A48':
++                need(qualification_chain.same_receipt(qualified_receipt, bundle['report']), 'loaded qualification receipt changed')
++                prepared = json.loads(qualified_raw)['source_input']
++                need(set(prepared) == set(bundle['source_map'])
++                     and qualification_chain.map_sha(prepared) == expected['prepared_source_map_compact_sha256'],
++                     'prepared candidate source binding differs')
++                for ref in (entry['qualification_report'], worker['qualifier_report'],
++                            worker['strict_fresh_artifact_evidence']['qualification_report']):
++                    need(qualification_chain.same_receipt(ref, bundle['report']), 'guardian qualification receipt differs')
++                need(qualification_chain.same_receipt(entry['guarded_worker_report'], report['qualification_worker']),
++                     'guardian final worker receipt differs')
++                if 'worker_report' in entry:
++                    need(qualification_chain.same_receipt(entry['worker_report'], report['qualification_worker']),
++                         'guardian optional worker receipt differs')
++                need(entry['source_after'] == bundle['source_map'], 'guardian/candidate source differs')
+             bundles[version] = bundle
+         report['qualifications'] = bundles
+         env = dict(os.environ)
+
+--- retained-A46
++++ run_native_archive_cohort_a48_r01.py
+@@ -29,13 +29,22 @@
+ 
+ DEV_ROOT = Path('/home/qian/hepta-runtime-optimization-20261023')
+ BASE = DEV_ROOT / 'a41-phase-timing-20261025-r01'
+-EXPECTED_OUT = BASE / 'a46-native-archive-cohort-r01'
++EXPECTED_OUT = BASE / 'a48-native-archive-cohort-r01'
+ SMALL_HELPER = BASE / 'tools/x230_small_archive_benchmark.py'
+ SMALL_SHA = '98413b4b177ec3bf68b7fe67de153376465374a9e74690c337633b3b4a912ffb'
+ NATIVE_DRIVER = BASE / 'tools/run_a41_native_validation_r07.py'
+ NATIVE_SHA = '6123660947b4b205d7f70d901c4e78b74395df065226a27937730b8c4cdd2ec9'
+ FINAL_BINDINGS_READY = True
+-PROTOCOL_SHA = 'e197b94d1e797ca367a5dbe93b7679fccefbc0aef9becf383e2a9c2f17cea90e'
++PROTOCOL_SHA = '5a3c8e814b3614d1c6729d474a38571e517ef0bc603690a104288576ca3afd8e'
++ENTRY_PATH = BASE / 'a48-page-fullscan-entry-r01/entry-report.json'
++ENTRY_SHA = '871814ec2e5d3b870623fd6496a044626292efbc9b5658f488a6470e2a2cf851'
++ENTRY_BYTES = 309398
++ENTRY_SCHEMA = 'hepta-a48-page-fullscan-qualification-entry/v1'
++WORKER_PATH = BASE / 'a48-page-fullscan-entry-r01/worker-report.json'
++WORKER_SHA = '758785ba8ecbaef30818cb21e7daa62ce45f3b86c575436c870c1e5f52dea940'
++WORKER_BYTES = 22281
++WORKER_SCHEMA = 'hepta-a48-page-fullscan-guarded-qualifier-worker/v1'
++
+ QUALIFICATION_CHAIN = BASE / 'tools/load_a46_qualification_chain_r01.py'
+ QUALIFICATION_CHAIN_SHA = '55a19e9e5d5bd2d514025fefe2cdf037b9a21f0fae1ed3f750c6b9af086cf7e0'
+ ORDER = ('A', 'B', 'B', 'A')
+@@ -471,7 +480,7 @@
+             row = {'purpose': 'initialize', 'okay': False}
+             self.startup['initialize'] = row
+             reply = self.wave([('initialize', {'protocolVersion': '2025-03-26', 'capabilities': {},
+-                'clientInfo': {'name': 'hepta-a42-native-archive-cohort', 'version': '1'}}, row)])[0]
++                'clientInfo': {'name': 'hepta-a48-native-archive-cohort', 'version': '1'}}, row)])[0]
+             need(reply is not None and 'result' in reply and 'error' not in reply,
+                  'native initialize failed; original response retained')
+             row.update(okay=True, status='succeeded')
+@@ -571,7 +580,7 @@
+         values.append(value)
+         raw_values.append(raw)
+     need(values[0] == values[1] and raw_values[0] == raw_values[1], 'native seed original hot/archive bytes differ')
+-    owners = [values[0]['owner']] + [sha(('hepta-a42-synthetic-owner-v1\0' + values[0]['owner'] + '\0' + str(i)).encode())
++    owners = [values[0]['owner']] + [sha(('hepta-a48-synthetic-owner-v1\0' + values[0]['owner'] + '\0' + str(i)).encode())
+                                   for i in range(1, 4)]
+     need(len(set(owners)) == 4, 'synthetic owners collided')
+     seed = {'seed_id': seed_id, 'native_record': values[0], 'native_raw_hex': raw_values[0].hex(),
+@@ -1078,7 +1087,7 @@
+     sync_directory(out.parent)
+     create(out / 'protocol.original.json', protocol_raw)
+     slots, waves = plan_slots()
+-    report = {'schema': 'hepta-a42-native-archive-cohort/v1', 'started_utc': utc(), 'phase': 'preflight',
++    report = {'schema': 'hepta-a48-native-archive-cohort/v1', 'started_utc': utc(), 'phase': 'preflight',
+               'complete': False, 'passed': False, 'performance_adopted': False, 'controllers': [],
+               'slots': slots, 'waves': waves, 'blocks': [], 'errors': [], 'protocol': protocol_receipt,
+               'native_mcp_wire': True, 'direct_index_test_entry': False, 'service_mutations': 0,
+@@ -1119,11 +1128,30 @@
+         report['frozen_inputs'] = inputs
+         report['disk_gate'] = disk_gate(out)
+         need(report['disk_gate']['clear'], 'insufficient available space/inodes for fixed private fixtures')
++        entry_receipt, entry_raw = bytes_receipt(ENTRY_PATH, maximum=1024 * 1024, keep=True)
++        worker_receipt, worker_raw = bytes_receipt(WORKER_PATH, maximum=1024 * 1024, keep=True)
++        need(entry_receipt['sha256'] == ENTRY_SHA and worker_receipt['sha256'] == WORKER_SHA
++             and len(entry_raw) == ENTRY_BYTES and len(worker_raw) == WORKER_BYTES, 'original A48 guardian pin differs')
++        entry, worker = document(entry_raw), document(worker_raw)
++        need(entry['schema'] == ENTRY_SCHEMA and entry['qualified'] is True
++             and entry['passed'] is True and entry['guarded_qualification_complete'] is True
++             and entry['parent_unchanged_after_attempt'] is True
++             and entry['reused_dependencies_unchanged'] is True
++             and not entry.get('error') and not entry.get('errors'), 'original A48 guardian is incomplete')
++        need(worker['schema'] == WORKER_SCHEMA and worker['passed'] is True
++             and worker['strict_fresh_artifacts_verified'] is True
++             and worker['required_test_coverage_verified'] is True
++             and worker['reused_dependencies_unchanged'] is True
++             and not worker.get('error') and not worker.get('errors'), 'original A48 worker postchecks are incomplete')
++        inputs.extend((entry_receipt, worker_receipt))
++        create(out / 'qualification-entry.original.json', entry_raw)
++        create(out / 'qualification-worker.original.json', worker_raw)
++        report['qualification_entry'], report['qualification_worker'] = entry_receipt, worker_receipt
+         for arm in ('A', 'B'):
+             check_stop()
+             binding = protocol['bindings'][arm]
+             path = direct(Path(binding['qualification_path']))
+-            pinned = bytes_receipt(path)
++            pinned, qualified_raw = bytes_receipt(path, keep=True)
+             need(pinned['sha256'] == binding['qualification_sha256'], 'qualification identity differs: ' + arm)
+             bundle = qualification_chain.load_qualification(native, path, arm, out)
+             compact = json.dumps(bundle['source_map'], sort_keys=True, separators=(',', ':')).encode()
+@@ -1133,6 +1161,21 @@
+                  and bundle['binary']['sha256'] == binding['release_sha256'], 'qualified source/release differs: ' + arm)
+             need(not out.is_relative_to(Path(bundle['source'])), 'fixture would change qualified source')
+             bundle['version'] = binding['version']
++            if arm == 'B':
++                need(qualification_chain.same_receipt(pinned, bundle['report']), 'loaded qualification receipt changed')
++                prepared = document(qualified_raw)['source_input']
++                need(set(prepared) == set(bundle['source_map'])
++                     and qualification_chain.map_sha(prepared) == binding['prepared_source_map_compact_sha256'],
++                     'prepared candidate source binding differs')
++                for ref in (entry['qualification_report'], worker['qualifier_report'],
++                            worker['strict_fresh_artifact_evidence']['qualification_report']):
++                    need(qualification_chain.same_receipt(ref, bundle['report']), 'guardian qualification receipt differs')
++                need(qualification_chain.same_receipt(entry['guarded_worker_report'], worker_receipt),
++                     'guardian final worker receipt differs')
++                if 'worker_report' in entry:
++                    need(qualification_chain.same_receipt(entry['worker_report'], worker_receipt),
++                         'guardian optional worker receipt differs')
++                need(entry['source_after'] == bundle['source_map'], 'guardian/candidate source differs')
+             bundles[arm] = bundle
+         need(bundles['A']['binary']['sha256'] != bundles['B']['binary']['sha256'], 'distinct candidate release required')
+         report['qualifications'] = bundles
+
+--- retained-A46
++++ evaluate_small_archive_a48_r01.py
+@@ -28,10 +28,10 @@
+ 
+ 
+ BASE = '/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01'
+-REMOTE_ROOT = PurePosixPath(BASE + '/a46-small-archive-comparison-r01')
+-BLOCKS = ('block-0-r07-A42', 'block-1-A42-r07')
++REMOTE_ROOT = PurePosixPath(BASE + '/a48-small-archive-comparison-r01')
++BLOCKS = ('block-0-r07-A48', 'block-1-A48-r07')
+ ORDER = ('A', 'B', 'B', 'A')
+-ACTUAL = ({'A': 'r07', 'B': 'A42'}, {'A': 'A42', 'B': 'r07'})
++ACTUAL = ({'A': 'r07', 'B': 'A48'}, {'A': 'A48', 'B': 'r07'})
+ TOOLS = ('usage_stats', 'request_history', 'request_archive')
+ BUSY = ('cargo', 'cargo-clippy', 'clippy-driver', 'rustc', 'heptabao_server')
+ HEX = re.compile(r'[0-9a-f]{64}\Z')
+@@ -47,6 +47,14 @@
+ CHAIN_SHA = '55a19e9e5d5bd2d514025fefe2cdf037b9a21f0fae1ed3f750c6b9af086cf7e0'
+ LEGACY_SCHEMA = 'runtime-candidate-qualification/v1'
+ COMPOSED_SCHEMA = 'hepta-runtime-composed-qualification/v1'
++ENTRY_PATH = '/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/entry-report.json'
++ENTRY_SHA = '871814ec2e5d3b870623fd6496a044626292efbc9b5658f488a6470e2a2cf851'
++ENTRY_BYTES = 309398
++ENTRY_SCHEMA = 'hepta-a48-page-fullscan-qualification-entry/v1'
++WORKER_PATH = '/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/worker-report.json'
++WORKER_SHA = '758785ba8ecbaef30818cb21e7daa62ce45f3b86c575436c870c1e5f52dea940'
++WORKER_BYTES = 22281
++WORKER_SCHEMA = 'hepta-a48-page-fullscan-guarded-qualifier-worker/v1'
+ COMPOSITION_KIND = 'a42-r03-five-stages-plus-a46-release/v1'
+ EXPECTED_GATES = {
+     'all_new_tool_calls_correct': 8848,
+@@ -173,8 +181,8 @@
+ 
+ 
+ def validate_protocol(protocol):
+-    need(protocol['schema'] == 'hepta-a42-small-archive-comparison-protocol/v1'
+-         and protocol['experiment_id'] == 'a46-small-archive-comparison-r01'
++    need(protocol['schema'] == 'hepta-a48-small-archive-comparison-protocol/v1'
++         and protocol['experiment_id'] == 'a48-small-archive-comparison-r01'
+          and protocol['bindings_ready'] is True and protocol['out'] == str(REMOTE_ROOT),
+          'new final A43 small protocol required')
+     need(exact(protocol['regression_gates'], EXPECTED_GATES), 'frozen numeric gates differ')
+@@ -190,16 +198,16 @@
+         expected = {'index': index, 'name': BLOCKS[index], 'cli_A': ACTUAL[index]['A'],
+                     'cli_B': ACTUAL[index]['B'], 'actual_order': [ACTUAL[index][arm] for arm in ORDER]}
+         need(exact(block, expected), 'fixed block order differs')
+-    need(set(protocol['bindings']) == {'r07', 'A42'}, 'unexpected comparison versions')
++    need(set(protocol['bindings']) == {'r07', 'A48'}, 'unexpected comparison versions')
+     old = protocol['bindings']['r07']
+     need(old['qualification_sha256'] == R07_QUALIFICATION_SHA
+          and old['source_map_compact_sha256'] == R07_MAP_SHA and old['release_sha256'] == R07_RELEASE_SHA
+          and old['source_files'] == 165 and old['qualification_schema'] == LEGACY_SCHEMA,
+          'frozen r07 baseline differs')
+-    new = protocol['bindings']['A42']
+-    need(new['qualification_path'] == BASE + '/qualification-a46-a42-release-completion-r01/report.json'
+-         and new['source_files'] == 168 and new['qualification_schema'] == COMPOSED_SCHEMA
+-         and new['composition_kind'] == COMPOSITION_KIND
++    new = protocol['bindings']['A48']
++    need(new['qualification_path'] == BASE + '/qualification-a48-page-fullscan-r01/report.json'
++         and new['source_files'] == 168 and new['qualification_schema'] == LEGACY_SCHEMA
++         and 'composition_kind' not in new
+          and protocol['qualification_chain_loader_path'] == CHAIN_PATH
+          and protocol['qualification_chain_loader_sha256'] == CHAIN_SHA,
+          'explicit composed candidate and reviewed validator binding differs')
+@@ -207,6 +215,11 @@
+         for key in ('qualification_sha256', 'source_map_compact_sha256', 'release_sha256'):
+             need(type(binding[key]) is str and HEX.fullmatch(binding[key]), 'actual final identity missing: ' + key)
+     need(new['release_sha256'] != old['release_sha256'], 'candidate release is not distinct')
++    need(exact(protocol['continuation'], {'path': ENTRY_PATH, 'bytes': ENTRY_BYTES, 'sha256': ENTRY_SHA, 'schema': ENTRY_SCHEMA})
++         and exact(protocol['qualification_worker'], {'path': WORKER_PATH, 'bytes': WORKER_BYTES, 'sha256': WORKER_SHA, 'schema': WORKER_SCHEMA}),
++         'final guardian entry/worker protocol pins differ')
++    need(type(new['prepared_source_map_compact_sha256']) is str
++         and HEX.fullmatch(new['prepared_source_map_compact_sha256']), 'prepared source pin missing')
+ 
+ 
+ def load_chain_validator(inputs, outer, protocol):
+@@ -265,8 +278,8 @@
+              and copied['sha256'] == original['sha256'] and copied['bytes'] == original['bytes'],
+              'captured composition copy is not a unique direct exact-body output')
+         relative = remote.relative_to(REMOTE_ROOT)
+-        need(str(relative) == 'A42-qualification.original.json'
+-             or re.fullmatch(r'A42-composition-input-[0-9]{3}\.original', str(relative)),
++        need(str(relative) == 'A48-qualification.original.json'
++             or re.fullmatch(r'A48-composition-input-[0-9]{3}\.original', str(relative)),
+              'unexpected captured composition filename')
+         paths.add(copied['path'])
+         bodies[original['path']] = inputs.read(inputs.root / relative, copied)
+@@ -296,18 +309,18 @@
+ 
+ 
+ def validate_qualifications(inputs, outer, protocol):
+-    need(set(outer['qualifications']) == {'r07', 'A42'}, 'both actual qualification bundles required')
++    need(set(outer['qualifications']) == {'r07', 'A48'}, 'both actual qualification bundles required')
+     module = load_chain_validator(inputs, outer, protocol)
+     result = {}
+-    for version in ('r07', 'A42'):
++    for version in ('r07', 'A48'):
+         binding = protocol['bindings'][version]
+         bundle = outer['qualifications'][version]
+         path = BASE + ('/qualification-r07-recovery-only/report.json' if version == 'r07'
+-                       else '/qualification-a46-a42-release-completion-r01/report.json')
++                       else '/qualification-a48-page-fullscan-r01/report.json')
+         need(bundle['report']['path'] == path and bundle['report']['sha256'] == binding['qualification_sha256'],
+              'qualified report binding differs')
+         q = inputs.document(inputs.root / (version + '-qualification.original.json'), bundle['report'])
+-        if version == 'r07':
++        if version in ('r07', 'A48'):
+             need(q['schema'] == LEGACY_SCHEMA and q['qualified'] is True
+                  and q['current_stage'] == 'complete' and not q.get('error')
+                  and bundle['qualification_schema'] == LEGACY_SCHEMA and bundle['composition_used'] is False,
+@@ -329,7 +342,7 @@
+              and source_map == q['source_after'] == bundle['source_map'] == outer['final_source_maps'][version]
+              and digest(compact(source_map)) == binding['source_map_compact_sha256'],
+              'complete formatted tested/after/report source maps differ')
+-        expected_source = BASE + ('/source-r07-recovery-only' if version == 'r07' else '/source-a42-fresh-cohort-r03')
++        expected_source = BASE + ('/source-r07-recovery-only' if version == 'r07' else '/source-a48-page-fullscan-r01')
+         need(q['source'] == bundle['source'] == expected_source and bundle['source_files'] == len(source_map),
+              'qualified source path/count differs')
+         for key in ('binary', 'test_binary'):
+@@ -337,6 +350,39 @@
+                  and q[key]['sha256'] == bundle[key]['sha256'] and q[key]['path'] == bundle[key]['path'],
+                  'fresh original artifact receipt differs')
+         need(q['binary']['sha256'] == binding['release_sha256'], 'release pin differs')
++    entry_receipt, worker_receipt = outer['qualification_entry'], outer['qualification_worker']
++    need(entry_receipt['path'] == ENTRY_PATH and entry_receipt['sha256'] == ENTRY_SHA and entry_receipt['bytes'] == ENTRY_BYTES
++         and worker_receipt['path'] == WORKER_PATH and worker_receipt['sha256'] == WORKER_SHA and worker_receipt['bytes'] == WORKER_BYTES,
++         'original guardian entry/worker binding differs')
++    for receipt in (entry_receipt, worker_receipt):
++        module.normalized_receipt(receipt)
++        need(sum(exact(item, receipt) for item in outer['original_inputs']) == 1, 'guardian receipt missing from original-input fences or duplicated')
++    entry = inputs.document(inputs.root / 'qualification-entry.original.json', entry_receipt)
++    worker = inputs.document(inputs.root / 'qualification-worker.original.json', worker_receipt)
++    need(entry['schema'] == ENTRY_SCHEMA and entry['qualified'] is True
++             and entry['passed'] is True and entry['guarded_qualification_complete'] is True
++             and entry['parent_unchanged_after_attempt'] is True
++             and entry['reused_dependencies_unchanged'] is True
++             and not entry.get('error') and not entry.get('errors'), 'original A48 guardian evidence failed')
++    need(worker['schema'] == WORKER_SCHEMA and worker['passed'] is True
++             and worker['strict_fresh_artifacts_verified'] is True
++             and worker['required_test_coverage_verified'] is True
++             and worker['reused_dependencies_unchanged'] is True
++             and not worker.get('error') and not worker.get('errors'), 'original A48 worker postchecks failed')
++    for ref in (entry['qualification_report'], worker['qualifier_report'],
++                worker['strict_fresh_artifact_evidence']['qualification_report']):
++        need(module.same_receipt(ref, outer['qualifications']['A48']['report']), 'guardian qualification receipt differs')
++    need(module.same_receipt(entry['guarded_worker_report'], worker_receipt),
++         'guardian final worker receipt differs')
++    if 'worker_report' in entry:
++        need(module.same_receipt(entry['worker_report'], worker_receipt),
++             'guardian optional worker receipt differs')
++    need(entry['source_after'] == outer['qualifications']['A48']['source_map'], 'guardian/candidate source differs')
++    need(set(q['source_input']) == set(q['source_tested'])
++         and digest(compact(q['source_input'])) == protocol['bindings']['A48']['prepared_source_map_compact_sha256'],
++         'captured qualification prepared source binding differs')
++    result['A48']['separate_guardian_receipt_verified'] = True
++    result['A48']['final_worker_postchecks_verified'] = True
+     return result
+ 
+ 
+@@ -440,7 +486,7 @@
+         'observed_measured_calls', 'measured_count_unknown_stages', 'unexecuted', 'error')}
+     result['all_stage_observations'] = [{key: stage.get(key) for key in ('name', 'status', 'executed',
+         'returncode', 'timed_out', 'observed_calls', 'error', 'unexecuted_reason')} for stage in outer.get('stages', [])]
+-    need(outer['schema'] == 'hepta-a42-small-archive-comparison/v1' and outer['phase'] == 'complete'
++    need(outer['schema'] == 'hepta-a48-small-archive-comparison/v1' and outer['phase'] == 'complete'
+          and outer['passed'] is True and outer['complete'] is True and outer['descriptive_comparison_eligible'] is True
+          and outer['originals_unchanged'] is True and not outer.get('error') and not outer.get('final_integrity_errors'),
+          'actual complete successful original comparison required')
+@@ -508,7 +554,7 @@
+     need(purposes == {'seed': 512, 'preflight': 40, 'warmup': 64, 'measured': 8192, 'postflight': 40},
+          'complete all-purpose counts differ')
+     arms = {}
+-    for version in ('r07', 'A42'):
++    for version in ('r07', 'A48'):
+         selected = [row for row in metrics if row['version'] == version]
+         need(len(selected) == 4, 'four complete rounds per actual source required')
+         data = {'rounds': 4, 'measured_calls': 4096,
+@@ -518,7 +564,7 @@
+             data[key] = sum((row[key] for row in selected), Decimal(0))
+         data['successful_calls_per_second'] = Decimal(4096) / data['wall_seconds']
+         arms[version] = data
+-    a, b = arms['r07'], arms['A42']
++    a, b = arms['r07'], arms['A48']
+     wall_ratio = b['wall_seconds'] / a['wall_seconds']
+     cpu_ratio = b['cpu_upper_seconds'] / a['cpu_lower_seconds'] if a['cpu_lower_seconds'] > 0 else None
+     rss_limit = max(Decimal(a['whole_round_wait4_max_rss_kib']) * Decimal('1.10'),
+@@ -556,7 +602,7 @@
+     parser.add_argument('--evidence-root', type=Path, required=True)
+     parser.add_argument('--out', type=Path, required=True)
+     args = parser.parse_args()
+-    result = {'schema': 'hepta-a46-small-composed-report-numeric-evaluation/v1',
++    result = {'schema': 'hepta-a48-small-ordinary-report-numeric-evaluation/v1',
+               'started_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+               'passed': False, 'report_evaluation_complete': False, 'numeric_gates_passed': False,
+               'performance_adoption_authorized': False, 'benchmark_or_runtime_executions': 0,

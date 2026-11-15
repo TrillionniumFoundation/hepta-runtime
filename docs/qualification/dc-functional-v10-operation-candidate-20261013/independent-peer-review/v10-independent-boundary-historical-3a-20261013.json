@@ -1,0 +1,75 @@
+{
+  "schema": "hepta-v10-independent-boundary-source-review-v1",
+  "reviewer": "/root/v10_source_boundary_audit",
+  "review_scope": "source-only historical R5; no cargo, native MCP, SSH fixtures, deployment, commits or live credentials read",
+  "worktree": "/home/qian-qi/hepta-runtime-operation-v10-20261013",
+  "base_HEAD": "50372629e0522d19b5bc4c1a800bfc311e4597f9",
+  "historical_source": {
+    "artifact": "docs/qualification/dc-functional-v10-operation-candidate-20261013/r5-focused-integration/source-before.json",
+    "artifact_sha256": "ffcd7b9021fc3b3bce951c0bdd488d5c79d5ac26104aad6a68890d35e84461b7",
+    "source_files": 98,
+    "source_code_fingerprint": "3a9106b6fa774758590a94c2506eaded97d3e794cc34823767f93597d2ecdbb0"
+  },
+  "historical_code_pins": {
+    "src/main.rs": "0d0308d17cd504e01ccf71d5eff5dfdca494e2a30899b52888516b20cedc3ff7",
+    "src/mcp/runtime/caller_scope.rs": "8013904df0fbe9e0aa5a44bf4e1c77a6ea9a273de06fe365078f81fd40a4254c",
+    "src/mcp/runtime/operation_async.rs": "cba4196ab6dc3e86dda313e3383f03a0f20c268022f15b8e50e9557ae0b27aaf",
+    "src/mcp/runtime/operation_crypto.rs": "25a0f60d866864e1cac8836ae34ba6a78165ca09ef009230957df2af1b2e40db"
+  },
+  "p0_findings": [],
+  "p1_findings": [
+    {
+      "id": "V10-POLICY-DICTIONARY-ORACLE",
+      "source": [
+        "src/mcp/runtime/operation_async.rs:1324,1490,1517,1544",
+        "src/mcp/runtime/request_results.rs:113-117",
+        "src/mcp/runtime/effective_config.rs:106-108"
+      ],
+      "finding": "V10 stored a public domain-prefixed SHA256 of full RuntimeConfig in each plaintext binding. Candidate hidden config fields can be checked offline if remaining config is known; this is an oracle rather than raw disclosure.",
+      "implementation": "For V10 only, derive an independent policy key from the verified credential; HMAC bounded canonical full RuntimeConfig, pass crypto into cancel and all lookups. Preserve V9 DTO behavior.",
+      "meaningful_regression": "Same policy/same credential stable; changed policy or credential differs; policy binding differs from request/idempotency domains and legacy/plain SHA; input is bounded; all four interfaces use private policy.",
+      "status": "Historical source issue; fix independently inspected in current source."
+    },
+    {
+      "id": "V10-METADATA-STABLE-FD",
+      "source": [
+        "src/mcp/runtime/operation_async.rs:409-419"
+      ],
+      "finding": "read_json validated file once but did not verify same-FD metadata after read. In-place content/mode/link mutation during admission was not rejected as a changed snapshot.",
+      "implementation": "Bound read and compare same-FD dev/ino/uid/mode/nlink/len/mtime/ctime before/after; revalidate private regular single-link owned0600 file; deserialize only after validation.",
+      "meaningful_regression": "Deterministic after-read hook injects mode change, same-width content/time change, append and added hardlink; all refuse before lookup/admission authority.",
+      "status": "Historical source issue; fix independently inspected in current source."
+    },
+    {
+      "id": "V10-DOUBLE-READY-LATE-CANCEL",
+      "source": [
+        "src/mcp/runtime/operation_async.rs:1414-1418"
+      ],
+      "finding": "The biased cancellation branch appeared before the operation branch, so an already-ready original SDK result could be discarded when cancellation was also ready.",
+      "implementation": "Poll completed native result first, preserving original bytes, while keeping pending read futures cancellable and settlement outside the cancellable select.",
+      "meaningful_regression": "A ready original SDK payload with an already-cancelled token survives byte-for-byte; pending read yields cancelled future with no fake payload; timeout remains unknown.",
+      "status": "Historical source issue; fix independently inspected in current source."
+    }
+  ],
+  "boundaries": [
+    {
+      "source": "src/main.rs:138-175,198",
+      "statement": "Credential authentication is startup-cached. Token or policy file changes require a controller restart. No live file-reload revocation was tested or inferred."
+    },
+    {
+      "source": "src/mcp/runtime/operation_crypto.rs:5-13",
+      "statement": "Key strength requires a sufficiently unpredictable private configured credential. Printable32-byte validation does not establish entropy; no credential guessing or live token inspection was performed."
+    },
+    {
+      "source": "src/mcp/runtime/caller_scope.rs:155-235",
+      "statement": "This is a credential/session scope, not ChatGPT user, conversation or tenant isolation; users sharing a credential share retrieval."
+    }
+  ],
+  "qualification": {
+    "complete_replacement": false,
+    "model_origin": false,
+    "business_replacement": false,
+    "dc_off": false,
+    "native_test_executed_by_reviewer": false
+  }
+}

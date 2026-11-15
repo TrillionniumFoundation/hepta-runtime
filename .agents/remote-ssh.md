@@ -5,8 +5,13 @@ Read before touching `src/mcp/fs/remote.rs` or anything path-resolution-adjacent
 ## Model
 
 Every path parses via `parse_path_source` into `PathSource::Local` or `PathSource::Remote` (`ssh://`, `sftp://`).
-Remote is a native capability — always compiled in, no feature flag. `resolve_path_source(path, workdir)`
-resolves locals against the workdir; a remote workdir (`--path ssh://…`) makes relative paths resolve to remote
+The default `remote-fs` Cargo feature enables the SSH/SFTP backend and is required by the main CLI.
+Native process library consumers can set `default-features = false` to omit `russh` and `russh-sftp`.
+All remote filesystem APIs then return an explicit unsupported-feature error, including the runtime's
+descriptor-relative file helper; remote URLs never fall back to local I/O. Local filesystem access and
+the native durable job owner's system-SSH process transport and original-request reconciliation remain
+available. `resolve_path_source(path, workdir)` resolves locals against the workdir; a remote workdir
+(`--path ssh://…`) makes relative paths resolve to remote
 sources, joined with `/` by hand — never `PathBuf::join` (it inserts `\` on Windows and corrupts the URL).
 IPv6 hosts (`ssh://user@[::1]:2222/path`) parse.
 
@@ -53,4 +58,7 @@ A bare remote directory listing defaults to `max_depth: 1` (each subdirectory co
 ## Tests
 
 `remote_tests.rs` covers URL parsing (schemes, defaults, IPv6, home-relative paths), ssh-config parsing,
-proxy-jump forms and lock keys — no live SSH server needed. Keep new remote logic testable the same way.
+proxy-jump forms and lock keys — no live SSH server needed. URL parsing tests run with and without
+`remote-fs`; SSH/pool tests require the feature. `remote_unavailable_tests.rs` verifies explicit rejection
+without the feature, including with a real initialized runtime configuration, while local I/O remains
+available. Keep new remote logic testable the same way.

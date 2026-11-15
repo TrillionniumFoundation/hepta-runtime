@@ -1,0 +1,80 @@
+{
+  "checks": [
+    {
+      "check": "real SSH target account",
+      "result": "passed",
+      "detail": {
+        "uid": 1000,
+        "platform": "linux",
+        "workdir": "/tmp/hepta-operator-canary-c410e2eaf93b4ca095f87e0cad65a4be"
+      }
+    },
+    {
+      "check": "real authenticated MCP discovery and explicit capability mode",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "all operator entry points rejected on isolated host without target execution",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+      "result": "passed",
+      "detail": {
+        "backend": {
+          "backend": "systemd",
+          "launcher_pid": null,
+          "ok": true,
+          "unit": "hepta-runtime-job-1a13365ba0f-7966b-1"
+        },
+        "uid": 1000
+      }
+    },
+    {
+      "check": "native remote file API sees the same operator-created file",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "actual host PID pagination",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "external disposable PID: stale identity denied, actual signal delivered",
+      "result": "passed",
+      "detail": {
+        "atomic_identity": true,
+        "effective_uid": 1000,
+        "identity": "linux:b33ee9b4-9252-493b-8bca-1d602e8ad645:7681046",
+        "pid": 1398869,
+        "result": "signal_sent",
+        "signal": 15,
+        "termination_confirmed": false
+      }
+    },
+    {
+      "check": "real SSH PTY shell input/output/Ctrl-C/close",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "real split-write Unicode PTY: text-safe pages and exact raw-byte pages",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "actual test-controller restart: same job, logs, once-only side effect",
+      "result": "passed",
+      "detail": null
+    }
+  ],
+  "complete": true,
+  "passed": 10,
+  "ssh_target": "rog",
+  "target_test_directory": "/tmp/hepta-operator-canary-c410e2eaf93b4ca095f87e0cad65a4be",
+  "password_prompt_tested": false,
+  "chatgpt_tunnel_tested": false
+}

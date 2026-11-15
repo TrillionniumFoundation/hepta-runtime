@@ -1,0 +1,68 @@
+{
+  "schema": "hepta-d1-c1-pre-execution-clarification/v1",
+  "status": "required clarified protocol before any diagnostic measurement",
+  "actual_diagnostic_run": null,
+  "preparation_only": true,
+  "decision": "Keep the original R16 driver error and continuation semantics exactly.",
+  "authority": "Root explicitly selected this protocol-preserving option before any D1 diagnostic execution.",
+  "earlier_preparation_document": {
+    "path": "QUALIFICATION_AND_DIAGNOSTIC_PLAN.md",
+    "git_blob_sha": "75ab164686b65ecc6eae3f73b2add8219fb00716",
+    "bytes": 13323,
+    "sha256": "6aebae889a001e9c478dd5b788904b254e877db33b3349f52e1c4d9c9c87ea51",
+    "earlier_sentence": "Stop on the first error, retain it and leave later cells explicitly unrun.",
+    "location": "Fixed diagnostic order, line 194 in this exact frozen source",
+    "disposition": "Retained unchanged as preparation history; its blanket stop-after-first-error advice is corrected by this explicit original-protocol fact."
+  },
+  "exact_original_protocol": {
+    "wrapper": {
+      "path": "reference/run_native_observation.py",
+      "sha256": "7606648c99b2ff2bbf0bba58384e8cab609ac3899f838c0b80ba54d6288d20bb"
+    },
+    "driver": {
+      "path": "reference/x230_observation_benchmark.py",
+      "sha256": "4d96f0bf2da2562e788f48be7c37589ab3a513be5f9d8b2d741afe5c08ea9eed"
+    },
+    "cell": "The original cell runs its complete fixed count through pool.map. An individual measured call recorded as okay=false is retained in the original rows and does not itself raise from cell.",
+    "main": "A measured cell with unsuccessful calls can complete normal shutdown and restart checks, mark its round passed=false and continue the original remaining preregistered rounds. All rows remain in the original report.",
+    "exception_warmup_cleanup": "Exceptions, unsuccessful balanced warmup or failed original cleanup raise under the original main and stop its remaining execution. Existing error/cleanup behavior is preserved.",
+    "result": "Any unsuccessful measured call makes the whole original stage reject. The adapter requires original returncode=0, report.passed=true, complete four rounds and eight normal closes before opening or interpreting a diagnostic trace.",
+    "no_success_interpretation": "A rejected/partial stage produces no successful trace cost interpretation, even if some individual traces or rounds look usable.",
+    "no_retry_or_expansion": "No request or round is automatically rerun. No successful subset is selected. No C8 or extra concurrency is started."
+  },
+  "unchanged": [
+    "Controller",
+    "Controller.__init__",
+    "Controller.call",
+    "Controller.close",
+    "cell",
+    "benchmark main",
+    "original direct Popen",
+    "original wrapper save_report",
+    "original native raw output capture",
+    "fixed ABBA and 192 measured / 24 warmup / 6 preflight / 12 restart dimensions"
+  ],
+  "forbidden_for_this_preparation": [
+    "new save_report interruption hook",
+    "new per-call early-stop hook",
+    "global Popen monkeypatch",
+    "new child reaper",
+    "changing count after a failed row",
+    "choosing best successful rounds"
+  ],
+  "actual_source": {
+    "path": "run_c1_phase_cost.py",
+    "bytes": 31131,
+    "sha256": "b49b95b00f67b33b05b726527ee5f63766fe568f7fed6d372f32417d3f811189",
+    "git_blob_sha": "1b55bf0634ec60855f7965223742ea10abf716d9",
+    "runtime_logic_changed_for_this_clarification": false
+  },
+  "future_outer_seal_requirement": "The outer sealed input/protocol must include this clarification before execution and preserve the original held-agent, quiet90, compiler monitor, native auditor and owner/terminal closure.",
+  "scope": {
+    "host_requests": 0,
+    "Rust_commands": 0,
+    "driver_or_parser_imports": 0,
+    "benchmark_runs": 0,
+    "Git_ref_changes": 0
+  }
+}

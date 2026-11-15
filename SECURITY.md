@@ -1,47 +1,24 @@
-# Security Policy
+# Hepta Runtime security policy
 
-## Supported Versions
+This private fork follows the operating contract in `docs/HEPTA_RUNTIME.md`.
+Upstream Octofs compatibility mode is not the hardened deployment: production
+must specify `--runtime-config` and loopback HTTP authentication.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.2.x   | :white_check_mark: |
-| < 0.2.0 | :x:                |
+The controller has no unrestricted root shell. Linux jobs run as systemd
+DynamicUser workloads under a reviewed root-owned policy and aggregate limits.
+The root helper accepts only owned-job operations, not arbitrary PIDs or unit
+names. A restricted SSH identity and strict known-host verification are required.
 
-## Reporting a Vulnerability
+File capabilities use descriptor-relative traversal and nofollow opens for
+remote operations. User home directories, trading state, runner credentials and
+Desktop Commander are outside runtime workspaces. HTTP rejects browser Origin
+headers and requires its per-installation token.
 
-We take security seriously. If you discover a security vulnerability, please report it responsibly.
+macOS does not have the Linux sandbox; its explicit fallback is suitable for
+trusted jobs under a dedicated account, not untrusted multi-tenant execution.
+Program output is untrusted input, and neither local JSONL audit nor per-job
+result files are tamper-evident attestations. Do not expose this runtime publicly,
+forward operator credentials into jobs, or grant general-purpose sudo actions.
 
-### How to Report
-
-1. **DO NOT** open a public issue
-2. Email security@muvon.io with:
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (if any)
-
-### What to Expect
-
-- **Acknowledgment** within 48 hours
-- **Assessment** within 7 days
-- **Resolution** timeline based on severity
-- **Credit** in the security advisory (if desired)
-
-## Security Considerations
-
-Octofs is designed with security in mind:
-
-- **Path Validation** — All paths are validated to prevent directory traversal
-- **Gitignore Awareness** — Respects `.gitignore` patterns
-- **Working Directory** — Operations are scoped to configured directories
-- **No Network** — Default stdio transport, no network exposure
-- **Shell Safety** — Commands are executed with user permissions only
-
-## Best Practices
-
-When using Octofs:
-
-- Configure appropriate working directories
-- Review batch edits before applying
-- Use environment variables for sensitive data
-- Keep Octofs updated to the latest version
+Report issues privately to the repository maintainer. Never include live keys,
+SSH material, trading identifiers or sensitive output in public reports.

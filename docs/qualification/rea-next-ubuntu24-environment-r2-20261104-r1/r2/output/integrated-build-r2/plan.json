@@ -1,0 +1,375 @@
+{
+  "root": "/home/qian-qi/work/hepta-rea-next-rog-20261104-r1",
+  "evidence": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2",
+  "env": {
+    "PATH": "/home/qian-qi/work/hepta-rea-verification-tools-20261104-r1/bin:/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin:/home/qian-qi/.cargo/bin:/usr/local/bin:/usr/bin:/bin",
+    "CARGO_TARGET_DIR": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/target",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "RUSTUP_TOOLCHAIN": "1.95.0",
+    "RUSTUP_AUTO_INSTALL": "0",
+    "CARGO_HOME": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/cargo-home",
+    "CARGO_NET_OFFLINE": "true"
+  },
+  "commands": [
+    {
+      "name": "rust-version",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc",
+        "--version",
+        "--verbose"
+      ]
+    },
+    {
+      "name": "cargo-version",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "--version"
+      ]
+    },
+    {
+      "name": "nextest-version",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "nextest",
+        "--version"
+      ]
+    },
+    {
+      "name": "format",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ]
+    },
+    {
+      "name": "check-all",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "check",
+        "--locked",
+        "--all-targets",
+        "--all-features"
+      ]
+    },
+    {
+      "name": "check-no-default",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "check",
+        "--locked",
+        "--all-targets",
+        "--no-default-features"
+      ]
+    },
+    {
+      "name": "clippy-all",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ]
+    },
+    {
+      "name": "clippy-no-default",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--no-default-features",
+        "--",
+        "-D",
+        "warnings"
+      ]
+    },
+    {
+      "name": "test-all",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--all-targets",
+        "--all-features",
+        "--test-threads",
+        "1",
+        "--retries",
+        "0",
+        "--no-fail-fast"
+      ]
+    },
+    {
+      "name": "test-no-default",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--all-targets",
+        "--no-default-features",
+        "--test-threads",
+        "1",
+        "--retries",
+        "0",
+        "--no-fail-fast"
+      ]
+    },
+    {
+      "name": "python-file_capabilities",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/file_capabilities.py"
+      ]
+    },
+    {
+      "name": "python-runtime_registry_page_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/runtime_registry_page_tests.py"
+      ]
+    },
+    {
+      "name": "python-test_native_canary_resume",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/test_native_canary_resume.py"
+      ]
+    },
+    {
+      "name": "python-chatgpt_v11_layered_read_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v11_layered_read_tests.py"
+      ]
+    },
+    {
+      "name": "python-chatgpt_v11_process_start_concurrency_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v11_process_start_concurrency_tests.py"
+      ]
+    },
+    {
+      "name": "python-chatgpt_v11_v4_session_binding_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v11_v4_session_binding_tests.py"
+      ]
+    },
+    {
+      "name": "python-runtime_workflow_owner_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/runtime_workflow_owner_tests.py"
+      ]
+    },
+    {
+      "name": "python-chatgpt_v10_single_v4_effect_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v10_single_v4_effect_tests.py"
+      ]
+    },
+    {
+      "name": "python-chatgpt_v10_stream_custody_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v10_stream_custody_tests.py"
+      ]
+    },
+    {
+      "name": "python-test_computer_http",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/test_computer_http.py"
+      ]
+    },
+    {
+      "name": "python-full_operator_facade_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/full_operator_facade_tests.py"
+      ]
+    },
+    {
+      "name": "python-full_operator_cancel_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/full_operator_cancel_tests.py"
+      ]
+    },
+    {
+      "name": "python-chatgpt_request_identity_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_request_identity_tests.py"
+      ]
+    },
+    {
+      "name": "python-full_operator_session_recovery_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/full_operator_session_recovery_tests.py"
+      ]
+    },
+    {
+      "name": "python-rea_browser_capture_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/rea_browser_capture_tests.py"
+      ]
+    },
+    {
+      "name": "python-rea_compatibility_ledger_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/rea_compatibility_ledger_tests.py"
+      ]
+    },
+    {
+      "name": "python-native_rollout_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "deploy/maintenance_20261017/native_rollout_tests.py"
+      ]
+    },
+    {
+      "name": "python-recover_control_channel_tests",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "deploy/maintenance_20261017/recover_control_channel_tests.py"
+      ]
+    },
+    {
+      "name": "python-x230-20261028",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/x230/20261028",
+        "-p",
+        "*_tests.py",
+        "-v"
+      ]
+    },
+    {
+      "name": "python-x230-20261029",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/x230/20261029",
+        "-p",
+        "*_tests.py",
+        "-v"
+      ]
+    },
+    {
+      "name": "python-x230-20261030",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/x230/20261030",
+        "-p",
+        "*_tests.py",
+        "-v"
+      ]
+    },
+    {
+      "name": "ledger-full-check",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check",
+        "--cache",
+        "/home/qian-qi/work/hepta-rea-reference-cache-20261104-r1"
+      ]
+    },
+    {
+      "name": "ledger-offline-check",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check-mapping"
+      ]
+    },
+    {
+      "name": "ledger-strict-open",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check-mapping",
+        "--require-parity"
+      ],
+      "expected_exit_code": 3
+    },
+    {
+      "name": "release",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "build",
+        "--locked",
+        "--all-features",
+        "--release",
+        "--bins",
+        "--examples"
+      ]
+    }
+  ],
+  "freeze_binary": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/target/release/hepta-runtime",
+  "environment_scope": {
+    "host": "rog",
+    "environment": "pinned Ubuntu 24.04 container",
+    "image_id": "sha256:120aee0fa701e4f9534dbd500ee7c101a5fc3793127c5820bf34d88cc13eb2d8",
+    "worktree_filesystem": "read-only bind of ext4 checkout",
+    "temporary_filesystem": "tmpfs",
+    "source_manifest_sha256": "9d08a4cc6b6c89f4db47eb300af5e54dd44092082434c93b1dee954c30b2209a",
+    "verification_manifest_sha256": "b783c4f05a5c7f614ee7150ecc66bb4fe25f1cfd8ed548723e405e4612b6baa4",
+    "r1_source_manifest_sha256": "4d2682eda938c49bdbbab45eed4117bbec0a2374477479246716fe749dbadacf",
+    "only_source_change_from_r1": "src/mcp/runtime/request_audit_tests.rs: deterministic fixture order and one same-millisecond cursor regression; no production code changes",
+    "desktop_job": "1a1a537153b-fc05-1ae4",
+    "qualification_scope": "Functional regression under the recorded supported system-executable profile. Does not qualify ROG bare-host observation-pool support or replace physical-ext4 evidence."
+  }
+}

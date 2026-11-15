@@ -1,0 +1,627 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Durable preview cold-recovery and corruption/atomic-publish regressions.
+
+use super::*;
+
+async fn retain_record(record: &Value, state_dir: &Path) -> Result<Value> {
+	retain_record_with_admission(record, state_dir, (), |_| Ok(())).await
+}
+
+fn sample(path: &str) -> Value {
+	rea::inspect_bytes(b"\0asm\x01\0\0\0", path).expect("WASM preview")
+}
+
+#[tokio::test]
+async fn native_preview_store_restores_after_new_reader() {
+	let dir = tempfile::tempdir().expect("private state");
+	let record = sample("/controlled/model.wasm");
+	let id = record["native_evidence_id"]
+		.as_str()
+		.expect("id")
+		.to_string();
+	let receipt = retain_record(&record, dir.path()).await.expect("persist");
+	assert_eq!(receipt["native_evidence_id"], id);
+	assert_eq!(receipt["reused"], false);
+	assert_eq!(receipt["rea_evidence_compatible"], false);
+	let restored = read_record(&id, dir.path()).await.expect("cold read");
+	assert_eq!(restored, record);
+
+	let receipt = retain_record(&record, dir.path()).await.expect("reuse");
+	assert_eq!(receipt["reused"], true);
+	let restored = read_record(&id, dir.path()).await.expect("subsequent read");
+	assert_eq!(restored, record);
+
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		let store = dir.path().join("rea-preview-v1");
+		let entry = store.join(format!("{id}.json"));
+		assert_eq!(
+			std::fs::metadata(store)
+				.expect("store")
+				.permissions()
+				.mode() & 0o777,
+			0o700
+		);
+		assert_eq!(
+			std::fs::metadata(entry)
+				.expect("record")
+				.permissions()
+				.mode() & 0o777,
+			0o600
+		);
+	}
+}
+
+#[tokio::test]
+async fn same_digest_from_two_selected_paths_never_overwrites_first_capture() {
+	let dir = tempfile::tempdir().expect("state");
+	let a = sample("/controlled/origin_a");
+	let b = sample("/controlled/origin_b");
+	assert_eq!(a["native_evidence_id"], b["native_evidence_id"]);
+	let (first, second) =
+		tokio::join!(retain_record(&a, dir.path()), retain_record(&b, dir.path()));
+	let first = first.expect("first");
+	let second = second.expect("second");
+	assert_ne!(first["reused"], second["reused"]);
+	let id = a["native_evidence_id"].as_str().expect("id");
+	let saved = read_record(id, dir.path())
+		.await
+		.expect("verified saved record");
+	assert!(
+		saved["subject"]["local_path"] == "/controlled/origin_a"
+			|| saved["subject"]["local_path"] == "/controlled/origin_b"
+	);
+	let contents = std::fs::read_dir(dir.path().join("rea-preview-v1"))
+		.expect("store entries")
+		.count();
+	assert_eq!(
+		contents, 1,
+		"staging files must be removed after exclusive publication"
+	);
+}
+
+#[tokio::test]
+async fn corrupt_store_never_returns_data_or_overwrites_it_on_retry() {
+	let dir = tempfile::tempdir().expect("state");
+	let record = sample("/controlled/original");
+	let id = record["native_evidence_id"]
+		.as_str()
+		.expect("id")
+		.to_string();
+	retain_record(&record, dir.path()).await.expect("retain");
+	let name = dir.path().join("rea-preview-v1").join(format!("{id}.json"));
+	tokio::fs::write(&name, b"{\"store_format\":\"tampered\"}")
+		.await
+		.expect("inject corruption");
+	let before = tokio::fs::read(&name).await.expect("corrupted bytes");
+	assert!(read_record(&id, dir.path()).await.is_err());
+	assert!(retain_record(&record, dir.path()).await.is_err());
+	assert_eq!(tokio::fs::read(&name).await.expect("still damaged"), before);
+}
+
+#[tokio::test]
+async fn changed_uncommitted_metadata_cannot_reuse_existing_record() {
+	let dir = tempfile::tempdir().expect("state");
+	let a = sample("/controlled/original");
+	retain_record(&a, dir.path()).await.expect("retain");
+	let mut b = a.clone();
+	b["limitations"] = json!(["a producer with different declared coverage"]);
+	assert!(retain_record(&b, dir.path()).await.is_err());
+	let id = a["native_evidence_id"].as_str().expect("id");
+	assert_eq!(
+		read_record(id, dir.path()).await.expect("still original"),
+		a
+	);
+}
+
+#[test]
+fn malformed_native_id_and_semantic_digest_are_rejected_before_lookup() {
+	for id in [
+		"",
+		"../outside",
+		"hepta_rea_preview_v1_",
+		"hepta_rea_preview_v1_0123",
+		"hepta_rea_preview_v1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+	] {
+		assert!(id_suffix(id).is_err(), "{id}");
+	}
+	let mut record = sample("/controlled/model");
+	record["normalized_result"]["format"] = json!("elf");
+	assert!(report_identity(&record).is_err());
+	let mut record = sample("/controlled/model");
+	record["coverage"]["status"] = json!("complete");
+	assert!(report_identity(&record).is_err());
+	let mut record = sample("/controlled/model");
+	record["rea_evidence_compatible"] = json!(true);
+	assert!(report_identity(&record).is_err());
+}
+
+#[tokio::test]
+async fn missing_stored_identity_does_not_create_a_record() {
+	let state = tempfile::tempdir().expect("state");
+	let id = format!("{}{}", ID_PREFIX, "a".repeat(64));
+	assert!(read_record(&id, state.path()).await.is_err());
+	assert!(!state.path().join("rea-preview-v1").exists());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn symlinked_or_world_readable_store_directory_is_refused() {
+	use std::os::unix::fs::PermissionsExt;
+	let state = tempfile::tempdir().expect("state");
+	let other = tempfile::tempdir().expect("other");
+	let link = state.path().join("rea-preview-v1");
+	std::os::unix::fs::symlink(other.path(), &link).expect("symlink");
+	assert!(retain_record(&sample("/selected"), state.path())
+		.await
+		.is_err());
+	std::fs::remove_file(&link).expect("remove symlink");
+	std::fs::create_dir(&link).expect("open dir");
+	std::fs::set_permissions(&link, std::fs::Permissions::from_mode(0o755)).expect("loose policy");
+	assert!(retain_record(&sample("/selected"), state.path())
+		.await
+		.is_err());
+}
+
+#[test]
+fn durable_envelope_rejects_duplicate_json_and_unknown_members() {
+	let record = sample("/controlled/original");
+	let id = record["native_evidence_id"].as_str().expect("id");
+	let envelope = make_envelope(&record).expect("sealed envelope");
+	assert!(verify_envelope(&envelope, id).is_ok());
+	let original = "\"store_format\":\"hepta.rea.preview-store.v1\"";
+	let text = String::from_utf8(envelope).expect("utf-8 JSON");
+	assert!(text.contains(original));
+	let duplicate = text.replacen(original, &format!("{original},{original}"), 1);
+	assert!(verify_envelope(duplicate.as_bytes(), id).is_err());
+	let mut unexpected: Value = serde_json::from_str(&text).expect("object");
+	unexpected["extra"] = json!(true);
+	assert!(verify_envelope(&serde_json::to_vec(&unexpected).expect("json"), id).is_err());
+}
+
+#[tokio::test]
+async fn repeated_concurrent_first_publications_never_expose_a_wide_permission_window() {
+	for round in 0..24 {
+		let state = tempfile::tempdir().expect("isolated new state");
+		let report = sample("/controlled/admitted.wasm");
+		let (a, b, c, d) = tokio::join!(
+			retain_record(&report, state.path()),
+			retain_record(&report, state.path()),
+			retain_record(&report, state.path()),
+			retain_record(&report, state.path())
+		);
+		let mut published = 0;
+		for result in [a, b, c, d] {
+			let receipt = result.unwrap_or_else(|error| panic!("round {round}: {error}"));
+			assert_eq!(receipt["status"], "retained");
+			if receipt["reused"] == false {
+				published += 1;
+			}
+		}
+		assert_eq!(
+			published, 1,
+			"only one atomic create-only operation can publish"
+		);
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			let mode = std::fs::metadata(state.path().join("rea-preview-v1"))
+				.expect("created store root")
+				.permissions()
+				.mode();
+			assert_eq!(
+				mode & 0o077,
+				0,
+				"private mode must be atomic on round {round}"
+			);
+		}
+	}
+}
+
+#[test]
+fn store_quota_counts_existing_records_and_abandoned_staging_bytes() {
+	let root = tempfile::tempdir().expect("store");
+	let one = root.path().join("one.json");
+	let two = root.path().join("two.json");
+	std::fs::write(&one, b"one").expect("one");
+	std::fs::write(&two, b"two").expect("two");
+	assert!(enforce_quota(root.path(), 1, 2, 1024).is_err());
+	assert!(enforce_quota(root.path(), 1, 3, 1024).is_ok());
+	let abandoned = root.path().join(".abandoned.tmp");
+	std::fs::write(&abandoned, b"uncommitted").expect("abandoned");
+	assert!(enforce_quota(root.path(), 1, 3, 10).is_err());
+}
+
+#[tokio::test]
+async fn total_byte_quota_is_enforced_without_replacing_prior_data() {
+	let state = tempfile::tempdir().expect("state");
+	let report = sample("/controlled/valid.wasm");
+	let id = report["native_evidence_id"]
+		.as_str()
+		.expect("id")
+		.to_string();
+	retain_record(&report, state.path())
+		.await
+		.expect("initial retain");
+	let root = state.path().join("rea-preview-v1");
+	let orphan = root.join(".uncommitted-large.tmp");
+	let file = std::fs::OpenOptions::new()
+		.create_new(true)
+		.write(true)
+		.open(&orphan)
+		.expect("sparse test staging file");
+	file.set_len(MAX_STORED_BYTES + 1)
+		.expect("sparse file length");
+	let another = rea::inspect_bytes(b"\0asm\x01\0\0\0additional", "/controlled/another")
+		.expect("different source digest");
+	assert_ne!(another["native_evidence_id"], id);
+	assert!(retain_record(&another, state.path()).await.is_err());
+	assert_eq!(
+		read_record(&id, state.path()).await.expect("old content"),
+		report
+	);
+	let reused = retain_record(&report, state.path())
+		.await
+		.expect("reuse at capacity");
+	assert_eq!(reused["reused"], true);
+	std::fs::remove_file(&orphan).expect("remove orphan");
+	assert!(retain_record(&another, state.path()).await.is_ok());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn external_hardlinks_cannot_reuse_or_read_retained_previews() {
+	let state = tempfile::tempdir().expect("state");
+	let record = sample("/controlled/admitted.wasm");
+	let id = record["native_evidence_id"].as_str().expect("id");
+	retain_record(&record, state.path())
+		.await
+		.expect("initial record");
+	let root = state.path().join("rea-preview-v1");
+	let filename = root.join(format!("{id}.json"));
+	let external = state.path().join("external-link.json");
+	std::fs::hard_link(&filename, &external).expect("create external hardlink");
+	assert!(read_record(id, state.path()).await.is_err());
+	assert!(retain_record(&record, state.path()).await.is_err());
+	assert!(enforce_quota(&root, 1, MAX_STORED_RECORDS, MAX_STORED_BYTES).is_err());
+	std::fs::remove_file(&external).expect("remove hardlink");
+	assert_eq!(
+		read_record(id, state.path()).await.expect("recovered"),
+		record
+	);
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn atomic_create_only_publication_has_no_two_link_crash_window() {
+	use std::os::unix::fs::MetadataExt;
+
+	let root = tempfile::tempdir().expect("private staging root");
+	let first_stage = root.path().join(".first.tmp");
+	let destination = root.path().join("evidence.json");
+	std::fs::write(&first_stage, b"sealed-record").expect("first staging bytes");
+	assert!(
+		!install_staged_exclusive(&first_stage, &destination).expect("first create-only commit"),
+		"first publication must not be classified as reuse"
+	);
+	assert!(
+		!first_stage.exists(),
+		"rename consumes the staging name atomically"
+	);
+	assert_eq!(
+		std::fs::metadata(&destination)
+			.expect("published fd")
+			.nlink(),
+		1,
+		"cold readers must never observe a committed nlink=2 inode"
+	);
+
+	let second_stage = root.path().join(".second.tmp");
+	std::fs::write(&second_stage, b"untrusted-collision").expect("second staging bytes");
+	assert!(
+		install_staged_exclusive(&second_stage, &destination).expect("create-only collision"),
+		"an already published identity must not be overwritten"
+	);
+	assert_eq!(
+		std::fs::read(&destination).expect("existing published bytes"),
+		b"sealed-record"
+	);
+	assert_eq!(
+		std::fs::read(&second_stage).expect("uncommitted bytes remain staged"),
+		b"untrusted-collision"
+	);
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn atomic_create_only_publication_preserves_an_existing_symlink() {
+	use std::os::unix::fs::MetadataExt;
+
+	let root = tempfile::tempdir().expect("private staging root");
+	let staged = root.path().join(".staged.tmp");
+	let protected = root.path().join("protected.json");
+	let destination = root.path().join("existing.json");
+	std::fs::write(&staged, b"new-record").expect("stage");
+	std::fs::write(&protected, b"existing-target").expect("protected target");
+	std::os::unix::fs::symlink(&protected, &destination).expect("destination symlink");
+	assert!(install_staged_exclusive(&staged, &destination).expect("collision"));
+	assert!(std::fs::symlink_metadata(&destination)
+		.expect("symlink metadata")
+		.file_type()
+		.is_symlink());
+	assert_eq!(
+		std::fs::read(&protected).expect("protected bytes"),
+		b"existing-target"
+	);
+	assert_eq!(
+		std::fs::read(&staged).expect("preserved stage"),
+		b"new-record"
+	);
+	assert_eq!(
+		std::fs::metadata(&staged).expect("stage metadata").nlink(),
+		1
+	);
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn atomic_create_only_publication_refuses_a_missing_source_without_a_fallback() {
+	let root = tempfile::tempdir().expect("private staging root");
+	let missing = root.path().join(".absent.tmp");
+	let destination = root.path().join("absent.json");
+	assert!(install_staged_exclusive(&missing, &destination).is_err());
+	assert!(!destination.exists());
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn atomic_create_only_primitive_has_one_winner_under_racing_publications() {
+	use std::os::unix::fs::MetadataExt;
+
+	let root = tempfile::tempdir().expect("private racing root");
+	let destination = root.path().join("winner.json");
+	let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+	let mut workers = Vec::new();
+	for index in 0..8 {
+		let staged = root.path().join(format!(".stage-{index}.tmp"));
+		let payload = format!("candidate-{index}");
+		std::fs::write(&staged, payload.as_bytes()).expect("candidate bytes");
+		let target = destination.clone();
+		let ready = std::sync::Arc::clone(&barrier);
+		workers.push(std::thread::spawn(move || {
+			ready.wait();
+			let reused = install_staged_exclusive(&staged, &target).expect("atomic install");
+			(staged, payload, reused)
+		}));
+	}
+	let results: Vec<_> = workers
+		.into_iter()
+		.map(|worker| worker.join().expect("worker"))
+		.collect();
+	let winners: Vec<_> = results.iter().filter(|(_, _, reused)| !reused).collect();
+	assert_eq!(winners.len(), 1);
+	assert_eq!(
+		std::fs::read(&destination).expect("winner"),
+		winners[0].1.as_bytes()
+	);
+	assert_eq!(
+		std::fs::metadata(&destination)
+			.expect("winner metadata")
+			.nlink(),
+		1
+	);
+	for (staged, payload, reused) in results {
+		if reused {
+			assert_eq!(
+				std::fs::read(&staged).expect("losing stage"),
+				payload.as_bytes()
+			);
+			assert_eq!(
+				std::fs::metadata(&staged).expect("losing metadata").nlink(),
+				1
+			);
+		} else {
+			assert!(!staged.exists());
+		}
+	}
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod publication_cancellation {
+	use super::*;
+	use std::os::fd::AsRawFd;
+	use std::os::unix::fs::OpenOptionsExt;
+	use std::sync::atomic::{AtomicBool, Ordering};
+	use std::sync::Arc;
+	use std::time::Duration;
+
+	struct OwnerGuard {
+		lock: Option<std::fs::File>,
+		released: Option<tokio::sync::oneshot::Sender<()>>,
+	}
+
+	impl Drop for OwnerGuard {
+		fn drop(&mut self) {
+			drop(self.lock.take());
+			if let Some(released) = self.released.take() {
+				let _ = released.send(());
+			}
+		}
+	}
+
+	fn exclusive_available(file: &std::fs::File) -> bool {
+		if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+			assert_eq!(unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) }, 0);
+			true
+		} else {
+			assert_eq!(
+				std::io::Error::last_os_error().kind(),
+				std::io::ErrorKind::WouldBlock
+			);
+			false
+		}
+	}
+
+	async fn cancel_at(phase: PublishPhase, existing: bool) {
+		let state = tempfile::tempdir().expect("private state");
+		let record = sample("/controlled/owned.wasm");
+		let id = report_identity(&record).expect("preview id");
+		if existing {
+			retain_record(&record, state.path())
+				.await
+				.expect("initial record");
+		}
+		let root = prepare_root(state.path()).expect("private preview root");
+		let destination = filename(&root, &id).expect("destination");
+		let store_probe = std::fs::File::open(&root).expect("independent store lock probe");
+		let owner_path = state.path().join("synthetic-owner.lock");
+		let owner_lock = std::fs::OpenOptions::new()
+			.read(true)
+			.write(true)
+			.create_new(true)
+			.mode(0o600)
+			.open(&owner_path)
+			.expect("owner lock");
+		assert_eq!(
+			unsafe { libc::flock(owner_lock.as_raw_fd(), libc::LOCK_SH | libc::LOCK_NB) },
+			0
+		);
+		let owner_probe = std::fs::File::open(&owner_path).expect("independent owner lock probe");
+		let (released_tx, released_rx) = tokio::sync::oneshot::channel();
+		let admission = Arc::new(OwnerGuard {
+			lock: Some(owner_lock),
+			released: Some(released_tx),
+		});
+		let reached = Arc::new(tokio::sync::Notify::new());
+		let worker_reached = reached.clone();
+		let synced = Arc::new(AtomicBool::new(false));
+		let worker_synced = synced.clone();
+		let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+		let worker_state = state.path().to_owned();
+		let worker_record = record.clone();
+		let task = tokio::spawn(async move {
+			retain_record_with_admission(&worker_record, &worker_state, admission, move |current| {
+				if current == PublishPhase::AfterParentSync {
+					worker_synced.store(true, Ordering::SeqCst);
+				}
+				if current == phase {
+					worker_reached.notify_one();
+					resume_rx
+						.recv_timeout(Duration::from_secs(20))
+						.context("test did not release preview commit")?;
+				}
+				Ok(())
+			})
+			.await
+		});
+		tokio::time::timeout(Duration::from_secs(20), reached.notified())
+			.await
+			.expect("commit reached checkpoint");
+		assert_eq!(
+			destination.exists(),
+			existing || phase == PublishPhase::BeforeParentSync
+		);
+		assert!(!synced.load(Ordering::SeqCst));
+		task.abort();
+		assert!(task.await.expect_err("waiter cancelled").is_cancelled());
+		assert!(
+			!exclusive_available(&store_probe),
+			"actual store lock survives waiter cancellation"
+		);
+		assert!(
+			!exclusive_available(&owner_probe),
+			"owner admission survives waiter cancellation"
+		);
+		assert!(
+			!synced.load(Ordering::SeqCst),
+			"cancellation did not confirm a durable receipt"
+		);
+		resume_tx.send(()).expect("resume real commit");
+		tokio::time::timeout(Duration::from_secs(20), released_rx)
+			.await
+			.expect("guard release")
+			.expect("guard notification");
+		assert!(synced.load(Ordering::SeqCst));
+		assert!(exclusive_available(&store_probe));
+		assert!(exclusive_available(&owner_probe));
+		assert_eq!(
+			read_record(&id, state.path())
+				.await
+				.expect("completed content"),
+			record
+		);
+		assert_eq!(std::fs::read_dir(&root).expect("store files").count(), 1);
+		let recovered = retain_record(&record, state.path())
+			.await
+			.expect("reconciled receipt");
+		assert_eq!(recovered["reused"], true);
+	}
+
+	#[tokio::test]
+	async fn cancellation_before_rename_preserves_owner_and_store_lifetimes() {
+		cancel_at(PublishPhase::BeforeRename, false).await;
+	}
+
+	#[tokio::test]
+	async fn cancellation_after_rename_preserves_owner_and_store_until_parent_fsync() {
+		cancel_at(PublishPhase::BeforeParentSync, false).await;
+	}
+
+	#[tokio::test]
+	async fn cancelled_reuse_keeps_both_guards_until_reconciliation_fsync() {
+		cancel_at(PublishPhase::BeforeParentSync, true).await;
+	}
+
+	#[tokio::test]
+	async fn post_rename_failure_has_no_success_receipt_and_retry_fsyncs_existing_identity() {
+		let state = tempfile::tempdir().expect("private state");
+		let record = sample("/controlled/owned.wasm");
+		let id = report_identity(&record).expect("identity");
+		let result = retain_record_with_admission(&record, state.path(), (), |phase| {
+			if phase == PublishPhase::BeforeParentSync {
+				bail!("injected failure before actual parent sync");
+			}
+			Ok(())
+		})
+		.await;
+		assert!(result
+			.expect_err("unconfirmed commit")
+			.to_string()
+			.contains("did not confirm durability"));
+		let saved = filename(&store_dir(state.path()).expect("root"), &id).expect("destination");
+		assert!(saved.exists(), "visible does not mean confirmed durable");
+		let before = std::fs::read(&saved).expect("visible record");
+		let phases = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let observed = phases.clone();
+		let receipt = retain_record_with_admission(&record, state.path(), (), move |phase| {
+			observed.lock().expect("test observations").push(phase);
+			Ok(())
+		})
+		.await
+		.expect("reconciled receipt");
+		assert_eq!(receipt["reused"], true);
+		assert_eq!(
+			*phases.lock().expect("observations"),
+			vec![
+				PublishPhase::BeforeParentSync,
+				PublishPhase::AfterParentSync
+			]
+		);
+		assert_eq!(std::fs::read(saved).expect("preserved record"), before);
+	}
+}

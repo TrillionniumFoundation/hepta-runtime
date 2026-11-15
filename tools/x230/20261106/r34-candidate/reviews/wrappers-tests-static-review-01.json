@@ -1,0 +1,115 @@
+{
+  "schema": "hepta-r34-wrappers-tests-static-review/v1",
+  "review_date_utc": "2026-11-06",
+  "reviewer": "independent evidence_review agent",
+  "result": "no_blocking_issue_found_in_reviewed_scope",
+  "status": "static_only_uncompiled_unexecuted",
+  "input": {
+    "repository": "TrillionniumFoundation/hepta-runtime",
+    "candidate_catalog_git_blob": "04968ea30cb3b08d4790d8b3f18fc62f69e3dab8",
+    "accepted_baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+    "manifest": {
+      "path": "manifest.json",
+      "bytes": 3999,
+      "sha256": "22c24ee1f14d1c267d2b88d14919b2fd6c35035af342f56a4c486ce776b1f90c",
+      "git_blob_sha1": "a37cb78532e51f85211e9e02f429c05d4fb587bc"
+    },
+    "patch": {
+      "path": "candidate.patch",
+      "bytes": 22870,
+      "sha256": "1a73c219fcfd2a273354bcbe0e1eb3f2ba629b1eb9f4969591352c6dd1a4ffc0",
+      "git_blob_sha1": "3584b03a215b32d685fdc497aa99a02b7edc3e90"
+    },
+    "changed_sources": [
+      {
+        "path": "source/src/mcp/runtime/jobs.rs",
+        "bytes": 186466,
+        "sha256": "e6d9de7aed9ab92b9a57544546651a707449577e56ba1fbcd3233e2d9407fec5",
+        "git_blob_sha1": "b4bab5345b69ab6e631a07ab3806db181e51d5a7"
+      },
+      {
+        "path": "source/src/mcp/runtime/ssh.rs",
+        "bytes": 18745,
+        "sha256": "cbb064cc63ec8d5217df4c240b255a49348054215411ee1a8bc39ac2886b1ad2",
+        "git_blob_sha1": "422075f8f9f73b86f5df79c6f89717551af1f5ae"
+      },
+      {
+        "path": "source/src/mcp/runtime/ssh_direct.rs",
+        "bytes": 23273,
+        "sha256": "5847841046a14dda46c2c18015ca82c385d76f0154e8fa5cce811b8f3fd07496",
+        "git_blob_sha1": "0b1c010554649cc7da4b384585d61a1096ca6da4"
+      },
+      {
+        "path": "source/src/mcp/runtime/ssh_direct_tests.rs",
+        "bytes": 44681,
+        "sha256": "ca1e96978f0b68e1e5a17427f62d01203e219d938fc4f1be3990225f551de9c5",
+        "git_blob_sha1": "7d156c4233b91639c23c53c8463def662222583f"
+      }
+    ],
+    "catalog_entries_independently_checked": 22,
+    "catalog_identity_errors": [],
+    "identity_method": "Read each of the 22 local catalog files and independently compare exact byte size, SHA-256 and Git blob SHA-1 with the frozen catalog."
+  },
+  "scope": {
+    "primary": [
+      "Eight new sibling tests in ssh_direct_tests.rs: scheduling, ownership/borrowing and API use.",
+      "Ordinary ssh.rs wrappers: deadline creation, serialization and error precedence.",
+      "jobs.rs: exactly two typed existing-job cancellation substitutions."
+    ],
+    "supporting": "Read direct cancellation admission/shared capture helpers and the existing Owner, fixture, gate and reap helpers needed to interpret those tests.",
+    "excluded": "This is not the separate full global/host admission and reap-custody review, a Rust compile result, an executed-test result, a performance result or adoption approval."
+  },
+  "findings": {
+    "ordinary_python_wrapper": "After only the admission-aware capture-call substitution and layout normalization, the original body is unchanged. It retains checked absolute deadline creation before interpreter validation and JSON serialization, the same deadline at capture, remote-exit handling before output JSON decoding, and the same error text.",
+    "ordinary_jobctl_wrapper": "After only the admission-aware capture-call substitution and layout normalization, the original body is unchanged. It retains the 20-second deadline before JSON serialization, newline framing, fixed sudo command, remote-exit check and JSON decoding. The typed cancel wrapper constructs the same cancel JSON before entering this body.",
+    "wrapper_scheduling": "Ordinary entry points select DirectAdmission::Ordinary. Wrapper awaits introduce no explicit yield or timeout renewal. The selected direct path receives the original absolute deadline.",
+    "jobs": "Independent exact text replacement reproduces candidate jobs.rs from baseline using only the two specified cancellation-call substitutions, each once. Receipt checks, intent recording, request construction, grace handling, cancellation-result retention and audit code remain in place.",
+    "borrowing_api": "Owner::finish takes &self; the pinned capture futures do not require moving the borrowed owner. Spawned cancellation helpers own their cloned proxy, command and target. Queue Permit values are consumed when requests are sent. No concrete borrow/API blocker was found by source inspection."
+  },
+  "test_review": [
+    {
+      "name": "existing_job_cancel_uses_ordinary_capacity_while_reserve_is_busy",
+      "observation": "Holds the reserve connection, waits for actual child readiness, and checks ordinary lease use with reserve admission untouched."
+    },
+    {
+      "name": "cancel_reserve_wait_releases_partial_ordinary_host_and_global_leases",
+      "observation": "Checks host-blocked and global-blocked attempts separately; caller abort is awaited before asserting reserve admission restoration."
+    },
+    {
+      "name": "closed_ordinary_capacity_cannot_select_the_cancellation_reserve",
+      "observation": "Checks the encountered closed-global error and returned partial leases. Its setup does not establish every possible combination of earlier unavailable and later closed semaphores."
+    },
+    {
+      "name": "full_ordinary_work_keeps_cancel_to_one_extra_child_and_eight_reserve_identities",
+      "observation": "Waits for all eight ordinary children to become ready before adding eight ordinary waiters. Gated child events support the intended nine-child total and three-child same-target peak checks."
+    },
+    {
+      "name": "original_owner_queue_can_hold_eight_ordinary_and_one_reserved_ready_request",
+      "observation": "Reserves all nine sender slots before sending any request, so receiver scheduling cannot hide an eight-slot queue. It checks that a tenth reservation fails."
+    },
+    {
+      "name": "reserve_readiness_cannot_overtake_original_expiry_or_stop",
+      "observation": "Explicitly polls the pending capture once, then makes expiry or stop visible before returning reserve capacity and re-polling. This exercises simultaneous readiness without an assumed scheduler order."
+    },
+    {
+      "name": "cancelled_reserved_child_keeps_its_leases_until_the_original_reap",
+      "observation": "Waits for caller cancellation and the reap gate, checks retained reserve custody, then releases the original gate. The release guard is dropped before owner teardown on unwinding."
+    },
+    {
+      "name": "unconfirmed_reserved_wait_keeps_custody_and_failed_shutdown_persistent",
+      "observation": "Uses the existing failed-wait mechanism, checks persistent shutdown failure, and performs fixture teardown through the same retained child and existing reap/release helpers."
+    }
+  ],
+  "boundaries": {
+    "rust_compiled": false,
+    "tests_executed": false,
+    "benchmarks_executed": false,
+    "prepared_verifier_executed": false,
+    "archived_programs_executed": false,
+    "source_modified": false,
+    "x230_or_mac_access_during_review": false,
+    "git_ref_modified": false,
+    "runtime_conclusion": "Actual compiler acceptance, execution outcomes, deadlines under load and performance require the separately authorized qualification and observation gates.",
+    "composition": "The frozen candidate is based on R24. This review does not establish the behavior of a future combination with R31, R32 or R33 changes."
+  }
+}

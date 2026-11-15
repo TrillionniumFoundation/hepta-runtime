@@ -1,0 +1,19 @@
+#[cfg(target_os = "macos")]
+fn install_staged_exclusive(staged: &Path, destination: &Path) -> Result<bool> {
+	use std::ffi::CString;
+	use std::os::unix::ffi::OsStrExt;
+
+	let from = CString::new(staged.as_os_str().as_bytes())
+		.context("REA preview staging path contains NUL")?;
+	let to = CString::new(destination.as_os_str().as_bytes())
+		.context("REA preview destination path contains NUL")?;
+	let status = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) };
+	if status == 0 {
+		return Ok(false);
+	}
+	let error = std::io::Error::last_os_error();
+	if error.kind() == std::io::ErrorKind::AlreadyExists {
+		return Ok(true);
+	}
+	Err(error).context("cannot atomically publish create-only REA preview on macOS")
+}

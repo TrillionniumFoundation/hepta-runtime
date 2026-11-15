@@ -1,0 +1,43 @@
+{
+  "schema": "hepta.rea.numeric-attempts.v1",
+  "excluded_attempts": [
+    {
+      "job_id": "1a1a67251e5-fc05-2561",
+      "artifact": "excluded-zero-test-attempt.json",
+      "qualification": false,
+      "reason": "Initial --bin filter ran zero tests. It is explicitly not a red or green verification."
+    },
+    {
+      "job_id": "1a1a68498dd-fc05-2663",
+      "output_path": "/tmp/rea-independent-evidence-audit-20261104/mcp-before-r2",
+      "deadline_seconds": 300,
+      "state": "timed_out",
+      "exit_code": 124,
+      "qualification": false,
+      "reason": "Initial all-438 old-binary MCP attempt exceeded command wall budget before producing qualification.json; no complete-corpus claim."
+    }
+  ],
+  "completed_attempts": [
+    {
+      "job_id": "1a1a67a46bf-fc05-25f0",
+      "artifact": "before-fix-lib.json",
+      "expected_red_observed": true
+    },
+    {
+      "job_id": "1a1a68facb7-fc05-26e8",
+      "artifact": "before-fix-mcp.json",
+      "deadline_seconds": 900,
+      "scope": "All 438 actual npm records; expected exactly 20 digest rejections"
+    },
+    {
+      "job_id": "1a1a687a326-fc05-2682",
+      "artifact": "qualification.json",
+      "scope": "Fixed library, 1052304 finite cases, npm fixtures and actual production MCP"
+    },
+    {
+      "job_id": "1a1a690de2e-fc05-26f1",
+      "artifact": "clippy.json",
+      "scope": "All features and all targets, warnings denied"
+    }
+  ]
+}

@@ -1,0 +1,207 @@
+{
+  "schema": "hepta-router-reuse-contract-review/v1",
+  "recorded_utc": "2026-11-05T18:17:50.906173+00:00",
+  "review_kind": "bounded local static source review only",
+  "accepted_base_commit_provided_by_parent": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "source_bindings": [
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/server.rs",
+      "repository_path": "src/mcp/server.rs",
+      "bytes": 118630,
+      "sha256": "875785604d51feba6b02fdf1a6699b8d361d065a44cc4ef7bee6f931521e7e71"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/server_tests.rs",
+      "repository_path": "src/mcp/server_tests.rs",
+      "bytes": 38983,
+      "sha256": "003fa3365b3af0302c4a8e19f9230cea35f3366878898c1cf0920b2b6d47cddb"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/runtime/caller_scope.rs",
+      "repository_path": "src/mcp/runtime/caller_scope.rs",
+      "bytes": 8822,
+      "sha256": "8013904df0fbe9e0aa5a44bf4e1c77a6ea9a273de06fe365078f81fd40a4254c"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/runtime/caller_scope_tests.rs",
+      "repository_path": "src/mcp/runtime/caller_scope_tests.rs",
+      "bytes": 5897,
+      "sha256": "77ccf054de81a644a3dc1245fffd7ce840853137205f33d93ab7c023088af950"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/runtime/config.rs",
+      "repository_path": "src/mcp/runtime/config.rs",
+      "bytes": 23682,
+      "sha256": "961c275dbe205180303ae9affa562af61aa4b0cc29eebbf5f8686c711d9d67d3"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/request_ctx.rs",
+      "repository_path": "src/mcp/request_ctx.rs",
+      "bytes": 2860,
+      "sha256": "81ebf6e68bcf8c119c83274a090b5e4796d00b3ca6d889c92e9922be0612e943"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/runtime/effect_owner_fence_tests.rs",
+      "repository_path": "src/mcp/runtime/effect_owner_fence_tests.rs",
+      "bytes": 21642,
+      "sha256": "4567df47507ee4366a6bdaab173a9a45bd0ad5c170469d6293ac267dca12684b"
+    }
+  ],
+  "actual_route_proof": {
+    "path": "/workspace/scratch/806ba5f52f94/r25-capacity-audit/r28-router-source-audit-01/actual-route-proof-01.json",
+    "bytes": 7479,
+    "sha256": "409693f6a271fe6123b90510838079b8cc40d734ffeb672144670a5006072b54",
+    "scope": "Parent/owner original route proof, locally hashed; no native route execution by this reviewer."
+  },
+  "metadata_scan": {
+    "path": "/workspace/scratch/b96be991ab90/router-contract-review-01/metadata-static-scan-01.json",
+    "bytes": 56582,
+    "sha256": "93ea662a83ab243f65458484acb4ae1bb37c02f28cdd38e26e1fd081ec2bc9a3"
+  },
+  "disposition": "No definite handwritten-server contract blocker to immutable table reuse, conditional on preserving the listed dynamic path and exact dependency traits/macro behavior. Candidate source, expansion and native verification have not been reviewed or executed.",
+  "findings": [
+    {
+      "id": "visibility",
+      "source": "src/mcp/server.rs:2427-2445,2605-2615; runtime/config.rs:13,353-395",
+      "requirement": "Read the current process runtime-config presence for every call/list and combine it with the current request tool name. Runtime mode hides shell; filesystem mode hides exactly RUNTIME_TOOL_NAMES. Retain unknown-tool canonicalization and exact-only metadata observer exemption.",
+      "clarification": "RUNTIME_CONFIG is process-global OnceLock, not per-OctofsServer mutable configuration. A pre-init to post-init transition is meaningful in an isolated child; two different installed runtime configurations in one process are not supported."
+    },
+    {
+      "id": "annotation_classification",
+      "source": "src/mcp/server.rs:2435-2439,2531-2538",
+      "requirement": "Borrow immutable metadata for the selected current name, preserving canonical name and read_only_hint values.",
+      "clarification": "readonly is an audit failure-classification input, not an authorization switch. It does not itself permit or reject a write."
+    },
+    {
+      "id": "authority_and_crypto",
+      "source": "src/mcp/server.rs:273-290,433-751,2446-2487; runtime/caller_scope.rs:155-236",
+      "requirement": "Resolve the current instance owner_binding against this RequestContext on each admitted call; metadata observers still resolve inside their own handler. HTTP request Parts must carry AuthenticatedOperatorScope or fail; no fallback for untrusted HTTP headers. Reject changed authority within one session. Native fallback remains this instance search_owner; operation crypto remains current trusted HTTP extension or this instance stdio scope. No owner, crypto, capabilities or authorization result in a shared route entry."
+    },
+    {
+      "id": "admission_order",
+      "source": "src/mcp/server.rs:2446-2513",
+      "requirement": "Keep audit admission and request_status/request_result read-target validation under the current owner before dispatch. Keep result-intent admission and refusal identity/ack behavior. Hidden and unknown routes retain ordinary audit admission when runtime is enabled; exact metadata observers alone skip it."
+    },
+    {
+      "id": "dispatch_context",
+      "source": "src/mcp/server.rs:2514-2522,273-352,770-793,1118-1174,2275-2307; request_ctx.rs:38-79",
+      "requirement": "Construct ToolCallContext from the current self, request and context for each call. Keep session root/current workdir and first-capability application, per-instance view cache, fresh task-local hints, current peer/progress token/protocol and subscription registry. Distinct with_root instances remain isolated; Clone intentionally shares the original session Arc state."
+    },
+    {
+      "id": "policy_and_effects",
+      "source": "src/mcp/server.rs:363-401,654-671,780-793,2253-2260; runtime/effect_owner_fence_tests.rs:78-175",
+      "requirement": "Retain existing handler-body current local/remote path and backend policy checks and new-effect admission. Existing continuation/local-state exceptions and direct-native ingress fencing remain unchanged. Do not pre-authorize a handler or store an admission permit in the router."
+    },
+    {
+      "id": "completion",
+      "source": "src/mcp/server.rs:2425,2523-2564",
+      "requirement": "Retain this request cancellation token, result, audit ticket and result intent. Cancellation => Unknown; successful complete response => Completed; invisible or readonly errors => Failed; remaining errors => Unknown. Keep result retention, current request identity, final wire budget, audit finish and durability acknowledgements; no automatic replay on audit finish failure."
+    },
+    {
+      "id": "discovery",
+      "source": "src/mcp/server.rs:2411-2415,2600-2631",
+      "requirement": "list_tools must filter current runtime mode, transform a cloned returned Tool and a cloned schema map, and put a new Arc only in that returned descriptor. Never mutate the shared raw Tool/schema. Keep per-context protocol hints: modern ttl0/public, legacy absent. Do not cache the whole ListToolsResult across protocol/mode states."
+    },
+    {
+      "id": "static_metadata",
+      "source": "metadata-static-scan-01.json; src/mcp/server.rs:2830-2841",
+      "requirement": "Only the compiled table and static descriptors are cache candidates. Current71 tool declarations use literal title/description and4 boolean annotation values, with no name/schema expression overrides. Seven schema_with uses target one fixed literal JSON callback; remaining schemars attributes are required and max50. No repository manual JsonSchema impl was found by the bounded source scan.",
+      "limitation": "Source review does not prove external macro/derive behavior or Send+Sync, and is not Cargo expansion or native compilation. Exact dependency reviewer owns those constraints."
+    }
+  ],
+  "existing_coverage": [
+    {
+      "test": "runtime_metadata_observers_do_not_admit_themselves_over_real_mcp",
+      "source": "src/mcp/server_tests.rs:1062-1137",
+      "kind": "non-ignored real duplex MCP in isolated child",
+      "covers": "Three metadata observer names, repeated valid and invalid observer calls preserve archive bytes, host_list normal admission, near-name unknown route is rejected and gets ordinary audit admission.",
+      "gap": "Currently one server/owner; not explicit warmed-before-init shared routing, hidden shell, cross-session owner or readonly completion classification."
+    },
+    {
+      "test": "served_tool_schemas_carry_no_generator_noise",
+      "source": "src/mcp/server_tests.rs:523-571",
+      "kind": "non-ignored real duplex MCP",
+      "covers": "Filesystem-mode10 tool list, expected explicit filesystem tools, cleaned schemas and retained view parameters.",
+      "gap": "Does not compare raw shared descriptors before and after discovery."
+    },
+    {
+      "test": "generator_noise_is_stripped_but_parameters_named_like_it_survive",
+      "source": "src/mcp/server_tests.rs:492-521",
+      "kind": "non-ignored helper unit test",
+      "covers": "Keywords inside parameter names survive cleaning; fixed non-null defaults and integer bounds retained.",
+      "gap": "Helper behavior only, not router sharing."
+    },
+    {
+      "test": "results_carry_cache_hints_on_2026_07_28; legacy_results_carry_no_cache_hints",
+      "source": "src/mcp/server_tests.rs:362-403",
+      "kind": "non-ignored real duplex MCP",
+      "covers": "Modern tools list public ttl0 and legacy absent cache hints, plus resource behavior.",
+      "gap": "No need to duplicate these protocol assertions in many new tests."
+    },
+    {
+      "test": "execution_shadow_tool_requires_runtime_mode_discovery",
+      "source": "src/mcp/server_tests.rs:1139-1146",
+      "kind": "non-ignored source/router registration check",
+      "covers": "Name belongs to RUNTIME_TOOL_NAMES and fresh factory registration exists.",
+      "gap": "Does not itself test actual list visibility or dispatch refusal."
+    },
+    {
+      "test": "runtime_remote_execution_recovery_and_policy_e2e",
+      "source": "src/mcp/server_tests.rs:599-859",
+      "kind": "ignored manual integration test requiring dedicated SSH identities/config",
+      "covers": "Runtime list hides shell; actual direct shell, arbitrary bash launch, controller-secret and protected-remote-path calls refuse.",
+      "gap": "Must not count this as newly executed or automatic qualification coverage merely because it exists."
+    },
+    {
+      "test": "same_verified_credential_has_stable_private_scope_across_native_sessions; session_binding_refuses_different_credential_without_mutating_its_owner; http_headers_without_trusted_extension_cannot_spoof_or_use_stdio_fallback; stdio_retains_random_native_session_ownership_and_no_secure_resume_claim",
+      "source": "src/mcp/runtime/caller_scope_tests.rs:17-93",
+      "kind": "non-ignored helper unit tests on Unix",
+      "covers": "Credential continuity, immutable session binding, forged HTTP header refusal and independent native fallback owners.",
+      "gap": "Helper tests do not by themselves prove dispatch uses the current OctofsServer."
+    },
+    {
+      "test": "all_mcp_mutating_tools_are_classified_for_owner_fencing",
+      "source": "src/mcp/runtime/effect_owner_fence_tests.rs:78-175",
+      "kind": "non-ignored source-contract test",
+      "covers": "Existing mutation annotation inventory and fence placement/continuation exceptions.",
+      "gap": "Not a runtime authorization test and not evidence that readonly is a write permission."
+    }
+  ],
+  "minimal_regression_work": [
+    {
+      "id": "extend_existing_runtime_mcp_test",
+      "change": "Extend the existing isolated-child runtime metadata observer test rather than adding a separate heavy campaign. Warm discovery through real MCP before init_runtime, assert runtime tool unavailable then, install the existing offline fixture, and verify runtime discovery/host_list work while shell is hidden and refuses. Keep existing exact-observer/unknown-route archive assertions. Add a second independently constructed server/client: A has one host_list admission, B usage/history remain empty until B calls host_list, then counts and identities remain per owner on interleaved calls.",
+      "risk_resolved": "No first-call mode/owner/audit-result capture; hidden/unknown handling still takes current request path.",
+      "constraints": "Use a fresh child because config is global OnceLock. Do not replace config or use remote hosts. Keep constructor-distinct servers; clones intentionally share a session."
+    },
+    {
+      "id": "one_new_session_dispatch_test",
+      "change": "One real-duplex two-server fixture with different local roots and the same relative filename containing different markers. Interleave view calls, change workdir only on A, and show B still resolves its own root and receives its own first full view. Warm the shared table before both calls; modest concurrent calls can exercise current self/context.",
+      "risk_resolved": "Current self/workdir/view cache are supplied at dispatch, not bound to first initializer.",
+      "constraints": "Use local temporary fixtures only. Avoid shell timing or network dependencies. This is behavioral isolation, not pointer-equality or repeated accessor tests."
+    },
+    {
+      "id": "extend_existing_schema_test",
+      "change": "Extend served_tool_schemas_carry_no_generator_noise: snapshot raw descriptors from the shared router by tool name, perform repeated actual list_tools calls, assert expected cleaned returned schemas and that raw shared metadata/schemas still equal the snapshot. Normalize by name instead of HashMap iteration order. Reuse existing protocol-hint tests.",
+      "risk_resolved": "Discovery does not mutate globally shared schemas or cache a protocol-specific result.",
+      "constraints": "Snapshot the shared router, not a newly generated factory; otherwise a mutation could escape detection. No need for dozens of copied schema tests."
+    }
+  ],
+  "performed": {
+    "local_source_reads": true,
+    "local_metadata_text_scan": true,
+    "production_edits": false,
+    "rustfmt": false,
+    "cargo_or_rustc": false,
+    "native_calls": false,
+    "tests_executed": false,
+    "github_calls": false,
+    "performance_measurement": false
+  },
+  "unproven": [
+    "Exact rmcp3.4.1 macro expansion and router Send+Sync/lifetime constraints are delegated to the dependency reviewer.",
+    "Repository source scan is not a complete Rust parser or audit of external JsonSchema implementations.",
+    "No new test is authored or passed here. Existing coverage means source presence only.",
+    "No speedup, allocation reduction, CPU reduction, RSS improvement, causal account of R28 failure or adoption follows from this review."
+  ]
+}

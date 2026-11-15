@@ -1,0 +1,319 @@
+{
+  "schema": "hepta-x230-r3-benchmark-pipeline/v1",
+  "native_report_sha256": "b4364a84b67eec628888661ab7fbca0ff052e237426f512cb8f4a9a570a2a17f",
+  "steps": [
+    {
+      "name": "reuse-abba",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261028/source-r3/tools/x230/20261028/run_reuse_throughput.py",
+        "--qualification",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r3/report.json",
+        "--qualification-sha256",
+        "736ce6511462f0bef63ed8e2d0741dd74e9a740f5bf95974d52da0cefdd481c5",
+        "--test-audit",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r3/isolated-tests.audit.json",
+        "--test-audit-sha256",
+        "dfe3e4dce34f92c0d32a6d8c15ec2d6407ef54451d42173f727b80f4c55eabe2",
+        "--candidate-sha256",
+        "5e670e58d1c8067df594fcc256a2b88bd52cb60a443cadb36e2a7dc0f49effa7",
+        "--resource-library",
+        "/home/qian/hepta-runtime-optimization-20261028/source-r3/tools/x230/20261028/pinned_resource_sampler.py",
+        "--out",
+        "/home/qian/hepta-runtime-optimization-20261028/reuse-throughput-r3-abba-r01",
+        "--calls",
+        "48",
+        "--synthetic-records",
+        "6000"
+      ],
+      "before_gate": {
+        "clear": true,
+        "matching_live_processes": [],
+        "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+      },
+      "exit_code": 0,
+      "seconds": 37.33633406995796,
+      "load_samples": {
+        "interval_seconds": 2,
+        "samples": 19,
+        "unclear_samples": 0,
+        "errors": [],
+        "clear": true,
+        "report": {
+          "path": "/home/qian/hepta-runtime-optimization-20261028/benchmark-r3-r01/reuse-abba.hostload-samples.jsonl",
+          "bytes": 741216,
+          "sha256": "3bc42d4591f861fe6f252d2d39fa4fa303dffd8471a94ad9fd095dc1c01038f4",
+          "identity": [
+            2053,
+            449990,
+            33152,
+            1000,
+            1000,
+            1,
+            741216,
+            1793205502952372322,
+            1793205502952372322
+          ]
+        }
+      }
+    },
+    {
+      "name": "registry-vs-r2",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261028/source-r3/tools/x230/20261028/run_registry_abba.py",
+        "--baseline",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r2/test-binaries/hepta_runtime-1b8b761b89392e3b",
+        "--baseline-source-manifest",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r2/source-map.json",
+        "--candidate",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r3/test-binaries/hepta_runtime-1b8b761b89392e3b",
+        "--candidate-source-manifest",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r3/source-map.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261028/registry-r3-vs-r2-abba-r01",
+        "--blocks",
+        "4"
+      ],
+      "before_gate": {
+        "clear": true,
+        "matching_live_processes": [],
+        "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+      },
+      "exit_code": 0,
+      "seconds": 87.55435311514884,
+      "load_samples": {
+        "interval_seconds": 2,
+        "samples": 44,
+        "unclear_samples": 0,
+        "errors": [],
+        "clear": true,
+        "report": {
+          "path": "/home/qian/hepta-runtime-optimization-20261028/benchmark-r3-r01/registry-vs-r2.hostload-samples.jsonl",
+          "bytes": 1716137,
+          "sha256": "c78a9e18bc827bfd070c596aaa06083439dae35fed04c446ac46eb2832c7fa94",
+          "identity": [
+            2053,
+            475712,
+            33152,
+            1000,
+            1000,
+            1,
+            1716137,
+            1793205590722747090,
+            1793205590722747090
+          ]
+        }
+      }
+    },
+    {
+      "name": "registry-vs-a62",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261028/source-r3/tools/x230/20261028/run_registry_abba.py",
+        "--baseline",
+        "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a62-jobctl-start-durability-20261027-r01/qualification/hepta-runtime-tests",
+        "--baseline-source-manifest",
+        "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a62-jobctl-start-durability-20261027-r01/qualification/report.json",
+        "--candidate",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r3/test-binaries/hepta_runtime-1b8b761b89392e3b",
+        "--candidate-source-manifest",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r3/source-map.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261028/registry-r3-vs-a62-abba-r01",
+        "--blocks",
+        "4"
+      ],
+      "before_gate": {
+        "clear": true,
+        "matching_live_processes": [],
+        "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+      },
+      "exit_code": 0,
+      "seconds": 82.04425456700847,
+      "load_samples": {
+        "interval_seconds": 2,
+        "samples": 41,
+        "unclear_samples": 0,
+        "errors": [],
+        "clear": true,
+        "report": {
+          "path": "/home/qian/hepta-runtime-optimization-20261028/benchmark-r3-r01/registry-vs-a62.hostload-samples.jsonl",
+          "bytes": 1601816,
+          "sha256": "64ffc4a54e720b41fab5b3f363583bcfa75a43918ad1cc6d5f7c8db5aaf5c7ed",
+          "identity": [
+            2053,
+            475716,
+            33152,
+            1000,
+            1000,
+            1,
+            1601816,
+            1793205672284430465,
+            1793205672284430465
+          ]
+        }
+      }
+    },
+    {
+      "name": "syscalls-r2",
+      "argv": [
+        "/usr/bin/strace",
+        "-f",
+        "-c",
+        "-e",
+        "trace=read,pread64,newfstatat,fstat,openat,close",
+        "-o",
+        "/home/qian/hepta-runtime-optimization-20261028/benchmark-r3-r01/r2.syscalls.txt",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r2/test-binaries/hepta_runtime-1b8b761b89392e3b",
+        "mcp::runtime::jobs::tests::positive_reuse_microbenchmark_6000_synthetic_records",
+        "--ignored",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "before_gate": {
+        "clear": true,
+        "matching_live_processes": [],
+        "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+      },
+      "exit_code": 0,
+      "seconds": 47.685656598070636,
+      "load_samples": {
+        "interval_seconds": 2,
+        "samples": 24,
+        "unclear_samples": 0,
+        "errors": [],
+        "clear": true,
+        "report": {
+          "path": "/home/qian/hepta-runtime-optimization-20261028/benchmark-r3-r01/syscalls-r2.hostload-samples.jsonl",
+          "bytes": 939595,
+          "sha256": "4a3671442361cdf999458869e5d337c3c35676cc8886db401e0a63a0d2680250",
+          "identity": [
+            2053,
+            475720,
+            33152,
+            1000,
+            1000,
+            1,
+            939595,
+            1793205720610106284,
+            1793205720610106284
+          ]
+        }
+      }
+    },
+    {
+      "name": "syscalls-r3",
+      "argv": [
+        "/usr/bin/strace",
+        "-f",
+        "-c",
+        "-e",
+        "trace=read,pread64,newfstatat,fstat,openat,close",
+        "-o",
+        "/home/qian/hepta-runtime-optimization-20261028/benchmark-r3-r01/r3.syscalls.txt",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r3/test-binaries/hepta_runtime-1b8b761b89392e3b",
+        "mcp::runtime::jobs::tests::positive_reuse_microbenchmark_6000_synthetic_records",
+        "--ignored",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "before_gate": {
+        "clear": true,
+        "matching_live_processes": [],
+        "scope": "local /proc sample; no remote-host load or between-sample guarantee"
+      },
+      "exit_code": 0,
+      "seconds": 33.18988722492941,
+      "load_samples": {
+        "interval_seconds": 2,
+        "samples": 17,
+        "unclear_samples": 0,
+        "errors": [],
+        "clear": true,
+        "report": {
+          "path": "/home/qian/hepta-runtime-optimization-20261028/benchmark-r3-r01/syscalls-r3.hostload-samples.jsonl",
+          "bytes": 663588,
+          "sha256": "dcc2cbf941e83ac9befcd82860ed7c0f14328c8757b8ae95d439df857f637f5c",
+          "identity": [
+            2053,
+            475725,
+            33152,
+            1000,
+            1000,
+            1,
+            663588,
+            1793205753891213167,
+            1793205753891213167
+          ]
+        }
+      }
+    },
+    {
+      "name": "package-main",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261028/pack_20261028_evidence.py",
+        "--qualification",
+        "/home/qian/hepta-runtime-optimization-20261028/qualification-r3",
+        "--native",
+        "/home/qian/hepta-runtime-optimization-20261028/native-r3-r02",
+        "--lease",
+        "/home/qian/hepta-runtime-optimization-20261028/native-lease-r3-r02",
+        "--reuse",
+        "/home/qian/hepta-runtime-optimization-20261028/reuse-throughput-r3-abba-r01",
+        "--registry",
+        "/home/qian/hepta-runtime-optimization-20261028/registry-r3-vs-a62-abba-r01",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261028/published-evidence-r3"
+      ],
+      "exit_code": 0,
+      "seconds": 7.931595147121698
+    },
+    {
+      "name": "package-supplement",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261028/pack_20261028_evidence.py",
+        "--native",
+        "/home/qian/hepta-runtime-optimization-20261028/native-r3",
+        "--lease",
+        "/home/qian/hepta-runtime-optimization-20261028/native-lease-r3",
+        "--registry",
+        "/home/qian/hepta-runtime-optimization-20261028/registry-r3-vs-r2-abba-r01",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261028/published-evidence-r3-supplement"
+      ],
+      "exit_code": 0,
+      "seconds": 5.926245173206553
+    }
+  ],
+  "automatic_retries": 0,
+  "complete": true,
+  "measurements_complete": true,
+  "packages": [
+    {
+      "folder": "/home/qian/hepta-runtime-optimization-20261028/published-evidence-r3",
+      "archive_size": 7425655,
+      "archive_sha256": "642ebfcf2c98091903d8c4ccf80f687a26767ec3a7971f83cccf0c619af9ac5b",
+      "manifest_sha256": "2d31faf2b543da845a13d034da7f1197658827d11037b03d594fe85fc7fbfcbe",
+      "compressed_manifest_size": 274309,
+      "compressed_manifest_sha256": "e660c39cfc1b1f41b6a0383f93a8fca3539022ad9344085cafc097227c4ea18d"
+    },
+    {
+      "folder": "/home/qian/hepta-runtime-optimization-20261028/published-evidence-r3-supplement",
+      "archive_size": 1598520,
+      "archive_sha256": "4161b7bfc82ef8403e4306442562da8889a6412f6f024e4f41ced9705c89f3f2",
+      "manifest_sha256": "31b3350ece916a15a0d0855bb8f35a98d31bfd7ea23b41e775b1cd60899f9ddf",
+      "compressed_manifest_size": 214970,
+      "compressed_manifest_sha256": "726601427f9c8024b6b017cf6d0137114eda415b68a733d8451f38fb84817f9d"
+    }
+  ]
+}

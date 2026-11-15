@@ -1,0 +1,52 @@
+{
+  "exception_type": "PermissionError",
+  "errno": null,
+  "frames": [
+    {
+      "path": "/home/qian-qi/hepta-runtime-v9-preflight-readonly-diagnosis-20261013-r1.py",
+      "line": 7,
+      "function": "<module>",
+      "code": "P.prepare_preflight(args);result={'prepare_only_succeeded':True,'publish_performed':False}"
+    },
+    {
+      "path": "/home/qian-qi/hepta-runtime-v9-code-frozen-5037262-20261013/deploy/preflight_dc_successor.py",
+      "line": 624,
+      "function": "prepare_preflight",
+      "code": "before = service_probe()"
+    },
+    {
+      "path": "/home/qian-qi/hepta-runtime-v9-code-frozen-5037262-20261013/deploy/preflight_dc_successor.py",
+      "line": 622,
+      "function": "<lambda>",
+      "code": "service_probe = service_probe or (lambda: service_observation(token_path))"
+    },
+    {
+      "path": "/home/qian-qi/hepta-runtime-v9-code-frozen-5037262-20261013/deploy/preflight_dc_successor.py",
+      "line": 155,
+      "function": "service_observation",
+      "code": "_, info = S.snapshot(fragment, \"installed unit fragment\")"
+    },
+    {
+      "path": "/home/qian-qi/hepta-runtime-v9-code-frozen-5037262-20261013/deploy/stage_dc_successor.py",
+      "line": 104,
+      "function": "snapshot",
+      "code": "validate_inode(before, label)"
+    },
+    {
+      "path": "/home/qian-qi/hepta-runtime-v9-code-frozen-5037262-20261013/deploy/stage_dc_successor.py",
+      "line": 92,
+      "function": "validate_inode",
+      "code": "raise PermissionError(label + \": trusted owner and no group/other writes required\")"
+    }
+  ],
+  "exception_message_or_credentials_output": false,
+  "publish_performed": false,
+  "credential_metadata": {
+    "mode": "0o400",
+    "uid": 1000,
+    "gid": 1000,
+    "nlink": 1,
+    "bytes": 65,
+    "symlink": false
+  }
+}

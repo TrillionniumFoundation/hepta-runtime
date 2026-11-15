@@ -1,0 +1,159 @@
+{
+  "schema": "hepta-r15-independent-allocator-tooling-review/v1",
+  "status": "read-only-review-complete-formal-results-pending",
+  "reviewer": "optimization_frontier",
+  "reviewed_utc": "2026-11-03",
+  "blocking_repairs_found": [],
+  "conclusion": "The frozen launcher and independent audit paths support attributing a same-binary comparison to the explicitly selected allocator setting. The formal orchestrator must bind candidate arena1 and both same-binary arms to the qualified R14 SHA. This review does not qualify the candidate.",
+  "formal_performance_claimed": false,
+  "workloads_started": 0,
+  "compilation_started": false,
+  "frozen_measurement_tools_modified": false,
+  "observed_files": [
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/allocator_environment.py",
+      "sha256": "0556884dae82916794820089d84f23d3433c297c3c3414582c4c114dcea91938",
+      "bytes": 5878
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/allocator_environment_audit.py",
+      "sha256": "dbef510d59f08b05c02f8cbfcca4ae60cc88b99073a0729748a878a549d0bf8e",
+      "bytes": 6486
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_isolated_tests.py",
+      "sha256": "5872b790168fb1fa0ebff4c51bd1233a454295566ba80b8456acb1a5b99b22c1",
+      "bytes": 11419
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/independent-audit-tools/tooling-diff-01.patch",
+      "sha256": "bccf26dff850aacc64502c9f1e649489f0c2e88f15d6b1582766dac6e9760fb2",
+      "bytes": 50068
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/allocator_environment_selftest.py",
+      "sha256": "5404a0718924988d79997102942bb249998aa07bab09343a13b9d4044d5f00c7",
+      "bytes": 10441
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/independent-audit-tools/environment-selftest-01.json",
+      "sha256": "0d82f2ee23f0bd5a8c92f431d7a403b413ca097b4ab0a7c53d392d15758f85fa",
+      "bytes": 2900
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/audit_isolated_tests.py",
+      "sha256": "e7d4adbc32486b4540c0d672dab0385312951388411aca6e351e293eb85d371b",
+      "bytes": 18227
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_native_observation.py",
+      "sha256": "750e0b68e5cf413e124d6de71523bf2caa44fb7eb2725df663976a420bf928c6",
+      "bytes": 9488
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_six_host_cancel_recovery.py",
+      "sha256": "65591be349f97dac2b2d4ada61816677628139893b3f3afe36db4a74780bd855",
+      "bytes": 26972
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/x230_observation_benchmark.py",
+      "sha256": "ce84f68d6448ccde7efca865d9935ffc1278a70a77aca7beefd550fb8b025134",
+      "bytes": 31722
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/analyze_cancel_responsiveness.py",
+      "sha256": "914c4b3cc38cf20d473633ca7223b804cb05ca5e06b74deb22dbb2305b3b2e2f",
+      "bytes": 12414
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/analyze_native_observation.py",
+      "sha256": "fe2e52d8ab571dc81edd9ca227ef1d46df02075e663c9ea743c53affb7abc693",
+      "bytes": 8035
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_cancel_responsiveness.py",
+      "sha256": "a4e1d631bd9591821acbc280ddafefc2a0d8e2a7270ccbc7988000d209b0798a",
+      "bytes": 18568
+    }
+  ],
+  "tooling_install_binding": {
+    "path": "/home/qian/hepta-runtime-optimization-20261103-r15/independent-audit-tools/tooling-install-01.json",
+    "sha256": "34f0d32bcdf5057ec1cf8148a51dd13773f1235841074e0f2b8914bdfb8e461d"
+  },
+  "configuration_binding": {
+    "path": "/home/qian/hepta-runtime-optimization-20261103-r15/configuration/configuration-ready.json",
+    "sha256": "fb4a2e8eab0bfafb0c272c4c3e259cd1d68dffbaa479796854a73a1100fcc947",
+    "selected_arena_max": "1"
+  },
+  "findings": [
+    {
+      "topic": "Explicit child allocator environment",
+      "result": "pass",
+      "evidence": "allocator_environment.child_environment copies its base, removes every MALLOC_* key and GLIBC_TUNABLES, then updates only with checked {} or MALLOC_ARENA_MAX=1/2/4. No parent os.environ mutation. Cancel and native Controllers pass the resulting map as Popen(env=...); isolated command does likewise."
+    },
+    {
+      "topic": "Configuration identity",
+      "result": "pass-with-scope",
+      "evidence": "ABBA and recovery run_metadata fingerprint the actual binary SHA together with the allocator environment, using sorted canonical JSON plus newline. The audit recomputes both environment hash and configuration fingerprint and requires clean arm A, nonempty arm B, and distinct identities even for equal executable SHA."
+    },
+    {
+      "topic": "Live process environment",
+      "result": "pass",
+      "evidence": "observe checks /proc/PID/stat start ticks before and after the bounded environ read, rejects zombie/exited identity, duplicate allocator keys or any unexpected allocator control, and matches requested/observed environment exactly. Long-lived Controller observations are after native initialize and before measured work."
+    },
+    {
+      "topic": "Held SSH agent",
+      "result": "pass",
+      "evidence": "Native minimal env includes the held SSH_AUTH_SOCK. observe compares its raw bytes to the supplied value and rejects duplicate/missing/changed values. Independent native/recovery validation requires presence. Cancel refusal fixture intentionally has no agent."
+    },
+    {
+      "topic": "Short libtest exit race",
+      "result": "pass-with-explicit-limitation",
+      "evidence": "command_observation records unavailable_process_exited only for missing/exited proc identity after poll confirms the child exited. It never labels that branch verified or retries the test. Audit accepts it only with the expected schema/phase/PID and exit_code=0. Other identity/env failures fail closed; main requires at least one live observation overall."
+    },
+    {
+      "topic": "Isolated binary binding",
+      "result": "pass-with-explicit-limitation",
+      "evidence": "The isolated summary uses one candidate configuration for several libtest binaries, so its metadata binary_sha256 is null. That top-level fingerprint alone does not bind all executable bytes. Actual executable hashes are stored in summary.binaries and each test row, and audit_isolated_tests binds original Cargo inventory, exact argv, per-command allocator fields, test identity and before/after executable hashes. Keep this distinction in the final report."
+    },
+    {
+      "topic": "Native/recovery observation coverage",
+      "result": "pass",
+      "evidence": "Native ABBA validates startup and restart_startup for each of four rounds: two live environment observations per round, eight per campaign. Recovery validates first_startup, after_crash_startup and after_cancel_startup: three live observations. Each path passes the selected configuration into the same Controller constructor."
+    },
+    {
+      "topic": "Wrapper versus experiment",
+      "result": "pass",
+      "evidence": "Ordinary wrapper respects explicit caller controls, while formal drivers intentionally clear them and directly exec the qualified runtime. Actual X230 loader evidence shows GLIBC arena_max overrides MALLOC_ARENA_MAX, so clearing GLIBC_TUNABLES is necessary. The two policies are deliberately distinct and documented."
+    },
+    {
+      "topic": "Existing selftest scope",
+      "result": "pass-with-explicit-limitation",
+      "evidence": "Read the existing seven passing selftest cases. Four cases exercise actual cancel/native Controller paths and an isolated Python child with deliberately dirty allocator env and a held fixture socket. Three use synthetic in-memory report copies to check same-binary schema acceptance and stripped-candidate rejection/recovery coverage. They are not Rust qualification or performance evidence; no selftest was rerun in this review."
+    }
+  ],
+  "report_requirements": [
+    "Separate same-R14-binary default versus arena1 from R11-default versus final candidate; never merge distinct campaign numerators or percentiles.",
+    "Gate the same-binary campaign on both hashes equal 51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d and selected candidate environment exactly MALLOC_ARENA_MAX=1. The reusable helper intentionally also accepts 2 and 4.",
+    "Report verified versus unavailable_process_exited counts honestly, preferably distinguishing enumeration commands from actual executed libtests. Ignored tests did not execute.",
+    "Attribution concerns the controller process allocation environment; remote workload environment is not configured by this profile.",
+    "Current cancel analyzer reports p95 and HWM. Derive any requested p99 and RSS before/after from retained raw evidence in the independent reporting layer, without editing frozen measurement code.",
+    "All complete negative directional results, raw finite checks, sample counts and statistical limitations remain required."
+  ],
+  "selftest_binding": {
+    "path": "/home/qian/hepta-runtime-optimization-20261103-r15/independent-audit-tools/environment-selftest-01.json",
+    "sha256": "0d82f2ee23f0bd5a8c92f431d7a403b413ca097b4ab0a7c53d392d15758f85fa",
+    "success": true,
+    "cases": 7,
+    "rerun": false
+  },
+  "loader_binding": {
+    "path": "/home/qian/hepta-runtime-optimization-20261103-r15/configuration/loader-precedence.json",
+    "sha256": "2b21e5d5b00a2590b96a0a456764e3f4691822a456754284b8544cbd1090d1b0",
+    "effective_arena_values": [
+      2,
+      4,
+      1
+    ]
+  }
+}

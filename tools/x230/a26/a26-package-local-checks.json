@@ -1,0 +1,29 @@
+{
+  "ast_passed": true,
+  "checks": [
+    "all eighteen evidence files exactly recoverable; new gzip mtime zero",
+    "all output SHA256/bytes and Git blob SHA1 independently checked",
+    "review removes only two allowed receipt-index classes and retains every other original field",
+    "review above 64 KiB retained completely with flag",
+    "original source files unchanged; existing target rejected without mutation",
+    "changed compressed input refused before package creation",
+    "incorrect decompressed receipt leaves partial attempt without completion manifest"
+  ],
+  "files": {
+    "pack_x230_a26_publication.py": {
+      "bytes": 19277,
+      "sha256": "a926ae1082a70b8b9c9048253b5f9a6b910f3bb6723762c216373330a1195713"
+    },
+    "pack_x230_a26_publication_tests.py": {
+      "bytes": 7902,
+      "sha256": "cff05148fcbc0d947e55757a682fb1878b2deb6299fdd7389174167edab06d1c"
+    }
+  },
+  "independent_readonly_review": "review_observation found no blocker in lossless copies, hash binding, Git blob construction, allowed index omissions, or create-only behavior.",
+  "observed_seconds": 0.184,
+  "post_review_small_change": "Check package inventory before final manifest write and fsync both package directory and its parent.",
+  "schema": "hepta-x230-a26-publication-package-local-checks/v1",
+  "scope": "Local synthetic tests and syntax only; no remote calls, real A26 packaging, or workload execution.",
+  "test_count": 3,
+  "tests_passed": true
+}

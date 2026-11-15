@@ -1,0 +1,239 @@
+--- a/src/mcp/runtime/request_audit.rs
++++ b/src/mcp/runtime/request_audit.rs
+@@ -1309,6 +1309,27 @@
+ 	Ok((records, archive))
+ }
+ 
++/// Callers hold STORE_LOCK. Metadata queries consume the archive, not copies of
++/// the hot records. Preserve the fresh archive and hot-namespace checks on a
++/// cache hit; a miss still runs the complete existing validation/seeding path.
++#[cfg(unix)]
++fn metadata_archive(root: &Path, directory: &File) -> Result<Archive> {
++	let archive = open_archive(root)?;
++	let stamp = archive_stamp(directory)?;
++	let cached = HOT_CACHE
++		.get_or_init(|| Mutex::new(VecDeque::new()))
++		.lock()
++		.map_err(|_| anyhow!("request hot cache unavailable"))?
++		.iter()
++		.any(|entry| entry.stamp == stamp);
++	if !cached {
++		// A miss repeats the stamp/cache lookup before the unchanged cold path.
++		// The miss still validates all hot records and seeds any absent originals.
++		hot_snapshot_at(directory, &archive, false)?;
++	}
++	Ok(archive)
++}
++
+ #[cfg(unix)]
+ fn hot_snapshot_at(directory: &File, archive: &Archive, consume: bool) -> Result<Vec<Record>> {
+ 	let mut stamp = archive_stamp(directory)?;
+@@ -1772,7 +1793,7 @@
+ 	let archive = {
+ 		let _guard = index::query_lock(deadline)?;
+ 		let hot = open_store(root)?;
+-		hot_snapshot(root, &hot)?.1
++		metadata_archive(root, &hot)?
+ 	};
+ 	Ok(serde_json::to_string(&index::usage(
+ 		root, &archive, owner, deadline,
+@@ -1821,7 +1842,7 @@
+ 	let (archive, cursor) = {
+ 		let _guard = index::query_lock(deadline)?;
+ 		let hot = open_store(root)?;
+-		let archive = hot_snapshot(root, &hot)?.1;
++		let archive = metadata_archive(root, &hot)?;
+ 		let cursor = if let Some(id) = params.after_id.as_deref() {
+ 			let record = archive.read_record(&format!("{id}.json"))?;
+ 			if record.owner != owner {
+@@ -2052,3 +2073,7 @@
+ #[cfg(all(test, unix))]
+ #[path = "request_audit_query_tests.rs"]
+ mod query_tests;
++
++#[cfg(all(test, unix))]
++#[path = "request_audit_preparation_tests.rs"]
++mod preparation_tests;
+--- /dev/null
++++ b/src/mcp/runtime/request_audit_preparation_tests.rs
+@@ -0,0 +1,180 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Compare query-only preparation with the A26 path across cache and authority failures.
++use super::*;
++use std::os::unix::fs::{MetadataExt, PermissionsExt};
++
++type PrepareArchive = fn(&Path, &File) -> Result<Archive>;
++
++fn old_metadata_archive(root: &Path, directory: &File) -> Result<Archive> {
++	Ok(hot_snapshot(root, directory)?.1)
++}
++
++fn preparations() -> [(&'static str, PrepareArchive); 2] {
++	[("A26", old_metadata_archive), ("candidate", metadata_archive)]
++}
++
++// All callers already hold STORE_LOCK, exactly like the two production callers.
++fn fixture() -> (tempfile::TempDir, File, Archive) {
++	let root = tempfile::Builder::new()
++		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
++		.unwrap();
++	let hot = open_store(root.path()).unwrap();
++	let archive = open_archive(root.path()).unwrap();
++	(root, hot, archive)
++}
++
++fn sample_record(number: usize) -> Record {
++	Record {
++		request_id: format!("{number:064x}"),
++		owner: ["a", "b"][number % 2].repeat(64),
++		tool_name: "host_list".to_owned(),
++		state: DurableState::Completed,
++		accepted_unix_ms: number as u128,
++		elapsed_ms: Some(7),
++	}
++}
++
++fn warm(root: &Path, hot: &File, archive: &Archive, record: &Record) {
++	save_archive_with_sync(archive, record, false, true).unwrap();
++	save(hot, record, false).unwrap();
++	hot_snapshot(root, hot).unwrap();
++}
++
++fn forget(hot: &File) {
++	let stamp = archive_stamp(hot).unwrap();
++	HOT_CACHE
++		.get()
++		.unwrap()
++		.lock()
++		.unwrap()
++		.retain(|entry| (entry.stamp.device, entry.stamp.inode) != (stamp.device, stamp.inode));
++}
++
++#[test]
++fn metadata_archive_warm_hit_keeps_exact_cache_and_archive_identity() {
++	let _guard = store_lock().unwrap();
++	for (label, prepare) in preparations() {
++		let (root, hot, archive) = fixture();
++		let record = sample_record(1);
++		warm(root.path(), &hot, &archive, &record);
++		let before = archive_stamp(&hot).unwrap();
++		let cached = {
++			let cache = HOT_CACHE.get().unwrap().lock().unwrap();
++			let saved = cache.iter().find(|entry| entry.stamp == before).unwrap();
++			(saved.records.as_ptr(), saved.records.clone())
++		};
++		let result = prepare(root.path(), &hot).unwrap();
++		let old = archive.legacy().metadata().unwrap();
++		let actual = result.legacy().metadata().unwrap();
++		assert_eq!((actual.dev(), actual.ino()), (old.dev(), old.ino()), "{label}");
++		assert!(result.read_record(&format!("{}.json", record.request_id)).unwrap() == record);
++		assert!(archive_stamp(&hot).unwrap() == before, "{label}");
++		let cache = HOT_CACHE.get().unwrap().lock().unwrap();
++		let saved = cache.iter().find(|entry| entry.stamp == before).unwrap();
++		assert_eq!(saved.records.as_ptr(), cached.0, "{label}");
++		assert!(saved.records == cached.1, "{label}");
++	}
++}
++
++#[test]
++fn metadata_archive_cold_and_stale_hits_still_seed_every_missing_hot_record() {
++	let _guard = store_lock().unwrap();
++	for (label, prepare) in preparations() {
++		let (root, hot, _archive) = fixture();
++		let first = sample_record(1);
++		save(&hot, &first, false).unwrap();
++		let archive = prepare(root.path(), &hot).unwrap();
++		assert!(archive.read_record(&format!("{}.json", first.request_id)).unwrap() == first);
++		let before = archive_stamp(&hot).unwrap();
++		let second = sample_record(2);
++		save(&hot, &second, false).unwrap();
++		assert!(archive_stamp(&hot).unwrap() != before, "{label}");
++		let archive = prepare(root.path(), &hot).unwrap();
++		for record in [&first, &second] {
++			assert!(archive.read_record(&format!("{}.json", record.request_id)).unwrap() == *record);
++		}
++		let now = archive_stamp(&hot).unwrap();
++		let cache = HOT_CACHE.get().unwrap().lock().unwrap();
++		let saved = cache.iter().find(|entry| entry.stamp == now).unwrap();
++		assert!(saved.records == vec![first, second], "{label}");
++	}
++}
++
++#[test]
++fn metadata_archive_cold_miss_keeps_corrupt_identity_permission_and_link_refusals() {
++	let _guard = store_lock().unwrap();
++	for (label, prepare) in preparations() {
++		for bad in ["json", "identity", "mode", "link"] {
++			let (root, hot, archive) = fixture();
++			let record = sample_record(1);
++			warm(root.path(), &hot, &archive, &record);
++			forget(&hot);
++			let filename = format!("{}.json", record.request_id);
++			let original = root.path().join(ARCHIVE_NAME).join(&filename);
++			let original_bytes = std::fs::read(&original).unwrap();
++			let path = root.path().join(STORE_NAME).join(&filename);
++			match bad {
++				"json" => std::fs::write(&path, b"{broken").unwrap(),
++				"identity" => {
++					std::fs::write(&path, serde_json::to_vec(&sample_record(2)).unwrap()).unwrap();
++				}
++				"mode" => {
++					std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
++				}
++				"link" => std::fs::hard_link(&path, root.path().join("extra-link")).unwrap(),
++				_ => unreachable!(),
++			}
++			assert!(prepare(root.path(), &hot).is_err(), "{label}: {bad}");
++			assert_eq!(std::fs::read(&original).unwrap(), original_bytes, "{label}: {bad}");
++			if bad == "link" {
++				assert_eq!(path.metadata().unwrap().nlink(), 2, "{label}");
++			}
++		}
++	}
++}
++
++#[test]
++fn metadata_archive_warm_presence_never_bypasses_directory_permissions() {
++	let _guard = store_lock().unwrap();
++	for (label, prepare) in preparations() {
++		let (root, hot, archive) = fixture();
++		warm(root.path(), &hot, &archive, &sample_record(1));
++		std::fs::set_permissions(
++			root.path().join(STORE_NAME),
++			std::fs::Permissions::from_mode(0o750),
++		)
++		.unwrap();
++		assert!(prepare(root.path(), &hot).is_err(), "{label}");
++	}
++}
++
++#[test]
++fn metadata_archive_warm_presence_never_rebinds_missing_or_replaced_archive() {
++	let _guard = store_lock().unwrap();
++	for (label, prepare) in preparations() {
++		for changed in ["missing_archive", "replaced_anchor"] {
++			let (root, hot, archive) = fixture();
++			warm(root.path(), &hot, &archive, &sample_record(1));
++			if changed == "missing_archive" {
++				std::fs::rename(
++					root.path().join(ARCHIVE_NAME),
++					root.path().join("retained-archive"),
++				)
++				.unwrap();
++			} else {
++				let anchor = root.path().join(ARCHIVE_ANCHOR);
++				let replacement = root.path().join("replacement-anchor");
++				std::fs::write(&replacement, std::fs::read(&anchor).unwrap()).unwrap();
++				std::fs::set_permissions(&replacement, std::fs::Permissions::from_mode(0o600))
++					.unwrap();
++				std::fs::rename(replacement, anchor).unwrap();
++			}
++			assert!(prepare(root.path(), &hot).is_err(), "{label}: {changed}");
++			if changed == "missing_archive" {
++				assert!(!root.path().join(ARCHIVE_NAME).exists(), "{label}");
++			}
++		}
++	}
++}

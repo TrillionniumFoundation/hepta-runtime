@@ -1,0 +1,70 @@
+{
+  "runs": [
+    {
+      "directory": "/home/qian-qi/work/hepta-rea-benchmark-dev-20261103-smoke-r1",
+      "excluded_from_formal_cohort": true,
+      "note": "Source binary changed during capture; refused before worker start. No formal samples.",
+      "outer_job_id": "1a1a1160dbd-96a-6cfb",
+      "results_file_exists": false
+    },
+    {
+      "cleanup_errors": null,
+      "complete_mcp_scope": null,
+      "directory": "/home/qian-qi/work/hepta-rea-benchmark-dev-20261103-smoke-r2",
+      "error": "RuntimeError('expected one bounded JSONL response')",
+      "excluded_from_formal_cohort": true,
+      "fixture_retained": null,
+      "note": "Initial 30-second resident open deadline was insufficient under shared-host load. Formal driver allows 120 seconds, matching MCP model open.",
+      "outer_job_id": "1a1a11a1122-96a-6d21",
+      "results_file_exists": true,
+      "results_sha256": "9abe8a3b563bee5155d26e4393c7e50b416a1214c674e64c2146e7e40cec1bae",
+      "samples": 0,
+      "status": "failed"
+    },
+    {
+      "cleanup_errors": null,
+      "complete_mcp_scope": null,
+      "directory": "/home/qian-qi/work/hepta-rea-benchmark-dev-20261103-smoke-r3",
+      "error": "FileExistsError(17, 'File exists')",
+      "excluded_from_formal_cohort": true,
+      "fixture_retained": null,
+      "note": "Harness trace filename collided during intentional same-ID conflict check. Formal driver uses independent invocation counters.",
+      "outer_job_id": "1a1a11cba23-96a-6d3a",
+      "results_file_exists": true,
+      "results_sha256": "8a7cce6be487fc7d1d72e5dccf0acccc97e49d5c67423c1222ac5976e98eeb19",
+      "samples": 0,
+      "status": "failed"
+    },
+    {
+      "cleanup_errors": [
+        "native_rust: RuntimeError(\"weight_status: {'content': [{'type': 'text', 'text': 'job capability failed: sudo: /usr/local/libexec/hepta-runtime-jobctl\uff1a\u627e\u4e0d\u5230\u547d\u4ee4\\\\n'}], 'isError': True}\")"
+      ],
+      "complete_mcp_scope": null,
+      "directory": "/home/qian-qi/work/hepta-rea-benchmark-dev-20261103-smoke-r4",
+      "error": "RuntimeError('isolated worker cleanup not confirmed: native_rust: RuntimeError(\"weight_status: {\\'content\\': [{\\'type\\': \\'text\\', \\'text\\': \\'job capability failed: sudo: /usr/local/libexec/hepta-runtime-jobctl\uff1a\u627e\u4e0d\u5230\u547d\u4ee4\\\\\\\\n\\'}], \\'isError\\': True}\")')",
+      "excluded_from_formal_cohort": true,
+      "fixture_retained": null,
+      "note": "Legacy isolated/system_jobctl configuration could not use an installed system jobctl. Cleanup was not confirmed, and the old TemporaryDirectory harness removed private fixture state before accepted job IDs were retained. This is not isolated-mode qualification or confirmed cleanup.",
+      "outer_job_id": "1a1a1225675-96a-6d6c",
+      "results_file_exists": true,
+      "results_sha256": "361d13bb24bc6f45dd1d72f17e3d255c41375a5e3b30305acf65a7537489ff22",
+      "samples": 9,
+      "status": "failed"
+    },
+    {
+      "cleanup_errors": null,
+      "complete_mcp_scope": "administrator-configured localhost SSH with user systemd; not isolated/jobctl mode",
+      "directory": "/home/qian-qi/work/hepta-rea-benchmark-dev-20261103-operator-smoke-r1",
+      "error": "RuntimeError('MCP process closed its output')",
+      "excluded_from_formal_cohort": true,
+      "fixture_retained": true,
+      "note": "Runtime refused invalid operator configuration before MCP initialization. Final fixture uses explicit operator mode, user systemd, and no claimed command sandbox.",
+      "outer_job_id": "1a1a128fba3-96a-6d9e",
+      "results_file_exists": true,
+      "results_sha256": "fa15885e222d422f93f2a300c4474414a1f8ae729775da44b678833027e5ccb1",
+      "samples": 9,
+      "status": "failed"
+    }
+  ],
+  "schema": "hepta.weight.benchmark-preparation-record.v1"
+}

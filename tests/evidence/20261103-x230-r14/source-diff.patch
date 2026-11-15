@@ -1,0 +1,680 @@
+--- a/src/mcp/runtime/jobs.rs
++++ b/src/mcp/runtime/jobs.rs
+@@ -44,7 +44,9 @@
+ const MAX_START_OUTCOME_PUBLICATIONS: usize = 8;
+ static START_OUTCOME_PUBLICATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+ const MAX_CANCEL_PUBLICATIONS: usize = 8;
++const MAX_CANCEL_PREPARATIONS: usize = 2;
+ static CANCEL_PUBLICATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
++static CANCEL_PREPARATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+ static AUDIT_LOCK: OnceLock<Mutex<Option<AuditReadiness>>> = OnceLock::new();
+ const MAX_OBSERVATION_AUDITS: usize = 8;
+ static OBSERVATION_AUDITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+@@ -3926,20 +3928,31 @@
+ 		.clone()
+ }
+ 
++fn cancel_preparation_slots() -> Arc<Semaphore> {
++	CANCEL_PREPARATIONS
++		.get_or_init(|| Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS)))
++		.clone()
++}
++
+ async fn run_cancel_intent<O: Send + 'static>(
+-	slots: Arc<Semaphore>,
++	publication_slots: Arc<Semaphore>,
++	preparation_slots: Arc<Semaphore>,
+ 	prepare: impl FnOnce() -> Result<(PreparedAudit, O)> + Send + 'static,
+ 	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
+ ) -> Result<(OwnedSemaphorePermit, O)> {
+-	let permit = slots
++	let permit = publication_slots
++		.acquire_owned()
++		.await
++		.map_err(|_| operation_intent_unavailable())?;
++	let preparation_permit = preparation_slots
+ 		.acquire_owned()
+ 		.await
+ 		.map_err(|_| operation_intent_unavailable())?;
+ 	let result = tokio::task::spawn_blocking(move || {
+-		// Receipt validation is part of the same bounded physical preparation as
+-		// the durable intent. Slow reads cannot block the executor or borrow an
+-		// observation slot needed by unrelated callers. The reservation follows
+-		// the verified binding through the remote response and completion audit.
++		// Keep queued and running receipt/intent work within its own physical
++		// budget even if the caller disappears. Only the original publication
++		// reservation follows the binding through the remote response and audit.
++		let _preparation_permit = preparation_permit;
+ 		let (prepared, ownership) = prepare()?;
+ 		require_operation_intent(append(prepared))?;
+ 		Ok((permit, ownership))
+@@ -4514,6 +4527,7 @@
+ 	};
+ 	let (publication_permit, record) = run_cancel_intent(
+ 		cancel_publication_slots(),
++		cancel_preparation_slots(),
+ 		move || {
+ 			// Cancellation continues an existing identity even when new effects
+ 			// are fenced off. Verify the full original receipt before intent,
+--- a/src/mcp/runtime/jobs_cancel_io_tests.rs
++++ b/src/mcp/runtime/jobs_cancel_io_tests.rs
+@@ -100,6 +100,7 @@
+ 		.unwrap()
+ 		.unwrap();
+ 	let slots = Arc::new(Semaphore::new(1));
++	let preparations = Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS));
+ 	let record = original();
+ 	let binding = Arc::downgrade(&record);
+ 	let prepared = event(root.path(), "process_cancel_intent", &record.id);
+@@ -108,10 +109,12 @@
+ 	let remote_calls = Arc::new(AtomicUsize::new(0));
+ 	let calls = remote_calls.clone();
+ 	let worker_slots = slots.clone();
++	let worker_preparations = preparations.clone();
+ 	let caller_thread = std::thread::current().id();
+ 	let cancelled = tokio::spawn(async move {
+ 		let retained = run_cancel_intent(
+ 			worker_slots,
++			worker_preparations,
+ 			move || Ok((prepared, record)),
+ 			move |prepared| {
+ 				let _ = entered.send(std::thread::current().id());
+@@ -129,6 +132,10 @@
+ 	assert_ne!(worker_thread, caller_thread);
+ 	assert!(!cancelled.is_finished());
+ 	assert_eq!(slots.available_permits(), 0);
++	assert_eq!(
++		preparations.available_permits(),
++		MAX_CANCEL_PREPARATIONS - 1
++	);
+ 	let heartbeat = tokio::spawn(async {
+ 		tokio::task::yield_now().await;
+ 		17
+@@ -144,10 +151,15 @@
+ 	assert!(cancelled.await.unwrap_err().is_cancelled());
+ 	assert!(binding.upgrade().is_some());
+ 	assert_eq!(slots.available_permits(), 0);
++	assert_eq!(
++		preparations.available_permits(),
++		MAX_CANCEL_PREPARATIONS - 1
++	);
+ 	assert_eq!(remote_calls.load(Ordering::SeqCst), 0);
+ 	drop(release);
+ 	blocker.await.unwrap().unwrap();
+ 	drain(slots, 1).await;
++	drain(preparations, MAX_CANCEL_PREPARATIONS).await;
+ 	// The abandoned intent result drops its permit before its record field;
+ 	// permit acquisition alone is not a cross-thread record-drop barrier.
+ 	tokio::time::timeout(Duration::from_secs(5), async {
+@@ -174,10 +186,19 @@
+ 	let pending_slots = start_io_slots();
+ 	let launch_slots = start_outcome_slots();
+ 	let cancel_slots = cancel_publication_slots();
++	let preparations = cancel_preparation_slots();
+ 	let observation_slots = observation_record_read_slots();
+ 	assert!(!Arc::ptr_eq(&pending_slots, &cancel_slots));
+ 	assert!(!Arc::ptr_eq(&launch_slots, &cancel_slots));
+ 	assert!(!Arc::ptr_eq(&observation_slots, &cancel_slots));
++	for other in [
++		&pending_slots,
++		&launch_slots,
++		&observation_slots,
++		&cancel_slots,
++	] {
++		assert!(!Arc::ptr_eq(&preparations, other));
++	}
+ 	let pending = tokio::time::timeout(
+ 		Duration::from_secs(5),
+ 		pending_slots
+@@ -211,6 +232,7 @@
+ 		Duration::from_secs(5),
+ 		run_cancel_intent(
+ 			cancel_slots.clone(),
++			preparations.clone(),
+ 			move || Ok((prepared, record)),
+ 			append_audit,
+ 		),
+@@ -225,6 +247,7 @@
+ 		cancel_slots.available_permits(),
+ 		MAX_CANCEL_PUBLICATIONS - 1
+ 	);
++	assert_eq!(preparations.available_permits(), MAX_CANCEL_PREPARATIONS);
+ 	let completed = complete_cancel_audit(
+ 		cancel_ack(),
+ 		Ok(event(root.path(), "process_cancel", &record.id)),
+@@ -237,6 +260,7 @@
+ 	assert_eq!(completed["termination_confirmed"], false);
+ 	assert_eq!(completed["audit_recorded"], true);
+ 	assert_eq!(cancel_slots.available_permits(), MAX_CANCEL_PUBLICATIONS);
++	assert_eq!(preparations.available_permits(), MAX_CANCEL_PREPARATIONS);
+ 	drop((pending, launches, observations));
+ }
+ 
+@@ -249,9 +273,10 @@
+ }
+ 
+ #[tokio::test(flavor = "current_thread")]
+-async fn cancelled_intent_waiters_retain_the_eight_actual_writer_bound() {
++async fn cancelled_intent_writers_retain_two_physical_preparation_slots() {
+ 	let root = tempfile::tempdir().unwrap();
+ 	let slots = Arc::new(Semaphore::new(MAX_CANCEL_PUBLICATIONS));
++	let preparations = Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS));
+ 	let active = Arc::new(AtomicUsize::new(0));
+ 	let maximum = Arc::new(AtomicUsize::new(0));
+ 	let (gate, release) = gate();
+@@ -264,6 +289,7 @@
+ 		let prepared = event(root.path(), "process_cancel_intent", name);
+ 		tokio::spawn(run_cancel_intent(
+ 			slots.clone(),
++			preparations.clone(),
+ 			move || Ok((prepared, original())),
+ 			move |_| {
+ 				let count = active.fetch_add(1, Ordering::SeqCst) + 1;
+@@ -277,28 +303,47 @@
+ 	let tasks: Vec<_> = (0..MAX_CANCEL_PUBLICATIONS)
+ 		.map(|index| launch(&format!("cancel-{index}")))
+ 		.collect();
+-	for _ in 0..MAX_CANCEL_PUBLICATIONS {
++	for _ in 0..MAX_CANCEL_PREPARATIONS {
+ 		tokio::time::timeout(Duration::from_secs(5), started.recv())
+ 			.await
+ 			.unwrap()
+ 			.unwrap();
+ 	}
++	tokio::time::timeout(Duration::from_secs(5), async {
++		while slots.available_permits() != 0 {
++			tokio::task::yield_now().await;
++		}
++	})
++	.await
++	.unwrap();
+ 	for task in tasks {
+ 		task.abort();
+ 		assert!(task.await.unwrap_err().is_cancelled());
+ 	}
+-	let cancelled_before_admission = launch("must-not-start");
++	assert_eq!(
++		slots.available_permits(),
++		MAX_CANCEL_PUBLICATIONS - MAX_CANCEL_PREPARATIONS
++	);
++	assert_eq!(preparations.available_permits(), 0);
++	let cancelled_before_preparation = launch("must-not-start");
+ 	tokio::task::yield_now().await;
+-	cancelled_before_admission.abort();
+-	assert!(cancelled_before_admission.await.unwrap_err().is_cancelled());
++	cancelled_before_preparation.abort();
++	assert!(cancelled_before_preparation
++		.await
++		.unwrap_err()
++		.is_cancelled());
+ 	let following = launch("next-cancel");
+ 	assert!(
+ 		tokio::time::timeout(Duration::from_millis(50), started.recv())
+ 			.await
+ 			.is_err()
+ 	);
+-	assert_eq!(slots.available_permits(), 0);
+-	assert_eq!(active.load(Ordering::SeqCst), MAX_CANCEL_PUBLICATIONS);
++	assert_eq!(
++		slots.available_permits(),
++		MAX_CANCEL_PUBLICATIONS - MAX_CANCEL_PREPARATIONS - 1
++	);
++	assert_eq!(preparations.available_permits(), 0);
++	assert_eq!(active.load(Ordering::SeqCst), MAX_CANCEL_PREPARATIONS);
+ 	drop(release);
+ 	let (permit, record) = tokio::time::timeout(Duration::from_secs(5), following)
+ 		.await
+@@ -314,9 +359,10 @@
+ 	)
+ 	.await;
+ 	assert_eq!(completed["audit_recorded"], true);
+-	drain(slots.clone(), MAX_CANCEL_PUBLICATIONS).await;
++	drain(slots, MAX_CANCEL_PUBLICATIONS).await;
++	drain(preparations, MAX_CANCEL_PREPARATIONS).await;
+ 	assert_eq!(active.load(Ordering::SeqCst), 0);
+-	assert_eq!(maximum.load(Ordering::SeqCst), MAX_CANCEL_PUBLICATIONS);
++	assert_eq!(maximum.load(Ordering::SeqCst), MAX_CANCEL_PREPARATIONS);
+ 	assert!(started.try_recv().is_ok());
+ 	assert!(matches!(
+ 		started.try_recv(),
+@@ -327,19 +373,29 @@
+ #[tokio::test(flavor = "current_thread")]
+ async fn failed_or_closed_cancel_intent_never_submits_remote_cancel() {
+ 	let root = tempfile::tempdir().unwrap();
+-	for failure in ["write", "panic", "closed"] {
++	for failure in ["write", "panic", "closed", "preparation_closed"] {
+ 		let slots = Arc::new(Semaphore::new(1));
++		let preparations = Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS));
+ 		if failure == "closed" {
+ 			slots.close();
++		} else if failure == "preparation_closed" {
++			preparations.close();
+ 		}
+ 		let remote_calls = Arc::new(AtomicUsize::new(0));
+ 		let remote = remote_calls.clone();
+ 		let prepared = event(root.path(), "process_cancel_intent", "original-cancel");
+ 		let publication_slots = slots.clone();
++		let worker_preparations = preparations.clone();
++		let prepare_calls = Arc::new(AtomicUsize::new(0));
++		let entered = prepare_calls.clone();
+ 		let submit = async move {
+ 			let (permit, record) = run_cancel_intent(
+ 				publication_slots,
+-				move || Ok((prepared, original())),
++				worker_preparations,
++				move || {
++					entered.fetch_add(1, Ordering::SeqCst);
++					Ok((prepared, original()))
++				},
+ 				move |_| {
+ 					if failure == "write" {
+ 						bail!("private-path credential in audit failure");
+@@ -358,6 +414,11 @@
+ 		);
+ 		assert_eq!(remote_calls.load(Ordering::SeqCst), 0);
+ 		assert_eq!(slots.available_permits(), 1);
++		assert_eq!(preparations.available_permits(), MAX_CANCEL_PREPARATIONS);
++		assert_eq!(
++			prepare_calls.load(Ordering::SeqCst),
++			usize::from(!matches!(failure, "closed" | "preparation_closed"))
++		);
+ 	}
+ }
+ 
+@@ -371,6 +432,7 @@
+ 	runtime.block_on(async {
+ 		let root = tempfile::tempdir().unwrap();
+ 		let slots = Arc::new(Semaphore::new(MAX_CANCEL_PUBLICATIONS));
++		let preparations = Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS));
+ 		let mut reservations = Vec::new();
+ 		for _ in 1..MAX_CANCEL_PUBLICATIONS {
+ 			reservations.push(slots.clone().acquire_owned().await.unwrap());
+@@ -378,10 +440,20 @@
+ 		let record = original();
+ 		let binding = Arc::downgrade(&record);
+ 		let prepared = event(root.path(), "process_cancel_intent", &record.id);
+-		let (permit, record) =
+-			run_cancel_intent(slots.clone(), move || Ok((prepared, record)), append_audit)
+-				.await
+-				.unwrap();
++		let (permit, record) = run_cancel_intent(
++			slots.clone(),
++			preparations.clone(),
++			move || Ok((prepared, record)),
++			append_audit,
++		)
++		.await
++		.unwrap();
++		assert_eq!(preparations.available_permits(), MAX_CANCEL_PREPARATIONS);
++		let held_preparations = preparations
++			.clone()
++			.acquire_many_owned(MAX_CANCEL_PREPARATIONS as u32)
++			.await
++			.unwrap();
+ 		assert_eq!(slots.available_permits(), 0);
+ 		let (gate, release) = gate();
+ 		let (entered, started) = tokio::sync::oneshot::channel();
+@@ -447,6 +519,9 @@
+ 				.count(),
+ 			2
+ 		);
++		assert_eq!(preparations.available_permits(), 0);
++		drop(held_preparations);
++		assert_eq!(preparations.available_permits(), MAX_CANCEL_PREPARATIONS);
+ 		drop(reservations);
+ 		assert_eq!(slots.available_permits(), MAX_CANCEL_PUBLICATIONS);
+ 	});
+--- a/src/mcp/runtime/jobs_cancel_read_tests.rs
++++ b/src/mcp/runtime/jobs_cancel_read_tests.rs
+@@ -1,7 +1,7 @@
+ // Copyright 2026 Muvon Un Limited
+ // Copyright 2026 TrillionniumFoundation
+ // SPDX-License-Identifier: Apache-2.0
+-//! Cancellation validates receipts off the executor under its original publication reservation.
++//! Two physical preparations retain the original eight cancellation publication reservations.
+ use super::*;
+ use std::future::poll_fn;
+ use std::pin::Pin;
+@@ -69,10 +69,10 @@
+ 	.await;
+ }
+ 
+-async fn drain(slots: Arc<Semaphore>) {
++async fn drain(slots: Arc<Semaphore>, count: usize) {
+ 	let all = tokio::time::timeout(
+ 		Duration::from_secs(5),
+-		slots.acquire_many_owned(MAX_CANCEL_PUBLICATIONS as u32),
++		slots.acquire_many_owned(count as u32),
+ 	)
+ 	.await
+ 	.unwrap()
+@@ -88,6 +88,7 @@
+ 	save_record_at(&path, &original).unwrap();
+ 	let bytes = std::fs::read(&path).unwrap();
+ 	let slots = Arc::new(Semaphore::new(MAX_CANCEL_PUBLICATIONS));
++	let preparations = Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS));
+ 	let (gate, release) = gate();
+ 	let (entered, started) = tokio::sync::oneshot::channel();
+ 	let prepared = intent(root.path());
+@@ -95,6 +96,7 @@
+ 	let caller_thread = std::thread::current().id();
+ 	let reader = tokio::spawn(run_cancel_intent(
+ 		slots.clone(),
++		preparations.clone(),
+ 		move || {
+ 			let _ = entered.send(std::thread::current().id());
+ 			wait_gate(&gate)?;
+@@ -109,6 +111,10 @@
+ 	assert_ne!(worker_thread, caller_thread);
+ 	assert!(!reader.is_finished());
+ 	assert_eq!(slots.available_permits(), MAX_CANCEL_PUBLICATIONS - 1);
++	assert_eq!(
++		preparations.available_permits(),
++		MAX_CANCEL_PREPARATIONS - 1
++	);
+ 	let heartbeat = tokio::spawn(async {
+ 		tokio::task::yield_now().await;
+ 		37
+@@ -122,6 +128,7 @@
+ 	);
+ 	drop(release);
+ 	let (permit, restored) = reader.await.unwrap().unwrap();
++	assert_eq!(preparations.available_permits(), MAX_CANCEL_PREPARATIONS);
+ 	assert_eq!(restored, original);
+ 	assert_eq!(std::fs::read(path).unwrap(), bytes);
+ 	let audit = std::fs::read_to_string(root.path().join("audit/events.jsonl")).unwrap();
+@@ -133,22 +140,25 @@
+ 	// Preparation has returned, but remote continuation still owns this slot.
+ 	assert_eq!(slots.available_permits(), MAX_CANCEL_PUBLICATIONS - 1);
+ 	drop(permit);
+-	drain(slots).await;
++	drain(slots, MAX_CANCEL_PUBLICATIONS).await;
++	drain(preparations, MAX_CANCEL_PREPARATIONS).await;
+ }
+ 
+ #[tokio::test(flavor = "current_thread")]
+-async fn cancelled_receipt_preparations_retain_eight_physical_slots() {
++async fn cancelled_receipt_preparations_keep_two_physical_slots_and_release_unsubmitted_waiters() {
+ 	let root = tempfile::tempdir().unwrap();
+ 	let path = root.path().join("cancel-read.json");
+ 	save_record_at(&path, &record()).unwrap();
+ 	let slots = Arc::new(Semaphore::new(MAX_CANCEL_PUBLICATIONS));
++	let preparations = Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS));
+ 	let (gate, release) = gate();
+ 	let calls = Arc::new(AtomicUsize::new(0));
+ 	let appended = Arc::new(AtomicUsize::new(0));
+ 	let remote = Arc::new(AtomicUsize::new(0));
++	let (entered, mut started) = tokio::sync::mpsc::unbounded_channel();
+ 	let mut readers = Vec::new();
+ 	for _ in 0..MAX_CANCEL_PUBLICATIONS {
+-		let (entered, started) = tokio::sync::oneshot::channel();
++		let entered = entered.clone();
+ 		let gate = gate.clone();
+ 		let calls = calls.clone();
+ 		let appended = appended.clone();
+@@ -156,12 +166,14 @@
+ 		let path = path.clone();
+ 		let prepared = intent(root.path());
+ 		let worker_slots = slots.clone();
++		let worker_preparations = preparations.clone();
+ 		readers.push(tokio::spawn(async move {
+ 			let retained = run_cancel_intent(
+ 				worker_slots,
++				worker_preparations,
+ 				move || {
+ 					calls.fetch_add(1, Ordering::SeqCst);
+-					let _ = entered.send(());
++					entered.send(()).unwrap();
+ 					wait_gate(&gate)?;
+ 					Ok((prepared, read_record_at(&path, "cancel-read")?))
+ 				},
+@@ -174,34 +186,58 @@
+ 			remote.fetch_add(1, Ordering::SeqCst);
+ 			Ok::<_, anyhow::Error>(retained)
+ 		}));
+-		tokio::time::timeout(Duration::from_secs(5), started)
++	}
++	for _ in 0..MAX_CANCEL_PREPARATIONS {
++		tokio::time::timeout(Duration::from_secs(5), started.recv())
+ 			.await
+ 			.unwrap()
+ 			.unwrap();
+ 	}
++	tokio::time::timeout(Duration::from_secs(5), async {
++		while slots.available_permits() != 0 {
++			tokio::task::yield_now().await;
++		}
++	})
++	.await
++	.unwrap();
++	assert_eq!(preparations.available_permits(), 0);
+ 	for reader in readers {
+ 		reader.abort();
+ 		assert!(reader.await.unwrap_err().is_cancelled());
+ 	}
+-	assert_eq!(slots.available_permits(), 0);
++	assert_eq!(
++		slots.available_permits(),
++		MAX_CANCEL_PUBLICATIONS - MAX_CANCEL_PREPARATIONS
++	);
++	assert_eq!(preparations.available_permits(), 0);
+ 	let observed = calls.clone();
+ 	let mut extra = Box::pin(run_cancel_intent::<()>(
+ 		slots.clone(),
++		preparations.clone(),
+ 		move || {
+ 			observed.fetch_add(100, Ordering::SeqCst);
+-			bail!("pre-admission cancellation must not read a receipt")
++			bail!("cancellation before preparation admission must not read a receipt")
+ 		},
+ 		|_| Ok::<(), anyhow::Error>(()),
+ 	));
+ 	assert_pending(extra.as_mut()).await;
++	assert_eq!(
++		slots.available_permits(),
++		MAX_CANCEL_PUBLICATIONS - MAX_CANCEL_PREPARATIONS - 1
++	);
+ 	drop(extra);
+-	assert_eq!(calls.load(Ordering::SeqCst), MAX_CANCEL_PUBLICATIONS);
++	assert_eq!(
++		slots.available_permits(),
++		MAX_CANCEL_PUBLICATIONS - MAX_CANCEL_PREPARATIONS
++	);
++	assert_eq!(calls.load(Ordering::SeqCst), MAX_CANCEL_PREPARATIONS);
+ 	assert_eq!(appended.load(Ordering::SeqCst), 0);
+ 	assert_eq!(remote.load(Ordering::SeqCst), 0);
+ 	drop(release);
+-	drain(slots).await;
+-	assert_eq!(calls.load(Ordering::SeqCst), MAX_CANCEL_PUBLICATIONS);
+-	assert_eq!(appended.load(Ordering::SeqCst), MAX_CANCEL_PUBLICATIONS);
++	drain(slots, MAX_CANCEL_PUBLICATIONS).await;
++	drain(preparations, MAX_CANCEL_PREPARATIONS).await;
++	assert_eq!(calls.load(Ordering::SeqCst), MAX_CANCEL_PREPARATIONS);
++	assert_eq!(appended.load(Ordering::SeqCst), MAX_CANCEL_PREPARATIONS);
+ 	assert_eq!(remote.load(Ordering::SeqCst), 0);
+ }
+ 
+@@ -224,12 +260,14 @@
+ 			.unwrap()
+ 			.unwrap();
+ 		let slots = Arc::new(Semaphore::new(MAX_CANCEL_PUBLICATIONS));
++		let preparations = Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS));
+ 		let calls = Arc::new(AtomicUsize::new(0));
+ 		let mut queued = Vec::new();
+ 		for _ in 0..MAX_CANCEL_PUBLICATIONS {
+ 			let calls = calls.clone();
+ 			let mut reader = Box::pin(run_cancel_intent::<()>(
+ 				slots.clone(),
++				preparations.clone(),
+ 				move || {
+ 					calls.fetch_add(1, Ordering::SeqCst);
+ 					bail!("original receipt unavailable")
+@@ -240,12 +278,17 @@
+ 			queued.push(reader);
+ 		}
+ 		drop(queued);
+-		assert_eq!(slots.available_permits(), 0);
++		assert_eq!(
++			slots.available_permits(),
++			MAX_CANCEL_PUBLICATIONS - MAX_CANCEL_PREPARATIONS
++		);
++		assert_eq!(preparations.available_permits(), 0);
+ 		assert_eq!(calls.load(Ordering::SeqCst), 0);
+ 		drop(release);
+ 		blocker.await.unwrap().unwrap();
+-		drain(slots).await;
+-		assert_eq!(calls.load(Ordering::SeqCst), MAX_CANCEL_PUBLICATIONS);
++		drain(slots, MAX_CANCEL_PUBLICATIONS).await;
++		drain(preparations, MAX_CANCEL_PREPARATIONS).await;
++		assert_eq!(calls.load(Ordering::SeqCst), MAX_CANCEL_PREPARATIONS);
+ 	});
+ }
+ 
+@@ -269,14 +312,17 @@
+ 		let source = path.clone();
+ 		let prepared = intent(root.path());
+ 		let slots = Arc::new(Semaphore::new(MAX_CANCEL_PUBLICATIONS));
++		let preparations = Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS));
+ 		let appended = Arc::new(AtomicUsize::new(0));
+ 		let append_calls = appended.clone();
+ 		let remote = Arc::new(AtomicUsize::new(0));
+ 		let remote_calls = remote.clone();
+ 		let worker_slots = slots.clone();
++		let worker_preparations = preparations.clone();
+ 		let result = async move {
+ 			let retained = run_cancel_intent(
+ 				worker_slots,
++				worker_preparations,
+ 				move || Ok((prepared, read_record_at(&source, expected_id)?)),
+ 				move |prepared| {
+ 					append_calls.fetch_add(1, Ordering::SeqCst);
+@@ -292,14 +338,21 @@
+ 		assert_eq!(appended.load(Ordering::SeqCst), 0);
+ 		assert_eq!(remote.load(Ordering::SeqCst), 0);
+ 		assert!(!root.path().join("audit/events.jsonl").exists());
+-		drain(slots).await;
++		drain(slots, MAX_CANCEL_PUBLICATIONS).await;
++		drain(preparations, MAX_CANCEL_PREPARATIONS).await;
+ 	}
+ }
+ 
+ #[tokio::test(flavor = "current_thread")]
+ async fn public_cancel_reserves_original_capacity_before_reading_a_receipt() {
+ 	let slots = cancel_publication_slots();
++	let preparations = cancel_preparation_slots();
+ 	assert!(!Arc::ptr_eq(&slots, &observation_record_read_slots()));
++	assert!(!Arc::ptr_eq(
++		&preparations,
++		&observation_record_read_slots()
++	));
++	assert!(!Arc::ptr_eq(&slots, &preparations));
+ 	let held = slots
+ 		.clone()
+ 		.acquire_many_owned(MAX_CANCEL_PUBLICATIONS as u32)
+@@ -310,17 +363,99 @@
+ 		job_id: "../invalid-id".into(),
+ 	};
+ 	let expected = format!("{:#}", check_ref(&reference).unwrap_err());
+-	let mut cancel = Box::pin(cancel_job(ProcessCancelParams {
+-		host: reference.host,
+-		job_id: reference.job_id,
+-		grace_seconds: None,
+-	}));
++	let cancellation = || {
++		cancel_job(ProcessCancelParams {
++			host: reference.host.clone(),
++			job_id: reference.job_id.clone(),
++			grace_seconds: None,
++		})
++	};
++	let mut cancel = Box::pin(cancellation());
+ 	assert_pending(cancel.as_mut()).await;
++	assert_eq!(preparations.available_permits(), MAX_CANCEL_PREPARATIONS);
+ 	drop(held);
+ 	let error = tokio::time::timeout(Duration::from_secs(5), cancel)
+ 		.await
+ 		.unwrap()
+ 		.unwrap_err();
+ 	assert_eq!(format!("{error:#}"), expected);
+-	drain(slots).await;
+-}
++	let held_preparations = preparations
++		.clone()
++		.acquire_many_owned(MAX_CANCEL_PREPARATIONS as u32)
++		.await
++		.unwrap();
++	let mut waiting = Box::pin(cancellation());
++	assert_pending(waiting.as_mut()).await;
++	assert_eq!(slots.available_permits(), MAX_CANCEL_PUBLICATIONS - 1);
++	assert_eq!(preparations.available_permits(), 0);
++	drop(waiting);
++	assert_eq!(slots.available_permits(), MAX_CANCEL_PUBLICATIONS);
++	drop(held_preparations);
++	let error = tokio::time::timeout(Duration::from_secs(5), cancellation())
++		.await
++		.unwrap()
++		.unwrap_err();
++	assert_eq!(format!("{error:#}"), expected);
++	drain(slots, MAX_CANCEL_PUBLICATIONS).await;
++	drain(preparations, MAX_CANCEL_PREPARATIONS).await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn two_preparation_slots_preserve_eight_publication_continuations() {
++	let root = tempfile::tempdir().unwrap();
++	let slots = Arc::new(Semaphore::new(MAX_CANCEL_PUBLICATIONS));
++	let preparations = Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS));
++	assert_eq!(MAX_CANCEL_PUBLICATIONS, 8);
++	assert_eq!(MAX_CANCEL_PREPARATIONS, 2);
++	let calls = Arc::new(AtomicUsize::new(0));
++	let mut continuations = Vec::new();
++	for _ in 0..8 {
++		let prepared = intent(root.path());
++		let entered = calls.clone();
++		let continuation = tokio::time::timeout(
++			Duration::from_secs(5),
++			run_cancel_intent(
++				slots.clone(),
++				preparations.clone(),
++				move || {
++					entered.fetch_add(1, Ordering::SeqCst);
++					Ok((prepared, ()))
++				},
++				append_audit,
++			),
++		)
++		.await
++		.unwrap()
++		.unwrap();
++		continuations.push(continuation);
++	}
++	assert_eq!(slots.available_permits(), 0);
++	assert_eq!(preparations.available_permits(), 2);
++	assert_eq!(calls.load(Ordering::SeqCst), 8);
++	let prepared = intent(root.path());
++	let entered = calls.clone();
++	let mut ninth = Box::pin(run_cancel_intent(
++		slots.clone(),
++		preparations.clone(),
++		move || {
++			entered.fetch_add(1, Ordering::SeqCst);
++			Ok((prepared, ()))
++		},
++		append_audit,
++	));
++	assert_pending(ninth.as_mut()).await;
++	assert_eq!(calls.load(Ordering::SeqCst), 8);
++	assert_eq!(preparations.available_permits(), 2);
++	drop(continuations.pop().unwrap());
++	let ninth = tokio::time::timeout(Duration::from_secs(5), ninth)
++		.await
++		.unwrap()
++		.unwrap();
++	assert_eq!(calls.load(Ordering::SeqCst), 9);
++	assert_eq!(slots.available_permits(), 0);
++	assert_eq!(preparations.available_permits(), 2);
++	drop(ninth);
++	drop(continuations);
++	drain(slots, MAX_CANCEL_PUBLICATIONS).await;
++	drain(preparations, MAX_CANCEL_PREPARATIONS).await;
++}

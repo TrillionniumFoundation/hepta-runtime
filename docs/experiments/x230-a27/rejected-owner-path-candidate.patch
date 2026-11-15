@@ -1,0 +1,27 @@
+--- a/src/mcp/runtime/ssh_observation_profile.rs
++++ b/src/mcp/runtime/ssh_observation_profile.rs
+@@ -112,20 +112,20 @@
+ pub(super) fn open_absolute(path: &Path, directory: bool) -> Result<File> {
+ 	absolute(path)?;
+ 	let mut current = File::open("/")?;
+-	let parts: Vec<_> = path
++	let mut parts = path
+ 		.components()
+ 		.filter_map(|v| match v {
+ 			Component::Normal(v) => Some(v),
+ 			_ => None,
+ 		})
+-		.collect();
+-	for (index, part) in parts.iter().enumerate() {
++		.peekable();
++	while let Some(part) = parts.next() {
+ 		let name = std::ffi::CString::new(part.as_encoded_bytes())?;
+ 		let flags = libc::O_RDONLY
+ 			| libc::O_NOFOLLOW
+ 			| libc::O_NONBLOCK
+ 			| libc::O_CLOEXEC
+-			| if index + 1 < parts.len() || directory {
++			| if parts.peek().is_some() || directory {
+ 				libc::O_DIRECTORY
+ 			} else {
+ 				0

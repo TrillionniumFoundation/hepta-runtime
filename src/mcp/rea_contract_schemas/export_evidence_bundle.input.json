@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "examples": [
+    {
+      "overwrite": false,
+      "path": "/tmp/evidence.json"
+    }
+  ],
+  "properties": {
+    "overwrite": {
+      "default": false,
+      "description": "Whether an existing destination may be replaced.",
+      "type": "boolean"
+    },
+    "path": {
+      "allOf": [
+        {
+          "pattern": "^[^\\x00]*$"
+        },
+        {
+          "pattern": "^\\/"
+        }
+      ],
+      "description": "Absolute local filesystem path for the exported evidence bundle; relative paths are rejected.",
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "type": "object"
+}

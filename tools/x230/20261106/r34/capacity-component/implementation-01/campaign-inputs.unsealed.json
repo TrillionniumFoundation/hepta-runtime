@@ -1,0 +1,42 @@
+{
+  "schema": "hepta-r34-capacity-campaign-preparation/v1",
+  "status": "unsealed_outer_campaign",
+  "scope": "six-host direct-transport native component, not full MCP capacity",
+  "campaign_entrypoint": null,
+  "single_cell_entrypoint": "coordinate.py",
+  "component_source_manifest": null,
+  "component_pair_report": null,
+  "runtime_qualification": null,
+  "exact_rust_ci": null,
+  "held_agent_control": null,
+  "compiler_monitor_control": null,
+  "quiet_control_receipt": null,
+  "quiet_seconds": 90,
+  "normal_environment_reference": null,
+  "output_root": null,
+  "automatic_retries": 0,
+  "on_any_cell_failure": "stop all remaining cells; retain all originals and failed-cell cleanup",
+  "on_missing_or_incomplete_capacity_witness": "fail or incomplete, never infer capacity from latency",
+  "run_cells_serially": true,
+  "fixed_cells": [
+    {"index": 0, "label": "A1-x230", "round": "A1", "arm": "A", "victim": "x230", "actual_input": null},
+    {"index": 1, "label": "A1-mac", "round": "A1", "arm": "A", "victim": "mac", "actual_input": null},
+    {"index": 2, "label": "B1-x230", "round": "B1", "arm": "B", "victim": "x230", "actual_input": null},
+    {"index": 3, "label": "B1-mac", "round": "B1", "arm": "B", "victim": "mac", "actual_input": null},
+    {"index": 4, "label": "B2-x230", "round": "B2", "arm": "B", "victim": "x230", "actual_input": null},
+    {"index": 5, "label": "B2-mac", "round": "B2", "arm": "B", "victim": "mac", "actual_input": null},
+    {"index": 6, "label": "A2-x230", "round": "A2", "arm": "A", "victim": "x230", "actual_input": null},
+    {"index": 7, "label": "A2-mac", "round": "A2", "arm": "A", "victim": "mac", "actual_input": null}
+  ],
+  "required_outer_closure": [
+    "actual runtime qualification and exact CI both closed before component build/run",
+    "A and B actual component builds, selected locks, feature graph and separate ELF identities closed",
+    "same frozen held-agent authentication identity and compiler monitor policy throughout",
+    "original or reviewed equivalent 90-second quiet receipt before first cell",
+    "all eight raw cell inputs, process receipts, reports and cleanup retained without retry or omission",
+    "outer summary checks exact order, unchanged controls, no skipped cells and no unplanned additional cells"
+  ],
+  "implemented_outer_or_executed": false,
+  "capacity_established": false,
+  "candidate_adopted": false
+}

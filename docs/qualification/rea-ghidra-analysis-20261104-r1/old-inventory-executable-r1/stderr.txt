@@ -1,0 +1,17 @@
+/home/qian-qi/hepta-runtime-rea-next-ghidra-20261104-r1/src/mcp/rea_ghidra_bridge.java:74: warning: [removal] getDomainObject() in Loaded has been deprecated and marked for removal
+            Program program=loaded.getPrimary().getDomainObject();
+                                               ^
+  where T is a type-variable:
+    T extends DomainObject declared in class Loaded
+1 warning
+Exception in thread "main" java.lang.NullPointerException: Cannot read field "value" because "anotherString" is null
+	at java.base/java.lang.String.compareTo(String.java:2105)
+	at ghidra.app.util.opinion.AbstractLibrarySupportLoader.lambda$getLibraryNameComparator$0(AbstractLibrarySupportLoader.java:1249)
+	at ghidra.app.util.opinion.AbstractLibrarySupportLoader.getLibraryNames(AbstractLibrarySupportLoader.java:963)
+	at ghidra.app.util.opinion.AbstractLibrarySupportLoader.doLoad(AbstractLibrarySupportLoader.java:936)
+	at ghidra.app.util.opinion.AbstractLibrarySupportLoader.loadProgram(AbstractLibrarySupportLoader.java:163)
+	at ghidra.app.util.opinion.AbstractProgramLoader.load(AbstractProgramLoader.java:102)
+	at ghidra.app.util.importer.ProgramLoader$Builder.loadAll(ProgramLoader.java:564)
+	at ghidra.app.util.importer.ProgramLoader$Builder.load(ProgramLoader.java:470)
+	at ghidra.app.util.importer.ProgramLoader$Builder.load(ProgramLoader.java:441)
+	at HeptaGhidra.main(rea_ghidra_bridge.java:73)

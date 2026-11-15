@@ -1,0 +1,277 @@
+--- a/src/mcp/runtime/ssh_observation_profile.rs
++++ b/src/mcp/runtime/ssh_observation_profile.rs
+@@ -13,6 +13,10 @@
+ use tokio::io::{AsyncReadExt, AsyncWriteExt};
+ use tokio::net::UnixStream;
+ use tokio::time::{timeout_at, Instant};
++
++#[path = "ssh_observation_prepared_path.rs"]
++mod prepared_path;
++use prepared_path::PreparedPath;
+ 
+ const MAX_PROFILE_BYTES: usize = 256 * 1024;
+ const MAX_AGENT_BYTES: usize = 64 * 1024;
+@@ -83,7 +87,7 @@
+ 
+ #[derive(Clone)]
+ struct PinnedFile {
+-	path: PathBuf,
++	path: PreparedPath,
+ 	stamp: Stamp,
+ 	digest: [u8; 32],
+ 	maximum: usize,
+@@ -154,7 +158,15 @@
+ 	private: bool,
+ 	executable: bool,
+ ) -> Result<(File, Stamp)> {
+-	let file = open_absolute(path, false)?;
++	check_opened_file(open_absolute(path, false)?, maximum, private, executable)
++}
++
++fn check_opened_file(
++	file: File,
++	maximum: usize,
++	private: bool,
++	executable: bool,
++) -> Result<(File, Stamp)> {
+ 	let before = file.metadata()?;
+ 	if !before.is_file()
+ 		|| before.nlink() != 1
+@@ -187,10 +199,20 @@
+ 	length: usize,
+ 	maximum: usize,
+ ) -> Result<()> {
++	verify_read_with(file, stamp, length, maximum, || open_absolute(path, false))
++}
++
++fn verify_read_with(
++	file: &File,
++	stamp: &Stamp,
++	length: usize,
++	maximum: usize,
++	reopen: impl FnOnce() -> Result<File>,
++) -> Result<()> {
+ 	if length as u64 != stamp.len
+ 		|| length > maximum
+ 		|| *stamp != Stamp::of(&file.metadata()?)
+-		|| *stamp != Stamp::of(&open_absolute(path, false)?.metadata()?)
++		|| *stamp != Stamp::of(&reopen()?.metadata()?)
+ 	{
+ 		bail!("observation profile input changed");
+ 	}
+@@ -248,7 +270,7 @@
+ 		}
+ 		Ok((
+ 			Self {
+-				path: path.to_owned(),
++				path: PreparedPath::new(path)?,
+ 				stamp,
+ 				digest,
+ 				maximum,
+@@ -259,15 +281,24 @@
+ 		))
+ 	}
+ 	fn verify_identity(&self) -> Result<()> {
+-		let (_, stamp) = checked_file(&self.path, self.maximum, self.private, self.executable)?;
++		let (_, stamp) = check_opened_file(
++			self.path.open(false)?,
++			self.maximum,
++			self.private,
++			self.executable,
++		)?;
+ 		if stamp != self.stamp {
+ 			bail!("observation profile changed after complete validation");
+ 		}
+ 		Ok(())
+ 	}
+ 	fn verify(&self) -> Result<()> {
+-		let (mut file, stamp) =
+-			checked_file(&self.path, self.maximum, self.private, self.executable)?;
++		let (mut file, stamp) = check_opened_file(
++			self.path.open(false)?,
++			self.maximum,
++			self.private,
++			self.executable,
++		)?;
+ 		if stamp != self.stamp {
+ 			bail!("observation profile changed");
+ 		}
+@@ -288,7 +319,7 @@
+ 			length += count;
+ 			hash.update(&buffer[..count]);
+ 		}
+-		verify_read(&self.path, &file, &stamp, length, self.maximum)?;
++		verify_read_with(&file, &stamp, length, self.maximum, || self.path.open(false))?;
+ 		if hash.finish().as_ref() != self.digest {
+ 			bail!("observation profile changed");
+ 		}
+@@ -426,7 +457,7 @@
+ 	}
+ 	fn verify_resolution(&self) -> Result<()> {
+ 		let (path, components) = fixed_shell_resolution()?;
+-		if path != self.target.path
++		if path.as_path() != self.target.path.as_path()
+ 			|| components.len() != self.components.len()
+ 			|| components
+ 				.iter()
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_prepared_path.rs
+@@ -0,0 +1,70 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Immutable lexical preparation; every open still walks fresh descriptors.
++
++use super::absolute;
++use anyhow::Result;
++use std::ffi::CString;
++use std::fs::File;
++use std::os::fd::{AsRawFd, FromRawFd};
++use std::path::{Component, Path, PathBuf};
++
++#[derive(Clone)]
++pub(super) struct PreparedPath {
++	// Only this module can construct or change the representation. Neither
++	// field is exposed mutably, and it stores no filesystem observation.
++	path: PathBuf,
++	components: Box<[CString]>,
++}
++
++impl PreparedPath {
++	pub(super) fn new(path: &Path) -> Result<Self> {
++		absolute(path)?;
++		let components = path
++			.components()
++			.filter_map(|value| match value {
++				Component::Normal(value) => Some(value),
++				_ => None,
++			})
++			.map(|value| CString::new(value.as_encoded_bytes()))
++			.collect::<std::result::Result<Vec<_>, _>>()?
++			.into_boxed_slice();
++		Ok(Self {
++			path: path.to_owned(),
++			components,
++		})
++	}
++
++	pub(super) fn as_path(&self) -> &Path {
++		&self.path
++	}
++
++	pub(super) fn open(&self, directory: bool) -> Result<File> {
++		// Keep the existing per-call lexical check as well as every fresh
++		// descriptor, flag and error boundary of open_absolute.
++		absolute(&self.path)?;
++		let mut current = File::open("/")?;
++		for (index, name) in self.components.iter().enumerate() {
++			let flags = libc::O_RDONLY
++				| libc::O_NOFOLLOW
++				| libc::O_NONBLOCK
++				| libc::O_CLOEXEC
++				| if index + 1 < self.components.len() || directory {
++					libc::O_DIRECTORY
++				} else {
++					0
++				};
++			let fd = unsafe { libc::openat(current.as_raw_fd(), name.as_ptr(), flags) };
++			if fd < 0 {
++				return Err(std::io::Error::last_os_error().into());
++			}
++			current = unsafe { File::from_raw_fd(fd) };
++		}
++		Ok(current)
++	}
++}
++
++#[cfg(test)]
++#[path = "ssh_observation_prepared_path_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_prepared_path_tests.rs
+@@ -0,0 +1,85 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Prepared paths retain lexical, descriptor and no-follow behavior.
++
++use super::*;
++use std::io::Read;
++use std::os::unix::ffi::OsStrExt;
++use std::os::unix::fs::{symlink, MetadataExt};
++
++#[test]
++fn prepared_paths_reject_invalid_lexical_inputs_and_keep_root() {
++	for path in [
++		Path::new("relative"),
++		Path::new("/one/./two"),
++		Path::new("/one/../two"),
++		Path::new("/space name"),
++		Path::new(std::ffi::OsStr::from_bytes(b"/bad\0name")),
++		Path::new(std::ffi::OsStr::from_bytes(b"/\xff")),
++	] {
++		assert!(PreparedPath::new(path).is_err());
++		assert!(super::super::open_absolute(path, false).is_err());
++	}
++	let root = PreparedPath::new(Path::new("/")).unwrap();
++	assert_eq!(root.as_path(), Path::new("/"));
++	for directory in [false, true] {
++		let prepared = root.open(directory).unwrap();
++		let original = super::super::open_absolute(Path::new("/"), directory).unwrap();
++		assert_eq!(prepared.metadata().unwrap().ino(), original.metadata().unwrap().ino());
++		assert_eq!(unsafe { libc::fcntl(prepared.as_raw_fd(), libc::F_GETFL) }, unsafe {
++			libc::fcntl(original.as_raw_fd(), libc::F_GETFL)
++		});
++	}
++}
++
++#[test]
++fn prepared_paths_keep_flags_and_reject_leaf_and_intermediate_symlinks() {
++	let root = tempfile::tempdir().unwrap();
++	let nested = root.path().join("nested");
++	std::fs::create_dir(&nested).unwrap();
++	let leaf = nested.join("file");
++	std::fs::write(&leaf, b"fixture").unwrap();
++	for (path, directory) in [(&leaf, false), (&nested, true)] {
++		let prepared = PreparedPath::new(path).unwrap().open(directory).unwrap();
++		let original = super::super::open_absolute(path, directory).unwrap();
++		assert_eq!(prepared.metadata().unwrap().ino(), original.metadata().unwrap().ino());
++		for command in [libc::F_GETFL, libc::F_GETFD] {
++			assert_eq!(unsafe { libc::fcntl(prepared.as_raw_fd(), command) }, unsafe {
++				libc::fcntl(original.as_raw_fd(), command)
++			});
++		}
++	}
++	assert!(PreparedPath::new(&leaf).unwrap().open(true).is_err());
++	assert!(PreparedPath::new(&leaf.join("child")).unwrap().open(false).is_err());
++	symlink(&leaf, root.path().join("leaf-link")).unwrap();
++	symlink(&nested, root.path().join("dir-link")).unwrap();
++	assert!(PreparedPath::new(&root.path().join("leaf-link")).unwrap().open(false).is_err());
++	assert!(PreparedPath::new(&root.path().join("dir-link/file")).unwrap().open(false).is_err());
++}
++
++#[test]
++fn prepared_paths_own_lexical_bytes_and_reopen_replaced_paths() {
++	let root = tempfile::tempdir().unwrap();
++	let path = root.path().join("file");
++	// Preparation does not require the file to exist and retains no descriptor.
++	let mut input = path.clone();
++	let prepared = PreparedPath::new(&input).unwrap();
++	input.set_file_name("different");
++	assert_eq!(prepared.as_path(), path.as_path());
++	assert!(prepared.open(false).is_err());
++	std::fs::write(&path, b"first").unwrap();
++	let first = prepared.open(false).unwrap().metadata().unwrap();
++	let previous = root.path().join("previous");
++	std::fs::rename(&path, &previous).unwrap();
++	std::fs::write(&path, b"replacement").unwrap();
++	let mut opened = prepared.open(false).unwrap();
++	assert_ne!(opened.metadata().unwrap().ino(), first.ino());
++	let mut bytes = Vec::new();
++	opened.read_to_end(&mut bytes).unwrap();
++	assert_eq!(bytes, b"replacement");
++	drop(opened);
++	std::fs::remove_file(&path).unwrap();
++	symlink(&previous, &path).unwrap();
++	assert!(prepared.open(false).is_err());
++}

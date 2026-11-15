@@ -1,0 +1,60 @@
+{
+  "schema": "hepta.focused_actual_source_harness.v1",
+  "repo": "/workspace/scratch/d72683e5e62a/runtime-transport-fix",
+  "source_head": "0414c548c46a2e16a0b58e7595bde7a8c44359ea",
+  "root_Cargo_lock_sha256": "1509860cac0e7f26e6a845edfec1c87ae3bd92380ecaa357457e5263e861d631",
+  "actual_full_modules": [
+    {
+      "source": "src/mcp/rea_inline_order.rs",
+      "sha256": "67887ec3a1a1e01b7bc2d46edef35eb7f204d98c880fdd455b17bfd9b51917cb"
+    },
+    {
+      "source": "src/mcp/rea_mcp_transport.rs",
+      "sha256": "3aca3e49cb4ae779617a5439350da6304fcf275a55fb594baabf9c38f2b96862"
+    },
+    {
+      "source": "src/mcp/rea_structured_wire.rs",
+      "sha256": "cae260bb5c7d978283d67417a147950c6a9b334413a07fc7561e1b7b2b915a60"
+    },
+    {
+      "source": "src/mcp/rea_mcp_transport_tests.rs",
+      "sha256": "2d963e94b56782d5fca8733ce58206ae1eb3301db14b34bfb4d3973f0460659c"
+    },
+    {
+      "source": "src/mcp/rea_structured_wire_tests.rs",
+      "sha256": "354f9a4cafd94748a16e8dedfed38128472ab6f465c1a09d7f205d0fa636458c"
+    }
+  ],
+  "exact_helper_extractions": [
+    {
+      "source": "src/mcp/rea_contract.rs",
+      "source_sha256": "9c8a0d503d6c90b281f6667a52fca7349b01fb1f8dc5eab281a7f65750fd319b",
+      "start_line": 428,
+      "end_line_exclusive": 442,
+      "exact_extracted_sha256": "fec7ef48aa4a9f1a655fd8e10bb04606e4b77e12d7b65ebf88de27331de11622"
+    },
+    {
+      "source": "src/mcp/rea_contract.rs",
+      "source_sha256": "9c8a0d503d6c90b281f6667a52fca7349b01fb1f8dc5eab281a7f65750fd319b",
+      "start_line": 29,
+      "end_line_exclusive": 29,
+      "exact_extracted_sha256": "b97b6be40fbcb58496f0bfd340a80ab3e80ea79607504d0807e2e3126b586fd5"
+    },
+    {
+      "source": "src/mcp/rea_contract.rs",
+      "source_sha256": "9c8a0d503d6c90b281f6667a52fca7349b01fb1f8dc5eab281a7f65750fd319b",
+      "start_line": 32,
+      "end_line_exclusive": 34,
+      "exact_extracted_sha256": "a637cedb4e394f8aa475c3c1071d3984ab6caa94eeaa242a59b0a2693ce253eb"
+    },
+    {
+      "source": "src/mcp/rea_evidence.rs",
+      "source_sha256": "6586a51457a711ede1ce44c64a61f77b39d9fecffa460260d35951bbd53e7b18",
+      "start_line": 44,
+      "end_line_exclusive": 111,
+      "exact_extracted_sha256": "c277eab6745d03011e3831bf3b12971a7f697d5907366de22634d08bc838890b"
+    }
+  ],
+  "harness_Cargo_toml": "[package]\nname = \"rea-transport-source-harness\"\nversion = \"0.0.0\"\nedition = \"2021\"\nrust-version = \"1.95\"\n\n[dependencies]\nanyhow = \"=1.0.104\"\nserde = { version = \"=1.0.229\", features = [\"derive\"] }\nserde_json = { version = \"=1.0.151\", features = [\"float_roundtrip\", \"raw_value\"] }\ntokio = { version = \"=1.53.3\", features = [\"rt-multi-thread\", \"macros\", \"process\", \"fs\", \"sync\", \"signal\", \"io-std\", \"io-util\", \"net\"] }\nrmcp = { version = \"=3.9.0\", features = [\"server\", \"macros\", \"transport-io\", \"transport-streamable-http-server\", \"client\"] }\n",
+  "note": "Original transport/writer/inline-order modules and their sibling test modules are compiled directly by absolute path. Two unrelated writer helper modules include exact unmodified source items, with imports only. SDK rmcp3.9.0 is the locked registry package. Repository Cargo.toml/Cargo.lock are not modified. This is focused module coverage, not a full runtime test pass."
+}

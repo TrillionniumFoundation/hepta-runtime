@@ -1,0 +1,133 @@
+{
+  "schema": "hepta-gateway-rfc9068-signed-access-token-offline-qualification-v1",
+  "recorded_at_utc": "2026-10-13T02:22:59.546760+00:00",
+  "based_on_head": "41887b3ec170dc44e3915beadab2950186c956cd",
+  "scope": "Actual RSA signature verification and typed policy ingress, OFFLINE only",
+  "new_admission": {
+    "trusted_public_jwks": "exact file SHA256, trusted owner and mode, no symlinks or remote fetch",
+    "algorithms": [
+      "RS256"
+    ],
+    "minimum_rsa_bits": 2048,
+    "maximum_rsa_bits": 4096,
+    "jws_type": "at+jwt or application/at+jwt",
+    "required_claims": [
+      "iss",
+      "sub",
+      "aud",
+      "exp",
+      "iat",
+      "jti",
+      "client_id",
+      "scope",
+      "tenant"
+    ],
+    "tenant_and_resource_binding": "exact issuer, single resource audience and immutable enrolled OAuth client",
+    "time_bounds": "exp > now, exp-now <= max_age, exp-iat <= max_age, issued time within age/clock skew",
+    "revocation": "mandatory injected trusted callback; fail closed on service error or invalid result",
+    "other_denials": [
+      "wrong RSA signer",
+      "HS256/none",
+      "JWK private key or duplicate kid",
+      "unsupported JWT typ",
+      "cross-tenant device binding",
+      "unknown client",
+      "malformed/split/duplicate scopes",
+      "token or trust file over size",
+      "expired/future/overlong token"
+    ],
+    "tool_contract_unchanged": true
+  },
+  "reproduced_and_fixed": {
+    "test": "signed token issued 300 seconds earlier with expiration 800 seconds ahead",
+    "prepatch": "incorrectly accepted due only relative-to-now bounds",
+    "postpatch": "denied because lifetime exp-iat > 900 seconds",
+    "red_test_exited_nonzero": true,
+    "no_real_user_tokens": true
+  },
+  "dependencies": {
+    "requirement": "PyJWT[crypto]==2.15.1",
+    "pin_verified": {
+      "pyjwt": "2.15.1",
+      "cryptography": "41.0.7"
+    },
+    "ci_worker": "existing disposable document test venv with cryptography 50.0.2",
+    "system_python_changed": false,
+    "installer_service_started": false
+  },
+  "test_suites": {
+    "https": {
+      "count": 5,
+      "passed": true,
+      "log_sha256": "092818100bcc8ff4207f9be61ccb82178862db03d68a1491e8c6f1d8acb723d3"
+    },
+    "policy": {
+      "count": 40,
+      "passed": true,
+      "log_sha256": "dd781fad59fa957c73b2a9d09fd9386cb9343ae275193b1758ef06afe9657f32"
+    },
+    "catalog": {
+      "count": 11,
+      "passed": true,
+      "log_sha256": "2525522a6b504b03aa8960f93d2d2b89ebfdb768868b18984022a6757075b792"
+    },
+    "authenticated_catalog": {
+      "count": 7,
+      "passed": true,
+      "log_sha256": "0ed112a773234ad73f26c00130af2d2252dc9ce9f0c960d019c867e48d6cc261"
+    },
+    "real_rs256_jwt": {
+      "count": 19,
+      "passed": true,
+      "log_sha256": "e3454c4358dccb59489f48723fff65f2d92460714064a5f4b6db52515421225f"
+    },
+    "private_facade": {
+      "count": 31,
+      "passed": true,
+      "log_sha256": "4e51b4b67d2457170c1a59f7cbdb439192cf4e317c14fa90440d8707dd8f4493"
+    }
+  },
+  "total_independent_test_cases": 113,
+  "artifact_sha256": {
+    "deploy/cloud_gateway_jwt_verifier.py": "94080617d484335e9f15b8a4ebee969d3f9521c10bd4d2acd654f24233de5abb",
+    "tests/cloud_gateway_jwt_verifier_tests.py": "121884cdf5bd94cf03618471fba42003b0274edf22bebfac1da8666a371e16b3",
+    "deploy/requirements-cloud-gateway-verifier.txt": "a8d1b8c7f2c816b3777c92f44560b56d175bbe97f717d5ccbdfffe9e1b9b6456",
+    "deploy/cloud_gateway_policy.py": "d381d45e572a72621d8e7fb57932f809e02c0453777a7af83cad013c6bf15e55",
+    "deploy/cloud_gateway_https.py": "40880f37a5a4a8d61165153e84e7db310c35f707f25c245ea8bb13fec6fb3985",
+    ".github/workflows/operator-parity.yml": "7b5cbccc150af919df7c69fafc1c63b3b263d83f8e43888a305b1381afa27052",
+    "docs/CLOUD_GATEWAY_V1.md": "c3966c1a712b5dc74926a2ab78e7346265a3206df68906e0f0281748ae4fd003"
+  },
+  "native_contract": {
+    "tool_count": 50,
+    "catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+    "json_file_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1"
+  },
+  "private_services_unchanged": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2064509",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "2064582",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    }
+  },
+  "unimplemented_or_unverified": [
+    "actual OAuth 2.1 authorization server / user login",
+    "verified live issuer ownership and remote HTTPS JWKS metadata",
+    "live revocation/consent store, issuer key rotation lifecycle",
+    "streamable public HTTPS MCP ingress",
+    "real device mutual TLS and signed per-tenant agent identity",
+    "OS tenant isolation and public penetration tests",
+    "OpenAI plugin directory submission and approval"
+  ],
+  "public_https_endpoint_running": false,
+  "private_tunnel_or_runtime_or_DC_restarted": false,
+  "production_user_credential_or_private_signing_key_read": false,
+  "secrets_in_receipt": false,
+  "exact_head_hosted_ci": "new commit not yet created"
+}

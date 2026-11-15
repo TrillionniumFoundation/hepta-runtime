@@ -1,0 +1,334 @@
+{
+  "schema": "hepta-compiler-candidate-qualification-design/v1",
+  "status": "prepared_only_not_selected_not_executed",
+  "created_utc": "2026-11-05T14:47:58.630880+00:00",
+  "actions_this_review": {
+    "native_calls": 0,
+    "rust_or_cargo_commands": 0,
+    "builds": 0,
+    "installs": 0,
+    "tests": 0,
+    "github_calls": 0,
+    "candidate_source_edits": 0,
+    "published_plan_edits": 0,
+    "local_design_files": 2,
+    "official_docs_read": true
+  },
+  "current_experiment_boundary": {
+    "metadata_preflight_binding": "existing fixed historical R24 preflight only",
+    "candidate_selected": false,
+    "target_cpu": null,
+    "target_triple": null,
+    "new_driver_implemented": false,
+    "qualification_executed": false,
+    "future_qualification_or_binary_pins_created": false,
+    "native_handoff_received_by_this_review": false
+  },
+  "historical_baseline_reference": {
+    "version": "R24",
+    "source_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+    "source_tree": "b71cac25e2c2138837f27f3c74f6a2dc5c56b565",
+    "source_inputs": 220,
+    "runtime_sha256": "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13",
+    "runtime_bytes": 14373416,
+    "historical_test_outcome": {
+      "passed": 1645,
+      "failed": 0,
+      "ignored": 34,
+      "selected": 1679
+    },
+    "binding_is_for_reference_not_a_future_qualification": true
+  },
+  "accepted_version_change_gate": {
+    "must_recheck_immediately_before_freezing_candidate": true,
+    "if_r28_or_other_version_adopted_first": "Create a NEW fixed plan binding its accepted source commit/tree, complete source map, actual baseline ELF, original qualification/harness, required test inventory and all hashes. Do not overwrite the existing R24 preparation or reuse the R24 220-count/ELF/test totals as latest-baseline evidence.",
+    "historical_r24_preflight_scope_remains_historical": true
+  },
+  "minimal_driver_change_set": [
+    {
+      "change": "External, explicitly versioned driver copy",
+      "details": "Preserve the original qualify.py and all original 19 harness files in the source copy. Retain copyright/SPDX in the new external driver; bind original driver SHA, exact diff and actual new driver SHA in additional report fields. The unchanged 19-file snapshots do not establish that the executed driver is byte-identical to the old harness."
+    },
+    {
+      "change": "Clean fixed environment and explicit flags after cleanup",
+      "details": "Replace inherited environment copying with a minimal allowlist; retain original test/worker settings. After cleanup insert only the frozen extra Rust CPU args through CARGO_ENCODED_RUSTFLAGS. No inherited CARGO_PROFILE_*, CARGO_TARGET_*, CARGO_BUILD_*, RUST* or CARGO_ENCODED_* value is copied; explicitly required Cargo/Rustup toolchain selectors are reconstructed from reviewed pins."
+    },
+    {
+      "change": "Explicit compile target and evidence",
+      "details": "Add reviewed host --target and -vv only to clippy/test-build/release. Retain test JSON; add release JSON. Keep all-target/all-feature/locked/offline scopes and all eight stages. Do not add global opt-level/LTO/panic flags to test builds."
+    },
+    {
+      "change": "Correct artifact path and provenance",
+      "details": "Original --target driver option means target DIRECTORY. Add a separately named --target-triple or plan field; never overload it. Release outputs become <target-directory>/<triple>/release/{hepta-runtime,hepta-runtime-jobctl,examples/native_process_driver}. Derive and cross-check with actual Cargo artifact events; no fallback to an older release directory."
+    }
+  ],
+  "environment_design": {
+    "mode": "construct_from_allowlist_not_filter_and_reuse_arbitrary_environment",
+    "explicit_values_after_cleanup": {
+      "PATH": "verified fixed toolchain/system paths only",
+      "HOME": "verified original build-account home, not repurposed as candidate workspace",
+      "LANG": "fixed reviewed value",
+      "LC_ALL": "fixed reviewed value",
+      "CARGO_HOME": "fresh isolated cache home",
+      "CARGO_TARGET_DIR": "fresh isolated build target directory",
+      "CARGO_BUILD_JOBS": "frozen value, original R24 actual was 2",
+      "CARGO_INCREMENTAL": "0",
+      "RUST_TEST_THREADS": "1",
+      "TOKIO_WORKER_THREADS": "2",
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTHONNOUSERSITE": "1",
+      "CARGO_ENCODED_RUSTFLAGS": "join fixed [-C, target-cpu=<unselected until metadata>] with ASCII 0x1f",
+      "RUSTUP_HOME": "verified installed toolchain home only if using pinned rustup shim",
+      "RUSTUP_AUTO_INSTALL": "0 if using the reviewed rustup path"
+    },
+    "ambient_values_not_inherited": [
+      "all CARGO_* except explicit reconstructed entries",
+      "all RUST* except explicit reconstructed entries",
+      "HEPTA_*",
+      "SSH_*",
+      "Python path overrides",
+      "compiler/linker preload and CC/CXX/flag overrides"
+    ],
+    "recording": "Record the constructed allowlist and command argv; never dump os.environ or credentials. Removed-variable families can be counted/named without values. Cargo may intentionally generate internal build-script/compiler variables; record normal outputs rather than rejecting expected Cargo/Clippy-generated internals.",
+    "config_guard": "A fresh CARGO_HOME alone does not exclude ancestor/project Cargo config. Bind the applicable config inputs and safe relevant settings; require no unreviewed profile, target, rustflags, linker, wrapper or forced [env] override. Do not modify system/user config to satisfy the experiment; stop preparation or choose already-authorized clean isolation when this cannot be established.",
+    "release_profile": "Keep accepted Cargo.toml unchanged: opt-level=3, lto=true/fat, codegen-units=1, panic=abort, strip=true, overflow-checks=false; verify observed final release invocation. Leave original dev/test profile and unwind fixtures intact.",
+    "initial_config_policy": {
+      "mode": "fail_closed_absence_check_for_unbound_configuration",
+      "paths": "From the actual Cargo cwd (the full copied source root), inspect only metadata for both .cargo/config and .cargo/config.toml at that directory and every ancestor through filesystem root, plus both forms in selected private CARGO_HOME.",
+      "accepted_absence": "Only definite not-found counts as absence. An existing unbound regular file, symlink, permission failure or other indeterminate path stops preparation. No file body or secret config value is printed or silently edited/renamed.",
+      "present_configuration": "Permit only an explicitly pre-reviewed safe configuration with its own identity and permitted-key policy in a NEW fixed plan; the first minimal template has no such exception.",
+      "known_gap": "Current metadata preflight hashes source-local Cargo configs only; that does not prove ancestor/user config absence.",
+      "no_cwd_workaround": "Do not silently change cwd and add --manifest-path; that would change the original stage argv/cwd and fmt handling and needs a separately reviewed recipe."
+    }
+  },
+  "stages": [
+    {
+      "stage": "format",
+      "command": "<cargo> +<pinned-toolchain> fmt --all",
+      "change": "none"
+    },
+    {
+      "stage": "fmt-check",
+      "command": "<cargo> +<pinned-toolchain> fmt --all -- --check",
+      "change": "none"
+    },
+    {
+      "stage": "harness-tests",
+      "command": "/usr/bin/python3 -B -m unittest discover -s <source>/tools/x230/20261028 -p *_tests.py -v",
+      "change": "none"
+    },
+    {
+      "stage": "clippy",
+      "command": "<cargo> +<pinned-toolchain> clippy --offline --locked --all-targets --all-features --target <verified-host-triple> -vv -- -D warnings",
+      "change": "explicit target and verbose evidence only"
+    },
+    {
+      "stage": "test-build",
+      "command": "<cargo> +<pinned-toolchain> test --offline --locked --all-targets --all-features --no-run --message-format=json --target <verified-host-triple> -vv",
+      "change": "explicit target and verbose evidence; preserve cargo-no-run.jsonl and original retention/parser"
+    },
+    {
+      "stage": "isolated-tests",
+      "command": "/usr/bin/python3 <source>/tools/x230/20261028/run_isolated_tests.py --artifacts <out>/retained-artifacts.jsonl --source-manifest <out>/source-map.json --output <out>/isolated-tests --timeout 180",
+      "change": "none"
+    },
+    {
+      "stage": "audit-isolated-tests",
+      "command": "/usr/bin/python3 <source>/tools/x230/20261028/audit_isolated_tests.py --evidence <out>/isolated-tests --output <out>/isolated-tests.audit.json",
+      "change": "none"
+    },
+    {
+      "stage": "release",
+      "command": "<cargo> +<pinned-toolchain> build --offline --locked --all-features --release --bins --examples --target <verified-host-triple> -vv --message-format=json",
+      "change": "explicit target plus command/artifact evidence; no scope reduction"
+    }
+  ],
+  "isolation_and_binding": [
+    "Create a fresh owned run root only after native handoff, metadata closure and new fixed-plan approval path; separate source, target, Cargo cache, driver, qualification output and evidence directories. No prior artifact overwrites or hardlinks to mutable original inputs.",
+    "Copy the exact accepted source and original tools; verify full source map and separate tool manifest before/after. Compiler-only means no production Rust/Cargo/lock/source changes; any formatting byte change stops that claim for review.",
+    "Populate only verified offline dependency cache data needed by Cargo.lock in the private Cargo home; no target/fingerprint reuse from old builds, no credential files copied or logged, no downloads/tool install implied.",
+    "Use the original selected test inventory and ignored list for the source accepted at build time; execute all required tests and keep original no-retry behavior. R24 historical counts are not an R28 requirement.",
+    "Bind actual accepted baseline ELF bytes and SHA before comparison, plus each new release/test executable, source map, tools, configs and logs. Preserve every failed attempt under its original identity.",
+    "All release bins/examples are still built. A CPU-specific controller artifact does not confer portability on a rebuilt jobctl/driver; freeze deployment scope and existing remote helper identities separately before adoption.",
+    "Private cache population means verified offline dependency source/index/archive data only. It does not prove CPU compatibility and does not justify generic compiled artifact reuse; --target/CPU changes may require widespread rebuilding in the fresh target."
+  ],
+  "evidence_recipe": {
+    "first_choice": "No compiler wrapper. Keep raw Cargo -vv stdout/stderr, test and release Cargo JSON, source/config/driver hashes and selected actual product fingerprint files.",
+    "mandatory_checks": [
+      "Actual required root release products come from this fresh run; match artifact path/name/profile/features and hash full bytes.",
+      "Observed final release compiler invocation includes the selected target/CPU plus retained release profile; do not require host proc macros or test fixtures to carry release-only flags.",
+      "Cargo JSON profile/artifact metadata is not a lossless complete rustc argv log. Cross-link it to verbose command evidence and actual output bytes.",
+      "Fingerprint rustflags[] is corroborating metadata if present, not a substitute for source/profile/command identity; preserve raw bytes and avoid assuming an invariant internal schema.",
+      "Missing or ambiguous effective flags fail evidence closure; do not fill gaps from the plan.",
+      "Very verbose logs include build-script output; preserve originals and hashes, apply existing publication scan policy, and never erase failed outcomes because a log cannot be published."
+    ],
+    "report_layout": "Keep original eight-stage report keys and stage names for existing auditors, add a versioned compiler_recipe/driver block or companion build-evidence JSON. Original harness_before/after is labeled preserved source-harness identity; actual external driver/diff is recorded separately. New qualified/binary fields are written only after real execution.",
+    "minimal_extra_files": [
+      "frozen-build-recipe.json",
+      "external-driver source plus exact diff and SHA",
+      "cargo-release.jsonl (or original release stdout with JSON) and raw stage logs",
+      "selected fingerprint/command artifact identity index",
+      "compiler-build-evidence.json after real execution"
+    ]
+  },
+  "optional_rustc_wrapper": {
+    "acceptable_conditionally": true,
+    "selected": false,
+    "first_choice": false,
+    "conditions": [
+      "Explicitly inject a pinned RUSTC_WRAPPER after the new driver environment construction for the intended compile stage; an outer wrapper variable is removed by the original qualifier.",
+      "Keep RUSTC_WORKSPACE_WRAPPER unset; published Cargo semantics and retained R19 history show workspace-wrapper metadata/identity effects.",
+      "A recorder may write a bounded per-invocation argv/cwd/stage identity record, never the ambient environment, then exec the exact compiler with unchanged arguments; logging failure must fail the build rather than silently omit evidence.",
+      "If attached across Clippy as well, the recorder must account for the intended Clippy driver/tool chain; a simplistic actual-rustc-only allowlist can reject legitimate Clippy commands.",
+      "Freeze recorder identity/path and treatment in any matched control. Do not assume a wrapped rebuild is byte/metadata-neutral relative to historical R24.",
+      "Use a new fixed recipe if wrapper instrumentation becomes necessary; do not mutate an already frozen qualifier or reinterpret a previous build."
+    ]
+  },
+  "comparison_scope": {
+    "deployment_comparison": "Qualified candidate versus actual accepted baseline under unchanged gates.",
+    "cpu_flag_causality": "Source-byte equality does not isolate CPU flags: historical R24 complete effective flags are not established, and a clean rebuild/explicit target/output mode may differ. Attribute only product-level results unless metadata proves the baseline recipe equivalence or a separately frozen matched control is actually built. No matched-control build is selected here."
+  },
+  "frozen_gates_reference": {
+    "plan_identity": {
+      "path": "/workspace/scratch/b96be991ab90/compiler-experiment/compiler-screen-plan.json",
+      "bytes": 3811,
+      "sha256": "0bb6cec902402e7fda41b1fc9e763d92735ee74e00f801ed588196d5470b8997",
+      "scope": "prepared observation/lifecycle gates; unchanged by this note"
+    },
+    "observation_gates": {
+      "baseline": "actual accepted R24 runtime",
+      "hosts": 6,
+      "order": "ABBA",
+      "concurrency": [
+        1,
+        8,
+        16
+      ],
+      "runtime_workers": 2,
+      "MALLOC_ARENA_MAX": "1",
+      "each_concurrency_throughput_minimum_B_over_A": 0.95,
+      "each_concurrency_p95_maximum_B_over_A": 1.1,
+      "C8_throughput_minimum_B_over_A": 1.03,
+      "C8_controller_own_cpu_per_call_maximum_B_over_A": 0.97,
+      "rss_maximum_B": "min(A + 512 KiB, A * 1.05)",
+      "original_C32_capacity_and_C6_recovery_correctness_required": true,
+      "admitted_global_host_master_caps_unchanged": [
+        16,
+        8,
+        2,
+        8
+      ]
+    },
+    "lifecycle_gates": {
+      "hosts": 6,
+      "order": "ABBA",
+      "required_groups": [
+        "all_operations",
+        "launch",
+        "concurrent_cancel"
+      ],
+      "throughput_minimum_B_over_A": 0.95,
+      "rpc_p95_maximum_B_over_A": 1.1,
+      "controller_own_cpu_limit": "A total plus original one tick per selected B phase per round; no new tolerance",
+      "rss_maximum_B": "min(A + 512 KiB, A * 1.05)",
+      "local_waited_child_cpu_cannot_replace_own_cpu_gate": true,
+      "original_gate_policy_required": true
+    },
+    "not_modified_by_this_note": true,
+    "rebinding_if_baseline_changes": "New plan/version, not edits to historical R24 metadata or its reported results."
+  },
+  "implementation_handoff": "Only a local driver/template may be prepared next, with target CPU/triple, current accepted version and future qualification pins unresolved. It must refuse execution until the new frozen binding and native handoff exist. No native candidate has been scheduled by this design.",
+  "sources": {
+    "original_qualifier": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/tools/x230/20261028/qualify.py",
+      "bytes": 7661,
+      "sha256": "95717717fd5421f2e31dbce24e2f8821696f57d779ce93e988ed66764159552d",
+      "scope": "source_map, environment, eight stages, release artifact lookup"
+    },
+    "r24_cargo": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/Cargo.toml",
+      "bytes": 3097,
+      "sha256": "3121870fbf66f65ce6b1925b3500eae8a05fc2d8019a2694da7d6fe941ad4d28",
+      "scope": "release and dev profiles"
+    },
+    "r24_report": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-report.json",
+      "bytes": 83365,
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971",
+      "scope": "actual source/harness hashes, stages and outputs"
+    },
+    "r24_source_map": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-publication-ready/tools/x230/20261105/r24/reviews/qualified-source-map-01.json",
+      "bytes": 24156,
+      "sha256": "c3415beaf7697b3eb07a763ef24f424138de80af31acfd6c224cf682f3c67cbd",
+      "scope": "220 historical R24 compiler inputs"
+    },
+    "r24_readback": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/final-publication-readback.json",
+      "bytes": 1022,
+      "sha256": "38866c01fac54133c8a88e25bee90ea4a551e7273614f493bf44522a8273d3ca",
+      "scope": "accepted historical publication identity"
+    },
+    "screen_plan": {
+      "path": "/workspace/scratch/b96be991ab90/compiler-experiment/compiler-screen-plan.json",
+      "bytes": 3811,
+      "sha256": "0bb6cec902402e7fda41b1fc9e763d92735ee74e00f801ed588196d5470b8997",
+      "scope": "prepared observation/lifecycle gates; unchanged by this note"
+    },
+    "preflight_plan": {
+      "path": "/workspace/scratch/b96be991ab90/compiler-experiment/preflight-plan.json",
+      "bytes": 8535,
+      "sha256": "e86d525894768cf6cf56f5171094c02a324314505653594a651de23b34b84708",
+      "scope": "metadata-only preparation; unchanged by this note"
+    },
+    "history_review": {
+      "path": "/workspace/scratch/b96be991ab90/remaining-cpu-scout/compiler-optimization-history-01.json",
+      "bytes": 22824,
+      "sha256": "4d008a89396232c6dee02a7de98a08b7e1e3b7463d784869ff1a22aae4ac7a5b",
+      "scope": "bounded historical evidence and effective-flags gap"
+    }
+  },
+  "official_references": [
+    {
+      "name": "Cargo configuration",
+      "url": "https://doc.rust-lang.org/cargo/reference/config.html",
+      "retrieval_ref": "turn11view0",
+      "relevant_sections": [
+        "Hierarchical structure",
+        "build.rustflags"
+      ],
+      "used_for": "config ancestry; flags precedence; explicit host target separates host build scripts/proc macros from target flags"
+    },
+    {
+      "name": "Cargo environment variables",
+      "url": "https://doc.rust-lang.org/cargo/reference/environment-variables.html",
+      "retrieval_ref": "turn11view4",
+      "relevant_sections": [
+        "RUSTC_WRAPPER",
+        "RUSTC_WORKSPACE_WRAPPER",
+        "CARGO_ENCODED_RUSTFLAGS"
+      ],
+      "used_for": "wrapper invocation/metadata effects and encoded argument separator"
+    },
+    {
+      "name": "cargo build",
+      "url": "https://doc.rust-lang.org/cargo/commands/cargo-build.html",
+      "retrieval_ref": "turn11view2",
+      "relevant_sections": [
+        "Compilation Options",
+        "Display Options"
+      ],
+      "used_for": "explicit target output mode, very verbose output and JSON stdout"
+    },
+    {
+      "name": "Cargo profiles",
+      "url": "https://doc.rust-lang.org/cargo/reference/profiles.html",
+      "retrieval_ref": "turn10view3",
+      "relevant_sections": [
+        "lto",
+        "Profile settings"
+      ],
+      "used_for": "lto=true is fat LTO and profile settings may be overridden"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "schema": "hepta-x230-compiler-screen/v1",
+  "status": "prepared_not_executed",
+  "native_preflight_executed": false,
+  "native_build_executed": false,
+  "native_training_executed": false,
+  "native_acceptance_executed": false,
+  "candidate_selected": false,
+  "candidate_adopted": false,
+  "native_window_owner": "/workspace/scratch/806ba5f52f94",
+  "native_handoff_required_before_upload_or_execution": true,
+  "accepted_baseline": {
+    "version": "R24",
+    "source_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+    "source_tree": "b71cac25e2c2138837f27f3c74f6a2dc5c56b565",
+    "runtime_sha256": "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13",
+    "runtime_bytes": 14373416,
+    "cargo_toml_sha256": "3121870fbf66f65ce6b1925b3500eae8a05fc2d8019a2694da7d6fe941ad4d28",
+    "declared_release_profile": {
+      "opt-level": 3,
+      "lto": true,
+      "codegen-units": 1,
+      "panic": "abort",
+      "strip": true,
+      "overflow-checks": false
+    },
+    "all_historical_effective_rustc_flags_established": false
+  },
+  "next_action": "Bounded metadata preflight only after explicit native-window handoff",
+  "possible_candidates": [
+    {
+      "name": "clean_x230_cpu_build",
+      "selected": false,
+      "source_changes": "none planned in production Rust source",
+      "selection_requires": [
+        "Actual X230 CPU and compiler target-feature evidence",
+        "Pinned toolchain and accepted source/binary identities",
+        "Clean explicit environment and compatible offline dependencies",
+        "Reviewed exact qualification and acceptance protocol"
+      ]
+    },
+    {
+      "name": "profile_guided_build",
+      "selected": false,
+      "selection_requires": [
+        "Compatible actual llvm-profdata identity",
+        "Separately frozen training workload and artifact boundaries",
+        "Matching instrumented/profile-use build recipes",
+        "Complete profile readback and actual coverage diagnostics",
+        "Independent final qualification and unchanged acceptance gates"
+      ]
+    }
+  ],
+  "observation_gates": {
+    "baseline": "actual accepted R24 runtime",
+    "hosts": 6,
+    "order": "ABBA",
+    "concurrency": [1, 8, 16],
+    "runtime_workers": 2,
+    "MALLOC_ARENA_MAX": "1",
+    "each_concurrency_throughput_minimum_B_over_A": 0.95,
+    "each_concurrency_p95_maximum_B_over_A": 1.10,
+    "C8_throughput_minimum_B_over_A": 1.03,
+    "C8_controller_own_cpu_per_call_maximum_B_over_A": 0.97,
+    "rss_maximum_B": "min(A + 512 KiB, A * 1.05)",
+    "original_C32_capacity_and_C6_recovery_correctness_required": true,
+    "admitted_global_host_master_caps_unchanged": [16, 8, 2, 8]
+  },
+  "lifecycle_gates": {
+    "hosts": 6,
+    "order": "ABBA",
+    "required_groups": ["all_operations", "launch", "concurrent_cancel"],
+    "throughput_minimum_B_over_A": 0.95,
+    "rpc_p95_maximum_B_over_A": 1.10,
+    "controller_own_cpu_limit": "A total plus original one tick per selected B phase per round; no new tolerance",
+    "rss_maximum_B": "min(A + 512 KiB, A * 1.05)",
+    "local_waited_child_cpu_cannot_replace_own_cpu_gate": true,
+    "original_gate_policy_required": true
+  },
+  "measurement_rules": {
+    "unchanged_failed_candidate_retry": false,
+    "original_failures_retained": true,
+    "unknown_launch_reconciled_by_same_key": true,
+    "training_is_validation": false,
+    "rejected_phase03_capacity_attribution_used": false,
+    "cross_host_binary_portability_assumed": false,
+    "global_optimality_claim": false
+  },
+  "sources": {
+    "local_history_review": "../remaining-cpu-scout/compiler-optimization-history-01.json",
+    "rust_pgo_reference": "https://doc.rust-lang.org/rustc/profile-guided-optimization.html",
+    "rust_codegen_reference": "https://doc.rust-lang.org/rustc/codegen-options/index.html#target-cpu"
+  }
+}

@@ -1,0 +1,1065 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Owner transfer fences and exact classification of every mutating MCP route.
+use super::*;
+use std::fs::{self, OpenOptions};
+use std::os::unix::fs::{symlink, PermissionsExt};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+struct Fixture {
+	temp: tempfile::TempDir,
+	root: PathBuf,
+	v4_state: PathBuf,
+	v11_state: PathBuf,
+}
+impl Fixture {
+	fn new() -> Self {
+		let temp = tempfile::tempdir().unwrap();
+		let root = temp.path().join("authority");
+		fs::create_dir(&root).unwrap();
+		fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+		let v4_state = temp.path().join("v4-state");
+		let v11_state = temp.path().join("v11-state");
+		for state in [&v4_state, &v11_state] {
+			fs::create_dir(state).unwrap();
+			fs::set_permissions(state, fs::Permissions::from_mode(0o700)).unwrap();
+		}
+		let lock = root.join(".owner.lock");
+		fs::write(&lock, b"").unwrap();
+		fs::set_permissions(&lock, fs::Permissions::from_mode(0o600)).unwrap();
+		let f = Self {
+			temp,
+			root,
+			v4_state,
+			v11_state,
+		};
+		f.write_state("v4", "admitting", 7);
+		f
+	}
+	fn write_state(&self, owner: &str, phase: &str, epoch: u64) {
+		let state = if owner == "v4" {
+			&self.v4_state
+		} else {
+			&self.v11_state
+		};
+		let record = serde_json::json!({
+			"schema": SCHEMA, "owner":owner, "phase":phase,
+			"epoch":epoch, "state_root": state.to_str().unwrap(),
+			"predecessor_state_root": if owner=="v11" {
+				Some(self.v4_state.to_str().unwrap()) } else { None }
+		});
+		let path = self.root.join(".owner.json");
+		let tmp = self.root.join(".owner.json.pending");
+		fs::write(&tmp, serde_json::to_vec(&record).unwrap()).unwrap();
+		fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600)).unwrap();
+		OpenOptions::new()
+			.read(true)
+			.open(&tmp)
+			.unwrap()
+			.sync_all()
+			.unwrap();
+		fs::rename(tmp, path).unwrap();
+		File::open(&self.root).unwrap().sync_all().unwrap();
+	}
+	fn admit(&self, owner: &str) -> Result<AdmissionPermit> {
+		acquire_from_root(
+			&self.root,
+			owner,
+			if owner == "v4" {
+				&self.v4_state
+			} else {
+				&self.v11_state
+			},
+		)
+	}
+}
+// Read one complete Rust method body, ignoring braces inside comments and
+// literals. A following tool's admission must never satisfy this tool's audit.
+fn owner_fence_tool_body(source: &str, start: usize) -> &str {
+	let bytes = source.as_bytes();
+	assert_eq!(bytes[start], b'{');
+	let mut at = start;
+	let mut depth = 0_usize;
+	while at < bytes.len() {
+		if bytes[at..].starts_with(b"//") {
+			at += source[at..].find('\n').unwrap_or(bytes.len() - at);
+			continue;
+		}
+		if bytes[at..].starts_with(b"/*") {
+			let mut comments = 1_usize;
+			at += 2;
+			while comments > 0 {
+				assert!(at + 1 < bytes.len(), "unterminated source comment");
+				if bytes[at..].starts_with(b"/*") {
+					comments += 1;
+					at += 2;
+				} else if bytes[at..].starts_with(b"*/") {
+					comments -= 1;
+					at += 2;
+				} else {
+					at += 1;
+				}
+			}
+			continue;
+		}
+		if bytes[at] == b'r' {
+			let mut opening = at + 1;
+			while bytes.get(opening) == Some(&b'#') {
+				opening += 1;
+			}
+			if bytes.get(opening) == Some(&b'"') {
+				let closing = format!("\"{}", "#".repeat(opening - at - 1));
+				let end = source[opening + 1..]
+					.find(&closing)
+					.expect("unterminated raw source literal");
+				at = opening + 1 + end + closing.len();
+				continue;
+			}
+		}
+		if bytes[at] == b'"' {
+			at += 1;
+			loop {
+				assert!(at < bytes.len(), "unterminated source string");
+				match bytes[at] {
+					b'\\' => at += 2,
+					b'"' => {
+						at += 1;
+						break;
+					}
+					_ => at += 1,
+				}
+			}
+			continue;
+		}
+		if bytes[at] == b'\'' {
+			let mut end = at + 1;
+			if bytes.get(end) == Some(&b'\\') {
+				end += match bytes.get(end + 1) {
+					Some(b'x') => 4,
+					Some(b'u') => {
+						source[end..]
+							.find('}')
+							.expect("unterminated character escape")
+							+ 1
+					}
+					_ => 2,
+				};
+			} else if let Some(character) = source[end..].chars().next() {
+				end += character.len_utf8();
+			}
+			// A lifetime has no closing apostrophe after one character.
+			if bytes.get(end) == Some(&b'\'') {
+				at = end + 1;
+				continue;
+			}
+		}
+		match bytes[at] {
+			b'{' => depth += 1,
+			b'}' => {
+				depth -= 1;
+				if depth == 0 {
+					return &source[start..=at];
+				}
+			}
+			_ => {}
+		}
+		at += 1;
+	}
+	panic!("unterminated tool method");
+}
+
+#[test]
+fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
+	use std::collections::BTreeSet;
+	let server_source = include_str!("../server.rs");
+	let matcher =
+		regex::Regex::new(r"(?s)#\[tool\((.*?)\)\]\s*async fn\s+([a-zA-Z0-9_]+)\s*\(").unwrap();
+	let expected: BTreeSet<&str> = [
+		"hia_artifact",
+		"hia_context",
+		"hia_candidate",
+		"hia_verify",
+		"hia_emit",
+		"hia_evaluate",
+		"hia_adopt",
+		"hia_rollback",
+		"request_start",
+		"request_cancel",
+		"operation_start",
+		"operation_cancel",
+		"text_editor",
+		"directory_create",
+		"file_move",
+		"text_file_write",
+		"directory_move",
+		"batch_edit",
+		"extract_lines",
+		"shell",
+		"shell_start",
+		"host_signal",
+		"sudo_start",
+		"search_start",
+		"search_stop",
+		"process_start",
+		"process_cancel",
+		"document_write",
+		"document_edit",
+		"binary_write",
+		"binary_upload",
+		"pdf_edit",
+		"worksheet_edit",
+		"document_render",
+		"worksheet_recalculate",
+		"binary_patch_inode",
+		"pdf_security",
+		"stream_handoff_prepare",
+		"stream_handoff_write",
+		"stream_handoff_close",
+		"process_checkpoint",
+		"pty_start",
+		"pty_write",
+		"pty_close",
+		"privileged_action",
+		"rea_inspect_elf_notes",
+		"rea_inspect_apk_signature_evidence",
+		"rea_inspect_analysis_view",
+		"rea_import_evidence_bundle",
+		"rea_export_evidence_bundle",
+		"rea_close_evidence_snapshot",
+		"rea_evidence_session_checkpoint",
+		"rea_evidence_session_resume",
+		"rea_retain_preview",
+		"rea_model_session_open",
+		"rea_static_start",
+		"rea_static_cancel",
+		"weight_artifact_patch",
+		"weight_artifact_restore",
+		"weight_cohort_patch",
+		"weight_cohort_restore",
+		"weight_guarded_linear_patch",
+		"weight_open",
+		"weight_call",
+		"weight_close",
+		"workdir",
+	]
+	.into_iter()
+	.collect();
+	let retained: BTreeSet<&str> = [
+		"request_cancel",
+		"operation_cancel",
+		"search_stop",
+		"process_cancel",
+		"pty_write",
+		"pty_close",
+		"stream_handoff_write",
+		"stream_handoff_close",
+		"rea_static_cancel",
+		// Release already-owned session memory even when new effects are fenced.
+		"rea_close_evidence_snapshot",
+		"weight_close",
+		"workdir",
+	]
+	.into_iter()
+	.collect();
+	let direct_native: BTreeSet<&str> = ["process_start", "pty_start"].into_iter().collect();
+	// HIA owns no scheduler. Its exact common dispatch chain is audited below
+	// through native's guarded, no-relaunch entry and the real jobs fence.
+	let hia_native: BTreeSet<&str> = [
+		"hia_artifact",
+		"hia_context",
+		"hia_candidate",
+		"hia_verify",
+		"hia_emit",
+		"hia_evaluate",
+		"hia_adopt",
+		"hia_rollback",
+	]
+	.into_iter()
+	.collect();
+	let rea_record_effects = [
+		(
+			"rea_inspect_elf_notes",
+			"rea_mcp_input::elf_ordered",
+			concat!(
+				"Ok(rea_elf_notes::inspect(params,&self.rea_session,",
+				"context.ct.clone(),admission).await)"
+			),
+		),
+		(
+			"rea_inspect_apk_signature_evidence",
+			"rea_apk_mcp_input::validate",
+			concat!(
+				"Ok(rea_apk_evidence::inspect(params,Arc::clone(&self.rea_session),",
+				"context.ct.clone(),admission,).await)"
+			),
+		),
+		(
+			"rea_inspect_analysis_view",
+			"rea_analysis_view_mcp_input::validate",
+			concat!(
+				"Ok(rea_analysis_view::inspect(params,inline_order,roots,",
+				"Arc::clone(&self.rea_session),context.ct.clone(),admission,).await)"
+			),
+		),
+		(
+			"rea_import_evidence_bundle",
+			"rea_mcp_input::import_ordered",
+			concat!(
+				"Ok(rea_evidence_import::import(params,roots,Arc::clone(&self.rea_session),",
+				"context.ct.clone(),admission,).await)"
+			),
+		),
+		(
+			"rea_export_evidence_bundle",
+			"rea_evidence_export::validate",
+			concat!(
+				"Ok(rea_evidence_export::export(params,snapshot,roots,context.ct.clone(),",
+				"admission,Arc::clone(&self.rea_exports),file_lock,).await)"
+			),
+		),
+	];
+	let cohort_native: BTreeSet<&str> = ["weight_cohort_patch", "weight_cohort_restore"]
+		.into_iter()
+		.collect();
+	let mut actual = BTreeSet::new();
+	for capture in matcher.captures_iter(server_source) {
+		if !capture[1].contains("read_only_hint = false") {
+			continue;
+		}
+		let name = capture.get(2).unwrap().as_str();
+		actual.insert(name);
+		let end = capture.get(0).unwrap().end();
+		let start = server_source[end..].find('{').unwrap() + end;
+		let body = owner_fence_tool_body(server_source, start);
+		if retained.contains(name) {
+			assert!(
+				!body.contains("effect_owner_fence::admit_new_effect"),
+				"{name} is already-owned continuation or local session state"
+			);
+		} else if hia_native.contains(name) {
+			assert_eq!(
+				body.chars()
+					.filter(|value| !value.is_ascii_whitespace())
+					.collect::<String>(),
+				format!("{{self.dispatch_hia(\"{name}\",arguments,&context).await}}"),
+				"{name} must transfer to the audited native HIA route"
+			);
+		} else if cohort_native.contains(name) {
+			assert!(
+				body.contains("weight_artifact::cohort::"),
+				"{name} must delegate to the retained cohort owner"
+			);
+		} else if !direct_native.contains(name) {
+			assert!(
+				body.contains("effect_owner_fence::admit_new_effect"),
+				"{name} lacks native new-effect owner admission"
+			);
+		}
+		if let Some(&(_, validation, dispatch)) =
+			rea_record_effects.iter().find(|(tool, _, _)| *tool == name)
+		{
+			let compact: String = body
+				.chars()
+				.filter(|value| !value.is_ascii_whitespace())
+				.collect();
+			let validation_at = compact
+				.find(validation)
+				.expect("missing REA input validation");
+			let admission_at = compact
+				.find("letadmission=matchruntime::effect_owner_fence::admit_new_effect().await{")
+				.expect("missing owned REA admission");
+			let dispatch_at = compact
+				.find(dispatch)
+				.expect("missing exact REA permit transfer");
+			assert!(
+				validation_at < admission_at && admission_at < dispatch_at,
+				"{name} must validate input before admission and admit before execution"
+			);
+			assert_eq!(
+				compact
+					.matches("effect_owner_fence::admit_new_effect")
+					.count(),
+				1,
+				"{name} must acquire its admission exactly once"
+			);
+			let admission = &compact[admission_at..dispatch_at];
+			assert!(
+				admission.contains("Ok(permit)=>Arc::new(permit),")
+					&& admission.contains("Err(error)=>{returnOk("),
+				"{name} must own its shared permit and return its tool failure before execution"
+			);
+			assert!(
+				compact.strip_suffix('}').unwrap().ends_with(dispatch),
+				"{name} must transfer that permit to its actual awaited executor"
+			);
+		}
+	}
+	assert_eq!(
+		actual, expected,
+		"MCP mutation contract expanded without owner audit"
+	);
+	assert_eq!(actual.difference(&retained).count(), 54);
+	let cohort = include_str!("../weight_artifact_cohort.rs");
+	assert!(cohort.contains("runtime::effect_owner_fence::admit_new_effect().await?"));
+	assert_eq!(
+		cohort
+			.matches("let guards = owner_guards().await?;")
+			.count(),
+		2
+	);
+	assert_eq!(
+		cohort
+			.matches("retained_transaction(guards, operation)")
+			.count(),
+		2
+	);
+	let jobs = include_str!("jobs.rs");
+	let pty = include_str!("pty.rs");
+	assert!(jobs
+		.contains("let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;"));
+	assert!(pty
+		.contains("let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;"));
+	assert!(
+		pty.contains("require_new_pty_identity"),
+		"PTY ingress must reject a predecessor V4 idempotency replay"
+	);
+}
+fn owner_fence_named_body<'a>(source: &'a str, function: &str) -> &'a str {
+	let start = source
+		.find(&format!("fn {function}"))
+		.expect("audited function missing");
+	let body = source[start..].find('{').unwrap() + start;
+	owner_fence_tool_body(source, body)
+}
+
+fn compact_owner_body(source: &str, function: &str) -> String {
+	owner_fence_named_body(source, function)
+		.chars()
+		.filter(|value| !value.is_ascii_whitespace())
+		.collect()
+}
+
+#[test]
+fn hia_routes_retain_native_owner_admission_and_never_relaunch_an_existing_binding() {
+	let server = include_str!("../server.rs");
+	let common = compact_owner_body(server, "dispatch_hia(");
+	let authority = common
+		.find(".owner_binding.resolve(")
+		.expect("HIA caller authority missing");
+	let validation = common
+		.find("hia_contract::validate_input(")
+		.expect("HIA input validation missing");
+	let dispatch = common
+		.find("hia_provider::execute(")
+		.expect("HIA native provider missing");
+	assert!(authority < validation && validation < dispatch);
+	for name in crate::mcp::hia_contract::TOOLS {
+		let body = compact_owner_body(server, &format!("{name}("));
+		assert_eq!(
+			body,
+			format!("{{self.dispatch_hia(\"{name}\",arguments,&context).await}}")
+		);
+	}
+	let resource = compact_owner_body(server, "read_resource(");
+	assert!(resource.contains("hia_provider::execute(\"hia_resource_read\","));
+	let provider = compact_owner_body(include_str!("../hia_provider.rs"), "execute(");
+	let observe = provider
+		.find("crate::native::observe_request(")
+		.expect("original HIA observation missing");
+	let branch = provider
+		.find("letraw=matchoriginal{Some(raw)=>raw,None=>{")
+		.expect("existing HIA request must stay on the observation branch");
+	let native_entry = provider
+		.find("crate::native::execute_or_observe_with_entry(")
+		.expect("guarded HIA native entry missing");
+	assert!(observe < branch && branch < native_entry);
+	assert_eq!(
+		provider
+			.matches("crate::native::execute_or_observe_with_entry(")
+			.count(),
+		1
+	);
+	assert!(!provider.contains("crate::native::execute_or_observe("));
+	assert!(!provider.contains("start_job("));
+	assert!(!provider.contains("Command::new("));
+	let native = compact_owner_body(
+		include_str!("../../native.rs"),
+		"execute_or_observe_with_entry<",
+	);
+	assert!(native.contains("require_key(&params)?;jobs::start_job_with_entry(params,enter).await"));
+	let jobs = include_str!("jobs.rs");
+	let entry = compact_owner_body(jobs, "start_job_with_entry<");
+	assert_eq!(entry, "{start_job_with_policy(params,false,enter).await}");
+	let owner = compact_owner_body(jobs, "start_job_with_policy<");
+	let admission = owner
+		.find("let_owner_admission=super::effect_owner_fence::admit_new_effect().await?;")
+		.expect("real owner fence missing");
+	let retained = owner
+		.find("letowner_admission=Arc::new(_owner_admission);")
+		.expect("owner permit custody missing");
+	let lookup = owner
+		.find("find_idempotent_async(")
+		.expect("existing request lookup missing");
+	let durable = owner
+		.find("publish_pending_record(record,&start_guard,&owner_admission)")
+		.expect("durable intent must retain its owner permit");
+	let launch = owner
+		.find("launch_record_with_entry(")
+		.expect("physical dispatch missing");
+	assert!(admission < retained && retained < lookup && lookup < durable && durable < launch);
+	assert!(owner.contains("letretry=allow_reconcile_launch&&reconcile_retry_allowed(&existing);"));
+	assert!(owner[launch..].contains("&start_guard,&owner_admission,"));
+}
+
+#[test]
+fn matching_owner_receives_epoch_bound_shared_admission() {
+	let f = Fixture::new();
+	let p = f.admit("v4").unwrap();
+	assert_eq!(p.epoch, Some(7));
+	assert!(p._locked.is_some());
+	assert!(f.admit("v4").is_ok()); // concurrent readers, not double exclusive writers
+}
+#[test]
+fn wrong_owner_or_wrong_state_root_fail_before_effect() {
+	let f = Fixture::new();
+	assert!(f.admit("v11").is_err());
+	assert!(acquire_from_root(&f.root, "v4", &f.v11_state).is_err());
+	assert!(acquire_from_root(&f.root, "shadow", &f.v4_state).is_err());
+}
+#[test]
+fn frozen_admission_fails_closed_and_preserves_no_new_effect() {
+	let f = Fixture::new();
+	f.write_state("v4", "frozen", 7);
+	assert!(f.admit("v4").is_err());
+	assert!(f.admit("v11").is_err());
+}
+#[test]
+fn owner_epoch_transition_denies_prior_owner_and_enables_successor() {
+	let f = Fixture::new();
+	let guard = f.admit("v4").unwrap();
+	let lock = OpenOptions::new()
+		.read(true)
+		.write(true)
+		.open(f.root.join(".owner.lock"))
+		.unwrap();
+	// A transfer must be exclusive and cannot overlap the old admitted effect.
+	assert_ne!(
+		unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+		0
+	);
+	drop(guard);
+	assert_eq!(
+		unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+		0
+	);
+	f.write_state("v4", "frozen", 7);
+	assert_eq!(unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_UN) }, 0);
+	assert!(f.admit("v4").is_err()); // frozen even before successor promotion
+	assert_eq!(unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) }, 0);
+	f.write_state("v11", "admitting", 8);
+	assert_eq!(unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_UN) }, 0);
+	assert!(f.admit("v4").is_err());
+	assert_eq!(f.admit("v11").unwrap().epoch, Some(8));
+}
+#[test]
+fn in_flight_old_submission_blocks_exclusive_handoff_until_release() {
+	let f = Fixture::new();
+	let guard = f.admit("v4").unwrap();
+	let lock = f.root.join(".owner.lock");
+	let (tx, rx) = mpsc::channel();
+	let child = thread::spawn(move || {
+		let l = OpenOptions::new()
+			.read(true)
+			.write(true)
+			.open(lock)
+			.unwrap();
+		let ok = unsafe { libc::flock(l.as_raw_fd(), libc::LOCK_EX) } == 0;
+		tx.send(ok).unwrap();
+	});
+	thread::sleep(Duration::from_millis(60));
+	assert!(rx.try_recv().is_err()); // transition not admitted before old ends
+	drop(guard);
+	assert!(rx.recv_timeout(Duration::from_secs(3)).unwrap());
+	child.join().unwrap();
+}
+#[test]
+fn malformed_metadata_and_missing_files_refuse() {
+	let f = Fixture::new();
+	fs::write(f.root.join(".owner.json"), b"{bad").unwrap();
+	assert!(f.admit("v4").is_err());
+	f.write_state("v4", "admitting", 0);
+	assert!(f.admit("v4").is_err());
+	f.write_state("v4", "admitting", 7);
+	fs::remove_file(f.root.join(".owner.json")).unwrap();
+	assert!(f.admit("v4").is_err());
+}
+#[test]
+fn symlinks_wrong_modes_and_replaced_lock_are_denied() {
+	let f = Fixture::new();
+	fs::set_permissions(
+		f.root.join(".owner.json"),
+		fs::Permissions::from_mode(0o644),
+	)
+	.unwrap();
+	assert!(f.admit("v4").is_err());
+	fs::set_permissions(
+		f.root.join(".owner.json"),
+		fs::Permissions::from_mode(0o600),
+	)
+	.unwrap();
+	let lock = f.root.join(".owner.lock");
+	fs::rename(&lock, f.root.join(".owner.lock.original")).unwrap();
+	symlink(".owner.lock.original", &lock).unwrap();
+	assert!(f.admit("v4").is_err());
+	fs::remove_file(&lock).unwrap();
+	fs::rename(f.root.join(".owner.lock.original"), lock).unwrap();
+	fs::set_permissions(&f.root, fs::Permissions::from_mode(0o755)).unwrap();
+	assert!(f.admit("v4").is_err());
+}
+#[test]
+fn symlinked_ancestor_refuses_even_with_private_final_directory() {
+	let f = Fixture::new();
+	let via = f.temp.path().join("alias");
+	symlink(&f.root, &via).unwrap();
+	assert!(acquire_from_root(&via, "v4", &f.v4_state).is_err());
+}
+#[test]
+fn unreadable_or_oversized_owner_record_refuses() {
+	let f = Fixture::new();
+	fs::write(
+		f.root.join(".owner.json"),
+		vec![b'x'; MAX_OWNER_BYTES as usize + 1],
+	)
+	.unwrap();
+	assert!(f.admit("v4").is_err());
+}
+
+#[test]
+fn invalid_or_extra_authority_fields_and_unknown_phase_refuse() {
+	let f = Fixture::new();
+	let path = f.root.join(".owner.json");
+	let mut value: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+	value["bogus_unreviewed_flag"] = serde_json::json!(true);
+	fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+	assert!(f.admit("v4").is_err());
+	f.write_state("v4", "promoting_without_freeze", 8);
+	assert!(f.admit("v4").is_err());
+}
+#[test]
+fn forged_authority_root_or_lock_hardlink_refuses() {
+	let f = Fixture::new();
+	let root = f.root.join(".owner.lock");
+	let link = f.root.join(".owner.lock.second");
+	std::fs::hard_link(&root, &link).unwrap();
+	assert!(f.admit("v4").is_err());
+	std::fs::remove_file(link).unwrap();
+	assert!(f.admit("v4").is_ok());
+}
+
+#[test]
+fn owner_metadata_replacement_under_open_fd_is_rejected() {
+	let f = Fixture::new();
+	let dir = open_root(&f.root).unwrap();
+	let old = open_record(&dir, ".owner.json", false).unwrap();
+	let expected = old.metadata().unwrap();
+	// An uncooperative same-UID writer swaps the pathname while the old
+	// read descriptor is still valid. The re-opened inode must not match.
+	f.write_state("v4", "admitting", 8);
+	assert!(verify_owner_record_stable(&dir, &old, &expected).is_err());
+}
+
+#[test]
+fn authority_root_rebinding_is_detected() {
+	let f = Fixture::new();
+	let pinned = open_root(&f.root).unwrap();
+	let moved = f.temp.path().join("previous-authority");
+	fs::rename(&f.root, moved).unwrap();
+	fs::create_dir(&f.root).unwrap();
+	fs::set_permissions(&f.root, fs::Permissions::from_mode(0o700)).unwrap();
+	assert!(verify_root_path_identity(&f.root, &pinned).is_err());
+}
+
+#[test]
+fn owner_controller_state_root_must_exist_and_remain_private() {
+	let f = Fixture::new();
+	fs::set_permissions(&f.v4_state, fs::Permissions::from_mode(0o755)).unwrap();
+	assert!(f.admit("v4").is_err());
+	fs::set_permissions(&f.v4_state, fs::Permissions::from_mode(0o700)).unwrap();
+	assert!(f.admit("v4").is_ok());
+	fs::remove_dir(&f.v4_state).unwrap();
+	assert!(f.admit("v4").is_err());
+	symlink(&f.v11_state, &f.v4_state).unwrap();
+	assert!(f.admit("v4").is_err());
+}
+
+#[test]
+fn controller_state_root_rebinding_is_detected() {
+	let f = Fixture::new();
+	let pinned = open_root(&f.v4_state).unwrap();
+	let moved = f.temp.path().join("previous-v4-state");
+	fs::rename(&f.v4_state, moved).unwrap();
+	fs::create_dir(&f.v4_state).unwrap();
+	fs::set_permissions(&f.v4_state, fs::Permissions::from_mode(0o700)).unwrap();
+	assert!(verify_root_path_identity(&f.v4_state, &pinned).is_err());
+}
+
+// Predecessor replay inspection is implemented only on Linux; the explicit
+// unsupported-platform refusal is exercised separately below.
+#[cfg(target_os = "linux")]
+#[test]
+fn successor_replay_rejects_predecessor_host_and_key_but_allows_new_key() {
+	let f = Fixture::new();
+	let jobs = f.v4_state.join("jobs");
+	fs::create_dir(&jobs).unwrap();
+	fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+	let record = serde_json::json!({
+        "id":"1a14-cafe-1", "host":"main",
+        "idempotency_key":"V4-OLD-PRIVATE-REQUEST",
+        "request_digest":"a".repeat(64)});
+	let entry = jobs.join("1a14-cafe-1.json");
+	fs::write(&entry, serde_json::to_vec(&record).unwrap()).unwrap();
+	fs::set_permissions(&entry, fs::Permissions::from_mode(0o600)).unwrap();
+	f.write_state("v11", "admitting", 8);
+	let guard = f.admit("v11").unwrap();
+	assert!(guard
+		.require_new_process_identity("main", Some("V4-OLD-PRIVATE-REQUEST"))
+		.is_err());
+	assert!(guard
+		.require_new_process_identity("main", Some("V11-NEW-REQUEST"))
+		.is_ok());
+	assert!(guard
+		.require_new_process_identity("mac", Some("V4-OLD-PRIVATE-REQUEST"))
+		.is_ok());
+	assert!(guard.require_new_process_identity("main", None).is_err());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn successor_replay_denies_uncertain_or_corrupt_legacy_registry() {
+	let f = Fixture::new();
+	let jobs = f.v4_state.join("jobs");
+	fs::create_dir(&jobs).unwrap();
+	fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+	f.write_state("v11", "admitting", 8);
+	let guard = f.admit("v11").unwrap();
+	assert!(guard
+		.require_new_process_identity("main", Some("NEW"))
+		.is_ok());
+	let uncertain = jobs.join("1a14-cafe-1.json.tmp.123");
+	fs::write(&uncertain, b"").unwrap();
+	fs::set_permissions(&uncertain, fs::Permissions::from_mode(0o600)).unwrap();
+	assert!(guard
+		.require_new_process_identity("main", Some("NEW"))
+		.is_err());
+	fs::remove_file(&uncertain).unwrap();
+	let bad = jobs.join("1a14-cafe-1.json");
+	fs::write(&bad, b"{bad").unwrap();
+	fs::set_permissions(&bad, fs::Permissions::from_mode(0o600)).unwrap();
+	assert!(guard
+		.require_new_process_identity("main", Some("NEW"))
+		.is_err());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn successor_replay_can_scan_predecessor_past_old_32768_job_limit() {
+	let f = Fixture::new();
+	let jobs = f.v4_state.join("jobs");
+	fs::create_dir(&jobs).unwrap();
+	fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+	// Real files, not a mocked counter: the old 32768-row bound would
+	// deny a new V11 request even with no duplicate idempotency binding.
+	for number in 0..32_769u32 {
+		let identity = format!("1a14-{number:x}-1");
+		let payload = serde_json::json!({"id":identity,"host":"main",
+            "idempotency_key":format!("private-old-{number}"),
+            "request_digest":"a".repeat(64)});
+		let path = jobs.join(format!("{identity}.json"));
+		fs::write(&path, serde_json::to_vec(&payload).unwrap()).unwrap();
+		fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+	}
+	f.write_state("v11", "admitting", 8);
+	let permit = f.admit("v11").unwrap();
+	assert!(
+		permit
+			.require_new_process_identity("main", Some("fresh-v11-key"))
+			.is_ok(),
+		"safe replay scan must handle more than 32768 predecessor records"
+	);
+	// Algorithmic regression: once the pinned predecessor has been verified,
+	// independent new keys must not trigger 16 more full 32K-record scans.
+	// The bound is deliberately generous to remain robust under CI load.
+	let warmed = std::time::Instant::now();
+	for ordinal in 0..16 {
+		let key = format!("new-v11-distinct-{ordinal}");
+		assert!(permit
+			.require_new_process_identity("main", Some(&key))
+			.is_ok());
+	}
+	assert!(
+		warmed.elapsed() < std::time::Duration::from_secs(2),
+		"predecessor cache path fell back to a full scan per V11 effect"
+	);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn successor_replay_cache_uses_same_pinned_authority_and_denies_stale_registry() {
+	let f = Fixture::new();
+	let jobs = f.v4_state.join("jobs");
+	fs::create_dir(&jobs).unwrap();
+	fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+	let row = serde_json::json!({"id":"1a14-cafe-1","host":"main",
+        "idempotency_key":"OLD_KEY","request_digest":"a".repeat(64)});
+	let path = jobs.join("1a14-cafe-1.json");
+	fs::write(&path, serde_json::to_vec(&row).unwrap()).unwrap();
+	fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+	f.write_state("v11", "admitting", 8);
+	let permit = f.admit("v11").unwrap();
+	assert!(permit
+		.require_new_process_identity("main", Some("OLD_KEY"))
+		.is_err());
+	for number in 0..25 {
+		assert!(permit
+			.require_new_process_identity("main", Some(&format!("NEW_KEY_{number}")))
+			.is_ok());
+	}
+	// A true after-seal membership change must refuse, even when it
+	// contains a V11-new idempotency key: no automatic rescan.
+	let marker = jobs.join("1a14-cafe-2.json.tmp.987");
+	fs::write(&marker, b"").unwrap();
+	fs::set_permissions(&marker, fs::Permissions::from_mode(0o600)).unwrap();
+	assert!(permit
+		.require_new_process_identity("main", Some("NEW_AFTER_DRIFT"))
+		.is_err());
+	fs::remove_file(&marker).unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn successor_replay_cache_cannot_be_used_by_second_authority_epoch() {
+	let f = Fixture::new();
+	let jobs = f.v4_state.join("jobs");
+	fs::create_dir(&jobs).unwrap();
+	fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+	f.write_state("v11", "admitting", 8);
+	let first = f.admit("v11").unwrap();
+	assert!(first
+		.require_new_process_identity("main", Some("SAFE_KEY"))
+		.is_ok());
+	drop(first);
+	let marker = jobs.join("1a14-cafe-2.json.tmp.987");
+	fs::write(&marker, b"").unwrap();
+	fs::set_permissions(&marker, fs::Permissions::from_mode(0o600)).unwrap();
+	f.write_state("v11", "admitting", 10);
+	let later = f.admit("v11").unwrap();
+	assert!(later
+		.require_new_process_identity("main", Some("SAFE_KEY"))
+		.is_err());
+}
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn successor_process_replay_refuses_without_linux_support() {
+	for registry in ["absent", "empty", "populated"] {
+		let f = Fixture::new();
+		let jobs = f.v4_state.join("jobs");
+		if registry != "absent" {
+			fs::create_dir(&jobs).unwrap();
+			fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+		}
+		if registry == "populated" {
+			let row = serde_json::json!({"id":"1a14-cafe-1","host":"main",
+				"idempotency_key":"old-key","request_digest":"a".repeat(64)});
+			let path = jobs.join("1a14-cafe-1.json");
+			fs::write(&path, serde_json::to_vec(&row).unwrap()).unwrap();
+			fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+		}
+		f.write_state("v11", "admitting", 8);
+		let permit = f.admit("v11").unwrap();
+		assert!(permit.has_predecessor_state());
+		for (host, key) in [
+			("main", Some("old-key")),
+			("main", Some("new-key")),
+			("other-host", Some("old-key")),
+			("main", None),
+		] {
+			assert_eq!(
+				permit
+					.require_new_process_identity(host, key)
+					.unwrap_err()
+					.to_string(),
+				"V11 predecessor replay validation requires supported Linux controller",
+				"registry={registry}, host={host}, key={key:?}"
+			);
+		}
+	}
+}
+
+#[test]
+fn successor_without_predecessor_root_is_not_an_effect_owner() {
+	let f = Fixture::new();
+	let path = f.root.join(".owner.json");
+	let record = serde_json::json!({
+       "schema":SCHEMA, "owner":"v11", "epoch":8,
+       "phase":"admitting", "state_root":f.v11_state});
+	fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
+	fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+	assert!(f.admit("v11").is_err());
+	assert!(f.admit("v4").is_err());
+}
+
+#[cfg(test)]
+mod isolated_pty_replay_tests {
+	use super::*;
+	use sha2::Digest;
+	use std::os::unix::fs::PermissionsExt;
+	fn fixture() -> (tempfile::TempDir, PathBuf, PathBuf, PathBuf) {
+		let t = tempfile::tempdir().unwrap();
+		let root = t.path().join("authority");
+		let v4 = t.path().join("old");
+		let v11 = t.path().join("candidate");
+		for d in [&root, &v4, &v11] {
+			std::fs::create_dir(d).unwrap();
+			std::fs::set_permissions(d, std::fs::Permissions::from_mode(0o700)).unwrap();
+		}
+		let terminals = v4.join("terminals");
+		std::fs::create_dir(terminals).unwrap();
+		std::fs::set_permissions(v4.join("terminals"), std::fs::Permissions::from_mode(0o700))
+			.unwrap();
+		std::fs::write(root.join(".owner.lock"), b"").unwrap();
+		std::fs::set_permissions(
+			root.join(".owner.lock"),
+			std::fs::Permissions::from_mode(0o600),
+		)
+		.unwrap();
+		let doc = serde_json::json!({
+			"schema":"hepta-effect-owner-fence-v1","owner":"v11",
+			"epoch":8,"phase":"admitting","state_root":v11,
+			"predecessor_state_root":v4,
+		});
+		std::fs::write(root.join(".owner.json"), serde_json::to_vec(&doc).unwrap()).unwrap();
+		std::fs::set_permissions(
+			root.join(".owner.json"),
+			std::fs::Permissions::from_mode(0o600),
+		)
+		.unwrap();
+		(t, root, v4, v11)
+	}
+	fn persist_old_pty(old: &Path, host: &str, key: &str) -> PathBuf {
+		let digest = sha2::Sha256::digest(format!("{host}\0{key}").as_bytes());
+		let id = format!(
+			"dpty-{}",
+			digest
+				.iter()
+				.map(|byte| format!("{byte:02x}"))
+				.collect::<String>()
+		);
+		let p = old.join("terminals").join(format!("{id}.json"));
+		std::fs::write(
+			&p,
+			serde_json::to_vec(
+				&serde_json::json!({"session_id":id,"host":host,"request":{"session_id":id}}),
+			)
+			.unwrap(),
+		)
+		.unwrap();
+		std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600)).unwrap();
+		p
+	}
+	#[test]
+	fn successor_rejects_untrusted_predecessor_terminal_alias_and_permissions() {
+		use std::os::unix::fs::symlink;
+		let (_t, root, old, new) = fixture();
+		let f = persist_old_pty(&old, "main", "owned");
+		let permit = acquire_from_root(&root, "v11", &new).unwrap();
+		std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o644)).unwrap();
+		assert!(permit
+			.require_new_pty_identity("main", Some("owned"))
+			.is_err());
+		std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o600)).unwrap();
+		std::fs::remove_file(&f).unwrap();
+		symlink("/tmp/not-trusted", &f).unwrap();
+		assert!(permit
+			.require_new_pty_identity("main", Some("owned"))
+			.is_err());
+	}
+	#[cfg(target_os = "linux")]
+	#[test]
+	fn successor_can_start_first_keyed_pty_when_old_terminal_store_absent() {
+		let (_t, root, old, new) = fixture();
+		std::fs::remove_dir(old.join("terminals")).unwrap();
+		let permit = acquire_from_root(&root, "v11", &new).unwrap();
+		assert!(permit
+			.require_new_pty_identity("main", Some("first-key"))
+			.is_ok());
+		assert!(permit.require_new_pty_identity("main", None).is_err());
+	}
+	#[test]
+	fn original_v4_unfenced_replay_check_does_not_require_idempotency_key() {
+		let (_t, root, old, _new) = fixture();
+		let mut d: serde_json::Value =
+			serde_json::from_slice(&std::fs::read(root.join(".owner.json")).unwrap()).unwrap();
+		d["owner"] = serde_json::json!("v4");
+		d["state_root"] = serde_json::json!(old);
+		d["predecessor_state_root"] = serde_json::Value::Null;
+		std::fs::write(root.join(".owner.json"), serde_json::to_vec(&d).unwrap()).unwrap();
+		let permit = acquire_from_root(&root, "v4", &old).unwrap();
+		assert!(!permit.has_predecessor_state());
+		assert!(permit.require_new_process_identity("main", None).is_ok());
+		assert!(permit
+			.require_new_process_identity("main", Some("new-key"))
+			.is_ok());
+		assert!(permit.require_new_pty_identity("main", None).is_ok());
+	}
+	#[cfg(target_os = "linux")]
+	#[test]
+	fn successor_rejects_predecessor_pty_key_before_new_session() {
+		let (_t, root, old, new) = fixture();
+		persist_old_pty(&old, "main", "same-original-key");
+		let permit = acquire_from_root(&root, "v11", &new).unwrap();
+		assert!(permit
+			.require_new_pty_identity("main", Some("same-original-key"))
+			.is_err());
+		assert!(permit
+			.require_new_pty_identity("main", Some("new-safe-key"))
+			.is_ok());
+		assert!(permit
+			.require_new_pty_identity("pocket4", Some("same-original-key"))
+			.is_ok());
+		assert!(permit.require_new_pty_identity("main", None).is_err());
+	}
+
+	#[cfg(not(target_os = "linux"))]
+	#[test]
+	fn successor_pty_replay_refuses_without_linux_support() {
+		for registry in ["absent", "empty", "populated"] {
+			let (_t, root, old, new) = fixture();
+			if registry == "absent" {
+				std::fs::remove_dir(old.join("terminals")).unwrap();
+			} else if registry == "populated" {
+				persist_old_pty(&old, "main", "old-key");
+			}
+			let permit = acquire_from_root(&root, "v11", &new).unwrap();
+			assert!(permit.has_predecessor_state());
+			for (host, key) in [
+				("main", Some("old-key")),
+				("main", Some("new-key")),
+				("other-host", Some("old-key")),
+				("main", None),
+			] {
+				assert_eq!(
+					permit
+						.require_new_pty_identity(host, key)
+						.unwrap_err()
+						.to_string(),
+					"V11 predecessor PTY replay validation requires Linux",
+					"registry={registry}, host={host}, key={key:?}"
+				);
+			}
+		}
+	}
+}

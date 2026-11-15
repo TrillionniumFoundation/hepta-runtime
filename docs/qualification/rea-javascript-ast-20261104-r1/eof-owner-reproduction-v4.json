@@ -1,0 +1,46 @@
+{
+  "schema": "hepta.javascript-worker-eof-reproduction.v1",
+  "binary_sha256": "786beaf13f80b98678ccde51b297cdf352c3878e55e263e9941a56f78e913219",
+  "tokio": [
+    {
+      "path": "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/process/mod.rs",
+      "sha256": "dcde12e2e92a4f07d27b86cecbed2a125dad1f6126fc4d07462317a41b54f0a9",
+      "excerpt": "l<io::Result<()>> {\n        Pin::new(&mut self.inner).poll_flush(cx)\n    }\n\n    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {\n        Pin::new(&mut self.inner).poll_shutdown(cx)\n    }\n\n    fn poll_write_vectored(\n        mut self: Pin<&mut Self>,\n        cx: &mut Context<'_>,\n        bufs: &[io::IoSlice<'_>],\n    ) -> Poll<Result<usi"
+    },
+    {
+      "path": "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/process/unix/mod.rs",
+      "sha256": "6c084b4a1821ee5cb6008226c39df65a88ca7615c6b5b114102fa6627fd4250b",
+      "excerpt": "t Context<'_>) -> Poll<io::Result<()>> {\n        Poll::Ready(Ok(()))\n    }\n\n    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {\n        Poll::Ready(Ok(()))\n    }\n\n    fn poll_write_vectored(\n        self: Pin<&mut Self>,\n        cx: &mut Context<'_>,\n        bufs: &[io::IoSlice<'_>],\n    ) -> Poll<Result<usize, io::Error>> {\n        self."
+    }
+  ],
+  "observed_workers": [
+    {
+      "pid": 250743,
+      "owner_pid": 250715,
+      "argv": [
+        "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/hepta-runtime",
+        "rea-javascript-worker"
+      ],
+      "stat": "250743 (hepta-runtime) S 250715 250584 250584 0 -1 4194304 433 0 0 0 0 0 0 0 20 0 1 0 84697344 33812480 2027 18446744073709551615 97948773838784 97948793234096 140734556360832 0 0 0 0 4096 1088 1 0 0 17 14 0 0 0 0 0 97948794278360 97948794488464 97949298446336 140734556364608 140734556364711 140734556364711 140734556364711 0\n"
+    }
+  ],
+  "owner_pid": 250715,
+  "duration_seconds": 20.252,
+  "reply": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "JavaScript AST worker exceeded 20 second wall-clock deadline"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "owner_alive_after_reply": true,
+  "owner_children_after_reply": [],
+  "observed_workers_absent_after_reply": true,
+  "status": "expected_failure_reproduced_and_original_owner_reaped"
+}

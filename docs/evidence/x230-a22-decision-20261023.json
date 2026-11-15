@@ -1,0 +1,123 @@
+{
+  "baseline": "A20",
+  "binary_sha256": "f57b6bf92012de15b2ffe81daedcc69688c65f3b6c63b67c95d486664de6d076",
+  "candidate": "A22",
+  "capacity_baseline_passed": false,
+  "capacity_c16": {
+    "A20": {
+      "all_recorded_failure_messages": [
+        "observation pool capacity unavailable; no fallback or automatic retry"
+      ],
+      "calls": 192,
+      "completion_rps": 59.738672245474326,
+      "controller_cpu_ms_per_call": 17.135416666666664,
+      "controller_cpu_ms_per_success_including_all_failed_attempt_costs": 36.966292134831455,
+      "controller_cpu_seconds_sum": 3.2899999999999996,
+      "elapsed_cell_seconds_sum": 3.2139984499663115,
+      "failures": 103,
+      "p50_ms": 21.95521118119359,
+      "p95_ms": 597.1270559821278,
+      "p99_ms": 619.8700820095837,
+      "successes": 89,
+      "successful_rps": 27.691363697120913
+    },
+    "A22": {
+      "all_recorded_failure_messages": [
+        "observation pool capacity unavailable; no fallback or automatic retry"
+      ],
+      "calls": 192,
+      "completion_rps": 30.43837501373789,
+      "controller_cpu_ms_per_call": 32.135416666666664,
+      "controller_cpu_ms_per_success_including_all_failed_attempt_costs": 33.351351351351354,
+      "controller_cpu_seconds_sum": 6.17,
+      "elapsed_cell_seconds_sum": 6.3078268768731505,
+      "failures": 7,
+      "p50_ms": 510.32676990143955,
+      "p95_ms": 630.5600879713893,
+      "p99_ms": 656.8504041060805,
+      "successes": 185,
+      "successful_rps": 29.328642591362026
+    }
+  },
+  "capacity_candidate_passed": false,
+  "capacity_evidence_sha256": "3125b3ad7dff6e6bd6c443da48832c94aa5468d7499a09c8bf246c8a00e3c508",
+  "capacity_source_report_sha256": "af9140f623bcd2a8c55340e4df1e0a05ec9bed9165dc2a235ecd33b55ee46193",
+  "decision": "not_adopted_pending_bounded_queue_admission_correction",
+  "fairness_baseline_passed": true,
+  "fairness_candidate_passed": true,
+  "fairness_evidence_sha256": "906b2c77c3d0a8fed3a47c96b9fd0290d41e2b4be55d7e05df9837302cf56fee",
+  "fairness_performance_comparison": {
+    "balanced": {
+      "all_call_p50_change_percent": 1.152457131294704,
+      "all_call_p95_change_percent": -6.339919603836764,
+      "baseline_client_timeouts": 0,
+      "baseline_failures": 0,
+      "baseline_refusal_responses": 0,
+      "candidate_client_timeouts": 0,
+      "candidate_failures": 0,
+      "candidate_refusal_responses": 0,
+      "completion_rps_change_percent": 4.906238127248441,
+      "controller_cpu_per_call_change_percent": -2.131438721136747,
+      "head_p95_change_percent": 4.0573760371067635,
+      "successful_rps_change_percent": 4.906238127248441,
+      "tail_p50_change_percent": -7.265285762426843,
+      "tail_p95_change_percent": -3.460793411392926,
+      "tail_p99_change_percent": 0.6159668566614762
+    },
+    "hot_only": {
+      "all_call_p50_change_percent": -0.637747607040251,
+      "all_call_p95_change_percent": -1.3900336650437106,
+      "baseline_client_timeouts": 0,
+      "baseline_failures": 0,
+      "baseline_refusal_responses": 0,
+      "candidate_client_timeouts": 0,
+      "candidate_failures": 0,
+      "candidate_refusal_responses": 0,
+      "completion_rps_change_percent": 2.3486235213770135,
+      "controller_cpu_per_call_change_percent": -1.639344262295095,
+      "head_p95_change_percent": 2.195798178037811,
+      "successful_rps_change_percent": 2.3486235213770135,
+      "tail_p50_change_percent": -3.3752387800720762,
+      "tail_p95_change_percent": -15.845950287034483,
+      "tail_p99_change_percent": -12.969133980016101
+    },
+    "skew": {
+      "all_call_p50_change_percent": 3.9275141978752925,
+      "all_call_p95_change_percent": 6.123770343164425,
+      "baseline_client_timeouts": 0,
+      "baseline_failures": 0,
+      "baseline_refusal_responses": 0,
+      "candidate_client_timeouts": 0,
+      "candidate_failures": 0,
+      "candidate_refusal_responses": 0,
+      "completion_rps_change_percent": -3.2928519162157555,
+      "controller_cpu_per_call_change_percent": 5.685131195335291,
+      "head_p95_change_percent": 6.28949008903763,
+      "successful_rps_change_percent": -3.2928519162157555,
+      "tail_p50_change_percent": -52.6339984631185,
+      "tail_p95_change_percent": -51.820151758283814,
+      "tail_p99_change_percent": -51.469387730384916
+    }
+  },
+  "fairness_source_report_sha256": "d33786e05348661af115251acc7d13c6a8b2cada5830d4ebd5bba9c363df200a",
+  "interpretation": [
+    "All 960 fairness rows and all 384 capacity rows are retained, including every refusal.",
+    "A22 improves skew cold-host p95 by 51.82 percent while whole-skew throughput is 3.29 percent lower and CPU per call is 5.69 percent higher; this is an explicit tradeoff.",
+    "Fast refusals inflate attempt throughput and lower mixed latency and CPU per attempt; successful throughput and refusal counts remain separate.",
+    "The native capacity error text does not identify which internal capacity gate refused the request; channel saturation is a source-level hypothesis to test, not a measured attribution.",
+    "No automatic RPC retry, fallback execution or new remote workload was used in either read-only experiment."
+  ],
+  "qualification_passed": true,
+  "reason": "Phased scheduling avoids the large A21 hot-only regression and improves cold-host latency, but the candidate still refused 7 of 192 C16 calls. Correct bounded waiting without enlarging channel, output or per-host limits is the next concrete candidate.",
+  "reproduction": {
+    "base_commit": "7da3a7ebaded8214bc65e69046b74e6251e21767",
+    "expected_source_file_count": 149,
+    "expected_source_map_sha256": "dcc6197816f1d36b515626390f128b6826abd47da30710ab4917ca418ef5c29c",
+    "patch_path": "docs/experiments/x230-a22-scheduling.patch",
+    "patch_sha256": "339168fcb40debfa332b675e0b6ca895879696eb46a5d719ef969c3029f03b34",
+    "qualification_receipt": "docs/evidence/x230-a22-qualification-20261023.json"
+  },
+  "runtime_code_to_retain": "A20 pending a separately qualified and measured successor",
+  "schema": "hepta-x230-candidate-decision/v1",
+  "source_map_sha256": "dcc6197816f1d36b515626390f128b6826abd47da30710ab4917ca418ef5c29c"
+}

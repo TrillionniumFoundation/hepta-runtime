@@ -1,0 +1,72 @@
+{
+  "status": "PASS",
+  "scope": "11 extracted CDP/socketpair and actual fixture TCP-loopback tests; stub cancellation and input admission types. This is not full runtime, Chrome, owner cancellation, or upstream REA parity qualification.",
+  "results": [
+    {
+      "name": "unit-tests",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "-j4",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "stdout": "\nrunning 11 tests\ntest tests::capture_close_acknowledgement_does_not_extend_deadline_or_skip_eof_drain ... ok\ntest tests::capture_close_allows_only_clean_pipe_end_after_sent_browser_command ... ok\ntest tests::capture_close_never_treats_protocol_framing_or_budget_errors_as_no_ack ... ok\ntest tests::capture_close_observes_late_target_network_even_after_close_acknowledgement ... ok\ntest tests::capture_close_records_late_target_denial_and_propagates_gate_error ... ok\ntest tests::capture_close_refuses_clean_eof_with_an_unconfirmed_late_gate ... ok\ntest tests::capture_fixture_final_receipt_refuses_a_late_probe_request ... ok\ntest tests::capture_fixture_receipt_requires_joined_threads_and_final_counters ... ok\ntest tests::capture_settle_propagates_late_request_gate_error_before_browser_close ... ok\ntest tests::capture_settle_refuses_a_missing_repeated_occurrence ... ok\ntest tests::capture_settle_waits_for_late_terminals_and_repeated_url_occurrences ... ok\n\ntest result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.12s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": "   Compiling hepta-rea-cdp-settle-review v0.1.0 (/home/qian-qi/rea-ledger-inputs-20261104-r1/browser-close-patch-r1)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.08s\n     Running unittests src/lib.rs (/home/qian-qi/work/hepta-rea-next-ledger-20261104-target/debug/deps/hepta_rea_cdp_settle_review-df986802d8a0cccc)\n   Doc-tests hepta_rea_cdp_settle_review\n"
+    },
+    {
+      "name": "clippy",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "clippy",
+        "--offline",
+        "--locked",
+        "--all-targets",
+        "-j4",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "    Checking typenum v1.20.1\n    Checking const-oid v0.10.2\n    Checking zmij v1.0.23\n    Checking serde_core v1.0.229\n    Checking cfg-if v1.0.5\n    Checking cpufeatures v0.3.1\n    Checking itoa v1.0.18\n    Checking memchr v2.8.3\n    Checking libc v0.2.189\n    Checking anyhow v1.0.104\n    Checking hybrid-array v0.4.15\n    Checking crypto-common v0.2.2\n    Checking block-buffer v0.12.1\n    Checking serde_json v1.0.151\n    Checking digest v0.11.3\n    Checking sha2 v0.11.0\n    Checking hepta-rea-cdp-settle-review v0.1.0 (/home/qian-qi/rea-ledger-inputs-20261104-r1/browser-close-patch-r1)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.17s\n"
+    },
+    {
+      "name": "patch-check",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "files": [
+    {
+      "path": "src/mcp/rea_browser_cdp.rs",
+      "before_sha256": "cd3ee09e83d523134e6ef256944c19b65205305a5c1b2bf77608d6b23073a37c",
+      "sha256": "8c29db490838c9580c888ae03f86640692d136933b7ed45791abeae0f2c1a872",
+      "bytes": 20726
+    },
+    {
+      "path": "src/mcp/rea_browser_capture.rs",
+      "before_sha256": "6f5a1cc664bb5550c9657bc818f3cbeb7be39f9c6a4e64373496f2be59cc16fa",
+      "sha256": "41be7f9dfe2949c6d5a7e685d74c0f23f17bf3fa77a0a8ed235398e49ee35999",
+      "bytes": 13206
+    },
+    {
+      "path": "src/mcp/rea_browser_tests.rs",
+      "before_sha256": "71be49ad6e16e871dbb0d24ed7e7cc9961d80f71d9a5537314fcabf97dbde152",
+      "sha256": "0a9eb1dbf2286774d0a768555017e829895427c6939439fa47cb5d35dc021393",
+      "bytes": 22117
+    },
+    {
+      "path": "src/mcp/rea_browser_fixture.rs",
+      "before_sha256": "05a19fe534308e1d15bb9aebb3ff2ab56375d9eeef5fa51467a70c9fcac7f66a",
+      "sha256": "793321904c33bd3136b5ec52b5447669d1d68508d96b8c2a6db328a894dcd3c9",
+      "bytes": 9180
+    }
+  ],
+  "patch": "/home/qian-qi/rea-ledger-inputs-20261104-r1/browser-close-patch-r1/browser-close-r1.patch",
+  "patch_sha256": "073182baee52c82af3744ee39f7da417f4315dde430f85a065a052ac7c09f132"
+}

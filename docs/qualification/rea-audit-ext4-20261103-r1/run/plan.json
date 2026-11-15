@@ -1,0 +1,173 @@
+{
+  "baseline_expected_sha256": "7ec5383c2f5f56006564fb2eb3f8f7c72027c73f94f7c5e524cf7567ab8f90ed",
+  "baseline_input": "/home/qian-qi/work/hepta-rea-blockers-20261103-r1/candidate-build-r2/baseline-test-lib",
+  "baseline_rule": "Run every scheduled baseline, preserving every success and failure; baseline failure is not required and never selects or filters the candidate.",
+  "candidate_expected_sha256": "924180ac166d07051d2aae8ffb349a99c086ad4964f420ddb5f089fbefedcd91",
+  "candidate_input": "/home/qian-qi/work/hepta-rea-blockers-20261103-r1/candidate-build-r2/all-test-build-lib",
+  "candidate_provenance": "/home/qian-qi/work/hepta-rea-blockers-20261103-r1/candidate-build-r2",
+  "candidate_success_rule": "All four candidate publication runs and every listed regression pass.",
+  "cargo_invocations": 0,
+  "case_timeout_seconds": 120,
+  "child_umask": "0022",
+  "created_at": "2026-11-03T19:22:18.180910+00:00",
+  "driver_sha256": "c62bc491ed6a1046e59a82784fd535b4f48cd7149bd54cfe042134fa15183f82",
+  "kernel": [
+    "Linux",
+    "qian-qi",
+    "7.0.0-38-generic",
+    "#38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2",
+    "x86_64"
+  ],
+  "log_limit_policy": "Thresholds include stdout/stderr and observation samples. Terminate only owned processes and retain all buffered bytes; no silent log truncation.",
+  "order": "A B B A B A A B",
+  "parent_umask": "0077",
+  "process_cleanup": "wait4 and pidfds must prove all owned processes terminal. Kernel uninterruptible cleanup can exceed the scheduling budget; later cases remain stopped.",
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "retries": 0,
+  "run_log_limit_bytes": 8388608,
+  "runs": [
+    {
+      "name": "01-A-publication",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_remains_exact_while_continuous_publications_progress",
+      "variant": "A"
+    },
+    {
+      "name": "02-B-publication",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_remains_exact_while_continuous_publications_progress",
+      "variant": "B"
+    },
+    {
+      "name": "03-B-publication",
+      "repetition": 2,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_remains_exact_while_continuous_publications_progress",
+      "variant": "B"
+    },
+    {
+      "name": "04-A-publication",
+      "repetition": 2,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_remains_exact_while_continuous_publications_progress",
+      "variant": "A"
+    },
+    {
+      "name": "05-B-publication",
+      "repetition": 3,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_remains_exact_while_continuous_publications_progress",
+      "variant": "B"
+    },
+    {
+      "name": "06-A-publication",
+      "repetition": 3,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_remains_exact_while_continuous_publications_progress",
+      "variant": "A"
+    },
+    {
+      "name": "07-A-publication",
+      "repetition": 4,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_remains_exact_while_continuous_publications_progress",
+      "variant": "A"
+    },
+    {
+      "name": "08-B-publication",
+      "repetition": 4,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_remains_exact_while_continuous_publications_progress",
+      "variant": "B"
+    },
+    {
+      "name": "09-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::warm_usage_keeps_its_admitted_store_turn",
+      "variant": "B"
+    },
+    {
+      "name": "10-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::large_cache_preparing_reply_does_not_wait_for_the_query_budget",
+      "variant": "B"
+    },
+    {
+      "name": "11-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::bounded_index_capacity_waits_without_retiring_live_callers_or_blocking_writers",
+      "variant": "B"
+    },
+    {
+      "name": "12-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_cannot_publish_while_a_taken_worker_cohort_is_in_flight",
+      "variant": "B"
+    },
+    {
+      "name": "13-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::metadata_deadline_does_not_leave_a_blocking_query_behind_the_store_lock",
+      "variant": "B"
+    },
+    {
+      "name": "14-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::audit_store_timed_cancellation_removes_head_and_middle_waiters",
+      "variant": "B"
+    },
+    {
+      "name": "15-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_preserves_exact_states_tools_owners_and_cursor_pages_without_writes",
+      "variant": "B"
+    },
+    {
+      "name": "16-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::index::tests::large_pending_view_rechecks_the_final_watch_and_each_returned_original_stamp",
+      "variant": "B"
+    },
+    {
+      "name": "17-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::query_tests::metadata_query_cancelled_while_waiting_never_spawns",
+      "variant": "B"
+    },
+    {
+      "name": "18-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::query_tests::metadata_query_cancelled_worker_retains_capacity_until_exit",
+      "variant": "B"
+    },
+    {
+      "name": "19-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::query_tests::metadata_query_timed_out_worker_retains_capacity_until_exit",
+      "variant": "B"
+    },
+    {
+      "name": "20-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::query_tests::metadata_query_expired_in_blocking_queue_never_runs",
+      "variant": "B"
+    },
+    {
+      "name": "21-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::query_tests::metadata_query_preserves_result_and_original_deadline",
+      "variant": "B"
+    },
+    {
+      "name": "22-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::query_tests::metadata_query_ready_success_consumed_after_deadline_is_refused",
+      "variant": "B"
+    },
+    {
+      "name": "23-B-regression",
+      "repetition": 1,
+      "test": "mcp::runtime::request_audit::query_tests::archive_query_expired_deadline_does_not_open_missing_store",
+      "variant": "B"
+    }
+  ],
+  "schema": "hepta.rea.audit-ext4-plan.v1",
+  "source_root": "/home/qian-qi/hepta-runtime-rea-blockers-20261103-r1",
+  "suite_schedule_budget_seconds": 1800,
+  "total_log_limit_bytes": 134217728,
+  "trace_scope_note": "Baseline metadata_drain begins after ready and covers the final acquisition/read. Candidate metadata_snapshot begins with initial admission and also includes hot/ready work and all actual reacquisitions. Their fields have different scopes; this driver does not compute a cross-variant phase ratio, subtraction or causal performance claim."
+}

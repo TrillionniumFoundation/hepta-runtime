@@ -1,0 +1,67 @@
+{
+  "schema": "hepta-x230-a26-draft-source-selection/v1",
+  "selected_candidate": "A26",
+  "selected_for_draft_pr_source": true,
+  "performance_adoption": false,
+  "production_deployment": false,
+  "base_commit": "63c826046f87cf432614546c97270006d1c91960",
+  "baseline_source_files_verified_against_repository": 149,
+  "candidate_source_files": 156,
+  "source_map_sha256": "2822cb186ad0d6380a20baa699f5b6e7ed02a9c4cbd0079ca6e50c17a414d2a0",
+  "release_sha256": "52b9a64618b46d04f339e4af2ce91450894d65a57a5ba58bdff7f4fc0ecadb0a",
+  "source_delta": {
+    "changed": 5,
+    "new": 7,
+    "removed": 0,
+    "unchanged": 144
+  },
+  "candidate_validation_passed": true,
+  "artifact_integrity_passed": true,
+  "comparison_valid": false,
+  "candidate_timed_calls": {
+    "standard": 576,
+    "capacity": 192,
+    "fairness": 960,
+    "calibration": 192,
+    "soak": 16956,
+    "total": 18876,
+    "failures": 0
+  },
+  "selection_reason": "Observation availability at C16, request-local transient agent lookup deadlines, actual blocking-worker lifetime limits, and recorded controller-crash recovery; the observed CPU cost is explicitly accepted for this draft review.",
+  "cpu_ms_per_call_standard": {
+    "A20": {
+      "1": 64.53125,
+      "4": 37.23958333333333,
+      "8": 36.302083333333336
+    },
+    "A26": {
+      "1": 68.95833333333333,
+      "4": 45.41666666666668,
+      "8": 45.052083333333336
+    }
+  },
+  "soak_resource_evidence": {
+    "normal_summary_retained_error_entries": 34,
+    "primary_controller_timeline_error_counter": 145,
+    "primary_controller_retained_error_entries": 32,
+    "counts_must_not_be_added": true,
+    "sampled_values_are_lower_bounds": true
+  },
+  "remaining_boundaries": [
+    "The full performance comparison is invalid after 99 A20 C16 capacity refusals; no relative overall speedup is selected.",
+    "Completed-job controller recovery retains six old socket entries in one directory; abrupt_cleanup_complete is false.",
+    "No wait-entry counter was recorded; zero proof-failure events do not prove that the narrow wait branch ran.",
+    "Kernel-blocked validation closures can delay orderly shutdown; SIGKILL bypasses cleanup code.",
+    "Recovery canaries do not establish arbitrary exactly-once external effects, host reboot recovery, physical power-loss behavior, or network partition recovery.",
+    "A finite candidate and probe series does not establish a global optimum."
+  ],
+  "hash_buffer_decision": {
+    "bytes": 16384,
+    "separate_64KiB_runtime_candidate_eligible": false,
+    "median_cpu_improvement_percent": 0.9204860321572582,
+    "paired_cpu_MAD_percentage_points": 1.3564757735700075,
+    "positive_blocks": 5,
+    "total_blocks": 8
+  },
+  "source_manifest_note": "The exact-source patch proof and source-publication manifest were collected before this selection and correctly retain adopted=false/source_adopted=false for their collection-time action scopes."
+}

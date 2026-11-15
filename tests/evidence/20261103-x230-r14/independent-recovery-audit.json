@@ -1,0 +1,1476 @@
+{
+  "schema": "hepta-six-host-independent-recovery-audit/v1",
+  "success": true,
+  "audited_utc": "2026-11-03T21:18:22.967609+00:00",
+  "auditor_sha256": "eaee71823276ff4a34ca0ecf21d9e3928d8dfe3ce252f0d0ba89507cd971a1c2",
+  "candidate_sha256": "51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d",
+  "qualification_audit_sha256": "667e9e966b43ce1e14c228b0ab7ab9b8fc017c26c95a41adba4e97cea1487ff3",
+  "raw_report_sha256": "14c1330ef769100465b9b57f31966a47a720adec4496f9a150b41f99071c3905",
+  "counts": {
+    "hosts": 6,
+    "native_replies": 90,
+    "ssh_probes": 36,
+    "ssh_stdout_and_stderr_files": 72,
+    "embedded_artifacts_rehashed": 150,
+    "embedded_artifact_bytes_rehashed": 224885,
+    "new_starts": 6,
+    "same_key_lookups": 12,
+    "cancel_calls": 12,
+    "extra_read_only_terminal_polls": 0,
+    "automatic_rpc_retries": 0
+  },
+  "phase_tool_counts": {
+    "after_crash_running/process_read": 6,
+    "after_crash_running/process_status": 6,
+    "after_transport_running/process_read": 6,
+    "after_transport_running/process_status": 6,
+    "before_crash_running/process_read": 6,
+    "before_crash_running/process_status": 6,
+    "cancel_after_terminal/process_cancel": 6,
+    "concurrent_cancel/process_cancel": 6,
+    "launch/process_start": 6,
+    "same_key_after_cancel/process_start": 6,
+    "same_key_after_crash/process_start": 6,
+    "terminal/process_read": 6,
+    "terminal/process_status": 6,
+    "terminal_after_restart/process_read": 6,
+    "terminal_after_restart/process_status": 6
+  },
+  "successful_cancel_concurrency": {
+    "observed_peak_overlap": 6,
+    "start_spread_ms": 2.329587936401367,
+    "latencies_ms": {
+      "ai395": 603.4232173115015,
+      "rog": 670.8021308295429,
+      "pocket4": 720.0499577447772,
+      "mac": 728.2648752443492,
+      "x230": 765.2786988765001,
+      "main": 952.527245040983
+    },
+    "supports": "live six-host successful-cancel overlap; not a successful-cancel C8 throughput measurement"
+  },
+  "faults": {
+    "controller_sigkill_confirmed": true,
+    "three_controller_generations": [
+      {
+        "pid": 2343185,
+        "birth_ticks": 244273583
+      },
+      {
+        "pid": 2343524,
+        "birth_ticks": 244274046
+      },
+      {
+        "pid": 2343924,
+        "birth_ticks": 244274562
+      }
+    ],
+    "owned_rog_ssh_master_sigkill_confirmed": true,
+    "master_generation_replaced": true,
+    "network_and_services_unchanged": true
+  },
+  "hosts": {
+    "ai395": {
+      "job_id": "1a1a3469746-23c111-1",
+      "launch_nonce": "5eee0cf45a1448465b8a7fbc50b3ffbb",
+      "request_sha256": "19f3a0814f1f4455ee5a898e745c88565611b7532c853d66c7714b90b5fa4b91",
+      "execution_marker_count": 1,
+      "same_key_reused_after_crash": true,
+      "same_key_reused_after_cancel": true,
+      "terminal_records": [
+        {
+          "phase": "terminal",
+          "exit_sha256": "16ba162c9cfad3f45e07ab70586815008f3870e716b159854f0161456d638959",
+          "witness_sha256": "6d227e6c95521e657c67e6b021cc2515cc14c7b079ec4f68229ab25ea18b4b10",
+          "cancel_intent_sha256": "8bcc2fae15e4dbe37bd67b94b2b2772542041a091496526e37569396f61a9709",
+          "stdout_sha256": "5fe80518db4944ce88b6f0e1e8011c5ef4c287e5ad7ca20ce1ca3daedac56219",
+          "stderr_sha256": "4a7d15d40a11ad316df546e5053f8a358ce90f06d1ef498cde03a539627d2abb"
+        },
+        {
+          "phase": "terminal_after_restart",
+          "exit_sha256": "16ba162c9cfad3f45e07ab70586815008f3870e716b159854f0161456d638959",
+          "witness_sha256": "6d227e6c95521e657c67e6b021cc2515cc14c7b079ec4f68229ab25ea18b4b10",
+          "cancel_intent_sha256": "8bcc2fae15e4dbe37bd67b94b2b2772542041a091496526e37569396f61a9709",
+          "stdout_sha256": "5fe80518db4944ce88b6f0e1e8011c5ef4c287e5ad7ca20ce1ca3daedac56219",
+          "stderr_sha256": "4a7d15d40a11ad316df546e5053f8a358ce90f06d1ef498cde03a539627d2abb"
+        }
+      ],
+      "cancel_acknowledgement": "stop_requested",
+      "cancel_after_terminal_acknowledgement": {
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "job_id": "1a1a3469746-23c111-1",
+        "reconcile_via": "process_status",
+        "result": "already_exited",
+        "termination_confirmed": false
+      },
+      "signal_identity": "pidfd"
+    },
+    "mac": {
+      "job_id": "1a1a346974d-23c111-5",
+      "launch_nonce": "5bcb11f299f7e3475e11c690473d6e26",
+      "request_sha256": "8863a323c0f62fef3280e8986d1422f65bcd7db958dc1fe2f59b78552474b3db",
+      "execution_marker_count": 1,
+      "same_key_reused_after_crash": true,
+      "same_key_reused_after_cancel": true,
+      "terminal_records": [
+        {
+          "phase": "terminal",
+          "exit_sha256": "e4a6e55f53954521af599784a782323620f615d272f2b77fbc2bc1321802eac5",
+          "witness_sha256": "c31e9b6b437e8eee0647dd4dc204e065c5aed0b2c2d9d7701dbd58e4bd829ff2",
+          "cancel_intent_sha256": "28e553dd308df7decd58ac97b0a2937ed151d1684c36568ed9e684fe7a6dd9b2",
+          "stdout_sha256": "4eca8830f2949e55b05e33ddb841b577f9e54f21f7d44f65b628a520508a051d",
+          "stderr_sha256": "03eafb7653ab84c62a64e29f766a5aa11723ef0aa8b720d686206cc6b1227189"
+        },
+        {
+          "phase": "terminal_after_restart",
+          "exit_sha256": "e4a6e55f53954521af599784a782323620f615d272f2b77fbc2bc1321802eac5",
+          "witness_sha256": "c31e9b6b437e8eee0647dd4dc204e065c5aed0b2c2d9d7701dbd58e4bd829ff2",
+          "cancel_intent_sha256": "28e553dd308df7decd58ac97b0a2937ed151d1684c36568ed9e684fe7a6dd9b2",
+          "stdout_sha256": "4eca8830f2949e55b05e33ddb841b577f9e54f21f7d44f65b628a520508a051d",
+          "stderr_sha256": "03eafb7653ab84c62a64e29f766a5aa11723ef0aa8b720d686206cc6b1227189"
+        }
+      ],
+      "cancel_acknowledgement": "term_sent",
+      "cancel_after_terminal_acknowledgement": {
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "job_id": "1a1a346974d-23c111-5",
+        "reconcile_via": "process_status",
+        "result": "already_exited",
+        "termination_confirmed": false
+      },
+      "signal_identity": "account-and-PID-start best effort"
+    },
+    "main": {
+      "job_id": "1a1a346974d-23c111-6",
+      "launch_nonce": "4b422d034c6157bf983f34630b5b6ec1",
+      "request_sha256": "d14529e2fb251c978887a2509e75fec403de43bce940e5b5a76d8657912f68f3",
+      "execution_marker_count": 1,
+      "same_key_reused_after_crash": true,
+      "same_key_reused_after_cancel": true,
+      "terminal_records": [
+        {
+          "phase": "terminal",
+          "exit_sha256": "7f360ea38aff02e59f15a0372a7c90856f7a506112ddb91c9795c0f51ee35c2c",
+          "witness_sha256": "160451fdcba9b8a962cf79c7bd4a040672c9cc6a6085f6e54d4a84eadbb9aec5",
+          "cancel_intent_sha256": "5cb900dd44557681560a4c1aae91bb15f52e3222b41ae7f3d45ed4b1d3cfa341",
+          "stdout_sha256": "b185b482edf13e65c3dde67ed2f6a825f7b7e1220b2324e987588ca7a20cb001",
+          "stderr_sha256": "ec3adb6fc2f166a6038ff6af7785e3bb561dcc5d15ea31df672f401e236b584d"
+        },
+        {
+          "phase": "terminal_after_restart",
+          "exit_sha256": "7f360ea38aff02e59f15a0372a7c90856f7a506112ddb91c9795c0f51ee35c2c",
+          "witness_sha256": "160451fdcba9b8a962cf79c7bd4a040672c9cc6a6085f6e54d4a84eadbb9aec5",
+          "cancel_intent_sha256": "5cb900dd44557681560a4c1aae91bb15f52e3222b41ae7f3d45ed4b1d3cfa341",
+          "stdout_sha256": "b185b482edf13e65c3dde67ed2f6a825f7b7e1220b2324e987588ca7a20cb001",
+          "stderr_sha256": "ec3adb6fc2f166a6038ff6af7785e3bb561dcc5d15ea31df672f401e236b584d"
+        }
+      ],
+      "cancel_acknowledgement": "stop_requested",
+      "cancel_after_terminal_acknowledgement": {
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "job_id": "1a1a346974d-23c111-6",
+        "reconcile_via": "process_status",
+        "result": "already_exited",
+        "termination_confirmed": false
+      },
+      "signal_identity": "pidfd"
+    },
+    "pocket4": {
+      "job_id": "1a1a346974d-23c111-2",
+      "launch_nonce": "3a818ffb4cfffbdce4d286361de0ea66",
+      "request_sha256": "357540f04069a115918eb0f413875a4fef6c999acb8dd6eb95f3c6bb6356258d",
+      "execution_marker_count": 1,
+      "same_key_reused_after_crash": true,
+      "same_key_reused_after_cancel": true,
+      "terminal_records": [
+        {
+          "phase": "terminal",
+          "exit_sha256": "b3bccbd240fadfe4ba222b728a0c1018ae720a79610ddc5f248b1232523c2533",
+          "witness_sha256": "1e446477f4f94bcaeb6d17f7f13b20716af13774238bb34cbad8e772af94a17d",
+          "cancel_intent_sha256": "5cbb537228297d3187246d6ad89ed06a9cf0a4fcc666156597bd56ab2af48236",
+          "stdout_sha256": "948f640aa02d8f1994a9d707e552e05268ad97895bbbff1ae8b412a45262f945",
+          "stderr_sha256": "fae656e40fdd539191a00194cad8f284c8963939ac8735b1227bce347381a1ae"
+        },
+        {
+          "phase": "terminal_after_restart",
+          "exit_sha256": "b3bccbd240fadfe4ba222b728a0c1018ae720a79610ddc5f248b1232523c2533",
+          "witness_sha256": "1e446477f4f94bcaeb6d17f7f13b20716af13774238bb34cbad8e772af94a17d",
+          "cancel_intent_sha256": "5cbb537228297d3187246d6ad89ed06a9cf0a4fcc666156597bd56ab2af48236",
+          "stdout_sha256": "948f640aa02d8f1994a9d707e552e05268ad97895bbbff1ae8b412a45262f945",
+          "stderr_sha256": "fae656e40fdd539191a00194cad8f284c8963939ac8735b1227bce347381a1ae"
+        }
+      ],
+      "cancel_acknowledgement": "stop_requested",
+      "cancel_after_terminal_acknowledgement": {
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "job_id": "1a1a346974d-23c111-2",
+        "reconcile_via": "process_status",
+        "result": "already_exited",
+        "termination_confirmed": false
+      },
+      "signal_identity": "pidfd"
+    },
+    "rog": {
+      "job_id": "1a1a346974d-23c111-4",
+      "launch_nonce": "56cc1bea04414a09c4d9cd70d52480fe",
+      "request_sha256": "f48be4ec244d4a3103af73ec62e2512f042e0ef30529c6f478b53c2e691c01d7",
+      "execution_marker_count": 1,
+      "same_key_reused_after_crash": true,
+      "same_key_reused_after_cancel": true,
+      "terminal_records": [
+        {
+          "phase": "terminal",
+          "exit_sha256": "4bb03cd5ea366cea7365aa9ca0a32af9ec5480e73daa98ae1fdf82fbd10bed4f",
+          "witness_sha256": "c91c7d466e2146238c8f9b36b05adadc0f810201f8cdeb18f8bd374d1b6fd438",
+          "cancel_intent_sha256": "7706b80a75d44c419ebbc20519e076620377b386d09592f5223b6c40e7c28972",
+          "stdout_sha256": "2d8f6d9880fc47be4e41366d635fc332e2861d84dc5541e4bddecea7d9d18ee0",
+          "stderr_sha256": "aa626f2b90447359a7399824f2597bfac63ad955470868d92b7b02b44985e56a"
+        },
+        {
+          "phase": "terminal_after_restart",
+          "exit_sha256": "4bb03cd5ea366cea7365aa9ca0a32af9ec5480e73daa98ae1fdf82fbd10bed4f",
+          "witness_sha256": "c91c7d466e2146238c8f9b36b05adadc0f810201f8cdeb18f8bd374d1b6fd438",
+          "cancel_intent_sha256": "7706b80a75d44c419ebbc20519e076620377b386d09592f5223b6c40e7c28972",
+          "stdout_sha256": "2d8f6d9880fc47be4e41366d635fc332e2861d84dc5541e4bddecea7d9d18ee0",
+          "stderr_sha256": "aa626f2b90447359a7399824f2597bfac63ad955470868d92b7b02b44985e56a"
+        }
+      ],
+      "cancel_acknowledgement": "stop_requested",
+      "cancel_after_terminal_acknowledgement": {
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "job_id": "1a1a346974d-23c111-4",
+        "reconcile_via": "process_status",
+        "result": "already_exited",
+        "termination_confirmed": false
+      },
+      "signal_identity": "pidfd"
+    },
+    "x230": {
+      "job_id": "1a1a346974d-23c111-3",
+      "launch_nonce": "ede58c8efbd095494cd22df5924bf700",
+      "request_sha256": "6e8727dde35f30485abeeff91962c854034a00e3e8feaabd5a63ac97c2dd03d1",
+      "execution_marker_count": 1,
+      "same_key_reused_after_crash": true,
+      "same_key_reused_after_cancel": true,
+      "terminal_records": [
+        {
+          "phase": "terminal",
+          "exit_sha256": "94f01a781ff90375be03f3de60a70a8c76453d7f8699730ceda81fe8c2fe6627",
+          "witness_sha256": "d726a0b463fca899ede34543705a3799b1cd955fe28a9ed042f88cd8741213b3",
+          "cancel_intent_sha256": "b6dbf2fa81baf112737ac3dc5f927627f94c3269c8b040383e868a0a37a4a399",
+          "stdout_sha256": "dab7003c41308e0572c81ae7179a305b6f89540892025ab188de06b480598ade",
+          "stderr_sha256": "e04bf3db8f70dcdee7896ec9fd1fc2175ce29affac44e857ee04cd650374b05d"
+        },
+        {
+          "phase": "terminal_after_restart",
+          "exit_sha256": "94f01a781ff90375be03f3de60a70a8c76453d7f8699730ceda81fe8c2fe6627",
+          "witness_sha256": "d726a0b463fca899ede34543705a3799b1cd955fe28a9ed042f88cd8741213b3",
+          "cancel_intent_sha256": "b6dbf2fa81baf112737ac3dc5f927627f94c3269c8b040383e868a0a37a4a399",
+          "stdout_sha256": "dab7003c41308e0572c81ae7179a305b6f89540892025ab188de06b480598ade",
+          "stderr_sha256": "e04bf3db8f70dcdee7896ec9fd1fc2175ce29affac44e857ee04cd650374b05d"
+        }
+      ],
+      "cancel_acknowledgement": "stop_requested",
+      "cancel_after_terminal_acknowledgement": {
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "job_id": "1a1a346974d-23c111-3",
+        "reconcile_via": "process_status",
+        "result": "already_exited",
+        "termination_confirmed": false
+      },
+      "signal_identity": "pidfd"
+    }
+  },
+  "native_reply_file_bindings": [
+    {
+      "sequence": 7,
+      "phase": "launch",
+      "host": "ai395",
+      "tool": "process_start",
+      "path": "native-0007-ai395-process_start.json",
+      "sha256": "3f0f481e8bb186352c80a1331134b1d4272122d74845136e0d7d732dcc6d2b42"
+    },
+    {
+      "sequence": 10,
+      "phase": "launch",
+      "host": "pocket4",
+      "tool": "process_start",
+      "path": "native-0010-pocket4-process_start.json",
+      "sha256": "650e791e6dc75025454c532e39111afd085c974d86b4bf72861f608fd6c14391"
+    },
+    {
+      "sequence": 8,
+      "phase": "launch",
+      "host": "mac",
+      "tool": "process_start",
+      "path": "native-0008-mac-process_start.json",
+      "sha256": "c36e347ceb5df5b0d8f0c6261b028f66bcc92d9d0c82ed7f82b2b87593e6b456"
+    },
+    {
+      "sequence": 11,
+      "phase": "launch",
+      "host": "rog",
+      "tool": "process_start",
+      "path": "native-0011-rog-process_start.json",
+      "sha256": "f87026882775b9b8300db018b9dbf888de122dac472728a7e50b702f9387c1a5"
+    },
+    {
+      "sequence": 12,
+      "phase": "launch",
+      "host": "x230",
+      "tool": "process_start",
+      "path": "native-0012-x230-process_start.json",
+      "sha256": "3833083edbb3523b60b513459af109ad1cfd3bb04df7b9c0a2e601a77296cc88"
+    },
+    {
+      "sequence": 9,
+      "phase": "launch",
+      "host": "main",
+      "tool": "process_start",
+      "path": "native-0009-main-process_start.json",
+      "sha256": "630f7f39d7ae83e6b2386b9f20aef5b7657d61b7acef899f543097159cd1cf38"
+    },
+    {
+      "sequence": 13,
+      "phase": "before_crash_running",
+      "host": "ai395",
+      "tool": "process_status",
+      "path": "native-0013-ai395-process_status.json",
+      "sha256": "1b4bdd3bb966f65d6a2b4ec3bb22b50d43c7ed7586506e4dcaec1ce94d56689f"
+    },
+    {
+      "sequence": 17,
+      "phase": "before_crash_running",
+      "host": "rog",
+      "tool": "process_status",
+      "path": "native-0017-rog-process_status.json",
+      "sha256": "6b82c6cc783cab90c40c8ba8b6e5f53cd60ea67fbf7f466b8a945a94fccba457"
+    },
+    {
+      "sequence": 15,
+      "phase": "before_crash_running",
+      "host": "main",
+      "tool": "process_status",
+      "path": "native-0015-main-process_status.json",
+      "sha256": "8dc54eaf16420d9580d0f0b15aa033d1229efbe91d7696c27fa6d67ff79e876f"
+    },
+    {
+      "sequence": 16,
+      "phase": "before_crash_running",
+      "host": "pocket4",
+      "tool": "process_status",
+      "path": "native-0016-pocket4-process_status.json",
+      "sha256": "00e946e52c018287deca880a7e842ea750f2ed2cc7a257622d3a44d78ac3f99a"
+    },
+    {
+      "sequence": 18,
+      "phase": "before_crash_running",
+      "host": "x230",
+      "tool": "process_status",
+      "path": "native-0018-x230-process_status.json",
+      "sha256": "14d652e5a74f5ad46b5caafb73b7645f8f420092d160e17602ba884d49244b86"
+    },
+    {
+      "sequence": 14,
+      "phase": "before_crash_running",
+      "host": "mac",
+      "tool": "process_status",
+      "path": "native-0014-mac-process_status.json",
+      "sha256": "4e30fa41fa64ed0447d91e15d8d963101a9a06cc8626c0831c52829a3c19b96a"
+    },
+    {
+      "sequence": 19,
+      "phase": "before_crash_running",
+      "host": "ai395",
+      "tool": "process_read",
+      "path": "native-0019-ai395-process_read.json",
+      "sha256": "128217264ff527ed494652c42a4749887177eb338514d2624626fc20782e6c9b"
+    },
+    {
+      "sequence": 20,
+      "phase": "before_crash_running",
+      "host": "rog",
+      "tool": "process_read",
+      "path": "native-0020-rog-process_read.json",
+      "sha256": "fd5a4f5154e99a2757d1ec86b90c077024af141bd96731117cc37df980ddcf31"
+    },
+    {
+      "sequence": 22,
+      "phase": "before_crash_running",
+      "host": "pocket4",
+      "tool": "process_read",
+      "path": "native-0022-pocket4-process_read.json",
+      "sha256": "7ee051af06ce094ebfe6874e5d3377778a326cf532013afb60a0540a4da48964"
+    },
+    {
+      "sequence": 21,
+      "phase": "before_crash_running",
+      "host": "main",
+      "tool": "process_read",
+      "path": "native-0021-main-process_read.json",
+      "sha256": "7493d51ac3faf9d16a1bd37a6d3423efd4d6e8209592da49eaf0f725012f40d5"
+    },
+    {
+      "sequence": 23,
+      "phase": "before_crash_running",
+      "host": "x230",
+      "tool": "process_read",
+      "path": "native-0023-x230-process_read.json",
+      "sha256": "dbba3018c020b8183a8e055852f208be25d5c9501d5a5f1df134df7493504406"
+    },
+    {
+      "sequence": 24,
+      "phase": "before_crash_running",
+      "host": "mac",
+      "tool": "process_read",
+      "path": "native-0024-mac-process_read.json",
+      "sha256": "f41effa614e040bb8297fbfdfc8bf02f00e8d8829a9cef97e0d7f08c180dbd70"
+    },
+    {
+      "sequence": 34,
+      "phase": "after_transport_running",
+      "host": "pocket4",
+      "tool": "process_status",
+      "path": "native-0034-pocket4-process_status.json",
+      "sha256": "8847a57ccf21e17b1fecc466a002a84c500f5022752fa96973c706e85acc2434"
+    },
+    {
+      "sequence": 31,
+      "phase": "after_transport_running",
+      "host": "ai395",
+      "tool": "process_status",
+      "path": "native-0031-ai395-process_status.json",
+      "sha256": "da4e7d8ce27c49479f9b44f513d13eaf2fd1b264aedad28bce4e9b4c11625cfc"
+    },
+    {
+      "sequence": 36,
+      "phase": "after_transport_running",
+      "host": "x230",
+      "tool": "process_status",
+      "path": "native-0036-x230-process_status.json",
+      "sha256": "a19862af9d6ee2cebb7f0b056386517088d0fec158eb8fd395cd356e57ad8332"
+    },
+    {
+      "sequence": 33,
+      "phase": "after_transport_running",
+      "host": "main",
+      "tool": "process_status",
+      "path": "native-0033-main-process_status.json",
+      "sha256": "9a3161c96df63f7ae507edcfe047ef2077d527c4b4ae07d5c9cad56635a43af6"
+    },
+    {
+      "sequence": 32,
+      "phase": "after_transport_running",
+      "host": "mac",
+      "tool": "process_status",
+      "path": "native-0032-mac-process_status.json",
+      "sha256": "af8376396ce9f493379915be8c923c436bb1f6b93b71dde6271730375ce61f5a"
+    },
+    {
+      "sequence": 38,
+      "phase": "after_transport_running",
+      "host": "ai395",
+      "tool": "process_read",
+      "path": "native-0038-ai395-process_read.json",
+      "sha256": "3b19ce081218ab236419eedff3966f0ef6892b707acbed0c1dfedf895d282801"
+    },
+    {
+      "sequence": 40,
+      "phase": "after_transport_running",
+      "host": "main",
+      "tool": "process_read",
+      "path": "native-0040-main-process_read.json",
+      "sha256": "40f42516f9ce6ad9f8d8b0a3433adce74276547ed3713be06da0bd2105e6b18b"
+    },
+    {
+      "sequence": 37,
+      "phase": "after_transport_running",
+      "host": "pocket4",
+      "tool": "process_read",
+      "path": "native-0037-pocket4-process_read.json",
+      "sha256": "54a74bd63c0161867643962c3227923b8ff59ed89f8cdc62671a97a1f50fefe4"
+    },
+    {
+      "sequence": 39,
+      "phase": "after_transport_running",
+      "host": "x230",
+      "tool": "process_read",
+      "path": "native-0039-x230-process_read.json",
+      "sha256": "5c6e1c577145139f4bf19b7206cde4002cb1917e14bd4f8a4b716f54e35934d3"
+    },
+    {
+      "sequence": 41,
+      "phase": "after_transport_running",
+      "host": "mac",
+      "tool": "process_read",
+      "path": "native-0041-mac-process_read.json",
+      "sha256": "2679fea5ca181b4674be2ad9270acf61c8724ad3a5ab4ddcd22906671a2d7045"
+    },
+    {
+      "sequence": 35,
+      "phase": "after_transport_running",
+      "host": "rog",
+      "tool": "process_status",
+      "path": "native-0035-rog-process_status.json",
+      "sha256": "8b3798947eee24a4dcad105528c4794ec097039c6bba2be97275a9fc68170927"
+    },
+    {
+      "sequence": 47,
+      "phase": "after_transport_running",
+      "host": "rog",
+      "tool": "process_read",
+      "path": "native-0047-rog-process_read.json",
+      "sha256": "6ab6055d1225cc69ef6c63884ade0f5416555804c75ffcce1d465272fae570cc"
+    },
+    {
+      "sequence": 52,
+      "phase": "after_crash_running",
+      "host": "pocket4",
+      "tool": "process_status",
+      "path": "native-0052-pocket4-process_status.json",
+      "sha256": "1667e0f286e6c2d6f75f5024d330b1832c1e11dfc159b227d43a103edda9f0ce"
+    },
+    {
+      "sequence": 54,
+      "phase": "after_crash_running",
+      "host": "x230",
+      "tool": "process_status",
+      "path": "native-0054-x230-process_status.json",
+      "sha256": "a2e2e52e1666ec4a0fc4ee06c0189fa68475c487421909bac87d09624a2c2af8"
+    },
+    {
+      "sequence": 49,
+      "phase": "after_crash_running",
+      "host": "ai395",
+      "tool": "process_status",
+      "path": "native-0049-ai395-process_status.json",
+      "sha256": "24703c83ccec95c7990921187ddaf4bd620822778b29c8bc8ce5e265159787ab"
+    },
+    {
+      "sequence": 53,
+      "phase": "after_crash_running",
+      "host": "rog",
+      "tool": "process_status",
+      "path": "native-0053-rog-process_status.json",
+      "sha256": "fe9cfbe324942489e7e6d744dcb6d9053880627a0ec32c0b720e55cfe17054b8"
+    },
+    {
+      "sequence": 50,
+      "phase": "after_crash_running",
+      "host": "mac",
+      "tool": "process_status",
+      "path": "native-0050-mac-process_status.json",
+      "sha256": "46f1921adf78f047b132693aab4b2c2ab823afea9b2e8ab12c5ca68c58bb071f"
+    },
+    {
+      "sequence": 51,
+      "phase": "after_crash_running",
+      "host": "main",
+      "tool": "process_status",
+      "path": "native-0051-main-process_status.json",
+      "sha256": "51681b8328a048cc5088439d98be551a3a67c26bad5b9f9549d2ffa00af24ad6"
+    },
+    {
+      "sequence": 56,
+      "phase": "after_crash_running",
+      "host": "x230",
+      "tool": "process_read",
+      "path": "native-0056-x230-process_read.json",
+      "sha256": "bc424698105d664076f3a26070df22489fe4fb6b192935c24dff639fb39fb313"
+    },
+    {
+      "sequence": 57,
+      "phase": "after_crash_running",
+      "host": "ai395",
+      "tool": "process_read",
+      "path": "native-0057-ai395-process_read.json",
+      "sha256": "c15068bf5d7e8c0b543ae12dde042f29ffa3e60b05abc7f4e30bae4dbf642f33"
+    },
+    {
+      "sequence": 58,
+      "phase": "after_crash_running",
+      "host": "rog",
+      "tool": "process_read",
+      "path": "native-0058-rog-process_read.json",
+      "sha256": "9d336e2c9612aa004b0934911a1ce9a0060e16507957ba4614866a4563e9bdcd"
+    },
+    {
+      "sequence": 55,
+      "phase": "after_crash_running",
+      "host": "pocket4",
+      "tool": "process_read",
+      "path": "native-0055-pocket4-process_read.json",
+      "sha256": "107a24a4b43f77c66b2f107ee2b698dc5385c92cca88c69b3eebbd6ac054fe71"
+    },
+    {
+      "sequence": 59,
+      "phase": "after_crash_running",
+      "host": "mac",
+      "tool": "process_read",
+      "path": "native-0059-mac-process_read.json",
+      "sha256": "115979d7a98ee3f45c078e88e4d3c753869f4d9a5b575f4f1d5a09cb0dc00fcd"
+    },
+    {
+      "sequence": 60,
+      "phase": "after_crash_running",
+      "host": "main",
+      "tool": "process_read",
+      "path": "native-0060-main-process_read.json",
+      "sha256": "bf88d93a4fd3eb08a22b34bdc5ea065f225eceb5dfeb99b59e2ee99815d1163c"
+    },
+    {
+      "sequence": 67,
+      "phase": "same_key_after_crash",
+      "host": "ai395",
+      "tool": "process_start",
+      "path": "native-0067-ai395-process_start.json",
+      "sha256": "71348801bfa010413dd28f834941609b61bbeab6842948b2453ea0f2c0c24c85"
+    },
+    {
+      "sequence": 70,
+      "phase": "same_key_after_crash",
+      "host": "pocket4",
+      "tool": "process_start",
+      "path": "native-0070-pocket4-process_start.json",
+      "sha256": "406bf2a5248202a20a95323b70f2a84f14916b12262232a8d9ce0b177c635af4"
+    },
+    {
+      "sequence": 71,
+      "phase": "same_key_after_crash",
+      "host": "rog",
+      "tool": "process_start",
+      "path": "native-0071-rog-process_start.json",
+      "sha256": "e15e42078309adc39c32701098ea6fa9e5cba409379a2a36fb797d1857756d82"
+    },
+    {
+      "sequence": 68,
+      "phase": "same_key_after_crash",
+      "host": "mac",
+      "tool": "process_start",
+      "path": "native-0068-mac-process_start.json",
+      "sha256": "ffc19c0b11f55acc02b50fa06586092425ef77596261be99cec528c3c1388fd2"
+    },
+    {
+      "sequence": 72,
+      "phase": "same_key_after_crash",
+      "host": "x230",
+      "tool": "process_start",
+      "path": "native-0072-x230-process_start.json",
+      "sha256": "c202d73fecf1052f1705c4c7e4d4da242accfc7b4bd8e2b4a44df59e48c3288d"
+    },
+    {
+      "sequence": 69,
+      "phase": "same_key_after_crash",
+      "host": "main",
+      "tool": "process_start",
+      "path": "native-0069-main-process_start.json",
+      "sha256": "5cf20e05a94c9ab2b0945e94ccc25edcb636676a97f8c1777de3a7d1d498c3b2"
+    },
+    {
+      "sequence": 73,
+      "phase": "concurrent_cancel",
+      "host": "ai395",
+      "tool": "process_cancel",
+      "path": "native-0073-ai395-process_cancel.json",
+      "sha256": "198f8647fbf694a6ac54ee8a7f75854cea3afcf89cddf67626343077270a2c3e"
+    },
+    {
+      "sequence": 77,
+      "phase": "concurrent_cancel",
+      "host": "rog",
+      "tool": "process_cancel",
+      "path": "native-0077-rog-process_cancel.json",
+      "sha256": "ae1571b28a809f1c70a195efacbf395d504fcccc4b5c1a4ae882a2113ce03f86"
+    },
+    {
+      "sequence": 76,
+      "phase": "concurrent_cancel",
+      "host": "pocket4",
+      "tool": "process_cancel",
+      "path": "native-0076-pocket4-process_cancel.json",
+      "sha256": "afcc7318808005ee610b0a1a51d74bbcf9df55995f728496e44489c8e0b0196a"
+    },
+    {
+      "sequence": 74,
+      "phase": "concurrent_cancel",
+      "host": "mac",
+      "tool": "process_cancel",
+      "path": "native-0074-mac-process_cancel.json",
+      "sha256": "22bba01fb978e9a6990d0b668e8f0aa9f632ac1ed43d805ec5b1ce3f8b2f5c2e"
+    },
+    {
+      "sequence": 78,
+      "phase": "concurrent_cancel",
+      "host": "x230",
+      "tool": "process_cancel",
+      "path": "native-0078-x230-process_cancel.json",
+      "sha256": "73de74464df82419f5734262cba3ee7b1066ed796fed9a2512b2deeadfff6eb2"
+    },
+    {
+      "sequence": 75,
+      "phase": "concurrent_cancel",
+      "host": "main",
+      "tool": "process_cancel",
+      "path": "native-0075-main-process_cancel.json",
+      "sha256": "9a8d406717151cf02353fff7b95730d8bb5400b012b637ac944272319ff66101"
+    },
+    {
+      "sequence": 79,
+      "phase": "terminal",
+      "host": "ai395",
+      "tool": "process_status",
+      "path": "native-0079-ai395-process_status.json",
+      "sha256": "0c6388e1bea6a7a2488cb81f5b22a09d46f61399c3b53edcbce7de4c427efcaf"
+    },
+    {
+      "sequence": 83,
+      "phase": "terminal",
+      "host": "rog",
+      "tool": "process_status",
+      "path": "native-0083-rog-process_status.json",
+      "sha256": "c247e7c99f16c4938ae286b799a6765c77a8c84febfd380b9703cb914b7f58f3"
+    },
+    {
+      "sequence": 82,
+      "phase": "terminal",
+      "host": "pocket4",
+      "tool": "process_status",
+      "path": "native-0082-pocket4-process_status.json",
+      "sha256": "a64d18900ece29bf73862701329e30710fc24f11d912ba42ab19cb505640fbb3"
+    },
+    {
+      "sequence": 84,
+      "phase": "terminal",
+      "host": "x230",
+      "tool": "process_status",
+      "path": "native-0084-x230-process_status.json",
+      "sha256": "43e1ee2ebaceef59395bb7d003c53ac024783449aab9c38e54f3aba47bac604a"
+    },
+    {
+      "sequence": 81,
+      "phase": "terminal",
+      "host": "main",
+      "tool": "process_status",
+      "path": "native-0081-main-process_status.json",
+      "sha256": "39c075d9f307cf39cae7161681936613e4b9744445b20ea7a1a1417b54c7a96a"
+    },
+    {
+      "sequence": 80,
+      "phase": "terminal",
+      "host": "mac",
+      "tool": "process_status",
+      "path": "native-0080-mac-process_status.json",
+      "sha256": "341890f982ebd3803270e77928c11ecec91cf5ed5f21c46bc6f082a16d3050c4"
+    },
+    {
+      "sequence": 85,
+      "phase": "terminal",
+      "host": "ai395",
+      "tool": "process_read",
+      "path": "native-0085-ai395-process_read.json",
+      "sha256": "32103e442ebc4e3572edcac58c64887a1792de9643882759eabc08e5ed8c3823"
+    },
+    {
+      "sequence": 86,
+      "phase": "terminal",
+      "host": "rog",
+      "tool": "process_read",
+      "path": "native-0086-rog-process_read.json",
+      "sha256": "78674ec6a587905f3f4f2af9d684bfd6b5d07db2e1e80d0f95cc62e69daefb91"
+    },
+    {
+      "sequence": 88,
+      "phase": "terminal",
+      "host": "x230",
+      "tool": "process_read",
+      "path": "native-0088-x230-process_read.json",
+      "sha256": "1fad20fa894c8793a748d6007930f2db24a51f70712583bb4e0ce953856f0635"
+    },
+    {
+      "sequence": 89,
+      "phase": "terminal",
+      "host": "main",
+      "tool": "process_read",
+      "path": "native-0089-main-process_read.json",
+      "sha256": "a4d259631f803168f3450a721befea28f489a2783df0da4819ab570d199659fa"
+    },
+    {
+      "sequence": 87,
+      "phase": "terminal",
+      "host": "pocket4",
+      "tool": "process_read",
+      "path": "native-0087-pocket4-process_read.json",
+      "sha256": "b6362a446e9581eaf61a43650edc9a75e15303cbfe706023f9194f6d60277b55"
+    },
+    {
+      "sequence": 90,
+      "phase": "terminal",
+      "host": "mac",
+      "tool": "process_read",
+      "path": "native-0090-mac-process_read.json",
+      "sha256": "d38c771f52f5f70345d0150e967fc1574ecc32f6fe78e760c32c597ea933f225"
+    },
+    {
+      "sequence": 97,
+      "phase": "terminal_after_restart",
+      "host": "ai395",
+      "tool": "process_status",
+      "path": "native-0097-ai395-process_status.json",
+      "sha256": "bc39ce48dfb242526f786491300ab0f96163b58db4205e3d22de0a69a7f58bb7"
+    },
+    {
+      "sequence": 98,
+      "phase": "terminal_after_restart",
+      "host": "mac",
+      "tool": "process_status",
+      "path": "native-0098-mac-process_status.json",
+      "sha256": "7531d883e96024d441e650bc071bf4e49c117829e56b9b610fd49629fa420140"
+    },
+    {
+      "sequence": 101,
+      "phase": "terminal_after_restart",
+      "host": "rog",
+      "tool": "process_status",
+      "path": "native-0101-rog-process_status.json",
+      "sha256": "316c8b0f8299298f7adebce8f62e77fbb1b64367311ee4a34487d0d849431b3a"
+    },
+    {
+      "sequence": 100,
+      "phase": "terminal_after_restart",
+      "host": "pocket4",
+      "tool": "process_status",
+      "path": "native-0100-pocket4-process_status.json",
+      "sha256": "8409ed7b33d572c1f5475f486b5cb343525059a363bbadf9d25545d81f0f1313"
+    },
+    {
+      "sequence": 102,
+      "phase": "terminal_after_restart",
+      "host": "x230",
+      "tool": "process_status",
+      "path": "native-0102-x230-process_status.json",
+      "sha256": "259b027eced16f46c3daeac60aaf549f6aaaad67ee5fb7eda867d0d22a8f5075"
+    },
+    {
+      "sequence": 99,
+      "phase": "terminal_after_restart",
+      "host": "main",
+      "tool": "process_status",
+      "path": "native-0099-main-process_status.json",
+      "sha256": "388d6d26ebc30038a9aec61ccca89f5ae57e12022bce0b1fc8f2b5cffc5da039"
+    },
+    {
+      "sequence": 103,
+      "phase": "terminal_after_restart",
+      "host": "ai395",
+      "tool": "process_read",
+      "path": "native-0103-ai395-process_read.json",
+      "sha256": "a90d2c3d25e1ec115eb0bc592c670a2f025fe0914df1da86a8ff6273d4e02e5f"
+    },
+    {
+      "sequence": 105,
+      "phase": "terminal_after_restart",
+      "host": "rog",
+      "tool": "process_read",
+      "path": "native-0105-rog-process_read.json",
+      "sha256": "3d099319d6564a8d7150f5e89ad916b00140c8672af9a3688095cb268f47ab9c"
+    },
+    {
+      "sequence": 104,
+      "phase": "terminal_after_restart",
+      "host": "mac",
+      "tool": "process_read",
+      "path": "native-0104-mac-process_read.json",
+      "sha256": "e13faba6a34c4117b397b064446b2fba5c04cff513282d94216088e2ada697f0"
+    },
+    {
+      "sequence": 107,
+      "phase": "terminal_after_restart",
+      "host": "x230",
+      "tool": "process_read",
+      "path": "native-0107-x230-process_read.json",
+      "sha256": "c59006689d543c58fb9bf241e84770e3cb48b5633113288287b5cb73d417482e"
+    },
+    {
+      "sequence": 106,
+      "phase": "terminal_after_restart",
+      "host": "pocket4",
+      "tool": "process_read",
+      "path": "native-0106-pocket4-process_read.json",
+      "sha256": "babd21b5c3e8748089691dc5e9ac6e8ea2e7a81449008173faf4a7856e29086a"
+    },
+    {
+      "sequence": 108,
+      "phase": "terminal_after_restart",
+      "host": "main",
+      "tool": "process_read",
+      "path": "native-0108-main-process_read.json",
+      "sha256": "bf88d93a4fd3eb08a22b34bdc5ea065f225eceb5dfeb99b59e2ee99815d1163c"
+    },
+    {
+      "sequence": 118,
+      "phase": "same_key_after_cancel",
+      "host": "pocket4",
+      "tool": "process_start",
+      "path": "native-0118-pocket4-process_start.json",
+      "sha256": "d6d663fa783d108dbcf874f1e074848671dafb66824a68395f5857026f30cb7a"
+    },
+    {
+      "sequence": 119,
+      "phase": "same_key_after_cancel",
+      "host": "rog",
+      "tool": "process_start",
+      "path": "native-0119-rog-process_start.json",
+      "sha256": "8891c19086488cc05f2160cbfb802481946e1fb9607950ec7ca783e91baca108"
+    },
+    {
+      "sequence": 115,
+      "phase": "same_key_after_cancel",
+      "host": "ai395",
+      "tool": "process_start",
+      "path": "native-0115-ai395-process_start.json",
+      "sha256": "569b40667664dcc16a7203bd33513bc058988fbe6e018021262969dce0a7a0db"
+    },
+    {
+      "sequence": 116,
+      "phase": "same_key_after_cancel",
+      "host": "mac",
+      "tool": "process_start",
+      "path": "native-0116-mac-process_start.json",
+      "sha256": "f3da60b026c24a2be1075e5592a2e11de2779911981b1b8a2870ad429812e6a5"
+    },
+    {
+      "sequence": 120,
+      "phase": "same_key_after_cancel",
+      "host": "x230",
+      "tool": "process_start",
+      "path": "native-0120-x230-process_start.json",
+      "sha256": "cc34d50114614d10d45f822726a7d3f7daad2b50e666d6eadc7f11b5301cd800"
+    },
+    {
+      "sequence": 117,
+      "phase": "same_key_after_cancel",
+      "host": "main",
+      "tool": "process_start",
+      "path": "native-0117-main-process_start.json",
+      "sha256": "55c8c358d70d4e3c963045a1011a3059dbdc1479d44316b376f23c0037e4896d"
+    },
+    {
+      "sequence": 124,
+      "phase": "cancel_after_terminal",
+      "host": "pocket4",
+      "tool": "process_cancel",
+      "path": "native-0124-pocket4-process_cancel.json",
+      "sha256": "530e99ea694df1dc656a35e46064e4304ee9fa0cbf7c3654819e889da7d47595"
+    },
+    {
+      "sequence": 125,
+      "phase": "cancel_after_terminal",
+      "host": "rog",
+      "tool": "process_cancel",
+      "path": "native-0125-rog-process_cancel.json",
+      "sha256": "f3dc2104866b2050e7e464dc92343d15585e193f8c1fd377da93c8dacdd7cb61"
+    },
+    {
+      "sequence": 121,
+      "phase": "cancel_after_terminal",
+      "host": "ai395",
+      "tool": "process_cancel",
+      "path": "native-0121-ai395-process_cancel.json",
+      "sha256": "cdaf6221f6c28e0d4bba5d6dd1c8aadbd877ffa9917bfec4b232f04d89dc3c50"
+    },
+    {
+      "sequence": 122,
+      "phase": "cancel_after_terminal",
+      "host": "mac",
+      "tool": "process_cancel",
+      "path": "native-0122-mac-process_cancel.json",
+      "sha256": "3802bd0c15ab9a5e60fdb452adef7258c36b9cc8393cb8818f0c2c806939567e"
+    },
+    {
+      "sequence": 126,
+      "phase": "cancel_after_terminal",
+      "host": "x230",
+      "tool": "process_cancel",
+      "path": "native-0126-x230-process_cancel.json",
+      "sha256": "e5039d66b6b0f3ea8c35a54ecee68b12c41b84411d9ae1f436282d340a568da2"
+    },
+    {
+      "sequence": 123,
+      "phase": "cancel_after_terminal",
+      "host": "main",
+      "tool": "process_cancel",
+      "path": "native-0123-main-process_cancel.json",
+      "sha256": "668a2b5bc6472dfd0e176097d888c64836aeffc517236f77cfcf94e86b7f50ee"
+    }
+  ],
+  "ssh_stream_bindings": [
+    {
+      "sequence": 6,
+      "host": "x230",
+      "mode": "prepare",
+      "terminal": false,
+      "stdout_sha256": "8efb776b911fdfdc2207a3f33265b8d1d780f5ef71b97c82b83158845ae3c666",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 1,
+      "host": "ai395",
+      "mode": "prepare",
+      "terminal": false,
+      "stdout_sha256": "b30ef0bbcb41d2c17478f6f5bd60f58a52f275d9457cfd9c3100ca55eb2f816e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 5,
+      "host": "rog",
+      "mode": "prepare",
+      "terminal": false,
+      "stdout_sha256": "b2a02cb017df1f3f41d846bc0bc543a7737ffc4e8985f25a41b8a91a0a1d7e88",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 4,
+      "host": "pocket4",
+      "mode": "prepare",
+      "terminal": false,
+      "stdout_sha256": "5fd1ada981d8ace48331b437c6c7736cde0d01622a7c152f7b52415625df4237",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 2,
+      "host": "mac",
+      "mode": "prepare",
+      "terminal": false,
+      "stdout_sha256": "b91a55b379aad4e2f46939b0e20dad4526d297195af908992a3b4d4c93eba970",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 3,
+      "host": "main",
+      "mode": "prepare",
+      "terminal": false,
+      "stdout_sha256": "181c14e3d6cef45070a58ff564e0d18c5a1bf29ee8ff8732dd6a7f618ef32905",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 25,
+      "host": "ai395",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "c5cc72cb559cb28117251b8a9b9ed6fe8a9e348133ea0062c78ad64c58d0dd26",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 26,
+      "host": "rog",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "dfa6f10702342af65672d274b48ee0381428d3da2454c37e96c4788e56e320eb",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 27,
+      "host": "pocket4",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "debf3032447a71df1ae0e1f76999437e455298b19b0953b1c9eceacd2c5ecd41",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 29,
+      "host": "x230",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "34a6602c433102c4b400f0ac8beb3e9250e7e1706f7d8d86ce262626f100df53",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 30,
+      "host": "mac",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "b3552792d9794d31eb9392d49ca940ea916a5e152a9f14ab7615a8a735526565",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 28,
+      "host": "main",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "eadd5ed9084b0f3e7a5d57a04d18588fafb8a5b4bd489dc88267f7ea9dce79f8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 42,
+      "host": "ai395",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "c5cc72cb559cb28117251b8a9b9ed6fe8a9e348133ea0062c78ad64c58d0dd26",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 44,
+      "host": "pocket4",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "debf3032447a71df1ae0e1f76999437e455298b19b0953b1c9eceacd2c5ecd41",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 46,
+      "host": "mac",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "b3552792d9794d31eb9392d49ca940ea916a5e152a9f14ab7615a8a735526565",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 45,
+      "host": "x230",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "34a6602c433102c4b400f0ac8beb3e9250e7e1706f7d8d86ce262626f100df53",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 43,
+      "host": "main",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "eadd5ed9084b0f3e7a5d57a04d18588fafb8a5b4bd489dc88267f7ea9dce79f8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 48,
+      "host": "rog",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "dfa6f10702342af65672d274b48ee0381428d3da2454c37e96c4788e56e320eb",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 62,
+      "host": "ai395",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "c5cc72cb559cb28117251b8a9b9ed6fe8a9e348133ea0062c78ad64c58d0dd26",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 63,
+      "host": "rog",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "dfa6f10702342af65672d274b48ee0381428d3da2454c37e96c4788e56e320eb",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 61,
+      "host": "x230",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "34a6602c433102c4b400f0ac8beb3e9250e7e1706f7d8d86ce262626f100df53",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 64,
+      "host": "pocket4",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "debf3032447a71df1ae0e1f76999437e455298b19b0953b1c9eceacd2c5ecd41",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 65,
+      "host": "mac",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "b3552792d9794d31eb9392d49ca940ea916a5e152a9f14ab7615a8a735526565",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 66,
+      "host": "main",
+      "mode": "inspect",
+      "terminal": false,
+      "stdout_sha256": "eadd5ed9084b0f3e7a5d57a04d18588fafb8a5b4bd489dc88267f7ea9dce79f8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 92,
+      "host": "rog",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "132a26e1fbd24a2eb75ccee05a49310754f9bca973ebf469ee2cb8420b60d65e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 91,
+      "host": "ai395",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "e6642d99d994fa4f824c490fdcdc623fa84a9f79d432cc3c8725a27631952040",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 95,
+      "host": "pocket4",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "7093b4690863cb0edf725a04e4e4bb86c72ae96187061fae3154d7b96070b162",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 93,
+      "host": "x230",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "f1ed6f5bc88a4415aaad2fe34c103fbdf85c97ab5f83bd9c4d9d40a697b75820",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 96,
+      "host": "mac",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "479efbf9e009c9fc6abec0c15daf2d626966ad39a50e25847dbbceb4e07a89cd",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 94,
+      "host": "main",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "5059b1d32ec6d2ee87c1dd68e61c45bf81af4b79028f5197876d90c158a36db0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 109,
+      "host": "ai395",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "e6642d99d994fa4f824c490fdcdc623fa84a9f79d432cc3c8725a27631952040",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 110,
+      "host": "rog",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "132a26e1fbd24a2eb75ccee05a49310754f9bca973ebf469ee2cb8420b60d65e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 113,
+      "host": "pocket4",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "7093b4690863cb0edf725a04e4e4bb86c72ae96187061fae3154d7b96070b162",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 111,
+      "host": "mac",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "479efbf9e009c9fc6abec0c15daf2d626966ad39a50e25847dbbceb4e07a89cd",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 112,
+      "host": "x230",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "f1ed6f5bc88a4415aaad2fe34c103fbdf85c97ab5f83bd9c4d9d40a697b75820",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sequence": 114,
+      "host": "main",
+      "mode": "inspect",
+      "terminal": true,
+      "stdout_sha256": "5059b1d32ec6d2ee87c1dd68e61c45bf81af4b79028f5197876d90c158a36db0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "original_controller_record_hashes_recomputed": 6,
+  "limitations": [
+    "Fixture execution markers prove one execution for these six same-key recovery scenarios, not universal distributed exactly-once execution.",
+    "No host reboot, power loss, WAN partition, ownership transfer, or external-effect deduplication experiment is claimed.",
+    "Mac signal identity is account/PID-start best effort; Linux evidence uses pidfd.",
+    "Native response files and embedded remote files are independently hashed; argument hashes are checked for shape but full request bodies were not retained in this report."
+  ],
+  "input_sha256": {
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/report.json": "14c1330ef769100465b9b57f31966a47a720adec4496f9a150b41f99071c3905",
+    "/home/qian/hepta-runtime-optimization-20261103-r14/remote-campaigns-01/report.json": "de3feacde5b7cee903a51207483e59e2678fa6388d3c6c95ea31c2bb358527e4",
+    "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-audit-summary.json": "667e9e966b43ce1e14c228b0ab7ab9b8fc017c26c95a41adba4e97cea1487ff3",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0007-ai395-process_start.json": "3f0f481e8bb186352c80a1331134b1d4272122d74845136e0d7d732dcc6d2b42",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0010-pocket4-process_start.json": "650e791e6dc75025454c532e39111afd085c974d86b4bf72861f608fd6c14391",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0008-mac-process_start.json": "c36e347ceb5df5b0d8f0c6261b028f66bcc92d9d0c82ed7f82b2b87593e6b456",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0011-rog-process_start.json": "f87026882775b9b8300db018b9dbf888de122dac472728a7e50b702f9387c1a5",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0012-x230-process_start.json": "3833083edbb3523b60b513459af109ad1cfd3bb04df7b9c0a2e601a77296cc88",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0009-main-process_start.json": "630f7f39d7ae83e6b2386b9f20aef5b7657d61b7acef899f543097159cd1cf38",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0013-ai395-process_status.json": "1b4bdd3bb966f65d6a2b4ec3bb22b50d43c7ed7586506e4dcaec1ce94d56689f",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0017-rog-process_status.json": "6b82c6cc783cab90c40c8ba8b6e5f53cd60ea67fbf7f466b8a945a94fccba457",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0015-main-process_status.json": "8dc54eaf16420d9580d0f0b15aa033d1229efbe91d7696c27fa6d67ff79e876f",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0016-pocket4-process_status.json": "00e946e52c018287deca880a7e842ea750f2ed2cc7a257622d3a44d78ac3f99a",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0018-x230-process_status.json": "14d652e5a74f5ad46b5caafb73b7645f8f420092d160e17602ba884d49244b86",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0014-mac-process_status.json": "4e30fa41fa64ed0447d91e15d8d963101a9a06cc8626c0831c52829a3c19b96a",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0019-ai395-process_read.json": "128217264ff527ed494652c42a4749887177eb338514d2624626fc20782e6c9b",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0020-rog-process_read.json": "fd5a4f5154e99a2757d1ec86b90c077024af141bd96731117cc37df980ddcf31",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0022-pocket4-process_read.json": "7ee051af06ce094ebfe6874e5d3377778a326cf532013afb60a0540a4da48964",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0021-main-process_read.json": "7493d51ac3faf9d16a1bd37a6d3423efd4d6e8209592da49eaf0f725012f40d5",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0023-x230-process_read.json": "dbba3018c020b8183a8e055852f208be25d5c9501d5a5f1df134df7493504406",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0024-mac-process_read.json": "f41effa614e040bb8297fbfdfc8bf02f00e8d8829a9cef97e0d7f08c180dbd70",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0034-pocket4-process_status.json": "8847a57ccf21e17b1fecc466a002a84c500f5022752fa96973c706e85acc2434",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0031-ai395-process_status.json": "da4e7d8ce27c49479f9b44f513d13eaf2fd1b264aedad28bce4e9b4c11625cfc",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0036-x230-process_status.json": "a19862af9d6ee2cebb7f0b056386517088d0fec158eb8fd395cd356e57ad8332",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0033-main-process_status.json": "9a3161c96df63f7ae507edcfe047ef2077d527c4b4ae07d5c9cad56635a43af6",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0032-mac-process_status.json": "af8376396ce9f493379915be8c923c436bb1f6b93b71dde6271730375ce61f5a",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0038-ai395-process_read.json": "3b19ce081218ab236419eedff3966f0ef6892b707acbed0c1dfedf895d282801",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0040-main-process_read.json": "40f42516f9ce6ad9f8d8b0a3433adce74276547ed3713be06da0bd2105e6b18b",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0037-pocket4-process_read.json": "54a74bd63c0161867643962c3227923b8ff59ed89f8cdc62671a97a1f50fefe4",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0039-x230-process_read.json": "5c6e1c577145139f4bf19b7206cde4002cb1917e14bd4f8a4b716f54e35934d3",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0041-mac-process_read.json": "2679fea5ca181b4674be2ad9270acf61c8724ad3a5ab4ddcd22906671a2d7045",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0035-rog-process_status.json": "8b3798947eee24a4dcad105528c4794ec097039c6bba2be97275a9fc68170927",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0047-rog-process_read.json": "6ab6055d1225cc69ef6c63884ade0f5416555804c75ffcce1d465272fae570cc",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0052-pocket4-process_status.json": "1667e0f286e6c2d6f75f5024d330b1832c1e11dfc159b227d43a103edda9f0ce",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0054-x230-process_status.json": "a2e2e52e1666ec4a0fc4ee06c0189fa68475c487421909bac87d09624a2c2af8",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0049-ai395-process_status.json": "24703c83ccec95c7990921187ddaf4bd620822778b29c8bc8ce5e265159787ab",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0053-rog-process_status.json": "fe9cfbe324942489e7e6d744dcb6d9053880627a0ec32c0b720e55cfe17054b8",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0050-mac-process_status.json": "46f1921adf78f047b132693aab4b2c2ab823afea9b2e8ab12c5ca68c58bb071f",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0051-main-process_status.json": "51681b8328a048cc5088439d98be551a3a67c26bad5b9f9549d2ffa00af24ad6",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0056-x230-process_read.json": "bc424698105d664076f3a26070df22489fe4fb6b192935c24dff639fb39fb313",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0057-ai395-process_read.json": "c15068bf5d7e8c0b543ae12dde042f29ffa3e60b05abc7f4e30bae4dbf642f33",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0058-rog-process_read.json": "9d336e2c9612aa004b0934911a1ce9a0060e16507957ba4614866a4563e9bdcd",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0055-pocket4-process_read.json": "107a24a4b43f77c66b2f107ee2b698dc5385c92cca88c69b3eebbd6ac054fe71",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0059-mac-process_read.json": "115979d7a98ee3f45c078e88e4d3c753869f4d9a5b575f4f1d5a09cb0dc00fcd",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0060-main-process_read.json": "bf88d93a4fd3eb08a22b34bdc5ea065f225eceb5dfeb99b59e2ee99815d1163c",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0067-ai395-process_start.json": "71348801bfa010413dd28f834941609b61bbeab6842948b2453ea0f2c0c24c85",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0070-pocket4-process_start.json": "406bf2a5248202a20a95323b70f2a84f14916b12262232a8d9ce0b177c635af4",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0071-rog-process_start.json": "e15e42078309adc39c32701098ea6fa9e5cba409379a2a36fb797d1857756d82",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0068-mac-process_start.json": "ffc19c0b11f55acc02b50fa06586092425ef77596261be99cec528c3c1388fd2",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0072-x230-process_start.json": "c202d73fecf1052f1705c4c7e4d4da242accfc7b4bd8e2b4a44df59e48c3288d",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0069-main-process_start.json": "5cf20e05a94c9ab2b0945e94ccc25edcb636676a97f8c1777de3a7d1d498c3b2",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0073-ai395-process_cancel.json": "198f8647fbf694a6ac54ee8a7f75854cea3afcf89cddf67626343077270a2c3e",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0077-rog-process_cancel.json": "ae1571b28a809f1c70a195efacbf395d504fcccc4b5c1a4ae882a2113ce03f86",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0076-pocket4-process_cancel.json": "afcc7318808005ee610b0a1a51d74bbcf9df55995f728496e44489c8e0b0196a",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0074-mac-process_cancel.json": "22bba01fb978e9a6990d0b668e8f0aa9f632ac1ed43d805ec5b1ce3f8b2f5c2e",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0078-x230-process_cancel.json": "73de74464df82419f5734262cba3ee7b1066ed796fed9a2512b2deeadfff6eb2",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0075-main-process_cancel.json": "9a8d406717151cf02353fff7b95730d8bb5400b012b637ac944272319ff66101",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0079-ai395-process_status.json": "0c6388e1bea6a7a2488cb81f5b22a09d46f61399c3b53edcbce7de4c427efcaf",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0083-rog-process_status.json": "c247e7c99f16c4938ae286b799a6765c77a8c84febfd380b9703cb914b7f58f3",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0082-pocket4-process_status.json": "a64d18900ece29bf73862701329e30710fc24f11d912ba42ab19cb505640fbb3",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0084-x230-process_status.json": "43e1ee2ebaceef59395bb7d003c53ac024783449aab9c38e54f3aba47bac604a",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0081-main-process_status.json": "39c075d9f307cf39cae7161681936613e4b9744445b20ea7a1a1417b54c7a96a",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0080-mac-process_status.json": "341890f982ebd3803270e77928c11ecec91cf5ed5f21c46bc6f082a16d3050c4",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0085-ai395-process_read.json": "32103e442ebc4e3572edcac58c64887a1792de9643882759eabc08e5ed8c3823",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0086-rog-process_read.json": "78674ec6a587905f3f4f2af9d684bfd6b5d07db2e1e80d0f95cc62e69daefb91",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0088-x230-process_read.json": "1fad20fa894c8793a748d6007930f2db24a51f70712583bb4e0ce953856f0635",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0089-main-process_read.json": "a4d259631f803168f3450a721befea28f489a2783df0da4819ab570d199659fa",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0087-pocket4-process_read.json": "b6362a446e9581eaf61a43650edc9a75e15303cbfe706023f9194f6d60277b55",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0090-mac-process_read.json": "d38c771f52f5f70345d0150e967fc1574ecc32f6fe78e760c32c597ea933f225",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0097-ai395-process_status.json": "bc39ce48dfb242526f786491300ab0f96163b58db4205e3d22de0a69a7f58bb7",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0098-mac-process_status.json": "7531d883e96024d441e650bc071bf4e49c117829e56b9b610fd49629fa420140",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0101-rog-process_status.json": "316c8b0f8299298f7adebce8f62e77fbb1b64367311ee4a34487d0d849431b3a",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0100-pocket4-process_status.json": "8409ed7b33d572c1f5475f486b5cb343525059a363bbadf9d25545d81f0f1313",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0102-x230-process_status.json": "259b027eced16f46c3daeac60aaf549f6aaaad67ee5fb7eda867d0d22a8f5075",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0099-main-process_status.json": "388d6d26ebc30038a9aec61ccca89f5ae57e12022bce0b1fc8f2b5cffc5da039",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0103-ai395-process_read.json": "a90d2c3d25e1ec115eb0bc592c670a2f025fe0914df1da86a8ff6273d4e02e5f",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0105-rog-process_read.json": "3d099319d6564a8d7150f5e89ad916b00140c8672af9a3688095cb268f47ab9c",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0104-mac-process_read.json": "e13faba6a34c4117b397b064446b2fba5c04cff513282d94216088e2ada697f0",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0107-x230-process_read.json": "c59006689d543c58fb9bf241e84770e3cb48b5633113288287b5cb73d417482e",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0106-pocket4-process_read.json": "babd21b5c3e8748089691dc5e9ac6e8ea2e7a81449008173faf4a7856e29086a",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0108-main-process_read.json": "bf88d93a4fd3eb08a22b34bdc5ea065f225eceb5dfeb99b59e2ee99815d1163c",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0118-pocket4-process_start.json": "d6d663fa783d108dbcf874f1e074848671dafb66824a68395f5857026f30cb7a",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0119-rog-process_start.json": "8891c19086488cc05f2160cbfb802481946e1fb9607950ec7ca783e91baca108",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0115-ai395-process_start.json": "569b40667664dcc16a7203bd33513bc058988fbe6e018021262969dce0a7a0db",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0116-mac-process_start.json": "f3da60b026c24a2be1075e5592a2e11de2779911981b1b8a2870ad429812e6a5",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0120-x230-process_start.json": "cc34d50114614d10d45f822726a7d3f7daad2b50e666d6eadc7f11b5301cd800",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0117-main-process_start.json": "55c8c358d70d4e3c963045a1011a3059dbdc1479d44316b376f23c0037e4896d",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0124-pocket4-process_cancel.json": "530e99ea694df1dc656a35e46064e4304ee9fa0cbf7c3654819e889da7d47595",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0125-rog-process_cancel.json": "f3dc2104866b2050e7e464dc92343d15585e193f8c1fd377da93c8dacdd7cb61",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0121-ai395-process_cancel.json": "cdaf6221f6c28e0d4bba5d6dd1c8aadbd877ffa9917bfec4b232f04d89dc3c50",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0122-mac-process_cancel.json": "3802bd0c15ab9a5e60fdb452adef7258c36b9cc8393cb8818f0c2c806939567e",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0126-x230-process_cancel.json": "e5039d66b6b0f3ea8c35a54ecee68b12c41b84411d9ae1f436282d340a568da2",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/native-0123-main-process_cancel.json": "668a2b5bc6472dfd0e176097d888c64836aeffc517236f77cfcf94e86b7f50ee",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0006-x230-prepare.stdout": "8efb776b911fdfdc2207a3f33265b8d1d780f5ef71b97c82b83158845ae3c666",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0006-x230-prepare.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0001-ai395-prepare.stdout": "b30ef0bbcb41d2c17478f6f5bd60f58a52f275d9457cfd9c3100ca55eb2f816e",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0001-ai395-prepare.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0005-rog-prepare.stdout": "b2a02cb017df1f3f41d846bc0bc543a7737ffc4e8985f25a41b8a91a0a1d7e88",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0005-rog-prepare.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0004-pocket4-prepare.stdout": "5fd1ada981d8ace48331b437c6c7736cde0d01622a7c152f7b52415625df4237",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0004-pocket4-prepare.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0002-mac-prepare.stdout": "b91a55b379aad4e2f46939b0e20dad4526d297195af908992a3b4d4c93eba970",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0002-mac-prepare.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0003-main-prepare.stdout": "181c14e3d6cef45070a58ff564e0d18c5a1bf29ee8ff8732dd6a7f618ef32905",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0003-main-prepare.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0025-ai395-inspect.stdout": "c5cc72cb559cb28117251b8a9b9ed6fe8a9e348133ea0062c78ad64c58d0dd26",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0025-ai395-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0026-rog-inspect.stdout": "dfa6f10702342af65672d274b48ee0381428d3da2454c37e96c4788e56e320eb",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0026-rog-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0027-pocket4-inspect.stdout": "debf3032447a71df1ae0e1f76999437e455298b19b0953b1c9eceacd2c5ecd41",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0027-pocket4-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0029-x230-inspect.stdout": "34a6602c433102c4b400f0ac8beb3e9250e7e1706f7d8d86ce262626f100df53",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0029-x230-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0030-mac-inspect.stdout": "b3552792d9794d31eb9392d49ca940ea916a5e152a9f14ab7615a8a735526565",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0030-mac-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0028-main-inspect.stdout": "eadd5ed9084b0f3e7a5d57a04d18588fafb8a5b4bd489dc88267f7ea9dce79f8",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0028-main-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0042-ai395-inspect.stdout": "c5cc72cb559cb28117251b8a9b9ed6fe8a9e348133ea0062c78ad64c58d0dd26",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0042-ai395-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0044-pocket4-inspect.stdout": "debf3032447a71df1ae0e1f76999437e455298b19b0953b1c9eceacd2c5ecd41",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0044-pocket4-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0046-mac-inspect.stdout": "b3552792d9794d31eb9392d49ca940ea916a5e152a9f14ab7615a8a735526565",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0046-mac-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0045-x230-inspect.stdout": "34a6602c433102c4b400f0ac8beb3e9250e7e1706f7d8d86ce262626f100df53",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0045-x230-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0043-main-inspect.stdout": "eadd5ed9084b0f3e7a5d57a04d18588fafb8a5b4bd489dc88267f7ea9dce79f8",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0043-main-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0048-rog-inspect.stdout": "dfa6f10702342af65672d274b48ee0381428d3da2454c37e96c4788e56e320eb",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0048-rog-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0062-ai395-inspect.stdout": "c5cc72cb559cb28117251b8a9b9ed6fe8a9e348133ea0062c78ad64c58d0dd26",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0062-ai395-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0063-rog-inspect.stdout": "dfa6f10702342af65672d274b48ee0381428d3da2454c37e96c4788e56e320eb",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0063-rog-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0061-x230-inspect.stdout": "34a6602c433102c4b400f0ac8beb3e9250e7e1706f7d8d86ce262626f100df53",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0061-x230-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0064-pocket4-inspect.stdout": "debf3032447a71df1ae0e1f76999437e455298b19b0953b1c9eceacd2c5ecd41",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0064-pocket4-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0065-mac-inspect.stdout": "b3552792d9794d31eb9392d49ca940ea916a5e152a9f14ab7615a8a735526565",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0065-mac-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0066-main-inspect.stdout": "eadd5ed9084b0f3e7a5d57a04d18588fafb8a5b4bd489dc88267f7ea9dce79f8",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0066-main-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0092-rog-inspect.stdout": "132a26e1fbd24a2eb75ccee05a49310754f9bca973ebf469ee2cb8420b60d65e",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0092-rog-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0091-ai395-inspect.stdout": "e6642d99d994fa4f824c490fdcdc623fa84a9f79d432cc3c8725a27631952040",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0091-ai395-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0095-pocket4-inspect.stdout": "7093b4690863cb0edf725a04e4e4bb86c72ae96187061fae3154d7b96070b162",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0095-pocket4-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0093-x230-inspect.stdout": "f1ed6f5bc88a4415aaad2fe34c103fbdf85c97ab5f83bd9c4d9d40a697b75820",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0093-x230-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0096-mac-inspect.stdout": "479efbf9e009c9fc6abec0c15daf2d626966ad39a50e25847dbbceb4e07a89cd",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0096-mac-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0094-main-inspect.stdout": "5059b1d32ec6d2ee87c1dd68e61c45bf81af4b79028f5197876d90c158a36db0",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0094-main-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0109-ai395-inspect.stdout": "e6642d99d994fa4f824c490fdcdc623fa84a9f79d432cc3c8725a27631952040",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0109-ai395-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0110-rog-inspect.stdout": "132a26e1fbd24a2eb75ccee05a49310754f9bca973ebf469ee2cb8420b60d65e",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0110-rog-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0113-pocket4-inspect.stdout": "7093b4690863cb0edf725a04e4e4bb86c72ae96187061fae3154d7b96070b162",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0113-pocket4-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0111-mac-inspect.stdout": "479efbf9e009c9fc6abec0c15daf2d626966ad39a50e25847dbbceb4e07a89cd",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0111-mac-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0112-x230-inspect.stdout": "f1ed6f5bc88a4415aaad2fe34c103fbdf85c97ab5f83bd9c4d9d40a697b75820",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0112-x230-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0114-main-inspect.stdout": "5059b1d32ec6d2ee87c1dd68e61c45bf81af4b79028f5197876d90c158a36db0",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/ssh-0114-main-inspect.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

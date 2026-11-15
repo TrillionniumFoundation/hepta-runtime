@@ -1,0 +1,34 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-B",
+      "-c",
+      "#!/usr/bin/env python3\n\"\"\"Copy only the two observed R36 holder inventories into a fresh evidence directory.\"\"\"\nimport hashlib\nimport json\nimport os\nimport stat\nimport sys\nfrom pathlib import Path\n\nROOT = Path('/home/qian/hepta-runtime-optimization-20261106-r36')\nDEST = ROOT / 'holder-inputs-01'\nMAC = '/Users/qianqi/work/hepta-runtime-x230-r36-20261106/'\nREPORTS = {\n    'observation-holder-01': 'ca2d51499c0c187528779205197c49d760cdc6dc93f81edf8ec74060cff8bcf6',\n    'lifecycle-holder-01': 'f885250569a1ab28089ccc618bc08bb20bb90942a8a8a9f12512494d4245f44e',\n}\n\ndef main():\n    raw = sys.stdin.buffer.read(1048577)\n    assert len(raw) <= 1048576\n    package = json.loads(raw)\n    manifest = package['manifest']\n    assert manifest['schema'] == 'hepta-r36-observed-holder-copies/v1'\n    assert manifest['observed'] is True\n    files = package['files']\n    assert set(files) == set(manifest['files']) and len(files) == 44\n    payloads = {}\n    expected_names = set()\n    for holder, report_sha in REPORTS.items():\n        key = holder + '/report.json'\n        report_body = files[key].encode('utf-8')\n        assert hashlib.sha256(report_body).hexdigest() == report_sha\n        report = json.loads(report_body)\n        assert report['owned_agent_reaped'] is True\n        assert report['owned_agent_directory_absent_after_context'] is True\n        assert report['owned_agent_socket_absent_after_context'] is True\n        expected_names.add(key)\n        for item in report['log_files']:\n            name = item['file']\n            assert name == Path(name).name and name not in ('', '.', '..')\n            relative = holder + '/' + name\n            expected_names.add(relative)\n            body = files[relative].encode('utf-8')\n            assert len(body) == item['bytes']\n            assert hashlib.sha256(body).hexdigest() == item['sha256']\n    assert set(files) == expected_names\n    for key, value in files.items():\n        body = value.encode('utf-8')\n        entry = manifest['files'][key]\n        assert entry['original_path'] == MAC + key\n        assert entry['bytes'] == len(body)\n        assert entry['sha256'] == hashlib.sha256(body).hexdigest()\n        payloads[key] = body\n    mode = ROOT.lstat().st_mode\n    assert stat.S_ISDIR(mode) and not stat.S_ISLNK(mode)\n    assert not os.path.lexists(DEST)\n    receipt_path = ROOT / 'holder-copy-installation-01.json'\n    assert not os.path.lexists(receipt_path)\n    manifest_bytes = (json.dumps(manifest, indent=2, sort_keys=True) + '\\n').encode()\n    DEST.mkdir(mode=0o700)\n    for holder in REPORTS:\n        (DEST / holder).mkdir(mode=0o700)\n    for name, body in sorted(payloads.items()):\n        with (DEST / name).open('xb') as output:\n            output.write(body)\n            output.flush()\n            os.fsync(output.fileno())\n    with (DEST / 'manifest.json').open('xb') as output:\n        output.write(manifest_bytes)\n        output.flush()\n        os.fsync(output.fileno())\n    for name, body in payloads.items():\n        assert (DEST / name).read_bytes() == body\n    receipt = {\n        'schema': 'hepta-r36-observed-holder-copy-installation/v1',\n        'passed': True,\n        'original_holder_files': len(payloads),\n        'copied_original_bytes': sum(map(len, payloads.values())),\n        'manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest(),\n        'async_holder_copied': False,\n        'benchmarks_started': 0,\n        'original_files_modified': False,\n    }\n    with receipt_path.open('x') as output:\n        json.dump(receipt, output, indent=2)\n        output.write('\\n')\n        output.flush()\n        os.fsync(output.fileno())\n    print(json.dumps(receipt), flush=True)\n\nif __name__ == '__main__':\n    main()\n"
+    ],
+    "created_unix_ms": 1793962076451,
+    "cwd": "/home/qian/hepta-runtime-optimization-20261106-r36",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "x230",
+    "id": "1a1b078e923-fc05-70b9",
+    "idempotency_key": "r36-observed-holder-copy-20261106-01",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian/.local/state/hepta-runtime-mac-worker/jobs/1a1b078e923-fc05-70b9",
+    "request_digest": "c0ec00af25fee369c06d8c1dd4bbcf97f35c8995313822d7b7891fba40af858f",
+    "request_fingerprint": 13901486902042616681,
+    "ssh_target": "x230-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1b078e923-fc05-70b9"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1b078e923-fc05-70b9"
+  },
+  "local_record_pending": false,
+  "reused": false
+}

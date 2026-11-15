@@ -1,0 +1,63 @@
+{
+  "schema": "hepta-dc-parity-concurrent-text-v4-v1",
+  "recorded_at_utc": "2026-10-12T13:57:05.207528+00:00",
+  "source_base": "c5d6ff78fc440b5753b1f91e8bec87e8c9564e34",
+  "intent": "Verify real user-facing file create/append/replace parity through independent authenticated MCP, without substitute shell execution or production cutover",
+  "catalog": {
+    "count": 50,
+    "file_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+    "catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad"
+  },
+  "concurrency": {
+    "schema": "hepta-dc-parity-concurrent-publisher-v1",
+    "complete": true,
+    "checks": [
+      "isolated native controller exactly matches pinned v4 50-tool catalog",
+      "6 rounds of 8 parallel append calls allow exactly one winner",
+      "all failed contenders leave no orphan staging files",
+      "competing create-only publications produce exactly one winner without overwrite",
+      "competing SHA-pinned replacements produce exactly one winner without lost writes",
+      "follow-up single replace preserves exact content and digest"
+    ],
+    "waves": 6,
+    "contenders": 8,
+    "parallel_mutations_attempted": 64,
+    "accepted_parallel_writes": 8,
+    "refused_stale_parallel_writes": 56,
+    "tool_count": 50,
+    "only_private_test_runtime": true,
+    "chatgpt_originated": false,
+    "native_production_changed": false
+  },
+  "test_sha256": "2caa14d28e075b17de9916cb7ef3d06aa8286808cb48588df7b0d541d5719285",
+  "log_sha256": "acbd7685ff9b150c873afcb40fd94ad8e4ef7071954d10b56594d2e2e842b1e0",
+  "code_changes": false,
+  "ci_workflow_wired": true,
+  "ci_current_head_not_yet_checked": true,
+  "service_identity": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2927",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "1270044",
+      "ActiveState": "active"
+    }
+  },
+  "tunnel_ready": true,
+  "tunnel_control_plane": "ok",
+  "claims": {
+    "native_candidate_real_mcp": true,
+    "model_origin_hepta_write": false,
+    "installed_hepta_tool_count": 46,
+    "candidate_tool_count": 50,
+    "runtime_or_dc_restarted": false,
+    "public_gateway_launched": false,
+    "platform_bypass_attempted": false
+  },
+  "preexisting_uncommitted_file": "tests/full_operator_acceptance.py (not staged)"
+}

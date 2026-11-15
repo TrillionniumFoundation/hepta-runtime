@@ -1,0 +1,53 @@
+   Compiling hepta-runtime v0.1.0 (/home/qian-qi/hepta-runtime-request-async-v9-20261013)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5m 15s
+     Running unittests src/main.rs (target/debug/deps/hepta_runtime-4bda2c104553fd25)
+     Running unittests src/bin/jobctl.rs (target/debug/deps/hepta_runtime_jobctl-68128660f66696f9)
+    Checking bitflags v2.13.2
+    Checking nix v0.31.3
+    Checking russh-cryptovec v0.62.0
+    Checking russh v0.63.3
+    Checking rmcp v3.4.1
+    Checking russh-sftp v3.0.0
+    Checking linux-raw-sys v0.12.1
+    Checking rustix v1.1.5
+    Checking parking_lot v0.12.5
+    Checking fastrand v2.5.0
+    Checking tempfile v3.27.0
+    Checking serial_test v3.5.0
+    Checking hepta-runtime v0.1.0 (/home/qian-qi/hepta-runtime-request-async-v9-20261013)
+error: you seem to be trying to use `match` for destructuring a single pattern. Consider using `if let`
+   --> src/mcp/runtime/request_async.rs:801:2
+    |
+801 | /     match binding_pair(&dir, &candidate.key_hash)? {
+802 | |         Some(old) => {
+803 | |             if old.tool_name != candidate.tool_name {
+804 | |                 bail!("async key unavailable to this operation");
+...   |
+818 | |         None => {}
+819 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#single_match
+    = note: `-D clippy::single-match` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::single_match)]`
+help: try
+    |
+801 ~     if let Some(old) = binding_pair(&dir, &candidate.key_hash)? {
+802 ~              if old.tool_name != candidate.tool_name {
+803 ~                  bail!("async key unavailable to this operation");
+804 ~              }
+805 ~              if !valid_binding(&old) {
+806 ~                  bail!("async key unavailable");
+807 ~              }
+808 ~              check_binding(
+809 ~                  &old,
+810 ~                  &candidate.owner,
+811 ~                  &candidate.key_hash,
+812 ~                  &candidate.request_hash,
+813 ~                  &candidate.policy_binding,
+814 ~              )?;
+815 ~              return Ok(Reservation::Existing(old));
+816 ~          }
+    |
+
+error: could not compile `hepta-runtime` (bin "hepta-runtime" test) due to 1 previous error

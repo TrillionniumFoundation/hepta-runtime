@@ -1,0 +1,177 @@
+{
+  "schema": "hepta-dc-v8-request-results-native-fixture-v1",
+  "recorded_utc": "2026-10-13T17:23:24.694599+00:00",
+  "origin": "disposable_native_http_fixture",
+  "binary_sha256": "1f49c782ed26373c72952bda733d5f48e8de1dcab1bee012207b5130d3cc3835",
+  "harness_sha256": "4627f63731ce581eb3a62122b95317aa0f81b92442d1014e2443d39cc2ff5fba",
+  "contract_sha256": "b64769210b9913fbdab28f7d0e95b7ef300d8710b3f1eeea74afcfac25b08318",
+  "catalog_mode": "unreviewed-export-candidate",
+  "exact_reviewed_contract_qualified": false,
+  "qualification_scope": "local_native_request_result_fixture_only",
+  "checks": [
+    {
+      "check": "reviewed V8 catalog and exact V7 predecessor definitions",
+      "result": "passed",
+      "detail": {
+        "tool_count": 60,
+        "all_previous_definitions_exact": true,
+        "new_tools": [
+          "request_status",
+          "request_result"
+        ],
+        "old_v7_positive_control": true,
+        "recomputed_unknown_catalogs_refused": [
+          "original-v4-drift",
+          "new-tool-hint-drift",
+          "new-tool-owner-input"
+        ],
+        "reviewed_pin_verified": false,
+        "export_requires_separate_explicit_review": true
+      }
+    },
+    {
+      "check": "three reviewed DTO tools retain exact native envelopes and server identities",
+      "result": "passed",
+      "detail": {
+        "retained_tools": [
+          "effective_config",
+          "host_health",
+          "host_list"
+        ],
+        "native_pages": {
+          "host_list": {
+            "pages": 3,
+            "bytes": 562,
+            "sha256": "1dd722510f0e9fcd8a8f503133339a8a6676f55814b053e456af3949ebbc524a"
+          },
+          "effective_config": {
+            "pages": 6,
+            "bytes": 1542,
+            "sha256": "267b84de31b0ff30f3659057eb1d1378318eb8ab50d5230c0798e0c5510925b1"
+          },
+          "host_health": {
+            "pages": 3,
+            "bytes": 728,
+            "sha256": "58e12c91608b3b035ac25c6b4fe07ff654f307589e0f8f6defe178e9b8357490"
+          }
+        },
+        "actual_request_identity": "server-generated _meta; never JSON-RPC caller ID",
+        "reference": "raw negotiated-protocol result minus retention ACK; legacy default complete discriminator restored",
+        "health_origin": "fixed local emulator; no real SSH qualification"
+      }
+    },
+    {
+      "check": "same private credential reconnect and controller restart preserve original bytes",
+      "result": "passed",
+      "detail": {
+        "reconnect_and_restart": true,
+        "health_replay_count": 0
+      }
+    },
+    {
+      "check": "owner spoof, invalid identities and byte page bounds are refused",
+      "result": "passed",
+      "detail": {
+        "strict_argument_and_bounds_refusals": true,
+        "caller_meta_does_not_select_identity": true
+      }
+    },
+    {
+      "check": "view and metadata lookups never retain excluded or recursive payloads",
+      "result": "passed",
+      "detail": {
+        "excluded_tools": [
+          "view",
+          "request_history",
+          "request_status",
+          "request_result"
+        ],
+        "recursive_cache_count": 0
+      }
+    }
+  ],
+  "complete": false,
+  "installed_runtime_changed": false,
+  "desktop_commander_changed": false,
+  "real_ssh_qualified": false,
+  "six_machine_qualified": false,
+  "model_origin_qualified": false,
+  "authenticated_chatgpt_caller_isolation": false,
+  "job_pty_caller_ownership_qualified": false,
+  "production_recovery_rollback_qualified": false,
+  "full_dc_replacement_qualified": false,
+  "fault_scope": "disposable local fixed read-only health emulator and private state",
+  "limits": [
+    "The native health emulator is a local fixture; no SSH authentication or real target health is proven.",
+    "No existing credentials, runtime service, remote host, user data or Desktop Commander is accessed.",
+    "The serialized native result precedes retention ACK; transport delivery and business success remain unproven.",
+    "Controller crash and late storage failure are fixture faults around a fixed read-only challenge.",
+    "Shared operator credentials share retained metadata; this does not prove ChatGPT user isolation."
+  ],
+  "requested_protocol_version": "2026-07-28",
+  "negotiated_protocol_version": "2025-11-25",
+  "snapshot_comparison_normalization": "legacy implicit resultType=complete restored; retention ACK removed",
+  "catalog_sha256": "cceb06f1871d7d129a8a4d442a0e4e38a0eb4fbac6d324c3386b03d104db03e9",
+  "failure": {
+    "check": "controller crash leaves unknown result intent and never replays health",
+    "type": "AssertionError",
+    "detail": ""
+  },
+  "logs": [
+    {
+      "name": "effective_config.native-result.json",
+      "sha256": "267b84de31b0ff30f3659057eb1d1378318eb8ab50d5230c0798e0c5510925b1",
+      "bytes": 1542,
+      "redacted": false
+    },
+    {
+      "name": "effective_config.observed-response.json",
+      "sha256": "f89e6edf954ad1333e52d10ee104c7c930736dea0fb2a759cb3e0011222f9290",
+      "bytes": 1862,
+      "redacted": false
+    },
+    {
+      "name": "host_health.native-result.json",
+      "sha256": "58e12c91608b3b035ac25c6b4fe07ff654f307589e0f8f6defe178e9b8357490",
+      "bytes": 728,
+      "redacted": false
+    },
+    {
+      "name": "host_health.observed-response.json",
+      "sha256": "e872722c9a33333580412b230f7deaffe6bbdb7e91e1367a0f2dde3cc048cb32",
+      "bytes": 1048,
+      "redacted": false
+    },
+    {
+      "name": "host_list.native-result.json",
+      "sha256": "1dd722510f0e9fcd8a8f503133339a8a6676f55814b053e456af3949ebbc524a",
+      "bytes": 562,
+      "redacted": false
+    },
+    {
+      "name": "host_list.observed-response.json",
+      "sha256": "b9ce246321843e09ee0d8249d73cf0f9b7a8b9a4a86e55ba48ecd5838577cdd5",
+      "bytes": 882,
+      "redacted": false
+    },
+    {
+      "name": "native-00.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    },
+    {
+      "name": "native-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    },
+    {
+      "name": "native-02.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    }
+  ],
+  "owned_cleanup_confirmed": true
+}

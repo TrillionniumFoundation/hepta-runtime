@@ -1,0 +1,34 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-B",
+      "-c",
+      "import runpy,pathlib,json,os\nroot=pathlib.Path('/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier');fix=root/'tooling-fix-02';attempt=root/'attempt-02'\nrunpy.run_path(str(fix/'write_native_receipt.py'),run_name='__main__')\ndriver=json.loads((attempt/'run-driver.json').read_text())\nwith (attempt/'machine-before.json').open('x') as f:json.dump(driver['machine_before'],f,sort_keys=True,indent=2);f.write('\\n')\nos.execve('/usr/bin/python3',['/usr/bin/python3','-B',str(fix/'finalize_screen.py')],os.environ.copy())\n"
+    ],
+    "created_unix_ms": 1793858939881,
+    "cwd": null,
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "x230",
+    "id": "1a1aa532be9-fc05-4109",
+    "idempotency_key": "x230-reference-buffer-run-receipt-finalize-20261105-02",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian/.local/state/hepta-runtime-mac-worker/jobs/1a1aa532be9-fc05-4109",
+    "request_digest": "9bd4ab6f39510034fe8e27c800eb727bec2bd1954ea05ab74e6c879e3c9cd8bd",
+    "request_fingerprint": 11228788265132818484,
+    "ssh_target": "x230-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1aa532be9-fc05-4109"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1aa532be9-fc05-4109"
+  },
+  "local_record_pending": false,
+  "reused": false
+}

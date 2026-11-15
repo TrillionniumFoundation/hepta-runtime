@@ -1,0 +1,90 @@
+{
+  "schema": "hepta-native-directory-write-search-parity-fix-v1",
+  "recorded_utc": "2026-10-12T13:40:41.072486+00:00",
+  "base_commit": "c5d6ff78fc440b5753b1f91e8bec87e8c9564e34",
+  "branch": "fix/parity-traverse-only-20261012",
+  "problem": "Linux owner has write+search (mode 0300) but not directory read. Prior O_RDONLY|O_DIRECTORY fd traversal falsely rejected mkdirat/renameat2 with EACCES.",
+  "real_filesystem_reproduction": {
+    "old_O_RDONLY_open_errno": 13,
+    "new_O_PATH_handle_open": "ok",
+    "fd_relative_mkdir": "ok",
+    "scope": "unique temporary directory; permissions restored on exit"
+  },
+  "fix": {
+    "file": "src/mcp/fs/parity_ops.rs",
+    "old_fd_flags": "O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC",
+    "new_fd_flags": "O_PATH|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC",
+    "source_sha256": "287bd65ce31d5cb226f86ddb63ba0dc528d00ec00501118f85c1884fc01e59e9",
+    "no_new_capabilities": true,
+    "no_new_shell": true,
+    "no_new_privileges": true,
+    "no_follow_symlinks": true,
+    "no_permission_bypass": true
+  },
+  "before": {
+    "unit_tests": 3,
+    "passed": 0,
+    "failed": 3,
+    "reason": "Permission denied os error 13",
+    "log_sha256": "d464774a1362fcfe4794b79b0cb06cee6abd94b3828328eb38a76709e509c0cc"
+  },
+  "after": {
+    "same_unit_tests_passed": 3,
+    "negative_execute_only_no_write_test_passed": true,
+    "full_main_rust_tests_passed": 419,
+    "ignored_by_existing_suite": 11,
+    "jobctl_tests_passed": 8,
+    "clippy_strict": "passed",
+    "cargo_fmt": "passed",
+    "cargo_build": "passed",
+    "isolated_native_mcp_checks_passed": 18,
+    "isolated_model_origin": false,
+    "native_tool_count": 50,
+    "official_modern_schema_checked": true,
+    "catalog_v4_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+    "frozen_tool_annotations_changed": false
+  },
+  "outcomes": {
+    "mkdir_under_0300": "success",
+    "file_move_under_0300": "success",
+    "directory_move_under_0300": "success",
+    "mkdir_under_0100": "denied",
+    "file_move_under_0100": "denied",
+    "directory_move_under_0100": "denied",
+    "symlink_hazards": "still_denied",
+    "outside_workspace": "still_denied",
+    "no_replace": "still_required"
+  },
+  "logs": {
+    "before.log": "d464774a1362fcfe4794b79b0cb06cee6abd94b3828328eb38a76709e509c0cc",
+    "after.log": "720d22a8a715f6c41f971aff3f9bd1a34444fccf3c62426d42742b9222b57371",
+    "full-tests.log": "fff0bf34c2888e6da37fd035266c5e4350f2283721c34682f1873d9ee458002b",
+    "clippy.log": "71eee0f16c30848de699f7b359757850d651902a88146a4decf3b3399a13c964",
+    "build.log": "8f34d228909b2bb3c93499b1d1a3460d0337c943cb5cadf13919f706d8fac953",
+    "isolated-native-v4-retest.log": "5531c1f235ef46145cbb18f2f8f3802baa958a032598cf7548a8109d719f0759"
+  },
+  "current_installed_services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2927",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "1270044",
+      "ActiveState": "active"
+    }
+  },
+  "release_boundary": {
+    "native_runtime_restarted": false,
+    "desktop_commander_restarted": false,
+    "tunnel_restarted": false,
+    "currently_installed_chatgpt_tool_count": 46,
+    "candidate_source_tool_count": 50,
+    "candidate_deployed_to_chatgpt": false,
+    "chatgpt_model_origin_write_approved": false,
+    "public_gateway_started": false
+  }
+}

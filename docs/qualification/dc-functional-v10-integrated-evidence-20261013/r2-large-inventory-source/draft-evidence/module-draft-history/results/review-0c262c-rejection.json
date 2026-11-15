@@ -1,0 +1,34 @@
+{
+  "reviewed_source_sha256": "0c262c85a3ab0a204182b59c81187cd3cd4a2a1ca85d12832dab1d1bff355aae",
+  "fixture_tests": 36,
+  "fixture_result": "PASS",
+  "review_status": "REJECTED_HIGH_SOURCE_FINDING",
+  "findings": [
+    {
+      "severity": "HIGH",
+      "finding": "per-host listing cap permitted up to six times 16384 per-ID status submissions before aggregate registry reconciliation, including unregistered IDs",
+      "resolution": "r3 requires each host exact membership equality with independent bounded registry before any status; aggregate statuses <=16384; adversarial unregistered and six-host overflow fixtures"
+    },
+    {
+      "severity": "MEDIUM",
+      "finding": "succeeded missing and native hostless matched-job_id response rejected",
+      "resolution": "static jobs.rs audit and matched request host adapter; succeeded allowed; missing state still unknown"
+    },
+    {
+      "severity": "MEDIUM",
+      "finding": "1e999 accepted and Python bool/int/float equality conflated structured JSON content",
+      "resolution": "finite parse_float and type-sensitive recursive JSON equality fixtures"
+    },
+    {
+      "severity": "BOUNDARY",
+      "finding": "uid 0 accepted as private owner without task-specific justification",
+      "resolution": "current UID required; synthetic foreign UID fixture"
+    },
+    {
+      "severity": "FOLLOWUP",
+      "finding": "optional credential custody guard and unbounded idle-reset HTTP framing were insufficient",
+      "resolution": "required metadata pin around reader/everyRPC; per-actual-raw-read/per-send remaining checkpoints and memory framing fixtures"
+    }
+  ],
+  "note": "Passing offline fixtures alone did not constitute source review acceptance or cutover authorization."
+}

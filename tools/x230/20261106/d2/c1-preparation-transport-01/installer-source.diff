@@ -1,0 +1,59 @@
+--- original-D1/install_c1_parent_preparation_05.py
++++ D2/install_c1_parent_preparation_01.py
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env python3
+ # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+-"""Install the exact unsealed D1 C1 preparation once; execute no packaged code."""
++"""Install the exact unsealed D2 C1 preparation once; execute no packaged code."""
+ import argparse
+ import gzip
+ import hashlib
+@@ -13,18 +13,18 @@
+ import sys
+ import tarfile
+ 
+-ROOT = Path("/home/qian/hepta-runtime-phase-cost-20261106-d1")
+-DEST = ROOT / "c1-parent-preparation-05"
+-RECEIPT = ROOT / "c1-preparation-install-05.json"
+-ARCHIVE = ROOT / "c1-parent-preparation-05.tar.gz"
++ROOT = Path("/home/qian/hepta-runtime-validation-cost-20261106-d2")
++DEST = ROOT / "c1-parent-preparation-01"
++RECEIPT = ROOT / "c1-preparation-install-01.json"
++ARCHIVE = Path("/home/qian/hepta-runtime-d2-c1-parent-preparation-01.tar.gz")
+ MAX_FILE = 4 * 1024 * 1024
+ MAX_TOTAL = 16 * 1024 * 1024
+ MAX_FILES = 128
+ MAX_TAR = MAX_TOTAL + MAX_FILES * 1024 + 10240
+-EXPECTED_MANIFEST = {"bytes": 13228, "sha256": "40693bc863122eff6c554aa18e4c4394e9a6c17a90753b2761deaa920382c38e"}
+-EXPECTED_MEMBERS = 43
+-EXPECTED_PAYLOAD_BYTES = 564059
+-EXPECTED_ARCHIVE = {'bytes': 158613, 'sha256': 'ad6778f31e7b10caaad3913e8c6368cc09fa6ef6b34c411cdf54a15d8a4e2faf'}
++EXPECTED_MANIFEST = {"bytes": 10577, "sha256": "9fcf4d95387e5b5fdb124acaf273c807ca59cf8d78c4fdc9f73577166e6e44f7"}
++EXPECTED_MEMBERS = 40
++EXPECTED_PAYLOAD_BYTES = 514838
++EXPECTED_ARCHIVE = {"bytes":138598,"sha256":"78fb352cae7e77cc34cef6be84059a38c423668e48a0dc5014ea012ebad38cdc"}
+ 
+ 
+ def need(condition, message):
+@@ -147,9 +147,9 @@
+          and hashlib.sha256(manifest_raw).hexdigest() == EXPECTED_MANIFEST["sha256"],
+          "frozen unsealed source manifest differs")
+     manifest = json.loads(manifest_raw)
+-    need(manifest.get("schema") == "hepta-d1-c1-outer-preparation/v1"
+-         and manifest.get("revision") == "05" and manifest.get("sealed") is False
+-         and manifest.get("source_only") is True
++    need(manifest.get("schema") == "hepta-d2-c1-outer-preparation/v1"
++         and manifest.get("revision") == "02" and manifest.get("sealed") is False
++         and manifest.get("source_package_only") is True
+          and manifest.get("actual_ordinary_result") is None
+          and manifest.get("actual_measurement") is None
+          and manifest.get("performance_acceptance_claim") is False,
+@@ -192,7 +192,7 @@
+     installed = [write_new(DEST / name, raw) for name, raw in sorted(members.items())]
+     need(regular(ARCHIVE) == archive_raw, "source archive changed during installation")
+     receipt = {
+-        "schema": "hepta-d1-c1-source-preparation-install/v1",
++        "schema": "hepta-d2-c1-source-preparation-install/v1",
+         "archive": identity(ARCHIVE, archive_raw),
+         "package_manifest": identity(DEST / "package-manifest.json", manifest_raw),
+         "destination": str(DEST), "created_directories": created,

@@ -1,0 +1,53 @@
+{
+  "all_counterexamples_observed": true,
+  "automatic_recovery_implemented": false,
+  "controller_SIGKILL_exercised": false,
+  "meaning": "Success means unsafe cleanup inferences reproduced in owned fixtures.",
+  "preexisting_socket_paths_inspected": false,
+  "runtime_changed": false,
+  "schema": "hepta-x230-socket-custody-counterexamples/v1",
+  "source_sha256": "a55807a9f54142ad91075dbcbf9bdfd6f9416706885ec187184e43fd60974030",
+  "ssh_invoked": false,
+  "tests": [
+    {
+      "counterexample_observed": true,
+      "name": "inherited_lease_release_does_not_end_writer",
+      "observations": {
+        "claims_installed_SSH_fd_behavior": false,
+        "lease_reacquired_while_original_child_alive": true,
+        "models_PDEATHSIG_timing": false,
+        "owned_child_reaped": true,
+        "writer_created_file_while_recovery_lock_held": true
+      },
+      "owned_fixture_cleanup_complete": true
+    },
+    {
+      "counterexample_observed": true,
+      "name": "checked_socket_name_can_be_replaced",
+      "observations": {
+        "original_socket_preserved_under_its_fixture_name": true,
+        "pinned_parent_unchanged": true,
+        "replacement_socket_removed_by_name_unlink": true
+      },
+      "owned_fixture_cleanup_complete": true
+    },
+    {
+      "counterexample_observed": true,
+      "name": "checked_socket_name_can_become_symlink",
+      "observations": {
+        "replacement_symlink_removed_by_name_unlink": true,
+        "symlink_target_was_not_followed_or_removed": true
+      },
+      "owned_fixture_cleanup_complete": true
+    },
+    {
+      "counterexample_observed": true,
+      "name": "checked_empty_root_name_can_be_replaced",
+      "observations": {
+        "pinned_original_directory_still_exists": true,
+        "replacement_empty_directory_removed_by_name": true
+      },
+      "owned_fixture_cleanup_complete": true
+    }
+  ]
+}

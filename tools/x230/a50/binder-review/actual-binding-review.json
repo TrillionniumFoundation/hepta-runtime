@@ -1,0 +1,384 @@
+{
+  "actual_bound_outputs": {
+    "binding-diff.txt": {
+      "bytes": 36823,
+      "sha256": "2c531f7ce42369692b103a1196825c0f2747d4e0311637c58218dc641994a7ba"
+    },
+    "evaluate_small_archive_a50_r01.py": {
+      "bytes": 42423,
+      "sha256": "83749ab38a51161b2a9597362752046a4d06866ffa8a4e0aacd8461b4f09e015"
+    },
+    "native-archive-cohort-a50-r01.protocol.json": {
+      "bytes": 10877,
+      "sha256": "0e88d817a7c6f0bf056c66fe68f3cc0e62d3a87f7df0ae966e603523e33511f3"
+    },
+    "run_native_archive_cohort_a50_r01.py": {
+      "bytes": 78248,
+      "sha256": "70d3a44fead9f5e21416994dd4462cbd2b25365630324521fd673420f4fad8e1"
+    },
+    "run_small_archive_a50_r01.py": {
+      "bytes": 23048,
+      "sha256": "9f043a205f237ac955012a58c332e6c7deaf2c59eb2449d915156ac79526c519"
+    },
+    "small-archive-a50-r01.protocol.json": {
+      "bytes": 8557,
+      "sha256": "3fd4104ad342c0403359a96baab757ec6b6db47992bc27b0c5b09ae40f615750"
+    }
+  },
+  "actual_evidence": {
+    "entry-report.json": {
+      "bytes": 315291,
+      "sha256": "9db04a9a7626942447680107788cd1f7cd485c8870514f034adaa74fa8c0ffa1"
+    },
+    "qualification.json": {
+      "bytes": 59532,
+      "sha256": "66dd2328c3ea2b952d51fe4133800f0aa5a25d98d8f40487c2d5a374ddb2a545"
+    },
+    "test.log": {
+      "bytes": 421584,
+      "sha256": "cce2bd73caefcbca13eb5497e59ce8b49ebffb2945ca14bc34437c7f11b42bb0"
+    },
+    "worker-report.json": {
+      "bytes": 24310,
+      "sha256": "226d51e5214950f1c819b6205144fa3f5192e6f47973446eb40eeefd5f57b17b"
+    }
+  },
+  "actual_qualification": {
+    "actual_test_log_top_level_failed": 0,
+    "actual_test_log_top_level_ignored": 23,
+    "actual_test_log_top_level_passed": 1272,
+    "entry_source_after_equal_to_tested": true,
+    "existing_test_names": [
+      "original_workers_expired_budget_does_not_detach_held_children",
+      "async_metadata_timeout_retains_its_permit_until_original_children_join",
+      "strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts",
+      "original_worker_second_spawn_failure_joins_the_first_waiting_thread",
+      "original_worker_panic_resumes_through_the_coordinator_lock_after_all_joins",
+      "original_workers_bound_submitted_unconsumed_work_to_one_per_lane",
+      "both_async_timeouts_keep_all_admitted_permits_until_actual_io_cleanup",
+      "completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member",
+      "fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it",
+      "a_final_epoch_change_discards_every_already_projected_page",
+      "shared_page_projection_errors_stay_local_before_the_common_final_fence",
+      "parallel_page_observation_rechecks_warm_off_page_originals",
+      "late_off_page_content_change_discards_every_shared_page"
+    ],
+    "focused_reruns": 0,
+    "nested_filtered_summaries_excluded": 2,
+    "new_test_names": [
+      "original_worker_batches_cover_exact_boundaries_and_partial_tails",
+      "original_worker_batch_failures_preserve_original_chain_and_join_other_lane",
+      "original_worker_batch_cancellation_discards_partial_tail_and_running_suffix",
+      "original_worker_batch_reply_identity_and_complete_coverage_are_required",
+      "original_worker_batches_refuse_invalid_task_sequences_and_extended_deadlines",
+      "original_worker_batches_keep_each_original_directory_across_shard_boundaries"
+    ],
+    "ordinary_six_stages": [
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "fmt",
+          "--all"
+        ],
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "name": "format",
+        "returncode": 0,
+        "seconds": 2.354278361890465
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "name": "fmt-check",
+        "returncode": 0,
+        "seconds": 1.9693258181214333
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "clean",
+          "--offline",
+          "--locked",
+          "--package",
+          "hepta-runtime"
+        ],
+        "log_sha256": "f836205dcdbf9ee923bd678c0e02533141a8b2f316f6cd29388fa5124b0283b7",
+        "name": "clean-package",
+        "returncode": 0,
+        "seconds": 0.38332390086725354
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "clippy",
+          "--offline",
+          "--locked",
+          "--all-features",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "log_sha256": "c9353be8b207f19e26002d6b98668f90a145a7f0599ce8ed5743017c97ee3d67",
+        "name": "clippy",
+        "returncode": 0,
+        "seconds": 48.773992243921384
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "test",
+          "--offline",
+          "--locked",
+          "--all-features",
+          "--message-format=json-render-diagnostics"
+        ],
+        "log_sha256": "cce2bd73caefcbca13eb5497e59ce8b49ebffb2945ca14bc34437c7f11b42bb0",
+        "name": "test",
+        "results": [
+          "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1268 filtered out; finished in 1.57s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1268 filtered out; finished in 1.48s",
+          "test result: ok. 1246 passed; 0 failed; 23 ignored; 0 measured; 0 filtered out; finished in 107.17s",
+          "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ],
+        "returncode": 0,
+        "seconds": 507.3602968228515
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "build",
+          "--offline",
+          "--locked",
+          "--all-features",
+          "--release",
+          "--bins",
+          "--message-format=json-render-diagnostics"
+        ],
+        "log_sha256": "511617cefb88a343070ca8389cb77772412f6171ea361ed9269766f3e710e04b",
+        "name": "release",
+        "returncode": 0,
+        "seconds": 311.6337555919308
+      }
+    ],
+    "prepared_source_map_compact_sha256": "e348cb3fb70a1d9dde8f97d722e65052c2ffba7807d409a2c822d75c314f4dd0",
+    "qualified": true,
+    "release": {
+      "cached": false,
+      "compiler_source": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/source-a50-record-batches-r01/src/main.rs",
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-a50-record-batches-r01/hepta-runtime",
+      "sha256": "01a8dfaf79e10c245e371f435998591147c39350e2a191caecb1a79d0536e2a0"
+    },
+    "required_test_names_found": 19,
+    "source_files": 168,
+    "source_files_changed_by_format": [
+      {
+        "path": "src/mcp/runtime/request_archive_content.rs",
+        "prepared_sha256": "2c634c74cd492a344ddce6e36efa63b18dee1e4d2144cb2d14ac80590623d26a",
+        "tested_sha256": "720c992a407fbe1bb3fa4ff9918d0772b4187065f848da947aa2fa96eb7a297a"
+      },
+      {
+        "path": "src/mcp/runtime/request_archive_content_parallel_tests.rs",
+        "prepared_sha256": "3308bb8515a7f0c742f96feeafe6811977e7d0f8ae29f1ef793e3b630f18fe63",
+        "tested_sha256": "1db236fe1188c86280ee76acd2628d3c3530451f0a5ca71a50a667610d058376"
+      }
+    ],
+    "test_artifact": {
+      "cached": false,
+      "compiler_source": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/source-a50-record-batches-r01/src/main.rs",
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-a50-record-batches-r01/hepta-runtime-tests",
+      "sha256": "2b37a93e3d1bfb37cd5382eb9cc9a48c17a9b24ff5c203d5b88026f73cdd53db"
+    },
+    "tested_and_after_source_map_compact_sha256": "5728b8a5d2beef13a218c08cc8c30ea3feb99f0ec36277e1b7efee41c098a95c"
+  },
+  "argv_correction": {
+    "actual_completed_evaluation_changed": false,
+    "field": "small_evaluator_template --protocol",
+    "reason": "The frozen offline evaluator requires the captured evidence-root/protocol.original.json path; the tool-directory source protocol path is inadmissible.",
+    "rerun_performed": false,
+    "scripts_or_raw_evidence_changed": false
+  },
+  "binder_sha256": "a9300316db52fff333c0bb6a5120a2e06f5de62c387cf02e39de6e1b8e44ece2",
+  "binding_manifest_sha256": "b70cc8c4404a97ac2700022fa06044f0ec1addb129bd21793bac29caceb4445c",
+  "blockers": [],
+  "cross_receipts": {
+    "compiler_artifact_original_event_fresh_strictly_false": true,
+    "entry_and_worker_postchecks": true,
+    "entry_pin": {
+      "bytes": 315291,
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a50-record-batches-entry-r01/entry-report.json",
+      "schema": "hepta-a50-record-batches-qualification-entry/v1",
+      "sha256": "9db04a9a7626942447680107788cd1f7cd485c8870514f034adaa74fa8c0ffa1"
+    },
+    "entry_worker_strict_proof_and_binding_same_original_stat9": true,
+    "qualification_report_receipt": {
+      "bytes": 59532,
+      "identity": [
+        2053,
+        6070289,
+        33152,
+        1000,
+        1000,
+        1,
+        59532,
+        1792994540469813636,
+        1792994540470813683
+      ],
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-a50-record-batches-r01/report.json",
+      "sha256": "66dd2328c3ea2b952d51fe4133800f0aa5a25d98d8f40487c2d5a374ddb2a545"
+    },
+    "worker_pin": {
+      "bytes": 24310,
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a50-record-batches-entry-r01/worker-report.json",
+      "schema": "hepta-a50-record-batches-guarded-qualifier-worker/v1",
+      "sha256": "226d51e5214950f1c819b6205144fa3f5192e6f47973446eb40eeefd5f57b17b"
+    },
+    "worker_receipt": {
+      "bytes": 24310,
+      "identity": [
+        2053,
+        4887573,
+        33152,
+        1000,
+        1000,
+        1,
+        24310,
+        1792994540586819175,
+        1792994540587819222
+      ],
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a50-record-batches-entry-r01/worker-report.json",
+      "sha256": "226d51e5214950f1c819b6205144fa3f5192e6f47973446eb40eeefd5f57b17b"
+    }
+  },
+  "execution_argv": {
+    "large": [
+      "/usr/bin/python3",
+      "-B",
+      "-s",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/tools/run_native_archive_cohort_a50_r01.py",
+      "--protocol",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/tools/native-archive-cohort-a50-r01.protocol.json",
+      "--out",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a50-native-archive-cohort-r01"
+    ],
+    "small": [
+      "/usr/bin/python3",
+      "-B",
+      "-s",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/tools/run_small_archive_a50_r01.py",
+      "--protocol",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/tools/small-archive-a50-r01.protocol.json",
+      "--out",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a50-small-archive-comparison-r01"
+    ],
+    "small_evaluator_template": [
+      "/usr/bin/python3",
+      "-B",
+      "-s",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/tools/evaluate_small_archive_a50_r01.py",
+      "--report",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a50-small-archive-comparison-r01/report.json",
+      "--expected-report-sha256",
+      "<actual final small report SHA required>",
+      "--protocol",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a50-small-archive-comparison-r01/protocol.original.json",
+      "--expected-protocol-sha256",
+      "3fd4104ad342c0403359a96baab757ec6b6db47992bc27b0c5b09ae40f615750",
+      "--evidence-root",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a50-small-archive-comparison-r01",
+      "--out",
+      "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a50-small-archive-evaluation-r01.json"
+    ]
+  },
+  "fixed_parameters": {
+    "automatic_retries": 0,
+    "client_deadline_seconds": 10,
+    "large_measured": 80,
+    "large_numeric_gates": {
+      "baseline_zero_success_cpu_per_success_gate": "undefined_and_not_passed",
+      "c1_baseline_correct_required_for_cpu_attribution": 8,
+      "c1_candidate_correct": 8,
+      "c1_max_cpu_per_attempt_ratio": 1.1,
+      "c1_max_wall_per_attempt_ratio": 1.1,
+      "c4_candidate_correct": 32,
+      "c4_candidate_successes_at_least_baseline": true,
+      "c4_max_inclusive_cpu_per_attempt_ratio": 1.1,
+      "c4_max_inclusive_cpu_per_success_ratio": 1.1,
+      "c4_min_successful_calls_per_second_ratio": 1.5,
+      "candidate_wholelife_max_rss_kib_limit": "max(baseline_wholelife_max_rss_kib*1.10, baseline_wholelife_max_rss_kib+4096)",
+      "rss_scope": "whole-life original wait4 maximum, regression guard only; not steady-state memory or soak proof"
+    },
+    "large_order": [
+      "A",
+      "B",
+      "B",
+      "A"
+    ],
+    "large_waves": 32,
+    "original_cleanup_budgets_seconds": [
+      30,
+      10,
+      10,
+      2
+    ],
+    "original_controller_budget_seconds": 300,
+    "product_deadline_seconds": 3,
+    "qualification_cargo_jobs": 2,
+    "runtime_workers": 2,
+    "small_measured": 8192,
+    "small_opposite_order_blocks": 2,
+    "small_regression_gates": {
+      "all_new_tool_calls_correct": 8848,
+      "both_blocks_required": true,
+      "candidate_over_baseline_measured_controller_cpu_max": 1.1,
+      "candidate_over_baseline_measured_wall_max": 1.1,
+      "cpu_quantization": "2 ticks per /proc endpoint, sum conservative intervals over every round; candidate upper/baseline lower must pass",
+      "fd_scope": "all endpoint counts retained; no continuous stability claim",
+      "historical_drift_calibration_used": false,
+      "measured_calls_each_arm": 4096,
+      "memory_peak_guard": "max candidate original wait4 maxRSS <= max(1.10*max baseline, max baseline+4096KiB)"
+    },
+    "small_rounds": 8,
+    "small_total_tool_calls": 8848
+  },
+  "independent_static_checks": {
+    "all_output_and_template_sha256_pins_match": true,
+    "all_protocol_fields_outside_binding_and_custody_metadata_unchanged": true,
+    "compared_to": "SHA-pinned A46 templates after exact A50 label binding",
+    "large_main_registered_factory_and_finalizer_match_frozen_review": true,
+    "large_main_terminal_finally_matches_frozen_review": true,
+    "large_unchanged_helper_asts": 38,
+    "numeric_evaluator_unchanged_helper_asts": 17,
+    "runner_entry_worker_protocol_constants_match_actual_bodies": true,
+    "small_unchanged_helper_asts": 4
+  },
+  "new_benchmark_executions": 0,
+  "new_binder_invocations": 0,
+  "new_remote_actions": 0,
+  "prior_A48_failure_preserved_sha256": "8c0377e52d930d93597f7b4e551d68101a29bffe6dd9aaa3d9bcdf22a036215f",
+  "resource_scope": {
+    "decoded_heap_or_RSS_hard_bound_claimed": false,
+    "lanes": 2,
+    "maximum_admitted_original_tasks": 64,
+    "records_per_lane_batch": 32,
+    "runtime_resource_conclusion": "Requires the actual fixed CPU and whole-life wait4 RSS measurements; this binding review establishes no performance or steady-state memory result.",
+    "validated_record_payload_estimate_caveat": "The earlier approximately 16.3 KiB estimate applies only to validated Record payload; it is not an upper bound on legacy cache decoding, all temporary heap, total batch heap or RSS."
+  },
+  "review_limit": "The locally captured test log and final report/worker/entry bodies were checked. Complete remote source/ELF/stage-log original bodies are fenced by the unchanged runtime loader; this review did not independently reread every remote body.",
+  "review_passed": true,
+  "schema": "hepta-a50-actual-binding-independent-review/v1",
+  "scope": "Local actual finalized report and bound-output review; no remote action, binder invocation or benchmark execution.",
+  "sequence": "Small comparison, original offline small evaluator with actual report SHA, then large only if required small gates pass; no concurrent build or benchmark. Use the existing original-owner outer execution budgets."
+}

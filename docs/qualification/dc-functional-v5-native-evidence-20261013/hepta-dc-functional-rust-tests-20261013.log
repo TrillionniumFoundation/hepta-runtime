@@ -1,0 +1,15 @@
+   Compiling hepta-runtime v0.1.0 (/home/qian-qi/hepta-runtime-dc-functional-20261013)
+error[E0433]: cannot find `Content` in `model`
+   --> src/mcp/runtime/search_jobs.rs:329:72
+    |
+329 |     let envelope = rmcp::model::CallToolResult::success(vec![rmcp::model::Content::text(text)]);
+    |                                                                           ^^^^^^^ could not find `Content` in `model`
+    |
+help: there is an enum variant `crate::mcp::runtime::search_jobs::SearchKind::Content`; try using the variant's enum
+    |
+329 -     let envelope = rmcp::model::CallToolResult::success(vec![rmcp::model::Content::text(text)]);
+329 +     let envelope = rmcp::model::CallToolResult::success(vec![crate::mcp::runtime::search_jobs::SearchKind::text(text)]);
+    |
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `hepta-runtime` (bin "hepta-runtime" test) due to 1 previous error

@@ -1,0 +1,69 @@
+{
+  "binary": "/home/qian-qi/work/hepta-rea-benchmark-release-20261103-formal-r1/bin/hepta-runtime",
+  "binary_sha256": "a697e102520cc483fe047665d86a3fab3049c74e7298936319d0f4bb224d0a82",
+  "cases": [
+    {
+      "audit_mode": "0700",
+      "fixture": "/home/qian-qi/work/hepta-state-root-umask-repro-20261103-r1/mask-022-qdu7kli2",
+      "fixture_mode": "0700",
+      "jobs_mode": "0700",
+      "production_state_accessed": false,
+      "remote_host_contacted": false,
+      "rpc_response": {
+        "error": {
+          "code": -32603,
+          "message": "request audit unavailable; dispatch refused"
+        },
+        "id": 2,
+        "jsonrpc": "2.0"
+      },
+      "state_children": [
+        "audit",
+        "controller.lock",
+        "controller.owner.lock",
+        "jobs"
+      ],
+      "state_mode": "0755",
+      "umask": "022"
+    },
+    {
+      "audit_mode": "0700",
+      "fixture": "/home/qian-qi/work/hepta-state-root-umask-repro-20261103-r1/mask-077-h8g0vag4",
+      "fixture_mode": "0700",
+      "jobs_mode": "0700",
+      "production_state_accessed": false,
+      "remote_host_contacted": false,
+      "rpc_response": {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "{\"analysis_profile\":null,\"coverage\":{\"scope\":\"selected-file-header\",\"status\":\"partial\"},\"limitations\":[\"WebAssembly sections, code validation and imports are not inspected\"],\"native_evidence_id\":\"hepta_rea_preview_v1_7ae633f6c9c36a04d1102c1ec3fabce92251bc912eaf99ff899918b64249ae0b\",\"normalized_result\":{\"architecture\":\"wasm\",\"byte_order\":\"little\",\"format\":\"wasm\",\"header_facts\":{\"binary_version\":1},\"word_size_bits\":null},\"operation\":\"rea_inspect_artifact\",\"rea_evidence_compatible\":false,\"record_format\":\"hepta.rea.preview.v1\",\"subject\":{\"local_path\":\"/home/qian-qi/work/hepta-state-root-umask-repro-20261103-r1/mask-077-h8g0vag4/workspace/owned.wasm\",\"sha256\":\"93a44bbb96c751218e4c00d479e4c14358122a389acca16205b1e4d0dc5f9476\",\"size_bytes\":8},\"upstream_reference\":{\"repository\":\"morluto/rea\",\"source_commit\":\"93b8b82db70279e40f484114cff9dc1958dc14ee\",\"version\":\"6.8.0\"}}",
+              "type": "text"
+            }
+          ],
+          "isError": false
+        }
+      },
+      "state_children": [
+        ".request-archive-v11-anchor.json",
+        "audit",
+        "controller.lock",
+        "controller.owner.lock",
+        "jobs",
+        "request-archive-v11",
+        "request-audit"
+      ],
+      "state_mode": "0700",
+      "umask": "077"
+    }
+  ],
+  "old_ci": {
+    "head": "f9756508462ebc72e814a12f5dbba1b067edabe4",
+    "job": 125845725090,
+    "run": 41614880662
+  },
+  "schema": "hepta.state-root-umask-prefixed-reproduction.v1",
+  "scope": "Existing pinned release artifact; all state/config/source paths under new private fixtures. No Cargo invocation or production configuration used."
+}

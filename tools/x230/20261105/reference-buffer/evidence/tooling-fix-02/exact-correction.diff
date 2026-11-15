@@ -1,0 +1,156 @@
+--- original/buffer_screen.py
++++ tooling-fix-02/buffer_screen.py
+@@ -226,7 +226,7 @@
+                 std::hint::black_box(&escape);
+                 println!("{}", serde_json::json!({"kind": "sample",
+                     "scenario": SCENARIOS[scenario], "block": block, "position": position,
+-                    "buffer_bytes": [16384, 65536][index], "iterations": 256,
++                    "buffer_bytes": ([16384, 65536][index]), "iterations": 256,
+                     "wall_start_ns": wall_start, "wall_end_ns": wall_end,
+                     "thread_cpu_start_ns": thread_start, "thread_cpu_end_ns": thread_end,
+                     "process_cpu_start_ns": process_start, "process_cpu_end_ns": process_end}));
+--- original/prepared/component.rs
++++ tooling-fix-02/prepared/component.rs
+@@ -1236,7 +1236,7 @@
+                 std::hint::black_box(&escape);
+                 println!("{}", serde_json::json!({"kind": "sample",
+                     "scenario": SCENARIOS[scenario], "block": block, "position": position,
+-                    "buffer_bytes": [16384, 65536][index], "iterations": 256,
++                    "buffer_bytes": ([16384, 65536][index]), "iterations": 256,
+                     "wall_start_ns": wall_start, "wall_end_ns": wall_end,
+                     "thread_cpu_start_ns": thread_start, "thread_cpu_end_ns": thread_end,
+                     "process_cpu_start_ns": process_start, "process_cpu_end_ns": process_end}));
+--- original/prepared/manifest.json
++++ tooling-fix-02/prepared/manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "arm_bodies_differ_only_in_buffer_constant": true,
+   "arm_diff_sha256": "79d7aec6e8179ae17faed8dd419063c8f552576de065e852c06f19d0d382ff21",
+-  "component_sha256": "feace6f9bdb3420483f05bb5e7ca6272a82abb1c97b71efdeea31309a6a63924",
++  "component_sha256": "57910987cbf4938394267fe83219c151257d92d549c283639d0e5ed8dd9d4e2f",
+   "copied_sections_sha256": {
+     "actual_check_current_method": "2fe173176c70319e95f5390560e5e4ef6b309ceab217b22912a52c3d70c94596",
+     "actual_test_clock": "5a672f643cd3b21bb9d40498ebc35a7303fea19573f53522aafafbcbfffda448",
+--- original/attempt-01/build-plan.json
++++ tooling-fix-02/build-plan.json
+@@ -1,7 +1,7 @@
+ {
+   "component": {
+-    "path": "/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier/prepared/component.rs",
+-    "sha256": "feace6f9bdb3420483f05bb5e7ca6272a82abb1c97b71efdeea31309a6a63924"
++    "path": "/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier/tooling-fix-02/prepared/component.rs",
++    "sha256": "57910987cbf4938394267fe83219c151257d92d549c283639d0e5ed8dd9d4e2f"
+   },
+   "dependencies": {
+     "anyhow": {
+@@ -114,7 +114,7 @@
+     "machine-after.json"
+   ],
+   "run_argv": [
+-    "/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier/attempt-01/component"
++    "/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier/attempt-02/component"
+   ],
+   "rustc_argv": [
+     "/home/qian/.cargo/bin/rustc",
+@@ -149,9 +149,9 @@
+     "tokio=/home/qian/hepta-runtime-optimization-20261105-r23/target-build/debug/deps/libtokio-a97feedc9a8fc9f2.rlib",
+     "--extern",
+     "tokio_util=/home/qian/hepta-runtime-optimization-20261105-r23/target-build/debug/deps/libtokio_util-f4b3cf831ceb32f8.rlib",
+-    "/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier/prepared/component.rs",
++    "/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier/tooling-fix-02/prepared/component.rs",
+     "-o",
+-    "/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier/attempt-01/component"
++    "/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier/attempt-02/component"
+   ],
+   "schema": "hepta-r23-buffer-screen-build-binding/v1",
+   "source_map_sha256": "18d42b8f376760eb86c9fb5e185c87146ee814b0d2278e3aea3c1e1edfc042b9"
+--- original/exec_screen_stage.py
++++ tooling-fix-02/exec_screen_stage.py
+@@ -14,7 +14,7 @@
+ 
+ ROOT = Path('/home/qian/hepta-runtime-optimization-20261105-r23')
+ FRONTIER = ROOT / 'remaining-frontier'
+-ATTEMPT = FRONTIER / 'attempt-01'
++ATTEMPT = FRONTIER / 'attempt-02'
+ 
+ def identity(path):
+     path = Path(path)
+@@ -30,6 +30,19 @@
+ assert len(sys.argv) == 2 and sys.argv[1] in ('compile', 'run')
+ stage = sys.argv[1]
+ plan = json.loads((ATTEMPT / 'build-plan.json').read_text())
++# Attempt 02 changes only output-macro syntax and the isolated paths below.
++# Preserve the real failed attempt's binding, flags, dependency pins and limits.
++assert identity(FRONTIER / 'plan.json')['sha256'] == '7dc98249c461be8d6525f03c9e1d922610fb3df4b6442ae05d36d770908aecff'
++original_plan_path = FRONTIER / 'attempt-01/build-plan.json'
++assert identity(original_plan_path)['sha256'] == '547ec0c6cf714d115907dde99a01f0a7351b63a67d7093f60eaffa400ddf1168'
++original_plan = json.loads(original_plan_path.read_text())
++expected_plan = dict(original_plan)
++expected_plan['component'] = {'path': '/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier/tooling-fix-02/prepared/component.rs',
++                              'sha256': '57910987cbf4938394267fe83219c151257d92d549c283639d0e5ed8dd9d4e2f'}
++assert original_plan['rustc_argv'][-3:] == [original_plan['component']['path'], '-o', original_plan['run_argv'][0]]
++expected_plan['rustc_argv'] = original_plan['rustc_argv'][:-3] + [expected_plan['component']['path'], '-o', str(ATTEMPT / 'component')]
++expected_plan['run_argv'] = [str(ATTEMPT / 'component')]
++assert plan == expected_plan, 'tool correction changed more than component syntax and attempt paths'
+ qualification = json.loads((ROOT / 'qualification-01/report.json').read_text())
+ accepted_root = Path('/home/qian/hepta-runtime-optimization-20261105-r24')
+ campaign = json.loads((accepted_root / 'campaign-01/report.json').read_text())
+--- original/write_native_receipt.py
++++ tooling-fix-02/write_native_receipt.py
+@@ -9,7 +9,7 @@
+ import time
+ 
+ ROOT = Path('/home/qian/hepta-runtime-optimization-20261105-r23/remaining-frontier')
+-ATTEMPT = ROOT / 'attempt-01'
++ATTEMPT = ROOT / 'attempt-02'
+ value = json.load(sys.stdin)
+ phase = value['phase']
+ assert phase in ('compile', 'run')
+@@ -23,7 +23,7 @@
+ job = start['job']
+ assert start['reused'] is False and status['job_id'] == job['id'] and job['host'] == 'x230'
+ assert job['executable'] == '/usr/bin/python3'
+-assert job['args'] == ['-B', str(ROOT / 'exec_screen_stage.py'), phase]
++assert job['args'] == ['-B', str(ROOT / 'tooling-fix-02/exec_screen_stage.py'), phase]
+ p = ATTEMPT / 'component'
+ assert p.is_file() and not p.is_symlink()
+ with p.open('rb') as stream:
+--- original/finalize_screen.py
++++ tooling-fix-02/finalize_screen.py
+@@ -11,7 +11,7 @@
+ 
+ ROOT = Path('/home/qian/hepta-runtime-optimization-20261105-r23')
+ FRONTIER = ROOT / 'remaining-frontier'
+-ATTEMPT = FRONTIER / 'attempt-01'
++ATTEMPT = FRONTIER / 'attempt-02'
+ 
+ def identity(path):
+     path = Path(path)
+@@ -24,7 +24,8 @@
+     with (ATTEMPT / name).open('x') as stream:
+         stream.write(json.dumps(value, sort_keys=True, indent=2) + '\n')
+ 
+-assert identity(FRONTIER / 'exec_screen_stage.py')['sha256'] == 'fe38b0ae912ab780bcd7f739dd75b8e13e3dee9efea60cf06635b311d840bbf2'
++assert identity(FRONTIER / 'tooling-fix-02/exec_screen_stage.py')['sha256'] == 'c3b09255d7ee49d93e967202ee2486cda0db15dba46ab0f4f8cc5cb4990a286b'
++assert identity(FRONTIER / 'tooling-fix-02/buffer_screen.py')['sha256'] == '8a8b32d5e29b498a99ca50f4cb73050ca2b256524fad5e07d55d8826e806c501'
+ rows = {}
+ for phase in ('compile', 'run'):
+     receipt = json.loads((ATTEMPT / (phase + '-receipt.json')).read_text())
+@@ -35,7 +36,7 @@
+     job = start['job']
+     assert status['job_id'] == job['id'] and job['host'] == 'x230'
+     assert job['executable'] == '/usr/bin/python3'
+-    assert job['args'] == ['-B', str(FRONTIER / 'exec_screen_stage.py'), phase]
++    assert job['args'] == ['-B', str(FRONTIER / 'tooling-fix-02/exec_screen_stage.py'), phase]
+     driver = json.loads((ATTEMPT / (phase + '-driver.json')).read_text())
+     assert driver['stage'] == phase and driver['automatic_retries'] == 0
+     for expected in driver['inputs'].values():
+@@ -53,7 +54,7 @@
+ spec.loader.exec_module(module)
+ machine = module.machine_snapshot()
+ create('machine-after.json', machine)
+-summary = subprocess.run(['/usr/bin/python3', '-B', str(FRONTIER / 'buffer_screen.py'),
++summary = subprocess.run(['/usr/bin/python3', '-B', str(FRONTIER / 'tooling-fix-02/buffer_screen.py'),
+                           'summarize', '--stdout', str(ATTEMPT / 'run.stdout'),
+                           '--output', str(ATTEMPT / 'summary.json')],
+                          capture_output=True, timeout=20)

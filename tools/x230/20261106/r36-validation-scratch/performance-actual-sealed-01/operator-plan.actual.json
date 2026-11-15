@@ -1,0 +1,289 @@
+{
+  "actual_exact_ci": null,
+  "actual_normal_lifecycle": null,
+  "actual_observation": null,
+  "actual_qualification": {
+    "job_id": "1a1b1cb4862-fc05-7ad9",
+    "native_state": "succeeded",
+    "exit_code": 0,
+    "stdout_bytes": 1125,
+    "stderr_bytes": 0,
+    "counts": {
+      "passed": 1647,
+      "failed": 0,
+      "ignored": 34,
+      "selected": 1681,
+      "retries": 0
+    },
+    "source_map_sha256": "b9eff66ea8b14eca80d16069a59588a551fcf6feff0ac4c991690425df65462a"
+  },
+  "argv_templates": {
+    "install_measurement_tools": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/install_measurement_tools.py",
+      "--bundle-sha256",
+      "a8e4d2debee8aae6538f197cff2020fb412586888c25ffc45955792422b9bd9d"
+    ],
+    "lifecycle_holder_after_observation_gate": [
+      "/usr/bin/python3",
+      "-B",
+      "-u",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/held_agent_campaign_02.py",
+      "--remote-script",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/r36_lifecycle_campaign.py",
+      "--out",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-lifecycle-holder-01",
+      "--timeout-seconds",
+      "3600"
+    ],
+    "materialize_lifecycle_after_observation_gate": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/prepare_lifecycle_inputs.py",
+      "--example-sha256",
+      null,
+      "--preparer-sha256",
+      "8d675039098f16524549830092f4a4fcb08b973a24d240ab2612b33b33b02c04"
+    ],
+    "materialize_observation": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/prepare_campaign_inputs.py",
+      "--example-sha256",
+      null,
+      "--preparer-sha256",
+      "6bda3bb790d0a015d3a3b31e10ba168b147df431781b03af94f876b829cd0209",
+      "--preparation-sha256",
+      "20ae4a6b83454d2079e23f012c62fddcf88434cce488d0935576d5aa83309035",
+      "--qualification-terminal-sha256",
+      "d064a939e5707b9694a0853b87bd2fff92887966b1daea5b988fe8a5229fc1bb",
+      "--qualification-job-id",
+      "1a1b1cb4862-fc05-7ad9"
+    ],
+    "observation_holder": [
+      "/usr/bin/python3",
+      "-B",
+      "-u",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/held_agent_campaign_02.py",
+      "--remote-script",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/r36_campaign.py",
+      "--out",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-observation-holder-01",
+      "--timeout-seconds",
+      "3600"
+    ]
+  },
+  "deployment": {
+    "example_jsons": "Review examples only. The original installer creates actual templates with derived lifecycle hashes.",
+    "mac": "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01",
+    "private_profile_body": "Never included; existing D1 seed is hash-bound and read under the unchanged original helper guards.",
+    "x230/tools-01": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01"
+  },
+  "execution_policy": "Root owns every host call and formal lock. No operation has been launched by this package.",
+  "lifecycle_threshold_source": "Unchanged 27-file lifecycle tools, original analyze_lifecycle_gates.py including its CPU tick tolerance.",
+  "mac_parent_directory": "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01",
+  "measurement_results": null,
+  "normal_lifecycle_original_tool_tests": 14,
+  "normal_lifecycle_required_comparisons": [
+    "all_operations",
+    "launch",
+    "concurrent_cancel"
+  ],
+  "planned_observation": {
+    "arena_max": 1,
+    "boundary_bursts": 2,
+    "boundary_concurrency": 32,
+    "calls_per_concurrency_per_round": 192,
+    "concurrency": [
+      1,
+      8,
+      16
+    ],
+    "hosts": 6,
+    "order": "ABBA",
+    "planned_measured_calls": 2304,
+    "planned_preflight_and_restart_calls": 72,
+    "planned_total_calls": 2664,
+    "planned_warmup_calls": 288,
+    "quiet_seconds": 90,
+    "recovery_hosts": 6,
+    "warmups_per_concurrency_per_round": 24,
+    "workers": 2
+  },
+  "private_namespaces": {
+    "normal_lifecycle_prefix": "/home/qian/s36lc1",
+    "observation": [
+      "/home/qian/hs36n01",
+      "/home/qian/hs36b01",
+      "/home/qian/hs36c01"
+    ],
+    "recovery": "/home/qian/hepta-runtime-optimization-20261104-r16/s36-cancel-recovery-01"
+  },
+  "runtime_root": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+  "schema": "hepta-r36-scratch-actual-parent-operator-plan/v1",
+  "sealed": false,
+  "sequence": [
+    "COMPLETED: actual original eight-stage qualification",
+    "COMPLETED: seal reviewed parent static inputs from original local receipts",
+    "create-only deploy sealed tools and seven recovered fixture inputs; run original tool installer once",
+    "original exact Rust CI using the sealed parent binder; preserve original native terminal/read/report/plan/audit/logs",
+    "original observation materializer after completed qualification and exact CI",
+    "original Mac held-agent observation parent",
+    "only if the original observation gate passes: original lifecycle materializer and original Mac lifecycle parent",
+    "archive original outputs and decide only from original required gates; no selective rerun"
+  ],
+  "source_baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "source_changed_paths": [
+    "src/mcp/runtime/ssh_observation_profile.rs",
+    "src/mcp/runtime/ssh_observation_reference_tests.rs"
+  ],
+  "thresholds": {
+    "controller_cpu_b_over_a_max": 1.1,
+    "controller_rss_b_over_a_max": 1.05,
+    "controller_rss_extra_kib_max": 512,
+    "p95_b_over_a_max": 1.1,
+    "primary_concurrency": 8,
+    "throughput_b_over_a_min": 0.95
+  },
+  "sealed_parent": true,
+  "actual_parent": {
+    "git_blob": "56f4a6e90dcd92d269c8b480c3e4ddcd9406d5a6",
+    "bytes": 90946,
+    "sha256": "070f53cec7359bfa3f390f45edd135f417d0013dbf091e35dd7334e0cefc0045"
+  },
+  "actual_bundle": {
+    "git_blob": "35f24b29c6f8773d93967b4b27ff881746901a5f",
+    "bytes": 9368,
+    "sha256": "a8e4d2debee8aae6538f197cff2020fb412586888c25ffc45955792422b9bd9d"
+  },
+  "pending_only_from_later_actual_outputs": [
+    "exact CI original terminal/report/plan/audit",
+    "installer-generated campaign example identity",
+    "original observation gate before lifecycle materialization"
+  ],
+  "deployment_files": [
+    {
+      "path": "mac/held_agent_campaign_02.py",
+      "bytes": 11374,
+      "sha256": "715e996217c7d33a7483354f16f2d39c9a033f51f3a20a52484495a00262dd65",
+      "git_blob": "c642b45500ed44abee56ba45614932855cd29892",
+      "destination": "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/held_agent_campaign_02.py"
+    },
+    {
+      "path": "mac/r36_campaign.py",
+      "bytes": 90946,
+      "sha256": "070f53cec7359bfa3f390f45edd135f417d0013dbf091e35dd7334e0cefc0045",
+      "git_blob": "56f4a6e90dcd92d269c8b480c3e4ddcd9406d5a6",
+      "destination": "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/r36_campaign.py"
+    },
+    {
+      "path": "mac/r36_lifecycle_campaign.py",
+      "bytes": 25165,
+      "sha256": "872a387c13f78365668d4626b02e29f7408c2cb37a76226eb4d96002026712e6",
+      "git_blob": "321374f3ac6c12f638db061a84695226232d4b13",
+      "destination": "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/r36_lifecycle_campaign.py"
+    },
+    {
+      "path": "x230/tools-01/frozen-fixture-inputs/jobs/1a16a4035ad-b1270-1.json",
+      "bytes": 880,
+      "sha256": "a8982325aea4833461e2b6a76ca83f846b80b99a227298e97a0b279e2d9dfdb8",
+      "git_blob": "63fc148938d5692275ca3d705b2e8db21ce78d84",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/frozen-fixture-inputs/jobs/1a16a4035ad-b1270-1.json"
+    },
+    {
+      "path": "x230/tools-01/frozen-fixture-inputs/jobs/1a16a403e55-b1270-2.json",
+      "bytes": 877,
+      "sha256": "bbb8a86161837ff0f197b345c25bc66224e3404473dea2ac46d1f44f3af43609",
+      "git_blob": "caefd6724c51f91bb283ff2c47a30a7c383ec453",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/frozen-fixture-inputs/jobs/1a16a403e55-b1270-2.json"
+    },
+    {
+      "path": "x230/tools-01/frozen-fixture-inputs/jobs/1a16a4046ac-b1270-3.json",
+      "bytes": 881,
+      "sha256": "4badc323518a6db1567162a2d7ef5d1209aa88375aba201ec6f3aab34bec61a8",
+      "git_blob": "6fdfde1d5b51d1b26fb6b4f65f040b43fe469ba3",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/frozen-fixture-inputs/jobs/1a16a4046ac-b1270-3.json"
+    },
+    {
+      "path": "x230/tools-01/frozen-fixture-inputs/jobs/1a16a40534e-b1270-4.json",
+      "bytes": 890,
+      "sha256": "79e18b1a42d84f8024b692dfd98a9f06fa1d6886bf5dc230248cfbde674f011c",
+      "git_blob": "4812016dd9646332213b78332c88f30dd56db6a2",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/frozen-fixture-inputs/jobs/1a16a40534e-b1270-4.json"
+    },
+    {
+      "path": "x230/tools-01/frozen-fixture-inputs/jobs/1a16a405d21-b1270-5.json",
+      "bytes": 877,
+      "sha256": "9c89c598f35f6bc94572852fcc03feed6e8c798ee34db5095bd3b48813562dc6",
+      "git_blob": "a9d57701312528461e761fd6207ee8f0f4e64ffa",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/frozen-fixture-inputs/jobs/1a16a405d21-b1270-5.json"
+    },
+    {
+      "path": "x230/tools-01/frozen-fixture-inputs/jobs/1a16a40671b-b1270-6.json",
+      "bytes": 878,
+      "sha256": "5b737330fa5a75a458138e1848a044d2a77c062175d8eb9694a510ff20b53cde",
+      "git_blob": "1197b0e7dcf8d6c398a4cc8805c9d32af6962fcf",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/frozen-fixture-inputs/jobs/1a16a40671b-b1270-6.json"
+    },
+    {
+      "path": "x230/tools-01/frozen-fixture-inputs/topology.json",
+      "bytes": 796,
+      "sha256": "c131f12bd145d53bd2c26d0917411a41e6e85d19a6273fc19d0ef3744d23658e",
+      "git_blob": "d6ea6ba25dcaa7e5edee98749161c46df76a71e0",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/frozen-fixture-inputs/topology.json"
+    },
+    {
+      "path": "x230/tools-01/install_measurement_tools.py",
+      "bytes": 12304,
+      "sha256": "2d6b4560e7f42eb6b9e9a732d05688930d164eda93b7655bc8694a24d9785e86",
+      "git_blob": "8fef7b667c1c62befeb84277ebd770bd6046d543",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/install_measurement_tools.py"
+    },
+    {
+      "path": "x230/tools-01/prepare_campaign_inputs.py",
+      "bytes": 9935,
+      "sha256": "6bda3bb790d0a015d3a3b31e10ba168b147df431781b03af94f876b829cd0209",
+      "git_blob": "3a6515522c0837667b379b592823af81d6dca2f8",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/prepare_campaign_inputs.py"
+    },
+    {
+      "path": "x230/tools-01/prepare_lifecycle_inputs.py",
+      "bytes": 12217,
+      "sha256": "8d675039098f16524549830092f4a4fcb08b973a24d240ab2612b33b33b02c04",
+      "git_blob": "2a2096a56d445323f7547d980b5015b17e922d01",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/prepare_lifecycle_inputs.py"
+    },
+    {
+      "path": "x230/tools-01/r36_campaign.py",
+      "bytes": 90946,
+      "sha256": "070f53cec7359bfa3f390f45edd135f417d0013dbf091e35dd7334e0cefc0045",
+      "git_blob": "56f4a6e90dcd92d269c8b480c3e4ddcd9406d5a6",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/r36_campaign.py"
+    },
+    {
+      "path": "x230/tools-01/r36_lifecycle_campaign.py",
+      "bytes": 25165,
+      "sha256": "872a387c13f78365668d4626b02e29f7408c2cb37a76226eb4d96002026712e6",
+      "git_blob": "321374f3ac6c12f638db061a84695226232d4b13",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/r36_lifecycle_campaign.py"
+    },
+    {
+      "path": "x230/tools-01/runner-bundle-manifest.json",
+      "bytes": 9368,
+      "sha256": "a8e4d2debee8aae6538f197cff2020fb412586888c25ffc45955792422b9bd9d",
+      "git_blob": "35f24b29c6f8773d93967b4b27ff881746901a5f",
+      "destination": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/runner-bundle-manifest.json"
+    }
+  ],
+  "linux_file_count": 13,
+  "mac_file_count": 3,
+  "local_seal_execution": {
+    "entrypoint": "seal_parent_bundle.py",
+    "exit_code": 0,
+    "attempts": 1,
+    "pure_data_only": true,
+    "host_calls": 0
+  },
+  "status": "PARENT_SEALED_QUALIFICATION_BOUND_CI_OBSERVATION_LIFECYCLE_PENDING"
+}

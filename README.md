@@ -1,0 +1,845 @@
+# Hepta Runtime
+
+## Concurrent execution
+
+Independent requests have no Hepta Runtime execution-count ceiling. SSH,
+durable-job I/O, search, document and artifact workers, PTYs, model workers,
+metadata queries and audit synchronization no longer reserve fixed global or
+per-host execution slots. `effective_config` reports
+`limits.concurrent_execution: "unbounded_by_runtime"`.
+
+Same-operation reconciliation, shared-store transactions and original-child
+cleanup still preserve their owners. Data size and retained-history quotas are
+separate from concurrent execution. See [Concurrency policy](docs/CONCURRENCY_POLICY.md)
+for the removed gates, preserved invariants and external transport boundaries.
+
+## Native artifact and weight integration
+
+The [unified REA/runtime integration](docs/rea-native/UNIFIED_RUNTIME.md) combines
+the native runtime owner and R9/R10 concurrency work with large GGUF/safetensors
+directories, bounded tensor reads, ZIP application-container indexes, pinned
+GNU analyzers, JADX and versioned Ghidra providers, native JS/TS AST inspection, bounded
+Rust CDP browser capture, immutable native weight patches and a scoped Rust F32
+Linear forward operator. Each report states its coverage and identity scope.
+Native artifact operations work without a resident Python model or Node REA process.
+Operator-mode durable jobs retain the existing Python launcher and runner.
+Ghidra/JDK and Chrome remain explicit engine dependencies for their routes.
+
+- [Verified native analysis increment and evidence](docs/rea-native/NATIVE_ANALYSIS_INCREMENT_20261104.md)
+- [Static providers and original-job lifecycle](docs/rea-native/STATIC_PROVIDERS.md)
+- [Versioned Ghidra function analysis and decompilation](docs/rea-native/GHIDRA_ANALYSIS.md)
+- [Native JavaScript/TypeScript and Electron AST observations](docs/rea-native/JAVASCRIPT_AST.md)
+- [Local browser capture through the existing job owner](docs/rea-native/LOCAL_BROWSER_CAPTURE.md)
+- [Exact native weight artifacts and restoration](docs/weight-runtime/NATIVE_ARTIFACTS.md)
+- [Native F32 Linear calculation and independent comparison](docs/weight-runtime/NATIVE_LINEAR.md)
+- [Native semantic replay joined to exact continuation certificates](docs/weight-semantic-certificate.md)
+
+The [frozen REA 6.8.0 compatibility ledger](docs/rea-native/compatibility/README.md)
+tracks all 229 upstream tools, their implementation scope and remaining behavior
+gates. CI checks its source bindings and mapping consistency; complete upstream
+behavioral parity remains OPEN.
+
+Use the CI's isolated runner for the full runtime suite:
+`cargo nextest run --locked --all-targets --all-features --test-threads 1 --retries 0 --no-fail-fast`.
+Some historical tests intentionally modify process-global state and require
+separate processes. The pinned toolchain, CI gates, and manual Linux artifact
+packaging are documented in [CI and private release validation](.agents/release.md).
+
+## Weight-space research workbench
+
+The optional `hepta-weight` domain runs a resident CPU model under the existing
+process owner. It supports internal probes, temporary causal interventions,
+bounded numerical analysis and exact typed weight patches. Candidate artifacts
+retain base/backend identity, realized dtype changes and costs.
+
+- [Enable profiles and use the six MCP tools](docs/weight-runtime/RUST_OWNER.md)
+- [Compose probes, SVD and writer-column edits](docs/weight-runtime/ANALYSIS.md)
+- [Python worker protocol and model adapters](workers/weight/PROTOCOL.md)
+- [Implementation qualification and closed defects](docs/weight-runtime/QUALIFICATION.md)
+- [Separate frozen paired evaluation](experiments/weight/evaluation/README.md)
+- [Public MIT Qwen reconstruction and measured mechanism replay](experiments/weight/mit_replay/README.md)
+
+Profiles default to disabled. The research worker does not train, replace an
+active checkpoint, grant production eligibility, or place an order. Confirmation
+outcomes and production selection remain with their existing independent owners.
+
+
+**Current capabilities:** [CHECKPOINT_LIFECYCLE.md](docs/CHECKPOINT_LIFECYCLE.md) describes the native, pinned Linux checkpoint API with bounded thread groups and separate stopped-restore/resume actions. [PROTECTED_AND_COMPLEX_PARITY.md](docs/PROTECTED_AND_COMPLEX_PARITY.md) covers native protected PDFs, explicit certificate anchors, complex workbooks and inode-preserving patches. Earlier failed/withdrawn experiments remain historical evidence, not the status of the current implementation; exact installation is established by its dated receipt.
+Policy-enforced, multi-host MCP runtime for durable process execution, interactive PTYs, read-only hardware/service/network inspection, and exact administrator-approved privileged actions.
+
+This project is derived from [Muvon/octofs](https://github.com/Muvon/octofs) at commit `37b5d3d02be511bae86d91fa980996a5fe257d7b` under Apache-2.0. The original Octofs documentation follows below; see [`docs/HEPTA_RUNTIME.md`](docs/HEPTA_RUNTIME.md) for the fork-specific architecture, policy, deployment, and recovery contract.
+
+## Hepta operator deployment
+
+The optional [two-phase process checkpoint API](docs/CHECKPOINT_LIFECYCLE.md) separates memory restoration from explicitly authorized execution; host capability pins remain opt-in.
+
+See [local handoff, restart and format completion](docs/LOCAL_HANDOFF_AND_FORMATS.md) for the current maintenance and parser capabilities, qualified scopes, and local native CLI.
+
+See [native binary/remote document/page/range tools](docs/NATIVE_TRANSFER.md) for the current local replacement APIs and their explicit preservation limits.
+
+See [the v5 native DC-replacement candidate](docs/DC_FUNCTIONAL_V5_NATIVE_CANDIDATE.md) for bounded multi-file UTF-8 reads, configured-host SSH health and durable cancellable search. The [optimized six-host stage receipt](docs/qualification/dc-functional-v5-release-staged-20261013.json) records a staged artifact, not an installed catalog or full replacement. The installed v4 service and Desktop Commander remain active; [the Work handoff](docs/WORK_HANDOFF_DC_REPLACEMENT_20261013.md) lists caller/resume, model-origin, business and recovery/cutover gates.
+
+Current bounded metadata/configuration candidate: [native v6 audit and configuration](docs/DC_FUNCTIONAL_V6_METADATA_CANDIDATE.md). Installed v4 and Desktop Commander remain unchanged; native receipts do not grant full replacement qualification.
+Bounded request cancellation: [native v6 facade candidate](docs/DC_FUNCTIONAL_V6_FACADE_CANCELLATION.md), with actual six-host native/facade receipts; ChatGPT model-origin and production cutover remain open.
+
+
+
+
+The upstream Octofs installation instructions below do **not** install this fork. Build Hepta with `cargo build --release --locked --bin hepta-runtime` and use the configuration and deployment assets in this repository.
+
+For trusted-account shell, external-PID signalling and temporary sudo, see [Operator mode](docs/OPERATOR_MODE.md). For complete operator output archives and target-owned terminals that survive controller restarts, see [Persistent terminals](docs/PERSISTENT_TERMINALS.md). The isolated default remains separate; arbitrary operator execution is not a sandbox.
+
+Follow the exact source/binary qualification receipts under `docs/qualification/`. Source implementation, a parallel installed service, and a completed Desktop Commander cutover are different states. Preserve DC for existing sessions and rescue; cloud/ChatGPT registration is the final, separately authorized step.
+
+## Durable inventory pagination
+
+`process_list_page` observes the complete private job registry before returning
+its first page. Continue the returned opaque cursor with the same host filter;
+page limits are independently selectable from 1 to 128, with a 64 KiB response
+bound. Only the final page has `inventory_complete: true`. Job metadata remains
+an observation; use `process_status` for authoritative live status.
+
+The controller prunes idle snapshots toward a four-entry cache target and
+accounts for at most 32 MiB of owned snapshot payload. The entry-count target
+does not refuse additional active readers. Cursors expire five minutes after
+the observation; expired idle entries are removed on subsequent access.
+In-flight entries remain charged until their readers finish. Independent scans
+and render operations have no fixed worker admission ceiling, including cold
+observations not yet published in the cache. A continuation is bound to its original state root,
+host filter and controller-local handle. Expiry, eviction, restart or a detected
+source change requires a fresh first page. A fresh first page always rechecks
+the source; it cannot silently resume an older observation.
+
+Every continuation reads and hashes all original receipt bytes on every host.
+The cache reuses the checked public projection and digest. Filesystem timestamps
+and directory content watches do not prove unchanged content; in particular,
+Linux inotify does not report writes through an existing shared memory mapping. The source limits remain 65,536 records, 128 MiB,
+4 MiB + 64 KiB per record and five seconds; a refusal returns no partial inventory.
+This source candidate still requires dev-host tests and an exact-build Mac
+measurement before it qualifies the observed 1,912-record production workload.
+
+## Native library builds
+
+The default `remote-fs` feature includes the existing SSH/SFTP filesystem backend.
+The `hepta-runtime` CLI requires this feature, so its default build and host-key
+verification remain unchanged. A trusted native process consumer can depend on
+the library with `default-features = false` to omit `russh` and `russh-sftp`.
+
+Without `remote-fs`, local filesystem access and the existing native durable job
+owner, original-request reconciliation, policy checks, and system-SSH process
+transport remain available. All remote filesystem APIs reject `ssh://` and
+`sftp://` operations, including the runtime's descriptor-relative file helper;
+they do not interpret those URLs as local paths. The `native` API still requires
+the embedding host to validate final-use authorization independently.
+
+`native::execute_or_observe_with_entry` accepts an owned `Send + 'static`
+callback and guard. Move the host's owned capability into the callback; the
+independent transport owner invokes it immediately before the original SSH
+spawn and retains its guard until that original child is reaped, including
+after caller cancellation. Reusing an existing binding only observes it and
+does not consume the callback or submit another launch.
+
+The following Octofs material is retained upstream reference, not the authoritative Hepta runtime policy and installation contract.
+
+---
+
+<div align="center">
+
+# 🐙 Octofs
+
+**Give your AI assistant filesystem superpowers**
+
+[![CI](https://github.com/muvon/octofs/actions/workflows/ci.yml/badge.svg)](https://github.com/muvon/octofs/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmuvon%2Foctofs%2Fbadges%2Fcoverage.json&style=flat-square)](https://github.com/muvon/octofs/actions/workflows/ci.yml)
+[![Rust](https://img.shields.io/badge/Rust-1.95+-orange.svg?logo=rust)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-2026--07--28-green.svg)](https://modelcontextprotocol.io)
+[![Version](https://img.shields.io/crates/v/octofs.svg)](https://crates.io/crates/octofs)
+
+*Standalone Rust binary that exposes filesystem tools over the Model Context Protocol. Built on `rmcp` 3.x, `tokio`, and `axum`.*
+
+[Installation](#installation) · [Quick Start](#quick-start) · [Features](#features) · [Tools Reference](#mcp-tools-reference) · [Docs](doc/tools.md) · [Architecture](#architecture) · [Changelog](CHANGELOG.md)
+
+MCP Registry: [`io.github.Muvon/octofs`](https://registry.modelcontextprotocol.io)
+
+</div>
+
+---
+
+## Why Octofs?
+
+Your AI coding assistant (Cursor, Claude, Windsurf, etc.) is smart — but it's **blind to your filesystem**. Octofs bridges that gap, giving your AI:
+
+- **Eyes** — Read files, search content, explore directories
+- **Hands** — Create, edit, batch-modify files atomically
+- **Context** — Execute commands, manage working directories
+- **Reach** — Transparent SSH/SFTP: every file tool accepts `ssh://` URLs
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  You: "Refactor all error handling to use anyhow::Context" │
+├─────────────────────────────────────────────────────────────┤
+│  AI without Octofs:                                         │
+│  • "I can't see your project structure"                     │
+│  • "Please paste the relevant files"                        │
+│  • *Wastes 10 minutes on back-and-forth*                    │
+├─────────────────────────────────────────────────────────────┤
+│  AI with Octofs:                                            │
+│  • Reads your codebase directly                             │
+│  • Finds all error handling patterns                         │
+│  • Suggests atomic batch edits                              │
+│  • Applies changes with your approval                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## What Makes It Different
+
+| Feature | Octofs | Typical Alternatives |
+|---------|--------|---------------------|
+| **Implementation** | Compiled Rust binary, no runtime | Python/Node script |
+| **Content Search** | Built-in search with context lines | String matching only |
+| **Batch Operations** | Atomic multi-edit on single file | One-at-a-time |
+| **Line Addressing** | Composite `N:hh` ids — hash-verified at apply time; stale edits fail with relocation hints | Number-only |
+| **Transport** | STDIO + Streamable HTTP | STDIO only |
+| **Shell Integration** | Automatic foreground-to-background handoff | Limited or none |
+| **Remote Files** | Transparent SSH/SFTP on every file tool | None |
+| **Re-reads** | Delta views — re-viewing a file returns only the hunks changed since | Full file every time |
+| **Safety** | Gitignore-aware, stale-write detection, path validation | Full filesystem access |
+
+---
+
+## Installation
+
+### Cargo (crates.io)
+
+```bash
+cargo install octofs
+```
+
+### Homebrew
+
+```bash
+brew install muvon/tap/octofs
+```
+
+### npm (no Rust toolchain needed)
+
+```bash
+npx -y @muvon/octofs --version
+```
+
+The wrapper downloads the matching pre-built binary on first run. MCP config:
+
+```json
+{
+  "mcpServers": {
+    "octofs": {
+      "command": "npx",
+      "args": ["-y", "@muvon/octofs", "mcp"]
+    }
+  }
+}
+```
+
+### Pre-built Binaries
+
+Download from [GitHub Releases](https://github.com/muvon/octofs/releases) for your platform:
+
+| Platform | Target |
+|----------|--------|
+| Linux (x86_64) | `x86_64-unknown-linux-musl` |
+| Linux (ARM64) | `aarch64-unknown-linux-musl` |
+| Windows (x86_64) | `x86_64-pc-windows-msvc` |
+| Windows (ARM64) | `aarch64-pc-windows-msvc` |
+| macOS (Intel) | `x86_64-apple-darwin` |
+| macOS (Apple Silicon) | `aarch64-apple-darwin` |
+
+Each release also ships `.mcpb` bundles for one-click install in clients that support MCP bundles (e.g. Claude Desktop).
+
+### MCP Registry
+
+Published to the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.Muvon/octofs`.
+
+### From Source
+
+Requires Rust 1.95+.
+
+```bash
+git clone https://github.com/muvon/octofs
+cd octofs
+cargo build --release
+# Binary at ./target/release/octofs
+```
+
+---
+
+## Quick Start
+
+### 1. Configure Your AI Assistant
+
+The CLI uses a `mcp` subcommand — your config must pass `["mcp"]` as args.
+
+**Cursor** (`~/.cursor/mcp.json`):
+```json
+{
+  "mcpServers": {
+    "octofs": {
+      "command": "octofs",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+```json
+{
+  "mcpServers": {
+    "octofs": {
+      "command": "octofs",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+**Windsurf** (`~/.windsurf/mcp.json`):
+```json
+{
+  "mcpServers": {
+    "octofs": {
+      "command": "octofs",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+> If Octofs isn't on your `PATH`, use the full path to the binary (e.g. `/usr/local/bin/octofs` or `./target/release/octofs`).
+
+### 2. Restart Your AI Assistant
+
+The MCP server starts automatically when your AI assistant connects.
+
+### 3. Try It
+
+Ask your AI assistant to:
+- "Show me the project structure"
+- "Read the main.rs file"
+- "Search for all uses of `unwrap()` in the codebase"
+- "Create a new file called `test.rs`"
+
+---
+
+## Features
+
+### 📁 Filesystem Operations
+
+- **View Files & Directories** — Read a single file (call `view` in parallel for several), list directories with glob patterns, search content
+- **Smart Truncation** — Large files are truncated intelligently to avoid overwhelming context windows
+- **Gitignore-Aware** — Respects `.gitignore` patterns during directory traversal
+- **Line Ranges** — Read specific line ranges with negative indexing (`-1` = last line)
+- **Remote Files (SSH/SFTP)** — Every file tool accepts `ssh://user@host:port/path` URLs (see [Remote Filesystem](#remote-filesystem-sshsftp))
+
+### ✏️ Text Editing
+
+- **Create Files** — Create new files with automatic parent directory creation
+- **String Replace** — Replace exact string matches with fuzzy fallback for whitespace
+- **Delete** — Remove a file (recoverable via undo)
+- **Undo** — Revert last edit (up to 10 undo levels per file, in-memory)
+- **Batch Edit** — Perform multiple insert/replace operations atomically on a single file
+- **Stale-Write Protection** — Every edit target's `N:hh` id is verified against the file at apply time; a stale id fails with the current content and where it moved, instead of editing the wrong line
+
+### 🔍 Code Intelligence
+
+- **Content Search** — Search for strings within files with context lines
+- **Line Extraction** — Copy specific line ranges from one file to another
+
+### 🖥️ Shell & System
+
+- **Command Execution** — Run shell commands with output capture
+- **Background Processes** — Long commands automatically continue in background with completion notifications
+- **Working Directory** — Set/get/reset working directory context for operations
+
+---
+
+## Configuration
+
+### Line Identifiers
+
+Every line is addressed by a composite id `N:hh` — its 1-indexed position plus a
+2-character hex hash (FNV-1a) of its content. `view` renders lines as `N:hh|content`:
+
+```
+1:a3|fn main() {
+2:f1|    println!("Hello");
+3:0e|}
+```
+
+Edit tools take these ids back as targets and verify the hash against the file
+before applying anything. A stale id (the file changed since it was viewed) fails
+with the current content around the target and where the expected content moved —
+so the model retargets from the error instead of re-reading the file. Edit results
+are diffs with fresh ids, so edits chain without re-viewing. Removed lines collapse
+to their old id range (`-12:a3..15:f1 (4 lines)`), and a trailing
+`shift: lines after 40:b2 +3` line says how original line numbers below each edit
+moved, so ids the model still holds can be adjusted without a failed call.
+
+This is the single line-id format — there is no mode switch. Plain line numbers
+are still accepted where a position alone is safe: `view` ranges (negative counts
+from the end) and the insert anchors `0` (file start) / `-1` (append).
+
+### Shell Misuse Enforcement
+
+Octofs detects shell misuse — commands like `cat`, `grep`, `find`, or `sed` that
+should use the dedicated MCP tools instead — and rejects them with an error
+explaining which tool to use. The call fails; nothing executes. This is
+intentional and not configurable: the dedicated tools give the model line ids,
+gitignore-awareness, and remote-host support that raw shell output cannot.
+Pipelines (`cargo build 2>&1 | grep error`) remain allowed — only standalone
+invocations of those programs are blocked.
+
+Other guidance (out-of-bounds ranges, fuzzy-match notices) is appended to
+successful responses as ⚠️ hints without failing the call.
+
+### Transport Modes
+
+#### STDIO (default)
+
+Standard input/output transport. Works with all MCP clients.
+
+```bash
+octofs mcp
+```
+
+#### HTTP
+
+Hepta Runtime uses authenticated Streamable HTTP on a loopback address in every
+tool mode, including when no runtime configuration is supplied. The token file
+must be an account-owned, single-link regular file with mode `0600`; token loading
+currently requires Unix descriptor support. Create a private token file once:
+
+```bash
+python3 - <<'PY'
+import os
+import pathlib
+import secrets
+
+path = pathlib.Path.home() / ".config" / "hepta-runtime" / "http.token"
+path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+os.fchmod(fd, 0o600)
+with os.fdopen(fd, "w", encoding="ascii") as token:
+    token.write(secrets.token_hex(32) + "\n")
+PY
+
+./target/release/hepta-runtime mcp --bind 127.0.0.1:12345 \
+  --auth-token-file "$HOME/.config/hepta-runtime/http.token"
+```
+
+Connect the MCP client to `http://127.0.0.1:12345/mcp` and configure it to send the
+file's token, without its final newline, as the `X-Hepta-Runtime-Token` header on
+every MCP request. Missing or incorrect tokens return `401`; requests carrying
+an `Origin` header return `403`. For remote clients, use an SSH or TLS tunnel
+whose server-side target is this loopback listener. The local `/healthz` and
+`/readyz` probes remain unauthenticated and do not grant MCP access.
+
+### Working Directory
+
+By default, Octofs operates in the current directory. Specify a different root:
+
+```json
+{
+  "mcpServers": {
+    "octofs": {
+      "command": "octofs",
+      "args": ["mcp", "--path", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+### Remote Filesystem (SSH/SFTP)
+
+All path parameters — and `--path` itself — accept `ssh://` or `sftp://` URLs:
+
+```bash
+# Remote session root: relative paths resolve on the remote host
+octofs mcp --path ssh://deploy@example.com/var/www/app --ssh-key ~/.ssh/id_ed25519
+```
+
+```
+view path="ssh://deploy@example.com/etc/nginx/nginx.conf"
+```
+
+- **Login home** — `ssh://host` (no path) and `ssh://host/~/dir` resolve against the login user's home, like `ssh host` / `scp host:dir`. `ssh://host/dir` stays absolute.
+- **OpenSSH config** — host aliases are resolved through the local OpenSSH config (including `Include` and `Match`) and honor `HostName`, `User`, `Port`, and a single `ProxyJump`. Explicit URL values win, so both `ssh://dev/path` and `ssh://user@example.com:2222/path` work as expected. Multi-hop `ProxyJump` and `ProxyCommand` routing are rejected with a clear error.
+- **Authentication** — uses the host's `IdentityAgent` (e.g. 1Password) or `$SSH_AUTH_SOCK`, then key files — `--ssh-key` if given, the host's `IdentityFile` entries, then the defaults in `~/.ssh` (`id_ed25519`, `id_ecdsa`). Passphrase-protected key files are not supported directly; use an agent instead.
+- **RSA keys are not supported** — the Rust `rsa` crate has an unfixed timing side-channel (Marvin attack, [RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071)), so octofs is built without RSA entirely. Use an ed25519 key instead (`ssh-keygen -t ed25519`); ecdsa also works. RSA-only setups fail with a clear error naming the key.
+- **Host keys** — verified against `~/.ssh/known_hosts` with the OpenSSH `accept-new` policy: unknown hosts are recorded on first use, a changed key fails closed.
+- **`--ssh-timeout SECS`** — connection timeout (default 30). Connections are pooled per host, kept alive with transport keepalives, and reconnected automatically if they drop.
+- **`shell` stays local** — commands always run on the machine where Octofs runs; only file tools (`view`, `text_editor`, `batch_edit`, `extract_lines`, `workdir`) reach remote hosts.
+
+---
+
+## MCP Tools Reference
+
+### `view` — Read files, list directories, search content
+
+**File reading:** (`path` is a single path; `start`/`end` are line numbers or line ids)
+```json
+{"path": "src/main.rs"}                          // whole file
+{"path": "src/main.rs", "start": 10, "end": 20}  // lines 10–20
+{"path": "src/main.rs", "start": 42, "end": 42}  // single line
+{"path": "src/main.rs", "start": 80}             // line 80 → end of file
+{"path": "src/main.rs", "start": -20}            // last 20 lines
+{"path": "src/main.rs", "start": "12:a3", "end": "20:f1"}  // line ids from prior output
+```
+
+Output renders every line as `N:hh|content` — the `N:hh` prefix is the line id
+that `batch_edit` and `extract_lines` take as targets.
+
+To read several files, make multiple `view` calls — they run in parallel.
+
+Reuse content and line ids already returned. Read a complete relevant function or block
+in one call, combining adjacent windows. If its location is unknown, use `content` with
+enough `context` to understand the matches, then fetch only missing surrounding code.
+Do not re-read overlapping ranges or repeatedly narrow a range just to pick edit targets.
+Re-read when the file may have changed, output was truncated, or prior context is unavailable.
+Empty files return `[empty file, 0 lines]` on an initial or forced full read.
+
+**Delta views:** a whole-file view of a file the session already served returns
+only the hunks changed since — the same `...`/`-`/`+` style as edit results, with
+removed lines collapsed to their old id range — or
+`[unchanged since you last viewed or edited it: N lines. Pass full: true to re-read.]`.
+Octofs' own edits keep the cache current, so a re-view after your own `batch_edit`
+costs one line. Ranged views and content search always render exactly what was asked.
+`full` has no effect on ranges or searches; omit `start`/`end` and content search to
+force a complete file read. It does not change output limits.
+```json
+{"path": "src/main.rs", "full": true}   // force the complete file (e.g. after context compaction)
+```
+
+**Directory listing:**
+```json
+{"path": "src/"}
+{"path": "src/", "pattern": "*.rs"}
+{"path": "src/", "max_depth": 2, "include_hidden": true}
+```
+
+A bare listing of a remote directory (`ssh://host/path`, no `pattern`/`content`)
+defaults to `max_depth: 1` — root entries only — because every subdirectory costs
+an SFTP round trip; pass `max_depth` explicitly to walk deeper. Searches with
+`pattern` or `content` always walk the whole tree, like `rg`.
+
+`pattern` uses the same gitignore-style glob grammar as ripgrep's `-g/--glob`:
+without `/` it matches filenames at any depth, while a pattern containing `/`
+matches the returned relative path. It supports `*` within one path component,
+`**` across directories, `?`, character classes such as `[abc]`, brace alternatives
+such as `*.{rs,toml}`, and leading `!` exclusions. Use `|` to pass ordered globs in
+one MCP string; later globs take precedence:
+
+```json
+{"path": ".", "pattern": "**/*.{rs,toml}|!target/**"}
+{"path": ".", "content": "unsafe", "pattern": "src/**/*.rs|!src/generated/**"}
+```
+
+The glob filters files discovered by Octofs' gitignore-aware traversal. Use
+`include_hidden: true` to include hidden paths; gitignored paths remain excluded.
+Patterns are limited to 4096 UTF-8 bytes, 64 `|`-separated rules, and 16 nested
+brace levels. They must be a single line and are validated before traversal.
+Escape a literal leading `#` or `!` as `\#` or `\!`; otherwise `#` is rejected
+instead of silently acting as a gitignore comment. Empty brace alternatives such
+as `{,rs}` are rejected because ripgrep does not support them.
+
+**Content search:** (literal by default; set `regex: true` for a Rust regex, `(?i)` = case-insensitive)
+```json
+{"path": "src", "content": "fn main"}
+{"path": "src", "content": "unwrap()", "context": 3}
+{"path": "src", "content": "(?i)error", "regex": true}
+{"path": "docs|scripts|BENCHMARK.md", "content": "update_benchmark.py", "context": 4}
+```
+
+For an rg-style search across several roots, `path` accepts `|`-separated literal
+files and directories when `content` is set. The roots are not regexes: as with
+rg's positional path arguments, each one must exist. A real path containing `|`
+takes precedence over this shorthand. Root lists must be single-line, contain no
+duplicates, and are limited to 32 roots and 8192 UTF-8 bytes.
+
+Directory listings annotate each file as `path<TAB>NL<TAB>~Nt` (line count + estimated tokens) so you can budget reads before opening files; binary files show `path<TAB>(binary)`.
+
+---
+
+### `text_editor` — Create, edit, replace text
+
+**Create file:**
+```json
+{"command": "create", "path": "src/new.rs", "content": "pub fn new() {}"}
+```
+
+**Replace string:** (`old_text` must match exactly once)
+```json
+{
+  "command": "str_replace",
+  "path": "src/main.rs",
+  "old_text": "fn old()",
+  "new_text": "fn new()"
+}
+```
+
+**Replace ALL occurrences** (rename-style edits):
+```json
+{
+  "command": "str_replace",
+  "path": "src/main.rs",
+  "old_text": "old_name",
+  "new_text": "new_name",
+  "replace_all": true
+}
+```
+
+Matching is progressive: exact → escaped-literal recovery (double-escaped `\n`/`\t`
+interpreted when the result matches uniquely) → whitespace-normalized fuzzy with
+indentation adjustment → rich diagnostics with the closest candidates and their
+line ids. CRLF files are matched in LF space and keep their line endings on write.
+
+**Delete file:** (recoverable with `undo_edit`)
+```json
+{"command": "delete", "path": "src/old.rs"}
+```
+
+**Undo last edit:**
+```json
+{"command": "undo_edit", "path": "src/main.rs"}
+```
+
+---
+
+### `batch_edit` — Atomic multi-operation edits
+
+Perform multiple insert/replace operations on a single file atomically.
+
+Each operation has a `start`. For `replace` it's the first line of the range as a
+line id copied from `view` output (add `end` for a range; omit it for a single
+line). For `insert` it's the anchor to insert after — a line id, or the integers
+`0` (file start) / `-1` (after last line). Every id is verified against the file
+before anything applies; a stale id fails with the current content so the model
+can retarget without a re-view. The result is a diff with fresh ids.
+
+**Insert at beginning:**
+```json
+{
+  "path": "src/main.rs",
+  "operations": [
+    {"operation": "insert", "start": 0, "content": "// Header\n"}
+  ]
+}
+```
+
+**Replace lines:**
+```json
+{
+  "path": "src/main.rs",
+  "operations": [
+    {"operation": "replace", "start": "10:4b", "end": "15:c2", "content": "new code here"}
+  ]
+}
+```
+
+---
+
+### `extract_lines` — Copy lines between files
+
+```json
+{
+  "from_path": "src/utils.rs",
+  "from_start": 10,
+  "from_end": 25,
+  "append_path": "src/new.rs",
+  "append_line": -1
+}
+```
+
+`from_end` is optional (omit to copy a single line). `from_start`, `from_end`, and
+`append_line` each accept a line number or a line id (`"12:a3"`, verified against
+the file). `append_line` positions the copy in the target: `0` = beginning,
+`-1` = end, `N` = after line N.
+
+---
+
+### `shell` — Execute commands
+
+Commands start in the foreground and return their output normally when they
+finish within about 10 seconds:
+
+```json
+{"command": "cargo test"}
+{"command": "cd foo && cargo build"}
+```
+
+If a command is still running at that boundary, the same process continues in
+the background. The response returns its PID and linked output resource, and a
+completion notification arrives when it exits. There is no `background` flag
+and the command is never killed or restarted during the handoff. Multiple
+distinct commands may run concurrently, including from the same working
+directory. An exact duplicate command in the same working directory is rejected
+while the first copy is still running.
+
+The completion is delivered as `resources/updated` for the job resource (on a
+`subscriptions/listen` stream when the client opened one). Claude Code does not
+surface that to the model, so octofs also sends it as a Claude Code channel
+message (`notifications/claude/channel`) on pre-2026-07-28 connections — the
+exit code and output tail wake the session. Claude Code accepts channel
+messages only from servers enabled for the session, in interactive mode:
+
+```bash
+claude --dangerously-load-development-channels server:octofs
+```
+
+Without it, read the job's resource link when you need the result.
+
+> On Windows, shutdown cleanup terminates only direct child processes (no Unix
+> process-group semantics); use `taskkill /PID <pid> /T` for process trees.
+
+---
+
+### `workdir` — Manage working directory
+
+**Get current:**
+```json
+{}
+```
+
+**Set new:**
+```json
+{"path": "/path/to/project"}
+```
+
+**Reset to session root:**
+```json
+{"reset": true}
+```
+
+---
+
+## Architecture
+
+```
+octofs/
+├── src/
+│   ├── main.rs                  # Entry point, STDIO/HTTP server setup, signal handling
+│   ├── cli.rs                   # CLI argument parsing (clap): octofs mcp [OPTIONS]
+│   ├── mcp/
+│   │   ├── mod.rs               # McpToolCall, SessionRoot
+│   │   ├── server.rs            # OctofsServer (rmcp tool impl), Params structs, SessionWorkdir
+│   │   ├── request_ctx.rs       # Per-request hint queue + stale-file stamps
+│   │   └── fs/                  # Filesystem tool implementations
+│   │       ├── mod.rs           # Re-exports
+│   │       ├── core.rs          # view, text_editor, batch_edit, extract_lines
+│   │       ├── file_ops.rs      # view_file_spec, create_file_spec
+│   │       ├── text_editing.rs  # str_replace, batch_edit, undo, per-file locking
+│   │       ├── directory.rs     # Directory listing + content search
+│   │       ├── search.rs        # search_content
+│   │       ├── shell.rs         # Command execution, background, process cleanup
+│   │       ├── workdir.rs       # Working directory management
+│   │       ├── remote.rs        # SSH/SFTP path abstraction, SshHandler, SFTP pool
+│   │       └── fs_tests.rs      # Integration tests (cfg(test))
+│   └── utils/
+│       ├── mod.rs               # Module re-exports
+│       ├── line_hash.rs         # Composite line ids (N:hh), FNV-1a hashes, endpoint parsing
+│       └── truncation.rs        # Token estimation, smart truncation
+```
+
+**Key design decisions:**
+
+- **rmcp SDK** — Official Rust MCP SDK (`rmcp` 3.x) for protocol handling
+- **Tokio** — Async runtime; all file I/O uses `tokio::fs`, never blocking `std::fs`
+- **File locking** — Per-file `tokio::sync::Mutex` prevents concurrent write conflicts
+- **Undo history** — Up to 10 snapshots per file, in-memory (lost on restart)
+- **Path resolution** — Relative paths resolve against the session workdir; no canonicalization (files may not exist yet)
+- **Stale-write detection** — every edit target's `N:hh` id is verified against the file at apply time; a stale id fails with the current content instead of editing the wrong line
+
+---
+
+## Development
+
+For this Hepta checkout, use the pinned Rust toolchain and isolated test runner:
+
+```bash
+# Install CI tool versions
+rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+cargo +1.95.0 install --locked --version '=0.9.137' cargo-nextest
+
+# Build both runtime binaries
+cargo +1.95.0 build --locked --release
+
+# Run tests
+cargo +1.95.0 nextest run --locked --all-targets --all-features \
+  --test-threads 1 --retries 0 --no-fail-fast
+
+# Lint (zero warnings policy)
+cargo +1.95.0 clippy --locked --all-targets --all-features -- -D warnings
+
+# Format
+cargo +1.95.0 fmt --all
+
+# Run locally
+cargo +1.95.0 run --locked --bin hepta-runtime -- mcp
+```
+
+### Running Tests
+
+```bash
+# Library configuration without remote filesystem support
+cargo +1.95.0 nextest run --locked --all-targets --no-default-features \
+  --test-threads 1 --retries 0 --no-fail-fast
+
+# Specific tests, still isolated by process
+cargo +1.95.0 nextest run --locked --all-targets --all-features \
+  --test-threads 1 --retries 0 -E 'test(test_view_file)'
+
+# Include output from successful tests
+cargo +1.95.0 nextest run --locked --all-targets --all-features \
+  --test-threads 1 --retries 0 --no-fail-fast --success-output immediate
+```
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**Quick checklist:**
+1. Run `cargo fmt` before committing
+2. Ensure `cargo clippy` passes with zero warnings
+3. Add tests for new functionality
+4. Update documentation as needed
+
+---
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for security policy and reporting vulnerabilities.
+
+---
+
+## License
+
+Apache-2.0 — See [LICENSE](LICENSE)
+
+---
+
+## Acknowledgments
+
+- [rmcp](https://crates.io/crates/rmcp) — Official Rust MCP SDK
+- [Model Context Protocol](https://modelcontextprotocol.io) — The protocol specification
+
+---
+
+<div align="center">
+
+**Built with 🦀 by [Muvon](https://muvon.io)**
+
+*Star us on GitHub if Octofs helps you ship faster! ⭐*
+
+</div>

@@ -1,0 +1,86 @@
+{
+  "schema": "hepta.javascript-native-qualification.v1",
+  "status": "fail",
+  "host": "desktop",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+  "base_head": "310add6db47bcfbed3545432eb528a72f5eb6dcd",
+  "scope": "Owned finite AST fixtures, isolated native worker and actual stdio MCP; not full REA parity or observed Electron runtime",
+  "steps": [
+    {
+      "name": "unit-tests-v5",
+      "command": [
+        "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/hepta_runtime-5117db2dd88b186e",
+        "mcp::rea_javascript_graph::tests::",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.016,
+      "log_file": "unit-tests-v5.log",
+      "log_sha256": "bbb8494da6a286c0d535762966f99410b643d3249fcfabd2aa103bafcc10a421"
+    },
+    {
+      "name": "production-build-v5",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "build",
+        "--locked",
+        "--all-features",
+        "--bin",
+        "hepta-runtime",
+        "-j4"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 207.602,
+      "log_file": "production-build-v5.log",
+      "log_sha256": "bac35072cd17bb3b232491cd24e118722779e42d5ebb2061a8c5d7f425443156"
+    },
+    {
+      "name": "mcp-integration-v5",
+      "command": [
+        "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/rea_javascript_graph_external-0185c18b66bf59d1",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "duration_seconds": 20.169,
+      "log_file": "mcp-integration-v5.log",
+      "log_sha256": "91f9b4b7dbce882790586558273be749a2e690d29aeede2e8519ceed9743e37d"
+    }
+  ],
+  "source": {
+    "manifest_file": "source-prequalification-v5.json",
+    "manifest_file_sha256": "70f53866e1e2974500c1cd38137144eec85f2fbbf633e87b390630166713898a",
+    "entries": 8250,
+    "changed_paths_since_original_build": [
+      "docs/rea-native/JAVASCRIPT_AST.md",
+      "scripts/rea-javascript-ast-reference.mjs",
+      "src/mcp/rea_javascript_graph_worker.rs",
+      "tests/fixtures/rea_javascript/manual-golden.json",
+      "tests/fixtures/rea_javascript/package.json",
+      "tests/fixtures/rea_javascript/reference.json",
+      "tests/rea_javascript_graph_external.rs"
+    ],
+    "production_changed_paths_since_original_build": [
+      "src/mcp/rea_javascript_graph_worker.rs"
+    ],
+    "test_build_manifest_verified_before_execution": true
+  },
+  "test_artifacts": [
+    {
+      "name": "hepta_runtime",
+      "executable": "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/hepta_runtime-5117db2dd88b186e",
+      "sha256": "6bdfaebfdd665c0085dae87392ed7d64c3a3760bc692502bc62356dfb00e1768"
+    },
+    {
+      "name": "rea_javascript_graph_external",
+      "executable": "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/rea_javascript_graph_external-0185c18b66bf59d1",
+      "sha256": "0b4f6b8f1b0c411c1c1afbf5ad51bc751d4ce6836057ed3d25af47cd88ef2cc3"
+    }
+  ],
+  "candidate": {
+    "path": "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/hepta-runtime",
+    "sha256": "ff9278fcaf163f8a434041a3125872e5482dfe39db93de15619e913c71032dd5",
+    "profile": "dev optimized + debuginfo; all production features",
+    "original_worker_build_sha256": "786beaf13f80b98678ccde51b297cdf352c3878e55e263e9941a56f78e913219"
+  },
+  "error": "qualification step failed: mcp-integration-v5"
+}

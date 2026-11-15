@@ -1,0 +1,36 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-I",
+      "-B",
+      "-c",
+      "import os,stat,json\nfrom pathlib import Path\nroot=Path('/Users/qianqi/work/hepta-runtime-d1-c1-sealed-staging-01')\nrows=[]\nfor rel in ('','x230','x230/c1-tools-01','x230/c1-tools-01/reference','mac'):\n p=root/rel\n entries=[]\n for name in sorted(os.listdir(p)):\n  s=os.lstat(p/name)\n  entries.append({'name':name,'mode':oct(stat.S_IMODE(s.st_mode)),'bytes':s.st_size,'uid':s.st_uid,'nlink':s.st_nlink,'kind':'file' if stat.S_ISREG(s.st_mode) else 'directory' if stat.S_ISDIR(s.st_mode) else 'symlink' if stat.S_ISLNK(s.st_mode) else 'other'})\n rows.append({'relative_directory':rel,'entries':entries})\nprint(json.dumps({'read_only':True,'root':str(root),'directories':rows},sort_keys=True))"
+    ],
+    "created_unix_ms": 1793962565341,
+    "cwd": "/Users/qianqi/work",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "mac",
+    "id": "1a1b0805edd-fc05-70f5",
+    "idempotency_key": "mac-d1-c1-import-failure-inventory-20261106-01",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/Users/qianqi/.local/state/hepta-runtime-mac-worker/jobs/1a1b0805edd-fc05-70f5",
+    "request_digest": "71968e72d3c5a24088c65acb0fd03493bb7b4f849ba37620006ff3413fb435df",
+    "request_fingerprint": 8184885996622815808,
+    "ssh_target": "hepta-mac-local",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1b0805edd-fc05-70f5"
+  },
+  "launch": {
+    "backend": "detached",
+    "launcher_pid": 69936,
+    "ok": true,
+    "systemd_error": "systemd user units unavailable on this platform",
+    "unit": "hepta-runtime-job-1a1b0805edd-fc05-70f5"
+  },
+  "local_record_pending": false,
+  "reused": false
+}

@@ -1,0 +1,714 @@
+{
+  "schema": "hepta-operator-qualification-v1",
+  "recorded_at": "2026-10-06T07:41:56.294401+00:00",
+  "implementation_revision": "ffd78c32c5a59ce4e52271fb65f894fa83297b5f",
+  "rust_suites": [
+    {
+      "passed": 359,
+      "failed": 0,
+      "ignored": 11
+    },
+    {
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "rustfmt": "passed",
+  "clippy_all_features_all_targets_deny_warnings": "passed",
+  "python_os_process_tests": 4,
+  "python_embedded_supervisor_tests": 4,
+  "release_matrix": {
+    "binary_sha256": "85d9c67b8fe5c7b7a42d912dbc3419d39e17e7e1afda0f69ae47f5ad356ac0bc",
+    "results": [
+      {
+        "host": "main",
+        "ssh_target": "localhost",
+        "exit_code": 0,
+        "existing_noninteractive_sudo": true,
+        "binary_sha256": "85d9c67b8fe5c7b7a42d912dbc3419d39e17e7e1afda0f69ae47f5ad356ac0bc",
+        "acceptance": {
+          "checks": [
+            {
+              "check": "real SSH target account",
+              "result": "passed",
+              "detail": {
+                "uid": 1000,
+                "platform": "linux",
+                "workdir": "/tmp/hepta-operator-canary-cfb81190d06b43bab9b0ebb4b5f19326"
+              }
+            },
+            {
+              "check": "real authenticated MCP discovery and explicit capability mode",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "all operator entry points rejected on isolated host without target execution",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+              "result": "passed",
+              "detail": {
+                "backend": {
+                  "backend": "systemd",
+                  "launcher_pid": null,
+                  "ok": true,
+                  "unit": "hepta-runtime-job-1a1101e3dd6-66333-1"
+                },
+                "uid": 1000
+              }
+            },
+            {
+              "check": "native remote file API sees the same operator-created file",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual host PID pagination",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "external disposable PID: stale identity denied, actual signal delivered",
+              "result": "passed",
+              "detail": {
+                "atomic_identity": true,
+                "effective_uid": 1000,
+                "identity": "linux:a5cfd4f3-4a31-4fb1-b8cc-cf71ef25ea2d:1231430",
+                "pid": 419474,
+                "result": "signal_sent",
+                "signal": 15,
+                "termination_confirmed": false
+              }
+            },
+            {
+              "check": "real SSH PTY shell input/output/Ctrl-C/close",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "temporary sudo PTY real uid=0 using existing authorization only",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "durable operator backend does not accidentally block existing sudo",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual test-controller restart: same job, logs, once-only side effect",
+              "result": "passed",
+              "detail": null
+            }
+          ],
+          "complete": true,
+          "passed": 12,
+          "ssh_target": "localhost",
+          "target_test_directory": "/tmp/hepta-operator-canary-cfb81190d06b43bab9b0ebb4b5f19326",
+          "password_prompt_tested": false,
+          "chatgpt_tunnel_tested": false
+        }
+      },
+      {
+        "host": "pocket4",
+        "ssh_target": "pocket4",
+        "exit_code": 0,
+        "existing_noninteractive_sudo": true,
+        "binary_sha256": "85d9c67b8fe5c7b7a42d912dbc3419d39e17e7e1afda0f69ae47f5ad356ac0bc",
+        "acceptance": {
+          "checks": [
+            {
+              "check": "real SSH target account",
+              "result": "passed",
+              "detail": {
+                "uid": 1000,
+                "platform": "linux",
+                "workdir": "/tmp/hepta-operator-canary-16ca9d22a7084a50913a2f60f65c51f8"
+              }
+            },
+            {
+              "check": "real authenticated MCP discovery and explicit capability mode",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "all operator entry points rejected on isolated host without target execution",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+              "result": "passed",
+              "detail": {
+                "backend": {
+                  "backend": "systemd",
+                  "launcher_pid": null,
+                  "ok": true,
+                  "unit": "hepta-runtime-job-1a1101e3d28-662d5-1"
+                },
+                "uid": 1000
+              }
+            },
+            {
+              "check": "native remote file API sees the same operator-created file",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual host PID pagination",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "external disposable PID: stale identity denied, actual signal delivered",
+              "result": "passed",
+              "detail": {
+                "atomic_identity": true,
+                "effective_uid": 1000,
+                "identity": "linux:2804893f-cd51-4abe-aaa9-9babcb766050:18678917",
+                "pid": 1134702,
+                "result": "signal_sent",
+                "signal": 15,
+                "termination_confirmed": false
+              }
+            },
+            {
+              "check": "real SSH PTY shell input/output/Ctrl-C/close",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "temporary sudo PTY real uid=0 using existing authorization only",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "durable operator backend does not accidentally block existing sudo",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual test-controller restart: same job, logs, once-only side effect",
+              "result": "passed",
+              "detail": null
+            }
+          ],
+          "complete": true,
+          "passed": 12,
+          "ssh_target": "pocket4",
+          "target_test_directory": "/tmp/hepta-operator-canary-16ca9d22a7084a50913a2f60f65c51f8",
+          "password_prompt_tested": false,
+          "chatgpt_tunnel_tested": false
+        }
+      },
+      {
+        "host": "rog",
+        "ssh_target": "rog",
+        "exit_code": 0,
+        "existing_noninteractive_sudo": true,
+        "binary_sha256": "85d9c67b8fe5c7b7a42d912dbc3419d39e17e7e1afda0f69ae47f5ad356ac0bc",
+        "acceptance": {
+          "checks": [
+            {
+              "check": "real SSH target account",
+              "result": "passed",
+              "detail": {
+                "uid": 1000,
+                "platform": "linux",
+                "workdir": "/tmp/hepta-operator-canary-8fc058ee3c614ff39e550da0c23e1539"
+              }
+            },
+            {
+              "check": "real authenticated MCP discovery and explicit capability mode",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "all operator entry points rejected on isolated host without target execution",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+              "result": "passed",
+              "detail": {
+                "backend": {
+                  "backend": "systemd",
+                  "launcher_pid": null,
+                  "ok": true,
+                  "unit": "hepta-runtime-job-1a1101e3d0c-6629d-1"
+                },
+                "uid": 1000
+              }
+            },
+            {
+              "check": "native remote file API sees the same operator-created file",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual host PID pagination",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "external disposable PID: stale identity denied, actual signal delivered",
+              "result": "passed",
+              "detail": {
+                "atomic_identity": true,
+                "effective_uid": 1000,
+                "identity": "linux:2dc410a8-ee88-4fec-b5ea-6025a4201e86:15134400",
+                "pid": 482403,
+                "result": "signal_sent",
+                "signal": 15,
+                "termination_confirmed": false
+              }
+            },
+            {
+              "check": "real SSH PTY shell input/output/Ctrl-C/close",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "temporary sudo PTY real uid=0 using existing authorization only",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "durable operator backend does not accidentally block existing sudo",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual test-controller restart: same job, logs, once-only side effect",
+              "result": "passed",
+              "detail": null
+            }
+          ],
+          "complete": true,
+          "passed": 12,
+          "ssh_target": "rog",
+          "target_test_directory": "/tmp/hepta-operator-canary-8fc058ee3c614ff39e550da0c23e1539",
+          "password_prompt_tested": false,
+          "chatgpt_tunnel_tested": false
+        }
+      },
+      {
+        "host": "mac",
+        "ssh_target": "macbook-pro",
+        "exit_code": 0,
+        "existing_noninteractive_sudo": true,
+        "binary_sha256": "85d9c67b8fe5c7b7a42d912dbc3419d39e17e7e1afda0f69ae47f5ad356ac0bc",
+        "acceptance": {
+          "checks": [
+            {
+              "check": "real SSH target account",
+              "result": "passed",
+              "detail": {
+                "uid": 501,
+                "platform": "macos",
+                "workdir": "/private/tmp/hepta-operator-canary-103e056ad0e847d7a3a5092ee589fe45"
+              }
+            },
+            {
+              "check": "real authenticated MCP discovery and explicit capability mode",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "all operator entry points rejected on isolated host without target execution",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+              "result": "passed",
+              "detail": {
+                "backend": {
+                  "backend": "detached",
+                  "launcher_pid": 33473,
+                  "ok": true,
+                  "systemd_error": "systemd user units unavailable on this platform",
+                  "unit": "hepta-runtime-job-1a1101e9326-66c6f-1"
+                },
+                "uid": 501
+              }
+            },
+            {
+              "check": "native remote file API sees the same operator-created file",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual host PID pagination",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "external disposable PID: stale identity denied, actual signal delivered",
+              "result": "passed",
+              "detail": {
+                "atomic_identity": false,
+                "effective_uid": 501,
+                "identity": "ps:Tue Oct  6 15:30:05 2026",
+                "pid": 33566,
+                "result": "signal_sent",
+                "signal": 15,
+                "termination_confirmed": false
+              }
+            },
+            {
+              "check": "real SSH PTY shell input/output/Ctrl-C/close",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "temporary sudo PTY real uid=0 using existing authorization only",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "durable operator backend does not accidentally block existing sudo",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual test-controller restart: same job, logs, once-only side effect",
+              "result": "passed",
+              "detail": null
+            }
+          ],
+          "complete": true,
+          "passed": 12,
+          "ssh_target": "macbook-pro",
+          "target_test_directory": "/private/tmp/hepta-operator-canary-103e056ad0e847d7a3a5092ee589fe45",
+          "password_prompt_tested": false,
+          "chatgpt_tunnel_tested": false
+        }
+      },
+      {
+        "host": "x230",
+        "ssh_target": "x230-ts",
+        "exit_code": 0,
+        "existing_noninteractive_sudo": true,
+        "binary_sha256": "85d9c67b8fe5c7b7a42d912dbc3419d39e17e7e1afda0f69ae47f5ad356ac0bc",
+        "acceptance": {
+          "checks": [
+            {
+              "check": "real SSH target account",
+              "result": "passed",
+              "detail": {
+                "uid": 1000,
+                "platform": "linux",
+                "workdir": "/tmp/hepta-operator-canary-f3244721ae4c4edcba4cd96a4d1bc440"
+              }
+            },
+            {
+              "check": "real authenticated MCP discovery and explicit capability mode",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "all operator entry points rejected on isolated host without target execution",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+              "result": "passed",
+              "detail": {
+                "backend": {
+                  "backend": "systemd",
+                  "launcher_pid": null,
+                  "ok": true,
+                  "unit": "hepta-runtime-job-1a1101e957a-66ce6-1"
+                },
+                "uid": 1000
+              }
+            },
+            {
+              "check": "native remote file API sees the same operator-created file",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual host PID pagination",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "external disposable PID: stale identity denied, actual signal delivered",
+              "result": "passed",
+              "detail": {
+                "atomic_identity": true,
+                "effective_uid": 1000,
+                "identity": "linux:29fbe93d-3384-4fcc-861b-acf43d294279:49845179",
+                "pid": 3872202,
+                "result": "signal_sent",
+                "signal": 15,
+                "termination_confirmed": false
+              }
+            },
+            {
+              "check": "real SSH PTY shell input/output/Ctrl-C/close",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "temporary sudo PTY real uid=0 using existing authorization only",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "durable operator backend does not accidentally block existing sudo",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual test-controller restart: same job, logs, once-only side effect",
+              "result": "passed",
+              "detail": null
+            }
+          ],
+          "complete": true,
+          "passed": 12,
+          "ssh_target": "x230-ts",
+          "target_test_directory": "/tmp/hepta-operator-canary-f3244721ae4c4edcba4cd96a4d1bc440",
+          "password_prompt_tested": false,
+          "chatgpt_tunnel_tested": false
+        }
+      },
+      {
+        "host": "ai395",
+        "ssh_target": "ai395",
+        "exit_code": 0,
+        "existing_noninteractive_sudo": true,
+        "binary_sha256": "85d9c67b8fe5c7b7a42d912dbc3419d39e17e7e1afda0f69ae47f5ad356ac0bc",
+        "acceptance": {
+          "checks": [
+            {
+              "check": "real SSH target account",
+              "result": "passed",
+              "detail": {
+                "uid": 1000,
+                "platform": "linux",
+                "workdir": "/tmp/hepta-operator-canary-4612fb564db54fd7ac1bbe558acef6b7"
+              }
+            },
+            {
+              "check": "real authenticated MCP discovery and explicit capability mode",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "all operator entry points rejected on isolated host without target execution",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+              "result": "passed",
+              "detail": {
+                "backend": {
+                  "backend": "systemd",
+                  "launcher_pid": null,
+                  "ok": true,
+                  "unit": "hepta-runtime-job-1a1101ea1be-66dd6-1"
+                },
+                "uid": 1000
+              }
+            },
+            {
+              "check": "native remote file API sees the same operator-created file",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual host PID pagination",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "external disposable PID: stale identity denied, actual signal delivered",
+              "result": "passed",
+              "detail": {
+                "atomic_identity": true,
+                "effective_uid": 1000,
+                "identity": "linux:dd02ba1e-b5bd-4398-afae-3e907400457e:15145686",
+                "pid": 3596495,
+                "result": "signal_sent",
+                "signal": 15,
+                "termination_confirmed": false
+              }
+            },
+            {
+              "check": "real SSH PTY shell input/output/Ctrl-C/close",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "temporary sudo PTY real uid=0 using existing authorization only",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "durable operator backend does not accidentally block existing sudo",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+              "result": "passed",
+              "detail": null
+            },
+            {
+              "check": "actual test-controller restart: same job, logs, once-only side effect",
+              "result": "passed",
+              "detail": null
+            }
+          ],
+          "complete": true,
+          "passed": 12,
+          "ssh_target": "ai395",
+          "target_test_directory": "/tmp/hepta-operator-canary-4612fb564db54fd7ac1bbe558acef6b7",
+          "password_prompt_tested": false,
+          "chatgpt_tunnel_tested": false
+        }
+      }
+    ],
+    "complete": true
+  },
+  "installed_controller": {
+    "installed": true,
+    "verified": true,
+    "service": "hepta-runtime-operator.service",
+    "active": "active",
+    "enabled": "enabled",
+    "pid": 438341,
+    "binary": "/home/qian-qi/.local/lib/hepta-runtime/releases/operator-85d9c67b8fe5c7b7/hepta-runtime",
+    "binary_sha256": "85d9c67b8fe5c7b7a42d912dbc3419d39e17e7e1afda0f69ae47f5ad356ac0bc",
+    "binary_source_revision": "d9523bef455875f098c164ae42bb5c7465679cd6",
+    "deployment_source_revision": "ffd78c32c5a59ce4e52271fb65f894fa83297b5f",
+    "endpoint": "http://127.0.0.1:8790/mcp",
+    "config_file": "/home/qian-qi/.config/hepta-runtime-operator/runtime.json",
+    "token_file": "/home/qian-qi/.config/hepta-runtime-operator/token",
+    "hosts": {
+      "main": {
+        "hostname": "qian-qi",
+        "uid": 1000,
+        "home": "/home/qian-qi",
+        "platform": "linux"
+      },
+      "pocket4": {
+        "hostname": "alex-G1628-04",
+        "uid": 1000,
+        "home": "/home/alex",
+        "platform": "linux"
+      },
+      "rog": {
+        "hostname": "qian-qi-ROG-Flow-Z13-GZ302EA-GZ302EA",
+        "uid": 1000,
+        "home": "/home/qian-qi",
+        "platform": "linux"
+      },
+      "mac": {
+        "hostname": "MacBook-Pro.local",
+        "uid": 501,
+        "home": "/Users/qianqi",
+        "platform": "macos"
+      },
+      "x230": {
+        "hostname": "qian-ThinkPad-X230",
+        "uid": 1000,
+        "home": "/home/qian",
+        "platform": "linux"
+      },
+      "ai395": {
+        "hostname": "ai395",
+        "uid": 1000,
+        "home": "/home/qq",
+        "platform": "linux"
+      }
+    },
+    "checks": [
+      "new user unit parser and authenticated MCP connection",
+      "installed real SSH identity main",
+      "installed temporary sudo real root main",
+      "installed real SSH identity pocket4",
+      "installed temporary sudo real root pocket4",
+      "installed real SSH identity rog",
+      "installed temporary sudo real root rog",
+      "installed real SSH identity mac",
+      "installed temporary sudo real root mac",
+      "installed real SSH identity x230",
+      "installed temporary sudo real root x230",
+      "installed real SSH identity ai395",
+      "installed temporary sudo real root ai395",
+      "installed endpoint rejects unauthenticated request",
+      "installed user-service restart preserves in-flight job ID/logs/once-only effect",
+      "actual running executable matches six-host release acceptance SHA256"
+    ],
+    "user_linger": "yes",
+    "reboot_tested": false,
+    "chatgpt_tunnel_verified": false,
+    "password_prompt_tested": false,
+    "desktop_commander_changed": false
+  },
+  "observed_tunnel_state": {
+    "main": {
+      "client_present": false,
+      "configuration_present": false,
+      "dedicated_key_present": false
+    },
+    "pocket4": {
+      "client_present": true,
+      "configuration_present": false,
+      "dedicated_key_present": false,
+      "existing_runtime_service": "inactive",
+      "existing_tunnel_service": "inactive"
+    }
+  },
+  "deployment_fix": "Initial installation failed because WorkingDirectory was quoted. Corrected installer template and new unit; added systemd-analyze verify before startup; final installed qualification passed.",
+  "not_qualified": [
+    "ChatGPT custom app/workspace tunnel binding and first direct tool call",
+    "Interactive password-authentication prompt; all sudo checks used existing noninteractive account permission",
+    "Cold boot and target reboot recovery",
+    "Lossless transfer of existing Desktop Commander live PTY sessions",
+    "Full DC binary/document/image tool-contract equivalence",
+    "Unbounded lossless output: supervisor currently stores 16 MiB per stream with explicit truncation reporting"
+  ],
+  "platform_limitations": [
+    "macOS PID identity signalling is best effort, not Linux pidfd-atomic",
+    "Arbitrary shell/elevation is full target-account trust, not a sandbox",
+    "Changed-UID or deliberately detached subprocess cleanup may require explicit authorized sudo signalling"
+  ]
+}

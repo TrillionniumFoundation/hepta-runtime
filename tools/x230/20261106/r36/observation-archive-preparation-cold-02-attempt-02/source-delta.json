@@ -1,0 +1,102 @@
+{
+  "schema": "hepta-r36-cold02-second-observation-capture-source-delta/v1",
+  "original_policy": {
+    "git_blob": "e50faaaf3f0fe686de76d16895c97e8dc01b4541",
+    "bytes": 11828,
+    "sha256": "2f987efca72db78a3ed11ccddcb5d0f2726ea5b1ea548726331aa099c8e307c8"
+  },
+  "current_policy": {
+    "git_blob": "6353ec3247fe0d54d08f7f5fcc19ad1405ca21f4",
+    "bytes": 12151,
+    "sha256": "577a1a04da9768a0a68b101f581d65b7f53183155131d072a066f1e9dc366a58"
+  },
+  "replacements": [
+    {
+      "reason": "Only the second observation canary path is the current external scope.",
+      "old": "CANARY = Path('/home/qian/hepta-runtime-optimization-20261104-r16/s36-cancel-recovery-01')",
+      "new": "CANARY = Path('/home/qian/hepta-runtime-optimization-20261104-r16/s36-cancel-recovery-02')"
+    },
+    {
+      "reason": "The current holder copy will be bound only after its actual report is available.",
+      "old": "HOLDERS = ('hepta-runtime-r36-validation-scratch-cold-02-observation-holder-01',)",
+      "new": "HOLDERS = ('hepta-runtime-r36-validation-scratch-cold-02-observation-holder-02',)"
+    },
+    {
+      "reason": "New source directory; original evidence-tools-01 remains unmodified and captured.",
+      "old": "CAPTURE_TOOLS = 'evidence-tools-01'",
+      "new": "CAPTURE_TOOLS = 'evidence-tools-02'"
+    },
+    {
+      "reason": "Keep campaign-01 and holder-inputs-01; add only the current second attempt's directories.",
+      "old": "    'campaign-01', 'lifecycle-campaign-01', 'lifecycle-abba-01',",
+      "new": "    'campaign-01', 'campaign-02', 'holder-inputs-02', 'lifecycle-campaign-01', 'lifecycle-abba-01',"
+    },
+    {
+      "reason": "Current observation report is 02; 01 remains an explicitly preserved original report. The holder manifest entry is metadata only and uses the unchanged packer's wanted-report selection.",
+      "old": "    'observation': ('campaign-01', 'report.json', 'observation_gate_passed'),",
+      "new": "    'observation': ('campaign-02', 'report.json', 'observation_gate_passed'),\n    'prior_observation_01': ('campaign-01', 'report.json', 'observation_gate_passed'),\n    'holder_copy_manifest_02_metadata': ('holder-inputs-02', 'manifest.json', 'observed'),"
+    },
+    {
+      "reason": "Read only the two successful prior export/verification JSON originals within export01. Its archive remains metadata only; no other prior export body is admitted.",
+      "old": "    if (member.startswith('r36/evidence-export-01/') and member != PRIOR_FAILURE_MEMBER):\n        return 'outside-exact-original-export-failure-receipt; metadata only, descendants not read'",
+      "new": "    if (member.startswith('r36/evidence-export-01/') and member not in {\n            'r36/evidence-export-01/export-report.json',\n            'r36/evidence-export-01/verification-01.json'}):\n        return 'outside-exact-prior-export-and-verification-receipts; metadata only, descendants not read'"
+    },
+    {
+      "reason": "Only the explanatory docstring changes; no synthetic prior failure or pass is produced.",
+      "old": "    \"\"\"First evidence capture in this independent cold02 root; no earlier export failure.\"\"\"",
+      "new": "    \"\"\"Prior export receipts are retained as originals; no legacy capture failure is bound.\"\"\""
+    },
+    {
+      "reason": "The second actual holder manifest is validated independently; original first-holder files and manifest remain unchanged retained payloads.",
+      "old": "    prefix = 'r36/holder-inputs-01/'",
+      "new": "    prefix = 'r36/holder-inputs-02/'"
+    }
+  ],
+  "exact_forward_and_reverse": true,
+  "four_other_core_files_byte_identical": [
+    {
+      "name": "pack_r36_evidence.py",
+      "git_blob": "aa69f6654c3b5e874a79857b93a9c8ebda3bb165",
+      "bytes": 8301,
+      "sha256": "124826625635f65c5b5c5e52de7034fb20c523aac47bf003452fe999b332bdd2"
+    },
+    {
+      "name": "verify_r36_evidence.py",
+      "git_blob": "2c0e800e033b9320f816642e899ebcd26ca4f3a0",
+      "bytes": 9902,
+      "sha256": "c89ed01e2a5ad3cb1812bc2f8291465341faefcb66112943f04dc2c6413668a9"
+    },
+    {
+      "name": "scan_evidence.py",
+      "git_blob": "ca3df3d34007a37bae9cf337abeaf5639533d35b",
+      "bytes": 5533,
+      "sha256": "24d87ae04ce4d43fa0aaef6a2d322fe5d5292eb3002ec77fbf45332223092a2b"
+    },
+    {
+      "name": "stable_xz_archive.py",
+      "git_blob": "3bc73a1ca1b3862f011268cfd4086a02a8290e86",
+      "bytes": 14081,
+      "sha256": "8b7aa7ef3b3772da13ea4f7009d8c478e0c92bc207d65db3f45c23453097d7a2"
+    }
+  ],
+  "original_first_manifest_unchanged": "dfd941e6d3aef69b634fc4adda8f6317d2158715",
+  "original_first_export_report": {
+    "relative_path": "evidence-export-01/export-report.json",
+    "bytes": 4714,
+    "sha256": "3bdbfe745f080640a2f319c19af7386565d441066c135c1a37e56a73bba5e621",
+    "source": "root-observed-original"
+  },
+  "original_first_verification_report": {
+    "relative_path": "evidence-export-01/verification-01.json",
+    "bytes": 4057,
+    "sha256": "e79d7655bb73604db2847ca9d6bbc3876dbd62f4e096a89110d1c8747dca0edd",
+    "source": "root-observed-original"
+  },
+  "future_holder_manifest_created": false,
+  "future_second_observation_outcome": null,
+  "future_second_observation_gate": null,
+  "future_normal_lifecycle_outcome": null,
+  "original_seven_stage_workload_or_threshold_changed": false,
+  "target_executed": false,
+  "host_calls": 0
+}

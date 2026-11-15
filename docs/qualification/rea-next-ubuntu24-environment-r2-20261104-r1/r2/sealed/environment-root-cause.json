@@ -1,0 +1,75 @@
+{
+  "affected_fixtures": [
+    {
+      "construction_lines": "10-23",
+      "failure_line": 37,
+      "path": "src/mcp/runtime/inspect_security_tests.rs",
+      "raw_error": "PermissionError: [Errno 13] Permission denied: 'sudo'",
+      "test": "mcp::runtime::inspect::security_tests::privileged_non_utf8_output_is_json_serializable"
+    },
+    {
+      "construction_lines": "10-23",
+      "failure_line": 37,
+      "path": "src/mcp/runtime/inspect_security_tests.rs",
+      "raw_error": "PermissionError: [Errno 13] Permission denied: 'sudo'",
+      "test": "mcp::runtime::inspect::security_tests::privileged_timeout_with_stdout_is_json_serializable"
+    },
+    {
+      "construction_lines": "52-74",
+      "failure_line": 146,
+      "path": "src/mcp/runtime/jobs_observe_request_tests.rs",
+      "raw_error": "status_unavailable != running",
+      "test": "mcp::runtime::jobs::observe_request_tests::lost_ack_observation_never_launches_and_preserves_original_binding"
+    },
+    {
+      "construction_lines": "181-248",
+      "failure_line": 124,
+      "path": "src/native_entry_tests.rs",
+      "raw_error": "launch_unknown != launched",
+      "test": "native::entry_tests::checked_native_entry_retains_original_job_and_never_relaunches"
+    }
+  ],
+  "classification": "Qualification environment setup did not satisfy existing fixture executable prerequisites; production guards were not changed.",
+  "dependency_audit_v2_job": "1a1a5b37ecc-fc05-20d1",
+  "failure_extract_job": "1a1a5bc9b9c-fc05-2119",
+  "fixture_snapshots": {
+    "src/mcp/runtime/inspect_security_tests.rs": {
+      "retained": "inspect_security_tests.rs",
+      "sha256": "47cb7f7c4f0b9074e43ad4fe12b6d062bb585319f8c663cc5662fd32cfdcc439"
+    },
+    "src/mcp/runtime/jobs_observe_request_tests.rs": {
+      "retained": "jobs_observe_request_tests.rs",
+      "sha256": "ed497044dc49f4a1d479f8b78712131e3067d2c496bb0b21b830d1ecc625e685"
+    },
+    "src/native_entry_tests.rs": {
+      "retained": "native_entry_tests.rs",
+      "sha256": "6a026067c83e146e7d6c92dda252fc4ba217a0f7a4767d69fcc61add959ec510"
+    }
+  },
+  "later_commands_not_executed": 26,
+  "new_run_authorization": "Parent explicitly authorized fresh r3 with only owned tmpfs exec correction and bounded owned-shim preflight; all 35 commands/env/budgets remain equal; warm r2 cache reuse disclosed; r2 remains failed.",
+  "original_container_id": "9bae004dce151d64b702f8026a139f36f34262e685fc51dd14cf7c3292a66c89",
+  "original_image_id": "sha256:120aee0fa701e4f9534dbd500ee7c101a5fc3793127c5820bf34d88cc13eb2d8",
+  "original_job_id": "1a1a5b446b4-fc05-20d8",
+  "original_tmp_mount": {
+    "filesystem": "tmpfs",
+    "mount_options": "rw,nosuid,nodev,noexec,relatime",
+    "raw": "2720 2709 0:124 / /tmp rw,nosuid,nodev,noexec,relatime - tmpfs tmpfs rw,size=4194304k,inode64",
+    "super_options": "rw,size=4194304k,inode64"
+  },
+  "qualified": false,
+  "release_not_frozen": true,
+  "root_cause": "The qualification wrapper omitted explicit exec; Docker mounted its owned /tmp tmpfs noexec. All four failing fixtures execute their own mode0700 shim from TMPDIR=/tmp; two raw Python subprocess failures directly report EACCES for sudo; SSH failures remain fail-closed status_unavailable/launch_unknown.",
+  "schema": "hepta.rea.ubuntu24-r2-failure-cause.v1",
+  "test_all": {
+    "command_exit_code": 100,
+    "command_seconds": 297.996,
+    "expected_exit_code": 0,
+    "failed": 4,
+    "log_sha256": "6e4222f249edc967cb9fd793c28ce9a1417f528ef550ae6224d96a368a24fadf",
+    "passed": 1882,
+    "skipped_existing_ignored": 39,
+    "summary_seconds": 125.299,
+    "tests_run": 1886
+  }
+}

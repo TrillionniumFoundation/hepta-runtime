@@ -1,0 +1,82 @@
+{
+  "schema": "hepta-independent-v10-explicit-state-228-and-causal-fb8-source-peer-v1",
+  "reviewer": "/root/v10_source_boundary_audit",
+  "review_date_utc": "2026-10-14",
+  "scope": "New fixture exact whole-byte inverse verification and complete196-line causaldriver source review only. Source reader ran only two frozen source reads/hash/diff; no reviewed module, Cargo, MCP, fixture, SSH or signal execution.",
+  "decisions": {
+    "explicit_state_harness_228": "SOURCE_ONLY_ACCEPTED",
+    "causal_driver_fb8": "HOLD_SOURCE_FIX_REQUIRED"
+  },
+  "artifacts": {
+    "old_fixture": {
+      "path": "/home/qian-qi/hepta-runtime-operation-v10-20261013/tests/dc_functional_v10_operation_acceptance.py",
+      "sha256": "3c3e53a1f9e63954e251580ed643be743da4add4702b166faece762b4486b5fa",
+      "bytes": 45074
+    },
+    "new_fixture": {
+      "path": "/home/qian-qi/hepta-runtime-operation-v10-20261013/tests/dc_functional_v10_operation_explicit_state_acceptance.py",
+      "sha256": "22837c70f1fa9deb093eda82233c22c496a20617c1baeca545a96e7a235cf6e5",
+      "bytes": 45172
+    },
+    "causal_driver": {
+      "path": "/home/qian-qi/hepta-runtime-operation-v10-20261013/tests/dc_functional_v10_operation_umask_causal_tests.py",
+      "sha256": "fb8cf941659a0e0546baa30584e3df42e08707170432ef4c288265c58fc3f1c4",
+      "bytes": 11326
+    }
+  },
+  "exact_fixture_delta": {
+    "source_reader_job_id": "1a138235177-b2f-e4e",
+    "actual_state": "succeeded",
+    "actual_exit_code": 0,
+    "operation": "Read only the two literal frozen test source files, check full expected SHA/size, remove exact one98-byte line from new file and compare entire inverse bytes with old.",
+    "line_517": "            state.mkdir(mode=0o700)  # Owned create-only fixture; independent of inherited umask.",
+    "only_this_exact_addition": true,
+    "inverse_entire_source_sha256": "3c3e53a1f9e63954e251580ed643be743da4add4702b166faece762b4486b5fa",
+    "all_old_assertions_and_helpers_byte_preserved": true,
+    "native_result_or_effect_proof": false
+  },
+  "source_derived_causal_boundary": {
+    "callgraph": "Old fixture defines state path without creating it. config::init_runtime258..261 uses ordinary create_dir_all(state/jobs,audit), inheriting controller umask. operation.start1399 lookup_key_at865 -> locked_store683 -> store546 -> root_at386 -> private_dir349 requires exact0700 before Slot or native dispatch.",
+    "effect_of_new_line": "Owned create-only fixture explicitly creates0700 state before controller startup. Product fail-closed permission behavior is not relaxed or edited.",
+    "old_ci_cause_directly_observed": false,
+    "limit": "Original CI artifact retained frames/type only. This source-derived plausible cause needs a fresh correctly bound owned forced0022 negative/0700 positive pair; neither source review nor historical local passes supplies that native evidence."
+  },
+  "p0_count": 0,
+  "causal_driver_p1_count": 1,
+  "findings": [
+    {
+      "id": "P1-GLOBAL-POPEN-BLOCKS-REAL-SOURCE-OBSERVER",
+      "severity": "P1",
+      "path": "dc_functional_v10_operation_umask_causal_tests.py",
+      "source_lines": [
+        109,
+        110,
+        157,
+        158
+      ],
+      "related_source": "Original3c source_identity70..79 invokes subprocess.check_output(git rev-parse).",
+      "problem": "The driver globally replaces stdlib subprocess.Popen with a function that accepts only pinned binary mcp argv. subprocess.check_output uses run/Popen from that same module. During module.main its real source_identity Git process therefore reaches the replacement and is refused before admission. The intended specific0022 SDK refusal and native16 positive cannot be reached by this source.",
+      "repair": "Inject a module-local subprocess facade or a scoped controller-only Popen seam. Keep the exact original controller executable/argv check and forced0022 for native children, while actual fixed readonly Git queries use the unmodified stdlib check_output/Popen and real results. Do not fake source_identity or native responses. Preserve fb8 unchanged and seal a new driver pin.",
+      "meaningful_regression": "A zero-process test can independently trace both paths: source observer fixed readonly Git delegates to the real-query seam, and controller start delegates exactly pinned binary mcp with forced0022. A fresh actual owned negative/positive pair then must observe the specific enum and16 checks with original cleanup."
+    }
+  ],
+  "other_source_supported": [
+    "Causaldriver captures fixed helper/source buffers by nofollow single-link stableFD then compiles/executes same bytes; old3c/mcpe2b/stage80fb/raw129/predecessor3eb fixed literals remain.",
+    "Observer returns original SDK result unchanged; only classifies the exact public Rust error literal as a fixed enum, emits no arbitrary raw message/params/SDK data.",
+    "Whole official stage compiler/HEAD identity is checked before/after each case and at finalization; both harnesses, binary and catalog pins are rechecked. Expected failure cleanup and positive16/complete are explicit.",
+    "No real configured SSH, production token/config/profile, installed service, business job or Desktop Commander mutation is intended by this owned-local adapter. Root must bind the concrete new driver invocation to fixed Root37 source498/debug757/current helper closure."
+  ],
+  "qualification": {
+    "source_only": true,
+    "native_case_run_by_reviewer": false,
+    "old_ci_cause_observed_directly": false,
+    "new_native16_proven_by_this_peer": false,
+    "real_ssh_qualified": false,
+    "six_machine_qualified": false,
+    "model_origin_qualified": false,
+    "business_replacement_qualified": false,
+    "full_dc_replacement_qualified": false,
+    "production_recovery_rollback_qualified": false,
+    "desktop_commander_must_remain_available": true
+  }
+}

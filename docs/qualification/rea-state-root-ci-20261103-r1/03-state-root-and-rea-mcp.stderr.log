@@ -1,0 +1,74 @@
+   Compiling hepta-runtime v0.1.0 (/home/qian-qi/hepta-runtime-rea-full-20261103-r1)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3m 09s
+────────────
+ Nextest run ID 4563ee5b-a10c-4740-bf07-a99ca71b019c with nextest profile: default
+    Starting 45 tests across 16 binaries (1838 tests skipped)
+        PASS [   0.010s] ( 1/45) hepta-runtime mcp::runtime::config::tests::a20_legacy_controller_lock_also_excludes_the_combined_owner
+        PASS [   0.010s] ( 2/45) hepta-runtime mcp::runtime::config::tests::basename_is_stable
+        PASS [   0.011s] ( 3/45) hepta-runtime mcp::runtime::config::tests::checkpoint_config_is_pinned_and_opt_in_linux_operator_only
+        PASS [   0.009s] ( 4/45) hepta-runtime mcp::runtime::config::tests::controller_owner_child_probe
+        PASS [   0.027s] ( 5/45) hepta-runtime mcp::runtime::config::tests::controller_owner_is_fenced_across_processes
+        FAIL [   0.011s] ( 6/45) hepta-runtime mcp::runtime::config::tests::controller_state_identity_requires_the_actual_filesystem_owner
+  stdout ───
+
+    running 1 test
+    test mcp::runtime::config::tests::controller_state_identity_requires_the_actual_filesystem_owner ... FAILED
+
+    failures:
+
+    failures:
+        mcp::runtime::config::tests::controller_state_identity_requires_the_actual_filesystem_owner
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1806 filtered out; finished in 0.00s
+
+  stderr ───
+
+    thread 'mcp::runtime::config::tests::controller_state_identity_requires_the_actual_filesystem_owner' (3834578) panicked at src/mcp/runtime/config_tests.rs:503:5:
+    assertion `left == right` failed
+      left: 493
+     right: 448
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        PASS [   0.013s] ( 7/45) hepta-runtime mcp::runtime::config::tests::controller_state_umask_child_probe
+        PASS [   0.013s] ( 8/45) hepta-runtime mcp::runtime::config::tests::directory_move_does_not_relocate_configured_roots_or_ancestors
+        PASS [   0.010s] ( 9/45) hepta-runtime mcp::runtime::config::tests::disabled_analysis_extensions_preserve_the_existing_runtime_policy_identity
+        PASS [   0.012s] (10/45) hepta-runtime mcp::runtime::config::tests::existing_nonprivate_state_is_rejected_before_locks_without_repair
+        PASS [   0.018s] (11/45) hepta-runtime mcp::runtime::config::tests::installed_policy_digest_binds_normalized_config_and_rejects_reinstallation
+        PASS [   0.011s] (12/45) hepta-runtime mcp::runtime::config::tests::installed_policy_digest_child_probe
+        PASS [   0.011s] (13/45) hepta-runtime mcp::runtime::config::tests::installed_policy_digest_matches_full_json_and_never_reuses_another_config
+        PASS [   0.011s] (14/45) hepta-runtime mcp::runtime::config::tests::installed_policy_serialization_failure_stays_deferred_to_digest_requests
+        PASS [   0.010s] (15/45) hepta-runtime mcp::runtime::config::tests::legacy_controller_lock_never_follows_symlink_or_hardlink
+        PASS [   0.041s] (16/45) hepta-runtime mcp::runtime::config::tests::missing_controller_state_is_private_under_permissive_umasks
+        PASS [   0.010s] (17/45) hepta-runtime mcp::runtime::config::tests::names_are_strict
+        PASS [   0.012s] (18/45) hepta-runtime mcp::runtime::config::tests::operator_allows_shell_sudo_and_signals_but_keeps_structural_checks
+        PASS [   0.011s] (19/45) hepta-runtime mcp::runtime::config::tests::operator_config_cannot_pretend_to_be_sandboxed
+        PASS [   0.012s] (20/45) hepta-runtime mcp::runtime::config::tests::operator_mode_is_explicit_and_unknown_modes_fail
+        PASS [   0.010s] (21/45) hepta-runtime mcp::runtime::config::tests::owner_lock_refuses_symlinked_lockfile
+        PASS [   0.011s] (22/45) hepta-runtime mcp::runtime::config::tests::permissive_owner_lock_is_rejected
+        PASS [   0.014s] (23/45) hepta-runtime mcp::runtime::config::tests::privileged_regexes_are_full_match_capable
+        PASS [   0.011s] (24/45) hepta-runtime mcp::runtime::config::tests::separate_controllers_cannot_claim_same_state_directory
+        PASS [   0.022s] (25/45) hepta-runtime mcp::runtime::effect_owner_fence::tests::controller_state_root_rebinding_is_detected
+        PASS [   0.041s] (26/45) hepta-runtime mcp::runtime::effect_owner_fence::tests::owner_controller_state_root_must_exist_and_remain_private
+        PASS [   0.052s] (27/45) hepta-runtime mcp::runtime::effect_owner_fence::tests::wrong_owner_or_wrong_state_root_fail_before_effect
+        PASS [   0.027s] (28/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_bounds_host_count_and_serialized_response
+        PASS [   0.014s] (29/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_bounds_the_actual_mcp_wire_envelope
+        PASS [   0.014s] (30/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_cache_does_not_retain_failed_validation_or_rendering
+        PASS [   0.013s] (31/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_cache_reuses_exact_summary_and_returns_independent_strings
+        PASS [   0.013s] (32/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_concurrent_first_readers_receive_identical_redacted_output
+        PASS [   0.010s] (33/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_empty_roots_never_claim_file_access_or_policy_grants
+        PASS [   0.012s] (34/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_has_no_hidden_policy_or_secret_hash_oracle
+        PASS [   0.011s] (35/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_hides_retrieval_and_validation_failure_details
+        PASS [   0.012s] (36/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_never_serializes_secret_fields_or_policy_digests
+        PASS [   0.013s] (37/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_parameters_accept_only_empty_object
+        PASS [   0.011s] (38/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_preserves_flags_counts_and_alias_order
+        PASS [   0.013s] (39/45) hepta-runtime mcp::runtime::jobs::tests::cached_positive_cannot_escape_configured_state_root
+        PASS [   0.074s] (40/45) hepta-runtime mcp::runtime::request_audit::tests::wide_state_root_is_refused_without_repair_or_partial_audit_creation
+        PASS [   1.366s] (41/45) hepta-runtime::rea_application_external real_owned_packages_are_read_only_discoverable_and_hash_bound_across_restart
+        PASS [   1.316s] (42/45) hepta-runtime::rea_mcp_external external_mcp_policy_worker_and_controller_restart
+        PASS [   3.283s] (43/45) hepta-runtime::rea_mcp_external model_pages_ranges_and_archive_roles_use_the_shipped_mcp_workers
+        PASS [   3.954s] (44/45) hepta-runtime::rea_model_session_external real_http_model_session_survives_restart_and_refuses_changed_authority
+        PASS [   1.805s] (45/45) hepta-runtime::rea_web_external offline_capture_package_and_restart_keep_original_sources_and_never_execute_targets
+────────────
+     Summary [  12.407s] 45 tests run: 44 passed, 1 failed, 1838 skipped
+        FAIL [   0.011s] ( 6/45) hepta-runtime mcp::runtime::config::tests::controller_state_identity_requires_the_actual_filesystem_owner
+error: test run failed

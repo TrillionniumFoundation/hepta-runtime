@@ -50,28 +50,94 @@ HTTP mode requires a high-entropy token file; every `/mcp` request must carry
 ### Durable process tools
 
 - `process_start`: explicit host, executable, argv, cwd, environment, optional
-  stdin, timeout and resource limits. An idempotency key binds to one exact
-  request and prevents accidental duplicate starts.
+  stdin, timeout and resource limits. A nonblank **required** `idempotency_key`
+  (at most 256 bytes) binds to one exact request. Retrying with the same host,
+  key and request reconciles the original job rather than starting a duplicate;
+  changing the payload under the same key fails closed.
 - `process_status`: authoritative remote state.
 - `process_read`: independent stdout/stderr byte offsets, bounded pagination.
 - `process_wait`: bounded wait, never a new process.
 - `process_cancel`: only stored jobs; no arbitrary PID input.
 - `process_list`: durable controller-side identities.
 
-On Linux, the remote helper uses a transient user systemd unit. Production
-policies fail closed if the user manager cannot create it; detached fallback is
-an explicit per-host exception intended for macOS in v0.1. Jobs default to a
-private network namespace restricted to AF_UNIX, preventing access to host
-localhost services such as trading gateways. Network access is a separate,
-explicit host policy. Both backends write
-request, launch, PID/start-time and exit records inside the configured remote
-state directory. The controller stores a separate immutable job identity and
-an append-only audit event.
+On Linux, the dedicated SSH identity can invoke only the no-argument root-owned
+`hepta-runtime-jobctl` binary through a narrow sudoers entry. That binary accepts
+bounded, typed JSON for start/status/read/cancel/PTY, validates a root-owned host
+policy, and creates a transient **system** systemd unit. Workloads run under a
+separate DynamicUser, not root and not the controller SSH identity. The unit
+hides controller state/credentials and user homes, uses a private network by
+default, and grants write access only to the workspace and its own result data.
+The independent aggregate job slice enforces its configured CPU and memory
+budgets. Both the slice and each new job unit use `TasksMax=infinity`, so Hepta
+does not impose a fixed process or thread count on a job. Per-job CPU, memory
+and timeout settings remain enforced. Retaining active or completed job
+records does not block new job admission, and admitting a new job does not
+delete the original records or terminal receipts.
+
+Controller startup acquires a nonblocking OS-level exclusive lock on
+both `controller.lock` and `controller.owner.lock` inside its canonical,
+non-world-writable state directory. Holding the legacy lock also fences an
+older controller that only recognizes that filename.
+A second controller using that state refuses startup, including after tunnel
+reconnects; the lock lasts for the owning process and is released on exit.
+State directories on network filesystems need separately qualified locking
+semantics and are not assumed safe merely because the file exists.
 
 A controller restart does not terminate durable jobs. A remote host reboot is
 not claimed as process recovery in v0.1: logs and metadata remain, but an
 in-flight transient unit is reported lost unless the application itself has a
 separate restart policy.
+
+Root-owned records bind the job ID, full SHA-256 request digest, boot ID, random
+nonce, unit name and systemd invocation identity. New idempotent requests bind
+all 256 bits; legacy controller records remain readable but cannot silently
+relaunch through a missing full-digest binding. Completed exit records are
+preserved across target boots; interrupted in-flight jobs are reported lost and
+are never automatically repeated. Invalid completion identities fail closed.
+
+The macOS backend remains a Python detached supervisor under the dedicated
+unprivileged account. It verifies stored process identity for cancellation but
+does **not** provide Linux namespace/DynamicUser isolation; administrators must
+explicitly enable its fallback/network policy.
+
+A controller-side `launch_failed` record means the launch acknowledgement failed,
+not proof that no target process exists. Pending and failed acknowledgements
+remain indeterminate and never authorize another launch. Reconcile the exact
+original job ID and full request digest; status errors are reported explicitly.
+Never retry an uncertain effect under a new key.
+
+Duplicate entries in the durable controller store with the same host and
+idempotency key are treated as conflicting owners even when their request
+payloads appear identical. Recovery refuses automatic reuse and requires
+manual reconciliation of each possible effect; selecting the oldest receipt
+would silently discard evidence of a second launch.
+
+The controller state-directory owner lock already serializes processes that
+share one canonical local state directory. In-process start lock sharding does
+not create distributed single-writer authority: controllers with separate
+state directories pointing to one SSH host remain a distinct deployment
+blocker and must not be promoted as a multi-controller configuration.
+
+A duplicate `process_start` is observation-only after a stored `launched`
+acknowledgement. Persisted `pending` and `launch_failed` rows remain
+**indeterminate** and cannot dispatch a second remote launch, even if a prior
+remote directory was erased or the target was rebooted. The operator must
+reconcile exact original effect evidence; the runtime never treats remote
+metadata absence as proof that a command did not execute.
+
+Durable job observations remain bound to the SSH target and remote job root
+recorded at original admission. If an administrator remaps a configured host
+alias to another target or remote state directory, existing job launch retries,
+status/wait, log reads and cancellations fail closed; manually reconcile the
+original remote operation rather than following the changed alias. This guard
+does not attest changes to DNS or OpenSSH alias resolution on its own: retain
+strict host-key verification and independently qualify host identity.
+Remote status/wait, stdout/stderr reads and cancellations additionally require the
+remote request.json to match the locally persisted job ID, unit, job directory
+and full 64-character SHA-256 request digest. A legacy job record lacking this
+binding remains listable for manual reconciliation, but cannot drive a remote
+observer or cancellation. A matching digest is not independent remote-host
+attestation; separate host identity and terminal-effect acceptance remain required.
 
 ### PTY tools
 
@@ -97,6 +163,24 @@ arguments are accepted, and a timeout. The runtime invokes it through
 `sudo -n`. Do not configure `/bin/sh`, `/usr/bin/env`, interpreters, package
 managers, general-purpose file tools, or a wrapper accepting arbitrary shell
 text as a privileged action.
+
+Each \`privileged_action\` request must also include a nonblank caller-stable
+\`idempotency_key\` (at most 256 bytes). The controller durably enters the
+policy-resolved executable, arguments and timeout before any remote SSH effect.
+An observed result is cached for same-key retries; a lost acknowledgement remains
+\`indeterminate\` and MUST be reconciled, never automatically re-executed.
+Changing the action or payload under the same key is rejected. The V2 intent
+also binds the configured SSH target string: if a host alias is administratively
+remapped, an old successful result cannot be reused as evidence for the new target.
+V1 intent records are not automatically upgraded, replayed, or counted as V2 success;
+they require independent operator reconciliation. This string binding does **not**
+attest the physical host or protect against underlying DNS/SSH configuration changes
+without separately checked server host keys and target identity.
+This bounded
+no-blind-replay mechanism does not make arbitrary sudo operations transactional,
+does not prevent distinct authorized keys from invoking the same named action,
+and is **not** an independently signed Hepta Final-use grant. Production activation
+still requires issuer/revocation/generation binding and target-host fault tests.
 
 ## Policy boundary
 
@@ -143,8 +227,8 @@ relative forms, and must fall under `allowed_read_path_prefixes` or
 `allowed_write_path_prefixes`. Writes additionally require `allow_write=true`.
 A registered host must set `allow_write=true`, provide at least one absolute
 `allowed_write_path_prefixes` entry, and the target must not intersect a
-protected prefix. Login-home-relative forms such as `ssh://host/~/file` are
-read-only; write calls must use an absolute remote path.
+protected prefix. Login-home-relative forms such as `ssh://host/~/file` are rejected in runtime
+mode; use an absolute remote path.
 
 Without `--runtime-config`, upstream Octofs compatibility is retained and these
 fork-specific host policies are not active.
@@ -153,7 +237,7 @@ fork-specific host policies are not active.
 
 Preferred deployment keeps the runtime on loopback and uses the official
 OpenAI tunnel client as a separate service. Create a tunnel ID and a runtime API
-key in OpenAI Platform. Keep that key in `/etc/hepta-runtime/tunnel.env` or a
+key in OpenAI Platform. Keep that key in `/etc/hepta-runtime/tunnel-api-key` or a
 secret manager; never put it in this repository. The same environment file sets
 `MCP_SERVER_URL` to the loopback MCP endpoint, sends
 `X-Hepta-Runtime-Token: file:/etc/hepta-runtime/mcp-token` for discovery and
@@ -195,7 +279,70 @@ deleted automatically. Inspect or archive them before removal.
   reboots.
 - PTYs are controller-process scoped.
 - The controller-side JSONL audit is not yet a tamper-evident hash chain.
-- macOS uses a detached supervisor rather than transient systemd units.
+- macOS uses a detached Python supervisor and weaker OS-identity isolation.
+- Remote inspection and descriptor-safe file RPCs require Python 3. Core MCP,
+  lifecycle coordination and the Linux privileged helper are Rust.
+- Each Linux target retains at most 128 job identities before refusing new
+  starts. Archive completed records administratively; do not erase idempotency
+  history to make capacity appear available.
+- Job logs are capped at 16 MiB per stream and PTY output at a 4 MiB ring.
+  Keep important artifacts in the workspace, not unbounded stdout.
+- Jobs may alter their own workspace/output; outputs are not a proof of trusted
+  computation. Audit records are not cryptographic attestations.
 - No GUI capture or desktop input API is included in v0.1.
-- Hardware schemas expose raw kernel values where units vary; consumers must
-  preserve field names and interpret units explicitly.
+- Hardware includes raw kernel fields and normalized C/W/RPM/Hz readings.
+  Preserve field names and units; unavailable readings are null and requested
+  power limits are not sustained-power evidence.
+
+### No-follow remote observation and cancellation (source-only candidates)
+
+Remote process_read, process_status and process_wait pin the absolute job
+directory component-by-component without following symlinks. Request metadata,
+logs and status state are opened relative to a pinned descriptor, rejecting
+symlinks, hard links, non-regular inodes and corrupt/oversized metadata. The
+request ceiling is 4 MiB and log page ceiling remains 1 MiB. For status and
+cancel, even an optional corrupt exit/launch/started JSON is an error rather
+than silently interpreted as missing terminal evidence.
+
+Remote process_cancel additionally requires the pinned job directory to be
+owned by the executing SSH user and owner-private, verifies the immutable job,
+directory, unit and complete SHA-256 request binding, refuses an unknown launch
+backend, and for a detached supervisor requires a stored process-start identity
+matching the current PID plus the recorded runner command. It rechecks this
+identity before escalating to SIGKILL. Its cancel-request marker is written via
+a no-follow, exclusive temporary inode, fsync and descriptor-relative rename
+only after validating the backend and supervisor identity, preventing a denied
+PID cancellation from leaving a misleading marker. Configure a physical
+absolute remote state root without symlinked path components.
+
+These source changes reduce log/status/cancel path substitution and some
+recycled-PID risks. They do NOT make launch/runner writes, remote control-group
+termination, SFTP physical confinement, DNS/SSH identity, cross-controller
+once-only ownership or credentialed target-host effects race-free. A PID can
+still disappear between identity verification and kill; host-side systemd
+ownership and independent acceptance remain necessary. No independent
+Final-use or production authority is granted. Retain DRAFT / DENY_ALL /
+HOLD_NO_GO until exact-source and prospective-merge Rust gates, real SSH
+negative tests and independent operator/release reviews are complete.
+
+## Tunnel account binding
+
+The official runtime client is installed independently of cloud credentials.
+Create a workspace-associated tunnel and a dedicated Tunnels Read+Use runtime
+key in OpenAI Platform. Provision it from a root-owned 0600 file, without putting
+the secret in command-line arguments or chat:
+
+```sh
+sudo /usr/local/sbin/hepta-runtime-provision-tunnel \
+  --tunnel-id tunnel_ACTUAL_ID --key-file /root/hepta-tunnel-runtime-key
+sudo /usr/local/sbin/hepta-runtime-provision-tunnel --check
+```
+
+The helper never reuses OpenClaw/Codex credentials, creates tunnels by guessing
+an organization, or treats client installation as a connected ChatGPT app.
+After tunnel health is valid, add the tunnel to the correct ChatGPT workspace
+and verify `host_list` followed by a read-only `hardware_snapshot` tool call.
+
+## Explicit operator extension
+
+The default isolated contracts above remain unchanged. For the opt-in full-SSH-account execution mode, new shell/process-signal/sudo tools and separate qualification criteria, see [OPERATOR_MODE.md](OPERATOR_MODE.md). Operator mode intentionally changes the trust boundary and is not covered by the isolated-account sandbox claims above.

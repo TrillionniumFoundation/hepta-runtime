@@ -1,0 +1,60 @@
+--- a/src/mcp/runtime/jobs.rs
++++ b/src/mcp/runtime/jobs.rs
+@@ -3378,7 +3378,7 @@
+ "#;
+ 
+ const STATUS_CODE: &str = r#"
+-import json, os, pathlib, stat, subprocess, sys, time
++import json, os, pathlib, stat, sys, time
+ q = json.load(sys.stdin)
+ job = private_job_directory(q["job_dir"])
+ 
+@@ -3393,6 +3393,7 @@
+             return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)} if boot else None
+         except Exception:
+             return None
++    import subprocess
+     try:
+         value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True, timeout=3).strip()
+         return {"kind": "ps_lstart", "value": value} if value else None
+@@ -3413,6 +3414,7 @@
+ 
+ def process_uid(pid):
+     if sys.platform == "linux": return pathlib.Path(f"/proc/{pid}").stat().st_uid
++    import subprocess
+     return int(subprocess.check_output(["ps", "-p", str(pid), "-o", "uid="], text=True, timeout=3).strip())
+ 
+ def publication_pending(reason):
+@@ -3530,6 +3532,7 @@
+         env = os.environ.copy()
+         env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+         env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus")
++        import subprocess
+         p = subprocess.run(
+             ["systemctl", "--user", "show", q["unit"], "--no-pager",
+              "--property=LoadState,ActiveState,SubState,Result,ExecMainPID,ExecMainCode,ExecMainStatus,InvocationID,Description"],
+@@ -3661,7 +3664,7 @@
+ "#;
+ 
+ const CANCEL_CODE: &str = r#"
+-import json, os, pathlib, signal, subprocess, sys, time
++import json, os, pathlib, signal, sys, time
+ q = json.load(sys.stdin)
+ job = private_job_directory(q["job_dir"])
+ 
+@@ -3688,6 +3691,7 @@
+             return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)} if boot else None
+         except Exception:
+             return None
++    import subprocess
+     try:
+         value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True, timeout=3).strip()
+         return {"kind": "ps_lstart", "value": value} if value else None
+@@ -3708,6 +3712,7 @@
+ 
+ def process_uid(pid):
+     if sys.platform == "linux": return pathlib.Path(f"/proc/{pid}").stat().st_uid
++    import subprocess
+     return int(subprocess.check_output(["ps", "-p", str(pid), "-o", "uid="], text=True, timeout=3).strip())
+ 
+ request = read_json("request.json")

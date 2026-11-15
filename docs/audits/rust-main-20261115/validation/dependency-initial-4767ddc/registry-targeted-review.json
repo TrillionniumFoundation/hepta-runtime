@@ -1,0 +1,130 @@
+{
+  "schema": "hepta.targeted-registry-review.v1",
+  "observed_utc": "2026-11-15T08:28:54.770438+00:00",
+  "scope": "Direct official sparse-index lookup for crypto-bigint and ctutils only; not a full-lock yanked sweep.",
+  "registry": {
+    "crypto-bigint": {
+      "source_url": "https://index.crates.io/cr/yp/crypto-bigint",
+      "saved_sha256": "d9414f469e8359c747ae72286396b901da2af71489b7fb78d907dc6cd4c62e61",
+      "versions": [
+        {
+          "version": "0.7.5",
+          "yanked": true,
+          "checksum": "1a52aa3fcda4e6302a9f48734f234d35d4721b96f8fe07d073f07ce9df4f0271",
+          "rust_version": "1.85",
+          "ctutils_requirement": "^0.4"
+        },
+        {
+          "version": "0.7.6",
+          "yanked": true,
+          "checksum": "6bb08299a6046833a879ace115697f12fd2bd6c8d3e93c909ffc9e0738e7cae0",
+          "rust_version": "1.87",
+          "ctutils_requirement": "^0.4.5"
+        },
+        {
+          "version": "0.7.7",
+          "yanked": true,
+          "checksum": "cc907c45bb7e9ef8fc3778defd0f3cd8c81288f1b4e748eba064948f20c47122",
+          "rust_version": "1.87",
+          "ctutils_requirement": "^0.4.5"
+        },
+        {
+          "version": "0.7.8",
+          "yanked": true,
+          "checksum": "d726facc8b27e604391b232b970cdc19b5468c69f08b466b9734c759216c7415",
+          "rust_version": "1.87",
+          "ctutils_requirement": "^0.4.5"
+        },
+        {
+          "version": "0.7.9",
+          "yanked": false,
+          "checksum": "d811ea23fdfbcce2e2d5132344d471abdb8f901ac496a0893a3df92e70525e52",
+          "rust_version": "1.87",
+          "ctutils_requirement": "^0.4.5"
+        },
+        {
+          "version": "0.7.10",
+          "yanked": false,
+          "checksum": "9c035cb64cba03dad2fb921f3e218785e8cf9a41790da5eb3a1400f62fa2be11",
+          "rust_version": "1.87",
+          "ctutils_requirement": "^0.4.6"
+        },
+        {
+          "version": "0.7.11",
+          "yanked": false,
+          "checksum": "914c195c4d7fbc5ed7f88d14cbf85914d5c664967658d43404b263913a477e82",
+          "rust_version": "1.87",
+          "ctutils_requirement": "^0.4.8"
+        }
+      ]
+    },
+    "ctutils": {
+      "source_url": "https://index.crates.io/ct/ut/ctutils",
+      "saved_sha256": "7411ed7e18193046256f5b0a34a98e1050b2febf07d9f1a4ccc248439692c1cc",
+      "versions": [
+        {
+          "version": "0.4.2",
+          "yanked": false,
+          "checksum": "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e",
+          "rust_version": "1.85",
+          "ctutils_requirement": null
+        },
+        {
+          "version": "0.4.4",
+          "yanked": false,
+          "checksum": "12218662ccac37d9714f2191252553d67585b97df8c839cbe49e0bde278dc865",
+          "rust_version": "1.87",
+          "ctutils_requirement": null
+        },
+        {
+          "version": "0.4.5",
+          "yanked": false,
+          "checksum": "38d28fb6aa7dd680b3ffd1a3e64e115c177bdba63c0ae7f9cd48129ff05c4fa0",
+          "rust_version": "1.87",
+          "ctutils_requirement": null
+        },
+        {
+          "version": "0.4.6",
+          "yanked": false,
+          "checksum": "fe3e9d21d39e6f39ff46e03d5b621424f88ee23d8a1672c6bfc9ccc7f2da4f6a",
+          "rust_version": "1.87",
+          "ctutils_requirement": null
+        },
+        {
+          "version": "0.4.8",
+          "yanked": false,
+          "checksum": "261af4dc7a06ea8a527a8717d8cbba3417530d6ea14e1edb3de6b67806be474f",
+          "rust_version": "1.87",
+          "ctutils_requirement": null
+        }
+      ]
+    }
+  },
+  "official_changelog_url": "https://github.com/RustCrypto/crypto-bigint/blob/master/CHANGELOG.md",
+  "saved_changelog_sha256": "1eb9b7e3b92d20ad8f2299a68baaf5297dc6e9ad5d95885c8183f10b606e1925",
+  "official_breaking_fix_url": "https://github.com/RustCrypto/crypto-bigint/pull/1373",
+  "selected_recommendation": {
+    "crypto-bigint": "0.7.11",
+    "ctutils": "0.4.8",
+    "reason_zh": "0.7.6至0.7.8因NonZero<T>乘法不变量修订被撤回。0.7.9是满足已知RustSec范围的最早未撤回版本，但0.7.11另有官方声明的Thumb-1常数时间安全修复并要求ctutils0.4.8；两者MSRV1.87，兼容项目1.95。此选择不声明本次x86_64部署可被Thumb-1问题利用。",
+    "security_fix_links": [
+      "https://github.com/RustCrypto/crypto-bigint/pull/1391",
+      "https://github.com/RustCrypto/crypto-bigint/pull/1399"
+    ],
+    "source_of_finding": "Official upstream changelog plus official registry index, additional to pinned RustSec matching."
+  },
+  "initial_locked_yanked_packages_confirmed": [
+    {
+      "name": "crypto-bigint",
+      "version": "0.7.5",
+      "yanked": true
+    }
+  ],
+  "initial_locked_unyanked_packages_confirmed": [
+    {
+      "name": "ctutils",
+      "version": "0.4.2",
+      "yanked": false
+    }
+  ]
+}

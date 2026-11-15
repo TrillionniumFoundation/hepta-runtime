@@ -1,0 +1,140 @@
+{
+  "schema": "hepta-chatgpt-full-operator-tunnel-v1",
+  "recorded_at": "2026-10-12T08:12:57.376911+00:00",
+  "tunnel": {
+    "id": "tunnel_6acc93cc226081919911d15143cafbdb",
+    "name": "hepta",
+    "organization_ids": [
+      "org-HZREzVEV7tK0fnzuYOZL0ivs"
+    ],
+    "workspace_ids": [
+      "9958b3c3-c57c-49a0-b50c-681d1a1a82da"
+    ]
+  },
+  "full_operator": {
+    "profile": "hepta-full-operator",
+    "service": {
+      "MainPID": "1039956",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    },
+    "health_ready": true,
+    "control_plane": {
+      "status": "ok",
+      "state": "polling",
+      "observed_at": "2026-10-12T08:12:46.610580296Z",
+      "limited": false,
+      "details": {
+        "last_attempt": "2026-10-12T08:12:46.610580296Z",
+        "last_success": "2026-10-12T08:12:46.610573333Z",
+        "consecutive_failures": 0,
+        "current_poll_age_seconds": 10.716000476,
+        "configured_wait_seconds": 30,
+        "effective_wait_seconds": 30,
+        "deadline_seconds": 35
+      }
+    },
+    "dispatcher": {
+      "status": "ok",
+      "state": "accepting",
+      "limited": false,
+      "details": {
+        "active": 0,
+        "pool_limit": 4,
+        "oldest_active_age_seconds": 0,
+        "completed": 0,
+        "failures": 0,
+        "timeouts": 0,
+        "accepting": true
+      }
+    },
+    "queue": {
+      "status": "ok",
+      "state": "available",
+      "limited": false,
+      "details": {
+        "depth": 0,
+        "capacity": 20,
+        "utilization": 0,
+        "enqueued": 0,
+        "dequeued": 0,
+        "backpressure_seconds": 0
+      }
+    },
+    "mcp": {
+      "status": "unknown",
+      "state": "not_observed",
+      "limited": false,
+      "details": {
+        "channel": "main",
+        "transport": "stdio",
+        "child_state": "running",
+        "child_generation": "b9ac8eda19fd400bfe401b4160a7916a",
+        "initialize_epoch": 0,
+        "evidence": "same_child",
+        "initialize": {
+          "ok": false,
+          "identity_complete": false,
+          "limited": false,
+          "capability_names": []
+        },
+        "tools_list": {
+          "ok": false,
+          "tool_names": [],
+          "retained_count": 0,
+          "complete": false,
+          "partial": false,
+          "limited": false
+        }
+      }
+    },
+    "installed_manifest": {
+      "release": "/home/qian-qi/.local/lib/hepta-chatgpt-full/releases/bc0c3566cdc7562e",
+      "facade_sha256": "bc0c3566cdc7562e8fe6aa0d2a0a323dc7fd043d21f435007101fcdf41f5b8d3",
+      "contract_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+      "tool_contract_catalog_sha256": "c1662cd7231c29f5bff3c6624d9d96aa448ce88cb6b7a84aceb53f25bf3e064c",
+      "tools": 46,
+      "profile": "/home/qian-qi/.config/tunnel-client/hepta-full-operator.yaml",
+      "unit": "/home/qian-qi/.config/systemd/user/hepta-openai-full-operator.service"
+    }
+  },
+  "retired_readonly_tunnel": {
+    "service": {
+      "MainPID": "0",
+      "ActiveState": "inactive",
+      "UnitFileState": "disabled"
+    },
+    "note": "disabled/inactive after controlled full-operator cutover; config retained for rollback"
+  },
+  "protected_services": {
+    "runtime": {
+      "MainPID": "2927",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    },
+    "desktop_commander": {
+      "MainPID": "2894",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    }
+  },
+  "contract": {
+    "tools": 46,
+    "catalog_sha256": "c1662cd7231c29f5bff3c6624d9d96aa448ce88cb6b7a84aceb53f25bf3e064c",
+    "file_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e"
+  },
+  "helper_fix": {
+    "installed_helper_sha256": "8a1bc5e2f4c7e7905bffe810eeb900ef861d72fc79b1b14c2a97cc5ae12395f5",
+    "doctor_health_listener": "127.0.0.1:0",
+    "reason": "avoid false failure when live tunnel already owns 127.0.0.1:8792"
+  },
+  "claims": {
+    "server_side_full_operator_live": true,
+    "chatgpt_custom_app_created": false,
+    "chatgpt_originated_initialize_observed": false,
+    "chatgpt_originated_write_call_observed": false,
+    "public_gateway_started": false,
+    "runtime_restarted": false,
+    "desktop_commander_restarted": false
+  }
+}

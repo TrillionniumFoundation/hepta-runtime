@@ -1,0 +1,111 @@
+{
+  "schema": "hepta-dc-v4-model-origin-parity-expansion-v1",
+  "created_utc": "2026-10-12T17:17:51.487587+00:00",
+  "source_branch": "feat/operator-parity-20261006",
+  "source_head_before_evidence": "2fa3714ee0a68d9b974e20a7b67187a9c3c3c612",
+  "prior_receipt": "docs/qualification/dc-parity-v4-chatgpt-model-origin-accepted-20261013.json",
+  "model_origin": "All specific Hepta calls below were invoked by the active ChatGPT client from this conversation. No browser or signed request-ID attestation is available.",
+  "additional_positive_calls": {
+    "text_editor_create": {
+      "path": "/tmp/hepta-chatgpt-v4-model-acceptance-20261013-0100-6f3a2b-relocated/edit_block_parity.txt",
+      "bytes": 23,
+      "result": "File created successfully"
+    },
+    "text_editor_str_replace": {
+      "old": "second line",
+      "new": "second line verified",
+      "result": "success; fresh line id 2:a1"
+    },
+    "text_editor_view_after_replace": {
+      "line_2": "second line verified"
+    },
+    "text_editor_undo_edit": {
+      "result": "Successfully undid last edit"
+    },
+    "text_editor_view_after_undo": {
+      "line_2": "second line"
+    },
+    "process_cancel_owned": {
+      "created_process": "/usr/bin/sleep 30",
+      "job_id": "1a1311baa23-1f807d-3",
+      "result": "stop_requested",
+      "wait_result": "cancelled",
+      "exit_code": -15,
+      "output_complete": true
+    },
+    "host_processes": {
+      "pid": 2343316,
+      "name": "sleep",
+      "uid": 1000,
+      "expected_identity": "linux:41d33b85-01f6-4520-8c5f-208e9f068d89:45143644"
+    },
+    "host_signal": {
+      "pid": 2343316,
+      "signal": 15,
+      "sudo": false,
+      "result": "signal_sent",
+      "atomic_identity": true,
+      "effective_uid": 1000,
+      "pty_terminal_state_after_signal": "exited",
+      "terminal_exit_code": -15,
+      "pty_close": "already_exited",
+      "target_is_only_disposable_self_created_process": true
+    }
+  },
+  "eight_bounded_dc_core_categories_with_positive_hepta_model_calls": {
+    "DC.write_file": "Hepta.text_file_write(create/append/replace)",
+    "DC.create_directory": "Hepta.directory_create",
+    "DC.move_file": "Hepta.file_move + directory_move",
+    "DC.edit_block": "Hepta.text_editor(create/str_replace/undo_edit)",
+    "DC.start_process": "Hepta.process_start and safe shell_start",
+    "DC.interact_with_process": "Hepta.pty_start/write/read/close",
+    "DC.force_terminate": "Hepta.process_cancel (runtime-owned jobs)",
+    "DC.kill_process": "Hepta.host_signal (identity-checked, disposable UID 1000 PID)"
+  },
+  "dc_main_modify_execute_categories_count": 10,
+  "categories_qualified_safe_scope": 8,
+  "categories_not_qualified": [
+    "DC.write_pdf (Hepta document_write remains unverified from this client)",
+    "DC.set_config_value (no universal Hepta configuration mutation endpoint, intentionally no matching public tool)"
+  ],
+  "semantics_limits": [
+    "Hepta new file tools are controller-local authorized Linux paths, not the full DC cross-platform/multi-host move capabilities.",
+    "The process_cancel success covers runtime-owned jobs only; the identity-checked host_signal covers the exact disposable test PID, not arbitrary business processes.",
+    "Safe model-origin /usr/bin/id -u via shell_start does not attest arbitrary shell programs, sudo or compound filesystem mutations.",
+    "Interactive PTY proved a harmless Python print; broader commands remain separately subject to platform safeguards.",
+    "The currently approved 50-tool catalog does not imply every tool and argument is approved."
+  ],
+  "independent_readonly_followup": {
+    "edit_file_sha256": "c2097f55f01fc297fc7f4acf21438123e06e4d409a818524428534e850642f4f",
+    "edit_file_content_restored": true,
+    "source_file_sha256_still_matches": true,
+    "services": {
+      "hepta-runtime-operator.service": {
+        "MainPID": "2064509",
+        "ActiveState": "active"
+      },
+      "hepta-openai-full-operator.service": {
+        "MainPID": "2064582",
+        "ActiveState": "active"
+      },
+      "desktop-commander-remote.service": {
+        "MainPID": "2894",
+        "ActiveState": "active"
+      }
+    },
+    "tunnel_ready": true,
+    "control_plane": "ok",
+    "dispatch_completed": 70,
+    "responses_accepted": 70,
+    "dispatcher_failures": 0
+  },
+  "safety_boundary": {
+    "no_sudo": true,
+    "no_arbitrary_user_pid_terminated": true,
+    "no_app_risk_hint_changed": true,
+    "no_business_files_changed": true,
+    "no_desktop_commander_or_runtime_restart": true,
+    "public_gateway_unreleased": true,
+    "no_credentials_logged": true
+  }
+}

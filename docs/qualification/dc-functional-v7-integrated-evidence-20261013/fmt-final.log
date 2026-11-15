@@ -1,0 +1,57 @@
+Diff in /home/qian-qi/hepta-runtime-dc-functional-20261013/src/mcp/runtime/jobs.rs:2:
+ // Copyright 2026 TrillionniumFoundation
+ // SPDX-License-Identifier: Apache-2.0
+ //! Durable host-bound job identities, recovery and log pagination.
+-use anyhow::{Context, Result, bail};
++use anyhow::{bail, Context, Result};
+ use rmcp::schemars;
+ use serde::{Deserialize, Serialize};
+-use serde_json::{Value, json};
++use serde_json::{json, Value};
+ use sha2::{Digest, Sha256};
+ use std::collections::BTreeMap;
+ use std::fs::OpenOptions;
+Diff in /home/qian-qi/hepta-runtime-dc-functional-20261013/src/mcp/runtime/jobs.rs:16:
+ use std::time::{Duration, SystemTime, UNIX_EPOCH};
+ use tokio::sync::Mutex as AsyncMutex;
+ 
+-use super::config::{ExecutionMode, Platform};
+ use super::config::{check_environment, check_execution, runtime_config, valid_name};
++use super::config::{ExecutionMode, Platform};
+ use super::ssh::{run_jobctl, run_python_json};
+ 
+ static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+Diff in /home/qian-qi/hepta-runtime-dc-functional-20261013/src/mcp/runtime/jobs_tests.rs:76:
+ 			assert_eq!(&retained[key], value);
+ 		}
+ 		assert_eq!(retained["audit_recorded"], false);
+-		assert!(
+-			retained["audit_warning"]
+-				.as_str()
+-				.unwrap()
+-				.contains("No new job")
+-		);
++		assert!(retained["audit_warning"]
++			.as_str()
++			.unwrap()
++			.contains("No new job"));
+ 		assert!(!retained.to_string().contains("PRIVATE_AUDIT_SECRET"));
+ 	}
+ 	let observed = retain_observation_after_audit(
+Diff in /home/qian-qi/hepta-runtime-dc-functional-20261013/src/mcp/runtime/jobs_tests.rs:195:
+ 	assert_eq!(result["launch"], original["launch"]);
+ 	assert_eq!(result["reused"], false);
+ 	assert_eq!(result["audit_recorded"], false);
+-	assert!(
+-		result["audit_warning"]
+-			.as_str()
+-			.unwrap()
+-			.contains("existing job_id")
+-	);
++	assert!(result["audit_warning"]
++		.as_str()
++		.unwrap()
++		.contains("existing job_id"));
+ 	let text = result.to_string();
+ 	assert!(!text.contains("/secret"));
+ 	assert!(!text.contains("TOKEN"));

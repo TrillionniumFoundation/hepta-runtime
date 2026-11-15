@@ -1,0 +1,21 @@
+config_version: 1
+control_plane:
+  base_url: "https://api.openai.com"
+  api_key: "file:/home/qian-qi/.config/hepta-chatgpt-tunnel/runtime-api-key"
+health:
+  listen_addr: "127.0.0.1:8792"
+admin_ui:
+  open_browser: false
+log:
+  level: info
+  format: json
+mcp:
+  # Preserve the seven-tool read-only bridge and its private Unix HTTP socket.
+  # A command/stdio target would serialize full request lifecycles upstream.
+  server_urls:
+    - channel: main
+      url: "http://localhost/mcp"
+      unix_socket: "env:HEPTA_CHATGPT_BRIDGE_SOCKET"
+  startup_wait_timeout: 30s
+  # Requires the pinned Hepta patch: zero selects native unbounded dispatch.
+  max_concurrent_requests: 0

@@ -1,0 +1,153 @@
+--- 977/deploy/preflight_dc_successor.py
++++ draft-R2/deploy/preflight_dc_successor.py
+@@ -12,6 +12,7 @@
+ import hashlib
+ import http.client
+ import json
++import math
+ import os
+ import pathlib
+ import re
+@@ -408,6 +409,68 @@
+     if isinstance(value.get("registry_pin"), str) and S.HASH.fullmatch(value["registry_pin"]):
+         result["registry_pin"] = value["registry_pin"]
+     return result
++
++
++
++def large_bounded_deadline(protocol, budget_seconds, rpc_timeout):
++    """Refuse invalid requested limits before credential, contract or RPC work."""
++    if (isinstance(rpc_timeout, bool) or not isinstance(rpc_timeout, (int, float))
++            or not 0 < rpc_timeout <= protocol.MAX_RPC_SECONDS or not math.isfinite(rpc_timeout)):
++        raise protocol.InventoryError("DeadlineExpired")
++    deadline = protocol.Deadline(budget_seconds)
++    deadline.timeout(rpc_timeout)
++    return deadline
++
++
++def large_bounded_inventory_observation(manifest, *, budget_seconds=120.0, rpc_timeout=10.0):
++    """Jobs-only observer; exact installed catalog and six authorities precede status."""
++    import dc_successor_inventory as I
++    deadline = large_bounded_deadline(I, budget_seconds, rpc_timeout)
++    token_path = S.absolute_path(manifest["baseline"]["auth_token_file"])
++    contract_pin = manifest["baseline"]["artifacts"]["contract"]
++    refuse_token_source(contract_pin["path"], token_path)
++    credential_pin = I.credential_inode(token_path)
++    raw, _ = S.read_pinned(contract_pin["path"], contract_pin["sha256"], "installed inventory contract")
++    expected = I._json(raw)
++    expected_tools = expected.get("tools")
++    if not isinstance(expected_tools, list):
++        raise I.InventoryError("ProtocolInvalid")
++
++    def definitions(rows):
++        if not isinstance(rows, list) or len(rows) > I.MAX_RECORDS:
++            raise I.InventoryError("ProtocolInvalid")
++        tools = {}
++        for row in rows:
++            if (not isinstance(row, dict) or not isinstance(row.get("name"), str)
++                    or row["name"] in tools):
++                raise I.InventoryError("ProtocolInvalid")
++            tools[row["name"]] = row
++        return tools
++
++    expected_definitions = definitions(expected_tools)
++
++    def factory(host, shared_deadline, pin):
++        client = I.LoopbackReadClient(token_path, token_reader=read_private_token, host=host,
++            deadline=shared_deadline, expected_credential_identity=pin, rpc_timeout=rpc_timeout)
++        try:
++            catalog = client.rpc("tools/list", {})
++            if (not isinstance(catalog, dict) or catalog.get("nextCursor") is not None
++                    or not I._typed_json_equal(definitions(catalog.get("tools")), expected_definitions)):
++                raise I.InventoryError("ProtocolInvalid")
++            host_data = client.call("host_list", {})
++            rows = host_data.get("hosts")
++            if (not isinstance(rows, list) or len(rows) != len(HOSTS)
++                    or any(not isinstance(row, dict) or not isinstance(row.get("name"), str) for row in rows)
++                    or len({row["name"] for row in rows}) != len(HOSTS)
++                    or {row["name"] for row in rows} != set(HOSTS)):
++                raise I.InventoryError("IdentityMismatch")
++            return client
++        except BaseException:
++            client.close()
++            raise
++
++    return I.observe_inventory(S.absolute_path(manifest["baseline"]["state_directory"]) / "jobs",
++        factory, credential_identity=credential_pin, budget_seconds=deadline.remaining(), rpc_timeout=rpc_timeout)
+ 
+ 
+ def inventory_observation(manifest):
+@@ -839,6 +902,12 @@
+ 
+ def prepare_preflight(args, service_probe=None, inventory_probe=None, process_probe=None):
+     """Read only; even late failure cannot leave an output directory or backup."""
++    observer_mode = getattr(args, "inventory_observer", "legacy")
++    observer_budget = getattr(args, "inventory_budget_seconds", 120.0)
++    observer_timeout = getattr(args, "inventory_rpc_timeout_seconds", 10.0)
++    if observer_mode == "large-bounded":
++        import dc_successor_inventory as protocol
++        large_bounded_deadline(protocol, observer_budget, observer_timeout)
+     output = absent(args.output_directory)
+     if args.prepare_backups:
+         if args.backup_directory is None:
+@@ -944,7 +1013,16 @@
+     if material["native-dropin.conf"] != ("[Service]\nExecStart=\nExecStart=" + dropin_line + "\n").encode():
+         raise ValueError("native drop-in bytes do not match the exact non-starting command")
+     private_profile_review = validate_private_profile_review(args, manifest, material, stage_pin)
+-    inventory = sanitized_inventory((inventory_probe or inventory_observation)(manifest))
++    if observer_mode == "legacy":
++        inventory = sanitized_inventory((inventory_probe or inventory_observation)(manifest))
++    elif observer_mode == "large-bounded":
++        import dc_successor_inventory as protocol
++        large_bounded_deadline(protocol, observer_budget, observer_timeout)
++        observer = inventory_probe or (lambda value: large_bounded_inventory_observation(
++            value, budget_seconds=observer_budget, rpc_timeout=observer_timeout))
++        inventory = protocol.sanitized_inventory(observer(manifest))
++    else:
++        raise ValueError("unsupported inventory observer mode")
+     holds.extend(inventory_holds(inventory))
+     after = service_probe()
+     if after != before or any(process_probe(pin["pid"]) != pin for pin in process_pins.values()):
+@@ -1009,6 +1087,9 @@
+                   "rollback_restore_exact_private_profile_manifest_dropins": "Use packet manifest original paths and SHA pins after fresh same-ID inventories; preserve state/token/DC"}}
+     if private_profile_review is not None:
+         report["private_profile_review"] = private_profile_review
++    if observer_mode == "large-bounded":
++        report["inventory_observer"] = observer_mode
++        report["inventory_observer_scope"] = "jobs-only; PTY, stream and dispatch remain unobserved and incomplete"
+     # Internal backup bytes may contain profile credentials, never report/public output.
+     return {"report": report, "backups": backups if args.prepare_backups else {},
+             "pins": {"stage_manifest_sha256": stage_pin["sha256"], "live_files": live, "dropins": dropins,
+@@ -1016,6 +1097,9 @@
+                      "backup_directory": str(backup) if args.prepare_backups else None,
+                      "prepare_backups": bool(args.prepare_backups), "source_root": str(S.absolute_path(args.source_root)),
+                      "restore_entries": restore_entries,
++                     "inventory_observer": observer_mode,
++                     "inventory_budget_seconds": observer_budget if observer_mode == "large-bounded" else None,
++                     "inventory_rpc_timeout_seconds": observer_timeout if observer_mode == "large-bounded" else None,
+                      "private_profile_review": ({"path": private_profile_review["review_manifest"]["path"],
+                           "sha256": private_profile_review["review_manifest"]["sha256"]}
+                           if private_profile_review is not None else None)}}
+@@ -1085,6 +1169,12 @@
+         root = S.absolute_path(args.source_root)
+         if backup == root or root in backup.parents or backup == output or backup in output.parents or output in backup.parents:
+             raise ValueError("private backup destination is not isolated")
++    observer_mode = getattr(args, "inventory_observer", "legacy")
++    supplied_observer = {"inventory_observer": observer_mode,
++        "inventory_budget_seconds": getattr(args, "inventory_budget_seconds", 120.0) if observer_mode == "large-bounded" else None,
++        "inventory_rpc_timeout_seconds": getattr(args, "inventory_rpc_timeout_seconds", 10.0) if observer_mode == "large-bounded" else None}
++    if any(raw_json(supplied_observer[key]) != raw_json(pins.get(key)) for key in supplied_observer):
++        raise ValueError("inventory observer publication arguments differ from validated observations")
+     private_pin = pins.get("private_profile_review")
+     supplied_path = getattr(args, "profile_review_manifest", None)
+     supplied_sha256 = getattr(args, "profile_review_manifest_sha256", None)
+@@ -1133,6 +1223,9 @@
+     ap.add_argument("--backup-directory", type=pathlib.Path)
+     ap.add_argument("--profile-review-manifest", type=pathlib.Path)
+     ap.add_argument("--profile-review-manifest-sha256")
++    ap.add_argument("--inventory-observer", choices=("legacy", "large-bounded"), default="legacy")
++    ap.add_argument("--inventory-budget-seconds", type=float, default=120.0)
++    ap.add_argument("--inventory-rpc-timeout-seconds", type=float, default=10.0)
+     return ap
+ 
+ 

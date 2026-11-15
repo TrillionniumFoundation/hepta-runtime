@@ -1,0 +1,161 @@
+{
+  "schema": "hepta-v6-owned-temporary-controller-v4-rollback-v1",
+  "source_head": "3735393facfbd9e9d21ef417c986e61176d918be",
+  "candidate_binary_sha256": "a2eb8e7480260a9208e6fe509917b3e3b7d4ae0848e5aeedf4b048ce8c832cfa",
+  "candidate_contract_sha256": "de23cec290a0c22d248575c92b656d2a194a8306b85cc92b68aedea4fe0db3c8",
+  "v4_contract_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+  "production_rollback_tested": false,
+  "production_service_restarted": false,
+  "chatgpt_tool_refresh_requested": false,
+  "model_origin": false,
+  "chatgpt_caller_identity_tested": false,
+  "business_replacement_tested": false,
+  "DC_off_tested": false,
+  "full_dc_replacement_qualified": false,
+  "protected_services_before": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2064509",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "2064582",
+      "ActiveState": "active"
+    }
+  },
+  "checks": [
+    {
+      "check": "pinned production executable descriptor copied privately without live artifact mutation",
+      "result": "passed",
+      "detail": {
+        "source_proc": "/proc/2064509/exe",
+        "source_path": "/home/qian-qi/.local/lib/hepta-runtime/releases/operator-v4-db181570e9e65f9e/hepta-runtime",
+        "source_identity": {
+          "pid": 2064509,
+          "start_ticks": 44749776,
+          "uid": 1000
+        },
+        "sha256": "db181570e9e65f9e6a962d013dd4880eedc5b0cda1c71508f84388a4a8d8072b",
+        "bytes": 6992536,
+        "private_copy": "/tmp/hepta-dc-v6-owned-rollback-fixtures-20261013/qualified-installed-v4"
+      }
+    },
+    {
+      "check": "initial v6 exact frozen tool definitions",
+      "result": "passed",
+      "detail": {
+        "tool_count": 58
+      }
+    },
+    {
+      "check": "v6 creates owned in-flight once-job and real persistent terminal",
+      "result": "passed",
+      "detail": {
+        "job_id": "1a133b9a1e5-c5623-1",
+        "job_state": "running",
+        "pty_session_id": "dpty-cfa8f69eae567c37becc79a3531e1d65a92e96f45c0f749b7fda2a939d5a3ab4",
+        "pty_pid": 808787
+      }
+    },
+    {
+      "check": "temporary old-controller rollback exposes all original 50 exact definitions",
+      "result": "passed",
+      "detail": {
+        "tool_count": 50
+      }
+    },
+    {
+      "check": "old v4 controller reuses same running v6-owned job and same-PID PTY with actual stdin/stdout",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "forward v6 same identities, once-only process side effect and deduplicated persistent PTY input",
+      "result": "passed",
+      "detail": {
+        "job_id": "1a133b9a1e5-c5623-1",
+        "pty_session_id": "dpty-cfa8f69eae567c37becc79a3531e1d65a92e96f45c0f749b7fda2a939d5a3ab4",
+        "pty_pid": 808787,
+        "once_bytes": 1
+      }
+    },
+    {
+      "check": "new native MCP session denies old history/search owner; persistent jobs do not counterfeit session resume",
+      "result": "passed",
+      "detail": null
+    }
+  ],
+  "complete": true,
+  "cleanup": {
+    "owned_workloads_stopped": true,
+    "target_fixture_removed": true,
+    "errors": []
+  },
+  "old_artifact": {
+    "source_proc": "/proc/2064509/exe",
+    "source_path": "/home/qian-qi/.local/lib/hepta-runtime/releases/operator-v4-db181570e9e65f9e/hepta-runtime",
+    "source_identity": {
+      "pid": 2064509,
+      "start_ticks": 44749776,
+      "uid": 1000
+    },
+    "sha256": "db181570e9e65f9e6a962d013dd4880eedc5b0cda1c71508f84388a4a8d8072b",
+    "bytes": 6992536,
+    "private_copy": "/tmp/hepta-dc-v6-owned-rollback-fixtures-20261013/qualified-installed-v4"
+  },
+  "target_fixture": {
+    "path": "/tmp/hepta-v6-rollback-target-f3ohmhye",
+    "uid": 1000
+  },
+  "passed": 7,
+  "workflow_passed": true,
+  "target_archives": [
+    {
+      "path": "remote-state/terminals/dpty-cfa8f69eae567c37becc79a3531e1d65a92e96f45c0f749b7fda2a939d5a3ab4/output.log",
+      "sha256": "e3a171e945d7f4cdcf7d7ef9d862edac7c1d60a136bb130423dd3c853f0ce2e6",
+      "text": "OWNER_PID=808787\r\nV6\r\nACK_V6\r\nV4\r\nACK_V4\r\nFORWARD\r\nACK_FORWARD\r\n"
+    },
+    {
+      "path": "remote-state/jobs/1a133b9a1e5-c5623-1/stdout.log",
+      "sha256": "47a7de4622e3a66708e71c3aa5d0124ce6c41971b6510eb3acb7f4a14a8e1895",
+      "text": "BEGIN\nEND\n"
+    },
+    {
+      "path": "remote-state/jobs/1a133b9a1e5-c5623-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "text": ""
+    }
+  ],
+  "phase_logs": [
+    {
+      "path": "/tmp/hepta-dc-v6-owned-rollback-fixtures-20261013/v6-forward.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/hepta-dc-v6-owned-rollback-fixtures-20261013/v4-rollback.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/hepta-dc-v6-owned-rollback-fixtures-20261013/v6-initial.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "protected_services_after": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2064509",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "2064582",
+      "ActiveState": "active"
+    }
+  },
+  "service_identity_stable": true
+}

@@ -1,0 +1,79 @@
+{
+  "case": "singleton",
+  "report": {
+    "base_f32_rounding_max_absolute": 0.0,
+    "candidate_f32_rounding_max_absolute": 0.0,
+    "constraint": "one joint L2/Frobenius ball across all outputs around the exact F32 anchor",
+    "diagnostics": [
+      {
+        "f32_objective_strictly_improved": false,
+        "objective_after_f32": 4.0,
+        "objective_after_f64": 4.0,
+        "objective_before_f32": 4.0,
+        "objective_before_f64": 4.0,
+        "output": 0,
+        "positive_weight_rows": 1,
+        "relative_shifted_stationarity_residual_f64": null
+      }
+    ],
+    "f32_edit_count": 0,
+    "f32_element_edits": [],
+    "f32_lowering": "toward_anchor_then_exact_dyadic_joint_budget_check",
+    "f32_optimality_certified": false,
+    "f32_tensor_layout": "[outputs,features], row-major little endian",
+    "f32_update_budget": {
+      "arithmetic": "exact_576_bit_integer_F32_differences_and_exact_F64_radius_square",
+      "elements_checked": 1,
+      "maximum_update_l2_norm": 0.0,
+      "radius_f64_bits": "0000000000000000",
+      "squared_update_unit_exponent": -298,
+      "squared_update_units_hex": "0",
+      "within_budget": true
+    },
+    "features": 1,
+    "gradient_steps": 0,
+    "independent_holdout_verified": false,
+    "lambda": 1.0,
+    "max_update_l2_norm": 0.0,
+    "method": "supervised_proximal_weighted_ridge_joint_l2_trust_region_f64",
+    "native_operation_wall_seconds": 0.000110406,
+    "objective": "sum_j sum_i sample_weights[i][j]*(features[i] dot weights[j]-targets[i][j])^2 + lambda*sum_j||weights[j]-base_weights[j]||^2; no row normalization",
+    "operation_budget_units": 1245,
+    "operation_charged_units": 1245,
+    "outputs": 1,
+    "production_eligible": false,
+    "request_bytes": 124,
+    "request_sha256": "08be350d6ff82fa23d20204da84d9d798a6a0fb6fe666eb223eb57c7451f9391",
+    "requires_pinned_source_and_guarded_evaluation": true,
+    "rows": 1,
+    "schema": "hepta.weight.proximal-ridge-plan.v1",
+    "scope": "bounded convex F64 supervised fitting with exact represented-F32 update feasibility; no F32 optimum, authenticated source, task-value improvement or activation claim",
+    "source_weights_verified": false,
+    "training_targets_used": true,
+    "trust_region": {
+      "bisection_steps": 0,
+      "bracket_steps": 0,
+      "constraint_active": true,
+      "f64_global_optimality_certified": false,
+      "f64_update_l2_norm": 0.0,
+      "frank_wolfe_gap_f64_diagnostic": 0.0,
+      "maximum_relative_stationarity_residual_f64": null,
+      "numerical_kkt_checks_passed": false,
+      "relative_radius_slack_f64": null,
+      "shared_multiplier": null,
+      "shift_solve_batches": 0,
+      "singleton": true,
+      "singleton_feasibility_verified": true
+    },
+    "weights_f32": [
+      [
+        1.0
+      ]
+    ],
+    "weights_f64": [
+      [
+        1.0
+      ]
+    ]
+  }
+}

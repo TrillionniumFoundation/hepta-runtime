@@ -1,0 +1,565 @@
+{
+  "started_utc": "2026-11-15T06:01:51.418697+00:00",
+  "source_start": {
+    "commit": "7e43723c97c36107b271c9ba8998c7a166c75e36",
+    "tree": "5a2f2649a90ee72daf053d065c73dee8e3bf9e4a",
+    "worktree_status": []
+  },
+  "workflow_sha256": {
+    "ci.yml": "1dba30a111234a9c9f8757162fc2c358f643d760d25c4e50fe784daaa02976e5",
+    "cloud-compute.yml": "4a175ad95098e722ea9c3cb3b0b338a959824fa2ebee8265345a555d9ffe1f76",
+    "runtime-capacity-shadow.yml": "cc8dcf727811f656a5987b3f84ab50a9bc09900dcd2c72f8257066c4e4832c97"
+  },
+  "runner_sha256": "694d2ffc4607fcf2b7d9f12588a8bf9670acd0e98e5100bcdbc6b08d2ceb1538",
+  "parallel_commands": 2,
+  "scope": "Reviewed CI offline Python/unit gates; no release integration, live host, cloud submission, or HIA qualification commands",
+  "commands": [
+    {
+      "index": 1,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Descriptor-relative file safety",
+      "argv": [
+        "/usr/bin/python3",
+        "tests/file_capabilities.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 2,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Frozen REA local mapping checks",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/rea_compatibility_ledger_tests.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 3,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Frozen REA local mapping checks",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check-mapping"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 4,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "REA qualification evidence regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "rea_*tests.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 5,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/runtime_registry_page_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 6,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/test_native_canary_resume.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 7,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v11_layered_read_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 8,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v11_process_start_concurrency_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 9,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v11_v4_session_binding_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 10,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/runtime_workflow_owner_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 11,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v10_single_v4_effect_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 12,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_v10_stream_custody_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 13,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/test_computer_http.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 14,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/full_operator_facade_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 15,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/full_operator_cancel_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 16,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_request_identity_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 17,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/full_operator_session_recovery_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 18,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/rea_browser_capture_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 19,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "deploy/maintenance_20261017/native_rollout_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 20,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Control-plane regression",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "deploy/maintenance_20261017/recover_control_channel_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 21,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "X230 qualification evidence regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/x230/20261028",
+        "-p",
+        "*_tests.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 22,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "X230 qualification evidence regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/x230/20261029",
+        "-p",
+        "*_tests.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 23,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "X230 qualification evidence regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/x230/20261030",
+        "-p",
+        "*_tests.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 24,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Unbounded ingress and collector regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/dc_readonly_inventory_collector_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 25,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Unbounded ingress and collector regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_bridge_stdio_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 26,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Unbounded ingress and collector regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/chatgpt_bridge_http_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 27,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Unbounded ingress and collector regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/search_worker_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 28,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Unbounded ingress and collector regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/tunnel_client_patch_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 29,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Unbounded ingress and collector regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/tunnel_deployment_config_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 30,
+      "workflow": "ci.yml",
+      "job": "runtime-head-ci",
+      "step": "Unbounded ingress and collector regressions",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/runtime_http_probe_tests.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/usr/bin/python3.13",
+      "interpreter_version": "Python 3.13.5"
+    },
+    {
+      "index": 31,
+      "workflow": "cloud-compute.yml",
+      "job": "offline-tests",
+      "step": "Router regression suite",
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "-v",
+        "test_hepta_compute.py"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime/tools/cloud-compute/router",
+      "interpreter_resolved": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3.12",
+      "interpreter_version": "Python 3.12.14"
+    },
+    {
+      "index": 32,
+      "workflow": "cloud-compute.yml",
+      "job": "offline-tests",
+      "step": "Colab regression suite",
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        ".",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime/tools/cloud-compute/colab",
+      "interpreter_resolved": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3.12",
+      "interpreter_version": "Python 3.12.14"
+    },
+    {
+      "index": 33,
+      "workflow": "cloud-compute.yml",
+      "job": "offline-tests",
+      "step": "Kaggle regression suite",
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime/tools/cloud-compute/kaggle",
+      "interpreter_resolved": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3.12",
+      "interpreter_version": "Python 3.12.14"
+    },
+    {
+      "index": 34,
+      "workflow": "runtime-capacity-shadow.yml",
+      "job": "planner",
+      "step": "Original behavior",
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "runtime_capacity_tests.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3.12",
+      "interpreter_version": "Python 3.12.14"
+    },
+    {
+      "index": 35,
+      "workflow": "runtime-capacity-shadow.yml",
+      "job": "planner",
+      "step": "Optimized Python behavior",
+      "argv": [
+        "python3",
+        "-O",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "runtime_capacity_tests.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime",
+      "interpreter_resolved": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3.12",
+      "interpreter_version": "Python 3.12.14"
+    }
+  ]
+}

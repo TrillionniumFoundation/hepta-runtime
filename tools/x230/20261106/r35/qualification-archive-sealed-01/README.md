@@ -1,0 +1,15 @@
+# R35 qualification collector: actual sealed inputs
+
+This is the frozen collector for the completed original first R35 qualification, job `1a1af619097-fc05-6813`. All eight original stages reported exit 0. Actual inventory: **1,645 passed, 0 failed, 34 ignored, 1,679 selected, 0 retries**. The original native terminal is succeeded/0, durable and complete, with exactly 1,109 stdout bytes and empty stderr.
+
+`actual-pins.json` binds the seven exact original preparation/native/read/report/map/summary/audit files, these actual counts, and the three reported qualified binary hashes. The local sealer was executed once. No collector, test, original auditor, Rust program, or remote operation was executed by this preparation.
+
+The sealed collector is 63,799 bytes, SHA-256 `8b5caa5a5bbb2b5d82f791c464da635230b7dcb4a7dd2ca82d0b22b0a96ed971`. Replacing its sole ACTUAL assignment with the original `ACTUAL = None` reconstructs the reviewed 61,807-byte template exactly. Every function body and every other constant is byte-identical. The original 32 MiB / 8 MiB / 2 MiB / 8,192 limits, fixed selection, create-only outputs, credential/binary exclusions, and zero-extraction verifier are unchanged.
+
+The separate local verification checked all seven stable original files, complete native stream custody, every original stage start/exit record and command, accepted R24 source lineage, 220 compiler-map inputs including 17 Python files, the 19 original harness hashes, actual summary/audit counts, five original test-binary before/after identity records, and 1,655 original audited command proofs. Formatting changed only ssh_observation_pool.rs and ssh_observation_pool_tests.rs relative to the frozen candidate. The final tested map still differs from R24 in exactly the three approved candidate paths.
+
+This verification did not reread the full raw stage/case-log bodies, all current compiler-source bodies, or the ELF files locally. The original auditors were not rerun. The remote collector must still bind the complete raw log inventory and current source bytes; root's separate postflight checks current source and the three retained ELF identities. This is qualification evidence and makes no exact-CI, performance, or adoption claim.
+
+`seal-manifest.json` remains exactly as generated and records the 14 installation-history copies as pending at seal time. Root subsequently reported successful postflight job `1a1af7ee913-fc05-690e`, complete 5,423/0 native streams, and creation of all 16 originals. `postflight-availability-note-01.json` preserves that later report separately, including the actual 8,190-byte postflight identity. It does not rewrite the earlier seal or relax collection guards.
+
+Deploy the exact script using the unique path and one native argv in `deployment-plan-01.json`. The output namespace is `ROOT/qualification-evidence-01.{tar.gz,manifest.json,compact.json}`. This directory contains prepared code and verified actual input identities; an archive result is not claimed until root executes the collector and verifies the resulting archive.

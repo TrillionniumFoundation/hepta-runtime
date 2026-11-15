@@ -1,0 +1,91 @@
+{
+  "schema": "hepta-r36-cold02-first-partial-capture-source-delta/v1",
+  "reference": {
+    "git_blob": "644e0784570c3484d6c7662774be4da1f00775a0",
+    "bytes": 12533,
+    "sha256": "5e7b8679a3d1aaa24bbc1dd827d7892016d324f25f48078c6347170d54b35f35"
+  },
+  "current": {
+    "git_blob": "e50faaaf3f0fe686de76d16895c97e8dc01b4541",
+    "bytes": 11828,
+    "sha256": "2f987efca72db78a3ed11ccddcb5d0f2726ea5b1ea548726331aa099c8e307c8"
+  },
+  "root": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+  "source_directory": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/evidence-tools-01",
+  "fresh_output": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/evidence-export-01",
+  "replacements": [
+    {
+      "reason": "Current scratch cold02 root; legacy audit-cache root stays untouched.",
+      "old": "ROOT = Path('/home/qian/hepta-runtime-optimization-20261106-r36')",
+      "new": "ROOT = Path('/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02')"
+    },
+    {
+      "reason": "Original current R36 boundary/cancel path, without inventing execution.",
+      "old": "CANARY = Path('/home/qian/hepta-runtime-optimization-20261104-r16/r36-cancel-recovery-01')",
+      "new": "CANARY = Path('/home/qian/hepta-runtime-optimization-20261104-r16/s36-cancel-recovery-01')"
+    },
+    {
+      "reason": "Original current Mac holder is directly below work.",
+      "old": "HOLDER_ROOT = Path('/Users/qianqi/work/hepta-runtime-x230-r36-20261106')",
+      "new": "HOLDER_ROOT = Path('/Users/qianqi/work')"
+    },
+    {
+      "reason": "Only the actual first observation holder is eligible; no LC/supplement holder is invented.",
+      "old": "HOLDERS = ('observation-holder-01', 'lifecycle-holder-01', 'async-read-holder-01')",
+      "new": "HOLDERS = ('hepta-runtime-r36-validation-scratch-cold-02-observation-holder-01',)"
+    },
+    {
+      "reason": "Fresh first capture source directory in this independent root.",
+      "old": "CAPTURE_TOOLS = 'evidence-tools-02'",
+      "new": "CAPTURE_TOOLS = 'evidence-tools-01'"
+    },
+    {
+      "reason": "No prior evidence-export failure occurred in this cold02 root; the legacy failure belongs to PR106.",
+      "old": "PRIOR_FAILURE_MEMBER = 'r36/evidence-export-01/export-failure.json'\nPRIOR_FAILURE_PIN = {'bytes': 2129,\n                     'sha256': '24ef364dc00258ad354ec5650950060ac8e91f823c6598d922b8a18452752332'}",
+      "new": "PRIOR_FAILURE_MEMBER = None\nPRIOR_FAILURE_PIN = None"
+    },
+    {
+      "reason": "Include the deployed six historical owner originals and exact recovered measurement fixtures.",
+      "old": "    'source', 'candidate', 'qualification-01', 'rust-ci-01', 'rust-ci-tools-01',",
+      "new": "    'source', 'candidate', 'qualification-01', 'rust-ci-01', 'rust-ci-tools-01',\n    'owner-closure-provenance', 'measurement-fixtures-01',"
+    },
+    {
+      "reason": "Replace only the inapplicable legacy capture-failure binding; runtime/workload failures remain original payloads.",
+      "old": "def prior_failure_binding(payloads, body):\n    \"\"\"Keep the actual failed capture as an original; the repaired capture cannot erase it.\"\"\"\n    need(PRIOR_FAILURE_MEMBER in payloads, 'original failed capture receipt missing')\n    need(all(payloads[PRIOR_FAILURE_MEMBER][key] == value for key, value in PRIOR_FAILURE_PIN.items()),\n         'original failed capture receipt differs')\n    value = json.loads(body(PRIOR_FAILURE_MEMBER))\n    need(value.get('package_complete') is False and value.get('phase') == 'scan'\n         and value.get('candidate_adopted') is False, 'original scan failure was promoted')\n    return dict(PRIOR_FAILURE_PIN, member=PRIOR_FAILURE_MEMBER, package_complete=False,\n                phase='scan', candidate_adopted=False)",
+      "new": "def prior_failure_binding(payloads, body):\n    \"\"\"First evidence capture in this independent cold02 root; no earlier export failure.\"\"\"\n    return None"
+    }
+  ],
+  "whole_source_inverse_exact": true,
+  "four_other_core_files_byte_identical": [
+    {
+      "name": "pack_r36_evidence.py",
+      "git_blob": "aa69f6654c3b5e874a79857b93a9c8ebda3bb165",
+      "bytes": 8301,
+      "sha256": "124826625635f65c5b5c5e52de7034fb20c523aac47bf003452fe999b332bdd2"
+    },
+    {
+      "name": "verify_r36_evidence.py",
+      "git_blob": "2c0e800e033b9320f816642e899ebcd26ca4f3a0",
+      "bytes": 9902,
+      "sha256": "c89ed01e2a5ad3cb1812bc2f8291465341faefcb66112943f04dc2c6413668a9"
+    },
+    {
+      "name": "scan_evidence.py",
+      "git_blob": "ca3df3d34007a37bae9cf337abeaf5639533d35b",
+      "bytes": 5533,
+      "sha256": "24d87ae04ce4d43fa0aaef6a2d322fe5d5292eb3002ec77fbf45332223092a2b"
+    },
+    {
+      "name": "stable_xz_archive.py",
+      "git_blob": "3bc73a1ca1b3862f011268cfd4086a02a8290e86",
+      "bytes": 14081,
+      "sha256": "8b7aa7ef3b3772da13ea4f7009d8c478e0c92bc207d65db3f45c23453097d7a2"
+    }
+  ],
+  "original_observation_job_id": "1a1b20946a5-fc05-7c24",
+  "original_attempt_replayed": false,
+  "future_lifecycle_result": null,
+  "collector_or_auditor_executed": false,
+  "guard_changes": "Only the old unrelated export-failure receipt is inapplicable; no scanner, reader, bound, omission or verification rule is changed.",
+  "actual_source_review_pending": true
+}

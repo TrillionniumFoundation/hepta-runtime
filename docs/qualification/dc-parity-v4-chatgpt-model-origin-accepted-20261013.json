@@ -1,0 +1,141 @@
+{
+  "schema": "hepta-dc-v4-actual-chatgpt-model-origin-acceptance-v1",
+  "created_at_utc": "2026-10-12T17:10:44.359982+00:00",
+  "source_branch": "feat/operator-parity-20261006",
+  "source_head_before_evidence": "cb00629ff39c376bf3f6e15ca5cc72195caa1acb",
+  "existing_ci": {
+    "head": "cb00629ff39c376bf3f6e15ca5cc72195caa1acb",
+    "run_id": 38280658585,
+    "conclusion": "success",
+    "url": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/38280658585"
+  },
+  "architecture": {
+    "mcp_app": "Hepta Runtime Full Operator",
+    "server_advertised_tools": 50,
+    "tools_available_to_this_chatgpt_conversation": 50,
+    "read_only_tools": 19,
+    "non_readonly_tools": 31,
+    "frozen_contract_catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+    "new_tools": [
+      "directory_create",
+      "directory_move",
+      "file_move",
+      "text_file_write"
+    ],
+    "no_new_shell_wrappers": true,
+    "tool_annotations_modified_to_bypass_safety": false,
+    "new_runtime_installed_this_turn": false,
+    "desktop_commander_modified_this_turn": false
+  },
+  "model_origin_direct_calls": {
+    "scope": "Current ChatGPT session invoked Hepta MCP tools directly; these are not local test-controller or DC-originated operations.",
+    "directory_create": {
+      "result": "created:true",
+      "path": "/tmp/hepta-chatgpt-v4-model-acceptance-20261013-0100-6f3a2b"
+    },
+    "text_file_write_create": {
+      "result": "published:true",
+      "bytes": 55,
+      "sha256": "ce34f66d7a5df99a89ae803b58527e4241ca27e5c4a56ff0ad2f70c78c5bb5dd"
+    },
+    "text_file_write_append": {
+      "result": "published:true",
+      "bytes": 65,
+      "sha256": "d964efa4938f5679c789d4a44a1ad983d16c04ea86cffd741b88ed68557248d8"
+    },
+    "text_file_write_replace": {
+      "result": "published:true",
+      "bytes": 70,
+      "sha256": "46a58a30f025c63efb1c2250c13e992ad47a35a4518eda29eeeabc89c35217c5"
+    },
+    "file_move": {
+      "result": "moved:true; same_filesystem_atomic_noreplace:true",
+      "source_basename": "parity.txt",
+      "destination_basename": "renamed.txt"
+    },
+    "directory_move": {
+      "result": "moved:true; same_filesystem_atomic_noreplace:true",
+      "moved_subtree": true
+    },
+    "file_info_and_view": {
+      "result": "final contents and SHA256 match, symlinks not traversed"
+    },
+    "process_start": {
+      "executable": "/usr/bin/id",
+      "arguments": [
+        "-u"
+      ],
+      "job_id": "1a131146127-1f807d-1",
+      "exit_code": 0,
+      "stdout": "1000\\n",
+      "status": "succeeded"
+    },
+    "pty_start_write_read_close": {
+      "executable": "/usr/bin/python3",
+      "arguments": [
+        "-q"
+      ],
+      "session_id": "dpty-66b5081176c76decd3634aa2113d99c925c82effee09a040b2b91d7e72a96576",
+      "input": "print('HEPTA_DIRECT_PTY_OK')\\n",
+      "observed_output": "HEPTA_DIRECT_PTY_OK",
+      "final_state": "exited",
+      "output_complete": true
+    },
+    "shell_start_read_only": {
+      "command": "/usr/bin/id -u",
+      "job_id": "1a13115f510-1f807d-2",
+      "exit_code": 0,
+      "stdout": "1000\\n",
+      "status": "succeeded"
+    },
+    "method_observation": "MCP calls visibly succeeded in this ChatGPT tool session, but no signed client-side per-call attestation is available."
+  },
+  "independent_readonly_final_state": {
+    "original_directory_absent": true,
+    "old_file_absent": true,
+    "relocated_directory": "/tmp/hepta-chatgpt-v4-model-acceptance-20261013-0100-6f3a2b-relocated",
+    "final_file": "/tmp/hepta-chatgpt-v4-model-acceptance-20261013-0100-6f3a2b-relocated/renamed.txt",
+    "file_sha256": "46a58a30f025c63efb1c2250c13e992ad47a35a4518eda29eeeabc89c35217c5",
+    "file_size": 70,
+    "file_mode": "0o600",
+    "directory_mode": "0o700",
+    "final_content_utf8": "FINAL_CONTENT\nHepta model-origin file create+append+replace confirmed\n",
+    "left_in_private_tmp_for_evidence": true
+  },
+  "live_health": {
+    "ready": true,
+    "control_plane": "ok",
+    "dispatcher_completed": 57,
+    "responses_accepted": 57,
+    "dispatcher_failures": 0,
+    "mcp_health_legacy_state": "not_observed",
+    "mcp_health_modern_unobserved_not_a_failed_tool_result": true
+  },
+  "services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2064509",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "2064582",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    }
+  },
+  "limits": {
+    "models_origin_all_50_tools_verified": false,
+    "arbitrary_compound_shell_with_filesystem_side_effects_verified": false,
+    "sudo_start_verified_from_chatgpt": false,
+    "external_PIDs_signal_from_chatgpt_verified": false,
+    "document_write_verified_from_chatgpt": false,
+    "multi_host_model_origin_write_verified": false,
+    "public_cloud_gateway_deployed": false,
+    "prior_complex_shell_and_document_write_platform_refusals_are_retained_as_historical_evidence": true,
+    "not_equivalent_to_full_DC_feature_parity": true,
+    "tool_names_or_risk_hints_disguised": false,
+    "tokens_or_secrets_logged": false
+  }
+}

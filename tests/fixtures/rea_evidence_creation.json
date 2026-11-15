@@ -1,0 +1,1288 @@
+{
+  "schema": "hepta.rea.frozen-evidence-creation.v1",
+  "oracle": "rea-agents@6.8.0",
+  "cases": [
+    {
+      "name": "defaults",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_ae7c8d6f42e0bd08eb6a25a7241cdfe321f8a6ba8a1044cacee8ca1baf5e427b",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "architecture-absent",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_e27be1ab702aded0bb08f1dfc6816524bd792dee0815598a02fa5baf78e2675c",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": null
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "provider-version-null",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": null
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_13efddf8e694271225b4728c2402027f194d2c5ad5666305e0438379f19ffdf5",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": null
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "provider-version-empty",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": ""
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_7deb074a071c83461ac2f7492bb020517017a78df1a0131e1840dff0db98c2bb",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": ""
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "subject-unavailable",
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_5ef090584a1dd4a64c10f85dd8db406a1ea13b200e8ff81a8c28ab15c61eae39",
+        "subject": null,
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [
+          "Artifact identity is unavailable for this observation."
+        ],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "subject-unavailable-reason",
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        },
+        "subjectUnavailableReason": "No immutable artifact was captured.",
+        "limitations": [
+          "one"
+        ]
+      },
+      "expected": {
+        "evidence_id": "ev_70824cad3b82bec12b3fe8889dae321da816a16a2c790eb2407609eca4c647e0",
+        "subject": null,
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [
+          "No immutable artifact was captured.",
+          "one"
+        ],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "nullish-defaults",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        },
+        "analysisProfile": null,
+        "predicateType": null,
+        "rawResult": null,
+        "confidence": null,
+        "authority": null,
+        "environment": null,
+        "locations": null,
+        "evidenceLinks": null,
+        "relationshipCoverage": null,
+        "limitations": null
+      },
+      "expected": {
+        "evidence_id": "ev_ae7c8d6f42e0bd08eb6a25a7241cdfe321f8a6ba8a1044cacee8ca1baf5e427b",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "all-location-variants",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        },
+        "locations": [
+          {
+            "kind": "address",
+            "address": "0x10"
+          },
+          {
+            "kind": "address-range",
+            "start": "0x10",
+            "end": "0x20"
+          },
+          {
+            "kind": "artifact-path",
+            "path": "/fixtures/probe.elf"
+          },
+          {
+            "kind": "file-offset",
+            "offset": 0
+          },
+          {
+            "kind": "file-offset-range",
+            "start": 1,
+            "end": 64
+          }
+        ]
+      },
+      "expected": {
+        "evidence_id": "ev_0c3b7986588b33e67b3a48a302db8262bc5d74e674291e3686afcfa066a49112",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [
+          {
+            "kind": "address",
+            "address": "0x10"
+          },
+          {
+            "kind": "address-range",
+            "start": "0x10",
+            "end": "0x20"
+          },
+          {
+            "kind": "artifact-path",
+            "path": "/fixtures/probe.elf"
+          },
+          {
+            "kind": "file-offset",
+            "offset": 0
+          },
+          {
+            "kind": "file-offset-range",
+            "start": 1,
+            "end": 64
+          }
+        ],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "relationship-complete",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        },
+        "relationshipCoverage": {
+          "status": "complete"
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_ea30f54d404fd9c2584da4874baf7fd053a60d73d734f4f2bbf7cbba3ffc0097",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": {
+          "status": "complete"
+        },
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "relationship-partial",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        },
+        "relationshipCoverage": {
+          "status": "partial",
+          "limitations": [
+            "bounded"
+          ],
+          "limited_directions": [
+            "callers",
+            "callees"
+          ],
+          "diagnostics": [
+            "fixture"
+          ]
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_c157e11e23a79768e769c1294040c535eb4551ef9dada660d4f4d62a739e2d18",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": {
+          "status": "partial",
+          "limitations": [
+            "bounded"
+          ],
+          "limited_directions": [
+            "callers",
+            "callees"
+          ],
+          "diagnostics": [
+            "fixture"
+          ]
+        },
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "relationship-unknown",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        },
+        "relationshipCoverage": {
+          "status": "unknown",
+          "reason": "not-observed",
+          "limited_directions": [
+            "callees"
+          ]
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_d784da9ecbe4bc9732977944cc68a6f18661920a4930a0dedd3eb8c97cc1f51a",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": {
+          "status": "unknown",
+          "reason": "not-observed",
+          "limited_directions": [
+            "callees"
+          ]
+        },
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "profile",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        },
+        "analysisProfile": {
+          "provider": {
+            "id": "rea-elf-notes",
+            "name": "REA ELF note parser",
+            "version": "1"
+          },
+          "parameters": {
+            "mode": "static",
+            "budget": 32
+          },
+          "digest": "16041456f2e80413eea9cae8f768ee338a2eb4aa7f63bd9ab51b3103288ac20f"
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_c0c247f19c9367a666e6f00437dd613866480b2315ccc86f2d296caa746264cb",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": {
+          "provider": {
+            "id": "rea-elf-notes",
+            "name": "REA ELF note parser",
+            "version": "1"
+          },
+          "parameters": {
+            "mode": "static",
+            "budget": 32
+          },
+          "digest": "16041456f2e80413eea9cae8f768ee338a2eb4aa7f63bd9ab51b3103288ac20f"
+        },
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "explicit-options",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        },
+        "predicateType": "fixture.observation",
+        "rawResult": {
+          "bytes": [
+            0,
+            127,
+            255
+          ]
+        },
+        "confidence": "derived",
+        "authority": "controlled-replay",
+        "environment": {
+          "id": "fixture",
+          "platform": "linux",
+          "architecture": "x86_64",
+          "isolation": "process"
+        },
+        "limitations": [
+          "limited"
+        ],
+        "evidenceLinks": [
+          "ev_2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      },
+      "expected": {
+        "evidence_id": "ev_5c545e03bbe21d286810f78aa1f4180187a6addaa4abe0b840674ba16236dd8f",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "fixture.observation",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": {
+          "bytes": [
+            0,
+            127,
+            255
+          ]
+        },
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "derived",
+        "authority": "controlled-replay",
+        "environment": {
+          "id": "fixture",
+          "platform": "linux",
+          "architecture": "x86_64",
+          "isolation": "process"
+        },
+        "limitations": [
+          "limited"
+        ],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": [
+          "ev_2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      }
+    },
+    {
+      "name": "numeric-utf16",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "😀": 1,
+          "": 2,
+          "halfway": 1497790137415200.2,
+          "negative_zero": 0,
+          "small": 1e-7,
+          "large": 1e+21
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_1ef410343cd46f6a8d97357438b584da6fb20f70edca8785e16a306ca3889f99",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "😀": 1,
+          "": 2,
+          "halfway": 1497790137415200.2,
+          "negative_zero": 0,
+          "small": 1e-7,
+          "large": 1e+21
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "root-display-name",
+      "target": {
+        "path": "/",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_ae7c8d6f42e0bd08eb6a25a7241cdfe321f8a6ba8a1044cacee8ca1baf5e427b",
+        "subject": {
+          "name": "artifact",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "trailing-slash-display-name",
+      "target": {
+        "path": "/fixtures/probe.elf/",
+        "format": "elf",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "x86_64"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_ae7c8d6f42e0bd08eb6a25a7241cdfe321f8a6ba8a1044cacee8ca1baf5e427b",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf/",
+          "format": "elf",
+          "architecture": "x86_64"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "raw-only-architecture",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "raw-binary",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "6502"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_80cbd74dde74bbc051eb0c0cd56c736908428f2817798772b68d4dbf1f6ecb72",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "raw-binary",
+          "architecture": "6502"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    },
+    {
+      "name": "gamecube-architecture",
+      "target": {
+        "path": "/fixtures/probe.elf",
+        "format": "gamecube-dol",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "architecture": "powerpc"
+      },
+      "provider": {
+        "id": "rea-elf-notes",
+        "name": "REA ELF note parser",
+        "version": "1"
+      },
+      "observation": {
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "result": {
+          "available": true,
+          "entries": []
+        }
+      },
+      "expected": {
+        "evidence_id": "ev_3d2f1d6f0d3e8118a7fc96419f20f64c9b38baf94429e00a2f2ee515ccdf9c99",
+        "subject": {
+          "name": "probe.elf",
+          "digest": {
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "local_path": "/fixtures/probe.elf",
+          "format": "gamecube-dol",
+          "architecture": "powerpc"
+        },
+        "provider": {
+          "id": "rea-elf-notes",
+          "name": "REA ELF note parser",
+          "version": "1"
+        },
+        "analysis_profile": null,
+        "predicate_type": "rea.analysis",
+        "operation": "inspect_elf_notes",
+        "parameters": {
+          "path": "/fixtures/probe.elf",
+          "max_file_bytes": 67108864,
+          "max_entries": 32
+        },
+        "raw_result": null,
+        "normalized_result": {
+          "available": true,
+          "entries": []
+        },
+        "confidence": "observed",
+        "authority": "shipped-artifact",
+        "environment": null,
+        "limitations": [],
+        "relationship_coverage": null,
+        "locations": [],
+        "evidence_links": []
+      }
+    }
+  ]
+}

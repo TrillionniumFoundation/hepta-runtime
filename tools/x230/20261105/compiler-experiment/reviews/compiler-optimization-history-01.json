@@ -1,0 +1,488 @@
+{
+  "schema": "hepta-compiler-optimization-history-readonly/v1",
+  "created_utc": "2026-11-05T13:56:02.134135+00:00",
+  "scope": {
+    "accepted_source": "R24",
+    "local_files_only": true,
+    "remote_calls": 0,
+    "native_calls": 0,
+    "web_calls": 0,
+    "compilations": 0,
+    "installs": 0,
+    "test_runs": 0,
+    "new_candidates": 0,
+    "archives_opened_or_extracted": 0,
+    "content_roots": [
+      "accepted R24 Cargo/qualifier, benchmark-r24 preparation and R24 qualification receipts",
+      "R11-R24 retained docs and R23/R24 build receipts in the named workspaces",
+      "earlier docs already present under /workspace/scratch/846f8b2ab644/r20/audit-transport/docs after root follow-up",
+      "two retained R20 request-hash component build-stage receipts and their runners"
+    ],
+    "negative_search_pattern": "target[-_]cpu|profile[-_]generate|profile[-_]use|llvm[-_]profdata|llvm[-_]bolt|\\bPGO\\b|\\bBOLT\\b",
+    "negative_search_files": 31,
+    "negative_search_matches": [],
+    "limits": [
+      "No independent R20/R21 optimization report filename was found in the bounded document inventory; the R20 component materials are not a full runtime qualification substitute.",
+      "No target build cache, archive contents, global Cargo configuration, current host configuration or remote process environment was inspected.",
+      "Initial filename discovery also surfaced later-version paths; those were excluded from this compiler review content corpus."
+    ]
+  },
+  "release_configuration": {
+    "profile": {
+      "lto": true,
+      "codegen-units": 1,
+      "panic": "abort",
+      "strip": true,
+      "opt-level": 3,
+      "overflow-checks": false
+    },
+    "source_identity": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/Cargo.toml",
+      "bytes": 3097,
+      "sha256": "3121870fbf66f65ce6b1925b3500eae8a05fc2d8019a2694da7d6fe941ad4d28",
+      "location": "30-36"
+    },
+    "matches_qualification_source_input": true,
+    "matches_qualification_source_tested": true,
+    "matches_qualification_source_after": true,
+    "evidence_level": "bound Cargo manifest configuration; not an independently captured rustc command line"
+  },
+  "actual_build_receipt": {
+    "qualification": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-report.json",
+      "bytes": 83365,
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971",
+      "location": "source_input/source_tested/source_after, harness_before/harness_after, jobs, stages.release, binaries"
+    },
+    "qualified": true,
+    "jobs": 2,
+    "release_stage": {
+      "name": "release",
+      "command": [
+        "/home/qian/.cargo/bin/cargo",
+        "+1.95.0",
+        "build",
+        "--offline",
+        "--locked",
+        "--all-features",
+        "--release",
+        "--bins",
+        "--examples"
+      ],
+      "returncode": 0,
+      "seconds": 336.44946675980464,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "5be8281e1f465d9c6b08d1563797c6d6168ccd3aac8eecffd01d94d4b3b20576"
+    },
+    "binaries": {
+      "hepta-runtime": {
+        "bytes": 14373416,
+        "sha256": "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13"
+      },
+      "hepta-runtime-jobctl": {
+        "bytes": 739016,
+        "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62"
+      },
+      "native_process_driver": {
+        "bytes": 2896456,
+        "sha256": "51165c1e38409248f5fdb7da2036ebe5e05eec7576035e95bd4b8e2a5c675530"
+      }
+    },
+    "rust_toolchain_selector": "+1.95.0",
+    "actual_rustc_argv_observed_in_inspected_files": false,
+    "actual_release_fingerprint_rustflags_observed_in_inspected_files": false,
+    "complete_effective_cargo_config_observed": false
+  },
+  "qualifier_environment": {
+    "qualifier": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/tools/x230/20261028/qualify.py",
+      "bytes": 7661,
+      "sha256": "95717717fd5421f2e31dbce24e2f8821696f57d779ce93e988ed66764159552d",
+      "location": "42-55, 67-83, 120-126"
+    },
+    "matches_harness_before_and_after": true,
+    "construction": "env = dict(os.environ); selective removals; explicit env passed to every Cargo stage",
+    "removed_prefixes": [
+      "HEPTA_",
+      "SSH_",
+      "RUST_TEST_"
+    ],
+    "removed_exact_names": [
+      "RUSTFLAGS",
+      "CARGO_ENCODED_RUSTFLAGS",
+      "RUSTDOCFLAGS",
+      "RUSTC_WRAPPER",
+      "RUSTC_WORKSPACE_WRAPPER",
+      "PYTHONPATH",
+      "PYTHONHOME",
+      "RUST_LOG"
+    ],
+    "explicit_build_settings": {
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_HOME": "explicit command argument, resolved",
+      "CARGO_TARGET_DIR": "explicit command argument, resolved"
+    },
+    "not_blanket_removed_by_this_qualifier": [
+      "CARGO_PROFILE_*",
+      "CARGO_TARGET_*",
+      "CARGO_BUILD_*",
+      "RUSTC",
+      "CARGO_BUILD_RUSTC",
+      "CARGO_BUILD_RUSTC_WRAPPER",
+      "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER"
+    ],
+    "outer_launcher": "prepare_and_qualify_r24.py uses subprocess.run(command, cwd=source, timeout=10800) with no env argument; its inherited environment is not fully recorded in these inspected receipts.",
+    "interpretation": "The bound code proves removal of RUSTFLAGS/CARGO_ENCODED_RUSTFLAGS for the Cargo subprocess. It does not by itself prove the entire effective rustflags/profile/target configuration or generic target CPU. No current environment was sampled."
+  },
+  "history_findings": [
+    {
+      "direction": "O3 / LTO / one codegen unit / panic abort / strip",
+      "status": "already_configured",
+      "evidence": [
+        "r24_cargo",
+        "r13_report",
+        "r16_r18_report",
+        "r5_r7_report"
+      ],
+      "statement": "R24 already declares these release choices; the retained R5-R7, R13 and R16-R18 reports describe the same main optimization level/LTO/codegen setting. Do not count enabling them as a new candidate."
+    },
+    {
+      "direction": "X230 target-cpu=native or named CPU compile",
+      "status": "no_record_found_in_bounded_local_corpus",
+      "evidence_gap": "No explicit target CPU compile flag, matched whole-runtime A/B or actual product fingerprint rustflags[] was found. Compiling on X230 and use of native_process_driver do not establish a native CPU code-generation option."
+    },
+    {
+      "direction": "Rust PGO profile-generate/profile-use/llvm-profdata",
+      "status": "no_record_found_in_bounded_local_corpus",
+      "evidence_gap": "No instrumentation/use flags, profile identities, merge record, compatible profiler tool receipt, or qualified PGO product/performance result was found."
+    },
+    {
+      "direction": "LLVM BOLT post-link optimization",
+      "status": "no_record_found_in_bounded_local_corpus",
+      "evidence_gap": "No BOLT command, tool identity, profile, input ELF metadata or transformed/qualified output identity was found."
+    },
+    {
+      "direction": "Build environment reproducibility",
+      "status": "previously_investigated",
+      "evidence": [
+        "r13_report",
+        "r19_report"
+      ],
+      "statement": "R13 documented clearing CARGO_PROFILE_*, CARGO_TARGET_* and CARGO_BUILD_* in its then-current launcher. R19 retained a rejected build and an unset/empty/unset wrapper diagnosis: empty CARGO_BUILD_RUSTC_*WRAPPER affected workspace metadata and binary identity. These are reproducibility findings, not native CPU/PGO/BOLT speed measurements."
+    },
+    {
+      "direction": "R20 request-hash probes",
+      "status": "component_only",
+      "evidence": [
+        "r20_probe_runner",
+        "r20_probe_build",
+        "r20_probe64_runner",
+        "r20_probe64_build"
+      ],
+      "statement": "Both retained stage receipts record cargo +1.95.0 build --release --offline --locked, returncode=0. Runners use an explicit environment with no RUSTFLAGS fields. They compare hash implementations, not compiler optimization variants or runtime throughput."
+    }
+  ],
+  "minimum_prerequisites_for_later_work_not_actions": [
+    {
+      "direction": "shared metadata preflight",
+      "items": [
+        "Bind accepted R24 source, Cargo.lock, toolchain/Cargo/rustc/LLVM and baseline output identities.",
+        "Identify effective project/ancestor/CARGO_HOME config and selected CARGO_PROFILE_*, CARGO_BUILD_*, CARGO_TARGET_* and Rust flag/wrapper settings; preserve unset versus empty. Prefer actual product fingerprint and command receipts where already available.",
+        "Define all affected binaries and whether they are X230-only or must remain usable on other hosts; the current release command builds bins and examples.",
+        "Any new product needs explicit build provenance, unchanged authority/process/cancellation behavior and the original qualification and performance gates. This review authorizes no new build or altered gate."
+      ]
+    },
+    {
+      "direction": "target CPU",
+      "items": [
+        "Bind X230 CPU/target feature metadata and declared deployment compatibility before selecting an explicit target-cpu/feature option.",
+        "Freeze one exact compiler-option delta and isolated output identity against accepted R24; avoid inferring present CPU selection from build location."
+      ]
+    },
+    {
+      "direction": "PGO",
+      "items": [
+        "Establish compatible instrumentation, profile runtime and profile-merging tool versions plus available storage/ownership.",
+        "Predeclare bounded representative training inputs and a separate comparison workload; retain raw and merged profile identities and mismatch diagnostics.",
+        "Bind distinct instrumented, profile-use and baseline artifacts and target/cache identities; run no training or build during the current metadata-only scope."
+      ]
+    },
+    {
+      "direction": "BOLT",
+      "items": [
+        "First establish that the retained ELF metadata, symbols/relocations and selected tool version support the intended transformation; current Cargo strip=true is a fact, not proof of BOLT readiness or incompatibility.",
+        "Bind any additional build inputs needed for analyzable ELF, the profile, original ELF and transformed output.",
+        "Qualify and measure the transformed final bytes under the unchanged gates; no post-link gain is established by this review."
+      ]
+    }
+  ],
+  "conclusion": "Existing local evidence supports the accepted O3/LTO/single-unit release configuration and the recorded Cargo release command, but does not establish a complete emitted rustc invocation/fingerprint. Native CPU, PGO and BOLT have no discovered experiment in this bounded corpus; this is not a claim that they were never tried or that benefits are available.",
+  "sources": {
+    "r24_cargo": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/Cargo.toml",
+      "bytes": 3097,
+      "sha256": "3121870fbf66f65ce6b1925b3500eae8a05fc2d8019a2694da7d6fe941ad4d28",
+      "location": "30-36"
+    },
+    "r24_qualifier": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/tools/x230/20261028/qualify.py",
+      "bytes": 7661,
+      "sha256": "95717717fd5421f2e31dbce24e2f8821696f57d779ce93e988ed66764159552d",
+      "location": "42-55, 67-83, 120-126"
+    },
+    "r24_prepare": {
+      "path": "/workspace/scratch/806ba5f52f94/benchmark-r24/prepare_and_qualify_r24.py",
+      "bytes": 6093,
+      "sha256": "c76956cd24e3ffe8f78fe188ecb51041828c0de1e924c96329dd93bd742f87a8",
+      "location": "87-104"
+    },
+    "r24_qualification": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-report.json",
+      "bytes": 83365,
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971",
+      "location": "source_input/source_tested/source_after, harness_before/harness_after, jobs, stages.release, binaries"
+    },
+    "r24_compact": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-compact.json",
+      "bytes": 2325,
+      "sha256": "184713b11ef53a660cd1e30da7a91261f53977f3fb75e8cb375bda53003b0401",
+      "location": "qualification_report, binaries, stages"
+    },
+    "r24_review": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-review.json",
+      "bytes": 4095,
+      "sha256": "0e30bb5082d1c023d9b660910cb6a0831cf6b821261c397f2f19f1c9db35786c",
+      "location": "basis, qualified, source_binding, binaries, limitations"
+    },
+    "r24_closure": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/source-binding-qualification-closure.json",
+      "bytes": 7307,
+      "sha256": "135fbe672b72b1d142731d6452ac4a9089161dc969d9ec49596375efabbbbe05",
+      "location": "qualification_report, source maps, binaries, limits"
+    },
+    "r24_output_identities": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-output-identities.json",
+      "bytes": 2806,
+      "sha256": "180fe8eee2484a61c310f4c41a0e745a8e1e651f6687a6715a38faa9f2033cdb",
+      "location": "binaries and verification_basis"
+    },
+    "r24_report": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-publication-ready/docs/X230_OPTIMIZATION_20261105_R24.md",
+      "bytes": 14254,
+      "sha256": "0bec7ea604e28832489c6a1338760aec77ea3eca22d65d868d6aae1f3b126dc2",
+      "location": "35-55"
+    },
+    "r13_report": {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261103_R13.md",
+      "bytes": 20362,
+      "sha256": "d57428c4ec064f2d86557474381663956b3f075a25e514f9598b71b67a34abd5",
+      "location": "79-86"
+    },
+    "r16_r18_report": {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261104_R16_R18.md",
+      "bytes": 33427,
+      "sha256": "31305eefb0917156bd666cd579ce60a8ec477da5db981c662054483715974ac0",
+      "location": "16, 221"
+    },
+    "r19_report": {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261104_R19.md",
+      "bytes": 29952,
+      "sha256": "494c1aae283a6313c48b867cecedac446c1bb326b3d9f115eb82eb141aa39b2f",
+      "location": "83-91"
+    },
+    "r5_r7_report": {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_R5_R7_20261030.md",
+      "bytes": 87086,
+      "sha256": "73762efb0d1c62562c6f686419e621576b49d8dadc72f1e478423e18b607a201",
+      "location": "166"
+    },
+    "r9_report": {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261031_R9.md",
+      "bytes": 34897,
+      "sha256": "631582cfbd1b2c5e6d0ecf98e1d71120cc90e650adf61191172a95dde669fbb5",
+      "location": "118, 218, 269"
+    },
+    "r20_probe_runner": {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/hash-probe/run_probe.py",
+      "bytes": 12935,
+      "sha256": "0efc43a17e2d95606174990d8eefedfaf95d162c15bdcd824f8d715a1899d83b",
+      "location": "79-84, 161-162"
+    },
+    "r20_probe_build": {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/hash-probe-results-01/received/probe/04-build.stage.json",
+      "bytes": 584,
+      "sha256": "43a0719cb87f1b97d46aac1427bfd9d0d5608cfda1487c8b6b59d36d70fa5047",
+      "location": "argv and returncode"
+    },
+    "r20_probe64_runner": {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/hash-probe-64b/run_probe.py",
+      "bytes": 12953,
+      "sha256": "c29e111308fcd40ede1361a7c3d5329ba8391908462405bc803dd8abbb2e19c8",
+      "location": "79-84, 161-162"
+    },
+    "r20_probe64_build": {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/hash-probe-64b-results-01/received/probe/04-build.stage.json",
+      "bytes": 584,
+      "sha256": "cf6abacef191cf68169d70c75d3e75743088607bfa7f4fc66d9a0abed808923c",
+      "location": "argv and returncode"
+    }
+  },
+  "search_inventory": [
+    {
+      "path": "/workspace/scratch/806ba5f52f94/benchmark-r24/prepare_and_qualify_r24.py",
+      "bytes": 6093,
+      "sha256": "c76956cd24e3ffe8f78fe188ecb51041828c0de1e924c96329dd93bd742f87a8"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/publication-draft/proposed/docs/X230_OPTIMIZATION_20261105_R22.md",
+      "bytes": 9491,
+      "sha256": "94f62ab0bcbd892d83a0d5c368b0c5a83f9d778fdbd93c44432ab23b7eeb535f"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r23-publication-ready/docs/X230_OPTIMIZATION_20261105_R23.md",
+      "bytes": 6657,
+      "sha256": "55df4f2344fa65c298f67daa4f28384947bb9e4a99752f323158bae67bec71c1"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r23-publication-ready/tools/x230/20261105/r23/reviews/qualification-compact-01.json",
+      "bytes": 2320,
+      "sha256": "f50af0772599dd20153f8a83311968b5b766866e16adfd4c879576a4a2879bf8"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r23-publication-ready/tools/x230/20261105/r23/reviews/qualification-report-01.json",
+      "bytes": 83360,
+      "sha256": "c9c78be4c93d2f9246a317d27f7a616431f31157a05b8cc46d9dc1cf86c848d7"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-publication-ready/docs/X230_OPTIMIZATION_20261105_R24.md",
+      "bytes": 14254,
+      "sha256": "0bec7ea604e28832489c6a1338760aec77ea3eca22d65d868d6aae1f3b126dc2"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-publication-ready/tools/x230/20261105/r24/README.md",
+      "bytes": 8944,
+      "sha256": "6a2c03b8199215ff4f8851c51c288aaeff666222ce1e81fcd971320200d6f0b4"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-compact.json",
+      "bytes": 2325,
+      "sha256": "184713b11ef53a660cd1e30da7a91261f53977f3fb75e8cb375bda53003b0401"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-output-identities.json",
+      "bytes": 2806,
+      "sha256": "180fe8eee2484a61c310f4c41a0e745a8e1e651f6687a6715a38faa9f2033cdb"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-report.json",
+      "bytes": 83365,
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-review.json",
+      "bytes": 4095,
+      "sha256": "0e30bb5082d1c023d9b660910cb6a0831cf6b821261c397f2f19f1c9db35786c"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/source-binding-qualification-closure.json",
+      "bytes": 7307,
+      "sha256": "135fbe672b72b1d142731d6452ac4a9089161dc969d9ec49596375efabbbbe05"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/Cargo.toml",
+      "bytes": 3097,
+      "sha256": "3121870fbf66f65ce6b1925b3500eae8a05fc2d8019a2694da7d6fe941ad4d28"
+    },
+    {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/tools/x230/20261028/qualify.py",
+      "bytes": 7661,
+      "sha256": "95717717fd5421f2e31dbce24e2f8821696f57d779ce93e988ed66764159552d"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261023.md",
+      "bytes": 34739,
+      "sha256": "6003fa09af2b75735046613dbca8b3ef6860bb4388f266a0c9b05a687f59328d"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261028.md",
+      "bytes": 41525,
+      "sha256": "dd88967095277a754d20d05f173ef88ce145b347dc326ddf44565a5195e5156c"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261031_R9.md",
+      "bytes": 34897,
+      "sha256": "631582cfbd1b2c5e6d0ecf98e1d71120cc90e650adf61191172a95dde669fbb5"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261103_R10E_SNAPSHOT.md",
+      "bytes": 6860,
+      "sha256": "23736a623df1b208804b2023653c5e59fe5cb6c5fe54e6049118fb33dca816fa"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261103_R11.md",
+      "bytes": 29881,
+      "sha256": "7e75772efdda6d3ce098ff5d4bb96bde85fa9ce8594ac8ac2ea471a6c441cfa9"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261103_R12.md",
+      "bytes": 23111,
+      "sha256": "3740e79c8d842c8c5bf7376515ee31d4e5052864d3659746a04d5fd44488e8c6"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261103_R13.md",
+      "bytes": 20362,
+      "sha256": "d57428c4ec064f2d86557474381663956b3f075a25e514f9598b71b67a34abd5"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261103_R14.md",
+      "bytes": 13895,
+      "sha256": "e71d8596cfb67bca2807b6a17924ab996495797d5a2ef32e59f4a44afb6bbcad"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261103_R15.md",
+      "bytes": 37983,
+      "sha256": "df605c897d2fce9ba562332fc889597b1b8237b3d16b155a86a1a16f247e0323"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261104_R16_R18.md",
+      "bytes": 33427,
+      "sha256": "31305eefb0917156bd666cd579ce60a8ec477da5db981c662054483715974ac0"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_20261104_R19.md",
+      "bytes": 29952,
+      "sha256": "494c1aae283a6313c48b867cecedac446c1bb326b3d9f115eb82eb141aa39b2f"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_R4_20261028.md",
+      "bytes": 92053,
+      "sha256": "cd000b1017f138684f1b191019f5476e06eaae55b4ef85f6e96671401e82cb6b"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/docs/X230_OPTIMIZATION_R5_R7_20261030.md",
+      "bytes": 87086,
+      "sha256": "73762efb0d1c62562c6f686419e621576b49d8dadc72f1e478423e18b607a201"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/hash-probe/run_probe.py",
+      "bytes": 12935,
+      "sha256": "0efc43a17e2d95606174990d8eefedfaf95d162c15bdcd824f8d715a1899d83b"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/hash-probe-64b/run_probe.py",
+      "bytes": 12953,
+      "sha256": "c29e111308fcd40ede1361a7c3d5329ba8391908462405bc803dd8abbb2e19c8"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/hash-probe-64b-results-01/received/probe/04-build.stage.json",
+      "bytes": 584,
+      "sha256": "cf6abacef191cf68169d70c75d3e75743088607bfa7f4fc66d9a0abed808923c"
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r20/audit-transport/hash-probe-results-01/received/probe/04-build.stage.json",
+      "bytes": 584,
+      "sha256": "43a0719cb87f1b97d46aac1427bfd9d0d5608cfda1487c8b6b59d36d70fa5047"
+    }
+  ]
+}

@@ -1,0 +1,185 @@
+{
+  "A40_in_new_performance_totals": false,
+  "archive_records_per_controller": 65536,
+  "archive_records_per_owner": 16384,
+  "binding_state": "Bound to the actual A46 composed qualification and witness; no benchmark result is implied.",
+  "bindings": {
+    "A": {
+      "qualification_path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-r07-recovery-only/report.json",
+      "qualification_schema": "runtime-candidate-qualification/v1",
+      "qualification_sha256": "ab3481a57c69177d20f4d4feff31543dbc0a32b6f07892a0553879035b928cc9",
+      "release_sha256": "7ab8d93d00f964e7e479ee7df7d25f40ede8e364f3914d30b9fa4b7b2ff867eb",
+      "source_files": 165,
+      "source_map_compact_sha256": "4da4bae757abb1e31b250efb406e62fab32a6a0bd537f9642911ddf8b4d3000d",
+      "version": "r07-recovery-only"
+    },
+    "B": {
+      "composition_kind": "a42-r03-five-stages-plus-a46-release/v1",
+      "qualification_path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-a46-a42-release-completion-r01/report.json",
+      "qualification_schema": "hepta-runtime-composed-qualification/v1",
+      "qualification_sha256": "d6ee0938ef816c5f472edb967fe2764fc3bc05b4e958243e102f1d542c4fa46f",
+      "release_sha256": "dde7f516d39ec8f6b7ee010e5747f55b0b10d742c419df22fd96ecbfffdd5299",
+      "source_files": 168,
+      "source_map_compact_sha256": "c1ae8a69901aee16e03871e920a6a7e321672c9b30b3a6e75d3560390b8c2e11",
+      "version": "A42-native-archive-cohort"
+    }
+  },
+  "bindings_ready": true,
+  "blocks": [
+    [
+      0,
+      1
+    ],
+    [
+      2,
+      3
+    ]
+  ],
+  "c1_query_order": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "c4_wave_query_orders": [
+    [
+      0,
+      1,
+      2,
+      3
+    ],
+    [
+      1,
+      2,
+      3,
+      0
+    ],
+    [
+      2,
+      3,
+      0,
+      1
+    ],
+    [
+      3,
+      0,
+      1,
+      2
+    ]
+  ],
+  "client_concurrency_proof": "Record the actual pending RPC-ID dictionary immediately before each once-only write; require exactly four distinct pending IDs in C4 and one in C1. This does not establish concurrent server admission or membership in the same 1ms cohort.",
+  "client_query_budget_seconds": 10,
+  "continuation": {
+    "bytes": 1648,
+    "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a46-release-admission-r01/protocol.json",
+    "sha256": "849fb328c9e91bee6a14f3330a846593c0102bf2f4d9314eb5a1594e496aa47a"
+  },
+  "controller_budget_seconds_excluding_cleanup": 300,
+  "controller_order": [
+    "A",
+    "B",
+    "B",
+    "A"
+  ],
+  "cpu_primary": "C1: process /proc utime+stime at C1 start to C4 start, only comparable if every C1 request succeeded and no incomplete work is observed. C4: original wait4 user+system total minus C4-start /proc cumulative CPU; conservatively includes all C4 failures, remaining workers, final original verification and shutdown. Whole-life wait4 and response-window process CPU are retained separately. Use conservative two clock ticks per observed process endpoint plus timeval precision; candidate upper / baseline lower for resource gates.",
+  "disk_gate": {
+    "minimum_available_bytes": 2147483648,
+    "minimum_free_inodes_when_valid": 300000
+  },
+  "evidence_payload_budget_bytes": 536870912,
+  "experiment_id": "a46-native-archive-cohort-r01",
+  "fatal_policy": "Transport, request-ID, unknown error, owner/DTO oracle, fixture integrity, host gate or custody errors stop future waves and controllers. Recoverably framed protocol violations are retained while original pending IDs continue to receive replies up to their original deadlines. Unrecoverable framing/capture failure or EOF records the outstanding-ID inventory as terminal transport unknown rather than claiming drainage or waiting out a closed channel. Every planned slot retains an explicit outcome or unexecuted reason. No replay.",
+  "fixture_bytes_identical_across_arms": false,
+  "fixture_generator": "synthetic i=1..65535: id=format(i%256,02x)+format(i+1,062x); owner=owners[i%4]; tool cycles host_list/host_health/file_info/effective_config by (i//4)%4; state cycles unknown/completed/failed by (i//16)%3; accepted_ms=1000000+i; elapsed=null for unknown, otherwise 1+i%1000. owner[0] is the real seed owner, others are SHA256 of a fixed synthetic-owner namespace plus that owner and index. Preserve the native seed record bytes as the 65536th record. Hot consists of that seed plus i=65025..65535.",
+  "frozen_original_controller_cleanup_seconds": [
+    30,
+    10,
+    10,
+    2
+  ],
+  "helper_sha256": "98413b4b177ec3bf68b7fe67de153376465374a9e74690c337633b3b4a912ffb",
+  "host_gates": "Frozen host_load before/after each two-controller block, plus after each fixed setup and before measured calls. Required fields present, errors empty, no live cargo/cargo-clippy/clippy-driver/rustc/heptabao_server. No waiting out or stopping other workloads.",
+  "hot_records_per_controller": 512,
+  "hot_records_per_owner": 128,
+  "layout": "flat-v11 with the real seed-created original anchor; no synthesized shard anchor",
+  "lineage": "Fixed PR69 head 5f558594cc2a69154eb8b34c70559aa80307d0eb / A40 to qualified r07 to unqualified A42 source. A43 read-only GitHub check confirmed the same PR head/base and observed default branch hepta-runtime-base HEAD ebfda9b92106718669cd8435235ce1478352ab73, a distinct branch. This is not synchronization to default branch or a new complete Git tree identity proof. A46 now supplies the independently witnessed composed build qualification; performance remains unmeasured.",
+  "native_driver_sha256": "6123660947b4b205d7f70d901c4e78b74395df065226a27937730b8c4cdd2ec9",
+  "native_small_guard_included": false,
+  "numeric_gates": {
+    "baseline_zero_success_cpu_per_success_gate": "undefined_and_not_passed",
+    "c1_baseline_correct_required_for_cpu_attribution": 8,
+    "c1_candidate_correct": 8,
+    "c1_max_cpu_per_attempt_ratio": 1.1,
+    "c1_max_wall_per_attempt_ratio": 1.1,
+    "c4_candidate_correct": 32,
+    "c4_candidate_successes_at_least_baseline": true,
+    "c4_max_inclusive_cpu_per_attempt_ratio": 1.1,
+    "c4_max_inclusive_cpu_per_success_ratio": 1.1,
+    "c4_min_successful_calls_per_second_ratio": 1.5,
+    "candidate_wholelife_max_rss_kib_limit": "max(baseline_wholelife_max_rss_kib*1.10, baseline_wholelife_max_rss_kib+4096)",
+    "rss_scope": "whole-life original wait4 maximum, regression guard only; not steady-state memory or soak proof"
+  },
+  "old_r07_and_B16_results_modified_or_pooled": false,
+  "optimization_exhausted_claim": false,
+  "originals_policy": "Create-only private fixture and evidence. Retain exact original native seed, all 65535 synthetic record bytes, 512 hot copies, anchors, all wire bytes, raw errors, full per-slot costs, one complete per-file initial hash/identity map and complete subsequent revalidation digests. Collect only after measurement. Known disposable index cache bodies may be omitted with explicit inventory/receipts; never omit original records or failed calls.",
+  "out": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a46-native-archive-cohort-r01",
+  "owners_per_controller": 4,
+  "performance_errors_allowed_to_finish_fixed_schedule": [
+    "archive metadata query total deadline exceeded; repeat only the metadata query",
+    "archive index preparing or validation unavailable; repeat only this metadata query"
+  ],
+  "planned_measured_calls": 80,
+  "planned_measured_per_arm": {
+    "C1": 8,
+    "C4": 32
+  },
+  "planned_waves": 32,
+  "product_query_budget_seconds": 3,
+  "qualification_binding_contract": "explicit legacy-six-stage or hepta-runtime-composed-qualification/v1; no fallback and no original failure rewriting",
+  "qualification_chain_loader_path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/tools/load_a46_qualification_chain_r01.py",
+  "qualification_chain_loader_sha256": "55a19e9e5d5bd2d514025fefe2cdf037b9a21f0fae1ed3f750c6b9af086cf7e0",
+  "query_variants": [
+    {
+      "cursor": null,
+      "limit": 1,
+      "name": "first_1"
+    },
+    {
+      "cursor": null,
+      "limit": 32,
+      "name": "first_32"
+    },
+    {
+      "cursor": "owned_sorted_record_index_4095",
+      "limit": 16,
+      "name": "quarter_16"
+    },
+    {
+      "cursor": "owned_sorted_record_index_16381",
+      "limit": 32,
+      "name": "tail_32"
+    }
+  ],
+  "real_native_seed_records_per_controller": 1,
+  "schema": "hepta-a42-native-archive-cohort-protocol/v1",
+  "server_cohort_membership_instrumented_or_guaranteed": false,
+  "service_mutations": false,
+  "setup": {
+    "automatic_retries": false,
+    "fixed_idle_seconds_after_kickoff": 60,
+    "kickoff_errors_retained": true,
+    "native_host_list_seed_calls": 1,
+    "readiness_polling": false,
+    "request_archive_limit_1_warmup_calls": 1,
+    "usage_stats_kickoff_calls": 1,
+    "warmup_must_succeed": true
+  },
+  "ssh_or_agent_access": false,
+  "synthetic_archive_records_per_controller": 65535,
+  "synthetic_directory_fsync_before_measurement": true,
+  "synthetic_durability_or_power_loss_claimed": false,
+  "synthetic_per_record_fsync": false,
+  "synthetic_records_are_native_admissions": false,
+  "termination_policy": "A one-shot TERM/INT handler records only the first signal. Explicit bounded control points observe it before a new wave/controller and during setup/hash work. The fixed idle checks only this stop flag at most one second apart, with no readiness query or state poll; absent cancellation it always lasts at least 60 seconds. Popen is bound to its owned object before any deferred stop exception; raw wait4 cleanup is never interrupted or renewed by later TERM/INT signals. Child signal masks are unchanged. At the final decision point, a requested stop is recorded separately and excludes passed=true.",
+  "workers": 2
+}

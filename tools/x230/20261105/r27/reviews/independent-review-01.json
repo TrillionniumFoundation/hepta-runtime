@@ -1,0 +1,769 @@
+{
+  "schema": "hepta-r27-serializer-component-independent-review/v1",
+  "reviewed_utc": "2026-11-05T12:08:13.142640+00:00",
+  "review_passed": true,
+  "scope": "Local recomputation and receipt/source-custody audit only; no workloads, compilation, remote tools or source edits performed.",
+  "disposition": {
+    "component_improvement_established": true,
+    "promote_to_full_qualification_or_campaign": false,
+    "serializer_capacity_branch": "stop",
+    "end_to_end_gate_status": "not_run_not_evaluated",
+    "reason": "Ordinary Python equal-mix savings are 0.61852976 us/call, about 0.0032010% of historical controller CPU. Local improvement is established; these component results do not justify a full campaign or prove an end-to-end gate failure."
+  },
+  "native": {
+    "job_id": "1a1ab92f54d-fc05-4ebe",
+    "idempotency_key": "hepta-x230-b96-r27-serializer-component-20261105-02",
+    "state": "succeeded",
+    "exit_code": 0,
+    "automatic_retry": false,
+    "request_matches_planned_and_original": true,
+    "complete_stdout_bytes": 2151,
+    "stderr_bytes": 0,
+    "stage_order": [
+      "compiler-version",
+      "build-time",
+      "build-alloc",
+      "timing",
+      "allocation"
+    ],
+    "all_stage_exit_codes_zero": true,
+    "report_seal_matches": true,
+    "quiet_process_snapshots": 3,
+    "continuous_exclusivity_proved": false
+  },
+  "checks": {
+    "timing_records": 48,
+    "allocation_records": 12,
+    "case_records_per_build": 6,
+    "all_six_exact_tuple_checks_passed_in_each_build": true,
+    "serde_json_map_sorted_assertion_executed_in_each_build": true,
+    "exact_ABBA_order_all_rounds": true,
+    "timing_iterations_small_per_sample": 100000,
+    "timing_iterations_near_limit_per_sample": 2000,
+    "timing_calls_per_arm": 2008000,
+    "timing_calls_all_arms": 4016000,
+    "allocation_iterations_per_row": 1000,
+    "allocation_calls_all_rows": 12000,
+    "warmup_iterations_per_build": 10064,
+    "warmup_in_measurements": false,
+    "all_48_raw_cpu_wall_per_call_values_recomputed": true,
+    "all_six_summary_rows_match_raw_and_report": true,
+    "all_12_allocation_rows_recomputed_and_match_report": true,
+    "all_12_attempt02_readbacks_match_bytes_size_SHA_and_receipt": true,
+    "all_two_attempt01_readbacks_match_bytes_size_SHA": true,
+    "source_extracted_items_verified": 11,
+    "separate_plain_System_timing_and_counting_allocation_builds": true,
+    "only_four_third_party_direct_externs": true
+  },
+  "case_metadata": [
+    {
+      "byte_equivalent": true,
+      "case": "python_status",
+      "combined_bytes": 262,
+      "command_bytes": 42,
+      "kind": "case",
+      "raw_field_bytes": 146,
+      "stdin_bytes": 220,
+      "system": false,
+      "timeout_seconds": 40,
+      "timing_iterations": 100000
+    },
+    {
+      "byte_equivalent": true,
+      "case": "python_read",
+      "combined_bytes": 296,
+      "command_bytes": 42,
+      "kind": "case",
+      "raw_field_bytes": 146,
+      "stdin_bytes": 254,
+      "system": false,
+      "timeout_seconds": 15,
+      "timing_iterations": 100000
+    },
+    {
+      "byte_equivalent": true,
+      "case": "system_status",
+      "combined_bytes": 87,
+      "command_bytes": 47,
+      "kind": "case",
+      "raw_field_bytes": 12,
+      "stdin_bytes": 40,
+      "system": true,
+      "timeout_seconds": 20,
+      "timing_iterations": 100000
+    },
+    {
+      "byte_equivalent": true,
+      "case": "system_read",
+      "combined_bytes": 137,
+      "command_bytes": 47,
+      "kind": "case",
+      "raw_field_bytes": 12,
+      "stdin_bytes": 90,
+      "system": true,
+      "timeout_seconds": 20,
+      "timing_iterations": 100000
+    },
+    {
+      "byte_equivalent": true,
+      "case": "python_read_escaped_unicode",
+      "combined_bytes": 365,
+      "command_bytes": 42,
+      "kind": "case",
+      "raw_field_bytes": 116,
+      "stdin_bytes": 323,
+      "system": false,
+      "timeout_seconds": 15,
+      "timing_iterations": 100000
+    },
+    {
+      "byte_equivalent": true,
+      "case": "python_read_64k_boundary",
+      "combined_bytes": 65536,
+      "command_bytes": 42,
+      "kind": "case",
+      "raw_field_bytes": 65386,
+      "stdin_bytes": 65494,
+      "system": false,
+      "timeout_seconds": 15,
+      "timing_iterations": 2000
+    }
+  ],
+  "timing_recomputed": [
+    {
+      "case": "python_status",
+      "baseline": {
+        "calls": 400000,
+        "cpu_ns": 343746440,
+        "wall_ns": 343767592,
+        "cpu_ns_per_call": 859.3661,
+        "wall_ns_per_call": 859.41898
+      },
+      "candidate": {
+        "calls": 400000,
+        "cpu_ns": 161295219,
+        "wall_ns": 161305559,
+        "cpu_ns_per_call": 403.2380475,
+        "wall_ns_per_call": 403.2638975
+      },
+      "cpu_saved_ns_per_call": 456.1280525,
+      "candidate_cpu_over_baseline": 0.46922731476142704,
+      "cpu_reduction_percent": 53.07726852385729,
+      "wall_saved_ns_per_call": 456.1550825,
+      "candidate_wall_over_baseline": 0.469228521692644,
+      "wall_reduction_percent": 53.0771478307356,
+      "both_rounds_candidate_cpu_lower": true
+    },
+    {
+      "case": "python_read",
+      "baseline": {
+        "calls": 400000,
+        "cpu_ns": 497026501,
+        "wall_ns": 497064491,
+        "cpu_ns_per_call": 1242.5662525,
+        "wall_ns_per_call": 1242.6612275
+      },
+      "candidate": {
+        "calls": 400000,
+        "cpu_ns": 184653914,
+        "wall_ns": 184658825,
+        "cpu_ns_per_call": 461.634785,
+        "wall_ns_per_call": 461.6470625
+      },
+      "cpu_saved_ns_per_call": 780.9314675,
+      "candidate_cpu_over_baseline": 0.37151724028494004,
+      "cpu_reduction_percent": 62.84827597150599,
+      "wall_saved_ns_per_call": 781.014165,
+      "candidate_wall_over_baseline": 0.3714987257055946,
+      "wall_reduction_percent": 62.85012742944054,
+      "both_rounds_candidate_cpu_lower": true
+    },
+    {
+      "case": "system_status",
+      "baseline": {
+        "calls": 400000,
+        "cpu_ns": 117677645,
+        "wall_ns": 117682622,
+        "cpu_ns_per_call": 294.1941125,
+        "wall_ns_per_call": 294.206555
+      },
+      "candidate": {
+        "calls": 400000,
+        "cpu_ns": 45678721,
+        "wall_ns": 45691006,
+        "cpu_ns_per_call": 114.1968025,
+        "wall_ns_per_call": 114.227515
+      },
+      "cpu_saved_ns_per_call": 179.99731,
+      "candidate_cpu_over_baseline": 0.3881682115579386,
+      "cpu_reduction_percent": 61.18317884420614,
+      "wall_saved_ns_per_call": 179.97904,
+      "candidate_wall_over_baseline": 0.3882561862022415,
+      "wall_reduction_percent": 61.17438137977585,
+      "both_rounds_candidate_cpu_lower": true
+    },
+    {
+      "case": "system_read",
+      "baseline": {
+        "calls": 400000,
+        "cpu_ns": 261726747,
+        "wall_ns": 261875166,
+        "cpu_ns_per_call": 654.3168675,
+        "wall_ns_per_call": 654.687915
+      },
+      "candidate": {
+        "calls": 400000,
+        "cpu_ns": 83056220,
+        "wall_ns": 83096505,
+        "cpu_ns_per_call": 207.64055,
+        "wall_ns_per_call": 207.7412625
+      },
+      "cpu_saved_ns_per_call": 446.6763175,
+      "candidate_cpu_over_baseline": 0.31733944257519847,
+      "cpu_reduction_percent": 68.26605574248015,
+      "wall_saved_ns_per_call": 446.9466525,
+      "candidate_wall_over_baseline": 0.3173134217698214,
+      "wall_reduction_percent": 68.26865782301786,
+      "both_rounds_candidate_cpu_lower": true
+    },
+    {
+      "case": "python_read_escaped_unicode",
+      "baseline": {
+        "calls": 400000,
+        "cpu_ns": 502490225,
+        "wall_ns": 502655965,
+        "cpu_ns_per_call": 1256.2255625,
+        "wall_ns_per_call": 1256.6399125
+      },
+      "candidate": {
+        "calls": 400000,
+        "cpu_ns": 224120364,
+        "wall_ns": 224235272,
+        "cpu_ns_per_call": 560.30091,
+        "wall_ns_per_call": 560.58818
+      },
+      "cpu_saved_ns_per_call": 695.9246525,
+      "candidate_cpu_over_baseline": 0.4460193509236921,
+      "cpu_reduction_percent": 55.39806490763079,
+      "wall_saved_ns_per_call": 696.0517325,
+      "candidate_wall_over_baseline": 0.446100887313652,
+      "wall_reduction_percent": 55.3899112686348,
+      "both_rounds_candidate_cpu_lower": true
+    },
+    {
+      "case": "python_read_64k_boundary",
+      "baseline": {
+        "calls": 8000,
+        "cpu_ns": 535261480,
+        "wall_ns": 540037473,
+        "cpu_ns_per_call": 66907.685,
+        "wall_ns_per_call": 67504.684125
+      },
+      "candidate": {
+        "calls": 8000,
+        "cpu_ns": 383243346,
+        "wall_ns": 383495058,
+        "cpu_ns_per_call": 47905.41825,
+        "wall_ns_per_call": 47936.88225
+      },
+      "cpu_saved_ns_per_call": 19002.26675,
+      "candidate_cpu_over_baseline": 0.7159927630136956,
+      "cpu_reduction_percent": 28.400723698630433,
+      "wall_saved_ns_per_call": 19567.801875,
+      "candidate_wall_over_baseline": 0.7101267544817209,
+      "wall_reduction_percent": 28.987324551827907,
+      "both_rounds_candidate_cpu_lower": true
+    }
+  ],
+  "timing_totals_for_audit_not_workload_mix": {
+    "baseline": {
+      "calls": 2008000,
+      "cpu_ns": 2257929038,
+      "wall_ns": 2263083309
+    },
+    "candidate": {
+      "calls": 2008000,
+      "cpu_ns": 1082047784,
+      "wall_ns": 1082482225
+    }
+  },
+  "allocation_recomputed": [
+    {
+      "alloc_calls": 12000,
+      "alloc_calls_per_call": 12.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_status",
+      "dealloc_calls": 12000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 1000,
+      "realloc_calls_per_call": 1.0,
+      "requested_bytes": 1247000,
+      "requested_bytes_per_call": 1247.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_status",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 1000,
+      "realloc_calls_per_call": 1.0,
+      "requested_bytes": 426000,
+      "requested_bytes_per_call": 426.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 14000,
+      "alloc_calls_per_call": 14.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read",
+      "dealloc_calls": 14000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 1000,
+      "realloc_calls_per_call": 1.0,
+      "requested_bytes": 1266000,
+      "requested_bytes_per_call": 1266.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 1000,
+      "realloc_calls_per_call": 1.0,
+      "requested_bytes": 426000,
+      "requested_bytes_per_call": 426.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 7000,
+      "alloc_calls_per_call": 7.0,
+      "alloc_zeroed_calls": 0,
+      "case": "system_status",
+      "dealloc_calls": 7000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 0,
+      "realloc_calls_per_call": 0.0,
+      "requested_bytes": 833000,
+      "requested_bytes_per_call": 833.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "system_status",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 0,
+      "realloc_calls_per_call": 0.0,
+      "requested_bytes": 175000,
+      "requested_bytes_per_call": 175.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 10000,
+      "alloc_calls_per_call": 10.0,
+      "alloc_zeroed_calls": 0,
+      "case": "system_read",
+      "dealloc_calls": 10000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 0,
+      "realloc_calls_per_call": 0.0,
+      "requested_bytes": 862000,
+      "requested_bytes_per_call": 862.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "system_read",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 0,
+      "realloc_calls_per_call": 0.0,
+      "requested_bytes": 175000,
+      "requested_bytes_per_call": 175.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 14000,
+      "alloc_calls_per_call": 14.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read_escaped_unicode",
+      "dealloc_calls": 14000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 2000,
+      "realloc_calls_per_call": 2.0,
+      "requested_bytes": 1748000,
+      "requested_bytes_per_call": 1748.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read_escaped_unicode",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 2000,
+      "realloc_calls_per_call": 2.0,
+      "requested_bytes": 938000,
+      "requested_bytes_per_call": 938.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 14000,
+      "alloc_calls_per_call": 14.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read_64k_boundary",
+      "dealloc_calls": 14000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 2000,
+      "realloc_calls_per_call": 2.0,
+      "requested_bytes": 262126000,
+      "requested_bytes_per_call": 262126.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read_64k_boundary",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 2000,
+      "realloc_calls_per_call": 2.0,
+      "requested_bytes": 196046000,
+      "requested_bytes_per_call": 196046.0,
+      "version": "candidate"
+    }
+  ],
+  "allocation_totals_for_audit_not_workload_mix": {
+    "baseline": {
+      "iterations": 6000,
+      "alloc_calls": 71000,
+      "alloc_zeroed_calls": 0,
+      "realloc_calls": 6000,
+      "dealloc_calls": 71000,
+      "requested_bytes": 268082000
+    },
+    "candidate": {
+      "iterations": 6000,
+      "alloc_calls": 12000,
+      "alloc_zeroed_calls": 0,
+      "realloc_calls": 6000,
+      "dealloc_calls": 12000,
+      "requested_bytes": 198186000
+    }
+  },
+  "ordinary_python_equal_mix": {
+    "baseline_cpu_ns_per_call": 1050.96617625,
+    "candidate_cpu_ns_per_call": 432.43641625,
+    "cpu_saved_ns_per_call": 618.52976,
+    "cpu_saved_us_per_call": 0.61852976,
+    "cpu_reduction_percent": 58.853441145651715,
+    "baseline_wall_ns_per_call": 1051.04010375,
+    "candidate_wall_ns_per_call": 432.45548,
+    "wall_saved_ns_per_call": 618.58462375,
+    "wall_saved_us_per_call": 0.61858462375,
+    "wall_reduction_percent": 58.854521491896975,
+    "weights": {
+      "python_status": 0.5,
+      "python_read": 0.5
+    },
+    "historical_controller_cpu_ms_per_call": 19.322916666666668,
+    "saved_percent_of_historical_controller_cpu": 0.003201016547708895,
+    "historical_3_percent_cpu_us": 579.6875,
+    "saved_percent_of_historical_3_percent_budget": 0.10670055159029648,
+    "budget_divided_by_saved_cpu": 937.2022778661451,
+    "allocation_calls_per_call": {
+      "baseline": 13,
+      "candidate": 2
+    },
+    "reallocation_calls_per_call": {
+      "baseline": 1,
+      "candidate": 1
+    },
+    "requested_bytes_per_call": {
+      "baseline": 1256.5,
+      "candidate": 426,
+      "saved": 830.5
+    }
+  },
+  "historical_reference": {
+    "path": "/workspace/scratch/806ba5f52f94/r24-results/summary.json",
+    "bytes": 13529,
+    "sha256": "5f0cf4538c5e4e7dff9f3f6a43e88f4fd4675f76640137908ec565daea285015",
+    "json_selection": "cases[concurrency=8].B.controller_cpu_ms_per_call",
+    "published_local_path": "/workspace/scratch/806ba5f52f94/r24-publication-ready/tools/x230/20261105/r24/reviews/campaign-summary-01.json",
+    "github_url": "https://github.com/TrillionniumFoundation/hepta-runtime/blob/baab4def80be7af015b2e7a594cb302f66c4130e/tools/x230/20261105/r24/reviews/campaign-summary-01.json",
+    "github_url_basis": "Local publication identity; no network access used in this review."
+  },
+  "source_bindings": [
+    {
+      "arm": "baseline",
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/runtime/ssh.rs",
+      "bytes": 16929,
+      "sha256": "4db25902c01d1a501f699ca26c9a70af49860127c625a9e0ff402572ad3e9829",
+      "exact_extracted_items": 5,
+      "all_excerpt_hashes_and_embedded_bytes_match": true
+    },
+    {
+      "arm": "candidate",
+      "path": "/workspace/scratch/b96be991ab90/r27-serializer/apply-check/r24/src/mcp/runtime/ssh.rs",
+      "bytes": 17739,
+      "sha256": "d0d3fcc1a6207e0f0b9f761b5e66d9ab82c62ad83a04085165295fa1f41b56f0",
+      "exact_extracted_items": 6,
+      "all_excerpt_hashes_and_embedded_bytes_match": true
+    }
+  ],
+  "readbacks_verified": [
+    {
+      "attempt": "attempt-01",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component/report.json",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-01/report.json",
+      "bytes": 1262,
+      "sha256": "f3ed69b104573fa4f2c667a4a165cf18c58b0f63e87e646d7af0a008e3511f6d",
+      "version": "2053:1967731:1262:1793879034758500561:1793879034758500561",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-01",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component/exception.txt",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-01/exception.txt",
+      "bytes": 876,
+      "sha256": "eb6da35f3116250bb0c2f0e7989310f2b8be7dcd9903f4222f1291f5e42d38fb",
+      "version": "2053:1967720:876:1793879034757500562:1793879034757500562",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/report.json",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/report.json",
+      "bytes": 16368,
+      "sha256": "75c5cef16803e0a3135cdb44ceb93f7ed4958e1e8ecde8179fb1caaec03901fa",
+      "version": "2053:1967744:16368:1793879906676555879:1793879906676555879",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/timing.stdout",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/timing.stdout",
+      "bytes": 15151,
+      "sha256": "0d19da01fcfd480b4ea901b504954c13fa8e2b1ce7a5aaa2977166d64a11ec9a",
+      "version": "2053:1967764:15151:1793879906350555650:1793879906350555650",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/timing.stderr",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/timing.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "version": "2053:1967765:0:1793879902989553302:1793879902989553302",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/allocation.stdout",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/allocation.stdout",
+      "bytes": 7053,
+      "sha256": "23a00f8ce535f2b07f98ef790e846f43fbdef62becc52c3c4abc9ac7f3061b3d",
+      "version": "2053:1967766:7053:1793879906575555808:1793879906575555808",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/allocation.stderr",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/allocation.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "version": "2053:1967769:0:1793879906436555711:1793879906436555711",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/build-time.stdout",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/build-time.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "version": "2053:1967753:0:1793879899828551102:1793879899828551102",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/build-time.stderr",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/build-time.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "version": "2053:1967755:0:1793879899828551102:1793879899828551102",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/build-alloc.stdout",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/build-alloc.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "version": "2053:1967756:0:1793879901503552267:1793879901503552267",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/build-alloc.stderr",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/build-alloc.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "version": "2053:1967763:0:1793879901503552267:1793879901503552267",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/compiler-version.stdout",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/compiler-version.stdout",
+      "bytes": 196,
+      "sha256": "4fdff2578428e9c5c08ddd7a0d3079c1a106b1cdaa46e73e46f7cd32b0fb9cad",
+      "version": "2053:1967745:196:1793879899811551091:1793879899811551091",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/compiler-version.stderr",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/compiler-version.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "version": "2053:1967752:0:1793879899794551079:1793879899794551079",
+      "eof": true
+    },
+    {
+      "attempt": "attempt-02",
+      "remote_path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/qualified-product-fingerprint.json",
+      "local_path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/qualified-product-fingerprint.json",
+      "bytes": 1569,
+      "sha256": "ed3d18008e23932331e4f6422e9935cc13f172522a75cfaa56785c41f359c6ee",
+      "version": "2053:1967742:1569:1793879899740551041:1793879899740551041",
+      "eof": true
+    }
+  ],
+  "primary_inputs": [
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/report.json",
+      "bytes": 16368,
+      "sha256": "75c5cef16803e0a3135cdb44ceb93f7ed4958e1e8ecde8179fb1caaec03901fa"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/timing.stdout",
+      "bytes": 15151,
+      "sha256": "0d19da01fcfd480b4ea901b504954c13fa8e2b1ce7a5aaa2977166d64a11ec9a"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/allocation.stdout",
+      "bytes": 7053,
+      "sha256": "23a00f8ce535f2b07f98ef790e846f43fbdef62becc52c3c4abc9ac7f3061b3d"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/readback.json",
+      "bytes": 48504,
+      "sha256": "45783dc63216b933eff68d266aa311bd7cef686b45f20199ba314b1bb346bee7"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-02/receipt-verification.json",
+      "bytes": 3646,
+      "sha256": "9a7a2fa480615d569e28c2ab0a22928db2320fad61133fe750dbdb720f657002"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt02-original-native-start.json",
+      "bytes": 2044,
+      "sha256": "31e9fa185f29b8ff63e16afbf5810026e4c57ba63f8728f1ce055560daa03411"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt02-original-native-terminal.json",
+      "bytes": 7891,
+      "sha256": "2b2c38ed417dfb26c6dd72997935dcc718762694d43d9cc74ecd9507dc7078e2"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt02-planned-native-request.json",
+      "bytes": 469,
+      "sha256": "e558dffe16260dbddc1c0b7b2eb88e4459ca5c6bd0db7eb9f2c6b9ede4f792ab"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt02-runner-staging-receipt.json",
+      "bytes": 325,
+      "sha256": "3a07a979554d3cc8a739652e531b0f10be29e497824a46bfcadbcf57110c633e"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/bench.rs",
+      "bytes": 22983,
+      "sha256": "eb088497f092b82c21d70dd8a17ef191e5430164f6e9967b9816d95514504e35"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/run_component_02.py",
+      "bytes": 11755,
+      "sha256": "b373a21be6346f95407e957d7ca9a3b3aec7337b735813b696a7845b65ff7c1d"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-01/report.json",
+      "bytes": 1262,
+      "sha256": "f3ed69b104573fa4f2c667a4a165cf18c58b0f63e87e646d7af0a008e3511f6d"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-01/readback.json",
+      "bytes": 3028,
+      "sha256": "665de2566f96c870791d6be93c6975d30233516f84f5237d3e3b4f8de401e3a1"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/original-native-start.json",
+      "bytes": 2088,
+      "sha256": "603eabfd10dfad87196915faea7281027c758775bacf43692c630e348cdc6cb3"
+    },
+    {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/original-native-terminal.json",
+      "bytes": 2474,
+      "sha256": "4d7c1c908ce4dde36e35feb95905b2ea19ba4548fa314af96d41412dd2c87993"
+    }
+  ],
+  "prior_attempt": {
+    "job_id": "1a1ab85c2c3-fc05-4e78",
+    "state": "failed",
+    "exit_code": 1,
+    "stages": [],
+    "error": "FileNotFoundError: [Errno 2] No such file or directory: '/home/qian/hepta-runtime-optimization-20261105-r25/target-build-02/release/.fingerprint/hepta-runtime-edfb8cc1d486112f/lib-hepta_runtime.json'",
+    "report": {
+      "path": "/workspace/scratch/b96be991ab90/serializer-component/attempt-01/report.json",
+      "bytes": 1262,
+      "sha256": "f3ed69b104573fa4f2c667a4a165cf18c58b0f63e87e646d7af0a008e3511f6d"
+    },
+    "same_benchmark_source_as_attempt02": true,
+    "performance_samples": 0,
+    "performance_retry": false,
+    "disposition": "Retained setup failure from missing prior cache fingerprint, before compiler or measurement stages. Attempt02 is the first successful measurement, using R26 third-party dependency cache."
+  },
+  "limitations": [
+    "Identical fixed Python command stub; does not time actual cached command construction, RPC transport, SSH children, queueing, validation, cancellation or recovery.",
+    "Six fixed successful cases establish byte/command/timeout/system equivalence for those inputs; they do not replace complete runtime tests or seven new sibling tests.",
+    "Normal Python fixture weighting is a historical workload scale comparison, not a measurement of actual full-controller requests; no system or edge case is averaged into it.",
+    "Requested allocation bytes are cumulative requested sizes, including realloc requests; they are not live memory, RSS, heap peak or retained-memory savings.",
+    "Rlib and component executable bytes are not present in this local evidence set; their reported hashes are bound to the successful native launcher/report, not independently rehashed locally.",
+    "Process snapshots are scheduling evidence at three instants, not continuous exclusivity proof.",
+    "Frozen end-to-end C8 throughput +3% AND CPU/call -3% adoption gates remain unchanged and untested for R27."
+  ]
+}

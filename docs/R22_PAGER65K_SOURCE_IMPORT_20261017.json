@@ -1,0 +1,80 @@
+{
+  "schema": "hepta-r22-pager65k-source-import-v1",
+  "date_utc": "2026-10-17",
+  "repository_base": {
+    "commit": "bcd0a99df19c5b651c35c90e5a477cd9717cb47c",
+    "pull_request": 17,
+    "original_import_receipt": "docs/R22_CONTROL_PLANE_SOURCE_IMPORT_20261017.json",
+    "historical_import_receipt_unchanged": true
+  },
+  "scope": "Import the existing pager65k-index Python module and qualify its row growth and cursor index. This record does not change or qualify the native effect owner, WAL, or the separately patched HTTP frontend.",
+  "source_import": {
+    "release_generation": "latest-r22-pager65k-index",
+    "release_closure_sha256": "8135e435d75a2a837cc2958f428be7b036b6515bcc9ed4fe9bdc2fc1c95f1841",
+    "release_closure_algorithm": "sha256(json.dumps(manifest.files, sort_keys=True, separators=(',', ':')).encode('utf-8'))",
+    "release_manifest_member_count": 49,
+    "release_file": "runtime_registry_page.py",
+    "repo_path": "deploy/runtime_registry_page.py",
+    "previous_repository_sha256": "47dd3c5d3e955c491c96ecdbab572a953fbf39602b23041d34d734ed96c7d749",
+    "original_installed_r22_sha256": "ace0a827cc2dc103bb5804e50486ae31e07d5ccfa45a3532d7d0d4c474af50d9",
+    "imported_sha256": "905443512f5b59fbc1b6bd86523329cc9ea548aca06cd97117a1e3aab9f95678",
+    "imported_bytes_checked": true,
+    "release_manifest_closure_recomputed": true,
+    "all_other_release_member_bytes_rehashed_in_this_receipt": true
+  },
+  "behavior": {
+    "max_job_rows_before": 32760,
+    "max_job_rows_after": 65528,
+    "max_paged_directory_entries_after": 65536,
+    "other_registry_limit_unchanged": 32768,
+    "source_byte_limit": 134217728,
+    "snapshot_cache_byte_limit": 67108864,
+    "max_snapshot_count": 16,
+    "snapshot_cache_row_limit": 131072,
+    "snapshot_absolute_ttl_seconds": 300,
+    "page_wire_byte_limit": 65536,
+    "page_row_limit": 128,
+    "continuation": "Indexed HMAC cursor lookup followed by constant-time re-attestation of the bound row. Index storage is charged to the existing snapshot byte quota.",
+    "source_semantics": "Frozen initial public metadata projection. No execution, authoritative status, argv, logs or secret state is returned."
+  },
+  "manifest_consistency": {
+    "historical_source_asset_count": 42,
+    "candidate_manifest_assets_equal_to_historical_source_hashes": 41,
+    "only_candidate_manifest_difference_from_historical_import": "runtime_registry_page.py",
+    "repository_http_sha256": "35d15ae59b5f1616ae213abe5824079a4390aa1e0346aa060f0ee501e18b5694",
+    "disk_release_http_sha256": "18151f5878c8f4fac981a6dcb91bc3defcdfa2e27e4ebd66dad786de9301677d",
+    "deployment_rule": "Preserve the actual pinned release closure when selecting its Python entry. Do not copy the entire repository deploy directory over the live release; that would also introduce the separate HTTP pager-sharing patch.",
+    "native_binary_sha256_retained": "6d4d182b2fa50cc79f921f1a8fb3b7da0dc1456d8d5feddf14d031fb044a079f",
+    "native_binary_source_equivalence": null
+  },
+  "validation_prepared": {
+    "test_file": "tests/runtime_registry_page_tests.py",
+    "baseline_test_count": 27,
+    "resulting_test_count": 29,
+    "new_tests": [
+      "test_cursor_index_is_included_in_snapshot_memory_quota",
+      "test_real_registry_growth_past_32768_to_65528_and_bound"
+    ],
+    "strengthened_test": "test_large_real_two_owner_registry_fully_discoverable now bounds continuation HMAC calls by returned rows plus two.",
+    "retained_regressions": "Existing cursor forgery/host binding/root replacement, cache eviction, absolute TTL, exact repeat, metadata privacy, wire bounds, membership races and active-cursor fairness are reused.",
+    "large_fixture": "Create 32769 real private JSON records in one registry and enumerate them to EOF. Grow the same fixture across both registries to exactly 65528 and enumerate to EOF. A 65529th record must refuse the whole new page.",
+    "syntax_parse": "passed",
+    "suite_execution": "Root agent runs the assembled candidate; no passing suite claim is made by this receipt."
+  },
+  "rollout": {
+    "procedure": "Stage or select the already pinned immutable Python release; capture the actual active frontend pointer/config bytes; restart only its importing frontend if necessary; verify new pager import, fresh page, exact continuation/repeat and original job reads.",
+    "native_controller_restart_required": false,
+    "durable_registry_migration_required": false,
+    "old_process_local_cursors_survive_frontend_restart": false,
+    "rollback": "Restore the exact previous frontend pointer/config bytes and restart that frontend; then require a fresh first page and original known-job reads. Do not restore or delete durable job history.",
+    "production_activation_evidence": "Recorded separately by the root executor.",
+    "production_rollback_evidence": "Recorded separately if executed; this source import receipt is not a rollback execution receipt."
+  },
+  "validation_executed": {
+    "python_control_tests": 205,
+    "pager_tests": 29,
+    "large_fixture_max_rows": 65528,
+    "result": "passed",
+    "evidence": "python-control-regression.json"
+  }
+}

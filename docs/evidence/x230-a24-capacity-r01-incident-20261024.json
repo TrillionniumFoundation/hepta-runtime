@@ -1,0 +1,306 @@
+{
+  "abba_completed": false,
+  "actual_soak_or_recovery_pass_established": false,
+  "adopted": false,
+  "candidate": "A24",
+  "capacity_evidence": {
+    "bytes": 166512,
+    "file": "x230-a24-capacity-r01-20261024.json",
+    "sha256": "9027ad73bb0f4d2a5550effa816882429d957428e1e2531331fabade5a827352"
+  },
+  "controller_stderr": [
+    {
+      "bytes": 0,
+      "controller_relative_ref": "round-0-A/first",
+      "retained_byte_exact": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "text": ""
+    },
+    {
+      "bytes": 0,
+      "controller_relative_ref": "round-0-A/restart",
+      "retained_byte_exact": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "text": ""
+    },
+    {
+      "bytes": 0,
+      "controller_relative_ref": "round-1-B/first",
+      "retained_byte_exact": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "text": ""
+    },
+    {
+      "bytes": 0,
+      "controller_relative_ref": "round-1-B/restart",
+      "retained_byte_exact": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "text": ""
+    },
+    {
+      "bytes": 117,
+      "controller_relative_ref": "round-2-B/first",
+      "retained_byte_exact": true,
+      "sha256": "e50a68bd963ef0fe698d5d0e03bf21e1023cd7ff95a8c7787ebd8c28252fdd6e",
+      "text": "Error: observation private root not empty; reconciliation required\n\nCaused by:\n    Directory not empty (os error 39)\n"
+    }
+  ],
+  "experiment_passed": false,
+  "failure_export": {
+    "bytes": 22665,
+    "metadata_sha256": "31ab6ec21b763e95997ee82a5e06df16cba0617c301d524a40f8bf08ddbd7717",
+    "regular_files": 9,
+    "sha256": "3f170760379d23c6fcd5d7ac88cfc831faac4eaeb2edebf55993cd501f8b1e9d"
+  },
+  "limits": [
+    "One completed A24 timed cell and restart do not make the incomplete A24 ABBA attempt successful.",
+    "The control-socket proof refusal and subsequent nonempty private-root shutdown error are retained as observations; the failing proof subcondition and root cause are unknown.",
+    "A later name-prefix directory match is not ownership authority. Its one socket and nlink=1 snapshot cannot reconstruct state at the earlier rejection or authorize deletion.",
+    "The failing controller's EOF exit was 1. No observed descendant survivors, reader error or unmatched replies does not establish successful cleanup.",
+    "The current failure is not reported as AgentLookupDeadline or the earlier pidfd/postexec identity refusal; no causal equivalence or fix is inferred.",
+    "All 234 observation rows, all 51 failures, five shutdown receipts and recorded sampling errors are retained. No retry, repair, uncertain-object deletion, or replacement experiment was performed by this publication step.",
+    "A24 is qualified but unadopted; this attempt does not establish actual sustained fault recovery, a throughput gain or readiness to proceed to soak/recovery."
+  ],
+  "measurement_harness_sha256": "efdf18dc4ded1193884cc7c529ca652ae22c1d7178e2fd29973463cceffa6db0",
+  "not_run_after_series_stop": [
+    "fairness-a20-a24-r01",
+    "obs-a17-a24-r01"
+  ],
+  "observed_request_failure": {
+    "ordinal_in_phase": 3,
+    "other_five_preflight_reads_succeeded": true,
+    "phase": "initial_complete_outputs",
+    "proof_subcondition_or_root_cause": null,
+    "round_index": 2,
+    "row": {
+      "automatic_retry": false,
+      "elapsed_ms": 438.83718783035874,
+      "error_type": "RuntimeError",
+      "host": "pocket4",
+      "isError": true,
+      "job_id": "1a16a40534e-b1270-4",
+      "native_error": "observation control socket is not the owned master",
+      "okay": false,
+      "purpose": "preflight_complete_output",
+      "reason": "native observation refused",
+      "response_sha256": "8dea9b0895379f88884aff9099e7f15aec1aa35f75dcfff2d7a0a24d33e93e36",
+      "tool": "process_read"
+    },
+    "version": "A24"
+  },
+  "observed_shutdown": {
+    "clean_exit": false,
+    "receipt": {
+      "exit_code": 1,
+      "observed_descendant_survivors": [],
+      "reader_error": null,
+      "resources": {
+        "errors": [],
+        "peaks": {
+          "controller_fd": 44,
+          "controller_hwm_kib": 13692,
+          "controller_rss_kib": 13692,
+          "descendants": 5,
+          "tree_fd": 69,
+          "tree_rss_kib": 53936
+        },
+        "sample_interval_seconds": 0.1,
+        "sampled_peaks_and_tree_cpu_are_lower_bounds": true,
+        "sampled_process_generations": 11,
+        "sampled_tree_cpu_seconds": 1.51,
+        "samples": 34
+      },
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    },
+    "source": "report.interrupted_shutdown",
+    "zero_observed_survivors_is_not_cleanup_completion": true
+  },
+  "performance_comparison_emitted": false,
+  "qualified_input_bindings": {
+    "A20": {
+      "binary_sha256": "727c4661450fdb2a2a44b63f7f9442a5cd20ad854f1c26b043ac710b6fa2ea06",
+      "raw_qualification_sha256": "35ccff9730cf28330e9f3d646f04cd12d0b66ec5d457b9039d8d94b34a359461",
+      "tested_source_map_sha256": "ad734d2154e5e329467ba3d4c0f48d415ae3c4594a490a7aa1c7721ae780d8bc"
+    },
+    "A24": {
+      "binary_sha256": "1499e6b1a5588dbb344f4668b241a66b870b232a08a03340efc65b8c30705141",
+      "raw_qualification_sha256": "4034c012dafca4ca289252b8fa47beac93130bcf0525c48022b7f1e4634c4877",
+      "tested_source_map_sha256": "fafba08d9c3fc0c269203c679c3e8a111b457c574fa7dd437425a9871d243dff"
+    }
+  },
+  "raw_report": {
+    "bytes": 126426,
+    "sha256": "cad794097c9e99ee45b961727350269c1358cc8dc19f9eb1ff5906a5f27af1f8"
+  },
+  "readonly_inventory": {
+    "captured_after_capacity_report_finished": true,
+    "inventory": {
+      "captured_unix": 1792813364.4694717,
+      "controller_birth_ticks_redaction": {
+        "redacted": true,
+        "sha256": "ea113a65dcc062942efd93e433f902e0567d305ce44081080bab03dc29eae153"
+      },
+      "controller_pid_redaction": {
+        "redacted": true,
+        "sha256": "4c3bb3057d1a319b8d1573686a7db0a113e094531ba351752d7f54460d62cd53"
+      },
+      "controller_process": {
+        "present": false
+      },
+      "deleted_objects": 0,
+      "matching_roots": [
+        {
+          "children": [
+            {
+              "ctime_ns": 1792813108176911229,
+              "dev_redaction": {
+                "redacted": true,
+                "sha256": "f8b2a676f3cf778f3efb6ad11c5173bfbe1f839b798e9336c459fa4aa3082964"
+              },
+              "ino_redaction": {
+                "redacted": true,
+                "sha256": "a7c15ac97ff5677335a6b01c9482e52d035dcbf864c64cc97ff7a5f4341c54e5"
+              },
+              "is_socket": true,
+              "mode": 384,
+              "mtime_ns": 1792813108176911229,
+              "name_redaction": {
+                "redacted": true,
+                "sha256": "ab9875b173ece370434d0f74e245e43526898cb7f8ef8c2ae248c351f79be498"
+              },
+              "nlink": 1,
+              "size": 0,
+              "uid_redaction": {
+                "redacted": true,
+                "sha256": "83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9"
+              }
+            }
+          ],
+          "dev_redaction": {
+            "redacted": true,
+            "sha256": "f8b2a676f3cf778f3efb6ad11c5173bfbe1f839b798e9336c459fa4aa3082964"
+          },
+          "ino_redaction": {
+            "redacted": true,
+            "sha256": "92217444ca7d736d3df42e1215c27246ad285816994554b46b0c4faf92eaa46c"
+          },
+          "mode": 448,
+          "path_redaction": {
+            "redacted": true,
+            "sha256": "7d8f3d938dbcb4c136eaeb50ed454075df153a8ef8614f37369e399d42018b7a"
+          },
+          "uid_redaction": {
+            "redacted": true,
+            "sha256": "83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9"
+          }
+        }
+      ],
+      "name_matches_do_not_establish_ownership": true,
+      "read_only": true,
+      "schema": "hepta-x230-controller-failure-readonly-inventory/v1"
+    },
+    "later_nlink_one_does_not_reconstruct_the_earlier_rejected_proof": true,
+    "matching_root_count": 1,
+    "name_match_is_ownership_authority": false,
+    "objects_deleted": 0,
+    "remaining_socket_entry_count": 1,
+    "source_bytes": 860,
+    "source_sha256": "4a10e40be693b06d18b44c62b976e4f5857a07620f30cb0ea641bae1c742b551"
+  },
+  "schema": "hepta-x230-a24-partial-capacity-incident/v1",
+  "series_execution": {
+    "actual_raw_shutdown_receipts_including_interrupted": 5,
+    "manifest_eof_controllers_4_counts_only_round_attached_receipts": true,
+    "report": {
+      "all_raw_passed": false,
+      "completed": false,
+      "experiments": [
+        {
+          "candidate_rounds_passed": [
+            true,
+            false
+          ],
+          "driver_returncode": 1,
+          "eof_controllers": 4,
+          "error": {
+            "reason": "six-host output preflight failed",
+            "type": "RuntimeError"
+          },
+          "name": "capacity-a20-a24-r01",
+          "raw_passed": false,
+          "report_bytes": 126426,
+          "report_sha256": "cad794097c9e99ee45b961727350269c1358cc8dc19f9eb1ff5906a5f27af1f8",
+          "safe_to_continue_series": false
+        }
+      ],
+      "finished_unix": 1792813109.3777416,
+      "schema": "hepta-x230-a24-observation-series-execution/v1",
+      "started_unix": 1792813084.0461364,
+      "stopped_reason": "owned cleanup or immutable-input evidence incomplete"
+    },
+    "source_sha256": "ac82f6ca49ef9e94f7a43f16360202698965ac15f1ab5d5299c2de7d537200fb"
+  },
+  "series_plan": {
+    "report": {
+      "automatic_rpc_retries": 0,
+      "binary_sha256": "1499e6b1a5588dbb344f4668b241a66b870b232a08a03340efc65b8c30705141",
+      "candidate": "A24-r02",
+      "created_unix": 1792813083.9958446,
+      "driver_sha256": {
+        "x230_observation_benchmark.py": "efdf18dc4ded1193884cc7c529ca652ae22c1d7178e2fd29973463cceffa6db0",
+        "x230_observation_fairness.py": "31fe9a9c44082d57f78cb75de060736eaffb1fa903532236071aab62508f30af"
+      },
+      "experiments": [
+        {
+          "baseline_sha256": "727c4661450fdb2a2a44b63f7f9442a5cd20ad854f1c26b043ac710b6fa2ea06",
+          "driver": "x230_observation_benchmark.py",
+          "expected_eof_controllers": 8,
+          "name": "capacity-a20-a24-r01",
+          "options": [
+            "--calls",
+            "96",
+            "--concurrency",
+            "16"
+          ]
+        },
+        {
+          "baseline_sha256": "727c4661450fdb2a2a44b63f7f9442a5cd20ad854f1c26b043ac710b6fa2ea06",
+          "driver": "x230_observation_fairness.py",
+          "expected_eof_controllers": 4,
+          "name": "fairness-a20-a24-r01",
+          "options": [
+            "--waves",
+            "8",
+            "--gate-budget-ms",
+            "120"
+          ]
+        },
+        {
+          "baseline_sha256": "721b4108569f90374086da71966b57f2e13a7351ac44f7f19775cbc93a9c9917",
+          "driver": "x230_observation_benchmark.py",
+          "expected_eof_controllers": 8,
+          "name": "obs-a17-a24-r01",
+          "options": [
+            "--calls",
+            "96",
+            "--concurrency",
+            "1",
+            "4",
+            "8"
+          ]
+        }
+      ],
+      "new_remote_workloads": 0,
+      "one_continuous_forwarded_agent_session": true,
+      "order": "ABBA",
+      "planned_no_compilation_overlap": true,
+      "qualification_report_sha256": "4034c012dafca4ca289252b8fa47beac93130bcf0525c48022b7f1e4634c4877",
+      "schema": "hepta-x230-a24-observation-series-plan/v1",
+      "source_map_sha256": "fafba08d9c3fc0c269203c679c3e8a111b457c574fa7dd437425a9871d243dff",
+      "stop_series_if_owned_cleanup_or_immutability_cannot_be_confirmed": true,
+      "workers": 2
+    },
+    "source_sha256": "85982427c740633e9e3fdc6aa0af70d5a7cad32116106354ce1545e7200cc0fa"
+  }
+}

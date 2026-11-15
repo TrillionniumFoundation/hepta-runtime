@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//! Runtime command-line transport, policy and optional durability settings.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -33,7 +34,7 @@ pub enum Commands {
 		#[arg(long, value_name = "PATH")]
 		path: Option<PathBuf>,
 
-		/// Bind to HTTP server on host:port instead of using stdin/stdout (e.g., "0.0.0.0:12345")
+		/// Serve authenticated HTTP on loopback instead of stdio (e.g., "127.0.0.1:12345")
 		#[arg(long, value_name = "HOST:PORT")]
 		bind: Option<String>,
 
@@ -49,8 +50,95 @@ pub enum Commands {
 		#[arg(long, value_name = "FILE")]
 		runtime_config: Option<PathBuf>,
 
+		/// Privately retain same-read configuration identity after successful installation (Unix).
+		/// Does not expose policy digests through MCP or certify service readiness.
+		#[arg(long, requires = "runtime_config")]
+		runtime_private_config_receipt: bool,
+
 		/// File containing the X-Hepta-Runtime-Token value for HTTP MCP requests.
 		#[arg(long, value_name = "FILE")]
 		auth_token_file: Option<PathBuf>,
+
+		/// Prepare verified private audit/result stores before accepting requests.
+		#[arg(long, requires = "runtime_config")]
+		runtime_prewarm: bool,
+
+		/// Batch at most 32 already queued audit operations, without a gather timer.
+		#[arg(long, requires = "runtime_config")]
+		runtime_audit_group_commit: bool,
+
+		/// Explicit private profile authorizing bounded cached SSH authentication for job observations.
+		#[arg(long, value_name = "FILE", requires = "runtime_config")]
+		runtime_observation_pool_profile: Option<PathBuf>,
+
+		/// Also use the explicitly configured observation pool for file_info and binary_read.
+		#[arg(long, requires_all = ["runtime_config", "runtime_observation_pool_profile"])]
+		runtime_file_observation_pool: bool,
+	},
+	/// Internal, stdin-only REA analysis worker. Does not open any artifact path.
+	#[command(hide = true)]
+	ReaWorker {
+		/// Display-only path; bytes are provided on stdin, not read by this worker.
+		#[arg(long)]
+		selected_path: String,
+		/// Internal test proving syscall denials after worker input admission.
+		#[arg(long, hide = true)]
+		sandbox_probe: bool,
+	},
+	/// Internal model parser. Reads one admitted read-only regular-file descriptor.
+	#[command(hide = true)]
+	ReaModelWorker {
+		#[arg(long)]
+		request: String,
+	},
+	/// Internal pinned native transport for an existing weight worker job.
+	#[command(hide = true)]
+	WeightClient(hepta_runtime::mcp::weight_native::WeightClientArgs),
+	/// Internal pinned static-provider worker. Reads one structured request on stdin.
+	#[command(hide = true)]
+	ReaStaticWorker,
+	/// Internal bounded JS/TS AST parser over controller-admitted source bytes.
+	#[command(hide = true)]
+	ReaJavascriptWorker,
+	/// Internal bounded source-map parser over controller-admitted bytes.
+	#[command(hide = true)]
+	ReaSourceMapWorker,
+	/// Internal isolated ELF note parser.
+	#[command(hide = true)]
+	ReaElfNotesWorker,
+	/// Internal recorded-core decoder over one digest-bound captured stdin frame.
+	#[command(hide = true)]
+	ReaRecordedCoreWorker,
+	/// Internal bounded APK signature verifier over captured stdin bytes.
+	#[command(hide = true)]
+	ReaApkSignatureWorker,
+	/// Internal bounded static APK report over controller-admitted bytes.
+	#[command(hide = true)]
+	ReaApkStaticWorker,
+	/// Fixed local-resource capture under an existing durable process job (Linux).
+	ReaBrowserCapture(hepta_runtime::mcp::rea_browser::BrowserCaptureArgs),
+	/// Internal bounded ASAR parser over one admitted read-only descriptor.
+	#[command(hide = true)]
+	ReaAsarWorker {
+		#[arg(long)]
+		request: String,
+	},
+	/// Internal ZIP directory parser over one admitted read-only descriptor.
+	#[command(hide = true)]
+	ReaArchiveWorker {
+		#[arg(long)]
+		request: String,
 	},
 }
+
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "cli_recorded_core_tests.rs"]
+mod recorded_core_tests;
+
+#[cfg(test)]
+#[path = "cli_config_receipt_tests.rs"]
+mod config_receipt_tests;

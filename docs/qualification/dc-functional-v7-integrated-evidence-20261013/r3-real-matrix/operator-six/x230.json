@@ -1,0 +1,82 @@
+{
+  "checks": [
+    {
+      "check": "real SSH target account",
+      "result": "passed",
+      "detail": {
+        "uid": 1000,
+        "platform": "linux",
+        "workdir": "/tmp/hepta-operator-canary-97e0d120dad242d382cc19992d50b612"
+      }
+    },
+    {
+      "check": "real authenticated MCP discovery and explicit capability mode",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "all operator entry points rejected on isolated host without target execution",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+      "result": "passed",
+      "detail": {
+        "backend": {
+          "backend": "systemd",
+          "launcher_pid": null,
+          "ok": true,
+          "unit": "hepta-runtime-job-1a1362b73ae-73b23-1"
+        },
+        "uid": 1000
+      }
+    },
+    {
+      "check": "native remote file API sees the same operator-created file",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "actual host PID pagination",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "external disposable PID: stale identity denied, actual signal delivered",
+      "result": "passed",
+      "detail": {
+        "atomic_identity": true,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "effective_uid": 1000,
+        "identity": "linux:b19bd1b9-4dbe-4335-96cf-ed98d393efea:61226367",
+        "pid": 3523235,
+        "result": "signal_sent",
+        "signal": 15,
+        "termination_confirmed": false
+      }
+    },
+    {
+      "check": "real SSH PTY shell input/output/Ctrl-C/close",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "real split-write Unicode PTY: text-safe pages and exact raw-byte pages",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "actual test-controller restart: same job, logs, once-only side effect",
+      "result": "passed",
+      "detail": null
+    }
+  ],
+  "complete": true,
+  "passed": 10,
+  "ssh_target": "x230-ts",
+  "target_test_directory": "/tmp/hepta-operator-canary-97e0d120dad242d382cc19992d50b612",
+  "password_prompt_tested": false,
+  "chatgpt_tunnel_tested": false
+}

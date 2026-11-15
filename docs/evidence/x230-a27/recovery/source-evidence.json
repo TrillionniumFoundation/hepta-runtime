@@ -1,0 +1,91 @@
+{
+  "automatic_recovery_implemented": false,
+  "baseline_commit": "65690e5bf8094888524ca2c2cd3cf4d01d846dc6",
+  "legacy_objects_authorized_for_cleanup": false,
+  "os_references": [
+    {
+      "purpose": "advisory open-file-description lease semantics",
+      "url": "https://man7.org/linux/man-pages/man2/flock.2.html"
+    },
+    {
+      "purpose": "name-based deletion with no expected-inode parameter",
+      "url": "https://man7.org/linux/man-pages/man2/unlink.2.html"
+    },
+    {
+      "purpose": "parent-thread death signal semantics; not proof of reaping",
+      "url": "https://man7.org/linux/man-pages/man2/PR_SET_PDEATHSIG.2const.html"
+    }
+  ],
+  "runtime_patch_produced": false,
+  "schema": "hepta-x230-a27-socket-custody-design-source/v1",
+  "sources": [
+    {
+      "bytes": 55237,
+      "git_blob_sha1": "17a99e504bd55f6b2f9e385be7569ef4542117ed",
+      "path": "src/mcp/runtime/ssh_observation_pool.rs",
+      "reviewed_symbols": [
+        "PrivateRoot::create",
+        "PrivateRoot::verify",
+        "PrivateRoot::drop",
+        "Core::command",
+        "Core::spawn",
+        "Core::start_master",
+        "master_socket_readiness",
+        "Core::unlink_socket",
+        "Core::shutdown"
+      ],
+      "sha256": "4d12d17f401161a546430fff811e00b67ad09f5585500f48d33e2f365ebc14ab"
+    },
+    {
+      "bytes": 22694,
+      "git_blob_sha1": "e2477c67e1db9443cb73aef32840db23ab1879d5",
+      "path": "src/mcp/runtime/ssh_observation_profile.rs",
+      "reviewed_symbols": [
+        "Stamp",
+        "open_absolute",
+        "private_directory",
+        "socket_stamp"
+      ],
+      "sha256": "4988b62ad917b4427c06875ba33f981af8f432f5df85932a5ef6a8a625a11e3e"
+    },
+    {
+      "bytes": 3641,
+      "git_blob_sha1": "c00ecb1e5de8f88c041e24eb2f673157c87fce46",
+      "path": "src/mcp/runtime/ssh_observation_postspawn.rs",
+      "reviewed_symbols": [
+        "wait_empty_argv"
+      ],
+      "sha256": "242fb404e67759ebc8287dcc0f0dd2017a5066d408a6219e345ba4448567dfa5"
+    },
+    {
+      "bytes": 4257,
+      "git_blob_sha1": "e1f8ccae6da733f32ab001847e51060e32cbc772",
+      "path": "src/mcp/runtime/ssh_observation_validation.rs",
+      "reviewed_symbols": [
+        "Workers::drain",
+        "Workers::finish_shutdown"
+      ],
+      "sha256": "dc254fcccfea85f27c21fa3496c6a20eee40936b2cceb5402d73ad207abecaa6"
+    },
+    {
+      "bytes": 89996,
+      "git_blob_sha1": "8d3d389860b4bc409933b37ef382413927b2e96d",
+      "path": "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "reviewed_symbols": [
+        "replaced-socket retention fixture",
+        "validation_early_shutdown_drain_fixture"
+      ],
+      "sha256": "0bbab07430e6e754e9c61754e452ba52ea703209894a8be76587838455e1efe2"
+    },
+    {
+      "bytes": 3425,
+      "git_blob_sha1": "7e5cbb6e4f33b8c0662c3a687a5621685610f708",
+      "path": "src/mcp/runtime/ssh_observation_socket_publication_tests.rs",
+      "reviewed_symbols": [
+        "initial_socket_waits_for_temporary_link_removal_before_exact_proof",
+        "initial_socket_rejects_extra_links_and_wrong_owned_peer"
+      ],
+      "sha256": "fd20a9d6ac539e2d261f3b21843d192745a9265c66e44727f0396c0a07cf0e4b"
+    }
+  ]
+}

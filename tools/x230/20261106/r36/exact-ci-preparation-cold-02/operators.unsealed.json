@@ -1,0 +1,57 @@
+{
+  "schema": "hepta-r36-cold02-exact-ci-operators/v1",
+  "sealed": false,
+  "root": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+  "local_seal": {
+    "executable": "/usr/bin/python3",
+    "args": [
+      "-B",
+      "/tmp/hepta-runtime-recovery-20261106/r36-cold02-exact-ci-preparation-01/seal_package.py",
+      "--pins",
+      null,
+      "--out",
+      null
+    ],
+    "input_schema": "hepta-r36-exact-rust-ci-actual-pins/v1",
+    "required_actual_files": 10,
+    "output_must_be_absent": true,
+    "invokes_target_binder": false,
+    "invokes_compiler": false,
+    "subprocesses": 0
+  },
+  "runtime_parent": {
+    "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/r36_campaign.py",
+    "bytes": null,
+    "sha256": null,
+    "qualification_only_api": "bind_r36_candidate_preparation(inputs, bind)",
+    "ci_success_dependency": false
+  },
+  "future_native_launch": {
+    "executable": "/usr/bin/python3",
+    "args": [
+      "-I",
+      "-B",
+      "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-tools-01/launch_exact_rust_ci_01.py",
+      "--launcher-sha256",
+      null
+    ],
+    "cwd": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+    "env": {},
+    "timeout_seconds": 6600,
+    "request_key": "x230-r36-validation-scratch-cold02-exact-rust-ci-first-20261106-01",
+    "submitted": false
+  },
+  "actual_qualification_job_id": null,
+  "actual_qualification_counts": null,
+  "actual_ci_job_id": null,
+  "actual_ci_passed": null,
+  "tool_inventory": [
+    "audit_nextest_0137.py",
+    "canonical-workflow.yml",
+    "launch_exact_rust_ci_01.py",
+    "materialize_rust_ci_plan_01.py",
+    "package-manifest-01.json",
+    "run_rust_ci_01.py"
+  ],
+  "deployment_note": "The final parent must be installed by the separately reviewed parent preparation. Do not create CI plan/output before the original launch; do not place transport or lock sidecars inside the six-file CI tool inventory."
+}

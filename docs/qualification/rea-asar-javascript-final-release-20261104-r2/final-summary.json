@@ -1,0 +1,183 @@
+{
+  "schema": "hepta.rea.final-asar-javascript-qualification.v1",
+  "release_gates_qualified": true,
+  "scope": "bounded ASAR acquisition and existing JavaScript regression; not complete REA parity or full Python/Rust matrix acceptance",
+  "created_unix_ns": 1793801292615922246,
+  "root": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+  "source_freeze_commit": "b857dc7d646dc938e29a51fa82a5856d9b96f842",
+  "observed_head_during_gate": "618e8638c84cd9c95fb08b52ea9354e982ee0154",
+  "frozen_runtime": {
+    "sha256": "0595fbf02e0f492bd151fec97eb90cb704a88810e9415b90582d348f3db99b6a",
+    "bytes": 18437832,
+    "copies": [
+      {
+        "path": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/final-release-r1/frozen/hepta-runtime",
+        "bytes": 18437832,
+        "sha256": "0595fbf02e0f492bd151fec97eb90cb704a88810e9415b90582d348f3db99b6a"
+      },
+      {
+        "path": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/frozen/hepta-runtime",
+        "bytes": 18437832,
+        "sha256": "0595fbf02e0f492bd151fec97eb90cb704a88810e9415b90582d348f3db99b6a"
+      },
+      {
+        "path": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/asar/hepta-runtime-qualified",
+        "bytes": 18437832,
+        "sha256": "0595fbf02e0f492bd151fec97eb90cb704a88810e9415b90582d348f3db99b6a"
+      },
+      {
+        "path": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/js-cancellation/hepta-runtime-qualified",
+        "bytes": 18437832,
+        "sha256": "0595fbf02e0f492bd151fec97eb90cb704a88810e9415b90582d348f3db99b6a"
+      }
+    ]
+  },
+  "commands_passed": 7,
+  "ordinary_external_rust_tests_passed": 3,
+  "source_and_verification_unchanged": true,
+  "inputs": {
+    "source": {
+      "count": 308,
+      "sha256": "64084b4dd57bbc04e53a0eb26eda6d70eea7bbe1b258bd79810b9aaa3e4c3871"
+    },
+    "verification": {
+      "count": 645,
+      "sha256": "455b490f167deaa4e520ab29d9982d36730ca57c3b3542ae615279185b74f216"
+    }
+  },
+  "final_pins_verified": 26,
+  "asar": {
+    "gates": {
+      "complete_inventory_matches_upstream_and_authored_names": true,
+      "packed_member_ranges_and_whole_sha256_match_upstream_authored_bytes": true,
+      "explicit_asar_graph_preserves_plain_source_identity_and_observations": true,
+      "malformed_conflicting_unsafe_stale_and_non_utf8_inputs_refuse": true,
+      "reconnect_can_reobserve_same_pinned_archive": true,
+      "owned_stopped_worker_cancel_reaped_and_same_owner_recovers": true,
+      "owned_stopped_worker_deadline_reaped_and_same_owner_recovers": true,
+      "fixture_unchanged_and_target_never_executed": true
+    },
+    "member_range_checks": 24,
+    "ordinary_probe_calls": 55,
+    "expected_refusals": 23,
+    "cancel_seconds": 0.032853785,
+    "cancel_window_seconds": 5,
+    "deadline_seconds_from_confirmed_stop": 20.067488833,
+    "production_deadline_seconds": 20,
+    "same_owner_recovery_after_cancel": true,
+    "same_owner_recovery_after_deadline": true,
+    "manual_worker_kill_used": false,
+    "producer_consumer": "@electron/asar@4.2.0",
+    "archive_reference_sha256": "a5f52a8cfe6836adcc361ede8ffb81dbf0e56b9d2ccbe230a4f0ad866dd64e86"
+  },
+  "legacy_javascript": {
+    "gates": {
+      "actual_owned_worker_stopped": true,
+      "baseline_mcp_worker_succeeds": true,
+      "cancelled_worker_terminated_and_reaped_by_live_original_owner": true,
+      "same_owner_next_call_recovers": true
+    },
+    "cancel_seconds": 0.030452669,
+    "cancel_window_seconds": 5,
+    "independent_deadline_test": false,
+    "manual_worker_kill_used": false,
+    "babel_comparison": {
+      "status": "pass",
+      "comparisons": {
+        "imports": {
+          "equal": true,
+          "expected_count": 17,
+          "actual_count": 17,
+          "missing": [],
+          "extra": []
+        },
+        "exports": {
+          "equal": true,
+          "expected_count": 16,
+          "actual_count": 16,
+          "missing": [],
+          "extra": []
+        },
+        "electron_calls": {
+          "equal": true,
+          "expected_count": 12,
+          "actual_count": 12,
+          "missing": [],
+          "extra": []
+        },
+        "ipc_edges": {
+          "equal": true,
+          "expected_count": 4,
+          "actual_count": 4,
+          "missing": [],
+          "extra": []
+        }
+      },
+      "manual_golden": {
+        "babel": {
+          "export_counts_match": true,
+          "corrected_export_observations_match": true,
+          "counts": {
+            "src/main.ts": 3,
+            "src/preload.cjs": 0,
+            "src/renderer.tsx": 1,
+            "src/dynamic.ts": 1,
+            "src/shadowing.cjs": 3,
+            "src/util.js": 3,
+            "src/types.ts": 2,
+            "src/barrel.ts": 3
+          }
+        },
+        "rust": {
+          "export_counts_match": true,
+          "corrected_export_observations_match": true,
+          "counts": {
+            "src/main.ts": 3,
+            "src/preload.cjs": 0,
+            "src/renderer.tsx": 1,
+            "src/dynamic.ts": 1,
+            "src/shadowing.cjs": 3,
+            "src/util.js": 3,
+            "src/types.ts": 2,
+            "src/barrel.ts": 3
+          }
+        }
+      },
+      "output": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/legacy-js/reference-final-release.json"
+    }
+  },
+  "canary": {
+    "original_python_matrix_r1_failure_preserved": true,
+    "diagnostic_only": true,
+    "diagnostic_summary_sha256": "2771a7e87ce99a9dc8766684a7a0194bfa00199e3d7d29da9fb4d5c9ba1db398",
+    "historical_cause_established": false,
+    "does_not_supersede_original_failure": true
+  },
+  "receipts": [
+    {
+      "path": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/legacy-js/qualification.json",
+      "bytes": 18373,
+      "sha256": "7c240765703c526c1fb26261fad160ac5291adb21c80707eed1497dc8aa56f58"
+    },
+    {
+      "path": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/lifecycle/qualification.json",
+      "bytes": 3635,
+      "sha256": "2e6825e32e6f2e2dc1735516df09ab8efb21e4d4072bae6908ab1094b9620617"
+    },
+    {
+      "path": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/asar/qualification.json",
+      "bytes": 24912,
+      "sha256": "0991f62af1b2d8423c8647acc6f63014bf49730ae64d05d4356bf09f66fe0127"
+    },
+    {
+      "path": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/js-cancellation/qualification.json",
+      "bytes": 10074,
+      "sha256": "c62a73075ff5493ea661ce176b5b2b39d2856e75c1fad3d0117af892c2a64ef0"
+    },
+    {
+      "path": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/canary-diagnostic-r1/summary.json",
+      "bytes": 5512,
+      "sha256": "2771a7e87ce99a9dc8766684a7a0194bfa00199e3d7d29da9fb4d5c9ba1db398"
+    }
+  ]
+}

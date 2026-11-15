@@ -1,0 +1,503 @@
+{
+  "agent_queries": 0,
+  "business_launches": 0,
+  "checks": [
+    "original_wait4_dual_eof_and_non_utf8_bytes_preserved",
+    "driver_sigint_cleanup_uses_original_pidfd_and_latched_deadline",
+    "ignored_interrupt_forces_only_original_child_without_renewal",
+    "pidfd_setup_failure_retains_and_reaps_original_popen",
+    "control_eof_preserves_original_child_for_clean_exit",
+    "registration_without_write_is_not_submission",
+    "actual_partial_control_write_stays_unknown_without_retry",
+    "deferred_signal_cannot_interrupt_original_popen_handoff",
+    "cleanup_io_error_still_reaps_original_and_cannot_pass",
+    "bounded_plan_input_refuses_open_non_eof_pipe"
+  ],
+  "original_local_children": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import sys;v=sys.stdin.buffer.read();sys.stdout.buffer.write(v);sys.stderr.buffer.write(b'\\xff\\tERR\\n')"
+      ],
+      "cleanup_complete": true,
+      "cleanup_errors": [],
+      "custody_uncertain": false,
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "original_pidfd_bound": true,
+      "original_popen_pid": 2739729,
+      "original_wait4": {
+        "exit_code": 0,
+        "maxrss_kib": 20188,
+        "pid": 2739729,
+        "raw_status": 0,
+        "system_seconds": 0.002966,
+        "user_seconds": 0.010876
+      },
+      "packets": [
+        {
+          "bytes": 21,
+          "bytes_written": 21,
+          "kind": "echo_input",
+          "sha256": "f96a7746976751e325f698f48a4169539fbcb4b64f8fb3cda93f088c3eedc6f1",
+          "write_state": "fully_written"
+        }
+      ],
+      "signals": [],
+      "stderr_bytes": 6,
+      "stderr_eof": true,
+      "stderr_original": "\ufffd\tERR\n",
+      "stderr_original_base64": "/wlFUlIK",
+      "stderr_sha256": "501539e25cce38315f1b5e66b8905bc5348d13abc34aa068e68014f23569d7c0",
+      "stdout_bytes": 21,
+      "stdout_eof": true,
+      "stdout_original": "ORIGINAL-LEASE-INPUT\n",
+      "stdout_original_base64": "T1JJR0lOQUwtTEVBU0UtSU5QVVQK",
+      "stdout_sha256": "f96a7746976751e325f698f48a4169539fbcb4b64f8fb3cda93f088c3eedc6f1",
+      "wall_seconds": 0.01675406494177878
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import signal,time,sys\ndef stop(*_):\n time.sleep(.05);sys.stdout.write('CLEANED\\n');sys.stdout.flush();raise SystemExit(0)\nsignal.signal(signal.SIGINT,stop);print('READY',flush=True);time.sleep(3)"
+      ],
+      "cleanup_complete": true,
+      "cleanup_errors": [],
+      "custody_uncertain": false,
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "driver_abort": {
+        "forced_deadline": 1720696.027276106,
+        "forced_seconds": 0.5,
+        "grace_deadline": 1720695.527276106,
+        "grace_seconds": 0.5,
+        "interrupt_requested": true,
+        "kill_requested": false,
+        "started_monotonic": 1720695.027276106
+      },
+      "original_pidfd_bound": true,
+      "original_popen_pid": 2739730,
+      "original_wait4": {
+        "exit_code": 0,
+        "maxrss_kib": 20188,
+        "pid": 2739730,
+        "raw_status": 0,
+        "system_seconds": 0.0029939999999999997,
+        "user_seconds": 0.017965
+      },
+      "packets": [],
+      "signals": [
+        {
+          "at_seconds": 0.017099231015890837,
+          "signal": "SIGINT",
+          "target": "original_pidfd"
+        }
+      ],
+      "stderr_bytes": 0,
+      "stderr_eof": true,
+      "stderr_original": "",
+      "stderr_original_base64": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 14,
+      "stdout_eof": true,
+      "stdout_original": "READY\nCLEANED\n",
+      "stdout_original_base64": "UkVBRFkKQ0xFQU5FRAo=",
+      "stdout_sha256": "05ee8e1a868a63aa550b782218166ada66f312a210f099880cf183672d2de7c1",
+      "wall_seconds": 0.07181843998841941
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import signal,time;signal.signal(signal.SIGINT,signal.SIG_IGN);print('READY',flush=True);time.sleep(3)"
+      ],
+      "cleanup_complete": true,
+      "cleanup_errors": [],
+      "custody_uncertain": false,
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "driver_abort": {
+        "forced_deadline": 1720695.70285087,
+        "forced_seconds": 0.5,
+        "grace_deadline": 1720695.20285087,
+        "grace_seconds": 0.1,
+        "interrupt_requested": true,
+        "kill_requested": true,
+        "started_monotonic": 1720695.10285087
+      },
+      "original_pidfd_bound": true,
+      "original_popen_pid": 2739731,
+      "original_wait4": {
+        "exit_code": -9,
+        "maxrss_kib": 20188,
+        "pid": 2739731,
+        "raw_status": 9,
+        "system_seconds": 0.005013999999999999,
+        "user_seconds": 0.016045
+      },
+      "packets": [],
+      "signals": [
+        {
+          "at_seconds": 0.02078511705622077,
+          "signal": "SIGINT",
+          "target": "original_pidfd"
+        },
+        {
+          "at_seconds": 0.121646324172616,
+          "signal": "SIGKILL",
+          "target": "original_pidfd"
+        }
+      ],
+      "stderr_bytes": 0,
+      "stderr_eof": true,
+      "stderr_original": "",
+      "stderr_original_base64": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 6,
+      "stdout_eof": true,
+      "stdout_original": "READY\n",
+      "stdout_original_base64": "UkVBRFkK",
+      "stdout_sha256": "3dfa3fb239f56c778a1e9b33eb31328349edd155a95806dac4378904e88527e5",
+      "wall_seconds": 0.12275762716308236
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import time;time.sleep(3)"
+      ],
+      "cleanup_complete": true,
+      "cleanup_errors": [],
+      "custody_uncertain": false,
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "driver_abort": {
+        "forced_deadline": 1720695.805812048,
+        "forced_seconds": 0.5,
+        "grace_deadline": 1720695.305812048,
+        "grace_seconds": 0.1,
+        "interrupt_requested": true,
+        "kill_requested": false,
+        "started_monotonic": 1720695.205812048
+      },
+      "original_popen_pid": 2739732,
+      "original_wait4": {
+        "exit_code": -2,
+        "maxrss_kib": 20188,
+        "pid": 2739732,
+        "raw_status": 2,
+        "system_seconds": 0.0,
+        "user_seconds": 0.000517
+      },
+      "packets": [],
+      "signals": [
+        {
+          "at_seconds": 0.0009042520541697741,
+          "signal": "SIGINT",
+          "target": "original_unreaped_Popen"
+        }
+      ],
+      "stderr_bytes": 0,
+      "stderr_eof": true,
+      "stderr_original": "",
+      "stderr_original_base64": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 0,
+      "stdout_eof": true,
+      "stdout_original": "",
+      "stdout_original_base64": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "wall_seconds": 0.0011000169906765223
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import sys;sys.stdin.buffer.read();print('CONTROL-EOF',flush=True)"
+      ],
+      "cleanup_complete": true,
+      "cleanup_errors": [],
+      "custody_uncertain": false,
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "original_pidfd_bound": true,
+      "original_popen_pid": 2739733,
+      "original_wait4": {
+        "exit_code": 0,
+        "maxrss_kib": 20188,
+        "pid": 2739733,
+        "raw_status": 0,
+        "system_seconds": 0.00418,
+        "user_seconds": 0.009405
+      },
+      "packets": [],
+      "signals": [],
+      "ssh_close": {
+        "eof_deadline": 1720695.706648667,
+        "forced_seconds": 0.5,
+        "grace_seconds": 0.5,
+        "kill_deadline": 1720696.206648667,
+        "kill_requested": false,
+        "started_monotonic": 1720695.206648667,
+        "term_deadline": 1720695.956648667,
+        "term_requested": false
+      },
+      "stderr_bytes": 0,
+      "stderr_eof": true,
+      "stderr_original": "",
+      "stderr_original_base64": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 12,
+      "stdout_eof": true,
+      "stdout_original": "CONTROL-EOF\n",
+      "stdout_original_base64": "Q09OVFJPTC1FT0YK",
+      "stdout_sha256": "5bb3fb9bfea2ebce3d50116710ff53547e2162b75e1336d015cef7175c9c29a6",
+      "wall_seconds": 0.014200147008523345
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import sys;sys.stdin.buffer.read();print('NO-SUBMITTED-BYTES',flush=True)"
+      ],
+      "cleanup_complete": true,
+      "cleanup_errors": [],
+      "custody_uncertain": false,
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "original_pidfd_bound": true,
+      "original_popen_pid": 2739734,
+      "original_wait4": {
+        "exit_code": 0,
+        "maxrss_kib": 20188,
+        "pid": 2739734,
+        "raw_status": 0,
+        "system_seconds": 0.006865,
+        "user_seconds": 0.006865
+      },
+      "packets": [
+        {
+          "bytes": 9,
+          "bytes_written": 0,
+          "kind": "registered_unwritten",
+          "sha256": "e2a6648c1c065f3f95a4f6c6bffce449f1504ab3bdc2f568b4876e0d80f782eb",
+          "write_state": "not_written"
+        }
+      ],
+      "signals": [],
+      "stderr_bytes": 0,
+      "stderr_eof": true,
+      "stderr_original": "",
+      "stderr_original_base64": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 19,
+      "stdout_eof": true,
+      "stdout_original": "NO-SUBMITTED-BYTES\n",
+      "stdout_original_base64": "Tk8tU1VCTUlUVEVELUJZVEVTCg==",
+      "stdout_sha256": "fd60d3c1f1d1330f5ad489aa3a76b1c09c72366a6bb6735a48b3117a59d8dc00",
+      "wall_seconds": 0.014364913804456592
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import sys;v=sys.stdin.buffer.read(16);print(len(v),flush=True)"
+      ],
+      "cleanup_complete": true,
+      "cleanup_errors": [],
+      "custody_uncertain": false,
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "original_pidfd_bound": true,
+      "original_popen_pid": 2739735,
+      "original_wait4": {
+        "exit_code": 0,
+        "maxrss_kib": 20188,
+        "pid": 2739735,
+        "raw_status": 0,
+        "system_seconds": 0.004977,
+        "user_seconds": 0.010950999999999999
+      },
+      "packets": [
+        {
+          "bytes": 131072,
+          "bytes_written": 8192,
+          "kind": "partial_start_surrogate",
+          "sha256": "15601535eca4a38b7e31ad6494861121cb9f84ccf55d4beb6a707d4f7a87813d",
+          "write_state": "partial_unknown"
+        }
+      ],
+      "signals": [],
+      "stderr_bytes": 0,
+      "stderr_eof": true,
+      "stderr_original": "",
+      "stderr_original_base64": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdin_errors": [
+        "original control pipe closed before packet completed"
+      ],
+      "stdout_bytes": 3,
+      "stdout_eof": true,
+      "stdout_original": "16\n",
+      "stdout_original_base64": "MTYK",
+      "stdout_sha256": "e6c21e8d260fe71882debdb339d2402a2ca7648529bc2303f48649bce0380017",
+      "wall_seconds": 0.016448872163891792
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import sys;sys.stdin.buffer.read();print('OWNED-AFTER-SIGNAL',flush=True)"
+      ],
+      "cleanup_complete": true,
+      "cleanup_errors": [],
+      "custody_uncertain": false,
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "original_pidfd_bound": true,
+      "original_popen_pid": 2739737,
+      "original_wait4": {
+        "exit_code": 0,
+        "maxrss_kib": 20188,
+        "pid": 2739737,
+        "raw_status": 0,
+        "system_seconds": 0.002025,
+        "user_seconds": 0.014176999999999999
+      },
+      "packets": [],
+      "signals": [],
+      "ssh_close": {
+        "eof_deadline": 1720695.751856142,
+        "forced_seconds": 0.5,
+        "grace_seconds": 0.5,
+        "kill_deadline": 1720696.251856142,
+        "kill_requested": false,
+        "started_monotonic": 1720695.251856142,
+        "term_deadline": 1720696.001856142,
+        "term_requested": false
+      },
+      "stderr_bytes": 0,
+      "stderr_eof": true,
+      "stderr_original": "",
+      "stderr_original_base64": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 19,
+      "stdout_eof": true,
+      "stdout_original": "OWNED-AFTER-SIGNAL\n",
+      "stdout_original_base64": "T1dORUQtQUZURVItU0lHTkFMCg==",
+      "stdout_sha256": "9aec51611ad539b5d47cb3f791ebe6049a95721e32c3bd4a31caa9b0562686c2",
+      "wall_seconds": 0.016594002954661846
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import signal,time;signal.signal(signal.SIGINT,signal.SIG_IGN);print('READY',flush=True);time.sleep(3)"
+      ],
+      "cleanup_complete": false,
+      "cleanup_errors": [
+        "original cleanup pump: OSError: injected selector cleanup failure"
+      ],
+      "custody_uncertain": false,
+      "discarded_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "driver_abort": {
+        "forced_deadline": 1720695.89239323,
+        "forced_seconds": 0.5,
+        "grace_deadline": 1720695.39239323,
+        "grace_seconds": 0.1,
+        "interrupt_requested": true,
+        "kill_requested": true,
+        "started_monotonic": 1720695.29239323
+      },
+      "original_pidfd_bound": true,
+      "original_popen_pid": 2739742,
+      "original_wait4": {
+        "exit_code": -9,
+        "maxrss_kib": 20188,
+        "pid": 2739742,
+        "raw_status": 9,
+        "system_seconds": 0.003978,
+        "user_seconds": 0.020885
+      },
+      "packets": [],
+      "signals": [
+        {
+          "at_seconds": 0.024544692132622004,
+          "signal": "SIGINT",
+          "target": "original_pidfd"
+        },
+        {
+          "at_seconds": 0.12465108721517026,
+          "signal": "SIGKILL",
+          "target": "original_pidfd"
+        }
+      ],
+      "stderr_bytes": 0,
+      "stderr_eof": true,
+      "stderr_original": "",
+      "stderr_original_base64": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 6,
+      "stdout_eof": true,
+      "stdout_original": "READY\n",
+      "stdout_original_base64": "UkVBRFkK",
+      "stdout_sha256": "3dfa3fb239f56c778a1e9b33eb31328349edd155a95806dac4378904e88527e5",
+      "wall_seconds": 0.6249866101425141
+    }
+  ],
+  "passed": true,
+  "platform": "linux",
+  "schema": "hepta-six-host-lease-custody-selfcheck/v1",
+  "ssh_connections": 0,
+  "tested_sources": {
+    "PROTOCOL.md": "3807eed6e66229d2bcd507cf1c87fe95b010d5630ff2a31961dc3a6db991e6d8",
+    "custody.py": "8dd8f01a2fae9dc448a84e8d8c6c6e7cf5e38dd27ced8e7b679bfd09e6d458e4",
+    "freeze_plan.py": "92f6706fef6c649451eaa4b6ceafa4d76d1712dfd87f4ccb53867c4f267261b7",
+    "main_supervisor.py": "ff4c5b31fad96ad4651e492677f13b11eaef3525d45d1a160663c90418ad1e0b",
+    "remote_supervisor.py": "4cffbf7762336df03364af30ea2514b6ff90cc87414682032bc0fc3260add5c6",
+    "run_main_lease.py": "24ca25eaf327d85b3081322841bfdb82343d94cec55cf17bb5af4b0289ced961",
+    "run_remote_supervisor.py": "0abce87e0c3112cfd24c84f9e11eece8658bc4f4c17bec1863b57dfce17b8bcb",
+    "selfcheck.py": "46eccb6729c587a749b973e911d223bdc4b2f7d23d59941196bf6a003a240182"
+  },
+  "uid": 1000,
+  "unexecuted": []
+}

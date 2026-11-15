@@ -1,0 +1,50 @@
+{
+  "schema": "hepta.rea.stderr-regression.v1",
+  "stage": "candidate",
+  "source": {
+    "rea_worker_transport.rs": "1baf38a79e11ad8c3dfafb4995af48d24026344f26774fb671b1d1c19c51a181",
+    "rea_worker_transport_tests.rs": "399550218c7c4d867062fe1138059a0b6fc6eb4c81e7837de088b84abb6f9000"
+  },
+  "steps": [
+    {
+      "name": "stderr-green",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "--all-features",
+        "--lib",
+        "worker_stderr_",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 193.78428435325623,
+      "log_sha256": "29d1c4802043509c4a5dfd008c16eb8cb7f7e9d54124c6804bef8203846c103f",
+      "test_summary": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2031 filtered out; finished in 0.11s"
+      ]
+    },
+    {
+      "name": "worker-regression",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "--all-features",
+        "--lib",
+        "rea_elf_notes::worker::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 1.4429614543914795,
+      "log_sha256": "660ed9b03f64d90995e173102066fe869cae61e0d18ea07174bdc0f516ac97a8",
+      "test_summary": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 2025 filtered out; finished in 0.79s"
+      ]
+    }
+  ]
+}

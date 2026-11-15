@@ -1,0 +1,95 @@
+{
+  "behavior_test_count": 7,
+  "behavior_tests": [
+    "borrowed_compact_order_matches_owned_keys_across_binary_and_optional_boundaries",
+    "serial_borrowed_and_legacy_rows_refuse_every_record_and_stamp_disagreement",
+    "malformed_compact_base_never_falls_back_or_hides_behind_a_pending_completion",
+    "corrupt_base_order_still_refuses_a_valid_pending_terminal_replacement",
+    "legacy_row_json_whitespace_escapes_and_strict_errors_keep_the_original_domain",
+    "borrowed_matching_keeps_lowercase_id_domain_and_accepts_decoded_json_escapes",
+    "serial_complete_join_checks_another_owners_original_with_both_row_encodings"
+  ],
+  "behavior_tests_executed": false,
+  "candidate_compiled": false,
+  "changed_source_files": 3,
+  "diagnostic_context": {
+    "actual_a53_diagnostic_report_sha256": "fc41dfdd6a7433434030a0352b7da1866faa166b7f8f5ed01d818b79120e6f73",
+    "actual_trace_sha256": "89698d9cb246335ff1ecfeb07a68ca8b08b8f6135649e2633479e9a6ed329e4a",
+    "independent_audit_sha256": "f5cd0a01cff8ab99647ab65c1b488cc9710b6f626a8b706dd39072092bd82a02",
+    "observed": "Same-qualified-ELF diagnostic wave6 split3+1; later singleton waited2159223us for store then expired during incomplete original verification. Trace may perturb scheduling; untraced large failure cause not inferred."
+  },
+  "expected_source_map": {
+    "bytes": 18939,
+    "path": "candidate-source-map.json",
+    "sha256": "157c9a1b1a5cc901c198eab929951052dda35e64e850a90e3011dd14973ad2fd"
+  },
+  "expected_unmodified_source_files": 172,
+  "files": [
+    {
+      "bytes": 5909,
+      "git_blob_sha1": "082f13461ed44e59a2970e0d020348dc7eef295b",
+      "new_file": false,
+      "parent_tested_sha256": "9096085b42b5e5ba2b074ae158f615044dc1e0df40382d7248e5a388728e68a5",
+      "path": "src/mcp/runtime/request_archive_codec.rs",
+      "sha256": "8201e82a69debf0243f9145f2b6fac8dfac5ec417cbe4f3f14b35f1a8c3a6e94"
+    },
+    {
+      "bytes": 26133,
+      "git_blob_sha1": "0f0cd8c04b112046d58d86d52634a8b00a9c73cd",
+      "new_file": false,
+      "parent_tested_sha256": "0939fdea0386da12114f469b06596b8a5f3d738f387dca1b68ae6853feb0d300",
+      "path": "src/mcp/runtime/request_archive_content.rs",
+      "sha256": "15b8891551922db29b4d397402a688f3c9452cf46823a019c6c782e4973e8473"
+    },
+    {
+      "bytes": 27378,
+      "git_blob_sha1": "e8b9a34c8cf12670a8ff39660713f5d4de98a63e",
+      "new_file": false,
+      "parent_tested_sha256": "787cb110310af7f789452eb020189406c52185f918f3d18eb4bcc0d4b65ecbc3",
+      "path": "src/mcp/runtime/request_archive_content_tests.rs",
+      "sha256": "7bdf508554834a447c2c007f481a299cdf05e6c0cda5861bfec7927f93db2fa5"
+    }
+  ],
+  "independent_static_reviews": {
+    "result": "No concrete source blocker found in the exact three files; no Rust compilation or test execution. Full immutable qualification remains required.",
+    "reviewer": "/root/recovery_resume"
+  },
+  "invariants": [
+    "Full original JSON observation for every member including other owners and off-page records",
+    "Original redb AccessGuard and one immutable ROWS/ORDER read transaction retained throughout each member",
+    "Exact ROW identity, 80-byte ORDER key and 32-byte ORDER value verified before any pending replacement",
+    "Exhaustive six Record fields plus complete FileStamp; id() rejects noncanonical uppercase/length/nonhex identities",
+    "Malformed recognized HAR1 errors propagate without legacy fallback",
+    "All existing tests are an unchanged byte prefix; new fixture construction reuses explicit0700 root and0600 original files",
+    "3-second product deadline and1ms collection window unchanged"
+  ],
+  "limits_of_claim": [
+    "No measured A54 performance benefit or passing gate",
+    "Removing three compact expected-record strings does not prove two separate full scans fit the original3s deadline",
+    "No frozen-cohort extension, cache shortcut, skipped original, retry, timeout change or source mutation to A53"
+  ],
+  "parent_qualification_sha256": "ab3a37ceb97667694c201d9b62556398e04e805010c8492af6a8f6f51486a72b",
+  "parent_release_sha256": "5855f6fb044745eba0bf0885b0430bc5a5bb03f68310cce50d961947925c03c6",
+  "parent_tested_source_map_compact_sha256": "91962e89b203621686cfa0d77567b13bd246092a99345681674bbafd46388c35",
+  "patch": {
+    "bytes": 19620,
+    "path": "a54-borrowed-compact-rows-unqualified.patch",
+    "sha256": "0bd6bdccb045f4df36b8cd462713e8d9cdf3be614238654e1eaf54503a965cd9"
+  },
+  "performance_adopted": false,
+  "prepared_source_map_compact_sha256": "5b128908b61e4a3f5f8c1ed951ec184eddf2a9b79361e6a16d5a80b0ded98d88",
+  "qualified": false,
+  "remote_calls": 0,
+  "rust_commands_executed": 0,
+  "schema": "hepta-a54-borrowed-compact-rows-candidate/v1",
+  "scope": "Only expected compact ROW interpretation in the serial complete original join; original read/parser/permissions/fences, parallel usage readers, query batching and deadlines unchanged. Noncompact ROWs use unchanged legacy decode.",
+  "source_bundle": {
+    "bytes": 66319,
+    "path": "a54-borrowed-compact-rows-source-r01.json",
+    "sha256": "760c119108256307c3697b3d7260371d66c65bfcadea7c3c57b3e7d563f0cd43"
+  },
+  "source_bytes": 59420,
+  "source_files": 175,
+  "source_tree_materialized": false,
+  "status": "reviewed-unqualified-preparation"
+}

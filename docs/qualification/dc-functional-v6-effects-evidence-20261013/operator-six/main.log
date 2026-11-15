@@ -1,0 +1,20 @@
+PASS real SSH target account
+PASS real authenticated MCP discovery and explicit capability mode
+PASS all operator entry points rejected on isolated host without target execution
+PASS shell pipes/redirects/env/Unicode/real UID/idempotency
+PASS native remote file API sees the same operator-created file
+PASS actual host PID pagination
+PASS external disposable PID: stale identity denied, actual signal delivered
+PASS real SSH PTY shell input/output/Ctrl-C/close
+PASS real split-write Unicode PTY: text-safe pages and exact raw-byte pages
+PASS temporary sudo PTY real uid=0 using existing authorization only
+PASS durable operator backend does not accidentally block existing sudo
+Traceback (most recent call last):
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/tests/operator_acceptance.py", line 229, in <module>
+    main()
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/tests/operator_acceptance.py", line 196, in main
+    c.call('host_signal', root_sig, denied=True)
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/tests/runtime_http_acceptance.py", line 28, in call
+    assert r.get('isError'),(name,txt)
+           ^^^^^^^^^^^^^^^^
+AssertionError: ('host_signal', '{\n  "audit_recorded": true,\n  "automatic_retry": false,\n  "expected_identity": "linux:60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1422463",\n  "host": "operator",\n  "outcome": "unknown",\n  "pid": 302611,\n  "reconcile_warning": "Signal delivery is not confirmed. Inspect the existing PID/start identity; do not resend automatically.",\n  "result": "signal_outcome_unknown",\n  "signal": 0,\n  "termination_confirmed": false\n}')

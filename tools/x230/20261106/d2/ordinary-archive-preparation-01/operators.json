@@ -1,0 +1,78 @@
+{
+  "schema": "hepta-d2-ordinary-archive-operators/v1",
+  "collector_template": {
+    "bytes": 44177,
+    "sha256": "ee14f25bd93070761ae90ccbc64828c85974a922958f145e411891ba8e272c21",
+    "git_blob": "50e64c41e5fe3f49306b56c1a8e2a9b7ebdf62e0"
+  },
+  "sealer": {
+    "bytes": 14106,
+    "sha256": "dcc064856f9f9236bc7bcde2baf6b37a0dc591e64c9b04ea764d1a85a4cc9e71",
+    "git_blob": "fbf82468f1a2c539b588ba36b1254b19803580c1"
+  },
+  "local_seal": {
+    "argv": [
+      "/usr/bin/python3",
+      "-B",
+      "<preparation>/seal_ordinary_archive.py",
+      "--template",
+      "<preparation>/archive_d2_ordinary.py",
+      "--originals",
+      "<actual-original-mirror>",
+      "--output",
+      "<new-sealed-directory>"
+    ],
+    "originals_are_relative_to": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+    "required_for_success_core_paths": [
+      "ordinary-native-01.json",
+      "ordinary-plan-01.json",
+      "ordinary-01/report.json",
+      "ordinary-01/source-map.json",
+      "ordinary-01/isolated-tests/summary.json",
+      "ordinary-01/isolated-tests.audit.json",
+      "ordinary-verification-input-01.json",
+      "ordinary-postflight-01.json",
+      "ordinary-postflight-native-01.json",
+      "ordinary-installation-started-01.json",
+      "ordinary-installation-01.json"
+    ],
+    "native_read_patterns": [
+      "ordinary-native-read-01-%03d.json",
+      "ordinary-postflight-native-read-01-%03d.json"
+    ],
+    "native_pages_must_be_original": true,
+    "successful_producer_requires_actual_postflight_terminal": true
+  },
+  "remote_collector": {
+    "authorized_operator": "root only; this preparation does not execute it",
+    "deployment_path": "/home/qian/hepta-runtime-validation-cost-20261106-d2/ordinary-archive-tools-01/archive_d2_ordinary.py",
+    "cwd": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+    "argv": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-validation-cost-20261106-d2/ordinary-archive-tools-01/archive_d2_ordinary.py",
+      "--kind",
+      "ordinary"
+    ],
+    "output_paths": [
+      "/home/qian/hepta-runtime-validation-cost-20261106-d2/ordinary-evidence-01.tar.gz",
+      "/home/qian/hepta-runtime-validation-cost-20261106-d2/ordinary-evidence-01.manifest.json",
+      "/home/qian/hepta-runtime-validation-cost-20261106-d2/ordinary-evidence-01.compact.json"
+    ],
+    "create_only": true
+  },
+  "local_verify": {
+    "argv": [
+      "/usr/bin/python3",
+      "-B",
+      "<same-actual-sealed-collector>",
+      "--verify",
+      "<absolute-downloaded-archive>",
+      "--expected-sha256",
+      "<actual-remote-archive-SHA256>"
+    ],
+    "files_extracted": 0,
+    "archived_source_or_auditor_executed": false
+  },
+  "expected_result_not_yet_available": true
+}

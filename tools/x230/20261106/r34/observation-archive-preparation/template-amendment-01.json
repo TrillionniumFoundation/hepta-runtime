@@ -1,0 +1,24 @@
+{
+  "actual_bindings_still_null": true,
+  "all_functions_except_summary_byte_identical": true,
+  "changes": [
+    "Require the already installed original 9076-byte holder report",
+    "Retain original held-agent closure and compare its completion/current parent source",
+    "Reconcile postflight identities for archive-present files",
+    "Record actual capacity execution disposition from original postflight",
+    "Declare Mac log bodies outside this x230 archive; report log identities are retained"
+  ],
+  "collector_or_original_auditors_executed": false,
+  "current_template": {
+    "bytes": 39886,
+    "file": "archive_r34_observation.unsealed-02.py",
+    "sha256": "3e717ec2bcb434daabcce3caeb106afbf588ad5b1b2328207f8ff443a50db65f"
+  },
+  "diff": "--- unsealed-01\n+++ unsealed-02\n@@ -141,6 +141,7 @@\n  'external/r16/r34-cancel-recovery-01/report.json',\n  'observation-holder-native-01.json',\n  'observation-holder-read-01.json',\n+ 'observation-holder-report-01.json',\n  'observation-postflight-01.json')\n PINNED = {**STATIC_PINS, **(ACTUAL['sha256'] if ACTUAL is not None else {})}\n REQUIRED = tuple(sorted(set(STATIC_PINS) | set(DYNAMIC_REQUIRED)))\n@@ -307,6 +308,8 @@\n     monitor = read('campaign-01/compiler-monitor.json')\n     monitor_audit = read('campaign-01/compiler-monitor.audit.json')\n     postflight = read('observation-postflight-01.json')\n+    holder = read('observation-holder-report-01.json')\n+    need(holder.get('schema') == 'hepta-x230-r21-held-agent-campaign/v1', 'original holder report schema differs')\n     need(postflight.get('schema') == 'hepta-r34-rejected-observation-owner-postflight/v1'\n          and postflight.get('original_observation_job_id') == HOLDER_JOB\n          and postflight.get('normal_lifecycle_started') is False\n@@ -401,6 +404,14 @@\n         receipt['holder_completion'] = lines[-1] if lines else None\n         native_receipts[label] = receipt\n \n+    holder_completion = native_receipts['observation-01']['holder_completion'] or {}\n+    if any(holder_completion.get(key) != holder.get(key) for key in ('passed', 'remote_returncode', 'owned_agent_reaped')):\n+        errors.append('original holder completion and full holder report differ')\n+    if holder.get('remote_script_sha256') != PINNED['tools-01/r34_campaign.py']:\n+        errors.append('original holder executed a different parent source')\n+    for name, identity in postflight.get('originals', {}).items():\n+        if name in data:\n+            binding(identity, 'postflight original ' + name)\n     if any(namespace.values()):\n         errors.append('normal lifecycle/materialization paths exist despite the original unrun postflight')\n     if set(postflight.get('normal_lifecycle_paths_absent', [])) != set(NAMESPACE_PATHS[:3]):\n@@ -434,6 +445,15 @@\n         'original_recovery_intentional_crash': recovery.get('intentional_crash'),\n         'boundary_correctness': gates['boundary'], 'cancel_recovery_correctness_canary': gates['lifecycle'],\n         'native_receipts': native_receipts,\n+        'original_holder_report': {key: holder.get(key) for key in ('schema', 'passed',\n+            'holder_script_sha256', 'remote_script_sha256', 'remote_returncode', 'automatic_ssh_retries',\n+            'services_modified', 'owned_agent_reaped', 'owned_agent_returncode',\n+            'owned_agent_directory_absent_after_context', 'owned_agent_socket_absent_after_context')},\n+        'holder_log_identities_retained_in_full_report': True,\n+        'mac_holder_log_file_bodies_copied_into_this_archive': False,\n+        'capacity_component': {'build_or_campaign_started_by_coordinator':\n+            postflight.get('capacity_build_or_campaign_started_by_coordinator'),\n+            'capacity_established': False, 'candidate_adopted': False},\n         'normal_lifecycle': {'materialization_job_id': None,\n             'materialization_native_state': None, 'materialization_native_exit_code': None,\n             'materialization_started': False, 'normal_lifecycle_started': False,\n",
+  "original_template": {
+    "bytes": 38338,
+    "file": "archive_r34_observation.unsealed.py",
+    "sha256": "d740fbf0acd62d94a16926d4b33eb1cfa02c789c4aae662c061c4b520a2a5755"
+  },
+  "schema": "hepta-r34-observation-template-original-holder-amendment/v1"
+}

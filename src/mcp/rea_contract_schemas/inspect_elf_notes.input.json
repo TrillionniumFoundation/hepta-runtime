@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "examples": [
+    {
+      "path": "/artifacts/program"
+    }
+  ],
+  "properties": {
+    "max_entries": {
+      "default": 32,
+      "description": "Maximum note entries to examine across every table; exceeding the budget fails without partial success",
+      "maximum": 256,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "max_file_bytes": {
+      "default": 67108864,
+      "description": "Maximum stable artifact bytes to read (default 64 MiB)",
+      "maximum": 536870912,
+      "minimum": 64,
+      "type": "integer"
+    },
+    "path": {
+      "description": "Absolute filesystem path to an ELF image",
+      "minLength": 1,
+      "pattern": "^[^\\x00]*$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "type": "object"
+}

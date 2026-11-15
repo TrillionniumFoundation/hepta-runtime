@@ -1,0 +1,67 @@
+   Compiling hepta-runtime v0.1.0 (/home/qian-qi/hepta-runtime-dc-functional-20261013)
+error[E0716]: temporary value dropped while borrowed
+   --> src/mcp/server.rs:897:15
+    |
+897 |         let owner = self.search_owner.as_deref().as_deref()
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ creates a temporary value which is freed while still in use
+898 |             .ok_or_else(|| "search session entropy unavailable".to_string())?;
+    |                                                                              - temporary value is freed at the end of this statement
+899 |         runtime::search_jobs::search_start(owner, params)
+    |                                            ----- borrow later used here
+    |
+help: consider using a `let` binding to create a longer lived value
+    |
+897 ~         let binding = self.search_owner.as_deref();
+898 ~   let owner = binding.as_deref()
+    |
+
+error[E0716]: temporary value dropped while borrowed
+   --> src/mcp/server.rs:918:15
+    |
+918 |         let owner = self.search_owner.as_deref().as_deref()
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ creates a temporary value which is freed while still in use
+919 |             .ok_or_else(|| "search session entropy unavailable".to_string())?;
+    |                                                                              - temporary value is freed at the end of this statement
+920 |         runtime::search_jobs::search_results(owner, params)
+    |                                              ----- borrow later used here
+    |
+help: consider using a `let` binding to create a longer lived value
+    |
+918 ~         let binding = self.search_owner.as_deref();
+919 ~   let owner = binding.as_deref()
+    |
+
+error[E0716]: temporary value dropped while borrowed
+   --> src/mcp/server.rs:939:15
+    |
+939 |         let owner = self.search_owner.as_deref().as_deref()
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ creates a temporary value which is freed while still in use
+940 |             .ok_or_else(|| "search session entropy unavailable".to_string())?;
+    |                                                                              - temporary value is freed at the end of this statement
+941 |         runtime::search_jobs::search_list(owner, params)
+    |                                           ----- borrow later used here
+    |
+help: consider using a `let` binding to create a longer lived value
+    |
+939 ~         let binding = self.search_owner.as_deref();
+940 ~   let owner = binding.as_deref()
+    |
+
+error[E0716]: temporary value dropped while borrowed
+   --> src/mcp/server.rs:960:15
+    |
+960 |         let owner = self.search_owner.as_deref().as_deref()
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ creates a temporary value which is freed while still in use
+961 |             .ok_or_else(|| "search session entropy unavailable".to_string())?;
+    |                                                                              - temporary value is freed at the end of this statement
+962 |         runtime::search_jobs::search_stop(owner, params)
+    |                                           ----- borrow later used here
+    |
+help: consider using a `let` binding to create a longer lived value
+    |
+960 ~         let binding = self.search_owner.as_deref();
+961 ~   let owner = binding.as_deref()
+    |
+
+For more information about this error, try `rustc --explain E0716`.
+error: could not compile `hepta-runtime` (bin "hepta-runtime" test) due to 4 previous errors

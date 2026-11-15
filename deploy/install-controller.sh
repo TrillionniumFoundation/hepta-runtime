@@ -7,14 +7,17 @@ fi
 binary=$1
 config=$2
 version=$3
+[[ $version =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Invalid release identifier" >&2; exit 2; }
 script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 if ! id -u hepta-runtime >/dev/null 2>&1; then
   useradd --system --home-dir /var/lib/hepta-runtime --create-home --shell /bin/bash hepta-runtime
 fi
 install -d -o hepta-runtime -g hepta-runtime -m 0700 \
   /var/lib/hepta-runtime /var/lib/hepta-runtime/.ssh \
-  /var/lib/hepta-runtime/state /var/lib/hepta-runtime/jobs \
-  /var/lib/hepta-runtime/workspaces
+  /var/lib/hepta-runtime/state /var/lib/hepta-runtime/jobs
+getent group hepta-workspace >/dev/null || groupadd --system hepta-workspace
+usermod -aG hepta-workspace hepta-runtime
+install -d -o hepta-runtime -g hepta-workspace -m 2770 /var/lib/hepta-runtime/workspaces
 install -d -o root -g root -m 0755 "/opt/hepta-runtime/releases/$version"
 install -o root -g root -m 0755 "$binary" "/opt/hepta-runtime/releases/$version/hepta-runtime"
 ln -sfn "/opt/hepta-runtime/releases/$version" /opt/hepta-runtime/current
@@ -31,6 +34,7 @@ install -o root -g root -m 0644 "$script_dir/hepta-runtime.service" \
 install -o root -g root -m 0644 "$script_dir/hepta-runtime-tunnel.service" \
   /etc/systemd/system/hepta-runtime-tunnel.service
 loginctl enable-linger hepta-runtime
+install -o root -g root -m 0755 "$(dirname "$0")/provision-tunnel.py" /usr/local/sbin/hepta-runtime-provision-tunnel
 systemctl daemon-reload
 systemctl enable --now hepta-runtime.service
 systemctl --no-pager --full status hepta-runtime.service

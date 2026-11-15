@@ -1,0 +1,25 @@
+# V10 private operation candidate — qualification remains false
+
+This unpublished candidate starts from pushed V9 source commit 50372629e0522d19b5bc4c1a800bfc311e4597f9. Later parent commits containing V9 evidence or preflight fixes do not retroactively relabel this base. Desktop Commander remains the rescue channel.
+
+Four new operation_start/status/result/cancel tools retain immutable operation IDs, let controller-owned read futures survive MCP reconnects, and retrieve paginated encrypted original native SDK payload bytes. The closed typed dispatcher delegates ten native readonly operations: read_multiple_files, file_info, binary_read, process_status, process_read, process_wait, process_list, hardware_snapshot, service_status and network_inspect. It preserves the existing host, filesystem, exec and privilege policies and accepts no arbitrary tool/executable, recursive operation/history control or privileged action.
+
+Start and cancel have readOnly=false because they modify controller/durable state. Status/result have readOnly=true. Completion means native SDK bytes were generated, not delivery, remote termination, successful business work or complete Desktop Commander replacement.
+
+Private HTTP scopes derive four separate AEAD/request/key/private-policy HKDF/HMAC domains from the verified configured bearer, never the public persisted owner hash. People sharing a bearer share the scope; this provides no authenticated ChatGPT caller or tenant isolation. Stdio uses independent ephemeral CSPRNG keys and cannot decrypt earlier-session results after restart. Keys are not serialized/logged. Encryption protects a storage reader without the token, not a token/same-UID holder or whole-storage rollback.
+
+Token and policy configuration are read at controller startup. Changes require controller restart; live file replacement does not instantly revoke an existing controller. A new token/policy after restart denies old operation ownership/retrieval.
+
+The retained family is original Complete(CallToolResult) success/tool-error or ErrorData RPC-error serialization, before operation metadata and transport normalization. Extra serialization buffers are zeroizing and bounded. Limits are 1 MiB original payload, 1,048,660-byte encrypted packet, 16,384 original bytes per result page plus bounded base64/metadata. Overflow, storage or audit failure may leave unknown status and unavailable output; that does not authorize replay or prove the underlying operation failed.
+
+V9 and V10 share 8 global/4 per-owner active slots. Separate immutable, non-evicted tombstones cap used keys at 128 per owner/512 globally. Full capacity refuses new keys. This finite lifetime capacity does not establish continuous generic Desktop Commander parity. Existing-key/status/result lookup does not take a new execution permit, including during shutdown. Both families freeze admission synchronously before concurrent shutdown waits.
+
+Anchored private FD graphs bind primary/occupancy/intent/outcome/payload to one ledger. Missing, corrupt, foreign or incomplete graphs deny lookup/replay without reconstruction. Metadata and payload readers validate same-FD private snapshots. Redacted audit eviction alone may leave retained result retrieval available; corrupt/permission errors are not treated as ordinary eviction.
+
+Cancellation selects only an owned readonly future. Completed payload bytes win simultaneous late cancellation; settlement is not cancellable. No arbitrary process is signaled and remote work is not promised to stop. Unfinished work after crash/restart stays unknown without automatic execution/replay.
+
+Preserved R5 evidence is 26 crypto +26 operation focused tests, strict lint/debug build on FP3a9106b6fa774758590a94c2506eaded97d3e794cc34823767f93597d2ecdbb0. Export-r1 verified exact 62 predecessors plus four new definitions only. These results do not cover later R6 policy-oracle, metadata-snapshot and double-ready cancellation fixes. New source/primitive manifests and fresh tests must bind the updated source.
+
+The native acceptance harness uses disposable private HTTP controllers and an exact readonly local SSH-helper adapter. It must never be called six-host, real SSH, production or business acceptance. Actual native execution, full Rust/release checks, new contract review, fresh six-host evidence, fault recovery, rollback and real business replacement remain required.
+
+Further engineering is required for generic effectful operations (durable original inner effect identity before dispatch, shielded settlement and truthful cancel), view/document/image retention, sustained quota/maintenance behavior and authenticated caller/platform approval boundaries. A private credential cannot manufacture sudo/privileged caller approval or platform approval. Ordinary source implementation/tests need no new user permission. Any live privileged action, administrator connector refresh or final cutover must be tied to its actual authorization and stated blocker by the root owner.

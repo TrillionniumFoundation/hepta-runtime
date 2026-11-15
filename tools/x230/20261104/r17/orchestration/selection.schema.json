@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "R17 final measurement selection",
+  "type": "object",
+  "required": ["schema", "selected_workers", "arena_max", "baseline", "candidate", "qualification_report", "implementation_ready", "source_freeze", "configuration_basis", "selection_reason"],
+  "properties": {
+    "schema": {"const": "hepta-x230-r17-final-measurement-selection/v1"},
+    "selected_workers": {"type": "integer", "enum": [1, 2, 4]},
+    "arena_max": {"const": 1},
+    "baseline": {"$ref": "#/$defs/artifact"},
+    "candidate": {"$ref": "#/$defs/artifact"},
+    "qualification_report": {"$ref": "#/$defs/artifact"},
+    "implementation_ready": {"$ref": "#/$defs/artifact"},
+    "source_freeze": {"$ref": "#/$defs/artifact"},
+    "selection_reason": {"type": "string", "minLength": 1},
+    "configuration_basis": {
+      "type": "array", "minItems": 1, "maxItems": 4,
+      "items": {
+        "type": "object", "required": ["role", "report", "independent_analysis"],
+        "properties": {
+          "role": {"enum": ["selection", "context"]},
+          "report": {"$ref": "#/$defs/artifact"},
+          "independent_analysis": {"$ref": "#/$defs/artifact"},
+          "selected_arm": {"enum": ["A", "B", null]}
+        },
+        "allOf": [{"if": {"properties": {"role": {"const": "selection"}}}, "then": {"required": ["selected_arm"], "properties": {"selected_arm": {"enum": ["A", "B"]}}}}]
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object", "required": ["path", "sha256"], "additionalProperties": false,
+      "properties": {"path": {"type": "string", "pattern": "^/"}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+    }
+  }
+}

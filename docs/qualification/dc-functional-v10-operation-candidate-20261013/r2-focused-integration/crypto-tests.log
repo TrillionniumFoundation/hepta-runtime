@@ -1,0 +1,184 @@
+   Compiling hepta-runtime v0.1.0 (/home/qian-qi/hepta-runtime-operation-v10-20261013)
+error[E0308]: arguments to this function are incorrect
+    --> src/mcp/runtime/operation_async.rs:1317:39
+     |
+1317 |         tokio::task::spawn_blocking(move || lookup_key_at(&rr, &ro, &rh, &rq, &rp)).await??
+     |                                             ^^^^^^^^^^^^^
+     |
+note: expected `&str`, found `&Result<String, CryptoError>`
+    --> src/mcp/runtime/operation_async.rs:1317:63
+     |
+1317 |         tokio::task::spawn_blocking(move || lookup_key_at(&rr, &ro, &rh, &rq, &rp)).await??
+     |                                                                     ^^^
+     = note: expected reference `&str`
+                found reference `&std::result::Result<std::string::String, operation_crypto::CryptoError>`
+note: expected `&str`, found `&Result<String, CryptoError>`
+    --> src/mcp/runtime/operation_async.rs:1317:68
+     |
+1317 |         tokio::task::spawn_blocking(move || lookup_key_at(&rr, &ro, &rh, &rq, &rp)).await??
+     |                                                                          ^^^
+     = note: expected reference `&str`
+                found reference `&std::result::Result<std::string::String, operation_crypto::CryptoError>`
+note: function defined here
+    --> src/mcp/runtime/operation_async.rs:830:4
+     |
+ 830 | fn lookup_key_at(
+     |    ^^^^^^^^^^^^^
+...
+ 833 |     hash: &str,
+     |     ----------
+ 834 |     request: &str,
+     |     -------------
+
+error[E0308]: arguments to this function are incorrect
+    --> src/mcp/runtime/operation_async.rs:1333:39
+     |
+1333 |         tokio::task::spawn_blocking(move || lookup_key_at(&rr, &ro, &rh, &rq, &rp)).await??
+     |                                             ^^^^^^^^^^^^^
+     |
+note: expected `&str`, found `&Result<String, CryptoError>`
+    --> src/mcp/runtime/operation_async.rs:1333:63
+     |
+1333 |         tokio::task::spawn_blocking(move || lookup_key_at(&rr, &ro, &rh, &rq, &rp)).await??
+     |                                                                     ^^^
+     = note: expected reference `&str`
+                found reference `&std::result::Result<std::string::String, operation_crypto::CryptoError>`
+note: expected `&str`, found `&Result<String, CryptoError>`
+    --> src/mcp/runtime/operation_async.rs:1333:68
+     |
+1333 |         tokio::task::spawn_blocking(move || lookup_key_at(&rr, &ro, &rh, &rq, &rp)).await??
+     |                                                                          ^^^
+     = note: expected reference `&str`
+                found reference `&std::result::Result<std::string::String, operation_crypto::CryptoError>`
+note: function defined here
+    --> src/mcp/runtime/operation_async.rs:830:4
+     |
+ 830 | fn lookup_key_at(
+     |    ^^^^^^^^^^^^^
+...
+ 833 |     hash: &str,
+     |     ----------
+ 834 |     request: &str,
+     |     -------------
+
+error[E0308]: mismatched types
+    --> src/mcp/runtime/operation_async.rs:1351:13
+     |
+1351 |         key_hash: hash,
+     |                   ^^^^ expected `String`, found `Result<String, CryptoError>`
+     |
+     = note: expected struct `std::string::String`
+                  found enum `std::result::Result<std::string::String, operation_crypto::CryptoError>`
+help: use the `?` operator to extract the `std::result::Result<std::string::String, operation_crypto::CryptoError>` value, propagating a `Result::Err` value to the caller
+     |
+1351 |         key_hash: hash?,
+     |                       +
+
+error[E0308]: mismatched types
+    --> src/mcp/runtime/operation_async.rs:1352:17
+     |
+1352 |         request_hash: request,
+     |                       ^^^^^^^ expected `String`, found `Result<String, CryptoError>`
+     |
+     = note: expected struct `std::string::String`
+                  found enum `std::result::Result<std::string::String, operation_crypto::CryptoError>`
+help: use the `?` operator to extract the `std::result::Result<std::string::String, operation_crypto::CryptoError>` value, propagating a `Result::Err` value to the caller
+     |
+1352 |         request_hash: request?,
+     |                              +
+
+error[E0308]: mismatched types
+    --> src/mcp/runtime/operation_async.rs:1408:56
+     |
+1408 |                     match crypto_binding(&owned, kind).and_then(|aad| crypto.seal(&aad, &bytes)) {
+     |                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<_, Error>`, found `Result<Vec<u8>, CryptoError>`
+     |
+     = note: expected enum `std::result::Result<_, anyhow::Error>`
+                found enum `std::result::Result<Vec<u8>, operation_crypto::CryptoError>`
+help: use `?` to coerce and return an appropriate `Err`, and wrap the resulting value in `Ok` so the expression remains of type `Result`
+     |
+1408 |                     match crypto_binding(&owned, kind).and_then(|aad| Ok(crypto.seal(&aad, &bytes)?)) {
+     |                                                                       +++                         ++
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+    --> src/mcp/runtime/operation_async.rs:1409:10
+     |
+1409 |                         Ok(packet) => {
+     |                            ^^^^^^ doesn't have a size known at compile-time
+     |
+     = help: the trait `Sized` is not implemented for `[u8]`
+     = note: all local variables must have a statically known size
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+    --> src/mcp/runtime/operation_async.rs:1409:7
+     |
+1409 |                         Ok(packet) => {
+     |                         ^^^^^^^^^^ doesn't have a size known at compile-time
+     |
+     = help: the trait `Sized` is not implemented for `[u8]`
+note: required by a bound in `std::prelude::v1::Ok`
+    --> /home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:557:17
+     |
+ 557 | pub enum Result<T, E> {
+     |                 ^ required by this bound in `std::prelude::v1::Ok`
+...
+ 561 |     Ok(#[stable(feature = "rust1", since = "1.0.0")] T),
+     |     -- required by a bound in this tuple variant
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+    --> src/mcp/runtime/operation_async.rs:1417:7
+     |
+1417 |                         Err(_) => false,
+     |                         ^^^^^^ doesn't have a size known at compile-time
+     |
+     = help: the trait `Sized` is not implemented for `[u8]`
+note: required by a bound in `Err`
+    --> /home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:557:17
+     |
+ 557 | pub enum Result<T, E> {
+     |                 ^ required by this bound in `Err`
+...
+ 566 |     Err(#[stable(feature = "rust1", since = "1.0.0")] E),
+     |     --- required by a bound in this tuple variant
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+    --> src/mcp/runtime/operation_async.rs:1408:41
+     |
+1408 |                     match crypto_binding(&owned, kind).and_then(|aad| crypto.seal(&aad, &bytes)) {
+     |                                                        ^^^^^^^^ doesn't have a size known at compile-time
+     |
+     = help: the trait `Sized` is not implemented for `[u8]`
+note: required by an implicit `Sized` bound in `std::result::Result::<T, E>::and_then`
+    --> /home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:1488:27
+     |
+1488 |     pub const fn and_then<U, F>(self, op: F) -> Result<U, E>
+     |                           ^ required by the implicit `Sized` requirement on this type parameter in `Result::<T, E>::and_then`
+
+error[E0308]: mismatched types
+    --> src/mcp/runtime/operation_async.rs:1067:2
+     |
+1066 |   fn crypto_binding(b: &Binding, kind: NativePayloadKind) -> Result<TrustedResultBinding> {
+     |                                                              ---------------------------- expected `std::result::Result<operation_crypto::TrustedResultBinding, anyhow::Error>` because of return type
+1067 | /     TrustedResultBinding::new(
+1068 | |         &b.request_id,
+1069 | |         &b.owner,
+1070 | |         &b.tool_name,
+...    |
+1075 | |         kind,
+1076 | |     )
+     | |_____^ expected `Result<TrustedResultBinding, Error>`, found `Result<TrustedResultBinding, ...>`
+     |
+     = note: expected enum `std::result::Result<_, anyhow::Error>`
+                found enum `std::result::Result<_, operation_crypto::CryptoError>`
+help: use `?` to coerce and return an appropriate `Err`, and wrap the resulting value in `Ok` so the expression remains of type `Result`
+     |
+1067 ~     Ok(TrustedResultBinding::new(
+1068 |         &b.request_id,
+ ...
+1075 |         kind,
+1076 ~     )?)
+     |
+
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `hepta-runtime` (bin "hepta-runtime" test) due to 10 previous errors

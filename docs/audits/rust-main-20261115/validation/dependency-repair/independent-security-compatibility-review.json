@@ -1,0 +1,163 @@
+{
+  "schema": "hepta.rust-dependency-independent-static-review.v1",
+  "reviewed_utc": "2026-11-15T08:36:34.243Z",
+  "status": "STATIC_REVIEW_PASS_PENDING_FINAL_CI",
+  "worktree": "/workspace/scratch/d72683e5e62a/runtime-dependency-fix",
+  "observed": {
+    "base_commit": "710fc78f424138afa4e03c4a405258f37b31fc0e",
+    "tracked_changes": [
+      "Cargo.lock",
+      "Cargo.toml",
+      "src/mcp/fs/remote.rs"
+    ],
+    "sha256": {
+      "Cargo.toml": "bf00111f6ec88df9df4d0d1d14c125a64ce4f6bdc6724ba20e70498f56dcae7f",
+      "Cargo.lock": "1509860cac0e7f26e6a845edfec1c87ae3bd92380ecaa357457e5263e861d631",
+      "src/mcp/fs/remote.rs": "a23f810f20d684b2a72cdf40e6fa4f4c3186237fa281ea3a8dcbeeed5039d888"
+    }
+  },
+  "scope": "Read-only comparison of the selected dependency sources, project call sites, final lockfile, and validation agent's resolved feature evidence. No builds, remote actions, credentials, or repository edits by this reviewer.",
+  "dependency_changes": [
+    {
+      "name": "rmcp",
+      "before": "3.4.1",
+      "after": "3.9.0"
+    },
+    {
+      "name": "rmcp-macros",
+      "before": "3.4.1",
+      "after": "3.9.0"
+    },
+    {
+      "name": "russh",
+      "before": "0.63.3",
+      "after": "0.65.0"
+    },
+    {
+      "name": "tokio",
+      "before": "1.53.1",
+      "after": "1.53.3"
+    },
+    {
+      "name": "crypto-bigint",
+      "before": "0.7.5",
+      "after": "0.7.11"
+    },
+    {
+      "name": "ctutils",
+      "before": "0.4.2",
+      "after": "0.4.8"
+    },
+    {
+      "name": "rustix",
+      "before": "1.1.5",
+      "after": "1.1.6"
+    }
+  ],
+  "lockfile": {
+    "packages": 362,
+    "added_package_names": [],
+    "removed_package_names": [],
+    "rsa_package_present": false,
+    "aws_lc_rs_or_sys_present": false,
+    "non_crates_io_registry_sources_added": false,
+    "qualification": "Version/source observations only; the independent RustSec audit result is maintained separately."
+  },
+  "findings": [
+    {
+      "topic": "RSA and crypto backend",
+      "result": "PASS",
+      "detail": "russh remains default-features=false with only flate2 and ring in the production feature tree. Neither rsa nor aws-lc-rs/aws-lc-sys appears in Cargo.lock. This claim is scoped to the Rust dependency build, not external OpenSSH algorithm configuration.",
+      "evidence": [
+        "Cargo.toml:82-87",
+        "/workspace/scratch/d72683e5e62a/runtime-dependency-validation/russh-production-features.txt"
+      ]
+    },
+    {
+      "topic": "Production MCP features",
+      "result": "PASS",
+      "detail": "The normal/build dependency feature tree has server, Streamable HTTP server, stdio and macros; it does not enable rmcp client, auth or HTTP client transports. The client feature in all-features metadata comes from the explicitly retained dev-dependency.",
+      "evidence": [
+        "Cargo.toml:76-79",
+        "Cargo.toml:97-99",
+        "/workspace/scratch/d72683e5e62a/runtime-dependency-validation/rmcp-production-features.txt",
+        "/workspace/scratch/d72683e5e62a/runtime-dependency-validation/selected-resolved-features.json"
+      ]
+    },
+    {
+      "topic": "Streamable HTTP unbounded schema cache",
+      "result": "FIX_PRESENT_IN_UPSTREAM_SOURCE",
+      "detail": "rmcp 3.4.1 retains unknown tool names in a shared tool_schemas map; 3.9.0 removes the map and tool_schema performs a direct get_service/get_tool lookup. Project auth remains outside the service. The old flaw was reachable by token holders despite loopback/token protections; those protections were not a fix for the cache.",
+      "evidence": [
+        "src/main.rs:310-329",
+        "rmcp-3.4.1/src/transport/streamable_http_server/tower.rs:1050-1060,1313-1331",
+        "rmcp-3.9.0/src/transport/streamable_http_server/tower.rs:1737-1744"
+      ]
+    },
+    {
+      "topic": "Legacy 2025-11-25 and frozen REA error text",
+      "result": "STATIC_COMPATIBILITY_PASS",
+      "detail": "Project ServerConfig explicitly advertises V_2026_07_28; its legacy test client explicitly uses V_2025_11_25 with Initialize. rmcp 3.9 negotiation returns an explicitly requested supported handshake version unchanged. Legacy complete resultType removal is unchanged for existing result types. ContentBlock source is byte-identical; CallToolResult::error constructs the same fields. No frozen fixture or expected error-text bytes should be changed or normalized to accommodate this upgrade.",
+      "evidence": [
+        "src/mcp/server.rs:4193-4214",
+        "src/mcp/server_tests.rs:125-150",
+        "rmcp-3.9.0/src/service/server.rs:478-488",
+        "rmcp-3.9.0/src/model.rs:5066-5082",
+        "rmcp-3.4.1/src/model/content.rs",
+        "rmcp-3.9.0/src/model/content.rs"
+      ]
+    },
+    {
+      "topic": "Actual SDK protocol changes",
+      "result": "DISCLOSED_NO_PROJECT_LOGIC_CHANGE_REQUIRED_BY_STATIC_REVIEW",
+      "detail": "LATEST changes from 2025-11-25 to 2026-07-28, but active project source has no direct LATEST/default-version caller and its server/tests pin their versions. Modern list/read results gain conservative missing cache hints ttlMs=0/cacheScope=private; tools/call error results are excluded. Modern outbound server-to-client requests are more strictly rejected; source scan found no ServerRequest/create_message/list_roots/elicit/send_request caller. Notifications use a separate path. These are not blanket claims of byte-identical behavior for every SDK operation.",
+      "evidence": [
+        "rmcp-3.9.0/src/model.rs:171-200,5112-5140",
+        "rmcp-3.9.0/src/handler/server.rs:310-333",
+        "rmcp-3.9.0/src/service/server.rs:53-72",
+        "src/mcp/server.rs",
+        "src/mcp/server_tests.rs"
+      ]
+    },
+    {
+      "topic": "HTTP Host, Origin and token guards",
+      "result": "PASS_UNCHANGED_POLICY",
+      "detail": "Both rmcp 3.4.1 and 3.9.0 default allowed_hosts to localhost/127.0.0.1/::1; this is not a new Host policy. Project loopback binding, mandatory token and outer Origin rejection remain unchanged. The checked-in bridge builds a loopback HTTPConnection and does not forward caller Host/Authorization/Cookie/Forwarded headers. No security default is disabled by the patch.",
+      "evidence": [
+        "src/main.rs:267-329",
+        "deploy/chatgpt_mcp_bridge.py:166-182",
+        "rmcp-3.4.1/src/transport/streamable_http_server/tower.rs:195,1541",
+        "rmcp-3.9.0/src/transport/streamable_http_server/tower.rs:344,1961"
+      ]
+    },
+    {
+      "topic": "Legacy SFTP host trust and certificate boundary",
+      "result": "PASS_BEHAVIOR_PRESERVED_BOUNDARY_RECORDED",
+      "detail": "Project legacy SFTP keeps TOFU: a known matching plain public key is accepted; an unrecognized key is learned and accepted; returned mismatch/error is rejected. Runtime operator SSH separately uses StrictHostKeyChecking=yes. russh negotiation.rs is byte-identical across 0.63.3/0.65.0, including empty host_key_certificates defaults. known_hosts.rs differs only by equivalent if-let formatting. The library verifies the KEX signature; certificate CA/principal validation is the handler's responsibility. The corrected project comment accurately describes that boundary without changing trust behavior. New 0.65 certificate nesting checks harden decoding and do not silently enable certificate algorithms.",
+      "evidence": [
+        "src/mcp/fs/remote.rs:296-339,763-766",
+        "src/mcp/runtime/ssh.rs:425",
+        "src/mcp/runtime/ssh_observation_pool.rs:726-764",
+        "russh-0.65.0/src/negotiation.rs:72-90,212",
+        "russh-0.65.0/src/client/kex.rs:293-307"
+      ]
+    },
+    {
+      "topic": "Tokio AsyncFd and ownership",
+      "result": "PASS_NO_PROJECT_UNSAFE_MIGRATION",
+      "detail": "No AsyncFd use was found in project src, russh 0.65 library source, or rmcp 3.9 library source. Tokio 1.53.3 deprecates unsafe-in-practice AsRawFd constructors in favor of explicit unsafe register with lifetime validity requirements. This patch adds no project unsafe code or descriptor ownership changes. rmcp's added stdio_pipes API uses OwnedFd/pipe wrappers; the existing stdio function remains the same and the project did not opt into the new API.",
+      "evidence": [
+        "tokio-1.53.3/src/io/async_fd.rs:212-277,899-980",
+        "rmcp-3.9.0/src/transport/io.rs:1-127",
+        "src/main.rs",
+        "git diff of src/mcp/fs/remote.rs"
+      ]
+    }
+  ],
+  "review_limitations": [
+    "Compilation, Clippy, RustSec rescan, and exact final-head hosted CI are owned by the validation/root agents and were not re-run by this reviewer.",
+    "Static review does not claim production deployment qualification or complete equivalence of all upstream SDK behavior.",
+    "The cleanup operation must receive the final changed candidate, fresh verifier PASS, and new successful CI run IDs before merge/default switch/deletion."
+  ],
+  "source_root": "/home/agent/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f"
+}

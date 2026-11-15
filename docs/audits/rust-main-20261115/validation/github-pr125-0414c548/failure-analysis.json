@@ -1,0 +1,69 @@
+{
+  "schema": "hepta.pr_ci_failure_analysis.v1",
+  "head": "0414c548c46a2e16a0b58e7595bde7a8c44359ea",
+  "observed_at": "2026-11-15T09:49:09.096Z",
+  "classification": "dependency_upgrade_stdio_eof_framing_expectation_mismatch",
+  "affected_jobs": [
+    132758637664,
+    132758637878
+  ],
+  "actual_test": "mcp::rea_mcp_transport::tests::sdk_bom_crlf_and_final_line_at_eof_keep_their_behavior",
+  "actual_panic": "complete request",
+  "panic_location": "src/mcp/rea_mcp_transport_tests.rs:17:31",
+  "backtrace": "Not emitted; runner log advises RUST_BACKTRACE=1. No invented stack trace.",
+  "per_job_counts": {
+    "exact_head": {
+      "job_id": 132758637664,
+      "all_features": {
+        "run": 2630,
+        "passed": 2629,
+        "failed": 1,
+        "skipped": 44,
+        "execution_seconds": 245.018,
+        "status": "failed"
+      },
+      "no_default_features": {
+        "status": "not_run_due_to_prior_failure"
+      },
+      "later_gates": {
+        "status": "not_run_due_to_prior_failure"
+      },
+      "log": "rust-exact-43696649514-job-132758637664.log"
+    },
+    "prospective_merge": {
+      "job_id": 132758637878,
+      "all_features": {
+        "run": 2630,
+        "passed": 2629,
+        "failed": 1,
+        "skipped": 44,
+        "execution_seconds": 215.114,
+        "status": "failed"
+      },
+      "no_default_features": {
+        "status": "not_run_due_to_prior_failure"
+      },
+      "later_gates": {
+        "status": "not_run_due_to_prior_failure"
+      },
+      "log": "rust-prospective-43696649514-job-132758637878.log"
+    }
+  },
+  "source_evidence": {
+    "old_sdk": "rmcp 3.4.1 src/transport/async_rw.rs AsyncRwTransport::receive read_until",
+    "new_sdk": "rmcp 3.9.0 src/transport/async_rw.rs read_line/LineRead::Eof",
+    "mechanism": "3.4.1 read_until delivered non-empty bytes at EOF before returning zero on the next call. 3.9.0 bounded read_line only returns Line when it sees LF, and returns Eof on an empty fill_buf even when line_buf contains a final undelimited JSON value; receive then returns None.",
+    "unchanged": "BOM/CRLF trimming and JsonRpcMessageCodec decode/decode_eof/encoder region are unchanged across these versions; the changed path is production AsyncRwTransport, not direct codec API usage.",
+    "failing_loop_case": "The second existing test case uses no prefix and no suffix, so the valid JSON value reaches EOF without LF."
+  },
+  "not_observed": [
+    "Out of memory",
+    "SIGKILL",
+    "Disk full",
+    "Timeout",
+    "Frozen REA response byte ordering failure"
+  ],
+  "blocked_gates": "Both no-default nextest suites and later dedicated Python/release/smoke gates were skipped after the all-feature failure.",
+  "follow_up_policy": "Root explicitly chose current SDK-owned framing: preserve BOM+CRLF and LF acceptance, explicitly test old EOF acceptance becoming non-delivery with real SDK/adapter parity, and test bounded oversized-line recovery. No production shim, disabled size limit, frozen-fixture edit, or dependency downgrade is authorized by this diagnosis.",
+  "historical_outcome_immutable": true
+}

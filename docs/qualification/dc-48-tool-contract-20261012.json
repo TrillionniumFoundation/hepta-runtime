@@ -1,0 +1,119 @@
+{
+  "schema": "hepta-dc-tool-contract-v2-candidate-v1",
+  "recorded_at_utc": "2026-10-12T11:05:35.493758+00:00",
+  "source_commit_before_receipt": "f5d2aa9654a2dbc365ba47aa162b8f6c62bf89ca",
+  "old_contract": {
+    "path": "deploy/contracts/hepta-runtime-full-operator-v1.json",
+    "tool_count": 46,
+    "catalog_sha256": "c1662cd7231c29f5bff3c6624d9d96aa448ce88cb6b7a84aceb53f25bf3e064c",
+    "file_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e"
+  },
+  "new_contract": {
+    "path": "deploy/contracts/hepta-runtime-full-operator-v2.json",
+    "tool_count": 48,
+    "catalog_sha256": "2d360275fcd392eeff93eb6c4c172ddbf46334bde591ff280301e9a16ce2bd77",
+    "file_sha256": "0e7f9890fa769d72f262da29addedeb9501b92a5c4006ed3703ebb2fd97a9014",
+    "format_schema": "hepta-native-tool-contract-v1"
+  },
+  "old_46_tool_definitions_exactly_unchanged": true,
+  "only_new_tools": {
+    "directory_create": {
+      "description": "Create a directory tree only inside the configured controller-local workspace. Existing directories succeed without change, while files or symlink components are refused. No command execution, remote host selection, privilege escalation or overwrite. Linux only.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "inputSchema": {
+        "properties": {
+          "path": {
+            "description": "Directory path in the configured local controller workspace. Remote paths are refused.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      }
+    },
+    "file_move": {
+      "description": "Move one regular file between two configured controller-local workspace paths. Never overwrite an existing destination or follow source/parent symlinks. Requires an existing destination parent and same-device atomic rename support; no copy/delete fallback. This removes the old filename but retains the file inode. Linux only.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "inputSchema": {
+        "properties": {
+          "destination": {
+            "description": "Absent destination path with an existing non-symlink parent directory.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Existing local ordinary file to move, never a symlink or directory.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "destination"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "checks": {
+    "isolated_real_mcp": {
+      "schema": "hepta-dc-parity-independent-mcp-v1",
+      "complete": true,
+      "checks": [
+        "old 46 definitions unchanged; candidate adds exactly two separately annotated operations",
+        "48 native tools discovered; both new tool annotations truthful",
+        "real MCP directory create and idempotent existing directory",
+        "controller workspace isolation enforced before mkdir",
+        "symlink parent refused without side effects",
+        "same private runtime creates and then atomically moves a regular file",
+        "existing destination not overwritten",
+        "file move refuses symlink source",
+        "both file move endpoints constrained to controller roots"
+      ],
+      "tool_count": 48,
+      "chatgpt_origin": false,
+      "runtime_install_changed": false,
+      "desktop_commander_changed": false,
+      "public_gateway_started": false
+    },
+    "rust_native": {
+      "main_passed": 399,
+      "jobctl_passed": 8,
+      "ignored": 11,
+      "strict_clippy_pass": true,
+      "format_pass": true
+    },
+    "contract_v2_acceptance": "pass"
+  },
+  "current_live_services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2927",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "1270044",
+      "ActiveState": "active"
+    }
+  },
+  "live_full_operator_contract_still_v1": true,
+  "new_runtime_deployed": false,
+  "chatgpt_custom_app_refreshed": false,
+  "chatgpt_originated_new_tool_calls": 0,
+  "platform_denied_legacy_shell_or_doc_calls_replayed": false,
+  "public_gateway_started": false,
+  "upgrade_control": "Review exact v1→v2 diff and deploy native runtime + pinned private facade contract as one versioned rollout; do not assume client approval."
+}

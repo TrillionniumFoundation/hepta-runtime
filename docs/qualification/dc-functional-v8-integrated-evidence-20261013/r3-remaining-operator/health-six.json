@@ -1,0 +1,81 @@
+{
+  "schema": "hepta-host-health-native-acceptance-v1",
+  "origin": "native_python_mcp_client",
+  "binary_sha256": "c0a082bcbb361e9f43d77a41351f8df7cce7cd0065f50d63b006a5c870e1784e",
+  "checks": [
+    {
+      "check": "read-only schema and exact bounded arguments",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "health cannot enable execution, PTY or writes",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "caller target and command overrides rejected",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "main authenticated fixed SSH health roundtrip",
+      "result": "passed",
+      "detail": {
+        "authenticated": true,
+        "diagnostics_redacted": true,
+        "host": "main",
+        "measurement": "SSH invocation roundtrip including connection setup or reuse, authentication, remote shell startup and fixed response; not ICMP RTT.",
+        "platform": "linux",
+        "reachable": true,
+        "schema": "hepta-host-health-v1",
+        "ssh_roundtrip_ms": 391.607265,
+        "status": "healthy",
+        "timeout_ms": 10000,
+        "transport": "ssh"
+      }
+    },
+    {
+      "check": "rog authenticated fixed SSH health roundtrip",
+      "result": "passed",
+      "detail": {
+        "authenticated": true,
+        "diagnostics_redacted": true,
+        "host": "rog",
+        "measurement": "SSH invocation roundtrip including connection setup or reuse, authentication, remote shell startup and fixed response; not ICMP RTT.",
+        "platform": "linux",
+        "reachable": true,
+        "schema": "hepta-host-health-v1",
+        "ssh_roundtrip_ms": 332.940267,
+        "status": "healthy",
+        "timeout_ms": 10000,
+        "transport": "ssh"
+      }
+    },
+    {
+      "check": "pocket4 authenticated fixed SSH health roundtrip",
+      "result": "passed",
+      "detail": {
+        "authenticated": true,
+        "diagnostics_redacted": true,
+        "host": "pocket4",
+        "measurement": "SSH invocation roundtrip including connection setup or reuse, authentication, remote shell startup and fixed response; not ICMP RTT.",
+        "platform": "linux",
+        "reachable": true,
+        "schema": "hepta-host-health-v1",
+        "ssh_roundtrip_ms": 323.95797999999996,
+        "status": "healthy",
+        "timeout_ms": 10000,
+        "transport": "ssh"
+      }
+    }
+  ],
+  "complete": false,
+  "full_dc_replacement_qualified": false,
+  "installed_service_changes": false,
+  "dc_stopped": false,
+  "failure": {
+    "check": "ai395 authenticated fixed SSH health roundtrip",
+    "exception_type": "AssertionError"
+  }
+}

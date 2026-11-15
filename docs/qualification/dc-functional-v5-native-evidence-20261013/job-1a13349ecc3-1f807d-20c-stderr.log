@@ -1,0 +1,15 @@
+   Compiling hepta-runtime v0.1.0 (/home/qian-qi/hepta-runtime-dc-functional-20261013)
+error[E0432]: unresolved import `rmcp::model::Content`
+ --> src/mcp/runtime/multi_read.rs:8:36
+  |
+8 | use rmcp::{model::{CallToolResult, Content}, schemars};
+  |                                    ^^^^^^^ no `Content` in `model`
+  |
+help: a similar name exists in the module (notice the capitalization)
+  |
+8 - use rmcp::{model::{CallToolResult, Content}, schemars};
+8 + use rmcp::{model::{CallToolResult, content}, schemars};
+  |
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `hepta-runtime` (bin "hepta-runtime" test) due to 1 previous error

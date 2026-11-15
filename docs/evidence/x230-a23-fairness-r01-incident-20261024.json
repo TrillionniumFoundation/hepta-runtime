@@ -1,0 +1,163 @@
+{
+  "all_timed_rows_retained": 960,
+  "baseline_passed": false,
+  "binary_sha256": {
+    "A": "727c4661450fdb2a2a44b63f7f9442a5cd20ad854f1c26b043ac710b6fa2ea06",
+    "B": "64416b53b63ffe7eac05b4d9eb6750092279b5f6e25dbad5a8cfd31067d206a1"
+  },
+  "candidate_passed": true,
+  "complete_public_evidence_path": "docs/evidence/x230-a23-fairness-r01-20261024.json",
+  "complete_public_evidence_sha256": "ac5227a8ce12e08e3810bf98380f2d6eb6dfa1b6f2335e028005883ca6502f97",
+  "controller_stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "disposition": "retain complete failed experiment; do not emit a performance comparison",
+  "experiment": "A20/A23 fairness r01",
+  "findings": [
+    "The A20 and A23 spawn/proof/cleanup functions are unchanged; successful A23 rounds do not establish a fix for this shared path.",
+    "The acceptance predicate requires a pidfd, a successful terminal probe, and either confirmed termination or matching UID/executable inode/argv.",
+    "The generic error does not retain pidfd errno or the identity-read failure stage. A short-lived-process race, a resource failure, and an actual identity mismatch cannot be distinguished from this record.",
+    "The exact final refusal text is emitted only after stop_child and release return successfully. The original owned child was therefore reaped and removed from its ledger; this does not establish that its command never executed.",
+    "The shared pool stop token is cancelled before that cleanup. One explicit proof refusal was recorded alongside 179 other timed stopped/unavailable refusals and six final-output-check refusals.",
+    "All four controllers later exited zero through stdin EOF with no recorded reader errors, unmatched responses, or observed descendant survivors.",
+    "A separate same-parameter r02 will remain a distinct experiment, with r01 retained. Passing r02 would not resolve this unclassified shared lifecycle risk."
+  ],
+  "invalid_admission_gates": [
+    {
+      "cell": "balanced",
+      "round": 0,
+      "wave": 7
+    },
+    {
+      "cell": "hot_only",
+      "round": 0,
+      "wave": 0
+    },
+    {
+      "cell": "hot_only",
+      "round": 0,
+      "wave": 1
+    },
+    {
+      "cell": "hot_only",
+      "round": 0,
+      "wave": 2
+    },
+    {
+      "cell": "hot_only",
+      "round": 0,
+      "wave": 3
+    }
+  ],
+  "metadata_observations": {
+    "final_history_completed": 780,
+    "final_history_failed": 180,
+    "initial_cursors": 4,
+    "query_successes": 294,
+    "wave_queries": 290
+  },
+  "next_action": "Preserve the original proof predicate, stop timing and cleanup. Add opt-in fixed-category failure diagnostics to an isolated diagnostic build; do not weaken identity validation or retry execution.",
+  "non_timed_failures": [
+    {
+      "host": "ai395",
+      "native_error": "observation pool unavailable; no fallback or automatic retry",
+      "phase": "final_complete_outputs",
+      "round": 0,
+      "tool": "process_read"
+    },
+    {
+      "host": "mac",
+      "native_error": "observation pool unavailable; no fallback or automatic retry",
+      "phase": "final_complete_outputs",
+      "round": 0,
+      "tool": "process_read"
+    },
+    {
+      "host": "main",
+      "native_error": "observation pool unavailable; no fallback or automatic retry",
+      "phase": "final_complete_outputs",
+      "round": 0,
+      "tool": "process_read"
+    },
+    {
+      "host": "pocket4",
+      "native_error": "observation pool unavailable; no fallback or automatic retry",
+      "phase": "final_complete_outputs",
+      "round": 0,
+      "tool": "process_read"
+    },
+    {
+      "host": "rog",
+      "native_error": "observation pool unavailable; no fallback or automatic retry",
+      "phase": "final_complete_outputs",
+      "round": 0,
+      "tool": "process_read"
+    },
+    {
+      "host": "x230",
+      "native_error": "observation pool unavailable; no fallback or automatic retry",
+      "phase": "final_complete_outputs",
+      "round": 0,
+      "tool": "process_read"
+    }
+  ],
+  "performance_comparison_emitted": false,
+  "raw_report_sha256": "23ad2d70464391abf6ac5b42fd2c21c335b54f0c1aa1538d02ba6c70bf1dacaa",
+  "reproduction": {
+    "base_commit": "7da3a7ebaded8214bc65e69046b74e6251e21767",
+    "candidate_patch_path": "docs/experiments/x230-a23-scheduling.patch",
+    "candidate_patch_sha256": "a041b6b935daa911a1746d06e82c5118531c2c43847576e1b54c27b7cf4ab909",
+    "candidate_source_map_sha256": "5cf2e5cf8fca60e845a2c8f997abfc28017085bc809086a3ddb42448569a2b4f"
+  },
+  "resource_sampling_errors": {
+    "A20": 1,
+    "A23": 3,
+    "retained": true,
+    "total": 4
+  },
+  "round_counts": {
+    "0": {
+      "timed_attempts": 240,
+      "timed_successes": 60,
+      "version": "A"
+    },
+    "1": {
+      "timed_attempts": 240,
+      "timed_successes": 240,
+      "version": "B"
+    },
+    "2": {
+      "timed_attempts": 240,
+      "timed_successes": 240,
+      "version": "B"
+    },
+    "3": {
+      "timed_attempts": 240,
+      "timed_successes": 240,
+      "version": "A"
+    }
+  },
+  "schema": "hepta-x230-observation-incident/v1",
+  "source_audit": {
+    "unchanged_source_block_sha256": "3b0292cbe76d4eac5fdf0ccc772c2cfa98e836cd0315a8dbaede22a8e9f94231",
+    "unchanged_spawn_release_stop_child_bytes": 2996
+  },
+  "specific_proof_refusal": {
+    "cell": "balanced",
+    "elapsed_ms": 207.14012486860156,
+    "host": "x230",
+    "native_error": "observation SSH pidfd or post-exec identity refused; no fallback",
+    "ordinal": 5,
+    "round": 0,
+    "tool": "process_status",
+    "wave": 6
+  },
+  "timed_failure_counts": {
+    "observation SSH pidfd or post-exec identity refused; no fallback": 1,
+    "observation pool stopped before admission": 2,
+    "observation pool stopped before child creation": 4,
+    "observation pool stopped; no automatic retry": 3,
+    "observation pool unavailable; no fallback or automatic retry": 170
+  }
+}

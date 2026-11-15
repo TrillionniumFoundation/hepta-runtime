@@ -47,6 +47,14 @@ pub struct ViewCache {
 }
 
 impl ViewCache {
+	/// Publication can outlive its request. An owned publisher clears this
+	/// session directly, without relying on a request-local cache context.
+	pub(crate) fn forget_all(&self) {
+		if let Ok(mut entries) = self.entries.lock() {
+			entries.clear();
+		}
+	}
+
 	fn get(&self, key: &str) -> Option<String> {
 		self.entries.lock().ok()?.get(key).cloned()
 	}
@@ -65,6 +73,16 @@ impl ViewCache {
 	fn forget(&self, key: &str) {
 		if let Ok(mut entries) = self.entries.lock() {
 			entries.remove(key);
+		}
+	}
+
+	/// A directory relocation invalidates its cached descendants as well as
+	/// the directory key. Use an explicit separator boundary so `old` cannot
+	/// invalidate a sibling named `old2`. Other sessions keep separate caches.
+	fn forget_subtree(&self, key: &str) {
+		let prefix = format!("{}/", key.trim_end_matches('/'));
+		if let Ok(mut entries) = self.entries.lock() {
+			entries.retain(|name, _| name != key && !name.starts_with(&prefix));
 		}
 	}
 }
@@ -99,6 +117,14 @@ pub fn note_create(source: &PathSource, content: &str) {
 pub fn forget(source: &PathSource) {
 	let key = lock_key_for_source(source);
 	with_view_cache(|cache| cache.forget(&key));
+}
+
+/// Invalidate the directory itself and all cached file paths beneath it.
+/// Moving a directory makes every descendant's previous cache identity stale;
+/// invalidating only the directory key would retain misleading file deltas.
+pub fn forget_subtree(source: &PathSource) {
+	let key = lock_key_for_source(source);
+	with_view_cache(|cache| cache.forget_subtree(&key));
 }
 
 /// Render a whole-file view: the full file the first time (or when `full`),

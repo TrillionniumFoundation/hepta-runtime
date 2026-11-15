@@ -1,0 +1,113 @@
+{
+  "acceptance": {
+    "J_reevaluation": "every one of 320 saved expected-trajectory worlds; exact actions, abs utility error <= 2e-12 * (1 + abs(scientific J utility)); preserve all descriptive diagnostics",
+    "all_actions": "exact equality, on canonical and query nodes; no near-tie exemption",
+    "all_legal_Q": "absolute error <= 2e-12 * (1 + abs(reference_Q)), on canonical and query nodes",
+    "all_legal_masks": "exact equality",
+    "failure_policy": "retain all errors and measured costs, keep the planned denominator 320, no resampling, dropping worlds, editing protocol, changing tolerances, or changing frozen science files",
+    "frozen_query_table": "regenerated rows must exactly match saved scientific table SHA256 before export",
+    "graph_identity": "actual request bytes SHA256 bound to native output and exporter manifest"
+  },
+  "domains": [
+    "iid",
+    "ood"
+  ],
+  "export_sources_sha256": {
+    "bridge/bridge_io.py": "5c6befe1443c31500c71cda43d467bf42740e173ca9e1d8269356ff17fd8fc5c",
+    "bridge/build_graph.py": "ee376ec39bfc233b7043bb64e798ce3b76c8188bfe888ba1108fe58e79af0001",
+    "bridge/export_graphs.py": "f0c8139319a8c01b0d3a609cccce8cd5e526c1ccd90d55ed11c3f96a9c3cbdc0"
+  },
+  "fits": [
+    11,
+    23,
+    37,
+    53,
+    71
+  ],
+  "frozen_utc": "2026-11-05T00:57:24.153062+00:00",
+  "graph": {
+    "actions_per_node": 6,
+    "argmax": "first legal action using strict greater-than updates",
+    "arithmetic": "start each continuation Q at positive zero; in input branch order, if probability != 0, add probability * ((V_child + reward) - fee); no FMA, no reassociation",
+    "continue": {
+      "branches": [
+        {
+          "fee": "nonnegative actual f64 successor charges minus source charges",
+          "probability": "raw own-law f64 probability",
+          "reward": 0.0,
+          "successor": "earlier canonical node index"
+        }
+      ],
+      "kind": "continue"
+    },
+    "environment_truth_in_solver_payload": false,
+    "expected_maximum_nodes_per_world": 1564,
+    "expected_total_nodes": 246160,
+    "illegal": null,
+    "layers": [
+      "canonical_zero_charge_value",
+      "frozen_enumeration_representative_query"
+    ],
+    "maximum_branches_per_action": 3,
+    "maximum_continue_actions_per_node": 2,
+    "maximum_total_branches_per_node": 4,
+    "nodes_per_markov_key": 2,
+    "normalization": "none",
+    "order": "all canonical nodes sorted by descending tick and canonical Markov key; then representative query nodes in the same order; all successors refer to strictly earlier canonical nodes",
+    "probability_sum_absolute_tolerance": 1e-12,
+    "reference_continuation_Q_or_selected_actions_in_solver_payload": false,
+    "source_attestation_scope": "Python exporter binds the original source/checkpoint/public schedule to graph bytes. Native generic graph solver authenticates only its actual request and execution; it does not independently authenticate checkpoint physics.",
+    "terminal": {
+      "kind": "terminal",
+      "value": "finite f64 own-law STOP/SUBMIT value"
+    },
+    "total_edges_upper_bound": 984640,
+    "zero_probability_branches": "retained in input; skipped by solver exactly as original Oracle.q"
+  },
+  "known_markov_key_total": 123080,
+  "mathematical_reason_for_two_layers": "Frozen Oracle.q evaluates immediate fee differences using the enumerated representative's actual accumulated charges, but recursive cached V uses Oracle._state(key) with zero charges. These states are mathematically equivalent but their f64 fee differences can differ near exact action ties. Two DAG layers preserve the existing arithmetic before results are inspected; they are not a new policy.",
+  "native_execution_precondition": "Native owner freezes its exact compiled Rust source/build identity and complete MCP execution resource budget before reading native corpus outputs; graph export does not start native execution.",
+  "outer_controller_sha256": "1f778a5f16d5a5dce962bfd84ef70f33f16051dbd53ed14442c3e12253c22e69",
+  "resource_caps": {
+    "costs": "full export/import/startup/write cost, native process and RPC cost, comparison and complete J replay cost reported separately; source retrieval/build costs separately retained",
+    "export_worker_cpu_seconds": 300,
+    "export_worker_wall_seconds": 600,
+    "max_blob_bytes_exclusive": 480000,
+    "native_phase_budget_scope": "owner to freeze process/RPC cap and complete outer process measurement before execution",
+    "python_cpu_threads": 1,
+    "storage": "deterministic gzip, ten fit/domain aggregates; split compressed bytes deterministically into 479000-byte parts when required",
+    "verification_and_J_replay_cpu_seconds": 300,
+    "verification_and_J_replay_wall_seconds": 600
+  },
+  "rpc": {
+    "method": "weight_bellman_plan",
+    "per_request_edge_cap": 24576,
+    "per_request_json_bytes_cap": 8388608,
+    "per_request_node_cap": 4096,
+    "request_count": 320,
+    "request_hashes": "Exporter hashes exact canonical-Python argument bytes. Native separately returns a typed-Serde canonical request SHA256. Executor retains original argument SHA and native response identity; the two different serialization hashes are never conflated.",
+    "request_root": {
+      "states": [
+        {
+          "actions": "exactly six null/terminal/continue entries"
+        }
+      ]
+    },
+    "response_root": {
+      "states": [
+        {
+          "action": "first maximal legal action",
+          "q": "exactly six f64-or-null entries, null iff illegal",
+          "value": "finite f64"
+        }
+      ]
+    }
+  },
+  "schema": "hepta-own-bellman-native-engineering-replay-v1",
+  "scientific_protocol_sha256": "735df99e3366a5d9343e1642a8c370b8d3359169bc70a98572476c6747a88251",
+  "scientific_results_sha256": "f63cc5264b68fa5e05b60a21b9f306f9027d60d2c80cc02d8c8aff9aaac9501e",
+  "scope": "Engineering migration replay of all 320 already-scored TEST worlds. No new scientific candidate, holdout, efficacy qualification, optimization search, or change to the frozen scientific protocol.",
+  "status": "FROZEN_EXPORT_AND_REPLAY_ACCEPTANCE_BEFORE_NATIVE_EXECUTION",
+  "world_count": 320,
+  "worlds_per_fit_domain": 32
+}

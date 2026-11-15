@@ -1,0 +1,130 @@
+{
+  "archived_code_executed": 0,
+  "benchmark_replays": 0,
+  "candidate_adopted": false,
+  "core_files": {
+    "evidence_policy.py": {
+      "bytes": 12533,
+      "sha256": "5e7b8679a3d1aaa24bbc1dd827d7892016d324f25f48078c6347170d54b35f35"
+    },
+    "pack_r36_evidence.py": {
+      "bytes": 8301,
+      "sha256": "124826625635f65c5b5c5e52de7034fb20c523aac47bf003452fe999b332bdd2"
+    },
+    "scan_evidence.py": {
+      "bytes": 5533,
+      "sha256": "24d87ae04ce4d43fa0aaef6a2d322fe5d5292eb3002ec77fbf45332223092a2b"
+    },
+    "stable_xz_archive.py": {
+      "bytes": 14081,
+      "sha256": "8b7aa7ef3b3772da13ea4f7009d8c478e0c92bc207d65db3f45c23453097d7a2"
+    },
+    "verify_r36_evidence.py": {
+      "bytes": 9902,
+      "sha256": "c89ed01e2a5ad3cb1812bc2f8291465341faefcb66112943f04dc2c6413668a9"
+    }
+  },
+  "created_utc": "2026-11-06T10:59:50.136630+00:00",
+  "fixture_source": {
+    "bytes": 14256,
+    "sha256": "b553758300c7baf9b9fb1d1d253e908946e6f9d1548ca3a64b9db9d5208d15c4"
+  },
+  "implementation_fixture_receipt": {
+    "bytes": 2627,
+    "sha256": "77b0c6d133bf17dda8499151cf2a84f60d5f31a6b0fa348368512a5d4d7d144c"
+  },
+  "independent_validation": {
+    "depth_fixtures": "Pending shallow route retained; already processed depth3 content was observed being scanned again at depth2, exposing the nested secret.",
+    "no_fixture_failure": true,
+    "production_boundary_cases": [
+      {
+        "findings": [],
+        "unique_strings": 99999
+      },
+      {
+        "findings": [
+          "decoded-scan-budget-exceeded"
+        ],
+        "unique_strings": 100000
+      },
+      {
+        "findings": [
+          "decoded-scan-queue-exceeded"
+        ],
+        "unique_strings": 100001
+      },
+      {
+        "findings": [],
+        "json_null_values": 999999
+      },
+      {
+        "findings": [
+          "raw:json-scan-budget-exceeded"
+        ],
+        "json_null_values": 1000000
+      }
+    ],
+    "production_boundary_explanation": "Raw root counts as one processed node and the JSON list root counts as one JSON visit; exact thresholds are retained.",
+    "repeated_telemetry_and_hidden_secret": "Both JSON and JSONL with 160000 repeated strings scan without duplicate-queue failure; hidden synthetic token remains detected.",
+    "suite_command": "python3 -B -m unittest -v test_evidence_tools",
+    "suite_cwd": "r36-evidence-tools-v2",
+    "suite_elapsed_seconds_reported": 1.7,
+    "suite_returncode": 0,
+    "suite_scope": "local synthetic temporary fixtures, no real X230 paths or credential contents",
+    "suite_tests": 12,
+    "transformation_equivalence_cases": 250,
+    "transformation_equivalence_method": "125 three-transform combinations of identity/base64/hex/gzip/JSON applied to a synthetic token, plus 125 deterministic mixed-depth duplicate wrappers; compared old/new finding types (layer labels excluded), all equal."
+  },
+  "limitations": [
+    "This is a bounded credential-pattern scanner, not a claim of exhaustive secret detection. Existing depth and decoding scope remain unchanged.",
+    "The actual export02 archive had not been created at this review. Its original byte inventory, stage reports and full raw evidence require later independent verification.",
+    "The fresh02 installer is outside this core review; it must be separately reviewed without modifying this frozen core."
+  ],
+  "old_tools_unchanged": {
+    "evidence_policy.py": {
+      "bytes": 11312,
+      "sha256": "4e1119db0aa3e3bf5c911513a360b568239079d6a66f6cacba719b5d18c184c4"
+    },
+    "scan_evidence.py": {
+      "bytes": 4859,
+      "sha256": "c8a5004b520f591968610e5b31a8f1fc8722508ecbedc09270c95737503e65e8"
+    },
+    "tools-manifest.json": {
+      "bytes": 2108,
+      "sha256": "671ceabc288a65637bc7ccf8301bd3016abb9747c8fe93d4e8c849bdea186527"
+    }
+  },
+  "original_capture_failure": {
+    "bytes": 2129,
+    "sha256": "24ef364dc00258ad354ec5650950060ac8e91f823c6598d922b8a18452752332"
+  },
+  "original_capture_failure_preserved": true,
+  "original_stable_archive_helper_unchanged": true,
+  "passed": true,
+  "performance_outcome_unchanged": "R36 rejected by mandatory normal-lifecycle gates",
+  "remote_operations": 0,
+  "reviewed_invariants": [
+    "All seven secret regex byte patterns and regex flags, ENCODED and HEX_RUN patterns are identical to the original scanner.",
+    "Processed depth and pending work are separate. Enqueue rejects same/deeper repeats of already processed or pending bytes; a shallower arrival replaces the pending value or is re-enqueued after a deeper processed visit.",
+    "Dict pop removes one pending digest. The existing processed-depth check does not suppress the item itself; actual deep-then-shallow reprocessing was exercised.",
+    "The pending dictionary admits no more than 100000 distinct queued digests. Attempts beyond the bound add a finding. The processed node and expanded byte limits remain separately fail-closed.",
+    "JSON visited counts every popped JSON value, including repeated values; queue dedup does not discount parser visits.",
+    "Decoded budget failures remain findings, and pack/verifier refuse any finding; no silent truncation path was added.",
+    "Private-name/tree, owner, symlink, hardlink, ELF, opaque-container, and fixed-scope rules retain original behavior.",
+    "Additional archive scope is limited to evidence-tools-02 and the exact pinned original evidence-export-01/export-failure.json; other entries under export01 are metadata-only and not traversed.",
+    "Original failure body must be present as a payload with exact 2129-byte SHA identity; package_complete=false/phase=scan/candidate_adopted=false are preserved.",
+    "Capture and verification bind the five actual evidence-tools-02 bytes; original stage outcomes remain reported-only and candidate acceptance stays false."
+  ],
+  "reviewer": "/root/audit_perf_history",
+  "scan_limits": {
+    "MAX_DEPTH": 3,
+    "MAX_EXPANDED": 67108864,
+    "MAX_FILE": 33554432,
+    "MAX_JSON_VISITS": 1000000,
+    "MAX_NODES": 100000,
+    "values_unchanged": true
+  },
+  "schema": "hepta-r36-evidence-v2-independent-source-review/v1",
+  "scope": "Frozen five core tools and local fixtures; installer reviewed separately after creation. No real evidence export or remote action executed by this reviewer.",
+  "static_findings": []
+}

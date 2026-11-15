@@ -1,0 +1,60 @@
+{
+  "schema": "hepta-r23-reference-buffer-screen-plan/v1",
+  "frozen_at": "2026-11-05T04:51:36.177780+00:00",
+  "status": "prepared_only_not_compiled_or_run",
+  "baseline": "actual frozen R23 source; R22 accepted commit afec5354d1e0eca09f10ccabd73a01be2f14092c",
+  "profile_sha256": "a62169343c2a08c38d69925f33fdc7551cf4be7b4b7f50cf89683f652a8f853a",
+  "validation_sha256": "65fb35aaf7cafc8f561bf7cce5fcd0ffb3ad98b2328245ed88d5dfce45b3a056",
+  "source_map_sha256": "18d42b8f376760eb86c9fb5e185c87146ee814b0d2278e3aea3c1e1edfc042b9",
+  "component_sha256": "feace6f9bdb3420483f05bb5e7ca6272a82abb1c97b71efdeea31309a6a63924",
+  "source_input_count": 220,
+  "arms_bytes": [
+    16384,
+    65536
+  ],
+  "only_source_arm_difference": "VERIFY_BUFFER_BYTES constant; original PinnedFile/helpers, fixed-shell resolver and public load block copied verbatim",
+  "guard": "actual OwnerTicket::check_current method body with real CancellationToken and tokio::time::Instant in a thin field shape; no worker/admission/permit/lifecycle implementation",
+  "scenarios": [
+    "ssh",
+    "false",
+    "shell",
+    "public_triplet"
+  ],
+  "order": "ABBA per scenario per block",
+  "blocks": 3,
+  "iterations_per_cell": 256,
+  "warmups_per_scenario_arm": 8,
+  "sample_cells": 48,
+  "primary_metric": "thread CPU per complete public triplet; one verify of each file, fixed-shell resolution and outer current checks retained",
+  "gates": {
+    "public_triplet_thread_cpu_B_over_A_max": 0.8,
+    "false_thread_cpu_B_over_A_max": 1.02,
+    "shell_thread_cpu_B_over_A_max": 1.02
+  },
+  "secondary": [
+    "per-file CPU",
+    "wall time",
+    "process CPU",
+    "all per-block directions",
+    "equal-frequency sum of per-file CPU ratios"
+  ],
+  "compile": "one rustc +1.95.0 invocation reusing qualified opt-level=1 rlibs; LTO off, no Cargo invocation or dependency builds",
+  "execution_not_before": "R23 qualification and formal campaign have finished; root separately authorizes and schedules the component with no overlapping owned workload",
+  "time_budgets_seconds": {
+    "compile": 90,
+    "fixed_post_compile_quiescence": 30,
+    "component": 60
+  },
+  "automatic_retries": 0,
+  "candidate_adopted": false,
+  "early_stop": "Missing/ambiguous/changed rlibs, compile/link failure, incomplete records, failed preflight, or failed component gate stops this direction without Cargo fallback or parameter sweep.",
+  "private_input_access": "No private profile/config/known-hosts read or retained. Setup fingerprints only fixed SSH, false and resolved fixed system shell, then both arms perform original SHA-pinned load against those public fingerprints.",
+  "limits": [
+    "Component CPU is not release RPC or cluster throughput.",
+    "This is dev opt-level=1 plus no-LTO component code, not the production release binary optimizer context.",
+    "No worker/owner lifecycle, SSH/agent lookup, private input or whole-profile qualification.",
+    "64 KiB reduces checkpoints per byte; cancellation observation time and race-dependent error ordering can change. No hard cancellation-time bound is claimed.",
+    "Each active verification stack buffer grows 48 KiB. Both arms/references coexist; RSS is not comparable.",
+    "The global production constant also affects three private SHA inputs and SHA fallback; this public-only screen cannot establish their non-regression or authorize a global constant change."
+  ]
+}

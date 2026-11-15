@@ -1,0 +1,171 @@
+{
+  "schema": "hepta-search-effects-native-localhost-v1",
+  "complete": true,
+  "origin": "native_python_mcp_client",
+  "binary_sha256": "c0a082bcbb361e9f43d77a41351f8df7cce7cd0065f50d63b006a5c870e1784e",
+  "contract_sha256": "b64769210b9913fbdab28f7d0e95b7ef300d8710b3f1eeea74afcfac25b08318",
+  "harness_sha256": "fb1a246db2a2bdfbeb7171dfe3c58c463c2ebda655161a9ee4bf2c69eb174dc0",
+  "checks": [
+    {
+      "check": "pre-intent failure dispatches zero real SSH workers",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "start-drop-ack retains one worker same ID and reconciles without replay",
+      "result": "passed",
+      "detail": {
+        "search_id": "c307122a29f8adee14d3b57d161abf063d809969e32c0edb8e46d67678f09eca",
+        "start_rpc_count": 1,
+        "worker_identity_recorded": true
+      }
+    },
+    {
+      "check": "start-save-failure retains one worker same ID and reconciles without replay",
+      "result": "passed",
+      "detail": {
+        "search_id": "34f5d7a6dca005a18a511bdaab5c2886278112dbe7f1aa79145698b00f0cc3f7",
+        "start_rpc_count": 1,
+        "worker_identity_recorded": true
+      }
+    },
+    {
+      "check": "stop-drop-ack retains same worker identity and accepted cancellation without replay",
+      "result": "passed",
+      "detail": {
+        "search_id": "a2f11ec190b6408591057cd28c481775f6761acfb8a9deb9c74340f01e39abe2",
+        "start_rpc_count": 1,
+        "stop_rpc_count": 1
+      }
+    },
+    {
+      "check": "stop-save-failure retains same worker identity and accepted cancellation without replay",
+      "result": "passed",
+      "detail": {
+        "search_id": "48950ae65202c949fae3fe20556c5c3b4db4867483543182401c03d04577820d",
+        "start_rpc_count": 1,
+        "stop_rpc_count": 1
+      }
+    }
+  ],
+  "source_code_fingerprint": "067aa186f8597cd270d65e5a5b3e449337d17c84d35f74e263994d988622ddca",
+  "compiled_source_fingerprint_supplied": null,
+  "source_to_binary_link_qualified_by_harness": false,
+  "evidence": {
+    "source-map.json": {
+      "sha256": "517fe8295cf1f4a117aa5f810441e889bb57cc889b9e54a534473ad3d6b0b07b",
+      "bytes": 12951
+    },
+    "harness.py": {
+      "sha256": "fb1a246db2a2bdfbeb7171dfe3c58c463c2ebda655161a9ee4bf2c69eb174dc0",
+      "bytes": 17113
+    },
+    "c307122a29f8adee14d3b57d161abf063d809969e32c0edb8e46d67678f09eca-terminal.json": {
+      "sha256": "8dd1a0c7f8357a7b26a55e89d227ae7ef46608748871fc41c2820c570ed7905a",
+      "bytes": 660
+    },
+    "c307122a29f8adee14d3b57d161abf063d809969e32c0edb8e46d67678f09eca-worker.json": {
+      "sha256": "2647007dd7e3b50e47fd240e11e6353937ef3aa621d2549963ee1a7586a5db59",
+      "bytes": 205
+    },
+    "34f5d7a6dca005a18a511bdaab5c2886278112dbe7f1aa79145698b00f0cc3f7-terminal.json": {
+      "sha256": "a0a94c5c1d7bd6ab6b0d68333246b77a88a2afed62d6811184b05c3dc0620b62",
+      "bytes": 660
+    },
+    "34f5d7a6dca005a18a511bdaab5c2886278112dbe7f1aa79145698b00f0cc3f7-worker.json": {
+      "sha256": "10b4b5060db33f352547b6cc2b4fd918e5862afd4cb15d6449fa7aff9e6d3fdf",
+      "bytes": 205
+    },
+    "a2f11ec190b6408591057cd28c481775f6761acfb8a9deb9c74340f01e39abe2-terminal.json": {
+      "sha256": "23864930193243537ec283c832bfb518e89c45777f95cb45598d21cf5485b50b",
+      "bytes": 672
+    },
+    "a2f11ec190b6408591057cd28c481775f6761acfb8a9deb9c74340f01e39abe2-worker.json": {
+      "sha256": "ae62b792064543bcc41685c566b7bca7e05e6a0bf0a0f9d6b2576962ac9bc278",
+      "bytes": 205
+    },
+    "48950ae65202c949fae3fe20556c5c3b4db4867483543182401c03d04577820d-terminal.json": {
+      "sha256": "60700da1f62ff5e1eda548183f6ce0e35128ec8007ded6ea4672c4806cb83bb2",
+      "bytes": 672
+    },
+    "48950ae65202c949fae3fe20556c5c3b4db4867483543182401c03d04577820d-worker.json": {
+      "sha256": "fb0e596589ec9813fa4387ab44f0411ddf54fe9f1e2f80bc5af1d91fd034e9bb",
+      "bytes": 205
+    },
+    "rpc-count.jsonl": {
+      "sha256": "7bdc1f974ce16014661fb6e18a1739a8f788efad6d5f60a3cb391350bdf1ffb3",
+      "bytes": 2397
+    },
+    "controller.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  },
+  "target": "real fixed localhost SSH worker",
+  "diagnostic_instrumentation": "controller-private SSH shim inserts a non-scheduling observer around the original os.fork; source files are unchanged",
+  "fault_scope": "controller-local ACK discard after RPC and disposable controller publication obstruction",
+  "production_target_outage_claimed": false,
+  "live_configuration_changed": false,
+  "dc_stopped": false,
+  "installed_service_changed": false,
+  "model_origin_qualified": false,
+  "six_host_qualified": false,
+  "full_dc_replacement_qualified": false,
+  "owned_cleanup_confirmed": true,
+  "searches": {
+    "c307122a29f8adee14d3b57d161abf063d809969e32c0edb8e46d67678f09eca": {
+      "observer": {
+        "pid": 886410,
+        "start_identity": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:2194339",
+        "search_id": "c307122a29f8adee14d3b57d161abf063d809969e32c0edb8e46d67678f09eca",
+        "observer": "second_original_fork_return"
+      },
+      "observer_sha256": "2647007dd7e3b50e47fd240e11e6353937ef3aa621d2549963ee1a7586a5db59",
+      "terminal_state": "limited",
+      "terminal_receipt_sha256": "c9059bb37c90080693c56bceaebe2e5d89a346da86411643fbe827f22ee68586",
+      "same_observer_retained": true,
+      "owned_identity_no_longer_live": true
+    },
+    "34f5d7a6dca005a18a511bdaab5c2886278112dbe7f1aa79145698b00f0cc3f7": {
+      "observer": {
+        "pid": 887319,
+        "start_identity": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:2194825",
+        "search_id": "34f5d7a6dca005a18a511bdaab5c2886278112dbe7f1aa79145698b00f0cc3f7",
+        "observer": "second_original_fork_return"
+      },
+      "observer_sha256": "10b4b5060db33f352547b6cc2b4fd918e5862afd4cb15d6449fa7aff9e6d3fdf",
+      "terminal_state": "limited",
+      "terminal_receipt_sha256": "dc9050a5cbbe4929d1317dc4a8f0c2b87dc324689d17078b5270a57968cb5942",
+      "same_observer_retained": true,
+      "owned_identity_no_longer_live": true
+    },
+    "a2f11ec190b6408591057cd28c481775f6761acfb8a9deb9c74340f01e39abe2": {
+      "observer": {
+        "pid": 887916,
+        "start_identity": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:2195229",
+        "search_id": "a2f11ec190b6408591057cd28c481775f6761acfb8a9deb9c74340f01e39abe2",
+        "observer": "second_original_fork_return"
+      },
+      "observer_sha256": "ae62b792064543bcc41685c566b7bca7e05e6a0bf0a0f9d6b2576962ac9bc278",
+      "terminal_state": "cancelled",
+      "terminal_receipt_sha256": "9ea3efa2b15f7db6d273c771443965d108b44bd218cb089d64771f46378e7d15",
+      "same_observer_retained": true,
+      "owned_identity_no_longer_live": true
+    },
+    "48950ae65202c949fae3fe20556c5c3b4db4867483543182401c03d04577820d": {
+      "observer": {
+        "pid": 888161,
+        "start_identity": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:2195400",
+        "search_id": "48950ae65202c949fae3fe20556c5c3b4db4867483543182401c03d04577820d",
+        "observer": "second_original_fork_return"
+      },
+      "observer_sha256": "fb0e596589ec9813fa4387ab44f0411ddf54fe9f1e2f80bc5af1d91fd034e9bb",
+      "terminal_state": "cancelled",
+      "terminal_receipt_sha256": "927f9d1e8aea588e81b1306637b41e5daf35b1cd7048a212b4b5d5251d3f1f43",
+      "same_observer_retained": true,
+      "owned_identity_no_longer_live": true
+    }
+  },
+  "controller_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "owned_controller_exit": 0
+}

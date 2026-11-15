@@ -1,0 +1,113 @@
+{
+  "candidate_qualified": false,
+  "check_count": 28,
+  "checks": [
+    "actual parent qualification physical SHA",
+    "physical parent and snapshot src/mcp/runtime/request_archive_content.rs",
+    "physical parent and snapshot src/mcp/runtime/request_archive_index.rs",
+    "physical parent and snapshot src/mcp/runtime/request_archive_store.rs",
+    "physical parent and snapshot src/mcp/runtime/request_audit.rs",
+    "physical parent and snapshot src/mcp/runtime/request_archive_content_tests.rs",
+    "no original test function removed src/mcp/runtime/request_archive_content_tests.rs",
+    "physical parent and snapshot src/mcp/runtime/request_archive_store_tests.rs",
+    "no original test function removed src/mcp/runtime/request_archive_store_tests.rs",
+    "physical parent and snapshot src/mcp/runtime/request_audit_tests.rs",
+    "no original test function removed src/mcp/runtime/request_audit_tests.rs",
+    "entire seven-file diff equals supplied frozen patch",
+    "complete read_original exact inverse, including all bytes, validation and deadlines",
+    "unchanged observation live",
+    "unchanged observation descriptor_matches",
+    "complete fresh fstatat stamp and private policy leaf unchanged",
+    "complete openat flags mode error and ownership leaf unchanged",
+    "legacy shard duplicate lookup exact original decisions and order",
+    "exact selected FD and final namespace fence body after same lookup",
+    "unchanged helper named_stat_with_component",
+    "unchanged helper named_directory",
+    "unchanged helper filename_id",
+    "unchanged helper shard_index",
+    "unchanged method shard_for",
+    "unchanged method directory_for_existing",
+    "unchanged method directory_for_write",
+    "unchanged method fence_target",
+    "six original store test bodies expanded"
+  ],
+  "expanded_existing_test_functions": {
+    "src/mcp/runtime/request_archive_content_tests.rs": [],
+    "src/mcp/runtime/request_archive_store_tests.rs": [
+      "record_fence_preserves_legacy_before_and_after_layout_activation",
+      "record_fence_checks_exact_held_fd_across_shard_prefix_boundaries",
+      "record_fence_rejects_duplicate_namespaces_for_both_held_targets",
+      "record_fence_refuses_invalid_names_before_prefix_indexing",
+      "record_fence_keeps_the_final_legacy_named_directory_check",
+      "wrong_shard_and_replaced_target_never_enter_the_logical_namespace"
+    ],
+    "src/mcp/runtime/request_audit_tests.rs": []
+  },
+  "github_writes": 0,
+  "manual_review": [
+    "All public component fences derive validated id from the exact same CStr; id/component pair helper remains private. Validated lowercase 64hex plus .json excludes NUL and makes the two-byte id prefix equal to the original filename prefix.",
+    "No stat/open observation was merged, moved across a namespace fence or removed. Directory and original file descriptors keep exact FD checks. Whole filename CString construction falls from 7/5 to 1 in layout/flat read_original; prefix/legacy component allocations and 16/10 metadata observations remain.",
+    "Three new tests exercise named replacement against held old descriptor, inode policy for links/mode/symlink, all three layout choices, and actual CLOEXEC/NONBLOCK/EXCL create semantics. Retained original before-stamp assertion is before rename to avoid invalid ctime expectation.",
+    "Six existing store tests additionally call the new entry point for exact FD/clone refusal, all shard prefixes/wrong shard, cross-namespace duplicate, invalid filenames/UTF8/NUL and missing entries, replaced legacy directory, wrong shard and replaced shard.",
+    "Original strings wrappers remain for existing callers; error shape stays invalid filename or NotFound as before. No new unsafe block in four production files."
+  ],
+  "new_test_declarations": [
+    "request_archive_content_tests::reused_component_complete_reads_keep_all_physical_namespace_choices",
+    "request_archive_content_tests::reused_component_stamps_reobserve_replacement_and_private_inode_policy",
+    "request_audit_tests::reused_component_open_keeps_flags_and_reobserves_the_named_inode"
+  ],
+  "parent_qualification_sha256": "49b0019ece7405d455ace8cb638080a203a24fca01c6985a6cdda6d51180a51c",
+  "passed": true,
+  "patch_sha256": "d6cf3e1e7016b6b27ab71f9b913126e1f50b7661a6c7c7e951dfde6cccc71313",
+  "performance_adopted": false,
+  "physical_seven_files": [
+    {
+      "bytes": 26362,
+      "parent_sha256": "d5be2c37d5544a870a7f64af210bfd9f512f7c7771f5501d13a6cd037071b768",
+      "path": "src/mcp/runtime/request_archive_content.rs",
+      "sha256": "28a6ae1b3bfa080c1a3dda673cf2e2717923d54acc710ed5fc3afee900f3ff64"
+    },
+    {
+      "bytes": 75699,
+      "parent_sha256": "f7d1de279c473a5df75778a5baa0ff048c4b86d6afa2b53208a5ba4f37185389",
+      "path": "src/mcp/runtime/request_archive_index.rs",
+      "sha256": "21984a42edfaaf5a3b16e10b18905ce3245cf8cc88cf5b9ff01131193c89546a"
+    },
+    {
+      "bytes": 35540,
+      "parent_sha256": "d9869c388682b71f16887c8342c89b5d6f6a3e3a1fdcbfe4b50406b32fbadb26",
+      "path": "src/mcp/runtime/request_archive_store.rs",
+      "sha256": "9a2c38c78a1be939101c8e22b692525d8732e56febbbf59dbe455560c2b916a7"
+    },
+    {
+      "bytes": 63512,
+      "parent_sha256": "78ad60bd25cd77d7872dd143239d4947db11ef954e7651a8d873a693d2b0f1af",
+      "path": "src/mcp/runtime/request_audit.rs",
+      "sha256": "6f923cd8b4479ae0fdeca590c13d7de0fc22762829ea703520f83fd9093e1901"
+    },
+    {
+      "bytes": 31002,
+      "parent_sha256": "a5053ec2721dacff50ba965f0bfa49534dffce668acd23e6c292c3e94f8e9d3d",
+      "path": "src/mcp/runtime/request_archive_content_tests.rs",
+      "sha256": "f4be8562f596c007085427fa3866cf64779004cca224e10c6ac34da080a8fff6"
+    },
+    {
+      "bytes": 30539,
+      "parent_sha256": "4d89e294587675a583a7f499bfe9b527e217f91bb8a0356f3d22019992e1fc1d",
+      "path": "src/mcp/runtime/request_archive_store_tests.rs",
+      "sha256": "4f602d6918a701b41e3ae1a68e3276e4b5aa8c3ba070184ecf3a0c11bf43e933"
+    },
+    {
+      "bytes": 34542,
+      "parent_sha256": "b27322a53fe1e1530d7c86069885c5bcb75a98c4ced2f1ebd35f557175ac2c3c",
+      "path": "src/mcp/runtime/request_audit_tests.rs",
+      "sha256": "b85c70e33996d7cc1a5b7892412dcad7e1a6283fad9e11ec61a0a60c050cb635"
+    }
+  ],
+  "remote_calls": 0,
+  "review_sha256": "b4094a704ef5206d86a9a90c4bed4d1b3be219244850851e5abaf664b7f1e3e3",
+  "rust_executions": 0,
+  "schema": "hepta-a55-cstr-draft-independent-peer-review/v1",
+  "scope": "Static independent review of the immutable CStr-only seven-file snapshot. Root diagnostic integration and actual Rust gates are separate; this receipt is not behavioral or performance qualification.",
+  "snapshot": "runtime-a55/cstr-draft-r01"
+}

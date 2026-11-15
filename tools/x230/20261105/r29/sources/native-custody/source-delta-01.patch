@@ -1,0 +1,350 @@
+--- R28/snapshot_inputs_01.py
++++ R29/snapshot_inputs_01.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Snapshot the fixed R28 custody scope after all three original archive QAs."""
++"""Snapshot the fixed R29 custody scope after all three original archive QAs."""
+ import argparse
+ import hashlib
+ import json
+@@ -9,30 +9,30 @@
+ import stat
+ 
+ WORK = Path('/workspace/scratch/806ba5f52f94')
+-HERE = WORK / 'r25-integration-audit/r28-native-custody-preparation-01'
++HERE = WORK / 'r25-integration-audit/r29-native-custody-final-01'
+ SCOPE = HERE / 'scope-preparation-01.json'
+-SCOPE_SHA256 = '80e04bf6eb404281207f2b5e1a8ddb3c816dc0ad85c6e2c007569f57bf71875b'
++SCOPE_SHA256 = 'c82fc2185caec1191d748711d795c51804dcff781e74361edc3962b57972b7cd'
+ GROUPS = ('qualification_ci', 'performance', 'mac')
+ ROOTS = {
+-    'qualification_ci': WORK / 'benchmark-r28/qualification-ci-export-operations-01',
+-    'performance': WORK / 'benchmark-r28/performance-export-operations-01',
+-    'mac': WORK / 'benchmark-r28/mac-companion-operations-01',
++    'qualification_ci': WORK / 'benchmark-r29/qc-export-operations-01',
++    'performance': WORK / 'benchmark-r29/performance-export-operations-01',
++    'mac': WORK / 'benchmark-r29/mac-export-operations-01',
+ }
+ QA_SCHEMAS = {
+-    'qualification_ci': 'hepta-r28-qualification-ci-independent-verification/v1',
+-    'performance': 'hepta-r28-performance-independent-verification/v1',
+-    'mac': 'hepta-r28-mac-companion-independent-verification/v1',
++    'qualification_ci': 'hepta-r29-qualification-ci-independent-verification/v1',
++    'performance': 'hepta-r29-performance-independent-verification/v1',
++    'mac': 'hepta-r29-mac-companion-independent-verification/v1',
+ }
+ EXPORTERS = {
+-    'qualification_ci': '0878941cf72bf093e09019e82766fa60674ec39447b5858121c91612b9e3dd19',
+-    'performance': '3aaa6744cf49649fe5a94d0e68489a6edfdee772c04aa8dda14141e3556701fb',
++    'qualification_ci': 'f38980671314149b376eb84d25b30b3ebadd3ac702424c36a4fa2c1ae5dc45c0',
++    'performance': 'c9fd58c7aaebd51f60f1a2fdc3a01c52629b41d5a5818be124c79a547735872e',
+ }
+ NAMES = {'qualification_ci': 'qualification-ci-01.tar.xz',
+          'performance': 'performance-01.tar.xz', 'mac': 'formal-holders-01.tar.gz'}
+ CAPTURE_KEYS = {
+-    'qualification_ci': 'hepta-r28-qualification-ci-evidence-export-20261105-01',
+-    'performance': 'hepta-r28-performance-evidence-export-20261105-01',
+-    'mac': 'hepta-r28-mac-holder-evidence-export-20261105-01',
++    'qualification_ci': 'hepta-r29-qualification-ci-evidence-export-20261105-01',
++    'performance': 'hepta-r29-performance-evidence-export-20261105-01',
++    'mac': 'hepta-r29-mac-holder-evidence-export-20261105-01',
+ }
+ FIELDS = ('st_dev', 'st_ino', 'st_uid', 'st_mode', 'st_nlink', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
+ 
+@@ -76,7 +76,7 @@
+ 
+ 
+ def completed_companions(value, scope):
+-    need(value['schema'] == 'hepta-r28-completed-companion-bindings/v1'
++    need(value['schema'] == 'hepta-r29-completed-companion-bindings/v1'
+          and set(value['companions']) == set(GROUPS), 'exact three completed companion bindings required')
+     proofs, companions, operations = {}, {}, dict(scope['known_original_operations'])
+     for group in GROUPS:
+@@ -100,11 +100,16 @@
+             declared, job_id = qa['archive'], qa['original_capture']['job_id']
+             if group == 'qualification_ci':
+                 need(qa['original_negative_outcomes_preserved'] is True
+-                     and job_id == '1a1acd29fba-fc05-5724', 'qualification/CI original failed attempts lost')
++                     and job_id == '1a1ad92dba0-fc05-5a38', 'qualification/CI original failed attempts lost')
+             else:
+-                need(qa['original_observation_rejection_preserved'] is True
+-                     and qa['lifecycle_and_saturation_executed'] is False,
+-                     'actual rejection or unexecuted lifecycle changed')
++                need(qa['original_outcomes_preserved'] is True
++                     and qa['actual_output_inventory_and_absence_verified'] is True
++                     and qa['original_bindings']['campaigns']['observation01']['original_observation_gate_passed'] is True
++                     and qa['original_bindings']['campaigns']['lifecycle01']['original_normal_lifecycle_gate_passed'] is False
++                     and qa['original_bindings']['campaigns']['lifecycle01']['saturation_stage_entered'] is False
++                     and qa['original_outcomes']['lifecycle01']['native_outcome']['state'] == 'failed'
++                     and qa['original_outcomes']['lifecycle01']['native_outcome']['exit_code'] == 1,
++                     'actual observation pass, lifecycle rejection or unexecuted saturation changed')
+         need(all(declared[k] == archive_pin[k] for k in ('bytes', 'sha256')),
+              'downloaded companion differs from its full consumer proof')
+         need(isinstance(job_id, str) and re.fullmatch(r'[0-9a-f]+-[0-9a-f]+-[0-9a-f]+', job_id),
+@@ -124,12 +129,12 @@
+             'repository_path': scope['prospective_repository_prefix'] + NAMES[group],
+             'full_consumer': qa_pin, 'native_capture_job_id': job_id,
+             'git_blob_sha1_local_only': hashlib.sha1(b'blob ' + str(len(archive_raw)).encode() + b'\0' + archive_raw).hexdigest(),
+-            'git_object_created': False, 'body_duplicated_here': False}
++            'git_object_created_by_this_tool': False, 'body_duplicated_here': False}
+     cross_raw, cross_pin = bound_record(value['cross_package_verification'], HERE)
+     cross = json.loads(cross_raw)
+-    need(cross['schema'] == 'hepta-r28-three-companion-cross-verification/v1'
++    need(cross['schema'] == 'hepta-r29-three-companion-cross-verification/v1'
+          and cross['passed'] is True and cross['candidate_adopted'] is False
+-         and cross['original_observation_rejection_preserved'] is True
++         and cross['original_lifecycle_rejection_preserved'] is True
+          and cross['Mac_wrapper_inner_text_bytes_compared_without_reencoding'] is True
+          and cross['archive_code_executed'] is False and set(cross['archives']) == set(GROUPS),
+          'actual cross-package proof is absent or widened')
+@@ -138,8 +143,8 @@
+              and all(cross['independent_verifications'][group][k] == proofs[group][k] for k in ('bytes', 'sha256')),
+              'cross-package proof refers to other actual archives or QAs')
+     proofs['cross_package'] = cross_pin
+-    need(len(operations) == len(scope['known_original_operations']) + 2,
+-         'the fixed two remaining original captures are not independently bound')
++    need(len(operations) == len(scope['known_original_operations']) == 21,
++         'the exact 21 original operations are not independently bound')
+     return proofs, companions, operations
+ 
+ 
+@@ -192,7 +197,7 @@
+         else:
+             row['archive_path'] = 'payload/' + path.relative_to('/workspace/scratch').as_posix()
+             records.append(row)
+-    result = {'schema': 'hepta-r28-native-custody-input-snapshot/v1',
++    result = {'schema': 'hepta-r29-native-custody-input-snapshot/v1',
+         'scope': scope_pin, 'completion_binding': completion_pin,
+         'files': records, 'directory_scope': directory_files, 'duplicate_companion_bodies': omissions,
+         'operation_jobs': operations, 'excluded_job': scope['fixed_excluded_job'],
+@@ -201,7 +206,7 @@
+         'all_three_companions_verified': True, 'all_native_streams_complete_not_inferred': True,
+         'prior_published_evidence_commit': scope['prior_published_commit'],
+         'accepted_src_tree': scope['accepted_src_tree'], 'candidate_adopted': False,
+-        'original_observation_rejection_preserved': True, 'raw_bodies_modified': False,
++        'original_lifecycle_rejection_preserved': True, 'raw_bodies_modified': False,
+         'host_calls': 0, 'git_mutations': 0}
+     with args.out.open('xb') as stream:
+         stream.write((json.dumps(result, sort_keys=True, indent=2) + '\n').encode())
+--- R28/build_custody_bundle_01.py
++++ R29/build_custody_bundle_01.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Build the fixed R28 original-call bundle only after complete local proofs."""
++"""Build the fixed R29 original-call bundle only after complete local proofs."""
+ import argparse
+ import hashlib
+ import io
+@@ -11,7 +11,7 @@
+ import tarfile
+ 
+ WORK = Path('/workspace/scratch/806ba5f52f94')
+-HERE = WORK / 'r25-integration-audit/r28-native-custody-preparation-01'
++HERE = WORK / 'r25-integration-audit/r29-native-custody-final-01'
+ NAME = 'native-operations-custody-01.tar.xz'
+ FIELDS = ('st_dev', 'st_ino', 'st_uid', 'st_mode', 'st_nlink', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
+ 
+@@ -78,11 +78,11 @@
+     index_raw, index_identity = frozen(args.inventory)
+     coverage_raw, coverage_identity = frozen(args.coverage)
+     index, coverage = json.loads(index_raw), json.loads(coverage_raw)
+-    need(index['schema'] == 'hepta-r28-native-custody-input-snapshot/v1'
++    need(index['schema'] == 'hepta-r29-native-custody-input-snapshot/v1'
+          and index['all_three_companions_verified'] is True and index['candidate_adopted'] is False
+-         and index['original_observation_rejection_preserved'] is True,
+-         'complete actual R28 snapshot required')
+-    need(coverage['schema'] == 'hepta-r28-original-native-custody-coverage/v1'
++         and index['original_lifecycle_rejection_preserved'] is True,
++         'complete actual R29 snapshot required')
++    need(coverage['schema'] == 'hepta-r29-original-native-custody-coverage/v1'
+          and coverage['inventory'] == {'path': str(args.inventory), **digest(index_raw)}
+          and coverage['gaps'] == [] and coverage['all_observed_native_operations_accounted_for'] is True
+          and coverage['all_three_companions_verified'] is True
+@@ -98,8 +98,8 @@
+         need((observed['host'], observed['original_state'], observed['original_exit_code']) ==
+              (declaration['host'], declaration['expected_state'], declaration['expected_exit_code']),
+              'original native outcome changed')
+-    need(index['excluded_job'] == '1a1acdb0c74-fc05-5746' and index['excluded_job'] not in coverage['jobs'],
+-         'unrelated dependency-source read entered R28 qualification/performance evidence')
++    need(index['excluded_job'] == '1a1adac31be-fc05-5a9a' and index['excluded_job'] not in coverage['jobs'],
++         'separate R30 operation entered R29 qualification/performance evidence')
+     directory_scope(index)
+     members, original_records, seen_paths = {}, [], set()
+     for row in index['files']:
+@@ -124,10 +124,12 @@
+              'actual completed proof missing from original payload')
+         proof_values[label] = json.loads(body)
+     need(proof_values['qualification_ci']['original_negative_outcomes_preserved'] is True
+-         and proof_values['performance']['original_observation_rejection_preserved'] is True
+-         and proof_values['performance']['lifecycle_and_saturation_executed'] is False
++         and proof_values['performance']['original_outcomes_preserved'] is True
++         and proof_values['performance']['original_bindings']['campaigns']['observation01']['original_observation_gate_passed'] is True
++         and proof_values['performance']['original_bindings']['campaigns']['lifecycle01']['original_normal_lifecycle_gate_passed'] is False
++         and proof_values['performance']['original_bindings']['campaigns']['lifecycle01']['saturation_stage_entered'] is False
+          and proof_values['mac']['original_negative_outcomes_preserved'] is True
+-         and proof_values['cross_package']['original_observation_rejection_preserved'] is True
++         and proof_values['cross_package']['original_lifecycle_rejection_preserved'] is True
+          and proof_values['cross_package']['Mac_wrapper_inner_text_bytes_compared_without_reencoding'] is True,
+          'negative or unexecuted original outcomes were promoted')
+     companions = index['companion_archives']
+@@ -135,7 +137,7 @@
+     for group, row in companions.items():
+         body, _ = frozen(Path(row['source_path']), row)
+         need(hashlib.sha1(b'blob ' + str(len(body)).encode() + b'\0' + body).hexdigest() == row['git_blob_sha1_local_only']
+-             and row['git_object_created'] is False and row['body_duplicated_here'] is False,
++             and row['git_object_created_by_this_tool'] is False and row['body_duplicated_here'] is False,
+              'companion content identity or publication scope changed')
+         need(all(proof_values['cross_package']['archives'][group][k] == row[k] for k in ('bytes', 'sha256')),
+              'actual cross-package archive binding differs')
+@@ -157,8 +159,8 @@
+         'original_failed_operations': sorted(job for job, row in coverage['jobs'].items()
+                                              if row['original_exit_code'] != 0),
+         'unknown_terminal_inferred': False, 'gaps': []}
+-    manifest = {'schema': 'hepta-r28-original-native-custody-bundle/v1',
+-        'repository_path': 'tools/x230/20261105/r28/evidence/' + NAME,
++    manifest = {'schema': 'hepta-r29-original-native-custody-bundle/v1',
++        'repository_path': 'tools/x230/20261105/r29/evidence/' + NAME,
+         'original_file_count': len(original_records), 'original_total_bytes': sum(row['bytes'] for row in original_records),
+         'original_files': original_records, 'packaging_support_files': support,
+         'duplicate_companion_bodies': index['duplicate_companion_bodies'],
+@@ -169,11 +171,11 @@
+         'excluded_dependency_task': {'job_id': index['excluded_job'], 'root': index['excluded_dependency_root']},
+         'all_original_raw_files_in_fixed_scope_preserved': True,
+         'all_failures_timeouts_and_read_only_retries_in_scope_preserved': True,
+-        'original_raw_files_reencoded': False, 'R28_candidate_rejected': True,
++        'original_raw_files_reencoded': False, 'R29_candidate_rejected': True,
+         'candidate_adopted': False, 'all_optimization_blockers_closed': False,
+         'archive_code_executed': False, 'archive_extracted': False,
+         'native_workload_or_SSH_replayed': False, 'host_calls': 0, 'git_mutations': 0,
+-        'git_objects_created': False, 'server_binary_byte_fetch_verified': False,
++        'git_objects_created_by_this_tool': False, 'server_binary_byte_fetch_verified': False,
+         'own_pack_verify_and_future_publication_operations_kept_outside_bundle': True,
+         'tar_metadata': {'format': 'ustar', 'mode': 0o644, 'uid': 0, 'gid': 0, 'mtime': 0, 'uname': '', 'gname': ''},
+         'compression': {'format': 'xz', 'preset': 6, 'check': 'sha256'}}
+@@ -195,7 +197,7 @@
+     frozen(args.inventory, index_identity)
+     frozen(args.coverage, coverage_identity)
+     archive_raw, archive_identity = frozen(args.out / NAME)
+-    receipt = {'schema': 'hepta-r28-native-custody-build/v1', 'built': True,
++    receipt = {'schema': 'hepta-r29-native-custody-build/v1', 'built': True,
+         'archive': archive_identity, 'manifest': digest(encoded), 'member_count': len(members) + 1,
+         'original_file_count': len(original_records), 'packaging_support_files': len(support),
+         'independent_verification_still_required': True, 'all_source_bytes_and_identities_unchanged': True,
+--- R28/verify_custody_bundle_01.py
++++ R29/verify_custody_bundle_01.py
+@@ -42,7 +42,7 @@
+     archive, _ = stable(args.bundle / NAME)
+     declared, _ = stable(args.bundle / 'manifest.json')
+     manifest = json.loads(declared)
+-    assert manifest['schema'] == 'hepta-r28-original-native-custody-bundle/v1'
++    assert manifest['schema'] == 'hepta-r29-original-native-custody-bundle/v1'
+     decoder = lzma.LZMADecompressor(format=lzma.FORMAT_XZ, memlimit=512 * 1024**2)
+     expanded = decoder.decompress(archive, max_length=256 * 1024**2 + 1)
+     assert len(expanded) <= 256 * 1024**2 and decoder.eof and not decoder.unused_data
+@@ -85,7 +85,7 @@
+     assert len(snapshot_rows) == 1
+     snapshot_raw = bodies[snapshot_rows[0]['archive_path']]
+     snapshot = json.loads(snapshot_raw)
+-    assert snapshot['schema'] == 'hepta-r28-native-custody-input-snapshot/v1'
++    assert snapshot['schema'] == 'hepta-r29-native-custody-input-snapshot/v1'
+     assert snapshot['files'] == originals
+     assert snapshot['duplicate_companion_bodies'] == manifest['duplicate_companion_bodies']
+     assert snapshot['all_three_companions_verified'] is True
+@@ -114,14 +114,14 @@
+         row = coverage['jobs'][job_id]
+         assert (row['host'], row['original_state'], row['original_exit_code']) == (
+             declaration['host'], declaration['expected_state'], declaration['expected_exit_code'])
+-    assert snapshot['excluded_job'] == '1a1acdb0c74-fc05-5746'
++    assert snapshot['excluded_job'] == '1a1adac31be-fc05-5a9a'
+     assert snapshot['excluded_job'] not in coverage['jobs']
+     excluded = Path('/workspace/scratch/806ba5f52f94') / snapshot['excluded_dependency_root']
+     assert all(not Path(row['source_path']).is_relative_to(excluded) for row in originals)
+     assert all(manifest[k] is False for k in ('original_raw_files_reencoded', 'candidate_adopted',
+         'all_optimization_blockers_closed', 'archive_code_executed', 'archive_extracted',
+-        'native_workload_or_SSH_replayed', 'server_binary_byte_fetch_verified', 'git_objects_created'))
+-    assert manifest['R28_candidate_rejected'] is True
++        'native_workload_or_SSH_replayed', 'server_binary_byte_fetch_verified', 'git_objects_created_by_this_tool'))
++    assert manifest['R29_candidate_rejected'] is True
+     expected_native = {'original_operations': len(coverage['jobs']),
+         'strong_terminal_and_complete_dual_streams': len(coverage['jobs']),
+         'original_failed_operations': sorted(job for job, row in coverage['jobs'].items()
+@@ -139,16 +139,18 @@
+         completed_proofs[label] = json.loads(body)
+         assert completed_proofs[label]['passed'] is True
+     assert set(completed_proofs) == {'qualification_ci', 'performance', 'mac', 'cross_package'}
+-    assert completed_proofs['qualification_ci']['schema'] == 'hepta-r28-qualification-ci-independent-verification/v1'
++    assert completed_proofs['qualification_ci']['schema'] == 'hepta-r29-qualification-ci-independent-verification/v1'
+     assert completed_proofs['qualification_ci']['original_negative_outcomes_preserved'] is True
+-    assert completed_proofs['performance']['schema'] == 'hepta-r28-performance-independent-verification/v1'
+-    assert completed_proofs['performance']['original_observation_rejection_preserved'] is True
+-    assert completed_proofs['performance']['lifecycle_and_saturation_executed'] is False
+-    assert completed_proofs['mac']['schema'] == 'hepta-r28-mac-companion-independent-verification/v1'
++    assert completed_proofs['performance']['schema'] == 'hepta-r29-performance-independent-verification/v1'
++    assert completed_proofs['performance']['original_outcomes_preserved'] is True
++    assert completed_proofs['performance']['original_bindings']['campaigns']['observation01']['original_observation_gate_passed'] is True
++    assert completed_proofs['performance']['original_bindings']['campaigns']['lifecycle01']['original_normal_lifecycle_gate_passed'] is False
++    assert completed_proofs['performance']['original_bindings']['campaigns']['lifecycle01']['saturation_stage_entered'] is False
++    assert completed_proofs['mac']['schema'] == 'hepta-r29-mac-companion-independent-verification/v1'
+     assert completed_proofs['mac']['original_negative_outcomes_preserved'] is True
+     cross = completed_proofs['cross_package']
+-    assert cross['schema'] == 'hepta-r28-three-companion-cross-verification/v1'
+-    assert cross['candidate_adopted'] is False and cross['original_observation_rejection_preserved'] is True
++    assert cross['schema'] == 'hepta-r29-three-companion-cross-verification/v1'
++    assert cross['candidate_adopted'] is False and cross['original_lifecycle_rejection_preserved'] is True
+     assert cross['Mac_wrapper_inner_text_bytes_compared_without_reencoding'] is True
+     companions = manifest['companion_archives']
+     for group, companion in companions.items():
+@@ -157,13 +159,13 @@
+         assert all(bound[k] == companion[k] == cross['archives'][group][k] for k in ('bytes', 'sha256'))
+         assert all(cross['independent_verifications'][group][k] == manifest['completed_proofs'][group][k]
+                    for k in ('bytes', 'sha256'))
+-        assert companion['git_object_created'] is False and companion['body_duplicated_here'] is False
++        assert companion['git_object_created_by_this_tool'] is False and companion['body_duplicated_here'] is False
+         if args.compare_originals:
+             body, descriptor = stable(Path(companion['source_path']))
+             assert identity(body) == {k: companion[k] for k in ('bytes', 'sha256')}
+             assert descriptor == companion['original_identity']
+             assert hashlib.sha1(b'blob ' + str(len(body)).encode() + b'\0' + body).hexdigest() == companion['git_blob_sha1_local_only']
+-    report = {'schema': 'hepta-r28-native-custody-independent-verification/v1', 'passed': True,
++    report = {'schema': 'hepta-r29-native-custody-independent-verification/v1', 'passed': True,
+         'archive': {'path': str(args.bundle / NAME), **identity(archive),
+                     'git_blob_sha1': hashlib.sha1(b'blob ' + str(len(archive)).encode() + b'\0' + archive).hexdigest()},
+         'manifest': identity(declared), 'members': observed, 'member_count': len(observed),
+@@ -174,7 +176,7 @@
+         'all_three_actual_companion_QA_and_cross_package_proofs_bound': True,
+         'all_original_failed_operations_preserved': True,
+         'native_coverage': manifest['native_coverage'],
+-        'prior_published_R25_R26_custody_body_duplicated': False, 'archive_code_executed': False,
++        'prior_published_R25_R26_R28_custody_body_duplicated': False, 'archive_code_executed': False,
+         'archive_extracted': False, 'host_calls': 0, 'git_mutations': 0,
+         'verifier': {'path': str(Path(__file__).resolve()), **identity(Path(__file__).read_bytes())}}
+     with args.out.open('xb') as stream:
+--- R28/check_native_custody_01.py
++++ R29/check_native_custody_01.py
+@@ -52,7 +52,7 @@
+         raise ValueError('fresh coverage output required')
+     raw_index = args.inventory.read_bytes()
+     index = json.loads(raw_index)
+-    if index['schema'] != 'hepta-r28-native-custody-input-snapshot/v1':
++    if index['schema'] != 'hepta-r29-native-custody-input-snapshot/v1':
+         raise ValueError('fixed original inventory required')
+     allowed_jobs = set(index['operation_jobs'])
+     if index['excluded_job'] in allowed_jobs or not allowed_jobs:
+@@ -77,7 +77,7 @@
+             if isinstance(job, dict) and all(k in job for k in ('id', 'host', 'args', 'idempotency_key', 'request_digest')):
+                 if job['id'] not in allowed_jobs:
+                     referenced_jobs.add(job['id'])
+-                    if job['id'] == index['excluded_job'] or 'r28' in job['idempotency_key'].lower():
++                    if job['id'] == index['excluded_job'] or 'r29' in job['idempotency_key'].lower():
+                         raise ValueError('unexpected current-operation start in fixed custody scope: ' + job['id'])
+                     continue
+                 record = records.setdefault(job['id'], {'starts': [], 'status': [], 'reads': []})
+@@ -176,7 +176,7 @@
+             if not matched_requests: missing.append('exact_original_request')
+             gaps.append({'job_id': job_id, 'host': host, 'missing': missing,
+                          'stdout_stored': streams['stdout']['stored_bytes'], 'stderr_stored': streams['stderr']['stored_bytes']})
+-    result = {'schema': 'hepta-r28-original-native-custody-coverage/v1',
++    result = {'schema': 'hepta-r29-original-native-custody-coverage/v1',
+         'inventory': {'path': str(args.inventory), **identity(raw_index)}, 'jobs': results,
+         'job_count': len(results), 'gaps': gaps,
+         'all_observed_native_operations_accounted_for': not gaps,

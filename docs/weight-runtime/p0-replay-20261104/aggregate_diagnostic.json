@@ -1,0 +1,41 @@
+{
+  "schema": "hepta.hwse.source-replay-aggregate-diagnostic.v1",
+  "checked_at_ms": 1793761894608,
+  "scope": "READ_ONLY_SOURCE_VALIDITY_DIAGNOSTIC_NOT_WEIGHT_EFFICACY",
+  "status": "HOLD",
+  "error_type": "EvidenceError",
+  "error_message": "SUBMITTED_COMMAND_WITHOUT_FILL_OR_ZERO_FILL_PROOF",
+  "error_source": "scripts/hepta_pnl_accounting.py:588",
+  "source_size_bytes": 53087317,
+  "source_sha256": "c715eea9719a37ec875c4fa877e37c82d8fbcb13d29d5e988006e2c8f30fd573",
+  "source_event_count": 47513,
+  "source_trailing_uncommitted_bytes": 0,
+  "offending_commands_verified": 1,
+  "matching_event_count": 5,
+  "offending_command_fill_count": 0,
+  "offending_command_terminal_status_count": 0,
+  "last_recorded_status": "PreSubmitted",
+  "strict_snapshot_retained_command_count": 14,
+  "strict_snapshot_current_observed_credit": 0,
+  "current_population_count_complete": false,
+  "last_completed_assessment": {
+    "as_of_ms": 1793745071611,
+    "retained_command_count": 13,
+    "observed_trades": 10
+  },
+  "source_code_hashes": {
+    "research/neuron_learning/laya_cell/current100k_weight_shadow_eval.py": "5395b81661b11db331f16557c405b5c7aab902c29e6d24574fc03ec63c752de4",
+    "research/neuron_learning/laya_cell/resident_rewards.py": "55715aaff6ef42d109bdb2cca97380275cf2d5acdf5b1a64ae472a13608a4ea0",
+    "scripts/hepta_pnl_accounting.py": "ad567743d91d5e1d2bd489ab38c32e268c2b55c09bf592677940af7528b19b4c"
+  },
+  "original_sources_modified": false,
+  "guards_relaxed": false,
+  "broker_orders_sent": 0,
+  "interpretation": "One unresolved submitted command makes the authoritative replay unavailable. Fourteen CENSORED records withdraw current credit and retain the known denominator; they do not prove fourteen lost trades.",
+  "limits": [
+    "Observed journal evidence is not a fresh broker account-state query.",
+    "No financial-source mutation or reconciliation was attempted.",
+    "The frozen prospective window remains unfinished.",
+    "This failure does not establish any weight-level model defect."
+  ]
+}

@@ -3,29 +3,68 @@ name: Hepta Runtime CI
 on:
   push:
     branches:
+      - main
       - hepta-runtime-base
       - 'feature/**'
+      - 'feat/**'
+      - 'codex/**'
+      - 'fix/**'
+      - 'perf/**'
+      - 'experiment/**'
   pull_request:
     branches:
+      - main
       - hepta-runtime-base
+      - feature/rea-native-foundation-20261102
+      - feature/rea-runtime-unified-20261103
+      - work/native-runtime-convergence-20261030
+      # Stacked WSP branches require the same prospective-merge gate.
+      - 'feature/**'
+      # Candidate branches are protected by exact HEAD and synthetic-merge gates.
+      # Stacked fix and integration PRs otherwise receive no CI event.
+      - 'fix/**'
+      - 'perf/**'
+      - 'experiment/**'
+      - 'dot/**'
+      - 'codex/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# Oxc qualification produced 8.4 GB of incremental state; retain normal
+# debug/test semantics while avoiding duplicate CI incremental caches.
+env:
+  CARGO_INCREMENTAL: '0'
+  # The integrated library and test harness are both large; compiling them
+  # together was killed during consolidation. Preserve the declared profiles
+  # while serializing build jobs (test execution is independently isolated).
+  CARGO_BUILD_JOBS: '1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  runtime-ci:
+  runtime-head-ci:
     name: Rust exact-head validation
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The integrated all-feature checks used up to 46 minutes before the second
+    # feature-mode test build and release link. Keep all gates with enough time.
+    timeout-minutes: 150
     steps:
-      - name: Checkout exact head
+      - name: Checkout exact source HEAD
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify checked-out source identity
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          printf 'SOURCE_HEAD_SHA=%s\n' "$EXPECTED_HEAD_SHA"
 
       - name: Install pinned Rust toolchain
         run: |
@@ -35,17 +74,384 @@ jobs:
           rustc --version
           cargo --version
 
+      - name: Local qualification guard regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_source_byte_boundary.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_qualification_path_fence.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_local_qualification.py' -v
+
       - name: Format
         run: cargo fmt --all -- --check
 
       - name: Check all targets
-        run: cargo check --locked --all-targets
+        run: cargo check --locked --all-targets --all-features
+
+      - name: Check all targets without remote filesystem
+        run: cargo check --locked --all-targets --no-default-features
 
       - name: Clippy
-        run: cargo clippy --locked --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
-      - name: Test
-        run: cargo test --locked --all-targets
+      - name: Clippy without remote filesystem
+        run: cargo clippy --locked --all-targets --no-default-features -- -D warnings
+
+      - name: Install pinned nextest
+        run: |
+          cargo install --locked --version '=0.9.137' cargo-nextest
+          cargo nextest --version
+
+      - name: Install integration test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ripgrep python3-jsonschema
+          rg --version
+
+      - name: Test in isolated processes
+        run: |
+          umask 022
+          cargo nextest run --locked --all-targets --all-features \
+            --test-threads 1 --retries 0 --no-fail-fast
+
+      - name: Descriptor-relative file safety
+        run: /usr/bin/python3 tests/file_capabilities.py
+
+      - name: Frozen REA local mapping checks
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B tests/rea_compatibility_ledger_tests.py -v
+          /usr/bin/python3 -B scripts/rea_compatibility_ledger.py check-mapping
+
+      - name: REA qualification evidence regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B -m unittest discover -s tests -p 'rea_*tests.py' -v
+
+      - name: Control-plane regression
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B tests/runtime_registry_page_tests.py
+          /usr/bin/python3 -B tests/test_native_canary_resume.py
+          /usr/bin/python3 -B tests/chatgpt_v11_layered_read_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_process_start_concurrency_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_v4_session_binding_tests.py
+          /usr/bin/python3 -B tests/runtime_workflow_owner_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v10_single_v4_effect_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v10_stream_custody_tests.py
+          /usr/bin/python3 -B tests/test_computer_http.py
+          /usr/bin/python3 -B tests/full_operator_facade_tests.py
+          /usr/bin/python3 -B tests/full_operator_cancel_tests.py
+          /usr/bin/python3 -B tests/chatgpt_request_identity_tests.py
+          /usr/bin/python3 -B tests/full_operator_session_recovery_tests.py
+          /usr/bin/python3 -B tests/rea_browser_capture_tests.py
+          /usr/bin/python3 -B deploy/maintenance_20261017/native_rollout_tests.py
+          /usr/bin/python3 -B deploy/maintenance_20261017/recover_control_channel_tests.py
+
+      - name: X230 qualification evidence regressions
+        run: |
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261028 -p '*_tests.py' -v
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261029 -p '*_tests.py' -v
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261030 -p '*_tests.py' -v
+
+      - name: Unbounded ingress and collector regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B tests/dc_readonly_inventory_collector_tests.py
+          /usr/bin/python3 -B tests/chatgpt_bridge_stdio_tests.py
+          /usr/bin/python3 -B tests/chatgpt_bridge_http_tests.py
+          /usr/bin/python3 -B tests/search_worker_tests.py
+          /usr/bin/python3 -B tests/tunnel_client_patch_tests.py
+          /usr/bin/python3 -B tests/tunnel_deployment_config_tests.py
+          /usr/bin/python3 -B tests/runtime_http_probe_tests.py
+
+      - name: Test without remote filesystem in isolated processes
+        run: |
+          umask 022
+          cargo nextest run --locked --all-targets --no-default-features \
+            --test-threads 1 --retries 0 --no-fail-fast
 
       - name: Release build
-        run: cargo build --locked --release
+        run: cargo build --locked --all-features --release --bins --examples
+
+      - name: Release JavaScript MCP cancellation and recovery
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, subprocess, sys
+          from pathlib import Path
+          binary = Path("target/release/hepta-runtime").resolve(strict=True)
+          with binary.open("rb") as stream:
+              digest = hashlib.file_digest(stream, "sha256").hexdigest()
+          subprocess.run([
+              sys.executable, "-u", "tests/rea_javascript_cancellation_external.py",
+              "--runtime", str(binary), "--expected-runtime-sha256", digest,
+              "--workspace", str(Path(os.environ["RUNNER_TEMP"]) / "rea-javascript-cancellation"),
+              "--allow-owned-child-signals", "--allow-local-mcp",
+          ], check=True)
+          PY
+
+      - name: Retain JavaScript cancellation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-js-cancellation-${{ github.job }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/rea-javascript-cancellation/
+            !${{ runner.temp }}/rea-javascript-cancellation/hepta-runtime-qualified
+            !${{ runner.temp }}/rea-javascript-cancellation/state/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Release binary REA parser and Linux syscall-denial smoke
+        run: |
+          set -euo pipefail
+          binary="./target/release/hepta-runtime"
+          test -x "$binary"
+          printf '\x00asm\x01\x00\x00\x00' | "$binary" rea-worker --selected-path=/controlled/release.wasm > "$RUNNER_TEMP/rea-release-good.json" 2> "$RUNNER_TEMP/rea-release-good.err"
+          test ! -s "$RUNNER_TEMP/rea-release-good.err"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["record_format"]=="hepta.rea.preview.v1" and r["normalized_result"]["format"]=="wasm" and r["rea_evidence_compatible"] is False and r["coverage"]["status"]=="partial"' "$RUNNER_TEMP/rea-release-good.json"
+
+          printf '\x00asm\x01\x00\x00\x00' | "$binary" rea-worker --selected-path=/controlled/release.wasm --sandbox-probe > "$RUNNER_TEMP/rea-release-sandbox.json" 2> "$RUNNER_TEMP/rea-release-sandbox.err"
+          test ! -s "$RUNNER_TEMP/rea-release-sandbox.err"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["status"]=="file_and_network_syscalls_denied"' "$RUNNER_TEMP/rea-release-sandbox.json"
+
+          if printf '\x7fELF\x02\x01\x01' | "$binary" rea-worker --selected-path=/controlled/invalid.elf > "$RUNNER_TEMP/rea-release-bad.out" 2> "$RUNNER_TEMP/rea-release-bad.err"; then
+            echo "ERROR: release worker accepted truncated ELF" >&2
+            exit 1
+          fi
+          test ! -s "$RUNNER_TEMP/rea-release-bad.out"
+          test -s "$RUNNER_TEMP/rea-release-bad.err"
+
+      - name: Independent Python ZIP writer to shipped Rust worker static checks
+        run: |
+          set -euo pipefail
+          binary="./target/release/hepta-runtime"
+          mkdir -p "$RUNNER_TEMP/rea-zip-evidence"
+          python3 - <<'PY'
+          import os, zipfile
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "rea-zip-evidence"
+          good = root / "apk-like-structural-only.zip"
+          with zipfile.ZipFile(good, "w", compression=zipfile.ZIP_STORED) as archive:
+              archive.writestr("AndroidManifest.xml", b"not a real Android manifest")
+              archive.writestr("classes.dex", b"not actual dex code")
+              archive.writestr("resources.arsc", b"not actual resources")
+              archive.writestr("META-INF/CERT.RSA", b"not a real certificate")
+          (root / "truncated.zip").write_bytes(good.read_bytes()[:-1])
+          with zipfile.ZipFile(root / "duplicate.zip", "w") as archive:
+              archive.writestr("duplicate.txt", b"first")
+              archive.writestr("duplicate.txt", b"second")
+          # Independent Python-written APK Signing Block *framing*, not a
+          # cryptographic signature. CRCs of ZIP members are authentic.
+          data = good.read_bytes()
+          end = len(data) - 22
+          directory = int.from_bytes(data[end + 16:end + 20], "little")
+          bogus_value = b"not-signed"
+          pair = (4 + len(bogus_value)).to_bytes(8, "little") + (0x7109871A).to_bytes(4, "little") + bogus_value
+          length = len(pair) + 24
+          block = length.to_bytes(8, "little") + pair + length.to_bytes(8, "little") + b"APK Sig Block 42"
+          wrapped = bytearray(data[:directory] + block + data[directory:])
+          shifted_end = end + len(block)
+          wrapped[shifted_end + 16:shifted_end + 20] = (directory + len(block)).to_bytes(4, "little")
+          (root / "fake-apk-signing-block.zip").write_bytes(wrapped)
+          with zipfile.ZipFile(root / "fake-apk-signing-block.zip") as archive:
+              assert archive.testzip() is None and len(archive.namelist()) == 4
+          malformed = bytearray(wrapped)
+          new_directory = directory + len(block)
+          malformed[new_directory - 24:new_directory - 16] = (length + 1).to_bytes(8, "little")
+          (root / "bad-apk-signing-block.zip").write_bytes(malformed)
+          bad_crc = bytearray(data)
+          bad_crc[14] ^= 1  # local header CRC differs from central directory
+          (root / "bad-local-crc.zip").write_bytes(bad_crc)
+          PY
+          cat "$RUNNER_TEMP/rea-zip-evidence/apk-like-structural-only.zip" | "$binary" rea-worker --selected-path=/controlled/apk-like.zip > "$RUNNER_TEMP/rea-zip-evidence/observed.json"
+          python3 - "$RUNNER_TEMP/rea-zip-evidence/observed.json" <<'PY'
+          import json, sys
+          record = json.load(open(sys.argv[1]))
+          result = record["normalized_result"]
+          facts = result["header_facts"]
+          assert record["rea_evidence_compatible"] is False
+          assert record["coverage"]["status"] == "partial"
+          assert result["format"] == "zip"
+          assert facts["declared_entries"] == facts["checked_central_and_local_entries"] == 4
+          assert facts["apk_structure_hint_only"] is True
+          assert facts["legacy_signature_entry_count"] == 1
+          assert "signature" in " ".join(record["limitations"]).lower()
+          PY
+          cat "$RUNNER_TEMP/rea-zip-evidence/fake-apk-signing-block.zip" | "$binary" rea-worker --selected-path=/controlled/fake-signed.apk > "$RUNNER_TEMP/rea-zip-evidence/signing-block-structure.json"
+          python3 - "$RUNNER_TEMP/rea-zip-evidence/signing-block-structure.json" <<'PY'
+          import json, sys
+          record = json.load(open(sys.argv[1]))
+          facts = record["normalized_result"]["header_facts"]
+          assert record["rea_evidence_compatible"] is False
+          assert record["coverage"]["status"] == "partial"
+          assert facts["apk_signing_block_structure_present"] is True
+          assert facts["apk_signing_block_id_pairs"] == 1
+          assert facts["apk_v2_scheme_id_present"] is True
+          assert facts["apk_v3_scheme_id_present"] is False
+          assert "NOT cryptographic" in " ".join(record["limitations"])
+          PY
+          for invalid in truncated duplicate bad-apk-signing-block bad-local-crc; do
+            if cat "$RUNNER_TEMP/rea-zip-evidence/$invalid.zip" | "$binary" rea-worker --selected-path=/controlled/bad.zip > "$RUNNER_TEMP/rea-zip-evidence/$invalid.out" 2> "$RUNNER_TEMP/rea-zip-evidence/$invalid.err"; then
+              echo "ERROR: REA preview accepted invalid $invalid archive" >&2
+              exit 1
+            fi
+            test ! -s "$RUNNER_TEMP/rea-zip-evidence/$invalid.out"
+            test -s "$RUNNER_TEMP/rea-zip-evidence/$invalid.err"
+          done
+
+      - name: Retain independent static ZIP fixtures and result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-zip-preview-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rea-zip-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  runtime-merge-ci:
+    name: Rust prospective-merge validation
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    # Budget both feature-mode test builds and the release link without dropping checks.
+    timeout-minutes: 150
+    steps:
+      - name: Checkout GitHub prospective merge
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Verify checked-out merge identity
+        env:
+          EXPECTED_MERGE_SHA: ${{ github.sha }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MERGE_SHA"
+          test "$EXPECTED_MERGE_SHA" != "$EXPECTED_HEAD_SHA"
+          printf 'PROSPECTIVE_MERGE_SHA=%s SOURCE_HEAD_SHA=%s\n' "$EXPECTED_MERGE_SHA" "$EXPECTED_HEAD_SHA"
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup component add rustfmt clippy --toolchain 1.95.0
+          rustup default 1.95.0
+          rustc --version
+          cargo --version
+
+      - name: Local qualification guard regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_source_byte_boundary.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_qualification_path_fence.py' -v
+          /usr/bin/python3 -B -m unittest discover -s scripts -p 'test_local_qualification.py' -v
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Check all targets
+        run: cargo check --locked --all-targets --all-features
+
+      - name: Check all targets without remote filesystem
+        run: cargo check --locked --all-targets --no-default-features
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Clippy without remote filesystem
+        run: cargo clippy --locked --all-targets --no-default-features -- -D warnings
+
+      - name: Install pinned nextest
+        run: |
+          cargo install --locked --version '=0.9.137' cargo-nextest
+          cargo nextest --version
+
+      - name: Install integration test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ripgrep python3-jsonschema
+          rg --version
+
+      - name: Test in isolated processes
+        run: |
+          umask 022
+          cargo nextest run --locked --all-targets --all-features \
+            --test-threads 1 --retries 0 --no-fail-fast
+
+      - name: Test without remote filesystem in isolated processes
+        run: |
+          umask 022
+          cargo nextest run --locked --all-targets --no-default-features \
+            --test-threads 1 --retries 0 --no-fail-fast
+
+      - name: Descriptor-relative file safety
+        run: /usr/bin/python3 tests/file_capabilities.py
+
+      - name: Frozen REA local mapping checks
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B tests/rea_compatibility_ledger_tests.py -v
+          /usr/bin/python3 -B scripts/rea_compatibility_ledger.py check-mapping
+
+      - name: REA qualification evidence regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B -m unittest discover -s tests -p 'rea_*tests.py' -v
+
+      - name: Control-plane regression
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B tests/runtime_registry_page_tests.py
+          /usr/bin/python3 -B tests/test_native_canary_resume.py
+          /usr/bin/python3 -B tests/chatgpt_v11_layered_read_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_process_start_concurrency_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_v4_session_binding_tests.py
+          /usr/bin/python3 -B tests/runtime_workflow_owner_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v10_single_v4_effect_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v10_stream_custody_tests.py
+          /usr/bin/python3 -B tests/test_computer_http.py
+          /usr/bin/python3 -B tests/full_operator_facade_tests.py
+          /usr/bin/python3 -B tests/full_operator_cancel_tests.py
+          /usr/bin/python3 -B tests/chatgpt_request_identity_tests.py
+          /usr/bin/python3 -B tests/full_operator_session_recovery_tests.py
+          /usr/bin/python3 -B tests/rea_browser_capture_tests.py
+          /usr/bin/python3 -B deploy/maintenance_20261017/native_rollout_tests.py
+          /usr/bin/python3 -B deploy/maintenance_20261017/recover_control_channel_tests.py
+
+      - name: X230 qualification evidence regressions
+        run: |
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261028 -p '*_tests.py' -v
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261029 -p '*_tests.py' -v
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261030 -p '*_tests.py' -v
+
+      - name: Release build
+        run: cargo build --locked --all-features --release --bins --examples
+
+      - name: Release JavaScript MCP cancellation and recovery
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, subprocess, sys
+          from pathlib import Path
+          binary = Path("target/release/hepta-runtime").resolve(strict=True)
+          with binary.open("rb") as stream:
+              digest = hashlib.file_digest(stream, "sha256").hexdigest()
+          subprocess.run([
+              sys.executable, "-u", "tests/rea_javascript_cancellation_external.py",
+              "--runtime", str(binary), "--expected-runtime-sha256", digest,
+              "--workspace", str(Path(os.environ["RUNNER_TEMP"]) / "rea-javascript-cancellation"),
+              "--allow-owned-child-signals", "--allow-local-mcp",
+          ], check=True)
+          PY
+
+      - name: Retain JavaScript cancellation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-js-cancellation-${{ github.job }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/rea-javascript-cancellation/
+            !${{ runner.temp }}/rea-javascript-cancellation/hepta-runtime-qualified
+            !${{ runner.temp }}/rea-javascript-cancellation/state/**
+          if-no-files-found: warn
+          retention-days: 14

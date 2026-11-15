@@ -1,0 +1,105 @@
+--- r20/run_lifecycle_abba_01.py
++++ r21/run_lifecycle_abba_01.py
+@@ -19,7 +19,7 @@
+ sys.dont_write_bytecode = True
+ import summarize_lifecycle_abba_01 as evidence
+ 
+-ROOT = Path("/home/qian/hepta-runtime-optimization-20261105-r20")
++ROOT = Path("/home/qian/hepta-runtime-optimization-20261105-r21")
+ OUTPUT = ROOT / "lifecycle-abba-01"
+ BASELINE = Path("/home/qian/hepta-runtime-optimization-20261104-r19/qualification-02/hepta-runtime")
+ CANDIDATE = ROOT / "qualification-01/hepta-runtime"
+@@ -67,7 +67,7 @@
+     args = parser.parse_args()
+     out = args.out.absolute()
+     need(sys.platform == "linux" and out == OUTPUT and out.resolve() == out and not os.path.lexists(out),
+-         "fresh canonical R20 lifecycle output required")
++         "fresh canonical R21 lifecycle output required")
+     need(args.baseline.absolute() == BASELINE and args.candidate.absolute() == CANDIDATE
+          and args.expected_baseline_sha256 == BASELINE_SHA
+          and all(HEX.fullmatch(value) for value in (args.expected_baseline_sha256,
+@@ -81,7 +81,7 @@
+     need(os.environ.get("SSH_AUTH_SOCK", "").startswith("/"), "held forwarded SSH agent required")
+     out.mkdir(mode=0o700)
+     report_path = out / "report.json"
+-    report = {"schema": "hepta-r20-lifecycle-abba-control/v1", "passed": False,
++    report = {"schema": "hepta-r21-lifecycle-abba-control/v1", "passed": False,
+               "order": "ABBA", "round_count": 4, "started_realtime_ns": time.time_ns(),
+               "stages": [], "rounds": [], "automatic_retries": 0,
+               "cleanup_scope": "owned stage session; original canary owns Controller/SSH cleanup; failures require review",
+@@ -185,7 +185,7 @@
+         checkpoint()
+         before = snapshot()
+         report.update(baseline=before["baseline"], candidate=before["candidate"], tools_manifest=before["tools_manifest"])
+-        plan = {"schema": "hepta-r20-lifecycle-plan/v1", "order": "ABBA", "round_count": 4,
++        plan = {"schema": "hepta-r21-lifecycle-plan/v1", "order": "ABBA", "round_count": 4,
+                 "new_jobs_per_round": 6, "phase_concurrency": 6, "workers": 2, "arena_max": 1,
+                 "interrupt_host": "rog", "phases": list(evidence.PHASES), "inputs": before,
+                 "socket_directories": [str(p) for p in socket_paths],
+@@ -219,7 +219,7 @@
+                 "report": fingerprint(directory / "report.json"),
+                 "independent_analysis": fingerprint(directory / "independent-summary.json"), "phase_files": phase_files})
+             checkpoint()
+-        index = {"schema": "hepta-r20-lifecycle-round-index/v1", "closed": True,
++        index = {"schema": "hepta-r21-lifecycle-round-index/v1", "closed": True,
+                  "order": "ABBA", "round_count": 4, "rounds": report["rounds"],
+                  "baseline": before["baseline"], "candidate": before["candidate"],
+                  "tools_manifest": before["tools_manifest"], "plan": report["plan"],
+--- r20/summarize_lifecycle_abba_01.py
++++ r21/summarize_lifecycle_abba_01.py
+@@ -97,7 +97,7 @@
+     raw = read(manifest_path, 262144)
+     need(sha(raw) == expected_sha, "lifecycle manifest SHA differs")
+     manifest = json.loads(raw)
+-    need(manifest["schema"] == "hepta-r20-lifecycle-tools/v1"
++    need(manifest["schema"] == "hepta-r21-lifecycle-tools/v1"
+          and isinstance(manifest["files"], dict) and len(manifest["files"]) >= 15,
+          "lifecycle manifest schema/set differs")
+     for name, identity in sorted(manifest["files"].items()):
+@@ -126,7 +126,7 @@
+ 
+ def phase_metrics(phase, report, expected_phase):
+     """Pure raw arithmetic, also used by the local non-workload fixture."""
+-    need(phase["schema"] == "hepta-r20-lifecycle-phase/v1" and phase["phase"] == expected_phase
++    need(phase["schema"] == "hepta-r21-lifecycle-phase/v1" and phase["phase"] == expected_phase
+          and len(phase["hosts"]) == 6 and set(phase["hosts"]) == HOSTS
+          and phase["concurrency"] == 6 and phase["successful_host_count"] == 6
+          and phase["failed_hosts"] == [] and phase["measurement_errors"] == [], "incomplete phase")
+@@ -182,7 +182,7 @@
+     index_path = Path(index_path).absolute()
+     raw_index = read(index_path)
+     index = json.loads(raw_index)
+-    need(index["schema"] == "hepta-r20-lifecycle-round-index/v1" and index["closed"] is True
++    need(index["schema"] == "hepta-r21-lifecycle-round-index/v1" and index["closed"] is True
+          and index["order"] == "ABBA" and len(index["rounds"]) == 4, "not a closed four-round index")
+     tools = verify_tools(Path(__file__).resolve().parent, index["tools_manifest"]["sha256"])
+     rows = []
+@@ -250,7 +250,7 @@
+                                        "B_over_A_mean": average_b / average_a if average_a else None,
+                                        "adjacent_B_over_A": [b[i] / a[i] if a[i] else None for i in range(2)]}
+         comparisons.append(item)
+-    return {"schema": "hepta-r20-lifecycle-abba-summary/v1", "verified": True,
++    return {"schema": "hepta-r21-lifecycle-abba-summary/v1", "verified": True,
+             "order": "ABBA", "round_count": 4, "total_new_starts": 24,
+             "total_same_key_lookups": 48, "total_cancellations": 48,
+             "round_index_sha256": sha(raw_index), "tools_manifest_sha256": index["tools_manifest"]["sha256"],
+--- r20/run_six_host_cancel_recovery_timed.py
++++ r21/run_six_host_cancel_recovery_timed.py
+@@ -32,7 +32,7 @@
+ import x230_six_running_recovery_canary as original
+ import owned_ssh_interruption as interruption
+ 
+-DEV_ROOT = Path("/home/qian/hepta-runtime-optimization-20261105-r20/lifecycle-abba-01")
++DEV_ROOT = Path("/home/qian/hepta-runtime-optimization-20261105-r21/lifecycle-abba-01")
+ HOSTS = original.HOSTS
+ REMOTE = original.REMOTE.replace(
+     '("exit.json", 1048576), ("exit.witness.json", 4096)]',
+@@ -173,7 +173,7 @@
+     def parallel(phase, operation):
+         checkpoint(phase)
+         failed = []
+-        measurement = {"schema": "hepta-r20-lifecycle-phase/v1", "phase": phase,
++        measurement = {"schema": "hepta-r21-lifecycle-phase/v1", "phase": phase,
+                        "hosts": list(HOSTS), "concurrency": 6,
+                        "operation_sequence_before": serial,
+                        "controller_before": None, "controller_after": None,

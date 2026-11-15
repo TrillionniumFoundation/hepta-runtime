@@ -1,0 +1,101 @@
+{
+  "schema": "hepta.native-canary-single-case-diagnostic.v1",
+  "purpose": "diagnosis only; original failed Python21 r1 gate remains failed",
+  "test_body_unchanged": true,
+  "total_timeout_seconds": 10,
+  "driver_timeout_seconds": 2,
+  "instrumentation": "Outside-ROOT subclass inherits the original test body/run_helper, wrapping calls only to record after-call state and adding a pre-cleanup fixture copy; strace adds observational overhead if available.",
+  "strace": "/usr/bin/strace",
+  "argv": [
+    "/usr/bin/strace",
+    "-f",
+    "-ttt",
+    "-T",
+    "-yy",
+    "-e",
+    "trace=%process,fsync,fdatasync,rename,renameat,renameat2",
+    "-o",
+    "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/canary-diagnostic-r1/syscall.trace",
+    "/usr/bin/python3",
+    "-B",
+    "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/canary-diagnostic-r1/run_single_case.py",
+    "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+    "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/canary-diagnostic-r1"
+  ],
+  "pins": {
+    "tests/test_native_canary_resume.py": "d04161b6f223e662c19805288b66dc15b7d7fa3fa5877e9d83adcab86832b328",
+    "tests/native_canary_resume.py": "310e201f084ea0a95bb86f89701084cb7c3e57d956dd219cc9f5763bda6429a3"
+  },
+  "harness_sha256": "f3080a4e71097eb97c2a402bf6ce0e05b66be13abccc9109c5eb669e43de35d8",
+  "root": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+  "tmpdir": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r2-evidence/canary-diagnostic-r1/tmp",
+  "before": {
+    "/proc/loadavg": "9.40 9.56 8.83 5/5696 2438813\n",
+    "/proc/pressure/cpu": "some avg10=0.00 avg60=0.01 avg300=0.04 total=6046107188\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n",
+    "/proc/pressure/io": "some avg10=8.30 avg60=9.90 avg300=12.56 total=40617431251\nfull avg10=8.00 avg60=9.62 avg300=12.19 total=38021224906\n",
+    "/proc/pressure/memory": "some avg10=0.00 avg60=0.00 avg300=0.00 total=1501965074\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=1437742024\n"
+  },
+  "started_unix_ns": 1793800444936937884,
+  "exit_code": 0,
+  "diagnostic_watchdog_timed_out": false,
+  "elapsed_seconds": 2.221339546958916,
+  "after": {
+    "/proc/loadavg": "9.29 9.54 8.82 6/5700 2438916\n",
+    "/proc/pressure/cpu": "some avg10=0.00 avg60=0.01 avg300=0.03 total=6046113841\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n",
+    "/proc/pressure/io": "some avg10=8.79 avg60=9.94 avg300=12.55 total=40617785302\nfull avg10=8.54 avg60=9.66 avg300=12.18 total=38021573979\n",
+    "/proc/pressure/memory": "some avg10=0.00 avg60=0.00 avg300=0.00 total=1501965074\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=1437742024\n"
+  },
+  "source_unchanged": true,
+  "files": [
+    {
+      "path": "diagnostic-plan.json",
+      "bytes": 2104,
+      "sha256": "de19f782d1992428d7e4d3da9dc4102a6d811a84f85fa901739e659319cac502"
+    },
+    {
+      "path": "final-fixture-state.json",
+      "bytes": 55030,
+      "sha256": "e1fe27b9e881702de77cf4920dc6309a0ee361bf4d2e626b144405f66f615454"
+    },
+    {
+      "path": "helper-invocation-01.json",
+      "bytes": 57634,
+      "sha256": "3195d584208d6cf6fce0dc4dac084d58903a3534978cbad5d3f4069165eb9d4f"
+    },
+    {
+      "path": "helper-invocation-02.json",
+      "bytes": 57957,
+      "sha256": "c7b53218be92fbb80383ad48472842c43f3cbcda0651800640686705ee93dec3"
+    },
+    {
+      "path": "observed-helper-calls.json",
+      "bytes": 119600,
+      "sha256": "e38cf72a0e936b7b346d6f8d13877e51f183be83cefcc97dc12daed979d39ab7"
+    },
+    {
+      "path": "run_single_case.py",
+      "bytes": 2264,
+      "sha256": "f3080a4e71097eb97c2a402bf6ce0e05b66be13abccc9109c5eb669e43de35d8"
+    },
+    {
+      "path": "stderr.log",
+      "bytes": 238,
+      "sha256": "a54353313cc2401d2565e4ea586b06d5b077ee3c30e9ba72cb56e7b424f9f435"
+    },
+    {
+      "path": "stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "syscall.trace",
+      "bytes": 18782,
+      "sha256": "237bfe19b4cba7ee342b59343c107da3661a3e18a7888547dc91739d42513ae1"
+    },
+    {
+      "path": "unittest-result.json",
+      "bytes": 94,
+      "sha256": "7a04211ae4044d354f748731fba41473e864b32ab26e7062038990b4a3e56b4a"
+    }
+  ]
+}

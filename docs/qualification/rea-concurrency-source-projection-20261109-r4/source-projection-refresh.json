@@ -1,0 +1,293 @@
+{
+  "schema": "hepta.rea.compatibility-source-projection-refresh.v1",
+  "date": "2026-11-09",
+  "checkpoint": "pre-unbounded-r4",
+  "scope": "Current source mapping after supplemental removal of task and retained-record admission gates; no behavioral qualification",
+  "raw_reference_authenticity": "NOT_REVERIFIED",
+  "behavioral_qualification": "NOT_RERUN",
+  "observed_checkout_head": "f4ac31f0444b6a263c74d16becfddeba84e3a68e",
+  "source_changes_committed_at_sampling": false,
+  "previous_refresh": {
+    "path": "docs/qualification/rea-concurrency-source-projection-20261109-r3/source-projection-refresh.json",
+    "sha256": "728948f87d0396401b0e83a95d341e35352a7252da409d59602b3e5147c82415"
+  },
+  "projection_functions": [
+    "published_pin",
+    "snapshot_rows",
+    "assemble_ledger"
+  ],
+  "previous_ledger": {
+    "path": "docs/qualification/rea-concurrency-source-projection-20261109-r4/REA_6_8_0_LEDGER.before.json",
+    "sha256": "b58bc5059c8d37b8ce5aa1764d696db77a50c92e7b2a0d25b3cc85e8286131c2",
+    "bytes": 779164,
+    "source_manifest_sha256": "59b35e795f256bee543d12086c3b7aef9c8baa8aeab9f34fc0daced2a21c4839"
+  },
+  "current_ledger": {
+    "path": "docs/rea-native/compatibility/REA_6_8_0_LEDGER.json",
+    "sha256": "2c7005526589b81609415b415d37e2892491cf6949e63d7a62b0a682cc0a48b0",
+    "bytes": 779164,
+    "source_manifest_sha256": "c3950c5241041224e3dda49c5a4814776c3ab66aafccbc12a2e5bc51a0f7d495"
+  },
+  "changed_fields": [
+    "runtime.source_files",
+    "runtime.source_manifest_sha256"
+  ],
+  "changed_source_paths": [
+    "src/bin/jobctl.rs",
+    "src/jobctl_tests.rs"
+  ],
+  "changed_source_files": [
+    {
+      "path": "src/bin/jobctl.rs",
+      "before": {
+        "path": "src/bin/jobctl.rs",
+        "sha256": "8bfd4b4bbef9a90da3c6ded73cdb83f833a4e4fd3e6cb078397c69ffcab5c241",
+        "bytes": 50858
+      },
+      "after": {
+        "path": "src/bin/jobctl.rs",
+        "sha256": "575e7b74f26f7ddada5f19ffafd6b9597307b565ac69de3c8091346fa516dc81",
+        "bytes": 51649
+      }
+    },
+    {
+      "path": "src/jobctl_tests.rs",
+      "before": {
+        "path": "src/jobctl_tests.rs",
+        "sha256": "a817e6da72908d7dc4891e1e561959675a5211ca519635e23c355d6915a81056",
+        "bytes": 42544
+      },
+      "after": {
+        "path": "src/jobctl_tests.rs",
+        "sha256": "86b2838f15b9f2563ebc479a5ab42aaf79f2cf786f6ad3f8137fdf4b55a7fdd8",
+        "bytes": 49658
+      }
+    }
+  ],
+  "preserved": {
+    "published_tools": 229,
+    "native_interfaces": 34,
+    "mapped_source_files": 318,
+    "qualified_tools": 0,
+    "open_tools": 229,
+    "all_tool_rows_exactly_equal": true,
+    "all_other_top_level_fields_exactly_equal": true,
+    "all_other_runtime_fields_exactly_equal": true,
+    "all_prior_source_projection_archive_bytes_unchanged": true,
+    "original_826c462_audit_bytes_unchanged": true
+  },
+  "unchanged_input_files": [
+    {
+      "path": "docs/rea-native/compatibility/REA_6_8_0_INPUTS.json",
+      "sha256": "31b9fc41fd9e4a626072de0ea10446c25660eb347949270e40d6ce02b1abd119"
+    },
+    {
+      "path": "docs/rea-native/compatibility/REA_6_8_0_CAPABILITY_MAP.json",
+      "sha256": "e325cd33b95718e751d3f315307471c12ac42afa4bf1522c8ccf56b1cb5939dd"
+    },
+    {
+      "path": "docs/rea-native/compatibility/REA_6_8_0_ENVIRONMENT.json",
+      "sha256": "b1bd6c31cf869b4d27154e5221cd6e3358d6f6e96873629cdae77076f18488b4"
+    },
+    {
+      "path": "scripts/rea_compatibility_ledger.py",
+      "sha256": "3e6ccb06e7a41f39e7a5ce1d27adff62e37fc3302ee585f514de350d7113478a"
+    }
+  ],
+  "deleted_unwired_sources": [
+    {
+      "path": "src/mcp/runtime/retention_limits.rs",
+      "present_in_previous_rea_source_mapping": false,
+      "present_in_current_rea_source_mapping": false,
+      "mapping_entry_removal_required": false
+    },
+    {
+      "path": "src/mcp/runtime/retention_limits_tests.rs",
+      "present_in_previous_rea_source_mapping": false,
+      "present_in_current_rea_source_mapping": false,
+      "mapping_entry_removal_required": false
+    }
+  ],
+  "supplemental_unmapped_runtime_changes": [
+    {
+      "path": "deploy/chatgpt_full_operator.py",
+      "change": "M",
+      "before_sha256": "fe8f1902844e2a04cbae4da5021a16f0db97c98a5fac0449465c04f841a4b45a",
+      "after_sha256": "7d0482be022d09e2c4d4dd766d79466ea9fca9e582ea5306ee32a2ca93d4acf9",
+      "bound_by_rea_source_projection": false
+    },
+    {
+      "path": "src/mcp/runtime/retention_limits.rs",
+      "change": "D",
+      "before_sha256": "ddf46d08aace44228c68fed3e6c84e508dc1f53e4733753bcd1c6b68b1201aa0",
+      "after_sha256": null,
+      "bound_by_rea_source_projection": false
+    },
+    {
+      "path": "src/mcp/runtime/retention_limits_tests.rs",
+      "change": "D",
+      "before_sha256": "4dc6f7d597e2c45fda5c51062d108b36e1358797886c2bf6c7d494345c9a9657",
+      "after_sha256": null,
+      "bound_by_rea_source_projection": false
+    },
+    {
+      "path": "src/mcp/runtime/search_jobs.rs",
+      "change": "M",
+      "before_sha256": "364434992bdff43656a8219e7a5241bc904e2cc6cc2a47c6320fb1e9b18d05f6",
+      "after_sha256": "d24a8e03a636cc0ed570fed36ea4d4505c285ddc3e963053c2496f683c127537",
+      "bound_by_rea_source_projection": false
+    },
+    {
+      "path": "src/mcp/runtime/search_jobs_tests.rs",
+      "change": "M",
+      "before_sha256": "3f75d6f6f95d33131e19ee92f732e533d539c0850984098b0ff11012ead6eb2f",
+      "after_sha256": "2bbf310eb66391216dd32b33f107bac12305f92be4244005e54e4d0f19dd4e4b",
+      "bound_by_rea_source_projection": false
+    },
+    {
+      "path": "src/mcp/runtime/search_worker.py",
+      "change": "M",
+      "before_sha256": "58e5ed08febd70de3f679856dc9f08933a409dc4d26004a1f50a0b29c93735ef",
+      "after_sha256": "a09ebdc8febe682b4527efc3de58f8f4b481a4eed8654693d440f168b232cac5",
+      "bound_by_rea_source_projection": false
+    },
+    {
+      "path": "src/mcp/weight.rs",
+      "change": "M",
+      "before_sha256": "6b9f5a9955f7b7f1736bf27e86dacc6d185e9d5b1f76e785c0244baaf6f42eab",
+      "after_sha256": "6da2c5667469cb76bd8c61bf69b25ba9a39d376bf966b1a30eaddcbb20852f6a",
+      "bound_by_rea_source_projection": false
+    },
+    {
+      "path": "src/mcp/weight_tests.rs",
+      "change": "M",
+      "before_sha256": "53b62511b2f384b4308c9f8df99a133524611310bd96e205ab55c3a6453285be",
+      "after_sha256": "9104eb6646952519cacdf6d5cbb1d807b5df3376fde8912374085e2b19112b29",
+      "bound_by_rea_source_projection": false
+    },
+    {
+      "path": "tests/full_operator_cancel_tests.py",
+      "change": "M",
+      "before_sha256": "3ec96f4fac1c81de708ccaef74a7f4a2e78a52bcbc7fd7f8dfd99b07a1de125f",
+      "after_sha256": "bca6f4181f116c0dec7b98eb67c37e345cc5a2e40f920754a416e7d4bd8a5898",
+      "bound_by_rea_source_projection": false
+    },
+    {
+      "path": "tests/search_worker_tests.py",
+      "change": "M",
+      "before_sha256": "cf7cfd27b8247b60d7d960b99e0ea14c245c9ef1b2b5cafad18e40ee3f203a60",
+      "after_sha256": "111fcecbca4e33415f8fab4c63d1abd4370f03c5b34bd23318d72411d3038bd0",
+      "bound_by_rea_source_projection": false
+    }
+  ],
+  "earlier_validation_scope": {
+    "implementation_commit": "826c462699a27ed6afa83298440acb732b726af5",
+    "covers_this_supplemental_change": false,
+    "new_runtime_binary_qualified_by_this_refresh": false,
+    "new_deployment_attested_by_this_refresh": false,
+    "original_audit_files": [
+      {
+        "path": "docs/qualification/concurrency-20261109/README.md",
+        "sha256": "b58dde2610f58b965f6f98db1a468e74869e44fcd15a2283e55ba90be0e55094",
+        "bytes": 13438
+      },
+      {
+        "path": "docs/qualification/concurrency-20261109/evidence.json",
+        "sha256": "c0e93b22fd4e7ad8f9116549f7e8201de043b3ba43244f5008ad54a59121149c",
+        "bytes": 21107
+      }
+    ]
+  },
+  "unchanged_historical_source_projection_files": [
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r1/README.md",
+      "sha256": "6528d00a25571c1f76b7bd7429352b69d881a0c475d329262b605c6f206d72d1",
+      "bytes": 2616
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r1/REA_6_8_0_LEDGER.before.json",
+      "sha256": "489bf18663c8ff4cfae8d7ab81b143d0528bcf693033547d03b3d307de73fefa",
+      "bytes": 779162
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r1/mapping-checks.json",
+      "sha256": "71db54eb0fb68d78be98193d971f4c4595f75966bc9b28db7a391d46806556ad",
+      "bytes": 3602
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r1/source-projection-refresh.json",
+      "sha256": "05f3597aa88dc6440b9bc556ca62f204b710aa2a8f51c8403b71c21b309ca487",
+      "bytes": 2980
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r2/README.md",
+      "sha256": "aa53cc154460a92498f25232c227466753e8d49c73d0a5996b75aca245931dc1",
+      "bytes": 3727
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r2/REA_6_8_0_LEDGER.before.json",
+      "sha256": "0b52b1742d2bf6e7cf24c1214614e785b0c59034a2c07f53c4caa240ebe6d871",
+      "bytes": 779163
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r2/mapping-checks.json",
+      "sha256": "3cfba295fae45666850015cc59e32b7ce511b6b26dc5beaa875da4da7fe3bde1",
+      "bytes": 3627
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r2/rea-python-gate.log",
+      "sha256": "c9c828e4bb09f29c6866b24e38dfea58c35232c0325ca7b5fc2d396617fdb74e",
+      "bytes": 3224
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r2/source-projection-refresh.json",
+      "sha256": "e660900201254886212d6306da3ed727aa3c5030c33cf453d32086fa8f350cda",
+      "bytes": 4600
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r3/README.md",
+      "sha256": "d428d1f19626dee37f87e32f770e103a6e0e084f3d466bc7b1bb1a0cb9063bb7",
+      "bytes": 1648
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r3/REA_6_8_0_LEDGER.before.json",
+      "sha256": "0b52b1742d2bf6e7cf24c1214614e785b0c59034a2c07f53c4caa240ebe6d871",
+      "bytes": 779163
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r3/mapping-checks.json",
+      "sha256": "b4166419574212406d6443a0a7ef7b626fbb3a15f481d9be0123cfabd4bd1418",
+      "bytes": 3329
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r3/source-projection-refresh.json",
+      "sha256": "728948f87d0396401b0e83a95d341e35352a7252da409d59602b3e5147c82415",
+      "bytes": 3399
+    }
+  ],
+  "checks": {
+    "mapping_checks": {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r4/mapping-checks.json",
+      "sha256": "5ab8632766c5e7570a3c63141758101d6cb53e12bef8643f45d5406a6b6c5591",
+      "normal_exit_code": 0,
+      "strict_parity_exit_code": 3
+    },
+    "ledger_tests": {
+      "argv": [
+        "python3",
+        "-B",
+        "tests/rea_compatibility_ledger_tests.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "passed": 29,
+      "runner_elapsed_seconds": 1.144,
+      "reported_test_elapsed_seconds": 0.534,
+      "log_path": "docs/qualification/rea-concurrency-source-projection-20261109-r4/ledger-tests.log",
+      "log_sha256": "c2fca340e9367d43d7462dea1919c95216f969ee9329df77ffa2a907868f473d",
+      "log_stream": "stderr",
+      "stdout_empty": true
+    },
+    "runtime_behavior_rerun_by_this_checkpoint": false
+  }
+}

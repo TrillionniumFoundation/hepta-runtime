@@ -1,0 +1,264 @@
+{
+  "schema": "hepta-v10-independent-boundary-source-review-v2",
+  "reviewer": "/root/v10_source_boundary_audit",
+  "date_utc": "2026-10-13",
+  "worktree": "/home/qian-qi/hepta-runtime-operation-v10-20261013",
+  "scope": "Read-only independent source and persisted static catalog review. No compiler, native MCP controller, fixture, SSH effect, deployment, credential inspection or source mutation performed by this reviewer.",
+  "source": {
+    "base_HEAD": "50372629e0522d19b5bc4c1a800bfc311e4597f9",
+    "source_code_fingerprint": "498cca6da8c442c70534b0a35807c94d7b5f7fbef4b2b4d8f15fa9c22484e33c",
+    "input_count": 98,
+    "python_input_count": 16,
+    "independent_immediate_rescan_equal": true,
+    "official_manifest_path": "docs/qualification/dc-functional-v10-operation-candidate-20261013/r14-combined-final-clippy-fresh-full-checks/source-before.json",
+    "official_manifest_sha256": "00015439870b172a34f07b269143764d9a644c3445eb2c7b5195b539f90e7938",
+    "official_source_files_equal": true,
+    "local_independent_map": "v10-independent-final-498-source-map-20261013.json"
+  },
+  "reviewed_primary_files": {
+    "src/main.rs": {
+      "bytes": 9440,
+      "sha256": "0d0308d17cd504e01ccf71d5eff5dfdca494e2a30899b52888516b20cedc3ff7"
+    },
+    "src/mcp/server.rs": {
+      "bytes": 106260,
+      "sha256": "384f8987de984f37ab80bf02eca4960c16423aacd584c57f1441e1c38abd07c6"
+    },
+    "src/mcp/runtime/caller_scope.rs": {
+      "bytes": 8822,
+      "sha256": "8013904df0fbe9e0aa5a44bf4e1c77a6ea9a273de06fe365078f81fd40a4254c"
+    },
+    "src/mcp/runtime/operation_async.rs": {
+      "bytes": 53682,
+      "sha256": "c36648334c4e55f06c0d326686bb9bdfcfc48303728cf7f660b54dceb86bf78e"
+    },
+    "src/mcp/runtime/operation_async_tests.rs": {
+      "bytes": 27872,
+      "sha256": "3935f0b1959d52d040c8a971fa57254bb37b31ff7c4aba579292a8ea61428b5c"
+    },
+    "src/mcp/runtime/operation_crypto.rs": {
+      "bytes": 15524,
+      "sha256": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633"
+    },
+    "src/mcp/runtime/operation_crypto_tests.rs": {
+      "bytes": 22916,
+      "sha256": "ccb885c51850a14332dba860a3e354598f489734fbb3539ec8f3bd3d7144a9f6"
+    },
+    "src/mcp/runtime/request_audit.rs": {
+      "bytes": 29284,
+      "sha256": "e771949825a9bbacb7f6e8e5d567c816be5843aeecba44fe591f4bec79e5a2eb"
+    },
+    "src/mcp/runtime/request_audit_tests.rs": {
+      "bytes": 13429,
+      "sha256": "9308e952b7612322edd733336305502222651a9adcb819fd847e01ad619447e2"
+    },
+    "src/mcp/runtime/request_async.rs": {
+      "bytes": 38088,
+      "sha256": "77bfb4617993f9d9a55ec89bc86596daab6619df6d8f41438d363a8407e6b817"
+    },
+    "src/mcp/runtime/mod.rs": {
+      "bytes": 1080,
+      "sha256": "ef30bfa8857f3d00b54cc7523a91a56e8884ab4e7acac49130fe8dae2f453fc3"
+    }
+  },
+  "verdict": {
+    "p0_findings": [],
+    "open_p1_findings": [],
+    "source_boundary_blocker_found": false,
+    "source_only_peer_review_complete": true,
+    "latest_native_acceptance_proven": false
+  },
+  "historical_findings_document": "v10-independent-boundary-historical-3a-20261013.json",
+  "resolved_source_findings": [
+    {
+      "id": "V10-POLICY-DICTIONARY-ORACLE",
+      "original_fp": "3a9106b6fa774758590a94c2506eaded97d3e794cc34823767f93597d2ecdbb0",
+      "status": "Fixed in inspected source",
+      "evidence": [
+        "operation_crypto.rs:41,225-230,286-317,341-346",
+        "operation_async.rs:1342-1354,1382,1545,1576,1603",
+        "server.rs:686"
+      ],
+      "conclusion": "V10 policy binding now uses an independently derived HKDF policy key and explicit HMAC domain over bounded canonical full config. All four new interfaces use the capability; cancel no longer drops crypto. V9 policy function is preserved.",
+      "regression_source": [
+        "operation_crypto_tests.rs:697-751",
+        "operation_async_tests.rs:705-734"
+      ],
+      "regression_executed_by_reviewer": false
+    },
+    {
+      "id": "V10-METADATA-STABLE-FD",
+      "original_fp": "3a9106b6fa774758590a94c2506eaded97d3e794cc34823767f93597d2ecdbb0",
+      "status": "Fixed in inspected source",
+      "evidence": [
+        "operation_async.rs:408-446"
+      ],
+      "conclusion": "Metadata is opened with nofollow/nonblock/cloexec; owned0600/single-link regular-file checks occur before and after. The same FD's dev/ino/uid/mode/nlink/len/mtime/ctime and full byte-count are compared before deserialization.",
+      "regression_source": [
+        "operation_async_tests.rs:737-779"
+      ],
+      "regression_executed_by_reviewer": false
+    },
+    {
+      "id": "V10-DOUBLE-READY-LATE-CANCEL",
+      "original_fp": "3a9106b6fa774758590a94c2506eaded97d3e794cc34823767f93597d2ecdbb0",
+      "status": "Fixed in inspected source",
+      "evidence": [
+        "operation_async.rs:1356-1371,1466-1516,1585-1591"
+      ],
+      "conclusion": "The completion branch is now first in biased selection. A ready original payload wins simultaneous cancellation; pending reads remain cancellable. Result sealing/publication and audit/outcome settlement occur after leaving selection and are not cancelled by this API.",
+      "regression_source": [
+        "operation_async_tests.rs:782-819"
+      ],
+      "regression_executed_by_reviewer": false
+    },
+    {
+      "id": "V10-RESERVED-AUDIT-CLOSED-FAMILY",
+      "status": "New seam fix independently inspected; no native outcome inferred",
+      "historical_problem": "Owner reported prior native reads burned immutable reservations but could not dispatch because V10 called V9's reserved-audit whitelist of only three DTO tools. This reviewer did not execute those native failures.",
+      "evidence": [
+        "request_audit.rs:744-764,767-821",
+        "operation_async.rs:71-84,1445-1448"
+      ],
+      "conclusion": "V9 begin_reserved_at remains exactly host_list/host_health/effective_config. New begin_operation_reserved_at validates owner/id plus the same closed ten-tool predicate used by V10 before sharing record publication. V10 now calls this new entry point. Existing audit IDs and malformed records refuse redispatch; duplicate reservation never rebuilds a ticket.",
+      "regression_source": [
+        "request_audit_tests.rs:350-446",
+        "operation_async_tests.rs:822-859"
+      ],
+      "regression_executed_by_reviewer": false
+    }
+  ],
+  "source_boundary_checks": [
+    {
+      "topic": "Caller authority",
+      "evidence": [
+        "main.rs:138-175",
+        "caller_scope.rs:14-42,164-235"
+      ],
+      "conclusion": "Only verified middleware extensions yield HTTP authority. A session cannot switch its bound credential, nor spoof owner via caller params. Crypto is derived from exact configured credential bytes, not persisted owner hash. Native stdio uses independent random ephemeral keys."
+    },
+    {
+      "topic": "Closed read dispatcher",
+      "evidence": [
+        "operation_async.rs:52-137"
+      ],
+      "conclusion": "Exactly ten tagged typed variants dispatch directly to existing native read functions. No generic tool recursion, process_start, write, privileged_action, sudo or caller-selected executable arm is added. The native policy checks remain in the actual handler call path."
+    },
+    {
+      "topic": "Result binding and secrecy",
+      "evidence": [
+        "operation_crypto.rs:91-184,225-230,242-265,358-454",
+        "operation_async.rs:1115-1161"
+      ],
+      "conclusion": "AAD binds ID, owner, tool, accepted time, private policy, typed request, immutable ledger identity and payload kind. Record subkeys bind ID+ledger; fresh CSPRNG nonces and shared bounded nonce accounting are used. Key fields and decrypted/canonical buffers use Zeroizing wrappers and redacted Debug; no serialization/export API is provided for key scopes."
+    },
+    {
+      "topic": "Original SDK payload",
+      "evidence": [
+        "operation_async.rs:1127-1161,1483-1505,1660-1705"
+      ],
+      "conclusion": "Complete CallToolResult and ErrorData are serialized directly before operation metadata, with a1MiB bounded writer. Paging does not dispatch or interpret the payload; it carries byte offset, SHA256 and at most16384 original bytes. This is original SDK serialization from the current handler, not a claim of unchanged pre-V10 business bytes."
+    },
+    {
+      "topic": "No replay and persistence",
+      "evidence": [
+        "operation_async.rs:825-988,1016-1069,1178-1287"
+      ],
+      "conclusion": "Independent intent, occupied and primary records must agree; incomplete/corrupt graphs refuse. Intent burns first. Existing bindings do not acquire a new ID or reconstruct an audit ticket. Payload publication is immutable link/unlink publication with sync; retrieval validates private files and stable FD then AEAD. Missing payload remains unavailable without granting a permit."
+    },
+    {
+      "topic": "Audit absence versus corruption",
+      "evidence": [
+        "request_audit.rs:160-196",
+        "operation_async.rs:1520-1538"
+      ],
+      "conclusion": "Only genuine NotFound can mean audit metadata eviction; other failures refuse. Present audit identity must match ID/owner/tool/accepted time. Redacted audit contains metadata only, not original outputs, raw params or raw errors."
+    },
+    {
+      "topic": "Cancellation and shared resources",
+      "evidence": [
+        "operation_async.rs:256-297,1570-1598",
+        "request_async.rs:185-210"
+      ],
+      "conclusion": "V10 acquires V9's shared eight-global/four-owner Slot; guard drop releases both counts. Shared stopping is checked before slot admission. Cancel selects only the controller's matching Active identity and Rust future, not an OS PID or signal; late settlement is not cancellable."
+    },
+    {
+      "topic": "Shutdown",
+      "evidence": [
+        "main.rs:120-125,242-247",
+        "operation_async.rs:1707-1727"
+      ],
+      "conclusion": "Main synchronously freezes both admission families before joining their shutdown futures. The active-drain polling loop is bounded; this source review does not certify an end-to-end shutdown latency under blocked filesystem admission."
+    },
+    {
+      "topic": "Quota/lifetime",
+      "evidence": [
+        "operation_async.rs:38-42,967-974",
+        "server.rs:587"
+      ],
+      "conclusion": "Immutable key retention really refuses new keys at512 globally/128 per owner while permitting existing lookup. No automatic expiry/eviction/rebind or restart execution resume is implemented or claimed."
+    },
+    {
+      "topic": "Whole result wire budget",
+      "evidence": [
+        "operation_async.rs:1313-1320,1665-1705",
+        "caller_scope.rs:61-101",
+        "server.rs:658-661,2263-2304"
+      ],
+      "conclusion": "The serialized CallToolResult is checked at64KiB in page and again after caller-scope annotation. These operation responses are excluded from the legacy result-family identity/ack enrichment; generic audit completion preserves their response."
+    }
+  ],
+  "catalog": {
+    "added": [
+      "operation_cancel",
+      "operation_result",
+      "operation_start",
+      "operation_status"
+    ],
+    "added_four_canonical_sha256": "ec87bee3d4a17caf3ce109fc6cc5540cd7da7573d33c5c83c50f37a95f84b652",
+    "catalog_sha256": "4bfcaa69c38a7219e9904a7adba2c260269319769799012dc67629262e61cce0",
+    "changed_old": [],
+    "execution_backend": "existing hepta-runtime; no gateway execution implementation",
+    "export_path": "docs/qualification/dc-functional-v10-operation-engine-tests-20261013/export-r3/contract.json",
+    "export_sha256": "12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553",
+    "missing_old": [],
+    "new_count": 66,
+    "old_count": 62,
+    "predecessor_path": "deploy/contracts/hepta-runtime-full-operator-v9.json",
+    "predecessor_sha256": "3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761"
+  },
+  "catalog_review": {
+    "entire_old_tool_objects_compared": true,
+    "comparison": "Canonical serialized bytes of every complete per-tool object; no fields stripped. This proves static catalog definition equality, not whole response/business equality.",
+    "new_four_reviewed": true,
+    "closed_start_variants": 10,
+    "all_new_envelopes_deny_unknown_fields": true,
+    "annotations": "start is mutating admission/non-idempotent hint/open-world; cancel mutates owned future but not destructive and idempotent; status/result read-only/idempotent/closed-world.",
+    "descriptions": "Explicit shared-credential scope, ephemeral stdio, ten native read APIs, no replay/restart execution resume/full DC replacement,1MiB sealed payload/16KiB pages and permanent quotas. operation_result explicitly requires controller restart for token/policy change and denies live file-reload revocation.",
+    "schema_note": "Some numeric schemas expose underlying unsigned type range; stricter1..16384 page limits are enforced by handler validation. No authorization bypass is inferred."
+  },
+  "remaining_boundaries": [
+    "Startup-cached HTTP auth and OnceLock loaded policy require restart to revoke changed files. Harness source781-808 explicitly stops and restarts, includes controller_restart_used=true/live_file_reload_revocation_supported=false. This reviewer did not execute it.",
+    "Private configured credential entropy is an assumption. Minimum length and HKDF do not defeat dictionary guessing of a weak credential; no token was read, modified or guessed.",
+    "Credential metadata scope is not authenticated ChatGPT user/conversation/tenant isolation; credential-sharing users share result keys.",
+    "Immutable ledger preservation is necessary for no replay. No adversarial filesystem rollback resistance, transport delivery proof, remote work termination, OS undo, business success or full replacement claim follows from this review.",
+    "Historical R5/3a, d1/R9 and rs-only R7 artifacts remain historical. No old focused primitive result or old full build is promoted to current native capability."
+  ],
+  "qualification": {
+    "complete_replacement": false,
+    "model_origin": false,
+    "business_replacement": false,
+    "dc_off": false,
+    "DC_rescue_required": true,
+    "tests_executed_by_reviewer": [],
+    "native_effects_executed_by_reviewer": []
+  },
+  "readonly_evidence_jobs": [
+    "1a137996579-b2f-a87",
+    "1a1379dabc6-b2f-aba",
+    "1a1379e036e-b2f-abd",
+    "1a1379e7c75-b2f-ac0",
+    "1a1379f9d25-b2f-ac8",
+    "1a1379feb92-b2f-acb"
+  ]
+}

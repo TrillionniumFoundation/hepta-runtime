@@ -1,0 +1,122 @@
+# Local exact-source Rust qualification (non-authorizing)
+
+Use this when GitHub Actions cannot start an actual job (see runtime issue #29).
+This tool collects **local** source and test evidence; it never grants Hepta
+FinalUse, authority, deployment, or target-host production qualification.
+
+## Prerequisites
+
+- Linux or macOS with Python 3, Git and enough disk for two Cargo builds.
+- Install Rust **1.95.0** with `rustfmt` and `clippy` (the verifier pins
+  `RUSTUP_TOOLCHAIN=1.95.0` and checks both `rustc` and `cargo` versions).
+- Use a trusted local clone of `hepta-runtime`, and fetch the **exact
+  candidate PR head and GitHub-generated PR merge**. Do not substitute a
+  locally constructed merge tree for GitHub's merge SHA.
+
+Example for PR `N` (replace `N` with the real PR number):
+
+```bash
+git fetch origin "refs/pull/N/head:refs/qualify/N-head"
+git fetch origin "refs/pull/N/merge:refs/qualify/N-merge"
+SOURCE="$(git rev-parse refs/qualify/N-head)"
+MERGE="$(git rev-parse refs/qualify/N-merge)"
+python3 scripts/local_qualification.py \
+  --repo . \
+  --source-sha "$SOURCE" \
+  --merge-sha "$MERGE" \
+  --output "$HOME/hepta-runtime-qualification/N"
+```
+
+The output directory must be **outside** the repository. The checker reads the raw SHA-addressed merge commit and requires exactly two
+parents, with the provided source SHA as its second parent. This rejects linear,
+unrelated or wrong-head commits masquerading as GitHub's PR merge. It does not
+authenticate the GitHub origin of a caller-supplied SHA; retrieve the actual
+`refs/pull/N/merge` from GitHub using a trusted remote.
+
+### Git checkout execution preflight
+
+Before creating any detached worktree, the qualifier checks effective repository
+Git configuration **as data** and rejects executable smudge/process filters,
+active `core.fsmonitor`, custom `core.hooksPath`, or config include directives.
+Disabling Git hooks alone is insufficient: `.gitattributes` plus
+`filter.*.smudge` can run an arbitrary command inside `git worktree add`
+**before** any byte attestation. This was reproduced with an isolated Git
+fixture. Git commands ignore system/global Git configuration by default.
+An active repo-local filter is a blocking qualification result, not a
+reason to whitelist unchecked subprocesses.
+
+Git index source qualification also **rejects every tracked symlink**: the
+Git object for mode `120000` binds only a target path, not the target's
+current bytes. Without this rule, external or local symlink targets can
+change code/test execution while the checkout's Git commit and blob
+identities remain unchanged. The checked P3 source tree currently contains
+no tracked symlinks, so this is a conservative admission rule rather than
+a compatibility waiver.
+
+The checker creates
+separate detached worktrees for both exact SHAs, refuses hidden index source
+flags, missing/modified tracked bytes, replacement refs, non-POSIX execution,
+non-pinned Rust, missing tests, or any failing check.
+
+It runs Python source-contract and self-regression suites, then Cargo fmt,
+check, Clippy, tests, and release build using locked dependencies on **both**
+commits. Output is bounded to 8 MiB per command, command trees have wall-clock
+deadlines, and an outliving child holding an inherited capture pipe triggers\nprocess-group cleanup plus a failed receipt. JSON plus SHA-256-digested logs\nare retained even on failure.
+
+`qualification.json.status` values:
+
+- `BLOCKED`: at least one gate did not complete successfully. Never promote.
+- `LOCAL_CHECKS_PASS_NOT_PRODUCTION`: **both** local SHA lanes passed. Still
+  require independently reviewed runtime/host/FinalUse evidence and a real
+  production acceptance decision before deployment.
+
+If the PR head or base changes, refetch both refs and rerun; receipts for an
+earlier exact SHA are not transferable to a new SHA or PR merge.
+
+
+### Execution environment preflight (source-only, fail-closed)
+
+The local verifier refuses inherited **execution-affecting environment variable names** before any Git or Cargo child process, including Git configuration/object redirects, Rust toolchain/compiler/flags, Cargo source/target/runner, Python import/startup overrides, dynamic loader injection, build/linker wrappers and OpenSSL/pkg-config overrides. Only reviewed diagnostic controls such as `RUST_BACKTRACE`, `RUST_LOG` and `CARGO_TERM_COLOR` are exempt. Denial receipts include **names only**, not values. Use a clean, controlled shell and rerun rather than passing tests under an unreviewed environment; no automatic allowlist expansion or gate bypass.
+
+This closes an environment-inheritance false-positive in the local evidence harness. It **does not** attest the executable files reachable through `PATH`, installed Rust binaries, kernel, devices or signed operator authority. Two genuine pinned Git commits and real Cargo/host evidence remain mandatory.
+
+
+### Closed-pipe descendant guard
+
+The verifier refuses success when a command's immediate parent exits and
+closes stdout but an in-session child remains alive. After collecting the
+parent's terminal result, it checks the isolated POSIX process group, kills
+remaining members, and issues an \`io_error\` receipt rather than a false
+\`LOCAL_CHECKS_PASS\`. This closes a local qualification acceptance gap, not
+an OS sandbox: descendants that create new sessions/cgroups can escape this
+process-group check. An independent host/container sandbox is required before
+production authorization.
+
+### Executable Git config is not source evidence
+
+The dual-SHA verifier now checks effective Git configuration **before each**
+Git command, rejecting `core.fsmonitor`, `core.hooksPath`,
+unreviewed `filter.*.clean/smudge/process`, external diff/merge drivers,
+credential helpers, aliases, pagers and other executable hooks. Only blocked
+configuration **key names** are shown, never their values. The read-only
+preflight is separate from the original checkout-filter check and preserves
+tracked-symlink refusal. This is a local software acceptance guard, not an OS
+sandbox, attested Rust toolchain or production FinalUse qualification.
+
+
+### Descriptor-rooted source intake (candidate P3 hardening)
+
+The exact-Git-index verifier now opens a worktree directory descriptor and
+walks **each** tracked pathname component with `O_NOFOLLOW`; it reads bytes,
+file type, size and executable mode from the **same regular-file descriptor**.
+It rejects intermediate/final symlinks, noncanonical components, FIFOs,
+devices, hard-linked source inodes, files larger than 64 MiB and a file whose
+size or inode timestamps change during the read. Six independent POSIX
+regressions run locally and in both exact-source/merge CI lanes. The previous
+`Path.is_file()/is_symlink()` then `Path.read_bytes()` sequence did not
+secure an intermediate directory against a symlink replacement.
+
+These guards reduce deceptive source-intake evidence but do **not** make the
+worktree immutable between checking and Cargo execution. An independent
+read-only filesystem/namespace snapshot or other trusted host confinement is
+still required for production acceptance. Unsupported platforms fail closed.

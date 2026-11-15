@@ -1,0 +1,408 @@
+--- evidence-tools-01/scan_evidence.py
++++ evidence-tools-02/scan_evidence.py
+@@ -11,6 +11,8 @@
+ MAX_FILE = 32 * 1024**2
+ MAX_EXPANDED = 64 * 1024**2
+ MAX_NODES = 100000
++MAX_JSON_VISITS = 1000000
++MAX_DEPTH = 3
+ RULES = {
+     'private-key-pem': re.compile(rb'-----BEGIN (?:(?:OPENSSH|RSA|EC|DSA|ENCRYPTED) )?PRIVATE KEY-----(?:\r?\n|\\(?:r\\)?n)(?:(?:Proc-Type|DEK-Info):[^\r\n\\]{1,512}(?:\r?\n|\\(?:r\\)?n)){0,2}(?:\r?\n|\\(?:r\\)?n)?[A-Za-z0-9+/=]{16,}'),
+     'github-token': re.compile(rb'(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})'),
+@@ -26,12 +28,28 @@
+ 
+ def scan(raw, path):
+     """Fail closed on bounds; decoded findings retain only path and pattern labels."""
+-    findings, seen, queue, total, nodes = set(), {}, [(raw, 'raw', 0)], 0, 0
++    findings, seen, queue, total, nodes = set(), {}, {}, 0, 0
+     if len(raw) > MAX_FILE:
+         return [{'path': path, 'pattern': 'raw:scan-size-limit'}]
++
++    def enqueue(data, layer, depth):
++        # Whole JSON/JSONL documents enqueue their strings before the queue drains.
++        # Deduplicate that pending work without losing a later, shallower decode.
++        digest = hashlib.sha256(data).digest()
++        prior_depth = seen.get(digest)
++        pending = queue.get(digest)
++        if prior_depth is not None and prior_depth <= depth:
++            return
++        if pending is not None and pending[2] <= depth:
++            return
++        if pending is None and len(queue) >= MAX_NODES:
++            findings.add('decoded-scan-queue-exceeded')
++            return
++        queue[digest] = (data, layer, depth)
++
++    enqueue(raw, 'raw', 0)
+     while queue:
+-        data, layer, depth = queue.pop()
+-        digest = hashlib.sha256(data).digest()
++        digest, (data, layer, depth) = queue.popitem()
+         prior_depth = seen.get(digest)
+         if prior_depth is not None and prior_depth <= depth:
+             continue
+@@ -46,7 +64,7 @@
+                 findings.add(layer + ':' + name)
+         if data.startswith(b'\x7fELF'):
+             findings.add(layer + ':elf-body')
+-        if depth >= 3:
++        if depth >= MAX_DEPTH:
+             continue
+         if data.startswith(b'\x1f\x8b'):
+             try:
+@@ -55,7 +73,7 @@
+                 if len(decoded) > MAX_EXPANDED - total:
+                     findings.add(layer + ':gzip-expansion-limit')
+                 else:
+-                    queue.append((decoded, layer + '/gzip', depth + 1))
++                    enqueue(decoded, layer + '/gzip', depth + 1)
+             except (OSError, EOFError, ValueError):
+                 findings.add(layer + ':invalid-gzip')
+         if data.lstrip().startswith((b'{', b'[', b'"')):
+@@ -71,17 +89,17 @@
+                     while pending:
+                         value = pending.pop()
+                         visited += 1
+-                        if visited > 1000000 or len(queue) > MAX_NODES:
++                        if visited > MAX_JSON_VISITS or 'decoded-scan-queue-exceeded' in findings:
+                             findings.add(layer + ':json-scan-budget-exceeded')
+                             break
+                         if isinstance(value, str):
+-                            queue.append((value.encode(), layer + '/json', depth + 1))
++                            enqueue(value.encode(), layer + '/json', depth + 1)
+                         elif isinstance(value, dict):
+                             pending.extend(value.keys())
+                             pending.extend(value.values())
+                         elif isinstance(value, list):
+                             pending.extend(value)
+-                    if visited > 1000000 or len(queue) > MAX_NODES:
++                    if visited > MAX_JSON_VISITS or 'decoded-scan-queue-exceeded' in findings:
+                         break
+             except (json.JSONDecodeError, UnicodeError):
+                 pass
+@@ -89,15 +107,14 @@
+                 findings.add(layer + ':json-parser-limit')
+         for token in HEX_RUN.finditer(data):
+             if len(token[0]) % 2 == 0:
+-                queue.append((bytes.fromhex(token[0].decode('ascii')), layer + '/hex', depth + 1))
++                enqueue(bytes.fromhex(token[0].decode('ascii')), layer + '/hex', depth + 1)
+         for token in ENCODED.finditer(data):
+             try:
+                 value = token[0]
+                 decoded = base64.b64decode(value + b'=' * (-len(value) % 4), altchars=b'-_', validate=True)
+-                queue.append((decoded, layer + '/base64', depth + 1))
++                enqueue(decoded, layer + '/base64', depth + 1)
+             except ValueError:
+                 pass
+-        if len(queue) > MAX_NODES:
+-            findings.add('decoded-scan-queue-exceeded')
++        if 'decoded-scan-queue-exceeded' in findings:
+             break
+     return [{'path': path, 'pattern': pattern} for pattern in sorted(findings)]
+--- evidence-tools-01/evidence_policy.py
++++ evidence-tools-02/evidence_policy.py
+@@ -14,13 +14,17 @@
+ SCOPES = {'r36': ROOT, 'recovery': CANARY}
+ HOLDER_ROOT = Path('/Users/qianqi/work/hepta-runtime-x230-r36-20261106')
+ HOLDERS = ('observation-holder-01', 'lifecycle-holder-01', 'async-read-holder-01')
++CAPTURE_TOOLS = 'evidence-tools-02'
++PRIOR_FAILURE_MEMBER = 'r36/evidence-export-01/export-failure.json'
++PRIOR_FAILURE_PIN = {'bytes': 2129,
++                     'sha256': '24ef364dc00258ad354ec5650950060ac8e91f823c6598d922b8a18452752332'}
+ DIRECTORIES = (
+     'source', 'candidate', 'qualification-01', 'rust-ci-01', 'rust-ci-tools-01',
+     'python-ci-01', 'python-ci-launch-01', 'python-ci-tools-01',
+     'campaign-01', 'lifecycle-campaign-01', 'lifecycle-abba-01',
+     'lifecycle-tool-tests-01', 'cancel-saturation-01', 'tools-01',
+     'lifecycle-tools-01', 'boundary-tools-01', 'ci-templates', 'input-templates',
+-    'holder-inputs-01', 'evidence-tools-01',
++    'holder-inputs-01', 'evidence-tools-01', 'evidence-tools-02', 'evidence-export-01',
+     'supplement-tools-01', 'async-read-abba-01',
+ )
+ STAGES = {
+@@ -93,11 +97,25 @@
+         return 'socket-or-special-file; body not opened'
+     if stat.S_ISREG(mode) and nlink != 1:
+         return 'nonexclusive-file-link; body not opened'
++    if (member.startswith('r36/evidence-export-01/') and member != PRIOR_FAILURE_MEMBER):
++        return 'outside-exact-original-export-failure-receipt; metadata only, descendants not read'
+     if stat.S_ISREG(mode) and name.endswith(('.tar', '.tar.gz', '.tar.xz', '.tgz', '.txz', '.zip', '.7z')):
+         return 'opaque-container; metadata only, original expanded evidence captured separately'
+     if member.startswith('r36/') and stat.S_ISDIR(mode) and len(parts) == 1 and parts[0] not in DIRECTORIES:
+         return 'outside-fixed-evidence-directories; metadata only, descendants not read'
+     return None
++
++
++def prior_failure_binding(payloads, body):
++    """Keep the actual failed capture as an original; the repaired capture cannot erase it."""
++    need(PRIOR_FAILURE_MEMBER in payloads, 'original failed capture receipt missing')
++    need(all(payloads[PRIOR_FAILURE_MEMBER][key] == value for key, value in PRIOR_FAILURE_PIN.items()),
++         'original failed capture receipt differs')
++    value = json.loads(body(PRIOR_FAILURE_MEMBER))
++    need(value.get('package_complete') is False and value.get('phase') == 'scan'
++         and value.get('candidate_adopted') is False, 'original scan failure was promoted')
++    return dict(PRIOR_FAILURE_PIN, member=PRIOR_FAILURE_MEMBER, package_complete=False,
++                phase='scan', candidate_adopted=False)
+ 
+ 
+ def inventory(helper, output):
+--- evidence-tools-01/pack_r36_evidence.py
++++ evidence-tools-02/pack_r36_evidence.py
+@@ -58,6 +58,7 @@
+         wanted = {'r36/' + directory + '/' + filename for directory, filename, _ in policy.STAGES.values()}
+         wanted.add('r36/holder-inputs-01/manifest.json')
+         wanted.add('recovery/report.json')
++        wanted.add(policy.PRIOR_FAILURE_MEMBER)
+         phase = 'scan'
+         total = 0
+         for member, row in sorted(before['entries'].items()):
+@@ -83,9 +84,10 @@
+         scopes = before['scopes']
+         holders = policy.holder_bindings(payloads, omissions, reports.get)
+         outcomes = policy.stage_observations(scopes, reports.get)
++        prior_failure = policy.prior_failure_binding(payloads, reports.get)
+         tool_pins = {}
+         for name in policy.TOOL_FILES:
+-            member = 'r36/evidence-tools-01/' + name
++            member = 'r36/' + policy.CAPTURE_TOOLS + '/' + name
+             policy.need(member in payloads, 'capture source missing from fixed package')
+             tool_pins[name] = {key: payloads[member][key] for key in ('bytes', 'sha256')}
+         manifest = {
+@@ -97,6 +99,7 @@
+                                   for name in policy.DIRECTORIES},
+             'original_stage_observations': outcomes, 'holder_bindings': holders,
+             'capture_sources': tool_pins, 'archive_helper_sha256': policy.HELPER_SHA,
++            'capture_tool_directory': policy.CAPTURE_TOOLS, 'prior_capture_failure': prior_failure,
+             'scanner': {'findings': [], 'raw_and_json_hex_base64_gzip_scanned': True,
+                         'credential_paths_opened': False, 'omitted_elf_body_hashed': False},
+             'candidate_adopted': False, 'performance_pass_inferred': False, 'hosted_CI_passed_inferred': False,
+@@ -118,6 +121,7 @@
+                   'payload_count': len(payloads), 'omission_count': len(omissions),
+                   'original_inputs_unchanged': True, 'original_stage_observations': outcomes,
+                   'holder_bindings': holders, 'capture_sources': tool_pins,
++                  'capture_tool_directory': policy.CAPTURE_TOOLS, 'prior_capture_failure': prior_failure,
+                   'archive_validation': archive_check, 'candidate_adopted': False,
+                   'performance_pass_inferred': False, 'hosted_CI_passed_inferred': False,
+                   'remote_operations': 0, 'commands_or_archived_code_executed': 0}
+@@ -138,10 +142,10 @@
+ 
+ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+-    parser.add_argument('--out', type=Path, default=policy.ROOT / 'evidence-export-01')
++    parser.add_argument('--out', type=Path, default=policy.ROOT / 'evidence-export-02')
+     args = parser.parse_args()
+     policy.need(sys.platform == 'linux' and os.geteuid() != 0, 'native X230 operator required')
+-    policy.need(Path(__file__).resolve().parent == policy.ROOT / 'evidence-tools-01', 'fixed deployed evidence tools required')
++    policy.need(Path(__file__).resolve().parent == policy.ROOT / policy.CAPTURE_TOOLS, 'fixed deployed evidence tools required')
+     return capture(args.out)
+ 
+ 
+--- evidence-tools-01/verify_r36_evidence.py
++++ evidence-tools-02/verify_r36_evidence.py
+@@ -104,14 +104,18 @@
+         policy.need(manifest['fixed_directories'] == expected_dirs, 'fixed directory absence declarations differ')
+         outcomes = policy.stage_observations(scopes, body)
+         holders = policy.holder_bindings(payloads, omissions, body)
++        prior_failure = policy.prior_failure_binding(payloads, body)
+         policy.need(outcomes == manifest['original_stage_observations'] == report['original_stage_observations']
+                     and holders == manifest['holder_bindings'] == report['holder_bindings'], 'original outcomes or holder binding changed')
++        policy.need(prior_failure == manifest['prior_capture_failure'] == report['prior_capture_failure']
++                    and manifest['capture_tool_directory'] == report['capture_tool_directory'] == policy.CAPTURE_TOOLS,
++                    'repaired capture identity or original failure differs')
+         policy.need(manifest['capture_sources'] == report['capture_sources']
+                     and set(manifest['capture_sources']) == set(policy.TOOL_FILES), 'capture source receipt differs')
+         for name, pin in manifest['capture_sources'].items():
+             policy.need(Path(name).name == name, 'unsafe capture tool name')
+             local = helper.read(Path(__file__).resolve().with_name(name))[0]
+-            archived = body('r36/evidence-tools-01/' + name)
++            archived = body('r36/' + policy.CAPTURE_TOOLS + '/' + name)
+             policy.need(archived is not None and all(local[key] == pin[key] for key in ('bytes', 'sha256'))
+                         and hashlib.sha256(archived).hexdigest() == pin['sha256'], 'reviewed capture source differs')
+     for value in (manifest, report):
+@@ -124,6 +128,7 @@
+               'scope': 'lossless retained payloads, explicit omissions and original reported outcomes; not candidate acceptance',
+               'archive': report['archive'], 'manifest': report['manifest'],
+               'archive_validation': verification, 'original_stage_observations': outcomes, 'holder_bindings': holders,
++              'capture_tool_directory': policy.CAPTURE_TOOLS, 'prior_capture_failure': prior_failure,
+               'omission_count': len(omissions), 'secret_scan_findings': [],
+               'candidate_adopted': False, 'performance_pass_inferred': False, 'hosted_CI_passed_inferred': False,
+               'archive_extracted': False, 'archive_code_executed': False, 'remote_operations': 0}
+--- evidence-tools-01/test_evidence_tools.py
++++ evidence-tools-02/test_evidence_tools.py
+@@ -16,11 +16,73 @@
+ 
+ import evidence_policy as policy
+ import pack_r36_evidence as pack
++import scan_evidence as scanner
+ from scan_evidence import scan
+ import verify_r36_evidence as verify
+ 
+ 
+ class EvidenceTests(unittest.TestCase):
++    def test_repeated_telemetry_is_deduplicated_before_queue_limit_and_hidden_secret_remains_visible(self):
++        rows = [{'metric': 'idle', 'unit': 'KiB'} for _ in range(40000)]
++        documents = [json.dumps(rows).encode(), b'\n'.join(json.dumps(row).encode() for row in rows)]
++        token = b'gh' + b'p_' + b'A' * 36
++        hidden = json.dumps({'nested': json.dumps({'bytes_hex': token.hex()})}).encode()
++        for raw in documents:
++            with self.subTest(jsonl=raw.startswith(b'{')):
++                self.assertEqual(scan(raw, 'repeated-telemetry'), [])
++                findings = scan(raw + b'\n' + hidden, 'repeated-telemetry-with-secret')
++                self.assertTrue(any('github-token' in row['pattern'] for row in findings))
++                self.assertFalse(any('budget' in row['pattern'] or 'queue' in row['pattern'] for row in findings))
++
++    def test_processed_deeper_content_is_revisited_when_a_shallower_route_arrives_later(self):
++        token = b'gh' + b'p_' + b'A' * 36
++        escaped = b'"' + b''.join(('\\u%04x' % byte).encode() for byte in token) + b'"'
++        shallow = json.dumps(escaped.decode())
++        deep = base64.b64encode(gzip.compress(base64.b64encode(escaped))).decode()
++        original = scanner.RULES['github-token']
++        visits = []
++
++        class RecordingRule:
++            def search(self, value):
++                if value == escaped:
++                    visits.append(value)
++                return original.search(value)
++
++        with patch.dict(scanner.RULES, {'github-token': RecordingRule()}):
++            findings = scan(json.dumps({'shallow': shallow, 'deep': deep}).encode(), 'depth-revisit')
++        self.assertEqual(len(visits), 2)
++        self.assertTrue(any('github-token' in row['pattern'] for row in findings))
++
++    def test_pending_deeper_duplicate_cannot_replace_the_shallower_route(self):
++        token = b'gh' + b'p_' + b'A' * 36
++        escaped = b'"' + b''.join(('\\u%04x' % byte).encode() for byte in token) + b'"'
++        shallow = base64.b64encode(escaped)
++        deep = base64.b64encode(gzip.compress(shallow))
++        findings = scan(json.dumps({'shallow': shallow.decode(), 'deep': deep.decode()}).encode(), 'pending-depth')
++        self.assertTrue(any('github-token' in row['pattern'] for row in findings))
++
++    def test_json_visit_limit_still_counts_duplicate_values(self):
++        raw = json.dumps([None] * 1000001).encode()
++        findings = scan(raw, 'json-visit-limit')
++        self.assertIn('raw:json-scan-budget-exceeded', {row['pattern'] for row in findings})
++
++    def test_original_fixed_bounds_and_fail_closed_queue_and_processed_node_limits(self):
++        self.assertEqual((scanner.MAX_FILE, scanner.MAX_EXPANDED, scanner.MAX_NODES,
++                          scanner.MAX_JSON_VISITS, scanner.MAX_DEPTH),
++                         (32 * 1024**2, 64 * 1024**2, 100000, 1000000, 3))
++        with patch.object(scanner, 'MAX_NODES', 8):
++            findings = scan(json.dumps(['value%d' % n for n in range(12)]).encode(), 'queue-limit')
++        self.assertIn('decoded-scan-queue-exceeded', {row['pattern'] for row in findings})
++        with patch.object(scanner, 'MAX_NODES', 2):
++            findings = scan(base64.b64encode(base64.b64encode(b'synthetic fixture content')), 'node-limit')
++        self.assertIn('decoded-scan-budget-exceeded', {row['pattern'] for row in findings})
++        with patch.object(scanner, 'MAX_EXPANDED', 128):
++            findings = scan(gzip.compress(b'A' * 1024), 'expanded-byte-limit')
++        self.assertTrue(any('gzip-expansion-limit' in row['pattern'] for row in findings))
++        with patch.object(scanner, 'MAX_FILE', 16):
++            self.assertEqual(scan(b'A' * 17, 'file-limit'),
++                             [{'path': 'file-limit', 'pattern': 'raw:scan-size-limit'}])
++
+     def test_encoded_secret_findings_never_include_the_matched_body(self):
+         token = b'gh' + b'p_' + b'A' * 36
+         forms = [token, token.hex().encode(), base64.b64encode(token),
+@@ -71,6 +133,33 @@
+                 self.assertIsNotNone(value['entries']['r36/' + name]['reason'])
+                 self.assertNotIn('r36/' + name + '/sentinel', value['entries'])
+             self.assertIn('r36/qualification-01/sentinel', value['entries'])
++
++    def test_only_exact_original_failed_export_receipt_is_traversed(self):
++        helper = policy.load_helper()
++        here = Path(__file__).resolve().parent
++        with tempfile.TemporaryDirectory(dir=here) as temporary:
++            root = Path(temporary)
++            old = root / 'evidence-export-01'
++            old.mkdir()
++            (old / 'export-failure.json').write_bytes((here / 'prior-capture-failure.json').read_bytes())
++            (old / 'other.json').write_text('synthetic unrelated body')
++            (old / 'unplanned-tree').mkdir()
++            (old / 'unplanned-tree' / 'not-read').write_text('synthetic unrelated body')
++            (root / 'evidence-export-99').mkdir()
++            (root / 'evidence-export-99' / 'not-read').write_text('synthetic unrelated body')
++            original = policy.os.scandir
++
++            def guarded(path):
++                self.assertNotIn(Path(path).name, ('unplanned-tree', 'evidence-export-99'))
++                return original(path)
++
++            with patch.object(policy, 'SCOPES', {'r36': root, 'recovery': root / 'absent'}), patch.object(policy.os, 'scandir', guarded):
++                inventory = policy.inventory(helper, root / 'evidence-export-02')
++            self.assertIsNone(inventory['entries'][policy.PRIOR_FAILURE_MEMBER]['reason'])
++            for name in ('r36/evidence-export-01/other.json', 'r36/evidence-export-01/unplanned-tree', 'r36/evidence-export-99'):
++                self.assertIsNotNone(inventory['entries'][name]['reason'])
++            self.assertNotIn('r36/evidence-export-01/unplanned-tree/not-read', inventory['entries'])
++            self.assertNotIn('r36/evidence-export-99/not-read', inventory['entries'])
+ 
+     def test_absence_failed_reports_and_unreadable_outputs_are_not_promoted(self):
+         scopes = {'r36': {'directories': {'r36/qualification-01': {}}, 'entries': ['r36/campaign-01']},
+@@ -106,7 +195,7 @@
+             base = Path(temporary)
+             root, recovery = base / 'r36', base / 'absent-recovery'
+             root.mkdir()
+-            deployed = root / 'evidence-tools-01'
++            deployed = root / policy.CAPTURE_TOOLS
+             deployed.mkdir()
+             for name in policy.TOOL_FILES:
+                 shutil.copyfile(here / name, deployed / name)
+@@ -119,7 +208,10 @@
+             for name in ('.ssh', 'target-build'):
+                 (root / name).mkdir()
+                 (root / name / 'not-read').write_text('synthetic body\n')
+-            out = root / 'evidence-export-01'
++            old = root / 'evidence-export-01'
++            old.mkdir()
++            (old / 'export-failure.json').write_bytes((here / 'prior-capture-failure.json').read_bytes())
++            out = root / 'evidence-export-02'
+             with patch.object(policy, 'ROOT', root), patch.object(policy, 'CANARY', recovery), \
+                     patch.object(policy, 'SCOPES', {'r36': root, 'recovery': recovery}), redirect_stdout(io.StringIO()):
+                 self.assertEqual(pack.capture(out), 0)
+@@ -133,6 +225,8 @@
+                 value = json.loads(result.read_bytes())
+                 self.assertIs(value['original_stage_observations']['qualification']['reported_flag'], False)
+                 self.assertIs(value['candidate_adopted'], False)
++                self.assertEqual(value['capture_tool_directory'], 'evidence-tools-02')
++                self.assertEqual(value['prior_capture_failure']['sha256'], policy.PRIOR_FAILURE_PIN['sha256'])
+                 self.assertEqual(value['omission_count'], 3)
+                 self.assertEqual(value['original_stage_observations']['lifecycle']['state'], 'not_executed_no_output_observed')
+                 archive = out / 'r36-evidence-01.tar.xz'
+--- evidence-tools-01/README.md
++++ evidence-tools-02/README.md
+@@ -1,8 +1,16 @@
+-# R36 bounded evidence capture
++# R36 bounded evidence capture — tool revision 2
+ 
+ These tools preserve original evidence and its original failures. A successful export or verification is a transport/inventory result, not candidate adoption, performance acceptance, or a hosted CI result. No command, benchmark, remote operation, or archived code is executed by the exporter or verifier.
+ 
+ `stable_xz_archive.py` is copied byte-for-byte from the verified R29 companion. Its SHA-256 is `8b7aa7ef3b3772da13ea4f7009d8c478e0c92bc207d65db3f45c23453097d7a2`. It supplies original-descriptor identity checks, streaming hashes, exclusive destination creation, canonical USTAR members, one SHA-256-checked XZ stream, exact archive EOF checks, and independent member verification without extraction.
++
++## Why this separate revision exists
++
++The original `evidence-export-01` stopped in its scan phase before archive creation. Its unmodified `export-failure.json` is 2,129 bytes with SHA-256 `24ef364dc00258ad354ec5650950060ac8e91f823c6598d922b8a18452752332`. Five telemetry files exceeded the pending decoded queue because the first scanner queued every repeated JSON key/value and deduplicated only when removing work from that queue. The failure reported queue/JSON-queue bounds, not a detected secret. The failed native capture and its original output remain separate evidence.
++
++Revision 2 deduplicates pending bytes at enqueue time using SHA-256 and the shallowest pending depth. Processed depths remain separate, so content previously inspected at a deeper level is inspected again if a shallower route later permits more decoding. Every accepted unique byte sequence still receives every raw secret rule. A full queue records a failure; no payload is silently skipped or excluded to make capture succeed. The original 100,000 processed/pending-node bounds, 1,000,000 JSON-visit bound, 32 MiB file bound, 64 MiB expanded-work bound and three decoded layers are unchanged. JSON visits still count duplicate values.
++
++The capture and verifier identify `evidence-tools-02`, retain all old `evidence-tools-01` files, and require the exact original failure receipt above. Only `evidence-export-01/export-failure.json` is eligible for a body read within that old export directory. Other files/directories there are metadata-only; other export directories remain outside the fixed scope. The new output directory is `evidence-export-02`; its archive keeps the canonical filename `r36-evidence-01.tar.xz`. Rejection of R36 and all original performance gates are unchanged.
+ 
+ ## Scope
+ 
+@@ -29,10 +37,10 @@
+ 
+ ## Run once after original writers have stopped
+ 
+-Deploy the reviewed directory to `ROOT/evidence-tools-01`. Keep the five implementation files unchanged; the verifier compares their archived hashes with its local reviewed copies. Use an unused output directory. Existing output files are never replaced, including on failure.
++Deploy this reviewed revision to the new `ROOT/evidence-tools-02` directory. Preserve `ROOT/evidence-tools-01` unchanged. Keep the five implementation files unchanged; the verifier compares their archived hashes with its local reviewed copies. Use an unused output directory. Existing output files are never replaced, including on failure.
+ 
+ ```sh
+-/usr/bin/python3 -B /home/qian/hepta-runtime-optimization-20261106-r36/evidence-tools-01/pack_r36_evidence.py --out /home/qian/hepta-runtime-optimization-20261106-r36/evidence-export-01
++/usr/bin/python3 -B /home/qian/hepta-runtime-optimization-20261106-r36/evidence-tools-02/pack_r36_evidence.py --out /home/qian/hepta-runtime-optimization-20261106-r36/evidence-export-02
+ ```
+ 
+ The output contains `r36-evidence-01.tar.xz` and `export-report.json`. Every included member has an exact byte count and SHA-256 in the embedded first-member manifest. The report binds that manifest and the complete compressed archive. Original files and services are not modified. A failed run retains `export-failure.json` and any partial new archive; it does not overwrite originals or retry.
+@@ -51,4 +59,4 @@
+ 
+ Bounds are 32 MiB per scanned file, 64 MiB decoded work per file, 100,000 decoded nodes, 30,000 inventory entries and 384 MiB total payload. The unchanged archive helper enforces a 16 MiB manifest and 512 MiB expanded archive bound. These are explicit fail-closed limits, not evidence completeness claims if a limit is reached. Opaque archive bodies are omitted because their expanded originals are captured separately; original gzip case logs are included and scanned after decompression.
+ 
+-Six local tests exercise encoded-secret handling without disclosure, private/build-directory containment, retention of negative/unresolved outcomes, holder binding rejection and an actual archive/independent-verification roundtrip followed by rejection of a corrupted compressed archive. They operate only on fixtures inside this tool directory and do not run the R36 qualification or any workload. Run them with `python3 -B -m unittest -v test_evidence_tools` from this directory. `static-frontier-review.md` records the source candidate's narrow scope and remaining optimization limits without claiming a measured result.
++Twelve local tests exercise repeated JSON/JSONL telemetry, later shallower decoding, unchanged failure bounds, exact prior-failure containment, and encoded-secret handling without disclosure, private/build-directory containment, retention of negative/unresolved outcomes, holder binding rejection and an actual archive/independent-verification roundtrip followed by rejection of a corrupted compressed archive. They operate only on fixtures inside this tool directory and do not run the R36 qualification or any workload. Run them with `python3 -B -m unittest -v test_evidence_tools` from this directory. The original R36 runtime candidate remains rejected; this transport repair does not run or change any qualification or performance workload.

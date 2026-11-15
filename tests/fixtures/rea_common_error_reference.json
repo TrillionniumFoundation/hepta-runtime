@@ -1,0 +1,78 @@
+{
+  "schema": "hepta.rea.common-error-reference.v1",
+  "node": "v22.23.4",
+  "oracle": "rea-agents@6.8.0",
+  "scope": "pretransport original error constructor and projector",
+  "sources": [
+    {
+      "file": "domain/analysisErrorProjection.js",
+      "sha256": "4f3764b944db8893cf048e84afab9f505041073c134076fa365eec22ed3b45f4"
+    },
+    {
+      "file": "domain/analysisErrorPresentation.js",
+      "sha256": "6fe60d0088561e5b4bc32055b1c822e9488ef4dbee2aa6e7459a6736b00a9eac"
+    },
+    {
+      "file": "domain/providerAdapterError.js",
+      "sha256": "0d46a79e2a9cd2219d2501b8d6261137fc04ae94a2c996c5662af24aa1983823"
+    },
+    {
+      "file": "domain/evidenceErrors.js",
+      "sha256": "54462bd6cc9cb97ad169ee2e10c069edd61b5b158e293d1378843bbc3ea4c299"
+    }
+  ],
+  "cases": [
+    {
+      "name": "apk-provider-adapter",
+      "expected": {
+        "code": "execution_failure",
+        "category": "execution_failure",
+        "message": "Analysis could not complete. Run `rea doctor` and review the reported details; repeating the unchanged request is not expected to succeed.",
+        "retryable": false,
+        "remediation": {
+          "action": "Analysis could not complete. Run `rea doctor` and review the reported details; repeating the unchanged request is not expected to succeed."
+        },
+        "details": {
+          "provider_id": "apk-signature",
+          "operation": "inspect_apk_signature"
+        }
+      }
+    },
+    {
+      "name": "retained-reference-missing",
+      "expected": {
+        "code": "evidence_integrity_mismatch",
+        "category": "integrity_mismatch",
+        "message": "Evidence ev_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa is not available from the selected source. Supply complete inline Evidence, re-run its producer, or select/import its bundle before using this reference.",
+        "retryable": false,
+        "remediation": {
+          "action": "Use an exact Evidence reference available from the selected source, supply the complete inline Evidence, re-run its producer, or select/import its Evidence bundle. close_binary clears a server session's retained records."
+        },
+        "details": {
+          "evidence_id": "ev_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "reason": "missing",
+          "expected": "Evidence available to the selected source",
+          "actual": null
+        }
+      }
+    },
+    {
+      "name": "retained-reference-identity",
+      "expected": {
+        "code": "evidence_integrity_mismatch",
+        "category": "integrity_mismatch",
+        "message": "Evidence ev_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa does not match the requested reference (identity_mismatch). Check the expected and actual identity in the diagnostic details.",
+        "retryable": false,
+        "remediation": {
+          "action": "Use an exact Evidence reference available from the selected source, supply the complete inline Evidence, re-run its producer, or select/import its Evidence bundle. close_binary clears a server session's retained records."
+        },
+        "details": {
+          "evidence_id": "ev_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "reason": "identity_mismatch",
+          "expected": "ev_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "actual": "ev_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,297 @@
+{
+  "candidate_adopted": false,
+  "conclusion": "Fresh complete validation is the dominant measured synchronous/controller CPU region; a finer diagnostic breakdown is justified, but no new runtime optimization is validated by this result.",
+  "counts": {
+    "off_controllers_without_phase_data": 4,
+    "on_measured_requests_bijected": 384,
+    "on_requests_bijected": 468,
+    "original_calls": 936,
+    "original_measured_calls": 768,
+    "trace_native_ids_unique_across_controllers": 468
+  },
+  "execution_receipt": {
+    "bytes": 1124,
+    "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-offline-interpretation-execution-01/receipt.json",
+    "sha256": "c21ee8c3462b2650f4b93c1338243b28ca224cbe963f887ea93d3fc3b7774327"
+  },
+  "interpretation_report": {
+    "bytes": 7881638,
+    "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-offline-interpretation-result-01/report.json",
+    "sha256": "3f2fa638154101f9aec9184b09807fa658f2bb8dc3935ceda9e396b8b4bf408e"
+  },
+  "interpretation_source": {
+    "bytes": 41876,
+    "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-offline-interpretation-01/interpret_c1.py",
+    "sha256": "7857a1f8960e82cbb1ba7700c1e805b87f7363cf5d8c3fecf32c5ebbf0dfa870"
+  },
+  "limitations": [
+    "Trace native IDs are internal observations; no public wire native ID is invented or recovered.",
+    "Unique controller/host/operation/whole-RPC containment is a new correlation method, not an original protocol ID.",
+    "All ON calls and trace requests must form a strict bidirectional bijection; no nearest-time or order guess is allowed.",
+    "All phases for measured requests are selected only after full-trace parser and arithmetic reconciliation.",
+    "Nested wall durations and queue/lock/child spans are nonadditive and do not isolate network or remote CPU.",
+    "Only synchronous same-thread spans have CPU attribution; awaited time and uninstrumented/background work remain outside it.",
+    "Diagnostic bookkeeping and the wider, quantized controller counter window affect the signed CPU residual.",
+    "OFF traces have no phase observations; empty traces do not mean zero runtime CPU.",
+    "Large original round variation precludes treating OFF/ON differences as an optimization benefit or significance claim.",
+    "Original failed parent/adapter remain failed; this derived analysis grants no runtime adoption or new performance gate."
+  ],
+  "measured_exclusive_phase_cpu": [
+    {
+      "cpu_event_count": 2304,
+      "exclusive_cpu_ms_per_measured_call": 7.663595088541667,
+      "exclusive_cpu_ns": 2942820514,
+      "fraction_of_controller_cpu": 0.33403184040862655,
+      "fraction_of_recorded_sync_cpu": 0.4726714190979452,
+      "phase": "validation_owner"
+    },
+    {
+      "cpu_event_count": 2304,
+      "exclusive_cpu_ms_per_measured_call": 6.350136091145833,
+      "exclusive_cpu_ns": 2438452259,
+      "fraction_of_controller_cpu": 0.2767823222474461,
+      "fraction_of_recorded_sync_cpu": 0.3916605461260286,
+      "phase": "validation_worker"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.7028801822916666,
+      "exclusive_cpu_ns": 269905990,
+      "fraction_of_controller_cpu": 0.03063632122587968,
+      "fraction_of_recorded_sync_cpu": 0.04335189547218706,
+      "phase": "spawn"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.5900748489583334,
+      "exclusive_cpu_ns": 226588742,
+      "fraction_of_controller_cpu": 0.025719493984108967,
+      "fraction_of_recorded_sync_cpu": 0.03639434403941299,
+      "phase": "router_build"
+    },
+    {
+      "cpu_event_count": 768,
+      "exclusive_cpu_ms_per_measured_call": 0.35049482552083333,
+      "exclusive_cpu_ns": 134590013,
+      "fraction_of_controller_cpu": 0.01527695947786606,
+      "fraction_of_recorded_sync_cpu": 0.0216176461114342,
+      "phase": "process_identity"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.21250015104166667,
+      "exclusive_cpu_ns": 81600058,
+      "fraction_of_controller_cpu": 0.009262208626560726,
+      "fraction_of_recorded_sync_cpu": 0.013106478981590597,
+      "phase": "audit_critical"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.11335502864583333,
+      "exclusive_cpu_ns": 43528331,
+      "fraction_of_controller_cpu": 0.004940786719636776,
+      "fraction_of_recorded_sync_cpu": 0.006991455267779569,
+      "phase": "audit_sync"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.05134626302083334,
+      "exclusive_cpu_ns": 19716965,
+      "fraction_of_controller_cpu": 0.0022380209988649264,
+      "fraction_of_recorded_sync_cpu": 0.0031669093587317967,
+      "phase": "arguments"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.0437687734375,
+      "exclusive_cpu_ns": 16807209,
+      "fraction_of_controller_cpu": 0.0019077422247446084,
+      "fraction_of_recorded_sync_cpu": 0.0026995487123023893,
+      "phase": "expected_argv"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.036525544270833335,
+      "exclusive_cpu_ns": 14025809,
+      "fraction_of_controller_cpu": 0.001592032803632236,
+      "fraction_of_recorded_sync_cpu": 0.002252804414162355,
+      "phase": "audit_write"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.0271704609375,
+      "exclusive_cpu_ns": 10433457,
+      "fraction_of_controller_cpu": 0.0011842743473325767,
+      "fraction_of_recorded_sync_cpu": 0.0016758062215572111,
+      "phase": "decode_observation"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.0205766015625,
+      "exclusive_cpu_ns": 7901415,
+      "fraction_of_controller_cpu": 0.0008968688989784336,
+      "fraction_of_recorded_sync_cpu": 0.0012691134315410003,
+      "phase": "encode_observation"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.01993604947916667,
+      "exclusive_cpu_ns": 7655443,
+      "fraction_of_controller_cpu": 0.0008689492622020431,
+      "fraction_of_recorded_sync_cpu": 0.001229605777660904,
+      "phase": "prepare_observation"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.014101966145833334,
+      "exclusive_cpu_ns": 5415155,
+      "fraction_of_controller_cpu": 0.0006146600454029512,
+      "fraction_of_recorded_sync_cpu": 0.0008697740777286608,
+      "phase": "audit_prepare"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.007625903645833333,
+      "exclusive_cpu_ns": 2928347,
+      "fraction_of_controller_cpu": 0.00033238898978433596,
+      "fraction_of_recorded_sync_cpu": 0.00047034670497787974,
+      "phase": "audit_mutex"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.00619903125,
+      "exclusive_cpu_ns": 2380428,
+      "fraction_of_controller_cpu": 0.0002701961407491487,
+      "fraction_of_recorded_sync_cpu": 0.00038234077663510654,
+      "phase": "socket_and_boundary"
+    },
+    {
+      "cpu_event_count": 384,
+      "exclusive_cpu_ms_per_measured_call": 0.0030799791666666666,
+      "exclusive_cpu_ns": 1182712,
+      "fraction_of_controller_cpu": 0.00013424653802497164,
+      "fraction_of_recorded_sync_cpu": 0.00018996542832451144,
+      "phase": "logical_admission"
+    }
+  ],
+  "measured_sync_cpu_ms_per_call_by_host": {
+    "ai395": 16.024053265625,
+    "mac": 16.27951075,
+    "main": 16.43459321875,
+    "pocket4": 16.224619984375,
+    "rog": 16.329306640625,
+    "x230": 15.988116875
+  },
+  "measured_sync_cpu_ms_per_call_by_operation": {
+    "process_read": 16.164552583333332,
+    "process_status": 16.262180994791667
+  },
+  "new_offline_interpretation_complete": true,
+  "next_diagnostic_scope": "Keep every R24 validation/read/permission/deadline/owner check and independently measure validation substeps. D2 implementation is owned separately.",
+  "nonadditive_wall_ms_per_measured_call": {
+    "admission_profile": 12.986254270833333,
+    "agent_snapshot": 24.05667682552083,
+    "arguments": 0.05153807552083334,
+    "audit_blocking_queue": 0.040076080729166665,
+    "audit_critical": 2.5038443229166667,
+    "audit_mutex": 0.008029921875,
+    "audit_permit": 0.0026072265625,
+    "audit_prepare": 0.014117520833333334,
+    "audit_sync": 2.254017015625,
+    "audit_write": 0.036814041666666665,
+    "binding": 0.0086393359375,
+    "capture": 63.0433691875,
+    "check_job_reference": 0.1173798046875,
+    "child_registry": 0.004238921875,
+    "child_wait": 60.6954947734375,
+    "decode_observation": 0.027920317708333333,
+    "encode_observation": 0.02133821614583333,
+    "expected_argv": 0.043871046875,
+    "global_capacity": 0.0022883932291666667,
+    "host_capacity": 0.0037652083333333335,
+    "initial_capacity_granted": 0.0017941822916666668,
+    "logical_admission": 0.0030782552083333335,
+    "master_entry": 0.0070915625,
+    "master_ready": 0.0030679947916666664,
+    "native_audit_begin": 2.4149254036458334,
+    "native_audit_finish": 2.757599484375,
+    "owner_execute": 0.0018985651041666667,
+    "post_capture_profile": 13.346651057291666,
+    "pre_capture_profile": 12.664686299479166,
+    "prepare_observation": 0.020629361979166667,
+    "process_identity": 0.4316402161458333,
+    "queue_received": 0.0027110104166666667,
+    "queue_reservation": 0.004209692708333333,
+    "queue_submitted": 0.0014411197916666667,
+    "request": 111.85538303645833,
+    "router_build": 0.5906519036458334,
+    "socket_and_boundary": 0.006516981770833333,
+    "socket_connect": 0.06367433854166667,
+    "spawn": 1.7315778203125,
+    "stderr_drain": 60.66314591145834,
+    "stdin_write": 0.06775552604166667,
+    "stdout_drain": 60.656520432291664,
+    "validation_blocking_queue": 0.3323094114583333,
+    "validation_owner": 7.676335091145833,
+    "validation_permit": 0.029215026041666668,
+    "validation_worker": 6.365966140625
+  },
+  "on_measured_rounds": [
+    {
+      "arm": "B",
+      "controller_cpu_ms_per_call": 29.479166666666668,
+      "controller_cpu_ns": 5660000000.0,
+      "cpu_clock_tick_resolution_ns": 10000000.0,
+      "measured_calls": 192,
+      "recorded_sync_cpu_ms_per_call": 20.812680333333333,
+      "recorded_sync_cpu_ns": 3996034624,
+      "recorded_sync_fraction_of_controller_cpu": 0.7060131844522968,
+      "round": 1,
+      "signed_controller_minus_recorded_sync_ns": 1663965376.0,
+      "validation_cpu_ms_per_call": 18.073513916666666,
+      "validation_cpu_ns": 3470114672,
+      "validation_fraction_of_controller_cpu": 0.6130944650176678,
+      "validation_fraction_of_recorded_sync_cpu": 0.868389540760896
+    },
+    {
+      "arm": "B",
+      "controller_cpu_ms_per_call": 16.40625,
+      "controller_cpu_ns": 3150000000.0,
+      "cpu_clock_tick_resolution_ns": 10000000.0,
+      "measured_calls": 192,
+      "recorded_sync_cpu_ms_per_call": 11.614053244791666,
+      "recorded_sync_cpu_ns": 2229898223,
+      "recorded_sync_fraction_of_controller_cpu": 0.7079041977777778,
+      "round": 2,
+      "signed_controller_minus_recorded_sync_ns": 920101777.0,
+      "validation_cpu_ms_per_call": 9.953948442708334,
+      "validation_cpu_ns": 1911158101,
+      "validation_fraction_of_controller_cpu": 0.6067168574603174,
+      "validation_fraction_of_recorded_sync_cpu": 0.8570606861280055
+    }
+  ],
+  "original_failure_preserved": true,
+  "original_workflow_passed": false,
+  "performance_acceptance_claim": false,
+  "phase_cost_evidence_does_not_split_validation_into_file_path_read_compare_or_fences": true,
+  "pooled_on_measured": {
+    "calls": 384,
+    "controller_cpu_ms_per_call": 22.942708333333332,
+    "controller_cpu_ns": 8810000000.0,
+    "recorded_sync_cpu_ms_per_call": 16.2133667890625,
+    "recorded_sync_cpu_ns": 6225932847,
+    "recorded_sync_fraction_of_controller_cpu": 0.706689312939841,
+    "signed_controller_minus_recorded_sync_ns": 2584067153.0,
+    "validation_cpu_ms_per_call": 14.0137311796875,
+    "validation_cpu_ns": 5381272773,
+    "validation_fraction_of_controller_cpu": 0.6108141626560727,
+    "validation_fraction_of_recorded_sync_cpu": 0.8643319652239738
+  },
+  "schema": "hepta-d1-c1-offline-cost-results/v1",
+  "sealed_input": {
+    "bytes": 1868,
+    "path": "/tmp/hepta-runtime-recovery-20261106/d1-c1-offline-interpretation-01/input.sealed.json",
+    "sha256": "ad12f1602f60d4432ed1c5cdd4e2397a858c90de8964934aa01eb6d80de70aec"
+  },
+  "workload_or_auditor_reexecuted_here": false
+}

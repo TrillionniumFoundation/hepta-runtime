@@ -1,0 +1,260 @@
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -117,6 +117,7 @@
+ 
+ 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
+ 	// are deliberately independent and remain queryable after this process restarts.
++	mcp::runtime::request_async::shutdown().await;
+ 	mcp::fs::shell::kill_all_shell_children();
+ 	mcp::runtime::pty::close_all_ptys().await;
+ 
+@@ -233,6 +234,7 @@
+ 		.await;
+ 
+ 	// Same orphan cleanup as STDIO shutdown. Durable runtime jobs are unaffected.
++	mcp::runtime::request_async::shutdown().await;
+ 	mcp::fs::shell::kill_all_shell_children();
+ 	mcp::runtime::pty::close_all_ptys().await;
+ 
+--- a/src/mcp/server.rs
++++ b/src/mcp/server.rs
+@@ -176,6 +176,8 @@
+ 	"request_history",
+ 	"request_status",
+ 	"request_result",
++	"request_start",
++	"request_cancel",
+ 	"host_health",
+ 	"read_multiple_files",
+ 	"search_start",
+@@ -450,10 +452,31 @@
+ 			.owner_binding
+ 			.resolve(&context, self.search_owner.as_ref().as_deref())
+ 			.map_err(|e| e.to_string())?;
+-		runtime::request_results::request_status(scope.owner(), params)
+-			.await
+-			.and_then(|text| scope.annotate(text, false))
+-			.map_err(|e| e.to_string())
++		let async_observation =
++			runtime::request_async::observation(scope.owner(), &params.request_id)
++				.await
++				.map_err(|error| error.to_string())?;
++		let request_id = params.request_id.clone();
++		let text = match runtime::request_results::request_status(scope.owner(), params).await {
++			Ok(text) => text,
++			Err(_) if async_observation.is_some() => serde_json::json!({
++				"request_id": request_id, "dispatch_state": "unknown", "result_state": "unavailable",
++				"inner_receipt_available": false, "automatic_retry": false,
++				"metadata_lookup_does_not_prove_delivery_or_business_success": true
++			})
++			.to_string(),
++			Err(error) => return Err(error.to_string()),
++		};
++		let mut value: serde_json::Value =
++			serde_json::from_str(&text).map_err(|_| "request status unavailable".to_string())?;
++		if let Some(observation) = async_observation {
++			if let (Some(object), Some(extra)) = (value.as_object_mut(), observation.as_object()) {
++				object.extend(extra.clone());
++			}
++		}
++		scope
++			.annotate(value.to_string(), false)
++			.map_err(|error| error.to_string())
+ 	}
+ 	#[tool(
+ 		title = "Read Bounded Original Request Result",
+@@ -474,10 +497,62 @@
+ 			.owner_binding
+ 			.resolve(&context, self.search_owner.as_ref().as_deref())
+ 			.map_err(|e| e.to_string())?;
++		runtime::request_async::observation(scope.owner(), &params.request_id)
++			.await
++			.map_err(|error| error.to_string())?;
+ 		runtime::request_results::request_result(scope.owner(), params)
+ 			.await
+ 			.and_then(|text| scope.annotate(text, false))
+ 			.map_err(|e| e.to_string())
++	}
++
++	#[tool(
++		title = "Start Idempotent Owned Read Request",
++		annotations(
++			read_only_hint = false,
++			destructive_hint = false,
++			idempotent_hint = false,
++			open_world_hint = false
++		),
++		description = "Admit one background request from the explicit host_list, host_health or effective_config typed whitelist. Requires a private idempotency key: identical retries under the same verified HTTP credential or native stdio session return the original server-generated inner request_id without redispatch; changed arguments or policy refuse reuse. Durable private key hashes precede admission and effects. Only eight requests globally and four per owner may be active; key retention is finite and never silently evicts or rebinds keys. Response acknowledges admission, not dispatch completion or transport delivery. Use request_status/request_result for the inner id. A controller restart makes unfinished work unknown; no request is automatically replayed or resumed. Users sharing a private credential share this scope; no authenticated ChatGPT caller isolation. No arbitrary tools, commands, addresses or process ids."
++	)]
++	async fn request_start(
++		&self,
++		Parameters(params): Parameters<runtime::request_async::RequestStartParams>,
++		context: RequestContext<RoleServer>,
++	) -> Result<String, String> {
++		let scope = self
++			.owner_binding
++			.resolve(&context, self.search_owner.as_ref().as_deref())
++			.map_err(|error| error.to_string())?;
++		runtime::request_async::start(scope.owner(), params)
++			.await
++			.and_then(|text| scope.annotate(text, false))
++			.map_err(|error| error.to_string())
++	}
++	#[tool(
++		title = "Cancel Owned Read Request Future",
++		annotations(
++			read_only_hint = false,
++			destructive_hint = false,
++			idempotent_hint = true,
++			open_world_hint = false
++		),
++		description = "Request cancellation of this controller's own background Rust future using the exact request_start inner request_id and the same verified private credential or native stdio session. Current policy must still authorize the immutable key binding. Never accepts an OS pid, command or arbitrary tool. Cancellation does not kill arbitrary processes or prove remote work stopped; effects started before cancellation may continue. Result settlement cannot be cancelled and late cancellation never discards a retained original result. Missing futures after controller restart remain unknown and are never recreated or replayed."
++	)]
++	async fn request_cancel(
++		&self,
++		Parameters(params): Parameters<runtime::request_async::RequestCancelParams>,
++		context: RequestContext<RoleServer>,
++	) -> Result<String, String> {
++		let scope = self
++			.owner_binding
++			.resolve(&context, self.search_owner.as_ref().as_deref())
++			.map_err(|error| error.to_string())?;
++		runtime::request_async::cancel(scope.owner(), params)
++			.await
++			.and_then(|text| scope.annotate(text, false))
++			.map_err(|error| error.to_string())
+ 	}
+ 
+ 	#[tool(
+@@ -1989,12 +2064,24 @@
+ 					scope.owner(),
+ 					canonical,
+ 					if matches!(canonical, "request_status" | "request_result") {
+-						request
++						match request
+ 							.arguments
+ 							.as_ref()
+ 							.and_then(|a| a.get("request_id"))
+ 							.and_then(serde_json::Value::as_str)
+-							.map(str::to_owned)
++						{
++							Some(id) => {
++								runtime::request_async::audit_read_target(scope.owner(), id)
++									.await
++									.map_err(|_| {
++										ErrorData::invalid_params(
++											"request unavailable to this scope or current policy",
++											None,
++										)
++									})?
++							}
++							None => None,
++						}
+ 					} else {
+ 						None
+ 					},
+--- a/src/mcp/runtime/mod.rs
++++ b/src/mcp/runtime/mod.rs
+@@ -16,6 +16,7 @@
+ pub mod multi_read;
+ pub mod operator;
+ pub mod pty;
++pub mod request_async;
+ pub mod request_audit;
+ pub mod request_results;
+ pub mod search_jobs;
+--- a/src/mcp/runtime/request_audit.rs
++++ b/src/mcp/runtime/request_audit.rs
+@@ -681,6 +681,60 @@
+ }
+ 
+ #[cfg(unix)]
++fn begin_reserved_at(root: &Path, identity: RequestIdentity) -> Result<RequestTicket> {
++	if !valid_id(&identity.owner)
++		|| !valid_id(&identity.request_id)
++		|| !matches!(
++			identity.tool_name.as_str(),
++			"host_list" | "host_health" | "effective_config"
++		) {
++		bail!("reserved request identity unavailable");
++	}
++	let _guard = store_lock()?;
++	let directory = open_store(root)?;
++	match read_record(&directory, &format!("{}.json", identity.request_id)) {
++		Ok(_) => bail!("reserved request already exists; never redispatch"),
++		Err(error)
++			if error
++				.downcast_ref::<std::io::Error>()
++				.is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) => {}
++		Err(_) => bail!("reserved request unavailable; never redispatch"),
++	}
++	let mut records = entries(&directory)?;
++	retain_before_begin(&directory, &identity.owner, &mut records)?;
++	let record = Record {
++		request_id: identity.request_id,
++		owner: identity.owner,
++		tool_name: identity.tool_name,
++		state: DurableState::Unknown,
++		accepted_unix_ms: identity.accepted_unix_ms,
++		elapsed_ms: None,
++	};
++	save(&directory, &record, false)?;
++	let active = Arc::new(AtomicBool::new(true));
++	active_registry()?.insert(record.request_id.clone(), Arc::downgrade(&active));
++	Ok(RequestTicket {
++		directory,
++		record,
++		started: Instant::now(),
++		active,
++		_read_pin: None,
++	})
++}
++#[cfg(not(unix))]
++fn begin_reserved_at(_root: &Path, _identity: RequestIdentity) -> Result<RequestTicket> {
++	bail!("private request auditing requires Unix descriptor support")
++}
++/// Only a newly published server-generated async reservation may call this.
++/// Existing key bindings never rebuild a ticket, even when the audit record is absent.
++pub(crate) async fn begin_reserved(identity: RequestIdentity) -> Result<RequestTicket> {
++	let root = runtime_config()?.state_dir.clone();
++	tokio::task::spawn_blocking(move || begin_reserved_at(&root, identity))
++		.await
++		.map_err(|_| anyhow!("reserved request admission unavailable; never redispatch"))?
++}
++
++#[cfg(unix)]
+ fn finish_sync(mut ticket: RequestTicket, completion: AuditCompletion) -> Result<()> {
+ 	let _guard = store_lock()?;
+ 	ticket.active.store(false, Ordering::Release);
+--- a/src/mcp/runtime/request_results.rs
++++ b/src/mcp/runtime/request_results.rs
+@@ -110,7 +110,7 @@
+ 		.map(|b| format!("{b:02x}"))
+ 		.collect()
+ }
+-fn policy_binding() -> Result<String> {
++pub(crate) fn policy_binding() -> Result<String> {
+ 	let mut hash = Sha256::new();
+ 	hash.update(b"hepta-runtime/result-policy/v1\0");
+ 	hash.update(serde_json::to_vec(runtime_config()?)?);
+@@ -326,14 +326,18 @@
+ 	json!({"request_id":id,"automatic_retry":false,"delivery_proven":false})
+ }
+ pub fn exposes_identity(tool: &str) -> bool {
+-	eligible(tool) || matches!(tool, "request_status" | "request_result")
++	eligible(tool)
++		|| matches!(
++			tool,
++			"request_status" | "request_result" | "request_start" | "request_cancel"
++		)
+ }
+ /// Preview the largest fixed acknowledgement before any result is retained.
+ /// DTO methods are read-only; an over-cap result becomes an explicit same-id refusal.
+ pub fn reserve_final_wire(result: &mut Result<CallToolResponse, ErrorData>, tool: &str, id: &str) {
+ 	let cap = match tool {
+ 		"effective_config" => 256 * 1024,
+-		"request_status" | "request_result" => 64 * 1024,
++		"request_status" | "request_result" | "request_start" | "request_cancel" => 64 * 1024,
+ 		_ => return,
+ 	};
+ 	let mut candidate = result.clone();

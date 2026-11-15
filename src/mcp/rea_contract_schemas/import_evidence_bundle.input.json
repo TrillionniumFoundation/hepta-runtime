@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "examples": [
+    {
+      "path": "/tmp/evidence.json"
+    }
+  ],
+  "properties": {
+    "path": {
+      "allOf": [
+        {
+          "pattern": "^[^\\x00]*$"
+        },
+        {
+          "pattern": "^\\/"
+        }
+      ],
+      "description": "Absolute local filesystem path for the evidence bundle to import; relative paths are rejected.",
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "type": "object"
+}

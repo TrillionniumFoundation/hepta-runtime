@@ -1,0 +1,2518 @@
+{
+  "schema": "hepta-native-tool-contract-v1",
+  "name": "Hepta Runtime Full Operator",
+  "tool_count": 58,
+  "catalog_sha256": "353a651486b580f5232bfa2073d06cc7a99b43438ce6a6679e1eb565a5dead3d",
+  "execution_backend": "existing hepta-runtime; no gateway execution implementation",
+  "tools": [
+    {
+      "name": "batch_edit",
+      "title": "Batch Edit",
+      "description": "Apply insert/replace operations (max 50) to one file atomically. Targets are line ids (\"12:a3\") from view or edit output, verified before anything is written; a stale id fails with the current content. All targets refer to the original file and must not overlap. The result diff carries fresh ids for follow-up edits — no re-view needed; removed lines, and the middle of a long added block, show as an id range, and a trailing `shift:` line says how later original line numbers moved. Insert anchors 0 (file start) and -1 (end) are plain integers. Content is raw text without id prefixes.",
+      "inputSchema": {
+        "$defs": {
+          "BatchEditOperation": {
+            "properties": {
+              "content": {
+                "description": "Raw text to insert or replace with, no line-id prefixes.",
+                "type": "string"
+              },
+              "end": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "description": "`replace` only: last line to replace (inclusive), as a line id. Default: `start`.",
+                "examples": [
+                  "12:a3",
+                  -1
+                ]
+              },
+              "operation": {
+                "$ref": "#/$defs/BatchEditOperationType",
+                "description": "`insert` (after `start`) or `replace` (`start`..`end`)."
+              },
+              "start": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "description": "Line id in the ORIGINAL file: first line to replace, or the anchor to insert after\n(for `insert` also the integers 0 = file start, -1 = after the last line).",
+                "examples": [
+                  "12:a3",
+                  -1
+                ]
+              }
+            },
+            "required": [
+              "operation",
+              "start",
+              "content"
+            ],
+            "type": "object"
+          },
+          "BatchEditOperationType": {
+            "enum": [
+              "insert",
+              "replace"
+            ],
+            "type": "string"
+          }
+        },
+        "properties": {
+          "operations": {
+            "description": "Operations on this one file (max 50).",
+            "items": {
+              "$ref": "#/$defs/BatchEditOperation"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "path": {
+            "description": "File to edit (ssh://user@host:port/path for remote).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "operations"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "binary_patch_inode",
+      "title": "Recoverable Inode Patch",
+      "description": "Linux-only explicit same-size patch of at most 64 KiB, preserving inode/hard links/open-file identity. Requires expected version/hash, transaction ID and acknowledgement of NON-ATOMIC visibility. Durable private receipts support status/recovery. Optional special mode-bit preservation uses existing owner rights only. Not a transactional snapshot for concurrent readers; capabilities/immutable flags are refused.",
+      "inputSchema": {
+        "$defs": {
+          "InodeAction": {
+            "enum": [
+              "apply",
+              "status",
+              "recover"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "acknowledge_non_atomic": {
+            "type": "boolean"
+          },
+          "action": {
+            "$ref": "#/$defs/InodeAction"
+          },
+          "data_base64": {
+            "type": "string"
+          },
+          "expected_sha256": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "preserve_special_bits": {
+            "default": false,
+            "type": "boolean"
+          },
+          "transaction_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "path",
+          "action",
+          "transaction_id",
+          "acknowledge_non_atomic"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "binary_read",
+      "title": "binary_read",
+      "description": "Read bounded base64 file bytes with independent chunk SHA256 and next_offset. Pin expected_version from the first chunk. No 1 MiB total file limit.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "description": "Bind every chunk to the version returned by the first read.",
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum returned bytes; capped at 64 KiB. Use next_offset until eof.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "path"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "binary_upload",
+      "title": "binary_upload",
+      "description": "Stage binary files in bounded chunks and commit only after total size and SHA256 verification. Retries are bound to upload ID and offsets; destination is unchanged until commit. Commit replay verifies the published destination; abort never deletes committed output. This does not lock out noncooperating writers.",
+      "inputSchema": {
+        "$defs": {
+          "UploadAction": {
+            "enum": [
+              "chunk",
+              "commit",
+              "abort"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "$ref": "#/$defs/UploadAction"
+          },
+          "data_base64": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "size": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "upload_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "path",
+          "action",
+          "upload_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "binary_write",
+      "title": "binary_write",
+      "description": "Atomically publish at most 1 MiB of decoded base64 under the target account. expected_version is mandatory; absent is create-only. Preserves supported descriptor-bound ownership/mode, xattrs and ACLs with verification; rejects hard-link splits and special execution flags before publication.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "data_base64": {
+            "description": "Strict base64, up to 1 MiB decoded. Use binary_upload for larger files.",
+            "type": "string"
+          },
+          "expected_version": {
+            "description": "Exactly the prior file version, or absent for a create-only write.",
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "path",
+          "data_base64",
+          "expected_version"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "directory_create",
+      "title": "Create Workspace Directory",
+      "description": "Create a directory tree only inside the configured controller-local workspace. Existing directories succeed without change, while files or symlink components are refused. No command execution, remote host selection, privilege escalation or overwrite. Linux only.",
+      "inputSchema": {
+        "properties": {
+          "path": {
+            "description": "Directory path in the configured local controller workspace. Remote paths are refused.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "directory_move",
+      "title": "Move Workspace Directory Without Overwrite",
+      "description": "Atomically rename one existing controller-local directory tree inside configured workspace roots to an absent target path. Existing destination, symlinked parents/source, missing destination parent and cross-device moves are refused. This moves an entire directory tree without traversing its entries and removes the original pathname. No shell, remote host, privilege escalation or copy/delete fallback. Linux only; not a transaction with independent writers.",
+      "inputSchema": {
+        "properties": {
+          "destination": {
+            "description": "Absent target directory path with an existing authorized parent.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Existing controller-local workspace directory, never a symlink or file.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "destination"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "document_edit",
+      "title": "document_edit",
+      "description": "Apply a fingerprint-checked exact XML replacement to a local or configured-operator-host DOCX body/header/footer. Preserve unselected package payloads. Reject invalid XML, stale versions and unexpected match counts. No shell operation.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_replacements": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "expected_sha256": {
+            "type": "string"
+          },
+          "host": {
+            "description": "Optional configured operator host. Omit for controller-local documents.",
+            "type": "string"
+          },
+          "new_xml": {
+            "type": "string"
+          },
+          "old_xml": {
+            "type": "string"
+          },
+          "part": {
+            "description": "DOCX package part; defaults to word/document.xml.",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "expected_sha256",
+          "old_xml",
+          "new_xml"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "document_read",
+      "title": "document_read",
+      "description": "Read PDF pages, DOCX outline/XML, XLS stored results and XLSX worksheet ranges on the controller or an explicit configured operator host. Native remote transfers verify versions and SHA256. Optional PDF render returns native MCP images. No URL fetching, decryption, macros or recalculation.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cached_values": {
+            "default": false,
+            "description": "Read stored spreadsheet cache values instead of formula strings; no recalculation.",
+            "type": "boolean"
+          },
+          "expected_sha256": {
+            "type": "string"
+          },
+          "host": {
+            "description": "Optional configured operator host. Omit for controller-local documents.",
+            "type": "string"
+          },
+          "length": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "description": "Absolute path on the selected host (or controller when host is omitted).",
+            "type": "string"
+          },
+          "range": {
+            "type": "string"
+          },
+          "render": {
+            "default": false,
+            "description": "Return native MCP image content for at most two PDF pages, in addition to text.",
+            "type": "boolean"
+          },
+          "sheet": {
+            "type": "string"
+          },
+          "xml_part": {
+            "description": "Optional DOCX document/header/footer XML part, returned with line pagination.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "document_render",
+      "title": "Rich Document PDF Render",
+      "description": "Render HTML/CSS, Markdown or inline SVG to PDF locally or on a configured operator host. Assets require declared names, paths and SHA256 and are referenced as asset:name. No implicit file/HTTP requests, scripts or external resources. Return render warnings and actual page count; no pixel-identity claim to a browser.",
+      "inputSchema": {
+        "$defs": {
+          "DocumentAsset": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "path",
+              "sha256"
+            ],
+            "type": "object"
+          },
+          "RichInputFormat": {
+            "enum": [
+              "html",
+              "markdown",
+              "svg"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "assets": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/DocumentAsset"
+            },
+            "type": "array"
+          },
+          "content": {
+            "type": "string"
+          },
+          "css": {
+            "type": "string"
+          },
+          "expected_sha256": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "input_format": {
+            "$ref": "#/$defs/RichInputFormat"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "input_format",
+          "content",
+          "expected_sha256"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "document_write",
+      "title": "document_write",
+      "description": "Create or replace PDF/DOCX from basic markdown, or XLSX from sheet row arrays, locally or on a configured operator host. Requires expected_sha256 or absent for create-only; no executable HTML, URL fetching or formula calculation.",
+      "inputSchema": {
+        "$defs": {
+          "DocumentFormat": {
+            "enum": [
+              "pdf",
+              "docx",
+              "xlsx"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "Markdown text for PDF/DOCX; sheet-name to row-array object for XLSX."
+          },
+          "expected_sha256": {
+            "description": "Prior source SHA256; use absent for create-only output.",
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/$defs/DocumentFormat"
+          },
+          "host": {
+            "description": "Optional configured operator host. Omit for controller-local documents.",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "format",
+          "content",
+          "expected_sha256"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "effective_config",
+      "title": "Read Redacted Effective Configuration",
+      "description": "Read bounded effective Hepta capabilities and configured host aliases from a strict allowlist projection. Returns authorization switches and counts, never SSH destinations, private paths, credentials, environment values, privileged commands or raw policy. Does not modify configuration; administrator changes require reviewed version-controlled configuration and rollback.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "extract_lines",
+      "title": "Extract Lines",
+      "description": "Copy a line range from one file and append it into another without retyping it — moving code between files, splitting modules. The source is left untouched; to move, follow with a batch_edit that removes the range.",
+      "inputSchema": {
+        "properties": {
+          "append_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "description": "Where to append in the target: 0 = beginning, -1 = end, N = after line N, or a line\nid (verified against the target).",
+            "examples": [
+              "12:a3",
+              -1
+            ]
+          },
+          "append_path": {
+            "description": "Target file the lines are appended to (ssh://user@host:port/path for remote).",
+            "type": "string"
+          },
+          "from_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "description": "Last line to copy (inclusive): integer or line id. Default: `from_start`.",
+            "examples": [
+              "12:a3",
+              -1
+            ]
+          },
+          "from_path": {
+            "description": "Source file (ssh://user@host:port/path for remote).",
+            "type": "string"
+          },
+          "from_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "description": "First line to copy (inclusive): integer or line id (verified against the source).",
+            "examples": [
+              "12:a3",
+              -1
+            ]
+          }
+        },
+        "required": [
+          "from_path",
+          "from_start",
+          "append_path",
+          "append_line"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "file_info",
+      "title": "file_info",
+      "description": "Return a regular target file size, immutable-read version token, POSIX mode and full SHA256. Explicit configured operator host; rejects symlinks and special files.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "path"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "file_move",
+      "title": "Move Workspace File Without Overwrite",
+      "description": "Move one regular file between two configured controller-local workspace paths. Never overwrite an existing destination or follow source/parent symlinks. Requires an existing destination parent and same-device atomic rename support; no copy/delete fallback. This removes the old filename but retains the file inode. Linux only.",
+      "inputSchema": {
+        "properties": {
+          "destination": {
+            "description": "Absent destination path with an existing non-symlink parent directory.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Existing local ordinary file to move, never a symlink or directory.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "destination"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "hardware_snapshot",
+      "title": "Hardware Snapshot",
+      "description": "Return a typed, read-only hardware snapshot from a configured host: DMI/CPU/memory, hwmon temperatures and power, GPU state, power supplies and limits, NPU devices, and USB4/Thunderbolt peers.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "host_health",
+      "title": "Configured Host Health",
+      "description": "Measure authenticated SSH reachability and command roundtrip latency for one configured host alias, including authentication and remote startup. Uses a fixed bounded read-only challenge and a 10-second deadline. No caller-supplied network destinations or commands; failures are redacted. This is not ICMP ping or pure network RTT.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "description": "Exact host name returned by host_list. No network address or SSH target is accepted.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "host_list",
+      "title": "Host List",
+      "description": "List configured runtime host names and their capability flags. SSH destinations and credentials are never accepted from tool input.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "host_processes",
+      "title": "Host Processes",
+      "description": "List actual host processes with bounded PID pagination and start identities, not only runtime jobs. Operator hosts only. Command arguments are omitted to avoid exposing secrets.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "after_pid": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "host": {
+            "type": "string"
+          },
+          "limit": {
+            "description": "At most 128 process records per response.",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "host_signal",
+      "title": "Host Signal",
+      "description": "Signal one positive target-host PID, including processes not created by this runtime. Operator hosts only; existing OS permissions and sudoers apply. Prefer expected_identity from host_processes. Result confirms signal delivery, not process termination. Never blindly retry uncertain delivery.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_identity": {
+            "description": "Identity from host_processes; rejects PID reuse when supplied.",
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "pid": {
+            "description": "A single positive host PID, never a process group or -1 wildcard.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "signal": {
+            "description": "Signal number; default SIGTERM (15). Zero probes permissions/existence.",
+            "type": "integer"
+          },
+          "sudo": {
+            "default": false,
+            "description": "Use existing noninteractive sudo permission; never grants privileges.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "host",
+          "pid"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "image_read",
+      "title": "image_read",
+      "description": "Read a raster image on the controller or an explicit configured operator host as native MCP image content, with original SHA256 and dimensions. Preview is resized; use binary_read for lossless original bytes.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cached_values": {
+            "default": false,
+            "description": "Read stored spreadsheet cache values instead of formula strings; no recalculation.",
+            "type": "boolean"
+          },
+          "expected_sha256": {
+            "type": "string"
+          },
+          "host": {
+            "description": "Optional configured operator host. Omit for controller-local documents.",
+            "type": "string"
+          },
+          "length": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "description": "Absolute path on the selected host (or controller when host is omitted).",
+            "type": "string"
+          },
+          "range": {
+            "type": "string"
+          },
+          "render": {
+            "default": false,
+            "description": "Return native MCP image content for at most two PDF pages, in addition to text.",
+            "type": "boolean"
+          },
+          "sheet": {
+            "type": "string"
+          },
+          "xml_part": {
+            "description": "Optional DOCX document/header/footer XML part, returned with line pagination.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "network_inspect",
+      "title": "Network Inspect",
+      "description": "Read links, addresses, routes, listeners, and USB4/Thunderbolt peers from a configured host without changing network state.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "pdf_edit",
+      "title": "PDF Page Edit",
+      "description": "Insert/delete PDF pages into a distinct output file, preserving the source. Source/output fingerprints are required; inserted PDF sources also need SHA256. Supports local or explicitly configured operator-host paths. Page deletion is not secure redaction; signed/encrypted PDFs are rejected.",
+      "inputSchema": {
+        "$defs": {
+          "PdfPageOperation": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "page_indexes": {
+                    "items": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  "type": {
+                    "const": "delete",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "page_indexes"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "markdown": {
+                    "type": "string"
+                  },
+                  "page_index": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "source_path": {
+                    "type": "string"
+                  },
+                  "source_sha256": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "insert",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "page_index"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "expected_sha256": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/$defs/PdfPageOperation"
+            },
+            "type": "array"
+          },
+          "output_expected_sha256": {
+            "type": "string"
+          },
+          "output_path": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "expected_sha256",
+          "output_path",
+          "output_expected_sha256",
+          "operations"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "pdf_security",
+      "title": "PDF Protection and Signature Integrity",
+      "description": "Inspect PDF detached-CMS byte-range integrity, create AES-256 encrypted or owner-authorized decrypted copies, or append an explicitly acknowledged unsigned metadata revision. Source/output SHA256 required. Passwords are private owned files on the chosen host, never raw parameters. Original files remain unchanged. Optional trust_store_file plus SHA256 validates the chain only against caller-supplied public roots. validate_policy additionally checks DocMDP/FieldMDP revision differences offline. fill_form_copy creates a distinct incremental text-form output only with explicit roots, allow_unsigned_revision and verified form-filling permission; locked fields or invalid revisions are refused. Revocation, trusted signing time and certificate-purpose policy remain unevaluated. Existing signatures do not sign a new revision.",
+      "inputSchema": {
+        "$defs": {
+          "PdfSecurityAction": {
+            "enum": [
+              "inspect",
+              "validate_policy",
+              "fill_form_copy",
+              "encrypt_copy",
+              "decrypt_copy",
+              "append_metadata"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "$ref": "#/$defs/PdfSecurityAction"
+          },
+          "allow_unsigned_revision": {
+            "default": false,
+            "type": "boolean"
+          },
+          "expected_sha256": {
+            "type": "string"
+          },
+          "form_values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "description": "Printable-ASCII single-widget text fields for a certified copy; never signing material.",
+            "type": "object"
+          },
+          "host": {
+            "type": "string"
+          },
+          "output_expected_sha256": {
+            "type": "string"
+          },
+          "output_owner_password_file": {
+            "type": "string"
+          },
+          "output_path": {
+            "type": "string"
+          },
+          "output_user_password_file": {
+            "type": "string"
+          },
+          "password_file": {
+            "description": "Path on the selected host to an owned 0600 password file, never the password itself.",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "trust_store_file": {
+            "description": "Explicit public PEM trust anchors; optional and bound to trust_store_sha256.",
+            "type": "string"
+          },
+          "trust_store_sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "expected_sha256",
+          "action"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "privileged_action",
+      "title": "Privileged Action",
+      "description": "Run one exact, administrator-configured sudo action on a configured host. Arbitrary sudo commands, executable paths, services, and PIDs are never accepted from tool input.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "Exact symbolic action name from the host policy.",
+            "type": "string"
+          },
+          "args": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "host": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "action"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "process_cancel",
+      "title": "Process Cancel",
+      "description": "Cancel only a durable process created by this runtime. Ownership is verified from stored unit/job metadata; arbitrary PID signalling is not exposed.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "grace_seconds": {
+            "description": "Grace period before the fallback backend sends SIGKILL, capped at 30 seconds.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "host": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "process_checkpoint",
+      "title": "Process Checkpoint Lifecycle",
+      "description": "Same-boot single-process Linux CRIU snapshots, only on administrator-pinned operator hosts. Inspect returns exact identity and resource limits. Dump stops/exits the original only after a validated private snapshot. Restore returns restored_stopped, never claims the program is running. A separate resume requires exact restored identity and acknowledge_resume. Old requests never silently relaunch; status exposes uncertain states. Internal pipes/unchanged files only; external sockets/terminals/GPU/multi-process state not supported. Uses existing sudo authority; no images or secrets returned.",
+      "inputSchema": {
+        "$defs": {
+          "CheckpointAction": {
+            "enum": [
+              "inspect",
+              "dump",
+              "restore",
+              "status",
+              "resume"
+            ],
+            "type": "string"
+          },
+          "CheckpointIdentity": {
+            "additionalProperties": false,
+            "properties": {
+              "boot_id": {
+                "type": "string"
+              },
+              "pid": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "start_ticks": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "uid": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "pid",
+              "uid",
+              "boot_id",
+              "start_ticks"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "acknowledge_process_stop": {
+            "default": false,
+            "type": "boolean"
+          },
+          "acknowledge_resume": {
+            "default": false,
+            "type": "boolean"
+          },
+          "action": {
+            "$ref": "#/$defs/CheckpointAction"
+          },
+          "checkpoint_id": {
+            "type": "string"
+          },
+          "expected_identity": {
+            "$ref": "#/$defs/CheckpointIdentity"
+          },
+          "host": {
+            "type": "string"
+          },
+          "pid": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "action"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "process_list",
+      "title": "Process List",
+      "description": "List locally persisted durable job identities, optionally restricted to one configured host. Use process_status for live state.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "process_read",
+      "title": "Process Read",
+      "description": "Read bounded stdout and stderr ranges from a durable process using independent byte offsets. The response returns next offsets for lossless pagination.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum bytes returned per stream, capped at 16 KiB with lossless byte cursors.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stderr_offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stdout_offset": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "process_start",
+      "title": "Process Start",
+      "description": "Start an explicit executable and argv on one configured host. No shell syntax is parsed. Jobs have durable metadata and logs, survive MCP reconnects, support idempotency keys, and may be resource-limited.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "args": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cpu_quota_percent": {
+            "description": "Optional transient systemd CPUQuota percentage, 1..1000.",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "type": "object"
+          },
+          "executable": {
+            "description": "Executable path or command name. Shell syntax is not accepted.",
+            "type": "string"
+          },
+          "host": {
+            "description": "Configured host name, never a raw SSH destination.",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Reusing the same host+key returns the existing durable job instead of starting twice.",
+            "type": "string"
+          },
+          "memory_max_bytes": {
+            "description": "Optional transient systemd MemoryMax in bytes.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nice": {
+            "description": "Non-negative Unix nice adjustment, 0..19.",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stdin": {
+            "description": "Optional standard input written once at process start (max 1 MiB).",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "description": "Optional process timeout. The remote supervisor terminates the process group.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "executable"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "process_status",
+      "title": "Process Status",
+      "description": "Read the authoritative state of a durable process created by this runtime. A job id is always bound to its original configured host.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "process_wait",
+      "title": "Process Wait",
+      "description": "Wait up to 30 seconds for a durable process state change, then return its current state. This never starts or duplicates a job.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "description": "Maximum wait for this call, capped at 30 seconds.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "pty_close",
+      "title": "PTY Close",
+      "description": "Close a runtime-created terminal. Operator mode asks its target owner to terminate the terminal child group and retains the complete archive. This does not guarantee containment of privileged or deliberately detached descendants.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "pty_list",
+      "title": "PTY List",
+      "description": "List interactive PTY sessions owned by this runtime process, optionally restricted to one configured host.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "after_session_id": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "limit": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "pty_read",
+      "title": "PTY Read",
+      "description": "Read bounded PTY output using byte cursors. By default text pages preserve complete UTF-8 characters (a tiny limit may extend up to 3 bytes); utf8_pending means an incomplete live character needs more input. Set raw_bytes=true for exact byte pages and decode bytes_hex for binary output. text_is_lossy labels invalid text; output_complete is false on capture errors. The ring reports dropped prefixes.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "limit": {
+            "description": "Preferred page bytes; text pages may extend up to 3 bytes to fit one character.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "raw_bytes": {
+            "default": false,
+            "description": "Keep exact byte page boundaries instead of UTF-8-safe text boundaries.\nUse bytes_hex for binary data; text_is_lossy labels invalid UTF-8 views.",
+            "type": "boolean"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "pty_start",
+      "title": "PTY Start",
+      "description": "Start a real terminal on a configured host. Operator terminals are owned by a target-account daemon, retain a full disk archive and survive controller restarts. Use an idempotency_key to reconcile uncertain launches. Target reboot does not resume a running program. Isolated-host terminals remain controller-scoped.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "args": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cols": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "type": "object"
+          },
+          "executable": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Operator terminals reuse the same key after an uncertain launch acknowledgement.",
+            "type": "string"
+          },
+          "rows": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "executable"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "pty_write",
+      "title": "PTY Write",
+      "description": "Write exact UTF-8 bytes, including control characters, to a PTY session created by this runtime.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "description": "UTF-8 data sent exactly as provided; control characters such as \\u0003 are allowed.",
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "request_id": {
+            "description": "Optional deduplication key for input sent to a persistent operator terminal.",
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "session_id",
+          "data"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "read_multiple_files",
+      "title": "Read Multiple UTF-8 Files",
+      "description": "Read 1 to 16 complete small UTF-8 files on one configured operator host. Each path is authorized independently and opened without symlinks or hard links. Per-file byte cap defaults to 16 KiB, maximum 64 KiB; serialized MCP text response budget defaults to 64 KiB, maximum 256 KiB including escaping. Any bad path, invalid UTF-8, changed file or exceeded budget fails the whole call without partial content. Returns independent file versions and SHA256; not an atomic snapshot across files. No shell or arbitrary SSH targets.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "description": "One configured operator host. Caller-selected SSH targets are unavailable.",
+            "type": "string"
+          },
+          "max_file_bytes": {
+            "description": "Full-file byte ceiling, 1..65536; default 16384. Larger files fail, never truncate.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_response_bytes": {
+            "description": "Shared serialized MCP text-result ceiling, 1024..262144; default 65536.\nIncludes JSON escaping. A failed batch returns no partial file content.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "paths": {
+            "description": "1..16 distinct absolute regular-file paths; symlinks and hardlinks are rejected.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "host",
+          "paths"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "request_history",
+      "title": "Read Credential or Native Session Request History",
+      "description": "Read bounded redacted dispatch metadata owned by the verified private HTTP operator credential; the same credential resumes its retained metadata after reconnect or controller restart. All users sharing that credential share this scope; this is not authenticated ChatGPT caller isolation. Stdio remains native-session-only. Independent retained-record cursors; server request identity, canonical tool name, timing and observed status only. Unknown effects must never be replayed automatically. Records prove neither delivery nor business success. Transport-invalid requests and facade-local refusals are outside native dispatch history.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "after_id": {
+            "description": "Last returned request id. Expired and other-session cursors are refused.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "At most 32 metadata records; default 32. No parameters or output are returned.",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_list",
+      "title": "List Owned Searches",
+      "description": "List bounded persisted searches owned by the verified private HTTP operator credential, shared by all its users, or this stdio native session. Independent pagination; never accepts caller-selected ownership. The same HTTP credential resumes retained metadata after reconnect or controller restart. Stdio and legacy native-session receipts remain inaccessible to fresh sessions. Not authenticated ChatGPT caller isolation.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "after_id": {
+            "description": "Last returned opaque search id, for lexicographic pagination.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "At most 32 session-owned receipts; default 32.",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_results",
+      "title": "Read Search Snapshot Page",
+      "description": "Read an immutable terminal page for a search owned by the verified private HTTP operator credential, or by this stdio native session. Same-credential HTTP reconnect and controller restart preserve metadata access; credential changes never grant older ownership. Running work reports snapshot_ready=false. Maximum 32 rows and 64 KiB per page, independent row cursors. No host or owner override, running-program restore or authenticated ChatGPT caller isolation.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Independent zero-based result offset; never advances another caller's cursor.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "limit": {
+            "description": "1..32 terminal snapshot records per response; default 32.",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "search_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_start",
+      "title": "Start Bounded Native Search",
+      "description": "Start a bounded background file-name or literal UTF-8 content search under one configured read root. No shell or arbitrary targets. Refuses symlinks and hard links; skips binary content and bounds traversal, bytes, results and time. HTTP ownership is the verified private operator credential, shared by all its users; stdio ownership remains this native session. Never takes caller-selected ownership. The same HTTP credential can resume retained metadata and immutable terminal pages after reconnect or controller restart; unfinished searches become interrupted without relaunch. Not authenticated ChatGPT caller isolation, running-program resume, regex or gitignore parity.",
+      "inputSchema": {
+        "$defs": {
+          "SearchKind": {
+            "oneOf": [
+              {
+                "const": "files",
+                "description": "Literal substring of the root-relative regular-file path.",
+                "type": "string"
+              },
+              {
+                "const": "content",
+                "description": "Literal UTF-8 substring in ordinary UTF-8 text files; no regular expressions.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "include_hidden": {
+            "default": false,
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/$defs/SearchKind"
+          },
+          "max_bytes": {
+            "description": "At most 64 MiB read; default 64 MiB. Individual files above 4 MiB are skipped.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_entries": {
+            "description": "At most 10000 traversed entries; default 10000.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_results": {
+            "description": "At most 1000 results; default 1000.",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "query": {
+            "description": "Literal 1..512 UTF-8 bytes; NUL and newlines are refused.",
+            "type": "string"
+          },
+          "root": {
+            "description": "Absolute root under this configured host's read policy; symlink components are refused.",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "description": "At most 30 seconds worker wall budget; default 30. Blocking OS I/O may delay termination.",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "root",
+          "query",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_stop",
+      "title": "Cancel Own Native Search",
+      "description": "Request cooperative cancellation only for a bounded search owned by the verified private HTTP operator credential, or this stdio native session. Uses its pinned job cancellation marker, never an arbitrary PID or signal. Repeated stop is idempotent; retained terminal snapshots are preserved. After controller restart, unfinished searches are interrupted and are never relaunched. Not authenticated ChatGPT caller isolation.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "search_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "service_status",
+      "title": "Service Status",
+      "description": "Read exact systemd unit or launchd label status from a configured host. This tool never starts, stops, enables, or disables services.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "services": {
+            "description": "Exact systemd unit or launchd label names, max 64.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "host",
+          "services"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "shell_start",
+      "title": "Shell Start",
+      "description": "Run a shell command on an administrator-configured operator host with the SSH account authority. Durable job identity, logs and idempotency use process_status/read/wait/cancel. Never retry uncertain execution with a new key. Isolated hosts deny this tool.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "description": "Shell source, including pipelines, redirects and compound commands.",
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "type": "object"
+          },
+          "host": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "shell": {
+            "description": "Absolute shell executable; defaults to /bin/sh.",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "command"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "stream_handoff_close",
+      "title": "Stream Handoff Close Input",
+      "description": "Close only the runtime owner's accepted stdin-writer pipe. This may deliver EOF to the application when no other writer remains. It does not send a signal or claim termination.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "stream_handoff_list",
+      "title": "Stream Handoff List",
+      "description": "List bounded controller-local cooperative stream sessions persisted by this runtime. Use status/read for authoritative state. No remote host or descriptor source can be supplied by the caller.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "stream_handoff_prepare",
+      "title": "Stream Handoff Prepare",
+      "description": "Prepare a controller-local receiver for a cooperating same-login old I/O owner. The first PID is the application leader; optional additional PIDs must be descendants. This does not open /proc fds, signal/capture processes, or steal DC sessions. Reuse the same idempotency key after uncertain acknowledgement. The returned private Unix socket is consumed by the reviewed owner-export helper; runtime restarts do not close accepted kernel pipe objects.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "application_pids": {
+            "description": "First PID is the application leader. Additional entries must be its descendants.",
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "idempotency_key": {
+            "description": "Reuse exactly this key after an uncertain prepare acknowledgement.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idempotency_key",
+          "application_pids"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "stream_handoff_read",
+      "title": "Stream Handoff Read",
+      "description": "Read exact bounded bytes from the retained stdout or stderr archive of an accepted cooperative handoff. Uses byte offsets/base64 and SHA256; it never consumes the application's kernel pipe directly.",
+      "inputSchema": {
+        "$defs": {
+          "StreamName": {
+            "enum": [
+              "stdout",
+              "stderr"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "description": "Preferred byte count, bounded to 16 KiB.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "stream": {
+            "$ref": "#/$defs/StreamName",
+            "default": "stdout"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "stream_handoff_status",
+      "title": "Stream Handoff Status",
+      "description": "Read the status of a controller-local cooperative stream receiver, including bound application identities, accepted owner state and retained output lengths. This never adopts a new descriptor or starts an application.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "stream_handoff_write",
+      "title": "Stream Handoff Write",
+      "description": "Write up to 64 KiB of exact base64-decoded input to a previously accepted cooperative stdin pipe. request_id is mandatory: same ID/same bytes returns the prior receipt; partial or uncertain writes are never blindly replayed. This does not signal the application.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "data_base64": {
+            "description": "Exact bytes encoded as base64, at most 64 KiB decoded.",
+            "type": "string"
+          },
+          "request_id": {
+            "description": "Mandatory retry identity. Reuse only with the identical byte payload.",
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "request_id",
+          "data_base64"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "sudo_start",
+      "title": "Sudo Start",
+      "description": "Start a temporary arbitrary sudo command through an operator-host SSH PTY, using only that login account existing sudoers/PAM rights. Does not grant permissions or install NOPASSWD. Use pty_read/write/close. Never put passwords in arguments; input is not persisted by the runtime audit but may be retained by the MCP client.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "args": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cols": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "description": "Environment before sudo; sudo itself may filter it according to sudoers.",
+            "type": "object"
+          },
+          "executable": {
+            "type": "string"
+          },
+          "fresh_auth": {
+            "default": true,
+            "description": "Default true: use sudo -k so an existing cached credential is not relied on.",
+            "type": "boolean"
+          },
+          "host": {
+            "type": "string"
+          },
+          "non_interactive": {
+            "default": false,
+            "description": "Use -n to fail instead of requesting a password.",
+            "type": "boolean"
+          },
+          "rows": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "run_as": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "executable"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "text_editor",
+      "title": "Text Editor",
+      "description": "File operations. create: new file only — fails if it exists, parent directories are made. str_replace: raw file text (real newlines, no `N:hh|` prefixes); old_text must match exactly once, or set replace_all: true — on no or multiple matches the error lists candidate line ids for batch_edit. delete: remove a file (not a directory). undo_edit: revert the last edit to `path` (10 levels, delete included). Prefer batch_edit when you already hold line ids.",
+      "inputSchema": {
+        "$defs": {
+          "TextEditorCommand": {
+            "enum": [
+              "create",
+              "str_replace",
+              "delete",
+              "undo_edit"
+            ],
+            "type": "string"
+          }
+        },
+        "properties": {
+          "command": {
+            "$ref": "#/$defs/TextEditorCommand",
+            "description": "Operation to perform."
+          },
+          "content": {
+            "description": "Content for `create`.",
+            "type": "string"
+          },
+          "new_text": {
+            "description": "`str_replace`: replacement text (required).",
+            "type": "string"
+          },
+          "old_text": {
+            "description": "`str_replace`: exact text to find (required).",
+            "type": "string"
+          },
+          "path": {
+            "description": "File path (ssh://user@host:port/path for remote).",
+            "type": "string"
+          },
+          "replace_all": {
+            "description": "`str_replace`: replace every occurrence (rename-style). Default: false.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "path"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "text_file_write",
+      "title": "Publish Bounded Workspace UTF-8 Text",
+      "description": "Create a new UTF-8 file, replace its full content, or append bounded text only in a configured controller-local workspace. Creates require expected_sha256='absent'; replace/append require the existing content's exact SHA256. Refuses symlinks, hard links, executable files, xattrs/ACLs, large content, remote targets and unmanaged overwrite. Publication uses a temporary file and atomic same-directory rename, changing inode on replacement; not a transaction against external concurrent writers. No shell, remote execution or privilege escalation. Never blindly retry an unknown outcome.",
+      "inputSchema": {
+        "$defs": {
+          "TextFileWriteMode": {
+            "enum": [
+              "create",
+              "replace",
+              "append"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "UTF-8 input up to 64 KiB. Repeated unknown-outcome writes must not be blindly retried.",
+            "type": "string"
+          },
+          "expected_sha256": {
+            "description": "'absent' for create; lowercase 64-hex original SHA256 for replace or append.",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/$defs/TextFileWriteMode",
+            "description": "Explicit create, replace or append semantics."
+          },
+          "path": {
+            "description": "Controller-local target path under an explicitly configured workspace.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "mode",
+          "content",
+          "expected_sha256"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "view",
+      "title": "View",
+      "description": "Read files, list directories, search content. Lines render as `N:hh|content`; copy `N:hh` verbatim — it is the line id edit tools target. Listings are recursive and gitignore-aware, one `path\tNL\t~Nt` (lines, ~tokens) per file. Re-viewing a whole file returns only the hunks changed since your last view (or an unchanged marker); ranged reads always return the requested lines. Reuse returned content: read a complete block in one call, combine adjacent windows, never re-read overlapping ranges or narrow one just to pick edit targets; re-read only when the file may have changed or output was truncated.",
+      "inputSchema": {
+        "properties": {
+          "content": {
+            "description": "Locate code: searches the whole file/tree (`start`/`end` ignored) for a literal\nsubstring, or a Rust regex with `regex: true` (`(?i)` case-insensitive; alternation for\nrelated terms).",
+            "type": "string"
+          },
+          "context": {
+            "description": "Lines around each `content` match. Default: 0.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "description": "Last line (inclusive): line id or integer (negative counts from the end). Default: end\nof file; omit both `start` and `end` for the whole file.",
+            "examples": [
+              "12:a3",
+              -1
+            ]
+          },
+          "full": {
+            "description": "Force the complete file when re-viewing a whole file (normally only changed hunks),\ne.g. after losing earlier context. No effect on ranges or searches; output limits\nunchanged.",
+            "type": "boolean"
+          },
+          "include_hidden": {
+            "description": "Include dotfiles and dot-directories.",
+            "type": "boolean"
+          },
+          "max_depth": {
+            "description": "Directory depth bound. Default: unlimited, except a bare remote listing (no\n`pattern`/`content`) stops at the root entries. Searches walk the whole tree.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "description": "File or directory. `a|b` searches several roots with `content` (max 32); several\nfiles take parallel view calls. Remote: ssh://[user@]host[:port]/path (host may be an\n~/.ssh/config alias; `ssh://host` or `ssh://host/~/dir` is the login home).",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Ripgrep -g globs bounding listings and searches: without `/` a name at any depth,\nwith `/` the relative path; `*`, `**`, `?`, `[abc]`, `{rs,toml}`, leading `!`; `|`\njoins ordered globs (later wins), e.g. `**/*.rs|!target/**`. Applied after\ngitignore/hidden filtering; one line, max 4096 bytes, 64 globs.",
+            "type": "string"
+          },
+          "regex": {
+            "description": "Treat `content` as a regex. Default: false.",
+            "type": "boolean"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "description": "First line (inclusive): line id or integer (negative counts from the end, -1 = last).\nDefault: line 1.",
+            "examples": [
+              "12:a3",
+              -1
+            ]
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "workdir",
+      "title": "Working Directory",
+      "description": "Switch the working directory for later calls (`path`) or revert to the session root (`reset: true`). Every tool resolves relative paths against it; do not call it just to check the directory. A remote (ssh://) workdir disables `shell`.",
+      "inputSchema": {
+        "properties": {
+          "path": {
+            "description": "Directory to switch into, absolute or relative to the current workdir; required unless\n`reset`. Not `\".\"` (a no-op). Remote: ssh://user@host:port/path; `ssh://host` or\n`ssh://host/~/dir` is the login home.",
+            "type": "string"
+          },
+          "reset": {
+            "description": "Revert to the session root.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "worksheet_edit",
+      "title": "Worksheet Range Edit",
+      "description": "Edit a bounded XLSX/XLSM cell range with source SHA256 validation. Preserves unselected OOXML package payloads and cell styles; invalidates formula caches and requests recalculation on open. Does NOT calculate formulas. Signed workbooks, merged sheets and shared/array formula edits are refused. Supports local and explicit operator-host files.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_sha256": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "range": {
+            "type": "string"
+          },
+          "sheet": {
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "path",
+          "expected_sha256",
+          "range",
+          "values"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "worksheet_recalculate",
+      "title": "Worksheet Formula Recalculate",
+      "description": "Compute supported XLSX/XLSM dependencies offline, including static global/local names, shared formulas, bounded declared fixed arrays and 1904 calendar serials. Preserve source formula encoding and unmodified OOXML payloads; require current SHA256. Reject circular/dynamic/external/relative-name/unsupported constructs before publication. Returns calculated caches and explicit error cells, not Microsoft Excel engine identity.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_sha256": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "expected_sha256"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    }
+  ]
+}

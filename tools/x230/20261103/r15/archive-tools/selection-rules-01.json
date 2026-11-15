@@ -1,0 +1,249 @@
+{
+  "candidate_adoption_claimed": false,
+  "credential_scan": "Original bytes, bounded decompressed gzip, and parsed JSON string fields; no redaction.",
+  "determinism": "Sorted paths; mtime=0; uid/gid=0; empty owner/gzip filename; mode 0644/0755.",
+  "execution": "Explicit --package only; default/--show-policy read no files or gates.",
+  "gate_mode": "One attempt. Missing, incomplete, changed or failed inputs stop nonzero.",
+  "gates": [
+    {
+      "finished_utc_required": true,
+      "label": "configuration_qualification",
+      "path": "configuration-qualification-01/report.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": true,
+      "label": "local",
+      "path": "local-campaigns-01/report.json",
+      "required_true": "success",
+      "stage_order": [
+        "isolated-tests",
+        "audit-isolated-tests",
+        "cancel-r14-r15",
+        "analyze-cancel-r14-r15",
+        "cancel-r11-r15",
+        "analyze-cancel-r11-r15"
+      ]
+    },
+    {
+      "finished_utc_required": true,
+      "label": "remote",
+      "path": "remote-campaigns-01/report.json",
+      "required_true": "success",
+      "stage_order": [
+        "native-r14-r15",
+        "analyze-native-r14-r15",
+        "native-r11-r15",
+        "analyze-native-r11-r15",
+        "six-host-cancel-recovery",
+        "verify-six-host-cancel-recovery"
+      ]
+    },
+    {
+      "finished_utc_required": false,
+      "label": "qualification_audit",
+      "path": "qualification-audit-summary.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": false,
+      "label": "performance_audit",
+      "path": "independent-performance-audit.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": false,
+      "label": "recovery_audit",
+      "path": "independent-recovery-audit.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": false,
+      "label": "performance_report_data",
+      "path": "performance-report-data.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": false,
+      "label": "performance_release",
+      "path": "perf-ready-01.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": true,
+      "label": "socket_cleanup",
+      "path": "independent-audit-tools/socket-cleanup-01.json",
+      "required_true": "success",
+      "stage_order": null
+    }
+  ],
+  "limits": {
+    "decompressed_file_bytes": 134217728,
+    "decompressed_total_bytes": 4294967296,
+    "file_count": 300000,
+    "raw_file_bytes": 134217728,
+    "raw_total_bytes": 4294967296
+  },
+  "output": "Strictly new R15/evidence-package-* direct child; default evidence-package-01.",
+  "pinned_input_sha256": {
+    "baseline-binding.json": "d701ad5c2d101ed389614083b386324c092182dcf19cb4f4bf0777e232d3c37a",
+    "cancel-recovery-01/report.json": "f5f80f466ce4d1f33caecc605591576d3487d9aa808023ad9502b78e8b7a698c",
+    "configuration-qualification-01/report.json": "bce0c05b8f13e6858ecd14d024364450cc08fd90f8adabb55d5c1323c0944a89",
+    "configuration/configuration-ready.json": "fb4a2e8eab0bfafb0c272c4c3e259cd1d68dffbaa479796854a73a1100fcc947",
+    "independent-audit-tools/allocator-tooling-review.json": "8c87efb5b5aaa0e347bcc3f8beaa61d7c66d21011daf006550a41367b30f7cbb",
+    "independent-audit-tools/configuration-recovery-auditors-ready-01.json": "480ad67baa64c1fcf28c781335d3c707ad5c0e98151e4557f9d2c0ef21cdae22",
+    "independent-audit-tools/environment-selftest-01.json": "0d82f2ee23f0bd5a8c92f431d7a403b413ca097b4ab0a7c53d392d15758f85fa",
+    "independent-audit-tools/frontier-assessment-before-r15.json": "bb406ff39275ab5698d7221831e583fde8d678d2c5d5a9d26545662e27faa463",
+    "independent-audit-tools/frontier-decision-after-r15.json": "c72943c46d2f578fbeeff2d4cb96d85928507a2fa6a3cd1418e95cc5593d0e5d",
+    "independent-audit-tools/local-orchestrator-ready-01.json": "f321182f6bd94b948b22948e524b5eaa0c42d08436e49ed9bf778f8a27196960",
+    "independent-audit-tools/performance-report-rendering.json": "57492c844d459a2635efda985ad48ec2a904ab9f1f44ae8e9e0e62e8de9b0098",
+    "independent-audit-tools/remote-orchestrator-ready-01.json": "181c6385afeb9b253435dd15cb90c7804928512ad1e361fcfed1c644efaa2d20",
+    "independent-audit-tools/socket-cleanup-01.json": "48557d7cb53f4501545742a4e33497dd7cfea2e596c2a37b63a5d4b710b58024",
+    "independent-audit-tools/socket-residual-readonly-01.json": "45f86817d18b5b93a37279ef4ddee9273819f4800c0881aaa6c2508bda1176ab",
+    "independent-audit-tools/socket-residual-source-02.json": "cc7447a02609f7a848cfec9f15f5bdd6b78765833a757a2921decdb3c2b59bb3",
+    "independent-audit-tools/tooling-install-01.json": "34f0d32bcdf5057ec1cf8148a51dd13773f1235841074e0f2b8914bdfb8e461d",
+    "independent-performance-audit.json": "3a3724e5a1cfbd4daade73d68ad96f2e97aad71f47a2f948fb8d1669cacfe4db",
+    "independent-recovery-audit.json": "b276c885da5b821192ce454c6117c6fce6d7300df1164331d4d9c81b71ebbb5e",
+    "local-campaigns-01/bindings/r14-implementation-ready.json": "efdc0a817aa4a9b80106a31b899678a4b7863523dd47e145f99b5d6ee2aa6442",
+    "local-campaigns-01/bindings/r14-isolated-summary.json": "25b7c25f60cc115d65a4c038912c34691f548a9103bbea82fd6366a5ce6759bb",
+    "local-campaigns-01/bindings/r14-qualification.json": "d6a46164b30c6677cf49ec7eea156748a8445589c71034795d016a62795610cd",
+    "local-campaigns-01/bindings/retained-artifacts.jsonl": "48b7515a568094403f153c68371242b7ebe534539f1c9513c1f60f91947a828a",
+    "local-campaigns-01/bindings/source-map.json": "d24d2cc040c3f3d9849112e55a076834d06d12a65ec647987c5e419c3621354c",
+    "local-campaigns-01/report.json": "b65a3d425edd91620f859ee8e14a4556b40651f4d94a022c088f7707e8a180e8",
+    "perf-ready-01.json": "a5d865206468be9b06bf84e85645469ae0a629564df7e1a853bc40f679717435",
+    "performance-report-data.json": "e8203c3477de1ebeb353dfa74affc2bbc65090d33477b74c7852a39ae0f2f2b2",
+    "performance-results.md": "50f856ef773022898495915e5382610953fe21ac824de6d816029e1f063489f7",
+    "qualification-audit-summary.json": "5d99035bb3800fab4edcd7b21534d98f215f1a1411317999905677a81d5ae901",
+    "remote-campaigns-01/report.json": "defff42c03b3a7f0a7910c627b7d0c6f392064980f5b3bb4a7f8b99d0a9acafd",
+    "run-state-01.json": "619e9d2ee317ed27a372e0253c4db7a2d2217de01bc0de2f005f23fd53f795cf",
+    "run-state-03.json": "1d1887110af045536a208f222d64f6a5719f7bb1cfc7c25e75676ca3e79930c1"
+  },
+  "preserved": [
+    "Original compressed test logs",
+    "All selected raw replies/state/fixtures",
+    "Negative results",
+    "Text bin/ssh guards",
+    "Safe arbitrary durable binary data",
+    "Public known_hosts, profile.json and ssh_config",
+    "Allocator configuration/loader/selftests and actual environment evidence",
+    "Root explicit performance-release gate and run states",
+    "Failed read-only diagnostic attempt and exact stale-socket cleanup evidence"
+  ],
+  "private_filename_rule": "Private-key/credential/token files and .env are excluded with reasons.",
+  "prune_compiled_names": [
+    "hepta-runtime",
+    "hepta-runtime-jobctl",
+    "native_process_driver",
+    "hepta-effect-ownerctl"
+  ],
+  "prune_compiled_suffixes": [
+    ".pyc",
+    ".pyo",
+    ".o",
+    ".obj",
+    ".a",
+    ".so",
+    ".dylib",
+    ".dll",
+    ".exe",
+    ".class",
+    ".wasm"
+  ],
+  "prune_names": [
+    ".git",
+    "__pycache__",
+    "source",
+    "target",
+    "test-binaries",
+    "tmp",
+    "temp",
+    "temporary",
+    "unpack",
+    "unpacked",
+    "extract",
+    "extracted",
+    "node_modules"
+  ],
+  "prune_nested_package_suffixes": [
+    ".zip",
+    ".tar",
+    ".tar.gz",
+    ".tar.bz2",
+    ".tar.xz",
+    ".tgz",
+    ".tbz2",
+    ".txz",
+    ".7z",
+    ".rar",
+    ".whl",
+    ".deb",
+    ".rpm"
+  ],
+  "rejected": [
+    "Unsafe relative names",
+    "Selected symlinks/hardlinks/special files",
+    "ELF/PE/Mach-O content",
+    "Suspected credentials",
+    "Concurrent changes"
+  ],
+  "report_data_sha256": "e8203c3477de1ebeb353dfa74affc2bbc65090d33477b74c7852a39ae0f2f2b2",
+  "reviewed_reference": {
+    "git_blob_sha1": "ea8d5d0daa2ee1127071035dfd0f750456e0ccd9",
+    "sha256": "126ae590f81819428db46afd3c37162ec4ffa3c2c4f795f2f978aebdca215529",
+    "stable_functions_kept": 15
+  },
+  "roots": {
+    "r15": "/home/qian/hepta-runtime-optimization-20261103-r15"
+  },
+  "schema": 1,
+  "scope": {
+    "r15": {
+      "required_files": [
+        "baseline-binding.json",
+        "perf-ready-01.json",
+        "run-state-03.json",
+        "qualification-audit-summary.json",
+        "independent-performance-audit.json",
+        "independent-recovery-audit.json",
+        "performance-report-data.json",
+        "performance-results.md"
+      ],
+      "required_trees": [
+        "configuration",
+        "configuration-qualification-01",
+        "local-campaigns-01",
+        "remote-campaigns-01",
+        "cancel-r14-r15-01",
+        "cancel-r11-r15-01",
+        "native-r14-r15-01",
+        "native-r11-r15-01",
+        "cancel-recovery-01",
+        "measurement-tools",
+        "independent-audit-tools",
+        "archive-tools"
+      ],
+      "root_globs": [
+        "run-state-*.json"
+      ]
+    }
+  },
+  "source_binding": {
+    "compiler_invocations": 0,
+    "complete_source_file_count": 219,
+    "equality": "Frozen R14 qualification/ready/source-map snapshots equal; pinned independent R15 qualification audit rehashed current 219 source files and 8 binaries.",
+    "qualification_reused": "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/report.json",
+    "read_scope": "Compare frozen metadata and audit bindings only; never rehash source tree or compiled binaries.",
+    "release_binary_count": 3,
+    "retained_test_binary_count": 5,
+    "rust_source_modified": false,
+    "source": "/home/qian/hepta-runtime-optimization-20261103-r14/source"
+  },
+  "source_trees_included": false,
+  "verification": "Readback without extraction; then recheck selected set, identities, and all gate hashes."
+}

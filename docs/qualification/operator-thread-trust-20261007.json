@@ -1,0 +1,2472 @@
+{
+  "schema": "hepta-thread-trust-installed-qualification-v1",
+  "recorded_at": "2026-10-06T20:58:21.827502+00:00",
+  "scope": "Actual multi-thread process-state recovery and explicit PDF trust-anchor checks, with full prior-feature regression; no universal or cloud integration claim",
+  "implementation_revision": "eede8e68f5dc9e4faf4c1faafcba15c856686572",
+  "source_tree": "ee012ba5a9b80daec2ce9887f960bd7d12066981",
+  "installed": true,
+  "running_binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+  "binary": "/home/qian-qi/.local/lib/hepta-runtime/releases/operator-8814bd81c9757408/hepta-runtime",
+  "final_services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "3836417",
+      "ExecMainStartTimestamp": "Wed 2026-10-07 04:49:15 CST",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2959",
+      "ExecMainStartTimestamp": "Tue 2026-10-06 12:04:54 CST",
+      "ActiveState": "active"
+    }
+  },
+  "native_tool_count": 40,
+  "native_tool_names": [
+    "batch_edit",
+    "binary_patch_inode",
+    "binary_read",
+    "binary_upload",
+    "binary_write",
+    "document_edit",
+    "document_read",
+    "document_render",
+    "document_write",
+    "extract_lines",
+    "file_info",
+    "hardware_snapshot",
+    "host_list",
+    "host_processes",
+    "host_signal",
+    "image_read",
+    "network_inspect",
+    "pdf_edit",
+    "pdf_security",
+    "privileged_action",
+    "process_cancel",
+    "process_checkpoint",
+    "process_list",
+    "process_read",
+    "process_start",
+    "process_status",
+    "process_wait",
+    "pty_close",
+    "pty_list",
+    "pty_read",
+    "pty_start",
+    "pty_write",
+    "service_status",
+    "shell_start",
+    "sudo_start",
+    "text_editor",
+    "view",
+    "workdir",
+    "worksheet_edit",
+    "worksheet_recalculate"
+  ],
+  "new_implementation": {
+    "checkpoint_thread_group": "The native pinned Linux checkpoint API now admits a bounded same-login process with 1..16 threads, verifies all members stop before capture, preserves original TIDs on restore, and requires every restored member identity/state to match before explicit resume. Children, external peers and incompatible devices remain unqualified.",
+    "pdf_trust_anchors": "pdf_security accepts optional paired trust_store_file/trust_store_sha256. A bounded public PEM bundle is policy-checked and pinned, transferred natively for remote files, and used for offline current-time OpenSSL chain verification. Default trust stores are excluded. Intact CMS bytes and trust under these explicit anchors are reported independently.",
+    "calendar_fix_deployed": "The earlier committed VALUE date/time correction is included in the actual running release and passed full installed-protocol 1900/1904 date, TEXT conditional-format and ordinary-time tests."
+  },
+  "checkpoint_qualification": [
+    {
+      "receipt": "advance-checkpoint-four-v2.json",
+      "receipt_sha256": "29106379fe45e876d401b5408fb0a91f790585c6169efa63aedecfe735429b2b",
+      "complete": true,
+      "installed_endpoint": false,
+      "threads": 4,
+      "worker_threads": 3,
+      "checks": [
+        "native inventory accepted real same-login process and internal anonymous pipe without exposing images",
+        "stale PID identity rejected, real CRIU image captured and original process stopped only after valid dump",
+        "restore reports stopped state; missing consent and stale restored identity cannot resume it",
+        "fresh controller recovers the same private checkpoint and stopped restored identity before resume",
+        "same PID/UID/random memory/unread pipe bytes restored; stdout offset retained and start not repeated"
+      ],
+      "pid_before": 221509,
+      "pid_after": 221509,
+      "tid_set": [
+        221509,
+        221514,
+        221515,
+        221516
+      ],
+      "observation_before_sha256": "4c99b41626c99333caab9ee641fd2a7461d35fac77e3cd7e3300504f26ec5c0c",
+      "observation_after_sha256": "4c99b41626c99333caab9ee641fd2a7461d35fac77e3cd7e3300504f26ec5c0c",
+      "same_memory_pipe_values_and_file_offset": true,
+      "all_restored_threads_initially_stopped": true,
+      "explicit_identity_bound_resume_passed": true,
+      "controller_restarted_while_stopped": true,
+      "application_checkpoint_code": false,
+      "private_snapshot_images_exported": false
+    },
+    {
+      "receipt": "advance-checkpoint-sixteen.json",
+      "receipt_sha256": "1b587255da19c73a02db92eb248b8946536fd280df8dded34593d884a833daad",
+      "complete": true,
+      "installed_endpoint": false,
+      "threads": 16,
+      "worker_threads": 15,
+      "checks": [
+        "native inventory accepted real same-login process and internal anonymous pipe without exposing images",
+        "stale PID identity rejected, real CRIU image captured and original process stopped only after valid dump",
+        "restore reports stopped state; missing consent and stale restored identity cannot resume it",
+        "fresh controller recovers the same private checkpoint and stopped restored identity before resume",
+        "same PID/UID/random memory/unread pipe bytes restored; stdout offset retained and start not repeated"
+      ],
+      "pid_before": 223615,
+      "pid_after": 223615,
+      "tid_set": [
+        223615,
+        223620,
+        223621,
+        223622,
+        223623,
+        223624,
+        223625,
+        223626,
+        223627,
+        223628,
+        223629,
+        223630,
+        223631,
+        223632,
+        223633,
+        223634
+      ],
+      "observation_before_sha256": "210f117e97fea1fb68e4c68ffa2a30feba9c11d86530dc108c1509b936ab6162",
+      "observation_after_sha256": "210f117e97fea1fb68e4c68ffa2a30feba9c11d86530dc108c1509b936ab6162",
+      "same_memory_pipe_values_and_file_offset": true,
+      "all_restored_threads_initially_stopped": true,
+      "explicit_identity_bound_resume_passed": true,
+      "controller_restarted_while_stopped": true,
+      "application_checkpoint_code": false,
+      "private_snapshot_images_exported": false
+    },
+    {
+      "receipt": "advance-checkpoint-installed.json",
+      "receipt_sha256": "14b210f6a570f906d7f1042c12385986d7b98cd74a0ec2ea1aa553909bb20c3e",
+      "complete": true,
+      "installed_endpoint": true,
+      "threads": 16,
+      "worker_threads": 15,
+      "checks": [
+        "native inventory accepted real same-login process and internal anonymous pipe without exposing images",
+        "stale PID identity rejected, real CRIU image captured and original process stopped only after valid dump",
+        "restore reports stopped state; missing consent and stale restored identity cannot resume it",
+        "same PID/UID/random memory/unread pipe bytes restored; stdout offset retained and start not repeated"
+      ],
+      "pid_before": 237630,
+      "pid_after": 237630,
+      "tid_set": [
+        237630,
+        237634,
+        237635,
+        237636,
+        237637,
+        237638,
+        237639,
+        237640,
+        237641,
+        237642,
+        237643,
+        237644,
+        237645,
+        237646,
+        237647,
+        237648
+      ],
+      "observation_before_sha256": "bf8612abe62cd73314b74e40f19a3374aa60de90fb687e689f5961ba6a0ebef9",
+      "observation_after_sha256": "bf8612abe62cd73314b74e40f19a3374aa60de90fb687e689f5961ba6a0ebef9",
+      "same_memory_pipe_values_and_file_offset": true,
+      "all_restored_threads_initially_stopped": true,
+      "explicit_identity_bound_resume_passed": true,
+      "controller_restarted_while_stopped": false,
+      "application_checkpoint_code": false,
+      "private_snapshot_images_exported": false
+    },
+    {
+      "receipt": "advance-installed-singlethread.json",
+      "receipt_sha256": "c63566271ac79698e05550eb68b4bf1342977f738f07788750b6c4541ea14c90",
+      "complete": true,
+      "installed_endpoint": true,
+      "threads": 1,
+      "worker_threads": 0,
+      "checks": [
+        "native inventory accepted real same-login process and internal anonymous pipe without exposing images",
+        "stale PID identity rejected, real CRIU image captured and original process stopped only after valid dump",
+        "restore reports stopped state; missing consent and stale restored identity cannot resume it",
+        "same PID/UID/random memory/unread pipe bytes restored; stdout offset retained and start not repeated"
+      ],
+      "pid_before": 240255,
+      "pid_after": 240255,
+      "tid_set": [
+        240255
+      ],
+      "observation_before_sha256": "3e652d4b732eff0db5b8714ec4c2e112d2373cd17f62bbce016c59789f78b258",
+      "observation_after_sha256": "3e652d4b732eff0db5b8714ec4c2e112d2373cd17f62bbce016c59789f78b258",
+      "same_memory_pipe_values_and_file_offset": true,
+      "all_restored_threads_initially_stopped": true,
+      "explicit_identity_bound_resume_passed": true,
+      "controller_restarted_while_stopped": false,
+      "application_checkpoint_code": false,
+      "private_snapshot_images_exported": false
+    }
+  ],
+  "checkpoint_enabled_hosts": [
+    "x230"
+  ],
+  "checkpoint_authority_changed": false,
+  "rust_suites": [
+    {
+      "passed": 384,
+      "failed": 0,
+      "ignored": 11
+    },
+    {
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "rust_passed": 392,
+  "rust_ignored": 11,
+  "python_suites": {
+    "process_ops": 4,
+    "checkpoint_lifecycle": 16,
+    "supervisor": 5,
+    "file_capabilities": 9,
+    "binary": 12,
+    "inode_recovery": 11,
+    "metadata": 8,
+    "parser_config": 5,
+    "capture_faults": 5,
+    "terminal": 6,
+    "local_documents": 11,
+    "extended_documents": 10,
+    "formats": 12,
+    "complex_workbooks": 10,
+    "protected_pdf": 12
+  },
+  "python_passed": 136,
+  "format_check": "passed",
+  "strict_clippy": "passed",
+  "locked_release_build": "passed",
+  "six_host_checks": 228,
+  "six_host_first_attempt_complete": true,
+  "six_host_matrix": {
+    "recorded_at": "2026-10-06T20:46:53.495394+00:00",
+    "source_revision": "eede8e68f5dc9e4faf4c1faafcba15c856686572",
+    "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+    "parser": "/home/qian-qi/.local/lib/hepta-runtime/document-env-protected-20261006/bin/python",
+    "results": [
+      {
+        "host": "main",
+        "ssh_target": "localhost",
+        "operator": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              {
+                "check": "real SSH target account",
+                "result": "passed",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "workdir": "/tmp/hepta-operator-canary-c811c490c2ce4aa5aceac3f3a099a5fd"
+                }
+              },
+              {
+                "check": "real authenticated MCP discovery and explicit capability mode",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "all operator entry points rejected on isolated host without target execution",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+                "result": "passed",
+                "detail": {
+                  "backend": {
+                    "backend": "systemd",
+                    "launcher_pid": null,
+                    "ok": true,
+                    "unit": "hepta-runtime-job-1a112f32397-3a0ad3-1"
+                  },
+                  "uid": 1000
+                }
+              },
+              {
+                "check": "native remote file API sees the same operator-created file",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual host PID pagination",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "external disposable PID: stale identity denied, actual signal delivered",
+                "result": "passed",
+                "detail": {
+                  "atomic_identity": true,
+                  "effective_uid": 1000,
+                  "identity": "linux:a5cfd4f3-4a31-4fb1-b8cc-cf71ef25ea2d:5982138",
+                  "pid": 3804788,
+                  "result": "signal_sent",
+                  "signal": 15,
+                  "termination_confirmed": false
+                }
+              },
+              {
+                "check": "real SSH PTY shell input/output/Ctrl-C/close",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real split-write Unicode PTY: text-safe pages and exact raw-byte pages",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "temporary sudo PTY real uid=0 using existing authorization only",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "durable operator backend does not accidentally block existing sudo",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual test-controller restart: same job, logs, once-only side effect",
+                "result": "passed",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "passed": 13,
+            "ssh_target": "localhost",
+            "target_test_directory": "/tmp/hepta-operator-canary-c811c490c2ce4aa5aceac3f3a099a5fd",
+            "password_prompt_tested": false,
+            "chatgpt_tunnel_tested": false
+          }
+        },
+        "lifecycle": {
+          "exit_code": 0,
+          "report": {
+            "ssh_target": "localhost",
+            "checks": [
+              {
+                "check": "actual SSH account and disposable workspace",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "path": "/tmp/hepta-lifecycle-14355577d3a35c133169118f04cfb8fb",
+                  "free": 172834996224
+                }
+              },
+              {
+                "check": "persistent terminal discovery and input idempotency schemas",
+                "detail": null
+              },
+              {
+                "check": "full durable archive above 16 MiB verified by SHA256",
+                "detail": {
+                  "bytes": 20971533,
+                  "sha256": "a4dcc4ed9c4c33624de02f1901a66b712be7541af6dd55e74217628de4202eb2"
+                }
+              },
+              {
+                "check": "full PTY archive above 4 MiB without prefix eviction",
+                "detail": {
+                  "bytes": 6291473,
+                  "sha256": "0ed46437de595bc808ab4f2c6209f95f9dfecf5d4422e80b1ddbb7cf2c0b38da"
+                }
+              },
+              {
+                "check": "graceful controller restart preserves same live target PTY and offline output",
+                "detail": {
+                  "pid": 3809128,
+                  "session_id": "dpty-c5405535c8d0b07d7a90e53c25389ce501eae5489c5d4887372f1737f6a687b5"
+                }
+              },
+              {
+                "check": "SIGKILL controller recovery and once-only input across reconnect",
+                "detail": {
+                  "pid": 3809128
+                }
+              },
+              {
+                "check": "persistent sudo PTY retains existing root authorization without policy change",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "password_prompt_tested": false,
+            "physical_target_reboot_tested": false,
+            "chatgpt_tested": false,
+            "target_test_directory": "/tmp/hepta-lifecycle-14355577d3a35c133169118f04cfb8fb",
+            "passed": 7
+          }
+        },
+        "native": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "native tools discovered with no hidden authority override fields",
+              "exact binary bytes, SHA256, byte cursor and authority/version rejection",
+              "over-5-MiB staged upload, exact total hash and once-only commit replay",
+              "native remote DOCX create/read/XML edit with stale-source rejection",
+              "remote original-image transfer and native MCP image content",
+              "native remote PDF insert/delete, source preservation and actual page-image content",
+              "remote worksheet range edit preserves formulas and invalidates stale caches"
+            ],
+            "complete": true,
+            "ssh_target": "localhost",
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "installed_endpoint": false,
+            "target_directory": "/tmp/hepta-native-transport-985933d8257929e01a04644f",
+            "passed": 7,
+            "cloud_tested": false,
+            "recalculation_tested": false
+          }
+        },
+        "formats": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "rich-format and calculation tools are native, typed and authority-bound",
+              "native target ACL/xattrs/ownership/mode preserved through binary replacement",
+              "native remote document edit preserves the same target metadata",
+              "legacy XLS read returns real Unicode/scalar stored values without execution",
+              "real cross-sheet calculation writes correct caches and preserves formula text",
+              "HTML/CSS/inline-SVG and SHA-bound image assets render into two native PDF page images"
+            ],
+            "complete": true,
+            "ssh_target": "localhost",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "target_directory": "/tmp/hepta-final-parity-5ac009245a765ac57a1104fd",
+            "metadata_evidence": {
+              "acl_sha256": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+              "gid": 1000,
+              "link_count": 1,
+              "metadata_platform": "linux",
+              "mode": 416,
+              "uid": 1000,
+              "xattr_names": [
+                "system.posix_acl_access",
+                "user.hepta.fixture"
+              ],
+              "xattr_sha256": {
+                "system.posix_acl_access": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+                "user.hepta.fixture": "3cb4c912640babb00df7fbc64809f186ddfb26584f881a34dec684ebaf2c1fd0"
+              }
+            },
+            "passed": 6,
+            "no_chatgpt_binding": true
+          }
+        },
+        "protected": {
+          "exit_code": 0,
+          "report": {
+            "complete": true,
+            "checks": [
+              "protected-PDF schema exposes owned password file references, not raw secret or authority overrides",
+              "AES-256 copy, real user/owner authentication split and owner-authorized clear copy preserve originals",
+              "real detached CMS integrity, tamper detection and unsigned incremental revision are distinguished",
+              "native SHA-bound certificate chain evaluation distinguishes explicit trust from intact untrusted signatures",
+              "native scoped names, shared formulas, fixed 2x2 arrays and 1904 calendar caches are correct without formula/package loss"
+            ],
+            "ssh_target": "localhost",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "fixture_directory": "/tmp/hepta-protected-native-b901fb7a0f2bd5bacc6426cc",
+            "caller_anchor_trust_verified": true,
+            "calculation_evidence": {
+              "formula_count": 9,
+              "calculated_cell_count": 12,
+              "fixed_array_count": 1,
+              "workbook_date_system": "1904"
+            },
+            "passed": 5,
+            "real_user_secrets_used": false,
+            "certificate_trust_claimed": false
+          }
+        },
+        "exit_code": 0,
+        "acceptance": {
+          "complete": true,
+          "passed": 38
+        }
+      },
+      {
+        "host": "pocket4",
+        "ssh_target": "pocket4",
+        "operator": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              {
+                "check": "real SSH target account",
+                "result": "passed",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "workdir": "/tmp/hepta-operator-canary-4d1fb2c142f64ee4bd5633eeb110e30c"
+                }
+              },
+              {
+                "check": "real authenticated MCP discovery and explicit capability mode",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "all operator entry points rejected on isolated host without target execution",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+                "result": "passed",
+                "detail": {
+                  "backend": {
+                    "backend": "systemd",
+                    "launcher_pid": null,
+                    "ok": true,
+                    "unit": "hepta-runtime-job-1a112f32320-3a0a8d-1"
+                  },
+                  "uid": 1000
+                }
+              },
+              {
+                "check": "native remote file API sees the same operator-created file",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual host PID pagination",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "external disposable PID: stale identity denied, actual signal delivered",
+                "result": "passed",
+                "detail": {
+                  "atomic_identity": true,
+                  "effective_uid": 1000,
+                  "identity": "linux:2804893f-cd51-4abe-aaa9-9babcb766050:23429653",
+                  "pid": 1949021,
+                  "result": "signal_sent",
+                  "signal": 15,
+                  "termination_confirmed": false
+                }
+              },
+              {
+                "check": "real SSH PTY shell input/output/Ctrl-C/close",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real split-write Unicode PTY: text-safe pages and exact raw-byte pages",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "temporary sudo PTY real uid=0 using existing authorization only",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "durable operator backend does not accidentally block existing sudo",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual test-controller restart: same job, logs, once-only side effect",
+                "result": "passed",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "passed": 13,
+            "ssh_target": "pocket4",
+            "target_test_directory": "/tmp/hepta-operator-canary-4d1fb2c142f64ee4bd5633eeb110e30c",
+            "password_prompt_tested": false,
+            "chatgpt_tunnel_tested": false
+          }
+        },
+        "lifecycle": {
+          "exit_code": 0,
+          "report": {
+            "ssh_target": "pocket4",
+            "checks": [
+              {
+                "check": "actual SSH account and disposable workspace",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "path": "/tmp/hepta-lifecycle-718d004db707c9db70b7429f4d9ffa00",
+                  "free": 11798204416
+                }
+              },
+              {
+                "check": "persistent terminal discovery and input idempotency schemas",
+                "detail": null
+              },
+              {
+                "check": "full durable archive above 16 MiB verified by SHA256",
+                "detail": {
+                  "bytes": 20971533,
+                  "sha256": "a4dcc4ed9c4c33624de02f1901a66b712be7541af6dd55e74217628de4202eb2"
+                }
+              },
+              {
+                "check": "full PTY archive above 4 MiB without prefix eviction",
+                "detail": {
+                  "bytes": 6291473,
+                  "sha256": "0ed46437de595bc808ab4f2c6209f95f9dfecf5d4422e80b1ddbb7cf2c0b38da"
+                }
+              },
+              {
+                "check": "graceful controller restart preserves same live target PTY and offline output",
+                "detail": {
+                  "pid": 1952434,
+                  "session_id": "dpty-fa8e85c5b4978d16ddb11925a85eed903b82b1e36a8154f51f3f97e9c2cb6aa2"
+                }
+              },
+              {
+                "check": "SIGKILL controller recovery and once-only input across reconnect",
+                "detail": {
+                  "pid": 1952434
+                }
+              },
+              {
+                "check": "persistent sudo PTY retains existing root authorization without policy change",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "password_prompt_tested": false,
+            "physical_target_reboot_tested": false,
+            "chatgpt_tested": false,
+            "target_test_directory": "/tmp/hepta-lifecycle-718d004db707c9db70b7429f4d9ffa00",
+            "passed": 7
+          }
+        },
+        "native": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "native tools discovered with no hidden authority override fields",
+              "exact binary bytes, SHA256, byte cursor and authority/version rejection",
+              "over-5-MiB staged upload, exact total hash and once-only commit replay",
+              "native remote DOCX create/read/XML edit with stale-source rejection",
+              "remote original-image transfer and native MCP image content",
+              "native remote PDF insert/delete, source preservation and actual page-image content",
+              "remote worksheet range edit preserves formulas and invalidates stale caches"
+            ],
+            "complete": true,
+            "ssh_target": "pocket4",
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "installed_endpoint": false,
+            "target_directory": "/tmp/hepta-native-transport-fd01fe7d8971e2e9f01baa46",
+            "passed": 7,
+            "cloud_tested": false,
+            "recalculation_tested": false
+          }
+        },
+        "formats": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "rich-format and calculation tools are native, typed and authority-bound",
+              "native target ACL/xattrs/ownership/mode preserved through binary replacement",
+              "native remote document edit preserves the same target metadata",
+              "legacy XLS read returns real Unicode/scalar stored values without execution",
+              "real cross-sheet calculation writes correct caches and preserves formula text",
+              "HTML/CSS/inline-SVG and SHA-bound image assets render into two native PDF page images"
+            ],
+            "complete": true,
+            "ssh_target": "pocket4",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "target_directory": "/tmp/hepta-final-parity-8a934682fb818107abed488a",
+            "metadata_evidence": {
+              "acl_sha256": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+              "gid": 1000,
+              "link_count": 1,
+              "metadata_platform": "linux",
+              "mode": 416,
+              "uid": 1000,
+              "xattr_names": [
+                "system.posix_acl_access",
+                "user.hepta.fixture"
+              ],
+              "xattr_sha256": {
+                "system.posix_acl_access": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+                "user.hepta.fixture": "3cb4c912640babb00df7fbc64809f186ddfb26584f881a34dec684ebaf2c1fd0"
+              }
+            },
+            "passed": 6,
+            "no_chatgpt_binding": true
+          }
+        },
+        "protected": {
+          "exit_code": 0,
+          "report": {
+            "complete": true,
+            "checks": [
+              "protected-PDF schema exposes owned password file references, not raw secret or authority overrides",
+              "AES-256 copy, real user/owner authentication split and owner-authorized clear copy preserve originals",
+              "real detached CMS integrity, tamper detection and unsigned incremental revision are distinguished",
+              "native SHA-bound certificate chain evaluation distinguishes explicit trust from intact untrusted signatures",
+              "native scoped names, shared formulas, fixed 2x2 arrays and 1904 calendar caches are correct without formula/package loss"
+            ],
+            "ssh_target": "pocket4",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "fixture_directory": "/tmp/hepta-protected-native-1aa2f97e7a37e436d01be2da",
+            "caller_anchor_trust_verified": true,
+            "calculation_evidence": {
+              "formula_count": 9,
+              "calculated_cell_count": 12,
+              "fixed_array_count": 1,
+              "workbook_date_system": "1904"
+            },
+            "passed": 5,
+            "real_user_secrets_used": false,
+            "certificate_trust_claimed": false
+          }
+        },
+        "exit_code": 0,
+        "acceptance": {
+          "complete": true,
+          "passed": 38
+        }
+      },
+      {
+        "host": "rog",
+        "ssh_target": "rog",
+        "operator": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              {
+                "check": "real SSH target account",
+                "result": "passed",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "workdir": "/tmp/hepta-operator-canary-174e0291f3244012ba8c4fc54ebb81de"
+                }
+              },
+              {
+                "check": "real authenticated MCP discovery and explicit capability mode",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "all operator entry points rejected on isolated host without target execution",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+                "result": "passed",
+                "detail": {
+                  "backend": {
+                    "backend": "systemd",
+                    "launcher_pid": null,
+                    "ok": true,
+                    "unit": "hepta-runtime-job-1a112f4b5d4-3a3fee-1"
+                  },
+                  "uid": 1000
+                }
+              },
+              {
+                "check": "native remote file API sees the same operator-created file",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual host PID pagination",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "external disposable PID: stale identity denied, actual signal delivered",
+                "result": "passed",
+                "detail": {
+                  "atomic_identity": true,
+                  "effective_uid": 1000,
+                  "identity": "linux:2dc410a8-ee88-4fec-b5ea-6025a4201e86:19895382",
+                  "pid": 1595005,
+                  "result": "signal_sent",
+                  "signal": 15,
+                  "termination_confirmed": false
+                }
+              },
+              {
+                "check": "real SSH PTY shell input/output/Ctrl-C/close",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real split-write Unicode PTY: text-safe pages and exact raw-byte pages",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "temporary sudo PTY real uid=0 using existing authorization only",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "durable operator backend does not accidentally block existing sudo",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual test-controller restart: same job, logs, once-only side effect",
+                "result": "passed",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "passed": 13,
+            "ssh_target": "rog",
+            "target_test_directory": "/tmp/hepta-operator-canary-174e0291f3244012ba8c4fc54ebb81de",
+            "password_prompt_tested": false,
+            "chatgpt_tunnel_tested": false
+          }
+        },
+        "lifecycle": {
+          "exit_code": 0,
+          "report": {
+            "ssh_target": "rog",
+            "checks": [
+              {
+                "check": "actual SSH account and disposable workspace",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "path": "/tmp/hepta-lifecycle-f2f3cf82e50ccb401d4f178dff16e398",
+                  "free": 61342941184
+                }
+              },
+              {
+                "check": "persistent terminal discovery and input idempotency schemas",
+                "detail": null
+              },
+              {
+                "check": "full durable archive above 16 MiB verified by SHA256",
+                "detail": {
+                  "bytes": 20971533,
+                  "sha256": "a4dcc4ed9c4c33624de02f1901a66b712be7541af6dd55e74217628de4202eb2"
+                }
+              },
+              {
+                "check": "full PTY archive above 4 MiB without prefix eviction",
+                "detail": {
+                  "bytes": 6291473,
+                  "sha256": "0ed46437de595bc808ab4f2c6209f95f9dfecf5d4422e80b1ddbb7cf2c0b38da"
+                }
+              },
+              {
+                "check": "graceful controller restart preserves same live target PTY and offline output",
+                "detail": {
+                  "pid": 1597279,
+                  "session_id": "dpty-3ad094f786a1bd8100bd558cb4e7d62941d274eb79d0a30e7fba9584687e3f41"
+                }
+              },
+              {
+                "check": "SIGKILL controller recovery and once-only input across reconnect",
+                "detail": {
+                  "pid": 1597279
+                }
+              },
+              {
+                "check": "persistent sudo PTY retains existing root authorization without policy change",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "password_prompt_tested": false,
+            "physical_target_reboot_tested": false,
+            "chatgpt_tested": false,
+            "target_test_directory": "/tmp/hepta-lifecycle-f2f3cf82e50ccb401d4f178dff16e398",
+            "passed": 7
+          }
+        },
+        "native": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "native tools discovered with no hidden authority override fields",
+              "exact binary bytes, SHA256, byte cursor and authority/version rejection",
+              "over-5-MiB staged upload, exact total hash and once-only commit replay",
+              "native remote DOCX create/read/XML edit with stale-source rejection",
+              "remote original-image transfer and native MCP image content",
+              "native remote PDF insert/delete, source preservation and actual page-image content",
+              "remote worksheet range edit preserves formulas and invalidates stale caches"
+            ],
+            "complete": true,
+            "ssh_target": "rog",
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "installed_endpoint": false,
+            "target_directory": "/tmp/hepta-native-transport-e9d0692459764e97e1d09455",
+            "passed": 7,
+            "cloud_tested": false,
+            "recalculation_tested": false
+          }
+        },
+        "formats": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "rich-format and calculation tools are native, typed and authority-bound",
+              "native target ACL/xattrs/ownership/mode preserved through binary replacement",
+              "native remote document edit preserves the same target metadata",
+              "legacy XLS read returns real Unicode/scalar stored values without execution",
+              "real cross-sheet calculation writes correct caches and preserves formula text",
+              "HTML/CSS/inline-SVG and SHA-bound image assets render into two native PDF page images"
+            ],
+            "complete": true,
+            "ssh_target": "rog",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "target_directory": "/tmp/hepta-final-parity-7c4ea194b57ce2ce051f1983",
+            "metadata_evidence": {
+              "acl_sha256": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+              "gid": 1000,
+              "link_count": 1,
+              "metadata_platform": "linux",
+              "mode": 416,
+              "uid": 1000,
+              "xattr_names": [
+                "system.posix_acl_access",
+                "user.hepta.fixture"
+              ],
+              "xattr_sha256": {
+                "system.posix_acl_access": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+                "user.hepta.fixture": "3cb4c912640babb00df7fbc64809f186ddfb26584f881a34dec684ebaf2c1fd0"
+              }
+            },
+            "passed": 6,
+            "no_chatgpt_binding": true
+          }
+        },
+        "protected": {
+          "exit_code": 0,
+          "report": {
+            "complete": true,
+            "checks": [
+              "protected-PDF schema exposes owned password file references, not raw secret or authority overrides",
+              "AES-256 copy, real user/owner authentication split and owner-authorized clear copy preserve originals",
+              "real detached CMS integrity, tamper detection and unsigned incremental revision are distinguished",
+              "native SHA-bound certificate chain evaluation distinguishes explicit trust from intact untrusted signatures",
+              "native scoped names, shared formulas, fixed 2x2 arrays and 1904 calendar caches are correct without formula/package loss"
+            ],
+            "ssh_target": "rog",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "fixture_directory": "/tmp/hepta-protected-native-c42a7a521e2bd657480507de",
+            "caller_anchor_trust_verified": true,
+            "calculation_evidence": {
+              "formula_count": 9,
+              "calculated_cell_count": 12,
+              "fixed_array_count": 1,
+              "workbook_date_system": "1904"
+            },
+            "passed": 5,
+            "real_user_secrets_used": false,
+            "certificate_trust_claimed": false
+          }
+        },
+        "exit_code": 0,
+        "acceptance": {
+          "complete": true,
+          "passed": 38
+        }
+      },
+      {
+        "host": "mac",
+        "ssh_target": "macbook-pro",
+        "operator": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              {
+                "check": "real SSH target account",
+                "result": "passed",
+                "detail": {
+                  "uid": 501,
+                  "platform": "macos",
+                  "workdir": "/private/tmp/hepta-operator-canary-8b0b42deeb1a417fb4c35dad1aee5802"
+                }
+              },
+              {
+                "check": "real authenticated MCP discovery and explicit capability mode",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "all operator entry points rejected on isolated host without target execution",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+                "result": "passed",
+                "detail": {
+                  "backend": {
+                    "backend": "detached",
+                    "launcher_pid": 43005,
+                    "ok": true,
+                    "systemd_error": "systemd user units unavailable on this platform",
+                    "unit": "hepta-runtime-job-1a112f4fd9c-3a48d2-1"
+                  },
+                  "uid": 501
+                }
+              },
+              {
+                "check": "native remote file API sees the same operator-created file",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual host PID pagination",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "external disposable PID: stale identity denied, actual signal delivered",
+                "result": "passed",
+                "detail": {
+                  "atomic_identity": false,
+                  "effective_uid": 501,
+                  "identity": "ps:Wed Oct  7 04:43:31 2026",
+                  "pid": 43098,
+                  "result": "signal_sent",
+                  "signal": 15,
+                  "termination_confirmed": false
+                }
+              },
+              {
+                "check": "real SSH PTY shell input/output/Ctrl-C/close",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real split-write Unicode PTY: text-safe pages and exact raw-byte pages",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "temporary sudo PTY real uid=0 using existing authorization only",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "durable operator backend does not accidentally block existing sudo",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual test-controller restart: same job, logs, once-only side effect",
+                "result": "passed",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "passed": 13,
+            "ssh_target": "macbook-pro",
+            "target_test_directory": "/private/tmp/hepta-operator-canary-8b0b42deeb1a417fb4c35dad1aee5802",
+            "password_prompt_tested": false,
+            "chatgpt_tunnel_tested": false
+          }
+        },
+        "lifecycle": {
+          "exit_code": 0,
+          "report": {
+            "ssh_target": "macbook-pro",
+            "checks": [
+              {
+                "check": "actual SSH account and disposable workspace",
+                "detail": {
+                  "uid": 501,
+                  "platform": "macos",
+                  "path": "/private/tmp/hepta-lifecycle-c37fb0dfa73b1b9a74e6754cd0cefe02",
+                  "free": 397390352384
+                }
+              },
+              {
+                "check": "persistent terminal discovery and input idempotency schemas",
+                "detail": null
+              },
+              {
+                "check": "full durable archive above 16 MiB verified by SHA256",
+                "detail": {
+                  "bytes": 20971533,
+                  "sha256": "a4dcc4ed9c4c33624de02f1901a66b712be7541af6dd55e74217628de4202eb2"
+                }
+              },
+              {
+                "check": "full PTY archive above 4 MiB without prefix eviction",
+                "detail": {
+                  "bytes": 6291473,
+                  "sha256": "0ed46437de595bc808ab4f2c6209f95f9dfecf5d4422e80b1ddbb7cf2c0b38da"
+                }
+              },
+              {
+                "check": "graceful controller restart preserves same live target PTY and offline output",
+                "detail": {
+                  "pid": 43644,
+                  "session_id": "dpty-1d0e2db14f785423a3740a96ecd4216ca6f53238de872c5ecde7886deee4cd7c"
+                }
+              },
+              {
+                "check": "SIGKILL controller recovery and once-only input across reconnect",
+                "detail": {
+                  "pid": 43644
+                }
+              },
+              {
+                "check": "persistent sudo PTY retains existing root authorization without policy change",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "password_prompt_tested": false,
+            "physical_target_reboot_tested": false,
+            "chatgpt_tested": false,
+            "target_test_directory": "/private/tmp/hepta-lifecycle-c37fb0dfa73b1b9a74e6754cd0cefe02",
+            "passed": 7
+          }
+        },
+        "native": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "native tools discovered with no hidden authority override fields",
+              "exact binary bytes, SHA256, byte cursor and authority/version rejection",
+              "over-5-MiB staged upload, exact total hash and once-only commit replay",
+              "native remote DOCX create/read/XML edit with stale-source rejection",
+              "remote original-image transfer and native MCP image content",
+              "native remote PDF insert/delete, source preservation and actual page-image content",
+              "remote worksheet range edit preserves formulas and invalidates stale caches"
+            ],
+            "complete": true,
+            "ssh_target": "macbook-pro",
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "installed_endpoint": false,
+            "target_directory": "/private/tmp/hepta-native-transport-06cd57f82acf8610908d9364",
+            "passed": 7,
+            "cloud_tested": false,
+            "recalculation_tested": false
+          }
+        },
+        "formats": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "rich-format and calculation tools are native, typed and authority-bound",
+              "native target ACL/xattrs/ownership/mode preserved through binary replacement",
+              "native remote document edit preserves the same target metadata",
+              "legacy XLS read returns real Unicode/scalar stored values without execution",
+              "real cross-sheet calculation writes correct caches and preserves formula text",
+              "HTML/CSS/inline-SVG and SHA-bound image assets render into two native PDF page images"
+            ],
+            "complete": true,
+            "ssh_target": "macbook-pro",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "target_directory": "/private/tmp/hepta-final-parity-dae0d7cd58e380966273117e",
+            "metadata_evidence": {
+              "acl_sha256": "df21f1db6db339fa824856c24616b6964c081d9c241edf2f12a23d2e2775be06",
+              "gid": 0,
+              "link_count": 1,
+              "metadata_platform": "darwin",
+              "mode": 416,
+              "uid": 501,
+              "xattr_names": [
+                "com.hepta.fixture"
+              ],
+              "xattr_sha256": {
+                "com.hepta.fixture": "23d11cf444616c2d2cc2a38e2440ad0510cf67e46b3739ed2371f20aadc90ebe"
+              }
+            },
+            "passed": 6,
+            "no_chatgpt_binding": true
+          }
+        },
+        "protected": {
+          "exit_code": 0,
+          "report": {
+            "complete": true,
+            "checks": [
+              "protected-PDF schema exposes owned password file references, not raw secret or authority overrides",
+              "AES-256 copy, real user/owner authentication split and owner-authorized clear copy preserve originals",
+              "real detached CMS integrity, tamper detection and unsigned incremental revision are distinguished",
+              "native SHA-bound certificate chain evaluation distinguishes explicit trust from intact untrusted signatures",
+              "native scoped names, shared formulas, fixed 2x2 arrays and 1904 calendar caches are correct without formula/package loss"
+            ],
+            "ssh_target": "macbook-pro",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "fixture_directory": "/private/tmp/hepta-protected-native-b7b0bc6d653a9c54dd29fcf2",
+            "caller_anchor_trust_verified": true,
+            "calculation_evidence": {
+              "formula_count": 9,
+              "calculated_cell_count": 12,
+              "fixed_array_count": 1,
+              "workbook_date_system": "1904"
+            },
+            "passed": 5,
+            "real_user_secrets_used": false,
+            "certificate_trust_claimed": false
+          }
+        },
+        "exit_code": 0,
+        "acceptance": {
+          "complete": true,
+          "passed": 38
+        }
+      },
+      {
+        "host": "x230",
+        "ssh_target": "x230-ts",
+        "operator": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              {
+                "check": "real SSH target account",
+                "result": "passed",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "workdir": "/tmp/hepta-operator-canary-73716e11372f4d6db6b8384e95008e7d"
+                }
+              },
+              {
+                "check": "real authenticated MCP discovery and explicit capability mode",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "all operator entry points rejected on isolated host without target execution",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+                "result": "passed",
+                "detail": {
+                  "backend": {
+                    "backend": "systemd",
+                    "launcher_pid": null,
+                    "ok": true,
+                    "unit": "hepta-runtime-job-1a112f63a84-3a5a0c-1"
+                  },
+                  "uid": 1000
+                }
+              },
+              {
+                "check": "native remote file API sees the same operator-created file",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual host PID pagination",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "external disposable PID: stale identity denied, actual signal delivered",
+                "result": "passed",
+                "detail": {
+                  "atomic_identity": true,
+                  "effective_uid": 1000,
+                  "identity": "linux:b19bd1b9-4dbe-4335-96cf-ed98d393efea:2155578",
+                  "pid": 226579,
+                  "result": "signal_sent",
+                  "signal": 15,
+                  "termination_confirmed": false
+                }
+              },
+              {
+                "check": "real SSH PTY shell input/output/Ctrl-C/close",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real split-write Unicode PTY: text-safe pages and exact raw-byte pages",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "temporary sudo PTY real uid=0 using existing authorization only",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "durable operator backend does not accidentally block existing sudo",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual test-controller restart: same job, logs, once-only side effect",
+                "result": "passed",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "passed": 13,
+            "ssh_target": "x230-ts",
+            "target_test_directory": "/tmp/hepta-operator-canary-73716e11372f4d6db6b8384e95008e7d",
+            "password_prompt_tested": false,
+            "chatgpt_tunnel_tested": false
+          }
+        },
+        "lifecycle": {
+          "exit_code": 0,
+          "report": {
+            "ssh_target": "x230-ts",
+            "checks": [
+              {
+                "check": "actual SSH account and disposable workspace",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "path": "/tmp/hepta-lifecycle-37721f435fda1f872cfabae8778cbb60",
+                  "free": 114180845568
+                }
+              },
+              {
+                "check": "persistent terminal discovery and input idempotency schemas",
+                "detail": null
+              },
+              {
+                "check": "full durable archive above 16 MiB verified by SHA256",
+                "detail": {
+                  "bytes": 20971533,
+                  "sha256": "a4dcc4ed9c4c33624de02f1901a66b712be7541af6dd55e74217628de4202eb2"
+                }
+              },
+              {
+                "check": "full PTY archive above 4 MiB without prefix eviction",
+                "detail": {
+                  "bytes": 6291473,
+                  "sha256": "0ed46437de595bc808ab4f2c6209f95f9dfecf5d4422e80b1ddbb7cf2c0b38da"
+                }
+              },
+              {
+                "check": "graceful controller restart preserves same live target PTY and offline output",
+                "detail": {
+                  "pid": 229512,
+                  "session_id": "dpty-385329188220271200f30e1d2421ea04db20f3470fe5ad922cabbcc0c324b977"
+                }
+              },
+              {
+                "check": "SIGKILL controller recovery and once-only input across reconnect",
+                "detail": {
+                  "pid": 229512
+                }
+              },
+              {
+                "check": "persistent sudo PTY retains existing root authorization without policy change",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "password_prompt_tested": false,
+            "physical_target_reboot_tested": false,
+            "chatgpt_tested": false,
+            "target_test_directory": "/tmp/hepta-lifecycle-37721f435fda1f872cfabae8778cbb60",
+            "passed": 7
+          }
+        },
+        "native": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "native tools discovered with no hidden authority override fields",
+              "exact binary bytes, SHA256, byte cursor and authority/version rejection",
+              "over-5-MiB staged upload, exact total hash and once-only commit replay",
+              "native remote DOCX create/read/XML edit with stale-source rejection",
+              "remote original-image transfer and native MCP image content",
+              "native remote PDF insert/delete, source preservation and actual page-image content",
+              "remote worksheet range edit preserves formulas and invalidates stale caches"
+            ],
+            "complete": true,
+            "ssh_target": "x230-ts",
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "installed_endpoint": false,
+            "target_directory": "/tmp/hepta-native-transport-2fe6ea06cc0dea5a88f3c325",
+            "passed": 7,
+            "cloud_tested": false,
+            "recalculation_tested": false
+          }
+        },
+        "formats": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "rich-format and calculation tools are native, typed and authority-bound",
+              "native target ACL/xattrs/ownership/mode preserved through binary replacement",
+              "native remote document edit preserves the same target metadata",
+              "legacy XLS read returns real Unicode/scalar stored values without execution",
+              "real cross-sheet calculation writes correct caches and preserves formula text",
+              "HTML/CSS/inline-SVG and SHA-bound image assets render into two native PDF page images"
+            ],
+            "complete": true,
+            "ssh_target": "x230-ts",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "target_directory": "/tmp/hepta-final-parity-b3a960889a258e5255ad0327",
+            "metadata_evidence": {
+              "acl_sha256": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+              "gid": 1000,
+              "link_count": 1,
+              "metadata_platform": "linux",
+              "mode": 416,
+              "uid": 1000,
+              "xattr_names": [
+                "system.posix_acl_access",
+                "user.hepta.fixture"
+              ],
+              "xattr_sha256": {
+                "system.posix_acl_access": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+                "user.hepta.fixture": "3cb4c912640babb00df7fbc64809f186ddfb26584f881a34dec684ebaf2c1fd0"
+              }
+            },
+            "passed": 6,
+            "no_chatgpt_binding": true
+          }
+        },
+        "protected": {
+          "exit_code": 0,
+          "report": {
+            "complete": true,
+            "checks": [
+              "protected-PDF schema exposes owned password file references, not raw secret or authority overrides",
+              "AES-256 copy, real user/owner authentication split and owner-authorized clear copy preserve originals",
+              "real detached CMS integrity, tamper detection and unsigned incremental revision are distinguished",
+              "native SHA-bound certificate chain evaluation distinguishes explicit trust from intact untrusted signatures",
+              "native scoped names, shared formulas, fixed 2x2 arrays and 1904 calendar caches are correct without formula/package loss"
+            ],
+            "ssh_target": "x230-ts",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "fixture_directory": "/tmp/hepta-protected-native-9934201f96a91d448ead46a6",
+            "caller_anchor_trust_verified": true,
+            "calculation_evidence": {
+              "formula_count": 9,
+              "calculated_cell_count": 12,
+              "fixed_array_count": 1,
+              "workbook_date_system": "1904"
+            },
+            "passed": 5,
+            "real_user_secrets_used": false,
+            "certificate_trust_claimed": false
+          }
+        },
+        "exit_code": 0,
+        "acceptance": {
+          "complete": true,
+          "passed": 38
+        }
+      },
+      {
+        "host": "ai395",
+        "ssh_target": "ai395",
+        "operator": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              {
+                "check": "real SSH target account",
+                "result": "passed",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "workdir": "/tmp/hepta-operator-canary-7de49bc56de4482b914c292bf4155e1e"
+                }
+              },
+              {
+                "check": "real authenticated MCP discovery and explicit capability mode",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "all operator entry points rejected on isolated host without target execution",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+                "result": "passed",
+                "detail": {
+                  "backend": {
+                    "backend": "systemd",
+                    "launcher_pid": null,
+                    "ok": true,
+                    "unit": "hepta-runtime-job-1a112f6a050-3a5e97-1"
+                  },
+                  "uid": 1000
+                }
+              },
+              {
+                "check": "native remote file API sees the same operator-created file",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual host PID pagination",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "external disposable PID: stale identity denied, actual signal delivered",
+                "result": "passed",
+                "detail": {
+                  "atomic_identity": true,
+                  "effective_uid": 1000,
+                  "identity": "linux:cfe901b9-afa8-465c-8e2f-78cc56b53b5d:3027459",
+                  "pid": 155633,
+                  "result": "signal_sent",
+                  "signal": 15,
+                  "termination_confirmed": false
+                }
+              },
+              {
+                "check": "real SSH PTY shell input/output/Ctrl-C/close",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real split-write Unicode PTY: text-safe pages and exact raw-byte pages",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "temporary sudo PTY real uid=0 using existing authorization only",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "durable operator backend does not accidentally block existing sudo",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "real root-owned disposable PID: user permission denied, explicit existing sudo signal works",
+                "result": "passed",
+                "detail": null
+              },
+              {
+                "check": "actual test-controller restart: same job, logs, once-only side effect",
+                "result": "passed",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "passed": 13,
+            "ssh_target": "ai395",
+            "target_test_directory": "/tmp/hepta-operator-canary-7de49bc56de4482b914c292bf4155e1e",
+            "password_prompt_tested": false,
+            "chatgpt_tunnel_tested": false
+          }
+        },
+        "lifecycle": {
+          "exit_code": 0,
+          "report": {
+            "ssh_target": "ai395",
+            "checks": [
+              {
+                "check": "actual SSH account and disposable workspace",
+                "detail": {
+                  "uid": 1000,
+                  "platform": "linux",
+                  "path": "/tmp/hepta-lifecycle-0c8687470d7b0781724282a756ba65bf",
+                  "free": 32875929600
+                }
+              },
+              {
+                "check": "persistent terminal discovery and input idempotency schemas",
+                "detail": null
+              },
+              {
+                "check": "full durable archive above 16 MiB verified by SHA256",
+                "detail": {
+                  "bytes": 20971533,
+                  "sha256": "a4dcc4ed9c4c33624de02f1901a66b712be7541af6dd55e74217628de4202eb2"
+                }
+              },
+              {
+                "check": "full PTY archive above 4 MiB without prefix eviction",
+                "detail": {
+                  "bytes": 6291473,
+                  "sha256": "0ed46437de595bc808ab4f2c6209f95f9dfecf5d4422e80b1ddbb7cf2c0b38da"
+                }
+              },
+              {
+                "check": "graceful controller restart preserves same live target PTY and offline output",
+                "detail": {
+                  "pid": 157807,
+                  "session_id": "dpty-261ad337094873a2aa68feabd6b548868f56695fe7d3672a3e68205fae897267"
+                }
+              },
+              {
+                "check": "SIGKILL controller recovery and once-only input across reconnect",
+                "detail": {
+                  "pid": 157807
+                }
+              },
+              {
+                "check": "persistent sudo PTY retains existing root authorization without policy change",
+                "detail": null
+              }
+            ],
+            "complete": true,
+            "password_prompt_tested": false,
+            "physical_target_reboot_tested": false,
+            "chatgpt_tested": false,
+            "target_test_directory": "/tmp/hepta-lifecycle-0c8687470d7b0781724282a756ba65bf",
+            "passed": 7
+          }
+        },
+        "native": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "native tools discovered with no hidden authority override fields",
+              "exact binary bytes, SHA256, byte cursor and authority/version rejection",
+              "over-5-MiB staged upload, exact total hash and once-only commit replay",
+              "native remote DOCX create/read/XML edit with stale-source rejection",
+              "remote original-image transfer and native MCP image content",
+              "native remote PDF insert/delete, source preservation and actual page-image content",
+              "remote worksheet range edit preserves formulas and invalidates stale caches"
+            ],
+            "complete": true,
+            "ssh_target": "ai395",
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "installed_endpoint": false,
+            "target_directory": "/tmp/hepta-native-transport-b914f1bd027b094895067b6e",
+            "passed": 7,
+            "cloud_tested": false,
+            "recalculation_tested": false
+          }
+        },
+        "formats": {
+          "exit_code": 0,
+          "report": {
+            "checks": [
+              "rich-format and calculation tools are native, typed and authority-bound",
+              "native target ACL/xattrs/ownership/mode preserved through binary replacement",
+              "native remote document edit preserves the same target metadata",
+              "legacy XLS read returns real Unicode/scalar stored values without execution",
+              "real cross-sheet calculation writes correct caches and preserves formula text",
+              "HTML/CSS/inline-SVG and SHA-bound image assets render into two native PDF page images"
+            ],
+            "complete": true,
+            "ssh_target": "ai395",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "target_directory": "/tmp/hepta-final-parity-3bb6701bcbbe7b803a7096f3",
+            "metadata_evidence": {
+              "acl_sha256": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+              "gid": 1000,
+              "link_count": 1,
+              "metadata_platform": "linux",
+              "mode": 416,
+              "uid": 1000,
+              "xattr_names": [
+                "system.posix_acl_access",
+                "user.hepta.fixture"
+              ],
+              "xattr_sha256": {
+                "system.posix_acl_access": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+                "user.hepta.fixture": "3cb4c912640babb00df7fbc64809f186ddfb26584f881a34dec684ebaf2c1fd0"
+              }
+            },
+            "passed": 6,
+            "no_chatgpt_binding": true
+          }
+        },
+        "protected": {
+          "exit_code": 0,
+          "report": {
+            "complete": true,
+            "checks": [
+              "protected-PDF schema exposes owned password file references, not raw secret or authority overrides",
+              "AES-256 copy, real user/owner authentication split and owner-authorized clear copy preserve originals",
+              "real detached CMS integrity, tamper detection and unsigned incremental revision are distinguished",
+              "native SHA-bound certificate chain evaluation distinguishes explicit trust from intact untrusted signatures",
+              "native scoped names, shared formulas, fixed 2x2 arrays and 1904 calendar caches are correct without formula/package loss"
+            ],
+            "ssh_target": "ai395",
+            "installed_endpoint": false,
+            "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+            "fixture_directory": "/tmp/hepta-protected-native-75755e3a8e172e08ae31ffa8",
+            "caller_anchor_trust_verified": true,
+            "calculation_evidence": {
+              "formula_count": 9,
+              "calculated_cell_count": 12,
+              "fixed_array_count": 1,
+              "workbook_date_system": "1904"
+            },
+            "passed": 5,
+            "real_user_secrets_used": false,
+            "certificate_trust_claimed": false
+          }
+        },
+        "exit_code": 0,
+        "acceptance": {
+          "complete": true,
+          "passed": 38
+        }
+      }
+    ],
+    "complete": true,
+    "physical_reboots_performed": false,
+    "chatgpt_connection_tested": false
+  },
+  "installed_core_checks": 17,
+  "installed_file_document_checks": 31,
+  "installed_file_document_check_breakdown": {
+    "native_transfer": 7,
+    "formats": 6,
+    "protected_complex_trust": 5,
+    "local_documents": 8,
+    "inode": 5
+  },
+  "additional_installed_validations": [
+    "16-thread native restore/explicit-resume",
+    "single-thread native checkpoint regression",
+    "1900/1904 TEXT/VALUE/date/time protocol checks",
+    "real synthetic sudo/PAM password transport",
+    "executed forced-failure rollback"
+  ],
+  "installed_upgrade": {
+    "source_revision": "eede8e68f5dc9e4faf4c1faafcba15c856686572",
+    "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+    "previous_binary_sha256": "3a410536bb3d51c450e9a4ed45b206c34a5057bfe909d8c7fec05f4baa5ed2cb",
+    "recorded_at": "20261006T204747Z",
+    "service": "hepta-runtime-operator.service",
+    "endpoint": "http://127.0.0.1:8790/mcp",
+    "rollback_unit": "/home/qian-qi/.config/hepta-runtime-operator/rollback-20261006T204747Z.service",
+    "desktop_commander_pid_before": 2959,
+    "checks": [
+      "installed authenticated host discovery and operator modes",
+      "installed UID and complete durable output: main",
+      "installed existing sudo UID 0: main",
+      "installed UID and complete durable output: pocket4",
+      "installed existing sudo UID 0: pocket4",
+      "installed UID and complete durable output: rog",
+      "installed existing sudo UID 0: rog",
+      "installed UID and complete durable output: mac",
+      "installed existing sudo UID 0: mac",
+      "installed UID and complete durable output: x230",
+      "installed existing sudo UID 0: x230",
+      "installed UID and complete durable output: ai395",
+      "installed existing sudo UID 0: ai395",
+      "installed real Unicode text pages and exact raw-byte compatibility",
+      "installed endpoint rejects missing token",
+      "installed controller restart preserves once-only durable job",
+      "actual running binary checksum and unchanged DC PID"
+    ],
+    "installed": true,
+    "chatgpt_tunnel_verified": false,
+    "password_prompt_tested": false,
+    "reboot_tested": false,
+    "verified": true,
+    "pid": 3833843,
+    "binary": "/home/qian-qi/.local/lib/hepta-runtime/releases/operator-8814bd81c9757408/hepta-runtime",
+    "active": "active",
+    "enabled": "enabled",
+    "desktop_commander_pid_after": 2959,
+    "desktop_commander_changed": false
+  },
+  "installed_suites": {
+    "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+    "results": [
+      {
+        "suite": "native",
+        "exit_code": 0,
+        "report": {
+          "checks": [
+            "native tools discovered with no hidden authority override fields",
+            "exact binary bytes, SHA256, byte cursor and authority/version rejection",
+            "over-5-MiB staged upload, exact total hash and once-only commit replay",
+            "native remote DOCX create/read/XML edit with stale-source rejection",
+            "remote original-image transfer and native MCP image content",
+            "native remote PDF insert/delete, source preservation and actual page-image content",
+            "remote worksheet range edit preserves formulas and invalidates stale caches"
+          ],
+          "complete": true,
+          "ssh_target": "localhost",
+          "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+          "installed_endpoint": true,
+          "target_directory": "/tmp/hepta-native-transport-89fbb0d57fa3a3cbb6464caa",
+          "passed": 7,
+          "cloud_tested": false,
+          "recalculation_tested": false
+        }
+      },
+      {
+        "suite": "formats",
+        "exit_code": 0,
+        "report": {
+          "checks": [
+            "rich-format and calculation tools are native, typed and authority-bound",
+            "native target ACL/xattrs/ownership/mode preserved through binary replacement",
+            "native remote document edit preserves the same target metadata",
+            "legacy XLS read returns real Unicode/scalar stored values without execution",
+            "real cross-sheet calculation writes correct caches and preserves formula text",
+            "HTML/CSS/inline-SVG and SHA-bound image assets render into two native PDF page images"
+          ],
+          "complete": true,
+          "ssh_target": "localhost",
+          "installed_endpoint": true,
+          "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+          "target_directory": "/tmp/hepta-final-parity-e1627402ae6d9ab35e529c71",
+          "metadata_evidence": {
+            "acl_sha256": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+            "gid": 1000,
+            "link_count": 1,
+            "metadata_platform": "linux",
+            "mode": 416,
+            "uid": 1000,
+            "xattr_names": [
+              "system.posix_acl_access",
+              "user.hepta.fixture"
+            ],
+            "xattr_sha256": {
+              "system.posix_acl_access": "be85b513409c711706e31b10ecdca2c36a2287ebc2f175c80144755e794428a2",
+              "user.hepta.fixture": "3cb4c912640babb00df7fbc64809f186ddfb26584f881a34dec684ebaf2c1fd0"
+            }
+          },
+          "passed": 6,
+          "no_chatgpt_binding": true
+        }
+      },
+      {
+        "suite": "protected",
+        "exit_code": 0,
+        "report": {
+          "complete": true,
+          "checks": [
+            "protected-PDF schema exposes owned password file references, not raw secret or authority overrides",
+            "AES-256 copy, real user/owner authentication split and owner-authorized clear copy preserve originals",
+            "real detached CMS integrity, tamper detection and unsigned incremental revision are distinguished",
+            "native SHA-bound certificate chain evaluation distinguishes explicit trust from intact untrusted signatures",
+            "native scoped names, shared formulas, fixed 2x2 arrays and 1904 calendar caches are correct without formula/package loss"
+          ],
+          "ssh_target": "localhost",
+          "installed_endpoint": true,
+          "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+          "fixture_directory": "/tmp/hepta-protected-native-7e14821084bbb7a3be28d113",
+          "caller_anchor_trust_verified": true,
+          "calculation_evidence": {
+            "formula_count": 9,
+            "calculated_cell_count": 12,
+            "fixed_array_count": 1,
+            "workbook_date_system": "1904"
+          },
+          "passed": 5,
+          "real_user_secrets_used": false,
+          "certificate_trust_claimed": false
+        }
+      },
+      {
+        "suite": "documents",
+        "exit_code": 0,
+        "report": {
+          "checks": [
+            "authenticated native tool discovery without caller authority overrides",
+            "native DOCX create and text-bearing outline with verified output SHA256",
+            "native DOCX XML edit preserves every unselected package payload",
+            "stale version and malformed XML rejected without changing the document",
+            "native MCP image content, dimensions and valid preview encoding",
+            "native PDF creation, page text and two rendered MCP page images",
+            "native XLSX create and bounded formula-preserving range read",
+            "configured local-root and create-only guards remain enforced"
+          ],
+          "complete": true,
+          "scope": "controller-local native documents and images",
+          "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+          "passed": 8,
+          "fixture_workspace": "/tmp/hepta-document-mcp-5k9uusbh/workspace",
+          "parser": "/home/qian-qi/.local/lib/hepta-runtime/document-env-protected-20261006/bin/python",
+          "installed_endpoint": true,
+          "remote_document_scope_tested": false,
+          "full_dc_document_contract_equivalence": false
+        }
+      },
+      {
+        "suite": "inode",
+        "exit_code": 0,
+        "report": {
+          "complete": true,
+          "checks": [
+            "native inode tool discovered without privilege override fields",
+            "stale source, omitted special-bit permission and atomicity acknowledgement rejected before mutation",
+            "hard-link aliases and already-open descriptor retain inode, patched bytes and special mode bits",
+            "exact transaction retry and status reconcile without repeating or accepting changed data",
+            "explicit committed-state recovery preserves verified bytes and permissions"
+          ],
+          "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+          "ssh_target": "localhost",
+          "installed_endpoint": true,
+          "fixture": {
+            "root": "/tmp/hepta-inode-native-cb05fd651e5a8569dfaaafb2",
+            "platform": "linux",
+            "inode": 37109238
+          },
+          "held_descriptor": {
+            "inode": 37109238,
+            "mode": 3560,
+            "text": "UPDATED! hardlink payload\n"
+          },
+          "passed": 5
+        }
+      },
+      {
+        "suite": "calendar",
+        "exit_code": 0,
+        "report": {
+          "complete": true,
+          "scope": "installed authenticated MCP create, byte-bound calendar setup, calculate and cached/formula reads",
+          "date1904_values": [
+            [
+              44839,
+              "2026-10-06",
+              "123.40",
+              "44839.00",
+              "12:00",
+              44839,
+              0.5,
+              0.5,
+              0
+            ]
+          ],
+          "date1900_values": [
+            [
+              46301,
+              "2026-10-06",
+              "123.40",
+              "2026-10-06",
+              "12:00",
+              46301,
+              0.5,
+              0.5,
+              0
+            ]
+          ],
+          "formula_text_preserved": true,
+          "conditional_format_branch_uses_original_serial": true,
+          "numeric_and_time_formats_not_offset": true,
+          "no_business_document_touched": true,
+          "value_time_has_no_ambient_date": true,
+          "value_date_matches_workbook_epoch": true
+        }
+      },
+      {
+        "suite": "singlethread",
+        "exit_code": 0,
+        "report": {
+          "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+          "complete": true,
+          "checks": [
+            "native inventory accepted real same-login process and internal anonymous pipe without exposing images",
+            "stale PID identity rejected, real CRIU image captured and original process stopped only after valid dump",
+            "restore reports stopped state; missing consent and stale restored identity cannot resume it",
+            "same PID/UID/random memory/unread pipe bytes restored; stdout offset retained and start not repeated"
+          ],
+          "application_checkpoint_code": false,
+          "installed_endpoint": true,
+          "images_exported": false,
+          "business_processes_modified": false,
+          "requested_threads": 1,
+          "before": {
+            "pid": 240255,
+            "uid": 1000,
+            "memory_sha256": "129497979a84f80acc74026ebd10e51362872635757eff4c933f4e979fd240ef",
+            "pipe_sha256": "abac1c30d859ea35e49f71b91957f742e3e80b1d10762a8ef4246c7d85a63f0d",
+            "value": 8273641
+          },
+          "dump": {
+            "checkpoint_id": "native-75f8673655a67d01ace72f7f",
+            "created_at_unix": 1791319922.4813042,
+            "criu_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+            "images_exported": false,
+            "original_exit_confirmed": true,
+            "original_identity": {
+              "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+              "pid": 240255,
+              "start_ticks": 2197973,
+              "uid": 1000
+            },
+            "original_kernel_state": "S",
+            "original_threads": [
+              {
+                "start_ticks": 2197973,
+                "tid": 240255,
+                "uid": 1000
+              }
+            ],
+            "private_image_count": 14,
+            "requires_explicit_resume": false,
+            "reused": false,
+            "schema": "checkpoint-two-phase-v1",
+            "state": "dumped",
+            "uid": 1000
+          },
+          "original_job_state": {
+            "at_unix_ms": 1791319922630,
+            "cancelled": false,
+            "exit_code": -9,
+            "job_id": "1a112fcc614-3a8a01-3",
+            "log_bytes": {
+              "stderr": {
+                "seen": 0,
+                "stored": 0
+              },
+              "stdout": {
+                "seen": 0,
+                "stored": 0
+              }
+            },
+            "log_errors": {
+              "stderr": null,
+              "stdout": null
+            },
+            "log_truncated": {
+              "stderr": false,
+              "stdout": false
+            },
+            "output_complete": true,
+            "state": "failed",
+            "timed_out": false
+          },
+          "original_log_prefix": {
+            "size": 11,
+            "sha256": "74eb89ba6375d3e9ec3c74de90012b2e28362d4740369228ae42b7951cfde5e6"
+          },
+          "restore": {
+            "all_threads_stopped": true,
+            "checkpoint_id": "native-75f8673655a67d01ace72f7f",
+            "created_at_unix": 1791319922.4813042,
+            "criu_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+            "images_exported": false,
+            "live_thread_count": 1,
+            "original_identity": {
+              "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+              "pid": 240255,
+              "start_ticks": 2197973,
+              "uid": 1000
+            },
+            "original_kernel_state": "S",
+            "original_threads": [
+              {
+                "start_ticks": 2197973,
+                "tid": 240255,
+                "uid": 1000
+              }
+            ],
+            "private_image_count": 14,
+            "requires_explicit_resume": true,
+            "restored_identity": {
+              "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+              "pid": 240255,
+              "start_ticks": 2198610,
+              "uid": 1000
+            },
+            "restored_identity_matches": true,
+            "restored_kernel_state": "T",
+            "restored_threads": [
+              {
+                "start_ticks": 2198610,
+                "tid": 240255,
+                "uid": 1000
+              }
+            ],
+            "restored_threads_match": true,
+            "reused": false,
+            "same_numeric_pid": true,
+            "schema": "checkpoint-two-phase-v1",
+            "state": "restored_stopped",
+            "uid": 1000
+          },
+          "resume": {
+            "all_threads_stopped": false,
+            "checkpoint_id": "native-75f8673655a67d01ace72f7f",
+            "created_at_unix": 1791319922.4813042,
+            "criu_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+            "images_exported": false,
+            "live_thread_count": 1,
+            "original_identity": {
+              "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+              "pid": 240255,
+              "start_ticks": 2197973,
+              "uid": 1000
+            },
+            "original_kernel_state": "S",
+            "original_threads": [
+              {
+                "start_ticks": 2197973,
+                "tid": 240255,
+                "uid": 1000
+              }
+            ],
+            "private_image_count": 14,
+            "requires_explicit_resume": false,
+            "restored_identity": {
+              "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+              "pid": 240255,
+              "start_ticks": 2198610,
+              "uid": 1000
+            },
+            "restored_identity_matches": true,
+            "restored_kernel_state": "R",
+            "restored_threads": [
+              {
+                "start_ticks": 2198610,
+                "tid": 240255,
+                "uid": 1000
+              }
+            ],
+            "restored_threads_match": true,
+            "resumed_at_unix": 1791319929.2344904,
+            "reused": false,
+            "schema": "checkpoint-two-phase-v1",
+            "state": "resumed",
+            "uid": 1000
+          },
+          "after": {
+            "pid": 240255,
+            "uid": 1000,
+            "memory_sha256": "129497979a84f80acc74026ebd10e51362872635757eff4c933f4e979fd240ef",
+            "pipe_sha256": "abac1c30d859ea35e49f71b91957f742e3e80b1d10762a8ef4246c7d85a63f0d",
+            "value": 8273641
+          },
+          "status": {
+            "checkpoint_id": "native-75f8673655a67d01ace72f7f",
+            "created_at_unix": 1791319922.4813042,
+            "criu_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+            "images_exported": false,
+            "original_identity": {
+              "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+              "pid": 240255,
+              "start_ticks": 2197973,
+              "uid": 1000
+            },
+            "original_kernel_state": "S",
+            "original_threads": [
+              {
+                "start_ticks": 2197973,
+                "tid": 240255,
+                "uid": 1000
+              }
+            ],
+            "private_image_count": 14,
+            "requires_explicit_resume": false,
+            "restored_identity": {
+              "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+              "pid": 240255,
+              "start_ticks": 2198610,
+              "uid": 1000
+            },
+            "restored_identity_matches": false,
+            "restored_threads": [
+              {
+                "start_ticks": 2198610,
+                "tid": 240255,
+                "uid": 1000
+              }
+            ],
+            "resumed_at_unix": 1791319929.2344904,
+            "schema": "checkpoint-two-phase-v1",
+            "state": "resumed",
+            "uid": 1000
+          },
+          "two_phase_restore_resume": true,
+          "passed": 4,
+          "host": "x230-ts",
+          "checkpoint_id": "native-75f8673655a67d01ace72f7f",
+          "third_party_resources_universally_supported": false,
+          "final_stdout_sha256": "4734039306856aba1c77136660b843090064ac71a6c54d6bba82e1f19f628a4f"
+        }
+      }
+    ],
+    "complete": true
+  },
+  "actual_failure_rollback": {
+    "source_revision": "67a3408eafd6a9e471475ad6e66acb919d118e23",
+    "binary_sha256": "3a410536bb3d51c450e9a4ed45b206c34a5057bfe909d8c7fec05f4baa5ed2cb",
+    "previous_binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+    "recorded_at": "20261006T204913Z",
+    "service": "hepta-runtime-operator.service",
+    "endpoint": "http://127.0.0.1:8790/mcp",
+    "rollback_unit": "/home/qian-qi/.config/hepta-runtime-operator/rollback-20261006T204913Z.service",
+    "desktop_commander_pid_before": 2959,
+    "checks": [
+      "installed authenticated host discovery and operator modes"
+    ],
+    "installed": false,
+    "chatgpt_tunnel_verified": false,
+    "password_prompt_tested": false,
+    "reboot_tested": false,
+    "rolled_back": true,
+    "error": "RuntimeError: HEPTA_EXPECTED_ROLLBACK_DRILL",
+    "desktop_commander_pid_after": 2959,
+    "original_unit_restored": true,
+    "original_manifest_restored": true,
+    "rollback_drill_passed": true
+  },
+  "actual_synthetic_sudo_password": {
+    "passed": true,
+    "actual_sudo_pam_password_prompt": true,
+    "actual_result_uid": 0,
+    "synthetic_namespace_account": true,
+    "host_account_password_tested": false,
+    "host_policy_changed": false,
+    "password_echoed": false,
+    "session_id": "dpty-18dc0bfd1bc34e0e-3a8a01-1"
+  },
+  "installed_calendar_values": {
+    "complete": true,
+    "scope": "installed authenticated MCP create, byte-bound calendar setup, calculate and cached/formula reads",
+    "date1904_values": [
+      [
+        44839,
+        "2026-10-06",
+        "123.40",
+        "44839.00",
+        "12:00",
+        44839,
+        0.5,
+        0.5,
+        0
+      ]
+    ],
+    "date1900_values": [
+      [
+        46301,
+        "2026-10-06",
+        "123.40",
+        "2026-10-06",
+        "12:00",
+        46301,
+        0.5,
+        0.5,
+        0
+      ]
+    ],
+    "formula_text_preserved": true,
+    "conditional_format_branch_uses_original_serial": true,
+    "numeric_and_time_formats_not_offset": true,
+    "no_business_document_touched": true,
+    "value_time_has_no_ambient_date": true,
+    "value_date_matches_workbook_epoch": true
+  },
+  "installed_inode_evidence": {
+    "complete": true,
+    "checks": [
+      "native inode tool discovered without privilege override fields",
+      "stale source, omitted special-bit permission and atomicity acknowledgement rejected before mutation",
+      "hard-link aliases and already-open descriptor retain inode, patched bytes and special mode bits",
+      "exact transaction retry and status reconcile without repeating or accepting changed data",
+      "explicit committed-state recovery preserves verified bytes and permissions"
+    ],
+    "binary_sha256": "8814bd81c9757408e1763929b4ffeb4ea6e9d05baf8506e2e9240b098ac47383",
+    "ssh_target": "localhost",
+    "installed_endpoint": true,
+    "fixture": {
+      "root": "/tmp/hepta-inode-native-cb05fd651e5a8569dfaaafb2",
+      "platform": "linux",
+      "inode": 37109238
+    },
+    "held_descriptor": {
+      "inode": 37109238,
+      "mode": 3560,
+      "text": "UPDATED! hardlink payload\n"
+    },
+    "passed": 5
+  },
+  "inherited_functionality_reverified": "Generic exact byte transfers, protected AES-256 derived PDFs and owner/user separation, retained original signature bytes in explicit unsigned incremental revisions, static scoped names/shared formulas/fixed arrays/1904 caches, and explicit non-atomic inode patches with hardlinks/open descriptors/special mode bits remain present and regressed. These are not all newly authored in this continuation.",
+  "power_lifecycle": {
+    "historical_S5_reverification": {
+      "checked_at": "2026-10-06T20:49:37.683252+00:00",
+      "target": "x230-ts",
+      "previous_S5_receipt": {
+        "complete": true,
+        "performed": true,
+        "target": "x230-ts",
+        "cold_g3_power_removal": false,
+        "checks": [
+          "physical identity, no existing RTC alarm, enabled recovery services, no business workload",
+          "actual controller-originated magic packet received on target wired interface",
+          "idle runner paused; temporary magic wake and independent RTC fallback armed and read back",
+          "target disappeared after poweroff and returned from firmware boot with a different kernel identity",
+          "runner, SSH, tailnet and wired recovery services returned automatically"
+        ],
+        "started_at": "2026-10-06T14:44:08.421721+00:00",
+        "boot_before": "0560577c-8576-4368-9cce-67df4b2abe07",
+        "preflight": {
+          "blocked": []
+        },
+        "wol_before": "d",
+        "rtc_alarm_epoch": 1791298035,
+        "shutdown_requested_at": "2026-10-06T14:44:16.033536+00:00",
+        "boot_after": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+        "first_unreachable_after_seconds": 2.0420047803781927e-06,
+        "return_after_seconds": 107.60271737100265,
+        "magic_packets_sent": 10,
+        "previous_shutdown_journal": "10月 06 22:44:16 qian-ThinkPad-X230 systemd-logind[1464]: Session 606 logged out. Waiting for processes to exit.\n10月 06 22:44:16 qian-ThinkPad-X230 systemd-logind[1464]: Removed session 606.\n10月 06 22:44:16 qian-ThinkPad-X230 systemd-logind[1464]: System is powering down.\n10月 06 22:44:16 qian-ThinkPad-X230 systemd-logind[1464]: Session 566 logged out. Waiting for processes to exit.\n10月 06 22:44:17 qian-ThinkPad-X230 systemd-logind[1464]: Session c1 logged out. Waiting for processes to exit.\n10月 06 22:44:17 qian-ThinkPad-X230 systemd-logind[1464]: Removed session 566.\n10月 06 22:44:17 qian-ThinkPad-X230 systemd-logind[1464]: Failed to start session scope session-607.scope: Transaction for session-607.scope/start is destructive (systemd-poweroff.service has 'start' job queued, but 'stop' is included in transaction).\n10月 06 22:44:17 qian-ThinkPad-X230 systemd-logind[1464]: Failed to start session scope session-608.scope: Transaction for session-608.scope/start is destructive (user-1000.slice has 'stop' job queued, but 'start' is included in transaction).\n10月 06 22:44:17 qian-ThinkPad-X230 systemd[1]: Stopping systemd-logind.service - User Login Management...\n10月 06 22:44:17 qian-ThinkPad-X230 systemd-logind[1464]: Removed session c1.\n10月 06 22:44:17 qian-ThinkPad-X230 systemd[1]: systemd-logind.service: Deactivated successfully.\n10月 06 22:44:17 qian-ThinkPad-X230 systemd[1]: Stopped systemd-logind.service - User Login Management.\n10月 06 22:44:17 qian-ThinkPad-X230 systemd[1]: systemd-logind.service: Consumed 8.770s CPU time, 3.9M memory peak, 0B memory swap peak.\n10月 06 22:44:20 qian-ThinkPad-X230 systemd[1]: systemd-poweroff.service: Deactivated successfully.\n10月 06 22:44:20 qian-ThinkPad-X230 systemd[1]: Finished systemd-poweroff.service - System Power Off.\n",
+        "postboot_services": [
+          "active",
+          "active",
+          "active",
+          "active"
+        ],
+        "completed_at": "2026-10-06T14:46:05.084275+00:00",
+        "wake_cleanup": "\tSupports Wake-on: pumbg\n\tWake-on: d\n"
+      },
+      "current_boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+      "recovery_services": [
+        "active",
+        "active",
+        "active",
+        "active"
+      ],
+      "historical_poweroff_return_independently_reverified": true,
+      "new_physical_power_cycle_performed": false,
+      "G3_AC_and_battery_removal_verified": false,
+      "controller_host_reboot_performed": false
+    },
+    "fresh_controller_preflight": {
+      "at": "2026-10-06T20:32:18.675722+00:00",
+      "host": "qian-qi",
+      "kernel_boot": "a5cfd4f3-4a31-4fb1-b8cc-cf71ef25ea2d",
+      "active_workloads": [
+        {
+          "pid": 3781239,
+          "name": "cargo",
+          "state": "S",
+          "start_ticks": 5921860
+        }
+      ],
+      "controller_reboot_performed": false,
+      "reason": "active runtime-independent jobs and interactive desktop session; no shutdown issued",
+      "hardware_power_switch_verified": false
+    },
+    "fresh_x230_preflight": {
+      "checked_at": "2026-10-06T20:54:42.960983+00:00",
+      "exit_code": 2,
+      "preflight": {
+        "blocked": [
+          {
+            "pid": 239422,
+            "name": "python3"
+          },
+          {
+            "pid": 239433,
+            "name": "cargo"
+          },
+          {
+            "pid": 239713,
+            "name": "rustc"
+          }
+        ]
+      },
+      "new_shutdown_performed": false
+    },
+    "new_physical_restart_performed": false,
+    "G3_power_removal_performed": false,
+    "hardware_power_control_discovery": "Searched available integrations for Home Assistant/remote power/PDU/IPMI; no matching connected physical power-control capability was returned. No connector was installed or credentials changed.",
+    "interpretation": "Actual prior S5 shutdown/wake evidence is retained and current boot/services were independently read. Main controller and later X230 preflights still had non-test workloads. No busy machine was powered off; S5 is not removal of both AC and battery."
+  },
+  "hosted_ci": {
+    "implementation_run": 37527979016,
+    "job_id": 112489751042,
+    "head_sha": "eede8e68f5dc9e4faf4c1faafcba15c856686572",
+    "conclusion": "success",
+    "job_completed_at": "2026-10-06T20:43:49Z",
+    "source": "GitHub REST job endpoint observed completed/success; latest evidence/test-only follow-up needs separate exact-head observation"
+  },
+  "known_scope_limits": [
+    "Native process restoration remains same-boot/same-host Linux with compatible files and process-internal pipes; CRIU is pinned only for x230. It does not transfer arbitrary DC userspace buffers, external socket peers, GPU contexts or whole process trees.",
+    "Controller physical reboot and mechanical AC/battery removal still lack a qualified idle/recovery window or independent power control. No virtual-machine reset or another hosts S5 event is substituted.",
+    "Inode patching remains Linux same-size <=65536-byte non-atomic mutation; immutable/executable capability flags and arbitrary atomic resize with all hard-link identities are not promised.",
+    "PDF caller-root chain verification does not establish revocation, trusted signing time, certificate-purpose/EKU or DocMDP compliance. Existing signatures never sign changed content. No real signing key or user password was used.",
+    "Complex workbook coverage includes tested names/shared/fixed-array/calendar semantics, not external workbook/macros/volatile or unconstrained dynamic-spill and Microsoft Excel engine identity.",
+    "ChatGPT/workspace/custom-app/tunnel integration is still deliberately last and untouched."
+  ],
+  "attempt_notes": [
+    "The first 4-thread launch was gated out because release build was not yet complete; it produced no test log/report and started no target process. The separately named completed-build rerun and 16-thread run both passed.",
+    "A combined source/result metadata read was refused by this session safety check and was not retried.",
+    "No private CRIU images, process memory, real passwords, certificate private keys or provider credentials were exported."
+  ],
+  "unchanged_by_this_work": [
+    "DC service/PID and configuration",
+    "host sudoers/PAM/accounts and credentials",
+    "existing runtime token and SSH identities",
+    "checkpoint host opt-in pins and access roots",
+    "other business workloads",
+    "cloud/tunnel configuration"
+  ],
+  "receipt_sha256": {
+    "advance-rust-tests.log": "9c8cf898a0895abb0a86fb9d03c8ae28e5502e65bcff36efec487f17fb435472",
+    "advance-python-tests.log": "dae5863133ec9a41636f0da99d4bbe7cfd3d93a2d1bbebf463d2af2bc01a7070",
+    "advance-release.log": "a5d07e7d70c5c733f30488f71b32f61ae08a76f666667db4220e54b0edeeb595",
+    "advance-matrix.json": "e51992a9a46774e71f49c63dca3029bc9b16f554b97ac92c128bea9dc032769c",
+    "advance-installed.json": "08857e5a0f812f851536c1d1977ac72f2359776fd5d66580d082778902098e65",
+    "advance-rollback.json": "16424dddcdea1e30b41807560d6b077f072f386e5f0264d48f8a309ed55a15ab",
+    "advance-installed-suites.json": "1930cea98dd5973218f56e271f0f3ac5f37266f372226993ab05cc92282e3315",
+    "advance-password.json": "945d99ba40f1a6e7ee1bd8520fc1c558ca7f92322f78dfea5e52e48786b6f643",
+    "advance-runtime-state.json": "1e59ae2453058d8b0b2e61c692ac093914deb25e4a6095187be795de565c2514",
+    "advance-checkpoint-four-v2.json": "29106379fe45e876d401b5408fb0a91f790585c6169efa63aedecfe735429b2b",
+    "advance-checkpoint-sixteen.json": "1b587255da19c73a02db92eb248b8946536fd280df8dded34593d884a833daad",
+    "advance-checkpoint-installed.json": "14b210f6a570f906d7f1042c12385986d7b98cd74a0ec2ea1aa553909bb20c3e",
+    "advance-installed-singlethread.json": "c63566271ac79698e05550eb68b4bf1342977f738f07788750b6c4541ea14c90",
+    "advance-installed-calendar.json": "431d2d9df0b76bb74f971853766a0bee3094d5f99dd115e66673efbdbd400a6c",
+    "advance-installed-inode.json": "156667da0f6489da6805bc71dc4289eb1e22a5a07da0d837de4741fc18c704ff",
+    "advance-installed-protected.json": "b910d8521ec48a36fc1452c65e624e2e95d9844be656bd2407ea1adaa63b31de",
+    "advance-power-reverified.json": "d1d38f459a6eece6f6e1c407d890fdabdab24727e713db616cf097d989de98f0",
+    "advance-controller-preflight.json": "e2fab1878fb86890d5d3b0f835f20d90ba74d3e584e842793878197d994089fa",
+    "advance-x230-power-preflight.json": "bc650562e9cd1d4936c390d006948af65b451fbffd1c68115c78b0b317240d94"
+  }
+}

@@ -1,0 +1,10 @@
+--- original-immutable/tests/dc_functional_v10_operation_acceptance.py
++++ new/tests/dc_functional_v10_operation_explicit_state_acceptance.py
+@@ -514,6 +514,7 @@
+             workspace = root / "workspace"
+             workspace.mkdir(mode=0o700)
+             state = root / "state"
++            state.mkdir(mode=0o700)  # Owned create-only fixture; independent of inherited umask.
+             token = secrets.token_hex(32)
+             rotated = secrets.token_hex(32)
+             marker = "PRIVATE_V10_RESULT_" + secrets.token_hex(16)

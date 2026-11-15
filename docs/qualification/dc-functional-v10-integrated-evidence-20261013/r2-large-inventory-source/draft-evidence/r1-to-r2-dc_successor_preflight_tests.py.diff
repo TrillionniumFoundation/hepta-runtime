@@ -1,0 +1,86 @@
+--- R1/tests/dc_successor_preflight_tests.py
++++ R2/tests/dc_successor_preflight_tests.py
+@@ -1765,5 +1765,83 @@
+             self.assert_hold(self.prepare())
+ 
+ 
++
++    def test_contract_token_path_and_alias_refused_before_any_content_hash(self):
++        I = self.protocol
++        original_bytes = self.token.read_bytes()
++        original_mode = stat.S_IMODE(self.token.stat().st_mode)
++        alias = self.live / "contract-token-alias"
++        for alias_case in (False, True):
++            with self.subTest(alias_case=alias_case):
++                path = self.token
++                if alias_case:
++                    os.link(self.token, alias)
++                    path = alias
++                value = copy.deepcopy(self.manifest)
++                value["baseline"]["artifacts"]["contract"] = {"path": str(path), "sha256": "0" * 64}
++                try:
++                    with mock.patch.object(S, "read_pinned", side_effect=AssertionError("content read forbidden")) as pinned, \
++                         mock.patch.object(S, "snapshot", side_effect=AssertionError("snapshot forbidden")) as snapshot, \
++                         mock.patch.object(P, "digest", side_effect=AssertionError("digest forbidden")) as hashed, \
++                         mock.patch.object(P.hashlib, "sha256", side_effect=AssertionError("sha256 forbidden")) as sha, \
++                         mock.patch.object(I, "credential_inode", side_effect=AssertionError("credential probe forbidden")) as credential, \
++                         mock.patch.object(I, "LoopbackReadClient", side_effect=AssertionError("HTTP forbidden")) as http:
++                        with self.assertRaises(ValueError):
++                            P.large_bounded_inventory_observation(value)
++                        for refused in (pinned, snapshot, hashed, sha, credential, http):
++                            refused.assert_not_called()
++                    self.assertEqual(self.token.read_bytes(), original_bytes)
++                    self.assertEqual(stat.S_IMODE(self.token.stat().st_mode), original_mode)
++                finally:
++                    if alias_case:
++                        alias.unlink()
++        self.assertEqual(self.token.stat().st_nlink, 1)
++
++    def test_invalid_rpc_timeout_refused_upfront_for_injected_and_real_observers(self):
++        I = self.protocol
++        for timeout in (0, -1, 30.0001, 31, float("nan"), float("inf"), float("-inf"), True, False, "10"):
++            with self.subTest(timeout=timeout):
++                self.args.inventory_rpc_timeout_seconds = timeout
++                service, inventory, process = mock.Mock(), mock.Mock(), mock.Mock()
++                with mock.patch.object(P, "validate_stage", side_effect=AssertionError("stage read forbidden")) as stage, \
++                     mock.patch.object(I, "credential_inode", side_effect=AssertionError("credential probe forbidden")) as credential, \
++                     mock.patch.object(P, "read_private_token", side_effect=AssertionError("token read forbidden")) as token, \
++                     mock.patch.object(I, "LoopbackReadClient", side_effect=AssertionError("HTTP forbidden")) as http, \
++                     mock.patch.object(S, "read_pinned", side_effect=AssertionError("content read forbidden")) as pinned, \
++                     mock.patch.object(P.hashlib, "sha256", side_effect=AssertionError("sha256 forbidden")) as sha:
++                    with self.assertRaises(I.InventoryError):
++                        P.prepare_preflight(self.args, service_probe=service, inventory_probe=inventory, process_probe=process)
++                    with self.assertRaises(I.InventoryError):
++                        P.large_bounded_inventory_observation(self.manifest, rpc_timeout=timeout)
++                    for refused in (stage, credential, token, http, pinned, sha, service, inventory, process):
++                        refused.assert_not_called()
++                self.assertFalse(self.args.output_directory.exists())
++        self.args.inventory_rpc_timeout_seconds = 10.0
++
++    def test_exact_rpc_limit_accepted_and_publication_timeout_is_bound(self):
++        I = self.protocol
++        self.args.inventory_rpc_timeout_seconds = I.MAX_RPC_SECONDS
++        prepared = self.prepare(inventory=self.large_inventory(6))
++        self.assert_hold(prepared, "JOB_INVENTORY_INCOMPLETE")
++        client, observer, calls, closed = self.guard_fixture()
++        def checked_client(token_file, **kwargs):
++            self.assertEqual(kwargs["rpc_timeout"], I.MAX_RPC_SECONDS)
++            return client(token_file, **kwargs)
++        def checked_observer(directory, factory, **kwargs):
++            self.assertEqual(kwargs["rpc_timeout"], I.MAX_RPC_SECONDS)
++            return observer(directory, factory, **kwargs)
++        with mock.patch.object(I, "LoopbackReadClient", side_effect=checked_client), \
++             mock.patch.object(I, "observe_inventory", side_effect=checked_observer):
++            self.assertEqual(len(P.large_bounded_inventory_observation(
++                self.manifest, rpc_timeout=I.MAX_RPC_SECONDS)["jobs"]), 6)
++        self.assertEqual(calls, [("constructor", "main"), ("catalog", "main"), ("hosts", "main")])
++        self.assertEqual(closed, ["main"])
++        before = tree_snapshot(self.root)
++        self.args.inventory_rpc_timeout_seconds = I.MAX_RPC_SECONDS - 1
++        with self.assertRaises(ValueError):
++            P.publish(prepared, self.args)
++        self.assertEqual(tree_snapshot(self.root), before)
++
++
+ if __name__ == "__main__":
+     unittest.main(verbosity=2)

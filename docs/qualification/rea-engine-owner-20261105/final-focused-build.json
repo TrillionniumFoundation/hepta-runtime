@@ -1,0 +1,83 @@
+{
+  "schema": "hepta.rea.engine-owner-focused-build.v1",
+  "status": {
+    "at_unix_ms": 1793855956958,
+    "audit_recorded": true,
+    "automatic_retry": false,
+    "cancelled": false,
+    "exit_code": 0,
+    "job_id": "1a1aa216818-fc05-3dc6",
+    "launch_nonce": "8c51d05fd8de31daaf14284806a64328",
+    "log_bytes": {
+      "stderr": {
+        "seen": 590,
+        "stored": 590
+      },
+      "stdout": {
+        "seen": 5535,
+        "stored": 5535
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_synced": {
+      "stderr": true,
+      "stdout": true
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "output_durable": true,
+    "state": "succeeded",
+    "terminal_publication_confirmed": true,
+    "terminal_publication_protocol": 1,
+    "timed_out": false
+  },
+  "stdout": "{\"command\": [\"cargo\", \"+1.95.0\", \"fmt\", \"--all\"]}\n{\"command\": [\"cargo\", \"+1.95.0\", \"clippy\", \"--all-features\", \"--all-targets\", \"--locked\", \"--offline\", \"--\", \"-D\", \"warnings\"]}\n{\"command\": [\"cargo\", \"+1.95.0\", \"test\", \"--all-features\", \"--bin\", \"hepta-runtime-jobctl\", \"--locked\", \"--offline\", \"--\", \"--test-threads=1\"]}\n\nrunning 45 tests\ntest engine_scratch_tests::engine_scratch_lost_child_custody_never_authorizes_numeric_group_cleanup ... ok\ntest engine_scratch_tests::engine_scratch_owner_stops_original_group_before_reap_and_publishes_cleanup ... ok\ntest engine_scratch_tests::production_nonce_is_accepted_by_the_real_worker_and_terminal_projection ... ok\ntest engine_scratch_tests::restricted_group_visibility_preserves_unknown_and_readable_retention ... ok\ntest engine_scratch_tests::worker_scratch::tests::cleanup_refuses_a_replaced_root_and_unlinks_symlinks_without_following_them ... ok\ntest engine_scratch_tests::worker_scratch::tests::cleanup_refuses_rebound_parent_even_when_absolute_leaf_inode_is_unchanged ... ok\ntest engine_scratch_tests::worker_scratch::tests::worker_adopts_exact_owner_and_defers_removal_to_original_owner ... ok\ntest engine_scratch_tests::worker_scratch::tests::wrong_owner_or_substituted_inode_cannot_be_adopted ... ok\ntest tests::a_delayed_inherited_writer_cannot_change_logs_after_terminal_publication ... ok\ntest tests::actual_exit_directory_sync_failure_leaves_visible_exit_unconfirmed ... ok\ntest tests::actual_fsync_failure_cannot_produce_a_successful_complete_receipt ... ok\ntest tests::actual_launch_namespace_sync_failures_preserve_pending_inputs_without_spawn ... ok\ntest tests::actual_read_error_is_retained_without_claiming_pipe_eof ... ok\ntest tests::actual_witness_publication_failure_cannot_promote_visible_exit ... ok\ntest tests::argv_and_stdin_bind_full_digest ... ok\ntest tests::cancellation_ack_cannot_overwrite_a_witnessed_original_exit ... ok\ntest tests::cap_plus_one_retains_the_bound_and_reports_lost_output_in_status_and_reads ... ok\ntest tests::completed_result_preserves_exit_from_previous_boot ... ok\ntest tests::completion_must_match_owned_nonce_and_job ... ok\ntest tests::confirmed_capture_pages_preserve_all_bytes_and_standard_digest_wire_format ... ok\ntest tests::confirmed_capture_reads_reject_deleted_truncated_or_appended_logs ... ok\ntest tests::cwd_symlink_escape_is_rejected ... ok\ntest tests::fresh_launch_namespace_sync_precedes_both_submission_modes ... ok\ntest tests::json_fifo_rejected_without_waiting_for_a_writer ... ok\ntest tests::legacy_completion_and_pty_never_invent_output_completeness ... ok\ntest tests::legacy_specs_upgrade_but_declared_capture_and_pty_modes_cannot_change ... ok\ntest tests::nonblocking_empty_pipe_then_hangup_preserves_bytes_and_exact_eof ... ok\ntest tests::original_pipes_are_fully_synced_before_the_terminal_capture_receipt ... ok\ntest tests::probe_failure_without_a_terminal_receipt_stays_an_error ... ok\ntest tests::read_and_status_refuse_foreign_or_inconsistent_terminal_capture_evidence ... ok\ntest tests::real_sink_write_failure_is_retained_without_stopping_other_stream_capture ... ok\ntest tests::resources_are_capped_by_admin ... ok\ntest tests::setup_failure_has_explicit_capture_evidence_and_never_looks_like_legacy ... ok\ntest tests::status_preserves_live_observations_and_legacy_terminal_states ... ok\ntest tests::status_rereads_terminal_publication_after_systemd_collection_or_probe_error ... ok\ntest tests::status_rereads_unwitnessed_publication_before_interpreting_unit_failure ... ok\ntest tests::strict_owned_ids ... ok\ntest tests::terminal_publication_during_boot_probe_remains_valid_after_reboot ... ok\ntest tests::timeout_and_cancellation_reap_the_original_child_and_keep_capture_evidence ... ok\ntest tests::unknown_root_actions_and_pid_fields_cannot_deserialize ... ok\ntest tests::unsafe_or_existing_log_refuses_before_the_original_child_is_spawned ... ok\ntest tests::versioned_reboot_without_a_receipt_is_unknown_and_never_replayed ... ok\ntest tests::versioned_status_without_terminal_receipt_never_invents_a_terminal_outcome ... ok\ntest tests::visible_witness_proves_prior_exit_barrier_not_its_own_directory_sync ... ok\ntest tests::witness_binds_exact_exit_bytes_identity_protocol_and_new_record_marker ... ok\n\ntest result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.42s\n\n{\"command\": [\"cargo\", \"+1.95.0\", \"build\", \"--all-features\", \"--bins\", \"--locked\", \"--offline\"]}\n{\"kind\": \"intermediate_engine_candidate_not_final_combination\", \"git_head\": \"c07f8d713113dd9eb7bec93b6e1ee7fd3c2e8b18\", \"git_diff_sha256\": \"390db10e13d277730fc77eb505a2bab7fb8dc88583243c275fc760ecac270b85\", \"build_env\": {\"CARGO_HOME\": \"/home/qian-qi/.cargo\", \"CARGO_TARGET_DIR\": \"/home/qian-qi/work/hepta-rea-sixpack-ca464-20261105-target\", \"CARGO_PROFILE_DEV_DEBUG\": \"0\", \"CARGO_PROFILE_TEST_DEBUG\": \"0\", \"CARGO_BUILD_JOBS\": \"4\"}, \"rustc\": \"rustc 1.95.0 (59807616e 2026-04-14)\\nbinary: rustc\\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\\ncommit-date: 2026-04-14\\nhost: x86_64-unknown-linux-gnu\\nrelease: 1.95.0\\nLLVM version: 22.1.2\\n\", \"binaries\": {\"hepta-runtime\": {\"path\": \"/home/qian-qi/work/hepta-rea-engine-candidate-ca464-20261105-r1/prepared/hepta-runtime\", \"sha256\": \"678ca51a70330ccf43040fb27bdba194aab11b9a93167de774e5f683911b6e32\", \"bytes\": 43558528}, \"hepta-runtime-jobctl\": {\"path\": \"/home/qian-qi/work/hepta-rea-engine-candidate-ca464-20261105-r1/prepared/hepta-runtime-jobctl\", \"sha256\": \"26112ce0e8a15c40e198b5767a10f4ce00ac72b8fdb27b3120b08dcf5905f857\", \"bytes\": 1520776}}}\n",
+  "stderr": "    Checking hepta-runtime v0.1.0 (/home/qian-qi/work/hepta-rea-engine-ca464-20261105)\n    Finished `dev` profile [optimized] target(s) in 37.91s\n   Compiling hepta-runtime v0.1.0 (/home/qian-qi/work/hepta-rea-engine-ca464-20261105)\n    Finished `test` profile [optimized] target(s) in 1m 22s\n     Running unittests src/bin/jobctl.rs (/home/qian-qi/work/hepta-rea-sixpack-ca464-20261105-target/debug/deps/hepta_runtime_jobctl-6383d88d8d9245bb)\n   Compiling hepta-runtime v0.1.0 (/home/qian-qi/work/hepta-rea-engine-ca464-20261105)\n    Finished `dev` profile [optimized] target(s) in 2m 28s\n",
+  "earlier_lint_failure": {
+    "job_id": "1a1aa1e1e93-fc05-3d76",
+    "reason": "duplicate_mod when actual worker consumer and owner each declared the same Directory source; resolved by one shared module reference, no lint suppression",
+    "terminal": {
+      "at_unix_ms": 1793855509480,
+      "audit_recorded": true,
+      "automatic_retry": false,
+      "cancelled": false,
+      "exit_code": 1,
+      "job_id": "1a1aa1e1e93-fc05-3d76",
+      "launch_nonce": "a16e75ed8a6fc868d85ff5c72d7cd0d1",
+      "log_bytes": {
+        "stderr": {
+          "seen": 1055,
+          "stored": 1055
+        },
+        "stdout": {
+          "seen": 178,
+          "stored": 178
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_synced": {
+        "stderr": true,
+        "stdout": true
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "output_durable": true,
+      "state": "failed",
+      "terminal_publication_confirmed": true,
+      "terminal_publication_protocol": 1,
+      "timed_out": false
+    }
+  }
+}

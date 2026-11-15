@@ -1,0 +1,351 @@
+{
+  "all_dispatched_rows_checked": true,
+  "all_original_wire_ranges_hash_and_rpc_bound": true,
+  "analysis_complete": true,
+  "automatic_retries": 0,
+  "consistent": true,
+  "counts": {
+    "by_purpose": {
+      "measured": 4096,
+      "postflight": 20,
+      "preflight": 20,
+      "seed": 256,
+      "warmup": 32
+    },
+    "by_tool": {
+      "host_list": 256,
+      "request_archive": 1388,
+      "request_history": 1392,
+      "usage_stats": 1388
+    },
+    "native_seed_ids_global_unique": 256,
+    "tool_dispatches": 4424,
+    "wire": {
+      "initialize_rpcs": 4,
+      "initialized_notifications": 4,
+      "request_lines": 4432,
+      "response_lines": 4428,
+      "rpc_requests_with_id": 4428,
+      "tool_calls": 4424
+    }
+  },
+  "descriptive_latencies": {
+    "request_archive": {
+      "baseline_mean_ms": 10.382118731671554,
+      "candidate_mean_change_percent": 3.3970975763974343,
+      "candidate_mean_ms": 10.734809435483871,
+      "per_arm": {
+        "A": {
+          "calls": 682,
+          "max_ms": 18.493471,
+          "mean_ms": 10.382118731671554,
+          "p50_ms": 11.4839095,
+          "p95_ms": 12.36211,
+          "p99_ms": 13.108885
+        },
+        "B": {
+          "calls": 682,
+          "max_ms": 16.663583,
+          "mean_ms": 10.734809435483871,
+          "p50_ms": 11.4216865,
+          "p95_ms": 12.439467,
+          "p99_ms": 14.078243
+        }
+      }
+    },
+    "request_history": {
+      "baseline_mean_ms": 4.201278872434018,
+      "candidate_mean_change_percent": 3.387445957311508,
+      "candidate_mean_ms": 4.343594923753666,
+      "per_arm": {
+        "A": {
+          "calls": 682,
+          "max_ms": 6.764624,
+          "mean_ms": 4.201278872434018,
+          "p50_ms": 4.6203255,
+          "p95_ms": 4.94863,
+          "p99_ms": 5.603974
+        },
+        "B": {
+          "calls": 682,
+          "max_ms": 6.589322,
+          "mean_ms": 4.343594923753666,
+          "p50_ms": 4.5893645,
+          "p95_ms": 4.959974,
+          "p99_ms": 5.58879
+        }
+      }
+    },
+    "usage_stats": {
+      "baseline_mean_ms": 5.970515532163743,
+      "candidate_mean_change_percent": 2.162127861976737,
+      "candidate_mean_ms": 6.099605711988304,
+      "per_arm": {
+        "A": {
+          "calls": 684,
+          "max_ms": 10.097144,
+          "mean_ms": 5.970515532163743,
+          "p50_ms": 6.558853,
+          "p95_ms": 7.12181,
+          "p99_ms": 7.738262
+        },
+        "B": {
+          "calls": 684,
+          "max_ms": 9.49484,
+          "mean_ms": 6.099605711988304,
+          "p50_ms": 6.3915565,
+          "p95_ms": 7.103913,
+          "p99_ms": 8.302421
+        }
+      }
+    }
+  },
+  "errors": [],
+  "history_retention": {
+    "global": 512,
+    "per_owner": 128
+  },
+  "inputs": {
+    "baseline_binary_sha256": "468da1822590d81690c9ab4a6bb63d4aebe7f8b6e8ba3987c5617c811d22577f",
+    "bundle_bytes": 2612169,
+    "bundle_sha256": "2fd95f6ab697ddda7d746752e5c3083eb96e2e23d9933a05ebf1093976c8a0e4",
+    "calls_bytes": 3500130,
+    "calls_member": "a40-staggered-output-recovery-20261025-r02/small-archive-abba-r01/calls.jsonl",
+    "calls_sha256": "d7055e1475f3db4d272e8dc71f383572fd39f5190141caa84ae17faac9300dd7",
+    "candidate_binary_sha256": "3238c9d4bb2f8dc4dbb86e591ce774bea70c6785c159cf27b70003f00623540c",
+    "harness_sha256": "98413b4b177ec3bf68b7fe67de153376465374a9e74690c337633b3b4a912ffb",
+    "report_member": "a40-staggered-output-recovery-20261025-r02/small-archive-abba-r01/report.json",
+    "report_sha256": "f5f75cd22e763b0861c5006318f67a883bb55586249ee56c8634cd985edc4918"
+  },
+  "inputs_unchanged": true,
+  "limitations": [
+    "Source reports and complete native-wire records were checked locally; no remote original files or original ELF were reread by this analyzer.",
+    "The collector excludes state directories. Original-file hash/stat maps are captured at four checkpoints; equality and their internal map/projection hashes were recomputed, but excluded original full file bytes were not independently reread.",
+    "Initialize RPCs and initialized notifications are counted separately from tools/call dispatch rows.",
+    "Different owner/request IDs and timestamps across rounds are intentional; fixtures are equivalent by count/schema and complete per-round projection, not byte-identical across arms.",
+    "Latency differences are descriptive and cannot be attributed causally to the output-recovery change.",
+    "No cold-start, 65,536-record, C4/concurrent, multi-host, reboot/power-loss, or general exactly-once qualification follows."
+  ],
+  "public_metadata_scope": "native_mcp_session_only",
+  "public_scope_checks_by_tool": {
+    "request_archive": 1388,
+    "request_history": 1392,
+    "usage_stats": 1388
+  },
+  "rounds": [
+    {
+      "archive_records": 64,
+      "arm": "A",
+      "exit_code": 0,
+      "file_map_sha256": "a3c3ca480593212a240165b2f852bb1a168aa898bb88b7f84cb420c8a6cb8a26",
+      "hot_records": 64,
+      "measured_tool_statistics": {
+        "request_archive": {
+          "calls": 341,
+          "max_ms": 18.493471,
+          "mean_ms": 9.607556653958945,
+          "p50_ms": 10.570374,
+          "p95_ms": 12.24803,
+          "p99_ms": 13.295772
+        },
+        "request_history": {
+          "calls": 341,
+          "max_ms": 6.764624,
+          "mean_ms": 3.924965337243402,
+          "p50_ms": 4.329233,
+          "p95_ms": 4.869752,
+          "p99_ms": 5.57287
+        },
+        "usage_stats": {
+          "calls": 342,
+          "max_ms": 9.818635,
+          "mean_ms": 5.484693666666667,
+          "p50_ms": 6.011683,
+          "p95_ms": 7.053156,
+          "p99_ms": 7.568383
+        }
+      },
+      "native_seed_ids_unique": 64,
+      "original_controller_reaped": true,
+      "original_maps_identical": true,
+      "original_snapshot_count": 4,
+      "public_projection_sha256": "9f6b0b87a584bee86b2888b9d94803014a84e6a331b7f7c9d15bd6b8eae1c57f",
+      "purpose_counts": {
+        "measured": 1024,
+        "postflight": 5,
+        "preflight": 5,
+        "seed": 64,
+        "warmup": 8
+      },
+      "round": 0,
+      "rpc_id_sequence_complete": true,
+      "shutdown_method": "stdin_eof",
+      "tool_dispatches": 1106,
+      "whole_round_waited_cpu_seconds": 7.154673,
+      "wire_request_lines": 1108,
+      "wire_response_lines": 1107,
+      "wire_rows_hash_and_identity_bound": true
+    },
+    {
+      "archive_records": 64,
+      "arm": "B",
+      "exit_code": 0,
+      "file_map_sha256": "7fcef1bbf221e8547bcb6d73719cbfdc393942c65dbce0fa72ba30c9656c83c4",
+      "hot_records": 64,
+      "measured_tool_statistics": {
+        "request_archive": {
+          "calls": 341,
+          "max_ms": 16.663583,
+          "mean_ms": 10.89428851026393,
+          "p50_ms": 11.435666,
+          "p95_ms": 12.476719,
+          "p99_ms": 15.306971
+        },
+        "request_history": {
+          "calls": 341,
+          "max_ms": 6.589322,
+          "mean_ms": 4.401456568914956,
+          "p50_ms": 4.608384,
+          "p95_ms": 4.966769,
+          "p99_ms": 5.863852
+        },
+        "usage_stats": {
+          "calls": 342,
+          "max_ms": 9.49484,
+          "mean_ms": 6.1623296432748536,
+          "p50_ms": 6.4054935,
+          "p95_ms": 7.095166,
+          "p99_ms": 8.424369
+        }
+      },
+      "native_seed_ids_unique": 64,
+      "original_controller_reaped": true,
+      "original_maps_identical": true,
+      "original_snapshot_count": 4,
+      "public_projection_sha256": "fe50b54b414e0ae80584db19849e72665fb8a7a45ed097a515a0711a111069e9",
+      "purpose_counts": {
+        "measured": 1024,
+        "postflight": 5,
+        "preflight": 5,
+        "seed": 64,
+        "warmup": 8
+      },
+      "round": 1,
+      "rpc_id_sequence_complete": true,
+      "shutdown_method": "stdin_eof",
+      "tool_dispatches": 1106,
+      "whole_round_waited_cpu_seconds": 7.882277,
+      "wire_request_lines": 1108,
+      "wire_response_lines": 1107,
+      "wire_rows_hash_and_identity_bound": true
+    },
+    {
+      "archive_records": 64,
+      "arm": "B",
+      "exit_code": 0,
+      "file_map_sha256": "c8986c0818d8579dd19d19dbead75e40db4f12e2af612f39fac59bcb72e111ff",
+      "hot_records": 64,
+      "measured_tool_statistics": {
+        "request_archive": {
+          "calls": 341,
+          "max_ms": 15.492289,
+          "mean_ms": 10.575330360703813,
+          "p50_ms": 11.408126,
+          "p95_ms": 12.345302,
+          "p99_ms": 12.836315
+        },
+        "request_history": {
+          "calls": 341,
+          "max_ms": 6.352421,
+          "mean_ms": 4.285733278592375,
+          "p50_ms": 4.560212,
+          "p95_ms": 4.950683,
+          "p99_ms": 5.270297
+        },
+        "usage_stats": {
+          "calls": 342,
+          "max_ms": 9.407298,
+          "mean_ms": 6.036881780701754,
+          "p50_ms": 6.379789000000001,
+          "p95_ms": 7.114655,
+          "p99_ms": 7.540318
+        }
+      },
+      "native_seed_ids_unique": 64,
+      "original_controller_reaped": true,
+      "original_maps_identical": true,
+      "original_snapshot_count": 4,
+      "public_projection_sha256": "bd8f4c7ae0160dfc1e0a887d07ceebc976afc01f9de4145a8e6c489bf197f5fd",
+      "purpose_counts": {
+        "measured": 1024,
+        "postflight": 5,
+        "preflight": 5,
+        "seed": 64,
+        "warmup": 8
+      },
+      "round": 2,
+      "rpc_id_sequence_complete": true,
+      "shutdown_method": "stdin_eof",
+      "tool_dispatches": 1106,
+      "whole_round_waited_cpu_seconds": 7.694203,
+      "wire_request_lines": 1108,
+      "wire_response_lines": 1107,
+      "wire_rows_hash_and_identity_bound": true
+    },
+    {
+      "archive_records": 64,
+      "arm": "A",
+      "exit_code": 0,
+      "file_map_sha256": "8a71ec2283ae4227f70ceb6247a140be35dd6ba9e476d687035829e379602420",
+      "hot_records": 64,
+      "measured_tool_statistics": {
+        "request_archive": {
+          "calls": 341,
+          "max_ms": 17.108521,
+          "mean_ms": 11.156680809384165,
+          "p50_ms": 11.883653,
+          "p95_ms": 12.409143,
+          "p99_ms": 13.107907
+        },
+        "request_history": {
+          "calls": 341,
+          "max_ms": 6.609358,
+          "mean_ms": 4.477592407624633,
+          "p50_ms": 4.748235,
+          "p95_ms": 5.010826,
+          "p99_ms": 6.019383
+        },
+        "usage_stats": {
+          "calls": 342,
+          "max_ms": 10.097144,
+          "mean_ms": 6.4563373976608185,
+          "p50_ms": 6.870329,
+          "p95_ms": 7.159526,
+          "p99_ms": 7.738262
+        }
+      },
+      "native_seed_ids_unique": 64,
+      "original_controller_reaped": true,
+      "original_maps_identical": true,
+      "original_snapshot_count": 4,
+      "public_projection_sha256": "3e190aaad4cb0e3d411c2467c59344fcf5f2445b93b6c39b2909660049943adb",
+      "purpose_counts": {
+        "measured": 1024,
+        "postflight": 5,
+        "preflight": 5,
+        "seed": 64,
+        "warmup": 8
+      },
+      "round": 3,
+      "rpc_id_sequence_complete": true,
+      "shutdown_method": "stdin_eof",
+      "tool_dispatches": 1106,
+      "whole_round_waited_cpu_seconds": 8.074902999999999,
+      "wire_request_lines": 1108,
+      "wire_response_lines": 1107,
+      "wire_rows_hash_and_identity_bound": true
+    }
+  ],
+  "schema": "hepta-x230-small-archive-independent-analysis/v1",
+  "scope": "One fixed A/B/B/A block; fresh native owners, 64 records per owner, hot C1 queries; two worker threads; no SSH."
+}

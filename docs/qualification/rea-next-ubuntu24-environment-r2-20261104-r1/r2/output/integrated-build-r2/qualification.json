@@ -1,0 +1,178 @@
+{
+  "schema": "hepta.rea.frozen-command-qualification.v1",
+  "root": "/home/qian-qi/work/hepta-rea-next-rog-20261104-r1",
+  "baseline_commit": "310add6db47bcfbed3545432eb528a72f5eb6dcd",
+  "runner_sha256": "f7f449dbcbd7705876c7cc953937411ad07d521117285db2159e646a1942dec1",
+  "started_unix_ms": 1793781419763,
+  "retry_count": 0,
+  "child_umask": "0022",
+  "commands": [
+    {
+      "name": "rust-version",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc",
+        "--version",
+        "--verbose"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 0.007,
+      "log": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2/00-rust-version.log",
+      "log_sha256": "4fdff2578428e9c5c08ddd7a0d3079c1a106b1cdaa46e73e46f7cd32b0fb9cad",
+      "log_bytes": 196
+    },
+    {
+      "name": "cargo-version",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "--version"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 0.003,
+      "log": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2/01-cargo-version.log",
+      "log_sha256": "c10ec31b8c6e6e2693cf65fc1971b41edbc3da1ae7db6f9f3f36c4823f8dcab5",
+      "log_bytes": 36
+    },
+    {
+      "name": "nextest-version",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "nextest",
+        "--version"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 0.018,
+      "log": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2/02-nextest-version.log",
+      "log_sha256": "f9bbf8f98ffb4c662e103de86c7afbec7f846fb9eb4b8cb7e5d5e9c05a06ee8e",
+      "log_bytes": 171
+    },
+    {
+      "name": "format",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 0.984,
+      "log": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2/03-format.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log_bytes": 0
+    },
+    {
+      "name": "check-all",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "check",
+        "--locked",
+        "--all-targets",
+        "--all-features"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 37.817,
+      "log": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2/04-check-all.log",
+      "log_sha256": "6fdd807abd0eda63be98aba5dac80665e16100b4e722d2853706c3cf90bc8c38",
+      "log_bytes": 9270
+    },
+    {
+      "name": "check-no-default",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "check",
+        "--locked",
+        "--all-targets",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 25.009,
+      "log": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2/05-check-no-default.log",
+      "log_sha256": "c8a1eec5ff831441303f0c5a130230d7b742d38d15d7ecac64b3becda0be9b28",
+      "log_bytes": 1425
+    },
+    {
+      "name": "clippy-all",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 22.967,
+      "log": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2/06-clippy-all.log",
+      "log_sha256": "7deb77be9e33426d17a8a12003e450cfe489b2df13f86faa1a1fa67d066202f4",
+      "log_bytes": 145
+    },
+    {
+      "name": "clippy-no-default",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--no-default-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 22.258,
+      "log": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2/07-clippy-no-default.log",
+      "log_sha256": "9e3f3296192d9f7a7217f80d8ab6bd942d913d611fd2f7c5f58b736e27d8f938",
+      "log_bytes": 145
+    },
+    {
+      "name": "test-all",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--all-targets",
+        "--all-features",
+        "--test-threads",
+        "1",
+        "--retries",
+        "0",
+        "--no-fail-fast"
+      ],
+      "exit_code": 100,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 297.996,
+      "log": "/home/qian-qi/work/hepta-rea-ubuntu24-matrix-20261104-r2/output/integrated-build-r2/08-test-all.log",
+      "log_sha256": "6e4222f249edc967cb9fd793c28ce9a1417f528ef550ae6224d96a368a24fadf",
+      "log_bytes": 295469
+    }
+  ],
+  "qualified": false,
+  "inputs": {
+    "source": {
+      "count": 295,
+      "sha256": "9d08a4cc6b6c89f4db47eb300af5e54dd44092082434c93b1dee954c30b2209a",
+      "after_sha256": "9d08a4cc6b6c89f4db47eb300af5e54dd44092082434c93b1dee954c30b2209a",
+      "unchanged": true
+    },
+    "verification": {
+      "count": 613,
+      "sha256": "b783c4f05a5c7f614ee7150ecc66bb4fe25f1cfd8ed548723e405e4612b6baa4",
+      "after_sha256": "b783c4f05a5c7f614ee7150ecc66bb4fe25f1cfd8ed548723e405e4612b6baa4",
+      "unchanged": true
+    }
+  },
+  "source_and_verification_unchanged": true,
+  "finished_unix_ms": 1793781826872,
+  "error": "command failed: test-all"
+}

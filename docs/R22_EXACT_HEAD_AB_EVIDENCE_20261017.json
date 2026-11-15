@@ -1,0 +1,104 @@
+{
+  "schema": "hepta-r22-git-head-perf-candidate-v1",
+  "source_commit_built": "72a455497564fc54e12cd27423b4f02ffbe5374e",
+  "candidate_binary_sha256": "71b12fb298bcd97b336132f6dbe31d15c153b91b432923b1f1b8507f61a192e2",
+  "baseline_binary_sha256": "7daff12a714f241c1a104f421e28246e89ea010642e5b06f8768f8676ef27d83",
+  "rustc": "1.95.0",
+  "cargo": "1.95.0",
+  "Cargo_lock_sha256": "32d432d501a74f7bb52a7c457c825321156ff1e07af8a67ff29e8585d01d93c9",
+  "build_receipt_sha256": "3fb280f9609f4e9e0a502688a3b98b0ae0618a12d8b7b7e08884fc1d1be55294",
+  "reports": [
+    {
+      "route": "ab-localhost-forward",
+      "physical_host_count": 1,
+      "baseline": {
+        "receipt_sha256": "9eea7aea11c620fc2e60e12262666dcd3a7b5736f4299cf73e3c22b08a4c6d5d",
+        "new_ms": 3445.49,
+        "cold_ms": 3291.33,
+        "hot_ms": 3329.6
+      },
+      "candidate": {
+        "receipt_sha256": "711e97b2283d7d9094e7aeea30ef20c7ae8a393a583069e8f31410d7d7f7b65c",
+        "new_ms": 866.77,
+        "cold_ms": 733.14,
+        "hot_ms": 617.73
+      },
+      "speedup": {
+        "new_ms": 3.98,
+        "cold_ms": 4.49,
+        "hot_ms": 5.39
+      },
+      "all_identity_cleanup_invariants": true
+    },
+    {
+      "route": "ab-localhost-reverse",
+      "physical_host_count": 1,
+      "baseline": {
+        "receipt_sha256": "d02947d9590b5cd521d918ac41e79ca7de6b362feb21e91a04d228b8a0f760ff",
+        "new_ms": 3446.42,
+        "cold_ms": 3334.53,
+        "hot_ms": 3185.22
+      },
+      "candidate": {
+        "receipt_sha256": "e2aa38afd9bed10e8f20513797eecc5c44c7ffae850070cc0adfb7c5815b8b90",
+        "new_ms": 913.59,
+        "cold_ms": 726.83,
+        "hot_ms": 658.53
+      },
+      "speedup": {
+        "new_ms": 3.77,
+        "cold_ms": 4.59,
+        "hot_ms": 4.84
+      },
+      "all_identity_cleanup_invariants": true
+    },
+    {
+      "route": "ab-sixphysical-forward",
+      "physical_host_count": 6,
+      "baseline": {
+        "receipt_sha256": "aa13e3f366fcf27d1cee56622d2982a36ace17e0eb6929833149023b90305129",
+        "new_ms": 9355.71,
+        "cold_ms": 2932.86,
+        "hot_ms": 2869.4
+      },
+      "candidate": {
+        "receipt_sha256": "8b6a421387bb3b182aa2e19dc044e8790247521626566de8a006cd46259bb52e",
+        "new_ms": 3036.75,
+        "cold_ms": 663.36,
+        "hot_ms": 589.92
+      },
+      "speedup": {
+        "new_ms": 3.08,
+        "cold_ms": 4.42,
+        "hot_ms": 4.86
+      },
+      "all_identity_cleanup_invariants": true
+    },
+    {
+      "route": "ab-sixphysical-reverse",
+      "physical_host_count": 6,
+      "baseline": {
+        "receipt_sha256": "494d2121bad7c52fbb3969d242a8ab5910f115ed7c7301cd67874f2dafe52c2c",
+        "new_ms": 2961.47,
+        "cold_ms": 2987.23,
+        "hot_ms": 2841.2
+      },
+      "candidate": {
+        "receipt_sha256": "203d363149d783826ec8023b6e40adf458574ee6f57e2e9f4dfad3a97cac9c80",
+        "new_ms": 733.43,
+        "cold_ms": 754.6,
+        "hot_ms": 702.22
+      },
+      "speedup": {
+        "new_ms": 4.04,
+        "cold_ms": 3.96,
+        "hot_ms": 4.05
+      },
+      "all_identity_cleanup_invariants": true
+    }
+  ],
+  "production_routing_changed": false,
+  "next_release_approved": false,
+  "provenance_statement": "Isolated A/B receipt; source Rust binary built from pinned commit; current PR child documentation commits do not rebuild the binary. Not an installed R22 production binary.",
+  "receipt_scope": "four paired results: two six-local-alias/single-physical and two six-distinct-physical SSH runs, 3000 synthetic rows, no production routing changes"
+}

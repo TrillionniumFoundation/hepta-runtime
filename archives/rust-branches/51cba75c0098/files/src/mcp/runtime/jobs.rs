@@ -1,0 +1,1381 @@
+use anyhow::{bail, Context, Result};
+use rmcp::schemars;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
+use std::fs::{File, OpenOptions};
+use std::hash::{Hash, Hasher};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::Mutex as AsyncMutex;
+
+use super::config::{check_environment, check_execution, runtime_config, valid_name};
+use super::ssh::run_python_json;
+
+static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+const START_LOCK_SHARDS: usize = 256;
+static START_LOCKS: OnceLock<Vec<AsyncMutex<()>>> = OnceLock::new();
+static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+const MAX_STDIN_BYTES: usize = 1024 * 1024;
+const MAX_LOG_READ_BYTES: u64 = 1024 * 1024;
+const MAX_JOB_RECORD_BYTES: u64 = 4 * 1024 * 1024;
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct ProcessStartParams {
+	/// Configured host name, never a raw SSH destination.
+	pub host: String,
+	/// Executable path or command name. Shell syntax is not accepted.
+	pub executable: String,
+	#[serde(default)]
+	pub args: Vec<String>,
+	#[serde(default)]
+	pub cwd: Option<String>,
+	#[serde(default)]
+	pub env: BTreeMap<String, String>,
+	/// Optional standard input written once at process start (max 1 MiB).
+	#[serde(default)]
+	pub stdin: Option<String>,
+	/// Optional process timeout. The remote supervisor terminates the process group.
+	#[serde(default)]
+	pub timeout_seconds: Option<u64>,
+	/// Mandatory stable operation key; retries of one exact host+request never launch twice.
+	#[schemars(required)]
+	pub idempotency_key: Option<String>,
+	/// Non-negative Unix nice adjustment, 0..19.
+	#[serde(default)]
+	pub nice: Option<u8>,
+	/// Optional transient systemd CPUQuota percentage, 1..1000.
+	#[serde(default)]
+	pub cpu_quota_percent: Option<u16>,
+	/// Optional transient systemd MemoryMax in bytes.
+	#[serde(default)]
+	pub memory_max_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct ProcessRefParams {
+	pub host: String,
+	pub job_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct ProcessReadParams {
+	pub host: String,
+	pub job_id: String,
+	#[serde(default)]
+	pub stdout_offset: Option<u64>,
+	#[serde(default)]
+	pub stderr_offset: Option<u64>,
+	/// Maximum bytes returned per stream, capped at 1 MiB.
+	#[serde(default)]
+	pub limit: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct ProcessWaitParams {
+	pub host: String,
+	pub job_id: String,
+	/// Maximum wait for this call, capped at 30 seconds.
+	#[serde(default)]
+	pub timeout_seconds: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct ProcessCancelParams {
+	pub host: String,
+	pub job_id: String,
+	/// Grace period before the fallback backend sends SIGKILL, capped at 30 seconds.
+	#[serde(default)]
+	pub grace_seconds: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct ProcessListParams {
+	#[serde(default)]
+	pub host: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct JobRecord {
+	id: String,
+	host: String,
+	ssh_target: String,
+	unit: String,
+	remote_job_dir: String,
+	executable: String,
+	args: Vec<String>,
+	cwd: Option<String>,
+	env_keys: Vec<String>,
+	created_unix_ms: u128,
+	idempotency_key: Option<String>,
+	request_fingerprint: u64,
+	/// Full, canonical SHA-256 request binding for collision-resistant idempotency.
+	/// Old records remain readable but cannot be automatically re-dispatched.
+	#[serde(default)]
+	request_digest: Option<String>,
+	#[serde(default = "default_launch_state")]
+	launch_state: String,
+	#[serde(default)]
+	launch_error: Option<String>,
+}
+
+fn default_launch_state() -> String {
+	"launched".to_string()
+}
+
+fn start_lock(host: &str, key: Option<&str>) -> &'static AsyncMutex<()> {
+	// Only requests sharing the same host and idempotency key must be serialized.
+	// Fixed sharding bounds lock memory and avoids global remote-launch head-of-line blocking.
+	let locks = START_LOCKS.get_or_init(|| {
+		(0..START_LOCK_SHARDS).map(|_| AsyncMutex::new(())).collect()
+	});
+	let mut hasher = std::collections::hash_map::DefaultHasher::new();
+	host.hash(&mut hasher);
+	key.hash(&mut hasher);
+	&locks[(hasher.finish() as usize) % START_LOCK_SHARDS]
+}
+
+fn now_ms() -> u128 {
+	SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap_or_default()
+		.as_millis()
+}
+
+fn next_job_id() -> String {
+	let seq = JOB_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+	format!("{:x}-{:x}-{:x}", now_ms(), std::process::id(), seq)
+}
+
+fn jobs_dir() -> Result<PathBuf> {
+	let path = runtime_config()?.state_dir.join("jobs");
+	std::fs::create_dir_all(&path)?;
+	Ok(path)
+}
+
+fn record_path(id: &str) -> Result<PathBuf> {
+	if !valid_name(id) {
+		bail!("invalid job id `{id}`");
+	}
+	Ok(jobs_dir()?.join(format!("{id}.json")))
+}
+
+fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
+	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
+	let bytes = serde_json::to_vec_pretty(record)?;
+	// The durable identity must remain readable by the bounded recovery path.
+	// Reject an oversized request before creating a receipt or remote effect.
+	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
+		bail!("durable job record exceeds {} bytes", MAX_JOB_RECORD_BYTES);
+	}
+	#[cfg(unix)]
+	let mut file = {
+		use std::os::unix::fs::OpenOptionsExt;
+		OpenOptions::new()
+			.create_new(true)
+			.write(true)
+			.mode(0o600)
+			.open(&tmp)?
+	};
+	#[cfg(not(unix))]
+	let mut file = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+	file.write_all(&bytes)?;
+	// The identity must be durable before an external process can be launched.
+	file.sync_all()?;
+	drop(file);
+	std::fs::rename(&tmp, path)?;
+	#[cfg(unix)]
+	if let Some(parent) = path.parent() {
+		File::open(parent)?.sync_all()?;
+	}
+	Ok(())
+}
+
+fn save_record(record: &JobRecord) -> Result<()> {
+	save_record_at(&record_path(&record.id)?, record)
+}
+
+fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
+	// A symlink or a mismatched identity is not a usable effect-owner receipt.
+	let metadata = std::fs::symlink_metadata(path)
+		.with_context(|| format!("cannot stat durable job record {}", path.display()))?;
+	if !metadata.file_type().is_file() {
+		bail!("unsafe durable job record type: {}", path.display());
+	}
+	let mut options = OpenOptions::new();
+	options.read(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.custom_flags(libc::O_NOFOLLOW);
+	}
+	// Recheck the opened file, not only the pathname inspected above:
+	// a concurrent symlink swap must never redirect a credentialed read.
+	let file = options
+		.open(path)
+		.with_context(|| format!("cannot open durable job record {}", path.display()))?;
+	let opened = file.metadata()?;
+	if !opened.is_file() || opened.len() > MAX_JOB_RECORD_BYTES {
+		bail!("invalid or oversized durable job record: {}", path.display());
+	}
+	let mut bytes = Vec::new();
+	let mut bounded = file.take(MAX_JOB_RECORD_BYTES + 1);
+	bounded.read_to_end(&mut bytes)?;
+	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
+		bail!("oversized durable job record: {}", path.display());
+	}
+	let record: JobRecord = serde_json::from_slice(&bytes)
+		.with_context(|| format!("corrupt durable job record {}", path.display()))?;
+	if record.id != expected_id {
+		bail!("durable job filename/identity mismatch: {}", path.display());
+	}
+	Ok(record)
+}
+
+fn load_record(id: &str) -> Result<JobRecord> {
+	read_record_at(&record_path(id)?, id)
+		.with_context(|| format!("unknown or invalid durable job `{id}`"))
+}
+
+fn scan_records_dir(dir: &Path) -> Result<Vec<JobRecord>> {
+	let mut records = Vec::new();
+	for entry in std::fs::read_dir(dir)? {
+		let entry = entry?;
+		let path = entry.path();
+		if path.extension().and_then(|s| s.to_str()) != Some("json") {
+			continue;
+		}
+		// A corrupt/unreadable record might be the owner of an idempotency key.
+		// Skipping it would allow a second physical launch after a restart.
+		let expected_id = path
+			.file_stem()
+			.and_then(|stem| stem.to_str())
+			.ok_or_else(|| anyhow::anyhow!("invalid durable job record name: {}", path.display()))?;
+		records.push(read_record_at(&path, expected_id)?);
+	}
+	records.sort_by_key(|record| record.created_unix_ms);
+	Ok(records)
+}
+
+fn all_records() -> Result<Vec<JobRecord>> {
+	scan_records_dir(&jobs_dir()?)
+}
+
+fn select_idempotent_record(
+	records: impl IntoIterator<Item = JobRecord>,
+	host: &str,
+	key: &str,
+) -> Result<Option<JobRecord>> {
+	let mut selected = None;
+	for record in records {
+		if record.host == host && record.idempotency_key.as_deref() == Some(key) {
+			// Historical duplicate owners cannot be resolved by selecting the oldest
+			// record. The external effect may already have run from either record.
+			if selected.is_some() {
+				bail!("multiple durable owners for one idempotency key; reconcile before reuse");
+			}
+			selected = Some(record);
+		}
+	}
+	Ok(selected)
+}
+
+fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
+	select_idempotent_record(all_records()?, host, key)
+}
+
+fn request_digest(params: &ProcessStartParams) -> (u64, String) {
+	let binding = json!({
+		"host": params.host,
+		"executable": params.executable,
+		"args": params.args,
+		"cwd": params.cwd,
+		"env": params.env,
+		"stdin": params.stdin,
+		"timeout_seconds": params.timeout_seconds,
+		"nice": params.nice,
+		"cpu_quota_percent": params.cpu_quota_percent,
+		"memory_max_bytes": params.memory_max_bytes,
+	});
+	let bytes = serde_json::to_vec(&binding).expect("process binding serializes");
+	let digest = Sha256::digest(bytes);
+	let legacy = u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"));
+	(legacy, format!("{digest:x}"))
+}
+
+#[cfg(test)]
+fn fingerprint(params: &ProcessStartParams) -> u64 {
+	request_digest(params).0
+}
+
+fn verify_reuse_binding(
+	existing: &JobRecord,
+	key: &str,
+	legacy_fingerprint: u64,
+	full_digest: &str,
+) -> Result<()> {
+	// Old 64-bit-only records remain inspectable, but do not establish a
+	// collision-resistant authorization to restart a physical process.
+	if existing.request_digest.is_none() {
+		bail!("legacy idempotency record lacks full request binding; reconcile without replay");
+	}
+	if existing.request_fingerprint != legacy_fingerprint
+		|| existing.request_digest.as_deref() != Some(full_digest)
+	{
+		bail!("idempotency key `{key}` is already bound to a different request");
+	}
+	Ok(())
+}
+
+fn admit_observation_only_reuse(record: &JobRecord) -> Result<()> {
+	match record.launch_state.as_str() {
+		"launched" => Ok(()),
+		"pending" | "launch_failed" => bail!(
+			"durable launch outcome indeterminate: reconcile original remote effect without replay"
+		),
+		_ => bail!("unknown durable job launch state; no replay permitted"),
+	}
+}
+
+fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
+	let record = load_record(&params.job_id)?;
+	if record.host != params.host {
+		bail!(
+			"job `{}` belongs to host `{}`, not `{}`",
+			params.job_id,
+			record.host,
+			params.host
+		);
+	}
+	Ok(record)
+}
+
+// Persisted operations must never silently follow a host alias that was
+// remapped to another SSH identity or remote job root after controller restart.
+// The record remains readable for independent reconciliation, but cannot drive
+// a remote status, log read, cancellation, or retry under the new mapping.
+fn verify_host_binding(
+	record: &JobRecord,
+	configured_target: &str,
+	configured_state_dir: &str,
+) -> Result<()> {
+	let expected_job_dir = format!(
+		"{}/jobs/{}",
+		configured_state_dir.trim_end_matches('/'),
+		record.id
+	);
+	if record.ssh_target != configured_target || record.remote_job_dir != expected_job_dir {
+		bail!("durable job host binding changed; remote operation requires independent reconciliation");
+	}
+	Ok(())
+}
+
+fn bound_host(record: &JobRecord) -> Result<&'static super::config::HostConfig> {
+	let host = runtime_config()?.host(&record.host)?;
+	verify_host_binding(record, &host.ssh_target, &host.remote_state_dir)?;
+	Ok(host)
+}
+
+// Open the audit sink through a private regular file descriptor, not a path
+// that a symlink can redirect to an unrelated file or credential.
+fn open_audit_append(path: &Path) -> Result<File> {
+	let mut options = OpenOptions::new();
+	options.create(true).append(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+	}
+	let file = options.open(path)?;
+	let metadata = file.metadata()?;
+	if !metadata.is_file() {
+		bail!("audit sink is not a regular file: {}", path.display());
+	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::{MetadataExt, PermissionsExt};
+		if metadata.nlink() != 1 {
+			bail!("audit sink must not be hard-linked: {}", path.display());
+		}
+		// The prior release created audit files using the caller's umask.
+		// Tighten a regular, independently opened file descriptor during upgrade
+		// rather than breaking every audit operation on legacy mode 0644.
+		if metadata.permissions().mode() & 0o077 != 0 {
+			file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+			if file.metadata()?.permissions().mode() & 0o077 != 0 {
+				bail!("audit sink must be owner-private: {}", path.display());
+			}
+		}
+	}
+	Ok(file)
+}
+
+// Only fixed, non-user-authored status fields belong in the persistent audit.
+// Raw process arguments, stdout/stderr, remote errors and privileged command
+// output may contain credentials. A JSONL file with mode 0600 is not a secret
+// store; do not persist these values even behind a private file descriptor.
+// This record is an operational trace, NOT an independent signed effect receipt.
+fn redacted_audit_outcome(outcome: &Value) -> Value {
+	const SAFE_STATES: &[&str] = &[
+		"pending",
+		"running",
+		"succeeded",
+		"failed",
+		"cancelled",
+		"interrupted",
+		"lost",
+		"completed_unknown",
+		"finalizing",
+		"indeterminate",
+		"rejected",
+		"overloaded",
+		"unknown",
+		"status_error",
+		"activating",
+	];
+	let state = outcome
+		.get("state")
+		.or_else(|| outcome.get("status").and_then(|status| status.get("state")))
+		.and_then(Value::as_str)
+		.filter(|state| SAFE_STATES.contains(state));
+	// The approved privileged-action helper can return only a numeric exit
+	// status as useful operational evidence; never retain its text streams.
+	let exit_code = outcome
+		.get("exit_code")
+		.and_then(Value::as_i64)
+		.filter(|code| (-255..=255).contains(code));
+	let ok = outcome
+		.get("ok")
+		.and_then(Value::as_bool)
+		.or_else(|| {
+			outcome
+				.get("launch")
+				.and_then(|launch| launch.get("ok"))
+				.and_then(Value::as_bool)
+		})
+		.or_else(|| exit_code.map(|code| code == 0));
+	json!({
+		"redacted": true,
+		"ok": ok,
+		"state": state,
+		"exit_code": exit_code,
+	})
+}
+
+pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) -> Result<()> {
+	let path = runtime_config()?.state_dir.join("audit/events.jsonl");
+	if let Some(parent) = path.parent() {
+		std::fs::create_dir_all(parent)?;
+	}
+	let event = json!({
+		"at_unix_ms": now_ms(),
+		"action": action,
+		"host": host,
+		"subject": subject,
+		"outcome": redacted_audit_outcome(outcome),
+	});
+	let _guard = AUDIT_LOCK
+		.get_or_init(|| Mutex::new(()))
+		.lock()
+		.map_err(|_| anyhow::anyhow!("audit lock poisoned"))?;
+	let mut line = serde_json::to_vec(&event)?;
+	line.push(b'\n');
+	let mut file = open_audit_append(&path)?;
+	file.write_all(&line)?;
+	file.sync_data()?;
+	Ok(())
+}
+
+const START_CODE: &str = r#"
+import json, os, pathlib, shutil, subprocess, sys, time
+req = json.load(sys.stdin)
+job = pathlib.Path(req["job_dir"])
+job.mkdir(parents=True, exist_ok=True)
+os.chmod(job, 0o700)
+
+def read_json(name):
+    target = job / name
+    if target.is_symlink():
+        raise SystemExit(f"unsafe remote job state symlink: {name}")
+    try:
+        value = json.loads(target.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except Exception as exc:
+        raise SystemExit(f"corrupt remote job state {name}: {exc}")
+    if not isinstance(value, dict):
+        raise SystemExit(f"invalid remote job state object: {name}")
+    return value
+
+def atomic(name, value):
+    target = job / name
+    tmp = job / (name + ".tmp")
+    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, target)
+
+stdin_text = req.pop("stdin", None)
+existing = read_json("request.json")
+if existing is not None:
+    if (existing.get("job_id") != req.get("job_id")
+            or existing.get("request_fingerprint") != req.get("request_fingerprint")
+            or not req.get("request_digest")
+            or existing.get("request_digest") != req.get("request_digest")):
+        raise SystemExit("remote job directory is bound to a different request")
+    launch = read_json("launch.json")
+    exit_data = read_json("exit.json")
+    started = read_json("started.json")
+    if exit_data is not None:
+        print(json.dumps({"ok": True, "reused_remote": True, "backend": "completed"}, sort_keys=True))
+        raise SystemExit(0)
+    if launch is not None:
+        if launch.get("backend") not in ("systemd", "detached"):
+            raise SystemExit("prior remote launch failed or has unknown backend; reconcile before retry")
+        print(json.dumps({"ok": True, "reused_remote": True, **launch}, sort_keys=True))
+        raise SystemExit(0)
+    if started is not None:
+        raise SystemExit("ambiguous prior launch: supervisor started without launch record")
+    # A request may have crossed the remote dispatch boundary before the
+    # controller lost its acknowledgement. Never infer 'not started' from
+    # missing launch metadata; a later launch would risk a duplicate effect.
+    raise SystemExit("ambiguous prior launch: request exists without terminal evidence")
+else:
+    # Missing request.json does not establish non-execution: a prior controller
+    # may have lost its durable request or encountered remote state corruption.
+    # Never overwrite evidence of a prior effect under the same job identity.
+    for name in ("launch.json", "started.json", "exit.json", "child.json", "runner.py", "stdin.bin"):
+        path = job / name
+        if path.exists() or path.is_symlink():
+            raise SystemExit("orphaned remote job state without request.json; reconcile before launch")
+    if stdin_text is not None:
+        stdin_path = job / "stdin.bin"
+        stdin_path.write_bytes(stdin_text.encode("utf-8"))
+        os.chmod(stdin_path, 0o600)
+        req["stdin_path"] = str(stdin_path)
+    atomic("request.json", req)
+runner = r'''#!/usr/bin/env python3
+import json, os, pathlib, shutil, signal, subprocess, sys, time
+job = pathlib.Path(__file__).resolve().parent
+req = json.loads((job / "request.json").read_text(encoding="utf-8"))
+
+def atomic(name, value):
+    target = job / name
+    tmp = job / (name + ".tmp")
+    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, target)
+
+def process_identity(pid):
+    try:
+        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().split()[21])
+        return {"kind": "proc_start_ticks", "value": str(ticks)}
+    except Exception:
+        pass
+    try:
+        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True).strip()
+        return {"kind": "ps_lstart", "value": value} if value else None
+    except Exception:
+        return None
+
+os.umask(0o077)
+child = None
+cancel_requested = False
+
+def stop_handler(signum, _frame):
+    global cancel_requested
+    cancel_requested = True
+    if child is not None and child.poll() is None:
+        try:
+            os.killpg(child.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+signal.signal(signal.SIGTERM, stop_handler)
+signal.signal(signal.SIGINT, stop_handler)
+if req.get("nice"):
+    try:
+        os.nice(int(req["nice"]))
+    except OSError:
+        pass
+atomic("started.json", {
+    "at_unix_ms": int(time.time() * 1000),
+    "supervisor_pid": os.getpid(),
+    "supervisor_identity": process_identity(os.getpid()),
+})
+out = open(job / "stdout.log", "ab", buffering=0)
+err = open(job / "stderr.log", "ab", buffering=0)
+stdin_handle = subprocess.DEVNULL
+if req.get("stdin_path"):
+    stdin_handle = open(req["stdin_path"], "rb", buffering=0)
+env = os.environ.copy()
+env.update(req.get("env", {}))
+env["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
+try:
+    child = subprocess.Popen(
+        [req["executable"], *req.get("args", [])],
+        cwd=req.get("cwd") or None,
+        env=env,
+        stdin=stdin_handle,
+        stdout=out,
+        stderr=err,
+        start_new_session=True,
+    )
+    atomic("child.json", {
+        "pid": child.pid,
+        "identity": process_identity(child.pid),
+    })
+except Exception as exc:
+    atomic("exit.json", {
+        "at_unix_ms": int(time.time() * 1000),
+        "exit_code": 127,
+        "launch_error": str(exc),
+        "cancelled": False,
+        "timed_out": False,
+    })
+    print(str(exc), file=err, flush=True)
+    raise SystemExit(127)
+
+timed_out = False
+try:
+    timeout = req.get("timeout_seconds")
+    rc = child.wait(timeout=float(timeout) if timeout else None)
+except subprocess.TimeoutExpired:
+    timed_out = True
+    try:
+        os.killpg(child.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        rc = child.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        rc = child.wait()
+    rc = 124
+atomic("exit.json", {
+    "at_unix_ms": int(time.time() * 1000),
+    "exit_code": int(rc),
+    "cancelled": bool(cancel_requested),
+    "timed_out": bool(timed_out),
+})
+raise SystemExit(int(rc) if 0 <= int(rc) <= 255 else 1)
+'''
+runner_path = job / "runner.py"
+runner_path.write_text(runner, encoding="utf-8")
+os.chmod(runner_path, 0o700)
+uid = os.getuid()
+env = os.environ.copy()
+env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus")
+cmd = [
+    "systemd-run", "--user", "--quiet", "--collect",
+    "--unit", req["unit"],
+    "--property", "KillMode=control-group",
+    "--property", "TimeoutStopSec=10s",
+    "--property", f"Description=Hepta Runtime job {req['job_id']}",
+]
+if req.get("cpu_quota_percent"):
+    cmd += ["--property", f"CPUQuota={int(req['cpu_quota_percent'])}%"]
+if req.get("memory_max_bytes"):
+    cmd += ["--property", f"MemoryMax={int(req['memory_max_bytes'])}"]
+if req.get("nice"):
+    cmd += ["--property", f"Nice={int(req['nice'])}"]
+cmd += ["--property", "NoNewPrivileges=yes", "--property", "RestrictSUIDSGID=yes"]
+if not req.get("allow_job_network", False):
+    cmd += ["--property", "PrivateNetwork=yes", "--property", "RestrictAddressFamilies=AF_UNIX AF_NETLINK"]
+cmd += ["--", sys.executable, str(runner_path)]
+if req.get("platform", "linux") == "linux" and shutil.which("systemd-run"):
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+else:
+    result = subprocess.CompletedProcess(cmd, 127, "", "systemd user units unavailable on this platform")
+if result.returncode == 0:
+    launch = {"backend": "systemd", "unit": req["unit"], "launcher_pid": None}
+else:
+    if not req.get("allow_detached_fallback", False):
+        atomic("launch.json", {
+            "backend": "launch_failed",
+            "unit": req["unit"],
+            "systemd_error": result.stderr.strip(),
+        })
+        print(result.stderr.strip(), file=sys.stderr)
+        raise SystemExit(result.returncode or 1)
+    process = subprocess.Popen(
+        [sys.executable, str(runner_path)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        close_fds=True,
+        env=env,
+    )
+    launch = {
+        "backend": "detached",
+        "unit": req["unit"],
+        "launcher_pid": process.pid,
+        "systemd_error": result.stderr.strip(),
+    }
+atomic("launch.json", launch)
+print(json.dumps({"ok": True, **launch}, sort_keys=True))
+"#;
+
+const STATUS_CODE: &str = r#"
+import json, os, pathlib, stat, subprocess, sys, time
+q = json.load(sys.stdin)
+job = pathlib.Path(q["job_dir"])
+
+# Pin the original remote job directory; never follow symlinks in its ancestry.
+def open_bound_directory(path):
+    if not path.is_absolute() or ".." in path.parts:
+        raise SystemExit("unsafe remote job directory path")
+    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for component in path.parts[1:]:
+            next_descriptor = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                      dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        metadata = os.fstat(descriptor)
+        if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
+            raise SystemExit("remote job directory must be owner-private")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+directory = open_bound_directory(job)
+
+# A missing optional state is distinct from a corrupt, aliased or linked inode.
+# A forged exit.json must never turn an unknown remote effect into success.
+def read_json(name, required=False):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    except FileNotFoundError:
+        if required:
+            raise SystemExit(f"remote job state missing: {name}")
+        return None
+    except OSError as exc:
+        raise SystemExit(f"unsafe remote job file {name}: {exc}")
+    with os.fdopen(fd, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
+                or metadata.st_size > 4 * 1024 * 1024):
+            raise SystemExit(f"unsafe remote job file {name}: non-regular, linked or oversized inode")
+        contents = source.read(4 * 1024 * 1024 + 1)
+    if len(contents) > 4 * 1024 * 1024:
+        raise SystemExit(f"oversized remote job file: {name}")
+    try:
+        value = json.loads(contents)
+    except (UnicodeError, ValueError) as exc:
+        raise SystemExit(f"corrupt remote job file {name}: {exc}")
+    if not isinstance(value, dict):
+        raise SystemExit(f"invalid remote job object: {name}")
+    return value
+
+def process_identity(pid):
+    try:
+        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().split()[21])
+        return {"kind": "proc_start_ticks", "value": str(ticks)}
+    except Exception:
+        pass
+    try:
+        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True).strip()
+        return {"kind": "ps_lstart", "value": value} if value else None
+    except Exception:
+        return None
+
+def final_status(exit_data):
+    if exit_data.get("timed_out"):
+        state = "timed_out"
+    elif exit_data.get("cancelled"):
+        state = "cancelled"
+    elif int(exit_data.get("exit_code", -1)) == 0:
+        state = "succeeded"
+    else:
+        state = "failed"
+    return {"state": state, **exit_data}
+
+def one_status():
+    request = read_json("request.json", True)
+    # A job ID alone does not bind the observed remote state to the original effect.
+    if (not isinstance(request, dict)
+            or request.get("job_id") != q.get("job_id")
+            or request.get("job_dir") != q.get("job_dir")
+            or request.get("unit") != q.get("unit")
+            or request.get("request_digest") != q.get("request_digest")
+            or not isinstance(q.get("request_digest"), str)
+            or len(q["request_digest"]) != 64):
+        raise SystemExit("remote job request binding missing or mismatched")
+    exit_data = read_json("exit.json")
+    if exit_data:
+        return final_status(exit_data)
+    launch = read_json("launch.json") or {}
+    if launch.get("backend") == "systemd":
+        uid = os.getuid()
+        env = os.environ.copy()
+        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+        env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus")
+        p = subprocess.run(
+            ["systemctl", "--user", "show", q["unit"], "--no-pager",
+             "--property=LoadState,ActiveState,SubState,Result,ExecMainPID,ExecMainCode,ExecMainStatus"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        props = {}
+        for line in p.stdout.splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1); props[k] = v
+        # A --collect unit can disappear immediately after the runner exits.
+        # Re-read the atomic exit record after querying systemd to close that race.
+        exit_data = read_json("exit.json")
+        if exit_data:
+            return final_status(exit_data)
+        active = props.get("ActiveState")
+        sub = props.get("SubState")
+        if active in ("active", "activating") and sub not in ("exited", "dead"):
+            state = "running"
+        elif active == "failed":
+            state = "failed"
+        elif active == "active" and sub == "exited":
+            # RemainAfterExit can become visible a few microseconds before the
+            # supervisor's atomic exit.json rename. systemd already has the
+            # authoritative process result, so use it rather than returning a
+            # false completed_unknown race.
+            try:
+                exit_code = int(props.get("ExecMainStatus", "-1"))
+            except ValueError:
+                exit_code = -1
+            if props.get("ExecMainCode") == "1":
+                state = "succeeded" if exit_code == 0 else "failed"
+                return {"state": state, "backend": "systemd", "exit_code": exit_code, "systemd": props}
+            state = "completed_unknown"
+        elif props.get("LoadState") == "not-found":
+            state = "finalizing"
+        else:
+            state = active or "unknown"
+        return {"state": state, "backend": "systemd", "systemd": props}
+    started = read_json("started.json") or {}
+    pid = int(started.get("supervisor_pid") or launch.get("launcher_pid") or 0)
+    expected = started.get("supervisor_identity")
+    actual = process_identity(pid) if pid else None
+    running = bool(pid and actual is not None and (expected is None or expected == actual))
+    return {"state": "running" if running else "lost", "backend": launch.get("backend", "detached"), "pid": pid, "identity": actual}
+
+deadline = time.monotonic() + min(float(q.get("wait_seconds", 0)), 30.0)
+while True:
+    status = one_status()
+    state = status.get("state")
+    transient = state in ("running", "activating", "finalizing", "completed_unknown")
+    now = time.monotonic()
+    if not transient or now >= deadline:
+        if now >= deadline and state in ("finalizing", "completed_unknown"):
+            status["state"] = "lost"
+            status["reason"] = "no exit record appeared before the wait deadline"
+        status["job_id"] = q["job_id"]
+        print(json.dumps(status, sort_keys=True))
+        break
+    time.sleep(0.1)
+"#;
+
+const READ_CODE: &str = r#"
+import json, os, pathlib, stat, sys
+q = json.load(sys.stdin)
+job = pathlib.Path(q["job_dir"])
+
+# Pin the target directory inode without following symlinked components.
+def open_bound_directory(path):
+    if not path.is_absolute() or ".." in path.parts:
+        raise SystemExit("unsafe remote job directory path")
+    directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for component in path.parts[1:]:
+            next_fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                              dir_fd=directory)
+            os.close(directory)
+            directory = next_fd
+        return directory
+    except OSError as exc:
+        os.close(directory)
+        raise SystemExit(f"unsafe remote job directory: {exc}")
+
+directory = open_bound_directory(job)
+
+def open_regular(name, required):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                     dir_fd=directory)
+    except FileNotFoundError:
+        if required:
+            raise SystemExit("remote job metadata missing")
+        return None
+    except OSError as exc:
+        raise SystemExit(f"unsafe remote job file {name}: {exc}")
+    metadata = os.fstat(fd)
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+        os.close(fd)
+        raise SystemExit(f"unsafe remote job file {name}: non-regular or linked inode")
+    return fd, metadata.st_size
+
+try:
+    fd, size = open_regular("request.json", True)
+    with os.fdopen(fd, "rb") as source:
+        encoded = source.read(4 * 1024 * 1024 + 1)
+    if size > 4 * 1024 * 1024 or len(encoded) > 4 * 1024 * 1024:
+        raise SystemExit("oversized remote job metadata")
+    request = json.loads(encoded)
+except (ValueError, UnicodeError):
+    raise SystemExit("invalid remote job metadata")
+
+if (not isinstance(request, dict)
+        or request.get("job_id") != q.get("job_id")
+        or request.get("job_dir") != q.get("job_dir")
+        or request.get("unit") != q.get("unit")
+        or request.get("request_digest") != q.get("request_digest")
+        or not isinstance(q.get("request_digest"), str)
+        or len(q["request_digest"]) != 64):
+    raise SystemExit("remote job request binding missing or mismatched")
+limit = max(1, min(int(q.get("limit", 65536)), 1048576))
+
+def read_part(name, offset):
+    opened = open_regular(name, False)
+    if opened is None:
+        size, data, offset = 0, b"", 0
+    else:
+        fd, size = opened
+        offset = min(max(0, int(offset or 0)), size)
+        with os.fdopen(fd, "rb") as stream:
+            stream.seek(offset)
+            data = stream.read(limit)
+    return {
+        "offset": offset,
+        "next_offset": offset + len(data),
+        "size": size,
+        "eof": offset + len(data) >= size,
+        "text": data.decode("utf-8", errors="replace"),
+    }
+
+try:
+    print(json.dumps({
+        "job_id": q["job_id"],
+        "stdout": read_part("stdout.log", q.get("stdout_offset", 0)),
+        "stderr": read_part("stderr.log", q.get("stderr_offset", 0)),
+    }, sort_keys=True))
+finally:
+    os.close(directory)
+"#;
+
+const CANCEL_CODE: &str = r#"
+import json, os, pathlib, signal, stat, subprocess, sys, time
+q = json.load(sys.stdin)
+job = pathlib.Path(q["job_dir"])
+
+# Pin the original remote job directory; never follow symlinks in its ancestry.
+def open_bound_directory(path):
+    if not path.is_absolute() or ".." in path.parts:
+        raise SystemExit("unsafe remote job directory path")
+    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for component in path.parts[1:]:
+            next_descriptor = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                      dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        metadata = os.fstat(descriptor)
+        if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
+            raise SystemExit("remote job directory must be owner-private")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+directory = open_bound_directory(job)
+
+# A missing optional state is distinct from a corrupt, aliased or linked inode.
+# A forged exit.json must never turn an unknown remote effect into success.
+def read_json(name, required=False):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    except FileNotFoundError:
+        if required:
+            raise SystemExit(f"remote job state missing: {name}")
+        return None
+    except OSError as exc:
+        raise SystemExit(f"unsafe remote job file {name}: {exc}")
+    with os.fdopen(fd, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
+                or metadata.st_size > 4 * 1024 * 1024):
+            raise SystemExit(f"unsafe remote job file {name}: non-regular, linked or oversized inode")
+        contents = source.read(4 * 1024 * 1024 + 1)
+    if len(contents) > 4 * 1024 * 1024:
+        raise SystemExit(f"oversized remote job file: {name}")
+    try:
+        value = json.loads(contents)
+    except (UnicodeError, ValueError) as exc:
+        raise SystemExit(f"corrupt remote job file {name}: {exc}")
+    if not isinstance(value, dict):
+        raise SystemExit(f"invalid remote job object: {name}")
+    return value
+
+def atomic(name, value):
+    # Write only through the verified, pinned directory descriptor.
+    temp_name = f".{name}.{os.getpid()}.{time.monotonic_ns()}.tmp"
+    contents = (json.dumps(value, sort_keys=True) + "\n").encode("utf-8")
+    fd = os.open(temp_name, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
+                 0o600, dir_fd=directory)
+    try:
+        with os.fdopen(fd, "wb") as sink:
+            sink.write(contents)
+            sink.flush()
+            os.fsync(sink.fileno())
+        os.replace(temp_name, name, src_dir_fd=directory, dst_dir_fd=directory)
+        os.fsync(directory)
+    except BaseException:
+        try:
+            os.unlink(temp_name, dir_fd=directory)
+        except FileNotFoundError:
+            pass
+        raise
+
+def process_identity(pid):
+    try:
+        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().split()[21])
+        return {"kind": "proc_start_ticks", "value": str(ticks)}
+    except Exception:
+        pass
+    try:
+        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True).strip()
+        return {"kind": "ps_lstart", "value": value} if value else None
+    except Exception:
+        return None
+
+def command_line(pid):
+    try:
+        return pathlib.Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+    except Exception:
+        try:
+            return subprocess.check_output(["ps", "-p", str(pid), "-o", "command="], text=True).strip()
+        except Exception:
+            return ""
+
+request = read_json("request.json", True)
+# Cancellation must never act on a job directory merely matching its job ID.
+if (not isinstance(request, dict)
+        or request.get("job_id") != q.get("job_id")
+        or request.get("job_dir") != q.get("job_dir")
+        or request.get("unit") != q.get("unit")
+        or request.get("request_digest") != q.get("request_digest")
+        or not isinstance(q.get("request_digest"), str)
+        or len(q["request_digest"]) != 64):
+    raise SystemExit("remote job request binding missing or mismatched")
+if read_json("exit.json"):
+    print(json.dumps({"job_id": q["job_id"], "result": "already_exited"}))
+    raise SystemExit(0)
+launch = read_json("launch.json") or {}
+if launch.get("backend") not in ("systemd", "detached"):
+    raise SystemExit("remote launch backend missing or unknown; cancel requires reconciliation")
+grace = max(0.0, min(float(q.get("grace_seconds", 10)), 30.0))
+result = "not_running"
+if launch.get("backend") == "systemd":
+    atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000)})
+    uid = os.getuid()
+    env = os.environ.copy()
+    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+    env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus")
+    p = subprocess.run(["systemctl", "--user", "stop", q["unit"]], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    result = "stop_requested" if p.returncode == 0 else "stop_failed"
+    if p.returncode != 0:
+        print(json.dumps({"job_id": q["job_id"], "result": result, "stderr": p.stderr.strip()}))
+        raise SystemExit(1)
+else:
+    started = read_json("started.json") or {}
+    pid = int(started.get("supervisor_pid") or launch.get("launcher_pid") or 0)
+    expected = started.get("supervisor_identity")
+    actual = process_identity(pid) if pid else None
+    cmdline = command_line(pid) if pid else ""
+    valid = bool(pid and isinstance(expected, dict) and actual == expected
+                 and str(job / "runner.py") in cmdline)
+    if not valid:
+        raise SystemExit("refusing to signal PID: ownership verification failed")
+    atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000)})
+    try:
+        os.killpg(pid, signal.SIGTERM)
+        result = "term_sent"
+    except ProcessLookupError:
+        result = "not_running"
+    deadline = time.monotonic() + grace
+    while time.monotonic() < deadline:
+        if read_json("exit.json") or not command_line(pid):
+            break
+        time.sleep(0.2)
+    # A process group can disappear and be recycled during the grace period.
+    # Recheck both identity and command before escalating.
+    if (process_identity(pid) == expected and str(job / "runner.py") in command_line(pid)
+            and not read_json("exit.json")):
+        try:
+            os.killpg(pid, signal.SIGKILL)
+            result = "kill_sent"
+        except ProcessLookupError:
+            pass
+print(json.dumps({"job_id": q["job_id"], "result": result}, sort_keys=True))
+"#;
+
+fn validate_start(params: &ProcessStartParams) -> Result<()> {
+	// Without a caller-stable key an ambiguous transport retry is a new launch.
+	// Reject before reaching any host or execution-policy lookup.
+	if params
+		.idempotency_key
+		.as_ref()
+		.is_none_or(|value| value.trim().is_empty() || value.len() > 256)
+	{
+		bail!("idempotency_key is required and must contain 1..256 non-blank bytes");
+	}
+	check_execution(
+		&params.host,
+		&params.executable,
+		&params.args,
+		params.cwd.as_deref(),
+		false,
+	)?;
+	check_environment(&params.host, &params.env)?;
+	if params.args.len() > 256 {
+		bail!("at most 256 arguments are allowed");
+	}
+	if params.env.len() > 128 {
+		bail!("at most 128 environment variables are allowed");
+	}
+	for key in params.env.keys() {
+		let valid = !key.is_empty()
+			&& !key.as_bytes()[0].is_ascii_digit()
+			&& key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+		if !valid {
+			bail!("invalid environment variable name `{key}`");
+		}
+	}
+	if params
+		.stdin
+		.as_ref()
+		.is_some_and(|value| value.len() > MAX_STDIN_BYTES)
+	{
+		bail!("stdin exceeds the 1 MiB limit");
+	}
+	if params
+		.timeout_seconds
+		.is_some_and(|value| value == 0 || value > 604_800)
+	{
+		bail!("timeout_seconds must be between 1 and 604800");
+	}
+	if params.nice.is_some_and(|value| value > 19) {
+		bail!("nice must be between 0 and 19");
+	}
+	if params
+		.cpu_quota_percent
+		.is_some_and(|value| value == 0 || value > 1000)
+	{
+		bail!("cpu_quota_percent must be between 1 and 1000");
+	}
+	if params
+		.memory_max_bytes
+		.is_some_and(|value| value < 16 * 1024 * 1024)
+	{
+		bail!("memory_max_bytes must be at least 16 MiB");
+	}
+	Ok(())
+}
+
+async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
+	let host = bound_host(record)?;
+	let request = json!({
+		"job_id": record.id,
+		"job_dir": record.remote_job_dir,
+		"unit": record.unit,
+		"request_digest": record.request_digest,
+		"wait_seconds": wait_seconds.min(30),
+	});
+	run_python_json(
+		host,
+		STATUS_CODE,
+		&request,
+		Duration::from_secs(wait_seconds.min(30) + 10),
+	)
+	.await
+}
+
+async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> Result<Value> {
+	let host = bound_host(record)?;
+	let request = json!({
+		"job_id": record.id,
+		"job_dir": record.remote_job_dir,
+		"unit": record.unit,
+		"request_fingerprint": format!("{:016x}", record.request_fingerprint),
+		"request_digest": record.request_digest,
+		"platform": host.platform,
+		"executable": params.executable,
+		"args": params.args,
+		"cwd": params.cwd,
+		"env": params.env,
+		"stdin": params.stdin,
+		"timeout_seconds": params.timeout_seconds,
+		"nice": params.nice.unwrap_or(0),
+		"cpu_quota_percent": params.cpu_quota_percent,
+		"memory_max_bytes": params.memory_max_bytes,
+		"allow_job_network": host.allow_job_network,
+		"allow_detached_fallback": host.allow_detached_fallback,
+	});
+	match run_python_json(host, START_CODE, &request, Duration::from_secs(20)).await {
+		Ok(launch) => {
+			record.launch_state = "launched".to_string();
+			record.launch_error = None;
+			save_record(record)?;
+			Ok(launch)
+		}
+		Err(error) => {
+			record.launch_state = "launch_failed".to_string();
+			// Preserve the uncertain outcome, never persistent untrusted stderr.
+			record.launch_error = Some("remote launch failed or response unknown; reconcile without replay".into());
+			save_record(record)?;
+			audit("process_start_failed", &record.host, &record.id, &json!({"ok": false}))?;
+			Err(error)
+		}
+	}
+}
+
+pub async fn start_job(params: ProcessStartParams) -> Result<String> {
+	validate_start(&params)?;
+	let _start_guard = start_lock(&params.host, params.idempotency_key.as_deref())
+		.lock()
+		.await;
+	let (request_fingerprint, request_digest) = request_digest(&params);
+	if let Some(key) = params.idempotency_key.as_deref() {
+		if let Some(existing) = find_idempotent(&params.host, key)? {
+			verify_reuse_binding(&existing, key, request_fingerprint, &request_digest)?;
+			// An earlier pending/failed controller attempt may already have crossed
+			// the remote launch boundary. A missing remote state directory is not
+			// proof that the effect did not happen: never dispatch it again.
+			admit_observation_only_reuse(&existing)?;
+			let status = status_record(&existing, 0).await?;
+			let result = json!({
+				"reused": true,
+				"retried_launch": false,
+				"job": existing,
+				"launch": null,
+				"status": status,
+			});
+			audit("process_start_reused", &params.host, &existing.id, &result)?;
+			return Ok(serde_json::to_string_pretty(&result)?);
+		}
+	}
+
+	let config = runtime_config()?;
+	let host = config.host(&params.host)?;
+	let id = next_job_id();
+	let unit = format!("hepta-runtime-job-{id}");
+	let remote_job_dir = format!("{}/jobs/{id}", host.remote_state_dir.trim_end_matches('/'));
+	let mut record = JobRecord {
+		id: id.clone(),
+		host: params.host.clone(),
+		ssh_target: host.ssh_target.clone(),
+		unit,
+		remote_job_dir,
+		executable: params.executable.clone(),
+		args: params.args.clone(),
+		cwd: params.cwd.clone(),
+		env_keys: params.env.keys().cloned().collect(),
+		created_unix_ms: now_ms(),
+		idempotency_key: params.idempotency_key.clone(),
+		request_fingerprint,
+		request_digest: Some(request_digest),
+		launch_state: "pending".to_string(),
+		launch_error: None,
+	};
+	// Persist identity before remote launch. Following a crash, the same key
+	// can only reconcile the original request; ambiguous dispatch never retries.
+	save_record(&record)?;
+	let launch = launch_record(&mut record, &params).await?;
+	let result = json!({"reused": false, "job": record, "launch": launch});
+	audit("process_start", &params.host, &id, &result)?;
+	Ok(serde_json::to_string_pretty(&result)?)
+}
+
+pub async fn status_job(params: ProcessRefParams) -> Result<String> {
+	let record = check_ref(&params)?;
+	let status = status_record(&record, 0).await?;
+	audit("process_status", &params.host, &params.job_id, &status)?;
+	Ok(serde_json::to_string_pretty(&status)?)
+}
+
+pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
+	let reference = ProcessRefParams {
+		host: params.host.clone(),
+		job_id: params.job_id.clone(),
+	};
+	let record = check_ref(&reference)?;
+	let wait = params.timeout_seconds.unwrap_or(10).min(30);
+	let status = status_record(&record, wait).await?;
+	audit("process_wait", &params.host, &params.job_id, &status)?;
+	Ok(serde_json::to_string_pretty(&status)?)
+}
+
+pub async fn read_job(params: ProcessReadParams) -> Result<String> {
+	let reference = ProcessRefParams {
+		host: params.host.clone(),
+		job_id: params.job_id.clone(),
+	};
+	let record = check_ref(&reference)?;
+	let host = bound_host(&record)?;
+	let request = json!({
+		"job_id": record.id,
+		"job_dir": record.remote_job_dir,
+		"unit": record.unit,
+		"request_digest": record.request_digest,
+		"stdout_offset": params.stdout_offset.unwrap_or(0),
+		"stderr_offset": params.stderr_offset.unwrap_or(0),
+		"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
+	});
+	let output: Value = run_python_json(host, READ_CODE, &request, Duration::from_secs(15)).await?;
+	audit(
+		"process_read",
+		&params.host,
+		&params.job_id,
+		&json!({"ok": true}),
+	)?;
+	Ok(serde_json::to_string_pretty(&output)?)
+}
+
+pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
+	let reference = ProcessRefParams {
+		host: params.host.clone(),
+		job_id: params.job_id.clone(),
+	};
+	let record = check_ref(&reference)?;
+	let host = bound_host(&record)?;
+	let request = json!({
+		"job_id": record.id,
+		"job_dir": record.remote_job_dir,
+		"unit": record.unit,
+		"request_digest": record.request_digest,
+		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
+	});
+	let output: Value =
+		run_python_json(host, CANCEL_CODE, &request, Duration::from_secs(45)).await?;
+	audit("process_cancel", &params.host, &params.job_id, &output)?;
+	Ok(serde_json::to_string_pretty(&output)?)
+}
+
+pub fn list_jobs(params: ProcessListParams) -> Result<String> {
+	if let Some(host) = params.host.as_deref() {
+		runtime_config()?.host(host)?;
+	}
+	let records: Vec<_> = all_records()?
+		.into_iter()
+		.filter(|record| params.host.as_ref().is_none_or(|host| &record.host == host))
+		.collect();
+	Ok(serde_json::to_string_pretty(&json!({"jobs": records}))?)
+}
+
+#[cfg(test)]
+#[path = "jobs_tests.rs"]
+mod tests;

@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Re-run unchanged real Chrome or Ghidra gates on one merged release."""
+import argparse
+import datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+import traceback
+
+ROOT = Path("/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2")
+BASE = Path("/home/qian-qi/work/hepta-rea-final-independent-20261104-r2")
+BINARY = BASE / "prepared-r2/hepta-runtime"
+SHA = "aa580409a73bc2e0927ead93d32634239051a39fc951c3c2a92d5a1dece8347a"
+BUILD = Path("/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/final-release-r2/summary.json")
+BUILD_SHA = "0541d43b62f631b3ebcda4895bafc5cdc087ac94460780191c0e61a4f043292d"
+SOURCE_TREE_SHA = "4021ee22efdf2eac830e08afc45eddf37b264e7fd31a222c329b4950ef2d94b6"
+SCRIPTS = {
+    "tests/rea_browser_external.py": "604fe68cfbf5b19bee0f48039b93967ed13b9a0ff519fee3f029f0fcc4038239",
+    "tests/rea_browser_native_differential.py": "c8afe9428510c347f7e62e4710fe5d46a22117a3c52dd5ec09ae8b9a50b50c24",
+    "tests/rea_browser_deadline_external.py": "acd355c41cc0c60fb4a55e46427394603e8f7d2e1f113df06bde9190a235b4f8",
+    "tests/rea_ghidra_analysis_external.py": "7932b234cd96decf2df522be161d4e03b11d4d129e50512f69949ce1eaa00c0a",
+}
+REFERENCE = Path("/home/qian-qi/work/hepta-rea-next-root-20261104-browser-python-reference-r1/qualification.json")
+
+
+def sha(path):
+    with Path(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def dump(path, value):
+    path.write_text(json.dumps(value, sort_keys=True, indent=2) + "\n")
+
+
+def require(condition, label):
+    if not condition:
+        raise AssertionError(label)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--suite", choices=("browser", "ghidra"), required=True)
+    args = parser.parse_args()
+    output = BASE / (args.suite + "-r3")
+    output.mkdir(mode=0o700, parents=False, exist_ok=False)
+    started = time.monotonic()
+    receipt = {
+        "schema": "hepta.rea.merged-release-engine-regression.v1",
+        "suite": args.suite,
+        "qualified": False,
+        "release": str(BINARY),
+        "release_sha256": SHA,
+        "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "outer_job_timeout_seconds": 1200,
+        "retry_count": 0,
+        "original_harnesses_unchanged": True,
+        "original_gate_timeouts_unchanged": True,
+        "all_new_workspaces_outside_root": True,
+        "full_upstream_parity_qualified": False,
+        "commands": [],
+    }
+    try:
+        require(sha(BINARY) == SHA and BINARY.stat().st_size == 18437864, "exact merged release identity")
+        require(sha(BUILD) == BUILD_SHA, "merged release build receipt identity")
+        build = json.loads(BUILD.read_text())
+        require(build["qualified"] is True and build["status"] == "passed" and build["source_changed"] is False, "qualified unchanged final release build")
+        require(build["source_before_tree_sha256"] == SOURCE_TREE_SHA and build["source_after_tree_sha256"] == SOURCE_TREE_SHA, "frozen source digest")
+        require(build["source_monitor"]["event_count"] == 0 and not build["source_monitor"]["errors"] and build["source_monitor"]["events_truncated"] is False, "unchanged release build monitor")
+        require(build["binary"]["sha256"] == SHA and build["binary"]["bytes"] == 18437864, "release receipt binding")
+        release_origin = Path(build["binary"]["path"])
+        require(sha(release_origin) == SHA, "parent original release identity")
+        source_patterns = ["src/mcp/rea_browser*.rs"] if args.suite == "browser" else ["src/mcp/rea_ghidra*.rs", "src/mcp/rea_ghidra*.java", "src/mcp/rea_static*.rs"]
+        selected = [*(ROOT / rel for rel in SCRIPTS), ROOT / "tests/rea_java_external.py", ROOT / "tests/rea_java_kernel_probe.py", ROOT / "src/main.rs", ROOT / "Cargo.toml", ROOT / "Cargo.lock"]
+        selected.extend(sorted(ROOT.glob("src/cli*.rs")))
+        selected.extend(sorted(ROOT.glob("src/cli/**/*.rs")))
+        for pattern in source_patterns:
+            selected.extend(sorted(ROOT.glob(pattern)))
+        selected = sorted(set(selected))
+        pins = {str(path.relative_to(ROOT)): sha(path) for path in selected}
+        for rel, expected in SCRIPTS.items():
+            require(pins[rel] == expected, "unchanged original harness: " + rel)
+        receipt.update(root=str(ROOT), root_commit=subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(), source_files=pins,
+                       release_build_receipt=str(BUILD), release_build_receipt_sha256=BUILD_SHA,
+                       release_source_commit=build["source_commit"], release_source_tree_sha256=SOURCE_TREE_SHA,
+                       original_release=str(release_origin), wrapper_sha256=sha(__file__))
+        env = os.environ.copy()
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        py = [sys.executable, "-B", "-u"]
+        if args.suite == "browser":
+            native = output / "native-workspace"
+            deadline = output / "deadline-workspace"
+            diff = output / "native-python-differential.json"
+            reference_sha = sha(REFERENCE)
+            receipt["historical_python_reference"] = {"path": str(REFERENCE), "sha256": reference_sha, "read_only": True, "new_python_reference_run": False}
+            commands = [
+                ("native-browser", py + [str(ROOT / "tests/rea_browser_external.py"), "--runtime", str(BINARY), "--native-capture", "--workspace", str(native), "--allow-owned-browser", "--allow-local-ssh"]),
+                ("native-python-differential", py + [str(ROOT / "tests/rea_browser_native_differential.py"), "--native-qualification", str(native / "qualification.json"), "--python-qualification", str(REFERENCE), "--output", str(diff)]),
+                ("native-browser-deadline", py + [str(ROOT / "tests/rea_browser_deadline_external.py"), "--runtime", str(BINARY), "--expected-runtime-sha256", SHA, "--source-qualification", str(native / "qualification.json"), "--workspace", str(deadline), "--allow-owned-browser", "--allow-local-ssh"]),
+            ]
+        else:
+            workspace = output / "workspace"
+            commands = [
+                ("ghidra-analysis", py + [str(ROOT / "tests/rea_ghidra_analysis_external.py"), "--runtime", str(BINARY), "--java-home", "/home/qian-qi/work/hepta-rea-engines-20261103-r1/jdk25/jdk-25.0.5+8", "--ghidra-home", "/home/qian-qi/work/hepta-rea-engines-20261103-r1/ghidra/ghidra_12.2_PUBLIC", "--workspace", str(workspace), "--execution-mode", "operator", "--allow-local-ssh"]),
+            ]
+        dump(output / "plan.json", {**receipt, "planned_commands": [{"name": name, "argv": command, "cwd": str(output)} for name, command in commands]})
+        for index, (name, command) in enumerate(commands):
+            stdout_path = output / ("%02d-%s.stdout.log" % (index, name))
+            stderr_path = output / ("%02d-%s.stderr.log" % (index, name))
+            before = time.monotonic()
+            print(json.dumps({"event": "started", "suite": args.suite, "gate": name}), flush=True)
+            with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
+                result = subprocess.run(command, cwd=output, env=env, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr)
+            item = {"name": name, "argv": command, "cwd": str(output), "exit_code": result.returncode, "elapsed_seconds": time.monotonic() - before,
+                    "stdout": {"path": str(stdout_path), "bytes": stdout_path.stat().st_size, "sha256": sha(stdout_path)},
+                    "stderr": {"path": str(stderr_path), "bytes": stderr_path.stat().st_size, "sha256": sha(stderr_path)}}
+            receipt["commands"].append(item)
+            dump(output / "progress.json", receipt)
+            print(json.dumps({"event": "finished", "suite": args.suite, "gate": name, "exit_code": result.returncode, "seconds": item["elapsed_seconds"]}), flush=True)
+            require(result.returncode == 0, "original gate failed: " + name)
+        if args.suite == "browser":
+            q_native = json.loads((native / "qualification.json").read_text())
+            q_diff = json.loads(diff.read_text())
+            q_deadline = json.loads((deadline / "qualification.json").read_text())
+            require(all(q["qualified"] is True for q in (q_native, q_diff, q_deadline)), "all three original Chrome gates")
+            require(q_native["runtime_sha256"] == SHA and q_deadline["runtime_sha256"] == SHA, "Chrome final runtime binding")
+            require(q_diff["identity"]["native"]["runtime_binary"]["sha256"] == SHA, "native differential final runtime binding")
+            require(len(q_native["checks"]) == 11 and q_diff["selected_pairs"] == 10 and len(q_deadline["checks"]) == 6, "original 11 / 10 / 6 finite coverage")
+            require(q_deadline["manifest_timeout_seconds"] == 1 and q_deadline["outer_job_timeout_seconds"] == 100, "original one-second manifest and 100-second child job deadlines")
+            require(q_deadline["outer_job_timed_out"] is False and q_deadline["successful_output_published"] is False and q_deadline["no_owned_browser_or_profile"] is True, "native deadline, no successful publication, original browser cleanup")
+            require(sha(REFERENCE) == reference_sha, "historical Python reference unchanged")
+            require(q_diff["full_har_equivalence_claimed"] is False and q_diff["raw_http_wire_equivalence_claimed"] is False and q_diff["application_behavior_equivalence_claimed"] is False, "finite differential claims remain limited")
+            receipt["gate_counts"] = {"native_checks": len(q_native["checks"]), "differential_selected_pairs": q_diff["selected_pairs"], "deadline_checks": len(q_deadline["checks"])}
+            receipt["qualifications"] = {name: {"path": str(path), "sha256": sha(path)} for name, path in [("native", native / "qualification.json"), ("differential", diff), ("deadline", deadline / "qualification.json")]}
+        else:
+            q = json.loads((workspace / "qualification.json").read_text())
+            require(q["qualified"] is True and q["runtime_sha256"] == SHA, "qualified final Ghidra runtime")
+            require(len(q["checks"]) == 8 and q["rea_full_parity"] is False and q["isolated_host_qualification"] is False, "eight original finite operator gates, no full/isolated claim")
+            require(q["targets_run_by_provider"] == 0, "analysis did not execute target programs")
+            receipt["gate_counts"] = {"ghidra_checks": len(q["checks"])}
+            receipt["qualifications"] = {"ghidra": {"path": str(workspace / "qualification.json"), "sha256": sha(workspace / "qualification.json")}}
+        require({str(path.relative_to(ROOT)): sha(path) for path in selected} == pins, "selected root source/tests/configuration unchanged")
+        require(sha(BINARY) == SHA and sha(release_origin) == SHA, "frozen and original final binary unchanged")
+        require(sha(BUILD) == BUILD_SHA, "release build receipt unchanged")
+        receipt.update(qualified=True, selected_inputs_unchanged=True, runtime_unchanged=True, release_build_receipt_unchanged=True)
+    except BaseException as error:
+        receipt["failure"] = {"type": type(error).__name__, "message": str(error), "traceback": traceback.format_exc()}
+        print(receipt["failure"]["traceback"], file=sys.stderr, flush=True)
+    finally:
+        receipt.update(finished_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(), elapsed_seconds=time.monotonic() - started)
+        dump(output / "qualification.json", receipt)
+        print(json.dumps({"suite": args.suite, "qualified": receipt["qualified"], "elapsed_seconds": receipt["elapsed_seconds"], "receipt": str(output / "qualification.json")}), flush=True)
+    return 0 if receipt["qualified"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

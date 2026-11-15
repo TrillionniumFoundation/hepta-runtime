@@ -1,0 +1,328 @@
+{
+  "schema": "hepta-dc-v9-request-results-native-fixture-v1",
+  "recorded_utc": "2026-10-14T00:06:55.961607+00:00",
+  "origin": "disposable_native_http_fixture",
+  "binary_sha256": "40c6f3299e8ea72e37b149673245ad77ee20ab9e5886e949ce4f0d025268c4ce",
+  "harness_sha256": "184f54f084f0df87a94cd61c8fee55baba1f72f0e38637e61bc908f92abcb1ab",
+  "explicit_observed_pins": {
+    "binary_sha256": "40c6f3299e8ea72e37b149673245ad77ee20ab9e5886e949ce4f0d025268c4ce",
+    "http_helper_sha256": "8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba",
+    "contract_helper_sha256": "e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216",
+    "approval_loader_sha256": "4623c4da9493dccfc4bcef18c7267ba96ba7f5f1ddd799441214948c9da161fe",
+    "compiled_source_fingerprint": "498cca6da8c442c70534b0a35807c94d7b5f7fbef4b2b4d8f15fa9c22484e33c"
+  },
+  "adapted_from_script": "tests/dc_functional_v8_request_results_acceptance.py",
+  "adapted_from_script_sha256": "802cc3f6230aa7a49cce11593bf1c11fc41941bb726f7dc2ab8e64ce0b944c10",
+  "all_original_v8_request_result_checks_retained": true,
+  "v9_async_start_cancel_qualified": false,
+  "contract_sha256": "12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553",
+  "catalog_mode": "reviewed-pinned-contract",
+  "exact_reviewed_contract_qualified": true,
+  "qualification_scope": "local_native_request_result_fixture_only",
+  "checks": [
+    {
+      "check": "reviewed V10 catalog and exact V8 predecessor definitions",
+      "result": "passed",
+      "detail": {
+        "tool_count": 66,
+        "all_previous_definitions_exact": true,
+        "all60_v8_definitions_exact": true,
+        "v8_added_names_in_v10": [
+          "request_start",
+          "request_cancel",
+          "operation_start",
+          "operation_status",
+          "operation_result",
+          "operation_cancel"
+        ],
+        "new_tools": [
+          "request_status",
+          "request_result"
+        ],
+        "old_v7_positive_control": true,
+        "old_v8_positive_control": true,
+        "recomputed_unknown_catalogs_refused": [
+          "original-v4-drift",
+          "new-tool-hint-drift",
+          "new-tool-owner-input"
+        ],
+        "reviewed_pin_verified": true,
+        "export_requires_separate_explicit_review": false
+      }
+    },
+    {
+      "check": "three reviewed DTO tools retain exact native envelopes and server identities",
+      "result": "passed",
+      "detail": {
+        "retained_tools": [
+          "effective_config",
+          "host_health",
+          "host_list"
+        ],
+        "native_pages": {
+          "host_list": {
+            "pages": 3,
+            "bytes": 562,
+            "sha256": "72a56c8e20497129e423b01c0412967a111a1fce80d3e24307732826db3de90c"
+          },
+          "effective_config": {
+            "pages": 6,
+            "bytes": 1542,
+            "sha256": "904433b6e056e35590925689d68f715b67c47c690ce31a319e6906fd2e4b6334"
+          },
+          "host_health": {
+            "pages": 3,
+            "bytes": 719,
+            "sha256": "32ebe7d8ba540c022abe694826af303166212ed2663b814b043e733d49dbb79e"
+          }
+        },
+        "actual_request_identity": "server-generated _meta; never JSON-RPC caller ID",
+        "reference": "raw negotiated-protocol result minus retention ACK; legacy default complete discriminator restored",
+        "wire_budget_checks": "effective_config <=256 KiB; lookup replies <=64 KiB including metadata",
+        "boundaries": "actual small-fixture envelopes; maximum DTO boundary tests remain Rust-specific",
+        "health_origin": "fixed local emulator; no real SSH qualification"
+      }
+    },
+    {
+      "check": "oldest retained result stays readable while its owner audit quota is full",
+      "result": "passed",
+      "detail": {
+        "owner_audit_quota": 128,
+        "oldest_record_preserved": true,
+        "one_byte_pages_under_quota": 562,
+        "repeated_status_preserves_target": true,
+        "recursive_retained_payloads": 0,
+        "independent_capacity_fixture": true
+      }
+    },
+    {
+      "check": "large reviewed DTO remains live while bounded retention honestly reports overflow",
+      "result": "passed",
+      "detail": {
+        "configured_hosts": 256,
+        "complete_live_dto_preserved": true,
+        "same_server_id": true,
+        "live_wire_bytes": 173136,
+        "retention_state": "overflow",
+        "retained_payload_bytes": 0,
+        "native_request_result_refused": true,
+        "original_dispatch_separate_from_retention_limit": true
+      }
+    },
+    {
+      "check": "same private credential reconnect and controller restart preserve original bytes",
+      "result": "passed",
+      "detail": {
+        "reconnect_and_restart": true,
+        "health_replay_count": 0
+      }
+    },
+    {
+      "check": "owner spoof, invalid identities and byte page bounds are refused",
+      "result": "passed",
+      "detail": {
+        "strict_argument_and_bounds_refusals": true,
+        "caller_meta_does_not_select_identity": true
+      }
+    },
+    {
+      "check": "view and metadata lookups never retain excluded or recursive payloads",
+      "result": "passed",
+      "detail": {
+        "excluded_tools": [
+          "view",
+          "request_history",
+          "request_status",
+          "request_result"
+        ],
+        "recursive_cache_count": 0
+      }
+    },
+    {
+      "check": "controller crash leaves unknown result intent and never replays health",
+      "result": "passed",
+      "detail": {
+        "intent_id_origin": "test-owned durable pending record; response never delivered",
+        "pending_unknown_after_restart": true,
+        "health_lookup_replay_count": 0,
+        "crash_scope": "only fixture controller process group"
+      }
+    },
+    {
+      "check": "late result-store permissions fault preserves original content and same server ID",
+      "result": "passed",
+      "detail": {
+        "fault": "test-owned result directory widened only after fixed health admission",
+        "original_health_content_preserved": true,
+        "server_identity_preserved": true,
+        "retention_failure_separate_from_dispatch": true,
+        "automatic_replay_count": 0
+      }
+    },
+    {
+      "check": "whole config root and host revocation deny old bytes while path-free audit remains",
+      "result": "passed",
+      "detail": {
+        "cases": [
+          {
+            "case": "root-policy-change",
+            "old_bytes_refused": true,
+            "path_free_audit_visible": true
+          },
+          {
+            "case": "host-binding-change",
+            "old_bytes_refused": true,
+            "path_free_audit_visible": true
+          }
+        ],
+        "restored_exact_policy_originals_unchanged": true
+      }
+    },
+    {
+      "check": "credential rotation rejects old owner even with request owner metadata spoof",
+      "result": "passed",
+      "detail": {
+        "other_bearer_live_http_status": 401,
+        "new_credential_old_owner_lookup": "refused",
+        "caller_meta_cannot_select_old_scope": true,
+        "new_credential_can_retain_own_result": true
+      }
+    },
+    {
+      "check": "private audit schema and bounded payload stores exclude credentials and arbitrary output",
+      "result": "passed",
+      "detail": {
+        "audit_records": 101,
+        "retained_snapshots": 5,
+        "unknown_fixture_fault_records": 2,
+        "audit_schema_fields": 6,
+        "stored_parameters_or_credentials": false,
+        "arbitrary_view_output_retained": false,
+        "owned_cleanup_confirmed": true
+      }
+    }
+  ],
+  "complete": true,
+  "installed_runtime_changed": false,
+  "desktop_commander_changed": false,
+  "real_ssh_qualified": false,
+  "six_machine_qualified": false,
+  "model_origin_qualified": false,
+  "authenticated_chatgpt_caller_isolation": false,
+  "job_pty_caller_ownership_qualified": false,
+  "production_recovery_rollback_qualified": false,
+  "full_dc_replacement_qualified": false,
+  "fault_scope": "disposable local fixed read-only health emulator and private state",
+  "limits": [
+    "The native health emulator is a local fixture; no SSH authentication or real target health is proven.",
+    "No existing credentials, runtime service, remote host, user data or Desktop Commander is accessed.",
+    "The serialized native result precedes retention ACK; transport delivery and business success remain unproven.",
+    "Controller crash and late storage failure are fixture faults around a fixed read-only challenge.",
+    "Shared operator credentials share retained metadata; this does not prove ChatGPT user isolation."
+  ],
+  "requested_protocol_version": "2026-07-28",
+  "negotiated_protocol_version": "2025-11-25",
+  "snapshot_comparison_normalization": "legacy implicit resultType=complete restored; retention ACK removed",
+  "catalog_sha256": "4bfcaa69c38a7219e9904a7adba2c260269319769799012dc67629262e61cce0",
+  "candidate_hashes_stable": true,
+  "passed": 12,
+  "logs": [
+    {
+      "name": "capacity-native-00.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    },
+    {
+      "name": "effective_config.native-result.json",
+      "sha256": "904433b6e056e35590925689d68f715b67c47c690ce31a319e6906fd2e4b6334",
+      "bytes": 1542,
+      "redacted": false
+    },
+    {
+      "name": "effective_config.observed-response.json",
+      "sha256": "90b6c2064ee6fb8585f51a913424fd02179e5b653facce6528b3570b3b343cfa",
+      "bytes": 1862,
+      "redacted": false
+    },
+    {
+      "name": "host_health.native-result.json",
+      "sha256": "32ebe7d8ba540c022abe694826af303166212ed2663b814b043e733d49dbb79e",
+      "bytes": 719,
+      "redacted": false
+    },
+    {
+      "name": "host_health.observed-response.json",
+      "sha256": "7666488253e131bb92e918249aeb27d48ab001cac17e0f0d5d763d1858ff8c6b",
+      "bytes": 1039,
+      "redacted": false
+    },
+    {
+      "name": "host_list.native-result.json",
+      "sha256": "72a56c8e20497129e423b01c0412967a111a1fce80d3e24307732826db3de90c",
+      "bytes": 562,
+      "redacted": false
+    },
+    {
+      "name": "host_list.observed-response.json",
+      "sha256": "917fafd728b2fd49a9153a27b20e22d3b35a95c6444c14873c14e50af678b65e",
+      "bytes": 882,
+      "redacted": false
+    },
+    {
+      "name": "native-00.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    },
+    {
+      "name": "native-03.log",
+      "sha256": "3e189b3cb6a94ee0a21d70fdc2f246bc51bed65a03a9066ce0913e6a146d1275",
+      "bytes": 176,
+      "redacted": false
+    },
+    {
+      "name": "native-04.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    },
+    {
+      "name": "native-05.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    },
+    {
+      "name": "native-06.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    },
+    {
+      "name": "native-07.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    },
+    {
+      "name": "native-08.log",
+      "sha256": "3cbeca24d06c9a5fdc9e0fd068e758c72d3d68ad73243bf7dde5b3be100f4f1c",
+      "bytes": 132,
+      "redacted": false
+    },
+    {
+      "name": "overflow-native-00.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "redacted": false
+    },
+    {
+      "name": "overflow.effective-config.observed-response.json",
+      "sha256": "979e182f10cb19fd086a76165c4f9a1a37d65ee54c0fb85fefbf82d2bac478c2",
+      "bytes": 173137,
+      "redacted": false
+    }
+  ],
+  "owned_cleanup_confirmed": true
+}

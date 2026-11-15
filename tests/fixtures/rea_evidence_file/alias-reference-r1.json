@@ -1,0 +1,236 @@
+{
+  "format": "hepta.evidence-file-alias-original.v1",
+  "node": "v22.23.4",
+  "cases": [
+    {
+      "name": "missing-alias",
+      "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./absent.json",
+      "api": "read",
+      "normalized_path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/absent.json",
+      "expected": {
+        "ok": false,
+        "typed_error": {
+          "cleanupIncomplete": false,
+          "operation": "read",
+          "reason": "missing",
+          "_tag": "EvidenceFileError",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/absent.json"
+        },
+        "projected": {
+          "code": "invalid_request",
+          "category": "invalid_input",
+          "message": "Evidence file does not exist at the selected path. Check the path and try again.",
+          "retryable": false,
+          "remediation": {
+            "action": "Evidence file does not exist at the selected path. Check the path and try again."
+          },
+          "details": {
+            "operation": "read",
+            "reason": "missing",
+            "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/absent.json"
+          }
+        }
+      }
+    },
+    {
+      "name": "empty-alias",
+      "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./empty.json",
+      "api": "read",
+      "hex": "",
+      "normalized_path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/empty.json",
+      "expected": {
+        "ok": false,
+        "typed_error": {
+          "cleanupIncomplete": false,
+          "operation": "read",
+          "reason": "invalid-json",
+          "_tag": "EvidenceFileError",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/empty.json",
+          "contentIssues": [
+            {
+              "path": [],
+              "reason": "invalid_format",
+              "expected": "JSON",
+              "message": "Unexpected end of JSON input"
+            }
+          ]
+        },
+        "projected": {
+          "code": "evidence_integrity_mismatch",
+          "category": "execution_failure",
+          "message": "Evidence file is not valid JSON. Repair or recreate the file and try again.",
+          "retryable": false,
+          "remediation": {
+            "action": "Evidence file is not valid JSON. Repair or recreate the file and try again."
+          },
+          "details": {
+            "operation": "read",
+            "reason": "invalid-json",
+            "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/empty.json",
+            "content_issues": [
+              {
+                "path": [],
+                "reason": "invalid_format",
+                "expected": "JSON",
+                "message": "Unexpected end of JSON input"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "bare-source-alias",
+      "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./bare.json",
+      "api": "read-with-source",
+      "normalized_path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/bare.json",
+      "expected": {
+        "ok": true,
+        "selected_path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/bare.json",
+        "evidence_id": "ev_5af4683e6824868d53370ed94b3711b3c0d8b7c84e00c8d654dbb067753e4a69"
+      }
+    },
+    {
+      "name": "bare-selector-alias",
+      "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./bare.json",
+      "api": "select",
+      "evidence_id": "ev_0000000000000000000000000000000000000000000000000000000000000000",
+      "normalized_path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/bare.json",
+      "expected": {
+        "ok": false,
+        "typed_error": {
+          "cleanupIncomplete": false,
+          "userMessage": "Evidence file /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./bare.json holds ev_5af4683e6824868d53370ed94b3711b3c0d8b7c84e00c8d654dbb067753e4a69, not selected record ev_0000000000000000000000000000000000000000000000000000000000000000.",
+          "operation": "inspect_analysis_view",
+          "issues": [
+            {
+              "path": [
+                "source",
+                "evidence_id"
+              ],
+              "reason": "invalid_value",
+              "message": "Evidence file /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./bare.json holds ev_5af4683e6824868d53370ed94b3711b3c0d8b7c84e00c8d654dbb067753e4a69, not selected record ev_0000000000000000000000000000000000000000000000000000000000000000."
+            }
+          ],
+          "_tag": "AnalysisInputError"
+        },
+        "projected": {
+          "code": "invalid_request",
+          "category": "invalid_input",
+          "message": "Evidence file /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./bare.json holds ev_5af4683e6824868d53370ed94b3711b3c0d8b7c84e00c8d654dbb067753e4a69, not selected record ev_0000000000000000000000000000000000000000000000000000000000000000.",
+          "retryable": false,
+          "remediation": {
+            "action": "Read the declared input schema or CLI usage for inspect_analysis_view; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+          },
+          "recovery": {
+            "kind": "inspect_input_contract",
+            "operation": "inspect_analysis_view"
+          },
+          "details": {
+            "operation": "inspect_analysis_view",
+            "issues": [
+              {
+                "path": [
+                  "source",
+                  "evidence_id"
+                ],
+                "reason": "invalid_value",
+                "message": "Evidence file /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./bare.json holds ev_5af4683e6824868d53370ed94b3711b3c0d8b7c84e00c8d654dbb067753e4a69, not selected record ev_0000000000000000000000000000000000000000000000000000000000000000."
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "file-trailing-slash",
+      "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./bare.json//",
+      "api": "read",
+      "normalized_path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/bare.json/",
+      "expected": {
+        "ok": false,
+        "typed_error": {
+          "cleanupIncomplete": false,
+          "operation": "read",
+          "reason": "missing",
+          "_tag": "EvidenceFileError",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/bare.json/"
+        },
+        "projected": {
+          "code": "invalid_request",
+          "category": "invalid_input",
+          "message": "Evidence file does not exist at the selected path. Check the path and try again.",
+          "retryable": false,
+          "remediation": {
+            "action": "Evidence file does not exist at the selected path. Check the path and try again."
+          },
+          "details": {
+            "operation": "read",
+            "reason": "missing",
+            "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/bare.json/"
+          }
+        }
+      }
+    },
+    {
+      "name": "file-trailing-dot",
+      "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./bare.json/.",
+      "api": "read",
+      "normalized_path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/bare.json/",
+      "expected": {
+        "ok": false,
+        "typed_error": {
+          "cleanupIncomplete": false,
+          "operation": "read",
+          "reason": "missing",
+          "_tag": "EvidenceFileError",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/bare.json/"
+        },
+        "projected": {
+          "code": "invalid_request",
+          "category": "invalid_input",
+          "message": "Evidence file does not exist at the selected path. Check the path and try again.",
+          "retryable": false,
+          "remediation": {
+            "action": "Evidence file does not exist at the selected path. Check the path and try again."
+          },
+          "details": {
+            "operation": "read",
+            "reason": "missing",
+            "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/bare.json/"
+          }
+        }
+      }
+    },
+    {
+      "name": "directory-alias",
+      "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace//./directory//.",
+      "api": "read",
+      "normalized_path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/directory/",
+      "expected": {
+        "ok": false,
+        "typed_error": {
+          "cleanupIncomplete": false,
+          "operation": "read",
+          "reason": "not-file",
+          "_tag": "EvidenceFileError",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/directory/"
+        },
+        "projected": {
+          "code": "invalid_request",
+          "category": "invalid_input",
+          "message": "Evidence path does not point to a regular file. Choose a file and try again.",
+          "retryable": false,
+          "remediation": {
+            "action": "Evidence path does not point to a regular file. Choose a file and try again."
+          },
+          "details": {
+            "operation": "read",
+            "reason": "not-file",
+            "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-alias-reference-r1/workspace/directory/"
+          }
+        }
+      }
+    }
+  ]
+}

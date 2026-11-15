@@ -1,0 +1,8 @@
+{
+  "schema": "hepta.raw-byte-evidence.v1",
+  "source_path": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/preload.cjs",
+  "bytes": 578,
+  "sha256": "ec12c2121240c0c303c47c03eb59ce99426c2a80cf0a48f8979309a315278b44",
+  "encoding": "utf-8",
+  "text": "const { ipcRenderer: renderer, contextBridge: bridge } = require(\"electron\");\nbridge.exposeInMainWorld(\"config\", {\n  get: (key) => renderer.invoke(\"cfg:get\", key),\n  set: (value) => renderer.send(\"cfg:set\", value),\n});\nrenderer.on(\"cfg:changed\", (_event, value) => value);\nfunction shadow(renderer) { renderer.invoke(\"shadowed-channel\"); }\nconst decoy = 'ipcMain.handle(\"string-only\", () => true)';\n// ipcRenderer.send(\"comment-only\");\nconst pattern = /ipcRenderer\\.invoke\\(\"regexp-only\"\\)/;\nrequire(\"node:fs\").writeFileSync(\"HEPTA_AST_EXECUTION_MARKER\", \"must never execute\");\n"
+}

@@ -1,0 +1,256 @@
+{
+  "artifacts": {
+    "baseline-graph.json": {
+      "bytes": 3130,
+      "sha256": "f82e76ad7eda4c8a7e5e80885e89923af494845063cf31628bf039f748211b45"
+    },
+    "cancel-observations.jsonl": {
+      "bytes": 50760,
+      "sha256": "9149552aa44be88dec63f6e6d72d517c353295cc83bf2504215aae4b5e33beae"
+    },
+    "inputs/owned-0.js": {
+      "bytes": 270000,
+      "sha256": "a11ae3c70f278d7e13570c56f2cc30f5102de84da1dc5fe9a39d40af9618ab70"
+    },
+    "inputs/owned-1.js": {
+      "bytes": 270000,
+      "sha256": "a11ae3c70f278d7e13570c56f2cc30f5102de84da1dc5fe9a39d40af9618ab70"
+    },
+    "inputs/owned-2.js": {
+      "bytes": 270000,
+      "sha256": "a11ae3c70f278d7e13570c56f2cc30f5102de84da1dc5fe9a39d40af9618ab70"
+    },
+    "inputs/owned-3.js": {
+      "bytes": 270000,
+      "sha256": "a11ae3c70f278d7e13570c56f2cc30f5102de84da1dc5fe9a39d40af9618ab70"
+    },
+    "inputs/recovery.js": {
+      "bytes": 24,
+      "sha256": "76aaf893b5d7aa9acd17c9562dc88134ead855c0f0eeb4bd929759e5ec574984"
+    },
+    "mcp.requests.jsonl": {
+      "bytes": 1854,
+      "sha256": "dbc9e6f7a4c946cd96d057e7623ff94ee69346e7e60b7478819fc5aee737d927"
+    },
+    "mcp.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "mcp.stdout.jsonl": {
+      "bytes": 3614,
+      "sha256": "d3a7f2b895de45465c5cc2af7b7b6ab261c948ebc62955bf4d454215c553347c"
+    },
+    "owned-worker-stopped.json": {
+      "bytes": 1231,
+      "sha256": "8bc991ebda69dfd4f360243065ba9c79dc3e4155ba1929e937125f3b18765ad4"
+    },
+    "runtime-config.json": {
+      "bytes": 542,
+      "sha256": "686824f90547c307289729d196fb41d29f7ecdc1d7908a70e78a1cc3dcfb17a7"
+    }
+  },
+  "cancellation": {
+    "duration_seconds": 5.009520225,
+    "final_observation": {
+      "monotonic_ns": 850006975856287,
+      "owner_alive": true,
+      "owner_all_task_children": [
+        505477
+      ],
+      "pidfd_exit_ready": false,
+      "unix_ns": 1793772340983543071,
+      "worker_proc_absent": false,
+      "worker_same_identity": true,
+      "worker_state": "T"
+    },
+    "passed": false,
+    "reason": "MCP cancellation did not terminate and reap the confirmed stopped original worker within the fixed observation window",
+    "samples": 235,
+    "window_seconds": 5.0
+  },
+  "cancellation_notification": {
+    "request_id": 3,
+    "sent_at": {
+      "monotonic_ns": 850001966442522,
+      "unix_ns": 1793772335974130348
+    },
+    "sha256": "1ec70ea1ca2db50131370c086cbf6bf5b148ba73d28789cb2a974b689f37922a"
+  },
+  "cancellation_observation_seconds": 5.0,
+  "cleanup": {
+    "manual_worker_sigkill_sent": true,
+    "observed_worker_absent_at_end": true,
+    "owner_children_before_close": [],
+    "parent": {
+      "exit_code": 0,
+      "owner_pid": 505413,
+      "owner_reaped": true,
+      "reader_errors": [],
+      "reader_threads_joined": true,
+      "shutdown": "stdin_eof"
+    },
+    "parent_alive_before_close": true,
+    "worker_present_before_harness_cleanup": true,
+    "worker_proc_absent_before_parent_close": true
+  },
+  "config": {
+    "path": "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/runtime-config.json",
+    "sha256": "686824f90547c307289729d196fb41d29f7ecdc1d7908a70e78a1cc3dcfb17a7"
+  },
+  "events": [
+    {
+      "monotonic_ns": 850001705300784,
+      "phase": "runtime_copy_verified",
+      "sha256": "c54b97b6cb9eb5b65e900f047e8aa565ed4dba562604a102f513097eab5beb42",
+      "unix_ns": 1793772335712987697
+    },
+    {
+      "monotonic_ns": 850001868776081,
+      "owner_pid": 505413,
+      "phase": "baseline_mcp_worker_succeeded",
+      "unix_ns": 1793772335876463142
+    },
+    {
+      "monotonic_ns": 850001966380056,
+      "phase": "owned_worker_sigstop_confirmed",
+      "unix_ns": 1793772335974067471,
+      "worker_pid": 505477,
+      "worker_start_ticks": 85000196
+    },
+    {
+      "elapsed_seconds": 5.009520225,
+      "monotonic_ns": 850006975996414,
+      "passed": false,
+      "phase": "cancellation_observed",
+      "unix_ns": 1793772340983684093
+    },
+    {
+      "error_type": "RuntimeError",
+      "message": "MCP cancellation did not terminate and reap the confirmed stopped original worker within the fixed observation window",
+      "monotonic_ns": 850006976104139,
+      "phase": "qualification_failed",
+      "unix_ns": 1793772340983791705
+    }
+  ],
+  "failure": {
+    "message": "MCP cancellation did not terminate and reap the confirmed stopped original worker within the fixed observation window",
+    "type": "RuntimeError"
+  },
+  "finished": {
+    "monotonic_ns": 850008584447403,
+    "unix_ns": 1793772342592134479
+  },
+  "fixture": {
+    "authored_expected": "Each large source consists only of 90000 valid numeric expression statements; no execution or source imports",
+    "expressions_per_large_source": 90000,
+    "per_large_source_bytes": 270000,
+    "recovery_expected": {
+      "exported_name": "alive",
+      "source_count": 1
+    },
+    "source_count": 4,
+    "source_sha256": {
+      "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/inputs/owned-0.js": "a11ae3c70f278d7e13570c56f2cc30f5102de84da1dc5fe9a39d40af9618ab70",
+      "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/inputs/owned-1.js": "a11ae3c70f278d7e13570c56f2cc30f5102de84da1dc5fe9a39d40af9618ab70",
+      "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/inputs/owned-2.js": "a11ae3c70f278d7e13570c56f2cc30f5102de84da1dc5fe9a39d40af9618ab70",
+      "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/inputs/owned-3.js": "a11ae3c70f278d7e13570c56f2cc30f5102de84da1dc5fe9a39d40af9618ab70",
+      "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/inputs/recovery.js": "76aaf893b5d7aa9acd17c9562dc88134ead855c0f0eeb4bd929759e5ec574984"
+    }
+  },
+  "gates": {
+    "actual_owned_worker_stopped": true,
+    "baseline_mcp_worker_succeeds": true,
+    "cancelled_worker_terminated_and_reaped_by_live_original_owner": false,
+    "same_owner_next_call_recovers": null
+  },
+  "harness": {
+    "path": "/home/qian-qi/work/hepta-rea-js-cancellation-harness-20261104-r1/rea_javascript_cancellation_external.py",
+    "sha256": "7c7e504f2227846d6434ba1306454455aea1c3178799def379e5c37f1f54735d"
+  },
+  "initialize": {
+    "capabilities": {
+      "experimental": {
+        "claude/channel": {}
+      },
+      "resources": {
+        "subscribe": true
+      },
+      "tools": {}
+    },
+    "instructions": "Filesystem tools. File lines render as `N:hh|content`; `N:hh` is the line id edit tools target, and edit results are diffs with fresh ids, so edits chain without re-viewing files. Reuse returned content and ids; read complete relevant blocks, then act on them. Each response costs a round trip: first decide what you need next, then request every call that doesn't depend on another's result in that one response.",
+    "protocolVersion": "2025-11-25",
+    "serverInfo": {
+      "name": "rmcp",
+      "version": "3.4.1"
+    }
+  },
+  "large_request": {
+    "request_id": 3,
+    "sent_at": {
+      "monotonic_ns": 850001869241122,
+      "unix_ns": 1793772335876928457
+    },
+    "sha256": "eb42bf89fc51b52d0326d77ec4505eb421ccdae09b1ed468b48d0b3f818785d7"
+  },
+  "owner": {
+    "argv": [
+      "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/hepta-runtime-qualified",
+      "mcp",
+      "--runtime-config",
+      "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/runtime-config.json"
+    ],
+    "pgid": 504774,
+    "pid": 505413,
+    "ppid": 504774,
+    "start_ticks": 85000171,
+    "stat": "505413 (hepta-runtime-q) R 504774 504774 504774 0 -1 4194304 9 0 0 0 0 0 0 0 30 10 1 0 85000171 30334976 0 18446744073709551615 97679822242560 97679841640944 140727428335968 0 0 0 0 0 0 0 0 0 17 46 0 0 0 0 0 97679842685216 97679842895320 97679943835648 140727428337366 140727428337565 140727428337565 140727428337565 0\n",
+    "state": "R"
+  },
+  "production_worker_deadline_seconds": 20,
+  "qualified": false,
+  "runtime": {
+    "bytes": 432454264,
+    "copy_path": "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/hepta-runtime-qualified",
+    "sha256": "c54b97b6cb9eb5b65e900f047e8aa565ed4dba562604a102f513097eab5beb42",
+    "source_dev": 2050,
+    "source_inode": 3162594,
+    "source_mtime_ns": 1793770825216855031,
+    "source_path": "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/hepta-runtime"
+  },
+  "runtime_copy_sha256_after": "c54b97b6cb9eb5b65e900f047e8aa565ed4dba562604a102f513097eab5beb42",
+  "schema": "hepta.javascript-mcp-cancellation-qualification.v1",
+  "scope": "one owned Linux MCP parent and its actual stopped direct JavaScript worker; cancellation and same-owner recovery",
+  "source_bytes_unchanged": true,
+  "started": {
+    "monotonic_ns": 849991587597446,
+    "unix_ns": 1793772325595283970
+  },
+  "worker": {
+    "argv": [
+      "/home/qian-qi/work/hepta-rea-js-cancellation-before-v6-20261104-r1/hepta-runtime-qualified",
+      "rea-javascript-worker"
+    ],
+    "before_stop": {
+      "pgid": 504774,
+      "pid": 505477,
+      "ppid": 505413,
+      "start_ticks": 85000196,
+      "stat": "505477 (hepta-runtime-q) R 505413 504774 504774 0 -1 4194304 165 0 0 0 0 0 0 0 30 10 1 0 85000196 33845248 604 18446744073709551615 94610591531776 94610610930160 140733389198928 0 0 0 0 0 0 0 0 0 17 44 0 0 0 0 0 94610611974432 94610612184536 94610818609152 140733389205292 140733389205405 140733389205405 140733389205405 0\n",
+      "state": "R"
+    },
+    "confirmed_at": {
+      "monotonic_ns": 850001965975379,
+      "unix_ns": 1793772335973662594
+    },
+    "pidfd_opened": true,
+    "sigstop_via_pidfd": true,
+    "stopped": {
+      "pgid": 504774,
+      "pid": 505477,
+      "ppid": 505413,
+      "start_ticks": 85000196,
+      "stat": "505477 (hepta-runtime-q) T 505413 504774 504774 0 -1 4194304 268 0 0 0 0 0 0 0 30 10 1 0 85000196 33845248 700 18446744073709551615 94610591531776 94610610930160 140733389198928 0 0 0 0 0 0 1 0 0 17 44 0 0 0 0 0 94610611974432 94610612184536 94610818609152 140733389205292 140733389205405 140733389205405 140733389205405 19\n",
+      "state": "T"
+    }
+  }
+}

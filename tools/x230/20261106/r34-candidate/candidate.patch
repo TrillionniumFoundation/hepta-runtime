@@ -1,0 +1,721 @@
+--- a/src/mcp/runtime/jobs.rs
++++ b/src/mcp/runtime/jobs.rs
+@@ -4568,9 +4568,9 @@
+ 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
+ 	});
+ 	let remote = if record.system_jobctl {
+-		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
++		super::ssh::run_jobctl_cancel(host, &record.id).await
+ 	} else {
+-		run_python_json(
++		super::ssh::run_job_cancel_python_json(
+ 			host,
+ 			&bound_remote_code(CANCEL_CODE)?,
+ 			&request,
+--- a/src/mcp/runtime/ssh.rs
++++ b/src/mcp/runtime/ssh.rs
+@@ -463,6 +463,28 @@
+ 	stdin_data: &[u8],
+ 	deadline: tokio::time::Instant,
+ ) -> Result<std::process::Output> {
++	run_capture_admitted_until(
++		host,
++		remote_command,
++		stdin_data,
++		deadline,
++		DirectAdmission::Ordinary,
++	)
++	.await
++}
++
++enum DirectAdmission {
++	Ordinary,
++	ExistingJobCancellation,
++}
++
++async fn run_capture_admitted_until(
++	host: &HostConfig,
++	remote_command: &str,
++	stdin_data: &[u8],
++	deadline: tokio::time::Instant,
++	admission: DirectAdmission,
++) -> Result<std::process::Output> {
+ 	let mut command = ssh_base(host);
+ 	command
+ 		.arg(remote_command)
+@@ -470,7 +492,14 @@
+ 		.stdout(Stdio::piped())
+ 		.stderr(Stdio::piped())
+ 		.kill_on_drop(true);
+-	direct::capture(&host.ssh_target, command, stdin_data, deadline).await
++	match admission {
++		DirectAdmission::Ordinary => {
++			direct::capture(&host.ssh_target, command, stdin_data, deadline).await
++		}
++		DirectAdmission::ExistingJobCancellation => {
++			direct::capture_job_cancel(&host.ssh_target, command, stdin_data, deadline).await
++		}
++	}
+ }
+ 
+ pub async fn run_python_json<I, O>(
+@@ -517,6 +546,47 @@
+ 	code: &str,
+ 	input: &I,
+ 	timeout: Duration,
++) -> Result<O>
++where
++	I: Serialize + ?Sized,
++	O: DeserializeOwned,
++{
++	run_python_json_admitted(
++		host,
++		interpreter,
++		code,
++		input,
++		timeout,
++		DirectAdmission::Ordinary,
++	)
++	.await
++}
++
++// Called only after jobs::cancel_job verifies the existing receipt and records intent.
++pub(super) async fn run_job_cancel_python_json(
++	host: &HostConfig,
++	code: &str,
++	input: &serde_json::Value,
++	timeout: Duration,
++) -> Result<serde_json::Value> {
++	run_python_json_admitted(
++		host,
++		"python3",
++		code,
++		input,
++		timeout,
++		DirectAdmission::ExistingJobCancellation,
++	)
++	.await
++}
++
++async fn run_python_json_admitted<I, O>(
++	host: &HostConfig,
++	interpreter: &str,
++	code: &str,
++	input: &I,
++	timeout: Duration,
++	admission: DirectAdmission,
+ ) -> Result<O>
+ where
+ 	I: Serialize + ?Sized,
+@@ -527,7 +597,8 @@
+ 		.context("SSH deadline exceeds the monotonic clock range")?;
+ 	let remote_command = python_json_command(interpreter, code)?;
+ 	let payload = serde_json::to_vec(input)?;
+-	let output = run_capture_until(host, &remote_command, &payload, deadline).await?;
++	let output =
++		run_capture_admitted_until(host, &remote_command, &payload, deadline, admission).await?;
+ 	if !output.status.success() {
+ 		let stderr = String::from_utf8_lossy(&output.stderr);
+ 		let stdout = String::from_utf8_lossy(&output.stdout);
+@@ -594,14 +665,35 @@
+ /// Fixed no-argument capability; the administrator policy, not the caller, owns
+ /// systemd properties, DynamicUser selection and protected paths.
+ pub async fn run_jobctl(host: &HostConfig, input: &serde_json::Value) -> Result<serde_json::Value> {
++	run_jobctl_admitted(host, input, DirectAdmission::Ordinary).await
++}
++
++pub(super) async fn run_jobctl_cancel(
++	host: &HostConfig,
++	job_id: &str,
++) -> Result<serde_json::Value> {
++	run_jobctl_admitted(
++		host,
++		&serde_json::json!({"op":"cancel","job_id":job_id}),
++		DirectAdmission::ExistingJobCancellation,
++	)
++	.await
++}
++
++async fn run_jobctl_admitted(
++	host: &HostConfig,
++	input: &serde_json::Value,
++	admission: DirectAdmission,
++) -> Result<serde_json::Value> {
+ 	let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+ 	let mut data = serde_json::to_vec(input)?;
+ 	data.push(b'\n');
+-	let output = run_capture_until(
++	let output = run_capture_admitted_until(
+ 		host,
+ 		"sudo -n /usr/local/libexec/hepta-runtime-jobctl",
+ 		&data,
+ 		deadline,
++		admission,
+ 	)
+ 	.await?;
+ 	if !output.status.success() {
+--- a/src/mcp/runtime/ssh_direct.rs
++++ b/src/mcp/runtime/ssh_direct.rs
+@@ -18,6 +18,10 @@
+ const HOST_CONNECTIONS: usize = 2;
+ const GLOBAL_CONNECTIONS: usize = 8;
+ const MAX_ADMITTED: usize = 16;
++const CANCEL_CONNECTIONS: usize = 1;
++const MAX_CANCEL_ADMITTED: usize = 8;
++// Every queued request already owns one ordinary or cancellation global lease.
++const OWNER_QUEUE: usize = GLOBAL_CONNECTIONS + CANCEL_CONNECTIONS;
+ const REAP: Duration = Duration::from_secs(3);
+ static DIRECT: OnceLock<std::result::Result<Arc<Proxy>, String>> = OnceLock::new();
+ static FROZEN: AtomicBool = AtomicBool::new(false);
+@@ -67,7 +71,8 @@
+ 
+ struct Leases {
+ 	_admission: OwnedSemaphorePermit,
+-	_host: OwnedSemaphorePermit,
++	// One reserved global child cannot add more than one child to any target.
++	_host: Option<OwnedSemaphorePermit>,
+ 	_global: OwnedSemaphorePermit,
+ }
+ 
+@@ -424,6 +429,8 @@
+ 	hosts: Mutex<BTreeMap<String, Weak<Semaphore>>>,
+ 	admission: Arc<Semaphore>,
+ 	global: Arc<Semaphore>,
++	cancel_admission: Arc<Semaphore>,
++	cancel_global: Arc<Semaphore>,
+ 	// The process-wide proxy retains quarantined original children and permits
+ 	// even if its owner thread exits with an error. No replacement owner is made.
+ 	core: Arc<Core>,
+@@ -443,7 +450,7 @@
+ 
+ impl Proxy {
+ 	fn start() -> Result<Arc<Self>> {
+-		let (sender, receiver) = mpsc::channel(GLOBAL_CONNECTIONS);
++		let (sender, receiver) = mpsc::channel(OWNER_QUEUE);
+ 		let core = Arc::new(Core {
+ 			stop: CancellationToken::new(),
+ 			accepting: Mutex::new(true),
+@@ -457,6 +464,8 @@
+ 			hosts: Mutex::new(BTreeMap::new()),
+ 			admission: Arc::new(Semaphore::new(MAX_ADMITTED)),
+ 			global: Arc::new(Semaphore::new(GLOBAL_CONNECTIONS)),
++			cancel_admission: Arc::new(Semaphore::new(MAX_CANCEL_ADMITTED)),
++			cancel_global: Arc::new(Semaphore::new(CANCEL_CONNECTIONS)),
+ 			core: core.clone(),
+ 			join: Arc::new(JoinReceipt {
+ 				state: Mutex::new(JoinState {
+@@ -543,7 +552,62 @@
+ 		};
+ 		Ok(Leases {
+ 			_admission: admission,
+-			_host: host,
++			_host: Some(host),
++			_global: global,
++		})
++	}
++
++	fn try_ordinary_cancel(&self, target: &str, deadline: Instant) -> Result<Option<Leases>> {
++		fn available(slots: Arc<Semaphore>) -> Result<Option<OwnedSemaphorePermit>> {
++			match slots.try_acquire_owned() {
++				Ok(permit) => Ok(Some(permit)),
++				Err(tokio::sync::TryAcquireError::NoPermits) => Ok(None),
++				Err(tokio::sync::TryAcquireError::Closed) => {
++					bail!("direct SSH ordinary admission closed; no cancellation submitted")
++				}
++			}
++		}
++		self.core.active(deadline, &self.core.stop)?;
++		let Some(admission) = available(self.admission.clone())? else {
++			return Ok(None);
++		};
++		let Some(host) = available(self.target(target)?)? else {
++			return Ok(None);
++		};
++		let Some(global) = available(self.global.clone())? else {
++			return Ok(None);
++		};
++		self.core.active(deadline, &self.core.stop)?;
++		Ok(Some(Leases {
++			_admission: admission,
++			_host: Some(host),
++			_global: global,
++		}))
++	}
++
++	async fn acquire_job_cancel(&self, target: &str, deadline: Instant) -> Result<Leases> {
++		// Ordinary capacity wins only when all three leases are immediately free.
++		// Returning None drops every partial lease before any reserve await.
++		if let Some(leases) = self.try_ordinary_cancel(target, deadline)? {
++			return Ok(leases);
++		}
++		self.core.active(deadline, &self.core.stop)?;
++		let admission = self
++			.cancel_admission
++			.clone()
++			.try_acquire_owned()
++			.map_err(|_| anyhow!("direct SSH cancellation reserve admitted capacity exhausted; no child submitted; no automatic retry"))?;
++		let global = tokio::select! {
++			biased;
++			_ = self.core.stop.cancelled() => bail!("direct SSH cancellation admission stopped"),
++			value = timeout_at(deadline, self.cancel_global.clone().acquire_owned()) => value
++				.context("direct SSH cancellation reserve deadline; no child submitted")??,
++		};
++		// Expiry/stop and a returned reserve lease may become ready together.
++		self.core.active(deadline, &self.core.stop)?;
++		Ok(Leases {
++			_admission: admission,
++			_host: None,
+ 			_global: global,
+ 		})
+ 	}
+@@ -556,6 +620,30 @@
+ 		deadline: Instant,
+ 	) -> Result<Output> {
+ 		let leases = self.acquire(target, deadline).await?;
++		self.capture_admitted(target, command, input, deadline, leases)
++			.await
++	}
++
++	async fn capture_job_cancel(
++		&self,
++		target: &str,
++		command: Command,
++		input: &[u8],
++		deadline: Instant,
++	) -> Result<Output> {
++		let leases = self.acquire_job_cancel(target, deadline).await?;
++		self.capture_admitted(target, command, input, deadline, leases)
++			.await
++	}
++
++	async fn capture_admitted(
++		&self,
++		target: &str,
++		command: Command,
++		input: &[u8],
++		deadline: Instant,
++		leases: Leases,
++	) -> Result<Output> {
+ 		let cancel = Cancellation::new();
+ 		let _cancel_on_drop = CancelOnDrop(cancel.clone());
+ 		self.core.active(deadline, &cancel.token)?;
+@@ -690,6 +778,18 @@
+ 	shared()?.capture(target, command, input, deadline).await
+ }
+ 
++// Only the existing-job cancellation entry points in ssh.rs select this path.
++pub(super) async fn capture_job_cancel(
++	target: &str,
++	command: Command,
++	input: &[u8],
++	deadline: Instant,
++) -> Result<Output> {
++	shared()?
++		.capture_job_cancel(target, command, input, deadline)
++		.await
++}
++
+ #[cfg(all(test, unix))]
+ #[path = "ssh_direct_tests.rs"]
+ mod tests;
+--- a/src/mcp/runtime/ssh_direct_tests.rs
++++ b/src/mcp/runtime/ssh_direct_tests.rs
+@@ -63,6 +63,11 @@
+ 		assert!(self.0.core.children.lock().unwrap().is_empty());
+ 		assert_eq!(self.0.global.available_permits(), GLOBAL_CONNECTIONS);
+ 		assert_eq!(self.0.admission.available_permits(), MAX_ADMITTED);
++		assert_eq!(self.0.cancel_global.available_permits(), CANCEL_CONNECTIONS);
++		assert_eq!(
++			self.0.cancel_admission.available_permits(),
++			MAX_CANCEL_ADMITTED
++		);
+ 	}
+ }
+ impl Drop for Owner {
+@@ -798,6 +803,386 @@
+ 	owner.finish().await;
+ 	assert!(!fixture.ready(2).exists());
+ 	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 2);
++}
++
++fn submit_job_cancel(
++	owner: &Owner,
++	fixture: &Fixture,
++	target: &str,
++	slot: usize,
++) -> JoinHandle<Result<Output>> {
++	let proxy = owner.0.clone();
++	let command = fixture.command(slot);
++	let target = target.to_owned();
++	tokio::spawn(async move {
++		proxy
++			.capture_job_cancel(
++				&target,
++				command,
++				format!("input-{slot}").as_bytes(),
++				Instant::now() + Duration::from_secs(10),
++			)
++			.await
++	})
++}
++
++#[tokio::test]
++async fn existing_job_cancel_uses_ordinary_capacity_while_reserve_is_busy() {
++	let owner = Owner::new();
++	let fixture = Fixture::new();
++	let reserved = owner.0.cancel_global.clone().try_acquire_owned().unwrap();
++	let host = owner.0.target("host").unwrap();
++	let call = submit_job_cancel(&owner, &fixture, "host", 0);
++	until(|| fixture.ready(0).exists()).await;
++	assert_eq!(owner.0.global.available_permits(), 7);
++	assert_eq!(owner.0.admission.available_permits(), 15);
++	assert_eq!(host.available_permits(), 1);
++	assert_eq!(owner.0.cancel_admission.available_permits(), 8);
++	fixture.release(0);
++	finish_call(call, 0).await;
++	drop(reserved);
++	owner.finish().await;
++}
++
++#[tokio::test]
++async fn cancel_reserve_wait_releases_partial_ordinary_host_and_global_leases() {
++	for blocked_stage in ["host", "global"] {
++		let owner = Owner::new();
++		let fixture = Fixture::new();
++		let host = owner.0.target("partial").unwrap();
++		let blocked = if blocked_stage == "host" {
++			host.clone().acquire_many_owned(2).await.unwrap()
++		} else {
++			owner.0.global.clone().acquire_many_owned(8).await.unwrap()
++		};
++		let reserved = owner.0.cancel_global.clone().try_acquire_owned().unwrap();
++		let waiting = submit_job_cancel(&owner, &fixture, "partial", 0);
++		until(|| owner.0.cancel_admission.available_permits() == 7).await;
++		assert_eq!(owner.0.admission.available_permits(), 16);
++		assert_eq!(
++			host.available_permits(),
++			if blocked_stage == "host" { 0 } else { 2 }
++		);
++		assert_eq!(
++			owner.0.global.available_permits(),
++			if blocked_stage == "global" { 0 } else { 8 }
++		);
++		assert!(!fixture.ready(0).exists());
++		assert!(owner.0.core.children.lock().unwrap().is_empty());
++		waiting.abort();
++		assert!(waiting.await.unwrap_err().is_cancelled());
++		assert_eq!(owner.0.cancel_admission.available_permits(), 8);
++		drop(reserved);
++		drop(blocked);
++		owner.finish().await;
++	}
++}
++
++#[tokio::test]
++async fn closed_ordinary_capacity_cannot_select_the_cancellation_reserve() {
++	let owner = Owner::new();
++	let fixture = Fixture::new();
++	let host = owner.0.target("closed").unwrap();
++	owner.0.global.close();
++	let error = owner
++		.0
++		.capture_job_cancel(
++			"closed",
++			fixture.command(0),
++			b"unsubmitted",
++			Instant::now() + Duration::from_secs(5),
++		)
++		.await
++		.unwrap_err();
++	assert!(error.to_string().contains("ordinary admission closed"));
++	assert_eq!(owner.0.admission.available_permits(), 16);
++	assert_eq!(host.available_permits(), 2);
++	assert_eq!(owner.0.cancel_admission.available_permits(), 8);
++	assert_eq!(owner.0.cancel_global.available_permits(), 1);
++	assert!(!fixture.ready(0).exists());
++	owner.finish().await;
++}
++
++#[tokio::test]
++async fn full_ordinary_work_keeps_cancel_to_one_extra_child_and_eight_reserve_identities() {
++	let owner = Owner::new();
++	let fixture = Fixture::new();
++	let mut ordinary: Vec<_> = (0..8)
++		.map(|slot| {
++			let target = format!("target-{}", slot / 2);
++			(slot, submit(&owner, &fixture, &target, slot))
++		})
++		.collect();
++	// First establish all eight actual children. Only then add same-target
++	// waiters, so scheduler order cannot choose different ready slot identities.
++	until(|| (0..8).all(|slot| fixture.ready(slot).exists())).await;
++	ordinary.extend(
++		(8..16).map(|slot| (slot, submit(&owner, &fixture, "target-0", slot))),
++	);
++	until(|| owner.0.admission.available_permits() == 0).await;
++	let refused = owner
++		.0
++		.capture(
++			"ordinary-overflow",
++			fixture.command(99),
++			b"unsubmitted",
++			Instant::now() + Duration::from_secs(1),
++		)
++		.await
++		.unwrap_err();
++	assert!(refused.to_string().contains("admitted capacity exhausted"));
++	assert!(!fixture.ready(99).exists());
++	assert_eq!(owner.0.cancel_admission.available_permits(), 8);
++	let cancelled: Vec<_> = (32..40)
++		.map(|slot| (slot, submit_job_cancel(&owner, &fixture, "target-0", slot)))
++		.collect();
++	until(|| {
++		(32..40)
++			.filter(|slot| fixture.ready(*slot).exists())
++			.count()
++			== 1
++			&& owner.0.cancel_admission.available_permits() == 0
++	})
++	.await;
++	assert_eq!(owner.0.core.children.lock().unwrap().len(), 9);
++	assert_eq!(owner.0.global.available_permits(), 0);
++	assert_eq!(owner.0.cancel_global.available_permits(), 0);
++	assert_eq!(owner.0.admission.available_permits(), 0);
++	assert_eq!(owner.0.cancel_admission.available_permits(), 0);
++	let refused = owner
++		.0
++		.capture_job_cancel(
++			"cancel-overflow",
++			fixture.command(100),
++			b"unsubmitted",
++			Instant::now() + Duration::from_secs(1),
++		)
++		.await
++		.unwrap_err();
++	assert!(refused.to_string().contains("cancellation reserve admitted capacity exhausted"));
++	assert!(!fixture.ready(100).exists());
++	for slot in (0..16).chain(32..40) {
++		fixture.release(slot);
++	}
++	for (slot, call) in ordinary.into_iter().chain(cancelled) {
++		finish_call(call, slot).await;
++	}
++	assert_eq!(fixture.event_peak(), 9);
++	let raw = std::fs::read_to_string(fixture.0.path().join("events")).unwrap();
++	let (mut active, mut peak) = (0usize, 0usize);
++	for line in raw.lines() {
++		let mut fields = line.split_whitespace();
++		let kind = fields.next().unwrap();
++		let slot: usize = fields.next().unwrap().parse().unwrap();
++		if slot < 2 || (8..16).contains(&slot) || (32..40).contains(&slot) {
++			match kind {
++				"start" => {
++					active += 1;
++					peak = peak.max(active);
++				}
++				"end" => active = active.checked_sub(1).unwrap(),
++				other => panic!("unexpected event {other}"),
++			}
++		}
++	}
++	assert_eq!((active, peak), (0, 3));
++	owner.finish().await;
++}
++
++#[tokio::test]
++async fn original_owner_queue_can_hold_eight_ordinary_and_one_reserved_ready_request() {
++	let owner = Owner::new();
++	let fixture = Fixture::new();
++	let deadline = Instant::now() + Duration::from_secs(5);
++	let mut ready = Vec::new();
++	for slot in 0..8 {
++		let target = format!("target-{}", slot / 2);
++		let leases = owner.0.acquire(&target, deadline).await.unwrap();
++		ready.push((target, leases));
++	}
++	ready.push((
++		"target-0".into(),
++		owner.0.acquire_job_cancel("target-0", deadline).await.unwrap(),
++	));
++	assert_eq!(owner.0.global.available_permits(), 0);
++	assert_eq!(owner.0.cancel_global.available_permits(), 0);
++	// Reserve all nine real production-channel entries before publishing any
++	// request. The running receiver cannot hide an eight-entry queue here.
++	let slots: Vec<_> = (0..9)
++		.map(|_| {
++			owner
++				.0
++				.sender
++				.try_reserve()
++				.expect("all nine ready owners need queue space")
++		})
++		.collect();
++	assert_eq!(owner.0.sender.capacity(), 0);
++	assert!(owner.0.sender.try_reserve().is_err());
++	let mut replies = Vec::new();
++	for (slot, (channel, (target, leases))) in slots.into_iter().zip(ready).enumerate() {
++		fixture.release(slot);
++		let (reply, receive) = oneshot::channel();
++		channel.send(Request {
++			target,
++			command: fixture.command(slot),
++			input: format!("input-{slot}").into_bytes(),
++			deadline,
++			cancel: Cancellation::new(),
++			reply,
++			leases: Some(leases),
++		});
++		replies.push((slot, receive));
++	}
++	for (slot, receive) in replies {
++		let output = reply(receive).await.unwrap();
++		assert!(output.status.success());
++		assert_eq!(output.stdout, format!("input-{slot}").as_bytes());
++		assert_eq!(output.stderr, format!("stderr-{slot}\n").as_bytes());
++	}
++	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 9);
++	assert_eq!(owner.0.sender.capacity(), 9);
++	owner.finish().await;
++}
++
++#[tokio::test]
++async fn reserve_readiness_cannot_overtake_original_expiry_or_stop() {
++	for fence in ["deadline", "stop"] {
++		let owner = Owner::new();
++		let fixture = Fixture::new();
++		let ordinary = owner.0.global.clone().acquire_many_owned(8).await.unwrap();
++		let reserved = owner.0.cancel_global.clone().try_acquire_owned().unwrap();
++		let deadline = Instant::now() + Duration::from_millis(200);
++		let call = owner
++			.0
++			.capture_job_cancel("fenced", fixture.command(0), b"", deadline);
++		tokio::pin!(call);
++		std::future::poll_fn(|context| {
++			assert!(std::future::Future::poll(call.as_mut(), context).is_pending());
++			std::task::Poll::Ready(())
++		})
++		.await;
++		assert_eq!(owner.0.cancel_admission.available_permits(), 7);
++		assert_eq!(owner.0.admission.available_permits(), 16);
++		if fence == "deadline" {
++			tokio::time::sleep_until(deadline + Duration::from_millis(1)).await;
++		} else {
++			owner.0.core.freeze();
++		}
++		// Do not repoll until both the lease and the expiry/stop fence are ready.
++		drop(reserved);
++		let error = call.await.unwrap_err();
++		assert!(format!("{error:#}").contains(fence));
++		assert!(!fixture.ready(0).exists());
++		assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 0);
++		assert_eq!(owner.0.cancel_global.available_permits(), 1);
++		assert_eq!(owner.0.cancel_admission.available_permits(), 8);
++		drop(ordinary);
++		owner.finish().await;
++	}
++}
++
++#[tokio::test]
++async fn cancelled_reserved_child_keeps_its_leases_until_the_original_reap() {
++	let owner = Owner::new();
++	let fixture = Fixture::new();
++	let ordinary = owner.0.global.clone().acquire_many_owned(8).await.unwrap();
++	let gate = Arc::new(Gate::default());
++	let _release = ReleaseGate(gate.clone());
++	*owner.0.core.hooks.child.lock().unwrap() = Some(ChildHooks {
++		before_reap: Mutex::new(Some(gate.clone())),
++		unconfirmed_wait: false,
++	});
++	let call = submit_job_cancel(&owner, &fixture, "held", 0);
++	until(|| fixture.ready(0).exists()).await;
++	call.abort();
++	assert!(call.await.unwrap_err().is_cancelled());
++	until(|| gate.reached.load(Ordering::Acquire)).await;
++	assert_eq!(owner.0.cancel_global.available_permits(), 0);
++	assert_eq!(owner.0.cancel_admission.available_permits(), 7);
++	assert_eq!(owner.0.admission.available_permits(), 16);
++	assert_eq!(owner.0.core.children.lock().unwrap().len(), 1);
++	assert!(owner
++		.0
++		.capture_job_cancel(
++			"another",
++			fixture.command(1),
++			b"",
++			Instant::now() + Duration::from_millis(30)
++		)
++		.await
++		.is_err());
++	assert!(!fixture.ready(1).exists());
++	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 1);
++	assert_eq!(owner.0.cancel_global.available_permits(), 0);
++	assert_eq!(owner.0.cancel_admission.available_permits(), 7);
++	gate.release();
++	drop(ordinary);
++	until(|| {
++		owner.0.cancel_global.available_permits() == 1
++			&& owner.0.cancel_admission.available_permits() == 8
++	})
++	.await;
++	owner.finish().await;
++}
++
++#[tokio::test]
++async fn unconfirmed_reserved_wait_keeps_custody_and_failed_shutdown_persistent() {
++	let owner = Owner::new();
++	let fixture = Fixture::new();
++	let ordinary = owner.0.global.clone().acquire_many_owned(8).await.unwrap();
++	fixture.release(0);
++	*owner.0.core.hooks.child.lock().unwrap() = Some(ChildHooks {
++		before_reap: Mutex::new(None),
++		unconfirmed_wait: true,
++	});
++	assert!(owner
++		.0
++		.capture_job_cancel(
++			"host",
++			fixture.command(0),
++			b"",
++			Instant::now() + Duration::from_secs(5)
++		)
++		.await
++		.is_err());
++	assert!(owner.0.shutdown().await.is_err());
++	assert!(owner.0.shutdown().await.is_err());
++	assert_eq!(owner.0.core.children.lock().unwrap().len(), 1);
++	assert_eq!(owner.0.cancel_global.available_permits(), 0);
++	assert_eq!(owner.0.cancel_admission.available_permits(), 7);
++	assert_eq!(owner.0.admission.available_permits(), 16);
++	drop(ordinary);
++	assert!(owner
++		.0
++		.capture_job_cancel(
++			"host",
++			fixture.command(1),
++			b"",
++			Instant::now() + Duration::from_secs(1)
++		)
++		.await
++		.is_err());
++	assert!(!fixture.ready(1).exists());
++	// As in the original ordinary-lane fault fixture, restore only the hidden
++	// cached wait status of this real test child. The failed owner stays frozen.
++	let original = owner
++		.0
++		.core
++		.children
++		.lock()
++		.unwrap()
++		.values()
++		.next()
++		.unwrap()
++		.clone();
++	original.state.lock().await.wait_failed = false;
++	original.stop_and_reap().await.unwrap();
++	owner.0.core.release(&original).await.unwrap();
++	drop(original);
++	assert!(owner.0.shutdown().await.is_err());
++	assert_eq!(owner.0.cancel_global.available_permits(), 1);
++	assert_eq!(owner.0.cancel_admission.available_permits(), 8);
+ }
+ 
+ // The independent driver owns both wait receipts. Its subreaper setting is

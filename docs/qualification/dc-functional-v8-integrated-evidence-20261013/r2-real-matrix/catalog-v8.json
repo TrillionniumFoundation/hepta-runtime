@@ -1,0 +1,139 @@
+{
+  "schema": "hepta-dc-functional-v8-catalog-native-facade-v1",
+  "recorded_utc": "2026-10-13T17:58:20.961525+00:00",
+  "binary_sha256": "c0a082bcbb361e9f43d77a41351f8df7cce7cd0065f50d63b006a5c870e1784e",
+  "contract_sha256": "b64769210b9913fbdab28f7d0e95b7ef300d8710b3f1eeea74afcfac25b08318",
+  "harness_sha256": "69a3d206c3f4fe5f125611e91557ed3730adcb886ba6ff01aca5ae5a4e477add",
+  "catalog_sha256": "cceb06f1871d7d129a8a4d442a0e4e38a0eb4fbac6d324c3386b03d104db03e9",
+  "tool_count": 60,
+  "checks": [
+    {
+      "check": "reviewed historical V5 positive control",
+      "result": "passed",
+      "detail": {
+        "original_fifty_projection_exact": true
+      }
+    },
+    {
+      "check": "reviewed historical V6 positive control",
+      "result": "passed",
+      "detail": {
+        "original_fifty_projection_exact": true
+      }
+    },
+    {
+      "check": "reviewed historical V7 positive control",
+      "result": "passed",
+      "detail": {
+        "original_fifty_projection_exact": true
+      }
+    },
+    {
+      "check": "pinned V8 contract rejects changed live catalog",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "unknown self-consistent original new-hint owner-input and extra-tool catalogs are refused",
+      "result": "passed",
+      "detail": {
+        "cases": [
+          "original-v4",
+          "new-tool-hint",
+          "new-tool-owner",
+          "extra-tool"
+        ]
+      }
+    },
+    {
+      "check": "native V8 exact catalog preserves all58 V7 definitions and adds only two names",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "new lookup schemas refuse owner and advertise accurate read-only hints",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "native host_list server ID ACK and original envelope lookup",
+      "result": "passed",
+      "detail": {
+        "native_original_bytes": 561,
+        "identity_is_server_generated": true
+      }
+    },
+    {
+      "check": "legacy native history envelope has no V8 overlay and rejects owner spoof",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "modern facade discover and exact V8 catalog",
+      "result": "passed",
+      "detail": {
+        "modern_protocol": "2026-07-28",
+        "native_catalog_count": 60
+      }
+    },
+    {
+      "check": "modern facade preserves dynamic host_list ID ACK status and original result pages",
+      "result": "passed",
+      "detail": {
+        "captured_server_ID_drives_lookup": true,
+        "ID_ACK_and_modern_serverInfo_coexist": true,
+        "original_native_bytes_before_ACK": 561
+      }
+    },
+    {
+      "check": "modern facade history remains without V8 overlay and lookup responses are not recursively retained",
+      "result": "passed",
+      "detail": {
+        "existing_modern_serverInfo_metadata_only": true,
+        "recursive_cache": false
+      }
+    },
+    {
+      "check": "modern facade refuses owner spoof on history search and new lookups",
+      "result": "passed",
+      "detail": {
+        "configured_host_operations": 0
+      }
+    }
+  ],
+  "complete": true,
+  "origin": "isolated local native controller and modern stdio facade",
+  "qualification_scope": "local_native_and_facade_contract_lookup_protocol_only",
+  "target_health_probed": false,
+  "real_ssh_qualified": false,
+  "six_machine_qualified": false,
+  "chatgpt_originated": false,
+  "installed_runtime_changed": false,
+  "desktop_commander_changed": false,
+  "full_dc_replacement_qualified": false,
+  "native_to_modern_normalization": "facade preserves native ID/ACK and adds existing serverInfo/resultType metadata",
+  "passed": 13,
+  "owned_cleanup_confirmed": true,
+  "logs": [
+    {
+      "name": "facade.host-list.native-result.json",
+      "sha256": "75a374828ee96e6fe731eac705dc0925dd8132a112d25ef28588ac899c81f610",
+      "bytes": 561
+    },
+    {
+      "name": "facade.protocol.json",
+      "sha256": "a42cebe4abaf5890e9b58014b9c5abd66405a1acbd80b14b5c72b7183785a5db",
+      "bytes": 170829
+    },
+    {
+      "name": "facade.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "name": "native.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}

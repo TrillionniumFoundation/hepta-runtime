@@ -1,0 +1,137 @@
+{
+  "baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "baseline_map": {
+    "bytes": 24156,
+    "path": "/tmp/hepta-runtime-recovery-20261106/r35/baseline-compile-inputs.json",
+    "sha256": "c3415beaf7697b3eb07a763ef24f424138de80af31acfd6c224cf682f3c67cbd"
+  },
+  "candidate_map": {
+    "bytes": 24156,
+    "path": "/tmp/hepta-runtime-recovery-20261106/r35/candidate-compile-inputs.json",
+    "sha256": "02843e761ae69211b0e0ccb75f8273017e432c3b75708a9edf6cad6fd0d78e05"
+  },
+  "conclusion": "no_static_blocker_identified",
+  "files": {
+    "src/mcp/runtime/jobs.rs": {
+      "baseline": {
+        "bytes": 186456,
+        "path": "/tmp/hepta-runtime-recovery-20261106/r35/baseline/src/mcp/runtime/jobs.rs",
+        "sha256": "c9080de8aa9a35f7495aa2822a1495d297903900ae0f0de26d7b0c86d043d3c9"
+      },
+      "candidate": {
+        "bytes": 186465,
+        "path": "/tmp/hepta-runtime-recovery-20261106/r35/source/src/mcp/runtime/jobs.rs",
+        "sha256": "17c8bb5c27c6bcc2e466dbfc31951183e9b694fa6e180865477cb2a322743629"
+      }
+    },
+    "src/mcp/runtime/ssh_observation_pool.rs": {
+      "baseline": {
+        "bytes": 63329,
+        "path": "/tmp/hepta-runtime-recovery-20261106/r35/baseline/src/mcp/runtime/ssh_observation_pool.rs",
+        "sha256": "92592431b6f4f0d3561c039ed86d9129f3942fb677ba9a336f639003b16b71d9"
+      },
+      "candidate": {
+        "bytes": 63354,
+        "path": "/tmp/hepta-runtime-recovery-20261106/r35/source/src/mcp/runtime/ssh_observation_pool.rs",
+        "sha256": "cd7c737faac90b9f2ec7a7faf73df38b63836854105600183e2140340ebc6dbd"
+      }
+    },
+    "src/mcp/runtime/ssh_observation_pool_tests.rs": {
+      "baseline": {
+        "bytes": 91747,
+        "path": "/tmp/hepta-runtime-recovery-20261106/r35/baseline/src/mcp/runtime/ssh_observation_pool_tests.rs",
+        "sha256": "c41347b04e3697503dd0f75237b66c7bb24c512b5bc9362cf7d9a5525e843a7c"
+      },
+      "candidate": {
+        "bytes": 91763,
+        "path": "/tmp/hepta-runtime-recovery-20261106/r35/source/src/mcp/runtime/ssh_observation_pool_tests.rs",
+        "sha256": "318bbd4566f0d08531d7886fbd0166906df63c2d2b990d165a51e9a2ac280baa"
+      }
+    }
+  },
+  "history": {
+    "attribution": "R35 isolates the existing R26 read_job allocation movement on accepted R24 and adds the command ownership transfer. Do not describe both edits as new.",
+    "bounded_search": "No command ownership transfer was present in the inspected R25/R26/R28 full patches or R27 serializer/compiler/router-cache/capacity12 pool snapshots; this is not a claim about every unpublished experiment.",
+    "causal_limit": "R26 combined qualification/CI/observation passed and combined normal lifecycle was rejected. Those combined results do not isolate the JSON movement performance or make it adopted.",
+    "prior_independent_history_review": {
+      "bytes": 5593,
+      "path": "/tmp/hepta-runtime-recovery-20261106/r35-history-review-01/historical-overlap-review-01.json",
+      "sha256": "04f6a7ae3f7a07c0ee7f881509e50f7fbe3b12a5e827e358be36381221caa7e8"
+    },
+    "prior_selected_change": {
+      "bytes": 1368,
+      "path": "/tmp/hepta-runtime-recovery-20261106/r35-history-review-01/originals/r26-selected-change.patch",
+      "sha256": "f06843dd9ba9026ac240ab6761e1abc16b32bcd3dc771d6a2754ff5eeebcb94f"
+    },
+    "r35_jobs_only_patch_equals_original_r26_selected_change_byte_for_byte": true
+  },
+  "map_checks": {
+    "baseline_equals_preserved_R24_220_map": true,
+    "changed_paths": [
+      "src/mcp/runtime/jobs.rs",
+      "src/mcp/runtime/ssh_observation_pool.rs",
+      "src/mcp/runtime/ssh_observation_pool_tests.rs"
+    ],
+    "input_count_after": 220,
+    "input_count_before": 220,
+    "other_217_actual_files_read_by_this_review": false,
+    "patch_equals_exact_sorted_unified_diffs": true,
+    "same_key_set": true,
+    "three_changed_baseline_and_candidate_file_bytes_rehashed": true,
+    "unchanged_map_entry_count": 217
+  },
+  "patch": {
+    "bytes": 3774,
+    "path": "/tmp/hepta-runtime-recovery-20261106/r35/candidate.patch",
+    "sha256": "89eed62593e1b3c5a675221d1df998d27aae4b6a0fdfa028e297544838fa049a"
+  },
+  "reasoning": [
+    {
+      "finding": "check_ref_async and runtime_config.host stay before the original three-way dispatch. The same seven fields, offsets, limits and serialization expression remain only in the direct Python branch that consumes them. Pooled and system jobctl branches cease constructing an unused local Value; completion audit and returned serialization stay unchanged.",
+      "limit": "No measured allocation count, latency or throughput is inferred.",
+      "location": "src/mcp/runtime/jobs.rs:4456-4517"
+    },
+    {
+      "finding": "execute already owns Request. execute_inner borrows it mutably for one awaited call; its owned Result<Captured> does not borrow Request, so that borrow ends before reply.send consumes the sender. Shared request helpers use temporary immutable reborrows.",
+      "limit": "Static Rust reasoning only; no compiler or Clippy invocation.",
+      "location": "src/mcp/runtime/ssh_observation_pool.rs:1378-1385,1422-1534"
+    },
+    {
+      "finding": "arguments returns an owned Vec<String>; its host borrow finishes before mem::take moves command into args. This is the only production read/consumption of request.command after enqueue. String::default leaves an empty String without duplicating the command buffer. The original captured path receives exactly the same command bytes, stdin, deadline, cancellation token and permit owners.",
+      "limit": "A future failure before or after the move follows the original cleanup path. No retry or alternate effect is introduced.",
+      "location": "src/mcp/runtime/ssh_observation_pool.rs:1510-1519"
+    },
+    {
+      "finding": "Only the two direct execute_inner test calls and their locally owned Request bindings become mutable. All assertions, fixture bytes, timing and test names are preserved.",
+      "limit": "Tests were not run in this review.",
+      "location": "src/mcp/runtime/ssh_observation_pool_tests.rs:992,1012,2540,2555"
+    }
+  ],
+  "remaining_validation": [
+    "Original first qualification and exact required CI against the final formatted source must complete successfully.",
+    "Use the original fixed observation and conditional normal-lifecycle gates; no throughput/CPU/RSS benefit is established by this static review.",
+    "If any original gate rejects, retain its failure and keep accepted R24; this review supplies no exemption or causal attribution."
+  ],
+  "reviewed_utc": "2026-11-06T05:12:36.198928+00:00",
+  "reviewer": "/root/audit_acceptance",
+  "schema": "hepta-r35-independent-source-static-review/v1",
+  "scope": {
+    "candidate_or_helper_code_imported_or_executed": false,
+    "candidate_source_modified": false,
+    "git_refs_modified": false,
+    "local_static_file_reads_hash_json_text_diff_only": true,
+    "qualification_or_performance_pass_claimed": false,
+    "rustfmt_cargo_build_clippy_tests_or_benchmarks_run": false,
+    "x230_mac_ssh_or_other_remote_workload_calls": false
+  },
+  "source_checks": {
+    "command_has_one_production_consumption_site": true,
+    "existing_test_file_only_four_lines_adapt_two_private_execute_inner_calls": true,
+    "jobs_original_seven_field_json_block_only_moved_to_final_else": true,
+    "jobs_read_limits_defaults_validation_and_remote_calls_unchanged": true,
+    "new_dependency_or_public_interface_change": false,
+    "pool_exact_four_source_substitutions_only": true,
+    "remaining_authority_deadline_lease_socket_owner_cleanup_code_unchanged": true,
+    "test_fixtures_assertions_and_case_inventory_unchanged": true
+  }
+}

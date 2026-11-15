@@ -1,0 +1,23 @@
+{
+  "execution_mode": "operator",
+  "system_jobctl": false,
+  "id": "1a136f7d65b-17538d-1",
+  "host": "x230",
+  "ssh_target": "x230-ts",
+  "unit": "hepta-runtime-job-1a136f7d65b-17538d-1",
+  "remote_job_dir": "/tmp/hepta-v9-rollback-target-1f8b4831baa4f445d8cf655af52367ea/remote-state/jobs/1a136f7d65b-17538d-1",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-u",
+    "-c",
+    "import json,os,pathlib,signal,time,subprocess,sys\nbase=pathlib.Path('.');once=base/'legacy-once';f=once.open('a');f.write('1');f.flush();os.fsync(f.fileno());f.close()\nif sys.platform=='linux':\n raw=pathlib.Path('/proc/'+str(os.getpid())+'/stat').read_text();ticks=int(raw.rsplit(') ',1)[1].split()[19])\n identity={'kind':'proc_start_ticks','value':pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()+':'+str(ticks)}\nelse:\n identity={'kind':'ps_lstart','value':subprocess.check_output(['ps','-p',str(os.getpid()),'-o','lstart='],text=True,timeout=3).strip()}\nassert identity['value']\nterm_count=0;tick=0\ndef store():\n p=base/'legacy-activity.json';t=base/'legacy-activity.tmp';t.write_text(json.dumps({'pid':os.getpid(),'uid':os.geteuid(),'identity':identity,'tick':tick,'term_count':term_count}));os.replace(t,p)\ndef term(sig,frame):\n global term_count\n term_count+=1;store()\nsignal.signal(signal.SIGTERM,term);store();print('LEGACY_BEGIN',flush=True)\ndeadline=time.monotonic()+180\nwhile not (base/'release-legacy').exists() and time.monotonic()<deadline:\n tick+=1;store();time.sleep(.1)\nprint('LEGACY_END',flush=True)\n"
+  ],
+  "cwd": "/tmp/hepta-v9-rollback-target-1f8b4831baa4f445d8cf655af52367ea/data",
+  "env_keys": [],
+  "created_unix_ms": 1791923574363,
+  "idempotency_key": "v9-rollback-1f8b4831baa4f445d8cf655af52367ea-legacy-job",
+  "request_fingerprint": 4773261339140914128,
+  "request_digest": "423e07e5eb997bd07d299c33484199b43f5f732b2d10331e6fd309aa67903f8e",
+  "launch_state": "launched",
+  "launch_error": null
+}

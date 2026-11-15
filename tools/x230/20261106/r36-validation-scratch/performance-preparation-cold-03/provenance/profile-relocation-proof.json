@@ -1,0 +1,80 @@
+{
+  "schema": "hepta-fresh-profile-relocation-source-proof/v1",
+  "method": "static source reading; no function execution or substitute configuration creation",
+  "source": {
+    "git_blob": "19c429f682afdf24112f579e7717155cc005dd53",
+    "bytes": 37006,
+    "sha256": "4d96f0bf2da2562e788f48be7c37589ab3a513be5f9d8b2d741afe5c08ea9eed",
+    "function": "fresh_profile",
+    "lines": [
+      118,
+      169
+    ]
+  },
+  "read_template_fields": [
+    "schema",
+    "allow_bounded_cached_authentication",
+    "ssh_config",
+    "ssh_config_sha256",
+    "known_hosts",
+    "known_hosts_sha256"
+  ],
+  "unused_for_generated_profile": [
+    "agent_socket",
+    "socket_parent",
+    "ssh_sha256",
+    "false_sha256",
+    "shell_sha256",
+    "other additional template fields"
+  ],
+  "guards_preserved": [
+    "schema and bool identity",
+    "bounded stable single-link file reads",
+    "both historical referenced-content SHA values",
+    "at least one explicit UserKnownHostsFile with exactly two tokens and the stated prior path",
+    "fresh output directory",
+    "owned direct0700 socket parent and unchanged108-byte conservative path budget"
+  ],
+  "algebra": {
+    "notation": "K is exact known_hosts bytes; N_Q(C) decodes and splitlines the config, rewrites every recognized UserKnownHostsFile line to Q, joins LF and appends LF; G builds the exact canonical profile from new paths, output content hashes, current binary hashes, current agent and current socket parent.",
+    "normalization_equation": "N_Q2(N_Q1(C)) = N_Q2(C)",
+    "known_hosts_equation": "copy(copy(K)) = K",
+    "body_projection_equation": "Bodies(F(F(seed,P1,A1,E1),P2,A2,E2)) = Bodies(F(seed,P2,A2,E2))",
+    "body_projection": [
+      "ssh_config",
+      "known_hosts",
+      "profile.json"
+    ],
+    "conditions": [
+      "All original guards succeed.",
+      "P1 and P2 are the fixed direct paths without whitespace or line separators; the input replacement path remains one token.",
+      "P2 is a fresh output in either hypothetical execution.",
+      "E2 supplies the same current executable file contents and socket-parent identity; A2 is the same current agent.",
+      "Existing config/known bytes are unchanged and match the explicitly bound private seed."
+    ],
+    "reasoning": [
+      "After first generation all original line separators have become LF and rewriting again is idempotent.",
+      "The first generated profile names Q1, and every rewritten directive also names Q1, so the second invocation checks and replaces the same directives with Q2.",
+      "Non-target config lines and known_hosts bytes are identical along both successful paths.",
+      "All final profile fields are constants, P2-derived paths/content hashes, or currently re-read E2 binaries and A2/socket arguments; no first generation executable hash or agent is reused."
+    ],
+    "limitations": [
+      "The full return receipt is not equal: template_sha256 records the actual seed body, hence fe1e versus ed680 differs.",
+      "Fresh file inode/time metadata is outside the content equality claim.",
+      "This does not prove arbitrary path/token inputs, partial failure paths, or byte identity of the old missing836-byte seed.",
+      "The existing topology guard must truthfully bind the new seed SHA; the original796-byte topology is retained, and only its64-byte profile hash value is replaced in a new file."
+    ]
+  },
+  "existing_cleanup": {
+    "driver_does_not_delete_generated_profile": true,
+    "wrapper_adapter_parent_do_not_delete_generated_profile": true,
+    "holder_cleanup_scope": "Mac tempfile.TemporaryDirectory(prefix='hr19a-', dir='/tmp') and its owned agent/foreground SSH child only",
+    "original_d1_private_directory": "/home/qian/hepta-runtime-phase-cost-20261106-d1/c1-observation-01/profile",
+    "source_inspection_not_current_existence_claim": true
+  },
+  "private_body_read_by_this_agent": false,
+  "private_body_copied": false,
+  "private_body_published": false,
+  "host_calls": false,
+  "workload_runs": 0
+}

@@ -1,0 +1,99 @@
+{
+  "schema": "hepta-v9-request-async-real-ssh-host-v1",
+  "host": "x230",
+  "platform_origin": "administrator_configured_platform",
+  "configured_platform": "linux",
+  "origin": "private_native_http_controller_real_ssh",
+  "actual_ssh": true,
+  "fake_ssh": false,
+  "actual_ssh_invocation_count_proven": false,
+  "transport_delivery_precedes_dispatch_proven": false,
+  "model_origin_qualified": false,
+  "full_dc_replacement_qualified": false,
+  "installed_runtime_changed": false,
+  "desktop_commander_changed": false,
+  "original_runtime_state_touched": false,
+  "checks": [
+    {
+      "check": "normal real health admission and same-credential reconnect result",
+      "result": "passed",
+      "detail": {
+        "admission_received_ms": 181.23187700257404,
+        "receipt_state": "queued",
+        "post_reply_observed_state": "running",
+        "post_reply_owned_future_active": true,
+        "ack_state_does_not_prove_network_delivery_before_dispatch": true,
+        "same_credential_new_session_original_id_and_bytes": true,
+        "original_result": {
+          "sha256": "fa9bc4a7b86301beeb568b1e1bd686a8204989789f8dc17901c08bd507707d6e",
+          "bytes": 706,
+          "pages": 2
+        },
+        "ssh_roundtrip_ms": 611.95287
+      }
+    },
+    {
+      "check": "lost ACK same-key recovery preserves original identity and immutable real result",
+      "result": "passed",
+      "detail": {
+        "response_read": false,
+        "client_received_request_id": false,
+        "same_generated_inner_id": true,
+        "immutable_bytes_unchanged": true,
+        "single_durable_key_binding": true,
+        "original_result": {
+          "sha256": "2d8149d85e77b75b95ea37222b693e35f6b6d248ed7ef7427d1d699502db2916",
+          "bytes": 707,
+          "pages": 2
+        },
+        "ssh_roundtrip_ms": 421.076081,
+        "actual_ssh_invocation_count_proven": false,
+        "no_dispatch_replay_inferred_from_idempotency_binding_only": true
+      }
+    },
+    {
+      "check": "one explicit real-host owned-future cancellation attempt",
+      "result": "passed",
+      "detail": {
+        "cancel_requested": true,
+        "request_observation": "owned_future_cancellation_requested",
+        "terminal_async_state": "cancelled_future",
+        "owned_future_active": false,
+        "remote_termination_confirmed": false,
+        "owned_future_cancel_observed": true,
+        "actual_cancel_qualified": true,
+        "qualification_rule": "accepted owned future request plus observed cancelled terminal; completion race does not qualify cancellation"
+      }
+    }
+  ],
+  "actual_read_health_complete": true,
+  "actual_cancel_qualified": true,
+  "complete": true,
+  "owned_controller_cleanup_confirmed": true,
+  "negotiated_protocol_version": "2025-11-25",
+  "original_ssh_authority_preserved": true,
+  "private_permissions": {
+    "execute": false,
+    "pty": false,
+    "write": false,
+    "job_network": false
+  },
+  "cancellation": {
+    "cancel_requested": true,
+    "request_observation": "owned_future_cancellation_requested",
+    "terminal_async_state": "cancelled_future",
+    "owned_future_active": false,
+    "remote_termination_confirmed": false,
+    "owned_future_cancel_observed": true,
+    "actual_cancel_qualified": true,
+    "qualification_rule": "accepted owned future request plus observed cancelled terminal; completion race does not qualify cancellation"
+  },
+  "private_candidate_state_removed": true,
+  "logs": [
+    {
+      "name": "controller-00.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}

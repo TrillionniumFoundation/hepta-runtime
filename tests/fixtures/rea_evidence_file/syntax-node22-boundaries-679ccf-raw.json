@@ -1,0 +1,232 @@
+{
+  "schema": "hepta.node-json-syntax-boundaries.v1",
+  "node": "v22.23.4",
+  "node_path": "/usr/bin/node",
+  "node_sha256": "94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90",
+  "cases": [
+    {
+      "input": "x                   ",
+      "utf16_length": 20,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'x', \"x                   \" is not valid JSON"
+    },
+    {
+      "input": "x                    ",
+      "utf16_length": 21,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'x', \"x         \"... is not valid JSON"
+    },
+    {
+      "input": "         x           ",
+      "utf16_length": 21,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'x', \"         x         \"... is not valid JSON"
+    },
+    {
+      "input": "          x          ",
+      "utf16_length": 21,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'x', ...\"          x         \"... is not valid JSON"
+    },
+    {
+      "input": "           x         ",
+      "utf16_length": 21,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'x', ...\"          x         \" is not valid JSON"
+    },
+    {
+      "input": "[\"0123456789012345678901234\",]",
+      "utf16_length": 30,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ']', ...\"78901234\",]\" is not valid JSON"
+    },
+    {
+      "input": "[\"0123456789012345678901234\", x, \"later-bad\"]",
+      "utf16_length": 45,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'x', ...\"8901234\", x, \"later-\"... is not valid JSON"
+    },
+    {
+      "input": "{\"a\" 1,\"bad\":]}",
+      "utf16_length": 15,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected ':' after property name in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "input": "[tru1]",
+      "utf16_length": 6,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected number in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "input": "[tru\"]",
+      "utf16_length": 6,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected string in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "input": "[tru-]",
+      "utf16_length": 6,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected number in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "input": "[fals1]",
+      "utf16_length": 7,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected number in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "input": "[nul0]",
+      "utf16_length": 6,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected number in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "input": "\"\\é\"",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Bad escaped character in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "input": "\"\\€\"",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token '€', \"\"\\€\"\" is not valid JSON"
+    },
+    {
+      "input": "\"\\😀\"",
+      "utf16_length": 5,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token '\ud83d', \"\"\\😀\"\" is not valid JSON"
+    },
+    {
+      "input": "😀",
+      "utf16_length": 2,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token '\ud83d', \"😀\" is not valid JSON"
+    },
+    {
+      "input": "€",
+      "utf16_length": 1,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token '€', \"€\" is not valid JSON"
+    },
+    {
+      "input": "' '",
+      "utf16_length": 3,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ''', \"' '\" is not valid JSON"
+    },
+    {
+      "input": "[\r\n 1,\r\n ]",
+      "utf16_length": 10,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ']', \"[\r\n 1,\r\n ]\" is not valid JSON"
+    },
+    {
+      "input": "{\r\"😀\":1,\r }",
+      "utf16_length": 12,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected double-quoted property name in JSON at position 11 (line 3 column 2)"
+    },
+    {
+      "input": "\"abc\r\n\"",
+      "utf16_length": 7,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Bad control character in string literal in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "input": "          é            ",
+      "utf16_length": 23,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'é', ...\"          é         \"... is not valid JSON"
+    },
+    {
+      "input": "[\"😀😀😀😀😀😀😀😀😀😀\",]",
+      "utf16_length": 25,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ']', ...\"😀😀😀😀\",]\" is not valid JSON"
+    },
+    {
+      "input": "[\"😀😀😀😀😀😀😀😀😀😀\", x]",
+      "utf16_length": 27,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'x', ...\"\ude00😀😀😀\", x]\" is not valid JSON"
+    },
+    {
+      "input": "true",
+      "utf16_length": 4,
+      "ok": true
+    },
+    {
+      "input": "false",
+      "utf16_length": 5,
+      "ok": true
+    },
+    {
+      "input": "null",
+      "utf16_length": 4,
+      "ok": true
+    },
+    {
+      "input": "-0",
+      "utf16_length": 2,
+      "ok": true
+    },
+    {
+      "input": "1.25e+3",
+      "utf16_length": 7,
+      "ok": true
+    },
+    {
+      "input": "{\"x\":\"😀\",\"y\":[1,true,null]}",
+      "utf16_length": 28,
+      "ok": true
+    },
+    {
+      "input": "[0.01]",
+      "utf16_length": 6,
+      "ok": true
+    },
+    {
+      "input": "[1e400,]",
+      "utf16_length": 8,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ']', \"[1e400,]\" is not valid JSON"
+    },
+    {
+      "input": "[\"\\uD800\",]",
+      "utf16_length": 11,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ']', \"[\"\\uD800\",]\" is not valid JSON"
+    }
+  ]
+}

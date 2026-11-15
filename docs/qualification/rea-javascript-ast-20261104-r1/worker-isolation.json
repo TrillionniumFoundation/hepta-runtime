@@ -1,0 +1,44 @@
+{
+  "schema": "hepta.javascript-worker-isolation-code-review.v1",
+  "evidence_kind": "review_of_qualified_sources_not_complete_OS_sandbox_qualification",
+  "source_sha256": {
+    "src/mcp/rea_javascript_graph_worker.rs": "7f7d5e9bed706dabe581cc8a070252d36aad8ac634940ef59a241201a8e669a6",
+    "src/mcp/rea_seccomp.rs": "d789cc3c4846fc7f35b7d72ffb7d0780a8a02c3b5dd93ad056fbd9e6ed3e1c0b",
+    "src/mcp/rea_worker.rs": "28ccab3ea5b1be540c6d4726b1fe1c250ef8c36062d67cb8e50917f11b49a221"
+  },
+  "spawn": {
+    "environment": "cleared",
+    "cwd": "/",
+    "argv": [
+      "<current_exe>",
+      "rea-javascript-worker"
+    ],
+    "stdio": "three_new_pipes",
+    "original_physical_source_paths_passed": false
+  },
+  "limits": {
+    "address_space_bytes": 805306368,
+    "cpu_seconds": 12,
+    "open_file_limit": 64,
+    "core_bytes": 0,
+    "file_size_bytes": 1048576,
+    "wall_seconds": 20,
+    "request_bytes": 33554432,
+    "response_json_bytes": 1048576,
+    "stderr_bytes": 65536
+  },
+  "linux": {
+    "parent_death_signal": "SIGKILL with parent PID recheck",
+    "no_new_privs": true,
+    "seccomp": "existing thread-synchronized denylist after stdin, before JSON/AST"
+  },
+  "fd_boundary": {
+    "explicit_close_range": false,
+    "other_inherited_descriptors": "depend_on_FD_CLOEXEC",
+    "no_file_limit_is_descriptor_cleanup": false,
+    "all_credential_descriptor_channels_excluded": "not_proven"
+  },
+  "namespace_or_uid_isolation": "not_established",
+  "non_linux_unix": "resource_limits_only_no_shared_seccomp_filter",
+  "non_unix_worker": "refused"
+}

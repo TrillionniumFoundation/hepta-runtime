@@ -1,0 +1,82 @@
+{
+  "schema": "hepta.javascript-node-store-reproduction.v1",
+  "status": "confirmed_zero_node_store_for_valid_nonempty_AST",
+  "binary_sha256": "ff9278fcaf163f8a434041a3125872e5482dfe39db93de15619e913c71032dd5",
+  "request": {
+    "sources": [
+      {
+        "id": "one.js",
+        "syntax": "javascript",
+        "module_kind": "module",
+        "text": "0;"
+      }
+    ],
+    "expected_graph_sha256": null,
+    "collection": "summary",
+    "offset": 0,
+    "limit": 64
+  },
+  "report": {
+    "collection": "summary",
+    "complete_application_graph": false,
+    "counts": {
+      "electron_calls": 0,
+      "exports": 0,
+      "imports": 0,
+      "ipc_candidate_edges": 0,
+      "reported_unknowns": 0,
+      "sources": 1
+    },
+    "coverage": "selected_ast_modules_and_lexical_electron_candidates",
+    "dependencies_opened": false,
+    "graph_sha256": "62354aa9b5162b02c347e1711be038fb21eed1255ce3f42859c656382d2728fa",
+    "identity_scope": "complete_selected_source_bytes_and_explicit_grammars",
+    "javascript_executed": false,
+    "limitations": [
+      "Only explicitly selected files are admitted. Package declarations, imports, source maps, ASAR files, dependencies, preload paths and URLs are never followed or executed.",
+      "Relative import links identify selected logical-path candidates, not Node, bundler or TypeScript module resolution. Type-only records are retained and are not runtime dependencies.",
+      "Electron receivers use lexical symbols from electron imports, unshadowed require calls and direct aliases. Reassigned bindings are excluded; property mutation, eval, factories, indirect calls and interprocedural dataflow are not resolved.",
+      "A matching literal channel and API role produces a candidate edge only. Branch reachability, process identity, window ownership, listener registration, sender validation, payload compatibility and runtime message delivery are unobserved.",
+      "Dynamic expressions remain unknown. Reported unknowns cover detected syntax patterns, not an exhaustive list of every unmodeled application behavior.",
+      "CommonJS assignments are syntactic observations; export replacement, alias mutation and final runtime module values are not evaluated. Preload declarations and contextBridge keys do not prove actual renderer exposure.",
+      "Source positions are UTF-8 byte offsets. Parser diagnostics, lone-surrogate strings and exceeded resource bounds refuse the inspection; recovered invalid ASTs are not promoted to valid graphs.",
+      "The source-set hash binds copied source bytes and grammars. It is not an atomic multi-file filesystem snapshot, a REA ev_ identity, or an assertion of runtime execution."
+    ],
+    "network_requests": 0,
+    "next_offset": null,
+    "offset": 0,
+    "parser": {
+      "name": "oxc",
+      "semantic_syntax_checks": true,
+      "version": "0.144.0"
+    },
+    "rea_evidence_compatible": false,
+    "record_format": "hepta.rea-javascript-graph.v1",
+    "rows": [],
+    "source_statistics": [
+      {
+        "ast_nodes": 0,
+        "lexical_scopes": 1,
+        "source_id": "one.js",
+        "syntax_valid": true
+      }
+    ],
+    "sources": [
+      {
+        "byte_length": 2,
+        "id": "one.js",
+        "module_kind": "module",
+        "sha256": "f1ab6b1fa3e07be02cdd3816ad1c1c0f6a540c262e4c805f208a901850e5dde0",
+        "syntax": "javascript"
+      }
+    ],
+    "total_rows": 0
+  },
+  "locked_oxc_sources": [
+    {
+      "path": "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/oxc_semantic-0.144.0/src/builder.rs",
+      "sha256": "dcf940579091af5bcad559b2067a7742e3e13eb1e08d1301f10c51e70b84f7fb",
+      "excerpt": "s: bool) -> Self {\n        self.check_syntax_error = yes;\n        self\n    }\n\n    /// Enable or disable building the full [`AstNodes`](crate::AstNodes) store.\n    ///\n    /// Disabled by default: [`Semantic::nodes`] is empty and only the ancestry\n    /// stack and node-id counter are maintained while traversing \u2014 cheaper for\n    /// the compiler pipeline, which does not need random access to nodes. Enable\n    /// it for the linter and mangler, which read [`Semantic::nodes`].\n    #[must_use]\n    pub fn with_build_nodes(mut self, yes: bool) -> Self {\n        self.node_store.set_build_nodes(yes);\n        self\n    }\n\n    /// Enable or disable evaluation of TypeScript enum mem"
+    }
+  ]
+}

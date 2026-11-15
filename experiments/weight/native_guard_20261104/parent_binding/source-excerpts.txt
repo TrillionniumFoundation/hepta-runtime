@@ -1,0 +1,175 @@
+src/mcp/runtime/jobs.rs SHA256 0fd54a135208a1bc492df5ff5d33a5b50e1075747d97ccb8b945bb09a3d8c642
+1930: #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+1931: struct AuditDirectoryStamp {
+1932: 	device: u64,
+1933: 	inode: u64,
+1934: 	modified: (i64, i64),
+1935: 	changed: (i64, i64),
+1936: 	namespace: super::namespace_version::Version,
+1937: }
+1938: 
+1939: #[cfg(unix)]
+1940: fn audit_directory_stamp(directory: &std::fs::File) -> Result<AuditDirectoryStamp> {
+1941: 	use std::os::unix::fs::MetadataExt;
+1942: 	let metadata = directory.metadata()?;
+1943: 	if !metadata.is_dir() {
+1944: 		bail!("audit publication parent is not a directory");
+1945: 	}
+1946: 	Ok(AuditDirectoryStamp {
+1947: 		device: metadata.dev(),
+1948: 		inode: metadata.ino(),
+1949: 		modified: (metadata.mtime(), metadata.mtime_nsec()),
+1950: 		changed: (metadata.ctime(), metadata.ctime_nsec()),
+1951: 		namespace: super::namespace_version::version(directory)?,
+1952: 	})
+1953: }
+2000: 	stamps: [AuditDirectoryStamp; 3],
+2001: }
+2002: 
+2003: #[cfg(unix)]
+2004: impl AuditBinding {
+2005: 	fn open(path: PathBuf, file: std::fs::File) -> Result<Self> {
+2006: 		let path = if path.is_absolute() {
+2007: 			path
+2008: 		} else {
+2009: 			std::env::current_dir()?.join(path)
+2010: 		};
+2011: 		let audit_path = path
+2012: 			.parent()
+2013: 			.context("audit path has no parent")?
+2014: 			.to_path_buf();
+2015: 		let state_path = audit_path.parent().unwrap_or(Path::new("/")).to_path_buf();
+2016: 		// The file was opened no-follow and owner-private. Keep the complete
+2017: 		// path and parent publication fences in addition to that inode check.
+2018: 		let target_path = std::fs::canonicalize(&path)?;
+2019: 		let target_parent = target_path.parent().context("audit target has no parent")?;
+2020: 		let audit_directory = open_audit_directory(&audit_path)?;
+2021: 		let state_directory = open_audit_directory(&state_path)?;
+2022: 		let target_directory = open_audit_directory(target_parent)?;
+2023: 		let stamps = [
+2024: 			audit_directory_stamp(&audit_directory)?,
+2025: 			audit_directory_stamp(&state_directory)?,
+2026: 			audit_directory_stamp(&target_directory)?,
+2027: 		];
+2028: 		let binding = Self {
+2029: 			path,
+2030: 			audit_path,
+2031: 			state_path,
+2032: 			target_path,
+2033: 			file,
+2034: 			audit_directory,
+2035: 			state_directory,
+2036: 			target_directory,
+2037: 			stamps,
+2038: 		};
+2039: 		binding.validate()?;
+2040: 		Ok(binding)
+2041: 	}
+2042: 
+2043: 	fn validate(&self) -> Result<()> {
+2044: 		let file_identity = audit_inode(&self.file.metadata()?);
+2045: 		if audit_inode(&std::fs::metadata(&self.path)?) != file_identity
+2046: 			|| std::fs::canonicalize(&self.path)? != self.target_path
+2047: 			|| audit_inode(&std::fs::metadata(&self.target_path)?) != file_identity
+2048: 		{
+2049: 			bail!("audit file binding changed");
+2050: 		}
+2051: 		let paths: [&Path; 3] = [
+2052: 			self.audit_path.as_path(),
+2053: 			self.state_path.as_path(),
+2054: 			self.target_path.parent().expect("target parent"),
+2055: 		];
+2056: 		let directories = [
+2057: 			&self.audit_directory,
+2058: 			&self.state_directory,
+2059: 			&self.target_directory,
+2060: 		];
+2061: 		for ((path, directory), expected) in paths.into_iter().zip(directories).zip(&self.stamps) {
+2062: 			if audit_inode(&std::fs::metadata(path)?) != (expected.device, expected.inode)
+2063: 				|| audit_directory_stamp(directory)? != *expected
+2064: 			{
+2065: 				bail!("audit directory publication binding changed");
+2066: 			}
+2067: 		}
+2068: 		Ok(())
+2069: 	}
+2210: #[cfg(unix)]
+2211: fn append_audit_at_with(
+2212: 	prepared: PreparedAudit,
+2213: 	readiness: &mut Option<AuditReadiness>,
+2214: 	synchronize_file: impl FnOnce(&std::fs::File) -> Result<()>,
+2215: 	mut synchronize_directory: impl FnMut(&std::fs::File) -> Result<()>,
+2216: ) -> Result<()> {
+2217: 	let previous = readiness.take();
+2218: 	let file = open_audit_append(&prepared.path)?;
+2219: 	let warm = previous.as_ref().is_some_and(|previous| {
+2220: 		previous
+2221: 			.binding
+2222: 			.can_reuse_parents(&prepared.path, &file)
+2223: 			.unwrap_or(false)
+2224: 	});
+2225: 	let mut binding = if warm {
+2226: 		let mut binding = previous.expect("qualified audit readiness").binding;
+2227: 		binding.file = file;
+2228: 		binding
+2229: 	} else {
+2230: 		// Any missing/mismatched/failed prior proof is irreversibly cold. A
+2231: 		// freshly opened matching binding cannot restore warm authorization.
+2232: 		AuditBinding::open(prepared.path, file)?
+2233: 	};
+2234: 	binding.file.write_all(&prepared.line)?;
+2235: 	// The existing per-event fdatasync remains mandatory on both paths.
+2236: 	synchronize_file(&binding.file)?;
+2237: 	if !warm {
+2238: 		binding.synchronize_directories(&mut synchronize_directory)?;
+2239: 	}
+2240: 	binding.validate()?;
+2241: 	*readiness = Some(AuditReadiness { binding });
+2242: 	Ok(())
+3714: fn operation_intent_unavailable() -> anyhow::Error {
+3715: 	anyhow::anyhow!("Operation intent audit unavailable; no remote operation submitted")
+3716: }
+3717: 
+3718: fn require_operation_intent(outcome: Result<()>) -> Result<()> {
+3719: 	outcome.map_err(|_| operation_intent_unavailable())
+3720: }
+src/mcp/runtime/jobs_start_io_tests.rs SHA256 c4b791cc832ac7abd5d24315204866149909e7aa737e0adb4ae1bec6a1dc54d8
+320: #[tokio::test(flavor = "current_thread")]
+321: async fn pending_publication_saves_frozen_intent_before_recoverable_identity() {
+322: 	let root = tempfile::tempdir().unwrap();
+323: 	let audit_path = root.path().join("audit.jsonl");
+324: 	let record_path = root.path().join("original-start.json");
+325: 	let prepared = prepared(&audit_path);
+326: 	let original_line = prepared.line.clone();
+327: 	let observed_audit_path = audit_path.clone();
+328: 	let observed_record_path = record_path.clone();
+329: 	let slots = Arc::new(Semaphore::new(1));
+330: 	let held = slots.clone().acquire_owned().await.unwrap();
+331: 	let writer = tokio::spawn(run_start_io(slots, (), move || {
+332: 		persist_pending_with(
+333: 			prepared,
+334: 			&record(),
+335: 			|prepared| {
+336: 				append_audit_prepared_with(
+337: 					prepared,
+338: 					&mut None,
+339: 					Ok(()),
+340: 					|file| Ok(file.sync_data()?),
+341: 					|directory| Ok(directory.sync_all()?),
+342: 				)
+343: 			},
+344: 			|record| {
+345: 				assert_eq!(std::fs::read(observed_audit_path)?, original_line);
+346: 				save_record_at(&observed_record_path, record)
+347: 			},
+348: 		)
+349: 	}));
+350: 	tokio::task::yield_now().await;
+351: 	assert!(!audit_path.exists());
+352: 	assert!(!record_path.exists());
+353: 	drop(held);
+354: 	writer.await.unwrap().unwrap();
+355: 	let saved = read_record_at(&record_path, "original-start").unwrap();
+356: 	assert_eq!(saved.id, "original-start");
+357: 	assert_eq!(saved.launch_state, "pending");
+358: }

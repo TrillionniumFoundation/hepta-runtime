@@ -1,0 +1,103 @@
+{"command": "/usr/bin/python3 -B tests/chatgpt_bridge_http_tests.py", "cwd": "/workspace/scratch/d72683e5e62a/hepta-runtime", "source_start": {"commit": "7e43723c97c36107b271c9ba8998c7a166c75e36", "tree": "5a2f2649a90ee72daf053d065c73dee8e3bf9e4a", "worktree_status": []}, "started_utc": "2026-11-15T06:02:36.242431+00:00"}
+
+FFFF
+======================================================================
+FAIL: test_http_discovery_reports_oauth_absence_without_exposing_more_tools (__main__.PackagedReadonlyHTTP.test_http_discovery_reports_oauth_absence_without_exposing_more_tools)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/tests/chatgpt_bridge_http_tests.py", line 56, in setUp
+    self.fail((self.root / "bridge.log").read_text())
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Traceback (most recent call last):
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/deploy/readonly-bridge/bridge.py", line 467, in <module>
+    main()
+    ~~~~^^
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/deploy/readonly-bridge/bridge.py", line 455, in main
+    server = UnixThreadingHTTPServer(str(socket_path), Handler)
+  File "/usr/lib/python3.13/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/socket.py", line 233, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+
+======================================================================
+FAIL: test_thirty_two_original_reads_overlap_without_expanding_the_catalog (__main__.PackagedReadonlyHTTP.test_thirty_two_original_reads_overlap_without_expanding_the_catalog)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/tests/chatgpt_bridge_http_tests.py", line 56, in setUp
+    self.fail((self.root / "bridge.log").read_text())
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Traceback (most recent call last):
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/deploy/readonly-bridge/bridge.py", line 467, in <module>
+    main()
+    ~~~~^^
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/deploy/readonly-bridge/bridge.py", line 455, in main
+    server = UnixThreadingHTTPServer(str(socket_path), Handler)
+  File "/usr/lib/python3.13/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/socket.py", line 233, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+
+======================================================================
+FAIL: test_http_discovery_reports_oauth_absence_without_exposing_more_tools (__main__.ReadonlyHTTP.test_http_discovery_reports_oauth_absence_without_exposing_more_tools)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/tests/chatgpt_bridge_http_tests.py", line 56, in setUp
+    self.fail((self.root / "bridge.log").read_text())
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Traceback (most recent call last):
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/deploy/chatgpt_mcp_bridge.py", line 467, in <module>
+    main()
+    ~~~~^^
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/deploy/chatgpt_mcp_bridge.py", line 455, in main
+    server = UnixThreadingHTTPServer(str(socket_path), Handler)
+  File "/usr/lib/python3.13/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/socket.py", line 233, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+
+======================================================================
+FAIL: test_thirty_two_original_reads_overlap_without_expanding_the_catalog (__main__.ReadonlyHTTP.test_thirty_two_original_reads_overlap_without_expanding_the_catalog)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/tests/chatgpt_bridge_http_tests.py", line 56, in setUp
+    self.fail((self.root / "bridge.log").read_text())
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Traceback (most recent call last):
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/deploy/chatgpt_mcp_bridge.py", line 467, in <module>
+    main()
+    ~~~~^^
+  File "/workspace/scratch/d72683e5e62a/hepta-runtime/deploy/chatgpt_mcp_bridge.py", line 455, in main
+    server = UnixThreadingHTTPServer(str(socket_path), Handler)
+  File "/usr/lib/python3.13/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/socket.py", line 233, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 2.013s
+
+FAILED (failures=4)

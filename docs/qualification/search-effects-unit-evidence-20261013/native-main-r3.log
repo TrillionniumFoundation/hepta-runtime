@@ -1,0 +1,13 @@
+PASS pre-intent failure dispatches zero real SSH workers
+Traceback (most recent call last):
+  File "/home/qian-qi/hepta-runtime-search-effects-20261013/tests/search_effects_native_acceptance.py", line 257, in <module>
+    main()
+  File "/home/qian-qi/hepta-runtime-search-effects-20261013/tests/search_effects_native_acceptance.py", line 207, in main
+    owned_observer(sid); restore_publication(); set_fault('')
+    ^^^^^^^^^^^^^^^^^^^
+  File "/home/qian-qi/hepta-runtime-search-effects-20261013/tests/search_effects_native_acceptance.py", line 141, in owned_observer
+    value = wait_for(lambda: json.loads(path.read_text()) if path.exists() else None)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/qian-qi/hepta-runtime-search-effects-20261013/tests/search_effects_native_acceptance.py", line 31, in wait_for
+    raise AssertionError("owned fixture observation deadline exceeded")
+AssertionError: owned fixture observation deadline exceeded

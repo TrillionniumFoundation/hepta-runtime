@@ -1,0 +1,93 @@
+{
+  "schema": "hepta-public-gateway-offline-policy-qualification-v1",
+  "recorded_at_utc": "2026-10-12T23:23:07.889096+00:00",
+  "based_on_commit": "5e34c189693a8b6f8720e9ac5560b94d573b66c7",
+  "shared_native_contract": {
+    "path": "deploy/contracts/hepta-runtime-full-operator-v4.json",
+    "file_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+    "catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+    "total_tools": 50,
+    "read_only_tools": 19,
+    "non_read_only_tools": 31,
+    "contract_renamed_or_security_annotations_changed": false
+  },
+  "new_sources": {
+    "deploy/cloud_gateway_policy.py": "5449d69ea1bd80a9a15ca756bdb336c30a583934246045954832bddc6e859774",
+    "tests/cloud_gateway_policy_tests.py": "d82379dc2df11711f9c2502229b61b3c61acfdddb78e0c366e7da17c7d93a62d",
+    "docs/CLOUD_GATEWAY_V1.md": "413cbbec945293946d366f9407042842d03f77aaedb690e3cb11dbdfa61ab55d"
+  },
+  "security_properties": {
+    "separate_execution_backend_created": false,
+    "fake_public_http_endpoint_claimed": false,
+    "public_http_listener_deployed": false,
+    "real_oauth_verifier_implemented": false,
+    "real_mtls_verified_agent_implemented": false,
+    "raw_runtime_token_exposed": false,
+    "tenant_agent_root_must_be_non_root": true,
+    "agent_catalog_hash_pinned": true,
+    "tenant_subject_device_and_agent_aliases_match_exactly": true,
+    "privileged_operations_additionally_authorized": true,
+    "per_request_arguments_and_payloads_saved_in_ledger": false,
+    "replay_after_device_reconnect_denied": true,
+    "unknown_outcome_automatically_retried": false
+  },
+  "tests": {
+    "gateway_offline": 28,
+    "private_facade_regression": 30,
+    "support_redaction_regression": 6,
+    "legacy_bridge_regression": 7,
+    "legacy_stdio_regression": 1,
+    "total_distinct_tests": 72,
+    "gateway_suite_repetitions": 15,
+    "repetition_test_passes": 420,
+    "logs_sha256": {
+      "gateway_tests": "b6e6011814e8b6cfc26e38f9f66f3f1fb7f56f6feda36f2750097c95b6a906c6",
+      "private_adapter": "f41b757e72d7e6e97ec20b76de6b1c5138ea60fc681628e133adf0be9dc393b7",
+      "support_redaction": "c04e0efd9d809d4a97602c7063162ef5429fe1a70c41150352067f61de96b991",
+      "legacy_bridge": "9f76fb640ecce76ffd41757974a37178c06676d98aa159ac3762e261a074e331",
+      "stdio_bridge": "ebe0577da7be6cd84af05e5a5d14e1730223ab22125b5e937ff9cc8c2ae7d824"
+    },
+    "concurrent_independent_sqlite_workers": 8
+  },
+  "private_live_services": {
+    "hepta-runtime-operator.service": {
+      "pid": "2064509",
+      "active": true,
+      "restart_count": "0"
+    },
+    "hepta-openai-full-operator.service": {
+      "pid": "2064582",
+      "active": true,
+      "restart_count": "0"
+    },
+    "desktop-commander-remote.service": {
+      "pid": "2894",
+      "active": true,
+      "restart_count": "0"
+    }
+  },
+  "previous_model_origin_v4_ledger": "docs/qualification/dc-parity-v4-model-origin-tool-ledger-v3-20261013.json",
+  "previous_limited_model_origin_positive_non_readonly_names": 29,
+  "previous_checkpoint_inspect_not_mutation": true,
+  "model_origin_test_this_turn": {
+    "text_file_write_created_document": "docs/CLOUD_GATEWAY_V1.md",
+    "did_not_probe_public_gateway": true
+  },
+  "next_hard_gates": [
+    "Real independently verified OAuth 2.1/OIDC JWT ingress and per-tool schemes",
+    "Public stable HTTPS Streamable HTTP MCP endpoint with OAuth metadata",
+    "Outbound authenticated per-tenant agents and real mTLS certificate binding",
+    "Actually isolated per-tenant runtime config and OS account/namespace, with signed configuration attestation",
+    "Multi-tenant live security/concurrency/availability and failover tests",
+    "Organization verification and actual OpenAI plugin submission review"
+  ],
+  "release": {
+    "public_plugin_submitted": false,
+    "public_endpoint_listening": false,
+    "directory_approved": false,
+    "business_runtime_replaced": false,
+    "private_50_tool_tunnel_changed": false,
+    "desktop_commander_changed": false,
+    "status": "HOLD - policy prototype only"
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "schema": "hepta-dc-v5-operator-supplement-v1",
+  "host": "mac",
+  "origin": "native_python_mcp_client",
+  "binary_sha256": "601403417981d190bcec483149479efbe1cb8b60ee15efbf0f7dcbf0718f3338",
+  "contract_sha256": "f3fd365ae69e1189c550c4314c4fdfb12f4c80d8cc86d1bc0aca6bd1bf7c4cba",
+  "checks": [
+    {
+      "check": "exact reviewed v5 catalog and unchanged original 50 definitions",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "real Unicode stdin and independent exact stdout/stderr byte cursors",
+      "result": "passed",
+      "detail": {
+        "job_id": "1a13361153d-75f11-1",
+        "stdout_bytes": 20,
+        "stderr_bytes": 20
+      }
+    }
+  ],
+  "complete": false,
+  "failure_exception_type": "AssertionError"
+}
+
+FIXTURE /private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb
+[
+  {
+    "path": "terminals/dpty-18ddfa377f86f31d-75b3c-1/request.json",
+    "text": "{\"allow_detached_fallback\": true, \"args\": [\"-i\"], \"cols\": 120, \"cwd\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb\", \"env\": {}, \"executable\": \"/bin/sh\", \"rows\": 24, \"session_id\": \"dpty-18ddfa377f86f31d-75b3c-1\"}"
+  },
+  {
+    "path": "terminals/dpty-18ddfa377f86f31d-75b3c-1/exit.json",
+    "text": "{\"pid\": 68966, \"owner_pid\": 68965, \"boot\": \"{ sec = 1791114156, usec = 311918 } Sun Oct  4 19:42:36 2026\", \"state\": \"exited\", \"output_complete\": true, \"created_unix_ms\": 1791863343013, \"bytes_seen\": 128, \"bytes_stored\": 128, \"capture_error\": null, \"exit_code\": 0, \"closed\": false}"
+  },
+  {
+    "path": "terminals/dpty-18ddfa377f86f31d-75b3c-1/started.json",
+    "text": "{\"pid\": 68966, \"owner_pid\": 68965, \"boot\": \"{ sec = 1791114156, usec = 311918 } Sun Oct  4 19:42:36 2026\", \"state\": \"running\", \"output_complete\": false, \"created_unix_ms\": 1791863343013}"
+  },
+  {
+    "path": "terminals/dpty-18ddfa387f29b044-75b3c-2/request.json",
+    "text": "{\"allow_detached_fallback\": true, \"args\": [\"-c\", \"import os,time; b=b'\\\\xe4\\\\xb8\\\\xad\\\\xe6\\\\x96\\\\x87\\\\xce\\\\xb1\\\\xf0\\\\x9f\\\\xa6\\\\x80';os.write(1,b[:2]);time.sleep(.15);os.write(1,b[2:])\"], \"cols\": 120, \"cwd\": null, \"env\": {}, \"executable\": \"/usr/bin/python3\", \"rows\": 24, \"session_id\": \"dpty-18ddfa387f29b044-75b3c-2\"}"
+  },
+  {
+    "path": "terminals/dpty-18ddfa387f29b044-75b3c-2/exit.json",
+    "text": "{\"pid\": 69041, \"owner_pid\": 69040, \"boot\": \"{ sec = 1791114156, usec = 311918 } Sun Oct  4 19:42:36 2026\", \"state\": \"exited\", \"output_complete\": true, \"created_unix_ms\": 1791863347320, \"bytes_seen\": 12, \"bytes_stored\": 12, \"capture_error\": null, \"exit_code\": 0, \"closed\": false}"
+  },
+  {
+    "path": "terminals/dpty-18ddfa387f29b044-75b3c-2/started.json",
+    "text": "{\"pid\": 69041, \"owner_pid\": 69040, \"boot\": \"{ sec = 1791114156, usec = 311918 } Sun Oct  4 19:42:36 2026\", \"state\": \"running\", \"output_complete\": false, \"created_unix_ms\": 1791863347320}"
+  },
+  {
+    "path": "jobs/1a13361153d-75f11-1/request.json",
+    "text": "{\"allow_detached_fallback\": true, \"allow_job_network\": true, \"args\": [\"-c\", \"import sys;b=sys.stdin.buffer.read();sys.stdout.buffer.write(b'OUT:'+b);sys.stderr.buffer.write(b'ERR:'+b)\"], \"cpu_quota_percent\": null, \"cwd\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb\", \"env\": {}, \"executable\": \"/usr/bin/python3\", \"execution_mode\": \"operator\", \"job_dir\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb/jobs/1a13361153d-75f11-1\", \"job_id\": \"1a13361153d-75f11-1\", \"memory_max_bytes\": null, \"nice\": 0, \"platform\": \"macos\", \"request_fingerprint\": \"55de89f7cc8fc0718b57f17bb3b01416129cbf4e8fc71ce3efc8f044a5a3c9f7\", \"stdin_path\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb/jobs/1a13361153d-75f11-1/stdin.bin\", \"timeout_seconds\": 20, \"unit\": \"hepta-runtime-job-1a13361153d-75f11-1\"}\n"
+  },
+  {
+    "path": "jobs/1a13361153d-75f11-1/exit.json",
+    "text": "{\"at_unix_ms\": 1791863362844, \"cancelled\": false, \"exit_code\": 0, \"log_bytes\": {\"stderr\": {\"seen\": 20, \"stored\": 20}, \"stdout\": {\"seen\": 20, \"stored\": 20}}, \"log_errors\": {\"stderr\": null, \"stdout\": null}, \"log_truncated\": {\"stderr\": false, \"stdout\": false}, \"output_complete\": true, \"timed_out\": false}\n"
+  },
+  {
+    "path": "jobs/1a13361153d-75f11-1/started.json",
+    "text": "{\"at_unix_ms\": 1791863362801, \"supervisor_identity\": {\"kind\": \"ps_lstart\", \"value\": \"\\u4e8c 10\\u6708/13 11:49:22 2026\"}, \"supervisor_pid\": 69269}\n"
+  },
+  {
+    "path": "jobs/1a13361153d-75f11-1/launch.json",
+    "text": "{\"backend\": \"detached\", \"launcher_pid\": 69269, \"systemd_error\": \"systemd user units unavailable on this platform\", \"unit\": \"hepta-runtime-job-1a13361153d-75f11-1\"}\n"
+  },
+  {
+    "path": "jobs/1a13361153d-75f11-1/child.json",
+    "text": "{\"identity\": {\"kind\": \"ps_lstart\", \"value\": \"\\u4e8c 10\\u6708/13 11:49:22 2026\"}, \"pid\": 69271}\n"
+  },
+  {
+    "path": "jobs/1a13360e594-75b3c-2/request.json",
+    "text": "{\"allow_detached_fallback\": true, \"allow_job_network\": true, \"args\": [\"-c\", \"printf x >> once; printf 'START\\\\n'; sleep 10; printf 'COUNT='; wc -c < once\"], \"cpu_quota_percent\": null, \"cwd\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb\", \"env\": {\"PARITY_ENV\": \"\\u4e2d\\u6587 ; $() literal\"}, \"executable\": \"/bin/sh\", \"execution_mode\": \"operator\", \"job_dir\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb/jobs/1a13360e594-75b3c-2\", \"job_id\": \"1a13360e594-75b3c-2\", \"memory_max_bytes\": null, \"nice\": 0, \"platform\": \"macos\", \"request_fingerprint\": \"9fc21c0eec5786669424757bfcfce9970bf3b41f366a086209bd58fb91076478\", \"timeout_seconds\": 30, \"unit\": \"hepta-runtime-job-1a13360e594-75b3c-2\"}\n"
+  },
+  {
+    "path": "jobs/1a13360e594-75b3c-2/exit.json",
+    "text": "{\"at_unix_ms\": 1791863360701, \"cancelled\": false, \"exit_code\": 0, \"log_bytes\": {\"stderr\": {\"seen\": 0, \"stored\": 0}, \"stdout\": {\"seen\": 21, \"stored\": 21}}, \"log_errors\": {\"stderr\": null, \"stdout\": null}, \"log_truncated\": {\"stderr\": false, \"stdout\": false}, \"output_complete\": true, \"timed_out\": false}\n"
+  },
+  {
+    "path": "jobs/1a13360e594-75b3c-2/started.json",
+    "text": "{\"at_unix_ms\": 1791863350604, \"supervisor_identity\": {\"kind\": \"ps_lstart\", \"value\": \"\\u4e8c 10\\u6708/13 11:49:10 2026\"}, \"supervisor_pid\": 69097}\n"
+  },
+  {
+    "path": "jobs/1a13360e594-75b3c-2/launch.json",
+    "text": "{\"backend\": \"detached\", \"launcher_pid\": 69097, \"systemd_error\": \"systemd user units unavailable on this platform\", \"unit\": \"hepta-runtime-job-1a13360e594-75b3c-2\"}\n"
+  },
+  {
+    "path": "jobs/1a13360e594-75b3c-2/child.json",
+    "text": "{\"identity\": {\"kind\": \"ps_lstart\", \"value\": \"\\u4e8c 10\\u6708/13 11:49:10 2026\"}, \"pid\": 69099}\n"
+  },
+  {
+    "path": "jobs/1a13360aa63-75b3c-1/request.json",
+    "text": "{\"allow_detached_fallback\": true, \"allow_job_network\": true, \"args\": [\"-c\", \"printf 'alpha\\\\nbeta\\\\n' | tail -n1 > canary.txt; cat canary.txt; printf '%s\\\\n' \\\"$PARITY_ENV\\\"; id -u\"], \"cpu_quota_percent\": null, \"cwd\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb\", \"env\": {\"PARITY_ENV\": \"\\u4e2d\\u6587 ; $() literal\"}, \"executable\": \"/bin/sh\", \"execution_mode\": \"operator\", \"job_dir\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb/jobs/1a13360aa63-75b3c-1\", \"job_id\": \"1a13360aa63-75b3c-1\", \"memory_max_bytes\": null, \"nice\": 0, \"platform\": \"macos\", \"request_fingerprint\": \"8256fe8c5298f3b411e6f6ebf7381bd25c3ac2fea1d83b0e88ab794074baa2e0\", \"timeout_seconds\": 20, \"unit\": \"hepta-runtime-job-1a13360aa63-75b3c-1\"}\n"
+  },
+  {
+    "path": "jobs/1a13360aa63-75b3c-1/exit.json",
+    "text": "{\"at_unix_ms\": 1791863335489, \"cancelled\": false, \"exit_code\": 0, \"log_bytes\": {\"stderr\": {\"seen\": 0, \"stored\": 0}, \"stdout\": {\"seen\": 30, \"stored\": 30}}, \"log_errors\": {\"stderr\": null, \"stdout\": null}, \"log_truncated\": {\"stderr\": false, \"stdout\": false}, \"output_complete\": true, \"timed_out\": false}\n"
+  },
+  {
+    "path": "jobs/1a13360aa63-75b3c-1/started.json",
+    "text": "{\"at_unix_ms\": 1791863335435, \"supervisor_identity\": {\"kind\": \"ps_lstart\", \"value\": \"\\u4e8c 10\\u6708/13 11:48:55 2026\"}, \"supervisor_pid\": 68790}\n"
+  },
+  {
+    "path": "jobs/1a13360aa63-75b3c-1/launch.json",
+    "text": "{\"backend\": \"detached\", \"launcher_pid\": 68790, \"systemd_error\": \"systemd user units unavailable on this platform\", \"unit\": \"hepta-runtime-job-1a13360aa63-75b3c-1\"}\n"
+  },
+  {
+    "path": "jobs/1a13360aa63-75b3c-1/child.json",
+    "text": "{\"identity\": {\"kind\": \"ps_lstart\", \"value\": \"\\u4e8c 10\\u6708/13 11:48:55 2026\"}, \"pid\": 68793}\n"
+  },
+  {
+    "path": "jobs/1a133615ad3-75f11-2/request.json",
+    "text": "{\"allow_detached_fallback\": true, \"allow_job_network\": true, \"args\": [\"-c\", \"import time;print('CANCEL_READY',flush=True);time.sleep(90)\"], \"cpu_quota_percent\": null, \"cwd\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb\", \"env\": {}, \"executable\": \"/usr/bin/python3\", \"execution_mode\": \"operator\", \"job_dir\": \"/private/tmp/hepta-operator-canary-d57104c362cf41bea87db7c2dfaed4fb/jobs/1a133615ad3-75f11-2\", \"job_id\": \"1a133615ad3-75f11-2\", \"memory_max_bytes\": null, \"nice\": 0, \"platform\": \"macos\", \"request_fingerprint\": \"06196be8213efac9cb6890c14e273ba8280067d05df61e407f2ae15c9fbb6a02\", \"timeout_seconds\": 30, \"unit\": \"hepta-runtime-job-1a133615ad3-75f11-2\"}\n"
+  },
+  {
+    "path": "jobs/1a133615ad3-75f11-2/exit.json",
+    "text": "{\"at_unix_ms\": 1791863381408, \"cancelled\": true, \"exit_code\": -15, \"log_bytes\": {\"stderr\": {\"seen\": 0, \"stored\": 0}, \"stdout\": {\"seen\": 13, \"stored\": 13}}, \"log_errors\": {\"stderr\": null, \"stdout\": null}, \"log_truncated\": {\"stderr\": false, \"stdout\": false}, \"output_complete\": true, \"timed_out\": false}\n"
+  },
+  {
+    "path": "jobs/1a133615ad3-75f11-2/cancel-request.json",
+    "text": "{\"at_unix_ms\": 1791863381345}\n"
+  },
+  {
+    "path": "jobs/1a133615ad3-75f11-2/started.json",
+    "text": "{\"at_unix_ms\": 1791863380538, \"supervisor_identity\": {\"kind\": \"ps_lstart\", \"value\": \"\\u4e8c 10\\u6708/13 11:49:40 2026\"}, \"supervisor_pid\": 69685}\n"
+  },
+  {
+    "path": "jobs/1a133615ad3-75f11-2/launch.json",
+    "text": "{\"backend\": \"detached\", \"launcher_pid\": 69685, \"systemd_error\": \"systemd user units unavailable on this platform\", \"unit\": \"hepta-runtime-job-1a133615ad3-75f11-2\"}\n"
+  },
+  {
+    "path": "jobs/1a133615ad3-75f11-2/child.json",
+    "text": "{\"identity\": {\"kind\": \"ps_lstart\", \"value\": \"\\u4e8c 10\\u6708/13 11:49:40 2026\"}, \"pid\": 69688}\n"
+  }
+]
+
+SSH_EXIT 0

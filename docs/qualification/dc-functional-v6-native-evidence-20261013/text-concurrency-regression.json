@@ -1,0 +1,21 @@
+{
+  "schema": "hepta-dc-parity-concurrent-publisher-v1",
+  "complete": true,
+  "checks": [
+    "isolated native controller exactly matches the explicitly pinned reviewed catalog",
+    "3 rounds of 6 parallel append calls allow exactly one winner",
+    "all failed contenders leave no orphan staging files",
+    "competing create-only publications produce exactly one winner without overwrite",
+    "competing SHA-pinned replacements produce exactly one winner without lost writes",
+    "follow-up single replace preserves exact content and digest"
+  ],
+  "waves": 3,
+  "contenders": 6,
+  "parallel_mutations_attempted": 30,
+  "accepted_parallel_writes": 5,
+  "refused_stale_parallel_writes": 25,
+  "tool_count": 58,
+  "only_private_test_runtime": true,
+  "chatgpt_originated": false,
+  "native_production_changed": false
+}

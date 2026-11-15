@@ -1,0 +1,223 @@
+{
+  "schema": "hepta-r13-measurement-commands/v1",
+  "executed": false,
+  "candidate_path_is_planned_until_qualification_complete": true,
+  "required_qualified_candidate": "/home/qian/hepta-runtime-optimization-20261103-r13/qualification-03/hepta-runtime",
+  "local_projection": {
+    "command": [
+      "python3",
+      "-B",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/measurement-tools/run_operation_projection_abba.py",
+      "--fixtures",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/measurement-tools/fixtures",
+      "--binary",
+      "REPLACE_WITH_QUALIFIED_R13_LIBTEST_PATH",
+      "--binary-sha256",
+      "REPLACE_WITH_QUALIFIED_R13_LIBTEST_SHA256",
+      "--out",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/operation-projection-abba-01",
+      "--pins",
+      "8",
+      "32",
+      "--rounds",
+      "2"
+    ],
+    "analyze": [
+      "python3",
+      "-B",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/measurement-tools/analyze_operation_projection.py",
+      "--report",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/operation-projection-abba-01/report.json",
+      "--output",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/operation-projection-abba-01/independent-summary.json"
+    ]
+  },
+  "cancel_r12_r13": [
+    "python3",
+    "-B",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/run_cancel_responsiveness.py",
+    "--baseline",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/qualification-02/hepta-runtime",
+    "--candidate",
+    "/home/qian/hepta-runtime-optimization-20261103-r13/qualification-03/hepta-runtime",
+    "--out",
+    "/home/qian/hepta-runtime-optimization-20261103-r13/cancel-r12-r13-01",
+    "--workers",
+    "1",
+    "2",
+    "--receipt-bytes",
+    "1024",
+    "4194272",
+    "--payload",
+    "escaped",
+    "--concurrency",
+    "8",
+    "--waves",
+    "24"
+  ],
+  "cancel_r11_r13": [
+    "python3",
+    "-B",
+    "/home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/run_cancel_responsiveness.py",
+    "--baseline",
+    "/home/qian/hepta-runtime-optimization-20261103-r11/qualification-01/hepta-runtime",
+    "--candidate",
+    "/home/qian/hepta-runtime-optimization-20261103-r13/qualification-03/hepta-runtime",
+    "--out",
+    "/home/qian/hepta-runtime-optimization-20261103-r13/cancel-r11-r13-01",
+    "--workers",
+    "1",
+    "2",
+    "--receipt-bytes",
+    "1024",
+    "4194272",
+    "--payload",
+    "escaped",
+    "--concurrency",
+    "8",
+    "--waves",
+    "24"
+  ],
+  "native_observation": {
+    "execute_on": "main; keep foreground ssh alive for the entire child run",
+    "ssh_prefix": [
+      "ssh",
+      "-A",
+      "-T",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "x230-ts"
+    ],
+    "create_fresh_socket_parent": {
+      "path": "/home/qian/hepta-r13-ns1",
+      "mode": "0700"
+    },
+    "command": [
+      "python3",
+      "-B",
+      "/home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/run_native_observation.py",
+      "--baseline",
+      "/home/qian/hepta-runtime-optimization-20261103-r11/qualification-01/hepta-runtime",
+      "--candidate",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/qualification-03/hepta-runtime",
+      "--profile-template",
+      "/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json",
+      "--frozen-jobs",
+      "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01",
+      "--socket-parent",
+      "/home/qian/hepta-r13-ns1",
+      "--out",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/native-r11-r13-01",
+      "--calls",
+      "96",
+      "--concurrency",
+      "1",
+      "4",
+      "8",
+      "--workers",
+      "2",
+      "--order",
+      "ABBA",
+      "--warmup-calls",
+      "24"
+    ],
+    "analyze": [
+      "python3",
+      "-B",
+      "/home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/analyze_native_observation.py",
+      "--report",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/native-r11-r13-01/report.json",
+      "--output",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/native-r11-r13-01/independent-summary.json"
+    ]
+  },
+  "six_host_recovery": {
+    "execute_on": "main; keep foreground ssh alive for the entire child run",
+    "ssh_prefix": [
+      "ssh",
+      "-A",
+      "-T",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "x230-ts"
+    ],
+    "create_fresh_socket_parent": {
+      "path": "/home/qian/hepta-r13-cs1",
+      "mode": "0700"
+    },
+    "output_location_reason": "Existing unmodified recovery driver requires a fresh direct child of R12 root; the new R13-named directory preserves all old evidence.",
+    "command": [
+      "python3",
+      "-B",
+      "/home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/run_six_host_cancel_recovery.py",
+      "--candidate",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/qualification-03/hepta-runtime",
+      "--profile-template",
+      "/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json",
+      "--frozen-jobs",
+      "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01",
+      "--socket-parent",
+      "/home/qian/hepta-r13-cs1",
+      "--out",
+      "/home/qian/hepta-runtime-optimization-20261103-r12/r13-candidate-cancel-recovery-01",
+      "--workers",
+      "2",
+      "--interrupt-host",
+      "rog"
+    ],
+    "analyze": [
+      "python3",
+      "-B",
+      "/home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/verify_cancel_recovery.py",
+      "--report",
+      "/home/qian/hepta-runtime-optimization-20261103-r12/r13-candidate-cancel-recovery-01/report.json",
+      "--output",
+      "/home/qian/hepta-runtime-optimization-20261103-r12/r13-candidate-cancel-recovery-01/independent-summary.json"
+    ]
+  },
+  "qualified_campaign_runners": {
+    "qualification_directory": "/home/qian/hepta-runtime-optimization-20261103-r13/qualification-03",
+    "qualification_launch_source": "/home/qian/hepta-runtime-optimization-20261103-r13/qualification-launch-03.py",
+    "qualification_completion_claimed": false,
+    "campaign_completion_claimed": false,
+    "local_argv": [
+      "/usr/bin/python3",
+      "-B",
+      "-u",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/measurement-tools/run_local_campaigns_v2.py"
+    ],
+    "local_report": "/home/qian/hepta-runtime-optimization-20261103-r13/local-campaigns-02/report.json",
+    "remote_execute_on": "main; hold foreground forwarded-agent SSH until the runner exits",
+    "remote_ssh_prefix": [
+      "ssh",
+      "-A",
+      "-T",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "-o",
+      "ServerAliveInterval=15",
+      "-o",
+      "ServerAliveCountMax=8",
+      "x230-ts"
+    ],
+    "remote_argv": [
+      "/usr/bin/python3",
+      "-B",
+      "-u",
+      "/home/qian/hepta-runtime-optimization-20261103-r13/measurement-tools/run_remote_campaigns_v2.py",
+      "--wait-seconds",
+      "3600"
+    ],
+    "remote_report": "/home/qian/hepta-runtime-optimization-20261103-r13/remote-campaigns-02/report.json",
+    "historical_runner_sources": [
+      "run_local_campaigns.py",
+      "run_remote_campaigns.py"
+    ]
+  }
+}

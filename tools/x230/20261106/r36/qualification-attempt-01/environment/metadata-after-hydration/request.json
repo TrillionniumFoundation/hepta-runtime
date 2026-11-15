@@ -1,0 +1,12 @@
+{
+  "host": "x230",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-B",
+    "-c",
+    "import os,json,hashlib,subprocess,time\nfrom pathlib import Path\nroot=Path('/home/qian/hepta-runtime-optimization-20261105-r24/source')\npaths=[root/'Cargo.toml',root/'Cargo.lock']\ndef identities():\n return {str(p):{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in paths}\nbefore=identities()\nenv=os.environ.copy()\nenv['CARGO_HOME']='/home/qian/.cargo'\ncommand=['/home/qian/.cargo/bin/cargo','metadata','--offline','--locked','--format-version=1']\nt=time.monotonic()\np=subprocess.run(command,cwd=root,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90,check=False)\nafter=identities()\nout={'schema':'hepta-r36-cargo-environment-preflight/v1','source':str(root),'cargo_home':env['CARGO_HOME'],'command':command,'returncode':p.returncode,'elapsed_seconds':time.monotonic()-t,'before':before,'after':after,'inputs_unchanged':before==after,'stdout_bytes':len(p.stdout),'stdout_sha256':hashlib.sha256(p.stdout).hexdigest(),'stderr_bytes':len(p.stderr),'stderr':p.stderr.decode('utf-8',errors='replace')[:12000],'compiled':False,'tests_run':False}\nif p.returncode==0:\n m=json.loads(p.stdout);out.update({'package_count':len(m['packages']),'resolve_node_count':len(m['resolve']['nodes']),'workspace_member_count':len(m['workspace_members']),'workspace_root':m['workspace_root']})\nprint(json.dumps(out,sort_keys=True))\nraise SystemExit(0 if p.returncode==0 and before==after else 1)\n"
+  ],
+  "cwd": "/home/qian",
+  "idempotency_key": "x230-r36-scratch-cargo-offline-locked-metadata-after-hydration-20261106-02",
+  "timeout_seconds": 120
+}

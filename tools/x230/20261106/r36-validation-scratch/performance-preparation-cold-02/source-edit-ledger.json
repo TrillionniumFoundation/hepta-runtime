@@ -1,0 +1,198 @@
+{
+  "edits": [
+    {
+      "kind": "assignment",
+      "name": "R36_CHANGED_PATHS",
+      "new": "R36_CHANGED_PATHS = {'src/mcp/runtime/ssh_observation_profile.rs',\n 'src/mcp/runtime/ssh_observation_reference_tests.rs'}\n",
+      "old": "R36_CHANGED_PATHS = {'src/mcp/runtime/jobs.rs',\n 'src/mcp/runtime/ssh_observation_pool.rs',\n 'src/mcp/runtime/ssh_observation_pool_tests.rs'}\n"
+    },
+    {
+      "kind": "assignment",
+      "name": "R36_ADOPTION_SCOPE",
+      "new": "R36_ADOPTION_SCOPE = ('accepted R24 plus reference-only Context elimination and sweep-local lazy '\n 'scratch; two frozen source/test files; validation-scratch PR108, separate '\n 'from rejected audit-cache PR106')\n",
+      "old": "R36_ADOPTION_SCOPE = ('accepted R24 plus legacy-read JSON deferral and observation command '\n 'ownership move; three frozen source files')\n"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "R24 plus reference-only Context elimination and sweep-local lazy scratch; two frozen files only",
+      "old": "R24 plus legacy-read JSON deferral and observation command move; three frozen files only"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "\"--cargo-home\", require_r36_preparation_seal()[\"cargo_home\"], \"--jobs\", \"2\"]",
+      "old": "\"--cargo-home\", \"/home/qian/hepta-runtime-optimization-20261023/cargo-home-a32-a33-r02\", \"--jobs\", \"2\"]"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "preparation.get(\"build_mode\") == \"cold-only\"\n         and preparation.get(\"preparation_attempt\") == \"cold-02\"\n         and preparation.get(\"cache_reused\") is False\n         and preparation.get(\"ownership_transfer_applicable\") is False\n         and preparation.get(\"cache_transferred_by_rename\") is False\n         and preparation.get(\"new_empty_target_created\") is True",
+      "old": "preparation.get(\"cache_transferred_by_rename\") is True"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "preparation.get(\"cache_to_transfer\") is None",
+      "old": "preparation.get(\"cache_to_transfer\") == str(R36_CACHE_OWNER / \"target-build\")"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "candidate_inputs[\"schema\"] == \"hepta-x230-r36-candidate-draft/v1\"",
+      "old": "candidate_inputs[\"schema\"] == \"hepta-x230-r36-candidate/v1\""
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "and candidate_inputs[\"revision\"] == \"lazy-scratch-draft-03\"",
+      "old": "and candidate_inputs[\"patch_path\"] == \"candidate.patch\""
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    seal = require_r36_preparation_seal()\n    need(input_id == seal[\"qualification_input\"], \"frozen R36 qualification input differs\")\n    need(launcher_id == seal[\"qualification_launcher\"], \"frozen R36 preparation launcher differs\")",
+      "old": "    need(input_id == {\"path\": str(fixed[\"qualification_input\"]), \"bytes\": 3742,\n         \"sha256\": \"652541a8f461af9cc7dccd80b5989ffd6e151a8885dea4cc4675f2d054a8be63\"},\n         \"frozen R36 qualification input differs\")\n    need(launcher_id == {\"path\": str(fixed[\"qualification_launcher\"]), \"bytes\": 32838,\n         \"sha256\": \"6870655895432c8bd3ca266d00eb4a68b3150619352306c997a81ca0487130f4\"},\n         \"frozen R36 preparation launcher differs\")"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    need(patch_id == {key: frozen_patch[key] for key in (\"path\", \"bytes\", \"sha256\")}\n         and patch_id[\"sha256\"] == candidate_inputs[\"patch_sha256\"],",
+      "old": "    need(patch_id == frozen_patch and patch_id[\"sha256\"] == candidate_inputs[\"patch_sha256\"],"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "         and preparation[\"candidate_patch\"] == frozen_patch",
+      "old": "         and preparation[\"candidate_patch\"] == patch_id"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    candidate_inputs, frozen_patch = r36_frozen_candidate(build_inputs, bind)\n    _, patch_raw = bind(fixed[\"candidate_patch\"], patch_id, retain=True)\n    patch_git = hashlib.sha1(b\"blob \" + str(len(patch_raw)).encode(\"ascii\") + b\"\\0\" + patch_raw).hexdigest()\n    need(frozen_patch[\"git_blob\"] == patch_git == \"273f9f72dd2e8da9d26cad55403cc09694bc96c3\",\n         \"R36 original four-field patch identity differs\")",
+      "old": "    candidate_inputs, frozen_patch = r36_frozen_candidate(build_inputs, bind)"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    require_r36_preparation_seal()\n\n    def document(path, expected=None):",
+      "old": "    def document(path, expected=None):"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "def r36_frozen_candidate(manifest, bind):\n    def read_bound(identity, maximum=8 * 1024 * 1024):\n        return bind(identity[\"path\"], identity, maximum=maximum, retain=True)[1]",
+      "old": "def r36_frozen_candidate(manifest):"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "PROFILE = Path(\"/home/qian/hepta-runtime-phase-cost-20261106-d1/c1-observation-01/profile/profile.json\")",
+      "old": "PROFILE = Path(\"/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json\")"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "TOPOLOGY = ROOT / \"measurement-fixtures-01/topology.json\"",
+      "old": "TOPOLOGY = R16 / \"benchmark-topology.json\""
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "FROZEN_JOBS = ROOT / \"measurement-fixtures-01/jobs\"",
+      "old": "FROZEN_JOBS = Path(\"/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01\")"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "ed680dc1613e4aea4de99336d21009c73e71554694edbe23f9dc3a433b586e89",
+      "old": "fe1e9551b5b8812ad6ed3da018c282b7261f7caeb2f49e4dcfefba7ff784ab08"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "c131f12bd145d53bd2c26d0917411a41e6e85d19a6273fc19d0ef3744d23658e",
+      "old": "8c0767d3318131a7d470d9cde8e327a59ce18adf022c8bc1b1d5a0fa9a865287"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "\"s36-cancel-recovery-\"",
+      "old": "\"r36-cancel-recovery-\""
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "\"hs36\"",
+      "old": "\"h35\""
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "def main():\n    require_r36_preparation_seal()\n",
+      "old": "def main():\n"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "Path(\"/home/qian/s36lc1\")",
+      "old": "Path(\"/home/qian/r36lc1\")"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    need(Path(parent.__file__).resolve() == HELPERS, \"helper module path differs\")\n    parent.require_r36_preparation_seal()",
+      "old": "    need(Path(parent.__file__).resolve() == HELPERS, \"helper module path differs\")"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "OLD = Path(\"/home/qian/hepta-runtime-optimization-20261106-r35\")",
+      "old": "OLD = Path(\"/home/qian/hepta-runtime-optimization-20261105-r29\")"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "eec0348217f6c679d1f965004f1bd8ecded2886fc1c654d45a9ad6ea700391e4",
+      "old": "c62d10947f018cb12eb173ad663309c1a10dc75199773c567bcaf73e3284ea11"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "eb50cd7ab0376c4b3dc768e8d184fdc23eeaa90c2ce5bdd4b9e9ac551448504e",
+      "old": "a377791a94e1327bdf3c7da98f30b379caafe6948295d81871f06287bf7c5ef0"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    need(bundle.get(\"sealed\") is True\n         and bundle[\"schema\"] == \"hepta-r36-parent-runner-bundle/v1\" and bundle[\"runtime_root\"] == str(ROOT)",
+      "old": "    need(bundle[\"schema\"] == \"hepta-r36-parent-runner-bundle/v1\" and bundle[\"runtime_root\"] == str(ROOT)"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    parent.require_r36_preparation_seal()\n    parent.private_directory(HERE)\n",
+      "old": "    parent.private_directory(HERE)\n"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    fixture_root = ROOT / \"measurement-fixtures-01\"\n    fixture_names = {\"topology.json\", *[\"jobs/\" + name for name in bundle[\"frozen_job_names\"]]}\n    need(len(bundle[\"frozen_job_names\"]) == 6 and len(fixture_names) == 7\n         and set(bundle[\"fixture_inputs\"]) == fixture_names,\n         \"seven frozen recovered fixture inputs required\")\n    for name, expected in sorted(bundle[\"fixture_inputs\"].items()):\n        relative = Path(name)\n        need(not relative.is_absolute() and \"..\" not in relative.parts\n             and (name == \"topology.json\" or (len(relative.parts) == 2 and relative.parts[0] == \"jobs\"\n                  and relative.name.endswith(\".json\"))), \"unsafe fixed fixture member\")\n        identity, data = parent.checked(HERE / \"frozen-fixture-inputs\" / relative,\n                                        expected, maximum=65536, retain=True)\n        bindings.append(identity)\n        payloads[fixture_root / relative] = data\n        copies.append({\"source\": identity, \"destination\": str(fixture_root / relative), \"changed\": False})\n    need(hashlib.sha256(payloads[fixture_root / \"topology.json\"]).hexdigest() == parent.TOPOLOGY_SHA,\n         \"recovered topology differs from the fixed parent\")\n    lifecycle_manifest_path = LIFECYCLE / \"lifecycle-tools-manifest-01.json\"",
+      "old": "    lifecycle_manifest_path = LIFECYCLE / \"lifecycle-tools-manifest-01.json\""
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    need(not any(os.path.lexists(path) for path in [LIFECYCLE, fixture_root, receipt_path, *payloads,",
+      "old": "    need(not any(os.path.lexists(path) for path in [LIFECYCLE, receipt_path, *payloads,"
+    },
+    {
+      "count": 1,
+      "kind": "literal",
+      "new": "    parent.private_directory(LIFECYCLE, create_new=True)\n    parent.private_directory(fixture_root, create_new=True)\n    parent.private_directory(fixture_root / \"jobs\", create_new=True)\n",
+      "old": "    parent.private_directory(LIFECYCLE, create_new=True)\n"
+    }
+  ],
+  "schema": "hepta-r36-scratch-source-edit-ledger/v1",
+  "scope": "pure local source derivation; no generated function imported or called"
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "hepta-x230-r22-exporter-source-review/v1",
+  "reviewer": "runtime_source_audit",
+  "reviewed_at": "2026-11-05T04:19:35.718325+00:00",
+  "status": "static_review_passed_remote_execution_separate",
+  "path": "benchmark-analysis/export_r22_evidence.py",
+  "sha256": "b35d6d2a5d3d21572ec92b55b9c6df81f55293e1bf519da0cb7080d47bd76a0d",
+  "bytes": 12321,
+  "blocking_findings": [],
+  "checked": [
+    "Required roots must exist as direct directories; os.walk errors raise instead of silently producing incomplete trees.",
+    "Three terminal reports are parsed from the exact stable-read bytes retained as initial identities and are rechecked after all archives.",
+    "ELF bodies are omitted after complete streaming hashing; 1 GiB read cap covers the observed 540751056-byte libtest. Omitted bodies are never sent through retain=True payload packing.",
+    "All three profile bodies, actual campaign/recovery runtime.json files and the recovery/bin/ssh session wrapper are omitted with exact identity witnesses. Actual harnesses do not write SSH private key files; key markers in campaign/recovery payloads cause failure.",
+    "Every retained payload is re-read and compared against the first identity before packing; source-tree membership and all retained/omitted identities are rechecked per group and globally across all three archives.",
+    "Duplicate cross-package source paths must have identical byte and stat identities. Qualification, mechanism and campaign use separate archives with embedded manifests; existing attempt directories and archive files cannot be overwritten.",
+    "The failed first exporter and original report are explicitly included; new exporter records its own identity. No workload execution is performed by the exporter."
+  ],
+  "execution_not_performed_by_reviewer": true,
+  "first_attempt_failure": "Exporter size bound only: 540751056-byte retained libtest exceeded the initial 256 MiB read cap. This was not a qualification, functional-test or performance failure. Actual measurement runs were not repeated.",
+  "publisher_path_check": "The code expects the original remote tools/export_r22_evidence.py to remain attempt 01 and the current script to execute at a separate path for attempt 02; verify these actual hashes in the returned manifest.",
+  "remote_execution_report_imported": {
+    "path": "results/export-report-02.json",
+    "passed": true,
+    "attempt": 2,
+    "scope": "Actual remote export report only; this reviewer did not execute the exporter or claim complete local archive replay."
+  }
+}

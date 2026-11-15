@@ -1,0 +1,127 @@
+{
+  "schema": "hepta-cloud-gateway-real-offline-mtls-peer-and-signed-jwt-v1",
+  "recorded_at_utc": "2026-10-13T02:45:23.017311+00:00",
+  "prior_head": "e632f4d56b140250ee5e199eac025508a9335831",
+  "scope": "Actual TLS 1.3 mutual handshake on local socketpairs, pinned client certificate identity, paired with existing cryptographic JWT policy. No HTTP listener or native execution.",
+  "verified_boundaries": {
+    "transport": "TLS 1.3 server-side SSLSocket, OpenSSL-verified client chain, CERT_REQUIRED, negotiated hepta-agent/1 ALPN",
+    "device_identity": "SHA256 of actual TLS leaf DER matched to immutable, private, pinned administrator enrollment",
+    "enrollment": "Private exact-byte SHA256 / owner check / no symlink / size <=64KiB / unique certificate, tenant/device tuple and host aliases / <=30 day freshness",
+    "isolation_proof": "Two mandatory trusted callbacks checked on every use: live device revocation and independent signed runtime/OS tenant isolation; both are TEST STUBS in this suite, not production proof",
+    "tenant_pair": "Two distinct real CA-verified client certs plus actual RS256 signed RFC9068 access tokens mapped through existing GatewayPolicy",
+    "negative_cases": [
+      "Untrusted issuer CA fails handshake",
+      "Valid CA but unenrolled leaf denied",
+      "Incorrect ALPN / no required client certificate policy denied",
+      "Raw DER, claimed dict or plain socket cannot mint device",
+      "Expired/overlong/revoked enrollment refused",
+      "Revocation and signed-isolation callback errors/nonboolean deny",
+      "Tampered/writable/symlink/duplicate-key enrollment rejected",
+      "Wrong-tenant signed token cannot select the other verified TLS device",
+      "Old write call ID remains reserved after certificate and generation rotation"
+    ],
+    "contracts_preserved": {
+      "tool_count": 50,
+      "catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+      "file_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+      "native_execution_kernel_duplicated": false
+    }
+  },
+  "evidence": {
+    "test_suites": [
+      {
+        "file": "cloud_gateway_https_tests.py",
+        "exit": 0,
+        "test_count": 5,
+        "duration_seconds": 0.1,
+        "output_sha256": "5c811c543e7deebcfdde92fd4ad4fed227d919e539dcb0e5b0131053a774b6e6"
+      },
+      {
+        "file": "cloud_gateway_policy_tests.py",
+        "exit": 0,
+        "test_count": 40,
+        "duration_seconds": 1.06,
+        "output_sha256": "52f1da8433261d207fa447eacc4860fd01ab0d5bd316845b1e00b8d532e7e232"
+      },
+      {
+        "file": "cloud_gateway_mcp_catalog_tests.py",
+        "exit": 0,
+        "test_count": 11,
+        "duration_seconds": 0.14,
+        "output_sha256": "67ca13a80794891c4e45fc0495f5260ccf0df2f9e31b165230d5a019bd9f1f4b"
+      },
+      {
+        "file": "cloud_gateway_authenticated_catalog_tests.py",
+        "exit": 0,
+        "test_count": 7,
+        "duration_seconds": 0.22,
+        "output_sha256": "b38109a431d355a39a42b321c8aa4fce9d4b3398d4a57f25937a2d641e829909"
+      },
+      {
+        "file": "cloud_gateway_jwt_verifier_tests.py",
+        "exit": 0,
+        "test_count": 19,
+        "duration_seconds": 0.63,
+        "output_sha256": "4135f77cdcb35ade68660f82fae89f02b27b411fac038634033235e0df63ae27"
+      },
+      {
+        "file": "cloud_gateway_mtls_tests.py",
+        "exit": 0,
+        "test_count": 15,
+        "duration_seconds": 20.72,
+        "output_sha256": "19d657aa9c05d31930975366fbd99226305c5774984ff84dce4acabb5bd74e51"
+      },
+      {
+        "file": "full_operator_facade_tests.py",
+        "exit": 0,
+        "test_count": 31,
+        "duration_seconds": 10.56,
+        "output_sha256": "43d62523b29319695ed7b3aac89ecd32cb13fa958f0802bc8686a8555353d1f5"
+      }
+    ],
+    "total_cases": 128,
+    "all_pass": true,
+    "source_sha256": {
+      "deploy/cloud_gateway_mtls.py": "3e158bb4f9e40ed555ee483a07062bcac9bd62d7eaf826f4fcdff5f1293407d0",
+      "tests/cloud_gateway_mtls_tests.py": "ed2d828bc0df8b2176c16b8be3078a6e7d90e8600c7ae6296af1be3c21f00122",
+      ".github/workflows/operator-parity.yml": "649d96d11582e7fe09ddd3df55643236fd6ad0a2d5154cf00d87b2a1585e431f",
+      "docs/CLOUD_GATEWAY_V1.md": "b946c1e9faa05ccc18124a86090accbad5bb40e87f0473ec92e85c5e8078f3f4"
+    },
+    "reproducible_test_command": "/tmp/hepta-document-worker/bin/python tests/cloud_gateway_mtls_tests.py",
+    "certificates_and_rsa_signing_keys_disposable": true,
+    "production_key_used": false
+  },
+  "running_private_services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2064509",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "2064582",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    }
+  },
+  "deployment": {
+    "tls_listener_started": false,
+    "public_https_mcp_server_started": false,
+    "authorization_server_started": false,
+    "outbound_device_channel_started": false,
+    "private_runtime_or_tunnel_or_dc_restarted": false,
+    "customer_credentials_read": false
+  },
+  "still_blocked": [
+    "Real OAuth 2.1 authorization/login/consent server and verified issuer discovery",
+    "Real revocation and consent persistence with fail-closed availability",
+    "Independent signed runtime manifest verification and OS tenant UID/mount/namespace isolation",
+    "Externally provisioned CA, client certificates and automatic key rotation/revocation",
+    "Authenticated outbound agent protocol, live public HTTPS streamable MCP ingress and end-to-end pen testing",
+    "Public ChatGPT app security review, rollout and commercial billing"
+  ],
+  "exact_head_hosted_ci": "Not yet run for this new candidate at receipt creation",
+  "release_status": "HOLD; isolated offline authentication tests, not a public service",
+  "secrets_in_receipt": false
+}

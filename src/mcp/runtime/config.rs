@@ -1,3 +1,7 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Fail-closed host configuration and capability policy.
 use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -6,7 +10,12 @@ use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
-static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
+#[path = "config_identity.rs"]
+mod config_identity;
+pub use config_identity::LoadedRuntimeConfig;
+
+static RUNTIME_CONFIG: OnceLock<InstalledRuntimeConfig> = OnceLock::new();
+static CONTROLLER_OWNER: OnceLock<ControllerLocks> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -14,6 +23,16 @@ pub enum Platform {
 	#[default]
 	Linux,
 	Macos,
+}
+
+/// Administrator-selected trust boundary, never supplied by a tool invocation.
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionMode {
+	#[default]
+	Isolated,
+	/// Full authority of the configured SSH login, including its existing sudo rights.
+	Operator,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -36,6 +55,14 @@ fn default_action_timeout() -> u64 {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HostConfig {
+	/// Optional administrator-pinned CRIU executable. Disabled when absent.
+	#[serde(default)]
+	pub checkpoint_binary: Option<String>,
+	/// Exact SHA256 for the configured CRIU artifact, never supplied by tool callers.
+	#[serde(default)]
+	pub checkpoint_binary_sha256: Option<String>,
+	#[serde(default)]
+	pub execution_mode: ExecutionMode,
 	/// OpenSSH config alias or user@host target. Never supplied by a tool call.
 	pub ssh_target: String,
 	#[serde(default)]
@@ -87,6 +114,52 @@ pub struct RuntimeConfig {
 	pub controller_workspace_roots: Vec<PathBuf>,
 	#[serde(default)]
 	pub hosts: BTreeMap<String, HostConfig>,
+	/// Named administrator-owned model workers; absent disables all weight tools.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	pub weight_workers: BTreeMap<String, crate::mcp::weight_config::WeightWorkerProfile>,
+	/// Fixed read-only static analyzers, pinned by executable, version and SHA-256.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	pub rea_static_profiles: BTreeMap<String, crate::mcp::rea_provider::ReaStaticProfile>,
+	/// Pinned HIA installation and private operator artifact namespace; absent disables HIA.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub hia_worker: Option<crate::mcp::hia_provider::HiaWorkerProfile>,
+}
+
+// The installed value has no mutable accessor or interior-mutable policy fields.
+// Keep its derived digest beside that exact value; neither can be replaced by a
+// later installation. Laziness preserves startup without observation pooling,
+// including configurations whose normalized paths cannot be JSON serialized.
+struct InstalledRuntimeConfig {
+	config: RuntimeConfig,
+	load_provenance: Option<config_identity::LoadProvenance>,
+	#[cfg(any(target_os = "linux", test))]
+	policy_digest: OnceLock<std::result::Result<[u8; 32], serde_json::Error>>,
+}
+
+impl InstalledRuntimeConfig {
+	fn new(config: RuntimeConfig) -> Self {
+		Self {
+			config,
+			load_provenance: None,
+			#[cfg(any(target_os = "linux", test))]
+			policy_digest: OnceLock::new(),
+		}
+	}
+
+	#[cfg(any(target_os = "linux", test))]
+	fn policy_digest(&self) -> Result<[u8; 32]> {
+		self.policy_digest
+			.get_or_init(|| {
+				let bytes = serde_json::to_vec(&self.config)?;
+				let mut digest = [0; 32];
+				digest
+					.copy_from_slice(ring::digest::digest(&ring::digest::SHA256, &bytes).as_ref());
+				Ok(digest)
+			})
+			.as_ref()
+			.copied()
+			.map_err(|error| anyhow!("{error}"))
+	}
 }
 
 fn default_state_dir() -> PathBuf {
@@ -113,6 +186,9 @@ impl RuntimeConfig {
 	}
 
 	pub fn validate(&self) -> Result<()> {
+		if !self.state_dir.is_absolute() {
+			bail!("controller state directory must be absolute");
+		}
 		if self.hosts.is_empty() {
 			bail!("runtime config must declare at least one host");
 		}
@@ -125,6 +201,42 @@ impl RuntimeConfig {
 			}
 		}
 		for (name, host) in &self.hosts {
+			match (&host.checkpoint_binary, &host.checkpoint_binary_sha256) {
+				(None, None) => {}
+				(Some(binary), Some(sha)) => {
+					if host.execution_mode != ExecutionMode::Operator
+						|| host.platform != Platform::Linux
+						|| !host.allow_execute
+					{
+						bail!("checkpoint pin requires an executable Linux operator host `{name}`");
+					}
+					if !Path::new(binary).is_absolute()
+						|| binary.contains(['\0', '\n', '\r'])
+						|| Path::new(binary)
+							.components()
+							.any(|c| matches!(c, Component::ParentDir))
+						|| sha.len() != 64 || !sha
+						.bytes()
+						.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+					{
+						bail!("invalid checkpoint executable or SHA256 on `{name}`");
+					}
+				}
+				_ => bail!("checkpoint executable and SHA256 must be paired on `{name}`"),
+			}
+			if host.execution_mode == ExecutionMode::Operator {
+				if !host.protected_path_prefixes.is_empty()
+					|| !host.protected_argument_substrings.is_empty()
+					|| !host.denied_executables.is_empty()
+					|| !host.allowed_cwd_prefixes.is_empty()
+					|| !host.allowed_dangerous_executables.is_empty()
+				{
+					bail!("operator host `{name}` cannot claim command/path sandboxing; use isolated mode or OS permissions");
+				}
+				if (host.allow_execute || host.allow_pty) && !host.allow_job_network {
+					bail!("operator host `{name}` requires explicit allow_job_network=true");
+				}
+			}
 			if !valid_name(name) {
 				bail!("invalid host name `{name}`; use letters, digits, dot, underscore or dash");
 			}
@@ -179,6 +291,9 @@ impl RuntimeConfig {
 				}
 			}
 		}
+		crate::mcp::weight_config::validate_profiles(self)?;
+		crate::mcp::rea_provider::validate_profiles(self)?;
+		crate::mcp::hia_provider::validate_profile(self)?;
 		Ok(())
 	}
 
@@ -196,23 +311,173 @@ impl RuntimeConfig {
 	}
 }
 
+struct ControllerLocks {
+	_owner: std::fs::File,
+	_legacy: std::fs::File,
+}
+
+fn claim_controller_state_dir(state_dir: &Path) -> Result<ControllerLocks> {
+	let open = |name: &str, legacy: bool| -> Result<std::fs::File> {
+		let path = state_dir.join(name);
+		let mut options = std::fs::OpenOptions::new();
+		options.read(true).write(true).create(true).truncate(false);
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::OpenOptionsExt;
+			options
+				.mode(0o600)
+				.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
+		}
+		let owner = options
+			.open(&path)
+			.with_context(|| format!("cannot open controller lock {}", path.display()))?;
+		let metadata = owner.metadata()?;
+		if !metadata.is_file() {
+			bail!("controller owner lock must be a regular file");
+		}
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::{MetadataExt, PermissionsExt};
+			if metadata.nlink() != 1 || metadata.uid() != unsafe { libc::geteuid() } {
+				bail!("controller owner lock has foreign ownership or hard links");
+			}
+			if metadata.permissions().mode() & 0o077 != 0 {
+				if !legacy {
+					bail!("controller owner lock must not be group/world accessible");
+				}
+				owner.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+			}
+		}
+		#[cfg(not(unix))]
+		let _ = legacy;
+		owner.try_lock().map_err(|error| {
+			anyhow!(
+				"controller state directory {} is already owned or cannot be locked: {error}",
+				state_dir.display()
+			)
+		})?;
+		Ok(owner)
+	};
+	// Fixed ordering plus nonblocking acquisition prevents deadlock. Holding
+	// both FDs excludes an old controller that recognizes only one filename.
+	let owner = open("controller.owner.lock", false)?;
+	let legacy = open("controller.lock", true)?;
+	Ok(ControllerLocks {
+		_owner: owner,
+		_legacy: legacy,
+	})
+}
+
+#[cfg(unix)]
+fn validate_controller_state_root(metadata: &std::fs::Metadata, uid: u32) -> Result<()> {
+	use std::os::unix::fs::MetadataExt;
+	if !metadata.is_dir() || metadata.uid() != uid || metadata.mode() & 0o7777 != 0o700 {
+		bail!("controller state directory must be owned by the current user with mode 0700");
+	}
+	Ok(())
+}
+
+fn prepare_controller_state_dir(path: &Path) -> Result<PathBuf> {
+	let mut builder = std::fs::DirBuilder::new();
+	builder.recursive(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::DirBuilderExt;
+		// Apply privacy in each mkdir, before any lock, audit file or observer
+		// can see the new directory. Existing directories are never repaired.
+		builder.mode(0o700);
+	}
+	builder.create(path).with_context(|| {
+		format!(
+			"cannot create controller state directory {}",
+			path.display()
+		)
+	})?;
+	let canonical = std::fs::canonicalize(path)?;
+	#[cfg(unix)]
+	validate_controller_state_root(&std::fs::metadata(&canonical)?, unsafe { libc::geteuid() })?;
+	Ok(canonical)
+}
+
 pub fn init_runtime(config: RuntimeConfig) -> Result<()> {
+	init_runtime_at(config, None, &RUNTIME_CONFIG, &CONTROLLER_OWNER)
+}
+
+/// Opt-in private evidence for this initialization, never an MCP response.
+/// A receipt records installed configuration, not listener or worker readiness.
+pub fn init_runtime_with_private_receipt(loaded: LoadedRuntimeConfig) -> Result<()> {
+	init_runtime_with_private_receipt_at(loaded, &RUNTIME_CONFIG, &CONTROLLER_OWNER).map(|_| ())
+}
+
+fn init_runtime_with_private_receipt_at(
+	loaded: LoadedRuntimeConfig,
+	runtime: &OnceLock<InstalledRuntimeConfig>,
+	controller_owner: &OnceLock<ControllerLocks>,
+) -> Result<PathBuf> {
+	config_identity::require_supported_platform()?;
+	let (config, provenance) = loaded.into_parts();
+	init_runtime_at(config, Some(provenance), runtime, controller_owner)?;
+	// Both sets must have succeeded. In particular, a partial initialization
+	// must not be turned into a positive receipt by inspecting only runtime.
+	let installed = runtime
+		.get()
+		.context("runtime configuration was not installed")?;
+	let owner = controller_owner
+		.get()
+		.context("controller ownership was not installed")?;
+	config_identity::publish_private_receipt(installed, owner)
+}
+
+fn init_runtime_at(
+	mut config: RuntimeConfig,
+	provenance: Option<config_identity::LoadProvenance>,
+	runtime: &OnceLock<InstalledRuntimeConfig>,
+	controller_owner: &OnceLock<ControllerLocks>,
+) -> Result<()> {
 	config.validate()?;
-	std::fs::create_dir_all(config.state_dir.join("jobs"))?;
-	std::fs::create_dir_all(config.state_dir.join("audit"))?;
-	RUNTIME_CONFIG
-		.set(config)
-		.map_err(|_| anyhow!("runtime config was already initialized"))
+	config.state_dir = prepare_controller_state_dir(&config.state_dir)?;
+	let owner = claim_controller_state_dir(&config.state_dir)?;
+	// State files and the audit trail must not become readable by other
+	// local users under a permissive process umask. Never chmod a symlink.
+	for name in ["jobs", "audit"] {
+		let dir = config.state_dir.join(name);
+		std::fs::create_dir_all(&dir)?;
+		if !std::fs::symlink_metadata(&dir)?.file_type().is_dir() {
+			bail!("controller state subdirectory {name} must not be a symlink");
+		}
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+		}
+	}
+	let mut installed = InstalledRuntimeConfig::new(config);
+	installed.load_provenance = provenance;
+	runtime
+		.set(installed)
+		.map_err(|_| anyhow!("runtime config was already initialized"))?;
+	controller_owner
+		.set(owner)
+		.map_err(|_| anyhow!("controller owner lock was already initialized"))
 }
 
 pub fn runtime_config() -> Result<&'static RuntimeConfig> {
 	RUNTIME_CONFIG
 		.get()
+		.map(|installed| &installed.config)
 		.ok_or_else(|| anyhow!("runtime tools are disabled; start with --runtime-config <file>"))
 }
 
 pub fn maybe_runtime_config() -> Option<&'static RuntimeConfig> {
-	RUNTIME_CONFIG.get()
+	RUNTIME_CONFIG.get().map(|installed| &installed.config)
+}
+
+#[cfg(any(target_os = "linux", test))]
+pub(super) fn runtime_policy_digest() -> Result<[u8; 32]> {
+	RUNTIME_CONFIG
+		.get()
+		.ok_or_else(|| anyhow!("runtime tools are disabled; start with --runtime-config <file>"))?
+		.policy_digest()
 }
 
 pub fn valid_name(value: &str) -> bool {
@@ -309,7 +574,10 @@ const DANGEROUS_ENV: &[&str] = &[
 pub fn check_environment(host_name: &str, env: &BTreeMap<String, String>) -> Result<()> {
 	let host = runtime_config()?.host(host_name)?;
 	for (key, value) in env {
-		if DANGEROUS_ENV.contains(&key.as_str()) {
+		if value.contains('\0') {
+			bail!("environment values may not contain NUL bytes");
+		}
+		if host.execution_mode == ExecutionMode::Isolated && DANGEROUS_ENV.contains(&key.as_str()) {
 			bail!("environment variable `{key}` is denied on host `{host_name}`");
 		}
 		if let Some(prefix) = protected_value(host, value) {
@@ -336,6 +604,18 @@ pub fn check_execution(
 ) -> Result<&'static HostConfig> {
 	let config = runtime_config()?;
 	let host = config.host(host_name)?;
+	validate_execution(host_name, host, executable, args, cwd, pty)?;
+	Ok(host)
+}
+
+fn validate_execution(
+	host_name: &str,
+	host: &HostConfig,
+	executable: &str,
+	args: &[String],
+	cwd: Option<&str>,
+	pty: bool,
+) -> Result<()> {
 	if pty && !host.allow_pty {
 		bail!("PTY execution is disabled for host `{host_name}`");
 	}
@@ -366,13 +646,23 @@ pub fn check_execution(
 		.allowed_dangerous_executables
 		.iter()
 		.any(|x| x == base || x == executable);
-	if explicitly_denied || (dangerous && !explicitly_allowed) {
+	if explicitly_denied
+		|| (host.execution_mode == ExecutionMode::Isolated && dangerous && !explicitly_allowed)
+	{
 		bail!(
             "executable `{base}` is denied on host `{host_name}`; use a named privileged_action when configured"
         );
 	}
+	if cwd.is_none() && !host.allowed_cwd_prefixes.is_empty() {
+		bail!("cwd is required when execution roots are configured for host `{host_name}`");
+	}
 	if let Some(cwd) = cwd {
-		if !Path::new(cwd).is_absolute() {
+		if cwd.contains('\0')
+			|| !Path::new(cwd).is_absolute()
+			|| Path::new(cwd)
+				.components()
+				.any(|c| matches!(c, Component::ParentDir))
+		{
 			bail!("cwd must be an absolute path");
 		}
 		if !host.allowed_cwd_prefixes.is_empty()
@@ -393,42 +683,37 @@ pub fn check_execution(
 			bail!("argument intersects protected value `{prefix}` on host `{host_name}`");
 		}
 	}
-	Ok(host)
-}
-
-fn normalize_absolute(path: &Path) -> Result<PathBuf> {
-	if !path.is_absolute() {
-		bail!("path `{}` must be absolute", path.display());
-	}
-	let mut normalized = PathBuf::from("/");
-	for component in path.components() {
-		match component {
-			Component::RootDir => normalized = PathBuf::from("/"),
-			Component::CurDir => {}
-			Component::ParentDir => {
-				if !normalized.pop() {
-					bail!("path `{}` escapes the filesystem root", path.display());
-				}
-			}
-			Component::Normal(part) => normalized.push(part),
-			Component::Prefix(_) => bail!("Windows path prefixes are not accepted here"),
-		}
-	}
-	Ok(normalized)
+	Ok(())
 }
 
 fn canonical_policy_path(path: &Path) -> Result<PathBuf> {
-	let normalized = normalize_absolute(path)?;
-	let mut probe = normalized.as_path();
+	if !path.is_absolute() {
+		bail!("path `{}` must be absolute", path.display());
+	}
+	// Resolve the spelling that the subsequent filesystem operation will use.
+	// Lexically collapsing `link/..` before resolving `link` can authorize an
+	// in-root name while the kernel opens a different, out-of-root inode.
+	let mut probe = path;
 	let mut suffix: Vec<OsString> = Vec::new();
-	while !probe.exists() {
+	loop {
+		match std::fs::symlink_metadata(probe) {
+			Ok(_) => break,
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+			Err(error) => {
+				return Err(error)
+					.with_context(|| format!("failed to inspect `{}`", probe.display()));
+			}
+		}
+		// Only absent normal components can be appended to an existing physical
+		// ancestor. A dangling symlink is an existing entry and must reach the
+		// canonicalize call below, which rejects its unresolved target.
 		let name = probe
 			.file_name()
-			.ok_or_else(|| anyhow!("no existing ancestor for `{}`", normalized.display()))?;
+			.ok_or_else(|| anyhow!("no existing ancestor for `{}`", path.display()))?;
 		suffix.push(name.to_os_string());
 		probe = probe
 			.parent()
-			.ok_or_else(|| anyhow!("no existing ancestor for `{}`", normalized.display()))?;
+			.ok_or_else(|| anyhow!("no existing ancestor for `{}`", path.display()))?;
 	}
 	let mut canonical = std::fs::canonicalize(probe)
 		.with_context(|| format!("failed to canonicalize `{}`", probe.display()))?;
@@ -465,6 +750,32 @@ pub fn check_local_path(path: &Path) -> Result<()> {
 		"local path `{}` is outside configured controller workspaces",
 		candidate.display()
 	)
+}
+
+/// An administrator-selected controller root is a durable authority boundary.
+/// Even when a process has OS rename permission on that directory, relocating
+/// the root (or one of its ancestors) would silently invalidate workspace
+/// confinement for later operations. This check does not grant new authority.
+/// Directory parents may still be changed concurrently by independent owners;
+/// the fd-relative kernel rename remains the final no-symlink/no-overwrite gate.
+fn check_directory_move_against_roots(source: &Path, roots: &[PathBuf]) -> Result<()> {
+	let candidate = std::fs::canonicalize(source)
+		.with_context(|| "cannot resolve directory move source identity")?;
+	for root in roots {
+		let pinned = std::fs::canonicalize(root)
+			.with_context(|| "configured controller workspace root is unavailable")?;
+		if pinned.starts_with(&candidate) {
+			bail!("directory move would relocate a configured controller workspace root");
+		}
+	}
+	Ok(())
+}
+
+/// Protect every configured root, including a nested root contained in a
+/// larger authorized workspace. Only callable after normal path checks.
+pub fn check_directory_move_source(source: &Path) -> Result<()> {
+	let config = runtime_config()?;
+	check_directory_move_against_roots(source, &config.controller_workspace_roots)
 }
 
 fn remote_path_allowed(path: &str, prefixes: &[String]) -> bool {
@@ -522,26 +833,5 @@ pub fn check_remote_write(alias: &str, path: &str) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn names_are_strict() {
-		assert!(valid_name("rog-1.example"));
-		assert!(!valid_name("rog/1"));
-		assert!(!valid_name(&"-".repeat(129)));
-	}
-
-	#[test]
-	fn basename_is_stable() {
-		assert_eq!(executable_basename("/usr/bin/systemctl"), "systemctl");
-		assert_eq!(executable_basename("python3"), "python3");
-	}
-
-	#[test]
-	fn privileged_regexes_are_full_match_capable() {
-		let regex = Regex::new(r"\A(?:[a-z0-9_-]+)\z").unwrap();
-		assert!(regex.is_match("profile-1"));
-		assert!(!regex.is_match("profile-1;id"));
-	}
-}
+#[path = "config_tests.rs"]
+mod tests;

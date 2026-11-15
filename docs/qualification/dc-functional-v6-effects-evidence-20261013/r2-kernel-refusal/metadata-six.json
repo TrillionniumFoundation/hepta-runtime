@@ -1,0 +1,138 @@
+{
+  "schema": "hepta-dc-v6-native-metadata-acceptance-v1",
+  "origin": "native_python_mcp_client",
+  "binary_sha256": "add205414b88925789f14d57b293ff185b0e57a8cc37e21e87823fc8e3c632f4",
+  "contract_sha256": "de23cec290a0c22d248575c92b656d2a194a8306b85cc92b68aedea4fe0db3c8",
+  "checks": [
+    {
+      "check": "exact reviewed v6 catalog",
+      "result": "passed",
+      "detail": {
+        "tools": 58,
+        "old_v4_and_v5_definitions_unchanged": true
+      }
+    },
+    {
+      "check": "effective configuration projection",
+      "result": "passed",
+      "detail": {
+        "six_aliases": [
+          "ai395",
+          "mac",
+          "main",
+          "pocket4",
+          "rog",
+          "x230"
+        ],
+        "raw_policy_and_private_values_absent": true
+      }
+    },
+    {
+      "check": "six-host fixed read-only health probes",
+      "result": "passed",
+      "detail": {
+        "ai395": "healthy",
+        "mac": "healthy",
+        "main": "healthy",
+        "pocket4": "healthy",
+        "rog": "healthy",
+        "x230": "healthy"
+      }
+    },
+    {
+      "check": "secret output and rejection metadata redaction",
+      "result": "passed",
+      "detail": {
+        "unknown_name_redacted": true,
+        "readonly_parameter_refusal_recorded": true,
+        "write_parameter_failure_conservatively_unknown": true,
+        "output_errors_and_untrusted_meta_not_logged": true
+      }
+    },
+    {
+      "check": "independent retained-history pagination and strict limits",
+      "result": "passed",
+      "detail": {
+        "overlapping_page_ids_stable": true,
+        "unique_paged_records": 30,
+        "invalid_limits_and_owner_override_denied": true
+      }
+    },
+    {
+      "check": "fresh authenticated native session cannot see or use old ownership",
+      "result": "passed",
+      "detail": {
+        "same_token_new_session_old_ids_absent": true,
+        "cross_owner_cursor_denied": true
+      }
+    },
+    {
+      "check": "simulated retained cursor expiry",
+      "result": "passed",
+      "detail": {
+        "only_disposable_own_record_deleted": true,
+        "expired_cursor_refused": true
+      }
+    },
+    {
+      "check": "private physical request metadata contains no payload or private input",
+      "result": "passed",
+      "detail": {
+        "private_records": 35,
+        "directory_mode": "0700",
+        "record_mode": "0600",
+        "payload_paths_credentials_and_meta_absent": true
+      }
+    },
+    {
+      "check": "wide audit directory fails before dispatch without publication",
+      "result": "passed",
+      "detail": {
+        "pre_dispatch_refused": true,
+        "record_set_unchanged": true,
+        "safe_permissions_restored": true
+      }
+    },
+    {
+      "check": "standalone controller refuses hidden runtime tools",
+      "result": "passed",
+      "detail": {
+        "hidden_runtime_catalog_and_dispatch_consistent": true
+      }
+    }
+  ],
+  "complete": true,
+  "installed_service_changed": false,
+  "dc_stopped": false,
+  "target_files_changed": false,
+  "model_origin_qualified": false,
+  "target_health_probed": true,
+  "qualification_scope": "native_six_host_metadata_and_readonly_health",
+  "native_log_directory": "/home/qian-qi/hepta-runtime-dc-functional-20261013/docs/qualification/dc-functional-v6-effects-evidence-20261013/r2-kernel-refusal/metadata-six-logs",
+  "native_log_redaction": "throwaway auth token, sentinel inputs, caller metadata and auth/header lines are redacted before delivery",
+  "full_dc_replacement_qualified": false,
+  "limits": [
+    "Only native MCP session scope is qualified; no authenticated ChatGPT caller isolation.",
+    "No secure cross-session or service-restart history resume is claimed.",
+    "Transport-invalid requests and facade-local refusals do not reach native dispatch audit.",
+    "Cursor expiry is safely simulated by deleting one test-owned metadata receipt.",
+    "This does not qualify actual audit finish failure during a real side-effecting operation."
+  ],
+  "passed": 10,
+  "native_logs": [
+    {
+      "path": "/home/qian-qi/hepta-runtime-dc-functional-20261013/docs/qualification/dc-functional-v6-effects-evidence-20261013/r2-kernel-refusal/metadata-six-logs/native-0.log",
+      "bytes": 44,
+      "sha256": "80c6b59fc97eb8fea19631f014be3ebecdb1f243b02a33b0823c969916dbe36f",
+      "redacted": false,
+      "raw_diagnostics_preserved_except_private_inputs": true
+    },
+    {
+      "path": "/home/qian-qi/hepta-runtime-dc-functional-20261013/docs/qualification/dc-functional-v6-effects-evidence-20261013/r2-kernel-refusal/metadata-six-logs/native-1.log",
+      "bytes": 66,
+      "sha256": "2693ab231094e358e324df96254d6366e872fdbc68f779f07f1a9d7a8692488d",
+      "redacted": false,
+      "raw_diagnostics_preserved_except_private_inputs": true
+    }
+  ]
+}

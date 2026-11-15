@@ -1,0 +1,103 @@
+{
+  "schema": "hepta-preflight-token-reader-independent-review-v1",
+  "review_id": "20261013-r1",
+  "reviewer": "independent token_reader_review subagent",
+  "scope": {
+    "checkout": "/home/qian-qi/hepta-runtime-dc-functional-20261013",
+    "source": "deploy/preflight_dc_successor.py",
+    "tests": "tests/dc_successor_preflight_tests.py",
+    "source_sha256": "5988336189c17358ff90e476440ee5d6b621ab902c57fb2e2095d8b351e4c808",
+    "tests_sha256": "6426dbbf576bbd162d01eca6ffe885459abad117c5a6bd9e535083000ba07e63",
+    "hash_provenance": "Exact full-file hashes supplied by implementing parent. Reviewer independently read corresponding source blocks; full-file hashes were not independently recomputed."
+  },
+  "outcome": {
+    "reader_static_review": "accepted within stated filesystem and same-UID limits",
+    "reader_blocking_findings": 0,
+    "new_fixtures": "R1 has one Medium test defect; fixed source requires R2 acceptance",
+    "production_validation": false
+  },
+  "findings": [
+    {
+      "id": "TOKEN-REVIEW-R1-001",
+      "severity": "Medium",
+      "category": "test validity",
+      "status": "accepted by parent; R1 preserved",
+      "location": "tests/dc_successor_preflight_tests.py:1131-1132 at R1",
+      "evidence": "The directory case calls read_private_token(self.root) and expects ValueError. Its immediate parent is /tmp. Reader lines 199-202 require immediate parent uid==current UID and mode exactly0700, so PermissionError occurs before a directory token descriptor is opened.",
+      "impact": "R1 directory-token coverage is ineffective and causes one test error. This is a fixture defect, not a reader bypass.",
+      "recommendation": "Create a mode0700 child such as self.root/'owned-directory' and pass it to the reader; its immediate parent then is the valid private self.root."
+    }
+  ],
+  "reader_evidence": [
+    {
+      "property": "No token snapshot/hash/metadata",
+      "evidence": "Reader lines195-247 do not call S.snapshot, digest or hashlib, and return only the decoded string. Positive fixtures forbid S.snapshot, P.digest and P.hashlib.sha256."
+    },
+    {
+      "property": "No symlink ancestry",
+      "evidence": "S.open_parent lines46-61 walks from / using O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC and dir_fd for every ancestor. It pins directories without following links."
+    },
+    {
+      "property": "Immediate parent privacy before token open",
+      "evidence": "Reader lines199-202 require S_ISDIR, current UID and S_IMODE exactly0700 before os.open of credential."
+    },
+    {
+      "property": "Credential FD flags",
+      "evidence": "Lines204-205 use O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK, dir_fd=parent."
+    },
+    {
+      "property": "Inode constraints",
+      "evidence": "Lines207-224 validate sameFD before and after: single-link ordinary file, current UID, exact0400 or0600."
+    },
+    {
+      "property": "Read and format bounds",
+      "evidence": "Initial st_size>512 rejected before read; loop collects short reads with maximum513 bytes; len must equal initial size and <=512. ASCII.decode.strip then requires1..256 printable chars33..126."
+    },
+    {
+      "property": "Stability and path binding",
+      "evidence": "Lines225-235 compare before/afterFD and linked name across dev/ino/size/mtime_ns/ctime_ns/uid/nlink/fullmode; parentFD dev/ino/uid/fullmode also stable."
+    },
+    {
+      "property": "Cleanup and no mutation",
+      "evidence": "Nested finally blocks close both FDs before decode. Reader performs no write/chmod/chown/rename/unlink. Positive0400 and0600 fixtures compare mode/inode/bytes and identity metadata before/after."
+    }
+  ],
+  "tests": {
+    "reviewer_execution": "none",
+    "execution_provenance": "Parent-reported offline synthetic results",
+    "r1_runner": "1a137562e2b-b2f-898",
+    "new_fixture_methods": {
+      "passed": 12,
+      "errors": 1,
+      "total": 13
+    },
+    "full_preflight_methods": {
+      "passed": 59,
+      "errors": 1,
+      "total": 60
+    },
+    "stage_methods": {
+      "passed": 26,
+      "errors": 0,
+      "total": 26
+    },
+    "reported_source_stable": true,
+    "raw_failure_retained_by_parent": true,
+    "interpretation": "Owned offline fixtures are regression evidence only; they do not qualify production HTTP/SSH/service inventory or cutover."
+  },
+  "limits": [
+    "S.open_parent rejects symlink traversal but does not establish every ancestor's trusted owner/mode or revalidate the complete current pathname after ancestor rename.",
+    "FD pinning, stat comparisons and the post-read linked-name check are consistency checks, not an atomic snapshot against arbitrary concurrent writers.",
+    "Private ownership is not a security boundary against code under the same UID or higher privilege. Timestamp checks are not a cryptographic content guarantee against such actors.",
+    "Parent timestamps are not compared; an exposure-and-restore of parent permissions between checkpoints is outside the guaranteed boundary.",
+    "No actual installed token or live HTTP/SSH/service operation was accessed by reviewer."
+  ],
+  "reviewer_actions": {
+    "source_mutations": [],
+    "actual_token_reads": 0,
+    "actual_token_hashes": 0,
+    "actual_http_or_ssh": 0,
+    "runtime_fixture_execution": 0,
+    "artifact_write": "Only this independently authored audit JSON. First text_file_write attempt returned Internal error; read-only view confirmed absence; create-only text_editor fallback used."
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "authoritative_status": {
+    "at_unix_ms": 1791920684152,
+    "cancelled": false,
+    "exit_code": 0,
+    "job_id": "1a136cbba1d-b2f-5db",
+    "log_bytes": {
+      "stderr": {
+        "seen": 0,
+        "stored": 0
+      },
+      "stdout": {
+        "seen": 608,
+        "stored": 608
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "state": "succeeded",
+    "timed_out": false
+  },
+  "job_id": "1a136cbba1d-b2f-5db",
+  "limitation": "Does not retroactively trace the exact failed Rust-suite fork; deterministic inherited descriptor reproduces the source lifetime defect.",
+  "observed_receipt": {
+    "checks": [
+      {
+        "child_still_holds_inherited_open_file_description": true,
+        "errno": 11,
+        "explicit_unlock_before_parent_close": false,
+        "new_descriptor_acquired_before_child_release": false,
+        "same_lock_inode": true
+      },
+      {
+        "child_still_holds_inherited_open_file_description": true,
+        "errno": null,
+        "explicit_unlock_before_parent_close": true,
+        "new_descriptor_acquired_before_child_release": true,
+        "same_lock_inode": true
+      }
+    ],
+    "owned_children_reaped": true,
+    "owned_temp_directories_removed": true,
+    "production_services_changed": false,
+    "schema": "hepta-v9-independent-lock-inheritance-proof-v1",
+    "source_modified": false
+  },
+  "schema": "hepta-v9-metadata-flock-independent-diagnosis-v1",
+  "scope": "independent Linux flock open-file-description semantics fixture; no product source changes; not complete product qualification"
+}

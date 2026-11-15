@@ -1,0 +1,717 @@
+diff --git a/src/mcp/runtime/ssh_observation_pool.rs b/src/mcp/runtime/ssh_observation_pool.rs
+index 23344a6..441f75b 100644
+--- a/src/mcp/runtime/ssh_observation_pool.rs
++++ b/src/mcp/runtime/ssh_observation_pool.rs
+@@ -4,6 +4,8 @@
+ //! A separate, explicitly opted-in transport; it never falls back or replays.
+ #[path = "ssh_observation_profile.rs"]
+ mod profile;
++#[path = "ssh_observation_spawn_diagnostic.rs"]
++mod spawn_diagnostic;
+ #[path = "ssh_observation_validation.rs"]
+ mod validation;
+ 
+@@ -179,6 +181,7 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
+ 				sequence: AtomicU64::new(1),
+ 				owner_tid: unsafe { libc::syscall(libc::SYS_gettid) },
+ 			});
++			spawn_diagnostic::initialize();
+ 			// Child ownership lives outside the fallible actor future. All spawning,
+ 			// pipe I/O and waiting occurs on this nonretiring current-thread runtime.
+ 			let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+@@ -199,6 +202,7 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
+ 			owner.healthy.store(false, Ordering::Release);
+ 			core.stop.cancel();
+ 			let cleanup = runtime.block_on(core.shutdown());
++			spawn_diagnostic::finish_cleanup(&cleanup);
+ 			match outcome {
+ 				Ok(result) => {
+ 					result?;
+@@ -427,24 +431,71 @@ struct ProcessIdentity {
+ 	argv: Vec<u8>,
+ }
+ fn process_identity(pid: u32) -> Result<ProcessIdentity> {
++	process_identity_observed(pid, None)
++}
++fn process_identity_observed(
++	pid: u32,
++	mut observation: Option<&mut spawn_diagnostic::IdentityObservation>,
++) -> Result<ProcessIdentity> {
+ 	let root = PathBuf::from(format!("/proc/{pid}"));
+-	let status = std::fs::read_to_string(root.join("stat"))?;
++	let status = std::fs::read_to_string(root.join("stat")).inspect_err(|error| {
++		if let Some(probe) = observation.as_deref_mut() {
++			probe.failed("stat_read", error.raw_os_error());
++		}
++	})?;
+ 	let tail = status
+ 		.rsplit_once(')')
+-		.context("observation child stat unavailable")?
++		.context("observation child stat unavailable")
++		.inspect_err(|_| {
++			if let Some(probe) = observation.as_deref_mut() {
++				probe.failed("stat_layout", None);
++			}
++		})?
+ 		.1;
++	if let Some(probe) = observation.as_deref_mut() {
++		probe.state(tail.split_ascii_whitespace().next());
++	}
+ 	let birth = tail
+ 		.split_ascii_whitespace()
+ 		.nth(19)
+-		.context("observation child birth unavailable")?
+-		.parse()?;
+-	let exe = std::fs::metadata(root.join("exe"))?;
++		.context("observation child birth unavailable")
++		.inspect_err(|_| {
++			if let Some(probe) = observation.as_deref_mut() {
++				probe.failed("birth_field", None);
++			}
++		})?
++		.parse()
++		.inspect_err(|_| {
++			if let Some(probe) = observation.as_deref_mut() {
++				probe.failed("birth_parse", None);
++			}
++		})?;
++	let exe = std::fs::metadata(root.join("exe")).inspect_err(|error| {
++		if let Some(probe) = observation.as_deref_mut() {
++			probe.failed("exe_metadata", error.raw_os_error());
++		}
++	})?;
++	let uid = std::fs::metadata(&root)
++		.inspect_err(|error| {
++			if let Some(probe) = observation.as_deref_mut() {
++				probe.failed("proc_directory_metadata", error.raw_os_error());
++			}
++		})?
++		.uid();
++	let argv = std::fs::read(root.join("cmdline")).inspect_err(|error| {
++		if let Some(probe) = observation.as_deref_mut() {
++			probe.failed("cmdline_read", error.raw_os_error());
++		}
++	})?;
++	if let Some(probe) = observation {
++		probe.argv_empty(argv.is_empty());
++	}
+ 	Ok(ProcessIdentity {
+ 		birth,
+-		uid: std::fs::metadata(&root)?.uid(),
++		uid,
+ 		dev: exe.dev(),
+ 		ino: exe.ino(),
+-		argv: std::fs::read(root.join("cmdline"))?,
++		argv,
+ 	})
+ }
+ 
+@@ -832,6 +883,12 @@ impl Core {
+ 		} else {
+ 			unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) }
+ 		};
++		// Preserve the original pidfd_open errno before any other syscall.
++		let pidfd_errno = if pid != 0 && fd < 0 {
++			std::io::Error::last_os_error().raw_os_error()
++		} else {
++			None
++		};
+ 		let pidfd = if fd < 0 {
+ 			None
+ 		} else {
+@@ -851,11 +908,13 @@ impl Core {
+ 		// Failed pidfd/identity checks use the same bounded cleanup ledger.
+ 		children.insert(id, owned.clone());
+ 		drop(children);
+-		let identity = process_identity(pid).ok();
++		let mut identity_observation = spawn_diagnostic::IdentityObservation::default();
++		let identity = process_identity_observed(pid, Some(&mut identity_observation)).ok();
++		let identity_available = identity.is_some();
+ 		let matches = identity.as_ref().is_some_and(|value| {
+-			value.uid == unsafe { libc::geteuid() }
+-				&& (value.dev, value.ino) == self.profile.ssh_inode
+-				&& value.argv == expected
++			identity_observation.uid(value.uid == unsafe { libc::geteuid() })
++				&& identity_observation.executable((value.dev, value.ino) == self.profile.ssh_inode)
++				&& identity_observation.argv(value.argv == expected)
+ 		});
+ 		if let Some(identity) = identity {
+ 			let _ = owned.identity.set(identity);
+@@ -864,10 +923,31 @@ impl Core {
+ 		let proof = owned.pidfd.is_some() && terminal.as_ref().is_ok_and(|done| *done || matches);
+ 		if !proof {
+ 			self.stop.cancel();
+-			self.stop_child(&owned, Duration::ZERO)
++			let mut failure = spawn_diagnostic::SpawnFailureGuard::new(|| {
++				spawn_diagnostic::SpawnProofObservation {
++					pid,
++					owned_child_id: id,
++					expected_argv_mode: spawn_diagnostic::expected_argv_mode(args),
++					pid_available: pid != 0,
++					pidfd_available: owned.pidfd.is_some(),
++					pidfd_errno,
++					identity_available,
++					identity_observation,
++					identity_matches: matches,
++					initial_terminal_probe: spawn_diagnostic::ProbeResult::terminal(&terminal),
++				}
++			});
++			failure.stopping();
++			let stopped = self
++				.stop_child(&owned, Duration::ZERO)
+ 				.await
+-				.context("observation early child proof failed; cleanup uncertain")?;
+-			self.release(&owned).await?;
++				.context("observation early child proof failed; cleanup uncertain");
++			failure.stopped(&stopped);
++			stopped?;
++			failure.releasing();
++			let released = self.release(&owned).await;
++			failure.released(&released);
++			released?;
+ 			bail!("observation SSH pidfd or post-exec identity refused; no fallback");
+ 		}
+ 		owned.approved.store(matches, Ordering::Release);
+diff --git a/source-a25-d4-r01/src/mcp/runtime/ssh_observation_spawn_diagnostic.rs b/src/mcp/runtime/ssh_observation_spawn_diagnostic.rs
+new file mode 100644
+index 0000000..accaf0c
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_spawn_diagnostic.rs
+@@ -0,0 +1,359 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Failure-only, always-on evidence for the isolated A25-D4 diagnostic tree.
++//! No phase clocks, extra process probes, retries, or raw process identity bytes.
++//! Guards buffer at most sixteen failures; only owner cleanup flushes stderr.
++use serde::Serialize;
++use std::cell::RefCell;
++use std::io::Write;
++
++const FAILURE_EVENT_LIMIT: u64 = 16;
++const PREFIX: &[u8] = b"HEPTA_X230_SPAWN_PROOF_FAILURE_JSON ";
++
++thread_local! {
++	static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
++}
++
++struct State {
++	seen: u64,
++	capped: u64,
++	events: Vec<FailureEvent>,
++}
++
++fn with_state(apply: impl FnOnce(&mut State)) {
++	let _ = STATE.try_with(|slot| {
++		let Ok(mut slot) = slot.try_borrow_mut() else {
++			return;
++		};
++		let Some(state) = slot.as_mut() else {
++			return;
++		};
++		apply(state);
++	});
++}
++
++pub(super) fn initialize() {
++	let _ = STATE.try_with(|slot| {
++		if let Ok(mut slot) = slot.try_borrow_mut() {
++			*slot = Some(State {
++				seen: 0,
++				capped: 0,
++				events: Vec::with_capacity(FAILURE_EVENT_LIMIT as usize),
++			});
++		}
++	});
++}
++
++pub(super) fn errno_category(errno: Option<i32>) -> &'static str {
++	match errno {
++		None => "no_os_errno",
++		Some(libc::ENOENT | libc::ESRCH) => "not_found_or_exited",
++		Some(libc::EACCES | libc::EPERM) => "permission",
++		Some(libc::EMFILE | libc::ENFILE | libc::ENOMEM | libc::EAGAIN | libc::ENOSPC) => {
++			"resource"
++		}
++		Some(libc::EINTR) => "interrupted",
++		Some(libc::EINVAL | libc::ENOSYS | libc::ENODEV) => "invalid_or_unsupported",
++		Some(libc::EIO) => "io",
++		Some(_) => "other_os_error",
++	}
++}
++
++#[derive(Clone, Copy, Default, Serialize)]
++pub(super) struct IdentityObservation {
++	failure_stage: Option<&'static str>,
++	failure_errno: Option<i32>,
++	failure_errno_category: Option<&'static str>,
++	stat_state: Option<&'static str>,
++	argv_was_empty: Option<bool>,
++	uid_matches: Option<bool>,
++	executable_matches: Option<bool>,
++	argv_matches: Option<bool>,
++}
++
++impl IdentityObservation {
++	pub(super) fn failed(&mut self, stage: &'static str, errno: Option<i32>) {
++		self.failure_stage = Some(stage);
++		self.failure_errno = errno;
++		self.failure_errno_category = Some(errno_category(errno));
++	}
++	pub(super) fn state(&mut self, value: Option<&str>) {
++		self.stat_state = value.map(|state| match state {
++			"R" => "running",
++			"S" => "sleeping",
++			"D" => "disk_sleep",
++			"Z" => "zombie",
++			"T" => "stopped",
++			"t" => "tracing_stop",
++			"X" | "x" => "dead",
++			"I" => "idle",
++			_ => "other",
++		});
++	}
++	pub(super) fn argv_empty(&mut self, value: bool) {
++		self.argv_was_empty = Some(value);
++	}
++	pub(super) fn uid(&mut self, value: bool) -> bool {
++		self.uid_matches = Some(value);
++		value
++	}
++	pub(super) fn executable(&mut self, value: bool) -> bool {
++		self.executable_matches = Some(value);
++		value
++	}
++	pub(super) fn argv(&mut self, value: bool) -> bool {
++		self.argv_matches = Some(value);
++		value
++	}
++}
++
++pub(super) fn expected_argv_mode(args: &[String]) -> &'static str {
++	let master = args.iter().any(|value| value == "ControlMaster=yes");
++	let slave = args.iter().any(|value| value == "ControlMaster=no");
++	let effective = args.iter().any(|value| value == "-G");
++	match (master, slave, effective) {
++		(true, false, true) => "effective_master",
++		(false, true, true) => "effective_slave",
++		(true, false, false) => "master",
++		(false, true, false) => "slave",
++		_ => "unknown",
++	}
++}
++
++#[derive(Clone, Copy, Serialize)]
++pub(super) struct ProbeResult {
++	kind: &'static str,
++	errno: Option<i32>,
++	errno_category: Option<&'static str>,
++}
++
++impl ProbeResult {
++	fn status(kind: &'static str) -> Self {
++		Self {
++			kind,
++			errno: None,
++			errno_category: None,
++		}
++	}
++	fn error(error: &anyhow::Error) -> Self {
++		let errno = error.chain().find_map(|cause| {
++			cause
++				.downcast_ref::<std::io::Error>()
++				.and_then(std::io::Error::raw_os_error)
++		});
++		Self {
++			kind: "error",
++			errno,
++			errno_category: Some(errno_category(errno)),
++		}
++	}
++	pub(super) fn terminal(result: &anyhow::Result<bool>) -> Self {
++		match result {
++			Ok(true) => Self::status("exited"),
++			Ok(false) => Self::status("not_exited"),
++			Err(error) => Self::error(error),
++		}
++	}
++	fn cleanup(result: &anyhow::Result<()>) -> Self {
++		match result {
++			Ok(()) => Self::status("succeeded"),
++			Err(error) => Self::error(error),
++		}
++	}
++}
++
++#[derive(Clone, Copy, Serialize)]
++pub(super) struct SpawnProofObservation {
++	// Private same-run correlation only: neither value proves identity.
++	pub pid: u32,
++	pub owned_child_id: u64,
++	pub expected_argv_mode: &'static str,
++	pub pid_available: bool,
++	pub pidfd_available: bool,
++	pub pidfd_errno: Option<i32>,
++	pub identity_available: bool,
++	pub identity_observation: IdentityObservation,
++	pub identity_matches: bool,
++	pub initial_terminal_probe: ProbeResult,
++}
++
++#[derive(Serialize)]
++struct FailureEvent {
++	schema: &'static str,
++	sequence: u64,
++	expected_argv_mode_is_not_verified_process_identity: bool,
++	initial_proof_passed: bool,
++	pool_stop_cancelled_before_cleanup: bool,
++	no_retry_or_fallback: bool,
++	pidfd_probe_kind: &'static str,
++	pidfd_errno_category: Option<&'static str>,
++	#[serde(flatten)]
++	observation: SpawnProofObservation,
++	stop_reap: ProbeResult,
++	ledger_release: ProbeResult,
++	failure_guard_closed: bool,
++}
++
++pub(super) struct SpawnFailureGuard {
++	index: Option<usize>,
++	owner_thread: std::thread::ThreadId,
++}
++
++impl SpawnFailureGuard {
++	pub(super) fn new(build: impl FnOnce() -> SpawnProofObservation) -> Self {
++		let mut sequence = None;
++		with_state(|state| {
++			state.seen = state.seen.saturating_add(1);
++			if state.seen <= FAILURE_EVENT_LIMIT {
++				sequence = Some(state.seen);
++			} else {
++				state.capped = state.capped.saturating_add(1);
++			}
++		});
++		let mut index = None;
++		if let Some(sequence) = sequence {
++			let observation = build();
++			let (kind, errno_class) = if !observation.pid_available {
++				("not_attempted_pid_unavailable", None)
++			} else if observation.pidfd_available {
++				("acquired", None)
++			} else {
++				("failed", Some(errno_category(observation.pidfd_errno)))
++			};
++			let event = FailureEvent {
++				schema: "hepta-x230-spawn-proof-failure/v2-d4",
++				sequence,
++				expected_argv_mode_is_not_verified_process_identity: true,
++				initial_proof_passed: false,
++				pool_stop_cancelled_before_cleanup: true,
++				no_retry_or_fallback: true,
++				pidfd_probe_kind: kind,
++				pidfd_errno_category: errno_class,
++				observation,
++				stop_reap: ProbeResult::status("not_attempted"),
++				ledger_release: ProbeResult::status("not_attempted"),
++				failure_guard_closed: false,
++			};
++			with_state(|state| {
++				if state.events.len() < FAILURE_EVENT_LIMIT as usize {
++					index = Some(state.events.len());
++					state.events.push(event);
++				}
++			});
++		}
++		Self {
++			index,
++			owner_thread: std::thread::current().id(),
++		}
++	}
++	fn update(&mut self, apply: impl FnOnce(&mut FailureEvent)) {
++		if self.owner_thread != std::thread::current().id() {
++			return;
++		}
++		let Some(index) = self.index else {
++			return;
++		};
++		with_state(|state| {
++			if let Some(event) = state.events.get_mut(index) {
++				apply(event);
++			}
++		});
++	}
++	pub(super) fn stopping(&mut self) {
++		self.update(|event| {
++			event.stop_reap = ProbeResult::status("in_progress");
++		});
++	}
++	pub(super) fn stopped(&mut self, result: &anyhow::Result<()>) {
++		self.update(|event| {
++			event.stop_reap = ProbeResult::cleanup(result);
++		});
++	}
++	pub(super) fn releasing(&mut self) {
++		self.update(|event| {
++			event.ledger_release = ProbeResult::status("in_progress");
++		});
++	}
++	pub(super) fn released(&mut self, result: &anyhow::Result<()>) {
++		self.update(|event| {
++			event.ledger_release = ProbeResult::cleanup(result);
++		});
++	}
++}
++
++impl Drop for SpawnFailureGuard {
++	fn drop(&mut self) {
++		self.update(|event| {
++			event.failure_guard_closed = true;
++			close_incomplete_probes(event);
++		});
++	}
++}
++
++fn close_incomplete_probes(event: &mut FailureEvent) {
++	if event.stop_reap.kind == "in_progress" {
++		event.stop_reap.kind = "not_completed";
++	}
++	if event.ledger_release.kind == "in_progress" {
++		event.ledger_release.kind = "not_completed";
++	}
++}
++
++#[derive(Serialize)]
++struct FlushedEvent<'a> {
++	#[serde(flatten)]
++	event: &'a FailureEvent,
++	owner_cleanup: ProbeResult,
++	flush_after_owner_cleanup_returned: bool,
++	failures_seen: u64,
++	failures_capped: u64,
++	failures_buffered: usize,
++	failures_reserved_but_not_buffered: u64,
++}
++
++fn finish_cleanup_with_writer(cleanup: &anyhow::Result<()>, writer: &mut impl Write) {
++	let state = STATE
++		.try_with(|slot| slot.try_borrow_mut().ok().and_then(|mut slot| slot.take()))
++		.ok()
++		.flatten();
++	let Some(mut state) = state else {
++		return;
++	};
++	let owner_cleanup = ProbeResult::cleanup(cleanup);
++	// Keep already captured evidence even if shutdown returned an error before
++	// an owner task was dropped. Never claim its unfinished cleanup completed.
++	for event in &mut state.events {
++		close_incomplete_probes(event);
++	}
++	for event in &state.events {
++		let output = FlushedEvent {
++			event,
++			owner_cleanup,
++			flush_after_owner_cleanup_returned: true,
++			failures_seen: state.seen,
++			failures_capped: state.capped,
++			failures_buffered: state.events.len(),
++			failures_reserved_but_not_buffered: state
++				.seen
++				.min(FAILURE_EVENT_LIMIT)
++				.saturating_sub(state.events.len() as u64),
++		};
++		// Logging failure cannot replace the original operation or cleanup result.
++		// Stop after a partial write so no later record masquerades as complete.
++		if writer.write_all(PREFIX).is_err()
++			|| serde_json::to_writer(&mut *writer, &output).is_err()
++			|| writer.write_all(b"\n").is_err()
++		{
++			break;
++		}
++	}
++}
++
++pub(super) fn finish_cleanup(cleanup: &anyhow::Result<()>) {
++	finish_cleanup_with_writer(cleanup, &mut std::io::stderr().lock());
++}
++
++#[cfg(test)]
++#[path = "ssh_observation_spawn_diagnostic_tests.rs"]
++mod tests;
+diff --git a/source-a25-d4-r01/src/mcp/runtime/ssh_observation_spawn_diagnostic_tests.rs b/src/mcp/runtime/ssh_observation_spawn_diagnostic_tests.rs
+new file mode 100644
+index 0000000..e0847e9
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_spawn_diagnostic_tests.rs
+@@ -0,0 +1,172 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++use super::*;
++
++struct TestState;
++impl TestState {
++	fn start() -> Self {
++		STATE.with(|state| assert!(state.borrow().is_none()));
++		initialize();
++		Self
++	}
++}
++impl Drop for TestState {
++	fn drop(&mut self) {
++		STATE.with(|state| {
++			state.borrow_mut().take();
++		});
++	}
++}
++
++fn observation(id: u64) -> SpawnProofObservation {
++	let mut identity = IdentityObservation::default();
++	identity.state(Some("R"));
++	identity.failed("exe_metadata", Some(libc::EACCES));
++	SpawnProofObservation {
++		pid: 123,
++		owned_child_id: id,
++		expected_argv_mode: expected_argv_mode(&[
++			"ControlMaster=no".into(),
++			"-G".into(),
++			"/private/sentinel-argv".into(),
++		]),
++		pid_available: true,
++		pidfd_available: true,
++		pidfd_errno: None,
++		identity_available: false,
++		identity_observation: identity,
++		identity_matches: false,
++		initial_terminal_probe: ProbeResult::terminal(&Ok(false)),
++	}
++}
++
++#[test]
++fn d4_observation_keeps_short_circuit_identity_results_and_fixed_categories() {
++	for uid in [false, true] {
++		for executable in [false, true] {
++			for argv in [false, true] {
++				let mut observed = IdentityObservation::default();
++				let matches =
++					observed.uid(uid) && observed.executable(executable) && observed.argv(argv);
++				assert_eq!(matches, uid && executable && argv);
++				assert_eq!(observed.uid_matches, Some(uid));
++				assert_eq!(observed.executable_matches, uid.then_some(executable));
++				assert_eq!(observed.argv_matches, (uid && executable).then_some(argv));
++			}
++		}
++	}
++	let mut observed = IdentityObservation::default();
++	observed.state(Some("secret-unexpected-state"));
++	observed.argv_empty(true);
++	observed.failed("exe_metadata", Some(libc::EACCES));
++	let data = serde_json::to_value(observed).unwrap();
++	assert_eq!(data["stat_state"], "other");
++	assert_eq!(data["failure_errno"], libc::EACCES);
++	assert_eq!(data["failure_errno_category"], "permission");
++	assert_eq!(data["argv_was_empty"], true);
++	assert!(!data.to_string().contains("secret-unexpected-state"));
++	assert_eq!(errno_category(Some(libc::ENOENT)), "not_found_or_exited");
++	assert_eq!(errno_category(Some(libc::EMFILE)), "resource");
++	assert_eq!(errno_category(None), "no_os_errno");
++	let error = anyhow::Error::from(std::io::Error::from_raw_os_error(libc::ECHILD))
++		.context("/private/sentinel-error");
++	let probe = serde_json::to_value(ProbeResult::terminal(&Err(error))).unwrap();
++	assert_eq!(probe["errno"], libc::ECHILD);
++	assert_eq!(probe["kind"], "error");
++	assert!(!probe.to_string().contains("sentinel-error"));
++}
++
++#[test]
++fn d4_failure_buffer_is_capped_and_flushes_after_failed_cleanup() {
++	let _state = TestState::start();
++	let mut unfinished = SpawnFailureGuard::new(|| observation(1));
++	unfinished.stopping();
++	for id in 2..=20 {
++		let mut failure = SpawnFailureGuard::new(|| observation(id));
++		failure.stopping();
++		failure.stopped(&Ok(()));
++		failure.releasing();
++		failure.released(&Ok(()));
++	}
++	STATE.with(|slot| {
++		let slot = slot.borrow();
++		let state = slot.as_ref().unwrap();
++		assert_eq!(state.events.len(), 16);
++		assert_eq!(state.seen, 20);
++		assert_eq!(state.capped, 4);
++		assert_eq!(state.events[0].stop_reap.kind, "in_progress");
++	});
++	let cleanup = Err(
++		anyhow::Error::from(std::io::Error::from_raw_os_error(libc::EBUSY))
++			.context("/private/sentinel-cleanup"),
++	);
++	let mut output = Vec::new();
++	finish_cleanup_with_writer(&cleanup, &mut output);
++	let text = String::from_utf8(output).unwrap();
++	assert!(!text.contains("sentinel-"));
++	let records: Vec<serde_json::Value> = text
++		.lines()
++		.map(|line| {
++			let prefix = std::str::from_utf8(PREFIX).unwrap();
++			serde_json::from_str(line.strip_prefix(prefix).unwrap()).unwrap()
++		})
++		.collect();
++	assert_eq!(records.len(), 16);
++	for (index, event) in records.iter().enumerate() {
++		assert_eq!(event["sequence"], index + 1);
++		assert_eq!(event["schema"], "hepta-x230-spawn-proof-failure/v2-d4");
++		assert_eq!(event["owner_cleanup"]["kind"], "error");
++		assert_eq!(event["owner_cleanup"]["errno"], libc::EBUSY);
++		assert_eq!(event["flush_after_owner_cleanup_returned"], true);
++		assert_eq!(event["initial_proof_passed"], false);
++		assert_eq!(event["failures_seen"], 20);
++		assert_eq!(event["failures_capped"], 4);
++		assert_eq!(event["failures_reserved_but_not_buffered"], 0);
++		assert_eq!(event["expected_argv_mode"], "effective_slave");
++	}
++	assert_eq!(records[0]["failure_guard_closed"], false);
++	assert_eq!(records[0]["stop_reap"]["kind"], "not_completed");
++	assert_eq!(records[0]["ledger_release"]["kind"], "not_attempted");
++	assert_eq!(records[1]["failure_guard_closed"], true);
++	assert_eq!(records[1]["stop_reap"]["kind"], "succeeded");
++	assert_eq!(records[1]["ledger_release"]["kind"], "succeeded");
++	drop(unfinished);
++	let mut second_output = Vec::new();
++	finish_cleanup_with_writer(&cleanup, &mut second_output);
++	assert!(second_output.is_empty());
++}
++
++#[test]
++fn d4_flush_write_failure_does_not_change_cleanup_result() {
++	struct Reject;
++	impl Write for Reject {
++		fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
++			Err(std::io::Error::from_raw_os_error(libc::EPIPE))
++		}
++		fn flush(&mut self) -> std::io::Result<()> {
++			Ok(())
++		}
++	}
++	let _state = TestState::start();
++	drop(SpawnFailureGuard::new(|| observation(1)));
++	let cleanup = Err(anyhow::Error::from(std::io::Error::from_raw_os_error(
++		libc::EACCES,
++	)));
++	finish_cleanup_with_writer(&cleanup, &mut Reject);
++	assert_eq!(
++		cleanup
++			.as_ref()
++			.unwrap_err()
++			.downcast_ref::<std::io::Error>()
++			.unwrap()
++			.raw_os_error(),
++		Some(libc::EACCES)
++	);
++	let mut output = Vec::new();
++	finish_cleanup_with_writer(&cleanup, &mut output);
++	assert!(output.is_empty());
++	initialize();
++	finish_cleanup_with_writer(&Ok(()), &mut output);
++	assert!(output.is_empty());
++}
