@@ -1,6 +1,6 @@
 import base64
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 import json
 import multiprocessing
 from pathlib import Path
@@ -8,6 +8,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from hepta_compute import Router, RouterError, digest, locked, safe_receipt
 
 
@@ -730,34 +731,46 @@ class RouterTests(unittest.TestCase):
 
 
     def test_claim_prevents_expiry_race_during_auth_with_stale_evaluation(self):
-        record = self.plan(provider="kaggle", account="account-a")
-        snapshot = json.loads(json.dumps(record["evaluation"]))
-        record["lease_until"] = time.time() + 0.15
-        self.router.store.save(record)
-        entered, release = threading.Event(), threading.Event()
-        original = self.fake.call
-        def delayed_auth(provider, account, args, timeout=90):
-            if args[:2] == ["batch", "account"]:
-                entered.set()
-                if not release.wait(timeout=3):
-                    raise AssertionError("test authentication gate timed out")
-            return original(provider, account, args, timeout)
-        self.fake.call = delayed_auth
-        with ThreadPoolExecutor(1) as pool:
-            old_execution = pool.submit(self.router.execute, record["request_id"])
-            try:
-                self.assertTrue(entered.wait(timeout=2))
-                time.sleep(0.2)
-                self.router.evaluate = lambda **kwargs: json.loads(json.dumps(snapshot))
-                with self.assertRaisesRegex(RouterError, "CANDIDATES_RESERVED_DURING_PLANNING"):
-                    self.plan("competing-task", provider="kaggle", account="account-a")
-                self.assertEqual(self.router.store.get(record["request_id"])["state"], "PREPARING")
-            finally:
-                release.set()
-            result = old_execution.result(timeout=3)
-        self.assertEqual(result["state"], "REMOTE_TERMINAL")
-        self.assertEqual(self.fake.effects["submit"], 1)
-        self.assertEqual(len(self.router.store.reservations()), 1)
+        # Lease time must expire during authentication, not during SQLite I/O
+        # or thread startup. Keep real monotonic time for lock/watchdog bounds.
+        with patch("hepta_compute.time", wraps=time) as clock:
+            clock.time.return_value = 1000.0
+            record = self.plan(provider="kaggle", account="account-a")
+            snapshot = json.loads(json.dumps(record["evaluation"]))
+            record["lease_until"] = clock.time() + 0.15
+            self.router.store.save(record)
+            entered, release = Future(), threading.Event()
+            original = self.fake.call
+            def delayed_auth(provider, account, args, timeout=90):
+                if args[:2] == ["batch", "account"]:
+                    entered.set_result(None)
+                    release.wait()
+                return original(provider, account, args, timeout)
+            self.fake.call = delayed_auth
+            with ThreadPoolExecutor(1) as pool:
+                old_execution = pool.submit(self.router.execute, record["request_id"])
+                try:
+                    completed, _ = wait((entered, old_execution), timeout=2,
+                                        return_when=FIRST_COMPLETED)
+                    if old_execution in completed:
+                        # Surface an exception or early expiry instead of hiding
+                        # the worker outcome behind an authentication timeout.
+                        early = old_execution.result()
+                        self.fail("execution finished before authentication gate: " + early["state"])
+                    self.assertIn(entered, completed, "execution did not reach authentication gate")
+                    self.assertEqual(self.router.store.get(record["request_id"])["state"], "PREPARING")
+                    clock.time.return_value = record["lease_until"] + 1
+                    self.assertGreater(clock.time(), record["lease_until"])
+                    self.router.evaluate = lambda **kwargs: json.loads(json.dumps(snapshot))
+                    with self.assertRaisesRegex(RouterError, "CANDIDATES_RESERVED_DURING_PLANNING"):
+                        self.plan("competing-task", provider="kaggle", account="account-a")
+                    self.assertEqual(self.router.store.get(record["request_id"])["state"], "PREPARING")
+                finally:
+                    release.set()
+                result = old_execution.result(timeout=3)
+            self.assertEqual(result["state"], "REMOTE_TERMINAL")
+            self.assertEqual(self.fake.effects["submit"], 1)
+            self.assertEqual(len(self.router.store.reservations()), 1)
 
     def test_expired_terminal_job_cannot_be_revived_by_stale_actor(self):
         record = self.plan()
