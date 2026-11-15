@@ -339,6 +339,21 @@
       "source": "native/shell_gate.hepta",
       "scope": "Original deterministic shell misuse admission, SSH-body recursion, shell token/segment boundaries, raw Unix workdir prefix rules, redirect and in-place edit decisions, and git-stash detection with exact messages. Explicit workspace capacity refusals; process spawn, cancellation, durable output and production routing remain separate owners.",
       "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/shell_process.hepta",
+      "scope": "Prepared-capture Linux shell child owner: original noninteractive environment and PATH/ENOEXEC selection, spawn handshake, same-child foreground deadline promotion, direct-child caller cancellation, tracked process-group shutdown, wait/reap/error priority and quiet orphan custody. Actual native states and original Rust process comparisons are separate mandatory gates. Durable preparation/duplicate registry, log-read/discard/resource subscriptions and production shell dispatch remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/shell_process_packer.hepta",
+      "scope": "HIA-emitted static ELF for the shell process owner and fixed syscall-only Linux adapter. Capture tokens and native PID/FD custody reject public raw authority. Complete packer buffer/guard/refusal checks and actual as/objcopy receipts bind source to emitted bytes. No Rust, Python, libc or dynamic loader is required at runtime; this prepared fixture is not production MCP routing.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/shell_background_text.hepta",
+      "scope": "Original background JobView/resource text and URI projection: stable raw-stream tail selection, separately observed read_tail result domain, per-stream UTF-8 lossiness, exact stderr labeling, combined byte tail and second UTF-8 lossiness, complete signed i32 status and None/empty URI semantics. Original registry, filesystem errors/concurrency, capture preparation and public resource dispatch remain external owners.",
+      "legacy_call_sites_replaced": false
     }
   ],
   "legacy_tool_handlers": [
@@ -1227,6 +1242,16 @@
         "src/mcp/runtime/request_async.rs",
         "src/mcp/runtime/operation_async.rs"
       ]
+    },
+    {
+      "name": "shell_job_registry_capture_and_resource_dispatch",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/fs/shell.rs",
+        "src/mcp/fs/background.rs",
+        "src/mcp/server.rs"
+      ],
+      "scope": "Prepared shell process ownership and deterministic background text have independent native owners. Original capture directory/naming/duplicate admission, background registry and status synchronization, foreground reads/cleanup, concurrent log reads, subscriptions and public shell/resource routing remain unported; the whole Shell stack is not replaced."
     },
     {
       "name": "authorization_and_effect_ownership",

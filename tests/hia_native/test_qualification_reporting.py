@@ -205,7 +205,8 @@ class QualificationReportingTests(unittest.TestCase):
                 command=[sys.executable, "-I", str(root / "tests/hia_native/serial.py")], timeout=5)
             return {"serial_complete": True}
         self.report.update(modules={"serial": {}, "operation_scope_os": {}}, original_rust_comparisons={})
-        with patch.object(comparison, "RECIPES", {"serial": serial, "operation_scope_os": worker}):
+        with patch.object(comparison, "RECIPES", {"serial": serial, "operation_scope_os": worker}), \
+                patch.object(comparison, "MODULES", ({"key": "serial"}, {"key": "operation_scope_os"})):
             comparison.run_rust_recipes(self.output, self.report, Path(sys.executable))
 
     def test_original_os_worker_overlaps_main_and_retains_private_records(self):

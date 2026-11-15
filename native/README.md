@@ -64,6 +64,51 @@ runtime aggregate. The separate focused shell workflow provides earlier
 feedback and explicitly does not qualify the compiler cold gate, production
 process lifetime, public routing or old-stack removal.
 
+## Prepared shell processes and background resources
+
+The [process owner](shell_process_abi.md) owns environment/PATH selection,
+the fork/exec handshake, foreground waiting, promotion of the same child,
+caller cancellation, process-group shutdown and reap custody. The
+[prepared fixture](shell_process_fixture.md) supplies already-owned capture
+files through opaque tokens. The HIA [packer](shell_process_packer.hepta)
+emits the static executable with its fixed Linux syscall boundary. No public
+request can borrow an arbitrary PID or file descriptor.
+
+The [background text owner](shell_background_text_abi.md) preserves the separate
+raw-log resource contract. Its stable-snapshot operation first takes each raw
+stream's last 30,000 bytes. Its observed-tail operation accepts the exact bytes
+and flags already returned by the original read boundary, including partial or
+oversized results. Both preserve separate lossy decoding, exact stderr labels,
+the combined 30,000-byte tail and the second lossy decoding. A split multibyte
+character can make the final UTF-8 result longer than 30,000 bytes. Foreground
+terminal cleanup is never applied to this projection.
+
+Five additional mandatory native suites cover 23 process state cases and
+14 independent refusals in 304 actual entries; the complete real-OS lifecycle
+corpus; transport/custody and evidence-admission controls; and 3,456 background
+semantic cases with 51 separate typed/capacity controls in 3,507 entries.
+Native-only OS evidence remains explicitly native-only. Two additional
+original-reference recipes require a fresh locked build of the unchanged
+shell/background owners, all 21 original tests, 38 actual process comparisons,
+and the full 3,456-case background corpus. They retain exact original source
+spans and full request/response bytes. The background observed-tail projection
+does not claim to have executed file reads.
+
+The ordinary aggregate keeps the previous 95 native suites and 35 original
+recipes, adding five suites and two recipes. The focused shell-process workflow
+is an earlier qualification entry; it does not replace the fresh full compiler
+cold gate or the ordinary aggregate. Before artifact transport, transient
+work/tmp targets are snapshotted and retired under the process evidence
+owner; captured logs, traces and receipts remain. Collection restores only
+byte-verified file modes and rechecks exact recorded paths and retirement
+evidence instead of substituting a weaker portable verdict.
+
+Capture directory/naming and duplicate-job admission, the complete background
+registry, concurrent log reads, resource subscriptions and production shell
+dispatch remain original owners. All 125 public handlers stay `not_ported`;
+production activation, whole-runtime replacement and old-stack removal remain
+false.
+
 ## Shadow execution composition
 
 The [three shadow owners](execution_shadow_abi.md) preserve exact original serde
@@ -150,9 +195,10 @@ changed recipe bytes or the fresh repository aggregate.
 
 ## Native components
 
-Qualification covers 66 native HIA sources through 40 executable component
-entries, including 16 HIA packers; the two scope profiles share their HIA scope
-owner. The complete source closure binds 597 files. The shadow entry
+Qualification covers 69 native HIA sources through 42 executable component
+entries, including 17 HIA packers; the two scope profiles share their HIA scope
+owner. Each qualification report enumerates and hashes its complete source closure.
+The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
 as qualification-only. The 17 other test HIA fixtures are recorded separately.

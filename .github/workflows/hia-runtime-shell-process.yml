@@ -1,0 +1,94 @@
+name: HIA Shell Process and Background Owners
+
+on:
+  push:
+    branches: ['codex/**']
+    paths:
+      - 'native/shell_process*'
+      - 'native/shell_background*'
+      - 'scripts/*hia*shell*'
+      - 'scripts/shell_process_adapter.S'
+      - 'tests/hia_native/*shell*'
+      - 'tests/hia_native/shell_process_oracle/**'
+      - 'src/mcp/fs/shell.rs'
+      - 'src/mcp/fs/shell_tests.rs'
+      - 'src/mcp/fs/background.rs'
+      - 'src/mcp/fs/background_tests.rs'
+      - 'src/mcp/request_ctx.rs'
+      - 'src/mcp/mod.rs'
+      - 'src/mcp/fs/remote.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'vendor/ruzstd/**'
+      - '.github/workflows/hia-runtime-shell-process.yml'
+  pull_request:
+    paths:
+      - 'native/shell_process*'
+      - 'native/shell_background*'
+      - 'scripts/*hia*shell*'
+      - 'scripts/shell_process_adapter.S'
+      - 'tests/hia_native/*shell*'
+      - 'tests/hia_native/shell_process_oracle/**'
+      - 'src/mcp/fs/shell.rs'
+      - 'src/mcp/fs/shell_tests.rs'
+      - 'src/mcp/fs/background.rs'
+      - 'src/mcp/fs/background_tests.rs'
+      - 'src/mcp/request_ctx.rs'
+      - 'src/mcp/mod.rs'
+      - 'src/mcp/fs/remote.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'vendor/ruzstd/**'
+      - '.github/workflows/hia-runtime-shell-process.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-shell-process-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shell-process:
+    name: Native process lifecycle and unchanged original Rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Checkout fixed HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify source and install the original toolchain
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+          rustup toolchain install 1.95.0 --profile minimal
+      - name: Execute complete focused qualification
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          python3 -I -B runtime/scripts/qualify_hia_shell_process.py \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-shell-process" \
+            --rustc "$(rustup which --toolchain 1.95.0 rustc)" \
+            --cargo "$(rustup which --toolchain 1.95.0 cargo)"
+      - name: Retain actual inputs, outputs, and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-shell-process-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-shell-process/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
