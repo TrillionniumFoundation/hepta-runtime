@@ -26,14 +26,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qualify_hia_runtime_native as q
 
 PARTITIONS = {
-    "batch": ("batch_plan", "batch_apply", "atomic_write"),
+    "batch": ("batch_plan", "batch_apply", "atomic_write", "write_chain"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "line_endpoint", "line_verify",
              "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir",
-             "file_locks", "file_lock_service"),
+             "file_locks", "file_lock_service", "workdir_service", "sdk_connection"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
-               "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service"),
+               "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service", "directory_service"),
 }
 BUILD_SEAL = "native-build.json"
 BUILD_REPORT = "prepared-report.json"
@@ -159,6 +159,11 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
                and [names.index(name) for name in ordered_locks] == sorted(names.index(name) for name in ordered_locks)
                for names in result.values()):
         raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
+    for group in (q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS)):
+        if not any(all(name in names for name in group)
+                   and [names.index(name) for name in group] == sorted(names.index(name) for name in group)
+                   for names in result.values()):
+            raise ValueError("service producer and evidence suites must stay ordered in one partition")
     return result
 
 
@@ -292,6 +297,7 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         evidence = q.atomic_write_evidence(output, report)
         q.atomic_write_retire_fixtures(output, tuple(evidence["transient_fixture_directories"]),
             output / "atomic-write/retired-fixtures.json", evidence["native_evidence"], create=True)
+    q.service_pipeline.prepare_transport(q.ROOT, output, report, q.completed_test_summary)
     files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
     for name in directories:
         if name not in seal.get("directories", ()):

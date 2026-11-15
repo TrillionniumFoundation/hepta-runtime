@@ -22,12 +22,15 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+import hia_native_service_pipeline as service_pipeline
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
                                        PARALLEL_NATIVE_SUITES,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
                                        history_evidence, json_evidence, execution_evidence, effect_fence_evidence, config_evidence,
                                        session_evidence, file_locks_evidence, file_lock_service_evidence,
+                                       write_chain_evidence, directory_service_evidence,
+                                       workdir_service_evidence, sdk_connection_evidence,
                                        atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
@@ -172,6 +175,23 @@ def check_input_pins(output: Path, report: dict) -> None:
                 raise ValueError("required actual file-lock original invocation changed: " + key)
     if report.get("session_evidence") != session_evidence(output, report):
         raise ValueError("required session state, latch, full corpus and executable evidence differs")
+    import hia_native_write_chain_pipeline as write_chain_pipeline
+    for key, inspect in (("write_chain", write_chain_evidence), ("directory_service", directory_service_evidence),
+                         ("workdir_service", workdir_service_evidence), ("sdk_connection", sdk_connection_evidence)):
+        if report.get(key + "_evidence") != inspect(output, report):
+            raise ValueError("required complete service native evidence differs: " + key)
+        if key in report.get("original_rust_comparisons", {}):
+            rustc = Path(report["rust_compiler"]["invocation_path"])
+            actual = (write_chain_pipeline.retained_original(ROOT, output, report, rustc, completed_test_summary)
+                      if key == "write_chain" else service_pipeline.retained_original(
+                          ROOT, output, report, rustc, completed_test_summary, key))
+            if report["original_rust_comparisons"][key] != actual:
+                raise ValueError("required actual service original invocation changed: " + key)
+    if "service_original_fixture_retirement" in report:
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        actual = service_pipeline.original_fixture_transport(ROOT, output, report, rustc, completed_test_summary)
+        if report["service_original_fixture_retirement"] != actual:
+            raise ValueError("service original fixture retirement differs")
     if "session_workdir" in report.get("original_rust_comparisons", {}):
         import hia_native_session_qualification as session_qualification
         rustc = Path(report["rust_compiler"]["invocation_path"])
@@ -230,7 +250,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir", "file_locks", "file_lock_service"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir", "file_locks", "file_lock_service", "write_chain", "directory_service", "workdir_service", "sdk_connection"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1347,12 +1367,37 @@ def compare_session_workdir(output: Path, report: dict, rustc: Path) -> dict:
                               record_check, qualification_env())
 
 
+def compare_write_chain(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_write_chain_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary, record_check, qualification_env())
+
+
+def compare_directory_service(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_service_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                              record_check, qualification_env(), "directory_service")
+
+
+def compare_workdir_service(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_service_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                              record_check, qualification_env(), "workdir_service")
+
+
+def compare_sdk_connection(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_service_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                              record_check, qualification_env(), "sdk_connection")
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
            "view_cache": compare_view_cache, "history": compare_history, "session_workdir": compare_session_workdir,
            "file_locks": compare_file_locks, "file_lock_service": compare_file_lock_service,
+           "write_chain": compare_write_chain, "directory_service": compare_directory_service,
+           "workdir_service": compare_workdir_service, "sdk_connection": compare_sdk_connection,
            "fence_json": compare_fence_json, "serde_json": compare_serde_json, "execution_shadow": compare_execution,
            "effect_fence": compare_effect_fence, "runtime_config": compare_config,
            "operation_scope_os": compare_operation_scope_os,
@@ -1477,6 +1522,8 @@ def run(output: Path, rustc_name: str) -> dict:
         run_rust_recipes(output, report, rustc)
         if set(report["original_rust_comparisons"]) != RECIPES.keys():
             raise ValueError("not all required Rust reference recipes completed")
+        report["service_original_fixture_retirement"] = service_pipeline.original_fixture_transport(
+            ROOT, output, report, rustc, completed_test_summary, create=True)
         check_input_pins(output, report)
         if sha(rustc) != compiler_sha:
             raise ValueError("original Rust compiler executable changed during comparison")

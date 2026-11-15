@@ -125,9 +125,40 @@ meta-engine resource optimizations, complete configuration-owner parity and
 public production routing remain unqualified. The complete-runtime and
 old-stack-removal declarations remain false.
 
+## Local write, directory, workdir and SDK connection chains
+
+Four additional registered components bind the previously separate owners into
+fixed private native services. Their 19 native suites and four fresh original
+recipes are mandatory in the aggregate. Each service has its own source/image
+manifest, complete process streams and domain-specific evidence admission.
+
+| Component | Native behavior and qualification boundary |
+| --- | --- |
+| [Write chain](write_chain_abi.md) | Local write/append callers compose shared locks, history, cache transitions, descriptor reads and atomic replacement. Six suites include actual write, cancellation and concurrency processes; the fresh original recipe compares all 147 large-file requests and the complete kernel/concurrency domains. |
+| [Directory service](directory_service_abi.md) | Typed caller ordering, installed configuration/regex policy, canonical paths, the actual effect permit and Linux directory creation are one fixed chain. Five suites retain functional, injected-fault, transport, build and regex observations; the original recipe includes paired actual kernel boundaries and evidence mutations. |
+| [Workdir service](workdir_service_abi.md) | The fixed 21-image profile composes typed parameters, the trusted connection snapshot, session latch/state, installed regex policy and Linux canonicalization. Its three suites cover 680 parameter cases, 193 caller controls and installed-regex processes. The fresh original recipe additionally compares 1,537 complete public-method requests per side through the explicitly private test adapter. |
+| [SDK connection](sdk_connection_abi.md) | Native message decoding, transport framing and session lifecycle reproduce the pinned rmcp 3.4.1 observations. Five suites include 2,215 real ELF processes, including controls. The original recipe freshly compiles the three locked SDK references and executes the full 11,789-case domain. |
+
+The write chain keeps its declared 512 MiB input, 1 GiB output and 1,152 MiB
+workspace profile. It does not claim arbitrary `usize` resource equivalence or
+the separate batch-edit final response. Directory and workdir remote execution,
+ordinary public connection dispatch, durable request admission/audit/results and
+production activation remain outside these four private profiles. The workdir
+startup snapshot does not itself implement repeated public initialization or
+the expanded argument domain of a complete public SDK caller.
+
+Admission rechecks the actual compiler/packer results, source closure, full raw
+process streams, complete SDK source inventory and every original replay.
+The directory's five aggregate wrappers also retain their actual child commands
+and completed inner-process streams. No saved summary replaces a fresh original
+invocation. Closed effect fixtures are removed only after their captured byte,
+filesystem and trace evidence passes; receipts bind that evidence. The workdir
+original probe, public-method and regex fixtures are three distinct domains,
+and symlinks outside those exact fixture roots remain an admission error.
+
 ## Native components
 
-Qualification covers 76 native HIA sources through 36 executable component
+Qualification covers 105 native HIA sources through 40 executable component
 entries; the two scope profiles share their HIA scope owner. The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
@@ -157,6 +188,18 @@ These counts do not count migrated production MCP handlers.
 | [file_lock_service.hepta](file_lock_service.hepta) | Native canonical-key-to-state dispatch with actual cross-thread shared serialization and growth |
 | [file_lock_state_packer.hepta](file_lock_state_packer.hepta), [file_lock_key_packer.hepta](file_lock_key_packer.hepta) | Required standalone state and key qualification executables |
 | [file_lock_service_packer.hepta](file_lock_service_packer.hepta) | Fixed three-image static service, four native threads and private CAS/futex state boundary |
+| [write_chain.hepta](write_chain.hepta), [atomic_write_shared.hepta](atomic_write_shared.hepta), [local_read.hepta](local_read.hepta) | Local write/append controller, shared atomic caller and descriptor reads through the qualified lock/history/cache chain |
+| [write_chain_packer.hepta](write_chain_packer.hepta) | Fixed native write-chain executable and kernel boundary |
+| [directory_caller.hepta](directory_caller.hepta), [directory_create.hepta](directory_create.hepta), [directory_errno.hepta](directory_errno.hepta) | Ordered directory caller, real creation state and exact errno results |
+| [local_path_policy.hepta](local_path_policy.hepta), [canonical_path_policy.hepta](canonical_path_policy.hepta), [path_source.hepta](path_source.hepta) | Original local policy, canonicalization policy and path-source interpretation |
+| [config_directory_owner.hepta](config_directory_owner.hepta), [client_context.hepta](client_context.hepta), [session_request_context.hepta](session_request_context.hepta) | Installed directory/workdir configuration, typed SDK context and per-call session context composition |
+| [effect_fence_caller_owner.hepta](effect_fence_caller_owner.hepta), [effect_fence_caller_manager.hepta](effect_fence_caller_manager.hepta), [directory_fence_fs.hepta](directory_fence_fs.hepta) | Fixed permit ownership, caller lifecycle and descriptor operations for directory effects |
+| [directory_fence_packer.hepta](directory_fence_packer.hepta), [directory_fence_queue_fixture_packer.hepta](directory_fence_queue_fixture_packer.hepta) | Source-pinned production-capacity and qualification-only one-worker fence executables |
+| [directory_service_prefix.hepta](directory_service_prefix.hepta), [directory_service_packer.hepta](directory_service_packer.hepta) | Native directory adapter emission and fixed image packing |
+| [workdir_params.hepta](workdir_params.hepta), [workdir_caller.hepta](workdir_caller.hepta), [local_canonical.hepta](local_canonical.hepta) | Exact parameter errors, private set/reset caller order and raw Linux path canonicalization |
+| [workdir_service_prefix.hepta](workdir_service_prefix.hepta), [workdir_service_packer.hepta](workdir_service_packer.hepta) | Fixed 21-image private workdir executable |
+| [sdk_message.hepta](sdk_message.hepta), [sdk_connection.hepta](sdk_connection.hepta) | Typed SDK message classification and native connection lifecycle |
+| [sdk_default_fixture.hepta](sdk_default_fixture.hepta), [sdk_connection_packer.hepta](sdk_connection_packer.hepta) | Explicit default-handler test fixture and static SDK connection test executable |
 | [fence_json.hepta](fence_json.hepta) | Exact original typed owner/job serde projection, duplicate-known rejection and IgnoredAny grammar |
 | [serde_json.hepta](serde_json.hepta) | Locked Value ordering, integer/float classification and compact finite-number serialization |
 | [serde_filter_packer.hepta](serde_filter_packer.hepta) | Static filter for the explicit serde-json.v1 16/64/256 MiB profile |
@@ -396,7 +439,7 @@ limit; every native process retains 180 seconds and the cold/owner limits below
 are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
-native evidence checks and all 31 original Rust recipes. Artifact transport can
+native evidence checks and all 35 original Rust recipes. Artifact transport can
 strip executable permissions; only byte-verified owned regular files have their
 recorded ordinary permissions restored. The aggregate retains the original
 partition reports and rechecks them before and after the original comparisons.
@@ -409,8 +452,8 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 98 native suite processes, the fresh compiler cold process,
-31 required original Rust recipes and one Rust-version process: 163 recorded
+The declared run has 117 native suite processes, the fresh compiler cold process,
+35 required original Rust recipes and one Rust-version process: 186 recorded
 checks in a complete successful aggregate. The configuration recipe retains two
 fresh original processes. Fourteen evidence controls then run against the inactive
 complete aggregate and preserve a separate receipt without adding semantic calls. The two JSON recipes share one locked
@@ -528,7 +571,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all 31 required original Rust recipes succeed. The Python reference domain
+after all 35 required original Rust recipes succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 

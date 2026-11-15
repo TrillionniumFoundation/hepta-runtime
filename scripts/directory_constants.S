@@ -1,0 +1,85 @@
+/* Fixed private controller storage. None of these pointers are wire inputs. */
+.equ D_POLICY_PARENT, 1000
+.equ D_CHILD_LEN, 1008
+.equ D_CURRENT, 1016
+.equ D_HEAD, 1024
+.equ D_LAST_ID, 1032
+.equ D_CLOSING, 1040
+.equ D_INPUT_STAGE, 1048
+.equ D_INPUT_USED, 1056
+.equ D_INPUT_LEN, 1064
+.equ D_WAKE_R, 1072
+.equ D_WAKE_W, 1080
+.equ D_FENCE_IN, 1088
+.equ D_FENCE_OUT, 1096
+.equ D_FENCE_PID, 1104
+.equ D_MEMFD, 1112
+.equ D_PARENT_PID, 1120
+.equ D_USER_PTR, 1128
+.equ D_USER_LEN, 1136
+.equ D_USER_PRESENT, 1144
+.equ D_ENVP, 1152
+.equ D_STARTUP_MODE, 1160
+.equ D_STATE_PTR, 1168
+.equ D_STATE_LEN, 1176
+.equ D_ENTRY_PTR, 1184
+.equ D_ENTRY_LEN, 1192
+.equ D_ENTRY_KIND, 1200
+.equ D_ERR_R, 1208
+.equ D_ERR_W, 1216
+.equ D_IN_R, 1224
+.equ D_OUT_W, 1232
+.equ D_SCAN, 1240
+.equ D_SCAN_NEXT, 1248
+.equ D_JOB_SEQUENCE, 1256
+.equ D_PATH_WORK, 1264
+.equ D_ERRNO_WORK, 1272
+.equ D_FENCE_CLOSED, 1280
+.equ D_BLOB_SIZE, 1288
+.equ D_CONTROL_ID, 1296
+.equ D_CONTROL_CMD, 1304
+.equ D_RESULT_CODE, 1312
+.equ D_PIPES, 1344
+.equ D_ARGV, 1408
+.equ D_DUP_FDS, 1472
+.equ D_SIGNAL_ACTION, 1536
+.equ D_SIGNAL_MASK, 1568
+.equ D_POLL, 1600
+.equ D_FRAME_HEADER, 1664
+.equ D_REPLY, 1728
+.equ D_EXEC_ERROR, 1856
+.equ D_WSTATUS, 1872
+.equ D_NOTICE, 1880
+.equ D_JOB_R, 1896
+.equ D_JOB_W, 1904
+.equ D_EMIT_EVENT, 1912
+.equ D_EMIT_ID, 1920
+.equ D_EMIT_CODE, 1928
+.equ D_EMIT_PTR, 1936
+.equ D_EMIT_LEN, 1944
+.equ D_SNAPSHOT_FD, 1952
+.equ D_SNAPSHOT, 1960
+.equ D_START_STAT, 2048
+.equ D_SNAPSHOT_BYTES, 8392704
+.equ D_TASK_BYTES, 402657280
+.equ T_NEXT, 0
+.equ T_ID, 8
+.equ T_WORK, 16
+.equ T_OUTPUT, 24
+.equ T_PID, 32
+.equ T_FD, 40
+.equ T_JOB, 48
+.equ T_STATUS, 56
+.equ T_SEQUENCE, 64
+.equ T_GOT, 72
+.equ T_WSTATUS, 80
+.equ T_PIPE_EOF, 88
+.equ T_PIPE_FAIL, 96
+.equ T_DROP_SENT, 104
+.equ T_RESPONSE, 256
+.global caller_call_displacement
+.global path_call_displacement
+.global errno_call_displacement
+.global mkdir_call_displacement
+.global fence_blob_displacement
+.global fence_blob_length

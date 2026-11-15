@@ -65,6 +65,9 @@ import hia_native_effect_fence_qualification as effect_fence_qualification
 import hia_native_config_qualification as config_qualification
 import hia_native_session_qualification as session_qualification
 import hia_native_file_lock_pipeline as file_lock_pipeline
+import hia_native_connection_qualification as connection_qualification
+import hia_native_service_pipeline as service_pipeline
+import hia_native_write_chain_pipeline as write_chain_pipeline
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -119,6 +122,36 @@ MODULES = (
      "test": "test_file_lock_service.py",
      "additional_tests": ("test_file_lock_service_contract.py", "test_file_lock_service_evidence.py"),
      "companion_sources": ("native/file_lock_service_packer.hepta",)},
+    {"key": "write_chain", "name": "write-chain", "source": "native/write_chain.hepta",
+     "builder": "write_chain", "manifest_env": "HIA_WRITE_CHAIN_BUNDLE", "test": "test_shared_atomic.py",
+     "additional_tests": ("test_write_chain_controller.py", "test_write_chain_files.py",
+                          "test_write_chain_kernel.py", "test_write_chain_concurrency.py",
+                          "test_write_chain_evidence.py"),
+     "companion_sources": ("native/atomic_write_shared.hepta", "native/local_read.hepta",
+                           "native/write_chain_packer.hepta")},
+    {"key": "directory_service", "name": "directory-service", "source": "native/directory_caller.hepta",
+     "builder": "directory_service", "manifest_env": "HIA_DIRECTORY_BUNDLE", "test": "test_directory_service.py",
+     "additional_tests": ("directory_service_faults.py", "test_directory_service_transport.py",
+                          "test_directory_service_build.py", "test_directory_service_regex.py"),
+     "companion_sources": ("native/canonical_path_policy.hepta", "native/client_context.hepta",
+                           "native/config_directory_owner.hepta", "native/directory_create.hepta",
+                           "native/directory_errno.hepta", "native/directory_fence_fs.hepta",
+                           "native/directory_fence_packer.hepta", "native/directory_fence_queue_fixture_packer.hepta",
+                           "native/directory_service_packer.hepta", "native/directory_service_prefix.hepta",
+                           "native/effect_fence_caller_manager.hepta", "native/effect_fence_caller_owner.hepta",
+                           "native/local_path_policy.hepta", "native/path_source.hepta",
+                           "native/session_request_context.hepta")},
+    {"key": "workdir_service", "name": "workdir-service", "source": "native/workdir_caller.hepta",
+     "builder": "workdir_service", "manifest_env": "HIA_WORKDIR_BUNDLE", "test": "test_workdir_params.py",
+     "additional_tests": ("test_workdir_caller_controls.py", "test_workdir_service_regex.py"),
+     "companion_sources": ("native/local_canonical.hepta", "native/workdir_params.hepta",
+                           "native/workdir_service_packer.hepta", "native/workdir_service_prefix.hepta")},
+    {"key": "sdk_connection", "name": "sdk-connection", "source": "native/sdk_connection.hepta",
+     "builder": "sdk_connection", "manifest_env": "HIA_CONNECTION_BUILD", "test": "test_sdk_message.py",
+     "additional_tests": ("test_sdk_transport.py", "test_sdk_connection.py",
+                          "test_sdk_connection_elf.py", "test_sdk_connection_controls.py"),
+     "companion_sources": ("native/sdk_message.hepta", "native/sdk_default_fixture.hepta",
+                           "native/sdk_connection_packer.hepta")},
     {"key": "fence_json", "name": "fence-json", "source": "native/fence_json.hepta",
      "standalone": "filter", "manifest_env": "HIA_FENCE_JSON_MANIFEST", "test": "test_fence_json.py"},
     {"key": "serde_json", "name": "serde-json", "source": "native/serde_json.hepta",
@@ -303,6 +336,7 @@ def sources() -> dict:
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
+    paths.update(ROOT / name for name in service_pipeline.sources(ROOT))
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
 
@@ -421,6 +455,10 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
         raise ValueError("native command override names an undeclared suite")
     config_commands = (config_qualification.test_commands(ROOT, output, report)
                        if set(tests) & set(config_qualification.TESTS) else {})
+    service_commands = (service_pipeline.test_commands(ROOT, output, report)
+                        if set(tests) & set(service_pipeline.DIRECTORY_TESTS) else {})
+    config_commands.update({name: command for name, command in service_commands.items()
+                            if name in service_pipeline.DIRECTORY_TESTS})
     def command(name):
         prefix = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
         argv = commands.get(name, prefix)
@@ -917,6 +955,22 @@ def file_locks_evidence(output: Path, report: dict) -> dict:
 
 def file_lock_service_evidence(output: Path, report: dict) -> dict:
     return file_lock_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary, "file_lock_service")
+
+
+def write_chain_evidence(output: Path, report: dict) -> dict:
+    return write_chain_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def directory_service_evidence(output: Path, report: dict) -> dict:
+    return service_pipeline.native_evidence(ROOT, output, report, completed_test_summary, "directory_service")
+
+
+def workdir_service_evidence(output: Path, report: dict) -> dict:
+    return service_pipeline.native_evidence(ROOT, output, report, completed_test_summary, "workdir_service")
+
+
+def sdk_connection_evidence(output: Path, report: dict, *, create=False) -> dict:
+    return connection_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
 
 
 def session_evidence(output: Path, report: dict) -> dict:
@@ -2118,6 +2172,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
             env["HIA_AUTHORITY_PROBE_MANIFEST"] = str(output / report["modules"][item["key"]]["probe_manifest"])
     env["HIA_NONCE_COMPOSITION_MANIFEST"] = str(output / report["nonce_composition"]["manifest"])
     env["HIA_CACHE_ELF_MANIFEST"] = str(output / report["cache_composition"]["manifest"])
+    env.update(connection_qualification.test_environment(output))
     return env
 
 
@@ -2186,6 +2241,17 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "file_lock_service":
             from hia_native_file_lock_service_build import build_file_lock_service
             built = build_file_lock_service(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "write_chain":
+            from hia_native_write_chain_build import build_write_chain
+            built = build_write_chain(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "directory_service":
+            from hia_native_directory_service_build import build_directory_service
+            built = build_directory_service(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "workdir_service":
+            from hia_native_workdir_service_build import build_workdir_service
+            built = build_workdir_service(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "sdk_connection":
+            built = connection_qualification.build_connection(hepta, output / "build", ROOT)
         elif item.get("builder") == "runtime_config":
             built = config_qualification.build_config(hepta, output / "build", ROOT)
         elif item.get("builder") == "execution_shadow":
@@ -2231,6 +2297,8 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / "regex-native").mkdir()
     (output / "file-locks").mkdir()
     (output / "file-lock-service").mkdir()
+    (output / "write-chain").mkdir()
+    (output / "workdir-native").mkdir()
     return builder
 
 
@@ -2247,6 +2315,9 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(config_qualification.test_commands(ROOT, output, report))
     commands.update(session_qualification.test_commands(ROOT, output, report))
     commands.update(file_lock_pipeline.test_commands(ROOT, output, report))
+    commands.update(write_chain_pipeline.test_commands(ROOT, output, report))
+    commands.update(service_pipeline.test_commands(ROOT, output, report))
+    commands.update(connection_qualification.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
@@ -2280,6 +2351,11 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["session_evidence"] = session_evidence(output, report)
     report["file_locks_evidence"] = file_locks_evidence(output, report)
     report["file_lock_service_evidence"] = file_lock_service_evidence(output, report)
+    report["write_chain_evidence"] = write_chain_evidence(output, report)
+    report["directory_service_evidence"] = directory_service_evidence(output, report)
+    report["workdir_service_evidence"] = workdir_service_evidence(output, report)
+    report["sdk_connection_evidence"] = sdk_connection_evidence(output, report, create=True)
+    service_pipeline.prepare_transport(ROOT, output, report, completed_test_summary)
     report["json_evidence"] = json_evidence(output, report)
     report["execution_evidence"] = execution_evidence(output, report)
     report["effect_fence_evidence"] = effect_fence_evidence(output, report)
@@ -2329,6 +2405,12 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["corpus_sha256"])
+    for key in ("directory_service", "workdir_service", "sdk_connection"):
+        report["rust_oracle_inputs"].update(report[key + "_evidence"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report[key + "_evidence"]["corpus_sha256"])
+    write_manifest = write_chain_pipeline.bundle(output, report)
+    report["rust_oracle_inputs"].update(service_pipeline.retained_files(output, write_manifest.parent))
+    report["rust_oracle_inputs"].update(service_pipeline.retained_files(output, output / "write-chain"))
     authority = report["caller_authority_evidence"]
     for label in ("artifact", "probe"):
         report["rust_oracle_inputs"].update({"build/" + name: expected

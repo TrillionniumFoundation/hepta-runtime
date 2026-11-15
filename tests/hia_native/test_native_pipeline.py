@@ -6,8 +6,10 @@ production HIA image or stand in for a compiler cold replay.
 from __future__ import annotations
 
 import copy
+import fnmatch
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import sys
@@ -20,6 +22,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_pipeline as p
 import hia_native_failure as failure
 import qualify_hia_runtime_native as q
+import hia_native_service_pipeline as service
 
 
 class NativePipelineTests(unittest.TestCase):
@@ -27,6 +30,91 @@ class NativePipelineTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix="hia-pipeline-reporting-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+
+    def test_ci_path_filters_cover_every_required_source_for_push_and_pull_request(self):
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        events = workflow.split("\npermissions:", 1)[0]
+        push, pull_request = events.split("  pull_request:\n", 1)
+        parse = lambda text: re.findall(r"^      - '([^']+)'$", text, re.MULTILINE)
+        push, pull_request = parse(push), parse(pull_request)
+        self.assertEqual(push, pull_request)
+        self.assertEqual(len(push), len(set(push)))
+        uncovered = [name for name in q.sources() if not any(fnmatch.fnmatchcase(name, pattern) for pattern in push)]
+        self.assertEqual(uncovered, [], "required source changes must trigger the actual native gate")
+
+    def test_service_original_inventory_keeps_streams_outside_all_workdir_fixtures(self):
+        output = self.root / "actual"; output.mkdir()
+        outside = self.root / "outside"; outside.mkdir()
+        sentinel = outside / "keep"; sentinel.write_bytes(b"external fixture target")
+        folder = output / "workdir-original"; folder.mkdir()
+        streams = {}
+        for domain in ("probe-v1", "public", "regex"):
+            fixture = folder / domain / "fixture"; fixture.mkdir(parents=True)
+            (fixture / "link").symlink_to(outside, target_is_directory=True)
+            (fixture / "ordinary").write_bytes(b"transient live state")
+            retained = folder / domain / "stdout.bin"
+            retained.write_bytes(domain.encode())
+            streams[retained.relative_to(output).as_posix()] = service.sha(domain.encode())
+        target = folder / "target"; target.mkdir()
+        (target / "generated-link").symlink_to(outside, target_is_directory=True)
+        result = service.retained_files(output, folder, service.WORKDIR_ORIGINAL_FIXTURES + ("workdir-original/target",))
+        self.assertEqual(result, streams)
+        self.assertEqual(sentinel.read_bytes(), b"external fixture target")
+
+    def test_service_original_inventory_refuses_unknown_or_replaced_fixture_links(self):
+        output = self.root / "actual"; output.mkdir()
+        folder = output / "workdir-original"; folder.mkdir()
+        outside = self.root / "outside"; outside.mkdir()
+        unknown = folder / "undeclared-link"
+        unknown.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "directory is not owned"):
+            service.retained_files(output, folder, service.WORKDIR_ORIGINAL_FIXTURES)
+        unknown.unlink()
+        declared = folder / "probe-v1/fixture"; declared.parent.mkdir()
+        declared.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "directory is not owned"):
+            service.retained_files(output, folder, service.WORKDIR_ORIGINAL_FIXTURES)
+        self.assertTrue(declared.is_symlink())
+
+    def test_service_fixture_retirement_preserves_external_targets_and_exact_receipt(self):
+        output = self.root / "actual"; output.mkdir()
+        folder = output / "workdir-native/regex"; folder.mkdir(parents=True)
+        fixture = folder / "fixture"; fixture.mkdir()
+        denied = fixture / "denied"; denied.mkdir()
+        (denied / "state").write_bytes(b"closed fixture")
+        outside = self.root / "outside"; outside.mkdir()
+        sentinel = outside / "keep"; sentinel.write_bytes(b"must remain")
+        (fixture / "directory-link").symlink_to(outside, target_is_directory=True)
+        (fixture / "file-link").symlink_to(sentinel)
+        denied.chmod(0)
+        self.addCleanup(lambda: denied.chmod(0o700) if denied.exists() else None)
+        receipt = output / "workdir-native/retired-fixtures.json"
+        evidence = {"status": "PASS", "actual_corpus_sha256": "a" * 64}
+        fixtures = ("workdir-native/regex/fixture",)
+        result = service.retire_fixtures(output, fixtures, receipt, evidence, create=True)
+        self.assertFalse(fixture.exists())
+        self.assertEqual(sentinel.read_bytes(), b"must remain")
+        self.assertEqual(result, service.retire_fixtures(output, fixtures, receipt, evidence))
+        with self.assertRaisesRegex(ValueError, "evidence differs"):
+            service.retire_fixtures(output, fixtures, receipt, dict(evidence, actual_corpus_sha256="b" * 64))
+        fixture.mkdir()
+        with self.assertRaisesRegex(ValueError, "reappeared"):
+            service.retire_fixtures(output, fixtures, receipt, evidence)
+
+    def test_service_fixture_retirement_checks_every_target_before_removal(self):
+        output = self.root / "actual"; output.mkdir()
+        fixture = output / "safe/fixture"; fixture.mkdir(parents=True)
+        sentinel = fixture / "keep"; sentinel.write_bytes(b"not admitted")
+        with self.assertRaisesRegex(ValueError, "path escaped"):
+            service.retire_fixtures(output, ("safe/fixture", "../outside/fixture"), output / "receipt.json", {}, create=True)
+        self.assertEqual(sentinel.read_bytes(), b"not admitted")
+        outside = self.root / "outside/fixture"; outside.mkdir(parents=True)
+        link = output / "replaced/fixture"; link.parent.mkdir()
+        link.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "not an owned directory"):
+            service.retire_fixtures(output, ("safe/fixture", "replaced/fixture"), output / "receipt.json", {}, create=True)
+        self.assertEqual(sentinel.read_bytes(), b"not admitted")
+        self.assertFalse((output / "receipt.json").exists())
 
     def test_partition_is_complete_unique_and_keeps_evidence_dependencies(self):
         partitions = p.partition_tests()
@@ -37,7 +125,9 @@ class NativePipelineTests(unittest.TestCase):
             ("test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
              "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
              "test_atomic_write_policy.py", "test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
-             "test_atomic_write_evidence.py"))
+             "test_atomic_write_evidence.py", "test_shared_atomic.py", "test_write_chain_controller.py",
+             "test_write_chain_files.py", "test_write_chain_kernel.py", "test_write_chain_concurrency.py",
+             "test_write_chain_evidence.py"))
         for bad in ("missing", "duplicate", "unknown", "new_module", "split_ordered"):
             changed = copy.deepcopy(p.PARTITIONS)
             modules = q.MODULES
