@@ -8,13 +8,17 @@ from hia_native_build import NativeBuild,json_bytes,write_new
 from hia_native_loader import NativeModule
 sha=lambda raw:hashlib.sha256(raw).hexdigest()
 SOURCES=['scripts/view_call_adapter.S','scripts/view_call_fixture_controls.S','scripts/view_call_engine.S','scripts/view_call_read_bridge.S',
-         'scripts/view_call_key_bridge.S','scripts/view_call_scope_bridge.S']
+         'scripts/view_call_key_bridge.S','scripts/view_call_scope_bridge.S','scripts/view_call_regex_bridge.S']
 MEMBERS=[('view-call','view_call','history.v1'),('view-read','view_read','history.v1'),
  ('view-endpoint','line_endpoint','standard'),('view-key','file_lock_key','history.v1'),
  ('view-scope','request_scope_lifecycle','standard'),('view-lease','request_cache_lease','standard'),
  ('view-cache','view_cache','history.v1'),('view-render','view_render','history.v1'),
- ('view-context','request_context','standard'),('view-error','view_error','standard')]
-SLOT_IMAGES=[0,1,1,1,2,3,4,5,6,7,8,9]
+ ('view-context','request_context','standard'),('view-error','view_error','standard'),
+ ('view-raw-regex','view_regex','history.v1'),('view-regex-syntax','regex_syntax','history.v1'),
+ ('view-regex-hir','regex_hir','history.v1'),('view-regex-nfa','regex_nfa','history.v1'),
+ ('view-regex-match','regex_match','history.v1'),('view-regex-data','regex_unicode_data','standard'),
+ ('view-regex-diagnostic','view_regex_diagnostic','history.v1')]
+SLOT_IMAGES=[0,1,1,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
 
 def assemble_prefix(root:Path,folder:Path):
     raw='\n'.join((root/p).read_text() for p in SOURCES)
@@ -37,7 +41,7 @@ def assemble_prefix(root:Path,folder:Path):
     proof=json.loads((root/'native/view_call_adapter.json').read_bytes())
     if proof['sources']!={p:sha((root/p).read_bytes()) for p in SOURCES}:raise ValueError('boundary source closure changed')
     if proof['prefix_sha256']!=sha(prefix) or proof['prefix_bytes']!=len(prefix) or proof['table_offset']!=table:raise ValueError('frozen native prefix changed')
-    if prefix[table:table+96]!=bytes(96):raise ValueError('image slots are not reserved zeros')
+    if prefix[table:table+152]!=bytes(152):raise ValueError('image slots are not reserved zeros')
     return prefix,table
 
 def build_view_call(hepta:Path,build_root:Path,*,source_root:Path=ROOT):
@@ -51,9 +55,13 @@ def build_view_call(hepta:Path,build_root:Path,*,source_root:Path=ROOT):
         members.append({'name':name,'source':f'native/{source}.hepta','manifest':str(manifest.relative_to(build_root)),
           'manifest_sha256':sha(manifest.read_bytes()),'source_sha256':data['source_sha256'],'image_sha256':sha(image)})
     packer=build.compile('view-call-packer',source_root/'native/view_call_packer.hepta',standalone=None)
-    frame=b'HVCLELF1'+struct.pack('<11Q',10,*map(len,images))+b''.join(images)
+    frame=b'HVCLELF2'+struct.pack('<18Q',17,*map(len,images))+b''.join(images)
+    packed_extent=len(prefix)
+    for image in images:
+        packed_extent=(packed_extent+15)&~15
+        packed_extent+=len(image)
     with NativeModule(packer,manifest_sha256=sha(packer.read_bytes())) as module:
-        elf=module.invoke(frame,output_capacity=2<<20,workspace_capacity=4096)
+        elf=module.invoke(frame,output_capacity=packed_extent,workspace_capacity=4096)
     expected=bytearray(prefix);positions=[]
     for image in images:
         expected+=bytes((-len(expected))%16);positions.append(len(expected));expected+=image

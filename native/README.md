@@ -166,7 +166,7 @@ old-stack-removal declarations remain false.
 
 ## Native components
 
-Qualification covers 100 native HIA sources through 47 executable component
+Qualification covers 102 native HIA sources through 47 executable component
 entries, including 26 HIA packers. Shared owners are compiled in the explicitly
 declared component profiles; they are not counted as additional source files.
 The complete source inventory binds implementation, contracts, builders, tests
@@ -224,6 +224,8 @@ These counts do not count migrated production MCP handlers.
 | [config_mcp_packer.hepta](config_mcp_packer.hepta) | Fixed seventeen-image static MCP executable. Result publication remains image 10. Validation image 3 calls physical regex controller 16; syntax 11, HIR 13, NFA 14 and matcher 15 use immutable Unicode image 12. Original private regex selectors are mapped separately to these fixed images. Only the configuration filesystem image owns its OS effects. |
 | [config_regex_packer.hepta](config_regex_packer.hepta) | Fixed native configuration-validation profile joining the original validation owner to all required regex children. |
 | [regex_controller.hepta](regex_controller.hepta) | Native continuation controller composing syntax, HIR, NFA and matching with checked child receipts and resource/domain refusals. |
+| [view_regex.hepta](view_regex.hepta) | Raw-pattern file-search controller connecting the shared regex owners to complete local-file search results. |
+| [view_regex_diagnostic.hepta](view_regex_diagnostic.hepta) | Original parser and semantic error rendering with complete Unicode and multiline source positions. |
 | [regex_hir.hepta](regex_hir.hepta) | Native regex HIR lowering, flags and class semantics through checked Unicode queries; complete 34,130-row original HIR domain. |
 | [regex_hir_packer.hepta](regex_hir_packer.hepta) | Fixed static native HIR executable with checked Unicode data calls and retained framing/resource refusals. |
 | [regex_match.hepta](regex_match.hepta) | Native regex matching through fixed NFA and Unicode dependencies, covering the complete 65,440 original pattern/haystack cases. |
@@ -440,7 +442,7 @@ and one aggregate/original-Rust job. The prepare job executes the full cold gate
 and builds every module once. Its exact SHA256 is passed through the workflow;
 every partition checks the full source, compiler, build and invocation identity
 before executing its complete suite list. Batch, text, view/history/session, JSON,
-configuration/regex and system suites run on separate runners with 10, 29, 21,
+configuration/regex and system suites run on separate runners with 10, 29, 25,
 16, 15 and 32 native suites, respectively. The view partition keeps the caller,
 public MCP and their evidence together; text keeps the ordered file-lock chain.
 Configuration and regex remain together
@@ -464,11 +466,11 @@ content snapshots through artifact ZIP transport. The atomic writer's live
 effect targets are retired only after complete snapshots, full content gzips,
 raw traces and all actual process outputs pass their evidence checks. Retirement
 records bind that accepted evidence; no semantic call is added or reconstructed.
-The local-view caller, literal-search and public MCP tests likewise retire only their private
+The local-view caller, literal/regex-search and public MCP tests likewise retire only their private
 live filesystem fixtures after complete native evidence passes. Their final
 regular-file bytes, raw Unix names, empty directories and symbolic-link targets
 remain in a checked archive and manifest. The archive stores byte streams without
-following links, and collection revalidates it against all four accepted evidence
+following links, and collection revalidates it against all six accepted evidence
 objects before original replay.
 Failed partitions and aggregates first preserve their complete top-level reports
 and process streams outside effect fixtures. A non-dereferencing tar archive
@@ -479,7 +481,7 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 123 native suite processes, the fresh compiler cold process,
+The declared run has 127 native suite processes, the fresh compiler cold process,
 42 required original Rust recipe entries and one Rust-version process. Aggregate
 process records, nested original processes, direct native calls and actual ELF
 processes are reported separately by the completed execution. Recipe entries
@@ -494,6 +496,9 @@ processes for Rust identity, compilation, complete replay and the concurrent lat
 The local reader, typed-parameter and view-caller entries share one fresh locked
 build and nine original processes. Literal search adds one separate shared
 three-process reference and a required post-reference evidence-control process.
+Regex file search independently adds the same three-process recipe structure
+and its own required six-group, 42-control post-reference process. Each search
+domain executes once and is shared by the existing view recipe entries.
 The public MCP reference entry strictly reads those completed executions,
 adding no original process. It distinguishes
 complete view/error bodies from explicit SDK fixture projections. The two
@@ -1067,9 +1072,9 @@ own fresh original Rust recipe. Existing corpus overlap adds no new native case.
 The local-file composition joins ordinary read observations, typed parameters,
 canonical cache keys, a growable session cache, request lifetime and the original
 base-result gate. Its read, typed, complete caller and wide-endpoint captures
-are independently verified. Literal file search uses the same caller image with
-its own complete execution evidence. The public MCP composition and remaining
-directory, regex-search and remote branches have separate qualification boundaries.
+are independently verified. Literal and regex file search use the same caller
+image with separate complete execution evidence. The public MCP composition and
+remaining directory and remote branches have separate qualification boundaries.
 
 ### Local view call and public MCP composition
 
@@ -1090,6 +1095,7 @@ is not substituted for this reader.
 | Wide endpoint | One additional complete endpoint Value produces a 19,000,091-byte original error, retained through the final caller output |
 | Engine resource cleanup | Ten actual kernel controls and one separate test-fixture compilation; zero HIA semantic or original Rust calls |
 | Literal file search | 72 complete cases in 65 caller ELF processes, including 71 literal searches and one real whole-file cache preparation |
+| Regex file search | 271 complete cases in 264 caller ELF processes, including 270 regex searches, one whole-file cache preparation, 1,595 logical I/O operations and one after-render cancellation |
 
 Thirteen caller cases share one actual process and the same cache. They cover
 unbound requests, cancellation after a cache effect, a later request observing
@@ -1117,14 +1123,23 @@ after the fresh replay and is never registered as a pre-reference native suite.
 The original nine-process view group and this three-process search group are
 each executed once; the three component entries do not multiply those counts.
 
-The separate 37-image MCP profile connects installed configuration, full client
+Regex search uses the shared native syntax, Unicode, HIR, NFA and match owners.
+The raw-pattern controller and diagnostic owner preserve the original complete
+parse/semantic errors, multiline positions, Unicode offsets and lossy raw-file
+reads. Plain literals use a faster exact search only after the same complete
+NFA admission; this does not bypass the original compilation resource decision.
+The original 10 MiB NFA admission limit remains distinct from the development
+carrier's 64 MiB individual-pattern/haystack and 128 MiB output capacities.
+Unconstrained regex arena and meta-engine resource equivalence remain open.
+
+The separate 39-image MCP profile connects installed configuration, full client
 capabilities, typed parameters, the session workdir latch, canonical path
 policy, local view and the growable result publisher. Its executable is emitted
 by the pinned native HIA ELF linker. The assembler supplies fixed syscall and
 borrowed-buffer boundaries; the running service needs no Python, Rust or libc.
 The profile currently exposes the three configuration tools and `view`, with
 an explicit 8 MiB input-line profile and 64 MiB gateway reply profile. Those
-carrier bounds, directory/regex/remote/background routes and the full HTTP
+carrier bounds, directory/remote/background routes and the full HTTP
 lifecycle still prevent a complete production replacement claim.
 
 The configuration/ordinary-view public test domain retains 109 actual ELF
@@ -1141,6 +1156,14 @@ reference executes the original generator and both publication transforms;
 ordinary/cached file responses and the wide error use the actual original view
 owners. Replacing a fixture body or projecting a tool list is not a comparison
 of every byte from the complete original production server.
+
+Public regex search retains 518 calls, 508 actual ELF processes and 772 replies.
+Its shared original-reference consumer compares all 510 designated response
+bodies in full, for both legacy and modern clients. Eight additional resolved
+path controls keep their separate meaning. Private and public refusal suites
+must pass before fixture retirement; the later original refusal suite cannot
+stand in for either native producer. Source/output relocation rechecks complete
+artifacts and the real original execution paths without rewriting receipts.
 
 One fresh locked Cargo build supplies all local-view, typed, adapter, schema and
 server-info references. Its nine recorded processes are shared by the declared

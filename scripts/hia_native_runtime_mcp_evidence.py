@@ -23,13 +23,13 @@ from hia_native_runtime_mcp_build import MEMBERS, BASE, BOUNDARIES, EXTRA, VIEW,
 FOLDER = 'runtime-mcp'
 NATIVE_SUITE = 'test_runtime_mcp.py'
 EVIDENCE_SUITE = 'test_runtime_mcp_evidence.py'
-SOURCE_MANIFEST_SHA256 = '1a475ceffbd092e32e2007e5a4762914c88122971791615b82acdc94c9dcc50d'
+SOURCE_MANIFEST_SHA256 = '9b22b16059c95583aa3cf8f70a4b90dd4d601af24e8c3a48923bf9661eaf8870'
 LINKER_SOURCE_SHA256 = '66063b0e8d9b244a8ccec27a31554fe8e77f309ac1fc981286e63befa7559cef'
 COMPILER_SHA256 = 'bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
 VIEW_IDS = tuple([*range(19), 26, 28, 29, 30, 35, 36, *range(45, 51)])
 TYPED_ERRORS = {0,1,2,3,11,12,13,14,15,16,17,20,200,201,202,203,206,207,208}
 META_ERRORS = {32,33,34,35,101,103,105,209,210}
-COUNTS = dict(actual_elf_processes=109, actual_elf_responses=222, actual_embedded_hia_images=37,
+COUNTS = dict(actual_elf_processes=109, actual_elf_responses=222, actual_embedded_hia_images=39,
               actual_policy_and_shared_config_controls=7, actual_public_ordinary_view_cases=31,
               large_error_body_bytes=19000091, large_error_publication_cases=1,
               observable_session_latch_controls=3, private_frame_refusals=34,
@@ -160,8 +160,31 @@ def completed_suite(root, output, report, completed, name, groups):
     rows = [row for row in report['checks'] if row.get('name') == name]
     require(len(rows) == 1, 'one actual process receipt required: ' + name)
     row = rows[0]
-    exact(row.get('command'), [sys.executable, '-I', '-B', str(root / 'tests/hia_native' / name)],
-          'suite command differs')
+    # Source/output directories may move after capture. The retained source
+    # root belongs to the complete native capture, whose exact current source
+    # closure is checked here; it is never used for reading a file.
+    capture = decode(owned(output, FOLDER + '/result.json').read_bytes())
+    native_header(capture, source_identity(root))
+    origin = capture.get('execution')
+    require(type(origin) is dict, 'native execution origin is missing')
+    exact(sorted(origin), ['corpus_root', 'manifest_path', 'runtime_root'],
+          'native execution origin fields differ')
+    for value in origin.values():
+        require(type(value) is str and Path(value).is_absolute()
+                and '..' not in Path(value).parts and str(Path(value)) == value,
+                'native execution origin is not canonical')
+    origin_root = Path(origin['runtime_root'])
+    origin_corpus = Path(origin['corpus_root'])
+    require(origin_corpus.name == FOLDER, 'native corpus origin differs')
+    owner = report.get('modules', {}).get('runtime_mcp')
+    require(type(owner) is dict and type(owner.get('manifest')) is str
+            and not Path(owner['manifest']).is_absolute()
+            and '..' not in Path(owner['manifest']).parts,
+            'native manifest owner is not relative')
+    exact(origin['manifest_path'], str(origin_corpus.parent / owner['manifest']),
+          'native manifest origin differs from the retained build owner')
+    exact(row.get('command'), [sys.executable, '-I', '-B', str(origin_root / 'tests/hia_native' / name)],
+          'suite command differs from its complete native origin')
     require(type(row.get('exit_code')) is int and row['exit_code'] == 0
             and row.get('timed_out') is False and not row.get('start_error')
             and type(row.get('timeout_seconds')) is int and row['timeout_seconds'] == 180
@@ -541,7 +564,7 @@ def elf_structure(elf, obj, images):
     exact(sorted(named), ['.bss','.data','.note.GNU-stack','.rela.text','.shstrtab','.strtab','.symtab','.text'], 'object section inventory differs')
     ti=named['.text']; text=bytearray(section_bytes(ti)); require(sections[ti][2]==6 and len(text)+256==rx[5], 'object text profile differs')
     require(all(row[5]==0 for index,row in enumerate(sections) if row[2]&2 and index!=ti), 'object contains another allocated payload')
-    reloc=section_bytes(named['.rela.text']); require(len(reloc)==24*24, 'fixed child relocation count differs')
+    reloc=section_bytes(named['.rela.text']); require(len(reloc)==31*24, 'fixed child relocation count differs')
     symbols=section_bytes(named['.symtab']); require(len(symbols)%24==0, 'object symbol table differs')
     offsets={}
     for key,image in images.items():
@@ -554,7 +577,7 @@ def elf_structure(elf, obj, images):
         struct.pack_into('<Q',text,offset,0x400100+value+addend)
     exact(bytes(text),elf[256:rx[5]], 'complete ELF machine text differs from actual assembled object/relocations')
     return dict(bytes=len(elf),sha256=sha(elf),entry=0x4000e8,program_headers=['PT_LOAD_RX','PT_LOAD_RW_EMPTY','PT_GNU_STACK_RW'],
-                interpreter=None,libc=False,fixed_child_address_relocations=24,embedded_images=37)
+                interpreter=None,libc=False,fixed_child_address_relocations=31,embedded_images=39)
 
 
 def build_evidence(root, output, report, evidence, capture):
@@ -609,6 +632,8 @@ def build_evidence(root, output, report, evidence, capture):
     exact(bundle['extra_table'],EXTRA,'extra child table differs');exact(bundle['view_table'],VIEW,'view child table differs')
     exact(bundle['regex_local_call_edges'],REGEX_LOCAL_CALL_EDGES,'regex private call graph differs')
     exact(bundle['regex_selector_members'],REGEX_SELECTOR_MEMBERS,'regex private selector binding differs')
+    exact(bundle['view_regex_local_call_edges'],{'12':[13,14,15,16,18],'13':[17],'14':[17],'16':[17]},'view regex private graph differs')
+    exact(bundle['view_regex_selector_members'],{'12':'view_regex','13':'regex_syntax','14':'regex_hir','15':'regex_nfa','16':'regex_match','17':'regex_unicode_data','18':'view_regex_diagnostic'},'view regex private selector binding differs')
     require(bundle.get('regex_compilation_closed') is False and bundle.get('unconstrained_regex_resources_closed') is False,
             'regex profile made an unqualified closure claim')
     stem=str(folder.relative_to(output))+'/'
@@ -651,7 +676,7 @@ def build_evidence(root, output, report, evidence, capture):
     exact((bundle['public_line_profile_bytes'],bundle['gateway_reply_profile_bytes'],bundle['result_publication_grows']),
           (8<<20,64<<20,True),'declared profile differs')
     return dict(manifest=owner['manifest'],manifest_sha256=sha(raw),elf=structure,fresh_member_compiles=fresh,
-                member_count=37,all_members_freshly_compiled=fresh==37,compiler_commit=HEPTA_COMMIT,compiler_image_sha256=COMPILER_SHA256)
+                member_count=39,all_members_freshly_compiled=fresh==39,compiler_commit=HEPTA_COMMIT,compiler_image_sha256=COMPILER_SHA256)
 
 
 def native_evidence(root: Path, output: Path, report: dict, completed) -> dict:
@@ -670,7 +695,7 @@ def native_evidence(root: Path, output: Path, report: dict, completed) -> dict:
 
 def qualification_evidence(root: Path, output: Path, report: dict, completed) -> dict:
     native=native_evidence(root,output,report,completed)
-    require(native['composition']['all_members_freshly_compiled'] is True,'formal qualification requires all 37 fresh member compiles')
+    require(native['composition']['all_members_freshly_compiled'] is True,'formal qualification requires all 39 fresh member compiles')
     check,summary=completed_suite(root,output,report,completed,EVIDENCE_SUITE,EVIDENCE_GROUPS)
     expected=dict(schema='hepta.runtime.mcp-view-evidence-tests.v1',status='PASS',groups=EVIDENCE_GROUPS,
                   refusal_controls=EVIDENCE_CONTROLS,failures=0,errors=0,skipped=0,new_native_calls=0,new_original_processes=0,

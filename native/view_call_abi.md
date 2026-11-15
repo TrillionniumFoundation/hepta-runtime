@@ -2,10 +2,10 @@
 
 This HIA controller is the ordinary local-file
 execution branch after native typed parameters, session/workdir snapshot and
-installed path policy. The production JSON-RPC frontend must create its private
-input; a public caller cannot select a session, scope, cache, child image or
-installed configuration. Until that frontend is connected and qualified, the
-static controller executable remains a component composition fixture.
+installed path policy. The native JSON-RPC frontend creates its private input;
+a public caller cannot select a session, scope, cache, child image or installed
+configuration. The standalone executable remains a component composition
+fixture, distinct from actual public MCP execution.
 
 ## Input and result
 
@@ -88,8 +88,8 @@ The original output body limit remains exactly 8 MiB.
 
 1. Open the request scope after the frontend's typed/session/policy checks.
 2. Follow the original `exists` and `is_dir` observations. A separate literal
-   search frame selects its file-search branch at this point. Directory,
-   regex, alternative-path search, remote and background-resource branches
+   or regex search frame selects its file-search branch at this point. Directory,
+   alternative-path search, remote and background-resource branches
    remain distinct unfinished routes, never reported as a local-file success.
 3. Parse start then end. If present, observe first metadata, apply its original
    5 MiB check and perform the first strict UTF-8 read. First metadata failure
@@ -139,7 +139,7 @@ actual production MCP calls are counted separately.
 
 ## Callable native boundary
 
-`view_engine_create` takes the private twelve-address image table in `rdi`
+`view_engine_create` takes the private nineteen-address image table in `rdi`
 and the real `AT_SECURE` value in `rsi`. It returns the engine pointer or an
 unchanged negative Linux errno. Failed creation releases every partial
 allocation. With the engine in `r15`, `view_call_run` takes a complete private
@@ -163,7 +163,8 @@ before destroying or reusing that storage.
 
 Each child descriptor is 64 bytes: entry, workspace pointer/capacity, output
 pointer/capacity, last return, then two private words. Slots 6 and 7 reserve
-the last two words for consumed HIACAL sequence and active state. All nested
+the last two words for consumed HIACAL sequence and active state. The regex
+bridge reserves those words for slots 12 through 18. All nested
 scope/lease calls reread the descriptor table, so a final cache release sees
 the current slot 8 allocation. Growth allocates guarded storage, copies the
 complete old contents, and retires the old mapping only after success. If
@@ -230,7 +231,8 @@ Only the trusted frontend constructs this frame after complete SDK metadata,
 typed ViewParams, session/workdir and installed-policy admission. A public
 caller cannot select the magic, cache, lease or request context. A nonblank
 content value with `regex` false selects this branch; blank content follows
-ordinary view. Regex search remains a separate unfinished branch. Context is
+ordinary view. A true regex flag selects the private HVCRQ001 route described
+in view_regex_abi.md. Context is
 the admitted u64; values above i64::MAX become zero, matching the original
 Value::as_i64 fallback. No private negative-JSON or invalid typed-parameter
 domain is inferred from this controller interface.
@@ -274,3 +276,13 @@ decode or search in the boundary. Its test-only gate remains disabled in
 production. New literal cases, whole-file cache preparation, private completion
 controls, real public MCP calls and independent Rust replays are separate
 evidence domains. None establishes whole-view or whole-runtime replacement.
+
+## Raw regex search extension
+
+The same caller now admits trusted HVCRQ001 frames and the fixed 19-slot graph
+documented in view_regex_abi.md. The raw regex owner and pure error formatter
+are actual HIA children. The standalone packer embeds 17 images; the public
+MCP composition reuses its existing five regex dependency images and adds only
+these two owners. It preserves the original read-before-compile order and
+empty-file skip. This extension does not close directory, alternative-path or
+remote routes and does not raise whole-view or whole-runtime flags.

@@ -15,7 +15,9 @@ RECEIPT = "view-call/retired-fixtures.json"
 ARCHIVE = "view-call/retired-fixtures.bin.gz"
 MAGIC = b"HVFIX001"
 FIXTURE = re.compile(r"(?:view-call/caller/files-[0-9]+|view-call/wide/files|"
-                     r"view-search/files-(?:100(?:[0-5][0-9]|6[0-3])|20000)|runtime-mcp/files)\Z")
+                     r"view-search/files-(?:100(?:[0-5][0-9]|6[0-3])|20000)|"
+                     r"view-regex-search/files-(?:300(?:[0-5][0-9]|6[0-3]|7[2-9]|[89][0-9])|"
+                     r"301[0-9]{2}|302(?:[0-6][0-9]|70)|40000)|runtime-mcp/files)\Z")
 HEX = re.compile(r"(?:[0-9a-f]{2})+\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 

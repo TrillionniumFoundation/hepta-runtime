@@ -276,9 +276,11 @@ class QualificationReportingTests(unittest.TestCase):
         import hia_native_view_call_qualification as view
         import hia_native_runtime_mcp_reference as public
         import hia_native_view_search_public_qualification as public_search
+        import hia_native_view_regex_search_public_qualification as public_regex_search
         actual = dict(comparison.RECIPES)
         providers = ("view_read", "view_params", "view_call")
         self.assertNotIn("view_search", actual)
+        self.assertNotIn("view_regex_search", actual)
         selected = set(providers) | {"runtime_mcp", "operation_scope_os"}
         # Preserve the real registry's order. JSON persistence deliberately
         # destroys that ordering in the report, as it does in aggregate CI.
@@ -292,17 +294,25 @@ class QualificationReportingTests(unittest.TestCase):
         public_native = {"fixture": "public-native"}
         public_search_native = {"corpus": "view-search-public"}
         search_original = {"fixture": "search-original", "original_output": "view-search-original"}
+        regex_native = {"corpus": "view-regex-search"}
+        (self.output / "view-regex-search").mkdir()
+        (self.output / "view-regex-search/native-cases.jsonl").write_bytes(b"")
+        public_regex_native = {"corpus": "view-regex-search-public"}
+        regex_original = {"fixture": "regex-original", "original_output": "view-regex-search-original"}
         self.report.update(modules={key: {} for key in declared},
             original_rust_comparisons={}, view_call_evidence=native,
             view_search_evidence=search_native, runtime_mcp_evidence=public_native,
-            view_search_public_evidence=public_search_native)
+            view_search_public_evidence=public_search_native,
+            view_regex_search_evidence=regex_native,
+            view_regex_search_public_evidence=public_regex_native)
         self.report = json.loads(json.dumps(self.report, sort_keys=True))
         self.assertLess(list(self.report["modules"]).index("runtime_mcp"),
                         list(self.report["modules"]).index("view_call"))
         executed = []
 
         def original_fixture(output, report, *, name, **kwargs):
-            self.assertIn(name, (view.ORIGINAL_CHECK, *comparison.VIEW_SEARCH_ORIGINAL_CHECKS))
+            self.assertIn(name, (view.ORIGINAL_CHECK, *comparison.VIEW_SEARCH_ORIGINAL_CHECKS,
+                                 *comparison.VIEW_REGEX_SEARCH_ORIGINAL_CHECKS))
             # The fixture executes a real process; it makes no Rust/native
             # semantic claim. The original reader's missing-recipe guard stays
             # real, while its already-tested byte reader is isolated here.
@@ -327,13 +337,17 @@ class QualificationReportingTests(unittest.TestCase):
         with patch.object(comparison, "view_call_evidence", return_value=native), \
              patch.object(comparison, "view_search_evidence", return_value=search_native), \
              patch.object(comparison, "view_search_public_evidence", return_value=public_search_native), \
+             patch.object(comparison, "view_regex_search_evidence", return_value=regex_native), \
+             patch.object(comparison, "view_regex_search_public_evidence", return_value=public_regex_native), \
              patch.object(comparison, "runtime_mcp_evidence", return_value=public_native), \
              patch.object(comparison, "record_check", side_effect=original_fixture), \
              patch.object(comparison, "executable", return_value=Path(sys.executable)), \
              patch.object(view, "_original_evidence", return_value={"original_output": "view-call-original"}), \
-             patch.object(comparison, "_view_search_original_evidence", return_value=search_original), \
+             patch.object(comparison, "_view_search_original_evidence", side_effect=lambda *args, regex=False:
+                          regex_original if regex else search_original), \
              patch.object(public, "compare_reference", return_value={"fixture": "public-original"}), \
              patch.object(public_search, "compare_public_reference", return_value={"fixture": "public-search-original"}), \
+             patch.object(public_regex_search, "compare_public_reference", return_value={"fixture": "public-regex-original"}), \
              patch.object(comparison, "RECIPES", recipes):
             with self.assertRaisesRegex(ValueError, "fresh original recipe has not executed"):
                 actual["runtime_mcp"](self.output, self.report, Path(sys.executable))
@@ -343,12 +357,18 @@ class QualificationReportingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "required public literal search original comparison"):
                 actual["runtime_mcp"](self.output, self.report, None)
             self.report["view_search_public_original_comparison"] = required
+            required_regex = self.report.pop("view_regex_search_public_original_comparison")
+            with self.assertRaisesRegex(ValueError, "required public regex search original comparison"):
+                actual["runtime_mcp"](self.output, self.report, None)
+            self.report["view_regex_search_public_original_comparison"] = required_regex
         self.assertEqual(executed, [key for key in declared if key != "operation_scope_os"])
         self.assertEqual(sum(row["name"] == view.ORIGINAL_CHECK for row in self.report["checks"]), 1)
-        for name in comparison.VIEW_SEARCH_ORIGINAL_CHECKS:
+        for name in (*comparison.VIEW_SEARCH_ORIGINAL_CHECKS, *comparison.VIEW_REGEX_SEARCH_ORIGINAL_CHECKS):
             self.assertEqual(sum(row["name"] == name for row in self.report["checks"]), 1)
         self.assertEqual(self.report["view_search_original_comparison"], search_original)
         self.assertEqual(self.report["view_search_public_original_comparison"], {"fixture": "public-search-original"})
+        self.assertEqual(self.report["view_regex_search_original_comparison"], regex_original)
+        self.assertEqual(self.report["view_regex_search_public_original_comparison"], {"fixture": "public-regex-original"})
         self.assertEqual([self.report["original_rust_comparisons"][key] for key in providers],
                          [{"original_output": "view-call-original"}] * 3)
         self.assertEqual(set(self.report["original_rust_comparisons"]), selected)
@@ -356,27 +376,43 @@ class QualificationReportingTests(unittest.TestCase):
                             for row in self.report["checks"]))
 
     def test_search_original_readonly_consumer_requires_both_shared_wrappers(self):
+        self._search_original_required_wrappers(False)
+
+    def test_regex_original_readonly_consumer_requires_both_shared_wrappers(self):
+        self._search_original_required_wrappers(True)
+
+    def _search_original_required_wrappers(self, regex):
         import compare_hia_runtime_rust as comparison
+        stem = "view_regex_search" if regex else "view_search"
+        label = "regex" if regex else "literal"
+        checks = comparison.VIEW_REGEX_SEARCH_ORIGINAL_CHECKS if regex else comparison.VIEW_SEARCH_ORIGINAL_CHECKS
         native = {"fixture": "native-search"}
-        self.report["view_search_evidence"] = native
-        with self.assertRaisesRegex(ValueError, "fresh literal search original recipe has not executed"):
-            comparison.compare_view_search(self.output, self.report, native=native)
-        self.report["checks"].append({"name": comparison.VIEW_SEARCH_ORIGINAL_CHECKS[0]})
+        self.report[stem + "_evidence"] = native
+        with self.assertRaisesRegex(ValueError, f"fresh {label} search original recipe has not executed"):
+            comparison.compare_view_search(self.output, self.report, native=native, regex=regex)
+        self.report["checks"].append({"name": checks[0]})
         with self.assertRaisesRegex(ValueError, "original evidence controls have not executed"):
-            comparison.compare_view_search(self.output, self.report, native=native)
-        self.assertNotIn("view_search_original_comparison", self.report)
+            comparison.compare_view_search(self.output, self.report, native=native, regex=regex)
+        self.assertNotIn(stem + "_original_comparison", self.report)
         self.assertEqual(list(self.output.iterdir()), [])
 
     def test_search_original_wrapper_rejects_missing_typed_or_changed_actual_receipts(self):
+        self._search_original_wrapper_controls(False)
+
+    def test_regex_original_wrapper_rejects_missing_typed_or_changed_actual_receipts(self):
+        self._search_original_wrapper_controls(True)
+
+    def _search_original_wrapper_controls(self, regex):
         import copy
         import compare_hia_runtime_rust as comparison
-        name = comparison.VIEW_SEARCH_ORIGINAL_CHECKS[0]
+        name = (comparison.VIEW_REGEX_SEARCH_ORIGINAL_CHECKS if regex
+                else comparison.VIEW_SEARCH_ORIGINAL_CHECKS)[0]
         command = [sys.executable, "-I", "-c", "print('{\"fixture\":true}')"]
         self.report["phase"] = "original_rust_comparison"
         record_check(self.output, self.report, name=name, command=command, timeout=180)
         actual = copy.deepcopy(self.report["checks"][0])
         summary = {"fixture": True}
-        comparison._view_search_check(self.output, self.report, name, command, summary)
+        comparison._view_search_check(self.output, self.report, name, command, summary, regex=regex)
         changed = []
         for field in ("timed_out", "timeout_seconds"):
             row = copy.deepcopy(actual)
@@ -392,22 +428,56 @@ class QualificationReportingTests(unittest.TestCase):
         for row in changed:
             self.report["checks"] = [row]
             with self.subTest(row=row), self.assertRaises(AssertionError):
-                comparison._view_search_check(self.output, self.report, name, command, summary)
+                comparison._view_search_check(self.output, self.report, name, command, summary, regex=regex)
         self.report["checks"] = [actual, copy.deepcopy(actual)]
         with self.assertRaisesRegex(AssertionError, "exactly one"):
-            comparison._view_search_check(self.output, self.report, name, command, summary)
+            comparison._view_search_check(self.output, self.report, name, command, summary, regex=regex)
         self.report["checks"] = [actual]
         raw = (self.output / (name + ".stdout")).read_bytes()
         (self.output / (name + ".stdout")).write_bytes(raw.replace(b"true", b"null"))
         with self.assertRaisesRegex(AssertionError, "stream hash"):
-            comparison._view_search_check(self.output, self.report, name, command, summary)
+            comparison._view_search_check(self.output, self.report, name, command, summary, regex=regex)
         for changed_stdout in (b'{"fixture":true,"fixture":true}\n', b'{"fixture":1}\n'):
             rehashed = copy.deepcopy(actual)
             rehashed.update(stdout_bytes=len(changed_stdout), stdout_sha256=comparison.digest(changed_stdout))
             self.report["checks"] = [rehashed]
             (self.output / (name + ".stdout")).write_bytes(changed_stdout)
             with self.subTest(stdout=changed_stdout), self.assertRaises(AssertionError):
-                comparison._view_search_check(self.output, self.report, name, command, summary)
+                comparison._view_search_check(self.output, self.report, name, command, summary, regex=regex)
+
+    def test_search_original_checkout_uses_its_own_actual_wrapper(self):
+        import copy
+        import compare_hia_runtime_rust as comparison
+        for regex in (False, True):
+            reference, stem, slug, checks, capture = comparison._view_search_domain(regex)
+            checkout = self.output / (slug + "-original-source")
+            script = checkout / f"tests/hia_native/{stem}_oracle/run.py"
+            script.parent.mkdir(parents=True)
+            script.write_text('print(\'{"reporting_fixture_only":true}\')\n')
+            command = [sys.executable, "-I", "-B", str(script),
+                "--runtime-root", str(checkout), "--output", str(self.output / reference.ORACLE_OUTPUT_FOLDER),
+                "--cargo", str(Path(sys.executable).with_name("cargo")), "--rustc", sys.executable,
+                "--native-corpus", str(self.output / slug)]
+            self.report["phase"] = "original_rust_comparison"
+            self.report["checks"] = [{"name": f"test_{stem}.py", "command": [sys.executable, "-I", "-B",
+                str(self.output / "different-native-source" / f"tests/hia_native/test_{stem}.py")]}]
+            record_check(self.output, self.report, name=checks[0], command=command, timeout=180)
+            self.assertEqual(comparison._view_search_original_origin(self.report, regex=regex),
+                             (sys.executable, checkout))
+            actual = copy.deepcopy(self.report["checks"][-1])
+            comparison._view_search_check(self.output, self.report, checks[0], command,
+                                          {"reporting_fixture_only": True}, regex=regex)
+            for index, value in ((0, "python"), (3, str(script) + ".changed"), (4, "--different-root"),
+                                 (5, str(checkout) + "/.."), (5, "relative/source"), (5, str(checkout) + "/"),
+                                 (6, "--cargo"), (13, False)):
+                changed = copy.deepcopy(actual)
+                changed["command"][index] = value
+                self.report["checks"][-1] = changed
+                with self.subTest(regex=regex, index=index, value=value), self.assertRaises(AssertionError):
+                    comparison._view_search_original_origin(self.report, regex=regex)
+            self.report["checks"] = [actual, copy.deepcopy(actual)]
+            with self.assertRaisesRegex(AssertionError, "exactly one"):
+                comparison._view_search_original_origin(self.report, regex=regex)
 
     def test_batch_original_stderr_requires_actual_bytes_and_typed_summary(self):
         import hashlib

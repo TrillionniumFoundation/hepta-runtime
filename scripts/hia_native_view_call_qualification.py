@@ -33,8 +33,12 @@ MEMBERS = (('view-call', 'view_call'), ('view-read', 'view_read'),
            ('view-endpoint', 'line_endpoint'), ('view-key', 'file_lock_key'),
            ('view-scope', 'request_scope_lifecycle'), ('view-lease', 'request_cache_lease'),
            ('view-cache', 'view_cache'), ('view-render', 'view_render'),
-           ('view-context', 'request_context'), ('view-error', 'view_error'))
-SLOTS = [0, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+           ('view-context', 'request_context'), ('view-error', 'view_error'),
+           ('view-raw-regex', 'view_regex'), ('view-regex-syntax', 'regex_syntax'),
+           ('view-regex-hir', 'regex_hir'), ('view-regex-nfa', 'regex_nfa'),
+           ('view-regex-match', 'regex_match'), ('view-regex-data', 'regex_unicode_data'),
+           ('view-regex-diagnostic', 'view_regex_diagnostic'))
+SLOTS = [0, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 EVENTS = {1: 'exists', 2: 'is_dir', 3: 'is_file', 4: 'metadata', 5: 'read'}
 READER_FIELDS = ('generation', 'operation', 'outcome', 'errno', 'mode',
                  'metadata_size', 'snapshot_offset', 'snapshot_length', 'read_attempts')
@@ -303,8 +307,8 @@ def _builds(evidence, descriptor):
     caller = evidence.json(paths['manifest']); build = paths['manifest'].parent.parent
     require(caller.get('schema') == 'hepta.runtime.view-call-build.v1', 'caller manifest schema')
     same(caller.get('slot_image_indices'), SLOTS, 'closed caller slot table')
-    same(len(caller.get('members', [])), 10, 'caller image count')
-    same(len(caller.get('image_offsets', [])), 10, 'caller image offsets')
+    same(len(caller.get('members', [])), 17, 'caller image count')
+    same(len(caller.get('image_offsets', [])), 17, 'caller image offsets')
     elf_path = evidence.path(caller['elf'], paths['manifest'].parent); elf = evidence.raw(elf_path)
     require(digest(elf) == caller['elf_sha256'], 'caller ELF identity')
     proof = json_value((evidence.root / 'native/view_call_adapter.json').read_bytes())
@@ -313,9 +317,9 @@ def _builds(evidence, descriptor):
     for source, sha in caller['sources'].items(): require(evidence.source(source)['sha256'] == sha, 'boundary source changed')
     for key in ('prefix_bytes', 'prefix_sha256', 'table_offset'): same(caller[key], proof[key], 'boundary ' + key)
     size, table = integer(caller['prefix_bytes'], 'prefix bytes', 176), integer(caller['table_offset'], 'slot offset', 176)
-    require(table + 96 <= size <= len(elf), 'prefix/slot containment')
+    require(table + 152 <= size <= len(elf), 'prefix/slot containment')
     prefix = bytearray(elf[:size]); require(struct.unpack_from('<2Q', prefix, 96) == (len(elf), len(elf)), 'ELF extent')
-    prefix[96:112] = bytes(16); prefix[table:table + 96] = bytes(96)
+    prefix[96:112] = bytes(16); prefix[table:table + 152] = bytes(152)
     require(digest(prefix) == proof['prefix_sha256'], 'actual ELF prefix/source proof')
     end = size; images = []
     for (name, source), member, offset in zip(MEMBERS, caller['members'], caller['image_offsets']):
@@ -326,7 +330,7 @@ def _builds(evidence, descriptor):
         require(elf[offset:offset + len(image)] == image, 'actual ELF embedded HIA image')
         end = offset + len(image); images.append(image)
     require(end == len(elf), 'trailing caller ELF payload')
-    same(list(struct.unpack_from('<12Q', elf, table)), [0x400000 + caller['image_offsets'][i] for i in SLOTS], 'actual ELF slot addresses')
+    same(list(struct.unpack_from('<19Q', elf, table)), [0x400000 + caller['image_offsets'][i] for i in SLOTS], 'actual ELF slot addresses')
     packer = evidence.path(caller['packer_manifest'], build)
     require(evidence.file(packer)['sha256'] == caller['packer_manifest_sha256'], 'caller packer manifest')
     _module(evidence, packer, 'native/view_call_packer.hepta')

@@ -15,8 +15,8 @@ import sys
 
 FOLDER = 'view-call/resources'
 SUITE = 'test_view_call_resources.py'
-ENGINE_SHA256 = 'f6942ab4168d4da8b361558e4b9587ae3ad64398d732c70eb9b1db193dc30d2e'
-ENGINE_BYTES = 162426880
+ENGINE_SHA256 = '6d634b77d3715cbf045bad707a7787502ff8d121aa259d927cdd2ae510dabd58'
+ENGINE_BYTES = 1807945728
 PAGE = 4096
 SOURCE_PATHS = (
     'scripts/view_call_engine.S',

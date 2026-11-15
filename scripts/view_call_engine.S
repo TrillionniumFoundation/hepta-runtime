@@ -194,6 +194,8 @@ view_dispatch:
     je view_scope_invoke
     cmp edx, 7
     je view_scope_invoke
+    cmp edx, 12
+    je view_regex_dispatch
     jmp view_pure_invoke
 view_dispatch_invalid:
     mov eax, 0xffffffff
@@ -482,7 +484,7 @@ view_run_child:
     mov rdx, [r14 + 544]
     cmp rdx, 1
     jb view_run_invalid
-    cmp rdx, 11
+    cmp rdx, 12
     ja view_run_invalid
     cmp qword ptr [r14 + 568], 1024
     jne view_run_invalid
@@ -557,7 +559,7 @@ view_run_copy:
     mov rbp, [r14 + 544]
     cmp rbp, 1
     jb view_run_invalid
-    cmp rbp, 11
+    cmp rbp, 12
     ja view_run_invalid
     shl rbp, 6
     add rbp, [r15 + 8]
@@ -722,7 +724,7 @@ view_engine_create_slot:
     mov [r14 + 24], rax
     add r14, 64
     inc rbp
-    cmp rbp, 12
+    cmp rbp, 19
     jb view_engine_create_slot
     lea rdi, [rip + view_bound_init_frame]
     mov esi, 16
@@ -767,6 +769,13 @@ view_initial_capacities:
     .quad 131072, 16777216
     .quad 33554432, 8388608
     .quad 4096, 4096
+    .quad 268435456, 1048576
+    .quad 268435456, 134217728
+    .quad 268435456, 134217728
+    .quad 268435456, 134217728
+    .quad 33554432, 4096
+    .quad 65536, 172032
+    .quad 4096, 134217728
 
 /* Explicit fixture-only scheduler gate. Production installation keeps +24=0.
  * Observed bytes here are qualification output, not public tool publication. */
@@ -979,7 +988,7 @@ view_engine_free_slot_control:
 view_engine_free_slot_next:
     add rbx, 64
     inc rbp
-    cmp rbp, 12
+    cmp rbp, 19
     jb view_engine_free_slot
     mov rdi, r12
     mov esi, 4096

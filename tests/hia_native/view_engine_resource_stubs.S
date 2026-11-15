@@ -7,6 +7,7 @@
 .global view_read_invoke
 .global view_key_invoke
 .global view_scope_invoke
+.global view_regex_dispatch
 resource_initialization_stub:
     cmp rsi, 16
     jne resource_unexpected_stub
@@ -25,6 +26,7 @@ resource_initialization_stub:
 view_read_invoke:
 view_key_invoke:
 view_scope_invoke:
+view_regex_dispatch:
 resource_unexpected_stub:
     inc qword ptr [rip + resource_stub_unexpected]
     mov eax, 0xffffffff

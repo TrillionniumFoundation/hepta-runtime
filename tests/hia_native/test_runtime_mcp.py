@@ -105,14 +105,14 @@ class NativeRuntime(unittest.TestCase):
     def setUpClass(cls):
         cls.manifest=json.loads(MANIFEST.read_bytes());cls.exe=MANIFEST.parent/cls.manifest['elf'];elf=cls.exe.read_bytes()
         assert sha(elf)==cls.manifest['elf_sha256'] and len(elf)==cls.manifest['elf_bytes']
-        cls.members={row['name']:row for row in cls.manifest['members']};assert len(cls.members)==37
+        cls.members={row['name']:row for row in cls.manifest['members']};assert len(cls.members)==39
         for row in cls.members.values():
             path=Path(row['manifest']);data=json.loads(path.read_bytes());image=(path.parent/data['image']).read_bytes()
             assert sha(path.read_bytes())==row['manifest_sha256'] and sha(image)==row['image_sha256']
             assert (path.parent/data['source']).read_bytes()==(ROOT/row['source']).read_bytes()
             assert sha((ROOT/row['source']).read_bytes())==row['source_sha256'] and elf.count(image)==1
         for path,digest in cls.manifest['boundary_sources'].items():assert sha((ROOT/path).read_bytes())==digest
-        cls.files=OUTPUT/'files';cls.files.mkdir();(cls.files/'file').write_bytes(b'alpha\n');COUNTS['actual_embedded_hia_images']=37
+        cls.files=OUTPUT/'files';cls.files.mkdir();(cls.files/'file').write_bytes(b'alpha\n');COUNTS['actual_embedded_hia_images']=39
     def view(self,session,arguments,*,identifier=2,metadata=None):
         response,raw=session.call(sdk.call(identifier,arguments,metadata));self.assertEqual(response['id'],identifier);result=response['result']
         self.assertIs(type(result['isError']),bool);self.assertEqual(len(result['content']),1);self.assertEqual(result['content'][0]['type'],'text')

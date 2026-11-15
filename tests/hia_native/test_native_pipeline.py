@@ -34,6 +34,11 @@ class NativePipelineTests(unittest.TestCase):
         flat = [name for tests in partitions.values() for name in tests]
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(set(flat), set(q.native_tests()))
+        for ordered in (("test_view_regex_search.py", "test_view_regex_search_native_evidence.py"),
+                        ("test_runtime_mcp.py", "test_runtime_mcp_evidence.py",
+                         "test_view_regex_search_public.py", "test_view_regex_search_public_evidence.py")):
+            positions = [partitions["view"].index(name) for name in ordered]
+            self.assertEqual(positions, sorted(positions))
         self.assertEqual(tuple(partitions["batch"]),
             ("test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
              "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
@@ -356,8 +361,10 @@ class NativePipelineTests(unittest.TestCase):
         output = self.root / "output"
         caller = output / "view-call/caller/files-0"
         public = output / "runtime-mcp/files"
+        regex = output / "view-regex-search/files-30072"
         caller.mkdir(parents=True)
         public.mkdir(parents=True)
+        regex.mkdir(parents=True)
         outside = self.root / "outside.bin"
         outside.write_bytes(b"untouched outside fixture")
         content = b"complete native fixture\0\xff"
@@ -367,15 +374,17 @@ class NativePipelineTests(unittest.TestCase):
         (caller / "outside-link").symlink_to(outside)
         (caller / "empty-directory").mkdir()
         os.link(raw, public / "same-inode.bin")
-        names = ("runtime-mcp/files", "view-call/caller/files-0")
+        (regex / "regex-result.bin").write_bytes(content)
+        names = ("runtime-mcp/files", "view-call/caller/files-0", "view-regex-search/files-30072")
         evidence = {"kind": "synthetic pipeline reporting control", "native_calls": 0}
         proof = fixtures.retire_fixtures(output, names, evidence, create=True)
-        self.assertEqual(proof["regular_files"], 3)
+        self.assertEqual(proof["regular_files"], 4)
         self.assertEqual(proof["symlinks"], 1)
-        self.assertEqual(proof["content_bytes"], len(content) * 2)
+        self.assertEqual(proof["content_bytes"], len(content) * 3)
         self.assertEqual(proof["semantic_invocations_added"], 0)
         self.assertFalse(caller.exists())
         self.assertFalse(public.exists())
+        self.assertFalse(regex.exists())
         self.assertEqual(outside.read_bytes(), b"untouched outside fixture")
         self.assertEqual(fixtures.retire_fixtures(output, names, evidence), proof)
         self.assertEqual(set(p.inventory(output)[0]), {fixtures.RECEIPT, fixtures.ARCHIVE})
@@ -407,7 +416,10 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual((target / "keep").read_bytes(), b"keep")
         self.assertTrue(alias.is_symlink())
         self.assertFalse((output / fixtures.ARCHIVE).exists())
-        for name in ("../outside", "view-call", "view-call/caller", "runtime-mcp/sessions"):
+        for name in ("../outside", "view-call", "view-call/caller", "runtime-mcp/sessions",
+                     "view-regex-search", "view-regex-search/files-30064",
+                     "view-regex-search/files-30071", "view-regex-search/files-30271",
+                     "view-regex-search/files-39999", "view-regex-search/files-40001"):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, "owned test domain"):
                 fixtures.retire_fixtures(output, (name,), {}, create=True)
 

@@ -1,4 +1,4 @@
-/* Mechanical resource controls for the unchanged view engine.
+/* Mechanical resource controls for the source-pinned 19-slot view engine.
  * No HIA image executes. The sole initialization fixture returns 32;
  * successful destroy explicitly marks the private retired bit as a fixture.
  */
@@ -24,11 +24,27 @@ extern uint64_t resource_stub_initializations;
 extern uint64_t resource_stub_unexpected;
 
 static const uint64_t PAGE = 4096;
-static const uint64_t ENGINE_BYTES = 162426880;
-static const uint64_t capacities[12][2] = {
-    {131072,16777216},{131072,4096},{131072,4096},{131072,4096},
-    {4096,4096},{1056768,4096},{33554432,8388608},{33554432,8388608},
-    {131072,1052672},{131072,16777216},{33554432,8388608},{4096,4096}
+static const uint64_t ENGINE_BYTES = 1807945728;
+static const uint64_t capacities[19][2] = {
+    {131072,16777216},
+    {131072,4096},
+    {131072,4096},
+    {131072,4096},
+    {4096,4096},
+    {1056768,4096},
+    {33554432,8388608},
+    {33554432,8388608},
+    {131072,1052672},
+    {131072,16777216},
+    {33554432,8388608},
+    {4096,4096},
+    {268435456,1048576},
+    {268435456,134217728},
+    {268435456,134217728},
+    {268435456,134217728},
+    {33554432,4096},
+    {65536,172032},
+    {4096,134217728},
 };
 struct observation {
     const char *name;
@@ -106,10 +122,10 @@ static void restore_limit(const struct rlimit *saved) {
 }
 static void image_table(uintptr_t *table) {
     table[0]=(uintptr_t)resource_initialization_stub;
-    for (size_t i=1;i<12;++i) table[i]=(uintptr_t)resource_unexpected_stub;
+    for (size_t i=1;i<19;++i) table[i]=(uintptr_t)resource_unexpected_stub;
 }
 static void create_destroy(struct observation *o) {
-    uintptr_t table[12];
+    uintptr_t table[19];
     image_table(table);
     o->before=vm_bytes();
     intptr_t result=view_engine_create(table,0);
@@ -124,7 +140,7 @@ static void create_destroy(struct observation *o) {
             "initial private flags differ");
     uint64_t *descriptors=(uint64_t *)(uintptr_t)control[1];
     require(descriptors!=NULL,"descriptor table absent");
-    for (size_t i=0;i<12;++i) {
+    for (size_t i=0;i<19;++i) {
         uint64_t *d=descriptors+i*8;
         require(d[0]==table[i] && d[2]==capacities[i][0] && d[4]==capacities[i][1],
                 "descriptor capacity or entry differs");
@@ -142,7 +158,7 @@ static void create_destroy(struct observation *o) {
     o->mapping_bytes=ENGINE_BYTES;
 }
 static void create_enomem(struct observation *o,uint64_t budget) {
-    uintptr_t table[12];
+    uintptr_t table[19];
     image_table(table);
     o->before=vm_bytes();
     require(o->before<=UINT64_MAX-budget,"budget overflow");
@@ -271,7 +287,7 @@ int main(int argc,char **argv) {
     o.name=argv[1];o.budget=-1;
     if (!strcmp(argv[1],"create-destroy") && argc==2) create_destroy(&o);
     else if (!strcmp(argv[1],"create-enomem") && argc==3) {
-        static const char *allowed[]={"0","16384","262144","20971520","67108864","134217728"};
+        static const char *allowed[]={"0","16384","262144","20971520","67108864","134217728","536870912","1610612736"};
         size_t i=0;
         for (;i<sizeof(allowed)/sizeof(allowed[0]);++i) if (!strcmp(argv[2],allowed[i])) break;
         require(i<sizeof(allowed)/sizeof(allowed[0]),"unknown budget");

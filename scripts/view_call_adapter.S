@@ -180,4 +180,4 @@ view_fixture_exit:
     ud2
 .balign 8
 view_image_table:
-    .zero 96
+    .zero 152

@@ -1,7 +1,7 @@
 """Strict native search evidence; no HIA or Rust execution occurs here.
 
 The reader binds all 72 logical inputs to complete actual ELF streams and
-kernel receipts, plus the exact ten-image composition and B3 compile records.
+kernel receipts, plus the exact seventeen-image composition and B3 compile records.
 Original method equivalence is admitted by the separate reference consumer.
 Live test files can be archived/removed after execution; no fixture is read.
 """
@@ -19,7 +19,7 @@ NATIVE_SUITE='test_view_search.py'
 EVIDENCE_SUITE='test_view_search_native_evidence.py'
 EXPECTED_INPUT=dict(bytes=47345844,sha256='1b2f8661ee9fde9b1a362a8a866a921645c36dbc5d821f916e91183c34b59742')
 BOUNDARIES=('scripts/view_call_adapter.S','scripts/view_call_fixture_controls.S','scripts/view_call_engine.S',
- 'scripts/view_call_read_bridge.S','scripts/view_call_key_bridge.S','scripts/view_call_scope_bridge.S')
+ 'scripts/view_call_read_bridge.S','scripts/view_call_key_bridge.S','scripts/view_call_scope_bridge.S','scripts/view_call_regex_bridge.S')
 CONTROLS=tuple(sorted(('check-command','check-bool-exit','check-timeout-budget','check-timed-out',
  'check-nonfinite-elapsed','check-duplicate','module-image','compiler-output',
  'process-stdin-gzip','logical-operation','event-ack-gzip','native-case-omitted')))
@@ -34,7 +34,7 @@ def _object_prefix(evidence, folder, prefix, proof):
         if '\n'+alias+':' not in combined:combined=combined.replace('\n'+name+':','\n'+name+':\n'+alias+':')
         combined=re.sub(r'\b(call|jmp) '+re.escape(name)+r'\b',lambda m:m[1]+' '+alias,combined)
         combined=combined.replace('[rip + '+name+']','[rip + '+alias+']')
-    require(evidence.raw(folder/'combined.S')==combined.encode(),'assembled source is not the exact six current boundaries')
+    require(evidence.raw(folder/'combined.S')==combined.encode(),'assembled source is not the exact seven current boundaries')
     raw=evidence.raw(folder/'adapter.o')
     require(len(raw)>=64 and raw[:6]==b'\x7fELF\x02\x01','assembler object is not little-endian ELF64')
     require(struct.unpack_from('<HH',raw,16)==(1,62),'assembler object type/machine')
@@ -106,8 +106,8 @@ def _caller_build(evidence, manifest_path):
     caller = evidence.json(manifest_path); build = manifest_path.parent.parent
     require(caller.get('schema') == 'hepta.runtime.view-call-build.v1', 'caller manifest schema')
     same(caller.get('slot_image_indices'), SLOTS, 'closed caller slot table')
-    same(len(caller.get('members', [])), 10, 'caller image count')
-    same(len(caller.get('image_offsets', [])), 10, 'caller image offsets')
+    same(len(caller.get('members', [])), 17, 'caller image count')
+    same(len(caller.get('image_offsets', [])), 17, 'caller image offsets')
     elf_path = evidence.path(caller['elf'], manifest_path.parent); elf = evidence.raw(elf_path)
     require(digest(elf) == caller['elf_sha256'], 'caller ELF identity')
     proof = json_value((evidence.root / 'native/view_call_adapter.json').read_bytes())
@@ -116,9 +116,9 @@ def _caller_build(evidence, manifest_path):
     for source, sha in caller['sources'].items(): require(evidence.source(source)['sha256'] == sha, 'boundary source changed')
     for key in ('prefix_bytes', 'prefix_sha256', 'table_offset'): same(caller[key], proof[key], 'boundary ' + key)
     size, table = integer(caller['prefix_bytes'], 'prefix bytes', 176), integer(caller['table_offset'], 'slot offset', 176)
-    require(table + 96 <= size <= len(elf), 'prefix/slot containment')
+    require(table + 152 <= size <= len(elf), 'prefix/slot containment')
     prefix = bytearray(elf[:size]); require(struct.unpack_from('<2Q', prefix, 96) == (len(elf), len(elf)), 'ELF extent')
-    prefix[96:112] = bytes(16); prefix[table:table + 96] = bytes(96)
+    prefix[96:112] = bytes(16); prefix[table:table + 152] = bytes(152)
     require(digest(prefix) == proof['prefix_sha256'], 'actual ELF prefix/source proof')
     end = size; images = []
     for (name, source), member, offset in zip(MEMBERS, caller['members'], caller['image_offsets']):
@@ -129,7 +129,7 @@ def _caller_build(evidence, manifest_path):
         require(elf[offset:offset + len(image)] == image, 'actual ELF embedded HIA image')
         end = offset + len(image); images.append(image)
     require(end == len(elf), 'trailing caller ELF payload')
-    same(list(struct.unpack_from('<12Q', elf, table)), [0x400000 + caller['image_offsets'][i] for i in SLOTS], 'actual ELF slot addresses')
+    same(list(struct.unpack_from('<19Q', elf, table)), [0x400000 + caller['image_offsets'][i] for i in SLOTS], 'actual ELF slot addresses')
     packer = evidence.path(caller['packer_manifest'], build)
     require(evidence.file(packer)['sha256'] == caller['packer_manifest_sha256'], 'caller packer manifest')
     _module(evidence, packer, 'native/view_call_packer.hepta')
