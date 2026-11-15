@@ -380,6 +380,7 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		&params.env,
 		rows,
 		cols,
+		&host.allowed_cwd_prefixes,
 	)?;
 	let system_jobctl =
 		host.platform == Platform::Linux && host.execution_mode == ExecutionMode::Isolated;

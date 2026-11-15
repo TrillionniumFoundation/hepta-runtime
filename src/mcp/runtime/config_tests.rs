@@ -245,6 +245,22 @@ fn local_policy_preserves_valid_physical_parents_and_missing_leaf_paths() {
 }
 
 #[test]
+fn configured_execution_roots_require_explicit_cwd_for_processes_and_ptys() {
+	let host: HostConfig = serde_json::from_value(serde_json::json!({
+		"ssh_target":"test", "remote_state_dir":"/tmp/jobs", "platform":"macos",
+		"allow_execute":true, "allow_pty":true, "allowed_cwd_prefixes":["/workspace"]
+	}))
+	.unwrap();
+	for pty in [false, true] {
+		assert!(validate_execution("test", &host, "/bin/pwd", &[], None, pty).is_err());
+		assert!(
+			validate_execution("test", &host, "/bin/pwd", &[], Some("/workspace"), pty).is_ok()
+		);
+		assert!(validate_execution("test", &host, "/bin/pwd", &[], Some("/outside"), pty).is_err());
+	}
+}
+
+#[test]
 fn privileged_regexes_are_full_match_capable() {
 	let regex = Regex::new(r"\A(?:[a-z0-9_-]+)\z").unwrap();
 	assert!(regex.is_match("profile-1"));

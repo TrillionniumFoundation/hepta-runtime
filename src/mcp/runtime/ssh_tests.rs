@@ -136,10 +136,52 @@ fn builds_argv_without_model_side_quoting() {
 		&BTreeMap::new(),
 		24,
 		80,
+		&[],
 	)
 	.unwrap();
 	assert!(cmd.contains("'/tmp/a b'"));
 	assert!(cmd.contains("'a b'\"'\"'c'"));
+}
+
+#[cfg(unix)]
+#[test]
+fn remote_cwd_guard_rejects_symlink_escape_before_exec() {
+	let fixture = tempfile::tempdir().unwrap();
+	let allowed = fixture.path().join("allowed with quote'");
+	let outside = fixture.path().join("outside");
+	std::fs::create_dir(&allowed).unwrap();
+	std::fs::create_dir(&outside).unwrap();
+	let link = allowed.join("escape");
+	std::os::unix::fs::symlink(&outside, &link).unwrap();
+	let roots = vec![allowed.to_string_lossy().into_owned()];
+	let env = BTreeMap::new();
+	assert!(build_exec_command("/bin/pwd", &[], None, &env, 0, 0, &roots).is_err());
+	for (cwd, accepted) in [(&allowed, true), (&link, false)] {
+		let command = build_exec_command(
+			"/bin/pwd",
+			&[],
+			Some(cwd.to_str().unwrap()),
+			&env,
+			0,
+			0,
+			&roots,
+		)
+		.unwrap();
+		let output = std::process::Command::new("sh")
+			.args(["-c", &command])
+			.output()
+			.unwrap();
+		assert_eq!(output.status.success(), accepted);
+		if accepted {
+			assert_eq!(
+				String::from_utf8_lossy(&output.stdout).trim(),
+				allowed.canonicalize().unwrap().to_str().unwrap()
+			);
+		} else {
+			assert_eq!(output.status.code(), Some(126));
+			assert!(output.stdout.is_empty());
+		}
+	}
 }
 
 #[test]

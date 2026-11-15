@@ -624,6 +624,7 @@ pub fn build_exec_command(
 	env: &std::collections::BTreeMap<String, String>,
 	rows: u16,
 	cols: u16,
+	allowed_cwd_prefixes: &[String],
 ) -> Result<String> {
 	for key in env.keys() {
 		if key.is_empty()
@@ -632,6 +633,9 @@ pub fn build_exec_command(
 		{
 			bail!("invalid environment variable name `{key}`");
 		}
+	}
+	if !allowed_cwd_prefixes.is_empty() && cwd.is_none() {
+		bail!("cwd is required for guarded remote execution");
 	}
 	let mut command = String::new();
 	if rows > 0 && cols > 0 {
@@ -643,6 +647,19 @@ pub fn build_exec_command(
 		command.push_str("cd ");
 		command.push_str(&shell_quote(cwd));
 		command.push_str(" && ");
+		if !allowed_cwd_prefixes.is_empty() {
+			// Check the actual directory after chdir; exec inherits its inode
+			// instead of reopening a mutable symlink after authorization.
+			command.push_str("cwd_physical=$(pwd -P) || exit 125; cwd_guard=0; ");
+			for prefix in allowed_cwd_prefixes {
+				command.push_str("root_physical=$(cd ");
+				command.push_str(&shell_quote(prefix));
+				command.push_str(" && pwd -P) || exit 125; ");
+				command.push_str("if [ \"$root_physical\" = / ]; then cwd_guard=1; else ");
+				command.push_str("case \"$cwd_physical\" in \"$root_physical\"|\"$root_physical\"/*) cwd_guard=1;; esac; fi; ");
+			}
+			command.push_str("[ \"$cwd_guard\" = 1 ] || exit 126; ");
+		}
 	}
 	command.push_str("exec env");
 	for (key, value) in env {

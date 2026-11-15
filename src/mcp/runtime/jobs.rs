@@ -2432,6 +2432,8 @@ if existing is not None:
             existing.get("job_dir") != req.get("job_dir") or existing.get("unit") != req.get("unit") or
             existing.get("request_digest", existing.get("request_fingerprint")) != req.get("request_digest", req.get("request_fingerprint"))):
         raise SystemExit("remote job directory is bound to a different request")
+    if existing.get("allowed_cwd_prefixes", []) != req.get("allowed_cwd_prefixes", []):
+        raise SystemExit("remote job execution root policy changed")
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
     # An existing request never launches again. Owner tombstones need not be
@@ -2742,13 +2744,51 @@ env.update(req.get("env", {}))
 env["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
 # The launcher alone chooses this binding, overriding caller or inherited env.
 env.pop("HEPTA_RUNTIME_ENGINE_SCRATCH", None)
+
+def pin_workload_cwd():
+    # Keep the supervisor in its descriptor-pinned job directory: all receipt
+    # paths below are relative to that owner, never the workload directory.
+    roots = req.get("allowed_cwd_prefixes", [])
+    if not isinstance(roots, list) or any(
+        not isinstance(root, str) or not os.path.isabs(root) for root in roots
+    ):
+        raise PermissionError("invalid remote cwd policy")
+    if roots and not req.get("cwd"):
+        raise PermissionError("cwd required by remote execution policy")
+    cwd = req.get("cwd") or req.get("default_cwd") or "."
+    access = getattr(os, "O_PATH", os.O_RDONLY) if sys.platform == "linux" else getattr(os, "O_SEARCH", os.O_RDONLY)
+    owner = os.open(cwd, access | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        physical_roots = [os.path.realpath(root) for root in roots]
+        os.fchdir(owner)
+        actual_cwd = os.getcwd()
+        if physical_roots and not any(
+            os.path.commonpath([actual_cwd, root]) == root for root in physical_roots
+        ):
+            raise PermissionError("cwd resolves outside allowed execution roots")
+    except BaseException:
+        os.close(owner)
+        raise
+    finally:
+        os.fchdir(_hepta_directory_pins[-1])
+    return owner
+
+cwd_owner = None
 try:
+    cwd_owner = pin_workload_cwd()
+    # No capture threads exist at this point. These two descriptor syscalls
+    # run only in the new child, before exec and before any workload effect.
+    def inherit_workload_cwd():
+        os.fchdir(cwd_owner)
+        os.close(cwd_owner)
     engine_scratch = prepare_engine_scratch()
     if engine_scratch is not None:
         env["HEPTA_RUNTIME_ENGINE_SCRATCH"] = json.dumps(engine_scratch["binding"], sort_keys=True)
     child = subprocess.Popen(
         [req["executable"], *req.get("args", [])],
-        cwd=req.get("cwd") or req.get("default_cwd"),
+        cwd=None,
+        preexec_fn=inherit_workload_cwd,
+        pass_fds=(cwd_owner,),
         env=env,
         stdin=stdin_handle,
         stdout=subprocess.PIPE,
@@ -2801,8 +2841,12 @@ except Exception as exc:
         "cancelled": False,
         "timed_out": False,
     })
-    print(str(exc), file=err, flush=True)
+    err.write((str(exc) + "\n").encode("utf-8", errors="replace"))
+    err.flush()
     raise SystemExit(127)
+finally:
+    if cwd_owner is not None:
+        os.close(cwd_owner)
 
 # Operator archives retain every byte; isolated compatibility remains bounded.
 # Disk failures are explicit capture errors, never silent tail eviction.
@@ -4067,6 +4111,7 @@ where
 		"executable": params.executable,
 		"args": params.args,
 		"cwd": params.cwd,
+		"allowed_cwd_prefixes": &host.allowed_cwd_prefixes,
 		"env": params.env,
 		"stdin": params.stdin,
 		"timeout_seconds": params.timeout_seconds,

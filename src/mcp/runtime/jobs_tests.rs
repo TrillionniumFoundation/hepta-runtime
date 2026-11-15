@@ -149,6 +149,55 @@ exercise()
 
 #[cfg(target_os = "linux")]
 #[test]
+fn inline_supervisor_confines_physical_remote_cwd_before_workload() {
+	for mode in ["allowed", "escape", "omitted"] {
+		let (temporary, job, mut request) = nice_fixture();
+		let allowed = temporary.path().join("allowed");
+		let outside = temporary.path().join("outside");
+		std::fs::create_dir(&allowed).unwrap();
+		std::fs::create_dir(&outside).unwrap();
+		let escape = allowed.join("escape");
+		std::os::unix::fs::symlink(&outside, &escape).unwrap();
+		request["execution_mode"] = json!("isolated");
+		request["allowed_cwd_prefixes"] = json!([allowed]);
+		request["default_cwd"] = json!(outside);
+		request["cwd"] = match mode {
+			"allowed" => json!(allowed),
+			"escape" => json!(escape),
+			_ => Value::Null,
+		};
+		request["args"] =
+			json!(["-I", "-S", "-c",
+			"import os,pathlib; pathlib.Path('child-ran').write_text('effect'); print(os.getcwd())"]);
+		let output = python_nice_fixture(
+			NICE_RUNNER_FIXTURE,
+			&json!({"request":request,"runner":inline_runner_source(),"marker":"detached"}),
+		);
+		assert_eq!(
+			output.status.success(),
+			mode == "allowed",
+			"{mode}: {}",
+			String::from_utf8_lossy(&output.stderr)
+		);
+		assert!(!outside.join("child-ran").exists());
+		assert_eq!(allowed.join("child-ran").exists(), mode == "allowed");
+		assert!(job.join("exit.witness.json").is_file());
+		assert!(!allowed.join("exit.json").exists());
+		assert!(!outside.join("exit.json").exists());
+		let terminal: Value =
+			serde_json::from_slice(&std::fs::read(job.join("exit.json")).unwrap()).unwrap();
+		assert_eq!(
+			terminal["exit_code"],
+			if mode == "allowed" { 0 } else { 127 }
+		);
+		if mode != "allowed" {
+			assert!(!job.join("child.json").exists());
+		}
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[test]
 fn inline_supervisor_applies_nice_once_for_each_backend_and_legacy_argv() {
 	for marker in [Some("systemd"), Some("detached"), None] {
 		for adjustment in [None, Some(0_u8), Some(1), Some(10), Some(19)] {
