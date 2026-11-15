@@ -25,6 +25,7 @@ BUFFER_PROFILES = {
     "view-render.v1": (16 << 20, 16 << 20, 256 << 20),
     "serde-json.v1": (16 << 20, 64 << 20, 256 << 20),
     "batch-plan.v1": (512 << 20, 1024 << 20, 1152 << 20),
+    "batch-write.v1": (512 << 20, 2048 << 20, 3072 << 20),
     "history.v1": (128 << 20, 128 << 20, 256 << 20),
 }
 # Some CPython builds omit the Linux constants although the kernel API exists.

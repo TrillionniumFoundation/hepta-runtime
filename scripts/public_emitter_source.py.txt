@@ -1,0 +1,58 @@
+def span_byte(s:readbuf, w:mutbuf, region:u64, index:u64) -> u64:
+    if region == 1:
+        return byte(s, index)
+    return byte(w, index)
+
+def emit(o:mutbuf, w:mutbuf, value:u64) -> u64:
+    at = get(w, CURSOR)
+    if get(w, WRITING) == 1:
+        store(o, at, value)
+    put(w, CURSOR, at + 1)
+    return 0
+
+def append_span(s:readbuf, o:mutbuf, w:mutbuf, region:u64, start:u64, size:u64) -> u64:
+    at = get(w, CURSOR)
+    if get(w, WRITING) == 1:
+        if region == 1:
+            copy_range(o, s, at, start, size)
+        else:
+            copy_range(o, w, at, start, size)
+    put(w, CURSOR, at + size)
+    return 0
+
+def quoted(s:readbuf, o:mutbuf, w:mutbuf, region:u64, start:u64, size:u64) -> u64:
+    emit(o, w, 34)
+    i = 0
+    while i < size:
+        ch = span_byte(s, w, region, start + i)
+        if ch == 34 or ch == 92:
+            emit(o, w, 92)
+            emit(o, w, ch)
+        else:
+            if ch < 32:
+                emit(o, w, 92)
+                escaped = 0
+                if ch == 8:
+                    escaped = 98
+                if ch == 9:
+                    escaped = 116
+                if ch == 10:
+                    escaped = 110
+                if ch == 12:
+                    escaped = 102
+                if ch == 13:
+                    escaped = 114
+                if escaped != 0:
+                    emit(o, w, escaped)
+                else:
+                    emit(o, w, 117)
+                    emit(o, w, 48)
+                    emit(o, w, 48)
+                    emit(o, w, 48 + (ch >> 4))
+                    digit = ch & 15
+                    emit(o, w, choose(digit < 10, 48 + digit, 87 + digit))
+            else:
+                emit(o, w, ch)
+        i = i + 1
+    emit(o, w, 34)
+    return 0

@@ -89,9 +89,13 @@ Changing the configuration file while installed does not reload it. Moving the
 state directory does not transfer its retained inode-bound locks to a newly
 created directory at the same path.
 
-The new tests exercise op 7 through the actual shared installed instance. Op 8
-is still a separate caller-integration obligation; this handoff does not count
-unexecuted public configuration operations as qualified.
+The registered tests exercise op 7 through the actual shared installed
+instance. Remote op 8 queries borrow their input directly and compute the full
+result extent before writing a body. An insufficient output span requests
+kind-2 growth without scaling the persistent configuration workspace to the
+input path length. The existing u32 result-channel refusal remains explicit.
+Public op 8 caller integration remains a separate obligation; private owner
+regressions do not qualify unexecuted public configuration routes.
 
 ## Owner relocation and completion delivery
 

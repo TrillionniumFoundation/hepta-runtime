@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 import sys
 import tempfile
 import unittest
@@ -15,8 +14,10 @@ ROOT = Path(__file__).resolve().parents[2]
 REFERENCE = Path(os.environ.get('HIA_REFERENCE_RUNTIME', ROOT))
 sys.path.insert(0, str(REFERENCE / 'scripts'))
 sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'tests/hia_native'))
+from evidence_snapshot import copy_evidence_files, unrelated_fixture_guard
 from hia_native_build import json_bytes
-from hia_native_history_qualification import FOLDER, native_evidence
+from hia_native_history_qualification import FOLDER, native_evidence, source_composition
 from qualify_hia_runtime_native import completed_test_summary
 
 CONTROLS = 0
@@ -42,15 +43,20 @@ class EvidenceTests(unittest.TestCase):
         cls.report = json.loads((cls.output / 'result.json').read_bytes())
         cls.actual = native_evidence(ROOT, cls.output, cls.report, completed_test_summary,
                                     reference_root=REFERENCE)
+        cls.snapshot_files = {**cls.actual['artifact_sha256'], **cls.actual['corpus_sha256'],
+            'test_history.py.stdout': cls.actual['test_stdout_sha256'],
+            'test_history.py.stderr': cls.actual['test_stderr_sha256']}
 
     def snapshot(self):
         temporary = tempfile.TemporaryDirectory(prefix='history-evidence-', dir=self.output.parent)
         output = Path(temporary.name) / 'capture'
-        # Public Workdir fixtures include deliberate symlink cycles.
-        # Copy links without following targets; readers still check their owned artifacts.
-        shutil.copytree(self.output, output, copy_function=os.link, symlinks=True)
         self.addCleanup(temporary.cleanup)
-        return output, copy.deepcopy(self.report)
+        with unrelated_fixture_guard(self.output):
+            copy_evidence_files(self.output, output, self.snapshot_files)
+        report = copy.deepcopy(self.report)
+        self.assertEqual(native_evidence(ROOT, output, report, completed_test_summary,
+                         reference_root=REFERENCE), self.actual)
+        return output, report
 
     def refuses(self, output, report, root=ROOT):
         global CONTROLS
@@ -170,12 +176,12 @@ class EvidenceTests(unittest.TestCase):
                     self.rewrite_capture(output, report, metadata)
                 else:
                     source = output.parent / 'owner'
-                    source.mkdir()
                     name = 'native/history_composition.json' if change == 'source-proof' else 'tests/hia_native/oracle_history.rs'
-                    # Point the complete copied source tree at altered bytes; no shared file is edited.
-                    shutil.copytree(ROOT / 'scripts', source / 'scripts', copy_function=os.link)
-                    shutil.copytree(ROOT / 'native', source / 'native', copy_function=os.link)
-                    shutil.copytree(ROOT / 'tests', source / 'tests', copy_function=os.link)
+                    # Copy only source bytes already admitted by this owner reader.
+                    copy_evidence_files(ROOT, source, {**self.actual['source_pins']['owner'],
+                                                       **self.actual['oracle_sources_sha256']})
+                    admitted = source_composition(source, REFERENCE, Path(report['compiler_checkout']))
+                    self.assertEqual(admitted, {key: self.actual[key] for key in admitted})
                     path = source / name
                     replace(path, path.read_bytes() + b'\n')
                     check = next(c for c in report['checks'] if c['name'] == 'test_history.py')

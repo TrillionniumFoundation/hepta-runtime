@@ -28,7 +28,7 @@ FROZEN = {
     'native/file_lock_service_packer.hepta': '72784c9efdd8486b5249521977a1e464a148fa26cad88babeb55467480916666',
     'native/file_lock_service_composition.json': '0561c291bbd225fc104e75aa5ca0a9c247efe0fdfdce68d2307a3c8c318a3ab6',
     'native/file_lock_service_layout.json': '845b80953e5fa8e988588f34492e35eb31ebd8b64be202817d10ba7df649b7a9',
-    'scripts/hia_native_file_lock_build.py': 'b165233b19619d21289fab64fdd08637e704a1317caf699c43ddbaac0a7b13b7',
+    'scripts/hia_native_file_lock_build.py': 'fce26f4a339ac4a800564a0d6a2115c11d5201e0f7479d9de675e80f75aa987f',
 }
 IMAGES = {
     'controller': '1ea13170fde98aeda075315d48b0610d9113f2acf97a15503c7950bbf75a1ca9',

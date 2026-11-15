@@ -57,6 +57,7 @@ from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 batch_plan_evidence as checked_batch_plan_evidence)
 
 import hia_native_batch_apply_qualification as batch_apply_qualification
+import hia_native_batch_write_pipeline as batch_write_pipeline
 import hia_native_atomic_write_qualification as atomic_write_qualification
 import hia_native_filesystem_parity_qualification as filesystem_parity_qualification
 from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
@@ -73,10 +74,41 @@ import hia_native_config_qualification as config_qualification
 import hia_native_session_qualification as session_qualification
 import hia_native_file_lock_pipeline as file_lock_pipeline
 import hia_native_shell_qualification as shell_qualification
+import hia_native_shell_capture_gate as capture_gate
+import hia_native_bellman_qualification as bellman_qualification
+import hia_native_bellman_commitment_qualification as bellman_commitment_qualification
+import hia_native_local_create_qualification as local_create_qualification
+import hia_native_connection_qualification as connection_qualification
+import hia_native_public_registry_qualification as public_registry_qualification
+import hia_native_result_qualification as result_qualification
+import hia_native_serde_error_pipeline as serde_error_pipeline
+import hia_native_service_pipeline as service_pipeline
+import hia_native_write_chain_pipeline as write_chain_pipeline
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
+    local_create_qualification.MODULE,
+    *bellman_qualification.MODULES,
+    bellman_commitment_qualification.MODULE,
+    {"key": "serde_error", "name": "serde-error", "source": "native/serde_error.hepta",
+     "standalone": "filter", "buffer_profile": "serde-json.v1",
+     "manifest_env": "HIA_SERDE_ERROR_MANIFEST", "test": "test_serde_error.py",
+     "additional_tests": ("test_serde_error_resources.py", "test_serde_error_evidence.py")},
+    {"key": "batch_write", "name": "batch-write", "source": "native/batch_write.hepta",
+     "builder": "batch_write", "manifest_env": "HIA_BATCH_WRITE_BUNDLE",
+     "test": "test_batch_write_controller.py",
+     "additional_tests": ("test_batch_render.py", "test_utf8_probe.py", "test_batch_write_files.py",
+                          "test_batch_write_kernel.py", "test_batch_write_concurrency.py",
+                          "test_batch_write_wide.py", "test_batch_write_evidence.py"),
+     "companion_sources": ("native/batch_render.hepta", "native/batch_write_packer.hepta")},
+    {"key": "binary32_json", "name": "binary32-json", "source": "native/binary32_json.hepta",
+     "builder": "result_values", "manifest_env": "HIA_RESULT_BUILD", "test": "test_binary32_json.py"},
+    {"key": "typed_result_json", "name": "typed-result-json", "source": "native/typed_result_json.hepta",
+     "builder": "result_values", "manifest_env": "HIA_RESULT_BUILD", "test": "test_typed_result_json.py"},
+    {"key": "request_result", "name": "request-result", "source": "native/request_result.hepta",
+     "builder": "result_values", "manifest_env": "HIA_RESULT_BUILD", "test": "test_request_result.py",
+     "additional_tests": ("test_result_value_evidence.py",)},
     {"key": "runtime_bytes", "name": "runtime-bytes", "source": "native/runtime_bytes.hepta",
      "standalone": "filter", "manifest_env": "HIA_BYTES_MANIFEST", "test": "test_runtime_bytes.py"},
     {"key": "runtime_protocol", "name": "runtime-protocol", "source": "native/runtime_protocol.hepta",
@@ -88,6 +120,26 @@ MODULES = (
     {"key": "shell_gate", "name": "shell-gate", "source": "native/shell_gate.hepta",
      "standalone": "filter", "manifest_env": "HIA_SHELL_GATE_MANIFEST", "test": "test_shell_gate_native.py",
      "additional_tests": ("test_shell_evidence.py",)},
+    {"key": "shell_process", "name": "shell-process", "source": "native/shell_process.hepta",
+     "builder": "shell_process", "manifest_env": "HIA_SHELL_PROCESS_MANIFEST",
+     "test": "shell_process_state.py",
+     "additional_tests": ("shell_process_transport.py", "hia_native_shell_process_qualification.py",
+                          "shell_process_evidence_controls.py"),
+     "companion_sources": ("native/shell_process_packer.hepta",)},
+    {"key": "shell_background_text", "name": "shell-background-text",
+     "source": "native/shell_background_text.hepta", "standalone": None,
+     "manifest_env": "HIA_SHELL_BACKGROUND_TEXT_MANIFEST", "test": "shell_background_text.py"},
+    {"key": "shell_outcome", "name": "shell-outcome", "source": "native/shell_outcome.hepta",
+     "builder": "shell_outcome", "manifest_env": "HIA_SHELL_OUTCOME_MANIFEST",
+     "test": "shell_outcome_state.py"},
+    {"key": "shell_output_io", "name": "shell-output", "source": "native/shell_output_io.hepta",
+     "builder": "shell_output", "manifest_env": "HIA_SHELL_OUTPUT_MANIFEST",
+     "test": "shell_output_io.py", "companion_sources": ("native/shell_output_packer.hepta",)},
+    {"key": "shell_foreground", "name": "shell-foreground", "source": "native/shell_foreground_controller.hepta",
+     "builder": "shell_foreground", "manifest_env": "HIA_SHELL_FOREGROUND_MANIFEST",
+     "test": "shell_foreground_controller.py", "additional_tests": ("shell_foreground_io.py",),
+     "companion_sources": ("native/shell_foreground_packer.hepta",)},
+    *capture_gate.MODULES,
     {"key": "request_context", "name": "request-context", "source": "native/request_context.hepta",
      "standalone": None, "manifest_env": "HIA_REQUEST_CONTEXT_MANIFEST", "test": "test_request_context.py"},
     {"key": "response_hints", "name": "response-hints", "source": "native/response_hints.hepta",
@@ -186,7 +238,9 @@ MODULES = (
      "test": "test_runtime_mcp.py", "additional_tests": ("test_runtime_mcp_evidence.py",
                                                          "test_view_search_public.py",
                                                          "test_view_regex_search_public.py",
-                                                         "test_view_regex_search_public_evidence.py")},
+                                                         "test_view_regex_search_public_evidence.py",
+                                                         "test_runtime_mcp_raw_value.py",
+                                                         "test_runtime_mcp_raw_value_evidence.py")},
     {"key": "view_cache", "name": "view-cache", "source": "native/view_cache.hepta",
      "standalone": None, "manifest_env": "HIA_CACHE_MANIFEST", "test": "test_view_cache.py",
      "additional_tests": ("test_view_cache_evidence.py",)},
@@ -206,13 +260,49 @@ MODULES = (
      "test": "test_file_lock_service.py",
      "additional_tests": ("test_file_lock_service_contract.py", "test_file_lock_service_evidence.py"),
      "companion_sources": ("native/file_lock_service_packer.hepta",)},
+    {"key": "write_chain", "name": "write-chain", "source": "native/write_chain.hepta",
+     "builder": "write_chain", "manifest_env": "HIA_WRITE_CHAIN_BUNDLE", "test": "test_shared_atomic.py",
+     "additional_tests": ("test_write_chain_controller.py", "test_write_chain_files.py",
+                          "test_write_chain_kernel.py", "test_write_chain_concurrency.py",
+                          "test_write_chain_evidence.py"),
+     "companion_sources": ("native/atomic_write_shared.hepta", "native/local_read.hepta",
+                           "native/write_chain_packer.hepta")},
+    {"key": "directory_service", "name": "directory-service", "source": "native/directory_caller.hepta",
+     "builder": "directory_service", "manifest_env": "HIA_DIRECTORY_BUNDLE", "test": "test_directory_service.py",
+     "additional_tests": ("directory_service_faults.py", "test_directory_service_transport.py",
+                          "test_directory_service_build.py", "test_directory_service_regex.py"),
+     "companion_sources": ("native/canonical_path.hepta", "native/client_context.hepta",
+                           "native/config_directory_owner.hepta", "native/directory_create.hepta",
+                           "native/directory_errno.hepta", "native/directory_fence_fs.hepta",
+                           "native/directory_fence_packer.hepta", "native/directory_fence_queue_fixture_packer.hepta",
+                           "native/directory_service_packer.hepta", "native/directory_service_prefix.hepta",
+                           "native/effect_fence_caller_manager.hepta", "native/effect_fence_caller_owner.hepta",
+                           "native/local_path_policy.hepta", "native/path_source.hepta",
+                           "native/session_request_context.hepta")},
+    {"key": "workdir_service", "name": "workdir-service", "source": "native/workdir_caller.hepta",
+     "builder": "workdir_service", "manifest_env": "HIA_WORKDIR_BUNDLE", "test": "test_workdir_params.py",
+     "additional_tests": ("test_workdir_caller_controls.py", "test_workdir_service_regex.py"),
+     "companion_sources": ("native/local_canonical.hepta", "native/workdir_params.hepta",
+                           "native/workdir_service_packer.hepta", "native/workdir_service_prefix.hepta")},
+    {"key": "sdk_connection", "name": "sdk-connection", "source": "native/sdk_connection.hepta",
+     "builder": "sdk_connection", "manifest_env": "HIA_CONNECTION_BUILD", "test": "test_sdk_message.py",
+     "additional_tests": ("test_sdk_transport.py", "test_sdk_connection.py",
+                          "test_sdk_connection_elf.py", "test_sdk_connection_controls.py"),
+     "companion_sources": ("native/sdk_message.hepta", "native/sdk_default_fixture.hepta",
+                           "native/sdk_connection_packer.hepta")},
+    {"key": "public_registry", "name": "public-registry", "source": "native/public_tool_dispatch.hepta",
+     "builder": "public_registry", "manifest_env": "HIA_PUBLIC_REGISTRY_BUILD",
+     "test": "run_public_registry_cases.py",
+     "additional_tests": ("test_public_registry_controls.py", "test_public_registry_elf.py"),
+     "companion_sources": ("native/public_runtime_packer.hepta",)},
     {"key": "fence_json", "name": "fence-json", "source": "native/fence_json.hepta",
      "standalone": "filter", "manifest_env": "HIA_FENCE_JSON_MANIFEST", "test": "test_fence_json.py"},
     {"key": "serde_json", "name": "serde-json", "source": "native/serde_json.hepta",
      "standalone": "filter", "buffer_profile": "serde-json.v1",
      "companion_sources": ("native/serde_filter_packer.hepta",),
      "manifest_env": "HIA_SERDE_JSON_MANIFEST", "test": "test_serde_json.py",
-     "additional_tests": ("test_serde_json_transport.py", "test_json_evidence.py")},
+     "additional_tests": ("test_serde_json_transport.py", "test_serde_json_raw_value.py",
+                          "test_json_evidence.py", "test_serde_json_raw_value_evidence.py")},
     {"key": "runtime_config_span", "name": "runtime-config-span", "source": "native/config_directory_owner_span.hepta",
      "builder": "runtime_config_span", "manifest_env": "HIA_CONFIG_SPAN_BUILD", "test": "test_config_span.py",
      "additional_tests": ("test_config_span_evidence.py",),
@@ -309,7 +399,7 @@ MODULES = (
 )
 PACKERS = {"native/filter_packer.hepta", "native/stdio_packer.hepta"}
 EXTRA_TESTS = ("test_transport.py", "test_native_composition.py", "test_qualification_reporting.py",
-               "test_native_pipeline.py")
+               "test_native_pipeline.py", "test_original_pipeline.py")
 RUST_CORPUS_FILES = ("native-corpus.json", "input.bin.gz", "native-output.bin.gz")
 FILE_INFO_SUITES = (
     ("test_info_service.py", "file-info-python-reference.json", "hepta.runtime.native-info-service-test.v1",
@@ -354,6 +444,10 @@ def sources() -> dict:
     paths.update((ROOT / "tests/hia_native").rglob("*"))
     paths.update(ROOT / "scripts" / name for name in (
         "hia_native_build.py", "hia_native_loader.py", "generate_hia_transport.py",
+        "hia_native_bellman_build.py", "hia_native_bellman_qualification.py",
+        "hia_native_bellman_commitment_build.py", "hia_native_bellman_commitment_qualification.py",
+        "hia_native_local_create_build.py", "hia_native_local_create_qualification.py",
+        "local_create_adapter.S",
         "hia_native_io_build.py", "hia_native_composition_build.py", "hia_native_record_build.py", "hia_native_cold.py",
         "hia_native_entropy_build.py", "hia_native_entropy_qualification.py",
         "hia_native_scope_build.py", "hia_native_scope_qualification.py",
@@ -370,6 +464,7 @@ def sources() -> dict:
         "view_call_adapter.S", "view_call_fixture_controls.S", "view_call_engine.S",
         "view_call_read_bridge.S", "view_call_key_bridge.S", "view_call_scope_bridge.S",
         "hia_native_runtime_mcp_build.py", "hia_native_runtime_mcp_evidence.py",
+        "hia_native_span_raw_value_qualification.py",
         "hia_native_runtime_mcp_reference.py", "hia_native_runtime_mcp_original.py",
         "hia_native_runtime_mcp_adapter.py", "hia_native_runtime_mcp_pack.py",
         "hia_native_runtime_mcp_pipeline.py", "hia_native_runtime_mcp_fixtures.py",
@@ -379,6 +474,7 @@ def sources() -> dict:
         "runtime_mcp_view_bridge.S", "runtime_mcp_workdir_io_bridge.S",
         "hia_native_view_cache_build.py", "hia_native_view_cache_qualification.py",
         "hia_native_history_build.py", "hia_native_history_qualification.py", "hia_native_json_qualification.py",
+        "hia_native_raw_value_qualification.py",
         "hia_native_request_context_build.py", "hia_native_request_context_qualification.py", "hia_native_request_context_reference.py",
         "hia_native_result_publication_build.py", "hia_native_result_publication_qualification.py",
         "hia_native_result_publication_reference.py", "result_publication_adapter.S",
@@ -414,6 +510,14 @@ def sources() -> dict:
         "hia_native_file_lock_pipeline.py",
         "hia_native_shell_qualification.py", "hia_native_shell_reference.py",
         "qualify_hia_shell_native.py",
+        "hia_native_shell_process_build.py", "hia_native_shell_process_qualification.py",
+        "hia_native_shell_process_reference.py", "hia_native_shell_process_evidence.py",
+        "hia_native_shell_outcome_build.py", "hia_native_shell_outcome_qualification.py",
+        "hia_native_shell_output_build.py", "hia_native_shell_output_qualification.py",
+        "hia_native_shell_foreground_build.py", "hia_native_shell_foreground_qualification.py",
+        "shell_foreground_adapter.S",
+        "hia_native_failure_evidence.py", "shell_output_adapter.S",
+        "shell_process_adapter.S", "qualify_hia_shell_process.py",
         "hia_native_effect_fence_build.py", "hia_native_effect_fence_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
@@ -426,12 +530,21 @@ def sources() -> dict:
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
-        "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py", "hia_native_failure.py", "hia_native_failure_evidence.py",
+        "check_hia_native_inventory.py", "check_hia_native_target.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py", "hia_native_rust_pipeline.py", "hia_native_failure.py", "hia_native_failure_evidence.py",
         "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
-                  ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / ".github/workflows/hia-runtime-shell.yml",
-                  ROOT / "rustfmt.toml"))
+                  ROOT / ".github/workflows/hia-migration-target.yml", ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / ".github/workflows/hia-runtime-shell.yml",
+                  ROOT / ".github/workflows/hia-runtime-shell-process.yml",
+                  ROOT / ".github/workflows/hia-runtime-bellman.yml",
+                  ROOT / ".github/workflows/hia-runtime-original-shard.yml", ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
+    paths.update(ROOT / "scripts" / name for name in capture_gate.SCRIPTS)
+    paths.update(ROOT / name for name in capture_gate.ORACLE_SOURCES)
+    paths.update(ROOT / name for name in service_pipeline.sources(ROOT))
+    paths.update(ROOT / name for name in public_registry_qualification.source_pins(ROOT))
+    paths.update(ROOT / name for name in result_qualification.source_pins(ROOT))
+    paths.update(ROOT / name for name in serde_error_pipeline.sources(ROOT))
+    paths.update(ROOT / name for name in batch_write_pipeline.q.pins(ROOT))
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
 
@@ -453,6 +566,12 @@ def save_report(path: Path, result: dict) -> None:
 
 
 def process_summary(name: str, stdout: bytes) -> dict:
+    if capture_gate.process_kind(name) is not None:
+        return capture_gate.progress_records(name, stdout)[-1]
+    if name in ("hia_native_shell_process_qualification.py", "shell-process-rust-compare"):
+        return shell_process_progress_summary(stdout, original=name == "shell-process-rust-compare")
+    if name in ("shell_output_io.py", "shell-output-native", "shell_foreground_io.py", "shell-foreground-native"):
+        return shell_io_progress_records(name, stdout)[-1]
     if name != "test_batch_plan.py":
         return json.loads(stdout)
     # This suite retains two complete-domain progress records before its final
@@ -525,7 +644,8 @@ INDEPENDENT_WAIT_SUITES = (
 )
 
 
-ORDERED_INDEPENDENT_SUITES = (("test_serde_json.py", "test_serde_json_transport.py"),)
+ORDERED_INDEPENDENT_SUITES = (("test_serde_json.py", "test_serde_json_transport.py",
+                              "test_serde_json_raw_value.py"),)
 PARALLEL_NATIVE_SUITES = INDEPENDENT_WAIT_SUITES + tuple(
     name for group in ORDERED_INDEPENDENT_SUITES for name in group)
 
@@ -550,11 +670,35 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
         raise ValueError("native command override names an undeclared suite")
     config_commands = (config_qualification.test_commands(ROOT, output, report)
                        if set(tests) & set(config_qualification.TESTS) else {})
+    service_commands = (service_pipeline.test_commands(ROOT, output, report)
+                        if set(tests) & set(service_pipeline.DIRECTORY_TESTS) else {})
+    config_commands.update({name: command for name, command in service_commands.items()
+                            if name in service_pipeline.DIRECTORY_TESTS})
+    if set(tests) & set(public_registry_qualification.TESTS):
+        config_commands.update(public_registry_qualification.test_commands(ROOT, output, report))
+    if set(tests) & set((*result_qualification.TESTS, result_qualification.CONTROL_TEST)):
+        config_commands.update(result_qualification.test_commands(ROOT, output, report))
+    if set(tests) & set(serde_error_pipeline.TESTS):
+        config_commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
+    if set(tests) & set(batch_write_pipeline.q.SUITES):
+        config_commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
+    shell_commands = (shell_process_test_commands(output, report)
+                      if set(tests) & {*SHELL_PROCESS_TESTS, SHELL_BACKGROUND_TEST} else {})
+    outcome_commands = (shell_outcome_test_commands(output, report)
+                        if SHELL_OUTCOME_TEST in tests else {})
+    output_commands = (shell_output_test_commands(output, report)
+                       if SHELL_OUTPUT_TEST in tests else {})
+    foreground_commands = (shell_foreground_test_commands(output, report)
+                           if set(tests) & set(SHELL_FOREGROUND_TESTS) else {})
+    capture_commands = (capture_gate.test_commands(output, report)
+                        if set(tests) & set(capture_gate.TESTS) else {})
+    exact_commands = {**config_commands, **shell_commands, **outcome_commands,
+                      **output_commands, **foreground_commands, **capture_commands}
     def command(name):
         prefix = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
         argv = commands.get(name, prefix)
         if (type(argv) is not list or any(type(value) is not str for value in argv)
-                or (argv != config_commands[name] if name in config_commands
+                or (argv != exact_commands[name] if name in exact_commands
                     else argv[:len(prefix)] != prefix)):
             raise ValueError("native command differs from its source-owned suite: " + name)
         return argv
@@ -609,6 +753,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                     if failure is not None:
                         raise failure
                 else:
+                    if name == "shell_process_evidence_controls.py":
+                        retire_shell_process_native(output, report)
                     record_check(output, report, name=name, command=invocation[name], timeout=timeout, env=env)
         finally:
             for name in futures:
@@ -774,6 +920,436 @@ def filesystem_parity_retirement(output: Path, report: dict, *, create: bool = F
 
 def shell_evidence(output: Path, report: dict) -> dict:
     return shell_qualification.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+SHELL_PROCESS_TESTS = (
+    "shell_process_state.py", "shell_process_transport.py",
+    "hia_native_shell_process_qualification.py", "shell_process_evidence_controls.py",
+)
+SHELL_BACKGROUND_TEST = "shell_background_text.py"
+SHELL_OUTCOME_TEST = "shell_outcome_state.py"
+SHELL_OUTPUT_TEST = "shell_output_io.py"
+SHELL_FOREGROUND_TESTS = ("shell_foreground_controller.py", "shell_foreground_io.py")
+
+
+def shell_io_progress_records(name: str, stdout: bytes) -> list[dict]:
+    """Admit the complete serial progress protocol, including its final report."""
+    output_io = name in (SHELL_OUTPUT_TEST, "shell-output-native")
+    if not output_io and name not in (SHELL_FOREGROUND_TESTS[1], "shell-foreground-native"):
+        raise ValueError("unknown shell IO progress suite")
+    module = _shell_test_module(SHELL_OUTPUT_TEST if output_io else SHELL_FOREGROUND_TESTS[1])
+    specifications = module.specs() if output_io else module.specifications()
+    names = [row["name"] for row in specifications]
+    count = 20 if output_io else 12
+    if len(names) != count or len(set(names)) != count:
+        raise ValueError("registered shell IO progress inventory differs")
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate shell IO progress field")
+            result[key] = value
+        return result
+
+    def nonfinite(_):
+        raise ValueError("nonfinite shell IO progress value")
+
+    rows = [json.loads(line, object_pairs_hook=unique_object, parse_constant=nonfinite)
+            for line in stdout.splitlines()]
+    if len(rows) != count + 1:
+        raise ValueError("shell IO progress omitted or added a record")
+    fields = {"case", "status", "effects", "outcome"} if output_io else {"case", "status"}
+    expected_status = "NATIVE_IO_PASS" if output_io else "ACTUAL_NATIVE_PASS"
+    for expected_name, row in zip(names, rows[:-1]):
+        if (type(row) is not dict or set(row) != fields
+                or row.get("case") != expected_name or row.get("status") != expected_status):
+            raise ValueError("shell IO progress case/order/status differs")
+        if output_io and (type(row["effects"]) is not int or row["effects"] < 1
+                          or type(row["outcome"]) is not bool):
+            raise ValueError("shell IO progress effect/outcome type differs")
+    summary = rows[-1]
+    schema = "hepta.runtime.shell-output-io-read.v1" if output_io else "hepta.runtime.shell-foreground-io-read.v1"
+    if (type(summary) is not dict or summary.get("schema") != schema or summary.get("status") != "PASS"
+            or type(summary.get("cases")) is not int or summary["cases"] != count
+            or summary.get("complete_registered_corpus") is not True
+            or type(summary.get("retired_fixtures")) is not int or summary["retired_fixtures"] != count
+            or summary.get("actual_native_process_wait") is not (not output_io)
+            or type(summary.get("native_phase_cases_added_by_reference")) is not int
+            or summary["native_phase_cases_added_by_reference"] != 0):
+        raise ValueError("shell IO aggregate progress differs")
+    if output_io and (summary.get("io_only") is not False
+                      or type(summary.get("effects")) is not int
+                      or summary["effects"] != sum(row["effects"] for row in rows[:-1])):
+        raise ValueError("shell IO aggregate effects/scope differs")
+    return rows
+
+
+def bind_shell_io_progress(output: Path, name: str, evidence: dict, cases: list[dict]) -> None:
+    rows = shell_io_progress_records(name, (output / (name + ".stdout")).read_bytes())
+    if json_bytes(rows[-1]) != json_bytes(evidence):
+        raise ValueError("shell IO final stdout differs from complete retained evidence")
+    if json_bytes(rows[:-1]) != json_bytes(cases):
+        raise ValueError("shell IO case stdout differs from complete retained evidence")
+
+
+def _shell_test_module(name: str):
+    import importlib.util
+    path = ROOT / "tests/hia_native" / name
+    spec = importlib.util.spec_from_file_location("shell_gate_" + name.removesuffix(".py"), path)
+    if spec is None or spec.loader is None:
+        raise ValueError("cannot load source-owned shell qualification module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def shell_process_test_commands(output: Path, report: dict) -> dict[str, list[str]]:
+    manifest = output / report["modules"]["shell_process"]["manifest"]
+    background = output / report["modules"]["shell_background_text"]["manifest"]
+    base = output / "shell-process"
+    prefix = [sys.executable, "-I", "-B"]
+    return {
+        SHELL_PROCESS_TESTS[0]: prefix + [str(ROOT / "tests/hia_native/shell_process_state.py"),
+            "--native-manifest", str(manifest), "--output", str(base / "state")],
+        SHELL_PROCESS_TESTS[1]: prefix + [str(ROOT / "tests/hia_native/shell_process_transport.py"),
+            "--native-manifest", str(manifest), "--output", str(base / "transport")],
+        SHELL_PROCESS_TESTS[2]: prefix + [str(ROOT / "scripts/hia_native_shell_process_qualification.py"),
+            "--native-executable", str(manifest.parent / "shell-process.elf"),
+            "--native-manifest", str(manifest),
+            "--cases-source", str(ROOT / "tests/hia_native/shell_process_cases.py"),
+            "--output", str(base / "native-os"), "--jobs", "2"],
+        SHELL_PROCESS_TESTS[3]: prefix + [str(ROOT / "tests/hia_native/shell_process_evidence_controls.py"),
+            "--evidence", str(base / "native-os"), "--native-manifest", str(manifest),
+            "--output", str(base / "evidence"), "--native-only"],
+        SHELL_BACKGROUND_TEST: prefix + [str(ROOT / "tests/hia_native/shell_background_text.py"),
+            "--native-manifest", str(background),
+            "--output", str(output / "shell-background-text/native")],
+    }
+
+
+def shell_outcome_test_commands(output: Path, report: dict) -> dict[str, list[str]]:
+    manifest = output / report["modules"]["shell_outcome"]["manifest"]
+    return {SHELL_OUTCOME_TEST: [sys.executable, "-I", "-B",
+        str(ROOT / "tests/hia_native/shell_outcome_state.py"),
+        "--native-manifest", str(manifest), "--output", str(output / "shell-outcome/native")]}
+
+
+def shell_output_test_commands(output: Path, report: dict) -> dict[str, list[str]]:
+    manifest = output / report["modules"]["shell_output_io"]["manifest"]
+    outcome = output / report["modules"]["shell_outcome"]["manifest"]
+    return {SHELL_OUTPUT_TEST: [sys.executable, "-I", "-B",
+        str(ROOT / "tests/hia_native/shell_output_io.py"),
+        "--native-manifest", str(manifest), "--outcome-manifest", str(outcome),
+        "--output", str(output / "shell-output/native")]}
+
+
+def shell_foreground_test_commands(output: Path, report: dict) -> dict[str, list[str]]:
+    manifest = output / report["modules"]["shell_foreground"]["manifest"]
+    return {name: [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name),
+                  "--native-manifest", str(manifest),
+                  "--output", str(output / "shell-foreground" / folder)]
+            for name, folder in zip(SHELL_FOREGROUND_TESTS, ("state", "native"))}
+
+
+def shell_process_progress_summary(stdout: bytes, *, original: bool) -> dict:
+    module = _shell_test_module("shell_process_cases.py")
+    names = {row["name"] for row in module.specs()}
+    if len(names) != 38:
+        raise ValueError("required real-OS shell case inventory changed")
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate real-OS shell progress field")
+            result[key] = value
+        return result
+    rows = [json.loads(line, object_pairs_hook=unique_object) for line in stdout.splitlines()]
+    if len(rows) != len(names) + 1:
+        raise ValueError("real-OS shell progress omitted or added a record")
+    seen = set()
+    for row in rows[:-1]:
+        if (type(row) is not dict or set(row) != {"name", "status", "duration_ns", "error"}
+                or row.get("name") not in names or row["name"] in seen
+                or row.get("status") != "PASS" or row.get("error") is not None
+                or type(row.get("duration_ns")) is not int or row["duration_ns"] < 0):
+            raise ValueError("real-OS shell progress contains an incomplete case")
+        seen.add(row["name"])
+    summary = rows[-1]
+    expected = "ORIGINAL_COMPARISON_PASS" if original else "NATIVE_ONLY_PASS"
+    if (seen != names or type(summary) is not dict or set(summary) != {"status", "case_count", "report"}
+            or summary.get("status") != expected or type(summary.get("case_count")) is not int
+            or summary["case_count"] != 38 or type(summary.get("report")) is not str
+            or not Path(summary["report"]).is_absolute()):
+        raise ValueError("real-OS shell aggregate progress differs")
+    return summary
+
+
+def shell_completed_process(output: Path, report: dict, name: str, command: list[str],
+                            *, phase: str, timeout: int, status: str = "PASS") -> dict:
+    import math
+    row, summary = completed_test_summary(output, report, name)
+    stdout = (output / (name + ".stdout")).read_bytes()
+    stderr = (output / (name + ".stderr")).read_bytes()
+    elapsed = row.get("elapsed_seconds")
+    if (row.get("command") != command or row.get("phase") != phase
+            or type(row.get("exit_code")) is not int or row["exit_code"] != 0
+            or "start_error" in row or row.get("timed_out") is not False
+            or type(row.get("timeout_seconds")) not in (int, float)
+            or row["timeout_seconds"] != timeout
+            or type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0
+            or type(row.get("stdout_bytes")) is not int or row["stdout_bytes"] != len(stdout)
+            or type(row.get("stderr_bytes")) is not int or row["stderr_bytes"] != 0 or stderr
+            or type(summary) is not dict or summary.get("status") != status):
+        raise ValueError("shell qualification process invocation or completion differs: " + name)
+    if name in (SHELL_PROCESS_TESTS[2], "shell-process-rust-compare"):
+        expected_report = Path(command[command.index("--output") + 1]) / "report.json"
+        if summary.get("report") != str(expected_report):
+            raise ValueError("shell real-OS stdout reports a different output directory")
+    return {key: row[key] for key in ("name", "phase", "command", "exit_code", "timed_out",
+            "timeout_seconds", "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256")}
+
+
+def retire_shell_process_native(output: Path, report: dict) -> None:
+    import hia_native_shell_process_evidence as evidence
+    command = shell_process_test_commands(output, report)[SHELL_PROCESS_TESTS[2]]
+    shell_completed_process(output, report, SHELL_PROCESS_TESTS[2], command,
+        phase="native_components", timeout=180, status="NATIVE_ONLY_PASS")
+    manifest = output / report["modules"]["shell_process"]["manifest"]
+    evidence.retire_fixtures(output / "shell-process/native-os", manifest)
+
+
+def shell_retained_files(output: Path, folders: tuple[Path, ...]) -> dict[str, str]:
+    """Only sealed ordinary evidence enters the aggregate; fixture targets retire first."""
+    result = {}
+    for folder in folders:
+        if folder.is_symlink() or folder.resolve(strict=True) != folder.absolute():
+            raise ValueError("shell evidence root crosses a symlink")
+        for path in sorted(folder.rglob("*")):
+            if path.is_symlink() or path.resolve() != path.absolute():
+                raise ValueError("unretired shell fixture or evidence symlink")
+            info = path.lstat()
+            if stat.S_ISDIR(info.st_mode):
+                continue
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+                raise ValueError("shell evidence is not an owned ordinary file")
+            result[path.relative_to(output).as_posix()] = sha(path)
+    return result
+
+
+def shell_process_evidence(output: Path, report: dict) -> dict:
+    import hia_native_shell_process_evidence as evidence
+    manifest = output / report["modules"]["shell_process"]["manifest"]
+    base = output / "shell-process"
+    commands = shell_process_test_commands(output, report)
+    completed = {
+        name: shell_completed_process(output, report, name, commands[name],
+            phase="native_components", timeout=180,
+            status="NATIVE_ONLY_PASS" if name == SHELL_PROCESS_TESTS[2] else "PASS")
+        for name in SHELL_PROCESS_TESTS
+    }
+    state_module = _shell_test_module("shell_process_state.py")
+    state = state_module.read_evidence(base / "state", manifest)
+    if ((state.get("cases"), state.get("controls"), state.get("entries"),
+         state.get("reader_control_count")) != (23, 14, 304, 5)):
+        raise ValueError("shell state native coverage differs")
+    state_report = json.loads((base / "state/report.json").read_bytes())
+    if (state_report.get("recorded_directory") != str(base / "state")
+            or state_report["native"]["supplied_manifest_path"] != str(manifest)):
+        raise ValueError("shell state evidence was relocated without its strong path binding")
+    transport_module = _shell_test_module("shell_process_transport.py")
+    transport = transport_module.read_evidence(base / "transport", manifest)
+    if transport.get("cases") != 6:
+        raise ValueError("shell transport and descendant custody coverage differs")
+    transport_report = json.loads((base / "transport/report.json").read_bytes())
+    if (transport_report["native"]["manifest_path"] != str(manifest)
+            or transport_report["native"]["executable_path"] != str(manifest.parent / "shell-process.elf")):
+        raise ValueError("shell transport executable path differs")
+    for case in transport_report["cases"]:
+        directory = base / "transport" / case["name"]
+        receipt = json.loads((directory / "process.json").read_bytes())
+        if (receipt["cwd"] != str(directory)
+                or receipt["argv"] != [str(manifest.parent / "shell-process.elf"),
+                                       "--process-fixture", str(directory / "capture")]):
+            raise ValueError("shell transport receipt path differs")
+    native = evidence.read_native_evidence(base / "native-os", manifest, require_full=True)
+    if native.get("fixtures_retired") is not True:
+        raise ValueError("shell native fixtures must be strongly retired before admission")
+    controls_module = _shell_test_module("shell_process_evidence_controls.py")
+    controls = controls_module.read_evidence(base / "evidence", manifest)
+    metadata = json.loads(manifest.read_bytes())
+    build_root = manifest.parent.parent
+    artifacts = shell_retained_files(output, (
+        manifest.parent, (build_root / metadata["owner_manifest"]).parent,
+        (build_root / metadata["packer_manifest"]).parent))
+    corpus = shell_retained_files(output, (base,))
+    return {
+        "schema": "hepta.runtime.shell-process-required-native.v1", "status": "PASS",
+        "state": state, "transport": transport, "real_os": native, "evidence_controls": controls,
+        "completed_processes": completed, "artifact_sha256": artifacts, "corpus_sha256": corpus,
+        "original_rust_compared": False, "production_shell_execution_qualified": False,
+        "whole_runtime_replaced": False, "production_activated": False, "old_stack_removal_qualified": False,
+    }
+
+
+def shell_background_evidence(output: Path, report: dict) -> dict:
+    manifest = output / report["modules"]["shell_background_text"]["manifest"]
+    folder = output / "shell-background-text/native"
+    command = shell_process_test_commands(output, report)[SHELL_BACKGROUND_TEST]
+    completed = shell_completed_process(output, report, SHELL_BACKGROUND_TEST, command,
+        phase="native_components", timeout=180)
+    module = _shell_test_module("shell_background_text.py")
+    result = module.read_evidence(folder, manifest)
+    if result.get("counts") != {
+            "capacity_refusals": 14, "controls": 51, "exact_capacity_successes": 6,
+            "invalid_controls": 31, "native_entries": 3507, "semantic_cases": 3456}:
+        raise ValueError("background native semantic/control coverage differs")
+    captured = json.loads((folder / "report.json").read_bytes())
+    if (captured.get("recorded_directory") != str(folder)
+            or captured["native"]["manifest_path"] != str(manifest)):
+        raise ValueError("background evidence was relocated without its strong path binding")
+    return {
+        "schema": "hepta.runtime.shell-background-required-native.v1", "status": "PASS",
+        "native": result, "completed_process": completed,
+        "artifact_sha256": shell_retained_files(output, (manifest.parent,)),
+        "corpus_sha256": shell_retained_files(output, (folder,)),
+        "original_rust_compared": False, "filesystem_reads_qualified": False,
+        "whole_runtime_replaced": False, "production_activated": False, "old_stack_removal_qualified": False,
+    }
+
+
+def shell_outcome_evidence(output: Path, report: dict) -> dict:
+    manifest = output / report["modules"]["shell_outcome"]["manifest"]
+    folder = output / "shell-outcome/native"
+    command = shell_outcome_test_commands(output, report)[SHELL_OUTCOME_TEST]
+    completed = shell_completed_process(output, report, SHELL_OUTCOME_TEST, command,
+        phase="native_components", timeout=180)
+    result = _shell_test_module(SHELL_OUTCOME_TEST).read_evidence(folder, native_manifest=manifest)
+    if result.get("status") != "PASS" or result.get("counts", {}).get("semantic_cases") != 78083:
+        raise ValueError("complete shell outcome native semantic/control evidence differs")
+    captured = json.loads((folder / "report.json").read_bytes())
+    if (captured.get("recorded_directory") != str(folder)
+            or captured.get("native", {}).get("manifest_path") != str(manifest)):
+        raise ValueError("shell outcome evidence path or current build binding differs")
+    return {
+        "schema": "hepta.runtime.shell-outcome-required-native.v1", "status": "PASS",
+        "native": result, "completed_process": completed,
+        "artifact_sha256": shell_retained_files(output, (manifest.parent,)),
+        "corpus_sha256": shell_retained_files(output, (folder,)),
+        "original_rust_compared": False, "filesystem_reads_qualified": False,
+        "whole_runtime_replaced": False, "production_activated": False,
+        "production_shell_execution_qualified": False, "old_stack_removal_qualified": False,
+    }
+
+
+def shell_output_evidence(output: Path, report: dict) -> dict:
+    manifest = output / report["modules"]["shell_output_io"]["manifest"]
+    outcome = output / report["modules"]["shell_outcome"]["manifest"]
+    folder = output / "shell-output/native"
+    command = shell_output_test_commands(output, report)[SHELL_OUTPUT_TEST]
+    completed = shell_completed_process(output, report, SHELL_OUTPUT_TEST, command,
+        phase="native_components", timeout=180)
+    result = _shell_test_module(SHELL_OUTPUT_TEST).read_evidence(
+        folder, native_manifest=manifest, outcome_manifest=outcome, require_full=True)
+    if (result.get("schema") != "hepta.runtime.shell-output-io-read.v1"
+            or result.get("status") != "PASS" or result.get("cases") != 20
+            or result.get("complete_registered_corpus") is not True
+            or result.get("shared_original_io_cases") != 6
+            or result.get("io_only") is not False or result.get("retired_fixtures") != 20
+            or result.get("native_phase_cases_added_by_reference") != 0
+            or result.get("actual_native_process_wait") is not False):
+        raise ValueError("complete shell output IO and actual outcome evidence differs")
+    captured = json.loads((folder / "report.json").read_bytes())
+    if (captured.get("producer_folder") != str(folder)
+            or captured.get("native_manifest") != str(manifest)
+            or captured.get("outcome_manifest") != str(outcome)):
+        raise ValueError("shell output evidence path or current builds differ")
+    progress = []
+    for case in captured["cases"]:
+        retained = json.loads((folder / "cases" / case["name"] / "result.json").read_bytes())
+        progress.append({"case": case["name"], "status": "NATIVE_IO_PASS",
+                         "effects": retained["validation"]["effects"],
+                         "outcome": retained["outcome"] is not None})
+    bind_shell_io_progress(output, SHELL_OUTPUT_TEST, result, progress)
+    metadata = json.loads(manifest.read_bytes())
+    build_root = manifest.parent.parent
+    artifacts = shell_retained_files(output, (
+        manifest.parent, (build_root / metadata["owner_manifest"]).parent,
+        (build_root / metadata["packer_manifest"]).parent, outcome.parent))
+    return {
+        "schema": "hepta.runtime.shell-output-required-native.v1", "status": "PASS",
+        "native": result, "completed_process": completed,
+        "artifact_sha256": artifacts, "corpus_sha256": shell_retained_files(output, (folder,)),
+        "original_rust_compared": False, "actual_native_process_wait": False,
+        "native_phase_cases_added_by_reference": 0,
+        "whole_runtime_replaced": False, "production_activated": False,
+        "production_shell_execution_qualified": False, "old_stack_removal_qualified": False,
+    }
+
+
+def shell_foreground_evidence(output: Path, report: dict) -> dict:
+    manifest = output / report["modules"]["shell_foreground"]["manifest"]
+    completed = {name: shell_completed_process(output, report, name, command,
+        phase="native_components", timeout=180)
+        for name, command in shell_foreground_test_commands(output, report).items()}
+    state_folder = output / "shell-foreground/state"
+    native_folder = output / "shell-foreground/native"
+    state = _shell_test_module(SHELL_FOREGROUND_TESTS[0]).read_evidence(state_folder, native_manifest=manifest)
+    native = _shell_test_module(SHELL_FOREGROUND_TESTS[1]).read_evidence(
+        native_folder, native_manifest=manifest, require_full=True)
+    captured = json.loads((state_folder / "report.json").read_bytes())
+    counts = captured.get("counts", {})
+    if (state.get("status") != "PASS"
+            or captured.get("schema") != "hepta.runtime.shell-foreground-controller-corpus.v1"
+            or captured.get("recorded_directory") != str(state_folder)
+            or captured.get("native", {}).get("manifest_path") != str(manifest)
+            or any(type(counts.get(key)) is not int for key in (
+                "semantic_cases", "native_control_cases", "actual_native_entries",
+                "complete_guarded_buffer_snapshots"))
+            or counts != {"semantic_cases": 20, "native_control_cases": 84,
+                          "actual_native_entries": 810,
+                          "complete_guarded_buffer_snapshots": 4860}):
+        raise ValueError("complete HIA foreground controller state evidence differs")
+    if (native.get("schema") != "hepta.runtime.shell-foreground-io-read.v1"
+            or native.get("status") != "PASS" or native.get("complete_registered_corpus") is not True
+            or type(native.get("cases")) is not int or type(native.get("retired_fixtures")) is not int
+            or native.get("cases") != 12 or native.get("retired_fixtures") != 12
+            or native.get("shared_original_io_cases") != 6
+            or native.get("actual_native_process_wait") is not True
+            or native.get("native_phase_cases_added_by_reference") != 0):
+        raise ValueError("complete real foreground wait/IO/outcome evidence differs")
+    progress = [{"case": case["name"], "status": "ACTUAL_NATIVE_PASS"}
+                for case in _shell_test_module(SHELL_FOREGROUND_TESTS[1]).specifications()]
+    bind_shell_io_progress(output, SHELL_FOREGROUND_TESTS[1], native, progress)
+    metadata = json.loads(manifest.read_bytes())
+    build_root = manifest.parent.parent
+    folders = [manifest.parent, (build_root / metadata["controller_manifest"]).parent,
+               (build_root / metadata["packer_manifest"]).parent]
+    for field, key in (("process_manifest", "shell_process"),
+                       ("output_manifest", "shell_output_io"),
+                       ("outcome_manifest", "shell_outcome")):
+        dependency = output / report["modules"][key]["manifest"]
+        if (metadata.get(field) != str(dependency)
+                or metadata.get(field + "_sha256") != sha(dependency)):
+            raise ValueError("foreground component dependency differs from this same gate: " + key)
+        folders.append(dependency.parent)
+        if key in ("shell_process", "shell_output_io"):
+            component = json.loads(dependency.read_bytes())
+            component_root = dependency.parent.parent
+            folders.extend((component_root / component[name]).parent
+                           for name in ("owner_manifest", "packer_manifest"))
+    return {
+        "schema": "hepta.runtime.shell-foreground-required-native.v1", "status": "PASS",
+        "state": state, "native": native, "completed_processes": completed,
+        "artifact_sha256": shell_retained_files(output, tuple(folders)),
+        "corpus_sha256": shell_retained_files(output, (state_folder, native_folder)),
+        "actual_native_process_wait": True, "original_rust_compared": False,
+        "native_phase_cases_added_by_reference": 0,
+        "capture_preparation_qualified": False, "background_registry_qualified": False,
+        "whole_runtime_replaced": False, "production_activated": False,
+        "production_shell_execution_qualified": False, "old_stack_removal_qualified": False,
+    }
 
 
 def entropy_evidence(output: Path, report: dict) -> dict:
@@ -970,49 +1546,8 @@ def atomic_write_retained_files(output: Path, directory: Path, *, fixtures: tupl
 
 def atomic_write_retire_fixtures(output: Path, fixtures: tuple[str, ...], receipt: Path,
                                  evidence: dict, *, create: bool = False) -> dict:
-    """Retire only owned live targets after their complete evidence is admitted."""
-    expected = {"schema": "hepta.runtime.atomic-write-fixture-retirement.v1", "status": "PASS",
-        "fixture_directories": list(fixtures), "complete_evidence_sha256":
-            atomic_write_qualification.sha(atomic_write_qualification.canonical(evidence)),
-        "semantic_invocations_added": 0}
-    if receipt.exists():
-        if receipt.is_symlink() or atomic_write_qualification.obj(receipt) != expected:
-            raise ValueError("atomic fixture retirement receipt differs")
-    elif create:
-        if output.is_symlink() or output.resolve(strict=True) != output:
-            raise ValueError("atomic fixture retirement root differs")
-        paths = []
-        for name in fixtures:
-            relative = Path(name)
-            if relative.is_absolute() or ".." in relative.parts or relative.name != "fixture":
-                raise ValueError("atomic fixture retirement path escaped its owner")
-            path = output / relative
-            info = path.lstat()
-            if path.resolve() != path or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
-                raise ValueError("atomic live fixture is not an owned real directory")
-            paths.append(path)
-        # Children have already been reaped. Make only owned directories
-        # traversable; leave symlinks untouched and use fd-based rmtree.
-        if not shutil.rmtree.avoids_symlink_attacks:
-            raise ValueError("atomic fixture retirement requires descriptor-based removal")
-        for path in paths:
-            path.chmod(0o700)
-            for base, dirs, _ in os.walk(path, followlinks=False):
-                for name in dirs:
-                    child = Path(base) / name
-                    info = child.lstat()
-                    if stat.S_ISDIR(info.st_mode):
-                        if info.st_uid != os.getuid():
-                            raise ValueError("atomic live fixture contains an unowned directory")
-                        child.chmod(0o700, follow_symlinks=False)
-            shutil.rmtree(path)
-        with receipt.open("x") as stream:
-            stream.write(json.dumps(expected, sort_keys=True, indent=2) + "\n")
-    else:
-        raise ValueError("completed atomic fixture retirement receipt is missing")
-    if any((output / name).exists() or (output / name).is_symlink() for name in fixtures):
-        raise ValueError("retired atomic live fixture reappeared")
-    return expected
+    """Share the same checked target retirement with the original replay driver."""
+    return atomic_write_qualification.retire_fixtures(output, fixtures, receipt, evidence, create=create)
 
 
 def atomic_write_completed_process(output: Path, report: dict, name: str, command: list[str],
@@ -1163,6 +1698,38 @@ def file_locks_evidence(output: Path, report: dict) -> dict:
 
 def file_lock_service_evidence(output: Path, report: dict) -> dict:
     return file_lock_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary, "file_lock_service")
+
+
+def write_chain_evidence(output: Path, report: dict) -> dict:
+    return write_chain_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def directory_service_evidence(output: Path, report: dict) -> dict:
+    return service_pipeline.native_evidence(ROOT, output, report, completed_test_summary, "directory_service")
+
+
+def workdir_service_evidence(output: Path, report: dict) -> dict:
+    return service_pipeline.native_evidence(ROOT, output, report, completed_test_summary, "workdir_service")
+
+
+def sdk_connection_evidence(output: Path, report: dict, *, create=False) -> dict:
+    return connection_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def batch_write_evidence(output: Path, report: dict) -> dict:
+    return batch_write_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def serde_error_evidence(output: Path, report: dict) -> dict:
+    return serde_error_pipeline.native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def result_values_evidence(output: Path, report: dict) -> dict:
+    return result_qualification.native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def public_registry_evidence(output: Path, report: dict, *, create=False) -> dict:
+    return public_registry_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
 
 
 def session_evidence(output: Path, report: dict) -> dict:
@@ -2286,6 +2853,10 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
     env = qualification_env()
     env.update({
         "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
+        "HIA_BELLMAN_QUALIFICATION_OUTPUT": str(output),
+        "HIA_BELLMAN_COMMITMENT_QUALIFICATION_OUTPUT": str(output),
+        "HIA_LOCAL_CREATE_OUTPUT": str(output / "local-create"),
+        "HIA_LOCAL_CREATE_QUALIFICATION_OUTPUT": str(output),
         "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
         "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
         "HIA_TERMINAL_CORPUS_DIR": str(output / "terminal-clean"),
@@ -2327,6 +2898,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_CACHE_QUALIFICATION_OUTPUT": str(output),
         "HIA_FENCE_JSON_CORPUS_DIR": str(output / JSON_COMPONENTS["fence_json"]["folder"]),
         "HIA_SERDE_JSON_CORPUS_DIR": str(output / JSON_COMPONENTS["serde_json"]["folder"]),
+        "HIA_RAW_VALUE_CORPUS_DIR": str(output / "serde-json-raw-value-rust-oracle"),
         "HIA_SERDE_JSON_TRANSPORT_REPORT": str(output / JSON_TRANSPORT_REPORT),
         "HIA_JSON_QUALIFICATION_OUTPUT": str(output),
         "HIA_HISTORY_CORPUS_DIR": str(output / HISTORY_FOLDER),
@@ -2406,6 +2978,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
     env["HIA_VIEW_PARAMS_VALUE_MANIFEST"] = env["HIA_SERDE_JSON_MANIFEST"]
     env["HIA_VIEW_SEARCH_FIXTURE_MANIFEST"] = env["HIA_VIEW_CALL_FIXTURE_MANIFEST"]
     env["HIA_VIEW_REGEX_SEARCH_FIXTURE_MANIFEST"] = env["HIA_VIEW_CALL_FIXTURE_MANIFEST"]
+    env.update(connection_qualification.test_environment(output))
     return env
 
 
@@ -2440,7 +3013,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
     (output / "filesystem-parity/native").mkdir(mode=0o700, parents=True)
     for item in MODULES:
-        if item.get("builder") == "io":
+        if item.get("builder") == "result_values":
+            built = result_qualification.build_result_values(hepta, output / "build", ROOT)
+        elif item.get("builder") == "io":
             from hia_native_io_build import build_io
             built = build_io(hepta, output / "build")
         elif item.get("builder") == "composition":
@@ -2449,6 +3024,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "record_composition":
             from hia_native_record_build import build_record
             built = build_record(hepta, output / "build")
+        elif item.get("builder") == "local_create":
+            from hia_native_local_create_build import build_local_create
+            built = build_local_create(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "entropy":
             from hia_native_entropy_build import build_entropy
             built = build_entropy(hepta, output / "build")
@@ -2475,6 +3053,19 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "file_lock_service":
             from hia_native_file_lock_service_build import build_file_lock_service
             built = build_file_lock_service(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "write_chain":
+            from hia_native_write_chain_build import build_write_chain
+            built = build_write_chain(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "directory_service":
+            from hia_native_directory_service_build import build_directory_service
+            built = build_directory_service(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "workdir_service":
+            from hia_native_workdir_service_build import build_workdir_service
+            built = build_workdir_service(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "sdk_connection":
+            built = connection_qualification.build_connection(hepta, output / "build", ROOT)
+        elif item.get("builder") == "public_registry":
+            built = public_registry_qualification.build_public_registry(hepta, output / "build", ROOT)
         elif item.get("builder") == "runtime_config":
             built = config_qualification.build_config(hepta, output / "build", ROOT)
         elif item.get("builder") == "runtime_config_span":
@@ -2509,9 +3100,29 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "effect_fence":
             from hia_native_effect_fence_build import build_effect_fence_bundle
             built = build_effect_fence_bundle(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "batch_write":
+            from hia_native_batch_write_build import build_batch_write
+            built = build_batch_write(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "batch_apply":
             from hia_native_batch_apply_build import build_batch_apply
             built = build_batch_apply(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "shell_process":
+            from hia_native_shell_process_build import build_shell_process
+            built = build_shell_process(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "shell_outcome":
+            from hia_native_shell_outcome_build import build_shell_outcome
+            built = build_shell_outcome(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "shell_output":
+            from hia_native_shell_output_build import build_shell_output
+            built = build_shell_output(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "shell_foreground":
+            from hia_native_shell_foreground_build import build_shell_foreground
+            built = build_shell_foreground(hepta, output / "build", source_root=ROOT,
+                process_manifest=output / report["modules"]["shell_process"]["manifest"],
+                output_manifest=output / report["modules"]["shell_output_io"]["manifest"],
+                outcome_manifest=output / report["modules"]["shell_outcome"]["manifest"])
+        elif item.get("builder") in capture_gate.KEYS:
+            built = capture_gate.build(item["key"], hepta, output / "build")
         elif item.get("builder") == "atomic_write":
             from hia_native_atomic_write_build import build_atomic_write
             built = build_atomic_write(hepta, output / "build", source_root=ROOT)
@@ -2586,6 +3197,8 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / "regex-native").mkdir()
     (output / "file-locks").mkdir()
     (output / "file-lock-service").mkdir()
+    (output / "write-chain").mkdir()
+    (output / "workdir-native").mkdir()
     return builder
 
 
@@ -2605,18 +3218,45 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(session_qualification.test_commands(ROOT, output, report))
     commands.update(file_lock_pipeline.test_commands(ROOT, output, report))
     commands.update(filesystem_parity_qualification.test_commands(ROOT, output, report))
+    commands.update(write_chain_pipeline.test_commands(ROOT, output, report))
+    commands.update(service_pipeline.test_commands(ROOT, output, report))
+    commands.update(connection_qualification.test_commands(ROOT, output, report))
+    commands.update(public_registry_qualification.test_commands(ROOT, output, report))
+    commands.update(result_qualification.test_commands(ROOT, output, report))
+    commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
+    commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
+    if set(tests) & {*SHELL_PROCESS_TESTS, SHELL_BACKGROUND_TEST}:
+        commands.update(shell_process_test_commands(output, report))
+    if SHELL_OUTCOME_TEST in tests:
+        commands.update(shell_outcome_test_commands(output, report))
+    if SHELL_OUTPUT_TEST in tests:
+        commands.update(shell_output_test_commands(output, report))
+    if set(tests) & set(SHELL_FOREGROUND_TESTS):
+        commands.update(shell_foreground_test_commands(output, report))
+    if set(tests) & set(capture_gate.TESTS):
+        commands.update(capture_gate.test_commands(output, report))
     return {name: command for name, command in commands.items() if name in tests}
 
 
 def collect_native_evidence(output: Path, report: dict) -> None:
+    report["local_create_file_evidence"] = local_create_qualification.native_evidence(output, report)
+    report["bellman_evidence"] = bellman_qualification.native_evidence(output, report)
+    report["bellman_commitment_evidence"] = bellman_commitment_qualification.native_evidence(output, report)
     report["request_context_evidence"] = request_context_evidence(output, report)
     report["result_publication_evidence"] = result_publication_evidence(output, report)
     report["request_scope_evidence"] = request_scope_evidence(output, report)
     report["filesystem_parity_evidence"] = filesystem_parity_evidence(output, report)
     report["filesystem_parity_fixture_retirement"] = filesystem_parity_retirement(output, report, create=True)
     report["shell_evidence"] = shell_evidence(output, report)
+    report["shell_process_evidence"] = shell_process_evidence(output, report)
+    report["shell_background_evidence"] = shell_background_evidence(output, report)
+    report["shell_outcome_evidence"] = shell_outcome_evidence(output, report)
+    report["shell_output_evidence"] = shell_output_evidence(output, report)
+    report["shell_foreground_evidence"] = shell_foreground_evidence(output, report)
+    for key in capture_gate.KEYS:
+        report[key + "_evidence"] = capture_gate.native_evidence(output, report, key)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
     report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -2661,6 +3301,15 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["session_evidence"] = session_evidence(output, report)
     report["file_locks_evidence"] = file_locks_evidence(output, report)
     report["file_lock_service_evidence"] = file_lock_service_evidence(output, report)
+    report["write_chain_evidence"] = write_chain_evidence(output, report)
+    report["directory_service_evidence"] = directory_service_evidence(output, report)
+    report["workdir_service_evidence"] = workdir_service_evidence(output, report)
+    report["sdk_connection_evidence"] = sdk_connection_evidence(output, report, create=True)
+    report["public_registry_evidence"] = public_registry_evidence(output, report, create=True)
+    report["result_values_evidence"] = result_values_evidence(output, report)
+    report["serde_error_evidence"] = serde_error_evidence(output, report)
+    report["batch_write_evidence"] = batch_write_evidence(output, report)
+    service_pipeline.prepare_transport(ROOT, output, report, completed_test_summary)
     report["json_evidence"] = json_evidence(output, report)
     report["execution_evidence"] = execution_evidence(output, report)
     report["effect_fence_evidence"] = effect_fence_evidence(output, report)
@@ -2685,6 +3334,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["python_reference_inputs"]["file-info-blocking-probe.elf"] = sha(output / "file-info-blocking-probe.elf")
     report["rust_oracle_inputs"] = {
         "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
+    report["rust_oracle_inputs"].update(report["local_create_file_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["request_context_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["result_publication_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
@@ -2701,6 +3351,11 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["view_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["runtime_mcp_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["shell_evidence"]["artifact_sha256"])
+    for key in ("shell_process_evidence", "shell_background_evidence", "shell_outcome_evidence",
+                "shell_output_evidence", "shell_foreground_evidence",
+                *(key + "_evidence" for key in capture_gate.KEYS)):
+        report["rust_oracle_inputs"].update(report[key]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report[key]["corpus_sha256"])
     report["rust_oracle_inputs"].update({
         ENTROPY_FOLDER + "/" + name: sha(output / ENTROPY_FOLDER / name) for name in ENTROPY_CORPUS_FILES})
     report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])
@@ -2716,6 +3371,15 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["view_cache_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["history_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["history_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["result_values_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["result_values_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["serde_error_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["serde_error_evidence"]["corpus_sha256"])
+    # The complete batch corpus is also inspected by batch_write_evidence on
+    # every admission; preserve the actual completed process and bundle roots.
+    batch_names = [report["modules"]["batch_write"]["manifest"]] + [
+        name + suffix for name in batch_write_pipeline.q.SUITES for suffix in (".stdout", ".stderr")]
+    report["rust_oracle_inputs"].update({name: sha(output / name) for name in batch_names})
     report["rust_oracle_inputs"].update(report["json_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["json_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["execution_evidence"]["artifact_sha256"])
@@ -2732,6 +3396,12 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["corpus_sha256"])
+    for key in ("directory_service", "workdir_service", "sdk_connection", "public_registry"):
+        report["rust_oracle_inputs"].update(report[key + "_evidence"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report[key + "_evidence"]["corpus_sha256"])
+    write_manifest = write_chain_pipeline.bundle(output, report)
+    report["rust_oracle_inputs"].update(service_pipeline.retained_files(output, write_manifest.parent))
+    report["rust_oracle_inputs"].update(service_pipeline.retained_files(output, output / "write-chain"))
     authority = report["caller_authority_evidence"]
     for label in ("artifact", "probe"):
         report["rust_oracle_inputs"].update({"build/" + name: expected

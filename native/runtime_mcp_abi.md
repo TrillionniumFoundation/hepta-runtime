@@ -82,6 +82,67 @@ Output is fixed 192 with `HRJPRR02`, followed by full ID/name/version spans.
 Node indexes and offsets are u64; the old 262,144-node cap is absent. The
 existing nesting-depth policy of 128 remains.
 
+The protocol first validates every unquoted JSON number, including numbers in
+ignored fields, using the same finite binary64 conversion as the Value owner.
+Its first preflight pass owns an isolated numeric slab at workspace offset
+4352, extending through 11367. The parser stack ends at 4256 and retained tail
+fields start at 13328 in the minimum 16384-byte workspace. Numeric validation
+does not write output, change the existing 6320-byte minimum output request,
+or expand RawValue objects in ignored fields.
+Two additional cache words at offsets 11376 through 11391 retain only the
+last successfully validated numeric span. Every preflight resets them; a hit
+requires equal length and every original token byte to match. Failed numbers
+are never cached, and intervening strings or containers do not change the
+grammar or numeric validation rule.
+
+An ordinary string or signed-i64 RequestId stays on the single protocol pass.
+The locked SDK deserializes a selected RequestId through Value before applying
+its String/i64 rule. For an object whose first decoded key is
+`$serde_json::private::RawValue`, the protocol therefore yields a private
+deferred result: return 192, `HRJPRR02`, kind 7 at offset 40, raw-ID length at
+48, original-envelope length at 144, and the raw ID alone after the header.
+Mode at 32 is preserved; all other fields, including offsets 152 through 184,
+are zero. This result grants no public handler admission.
+
+Frontend phases 9 and 10 call the generic Value owner for only that selected
+ID, then resume the protocol with `HRJPRQ03`: mode, original-envelope length,
+nonempty canonical-ID length, the exact original envelope at offset 32, and
+the canonical ID immediately afterward. Total extent must match both lengths.
+The original envelope remains the logical parsing bound; its method, params,
+ignored fields, duplicate checks and depth checks cannot consume trailer bytes.
+Resume requires the same first-key RawValue object and a canonical String or
+signed-i64 value. Fractions, exponent forms, negative zero and integers outside
+the signed-i64 range are not admitted as RequestId.
+
+The SDK's typed field boundaries are preserved. Method and `params.name` are
+strings; unknown struct fields remain ignored. Arguments are an optional
+JsonObject, so its root is a map and only its member values deserialize as
+generic Value. The full-span Value frame is `HJSVS002`; the typed-map frame is
+`HJSMS002`. Both contain operation 1, a u64 JSON length, and exactly that JSON
+span after the 24-byte header. The typed-map root must be an object and its own
+RawValue-named key remains an ordinary map key. Inside generic Value positions,
+only the first decoded object key activates RawValue; the string is decoded
+and reparsed with an independent original depth budget. A later RawValue key
+remains ordinary, and extra wrapper fields are rejected before publication.
+
+Both wide frames return a fixed 32-byte `HJSVR002` header containing status,
+body length and required capacity, followed by the canonical body on success.
+Statuses are 0 success, 1 ordinary JSON/value refusal, 2 workspace growth,
+3 output growth and 4 unrepresentable resource need. Status 5 is confined to
+an inner RawValue semantic refusal from `HJSMS002` operation 1; its two length
+fields are zero. The syscall bridge checks that exact originating frame before
+accepting status 5. Generic Value refusal remains status 1. The legacy
+`HSJVAL01` operation domain and its borrowed-buffer ABI are unchanged.
+
+Observed SDK routing is retained: invalid typed IDs, invalid selected RawValue
+IDs and unrepresentable raw JSON numbers silently discard that line while
+preserving the connection. Invalid method/jsonrpc fields produce an Invalid
+Request response without an ID, unless raw-number decoding has already failed.
+Invalid typed call parameters and inner argument RawValue failures produce
+the SDK's `-32601` / `tools/call` error with the admitted ID. These routes do
+not invoke the requested filesystem handler. A following valid request still
+uses the same live transport.
+
 `HGRWS002` is a 32-byte header: magic, kind, required capacity, reserved zero.
 Return is `0xffffffd0`. Kind 1 requests workspace, 2 output, and 3 denotes
 an unrepresentable resource boundary. Bridges check arithmetic, preserve live
@@ -101,6 +162,16 @@ adapter cases, 13 information cases, 31 ordinary View calls, a 19 MB error,
 a 67 MB input/output case, 262,146 JSON values, and 42 local Workdir scenarios
 with 336 public calls. It does not read original results. Complete original
 comparison is a separate qualification step.
+
+Two additive suites retain 4847 full-span Value/map cases, 37 complete-buffer
+capacity, refusal and recovery controls, and 94 actual public SDK-boundary
+cases with 243 responses. Their evidence controls copy only admitted source
+and artifact files and reject changed receipts, complete streams and domains.
+Separate fresh locked Rust builds replay every Value/map input and all 94
+SDK requests. The latter uses a typed SDK handler fixture to observe argument
+deserialization and protocol/error behavior; its body is not represented as
+the original View implementation. Existing public corpora, original reference
+steps, 60-second exchange deadlines and 180-second suite limits are unchanged.
 
 Transport/frontend/gateway byte windows grow dynamically. This does not close
 all resource dimensions. Configuration/execution still have legacy capacity

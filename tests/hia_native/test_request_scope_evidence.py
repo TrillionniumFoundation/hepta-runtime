@@ -8,13 +8,14 @@ import gzip
 import json
 import os
 from pathlib import Path
-import shutil
 import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'tests/hia_native'))
+from evidence_snapshot import copy_evidence_files, unrelated_fixture_guard
 import hia_native_request_scope_qualification as q
 from qualify_hia_runtime_native import completed_test_summary
 
@@ -22,23 +23,19 @@ CONTROLS = []
 
 
 @contextmanager
-def snapshot(source):
+def snapshot(source, expected):
     with tempfile.TemporaryDirectory(prefix='hia-request-scope-evidence-', dir=source.parent) as directory:
         destination = Path(directory) / 'snapshot'
-        shutil.copytree(source, destination, copy_function=os.link)
+        with unrelated_fixture_guard(source):
+            copy_evidence_files(source, destination, expected)
         yield destination
 
 
 @contextmanager
 def source_snapshot():
     with tempfile.TemporaryDirectory(prefix='hia-request-scope-source-', dir=ROOT.parent) as directory:
-        destination = Path(directory)
-        names = list(q.SOURCE_PINS) + ['scripts/hia_native_request_scope_qualification.py',
-                                     'tests/hia_native/test_request_scope_evidence.py']
-        for name in names:
-            target = destination / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            os.link(ROOT / name, target)
+        destination = Path(directory) / 'source'
+        copy_evidence_files(ROOT, destination, q.source_identity(ROOT))
         yield destination
 
 
@@ -74,12 +71,21 @@ class EvidenceTests(unittest.TestCase):
             callback()
         CONTROLS.append(name)
 
+    @contextmanager
+    def snapshot(self):
+        with snapshot(self.output, self.baseline['artifact_sha256']) as output:
+            # Replay process argv still names the actual original executable.
+            # Admit copied build bytes without inventing a relocated execution.
+            binding, _ = q.build_evidence(ROOT, output, self.report, q.Evidence(output))
+            self.assertEqual(binding, self.baseline['composition'])
+            yield output
+
     def test_01_complete_unchanged_evidence_is_admitted(self):
         self.assertEqual(self.baseline['status'], 'PASS')
         self.assertEqual(self.baseline['counts']['native_cases_added_by_validation'], 0)
         with source_snapshot() as root:
             self.assertEqual(q.source_identity(root), self.baseline['source_pins'])
-        with snapshot(self.output) as output:
+        with self.snapshot() as output:
             binding, _ = q.build_evidence(ROOT, output, self.report, q.Evidence(output))
             self.assertEqual(binding, self.baseline['composition'])
 
@@ -133,7 +139,7 @@ class EvidenceTests(unittest.TestCase):
         self.reject('absolute-artifact-path', lambda: q.owned(self.output, str(self.output / 'result.json')))
 
     def test_04_actual_compiler_images_and_private_table(self):
-        with snapshot(self.output) as output:
+        with self.snapshot() as output:
             def check(report=None):
                 return q.build_evidence(ROOT, output, self.report if report is None else report, q.Evidence(output))
 
@@ -169,7 +175,7 @@ class EvidenceTests(unittest.TestCase):
         record = copy.deepcopy(self.native['runs'][name])
         record['streams']['input']['bytes'] += 1
         self.reject('changed-frozen-input-domain', lambda: q.native_run(name, record, self.executable, q.Evidence(self.output)))
-        with snapshot(self.output) as output:
+        with self.snapshot() as output:
             original = self.native['runs'][name]
             stdout_path = output / q.FOLDER / original['streams']['stdout']['path']
             packed = stdout_path.read_bytes()

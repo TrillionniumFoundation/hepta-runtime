@@ -26,7 +26,9 @@ for path in (HERE, ROOT / 'scripts'):
         sys.path.insert(0, str(path))
 from atomic_write_kernel import run as run_kernel
 from hia_native_atomic_write_build import inspect_bundle
-from hia_native_atomic_write_qualification import OWN_FILES, policy_evidence, kernel_evidence
+from hia_native_atomic_write_qualification import (
+    OWN_FILES, policy_evidence, kernel_evidence, original_fixture_retirement,
+)
 
 ORIGINAL = "e55ce4df73d6e0b70e4065900d317f6b7329670ab6fcba44979ca69dcac80590"
 CLEARED = ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_TARGET",
@@ -214,6 +216,20 @@ def compare(runtime, native_manifest, policy_corpus, destination, *, rustc, carg
             result[name] = {k: v for k, v in value.items() if k != "observations"}
             if value["status"] != "PASS" or value["cases"] != 151 or value["requests"] != 171:
                 raise ValueError("actual kernel comparison domain is incomplete")
+        result['kernel_evidence'] = {}
+        for name, binary_id in (('native', native_identity), ('original', result['original_binary'])):
+            observed = kernel_evidence(destination / (name + '-kernel'), binary_id['sha256'], source_root=ROOT)
+            result['kernel_evidence'][name] = {key: value for key, value in observed.items() if key != 'observations'}
+        if identity(native) != native_identity or identity(original) != result["original_binary"]:
+            raise ValueError("executed binary changed during comparison")
+        if inspect_bundle(native_manifest, source_root=ROOT) != artifact:
+            raise ValueError('qualified native artifact changed during original comparison')
+        if source_pins != {name: identity(ROOT / name) for name in SOURCES} or reference.read_bytes() != original_bytes:
+            raise ValueError("source changed during original comparison")
+        # Pairwise semantic differences must remain a failing result, but cannot
+        # strand inaccessible live fixtures after their full evidence is saved.
+        result['fixture_retirement'] = original_fixture_retirement(
+            destination, result['kernel_evidence'], create=True)
         mismatches = []
         if len(native_kernel["observations"]) != len(original_kernel["observations"]):
             raise ValueError("kernel observation length differs")
@@ -225,10 +241,6 @@ def compare(runtime, native_manifest, policy_corpus, destination, *, rustc, carg
         write_json(destination / "mismatches.json", mismatches)
         if mismatches:
             raise ValueError(f"{len(mismatches)} actual original kernel comparisons differ")
-        result['kernel_evidence'] = {}
-        for name, binary_id in (('native', native_identity), ('original', result['original_binary'])):
-            observed = kernel_evidence(destination / (name + '-kernel'), binary_id['sha256'], source_root=ROOT)
-            result['kernel_evidence'][name] = {key: value for key, value in observed.items() if key != 'observations'}
         if identity(native) != native_identity or identity(original) != result["original_binary"]:
             raise ValueError("executed binary changed during comparison")
         if inspect_bundle(native_manifest, source_root=ROOT) != artifact:

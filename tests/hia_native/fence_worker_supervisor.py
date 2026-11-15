@@ -22,6 +22,41 @@ GETREGS, SETOPTIONS, GETEVENTMSG, GETSIGINFO, SYSCALL_INFO = 12, 0x4200, 0x4201,
 OPTIONS = 1 | 8 | 0x100000
 
 
+def owned_task_identity(parent, tid):
+    assert type(parent) is int and type(tid) is int and parent > 0 and tid > 0
+    task = Path(f"/proc/{parent}/task/{tid}")
+    fields = {}
+    for line in (task / "status").read_text().splitlines():
+        name, separator, value = line.partition(":")
+        if separator and name in ("Tgid", "Pid", "TracerPid"):
+            assert name not in fields and value.strip().isdigit()
+            fields[name] = int(value)
+    assert fields == {"Tgid": parent, "Pid": tid, "TracerPid": os.getpid()}
+    raw = (task / "stat").read_text()
+    first, tail = raw.split(" (", 1)
+    _, separator, tail = tail.rpartition(") ")
+    values = tail.split()
+    assert separator and int(first) == tid and len(values) >= 20
+    starttime = int(values[19])
+    assert starttime > 0
+    return (parent, tid, os.getpid(), starttime)
+
+
+def pending_initial_stop(parent, tid, status, live, parked, parent_identity):
+    assert type(tid) is int and tid > 0 and tid != parent and tid not in live and tid not in parked
+    assert os.WIFSTOPPED(status) and os.WSTOPSIG(status) == signal.SIGSTOP and status >> 16 == 0
+    assert owned_task_identity(parent, parent) == parent_identity
+    return owned_task_identity(parent, tid)
+
+
+def announced_worker_identity(parent, notifier, child, live, initial_masks, parked, parent_identity):
+    assert notifier == parent and child not in live and child not in initial_masks
+    assert owned_task_identity(parent, parent) == parent_identity
+    identity = owned_task_identity(parent, child)
+    assert child not in parked or parked[child] == identity
+    return identity
+
+
 class Registers(ctypes.Structure):
     _fields_ = [(name, ctypes.c_ulonglong) for name in (
         "r15 r14 r13 r12 rbp rbx r11 r10 r9 r8 rax rcx rdx rsi rdi orig_rax "
@@ -147,12 +182,13 @@ def main():
     address = native_address(raw, owner["offset"])
     expected_word = struct.unpack_from("<Q", raw, owner["offset"])[0]
     events, live, exits, pending, initial_masks = [], set(), {}, {}, {}
+    pending_initial, worker_identities = {}, {}
+    held_stops, early_stops = {}, []
     injected = None
     restored = False
     retired_regions = set()
     pending_retirement = None
     failure = None
-    held_stops, early_stops = {}, []
     pid = os.fork()
     if pid == 0:
         try:
@@ -165,40 +201,47 @@ def main():
             os.write(2, (str(error) + "\n").encode())
             os._exit(76)
     live.add(pid)
-
-    def initial_worker_stop(tid):
-        assert tid in live and tid != pid and tid not in initial_masks
-        initial_masks[tid] = blocked(tid)
-        events.append({"kind": "initial_worker_mask", "tid": tid, "mask": initial_masks[tid]})
-
     try:
         got, status = os.waitpid(pid, 0)
         assert got == pid and os.WIFSTOPPED(status) and os.WSTOPSIG(status) == signal.SIGTRAP
         assert Path(f"/proc/{pid}/exe").resolve() == executable
+        parent_identity = owned_task_identity(pid, pid)
         ptrace(SETOPTIONS, pid, 0, OPTIONS)
         ptrace(SYSCALL, pid)
         while live:
             tid, status = os.waitpid(-1, WALL)
             if os.WIFEXITED(status) or os.WIFSIGNALED(status):
-                assert tid in live and (tid != pid or not held_stops)
+                assert tid in live and (tid != pid or (not held_stops and not pending_initial))
                 live.remove(tid)
                 exits[tid] = os.waitstatus_to_exitcode(status)
                 events.append({"kind": "kernel_task_reaped", "tid": tid, "exit": exits[tid]})
                 continue
             if retain_unannounced_stop(pid, tid, status, live, held_stops):
+                pending_initial[tid] = pending_initial_stop(pid, tid, status, live, pending_initial, parent_identity)
                 continue
+            assert os.WIFSTOPPED(status) and tid in live
+            assert owned_task_identity(pid, tid) == (parent_identity if tid == pid else worker_identities[tid])
             sig, event = os.WSTOPSIG(status), status >> 16
             if event == 3:
+                assert sig == signal.SIGTRAP and tid == pid
                 child = ctypes.c_ulonglong()
                 ptrace(GETEVENTMSG, tid, 0, ctypes.byref(child))
+                identity = announced_worker_identity(pid, tid, child.value, live, initial_masks, pending_initial, parent_identity)
                 initial_status = confirm_owned_worker(pid, tid, child.value, live, held_stops)
+                worker_identities[child.value] = identity
                 events.append({"kind": "kernel_clone", "tid": child.value})
                 if initial_status is not None:
+                    assert child.value in pending_initial
+                    pending_initial.pop(child.value)
                     early_stops.append({"tid": child.value, "status": initial_status, "announced_by": tid})
-                    initial_worker_stop(child.value)
+                    initial_masks[child.value] = blocked(child.value)
+                    events.append({"kind": "initial_worker_mask", "tid": child.value, "mask": initial_masks[child.value]})
                     ptrace(SYSCALL, child.value)
             elif sig == signal.SIGSTOP and tid != pid:
-                initial_worker_stop(tid)
+                assert event == 0 and tid not in initial_masks
+                assert owned_task_identity(pid, tid) == worker_identities[tid]
+                initial_masks[tid] = blocked(tid)
+                events.append({"kind": "initial_worker_mask", "tid": tid, "mask": initial_masks[tid]})
             elif sig == (signal.SIGTRAP | 0x80):
                 op, value = syscall_info(tid)
                 if op == 1:
@@ -272,7 +315,8 @@ def main():
             else:
                 raise AssertionError(("unexpected owned ptrace stop", tid, sig, event))
             ptrace(SYSCALL, tid)
-        assert not held_stops and exits[pid] == 0 and all(code == 0 for code in exits.values())
+        assert not pending_initial and not held_stops
+        assert exits[pid] == 0 and all(code == 0 for code in exits.values())
         assert injected is not None and restored
         cleanup = [e["fd"] for e in events if e["kind"] == "fault_cleanup_close"]
         assert sorted(cleanup) == sorted(injected["owned_fds"])
@@ -285,18 +329,20 @@ def main():
         failure = repr(error)
         raise
     finally:
-        if live or held_stops:
+        if live or pending_initial or held_stops:
             try:
                 os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            while live or held_stops:
+            while live or pending_initial or held_stops:
                 tid, status = os.waitpid(-1, WALL)
                 if os.WIFEXITED(status) or os.WIFSIGNALED(status):
                     live.discard(tid)
+                    pending_initial.pop(tid, None)
                     held_stops.pop(tid, None)
                     exits[tid] = os.waitstatus_to_exitcode(status)
                 elif os.WIFSTOPPED(status) and tid in live:
+                    owned_task_identity(pid, tid)
                     ptrace(SYSCALL, tid, 0, signal.SIGKILL)
         report = {"schema": "hepta.effect-fence.actual-worker-fault.v1",
                   "status": "PASS" if failure is None else "FAIL", "failure": failure,
@@ -304,7 +350,7 @@ def main():
                   "executable_sha256": hashlib.sha256(raw).hexdigest(),
                   "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
                   "supervisor_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                  "owned_parent": pid, "all_owned_tasks_reaped": not live and not held_stops,
+                  "owned_parent": pid, "all_owned_tasks_reaped": not live and not pending_initial and not held_stops,
                   "exit_statuses": exits, "events": events,
                   "initial_stops_before_clone": early_stops,
                   "fault_is_synthetic": True, "kernel_sigill_is_actual": restored,

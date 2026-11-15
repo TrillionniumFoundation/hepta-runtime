@@ -4,7 +4,7 @@ import argparse,gzip,hashlib,json,os,stat,struct,subprocess,sys,time
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 if str(HERE) not in sys.path:sys.path.insert(0,str(HERE))
-from atomic_write_cases import cases,data,setup,snapshot,semantic_snapshot,normalized_trace
+from atomic_write_cases import cases,data,setup,snapshot,semantic_snapshot,normalized_trace,PinnedIdentities
 def sha(raw):return hashlib.sha256(raw).hexdigest()
 def encoded(value):return json.dumps(value,sort_keys=True,separators=(',',':')).encode()
 def wire(case):
@@ -41,7 +41,6 @@ def run(executable,destination,*,selected=None):
         for index,case in enumerate(corpus):
             name=f'{index:04d}-{case["name"]}';entry=destination/name;entry.mkdir(mode=0o700)
             fixture=entry/'fixture';setup(fixture,case)
-            before=snapshot(fixture,entry/'before-content')
             request_digest=hashlib.sha256();request_bytes=0
             with (entry/'request.bin').open('xb') as raw,gzip.open(entry/'request.bin.gz','wb') as compressed:
                 for _ in range(case.get('requests',1)):
@@ -51,14 +50,20 @@ def run(executable,destination,*,selected=None):
             (entry/'config.json').write_bytes(encoded(case['config'])+b'\n')
             command=[sys.executable,'-I',str(HERE/'atomic_write_supervisor.py'),'--executable',str(executable),'--fixture',str(fixture),
               '--config',str(entry/'config.json'),'--log',str(entry/'trace.json'),'--timeout','15']
-            with (entry/'request.bin').open('rb') as input_file:
-                child=subprocess.run(command,stdin=input_file,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20)
-            (entry/'stdout.bin').write_bytes(child.stdout);(entry/'stderr.bin').write_bytes(child.stderr)
-            after=snapshot(fixture,entry/'after-content');semantic=semantic_snapshot(before,after)
+            with PinnedIdentities(entry/'identity-custody.json') as pins:
+                before=snapshot(fixture,entry/'before-content',identity_pins=pins)
+                with (entry/'request.bin').open('rb') as input_file:
+                    child=subprocess.run(command,stdin=input_file,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                        timeout=20,close_fds=True)
+                (entry/'stdout.bin').write_bytes(child.stdout);(entry/'stderr.bin').write_bytes(child.stderr)
+                after=snapshot(fixture,entry/'after-content')
+                pins.after_snapshot(before)
+            semantic=semantic_snapshot(before,after)
             observation={'name':case['name'],'index':index,'request_bytes':request_bytes,'request_sha256':request_digest.hexdigest(),'request_file':str((entry/'request.bin.gz').relative_to(destination)),
               'fixture_path':str(fixture),
               'exit_code':child.returncode,'stdout_bytes':len(child.stdout),'stdout_sha256':sha(child.stdout),'stdout_hex':child.stdout.hex(),
-              'stderr_bytes':len(child.stderr),'stderr_sha256':sha(child.stderr),'before':before,'after':after,'semantic_snapshot':semantic}
+              'stderr_bytes':len(child.stderr),'stderr_sha256':sha(child.stderr),'before':before,'after':after,
+              'identity_custody':pins.receipt,'semantic_snapshot':semantic}
             if (entry/'trace.json').exists():
                 trace=json.loads((entry/'trace.json').read_bytes());observation['trace']=trace
                 observation['normalized_trace']=normalized_trace(trace,fixture)

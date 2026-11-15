@@ -1,6 +1,6 @@
 """Strict source, artifact, complete native corpus and original-Rust evidence."""
 from __future__ import annotations
-import collections,copy,gzip,hashlib,json,os,stat,struct,sys,tomllib
+import collections,copy,gzip,hashlib,json,os,shutil,stat,struct,sys,tomllib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 for p in (ROOT/'scripts',ROOT/'tests/hia_native'):
@@ -65,8 +65,8 @@ def source_contract(root=ROOT,reference=None,hepta=None):
             exact(f,old[name],'atomic imported function body changed')
             exact(sha(canonical(f)),row['functions'][name],'atomic imported function digest differs');count+=1
     exact(count,5,'atomic imported function count differs')
-    exact(sha(read(root/'scripts/hia_native_build.py')),'7b01d602d50835f2b73a2b7b39761c0cef08a372493985161d59184d52c0dcb2','atomic compiler driver changed')
-    exact(sha(read(root/'scripts/hia_native_loader.py')),'331b1fdc693df44847723f7171a1338918d1558f1cdc48f558cd29b32f2971e2','actual atomic loader changed')
+    exact(sha(read(root/'scripts/hia_native_build.py')),'02cc0f23764d3a2bc6c1325e2ed5beb7986a6b64b22827c6ddcb10d2799de7d1','atomic compiler driver changed')
+    exact(sha(read(root/'scripts/hia_native_loader.py')),'58e2fe0492379340d7471a7857e1aa5de1a9a5d1e37a118852278b131bb1fe06','actual atomic loader changed')
     lock=tomllib.loads(read(root/'tests/hia_native/atomic_write_oracle/Cargo.lock').decode())
     dependencies={}
     expected={'tokio':('1.53.1','202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed'),
@@ -152,6 +152,83 @@ def snapshot_contents(entry,name,rows):
     exact({p.name for p in folder.iterdir()},wanted,'retained content archive set differs')
     return files,total
 
+def identity_custody(receipt,before):
+    """Admit real observer-held inode lifetimes through the after-snapshot."""
+    exact(set(receipt),{'schema','flags','pins','observed_after_snapshot','closed_fds',
+      'close_errors','all_closes_verified','body_error'},'identity custody fields differ')
+    exact(receipt['schema'],'hepta.runtime.atomic-identity-custody.v1','identity custody schema differs')
+    exact(receipt['flags'],os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,'identity pin flags differ')
+    require(receipt['observed_after_snapshot'] is True and receipt['all_closes_verified'] is True,
+      'identity pins did not span the complete snapshot and close')
+    exact(receipt['close_errors'],[],'identity pin close failed')
+    exact(receipt['body_error'],None,'identity snapshot did not complete')
+    pins=receipt['pins'];exact(len(pins),len(before),'original inode was not pinned')
+    handles=[]
+    for pin,observed in zip(pins,before,strict=True):
+        exact(set(pin),{'path','fd','before','inheritable','after'},'identity pin fields differ')
+        exact(pin['path'],observed['path'],'identity pin path differs')
+        require(type(pin['fd'])is int and pin['fd']>=0 and pin['fd'] not in handles,
+          'identity pin descriptor is invalid or reused while live')
+        handles.append(pin['fd']);require(pin['inheritable'] is False,'identity pin reached the tested child')
+        wanted={'dev':observed['dev'],'inode':observed['inode'],'file_type':stat.S_IFMT(observed['mode'])}
+        exact(pin['before'],wanted,'pinned inode differs from the original snapshot')
+        exact(set(pin['after']),{'dev','inode','file_type','nlink'},'identity pin final observation differs')
+        require(type(pin['after']['nlink'])is int and pin['after']['nlink']>=0,'invalid pinned link count')
+        exact({k:pin['after'][k] for k in wanted},wanted,'original inode custody changed before the after-snapshot')
+    exact(receipt['closed_fds'],handles,'not every identity pin was closed exactly once')
+    return receipt
+
+
+def retire_fixtures(output,fixtures,receipt,evidence,*,create=False):
+    """Retire only owned live targets after their complete evidence is admitted."""
+    output=Path(output);receipt=Path(receipt)
+    expected={'schema':'hepta.runtime.atomic-write-fixture-retirement.v1','status':'PASS',
+      'fixture_directories':list(fixtures),'complete_evidence_sha256':sha(canonical(evidence)),
+      'semantic_invocations_added':0}
+    if receipt.exists():
+        if receipt.is_symlink() or obj(receipt)!=expected:
+            raise ValueError('atomic fixture retirement receipt differs')
+    elif create:
+        if output.is_symlink() or output.resolve(strict=True)!=output:
+            raise ValueError('atomic fixture retirement root differs')
+        paths=[]
+        for name in fixtures:
+            relative=Path(name)
+            if relative.is_absolute() or '..' in relative.parts or relative.name!='fixture':
+                raise ValueError('atomic fixture retirement path escaped its owner')
+            path=output/relative;info=path.lstat()
+            if path.resolve()!=path or not stat.S_ISDIR(info.st_mode) or info.st_uid!=os.getuid():
+                raise ValueError('atomic live fixture is not an owned real directory')
+            paths.append(path)
+        # Each tested child has been reaped. Preserve every captured stream,
+        # snapshot and content archive; only its separate live target is removed.
+        if not shutil.rmtree.avoids_symlink_attacks:
+            raise ValueError('atomic fixture retirement requires descriptor-based removal')
+        for path in paths:
+            path.chmod(0o700)
+            for base,dirs,_ in os.walk(path,followlinks=False):
+                for name in dirs:
+                    child=Path(base)/name;info=child.lstat()
+                    if stat.S_ISDIR(info.st_mode):
+                        if info.st_uid!=os.getuid():
+                            raise ValueError('atomic live fixture contains an unowned directory')
+                        child.chmod(0o700,follow_symlinks=False)
+            shutil.rmtree(path)
+        with receipt.open('x') as stream:
+            stream.write(json.dumps(expected,sort_keys=True,indent=2)+'\n')
+    else:raise ValueError('completed atomic fixture retirement receipt is missing')
+    if any((output/name).exists() or (output/name).is_symlink() for name in fixtures):
+        raise ValueError('retired atomic live fixture reappeared')
+    return expected
+
+
+def original_fixture_retirement(directory,kernel_receipts,*,create=False):
+    exact(set(kernel_receipts),{'native','original'},'original fixture custody omitted a writer')
+    fixtures=tuple(f'{kind}-kernel/{index:04d}-{case["name"]}/fixture'
+      for kind in ('native','original') for index,case in enumerate(case_module.cases()))
+    return retire_fixtures(directory,fixtures,Path(directory)/'retired-fixtures.json',kernel_receipts,create=create)
+
+
 def kernel_evidence(directory,binary_sha,*,source_root=ROOT,stdout=None,artifact=None):
     directory=Path(directory);root=Path(source_root);result=obj(directory/'result.json')
     corpus=case_module.cases();definition=encoded(corpus);exact(sha(definition),CASE_SHA,'atomic kernel domain changed')
@@ -227,11 +304,13 @@ def kernel_evidence(directory,binary_sha,*,source_root=ROOT,stdout=None,artifact
         exact(row['normalized_trace'],normalized_row,'kernel normalization omitted an event')
         exact(row['semantic_snapshot'],case_module.semantic_snapshot(row['before'],row['after'],result['execution_uid'],result['execution_gid']),
               'filesystem state projection differs')
+        custody=identity_custody(obj(entry/'identity-custody.json'),row['before'])
+        exact(row['identity_custody'],custody,'retained inode lifetime receipt differs')
         for name in ('before','after'):
             payloads,total=snapshot_contents(entry,name+'-content',row[name]);content_bytes+=total
             files.update({label+'/'+n:v for n,v in payloads.items()})
         exact(obj(entry/'observation.json'),row,'individual kernel observation changed')
-        for name in ('request.bin.gz','stdout.bin','stderr.bin','trace.json','observation.json','config.json'):
+        for name in ('request.bin.gz','stdout.bin','stderr.bin','trace.json','observation.json','config.json','identity-custody.json'):
             files[label+'/'+name]=file_record(entry/name)
         exact(obj(entry/'config.json'),case['config'],'retained kernel configuration changed')
         normalized.append({'name':case['name'],'stdout_hex':actual.hex(),'semantic_snapshot':row['semantic_snapshot'],'trace':normalized_row})
@@ -425,6 +504,9 @@ def original_comparison_evidence(directory,bundle_path,policy_corpus,*,source_ro
         receipt=obj(directory/(name+'-kernel')/'result.json')
         exact(value[name+'_kernel'],{key:item for key,item in receipt.items() if key!='observations'},'original result omitted kernel completion')
         files.update({name+'-kernel/'+key:item for key,item in observed['files'].items()})
+    retirement=original_fixture_retirement(directory,value['kernel_evidence'])
+    exact(value['fixture_retirement'],retirement,'original live-target retirement differs')
+    files['retired-fixtures.json']=file_record(directory/'retired-fixtures.json')
     for left,right in zip(native['observations'],rust['observations'],strict=True):
         for field in ('name','request_bytes','request_sha256','stdout_hex','semantic_snapshot','normalized_trace'):
             exact(left[field],right[field],'actual original atomic_write differs: '+left['name']+'/'+field)

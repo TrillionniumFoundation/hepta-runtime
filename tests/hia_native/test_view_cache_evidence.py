@@ -15,10 +15,13 @@ ROOT=Path(__file__).resolve().parents[2]
 REFERENCE=Path(os.environ.get('HIA_REFERENCE_RUNTIME',ROOT))
 sys.path.insert(0,str(REFERENCE/'scripts'))
 sys.path.insert(0,str(ROOT/'scripts'))
+sys.path.insert(0,str(ROOT/'tests/hia_native'))
 from qualify_hia_runtime_native import completed_test_summary
 from hia_native_view_cache_qualification import FOLDER,native_evidence
+from evidence_snapshot import copy_evidence_files, unrelated_fixture_guard
 
 CONTROLS=0
+SNAPSHOT_READS=0
 
 
 def sha(raw):
@@ -26,7 +29,7 @@ def sha(raw):
 
 
 def replace(path,raw):
-    # Snapshots use hard links; retire the private link before a controlled edit.
+    # Replace only this snapshot's private copy during a controlled edit.
     path.unlink()
     path.write_bytes(raw)
 
@@ -44,13 +47,20 @@ class EvidenceTests(unittest.TestCase):
         cls.actual=native_evidence(ROOT,cls.output,cls.report,completed_test_summary,reference_root=REFERENCE)
 
     def snapshot(self):
-        temporary=tempfile.TemporaryDirectory(prefix='hia-cache-evidence-', dir=self.output.parent)
+        global SNAPSHOT_READS
+        temporary=tempfile.TemporaryDirectory(prefix='hia-cache-evidence-')
         output=Path(temporary.name)/'capture'
-        # Public Workdir fixtures include deliberate symlink cycles.
-        # Copy links without following targets; readers still check their owned artifacts.
-        shutil.copytree(self.output,output,copy_function=os.link, symlinks=True)
         self.addCleanup(temporary.cleanup)
-        return output,copy.deepcopy(self.report)
+        expected={**self.actual['artifact_sha256'],**self.actual['corpus_sha256'],
+                  'test_view_cache.py.stdout':self.actual['test_stdout_sha256'],
+                  'test_view_cache.py.stderr':self.actual['test_stderr_sha256']}
+        with unrelated_fixture_guard(self.output):
+            copy_evidence_files(self.output,output,expected)
+        report=copy.deepcopy(self.report)
+        self.assertEqual(native_evidence(ROOT,output,report,completed_test_summary,
+                                         reference_root=REFERENCE),self.actual)
+        SNAPSHOT_READS+=1
+        return output,report
 
     def refuses(self,output,report,reference=REFERENCE):
         global CONTROLS
@@ -128,7 +138,7 @@ class EvidenceTests(unittest.TestCase):
 
 if __name__=='__main__':
     result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(EvidenceTests))
-    status=result.wasSuccessful() and result.testsRun==4 and CONTROLS==10
+    status=result.wasSuccessful() and result.testsRun==4 and CONTROLS==10 and SNAPSHOT_READS==10
     print(json.dumps({'schema':'hepta.runtime.view-cache-evidence-tests.v1','status':'PASS' if status else 'FAIL',
                       'test_groups':result.testsRun,'refusal_controls':CONTROLS,'native_calls_added':0,
                       'test_sha256':sha(Path(__file__).read_bytes())},sort_keys=True))

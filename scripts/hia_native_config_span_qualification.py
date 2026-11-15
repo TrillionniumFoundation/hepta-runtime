@@ -15,12 +15,12 @@ COMPILER='bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
 COMMIT='d3e2c90173cf733e42b299d0c4274df4b593a12f'
 SOURCE_PINS=json.loads(r'''{
   "native/canonical_path.hepta": {
-    "bytes": 366259,
-    "sha256": "8bc481de311ccc10e5370823d4b1d462eec07c57368eb9a77573c92de15b6cfb"
+    "bytes": 377552,
+    "sha256": "5be55498ecc1a2c47d0512d06887eb99007ddb610f30868eccdfd4805162554a"
   },
   "native/config_directory_owner_span.hepta": {
-    "bytes": 286227,
-    "sha256": "c9167832011ca2e448a3998e1acea8d9f7c339f7d76642e5db44017a4bd3b4b0"
+    "bytes": 288259,
+    "sha256": "6a0e7817013c32bd7189864c91dc768764ae44988cabe4391446ceafea9b5d81"
   },
   "native/config_fs_span.hepta": {
     "bytes": 78118,
@@ -87,8 +87,8 @@ SOURCE_PINS=json.loads(r'''{
     "sha256": "18953ed21ea1ff65266d562a552958f3d0c08857801bf95ca1779743fad0f0fd"
   },
   "native/serde_json.hepta": {
-    "bytes": 195187,
-    "sha256": "6c3afb7d322b3c42d89727651aaae7cc1907a7766773e0bff4fdac9b11567a96"
+    "bytes": 342221,
+    "sha256": "ef9dd3a567acf523257c4245c022b8cefa9b3ddb83075e826f129b1a1f341d18"
   },
   "scripts/config_mcp_grow_adapter.S": {
     "bytes": 45268,
@@ -116,7 +116,7 @@ SOURCE_PINS=json.loads(r'''{
   },
   "tests/hia_native/config_span/graph_sources.json": {
     "bytes": 2749,
-    "sha256": "25f8a734258ae7fe516fffee5d39119ecd038b448666206bec88002b48e50673"
+    "sha256": "63a621254c469ccd1915c59ebf3724fbd597225e2381b3e14b5d80f9411fcee2"
   },
   "tests/hia_native/config_span/grow_bridge.S": {
     "bytes": 24444,
@@ -125,11 +125,15 @@ SOURCE_PINS=json.loads(r'''{
   "tests/hia_native/config_span/grow_fixture.S": {
     "bytes": 3979,
     "sha256": "eac97286cad0d53b46b007d98aeee80d94f9863cba91f16d782ea32f9de7ebdc"
+  },
+  "tests/hia_native/config_span/op8_composition.json": {
+    "bytes": 5356,
+    "sha256": "a59607d91a95cfe199afbf0f30c8a844742a914f42745d0cf24b3b0fe7b3b495"
   }
 }''')
 PROFILE_PIN=json.loads(r'''{
-  "bytes": 4634,
-  "sha256": "3d03408b426638a7b1a8af05eae891737ca44c3eecbe0d04ec7ee86ed0f136e9"
+  "bytes": 4804,
+  "sha256": "c62ce3106ab8b3a0013e0567d4aa9adb1e282080d7ff5f9eb1a6330b190e864b"
 }''')
 PRODUCER_PINS=json.loads(r'''{
   "guard.py": {
@@ -690,7 +694,7 @@ def semantic_evidence(e):
     manifest_artifacts(b,r,names)
     rows=b.json('SOURCE.json');bound_source_table(e,rows)
     need(len(rows)==7,'all semantic producer inputs')
-    e.b['source'].file('scripts/hia_native_loader.py',{'bytes':12728,'sha256':'331b1fdc693df44847723f7171a1338918d1558f1cdc48f558cd29b32f2971e2'})
+    e.b['source'].file('scripts/hia_native_loader.py',{'bytes':12787,'sha256':'58e2fe0492379340d7471a7857e1aa5de1a9a5d1e37a118852278b131bb1fe06'})
     reference=e.b['semantic_source']
     for name,pin in SEMANTIC_INPUTS.items():reference.file(name,pin)
     before=list(sys.path);sys.path[:0]=[str(reference.root/'scripts'),str(reference.root/'tests/hia_native')]

@@ -1,0 +1,123 @@
+// Copyright 2026 Muvon Un Limited
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Test-only access to unchanged original background renderers.
+//!
+//! Stable-file operations call original read/resource_text. Observed-tail mode
+//! inserts byte-exact original statement spans below; it performs no file read.
+use super::*;
+use anyhow::anyhow;
+
+pub(crate) struct Rendered {
+	pub output: Vec<u8>,
+	pub text: Vec<u8>,
+	pub uri: Vec<u8>,
+	pub truncated: bool,
+}
+
+static FIXTURE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+struct FixtureFiles {
+	id: String,
+	directory: PathBuf,
+}
+
+impl Drop for FixtureFiles {
+	fn drop(&mut self) {
+		if let Ok(mut registry) = jobs().lock() {
+			registry.remove(&self.id);
+		}
+		let _ = std::fs::remove_dir_all(&self.directory);
+	}
+}
+
+fn carrier(
+	id: &str,
+	command: &str,
+	status: JobStatus,
+	stdout_path: PathBuf,
+	stderr_path: PathBuf,
+	working_dir: PathBuf,
+) -> Job {
+	Job {
+		id:id.to_string(),command:command.to_string(),stdout_path,stderr_path,working_dir,
+		status:Arc::new(Mutex::new(status)),pid:0,started_unix:0,
+	}
+}
+
+pub(crate) fn absent(id: &str) -> Result<()> {
+	jobs().lock().map_err(|_|anyhow!("fixture registry poisoned"))?.remove(id);
+	if super::read(id).is_some() || super::resource_text(id).is_some() {
+		return Err(anyhow!("original missing-job access unexpectedly returned a value"));
+	}
+	Ok(())
+}
+
+pub(crate) fn stable(
+	id: &str,
+	command: &str,
+	status: JobStatus,
+	stdout: &[u8],
+	stderr: &[u8],
+) -> Result<Rendered> {
+	let sequence=FIXTURE_SEQUENCE.fetch_add(1,Ordering::Relaxed);
+	let directory=std::env::temp_dir().join(format!(
+		"hepta-shell-background-oracle-{}-{sequence}",std::process::id()));
+	std::fs::create_dir(&directory)?;
+	let guard=FixtureFiles{id:id.to_string(),directory:directory.clone()};
+	let stdout_path=directory.join("stdout.bin");
+	let stderr_path=directory.join("stderr.bin");
+	std::fs::write(&stdout_path,stdout)?;
+	std::fs::write(&stderr_path,stderr)?;
+	let job=carrier(id,command,status,stdout_path,stderr_path,directory);
+	jobs().lock().map_err(|_|anyhow!("fixture registry poisoned"))?.insert(id.to_string(),job);
+	let view=super::read(id).ok_or_else(||anyhow!("original read lost the supplied fixture job"))?;
+	let text=super::resource_text(id).ok_or_else(||anyhow!("original resource text lost the fixture job"))?;
+	let result=Rendered{
+		output:view.output.into_bytes(),text:text.into_bytes(),
+		uri:super::resource_uri(id).into_bytes(),truncated:view.truncated,
+	};
+	drop(guard);
+	Ok(result)
+}
+
+fn projected_view(
+	job: &Job,
+	stdout: Vec<u8>,
+	stdout_truncated: bool,
+	stderr: Vec<u8>,
+	stderr_truncated: bool,
+) -> Option<JobView> {
+/* ORIGINAL_READ_PROJECTION */
+fn projected_text(id: &str, view: &JobView) -> Option<String> {
+/* ORIGINAL_RESOURCE_PROJECTION */
+pub(crate) fn observed_tails(
+	id: &str,
+	command: &str,
+	status: JobStatus,
+	stdout: Vec<u8>,
+	stdout_truncated: bool,
+	stderr: Vec<u8>,
+	stderr_truncated: bool,
+) -> Result<Rendered> {
+	let job=carrier(id,command,status,PathBuf::new(),PathBuf::new(),PathBuf::new());
+	let view=projected_view(&job,stdout,stdout_truncated,stderr,stderr_truncated)
+		.ok_or_else(||anyhow!("original tail projection returned no view"))?;
+	let text=projected_text(id,&view)
+		.ok_or_else(||anyhow!("original formatting projection returned no text"))?;
+	Ok(Rendered{
+		output:view.output.into_bytes(),text:text.into_bytes(),
+		uri:super::resource_uri(id).into_bytes(),truncated:view.truncated,
+	})
+}

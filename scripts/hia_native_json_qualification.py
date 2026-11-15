@@ -160,7 +160,9 @@ def source_inputs(root: Path, original_root: Path | None = None) -> dict:
                 or digest(after.group().encode()) != expected):
             raise ValueError('JSON original derived definition differs: ' + name)
     for name in ['native/filter_packer.hepta', 'scripts/hia_native_build.py', 'scripts/hia_native_loader.py',
-                 'scripts/hia_native_json_qualification.py', 'tests/hia_native/json_native_cases.py',
+                 'scripts/hia_native_json_qualification.py', 'scripts/hia_native_raw_value_qualification.py',
+                 'tests/hia_native/raw_value_cases.py', 'tests/hia_native/test_serde_json_raw_value.py',
+                 'tests/hia_native/test_serde_json_raw_value_evidence.py', 'tests/hia_native/json_native_cases.py',
                  'tests/hia_native/test_fence_json.py', 'tests/hia_native/test_serde_json.py',
                  'tests/hia_native/test_serde_json_transport.py', 'tests/hia_native/test_json_evidence.py']:
         files[name] = digest(regular(root / name))
@@ -416,6 +418,14 @@ def qualification_evidence(root: Path, output: Path, report: dict, completed) ->
     evidence['corpus_sha256'][EVIDENCE_REPORT] = digest(stored)
     evidence['artifact_sha256'][name + '.stdout'] = check['stdout_sha256']
     evidence['artifact_sha256'][name + '.stderr'] = check['stderr_sha256']
+    from hia_native_raw_value_qualification import qualification_evidence as raw_value_evidence
+    raw_value = raw_value_evidence(root, output, report, completed)
+    evidence['raw_value'] = raw_value
+    evidence['artifact_sha256'].update(raw_value['artifact_sha256'])
+    evidence['corpus_sha256'].update(raw_value['corpus_sha256'])
+    evidence['tests'].update(raw_value['tests'])
+    evidence['actual_native_calls'] += raw_value['actual_native_calls']
+    evidence['captured_reference_cases'] += raw_value['captured_reference_cases']
     return evidence
 
 
@@ -502,6 +512,9 @@ def check_original_receipts(root: Path, output: Path, report: dict, completed) -
                 or check.get('stdin_bytes') != CORPUS_IDENTITIES[component]['requests_bytes']
                 or expected.get('native_cases_added_by_replay') != 0):
             raise ValueError('JSON full actual original replay or retained bytes differ: ' + component)
+        if component == 'serde_json':
+            from hia_native_raw_value_qualification import check_original as check_raw_value_original
+            check_raw_value_original(root, output, report, expected.get('raw_value', {}), build, completed)
 
 
 def compare_original(root: Path, output: Path, report: dict, rustc: Path, cargo: Path,
@@ -551,6 +564,10 @@ def compare_original(root: Path, output: Path, report: dict, rustc: Path, cargo:
         'reference_kind': ('unchanged OwnerDocument/LegacyJobKey derives with original locked serde dependencies'
             if component == 'fence_json' else 'original locked serde_json Value/Number with float_roundtrip and zmij'),
         'native_cases_added_by_replay': 0, 'production_activated': False, 'whole_runtime_replaced': False}
+    if component == 'serde_json':
+        from hia_native_raw_value_qualification import compare_original as compare_raw_value_original
+        result['raw_value'] = compare_raw_value_original(root, output, report, build, completed=completed,
+            record_check=record_check, environment=environment)
     with (folder / 'rust-comparison.json').open('x') as stream:
         stream.write(json.dumps(result, indent=2, sort_keys=True) + '\n')
     return result

@@ -1,0 +1,67 @@
+{
+  "schema": "hepta.runtime.hia-bellman-component.v1",
+  "component": "weight_bellman_numerical_core",
+  "target": "linux-x86_64",
+  "original_repository": "TrillionniumFoundation/hepta-runtime",
+  "original_commit": "737acf6f901e46c57b0b4374e323e0d1132e0d49",
+  "original_path": "src/mcp/weight_bellman.rs",
+  "original_sha256": "254de61b7a169ab0a01583feb9562051fa9d477d89d98683263c52ea5545a4a7",
+  "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+  "compiler_image_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
+  "shared_integer_arithmetic_graph_sha256": "9690668a3d1ef7b8531c2f7187220c7b5e8977367e3d3a0b9b36d0e258e64cce",
+  "files": {
+    "finite_binary64.hepta": {
+      "bytes": 28700,
+      "sha256": "9c79fd920948720c56b1f4713c17c9eb6a23ab17338ffd6394a3795ef717313b"
+    },
+    "bellman_core.hepta": {
+      "bytes": 70114,
+      "sha256": "38dba3ef98789f78db25fefeed234f1e858fd5cecef1e528ec3f7da1a1ae039f"
+    },
+    "bellman_core_abi.md": {
+      "bytes": 6303,
+      "sha256": "6e4147441eaebf23c521ca9bb7514efdfc02f5c836e16197ff8c128dbbe97ee6"
+    },
+    "hia_native_bellman_build.py": {
+      "bytes": 7141,
+      "sha256": "b931299732e0d313de11f187fa59fe5dc8cae3d9018e4d4d9b6b437a600c2f97"
+    },
+    "qualify_binary64.py": {
+      "bytes": 4929,
+      "sha256": "858f74b972e6fc274a4832782a86fdc2a75ddf6ef1415369f770b599e2e0a404"
+    },
+    "qualify_bellman.py": {
+      "bytes": 12970,
+      "sha256": "78b539020ac38ec244937cbb3f799ca01398ffe5c4c722523552cecf9686b289"
+    },
+    "qualify_signed_zero.py": {
+      "bytes": 1931,
+      "sha256": "e5448b4685d4f23c82558e0aa635fe1b5a635e139e3b20a4f3b75d3202c1fda7"
+    },
+    "make_bellman_oracle.py": {
+      "bytes": 6581,
+      "sha256": "bb3679e3140fba97f13670d8ffefcfd92b4a97dc70db4f4450a97b841f59f752"
+    }
+  },
+  "production_call_sites_replaced": false,
+  "whole_handler_replaced": false,
+  "production_activated": false,
+  "old_stack_removal_qualified": false,
+  "required_public_integration": [
+    "exact serde JSON admission",
+    "typed canonical request commitment and plan identity",
+    "public JSON result and error rendering",
+    "original deadline",
+    "async permit and cancellation lifetime",
+    "MCP registration and caller qualification"
+  ],
+  "qualification_command": "python scripts/hia_native_bellman_build.py --runtime . --hepta HEPTA_PIN --sources native --drivers tests/hia_native/bellman --original src/mcp/weight_bellman.rs --output QUALIFICATION_OUTPUT",
+  "fixed_probe_cases": 165810,
+  "graph_cases": 299,
+  "signed_zero_graph_cases": 64,
+  "historical_failed_attempts": [
+    "two original HIA compilations exceeded the qualified sixteen-block-argument profile; private counters moved to bounded workspace header without changing numerical semantics",
+    "first local portable report failed absolute/relative path handling after successful native steps; fixed and complete native suite rerun",
+    "first remote original Rust build omitted edition2021; compile failed, then same source compiled with original Cargo edition2021"
+  ]
+}

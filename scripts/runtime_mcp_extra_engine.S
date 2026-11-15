@@ -438,7 +438,24 @@ runtime_grow_value_result:
     mov rdx, 0x3230305256534a48 /* HJSVR002 */
     cmp [r13], rdx
     jne runtime_grow_bad
-    jmp runtime_grow_status32
+    cmp qword ptr [r13 + 8], 5
+    jne runtime_grow_status32
+    /* Typed Map RawValue failure is an ordinary completed reply only for
+     * the exact new input mode; existing Value/status and other leaf
+     * domains keep their original guards. No body or growth extent exists. */
+    cmp qword ptr [rsp + 8], 24
+    jb runtime_grow_bad
+    mov rdx, [rsp]
+    mov rax, 0x323030534d534a48 /* HJSMS002 */
+    cmp [rdx], rax
+    jne runtime_grow_bad
+    cmp qword ptr [rdx + 8], 1
+    jne runtime_grow_bad
+    mov rax, [r13 + 16]
+    or rax, [r13 + 24]
+    jnz runtime_grow_bad
+    mov eax, 32
+    jmp runtime_grow_extent_ready
 runtime_grow_workdir_params_result:
     cmp eax, 32
     jne runtime_grow_bad
