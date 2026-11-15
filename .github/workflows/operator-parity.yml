@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
@@ -23,12 +23,12 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           git archive --format=tar.gz HEAD > /tmp/hepta-runtime-source.tar.gz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: operator-source-${{ github.sha }}
           path: /tmp/hepta-runtime-source.tar.gz
           retention-days: 7
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@92e73e19cbfb3981e63ef478a16f95f415e634d3 # 1.99.0
         with:
           components: rustfmt, clippy
       - name: Install and verify native PDF renderer
@@ -194,7 +194,7 @@ jobs:
             /tmp/hepta-document-worker/bin/python tests/pdf_security_prototype_tests.py
             /tmp/hepta-document-worker/bin/python tests/pdf_policy_tests.py
           } 2>&1 | tee /tmp/operator-tests.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: operator-tests-${{ github.sha }}
@@ -202,7 +202,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: operator-v10-local-protocol-and-offline-receipts-${{ github.sha }}
@@ -226,7 +226,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
           name: format-failure-fixtures-${{ github.sha }}
