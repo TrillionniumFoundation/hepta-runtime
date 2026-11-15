@@ -477,7 +477,7 @@ fn cohort_crash_worker() {
 	let response = runtime
 		.block_on(apply_with_roots(
 			params,
-			&[root.clone()],
+			std::slice::from_ref(&root),
 			&root.join("state"),
 			None,
 			None,
