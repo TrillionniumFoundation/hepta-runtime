@@ -1,7 +1,9 @@
 """Consume every original strace line; delimit unchanged publication calls."""
 import re,os
 from common import require,pin,integer
-LINE=re.compile(r'^(\d+) (\d+\.\d+) (.*)$')
+# strace pads a short PID column with ASCII spaces (for example "5499  ").
+# Keep the timestamp and complete syscall body separate; do not strip records.
+LINE=re.compile(r'^(\d+) +(\d+\.\d+) (.*)$')
 CALL=re.compile(r'^([a-z][a-z0-9_]*)\((.*)\)\s+=\s+(.*?)\s+<(\d+\.\d+)>$')
 ALLOWED={'getpgid','open','openat','close','read','write','readv','writev','lseek','newfstatat','fstat','statx','flock','flistxattr','geteuid','getrandom','fchmod','fsync','fdatasync','renameat','renameat2','unlinkat','fcntl','dup','dup2','dup3','exit','exit_group'}
 def split_args(raw):

@@ -954,6 +954,65 @@ class QualificationReportingTests(unittest.TestCase):
             self.assertEqual(q.text_publication_retirement(self.output, self.report, create=True), fixture)
         called.assert_called_once_with(ROOT, self.output, self.report, q.completed_test_summary, create=True)
 
+    def test_text_original_trace_accepts_pid_padding_without_skipping_records(self):
+        import hashlib
+        import hia_native_text_publication_reference as reference
+        api = reference.load_api(ROOT)
+        trace = api['ordinary_evidence'].__globals__['trace_evidence']
+        oracle = ROOT / reference.ORACLE
+        source_table = json.loads((ROOT / reference.CONTRACT).read_bytes())['files']
+        for name, expected in source_table.items():
+            data = (oracle / name).read_bytes()
+            self.assertEqual({'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}, expected)
+        for name, expected in api['race_evidence'].__globals__['ORDINARY_READER_PINS'].items():
+            self.assertEqual(expected, source_table['readers/' + name])
+        for name, expected in api['qualification_evidence'].__globals__['SOURCE_PINS'].items():
+            self.assertEqual(expected, source_table[name])
+
+        def capture(pid, padding):
+            # CI run 43765626814 used the prefix "5499  1794780630.112251 ".
+            prefix = pid + padding + '1794780630.112251 '
+            bodies = (
+                'getpgid(900000000) = -1 ESRCH (No such process) <0.000001>',
+                'openat(AT_FDCWD, "missing", O_RDONLY) = -1 ENOENT (No such file or directory) <0.000001>',
+                'getpgid(900000001) = -1 ESRCH (No such process) <0.000001>',
+                'exit_group(0) = ?',
+                '+++ exited with 0 +++',
+            )
+            return ''.join(prefix + body + '\n' for body in bodies).encode('ascii')
+
+        for pid, padding in [('1', '     '), ('12', '    '), ('123', '   '),
+                             ('5499', '  '), ('12345', ' '), ('1234567', ' ')]:
+            with self.subTest(pid=pid):
+                proof = trace(capture(pid, padding), [0], {0: {'ok': False}})
+                self.assertEqual((proof['trace_pid'], proof['line_count'],
+                                  proof['syscalls'], proof['marker_pairs']),
+                                 (int(pid), 5, 4, 1))
+                self.assertEqual(proof['cases'][0]['syscall_count'], 1)
+                self.assertEqual(proof['cases'][0]['syscalls'][0]['errno'], 'ENOENT')
+                self.assertTrue(proof['all_lines_consumed'])
+
+        raw = capture('5499', '  ')
+        mutations = {
+            'tab-in-pid-padding': raw.replace(b'5499  ', b'5499\t ', 1),
+            'missing-pid-separator': raw.replace(b'5499  ', b'5499', 1),
+            'signed-pid': raw.replace(b'5499  ', b'-5499  ', 1),
+            'invalid-timestamp': raw.replace(b'1794780630.112251', b'1794780630.x', 1),
+            'leading-record-space': b' ' + raw,
+            'extra-body-space': raw.replace(b'112251 getpgid', b'112251  getpgid', 1),
+            'unknown-record': raw.replace(b'openat(', b'unknown_call(', 1),
+            'second-pid': raw.replace(b'5499  ', b'5500  ', 1),
+            'lost-end-marker': raw.replace(b'900000001', b'900000003', 1),
+            'blank-record': raw.replace(b'\n', b'\n\n', 1),
+            'partial-final-record': raw[:-1],
+            'unmatched-owned-close': raw.replace(
+                b'openat(AT_FDCWD, "missing", O_RDONLY) = -1 ENOENT (No such file or directory)',
+                b'close(3) = 0', 1),
+        }
+        for name, changed in mutations.items():
+            with self.subTest(rejected=name), self.assertRaises(ValueError):
+                trace(changed, [0], {0: {'ok': False}})
+
     def test_batch_params_registration_preserves_component_and_original_boundaries(self):
         import qualify_hia_runtime_native as q
         import hia_native_batch_edit_params_pipeline as params

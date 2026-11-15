@@ -8,7 +8,7 @@ from race_cases import race_cases
 from ptrace_evidence import evidence as trace_evidence,blob
 import hia_native_text_publication_fixtures as fixture
 PINS={'GENERATOR-SOURCE.json': {'bytes': 396, 'sha256': 'ec858f8d91e6353db0b0b0494e2e71c69e81d5202eae7e764f3ff07d978902a0'}, 'original/native_races.py': {'bytes': 19050, 'sha256': '550cf160469171fda477dc5f7fdae070a094727a04f7ce6085d0fff3e190a421'}, 'ptrace_capture.py': {'bytes': 11988, 'sha256': 'fd796b8ffca32c6a94eec53d8ea9869a63f57b90df73c9c890386fbc3dc1fe18'}, 'race_cases.py': {'bytes': 3374, 'sha256': '337aebcf57b9f7998813f3c1b154722083397a660172c477875988037c0f32cc'}, 'race_native_predecessor.py': {'bytes': 6327, 'sha256': 'a7af1aeec6d94121dd256f3c15cb7553f099af0d86a9f3ae425ed56c177942a9'}, 'run_races.py': {'bytes': 17119, 'sha256': '2e89ff4e0c656691f3e9531ee28078ab23195dfb15ae34dac551912744e56aa9'}}
-ORDINARY_READER_PINS={'strict_reference.py': {'bytes': 22488, 'sha256': 'f797b9e1e7e1e337adf33367d7f76391930adce36b71bf7674fa601a10d2b81b'}, 'trace_evidence.py': {'bytes': 10447, 'sha256': '01586d600bd23761c08141c80912e80184859484a2147aaeb6f5bd99a8ee4407'}}
+ORDINARY_READER_PINS={'strict_reference.py': {'bytes': 22488, 'sha256': 'f797b9e1e7e1e337adf33367d7f76391930adce36b71bf7674fa601a10d2b81b'}, 'trace_evidence.py': {'bytes': 10602, 'sha256': '15d0b1891673e9779a237a2155e26c8547a52bef601f8fb45682db1dfe6d5b64'}}
 def process(p):
     require(p['exit_code']==0 and type(p['exit_code']) is int and p['timed_out'] is False and p['start_error'] is None,'successful real original process')
     require(type(p['timeout_seconds']) is int and p['timeout_seconds']==180,'actual unchanged 180-second budget')
