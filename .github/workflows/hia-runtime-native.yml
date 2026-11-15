@@ -148,7 +148,9 @@ concurrency:
   cancel-in-progress: true
 
 # The same fresh cold/build bytes feed all four complete native partitions.
-# Each job retains the original 15-minute limit; suite/owner limits are unchanged.
+# Cold/build and native partitions retain the original 15-minute limit.
+# The aggregate also retains every original comparison and the full evidence upload.
+# Its job budget covers that complete work; suite/owner subprocess limits are unchanged.
 # The batch partition includes all four atomic-write suites and its full 505 MiB case.
 # The aggregate uses the existing Rust 1.95.0 toolchain for its locked original owner.
 jobs:
@@ -295,7 +297,7 @@ jobs:
     name: All native evidence and complete original Rust comparisons
     needs: [prepare, native]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
