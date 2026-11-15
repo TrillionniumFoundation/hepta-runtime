@@ -1,0 +1,11 @@
+# Archived build interface — no execution for R34
+
+R34 failed the original normal C8 throughput gate. No capacity Cargo/build/cell is to be started from this preparation. All templates remain unsealed, and the component source state is unformatted/uncompiled.
+
+The implementation-01 BUILD is preserved as `reference/implementation-01-BUILD.md` for provenance. The substantive change in this source revision is that the formerly missing actual native invocation producer now exists as source; see `PRODUCER.md`, `record_build_invocation.py`, `build-stage-input.unsealed.json` and `seal_arm.py`. No producer or sealer result has been produced.
+
+A future separately reviewed reuse would first create a new source revision, format only the component package, retain the exact formatter delta and freeze its final source manifest. The runtime path dependencies and original qualification maps stay read-only. Actual `CARGO_HOME`, Cargo/rustc paths, effective environment/configuration, native job roots, source/qualification identities, offline lock/metadata outputs and every native stage receipt must then be bound from real files. No network download, hidden retry or cache copy is implied.
+
+The producer's supported source interface is a bounded per-stage native job, with an original supervisor-assigned job ID, request/child publication fence, actual original Cargo child and unmodified Cargo stdout/stderr streams. It supports offline metadata preparation and the three qualifying build stages. A/B use one new target sequentially; A's actual separate ELF is fsynced and preserved before B may start its build. The consumer requires the same Linux boot clock, original wait/cleanup, complete native read pages and matching component source revision. Current null pins cannot satisfy these conditions.
+
+The intended future outer interface is `materialize_capacity_campaign.py` followed by the original held-agent launcher transmitting `run_capacity_campaign.py`. The fixed eight-cell order, quiet90, original compiler monitor and no-retry/first-failure-stop policy are implemented in the source draft. No actual input was materialized, no holder was started for this component and no cell ran. Final external-holder closure remains unimplemented and is disclosed in README; the remote outer report cannot close it on its own.
