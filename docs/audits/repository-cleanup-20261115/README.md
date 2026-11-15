@@ -4,27 +4,29 @@
 
 The audit started from `a404d4f1bf540fb94f65ef3707145eed07eef183` (tree
 `0984578f72d2a4291b5954d1fd93914dc116e3e6`) and continued from
-`151d74efcf252314e57cb6e1a5542401ff68f362`. It covers every tracked path, source-language roles, the Rust module
+`151d74efcf252314e57cb6e1a5542401ff68f362` and
+`ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97`. It covers every tracked path, source-language roles, the Rust module
 graph, Cargo declarations, embedded helpers, CI/deployment callers, actual
 evidence-reader paths and original-source retention.
 
 | Metric | Original baseline | Current tree |
 | --- | ---: | ---: |
-| Tracked files | 17,673 | 5,636 |
-| Tracked-file bytes | 1,864,002,891 | 170,884,233 |
-| Python files | 1,986 | 609 |
+| Tracked files | 17,673 | 5,626 |
+| Tracked-file bytes | 1,864,002,891 | 170,706,608 |
+| Python files | 1,986 | 600 |
 
-**12,048 historical files / 1,696,849,279 original bytes** have
-left the current tree, including **1,378 Python
+**12,059 historical files / 1,697,040,311 original bytes** have
+left the current tree, including **1,387 Python
 files**. New audit/verification files account for the difference between gross
 retirements and net file counts. These are tracked-file measurements, not Git
 compressed-pack sizes or GitHub Linguist percentages.
 
-The current Rust runtime, model workers and cloud-compute inputs keep their
-original bytes. No additional safely removable active implementation was found
-after the final dependency and source-role review. That conclusion does not
-classify required non-Rust interfaces or independent reference programs as dead
-code.
+The latest review removes eleven more superseded entrypoint/registry files and
+consolidates two identical Rust rules: safetensors dtype widths and ECMAScript
+whitespace. Four Rust files change; the retained function bodies are byte-identical
+to their originals. The other 604 core inputs, Cargo, model workers, cloud-compute
+helpers and all embedded reference inputs remain unchanged. Required non-Rust
+interfaces, independent references and frozen source contracts remain in use.
 
 ## Why the repository contains other languages
 
@@ -33,15 +35,15 @@ code.
 | `src/` | 17 | Rust-embedded runtime helpers |
 | `workers/` | 25 | Model computation workers and worker tests |
 | `tools/cloud-compute/` | 24 | Colab/Kaggle routing, recovery and offline tests |
-| `tools/x230/` | 66 | Maintained qualification harnesses and frozen sampler inputs |
+| `tools/x230/` | 62 | Maintained qualification harnesses and frozen sampler inputs |
 | `deploy/` | 74 | Operator, gateway, installation and recovery interfaces |
-| `tests/` | 248 | Regression tests, independent references and fixtures |
+| `tests/` | 243 | Regression tests, independent references and fixtures |
 | `scripts/` | 45 | Qualification, evidence admission and independent differential oracles |
 | `experiments/` | 58 | Independent model studies and reproducible evaluation |
 | `qualification/` | 1 | Frozen standalone Rust study verifier |
 | `docs/` | 49 | Currently bound reference bundles and reproducible audit evidence |
 | `.github/` | 2 | Current browser qualification bootstrap and tests |
-| Total | 609 | |
+| Total | 600 | |
 
 All **17** Python helpers under `src/mcp/runtime` are actual Rust embedded inputs.
 They implement configured document, worksheet, binary-file, metadata, process,
@@ -73,7 +75,8 @@ per-root paths and binding/reader reasons.
 | Remaining October 28 X230 evidence | 80 | 54,051,755 |
 | Continued historical directory review | 2,039 | 114,186,765 |
 | Expired workflows/script and standalone harness snapshots | 6 | 62,797 |
-| Total | 12,048 | 1,696,849,279 |
+| Superseded acceptance and X230 publisher entrypoints/registries | 11 | 191,032 |
+| Total | 12,059 | 1,697,040,311 |
 
 The continued directory review removes forty complete X230, DC and REA history
 roots, the withdrawn native checkpoint prototype and an obsolete source recovery
@@ -86,7 +89,9 @@ does not operate any hardware or service.
 The first cleanup replaced one of two identical 467-line read-only MCP bridges
 with a fixed-path loader while retaining the standalone implementation unchanged.
 Its import/global-patching and standalone deployment behavior has focused tests.
-The continued review changes no active runtime implementation.
+That directory review changed no active runtime implementation. The subsequent
+internal review shares two identical pure rules across their existing Rust callers,
+removing 38 lines and adding seven without changing parser budgets or interfaces.
 
 The three remaining byte-identical active Python pairs have specific contracts:
 the DC V10 acceptance aliases must match under an existing test; the October 31
@@ -97,7 +102,7 @@ weightspace study also retains its exact frozen compilation inputs.
 
 ## Original-source retention
 
-[Four repository history manifests](../../../archives/repository-history/README.md)
+[Five repository history manifests](../../../archives/repository-history/README.md)
 and [42 Rust variant manifests](../../../archives/rust-branches/README.md) preserve
 every original source identity. The continued review retains all previous
 **15,065 original rows**, adds **2,045 exact original file rows**, and changes only
@@ -105,7 +110,7 @@ the allowed storage disposition of 119 historical source/documentation rows.
 Its 70 Markdown links and three directory references point to exact original
 commits. Historical JSON provenance, failure status and evidence pins are unchanged.
 
-Inventory continuity now binds all **46 manifests / 17,110 original source rows**
+Inventory continuity now binds the previous **46 manifests / 17,110 original source rows**
 to the immutable [b27890bf checkpoint](https://github.com/TrillionniumFoundation/hepta-runtime/commit/b27890bf2e4be06feea5729a57731ed071eb31bc).
 It must survive as an ancestor: use a merge commit or fast-forward, without
 squashing/rebasing the checkpoint history. The v2 schema additionally supports
@@ -115,10 +120,11 @@ The package check covers both retired directories and exact file names.
 
 ## Validation
 
-Independent comparison confirms **608 unchanged core inputs**, including all
-474 current runtime source inputs, Cargo, config, model workers, cloud-compute
-tools and the patched decoder. All **214 Rust include references / 141 unique
-embedded inputs** remain present and unchanged. Each of this continuation's
+The previous directory review confirmed 608 unchanged core inputs. The internal
+review permits only the four listed Rust helper edits: **604 core inputs remain
+unchanged**, including Cargo, config, model workers, cloud-compute tools and the
+patched decoder. All 474 runtime source paths remain present. All **214 Rust include references / 141 unique
+embedded inputs** remain present and unchanged. Each of the previous directory continuation's
 2,045 deletions matches its original path/blob/mode/size, with no unlisted deletion.
 
 The actual local checks include **34 real-Git custody tests** (23 previous and 11
@@ -139,6 +145,36 @@ an ancestor's successful run does not qualify a new commit.
 observations, exact source identities and the current review. Prior AF_UNIX,
 process-observation and disk-space failures remain recorded. Cleanup alone does
 not establish a new runtime, HIA, model-quality or deployment qualification.
+
+## Internal review and current qualification
+
+The final pass inspected 2,853 Rust function bodies and 232 maintained Python
+files containing 3,798 function definitions. Repeated state machines with
+different durable namespaces, externally visible library APIs and immutable
+oracle inputs are retained. The two shared Rust predicates preserve the original
+22 dtype mappings and all 25 ECMAScript whitespace scalars. An independent Node
+trim comparison checked all 1,112,064 Unicode scalars, including BOM, NEL and MVS.
+
+Five obsolete test entrypoints have no live code/workflow/Markdown callers.
+The retained owner-fence replay harness keeps all 22 original checks and four
+additional replay checks. Three prior fairness publishers and two registries
+have current successors; the fixed-path A25 publisher only rebuilt its historical
+failed campaign. Historical instructions point to exact Git originals because
+newer output schemas cannot stand in for original publication bytes.
+
+After deletion, 55 existing V9/V10 safety and contract tests pass without any
+attempt to open a retired file. Repository Hygiene now runs those exact pinned
+successor suites in addition to its existing gates. The 34 custody regressions
+also pass. The REA source projection initially failed after the Rust edits;
+canonical regeneration changed exactly nine identity scalars, followed by 29
+passing ledger tests and a passing mapping check. All 229 tool rows stay OPEN,
+with zero qualified tools; strict parity still refuses as expected.
+
+The latest manifest adds eleven exact original rows while preserving every one
+of the earlier 46 manifests and 17,110 original rows. Original failures, receipts,
+qualification input lists and publication manifests keep their original bytes.
+Full exact-source Rust validation is required for the helper consolidation.
+See the attached GitHub workflow, not an ancestor run, for its terminal outcome.
 
 ## Recovery
 

@@ -10,7 +10,8 @@ are preserved at their exact Git revisions and indexed here.
 | [historical-sources-20261115.json](historical-sources-20261115.json) | `151d74efcf25` | 2,039 | 114,186,765 |
 | [obsolete-entrypoints-20261115.json](obsolete-entrypoints-20261115.json) | `151d74efcf25` | 6 | 62,797 |
 | [x230-20261028-20261115.json](x230-20261028-20261115.json) | `136ff99783d4` | 80 | 54,051,755 |
-| Total | | 11,833 | 1,690,213,283 |
+| [superseded-harnesses-20261115.json](superseded-harnesses-20261115.json) | `ad7cabe9ccd3` | 11 | 191,032 |
+| Total | | 11,844 | 1,690,404,315 |
 
 Every row records the original path, Git blob, file mode and byte count. The
 separate [Rust branch index](../rust-branches/README.md) also retains the original
@@ -37,6 +38,13 @@ outputs remain byte-identical in Git history. Current REA mappings and reference
 bundles, DC receipts, `v9-harness-drafts`, X230 harnesses and the A27 sampler,
 model workers, Colab/Kaggle tools and the standalone weightspace study stay in
 the current tree. Active HIA development refs retain their own source history.
+
+The final entrypoint review additionally retires uncalled V5/V6 acceptance
+programs, the superseded two-controller owner-fence harness, X230 fairness
+publishers v1-v3, redundant A22/A23 registries and a fixed-path A25 publisher.
+Their exact originals are in
+[`ad7cabe9`](https://github.com/TrillionniumFoundation/hepta-runtime/tree/ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97).
+The maintained successor programs and original publication receipts stay intact.
 
 ## Read or reproduce originals
 
