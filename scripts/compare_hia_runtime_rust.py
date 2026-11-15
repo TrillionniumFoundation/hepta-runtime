@@ -27,7 +27,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
                                        history_evidence, json_evidence, request_context_evidence, result_publication_evidence,
-                                       request_scope_evidence,
+                                       request_scope_evidence, shell_evidence,
                                        execution_evidence, effect_fence_evidence, config_evidence,
                                        session_evidence,
                                        atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
@@ -59,6 +59,7 @@ from hia_native_result_publication_reference import (compare_original as compare
                                                      check_original_receipts as check_publication_original_receipts)
 from hia_native_request_scope_reference import (compare_original as compare_request_scope_original,
                                                 check_original_receipts as check_request_scope_original_receipts)
+import hia_native_shell_qualification as shell_qualification
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
                                                 REFERENCE_ROWS as BATCH_PLAN_ROWS)
@@ -163,6 +164,15 @@ def check_input_pins(output: Path, report: dict) -> None:
     if report.get("request_scope_evidence") != request_scope_evidence(output, report):
         raise ValueError("required request continuation/cache lease/native refusal evidence differs")
     check_request_scope_original_receipts(ROOT, output, report, completed_test_summary)
+    if report.get("shell_evidence") != shell_evidence(output, report):
+        raise ValueError("required complete native shell evidence changed")
+    for key in shell_qualification.COMPONENTS:
+        if key in report.get("original_rust_comparisons", {}):
+            rustc = Path(report["rust_compiler"]["invocation_path"])
+            expected = shell_qualification.original_evidence(ROOT, output, report, key, rustc,
+                executable(str(rustc.with_name("cargo"))), completed_test_summary)
+            if report["original_rust_comparisons"][key] != expected:
+                raise ValueError("required fresh shell original evidence changed")
     if report.get("execution_evidence") != execution_evidence(output, report):
         raise ValueError("required execution typed/core/controller evidence differs")
     if report.get("effect_fence_evidence") != effect_fence_evidence(output, report):
@@ -1287,6 +1297,16 @@ def compare_request_scope(output: Path, report: dict, rustc: Path) -> dict:
         completed=completed_test_summary, record_check=record_check, environment=qualification_env)
 
 
+def compare_terminal_clean(output: Path, report: dict, rustc: Path) -> dict:
+    return shell_qualification.compare_original(ROOT, output, report, "terminal_clean", rustc,
+        executable(str(rustc.with_name("cargo"))), completed_test_summary, record_check, qualification_env)
+
+
+def compare_shell_gate(output: Path, report: dict, rustc: Path) -> dict:
+    return shell_qualification.compare_original(ROOT, output, report, "shell_gate", rustc,
+        executable(str(rustc.with_name("cargo"))), completed_test_summary, record_check, qualification_env)
+
+
 def retained_execution_original(output: Path, report: dict) -> dict:
     import hia_native_execution_qualification as q
     name = "execution-shadow-rust-compare"
@@ -1358,6 +1378,7 @@ def compare_session_workdir(output: Path, report: dict, rustc: Path) -> dict:
 
 
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
+           "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
            "request_context": compare_request_context, "response_hints": compare_response_hints,
            "result_publication": compare_result_publication,
            "request_scope_lifecycle": compare_request_scope,

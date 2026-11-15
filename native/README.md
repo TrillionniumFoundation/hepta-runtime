@@ -30,6 +30,40 @@ complete functionality. This work preserves the integration stack as its base.
 Hepta already uses the `.hepta` suffix; protocol names such as `hia-asm.v1`
 continue to identify the language and are not filename extensions.
 
+## Shell admission and terminal output
+
+The [shell admission owner](shell_gate_abi.md) preserves the original command
+segments, shell-token spans, SSH-body recursion, Unix workdir component rules,
+redirect/in-place-edit decisions, exact diagnostic messages and git-stash
+detection. SSH recursion uses a caller-owned explicit stack; it does not impose
+a new fixed recursion-depth or command-length limit. Workdir bytes keep their
+original Unix `OsStr` domain, including non-UTF-8 bytes.
+
+The [terminal output owner](terminal_clean_abi.md) preserves the original ANSI
+regular-expression semantics, incomplete OSC sequences, CR progress redraw,
+Unicode backspace/control/whitespace rules and repeated-line accounting. It
+publishes the result only after all capacity checks. Neither component creates
+a process, performs shell effects, or replaces the registered production shell
+handler. Background resources retain a different raw-log contract and must not
+be silently passed through this cleaner.
+
+The mandatory native corpus contains 2,584 terminal cases and 7,876 admission
+and helper cases. Its 15 and 36 transport refusal controls retain full output
+and workspace captures separately from original semantic comparisons. The
+evidence suite physically corrupts each complete corpus in 19 ways, including
+rehashed input/output changes, missing controls, altered return codes, source
+and manifest substitutions, contradictory errors and symlinks.
+
+Each original-reference recipe freshly compiles unchanged source regions and
+runs all nine original pure tests with Rust 1.95.0. The five regex dependencies,
+their complete lock entries and the original default-feature declaration are
+bound to the production sources. Independent input regeneration and complete
+output-byte comparison are required; a native corpus alone cannot pass the
+original-reference phase. Both sources are part of the ordinary complete
+runtime aggregate. The separate focused shell workflow provides earlier
+feedback and explicitly does not qualify the compiler cold gate, production
+process lifetime, public routing or old-stack removal.
+
 ## Shadow execution composition
 
 The [three shadow owners](execution_shadow_abi.md) preserve exact original serde
@@ -116,9 +150,9 @@ changed recipe bytes or the fresh repository aggregate.
 
 ## Native components
 
-Qualification covers 64 native HIA sources through 38 executable component
+Qualification covers 66 native HIA sources through 40 executable component
 entries, including 16 HIA packers; the two scope profiles share their HIA scope
-owner. The complete source closure binds 577 files. The shadow entry
+owner. The complete source closure binds 597 files. The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
 as qualification-only. The 17 other test HIA fixtures are recorded separately.
@@ -129,6 +163,8 @@ These counts do not count migrated production MCP handlers.
 | [runtime_bytes.hepta](runtime_bytes.hepta) | Existing line hash/ID, strict and clamped line indices, log cursor/page arithmetic, name/digest/text predicates |
 | [runtime_protocol.hepta](runtime_protocol.hepta) | Strict JSON, JSON-RPC IDs/errors, protocol negotiation, initialization lifecycle, native tool responses and line hashing |
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
+| [shell_gate.hepta](shell_gate.hepta) | Original shell misuse decisions, SSH recursion, raw Unix workdir rules, exact hints/errors and git-stash recognition |
+| [terminal_clean.hepta](terminal_clean.hepta) | Original ANSI/OSC, Unicode control/backspace, CR redraw, whitespace and repeated-line cleanup |
 | [request_context.hepta](request_context.hepta) | Private nested hint queues, insertion-order deduplication, drain/exit/destruction and a dispatcher-owned view-cache association |
 | [request_scope_lifecycle.hepta](request_scope_lifecycle.hepta) | Private request entry, checked continuation suspension/resumption, cancellation, hint retirement and cache-reference ownership |
 | [request_cache_lease.hepta](request_cache_lease.hepta) | Shared cache ownership across session, request and publisher lifetimes, checked clones/releases and destruction on last release |

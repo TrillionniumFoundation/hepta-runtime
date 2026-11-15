@@ -67,6 +67,7 @@ import hia_native_execution_qualification as execution_qualification
 import hia_native_effect_fence_qualification as effect_fence_qualification
 import hia_native_config_qualification as config_qualification
 import hia_native_session_qualification as session_qualification
+import hia_native_shell_qualification as shell_qualification
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -77,6 +78,11 @@ MODULES = (
      "standalone": "stdio", "manifest_env": "HIA_PROTOCOL_MANIFEST", "test": "test_runtime_protocol.py"},
     {"key": "text_budget", "name": "text-budget", "source": "native/text_budget.hepta",
      "standalone": "filter", "manifest_env": "HIA_TEXT_MANIFEST", "test": "test_text_budget.py"},
+    {"key": "terminal_clean", "name": "terminal-clean", "source": "native/terminal_clean.hepta",
+     "standalone": "filter", "manifest_env": "HIA_TERMINAL_MANIFEST", "test": "test_shell_native.py"},
+    {"key": "shell_gate", "name": "shell-gate", "source": "native/shell_gate.hepta",
+     "standalone": "filter", "manifest_env": "HIA_SHELL_GATE_MANIFEST", "test": "test_shell_gate_native.py",
+     "additional_tests": ("test_shell_evidence.py",)},
     {"key": "request_context", "name": "request-context", "source": "native/request_context.hepta",
      "standalone": None, "manifest_env": "HIA_REQUEST_CONTEXT_MANIFEST", "test": "test_request_context.py"},
     {"key": "response_hints", "name": "response-hints", "source": "native/response_hints.hepta",
@@ -269,6 +275,8 @@ def sources() -> dict:
         'hia_native_config_qualification.py',
         "hia_native_execution_build.py", "hia_native_execution_qualification.py",
         "hia_native_session_build.py", "hia_native_session_qualification.py",
+        "hia_native_shell_qualification.py", "hia_native_shell_reference.py",
+        "qualify_hia_shell_native.py",
         "hia_native_effect_fence_build.py", "hia_native_effect_fence_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
@@ -280,7 +288,8 @@ def sources() -> dict:
         "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py",
         "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
-                  ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / "rustfmt.toml"))
+                  ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / ".github/workflows/hia-runtime-shell.yml",
+                  ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
@@ -601,6 +610,10 @@ def result_publication_evidence(output: Path, report: dict) -> dict:
 
 def request_scope_evidence(output: Path, report: dict) -> dict:
     return checked_request_scope_evidence(ROOT, output, report, completed_test_summary)
+
+
+def shell_evidence(output: Path, report: dict) -> dict:
+    return shell_qualification.qualification_evidence(ROOT, output, report, completed_test_summary)
 
 
 def entropy_evidence(output: Path, report: dict) -> dict:
@@ -2025,6 +2038,9 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
         "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
         "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
+        "HIA_TERMINAL_CORPUS_DIR": str(output / "terminal-clean"),
+        "HIA_SHELL_GATE_CORPUS_DIR": str(output / "shell-gate"),
+        "HIA_SHELL_QUALIFICATION_OUTPUT": str(output),
         "HIA_REQUEST_CONTEXT_CORPUS_DIR": str(output / "request-context-rust-oracle"),
         "HIA_RESPONSE_HINTS_CORPUS_DIR": str(output / "response-hints-rust-oracle"),
         "HIA_REQUEST_CONTEXT_TRANSPORT_DIR": str(output / "request-context-transport"),
@@ -2253,6 +2269,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["request_context_evidence"] = request_context_evidence(output, report)
     report["result_publication_evidence"] = result_publication_evidence(output, report)
     report["request_scope_evidence"] = request_scope_evidence(output, report)
+    report["shell_evidence"] = shell_evidence(output, report)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
     report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -2302,6 +2319,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["request_context_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["result_publication_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["shell_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update({
         ENTROPY_FOLDER + "/" + name: sha(output / ENTROPY_FOLDER / name) for name in ENTROPY_CORPUS_FILES})
     report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])
