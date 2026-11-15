@@ -668,9 +668,9 @@ def native_evidence(root, output, report, completed):
         config_bundle = reader.object(config_entry["manifest"])
         exact(reader.hashes[config_entry["manifest"]], config_entry["sha256"], "configuration bundle differs")
         exact([config_bundle.get("schema"), config_bundle.get("compiler_commit"), config_bundle.get("compiler_sha256")],
-              ["hepta.runtime.config-native-build.v1", HEPTA_COMMIT, report["compiler_image_sha256"]],
+              ["hepta.runtime.config-native-build.v2", HEPTA_COMMIT, report["compiler_image_sha256"]],
               "configuration publication compiler differs")
-        config_relative = (build_relative / "modules/cfg-publication/manifest.json").as_posix()
+        config_relative = (build_relative / "modules/cfg-regex-publication/manifest.json").as_posix()
         config_module = reader.object(config_relative)
         exact(config_bundle["modules"]["publication"],
               dict(path=str(origin / config_relative), sha256=reader.hashes[config_relative]),
