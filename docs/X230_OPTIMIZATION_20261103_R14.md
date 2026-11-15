@@ -121,7 +121,7 @@ Precision-preserving report-data.json SHA-256: `ffa94324ddc72f4a7fe1976621d22e9f
 
 The candidate Git source tree was independently checked for all 219 input blobs/modes before qualification; the later audit binds the same frozen bytes to actual tests. Preupload metadata honestly retains candidate-awaiting-qualification status from its creation time. Later qualification/audit artifacts establish the successful outcome; those earlier records are not rewritten.
 
-The [original evidence archive](../tests/evidence/20261103-x230-r14/r14-original-evidence-01.tar.gz) preserves **21,815 original files / 128,579,625 original bytes**. Its **21,816 members** include the selection manifest; every member was reread and hash-verified. Source trees, targets and compiled binaries are excluded. The separate compressed selection index makes original path, size and digest bindings inspectable without relying on this narrative. The known credential-pattern scan found zero matches.
+The [original evidence archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r14/r14-original-evidence-01.tar.gz) preserves **21,815 original files / 128,579,625 original bytes**. Its **21,816 members** include the selection manifest; every member was reread and hash-verified. Source trees, targets and compiled binaries are excluded. The separate compressed selection index makes original path, size and digest bindings inspectable without relying on this narrative. The known credential-pattern scan found zero matches.
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|

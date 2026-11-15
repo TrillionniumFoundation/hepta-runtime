@@ -148,5 +148,106 @@
         "reason": "Custody inventory source rows changed: archives/repository-history/x230-20261028-20261115.json"
       }
     }
+  },
+  "continued_cleanup_review": {
+    "parent_commit": "151d74efcf252314e57cb6e1a5542401ff68f362",
+    "deleted_files": 2045,
+    "deleted_bytes": 114249562,
+    "core_inputs_unchanged": 608,
+    "rust_modules_reachable": 429,
+    "orphan_src_rust_files": 0,
+    "used_dependency_declarations": 37,
+    "embedded_references": 214,
+    "embedded_unique_inputs": 141,
+    "old_manifests_preserved": 44,
+    "old_original_source_rows_preserved": 15065,
+    "custody_unit_tests": {
+      "passed": 34,
+      "existing": 23,
+      "new_v2_real_git_tests": 11
+    },
+    "dc_evidence_consumer_tests": {
+      "passed": 23,
+      "model_origin": 6,
+      "model_origin_v2": 5,
+      "replacement_gate": 12
+    },
+    "consumer_read_trace_summary": [
+      {
+        "name": "rea-mapping",
+        "exit": 0,
+        "opened_count": 380,
+        "opened_docs_count": 72,
+        "stdout_tail": " 23}}, \"families\": 18, \"implementation_counts\": {\"absent\": 187, \"partial_operation\": 23, \"related_facility\": 19}, \"mapping_check\": \"PASS\", \"native_interfaces\": 37, \"open_tools\": 229, \"parity_gate\": \"OPEN\", \"published_tools\": 229, \"qualified_tools\": 0, \"raw_reference_authenticity\": \"NOT_REVERIFIED\"}\n",
+        "stderr_tail": ""
+      },
+      {
+        "name": "dc-replacement",
+        "exit": 0,
+        "opened_count": 11,
+        "opened_docs_count": 7,
+        "stdout_tail": "n_policy_review\",\n    \"vendor_specific_retirement_decision\"\n  ],\n  \"integrity_problems\": [],\n  \"full_dc_replacement_qualified\": false,\n  \"statement\": \"Qualified for the exact described bounded actions only; vendor-specific operations cannot be silently represented as portable Hepta capabilities.\"\n}\n",
+        "stderr_tail": ""
+      },
+      {
+        "name": "dc-model-ledger",
+        "exit": 0,
+        "opened_count": 10,
+        "opened_docs_count": 8,
+        "stdout_tail": "",
+        "stderr_tail": "contract (__main__.LedgerIntegrity.test_truthful_annotations_are_identical_to_server_contract) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.001s\n\nOK\n"
+      },
+      {
+        "name": "model-origin-ledger",
+        "exit": 0,
+        "opened_count": 5,
+        "opened_docs_count": 3,
+        "stdout_tail": "",
+        "stderr_tail": "_bounded_success (__main__.ModelOriginLedger.test_scope_does_not_misrepresent_bounded_success) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.001s\n\nOK\n"
+      },
+      {
+        "retired_path_read_overlap": [],
+        "retired_count": 2039
+      }
+    ],
+    "independent_deletion_and_source_comparison": "PASS; every deletion and every original blob, mode and byte count checked independently of the project verifier",
+    "complete_candidate_custody": "PASS on the assembled local continuation; final published commit verification and hosted results are recorded separately.",
+    "published_cleanup_checkpoint": "b27890bf2e4be06feea5729a57731ed071eb31bc",
+    "complete_checkpoint_custody": "PASS with all 46 required manifests and 17,110 original source rows",
+    "retention_inventory_baseline": "b27890bf2e4be06feea5729a57731ed071eb31bc",
+    "new_checkpoint_refusal_probes": [
+      {
+        "operation": "delete_directory_manifest",
+        "status": "REFUSED",
+        "reason": "Required custody manifests are missing: ['archives/repository-history/historical-sources-20261115.json']"
+      },
+      {
+        "operation": "omit_directory_source_row",
+        "status": "REFUSED",
+        "reason": "Custody inventory source rows changed: archives/repository-history/historical-sources-20261115.json"
+      },
+      {
+        "operation": "shrink_exact_file_selection",
+        "status": "REFUSED",
+        "reason": "Custody inventory retired files changed: archives/repository-history/obsolete-entrypoints-20261115.json"
+      }
+    ],
+    "whole_runtime_ci": "Consult the exact published head; no ancestor pass is promoted to this source.",
+    "historical_workflows": [
+      {
+        "path": ".github/workflows/rog-smu-ab-20261002.yml",
+        "observed_run_id": 36984967309,
+        "observed_status": "completed",
+        "observed_conclusion": "cancelled",
+        "created_at": "2026-10-02T08:36:09Z"
+      },
+      {
+        "path": ".github/workflows/runtime-runner-availability.yml",
+        "observed_run_id": 39723027242,
+        "observed_status": "completed",
+        "observed_conclusion": "failure",
+        "created_at": "2026-10-22T04:33:20Z"
+      }
+    ]
   }
 }

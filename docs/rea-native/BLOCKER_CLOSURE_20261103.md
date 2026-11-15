@@ -67,8 +67,8 @@ Summary SHA-256:
 
 The historical baseline passed in this later window. The run therefore does
 not reproduce the older failure or establish a speedup. The
-[original 263/264 focused result](../qualification/rea-final-focused-20261103-r1/README.md)
-and [single traced failure](../qualification/rea-audit-budget-diagnostic-20261103-r1/README.md)
+[original 263/264 focused result](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/docs/qualification/rea-final-focused-20261103-r1/README.md)
+and [single traced failure](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/docs/qualification/rea-audit-budget-diagnostic-20261103-r1/README.md)
 remain unchanged. The deterministic regression and the observed ext4 candidate
 results qualify the admission correction; they do not guarantee an arbitrary
 load or a production latency SLA.
@@ -181,7 +181,7 @@ the subsequent complete ten-test pass remain in the archive.
 
 ## Build identity and final publication gates
 
-[Build evidence](../qualification/rea-blocker-build-20261103-r1/README.md)
+[Build evidence](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/docs/qualification/rea-blocker-build-20261103-r1/README.md)
 preserves the original commands, outputs, artifact records and full source
 inventories. The candidate Rust build is baseline 23246 plus exactly six
 reviewed Rust changes, inventory

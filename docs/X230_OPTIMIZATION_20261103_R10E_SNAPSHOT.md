@@ -113,9 +113,9 @@ b4e9022de0c764f84450cb7ade4947de0858460f09a898d3c830270006cc1504
 
 Evidence retained in the shared validation bundle:
 
-- [R10e qualification](../tests/evidence/20261103-x230-r11/r10e-qualification.json.gz)
-- [R10e isolated-test audit](../tests/evidence/20261103-x230-r11/r10e-isolated-tests.audit.json.gz)
-- [R10e source map](../tests/evidence/20261103-x230-r11/r10e-source-map.json)
+- [R10e qualification](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/r10e-qualification.json.gz)
+- [R10e isolated-test audit](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/r10e-isolated-tests.audit.json.gz)
+- [R10e source map](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r11/r10e-source-map.json)
 
 ## Limits
 

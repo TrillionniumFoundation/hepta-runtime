@@ -5,7 +5,12 @@ on:
     branches: [main, 'codex/**']
     paths:
       - 'archives/**'
+      - 'docs/qualification/**'
+      - 'docs/rea-native/compatibility/**'
       - 'scripts/*verify_rust_consolidation.py'
+      - 'deploy/dc_replacement_gate.py'
+      - 'tests/*ledger_tests.py'
+      - 'tests/dc_replacement_gate_tests.py'
       - 'deploy/chatgpt_mcp_bridge.py'
       - 'deploy/readonly-bridge/**'
       - 'tests/chatgpt_bridge*'
@@ -15,7 +20,12 @@ on:
   pull_request:
     paths:
       - 'archives/**'
+      - 'docs/qualification/**'
+      - 'docs/rea-native/compatibility/**'
       - 'scripts/*verify_rust_consolidation.py'
+      - 'deploy/dc_replacement_gate.py'
+      - 'tests/*ledger_tests.py'
+      - 'tests/dc_replacement_gate_tests.py'
       - 'deploy/chatgpt_mcp_bridge.py'
       - 'deploy/readonly-bridge/**'
       - 'tests/chatgpt_bridge*'
@@ -72,6 +82,12 @@ jobs:
           set -euo pipefail
           python3 -B scripts/rea_compatibility_ledger.py check-mapping
           python3 -B -m unittest discover -s tests -p 'rea_*tests.py' -v
+      - name: Retained DC evidence consumers
+        run: |
+          set -euo pipefail
+          python3 -B tests/dc_model_origin_ledger_tests.py
+          python3 -B tests/model_origin_tool_ledger_tests.py
+          python3 -B tests/dc_replacement_gate_tests.py
       - name: Install pinned Cargo
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Check package source closure and retired paths
@@ -83,11 +99,14 @@ jobs:
           from pathlib import Path
           paths = (Path(os.environ['RUNNER_TEMP']) / 'cargo-package-files.txt').read_text().splitlines()
           manifests = sorted(Path('archives/repository-history').glob('*.json'))
-          retired_roots = tuple(root for manifest in manifests
-                                for root in json.loads(manifest.read_text())['retired_roots'])
-          if not retired_roots:
+          inventories = [json.loads(manifest.read_text()) for manifest in manifests]
+          retired_roots = tuple(root for inventory in inventories
+                                for root in inventory['retired_roots'])
+          retired_files = {path for inventory in inventories
+                           for path in inventory.get('retired_files', [])}
+          if not retired_roots and not retired_files:
               raise SystemExit('Missing repository history inventory')
-          unexpected = [p for p in paths if p.startswith(retired_roots)]
+          unexpected = [p for p in paths if p.startswith(retired_roots) or p in retired_files]
           if unexpected:
               raise SystemExit('Retired package paths: ' + repr(unexpected))
           required = [str(p) for p in Path('src').rglob('*') if p.is_file()]

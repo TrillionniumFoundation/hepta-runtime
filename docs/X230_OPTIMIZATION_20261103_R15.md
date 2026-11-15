@@ -473,8 +473,8 @@ arena2 也留作目标化选择：若其他分配模式出现可重复且跨两�
 
 | 发布文件 | 字节 | SHA256 |
 | --- | ---: | --- |
-| [r15-original-evidence-01.tar.gz](../tests/evidence/20261103-x230-r15/r15-original-evidence-01.tar.gz) | 5,949,022 | eb5b3bf2638406efa47543a45af5b1eff574b9db4a11e389c843d1a47d457b34 |
-| [archive-selection-01.json.gz](../tests/evidence/20261103-x230-r15/archive-selection-01.json.gz) | 1,540,087 | 59a73076c0dc18c1ee091ac509c4bc32d364886b5adf30784e5dd5bfc8c79112 |
-| [archive-summary-01.json](../tests/evidence/20261103-x230-r15/archive-summary-01.json) | 7,943 | 05907dadaf7a0dbc792187d773d4c0e1781478e910a1a2798bcde8d7b78cc009 |
+| [r15-original-evidence-01.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r15/r15-original-evidence-01.tar.gz) | 5,949,022 | eb5b3bf2638406efa47543a45af5b1eff574b9db4a11e389c843d1a47d457b34 |
+| [archive-selection-01.json.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r15/archive-selection-01.json.gz) | 1,540,087 | 59a73076c0dc18c1ee091ac509c4bc32d364886b5adf30784e5dd5bfc8c79112 |
+| [archive-summary-01.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/151d74efcf252314e57cb6e1a5542401ff68f362/tests/evidence/20261103-x230-r15/archive-summary-01.json) | 7,943 | 05907dadaf7a0dbc792187d773d4c0e1781478e910a1a2798bcde8d7b78cc009 |
 
 包内原始记录与上述独立审计共同界定可复核范围；没有保存的 native observation 完整 envelopes 不因归档完成而补称存在。

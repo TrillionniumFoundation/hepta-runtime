@@ -12,10 +12,10 @@ import re
 import subprocess
 
 
-# This complete cleanup checkpoint includes both retirement waves. Later work
+# This complete cleanup checkpoint includes all current retirement waves. Later work
 # may change disposition or add a new manifest, but cannot erase an existing
 # source row merely to avoid checking its original object.
-RETENTION_INVENTORY_BASELINE = "cc18b5b399cfa594dfbaa9e4046ba2c376dbc6d3"
+RETENTION_INVENTORY_BASELINE = "b27890bf2e4be06feea5729a57731ed071eb31bc"
 
 
 def git(root, *args, check=True, input_bytes=None):
@@ -111,6 +111,8 @@ def verify_inventory_continuity(root, revision, tree, baseline):
         historical = path.startswith("archives/repository-history/")
         if historical and current.get("retired_roots") != original.get("retired_roots"):
             raise RuntimeError("Custody inventory retired roots changed: " + path)
+        if historical and current.get("retired_files", []) != original.get("retired_files", []):
+            raise RuntimeError("Custody inventory retired files changed: " + path)
 
         def source_rows(data):
             rows = data.get("paths")
@@ -252,14 +254,16 @@ def verify_archive_manifests(root, revision, tree):
 
 
 def verify_repository_history(root, revision, tree):
-    """Verify complete retired directory inventories against reachable snapshots."""
+    """Verify complete retired directory/file inventories against reachable snapshots."""
     require_history(root)
     manifests = sorted(path for path in tree if path.startswith("archives/repository-history/")
                        and path.endswith(".json") and path.count("/") == 2)
     checked, total_bytes, seen = 0, 0, set()
     for path in manifests:
         data = json.loads(git(root, "show", revision + ":" + path).stdout)
-        if data.get("schema") != "hepta.repository-history-retention.v1":
+        schema = data.get("schema")
+        if schema not in {"hepta.repository-history-retention.v1",
+                          "hepta.repository-history-retention.v2"}:
             raise RuntimeError("Unsupported repository history schema: " + path)
         source = object_id(data.get("source_commit"), path + " source_commit")
         expected_tree = object_id(data.get("source_tree"), path + " source_tree")
@@ -272,8 +276,17 @@ def verify_repository_history(root, revision, tree):
         if actual_tree != expected_tree:
             raise RuntimeError("Repository history source tree differs: " + path)
         roots = data.get("retired_roots")
-        if not isinstance(roots, list) or not roots:
+        if (not isinstance(roots, list)
+                or (schema == "hepta.repository-history-retention.v1" and not roots)):
             raise RuntimeError("Repository history roots are missing: " + path)
+        files = data.get("retired_files", [])
+        if schema == "hepta.repository-history-retention.v1" and files != []:
+            raise RuntimeError("Retired files require repository history schema v2: " + path)
+        if (not isinstance(files, list)
+                or (schema == "hepta.repository-history-retention.v2" and "retired_files" not in data)):
+            raise RuntimeError("Repository history retired files must be a list: " + path)
+        if not roots and not files:
+            raise RuntimeError("Repository history retirement selection is empty: " + path)
         normalized = []
         for value in roots:
             if not isinstance(value, str) or not value.endswith("/"):
@@ -282,10 +295,18 @@ def verify_repository_history(root, revision, tree):
         if (len(normalized) != len(set(normalized))
                 or any(a != b and a.startswith(b) for a in normalized for b in normalized)):
             raise RuntimeError("Duplicate or overlapping repository history roots: " + path)
+        files = [relative_path(name, path + " retired file") for name in files]
+        if (len(files) != len(set(files))
+                or any(name.startswith(prefix) or prefix.startswith(name + "/")
+                       for name in files for prefix in normalized)):
+            raise RuntimeError("Duplicate or overlapping repository history retired files: " + path)
         source_tree = read_tree(root, source)
         expected_paths = {name for name in source_tree if any(name.startswith(r) for r in normalized)}
         if any(not any(name.startswith(r) for name in expected_paths) for r in normalized):
             raise RuntimeError("Repository history root is absent from the source: " + path)
+        if any(name not in source_tree for name in files):
+            raise RuntimeError("Repository history retired file is absent from the source: " + path)
+        expected_paths.update(files)
         rows = data.get("paths")
         if not isinstance(rows, list):
             raise RuntimeError("Repository history paths must be a list: " + path)
@@ -311,7 +332,7 @@ def verify_repository_history(root, revision, tree):
             blobs[blob] = size
             byte_count += size
         if selected != expected_paths:
-            raise RuntimeError("Repository history inventory is incomplete or outside its roots: " + path)
+            raise RuntimeError("Repository history inventory is incomplete or outside its selection: " + path)
         if (type(data.get("file_count")) is not int or data["file_count"] != len(rows)
                 or type(data.get("byte_count")) is not int or data["byte_count"] != byte_count):
             raise RuntimeError("Repository history totals differ: " + path)

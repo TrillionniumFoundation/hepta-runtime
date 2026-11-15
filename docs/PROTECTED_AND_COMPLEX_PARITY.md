@@ -41,7 +41,7 @@ Prior pinned CRIU experiments on X230 genuinely preserved random process memory,
 
 A new authenticated MCP checkpoint experiment successfully inspected a process, rejected a stale identity, captured real CRIU images and restored the same PID/memory, but its restored process retained the stop state used during capture. Automatic continuation did not pass. A requested lifecycle correction was denied by the session safety check and was not retried through another route. Only the exact disposable restored process was explicitly resumed for cleanup; its original memory and unread-pipe hashes then matched and it exited normally. That cleanup is not reported as a successful automatic native lifecycle.
 
-The unqualified `process_checkpoint` registration was withdrawn from the production tool router and compiled module. Experiment source is retained under `experiments/native_checkpoint/` with the failed native acceptance receipt for review, not enabled in the installed service. No host checkpoint configuration or new sudo entitlement is installed. Do not advertise this as a production arbitrary-PID migration API.
+The unqualified `process_checkpoint` registration was withdrawn from the production tool router and compiled module. Experiment source is retained under [experiments/native_checkpoint/](https://github.com/TrillionniumFoundation/hepta-runtime/tree/151d74efcf252314e57cb6e1a5542401ff68f362/experiments/native_checkpoint/) with the failed native acceptance receipt for review, not enabled in the installed service. No host checkpoint configuration or new sudo entitlement is installed. Do not advertise this as a production arbitrary-PID migration API.
 
 
 ## Explicit PDF trust roots
