@@ -129,6 +129,20 @@ HTTP 服务无界 schema 缓存涉及当前启用路径；loopback/token 只限�
 修复版本的实际锁文件和独立复扫应另存记录，不覆盖本次失败证据，也不能将
 固定数据库匹配归零解释为整体 CVE clearance 或生产资格。
 
+修复后的锁文件 SHA-256 为
+`1509860cac0e7f26e6a845edfec1c87ae3bd92380ecaa357457e5263e861d631`。
+仅更新七个包记录：crypto-bigint 0.7.11、ctutils 0.4.8、rmcp/rmcp-macros
+3.9.0、russh 0.65.0、rustix 1.1.6、Tokio 1.53.3；总包数仍为 362。RSA
+禁用及 ring 后端保持，未增加 unsafe 或更改 SSH 信任逻辑。固定数据库复扫
+退出 0，漏洞与 warnings 都为 0、ignore 为空。完整官方 sparse-index 核对
+覆盖 360/360 个 registry 版本：0 yanked、0 checksum 不一致、0 覆盖缺口；
+352 份原始响应按原 SHA-256 验证后压缩保留。311 个版本声明的 MSRV 均不高于
+1.95，49 个未声明版本另列。详见
+[修复与本地检查](validation/dependency-repair/README.md)及
+[独立依赖和注册表复核](validation/dependency-registry-1509860c/dependency-verification-summary.md)。
+两种特性模式的全部 target check、严格 Clippy 与格式检查均通过；这轮本地
+检查未执行 Rust 测试，完整行为仍交由新提交的托管 CI 验证。
+
 Python 直接依赖虽固定版本，但未提供完整带 hash 的传递依赖环境；包管理器
 和 runner image 仍是重现性边界。
 
