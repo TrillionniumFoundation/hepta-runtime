@@ -126,6 +126,10 @@ MODULES = (
      "builder": "batch_diff", "manifest_env": "HIA_BATCH_DIFF_BUNDLE", "test": "test_batch_diff.py",
      "companion_sources": ("native/batch_apply.hepta", "native/editable_content.hepta",
                            "native/text_budget.hepta", "native/result_publication.hepta")},
+    {"key": "batch_call", "name": "batch-call", "source": "native/batch_call.hepta",
+     "builder": "batch_call", "manifest_env": "HIA_BATCH_CALL_MANIFEST", "test": "test_batch_call_native.py",
+     "additional_tests": ("test_batch_call_packing.py", "test_batch_call_async.py"),
+     "companion_sources": ("native/batch_line_verify.hepta", "native/batch_call_packer.hepta")},
     {"key": "atomic_write", "name": "atomic-write", "source": "native/atomic_write.hepta",
      "builder": "atomic_write", "manifest_env": "HIA_ATOMIC_MANIFEST", "test": "test_atomic_write_policy.py",
      "additional_tests": ("test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
@@ -485,6 +489,12 @@ def sources() -> dict:
         "hia_native_batch_apply_build.py", "hia_native_batch_apply_qualification.py",
         "hia_native_batch_diff_build.py", "hia_native_batch_diff_qualification.py",
         "hia_native_batch_diff_pipeline.py",
+        "hia_native_batch_call_build.py", "hia_native_batch_call_controls.py",
+        "hia_native_batch_call_pipeline.py", "hia_native_batch_call_fixtures.py",
+        "batch_call_fixture.S", "batch_call_fixture_controls.S", "batch_call_native_support.S",
+        "batch_call_engine.S", "batch_call_tree_bridge.S", "batch_call_atomic_bridge.S",
+        "batch_call_atomic_effects.S", "batch_call_atomic_observer.S", "batch_call_driver.S",
+        "batch_call_retire.S", "batch_call_async.S", "batch_call_shared.S", "batch_call_fixture_sessions.S",
         "hia_native_atomic_write_build.py", "hia_native_atomic_write_qualification.py",
         "hia_native_filesystem_parity_build.py", "hia_native_filesystem_parity_reference.py",
         "hia_native_filesystem_parity_qualification.py",
@@ -679,7 +689,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                         raise failure
                 else:
                     record_check(output, report, name=name, command=invocation[name], timeout=timeout, env=env,
-                                 record_identity=name == "test_batch_plan_input.py")
+                                 record_identity=name in {"test_batch_plan_input.py", "test_batch_call_native.py",
+                                                          "test_batch_call_packing.py", "test_batch_call_async.py"})
         finally:
             for name in futures:
                 if name not in collected:
@@ -706,6 +717,10 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
     if "test_batch_diff.py" in tests:
         from hia_native_batch_diff_pipeline import native_evidence
         native_evidence(ROOT, output, report, completed_test_summary, create=True)
+
+    if "test_batch_call_native.py" in tests:
+        from hia_native_batch_call_pipeline import native_evidence
+        native_evidence(ROOT, output, report, completed_test_summary)
 
 
 def io_reference_evidence(output: Path, report: dict) -> dict:
@@ -894,6 +909,16 @@ def batch_edit_params_evidence(output: Path, report: dict) -> dict:
 def batch_plan_input_evidence(output: Path, report: dict) -> dict:
     from hia_native_batch_plan_input_pipeline import native_evidence
     return native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def batch_call_evidence(output: Path, report: dict) -> dict:
+    from hia_native_batch_call_pipeline import native_evidence
+    return native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def batch_call_fixture_retirement(output: Path, report: dict, *, create=False, native=None) -> dict:
+    from hia_native_batch_call_pipeline import fixture_retirement
+    return fixture_retirement(ROOT, output, report, completed_test_summary, create=create, native=native)
 
 
 def batch_diff_evidence(output: Path, report: dict) -> dict:
@@ -2491,6 +2516,9 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         elif item.get("builder") == "batch_diff":
             from hia_native_batch_diff_pipeline import environment
             env.update(environment(ROOT, output, report))
+        elif item.get("builder") == "batch_call":
+            from hia_native_batch_call_pipeline import environment
+            env.update(environment(ROOT, output, report))
         elif item.get("builder") == "effect_fence":
             bundle = json.loads(built.read_bytes())
             env["HIA_FENCE_ASYNC_MANIFEST"] = str(
@@ -2649,6 +2677,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "batch_diff":
             from hia_native_batch_diff_pipeline import build as build_batch_diff
             built = build_batch_diff(hepta, output, source_root=ROOT)
+        elif item.get("builder") == "batch_call":
+            from hia_native_batch_call_pipeline import build as build_batch_call
+            built = build_batch_call(hepta, output, source_root=ROOT, source_sha256=report["source_sha256"])
         elif item.get("builder") == "batch_plan":
             from hia_native_batch_plan_build import build_batch_plan
             built = build_batch_plan(hepta, output / "build", source_root=ROOT)
@@ -2762,6 +2793,9 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["batch_edit_params_evidence"] = batch_edit_params_evidence(output, report)
     report["batch_plan_input_evidence"] = batch_plan_input_evidence(output, report)
     report["batch_diff_evidence"] = batch_diff_evidence(output, report)
+    report["batch_call_evidence"] = batch_call_evidence(output, report)
+    report["batch_call_fixture_retirement"] = batch_call_fixture_retirement(
+        output, report, create=True, native=report["batch_call_evidence"])
     report["batch_plan_evidence"] = batch_plan_evidence(output, report)
     report["batch_apply_evidence"] = batch_apply_evidence(output, report)
     atomic = atomic_write_evidence(output, report)
@@ -2864,6 +2898,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["batch_edit_params_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_input_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_diff_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_call_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_call_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["artifact_sha256"])

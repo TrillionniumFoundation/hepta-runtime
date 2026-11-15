@@ -157,14 +157,17 @@ class NativePipelineTests(unittest.TestCase):
             ("test_batch_edit_params.py", "test_batch_plan_input.py", "test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
              "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
              "test_batch_diff.py",
+             "test_batch_call_native.py", "test_batch_call_packing.py", "test_batch_call_async.py",
              "test_atomic_write_policy.py", "test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
-             "test_atomic_write_evidence.py"))
+             "test_atomic_write_evidence.py", "test_view_cache.py", "test_view_cache_evidence.py",
+             "test_history.py", "test_history_evidence.py"))
         self.assertEqual(partitions["system"][:3],
                          ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py",
                           "test_filesystem_parity_kernel.py"))
-        self.assertEqual(len(flat), 136)
+        self.assertEqual(len(flat), 139)
         self.assertEqual({name: len(tests) for name, tests in partitions.items()},
-                         {'batch': 13, 'text': 29, 'view': 26, 'json': 16, 'config': 17, 'system': 35})
+                         {'batch': 20, 'text': 29, 'view': 20, 'json': 16, 'config': 17, 'system': 37})
+        self.assertEqual(partitions['system'][-2:],('test_session_workdir.py','test_session_evidence.py'))
         self.assertLess(partitions['view'].index('test_runtime_mcp.py'),
                         partitions['view'].index('test_filesystem_public.py'))
         self.assertNotIn('test_filesystem_public_original_evidence.py', flat)

@@ -204,7 +204,7 @@ activation remain unfinished. The original implementations stay in place.
 
 ## Native components
 
-Qualification covers 123 native HIA sources through 53 executable component
+Qualification covers 126 native HIA sources through 54 executable component
 entries, including 28 HIA packers. Shared owners are compiled in the explicitly
 declared component profiles; they are not counted as additional source files.
 The complete source inventory binds implementation, contracts, builders, tests
@@ -481,12 +481,13 @@ CI executes the same gate as a fresh prepare job, six explicit native partitions
 and one aggregate/original-Rust job. The prepare job executes the full cold gate
 and builds every module once. Its exact SHA256 is passed through the workflow;
 every partition checks the full source, compiler, build and invocation identity
-before executing its complete suite list. Batch, text, view/history/session, JSON,
-configuration/regex and system suites run on separate runners with 13, 29, 26,
-16, 17 and 35 native suites, respectively. The view partition keeps the caller,
+before executing its complete suite list. Batch/history/cache, text, view, JSON,
+configuration/regex and system/session suites run on separate runners with 20, 29,
+20, 16, 17 and 37 native suites, respectively. The view partition keeps the caller,
 public MCP and their evidence together; text keeps the ordered file-lock chain.
-Configuration and regex remain together
-with all their evidence dependencies. Prepare and native partition jobs retain
+The standalone cache, history and session pairs stay with their own evidence
+while running independently of the public View corpus. Configuration and regex
+remain together with all their evidence dependencies. Prepare and native partition jobs retain
 15 minutes; the aggregate has 30 minutes for collection and all original recipes.
 Every native process retains 180 seconds and the cold/owner limits below are
 unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
@@ -497,7 +498,7 @@ is separate from the unchanged test result. The successful workflow requires
 the full archive and diagnostics, with original bytes and the tar receipt.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
-native evidence checks and all 48 original Rust recipe entries. Artifact transport can
+native evidence checks and all 49 original Rust recipe entries. Artifact transport can
 strip executable permissions; only byte-verified owned regular files have their
 recorded ordinary permissions restored. The aggregate retains the original
 partition reports and rechecks them before and after the original comparisons.
@@ -521,8 +522,8 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 136 native suite processes, the fresh compiler cold process,
-48 required original Rust recipe entries and one Rust-version process. Aggregate
+The declared run has 139 native suite processes, the fresh compiler cold process,
+49 required original Rust recipe entries and one Rust-version process. Aggregate
 process records, nested original processes, direct native calls and actual ELF
 processes are reported separately by the completed execution. Recipe entries
 can share a fresh build and are not a process count. The two JSON recipes share one locked
@@ -1599,6 +1600,48 @@ I/O and cancellation joins. In particular, a writer that has already committed
 an effect must not acquire a new result-size error during publication. This
 component does not claim those callers, a concurrent request scheduler, or the
 complete runtime has been replaced.
+
+## Complete inner Batch execution
+
+The `batch_call` component composes 20 HIA owners into one static ELF, including
+the typed Value and parameter projection, canonical path lock, read, line-ID
+verification, planning, application, history, atomic publication, cache updates
+and complete diff. The mechanical boundary transports fixed owner calls and
+actual Linux effects; it contains no Rust, Python or libc runtime dependency.
+The public MCP method, SDK extraction, session policy and effect-permit boundary
+remain separately tracked work.
+
+Three registered native suites capture all 215 semantic inputs and two
+subordinate post-cancellation operations, 52 complete private-state controls,
+14 actual HIA packer calls, six physical source/contract refusals and two actual
+Linux cancellation/late-worker lock controls. Every producer retains its real
+PID, exact arguments, full input/output/error streams and unchanged 180-second
+suite / 60-second request deadlines.
+
+The separate original recipe first admits the complete native evidence and
+retired fixture archives. It compiles the unchanged inner `execute_batch_edit`
+with explicitly selected Rust 1.95 and replays all three partitions at their
+actual original absolute fixture paths. Complete original responses, history,
+all session caches, file bytes, syscall observations and lifecycle markers
+remain separate from the native observations. The reader does not assert that
+Tokio and HIA have identical syscall schedules.
+
+Fixture archives retain ordinary bytes, modes, hardlink groups, symbolic-link
+targets, FIFOs and extended attributes. Unreadable private fixture files receive
+a temporary owner-read permission through a pinned inode; the actual change and
+restoration are recorded after all semantic processes have terminated. This
+housekeeping is not counted as a business invocation. Only normal original
+execution may reconstruct the admitted tree, with fresh inode identities. Its
+subsequent rename preserves those reconstructed identities, and both native and
+original effect trees are retired after comparison. Pure readers never restore
+or consult an execution-origin fixture.
+
+The final retained reader also consumes six groups of 42 physical or re-signed
+negative controls. Missing full streams, changed originals, fabricated process
+identities, modified complete values, broken descriptor/lifecycle observations
+and mutated private buffers must be refused even when a summary digest has been
+updated. Original replay and these controls do not add native semantic cases.
+None of these component gates sets a production-handler or full-migration flag.
 
 ## Remaining migration work and cleanup
 

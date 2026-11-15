@@ -173,6 +173,17 @@ def check_input_pins(output: Path, report: dict) -> None:
     if "batch_diff" in report.get("original_rust_comparisons", {}):
         if batch_diff_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["batch_diff"]:
             raise ValueError("registered complete batch diff original evidence differs")
+    from hia_native_batch_call_pipeline import native_evidence as batch_call_native
+    from hia_native_batch_call_pipeline import fixture_retirement as batch_call_retirement
+    from hia_native_batch_call_pipeline import retained_original as batch_call_original
+    native_call = batch_call_native(ROOT, output, report, completed_test_summary)
+    if native_call != report.get("batch_call_evidence"):
+        raise ValueError("registered complete Batch caller native evidence differs")
+    if batch_call_retirement(ROOT, output, report, completed_test_summary, native=native_call) != report.get("batch_call_fixture_retirement"):
+        raise ValueError("registered complete Batch fixture retirement differs")
+    if "batch_call" in report.get("original_rust_comparisons", {}):
+        if batch_call_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["batch_call"]:
+            raise ValueError("registered complete Batch inner original evidence differs")
     if report.get("batch_plan_evidence") != batch_plan_evidence(output, report):
         raise ValueError("required complete batch input/endpoint/large-result evidence differs")
     if report.get("batch_apply_evidence") != batch_apply_evidence(output, report):
@@ -1873,6 +1884,12 @@ def compare_batch_diff(output: Path, report: dict, rustc: Path) -> dict:
                             completed=completed_test_summary, qualification_env=qualification_env)
 
 
+def compare_batch_call(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_batch_call_pipeline import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check=record_check,
+                            completed=completed_test_summary, qualification_env=qualification_env)
+
+
 
 def compare_config_span(output: Path, report: dict, rustc: Path) -> dict:
     from hia_native_config_span_pipeline import execute_original
@@ -1893,6 +1910,7 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "batch_edit_params": compare_batch_edit_params,
            "batch_plan_input": compare_batch_plan_input,
            "batch_diff": compare_batch_diff,
+           "batch_call": compare_batch_call,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
            "view_render_growth": compare_view_render_growth,
