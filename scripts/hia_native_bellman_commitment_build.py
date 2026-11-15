@@ -50,7 +50,7 @@ def main():
         env.update(HIA_HEPTA_DIR=str(a.hepta.resolve()),HIA_BELLMAN_COMMITMENT_QUALIFICATION_OUTPUT=str(output))
         env[item["manifest_env"]]=str(manifest)
         aggregate.record_check(output,report,name=commitment.TEST,
-            command=[sys.executable,"-I","-B",str(ROOT/"tests/hia_native"/commitment.TEST)],timeout=180,env=env)
+            command=[sys.executable,"-I","-B",str(ROOT/"tests/hia_native"/commitment.TEST)],timeout=180,env=env,record_identity=True)
         report["bellman_commitment_evidence"]=commitment.native_evidence(output,report)
         report["phase"]="original_rust_comparison"
         selected=aggregate.record_check(output,report,name="bellman-commitment-selected-rustc",
