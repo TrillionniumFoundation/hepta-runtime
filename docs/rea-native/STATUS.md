@@ -11,7 +11,7 @@ Frozen C2 results: [Candidate C2 observations](C2_OBSERVATIONS_20261106_679CCF.m
 ## 2026-11-06 ELF Evidence and fixed Ghidra continuation
 
 The latest finite continuation is documented in
-[ELF Evidence and fixed Ghidra family continuation](../qualification/rea-family-20261106-r1/README.md).
+[ELF Evidence and fixed Ghidra family continuation](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/docs/qualification/rea-family-20261106-r1/README.md).
 Its binary-producing source is `fe3223cabbd2a8f1aa75a4ab57507bdb72291242`,
 with selected execution-input tree
 `1a83f83cf62bf3d96e50c944722977b6971ffe686aecd131cab5e728dd802424`.

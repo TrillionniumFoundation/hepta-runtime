@@ -71,7 +71,7 @@ Both c25 GitHub PR jobs were later observed completed/cancelled, without supplie
 step records or logs. They are not GitHub passes. The local source-bound matrix
 is independent of those cancelled jobs.
 
-The [candidate A audit archive](../qualification/rea-p0p5-679ccf-20261106/candidate-a/README.md)
+The [candidate A audit archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/docs/qualification/rea-p0p5-679ccf-20261106/candidate-a/README.md)
 retains the original inputs, responses, logs and failed receipts. Its independent
 consumer read all 5,056 regular archive members and verified every byte count and
 SHA-256; the 4,157 selected original files remained unchanged. Explicit omissions

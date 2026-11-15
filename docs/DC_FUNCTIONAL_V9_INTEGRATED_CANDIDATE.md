@@ -23,7 +23,7 @@ Full Desktop Commander replacement qualification remains **false**. Production s
 
 The first integrated Rust 1.99 full run passed 571 tests and failed the owner-capacity test with `EAGAIN` while acquiring a short metadata flock. A deterministic new Rust test reproduced the failure with an owned forked child retaining the same open-file description. The short metadata lock now explicitly unlocks before closing its parent descriptor; the long controller ownership lease retains its separate behavior. The corrected test passed, and its child cleanup uses non-reaping `waitid(...WNOWAIT)` observation and disarms signal ownership on `ECHILD`.
 
-Original failed logs, original source maps, the pre-fix counterexample, independent causal fixture, source review, and every subsequent source map remain in `docs/qualification/dc-functional-v9-integrated-evidence-20261013`.
+Original failed logs, original source maps, the pre-fix counterexample, independent causal fixture, source review, and every subsequent source map remain in [original v9 integrated evidence](https://github.com/TrillionniumFoundation/hepta-runtime/tree/a404d4f1bf540fb94f65ef3707145eed07eef183/docs/qualification/dc-functional-v9-integrated-evidence-20261013).
 
 ## Actual checks completed before source publication
 

@@ -9,9 +9,9 @@
 | 内容 | 文件 |
 |---|---|
 | 两个实际修改的 Rust 文件 | [ssh_observation_pool.rs](../src/mcp/runtime/ssh_observation_pool.rs)、[ssh_observation_pool_tests.rs](../src/mcp/runtime/ssh_observation_pool_tests.rs) |
-| 相对已资格验证 R24 源码的完整补丁 | [capacity12.patch](../tools/x230/20261105/capacity12-experiment/capacity12.patch) |
-| 准备时的源码身份、边界与静态核对 | [manifest.json](../tools/x230/20261105/capacity12-experiment/manifest.json)、[README.md](../tools/x230/20261105/capacity12-experiment/README.md) |
-| 预先选择的采用规则及执行阻塞 | [计划说明](../tools/x230/20261105/capacity12-experiment/candidate-screen-plan-01.md)、[结构化计划](../tools/x230/20261105/capacity12-experiment/candidate-screen-plan-01.json) |
+| 相对已资格验证 R24 源码的完整补丁 | [capacity12.patch](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/capacity12-experiment/capacity12.patch) |
+| 准备时的源码身份、边界与静态核对 | [manifest.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/capacity12-experiment/manifest.json)、[README.md](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/capacity12-experiment/README.md) |
+| 预先选择的采用规则及执行阻塞 | [计划说明](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/capacity12-experiment/candidate-screen-plan-01.md)、[结构化计划](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/capacity12-experiment/candidate-screen-plan-01.json) |
 
 `tools` 中五份记录按准备时原字节保存。其中绝对路径和未执行、未发布字段描述当时的本地准备状态，没有为本检查点改写历史。两个修改后的源码文件只放在仓库的 `src` 路径，不在 `tools` 重复复制；文档与计划不能替代未来的实际资格和测量证据。
 

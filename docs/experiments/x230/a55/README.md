@@ -225,7 +225,7 @@ offsets, lengths, SHA256 values and the unchanged complete transport SHA256.
 Concatenating the parts in listed order reconstructs the exact 776,727-byte
 original package before gzip decoding.
 
-Frozen [qualification and diagnostic tools](../../../../tools/x230/a55/README.md)
+Frozen [qualification and diagnostic tools](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/a55/README.md)
 retain their original input bindings and path contracts. The
 [prepublication compiler manifest](compiler-publication.prepublication.json)
 deliberately records final Git verification as false: a postpublication audit

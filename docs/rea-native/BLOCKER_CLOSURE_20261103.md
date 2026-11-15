@@ -43,7 +43,7 @@ handoff behavior that the fix changes.
 
 ### Actual ext4 result
 
-The [ext4 qualification](../qualification/rea-audit-ext4-20261103-r1/README.md)
+The [ext4 qualification](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/docs/qualification/rea-audit-ext4-20261103-r1/README.md)
 uses pinned test executables and the fixed **ABBA BAAB** schedule: four original
 64-publication invocations per variant, followed by 15 candidate regressions.
 There are zero retries, two explicit test listings and no Cargo invocation

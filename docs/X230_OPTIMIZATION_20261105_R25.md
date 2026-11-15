@@ -14,7 +14,7 @@ was changed, and no historical sample was pooled into the result. The campaign's
 `observation_gate_passed=false` records the performance rejection. Neither value
 establishes final candidate adoption.
 
-The [evidence index](../tools/x230/20261105/r25/README.md) links exact reports,
+The [evidence index](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r25/README.md) links exact reports,
 the complete rejected patch and original native operation receipts. This companion
 commit includes all four original X230 archives after lossless transfer and
 independent archive verification, together with the complete transport recovery

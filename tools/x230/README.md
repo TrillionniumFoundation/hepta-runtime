@@ -4,7 +4,7 @@
 
 The draft optimization PR now carries the exact A26 source qualified on x230.
 The [A26 report](../../docs/X230_A26_20261024.md) and
-[frozen A26 tools](a26/README.md) describe its availability, worker-lifetime,
+[frozen A26 tools](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/a26/README.md) describe its availability, worker-lifetime,
 and controller-recovery results, including the CPU cost, invalid full performance
 comparison, limited resource sampling, and retained crash sockets. The dated
 candidate sections below describe their respective historical checkpoints.

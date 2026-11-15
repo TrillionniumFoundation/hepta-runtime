@@ -1,4 +1,0 @@
-        stage("format", cargo + ["fmt", "--all"])
-        stage("fmt-check", cargo + ["fmt", "--all", "--", "--check"])
-        stage("harness-tests", ["/usr/bin/python3", "-B", "-m", "unittest", "discover",
-                                "-s", str(harness), "-p", "*_tests.py", "-v"])

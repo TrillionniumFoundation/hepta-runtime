@@ -181,31 +181,31 @@ Cargo 源码链的独立离线 addendum 第一次使用了错误的 AST 路径�
 
 | 归档 | 字节数 | 归档 SHA256 |
 |---|---:|---|
-| [qualification-01.tar.gz](../tools/x230/20261104/r19/qualification-01.tar.gz) | 1,593,948 | `17a74596608e993ce14a98ea013b4c7eedf6e2da33c3f6327891553a1814f766` |
-| [prequalification-component-01.tar.gz](../tools/x230/20261104/r19/prequalification-component-01.tar.gz) | 108,618 | `185637589688bb84864d265d3a3f5fb69b309dcda244a0015765a5291139c471` |
-| [qualification-02.tar.gz](../tools/x230/20261104/r19/qualification-02.tar.gz) | 1,594,996 | `b566ce6cadf11a34ac28ce91a418a143dc9cacb6e50afde72f66d1e4a9bea599` |
-| [qualification-resolution-02.tar.gz](../tools/x230/20261104/r19/qualification-resolution-02.tar.gz) | 48,052 | `90cb0793f5313fce062a379f3a168602ee89dc9cd09501a56ca5594ab7c3ab83` |
-| [qualification-diagnostics-01.tar.gz](../tools/x230/20261104/r19/qualification-diagnostics-01.tar.gz) | 249,406 | `6b4a9cc11b4cc957b55ca056e0fb8aa8972106f332bc043c378c5b6b9263ba21` |
-| [campaign-control-01.tar.gz](../tools/x230/20261104/r19/campaign-control-01.tar.gz) | 268,975 | `727437213953a8b9f0361f33ecd6a656a30b8282072daefb890849cf1ef121d3` |
-| [native-observation-01.tar.gz](../tools/x230/20261104/r19/native-observation-01.tar.gz) | 2,180,696 | `048a3ab43569a727336e5af4ca329bd9632c87bcce8b6b02d685150d1df92110` |
-| [native-boundary-01.tar.gz](../tools/x230/20261104/r19/native-boundary-01.tar.gz) | 261,894 | `8d948277ae47edfa3a089d09b49e8afdb11bd699b3c98bc9ffee6e607cacaec5` |
-| [cancel-recovery-01.tar.gz](../tools/x230/20261104/r19/cancel-recovery-01.tar.gz) | 263,130 | `ca9b3041ca4ba40f30a85607a47d151c132e2a1918d494b1d925636dda0b531d` |
-| [local-development.tar.gz](../tools/x230/20261104/r19/local-development.tar.gz) | 936,654 | `551477872059dd7700e4c43722a5f116ccf9c106d94f5bafe1a811ad735ee5bc` |
+| [qualification-01.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/qualification-01.tar.gz) | 1,593,948 | `17a74596608e993ce14a98ea013b4c7eedf6e2da33c3f6327891553a1814f766` |
+| [prequalification-component-01.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/prequalification-component-01.tar.gz) | 108,618 | `185637589688bb84864d265d3a3f5fb69b309dcda244a0015765a5291139c471` |
+| [qualification-02.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/qualification-02.tar.gz) | 1,594,996 | `b566ce6cadf11a34ac28ce91a418a143dc9cacb6e50afde72f66d1e4a9bea599` |
+| [qualification-resolution-02.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/qualification-resolution-02.tar.gz) | 48,052 | `90cb0793f5313fce062a379f3a168602ee89dc9cd09501a56ca5594ab7c3ab83` |
+| [qualification-diagnostics-01.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/qualification-diagnostics-01.tar.gz) | 249,406 | `6b4a9cc11b4cc957b55ca056e0fb8aa8972106f332bc043c378c5b6b9263ba21` |
+| [campaign-control-01.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/campaign-control-01.tar.gz) | 268,975 | `727437213953a8b9f0361f33ecd6a656a30b8282072daefb890849cf1ef121d3` |
+| [native-observation-01.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/native-observation-01.tar.gz) | 2,180,696 | `048a3ab43569a727336e5af4ca329bd9632c87bcce8b6b02d685150d1df92110` |
+| [native-boundary-01.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/native-boundary-01.tar.gz) | 261,894 | `8d948277ae47edfa3a089d09b49e8afdb11bd699b3c98bc9ffee6e607cacaec5` |
+| [cancel-recovery-01.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/cancel-recovery-01.tar.gz) | 263,130 | `ca9b3041ca4ba40f30a85607a47d151c132e2a1918d494b1d925636dda0b531d` |
+| [local-development.tar.gz](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/local-development.tar.gz) | 936,654 | `551477872059dd7700e4c43722a5f116ccf9c106d94f5bafe1a811ad735ee5bc` |
 
 前九包来自已关闭测量与构建证据写入的 X230 目录；第十个 local-development 包在完整原始数据回放、219 输入源码绑定及收尾观察记录完成后生成，保留代码与补丁修订、失败尝试、独立复核、两次 Mac holder 的文本收据及组件离线重算材料。十个证据包及全部 manifest/receipt 已生成。九个远端包共恢复 7,042 个唯一文件，55 个重复成员逐字节相同，100 个显式计划哈希绑定全部匹配。归档内的发布前报告快照保留当时状态；当前 docs 报告另补最终归档身份，避免归档哈希自引用。
 
-原组件传输归档另以 [`component-evidence-01.tar.gz`](../tools/x230/20261104/r19/component-evidence-01.tar.gz) 单独保留，精确为 29,364 字节，SHA256 为 `4d9787b50d914d3407ce5f15465060ff5e35828b5f489528fb39cc4dbc6a8dd5`。它与先前收到的组件 tar 逐字节相同，供组件离线审计检查原始传输身份；它不计为第十一个实验包。
+原组件传输归档另以 [`component-evidence-01.tar.gz`](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/component-evidence-01.tar.gz) 单独保留，精确为 29,364 字节，SHA256 为 `4d9787b50d914d3407ce5f15465060ff5e35828b5f489528fb39cc4dbc6a8dd5`。它与先前收到的组件 tar 逐字节相同，供组件离线审计检查原始传输身份；它不计为第十一个实验包。
 
 外层 `r19-transfer-envelope-01.tar.gz` 仅用于传输九个远端包及其 manifest、收据和已关闭的附加文件。原封装收据记录 83 个被索引的数据文件，外层归档为 7,712,102 字节，SHA256 `6e329b2b9adffc23c06496c68efeeea07605ce1ee28079a92cc3e2d508accd93`。这个数是运输层被索引文件数，不是九个内层归档的总成员数；外层不改变内层内容，也不计作额外实验包。该身份与实际本地组装结果一致；恢复收据 SHA256 为 `5b7797f667abb026e7fc2aac5c126165dbc282382c1e5f14d3f5158d3559a310`。完整接收、九包验证及三个原始分析的确定性复算均已完成。
 
-各包职责、原工具身份、native／C32／恢复的离线重算命令，以及组件 helper 的恢复布局见 [R19 证据说明](../tools/x230/20261104/r19/README.md)。资格包保留构建与测试证据以及产物哈希，未收录整个 target 树或 ELF 可执行文件；仅靠这些归档不能在另一台机器上重新核验原 ELF 的实际字节。
+各包职责、原工具身份、native／C32／恢复的离线重算命令，以及组件 helper 的恢复布局见 [R19 证据说明](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/README.md)。资格包保留构建与测试证据以及产物哈希，未收录整个 target 树或 ELF 可执行文件；仅靠这些归档不能在另一台机器上重新核验原 ELF 的实际字节。
 
 
 ### 发布与实际二进制位置
 
 本轮沿用 [draft PR #87](https://github.com/TrillionniumFoundation/hepta-runtime/pull/87) 及其原 base。编译源码的父提交为 `a83fe08d736522cf01adee53902e3c13fbc1d5ae`，实际候选 `src` tree 为 `3aa8c9aadbf42b6a0ebdac3954bd1e64b4055e20`；219 个编译输入与完整资格证据相符。最终提交同时包含该源码树、本报告和证据，文档及归档文件不计入 219 项编译输入。
 
-最终本地闭包计划 SHA256 为 `670c03c9e809d78ab0419507943afbf50bdb6489c2930934a05223196833b357`，闭包收据为 `deaaef8402f6f504580e9b6b3c3a71729617e347bfabfcedb29b79b7033ecb99`，本地归档批次报告为 `be0f664d5c2d9db2d09f0ba4e2d0c460ef69c6139415805ea0d9c779f8781786`。逐文件字节数、SHA256 和 Git blob 身份见 [最终文件清单](../tools/x230/20261104/r19/publication-manifest.json)。该清单不对自身做循环哈希。
+最终本地闭包计划 SHA256 为 `670c03c9e809d78ab0419507943afbf50bdb6489c2930934a05223196833b357`，闭包收据为 `deaaef8402f6f504580e9b6b3c3a71729617e347bfabfcedb29b79b7033ecb99`，本地归档批次报告为 `be0f664d5c2d9db2d09f0ba4e2d0c460ef69c6139415805ea0d9c779f8781786`。逐文件字节数、SHA256 和 Git blob 身份见 [最终文件清单](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261104/r19/publication-manifest.json)。该清单不对自身做循环哈希。
 
 X230 上已实际构建并通过资格的 ELF 保存在：
 

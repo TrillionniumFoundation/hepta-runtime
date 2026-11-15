@@ -98,7 +98,7 @@ switch window.
 
 The original remote request, job identity, grace limit, cancellation protocol,
 and completion-audit sequence remain unchanged. The
-[concurrency review](../tools/x230/20261103/r12/concurrency-review.md) records
+[concurrency review](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/concurrency-review.md) records
 these boundaries and the deferred proposal to reuse remote request validation.
 
 ### Single-pass receipt encoding
@@ -124,7 +124,7 @@ or introduce a new recovery/ownership protocol.
 
 Source: cancel-responsiveness-01/report.json in the
 [original archive](../tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz).
-The [driver](../tools/x230/20261103/r12/run_cancel_responsiveness.py) starts fresh
+The [driver](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/run_cancel_responsiveness.py) starts fresh
 local native MCP controllers with identical escaped JSON receipts, eight
 concurrent wrong-host cancellation requests per wave, and one host_list request.
 Every cancellation must fail with the expected binding error after receipt
@@ -165,8 +165,8 @@ and retention.
 Sources: native-observation-01/report.json in the
 [original archive](../tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz),
 the separate [C1 follow-up](../tests/evidence/20261103-x230-r12/native-c1-followup.json.gz),
-the [measurement wrapper](../tools/x230/20261103/r12/run_native_observation.py),
-and the [independent analyzer](../tools/x230/20261103/r12/analyze_native_observation.py).
+the [measurement wrapper](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/run_native_observation.py),
+and the [independent analyzer](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/analyze_native_observation.py).
 
 Both campaigns use the same qualified R11/R12 release runtimes, six original
 completed jobs on ai395/mac/main/pocket4/rog/x230, native stdio MCP, two Tokio
@@ -247,7 +247,7 @@ The separately exposed
 [persistence-qualified.json.gz](../tests/evidence/20261103-x230-r12/persistence-qualified.json.gz)
 is original qualified-matrix-01/persistence-cargo.json. Its uncompressed SHA256
 is db7be7966e8fc4e9c5861e2d9838293951bc43fc27bf25c2c5d69e9342807afe.
-The [persistence analyzer](../tools/x230/20261103/r12/analyze_persistence.py)
+The [persistence analyzer](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/analyze_persistence.py)
 provides the reproducible statistical definitions.
 
 Both arms run in the same qualified Cargo libtest on the actual production
@@ -326,8 +326,8 @@ Sources: baseline-cancel-recovery-01/report.json and
 candidate-cancel-recovery-01/report.json in the
 [original archive](../tests/evidence/20261103-x230-r12/r12-original-evidence.tar.gz).
 Reproduction and verification:
-[run_six_host_cancel_recovery.py](../tools/x230/20261103/r12/run_six_host_cancel_recovery.py)
-and [verify_cancel_recovery.py](../tools/x230/20261103/r12/verify_cancel_recovery.py).
+[run_six_host_cancel_recovery.py](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/run_six_host_cancel_recovery.py)
+and [verify_cancel_recovery.py](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12/verify_cancel_recovery.py).
 
 | Check | R11 baseline | R12 candidate |
 |---|---:|---:|
@@ -372,7 +372,7 @@ sampled resources are not complete process-tree accounting.
 
 ## Reproduction and next checkpoint
 
-The [R12 tool directory](../tools/x230/20261103/r12/) contains original drivers,
+The [R12 tool directory](https://github.com/TrillionniumFoundation/hepta-runtime/tree/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/r12) contains original drivers,
 independent analyzers, harness checks, concurrency review, and rejected
 experiment sources. Use fresh private output directories and bind every new run
 to its actual qualified source and executable. Original controller/SSH identities

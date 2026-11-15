@@ -253,7 +253,7 @@ performance or memory benefit remains unproven.
 
 ## Offline verification
 
-[The archived tools and read-only recomputation helper](../../../tools/x230/a43/README.md)
+[The archived tools and read-only recomputation helper](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/a43/README.md)
 verify original archive bytes, full-suite counts, declared kill/restart cases,
 all 128 measured terminal receipts and the pooled arithmetic without launching
 a workload. An optional checkout-source pass hashes all 166 source bodies.
