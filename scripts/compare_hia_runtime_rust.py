@@ -385,7 +385,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if sha(manifest) != item["sha256"]:
             raise ValueError("compiled module manifest changed")
         module = json.loads(manifest.read_bytes())
-        if item.get("builder") in {"view_call", "batch_diff"}:
+        if item.get("builder") in {"view_call", "batch_diff", "batch_call"}:
             # Its strict bundle reader above checked every child and packer
             # compiler identity, complete input/output and composed ELF.
             continue
