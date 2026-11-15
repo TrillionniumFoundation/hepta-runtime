@@ -46,7 +46,9 @@ class EvidenceTests(unittest.TestCase):
     def snapshot(self):
         temporary = tempfile.TemporaryDirectory(prefix='history-evidence-', dir=self.output.parent)
         output = Path(temporary.name) / 'capture'
-        shutil.copytree(self.output, output, copy_function=os.link)
+        # Public Workdir fixtures include deliberate symlink cycles.
+        # Copy links without following targets; readers still check their owned artifacts.
+        shutil.copytree(self.output, output, copy_function=os.link, symlinks=True)
         self.addCleanup(temporary.cleanup)
         return output, copy.deepcopy(self.report)
 

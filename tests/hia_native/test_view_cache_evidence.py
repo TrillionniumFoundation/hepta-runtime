@@ -44,9 +44,11 @@ class EvidenceTests(unittest.TestCase):
         cls.actual=native_evidence(ROOT,cls.output,cls.report,completed_test_summary,reference_root=REFERENCE)
 
     def snapshot(self):
-        temporary=tempfile.TemporaryDirectory(prefix='hia-cache-evidence-')
+        temporary=tempfile.TemporaryDirectory(prefix='hia-cache-evidence-', dir=self.output.parent)
         output=Path(temporary.name)/'capture'
-        shutil.copytree(self.output,output,copy_function=os.link)
+        # Public Workdir fixtures include deliberate symlink cycles.
+        # Copy links without following targets; readers still check their owned artifacts.
+        shutil.copytree(self.output,output,copy_function=os.link, symlinks=True)
         self.addCleanup(temporary.cleanup)
         return output,copy.deepcopy(self.report)
 
