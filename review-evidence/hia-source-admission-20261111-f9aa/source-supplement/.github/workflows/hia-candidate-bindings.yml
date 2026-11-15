@@ -1,0 +1,117 @@
+name: HIA candidate bindings
+on:
+  push:
+    branches: ['codex/hia-three-loop-*']
+  pull_request:
+    paths:
+      - 'hepta/**'
+      - 'tools/hia_candidate_preflight.py'
+      - 'tools/generate_hia_agent_native_contract.py'
+      - 'tests/test_hia_checker_identity*.py'
+      - 'tests/test_hia_worker_native_helpers.py'
+      - 'tests/test_hia_original_select_extension.py'
+      - 'tests/test_hia_original_select_fragments.py'
+      - 'tests/test_hia_agent_identity_source_binding.py'
+      - 'tools/build_hia_agent_identity.py'
+      - 'tools/qualify_hia_original_select_fragments.py'
+      - 'tools/replay_hia_original_select_fragments.py'
+      - 'tools/qualify_hia_original_select_extension.py'
+      - 'tests/test_hia_candidate*.py'
+      - '.github/workflows/hia-candidate-bindings.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bindings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install the existing qualified native prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/hia-llvm.asc" https://apt.llvm.org/llvm-snapshot.gpg.key
+          fingerprint=$(gpg --show-keys --with-colons "$RUNNER_TEMP/hia-llvm.asc" | awk -F: '$1 == "fpr" { print $10; exit }')
+          test "$fingerprint" = 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
+          sudo install -m 0644 "$RUNNER_TEMP/hia-llvm.asc" /usr/share/keyrings/hia-llvm.asc
+          printf '%s\n' 'deb [arch=amd64 signed-by=/usr/share/keyrings/hia-llvm.asc] https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main' | sudo tee /etc/apt/sources.list.d/hia-llvm20.list
+          sudo apt-get update
+          sudo apt-get install -y binutils gcc clang-20 libclang-rt-20-dev
+          printf 'CLANG=/usr/bin/clang-20\nHEPTA_CLANG=/usr/bin/clang-20\n' >> "$GITHUB_ENV"
+          python -m pip install setuptools==78.1.1 wheel==0.46.3 z3-solver==4.15.4.0 jsonschema==4.26.0
+      - name: Independently regenerate the shared tool catalog without changing source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/hia-candidate-bindings"
+          python -B - <<'PY' 2>&1 | tee "$RUNNER_TEMP/hia-candidate-bindings/catalog.log"
+          import os, pathlib, shutil, subprocess, sys
+          root = pathlib.Path.cwd()
+          temp = pathlib.Path(os.environ["RUNNER_TEMP"]) / "hia-catalog-regeneration"
+          (temp / "tools").mkdir(parents=True)
+          (temp / "docs").mkdir()
+          for name in ("tools/generate_hia_agent_native_contract.py", "docs/HIA_AGENT_NATIVE_RUNTIME_CONTRACT.md"):
+              shutil.copyfile(root / name, temp / name)
+          subprocess.run([sys.executable, "-B", str(temp / "tools/generate_hia_agent_native_contract.py")], check=True)
+          assert (temp / "docs/HIA_AGENT_NATIVE_TOOL_CATALOG.json").read_bytes() == (root / "docs/HIA_AGENT_NATIVE_TOOL_CATALOG.json").read_bytes()
+          shutil.copyfile(temp / "docs/HIA_AGENT_NATIVE_CONTRACT_SCHEMA_CHECK.json",
+                          pathlib.Path(os.environ["RUNNER_TEMP"]) / "hia-candidate-bindings" / "catalog-schema-check.json")
+          PY
+      - name: Run exact-source custody proof and actual native worker controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/hia-candidate-bindings"
+          git rev-parse HEAD > "$RUNNER_TEMP/hia-candidate-bindings/source.sha"
+          git rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/hia-candidate-bindings/source.tree"
+          python -B tools/generate_hia_selfhost_contract.py --check
+          python -B - <<'PY' 2>&1 | tee "$RUNNER_TEMP/hia-candidate-bindings/tests.log"
+          import json, os, pathlib, subprocess, time, unittest
+          names = (
+              "tests.test_hia_candidate_preflight",
+              "tests.test_hia_candidate_evidence",
+              "tests.test_hia_checker_identity",
+              "tests.test_hia_checker_identity_agent",
+              "tests.test_hia_scalar_proof_contract",
+              "tests.test_hia_safe_core_artifact",
+              "tests.test_hia_agent_native_proof_contract",
+              "tests.test_hia_agent_native_machine_validation",
+              "tests.test_hia_worker_native_helpers",
+              "tests.test_hia_original_select_extension",
+              "tests.test_hia_original_select_fragments",
+              "tests.test_hia_agent_identity_source_binding",
+          )
+          started = time.monotonic()
+          result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromNames(names))
+          passed = result.wasSuccessful() and not result.skipped and not result.expectedFailures
+          summary = {
+              "schema": "hepta.hia.candidate-bindings-tests.v1",
+              "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "source_tree": subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip(),
+              "tests": result.testsRun, "failures": len(result.failures), "errors": len(result.errors),
+              "skips": len(result.skipped), "expected_failures": len(result.expectedFailures),
+              "unexpected_successes": len(result.unexpectedSuccesses),
+              "elapsed_seconds": time.monotonic() - started, "passed": passed,
+              "full_cold_replay_qualified": False, "production_connector_deployed": False,
+              "whole_native_worker_qualified": False,
+          }
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "hia-candidate-bindings" / "summary.json"
+          path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+          print(json.dumps(summary, sort_keys=True))
+          raise SystemExit(0 if passed else 1)
+          PY
+          git diff --exit-code
+      - name: Retain original output on both failure and success
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hia-candidate-bindings-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/hia-candidate-bindings/

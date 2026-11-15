@@ -1,0 +1,50 @@
+{
+  "checks": {},
+  "cleanup_errors": [],
+  "client_sha256": "6c4ee53e052e8125cb925f42bc21be08eea44172eefaa8b1abb33fdfb5676a92",
+  "elapsed_ns": "682851537",
+  "error": {
+    "message": "unchanged-budget cold qualification is incomplete; native integration remains HOLD",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native_helper_mcp_integration.py\", line 644, in main\n    compiler, cold_bytes, report[\"cold_source_binding\"] = admit_cold_compiler(\n                                                          ~~~~~~~~~~~~~~~~~~~^\n        hepta, args.cold_report)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native_helper_mcp_integration.py\", line 213, in admit_cold_compiler\n    require(type(cold) is dict and cold.get(\"schema\") == \"hepta.hia.selfhost-cold-replay.v1\"\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n            and cold.get(\"status\") == \"COLD_SELFHOST_REPLAY_PASS\"\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<4 lines>...\n            and all(value is True for value in cold[\"checks\"].values()),\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n            \"unchanged-budget cold qualification is incomplete; native integration remains HOLD\")\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native_helper_mcp_integration.py\", line 39, in require\n    raise RuntimeError(message)\nRuntimeError: unchanged-budget cold qualification is incomplete; native integration remains HOLD\n",
+    "type": "RuntimeError"
+  },
+  "python": {
+    "executable": "/opt/hostedtoolcache/Python/3.14.10/x64/bin/python",
+    "version": "3.14.10 (main, Oct 26 2026, 14:19:15) [GCC 13.3.0]"
+  },
+  "python_source_imports": [
+    {
+      "files": 904,
+      "source_sha256": "3af9185c27e911af1f5d13b905c310595e08ad8954e887b1d315ad85eb29fe9b"
+    },
+    {
+      "files": 531,
+      "source_sha256": "bdd2d9c5fcf9be6e8b76e9cc0ac52dea666fcac98458c7a25966008523d8542f"
+    }
+  ],
+  "runtime_binary_sha256": "381ab7bbd97aa20c0bbc444751fcfe7e04bfa60fc5dec928b43380e96fcb6dc9",
+  "schema": "hepta.runtime.hia-native-helper-integration.v1",
+  "scope": {
+    "fresh_model_learning_test": false,
+    "native_helpers": [
+      "HEPTA_HIA_AGENT_IDENTITY_MANIFEST"
+    ],
+    "net_optimization_benefit_proved": false,
+    "production_deployed": false,
+    "transport": "actual_stdio_mcp_to_existing_owner_over_loopback_openssh",
+    "whole_worker_native": false,
+    "worker_json_and_journal": "hosted_python"
+  },
+  "sources": {
+    "hepta": {
+      "commit": "7c20b6cfc792f0147b5418968f94734b8890fcca",
+      "tree": "d76c851edfb51fd649aca26a799ed4874af54489"
+    },
+    "runtime": {
+      "commit": "a0dcdda1991ec536d5e2d252c006a778993fa566",
+      "tree": "98d96c88d54082637c27f1cbfae61a66d0dd81e7"
+    }
+  },
+  "status": "HOLD",
+  "transport_sessions": []
+}
