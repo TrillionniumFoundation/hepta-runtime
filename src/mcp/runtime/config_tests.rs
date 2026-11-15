@@ -175,6 +175,75 @@ fn basename_is_stable() {
 	assert_eq!(executable_basename("python3"), "python3");
 }
 
+#[cfg(unix)]
+#[test]
+fn local_policy_follows_kernel_symlink_parent_semantics_before_authorizing() {
+	let fixture = tempfile::tempdir().unwrap();
+	let workspace = fixture.path().join("workspace");
+	let outside = fixture.path().join("outside");
+	std::fs::create_dir(&workspace).unwrap();
+	std::fs::create_dir_all(outside.join("child")).unwrap();
+	std::fs::write(workspace.join("secret"), "inside").unwrap();
+	std::fs::write(outside.join("secret"), "outside").unwrap();
+	std::os::unix::fs::symlink(outside.join("child"), workspace.join("link")).unwrap();
+	let requested = workspace.join("link/../secret");
+	let physical_root = std::fs::canonicalize(&workspace).unwrap();
+	let authorized_candidate = canonical_policy_path(&requested).unwrap();
+	assert_eq!(std::fs::read_to_string(&requested).unwrap(), "outside");
+	assert_eq!(
+		authorized_candidate,
+		std::fs::canonicalize(&requested).unwrap()
+	);
+	assert!(!path_under(&authorized_candidate, &physical_root));
+
+	let new_requested = workspace.join("link/../new-directory/new-file");
+	let new_candidate = canonical_policy_path(&new_requested).unwrap();
+	assert_eq!(
+		new_candidate,
+		std::fs::canonicalize(outside)
+			.unwrap()
+			.join("new-directory/new-file")
+	);
+	assert!(!path_under(&new_candidate, &physical_root));
+}
+
+#[cfg(unix)]
+#[test]
+fn local_policy_rejects_dangling_symlinks_instead_of_treating_them_as_absent() {
+	let fixture = tempfile::tempdir().unwrap();
+	let workspace = fixture.path().join("workspace");
+	let outside = fixture.path().join("outside");
+	std::fs::create_dir(&workspace).unwrap();
+	std::fs::create_dir(&outside).unwrap();
+	let requested = workspace.join("dangling");
+	std::os::unix::fs::symlink(outside.join("new-file"), &requested).unwrap();
+	assert!(!requested.exists());
+	assert!(std::fs::symlink_metadata(&requested)
+		.unwrap()
+		.file_type()
+		.is_symlink());
+	assert!(canonical_policy_path(&requested).is_err());
+	assert!(canonical_policy_path(&requested.join("child")).is_err());
+}
+
+#[test]
+fn local_policy_preserves_valid_physical_parents_and_missing_leaf_paths() {
+	let fixture = tempfile::tempdir().unwrap();
+	let workspace = fixture.path().join("workspace");
+	std::fs::create_dir_all(workspace.join("child")).unwrap();
+	std::fs::write(workspace.join("file"), "inside").unwrap();
+	let root = std::fs::canonicalize(&workspace).unwrap();
+	assert_eq!(
+		canonical_policy_path(&workspace.join("child/../file")).unwrap(),
+		root.join("file")
+	);
+	assert_eq!(
+		canonical_policy_path(&workspace.join("new-directory/new-file")).unwrap(),
+		root.join("new-directory/new-file")
+	);
+	assert!(canonical_policy_path(&workspace.join("missing/../file")).is_err());
+}
+
 #[test]
 fn privileged_regexes_are_full_match_capable() {
 	let regex = Regex::new(r"\A(?:[a-z0-9_-]+)\z").unwrap();
