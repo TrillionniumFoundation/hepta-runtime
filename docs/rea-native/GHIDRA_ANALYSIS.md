@@ -11,7 +11,7 @@ The existing MCP surfaces remain `rea_static_profiles`, `rea_static_start`, `rea
 | Value | Engine | Bridge | Admitted operations |
 | --- | --- | --- | --- |
 | Absent | 12.2 | Original `rea_ghidra_bridge.java`, unchanged bytes | `inventory` only |
-| `2` | 12.2 | Repaired `rea_ghidra_inventory_v2.java` or `rea_ghidra_analysis_bridge.java` | Explicitly allowed `inventory`, `functions`, `function`, `xrefs`, `decompile` |
+| `2` | 12.2 | Repaired `rea_ghidra_inventory_v2.java` or `rea_ghidra_analysis_bridge.java` | Explicitly allowed `inventory`, `functions`, `function`, `xrefs`, `decompile`; `instructions` selects a separate C3 bridge |
 | `3` | 12.1.4 | Separate `rea_ghidra_inventory_1214_v3.java` or `rea_ghidra_analysis_1214_v3.java` | The same explicit operation selection, with independently bound engine and bridge identities |
 | `4` | 12.1.4 | Separate `rea_ghidra_inventory_1214_v4.java` or `rea_ghidra_analysis_1214_v4.java` | The same operation names; analysis requires the fixed x86:LE:64:default/gcc defaults, selected addresses resolve by complete body ranges, and functions include a separate external inventory |
 | Any other explicit value | Refused | None | None |
@@ -28,13 +28,14 @@ The legacy bridge remains solely to preserve its explicit historical identity an
 
 | Operation | Selection | Result and limits |
 | --- | --- | --- |
-| `inventory` | Captured ELF | Memory/imported-symbol inventory without automatic analysis or decompilation. Revision 2 also binds observation source SHA-256 and size. |
+| `inventory` | Captured ELF | Memory/imported-symbol inventory without automatic analysis or decompilation. Revisions 2 and 3 also bind observation source SHA-256 and size. |
 | `functions` | Captured ELF | Fixed analysis; at most 4,096 internal functions scanned and 128 rows returned, with scan completeness and omitted counts. |
 | `function` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Entry, qualified name/prototype, body bounds/size and thunk metadata after fixed analysis. |
 | `xrefs` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Revisions 2/3 retain incoming entry references and outgoing body references. Revision 4 observes both directions over the exact body plus entry, filters synthetic entry points, deduplicates and sorts. Each direction scans at most 4,096 raw references and returns at most 128 rows with explicit accounting. |
+| `instructions` (revision 2 only) | One exact internal entry | Complete bounded Listing window, instruction bytes, text and symbols, with exact body ranges; 4,096 rows and 65,536 UTF-8 text bytes. A bound violation refuses the complete observation. See [instruction-window contract](../rea-ghidra-instructions.md). |
 | `decompile` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Real `DecompInterface` native decompilation; completion status, bounded C preview, full C length/digest and preview digest/completeness. Native child cleanup must be confirmed. |
 
-The optional request field `function_address` is required for `function`, `xrefs` and `decompile`, and refused elsewhere. It is canonical lowercase hexadecimal such as `0x401106`: no uppercase, leading zeroes, symbol name, range, space prefix, expression or script. Revisions 2 and 3 retain their exact internal-entry requirement and their original bridge bytes. If those revisions do not find an exact internal entry, the real backend fails and no successful mapped facts are returned.
+The optional request field `function_address` is required for `function`, revision-2 `instructions`, `xrefs` and `decompile`, and refused elsewhere. It is canonical lowercase hexadecimal such as `0x401106`: no uppercase, leading zeroes, symbol name, range, space prefix, expression or script. Revisions 2 and 3 retain their exact internal-entry requirement and their original bridge bytes. If those revisions do not find an exact internal entry, the real backend fails and no successful mapped facts are returned.
 
 ## Revision 4 address and inventory semantics
 
@@ -246,3 +247,9 @@ The harness requires a fresh directory. It preserves qualification results and r
 For the 12.1.4 comparison, select `--engine-version 12.1.4`, its matching `--ghidra-home`, and the mandatory `--release-archive /absolute/original-release.zip`. The default remains revision 3; select `--bridge-revision 4` explicitly for the new contract. The revision-4 harness compares entry and interior `function`/`xrefs`/`decompile`, records the separate external inventory, and retains full invalid-selector/conflict `CallToolResult` objects before asserting refusal. To reuse the exact original-provider input, supply both `--fixture /absolute/original-owned.elf` and `--fixture-sha256 <64-hex-digest>`; the harness verifies and copies those bytes instead of recompiling the main fixture. The cancellation fixture remains separately authored and identified. Original REA and native results, remaining post-script differences, errors and cancellation observations require separate paired evidence; the harness's finite native checks alone cannot establish parity.
 
 Implementation files are `src/mcp/rea_ghidra_contract.rs`, `rea_engine_profile.rs`, `rea_engine_ghidra.rs`, `rea_provider.rs`, `rea_static_summary.rs`, and the explicitly versioned Java bridges. Contract regressions live in `rea_ghidra_contract_tests.rs`, `rea_provider_tests.rs` and `rea_static_tests.rs`.
+
+## Rust consolidation: separate instruction bridge
+
+The consolidated source retains `rea_ghidra_analysis_bridge.java` at SHA-256 `1b20b872258f26ba75ac463afd1c35a544f76efd3f0bcc05e29515eb940fdf21` for existing revision-2 operations. Explicit revision-2 `instructions` selects `rea_ghidra_instructions_bridge.java`, whose bytes are the C3 bridge at SHA-256 `b7eaf10c422e773006399bc6d200b21cc2e770d7a126354393c6c032f762a4e0`. Revisions 3 and 4 refuse instruction windows during profile and bridge admission. Revision 4 keeps its existing GNU helper digests, installation paths, analyzer options, containment and cleanup requirements.
+
+Historical C2/C3 receipts retain their original source, binary and bridge identities. They do not qualify this combined binary or retroactively replace the old revision-2 bridge identity.

@@ -1,0 +1,166 @@
+--- preparation-r1/archive-plan.json
++++ preparation-r2/archive-plan.json
+@@ -4,7 +4,30 @@
+     "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/a-publication-packaging-r1/package_candidate_a.py",
+     "sha256": "3036cf4fbbe5f491ad59d8b7aebc30001623cec41ec3f8d256fec8032b4c19d2"
+   },
+-  "archive_command_template": "/usr/bin/python3.12 -I -B '/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r1/package_candidate_c2_final.py' --execute --expected-plan-sha256 @PLAN_SHA@",
++  "admission_revision": {
++    "archive_payload_started": false,
++    "byte_identical_packager": true,
++    "consumer_source_diff": {
++      "bytes": 3761,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/consumer-r1-to-r2.patch",
++      "sha256": "053a141693305eeab118f8db67cd149dcaeed5ed647f398441ff8e4243d8add2"
++    },
++    "new_original_cohort_created": false,
++    "original_plan": {
++      "bytes": 56635,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r1/archive-plan.json",
++      "sha256": "e9e59fe6114acdd53f17d67530511683cbcf0b4a11b3290e4cf965bd6e37df11"
++    },
++    "original_rejection": {
++      "bytes": 1667,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/original-shell-start-admission-failure.json",
++      "sha256": "cd7f627c971bb8c5b7cb8ec634efb0777ee8b3eb4aac425a914b8b6573290866"
++    },
++    "original_unused_actual_key_retained": true,
++    "revision": 2,
++    "selection_and_inventories_unchanged": true
++  },
++  "archive_command_template": "/usr/bin/python3.12 -I -B '/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/package_candidate_c2_final.py' --execute --expected-plan-sha256 @PLAN_SHA@",
+   "archive_created": false,
+   "archive_idempotency_key": "679ccf-c2-archive-actual-r1-20261106",
+   "archive_requires_current_BASE_HEAD_2496": false,
+@@ -28,9 +51,9 @@
+   },
+   "candidate_executed": false,
+   "consumer": {
+-    "bytes": 9537,
+-    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r1/verify_publication.py",
+-    "sha256": "2046ddbff18d41be89c0591997c51206678be2f46720a749aa7da2a57835c8af"
++    "bytes": 9866,
++    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/verify_publication.py",
++    "sha256": "cb228e3d33eeff5e334c4c5e0e6b87509c241db35af6d35b02c2cd1dd24051dc"
+   },
+   "consumer_resource_limits": {
+     "cpu_quota_percent": 100,
+@@ -68,6 +91,7 @@
+   "global_status": "NO_GO",
+   "historical_pin_reference_differences_preserved": 23,
+   "immutable_Git_objects_required": true,
++  "launch_api": "process_start",
+   "libtest": {
+     "bytes": 98541896,
+     "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-libtest-frozen-r1/hepta_runtime-bbb6bf56b2736576",
+@@ -82,7 +106,7 @@
+   "minimum_free_bytes": 1073741824,
+   "packager": {
+     "bytes": 15435,
+-    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r1/package_candidate_c2_final.py",
++    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/package_candidate_c2_final.py",
+     "sha256": "93de2cc106a878a6fa92d073348efc4539b26cc05585c2d123f5923511f6659d"
+   },
+   "part_bytes": 62914560,
+@@ -256,6 +280,46 @@
+       "bytes": 16755,
+       "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r1/freeze_plan_c2.py",
+       "sha256": "5fac555ac2d6c267e3c7b3c50bdb1aa9e4018e3aee3be56a4ea08fc3f02e2662"
++    },
++    {
++      "bytes": 15435,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/package_candidate_c2_final.py",
++      "sha256": "93de2cc106a878a6fa92d073348efc4539b26cc05585c2d123f5923511f6659d"
++    },
++    {
++      "bytes": 9866,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/verify_publication.py",
++      "sha256": "cb228e3d33eeff5e334c4c5e0e6b87509c241db35af6d35b02c2cd1dd24051dc"
++    },
++    {
++      "bytes": 3761,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/consumer-r1-to-r2.patch",
++      "sha256": "053a141693305eeab118f8db67cd149dcaeed5ed647f398441ff8e4243d8add2"
++    },
++    {
++      "bytes": 1667,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/original-shell-start-admission-failure.json",
++      "sha256": "cd7f627c971bb8c5b7cb8ec634efb0777ee8b3eb4aac425a914b8b6573290866"
++    },
++    {
++      "bytes": 1848,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/REVISION.md",
++      "sha256": "397e5a61c96b1faae3b00288238d7144ae4c98e9838fcefcae0e207dfcea42db"
++    },
++    {
++      "bytes": 13634,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/prepare_c2_archive_admission_r2.py",
++      "sha256": "466d6fe42cd4fcc6a5eae2ed1dc7b5d77f304149d36dd9cb6ac023457568fb7d"
++    },
++    {
++      "bytes": 56635,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r1/archive-plan.json",
++      "sha256": "e9e59fe6114acdd53f17d67530511683cbcf0b4a11b3290e4cf965bd6e37df11"
++    },
++    {
++      "bytes": 7283,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r1/freeze-original-outer.json",
++      "sha256": "83e2c4f946656b6bdbb2fe28307bb82d57c4a766c290aa433c4a644652116793"
+     }
+   ],
+   "production_qualified": false,
+@@ -493,6 +557,54 @@
+       "bytes": 220070,
+       "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/prepare_c2_archive_r1.py",
+       "sha256": "ae805869d27a628b641d98823ab8d0f8e0632d62c8a8c6411870a967da0787d4"
++    },
++    {
++      "archive_path": "publication-provenance/admission-r2/package_candidate_c2_final.py",
++      "bytes": 15435,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/package_candidate_c2_final.py",
++      "sha256": "93de2cc106a878a6fa92d073348efc4539b26cc05585c2d123f5923511f6659d"
++    },
++    {
++      "archive_path": "publication-provenance/admission-r2/verify_publication.py",
++      "bytes": 9866,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/verify_publication.py",
++      "sha256": "cb228e3d33eeff5e334c4c5e0e6b87509c241db35af6d35b02c2cd1dd24051dc"
++    },
++    {
++      "archive_path": "publication-provenance/admission-r2/consumer-r1-to-r2.patch",
++      "bytes": 3761,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/consumer-r1-to-r2.patch",
++      "sha256": "053a141693305eeab118f8db67cd149dcaeed5ed647f398441ff8e4243d8add2"
++    },
++    {
++      "archive_path": "publication-provenance/admission-r2/original-shell-start-admission-failure.json",
++      "bytes": 1667,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/original-shell-start-admission-failure.json",
++      "sha256": "cd7f627c971bb8c5b7cb8ec634efb0777ee8b3eb4aac425a914b8b6573290866"
++    },
++    {
++      "archive_path": "publication-provenance/admission-r2/REVISION.md",
++      "bytes": 1848,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r2/REVISION.md",
++      "sha256": "397e5a61c96b1faae3b00288238d7144ae4c98e9838fcefcae0e207dfcea42db"
++    },
++    {
++      "archive_path": "publication-provenance/admission-r2/prepare_c2_archive_admission_r2.py",
++      "bytes": 13634,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/prepare_c2_archive_admission_r2.py",
++      "sha256": "466d6fe42cd4fcc6a5eae2ed1dc7b5d77f304149d36dd9cb6ac023457568fb7d"
++    },
++    {
++      "archive_path": "publication-provenance/admission-r2/archive-plan.json",
++      "bytes": 56635,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r1/archive-plan.json",
++      "sha256": "e9e59fe6114acdd53f17d67530511683cbcf0b4a11b3290e4cf965bd6e37df11"
++    },
++    {
++      "archive_path": "publication-provenance/admission-r2/freeze-original-outer.json",
++      "bytes": 7283,
++      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/c2-archive-preparation-r1/freeze-original-outer.json",
++      "sha256": "83e2c4f946656b6bdbb2fe28307bb82d57c4a766c290aa433c4a644652116793"
+     }
+   ],
+   "readme": {

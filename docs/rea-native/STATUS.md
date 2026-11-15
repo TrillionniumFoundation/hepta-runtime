@@ -1,5 +1,13 @@
 # REA 6.8.0 native Rust integration — scoped P0-P5 register
 
+## 2026-11-15 Rust branch consolidation
+
+This integration combines the current complete-byte Evidence readback and fixed Ghidra revision-4 path with C3 checkpoint/resume, import/error-order, bounded instruction and embedded source-map position work. The capability map now inventories 37 native interfaces. Historical C2 and C3 observations remain tied to their recorded sources and binaries; complete replacement and production qualification remain HOLD / NO_GO with 0/229 fully qualified upstream operations.
+
+The current compatibility ledger is a newly assembled source/mapping projection of the unchanged frozen 229-tool catalog snapshot. Its raw catalog, npm and behavioral references were not re-authenticated for this source merge. Historical receipt files and their source hashes are retained unchanged in Git ancestry and the evidence directories; new source fingerprints do not upgrade their qualification scope.
+
+Frozen C2 results: [Candidate C2 observations](C2_OBSERVATIONS_20261106_679CCF.md).
+
 ## 2026-11-06 ELF Evidence and fixed Ghidra continuation
 
 The latest finite continuation is documented in

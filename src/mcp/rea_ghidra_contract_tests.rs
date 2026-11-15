@@ -49,6 +49,7 @@ fn only_selected_ghidra_operations_admit_one_address() {
 		StaticOperation::Function,
 		StaticOperation::Decompile,
 		StaticOperation::Xrefs,
+		StaticOperation::Instructions,
 	] {
 		validate_selection(
 			StaticProvider::Ghidra,
@@ -107,6 +108,7 @@ fn old_request_serialization_and_inventory_bridge_are_unchanged() {
 		),
 		"a4d166231a4eade27ae1e403b85718da9729c4d752822e9bf9a7ff7fe37878f4"
 	);
+	// Existing revision-2 analysis operations retain their exact historical bytes.
 	assert_eq!(
 		sha256(
 			bridge(StaticOperation::Decompile, Some(2))
@@ -134,6 +136,7 @@ fn revision_three_has_separate_fixed_engine_bridges_without_legacy_rebinding() {
 		assert!(bridge(operation, Some(5)).is_err());
 	}
 	assert!(bridge(StaticOperation::Sources, Some(3)).is_err());
+	assert!(bridge(StaticOperation::Instructions, Some(3)).is_err());
 }
 
 #[test]
@@ -173,4 +176,35 @@ fn bounded_function_rows_require_internal_selected_entry() {
 	let mut bad = row;
 	bad["entry_address"] = json!("0x0401000");
 	assert!(function_row(&bad, None).is_err());
+}
+
+#[test]
+fn instructions_are_an_explicit_ghidra_only_operation_with_a_selected_entry() {
+	assert_eq!(
+		operation_name(StaticOperation::Instructions).unwrap(),
+		"instructions"
+	);
+	assert!(StaticProvider::Ghidra.supports(StaticOperation::Instructions));
+	for provider in [
+		StaticProvider::GnuReadelf,
+		StaticProvider::GnuObjdump,
+		StaticProvider::Jadx,
+	] {
+		assert!(!provider.supports(StaticOperation::Instructions));
+	}
+	assert!(bridge(StaticOperation::Instructions, None).is_err());
+	assert_eq!(
+		sha256(
+			bridge(StaticOperation::Instructions, Some(2))
+				.unwrap()
+				.as_bytes()
+		),
+		"b7eaf10c422e773006399bc6d200b21cc2e770d7a126354393c6c032f762a4e0"
+	);
+	assert!(bridge(StaticOperation::Instructions, Some(4)).is_err());
+	assert_eq!(
+		serde_json::to_value(request(StaticOperation::Instructions, Some("0x1000"))).unwrap()
+			["operation"],
+		"instructions"
+	);
 }

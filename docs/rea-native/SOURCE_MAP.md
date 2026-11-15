@@ -5,7 +5,7 @@ map inside the controller workspace roots. The shipped Rust binary decodes the
 map in its own bounded one-shot worker. Node, Babel and REA are development
 oracles; they are not dependencies of this runtime operation.
 
-This is the `hepta.source-map-declarations.v1` native report. Its
+This is the `hepta.source-map-declarations.v2` native report. Its
 `rea_evidence_compatible` field is always `false`. The operation does not create
 an upstream `trace_web_source_location` Evidence record, acquire a browser script,
 authenticate an Application Graph, resolve source URLs, or establish that the
@@ -39,7 +39,8 @@ selected file; a cold controller restart does not imply retained-result storage.
 
 Source declarations retain their original names, `sourceRoot`, section paths,
 local indexes and flattened indexes. Embedded `sourcesContent` contributes its
-decoded UTF-8 byte count and hash, without returning its text. Missing or null
+decoded UTF-8 byte count and hash, UTF-16 code-unit length and line count, without
+returning its text. Missing or null
 content differs from an embedded empty string. No source declaration is opened
 as a file or fetched as a URL. An embedded-content hash commits supplied bytes;
 it is not proof of the producer's claim.
@@ -71,6 +72,44 @@ This rule is deliberately explicit: a generic consumer's same-line
 The upstream differential script invokes the installed REA `traceSourceMap`
 function and checks that projection separately.
 
+## Embedded original positions
+
+Each mapped row's `original` object retains its one-based `line` and zero-based
+`column`, and adds an absolute UTF-16 `offset` plus `content_position`:
+
+| `content_position` | `offset` | Meaning |
+| --- | --- | --- |
+| `content-unavailable` | `null` | The source has no retained `sourcesContent` string. |
+| `outside-embedded-text` | `null` | Text is embedded, but the recorded line or column is outside it. |
+| `verified-in-embedded-text` | Integer | The coordinate lies in the supplied text; this is its UTF-16 offset. |
+
+`source_content_verified` is true only in the last case. This verifies the
+coordinate against the embedded string. It does not authenticate that string
+or establish a semantic relationship between generated and original programs.
+
+Offsets count UTF-16 code units from the start of the entire decoded string,
+including intervening line terminators. CRLF is one line break spanning two
+units. Lone CR, LF, U+2028 and U+2029 each form a line break. U+0085 does not.
+A column equal to the line's length is admitted; terminator units beyond that
+line end are not. Empty text has a valid position at line 1, column 0, and a
+trailing line break leaves a valid empty final line.
+
+An astral character occupies two units. A numeric position between its two
+units is admitted by the fixed original function and by this profile. These
+offsets are neither UTF-8 byte offsets nor a restriction to Unicode scalar
+boundaries. Isolated surrogate JSON strings remain outside the native scalar
+text profile and are refused without replacing their contents.
+
+The decoder constructs one bounded line index per embedded source, then answers
+mapping rows and point queries without rescanning the text. The whole map,
+including every indexed leaf and empty embedded string, shares a limit of
+1,000,000 indexed lines. The index retains two 32-bit integers per line.
+An overflow refuses the report before it can claim complete coverage; it never
+substitutes `content-unavailable` or silently drops a source.
+
+This new result and resource contract uses profile v2. A v1
+`analysis_sha256` is stale even when the input map bytes are unchanged.
+
 ## Bounds and ownership
 
 | Resource | Bound |
@@ -84,6 +123,7 @@ function and checks that projection separately.
 | Individual name/root/file declaration | 16 KiB |
 | Mapping segments | 200,000 |
 | Encoded generated lines | 1,000,000 |
+| Embedded original lines, across the complete map | 1,000,000 |
 | Indexed sections / nesting depth | 256 / 8 |
 | Coincident records in a point query | 256 |
 | Worker address-space / CPU budget | 768 MiB / 12 seconds |
@@ -135,9 +175,37 @@ consumer agreement is claimed.
 `scripts/rea-source-map-upstream-reference.mjs` uses those fixtures with the
 actual authenticated `rea-agents@6.8.0` installation. It compares cross-line
 point selection, all coincident records, source/name/section declarations and
-embedded-content identities. It saves attempted comparisons before asserting,
+embedded-content identities, UTF-16 offsets and the three content-position
+states. It saves attempted comparisons before asserting,
 so a mismatch remains visible. It does not claim parity for upstream URL
-resolution, embedded-content offsets, browser acquisition or Evidence wrappers.
+resolution, browser acquisition or Evidence wrappers.
+
+The additional `scripts/rea-source-map-content-reference.mjs` is an original
+fixture producer. It parses authored inert sources with real Babel 8.0.6,
+generates maps with Babel generator 8.1.0 and gen-mapping 0.4.0-beta.0, and
+executes the fixed `rea-agents@6.8.0` `traceSourceMap` and `webSourceOffset`
+functions. It emits each complete original observation before checking the
+case and retains the final complete fixture. It does not execute generated
+JavaScript or fetch declared URLs.
+
+The checked fixture contains 26 maps and 133 original observations: 121 admitted
+point controls, six malformed inputs refused by the original, and six original
+successes involving isolated surrogates that remain explicit native profile
+gaps. Eleven direct original offset controls are also retained; seven are in
+the native coordinate domain and four demonstrate original rejection of
+invalid or unrepresentable coordinates. This count is not a claim of 133
+native parity successes.
+
+The fixture preserves complete original result JSON strings and input map bytes.
+Its provenance record binds the actual Node child, raw stdout/stderr hashes,
+complete controller terminal, fixed original package identity and before/after
+dependency inventories. The original independent oracle directory had lost its
+installed packages; this run restored all 18 archives from the retained lock
+using their exact SHA-512 integrity values into a fresh private directory.
+No package install hooks ran and no existing package directory changed. The
+initial capture's instrumentation failure is retained separately; the complete
+accepted capture uses the corrected identity-record copy and a new output
+directory.
 
 `tests/rea_source_map_mcp.py` initializes the actual stdio MCP server with an
 owned isolated workspace and exercises file/root admission, stale identity,

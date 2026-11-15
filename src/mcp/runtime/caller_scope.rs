@@ -58,6 +58,10 @@ impl OwnerScope {
 	pub fn owner(&self) -> &str {
 		&self.owner
 	}
+	/// Durable state requires verified credential continuity, never a transport ID.
+	pub fn authenticated(&self) -> bool {
+		self.authenticated
+	}
 	pub fn annotate(&self, text: String, search: bool) -> Result<String> {
 		let mut result: Value = serde_json::from_str(&text)?;
 		let object = result

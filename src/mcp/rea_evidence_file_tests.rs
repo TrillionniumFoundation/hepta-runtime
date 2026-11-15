@@ -145,7 +145,7 @@ fn original_19_file_outcomes_keep_15_exact_cases_and_four_representation_boundar
 		let result = load(&path, owned.path(), NativeJsonLimits::default());
 		if name == "unpaired-surrogate" {
 			assert!(
-				matches!(result, Err(FileReadError::RootString)),
+				matches!(result, Err(FileReadError::RootString(_))),
 				"{result:?}"
 			);
 			gaps += 1;
@@ -327,6 +327,7 @@ fn actual_descriptor_fences_reject_writes_growth_truncation_and_name_replacement
 			&roots,
 			&cancellation,
 			NativeJsonLimits::default(),
+			&mut None,
 		);
 		assert!(
 			matches!(
@@ -757,7 +758,7 @@ fn complete_unrepresentable_root_strings_are_typed_rejections_without_a_fake_val
 		assert!(
 			matches!(
 				load(&path, owned.path(), NativeJsonLimits::default()),
-				Err(FileReadError::RootString)
+				Err(FileReadError::RootString(_))
 			),
 			"{input:?}"
 		);
@@ -939,7 +940,7 @@ fn frozen_remote_syntax_keeps_original_messages_and_root_type_upgrade() {
 		if name == "node-syntax-34" {
 			assert_eq!(case["native_value_profile_gap"], true);
 			assert!(
-				matches!(outcome, Err(FileReadError::RootString)),
+				matches!(outcome, Err(FileReadError::RootString(_))),
 				"{name}: {outcome:?}"
 			);
 			root_type_rejections += 1;

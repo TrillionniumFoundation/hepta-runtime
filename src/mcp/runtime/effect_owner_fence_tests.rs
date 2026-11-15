@@ -229,6 +229,8 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"rea_import_evidence_bundle",
 		"rea_export_evidence_bundle",
 		"rea_close_evidence_snapshot",
+		"rea_evidence_session_checkpoint",
+		"rea_evidence_session_resume",
 		"rea_retain_preview",
 		"rea_model_session_open",
 		"rea_static_start",
@@ -399,7 +401,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual, expected,
 		"MCP mutation contract expanded without owner audit"
 	);
-	assert_eq!(actual.difference(&retained).count(), 52);
+	assert_eq!(actual.difference(&retained).count(), 54);
 	let cohort = include_str!("../weight_artifact_cohort.rs");
 	assert!(cohort.contains("runtime::effect_owner_fence::admit_new_effect().await?"));
 	assert_eq!(

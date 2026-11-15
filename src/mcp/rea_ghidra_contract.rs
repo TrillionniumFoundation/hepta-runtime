@@ -3,11 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Shared admission and observation checks for bounded Ghidra analysis.
 //! Historical bridge bytes are retained; revision 4 separately admits containment and externals.
+//! The instruction-only revision-2 bridge is selected separately from historical analysis.
 
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 
 use super::{is_sha256, sha256, ReaStaticRequest, StaticOperation, StaticProvider, WorkerRequest};
+
+#[path = "rea_ghidra_instructions.rs"]
+mod instruction_window;
 
 pub(crate) const ANALYSIS_PROFILE: &str = "hepta.ghidra.elf-functions.v1";
 pub(crate) const ANALYSIS_PROFILE_1214: &str = "hepta.ghidra.12.1.4.elf-functions.v1";
@@ -69,6 +73,7 @@ pub(crate) fn operation_name(operation: StaticOperation) -> Result<&'static str>
 		StaticOperation::Function => Ok("function"),
 		StaticOperation::Decompile => Ok("decompile"),
 		StaticOperation::Xrefs => Ok("xrefs"),
+		StaticOperation::Instructions => Ok("instructions"),
 		_ => bail!("unsupported fixed Ghidra operation"),
 	}
 }
@@ -77,12 +82,18 @@ pub(crate) fn bridge(operation: StaticOperation, revision: Option<u32>) -> Resul
 	match (revision, operation) {
 		(None, StaticOperation::Inventory) => Ok(include_str!("rea_ghidra_bridge.java")),
 		(Some(2), StaticOperation::Inventory) => Ok(include_str!("rea_ghidra_inventory_v2.java")),
+		(Some(2), StaticOperation::Instructions) => {
+			Ok(include_str!("rea_ghidra_instructions_bridge.java"))
+		}
 		(Some(2), operation) => {
 			operation_name(operation)?;
 			Ok(include_str!("rea_ghidra_analysis_bridge.java"))
 		}
 		(Some(3), StaticOperation::Inventory) => {
 			Ok(include_str!("rea_ghidra_inventory_1214_v3.java"))
+		}
+		(Some(3 | 4), StaticOperation::Instructions) => {
+			bail!("Ghidra revisions 3 and 4 do not admit instruction windows");
 		}
 		(Some(3), operation) => {
 			operation_name(operation)?;
@@ -117,7 +128,10 @@ pub(crate) fn validate_selection(
 ) -> Result<()> {
 	let selected = matches!(
 		request.operation,
-		StaticOperation::Function | StaticOperation::Decompile | StaticOperation::Xrefs
+		StaticOperation::Function
+			| StaticOperation::Decompile
+			| StaticOperation::Xrefs
+			| StaticOperation::Instructions
 	);
 	if provider == StaticProvider::Ghidra && selected {
 		if !request
@@ -281,6 +295,16 @@ pub(crate) fn validate_observation(
 		function_row(
 			&observation["function"],
 			input.request.function_address.as_deref(),
+		)?;
+	}
+	if operation == StaticOperation::Instructions {
+		instruction_window::validate(
+			observation,
+			input
+				.request
+				.function_address
+				.as_deref()
+				.context("Ghidra instruction entry absent")?,
 		)?;
 	}
 	if operation == StaticOperation::Xrefs {
