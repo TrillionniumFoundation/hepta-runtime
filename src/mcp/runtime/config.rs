@@ -686,27 +686,6 @@ fn validate_execution(
 	Ok(())
 }
 
-fn normalize_absolute(path: &Path) -> Result<PathBuf> {
-	if !path.is_absolute() {
-		bail!("path `{}` must be absolute", path.display());
-	}
-	let mut normalized = PathBuf::from("/");
-	for component in path.components() {
-		match component {
-			Component::RootDir => normalized = PathBuf::from("/"),
-			Component::CurDir => {}
-			Component::ParentDir => {
-				if !normalized.pop() {
-					bail!("path `{}` escapes the filesystem root", path.display());
-				}
-			}
-			Component::Normal(part) => normalized.push(part),
-			Component::Prefix(_) => bail!("Windows path prefixes are not accepted here"),
-		}
-	}
-	Ok(normalized)
-}
-
 fn canonical_policy_path(path: &Path) -> Result<PathBuf> {
 	if !path.is_absolute() {
 		bail!("path `{}` must be absolute", path.display());
