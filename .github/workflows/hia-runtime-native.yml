@@ -161,7 +161,8 @@ concurrency:
   group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# The same fresh cold/build bytes feed all four complete native partitions.
+# The same fresh cold/build bytes feed all five complete native partitions.
+# Shell's 19 suites have their own partition; text retains its other 28 suites.
 # Cold/build and native partitions retain the original 15-minute limit.
 # The aggregate also retains every original comparison and the full evidence upload.
 # Its job budget covers that complete work; suite/owner subprocess limits are unchanged.
@@ -236,7 +237,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [batch, text, json, system]
+        group: [batch, text, shell, json, system]
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -362,7 +363,7 @@ jobs:
           name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/hia-runtime-native/
 
-      - name: Download every completed partition separately
+      - name: Download all five completed partitions separately
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: hia-native-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-*

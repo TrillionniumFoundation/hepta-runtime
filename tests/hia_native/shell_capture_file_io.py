@@ -42,7 +42,7 @@ def decoded(raw):
     return json.loads(raw, object_pairs_hook=unique,
                       parse_constant=lambda _: (_ for _ in ()).throw(ValueError('JSON constant')))
 
-def ordinary(path):
+def ordinary_observed(path):
     path = os.fsdecode(path); before = os.lstat(path)
     need(stat.S_ISREG(before.st_mode) and before.st_nlink == 1, 'nonordinary evidence')
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
@@ -54,9 +54,28 @@ def ordinary(path):
         after = os.fstat(fd)
         need((opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns) ==
              (after.st_size, after.st_mtime_ns, after.st_ctime_ns), 'evidence changed while reading')
-        return raw
+        return raw, stat_row(after)
     finally:
         os.close(fd)
+
+def ordinary(path):
+    return ordinary_observed(path)[0]
+
+def origin_identity(row):
+    need(type(row) is dict and set(row) == {'device','inode','mode','uid','gid','nlink'} and
+         all(type(value) is int and value >= 0 for value in row.values()) and
+         row['inode'] > 0 and row['nlink'] == 1 and
+         stat.S_ISREG(row['mode']) and not row['mode'] & 0o7000,
+         'producer ordinary identity fields')
+    return row
+
+def observed_identity(path):
+    _, observed = ordinary_observed(path)
+    return {name:observed[name] for name in ('device','inode','mode','uid','gid','nlink')}
+
+def audit_origin(path):
+    raw, observed = ordinary_observed(path)
+    return {'path':str(path), 'stat':observed, 'content':pin(raw)}
 
 def read_json(path):
     return decoded(ordinary(path))
@@ -509,6 +528,7 @@ def run_case(folder, spec, manifest, metadata, executable):
                        executable_before=executable_pin, executable_after=pin(ordinary(executable)),
                        native_manifest={'path':str(manifest), **pin(ordinary(manifest))},
                        streams={n:pin(ordinary(folder/n)) for n in ('stdin.bin','stdout.bin','stderr.bin')},
+                       audit_files={n:audit_origin(folder/n) for n in ('effects.bin','entries.bin')},
                        failure=None if failure is None else {'type':type(failure).__name__,'message':str(failure)})
         write_new(folder/'execution.json', packed(receipt))
         write_new(folder/'retirement.json', packed(retire(work, after)))
@@ -607,6 +627,39 @@ def fdinfo(raw):
     return dict(position=int(rows[b'pos']), flags=int(rows[b'flags'], 8),
                 inode=int(rows[b'ino']), mount_id=int(rows[b'mnt_id']))
 
+def verify_audit_origins(folder, execution):
+    """Keep producer FD identity separate from transported regular file bytes."""
+    records = execution.get('audit_files')
+    need(type(records) is dict and set(records) == {'effects.bin','entries.bin'}, 'complete producer audit origins')
+    identities = []
+    for name, record in records.items():
+        need(type(record) is dict and set(record) == {'path','stat','content'} and
+             record['path'] == str(folder/name), 'producer audit path binding')
+        origin = record['stat']
+        need(type(origin) is dict and set(origin) == {'device','inode','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'} and
+             all(type(value) is int and value >= 0 for value in origin.values()) and
+             origin['inode'] > 0 and origin['nlink'] == 1 and
+             stat.S_ISREG(origin['mode']) and not origin['mode'] & 0o7000 and
+             (origin['uid'],origin['gid']) == (execution['uid'],execution['gid']), 'producer audit identity fields')
+        raw, current = ordinary_observed(folder/name)
+        need(record['content'] == pin(raw), 'complete transported audit bytes')
+        need(origin['size'] == len(raw), 'producer audit final extent')
+        need(current['mode'] == origin['mode'], 'transported audit permission bits')
+        identities.append((origin['device'],origin['inode']))
+    need(len(set(identities)) == 2, 'producer audit files alias')
+    return records
+
+def verify_audit_fd(row, origin, path, extent):
+    """Compare one historical FD observation with its producer identity."""
+    observed = row['stat']
+    need(type(observed) is dict and set(observed) == set(origin) and
+         all(type(value) is int and value >= 0 for value in observed.values()) and
+         identity(observed) == identity(origin) and observed['nlink'] == 1 and
+         row['link_hex'] == os.fsencode(path).hex(), 'audit FD file identity')
+    info = fdinfo(bytes.fromhex(row['fdinfo_hex']))
+    need(info['inode'] == observed['inode'] and info['position'] == extent and observed['size'] == extent and
+         info['flags'] & 0x80000 and info['flags'] & 3 == 1, 'audit FD actual position/flags')
+
 def verify_observations(folder, spec, execution, observations, native, final):
     work = folder/'work'; pid = execution['pid']; ready = native['ready']
     snapshots = [observations['initial']]+[r['process'] for r in observations['requests']]
@@ -624,11 +677,7 @@ def verify_observations(folder, spec, execution, observations, native, final):
         step = None if index == 0 else native['steps'][index-1]
         for fd, name, extent in ((ready[3], 'effects.bin', 0 if step is None else step['effect_end']),
                                  (ready[4], 'entries.bin', 0 if step is None else step['entry_end'])):
-            row = mapping[fd]; info = fdinfo(bytes.fromhex(row['fdinfo_hex']))
-            need(identity(row['stat']) == identity(stat_row((folder/name).lstat())) and
-                 row['link_hex'] == os.fsencode(folder/name).hex(), 'audit FD file identity')
-            need(info['inode'] == row['stat']['inode'] and info['position'] == extent and row['stat']['size'] == extent and
-                 info['flags'] & 0x80000 and info['flags'] & 3 == 1, 'audit FD actual position/flags')
+            verify_audit_fd(mapping[fd], execution['audit_files'][name]['stat'], folder/name, extent)
         active = {} if step is None else step['live_handles']
         need(set(mapping) == {0,1,2,ready[3],ready[4]} | set(active.values()), 'owned file FD custody inventory')
         for token, fd in active.items():
@@ -673,6 +722,7 @@ def verify_case(folder, spec, manifest, metadata, executable):
     need(execution.get('streams') == {n:pin(ordinary(folder/n)) for n in ('stdin.bin','stdout.bin','stderr.bin')} and
          ordinary(folder/'stderr.bin') == b'', 'complete actual streams')
     native = verify_native(folder, spec, wires, capacity, execution, observed)
+    verify_audit_origins(folder, execution)
     before, after = read_json(folder/'before.json'), read_json(folder/'after.json')
     verify_trees(spec, before, after, [r['tree'] for r in observed['requests']], execution)
     verify_observations(folder, spec, execution, observed, native, after)
@@ -790,6 +840,9 @@ CONTROL_ERRORS = {
     'entry_guard':'native memory guards',
     'fd_inode':'owned capture FD inode',
     'fd_flags':'actual capture FD flags/position',
+    'audit_inode_drift':'audit FD file identity',
+    'audit_alias':'producer audit files alias',
+    'audit_final_extent':'producer audit final extent',
     'take_lost_fd':'owned file FD custody inventory',
     'retired_payload':'failed or rejected operation changed tree',
     'missing_footer':'missing effect footer',
@@ -857,6 +910,33 @@ def mutation(name, baseline):
                            for line in raw.splitlines(keepends=True))
         row['fdinfo_hex'] = raw.hex()
         js(path, value)
+    elif name == 'audit_inode_drift':
+        path = 'cases/create_new/observation.json'; value = decoded(get(path))
+        row = next(r for r in value['requests'][0]['process']['fds']
+                   if r['link_hex'] == os.fsencode(folder/'cases/create_new/effects.bin').hex())
+        row['stat']['inode'] += 1
+        raw = bytes.fromhex(row['fdinfo_hex'])
+        row['fdinfo_hex'] = b''.join(b'ino:\t'+str(row['stat']['inode']).encode()+b'\n'
+            if line.startswith(b'ino:') else line for line in raw.splitlines(keepends=True)).hex()
+        js(path, value)
+    elif name in ('audit_alias','audit_final_extent'):
+        path = 'cases/create_new/execution.json'; value = decoded(get(path))
+        if name == 'audit_final_extent':
+            value['audit_files']['entries.bin']['stat']['size'] += 1
+        else:
+            origin = value['audit_files']['effects.bin']['stat']
+            target = value['audit_files']['entries.bin']['stat']
+            target['device'], target['inode'] = origin['device'], origin['inode']
+            observed = decoded(get('cases/create_new/observation.json'))
+            for snap in [observed['initial']]+[item['process'] for item in observed['requests']]:
+                row = next(r for r in snap['fds']
+                    if r['link_hex'] == os.fsencode(folder/'cases/create_new/entries.bin').hex())
+                row['stat']['device'], row['stat']['inode'] = origin['device'], origin['inode']
+                raw = bytes.fromhex(row['fdinfo_hex'])
+                row['fdinfo_hex'] = b''.join(b'ino:\t'+str(origin['inode']).encode()+b'\n'
+                    if line.startswith(b'ino:') else line for line in raw.splitlines(keepends=True)).hex()
+            js('cases/create_new/observation.json', observed)
+        js(path, value)
     elif name == 'take_lost_fd':
         path = 'cases/hold_take/observation.json'; value = decoded(get(path))
         target = os.fsencode(folder/'cases/hold_take/work/file').hex()
@@ -902,7 +982,8 @@ def replace_ordinary(path, raw):
         os.close(fd)
     after = Path(path).lstat()
     need(identity(stat_row(before)) == identity(stat_row(after)) and ordinary(path) == raw, 'physical mutation readback')
-    return dict(device=before.st_dev, inode=before.st_ino, mode=before.st_mode)
+    return dict(device=before.st_dev, inode=before.st_ino, mode=before.st_mode,
+                uid=before.st_uid, gid=before.st_gid, nlink=before.st_nlink)
 
 def reader_process(folder, corpus, manifest, inputs):
     folder.mkdir(); interpreter = Path(sys.executable).resolve()
@@ -960,6 +1041,7 @@ def verify_reader_process(folder, corpus, manifest, inputs, expected_error=None)
 def run_controls(corpus, manifest):
     root = corpus/'controls'; root.mkdir(); names = [s['name'] for s in case_specs()]
     baseline = {name:ordinary(corpus/name) for name in core_names(names)}
+    baseline_identities = {name:observed_identity(corpus/name) for name in baseline}
     write_new(root/'baseline-report.json', baseline['report.json']); rows = []
     for name, expected_error in CONTROL_ERRORS.items():
         folder = root/name; changes = mutation(name, baseline); modified = []
@@ -967,6 +1049,7 @@ def run_controls(corpus, manifest):
             identities = {}
             for path, raw in changes.items():
                 modified.append(path); identities[path] = replace_ordinary(corpus/path, raw)
+                need(identities[path] == baseline_identities[path], 'physical mutation producer identity changed')
             inputs = dict(baseline); inputs.update(changes)
             receipt, value = reader_process(folder, corpus, manifest, inputs)
             change_rows = []
@@ -984,11 +1067,14 @@ def run_controls(corpus, manifest):
                 replace_ordinary(corpus/path, baseline[path])
     inputs = {name:ordinary(corpus/name) for name in baseline}
     need(inputs == baseline, 'baseline bytes not fully restored')
+    restored_identities = {name:observed_identity(corpus/name) for name in baseline}
+    need(restored_identities == baseline_identities, 'baseline producer identities not restored')
     reader_process(root/'restored-positive', corpus, manifest, baseline)
     verify_reader_process(root/'restored-positive', corpus, manifest, baseline)
-    report = dict(schema='hepta.runtime.shell-capture-file-physical-controls.v1', status='PASS',
+    report = dict(schema='hepta.runtime.shell-capture-file-physical-controls.v2', status='PASS',
                   recorded_directory=str(root), names=list(CONTROL_ERRORS), controls=rows,
                   baseline_inputs={n:pin(raw) for n,raw in baseline.items()},
+                  baseline_identities=baseline_identities, restored_identities=restored_identities,
                   restored_positive={n:pin(ordinary(root/'restored-positive'/n)) for n in ('execution.json','stdout.bin','stderr.bin')})
     write_new(root/'report.json', packed(report))
     return verify_controls(corpus, manifest)
@@ -996,7 +1082,7 @@ def run_controls(corpus, manifest):
 def verify_controls(corpus, manifest):
     root = corpus/'controls'; plain_dir(root)
     report = read_json(root/'report.json')
-    need(report.get('schema') == 'hepta.runtime.shell-capture-file-physical-controls.v1' and
+    need(report.get('schema') == 'hepta.runtime.shell-capture-file-physical-controls.v2' and
          report.get('status') == 'PASS' and report.get('recorded_directory') == str(root) and
          report.get('names') == list(CONTROL_ERRORS), 'complete physical control report')
     need(set(os.listdir(root)) == {'report.json','baseline-report.json','restored-positive'} | set(CONTROL_ERRORS), 'physical control inventory')
@@ -1006,6 +1092,23 @@ def verify_controls(corpus, manifest):
     baseline['report.json'] = ordinary(root/'baseline-report.json')
     need(decoded(baseline['report.json']) == current, 'exact restored baseline report')
     need(report.get('baseline_inputs') == {n:pin(raw) for n,raw in baseline.items()}, 'complete baseline byte identities')
+    origins = report.get('baseline_identities'); restored = report.get('restored_identities')
+    need(type(origins) is dict and type(restored) is dict and set(origins) == set(restored) == set(baseline),
+         'complete physical producer identity inventory')
+    for path in baseline:
+        origin_identity(origins[path]); origin_identity(restored[path])
+        need(origins[path] == restored[path], 'restored physical producer identity changed')
+        current = (corpus/path).lstat()
+        need(current.st_mode == origins[path]['mode'] and current.st_nlink == 1,
+             'transported physical evidence mode/type')
+    need(len({(r['device'],r['inode']) for r in origins.values()}) == len(origins),
+         'physical producer identity aliases different files')
+    for name in names:
+        execution = decoded(baseline['cases/'+name+'/execution.json'])
+        for stream in ('effects.bin','entries.bin'):
+            original = execution['audit_files'][stream]['stat']
+            need(origins['cases/'+name+'/'+stream] == {key:original[key] for key in
+                 ('device','inode','mode','uid','gid','nlink')}, 'physical producer audit origin differs')
     rows = report['controls']
     need([r.get('name') for r in rows] == list(CONTROL_ERRORS), 'named control coverage')
     for row in rows:
@@ -1019,10 +1122,8 @@ def verify_controls(corpus, manifest):
             before, after = ordinary(folder/(prefix+'.before.bin')), ordinary(folder/(prefix+'.after.bin'))
             need(before == baseline[path] and after == expected[path] and before != after, 'exact named physical mutation bytes')
             need(change['before'] == pin(before) and change['after'] == pin(after), 'physical changed byte pins')
-            actual = (corpus/path).lstat(); physical = change['physical_identity']
-            need(type(physical) is dict and set(physical) == {'device','inode','mode'} and
-                 all(type(x) is int and x >= 0 for x in physical.values()) and physical ==
-                 {'device':actual.st_dev,'inode':actual.st_ino,'mode':actual.st_mode} and stat.S_ISREG(actual.st_mode) and actual.st_nlink == 1,
+            physical = origin_identity(change['physical_identity'])
+            need(physical == origins[path],
                  'physical mutation preserved original identity')
             members |= {prefix+'.before.bin',prefix+'.after.bin'}
         need(set(os.listdir(folder)) == members, 'complete physical change evidence')

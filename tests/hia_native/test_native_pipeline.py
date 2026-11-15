@@ -9,6 +9,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -29,15 +30,26 @@ class NativePipelineTests(unittest.TestCase):
 
     def test_partition_is_complete_unique_and_keeps_evidence_dependencies(self):
         partitions = p.partition_tests()
+        self.assertEqual(tuple(partitions), ("batch", "text", "shell", "json", "system"))
         flat = [name for tests in partitions.values() for name in tests]
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(set(flat), set(q.native_tests()))
+        self.assertEqual(len(partitions["text"]), 28)
+        self.assertEqual(len(partitions["shell"]), 19)
+        self.assertTrue(set(q.EXTRA_TESTS).issubset(partitions["text"]))
+        for ordered in (*q.ORDERED_INDEPENDENT_SUITES, q.SHELL_PROCESS_TESTS,
+                        q.SHELL_FOREGROUND_TESTS, q.capture_gate.TESTS):
+            containing = [names for names in partitions.values() if set(ordered).issubset(names)]
+            self.assertEqual(len(containing), 1)
+            self.assertEqual(tuple(name for name in containing[0] if name in ordered), ordered)
         self.assertEqual(tuple(partitions["batch"]),
             ("test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
              "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
              "test_atomic_write_policy.py", "test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
              "test_atomic_write_evidence.py"))
-        for bad in ("missing", "duplicate", "unknown", "new_module", "split_ordered"):
+        for bad in ("missing", "duplicate", "unknown", "new_module", "split_ordered",
+                    "missing_partition", "renamed_partition", "empty_partition", "split_shell_ordered",
+                    "reordered_shell"):
             changed = copy.deepcopy(p.PARTITIONS)
             modules = q.MODULES
             if bad == "missing":
@@ -48,12 +60,53 @@ class NativePipelineTests(unittest.TestCase):
                 changed["text"] += ("unregistered",)
             elif bad == "new_module":
                 modules += ({"key": "unpartitioned", "test": "unpartitioned.py"},)
+            elif bad == "missing_partition":
+                del changed["shell"]
+            elif bad == "renamed_partition":
+                changed["other"] = changed.pop("shell")
+            elif bad == "empty_partition":
+                changed["text"] += changed["shell"]
+                changed["shell"] = ()
+            elif bad == "split_shell_ordered":
+                extra = next(row["additional_tests"] for row in modules if row["key"] == "shell_process")
+                modules = tuple(dict(row, additional_tests=()) if row["key"] == "shell_process" else
+                                dict(row, additional_tests=extra) if row["key"] == "runtime_bytes" else row
+                                for row in modules)
+            elif bad == "reordered_shell":
+                modules = tuple(dict(row, additional_tests=tuple(reversed(row["additional_tests"])))
+                                if row["key"] == "shell_process" else row for row in modules)
             else:
                 modules = tuple(dict(row, additional_tests=()) if row["key"] == "serde_json" else
                                 dict(row, additional_tests=("test_serde_json_transport.py", "test_json_evidence.py"))
                                 if row["key"] == "runtime_bytes" else row for row in modules)
             with self.subTest(bad=bad), patch.object(q, "MODULES", modules), self.assertRaises(ValueError):
                 p.partition_tests(changed)
+
+    def test_workflow_runs_and_collects_every_partition_without_extending_deadlines(self):
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        jobs = dict(re.findall(r"^  (prepare|native|qualify):\n(.*?)(?=^  [A-Za-z_][A-Za-z0-9_-]*:|\Z)",
+                               workflow, re.MULTILINE | re.DOTALL))
+        self.assertEqual(set(jobs), {"prepare", "native", "qualify"})
+        for name, minutes in (("prepare", "15"), ("native", "15"), ("qualify", "30")):
+            self.assertEqual(re.findall(r"^    timeout-minutes: (\d+)$", jobs[name], re.MULTILINE), [minutes])
+        matrix = re.findall(r"^        group: \[([^\]]+)\]$", jobs["native"], re.MULTILINE)
+        self.assertEqual(len(matrix), 1)
+        self.assertEqual(tuple(value.strip() for value in matrix[0].split(",")), tuple(p.PARTITIONS))
+        self.assertIn("    needs: prepare\n", jobs["native"])
+        self.assertIn("      fail-fast: false\n", jobs["native"])
+        self.assertIn("    needs: [prepare, native]\n", jobs["qualify"])
+        self.assertIn('--group "${{ matrix.group }}"', jobs["native"])
+        self.assertIn('--export "$RUNNER_TEMP/hia-native-shard"', jobs["native"])
+        artifact = "hia-native-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-"
+        self.assertIn("          name: " + artifact + "${{ matrix.group }}\n", jobs["native"])
+        self.assertIn("          pattern: " + artifact + "*\n", jobs["qualify"])
+        self.assertIn("          merge-multiple: false\n", jobs["qualify"])
+        self.assertIn("          path: ${{ runner.temp }}/hia-native-shards/\n", jobs["qualify"])
+        self.assertIn('--shards "$RUNNER_TEMP/hia-native-shards"', jobs["qualify"])
+        self.assertIn("runtime/scripts/hia_native_pipeline.py collect", jobs["qualify"])
+        self.assertIn("runtime/scripts/compare_hia_runtime_rust.py", jobs["qualify"])
+        self.assertLess(jobs["qualify"].index("hia_native_pipeline.py collect"),
+                        jobs["qualify"].index("compare_hia_runtime_rust.py"))
 
     def test_transport_mode_restore_requires_all_exact_owned_bytes(self):
         folder = self.root / "data"; folder.mkdir()
@@ -221,7 +274,7 @@ class NativePipelineTests(unittest.TestCase):
     def test_missing_or_duplicate_shards_cannot_reach_evidence_owners(self):
         source, prepared, report, destination = self.actual_fixture()
         shards = self.root / "shards"; shards.mkdir()
-        for group in ("one", "two", "three", "four"):
+        for group in p.PARTITIONS:
             shutil.copytree(destination, shards / group)
         output = self.root / "collect"; output.mkdir()
         with patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())), \
@@ -231,12 +284,17 @@ class NativePipelineTests(unittest.TestCase):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
             self.assertEqual(p.read_json(output / "result.json")["status"], "FAIL")
-            shutil.rmtree(shards / "four")
-            with self.assertRaisesRegex(ValueError, "exactly four"):
+            shutil.rmtree(shards / "shell")
+            with self.assertRaisesRegex(ValueError, "exactly one complete artifact for every native partition"):
+                p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
+            evidence.assert_not_called()
+            shutil.copytree(destination, shards / "shell")
+            shutil.copytree(destination, shards / "unexpected-sixth")
+            with self.assertRaisesRegex(ValueError, "exactly one complete artifact for every native partition"):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
 
-    def test_four_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
+    def test_five_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
         from contextlib import ExitStack
         from datetime import datetime, timezone
         source = self.root / "source"
@@ -256,7 +314,7 @@ class NativePipelineTests(unittest.TestCase):
             run = self.root / group; run.mkdir()
             report = copy.deepcopy(prepared)
             report.update(status="RUNNING", phase="native_components", native_components_status="RUNNING",
-                qualification_shard={"group": group, "invocation": "four-actual-processes",
+                qualification_shard={"group": group, "invocation": "five-actual-processes",
                                      "prepared_sha256": "b" * 64, "tests": [name]})
             with patch.object(q, "ROOT", source):
                 q.run_native_checks(run, report, (name,), q.qualification_env(), parallel_tests=(),
@@ -274,18 +332,23 @@ class NativePipelineTests(unittest.TestCase):
             stack.enter_context(patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())))
             evidence = stack.enter_context(patch.object(q, "collect_native_evidence"))
             stack.enter_context(patch.object(q, "finish_native", side_effect=finish))
-            result = p.collect(output, self.root / "compiler", "b" * 64, "four-actual-processes", artifacts)
-            self.assertEqual(result["checks"], 5)
+            result = p.collect(output, self.root / "compiler", "b" * 64, "five-actual-processes", artifacts)
+            self.assertEqual(result["checks"], 6)
             evidence.assert_called_once()
             report = p.read_json(output / "result.json")
             self.assertEqual([row["name"] for row in report["checks"][1:]], list(names))
+            self.assertEqual(set(report["qualification_pipeline"]["shards"]), set(p.PARTITIONS))
             p.verify_pipeline_receipts(output, report)
+            missing = copy.deepcopy(report)
+            del missing["qualification_pipeline"]["shards"]["shell"]
+            with self.assertRaisesRegex(ValueError, "complete native pipeline inventory"):
+                p.verify_pipeline_receipts(output, missing)
             # A native row cannot be counted a second time as a later phase.
             duplicated = copy.deepcopy(report); duplicated["checks"].append(report["checks"][1])
             with self.assertRaisesRegex(ValueError, "aggregate process records"):
                 p.verify_pipeline_receipts(output, duplicated)
             # Complete raw shard reports remain binding after collection.
-            saved = output / "qualification-shards/text/shard-report.json"
+            saved = output / "qualification-shards/shell/shard-report.json"
             original = saved.read_bytes(); saved.write_bytes(original + b" ")
             with self.assertRaisesRegex(ValueError, "retained shard receipt changed"):
                 p.verify_pipeline_receipts(output, report)
@@ -338,11 +401,13 @@ class ShellProcessPipelineTests(unittest.TestCase):
         self.assertEqual(q.SHELL_PROCESS_TESTS, (
             "shell_process_state.py", "shell_process_transport.py",
             "hia_native_shell_process_qualification.py", "shell_process_evidence_controls.py"))
-        text = p.partition_tests()["text"]
-        required = (*q.SHELL_PROCESS_TESTS, q.SHELL_BACKGROUND_TEST,
+        partitions = p.partition_tests()
+        required = ("test_shell_native.py", "test_shell_gate_native.py", "test_shell_evidence.py",
+                    *q.SHELL_PROCESS_TESTS, q.SHELL_BACKGROUND_TEST,
                     q.SHELL_OUTCOME_TEST, q.SHELL_OUTPUT_TEST, *q.SHELL_FOREGROUND_TESTS,
                     *q.capture_gate.TESTS)
-        self.assertEqual(tuple(name for name in text if name in required), required)
+        self.assertEqual(partitions["shell"], required)
+        self.assertTrue(set(required).isdisjoint(partitions["text"]))
         self.assertNotIn("shell_process", original.NEW_COMPONENTS)
         self.assertNotIn("shell_background_text", original.NEW_COMPONENTS)
         self.assertIs(original.RECIPES["shell_process"], original.compare_shell_process)
@@ -423,7 +488,7 @@ class ShellProcessPipelineTests(unittest.TestCase):
             key = item["key"]
             self.assertIn(key, original.RECIPES)
             self.assertNotIn(key, original.NEW_COMPONENTS)
-            self.assertIn(key, p.PARTITIONS["text"])
+            self.assertIn(key, p.PARTITIONS["shell"])
             for relative in (item["source"], *item.get("companion_sources", ())):
                 self.assertEqual(source.get(relative), q.sha(ROOT / relative))
         for name in q.capture_gate.SCRIPTS:
