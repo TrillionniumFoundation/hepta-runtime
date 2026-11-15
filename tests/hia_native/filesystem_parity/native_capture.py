@@ -275,7 +275,7 @@ def trace_evidence(raw, cases, rows, receipt, stream_bytes, strict):
     reads = writes = errors = 0
     effects = []
     for line_number, line in enumerate(text.splitlines(), 1):
-        match = re.fullmatch(r"(\d+) (\d+\.\d+) ([A-Za-z_][A-Za-z0-9_]*)\((.*)\)\s*=\s*(.*)", line)
+        match = re.fullmatch(r"(\d+)[ ]+(\d+\.\d+) ([A-Za-z_][A-Za-z0-9_]*)\((.*)\)\s*=\s*(.*)", line)
         assert match, ("incomplete native syscall record", line_number)
         actual_pid, stamp, name, arguments, tail = match.groups()
         actual_pid = int(actual_pid)

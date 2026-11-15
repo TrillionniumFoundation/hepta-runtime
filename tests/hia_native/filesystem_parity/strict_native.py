@@ -20,7 +20,7 @@ import sys
 sys.dont_write_bytecode = True
 U64 = (1 << 64) - 1
 EFFECT, WORK_GROW, OUTPUT_GROW = 0xfffffff0, 0xffffffef, 0xffffffee
-HELPER_FILES = {'cases.py': {'bytes': 12031, 'sha256': 'f2d3efb4e3da4a800206c018908bd5999a6d14b31dc8a7dd81a502413111dedb'}, 'replay_original.py': {'bytes': 18199, 'sha256': 'f46faf9747aa13c4ea5b1188c3a19fe1d8d1afb5befab3fc4d129da1506b3950'}, 'native_capture.py': {'bytes': 19459, 'sha256': 'fd274398923a9270c26ab46a0493ebbc3139eb8fcee418e2762892707d0d99a3'}, 'strict_reference.py': {'bytes': 50568, 'sha256': '0e245abf82475988d91d4e3979fac733ed4d2a32ea631a6ac58cd8fbfda9a159'}, 'capture_native.py': {'bytes': 10369, 'sha256': 'e44d3c600ff44f31eadd8d074d28f6a86bb515bccd60e936fef83acd37eac1d8'}}
+HELPER_FILES = {'cases.py': {'bytes': 12031, 'sha256': 'f2d3efb4e3da4a800206c018908bd5999a6d14b31dc8a7dd81a502413111dedb'}, 'replay_original.py': {'bytes': 18199, 'sha256': 'f46faf9747aa13c4ea5b1188c3a19fe1d8d1afb5befab3fc4d129da1506b3950'}, 'native_capture.py': {'bytes': 19462, 'sha256': 'ba6492e1a713eb55f090aea518ef155929fe125290757b24260ec14ce01a04b7'}, 'strict_reference.py': {'bytes': 50571, 'sha256': 'b7cfe2fba7ec3290d993ccad754a019d2d5e4b73af208c8a4daa8ddb9135bab5'}, 'capture_native.py': {'bytes': 10369, 'sha256': 'e44d3c600ff44f31eadd8d074d28f6a86bb515bccd60e936fef83acd37eac1d8'}}
 NATIVE_FILES = {'native/filesystem_parity.hepta': {'bytes': 372049, 'sha256': '1afb3046366a16a346a21345f3710efefdd312a1f9b35878bd7aec5118ddd454'}, 'native/filesystem_parity_composition.json': {'bytes': 4571, 'sha256': '52c5915dcf50742905ddefe6f3ff132612bea4e4eb85a2923a07835319fad9e7'}, 'native/filesystem_parity_layout.json': {'bytes': 773, 'sha256': 'bc33e25fda7a166e540b0a5998b247e339f338d6a6f91755a43ff832d8bf0bf4'}, 'native/filesystem_parity_packer.hepta': {'bytes': 75861, 'sha256': '59bef09a939dd55fc778c514a376d2ebcc63bf30752dedc0eaf717e6bc0a0c9e'}, 'native/text_budget.hepta': {'bytes': 47464, 'sha256': '89df7b4320fdbd3525450e9446267ae3d54a5b62660d8904fe8f09be36a7fbf9'}, 'native/view_error.hepta': {'bytes': 250530, 'sha256': '22254938e43feaebc8d24147f76c0aefdfc46b8574fad66d247ddafb2c209c5a'}, 'scripts/hia_native_build.py': {'bytes': 16253, 'sha256': '7b01d602d50835f2b73a2b7b39761c0cef08a372493985161d59184d52c0dcb2'}, 'scripts/hia_native_filesystem_parity_build.py': {'bytes': 20874, 'sha256': 'f9c1f646f8983d1f697350cd62cb26c9a94a6d87fbafb5bb3ec0381ef75488de'}, 'scripts/hia_native_loader.py': {'bytes': 12728, 'sha256': '331b1fdc693df44847723f7171a1338918d1558f1cdc48f558cd29b32f2971e2'}}
 
 
@@ -251,7 +251,7 @@ def trace_evidence(raw, cases, output_rows, receipts, stream_bytes, elf_path):
     need(text.endswith('\n'), 'incomplete native strace file')
     pid = None; previous_stamp = 0; reads = writes = errors = 0; effects = []
     for number, line in enumerate(text.splitlines(), 1):
-        match = re.fullmatch(r'(\d+) (\d+\.\d+) ([A-Za-z_][A-Za-z0-9_]*)\((.*)\)\s*=\s*(.*)', line)
+        match = re.fullmatch(r'(\d+)[ ]+(\d+\.\d+) ([A-Za-z_][A-Za-z0-9_]*)\((.*)\)\s*=\s*(.*)', line)
         need(match is not None, 'incomplete actual syscall line')
         actual_pid, stamp, name, arguments, tail = match.groups(); actual_pid = int(actual_pid); stamp = float(stamp)
         need(math.isfinite(stamp) and stamp >= previous_stamp, 'actual syscall timestamp order'); previous_stamp = stamp
@@ -564,8 +564,8 @@ def finish_admission(sources, bundle, capture, original, source, summary, build_
         for name in binder.artifacts:
             if name.startswith(prefix) and name.endswith('/trace.txt'):
                 lines = binder.data(name).splitlines()
-                first = re.match(rb'\d+ (\d+\.\d+) ', lines[0])
-                last = re.match(rb'\d+ (\d+\.\d+) ', lines[-1])
+                first = re.match(rb'\d+[ ]+(\d+\.\d+) ', lines[0])
+                last = re.match(rb'\d+[ ]+(\d+\.\d+) ', lines[-1])
                 need(first is not None and last is not None, 'actual trace time extent')
                 result.append((float(first[1]), float(last[1])))
         need(len(result) == 8, 'complete trace ordering extent')

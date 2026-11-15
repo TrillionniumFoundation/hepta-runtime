@@ -368,7 +368,7 @@ def trace_stream(raw, cases, outputs, input_bytes, output_bytes, expected_binary
     current = None; markers = []; result = {}; operation_events = []; traced_pid = None; read_bytes = write_bytes = executions = 0
     case_map = {case['case_id']: case for case in cases}; output_map = {row['case_id']: row for row in outputs}
     for line_number, line in enumerate(lines, 1):
-        match = re.fullmatch(r'(\d+) (\d+\.\d+) ([A-Za-z_][A-Za-z0-9_]*)\((.*)\)\s*=\s*(.*)', line)
+        match = re.fullmatch(r'(\d+)[ ]+(\d+\.\d+) ([A-Za-z_][A-Za-z0-9_]*)\((.*)\)\s*=\s*(.*)', line)
         need(match is not None, 'incomplete or unsupported actual strace record')
         pid, stamp, name, arguments, tail = match.groups(); pid = int(pid)
         if traced_pid is None: traced_pid = pid; need(name == 'execve', 'trace does not begin with original execution')
