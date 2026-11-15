@@ -71,6 +71,22 @@ class NativePipelineTests(unittest.TestCase):
             p.verify_files(folder, files, restore_modes=True)
         self.assertEqual((folder / "a.elf").stat().st_mode & 0o7777, 0o644)
 
+    def test_file_lock_corpus_producer_cannot_move_after_or_away_from_service(self):
+        suites = p.partition_tests()["text"]
+        ordered = q.file_lock_pipeline.ORDERED_SUITES
+        self.assertEqual(tuple(name for name in suites if name in ordered), ordered)
+        for mutation in ("split", "reverse"):
+            changed = copy.deepcopy(p.PARTITIONS)
+            if mutation == "split":
+                changed["text"] = tuple(key for key in changed["text"] if key != "file_lock_service")
+                changed["system"] += ("file_lock_service",)
+            else:
+                changed["text"] = tuple("file_lock_service" if key == "file_locks" else
+                                        "file_locks" if key == "file_lock_service" else key
+                                        for key in changed["text"])
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, "file-lock"):
+                p.partition_tests(changed)
+
     def test_artifact_path_symlink_and_special_mode_refusals(self):
         folder = self.root / "data"; folder.mkdir()
         (folder / "plain").write_bytes(b"real")

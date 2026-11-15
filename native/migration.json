@@ -299,6 +299,36 @@
       "source": "native/session_workdir.hepta",
       "scope": "Private per-session immutable root, optional raw Unix workdir, original poisoned-lock fallback and first-tool latch. Full 8 MiB raw paths; actual state and original reference qualified independently. Installed first-capability checks, public workdir routing and concurrent HTTP ownership remain separate.",
       "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/file_lock_state.hepta",
+      "scope": "Original FILE_LOCKS lease, weak/strong reference, fair queue, cancellation, sweep and poisoned-lock state; complete raw key storage and arena growth. The composed service supplies actual cross-thread serialization. Upper write-guard ownership remains separate.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/file_lock_key.hepta",
+      "scope": "Original local canonical key including realpath failure fallback and lexical normalization; exact remote host/port/path formatting. Native Linux filesystem effects are qualified; SSH/SFTP effects are separate.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/file_lock_state_packer.hepta",
+      "scope": "Fixed persistent native state qualification executable with owned dynamically growing storage; required standalone producer for the composed service state corpus.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/file_lock_key_packer.hepta",
+      "scope": "Fixed native canonical-key qualification executable with the original Linux path syscall order and complete failure outputs.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/file_lock_service.hepta",
+      "scope": "Connected canonical-key acquisition and shared lock state, with actual native cross-thread state serialization and growth. Pending async await, cancellation/Drop ownership in upper writes and production handler replacement remain separate.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/file_lock_service_packer.hepta",
+      "scope": "Fixed three-image static Linux service boundary with four actual native threads, shared CAS/futex serialization, growing owned arenas and checked direct call edges.",
+      "legacy_call_sites_replaced": false
     }
   ],
   "legacy_tool_handlers": [

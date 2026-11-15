@@ -28,7 +28,8 @@ import qualify_hia_runtime_native as q
 PARTITIONS = {
     "batch": ("batch_plan", "batch_apply", "atomic_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "line_endpoint", "line_verify",
-             "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir"),
+             "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir",
+             "file_locks", "file_lock_service"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
@@ -153,6 +154,11 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     for ordered in q.ORDERED_INDEPENDENT_SUITES:
         if not any(all(name in names for name in ordered) for names in result.values()):
             raise ValueError("an ordered native evidence dependency crosses partitions")
+    ordered_locks = q.file_lock_pipeline.ORDERED_SUITES
+    if not any(all(name in names for name in ordered_locks)
+               and [names.index(name) for name in ordered_locks] == sorted(names.index(name) for name in ordered_locks)
+               for names in result.values()):
+        raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
     return result
 
 

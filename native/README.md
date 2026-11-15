@@ -114,7 +114,7 @@ changed recipe bytes or the fresh repository aggregate.
 
 ## Native components
 
-Qualification covers 58 native HIA sources through 34 executable component
+Qualification covers 64 native HIA sources through 36 executable component
 entries; the two scope profiles share their HIA scope owner. The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
@@ -139,6 +139,11 @@ These counts do not count migrated production MCP handlers.
 | [view_cache.hepta](view_cache.hepta) | Persistent serial cache state, lifecycle, per-value limit, invalidation, poisoned-lock behavior and native view-plan application |
 | [history.hepta](history.hepta) | Persistent serial original undo snapshots, ten-entry per-file eviction, 64 MiB global budget, stale queue events and exact push/pop/lifecycle behavior |
 | [session_workdir.hepta](session_workdir.hepta) | Private per-session root/current path state, exact poisoned-lock behavior and the one-time first-tool atomic latch |
+| [file_lock_state.hepta](file_lock_state.hepta) | Original shared lock registry, weak/strong references, fair pending leases, cancellation, sweep and arena growth |
+| [file_lock_key.hepta](file_lock_key.hepta) | Exact local canonical path/failure fallback and remote host/port/path key formatting |
+| [file_lock_service.hepta](file_lock_service.hepta) | Native canonical-key-to-state dispatch with actual cross-thread shared serialization and growth |
+| [file_lock_state_packer.hepta](file_lock_state_packer.hepta), [file_lock_key_packer.hepta](file_lock_key_packer.hepta) | Required standalone state and key qualification executables |
+| [file_lock_service_packer.hepta](file_lock_service_packer.hepta) | Fixed three-image static service, four native threads and private CAS/futex state boundary |
 | [fence_json.hepta](fence_json.hepta) | Exact original typed owner/job serde projection, duplicate-known rejection and IgnoredAny grammar |
 | [serde_json.hepta](serde_json.hepta) | Locked Value ordering, integer/float classification and compact finite-number serialization |
 | [serde_filter_packer.hepta](serde_filter_packer.hepta) | Static filter for the explicit serde-json.v1 16/64/256 MiB profile |
@@ -267,6 +272,34 @@ First-capabilities policy/OS checks, the public `workdir` handler and concurrent
 HTTP session ownership remain caller work. No production handler is activated
 by this state component.
 
+The [file-lock components](file_locks_abi.md) retain the original canonical-key
+and registry semantics. Their standalone state/key executables are required
+qualification dependencies of the [connected lock service](file_lock_service_abi.md),
+which dispatches the actual HIA canonical owner into one shared state owner.
+The service uses four native threads with explicit CAS/futex serialization and
+retains 2,080 leases during shared arena growth. Its complete native domain has
+237,424 ELF requests: 51,783 state operations, 179,431 canonical acquire/drop/statistics
+requests and 6,210 concurrent operations. These overlap the standalone domains;
+they are not additional unique owner cases to sum together.
+
+All six suites run in one ordered partition. The aggregate checks the complete
+state producer's actual stdout before admitting the service corpus, all image
+and HIA pack receipts, 133 direct service calls, six packer calls, thirteen actual
+transport/bad-child processes and 51 refusal controls across the two components.
+Two mandatory original recipes each freshly build the locked Rust owners. The
+service recipe compares 231,214 sequential result frames byte for byte, checks
+6,210 original concurrent-property operations and runs 112 paired real kernel
+controls. Concurrent interleavings and TIDs are checked by their properties;
+they are not claimed to match byte for byte. Retained independent observations
+are [file_locks_observation.json](file_locks_observation.json) and
+[file_lock_service_observation.json](file_lock_service_observation.json).
+
+Pending async waiting, cancellation/Drop ownership in an upper write caller,
+atomic/history/batch ordering and SSH/SFTP effects still require integration.
+Neither lock component activates a production handler or qualifies removal of
+its original callers. The key/state standalone sources and tests remain active
+dependencies, rather than abandoned versions of the composed service.
+
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -338,7 +371,7 @@ limit; every native process retains 180 seconds and the cold/owner limits below
 are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
-native evidence checks and all 29 original Rust recipes. Artifact transport can
+native evidence checks and all 31 original Rust recipes. Artifact transport can
 strip executable permissions; only byte-verified owned regular files have their
 recorded ordinary permissions restored. The aggregate retains the original
 partition reports and rechecks them before and after the original comparisons.
@@ -351,8 +384,8 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 83 native suite processes, the fresh compiler cold process,
-29 required original Rust recipes and one Rust-version process: 145 recorded
+The declared run has 89 native suite processes, the fresh compiler cold process,
+31 required original Rust recipes and one Rust-version process: 153 recorded
 checks in a complete successful aggregate. The two JSON recipes share one locked
 Cargo build and each perform a complete independent replay. A component's retained historical
 comparison is not a fresh aggregate invocation.
@@ -468,7 +501,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all 29 required original Rust recipes succeed. The Python reference domain
+after all 31 required original Rust recipes succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 

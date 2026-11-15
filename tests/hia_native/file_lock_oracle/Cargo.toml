@@ -1,0 +1,20 @@
+[package]
+name = "hia-file-lock-original"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[[bin]]
+name = "hia-file-lock-original"
+path = "../oracle_file_lock_state.rs"
+
+[[bin]]
+name = "hia-file-lock-key-original"
+path = "../oracle_file_lock_key.rs"
+
+[dependencies]
+anyhow = "=1.0.104"
+libc = "=0.2.189"
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "fs", "time", "sync"] }
+
+[workspace]

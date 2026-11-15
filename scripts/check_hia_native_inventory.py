@@ -46,6 +46,7 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/fs/file_ops.rs": "dc43bd59c2dff679b8a741d52d1d7861002c0150",
     "src/mcp/fs/fs_tests.rs": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
     "src/mcp/fs/text_editing.rs": "4a8114e72a51238608201e108288294c6282ab20",
+    "src/mcp/fs/remote.rs": "b570130be0f545e91160339076388f255bd83abe",
     "src/mcp/request_ctx.rs": "0150c07b2d7ac593851c30557f71c628083d083b",
     "src/utils/line_hash.rs": "0e521656ba24869dbc05afc51d62aa4af79b5e44",
     "src/utils/truncation.rs": "a14ad26adedbff7624c67f5b89672e54fe60918e",
