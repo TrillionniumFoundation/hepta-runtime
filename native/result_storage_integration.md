@@ -58,6 +58,19 @@ are `record_io`, `record_io_faults`, `directory`, `archive_metadata`,
 limit. `domain_evidence` and `native_evidence` read every completed corpus and
 its bound images and streams without executing a semantic owner.
 
+Retention schedules its independent administrator profiles in at most two
+isolated processes. One owns `uninstalled`, the empty-host startup refusal,
+`mixed`, all 42 existing native controls, and the 104 RawValue cases. The other
+owns both 256-host and 257-host profiles. Every profile retains all prior cases,
+actual Value/typed/metadata/DTO/codec calls, complete Record bytes, configuration
+traffic and lock cleanup. Each worker has private native arenas and remains in
+the outer suite's owned process group. The complete suite still has one
+**180-second deadline**; both actual worker completions must be collected before
+it can pass. Source-bound argv, PID, parent/group identity, lifetimes, complete
+stdout/stderr and both full reports are checked again by the evidence reader.
+The claimed parent PID must match the outer qualifier's actual Popen receipt.
+The original Rust replay remains unchanged and covers every profile.
+
 The aggregate registers the nine components in an independent `storage`
 native partition. It preserves the existing eight other native partitions,
 including the complete ordered public View producer/consumer chain. The
@@ -131,8 +144,11 @@ seven original groups. Every CI job retains its existing 15-minute limit.
 completed result and its external native and original seals. It preserves all
 **25 earlier corruption controls** and appends **five RawValue controls** for
 complete native input/output, completion, original output and a consistently
-rewritten original command. The full native and all nine original admissions
-run before and after the thirty refusals. Every mutation receives an external
+rewritten original command. Nine additional controls reject missing profile
+workers, re-sealed timeouts/commands/process groups, changed worker output,
+missing worker cases, an overlong worker, a changed collected Record and a
+foreign parent PID. The full native and all nine original admissions run before and after all 39
+refusals. Every mutation receives an external
 restoration copy before writing; exact bytes and modes are restored in
 `finally`. Evidence admission does not substitute for an actual execution.
 

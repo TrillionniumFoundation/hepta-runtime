@@ -56,6 +56,11 @@ CONTROL_LABELS = (
     'native-raw-value-complete-input', 'native-raw-value-complete-output',
     'native-raw-value-completion', 'original-raw-value-complete-output',
     'original-raw-value-resealed-command',
+    'native-retention-missing-worker', 'native-retention-worker-timeout',
+    'native-retention-worker-command', 'native-retention-worker-process-group',
+    'native-retention-worker-output', 'native-retention-worker-domain',
+    'native-retention-overlong-worker', 'native-retention-collected-record',
+    'native-retention-foreign-parent',
 )
 
 
@@ -316,7 +321,7 @@ def control_evidence(root, output, report, completed):
         'complete_original_domains', 'new_native_executions', 'new_original_executions', 'elapsed_seconds')}
     require(summary['mutation_summary'] == expected_summary
         and value['schema'] == 'hepta.result-storage.evidence-controls.v1'
-        and value['status'] == 'PASS' and value['rejected'] == 30
+        and value['status'] == 'PASS' and value['rejected'] == 39
         and value['complete_native_domains'] == 13 and value['complete_original_domains'] == 9
         and value['new_native_executions'] == value['new_original_executions'] == 0
         and value['restored_all_files'] is True and value['sources_unchanged'] is True
@@ -344,7 +349,7 @@ def control_evidence(root, output, report, completed):
     paths.extend((snapshot_path, output / ORIGINAL_SUITE,
         output / (CONTROL + '.stdout'), output / (CONTROL + '.stderr')))
     return {'schema': 'hepta.runtime.result-storage-controls.v1', 'status': 'PASS',
-        'artifact_sha256': retained(output, paths), 'rejected': 30,
+        'artifact_sha256': retained(output, paths), 'rejected': 39,
         'complete_native_domains': 13, 'complete_original_domains': 9,
         'new_native_executions': 0, 'new_original_executions': 0}
 

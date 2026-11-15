@@ -8,7 +8,10 @@ import argparse
 import ctypes
 import hashlib
 import json
+import os
+import signal
 import struct
+import subprocess
 import sys
 import time
 import traceback
@@ -18,6 +21,12 @@ INVALID, CAPACITY, CALL = 0xffffffff, 0xfffffffe, 0xfffffff0
 ACTION, REQUEST, REPLY = 256, (160 << 20) + 65536, (176 << 20) + 65536
 WORK, CHILD_CAP, OUTPUT = 256 << 20, 64 << 20, 98336
 STATES = ('unknown', 'stored', 'overflow', 'not_retained_dto', 'not_completed')
+PROFILE_GROUPS = {'small-and-mixed': ('uninstalled', 'empty', 'mixed'),
+    'host-limits': ('hosts-256', 'hosts-257')}
+RAW_VALUE_GROUP = 'small-and-mixed'
+PROCESS_TIMEOUT = 180
+PROCESS_OPTIONS = ('manifest', 'value-manifest', 'typed-manifest', 'metadata-manifest',
+    'dto-manifest', 'codec-manifest', 'config-elf', 'runtime', 'oracle', 'output')
 
 
 def encode(value):
@@ -174,11 +183,17 @@ def controls(bridge, wire, module):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('manifest', 'value-manifest', 'typed-manifest', 'metadata-manifest', 'dto-manifest',
-                 'codec-manifest', 'config-elf', 'runtime', 'oracle', 'output'):
+    for name in PROCESS_OPTIONS:
         parser.add_argument('--' + name, required=name != 'oracle', type=Path)
+    parser.add_argument('--profile-group', choices=tuple(PROFILE_GROUPS))
     args = parser.parse_args()
-    out = args.output.resolve();out.mkdir(mode=0o700, parents=True, exist_ok=False)
+    if args.profile_group is None:
+        parallel_main(args)
+        return
+    out = args.output.resolve(strict=True)
+    worker = out / 'workers' / args.profile_group
+    if not worker.is_dir() or worker.is_symlink():
+        raise ValueError('profile worker requires its owned capture directory')
     sys.path[:0] = [str(Path(__file__).resolve().parent), str(args.runtime.resolve(strict=True) / 'scripts')]
     from hia_native_loader import NativeModule, NativeRejected, NativeCapacityError
     from result_storage_mapped_session import MappedSession
@@ -192,7 +207,10 @@ def main():
         controls=[], startup_refusals=[], whole_runtime_replaced=False, production_activated=False,
         old_stack_removal_qualified=False, result_storage_qualified=False, audit_storage_qualified=False,
         public_request_dispatch_qualified=False, original_descriptor_validation_executed=False)
-    save = lambda: (out / 'result.json').write_text(json.dumps(report, sort_keys=True, indent=2) + '\n')
+    report['worker_identity'] = dict(group=args.profile_group, pid=os.getpid(), parent_pid=os.getppid(),
+        process_group=os.getpgrp(), profile_names=list(PROFILE_GROUPS[args.profile_group]),
+        raw_value=args.profile_group == RAW_VALUE_GROUP, source_sha256=SHA(Path(__file__).read_bytes()))
+    save = lambda: (worker / 'result.json').write_text(json.dumps(report, sort_keys=True, indent=2) + '\n')
     save();started = time.monotonic()
     try:
         with ExitStack() as stack:
@@ -212,6 +230,8 @@ def main():
             report['native_workspace_allocation'] = 'private anonymous demand-zero; unchanged qualified invocation and guards'
             report['config_executable'] = dict(bytes=args.config_elf.stat().st_size, sha256=SHA(args.config_elf.read_bytes()))
             for label, hosts in profiles():
+                if label not in PROFILE_GROUPS[args.profile_group]:
+                    continue
                 directory = out / label;directory.mkdir(mode=0o700)
                 state = config = None
                 if hosts is not None:
@@ -287,12 +307,14 @@ def main():
                         dto_value_calls=dto_bridge.value_calls, config_calls=dto_bridge.config_calls)
                     save()
                 profile['status'] = 'PASS';save()
-            from result_storage_raw_value import run_native as run_raw_value
-            report['raw_value_extension'] = run_raw_value(args.runtime, 'retention', out / 'raw-value',
-                args.config_elf, lambda config: Bridge(owner, value, typed,
-                    MetadataBridge(metadata, value, typed, (NativeRejected, NativeCapacityError)),
-                    DtoBridge(dto, value, config, (NativeRejected, NativeCapacityError)), codec,
-                    (NativeRejected, NativeCapacityError)))
+            report['raw_value_extension'] = None
+            if args.profile_group == RAW_VALUE_GROUP:
+                from result_storage_raw_value import run_native as run_raw_value
+                report['raw_value_extension'] = run_raw_value(args.runtime, 'retention', out / 'raw-value',
+                    args.config_elf, lambda config: Bridge(owner, value, typed,
+                        MetadataBridge(metadata, value, typed, (NativeRejected, NativeCapacityError)),
+                        DtoBridge(dto, value, config, (NativeRejected, NativeCapacityError)), codec,
+                        (NativeRejected, NativeCapacityError)))
         report.update(status='PASS', compared_cases=sum(len(p['cases']) for p in report['profiles']),
             actual_original_cases=sum(len(p['cases']) + 7 for p in report['profiles']) if args.oracle else 0,
             retained_reference_cases=0 if args.oracle else sum(len(p['cases']) + 7 for p in report['profiles']),
@@ -302,10 +324,225 @@ def main():
             states={name: sum(p['states'][name] for p in report['profiles']) for name in STATES},
             controls_passed=len(report['controls']), exact_record_bytes_equal=True, elapsed_seconds=time.monotonic() - started)
     except BaseException as error:
-        report['error'] = repr(error);(out / 'failure.txt').write_text(traceback.format_exc());raise
+        report['error'] = repr(error);(worker / 'failure.txt').write_text(traceback.format_exc());raise
     finally:
         save()
     print(json.dumps({key: value for key, value in report.items() if key not in ('profiles', 'controls', 'modules', 'startup_refusals')}, sort_keys=True))
+
+
+def summary(report):
+    return {key: value for key, value in report.items()
+        if key not in ('profiles', 'controls', 'modules', 'startup_refusals')}
+
+
+def worker_command(args, group):
+    command = [sys.executable, '-I', '-B', str(Path(__file__).resolve())]
+    for name in PROCESS_OPTIONS:
+        value = getattr(args, name.replace('-', '_'))
+        if value is not None:
+            command.extend(('--' + name, str(value.resolve())))
+    return command + ['--profile-group', group]
+
+
+def combine_workers(workers):
+    """Join complete disjoint profiles; no result or native child is cached."""
+    from result_safe_dto_cases import profiles
+    assert set(workers) == set(PROFILE_GROUPS)
+    first = workers[RAW_VALUE_GROUP]
+    common = ('schema', 'modules', 'config_executable', 'native_workspace_allocation',
+        'reference_kind', 'whole_runtime_replaced', 'production_activated',
+        'old_stack_removal_qualified', 'result_storage_qualified', 'audit_storage_qualified',
+        'public_request_dispatch_qualified', 'original_descriptor_validation_executed',
+        'exact_record_bytes_equal')
+    indexed = {}
+    for name, worker in workers.items():
+        assert worker['status'] == 'PASS'
+        assert all(worker[key] == first[key] for key in common)
+        assert [row['name'] for row in worker['profiles']] == [label for label in PROFILE_GROUPS[name] if label != 'empty']
+        assert all(row['status'] == 'PASS' for row in worker['profiles'])
+        assert worker['compared_cases'] == sum(len(row['cases']) for row in worker['profiles'])
+        assert worker['controls_passed'] == len(worker['controls'])
+        assert len(worker['controls']) == (42 if name == RAW_VALUE_GROUP else 0)
+        assert len(worker['startup_refusals']) == (1 if name == RAW_VALUE_GROUP else 0)
+        assert (worker['raw_value_extension'] is not None) == (name == RAW_VALUE_GROUP)
+        for row in worker['profiles']:
+            assert row['name'] not in indexed
+            indexed[row['name']] = row
+    report = {key: value for key, value in first.items() if key not in ('worker_identity', 'elapsed_seconds')}
+    report['profiles'] = [indexed[label] for label, hosts in profiles() if hosts != {}]
+    report['controls'] = [row for name in PROFILE_GROUPS for row in workers[name]['controls']]
+    report['startup_refusals'] = [row for name in PROFILE_GROUPS for row in workers[name]['startup_refusals']]
+    for name in ('compared_cases', 'actual_original_cases', 'retained_reference_cases',
+            'actual_native_entries', 'actual_config_process_requests', 'controls_passed'):
+        report[name] = sum(worker[name] for worker in workers.values())
+    report['states'] = {name: sum(worker['states'][name] for worker in workers.values()) for name in STATES}
+    return report
+
+
+def parallel_main(args):
+    """At most two isolated native arenas within the existing outer deadline.
+
+    Workers inherit this owned process group. The ordinary aggregate retires
+    the same entire group on completion or timeout. A local failure also
+    retires this group after preserving every available process and stream.
+    """
+    out = args.output.resolve();out.mkdir(mode=0o700, parents=True, exist_ok=False)
+    (out / 'workers').mkdir(mode=0o700)
+    if os.getpgrp() != os.getpid():
+        os.setpgid(0, 0)
+    assert os.getpgrp() == os.getpid()
+    sys.path[:0] = [str(Path(__file__).resolve().parent), str(args.runtime.resolve(strict=True) / 'scripts')]
+    started_ns = time.monotonic_ns()
+    report = {'schema': 'hepta.request-retention.actual-comparison.v1', 'status': 'FAIL'}
+    save = lambda: (out / 'result.json').write_text(json.dumps(report, sort_keys=True, indent=2) + '\n')
+    live = [];workers = {};passed = False
+    try:
+        for group in PROFILE_GROUPS:
+            folder = out / 'workers' / group;folder.mkdir(mode=0o700)
+            command = worker_command(args, group)
+            stdout = (folder / 'stdout').open('xb');stderr = (folder / 'stderr').open('xb')
+            row = dict(schema='hepta.request-retention.profile-process.v1', command=command,
+                cwd=str(args.runtime.resolve(strict=True)), parent_pid=os.getpid(), process_group=os.getpgrp(),
+                timeout_seconds=PROCESS_TIMEOUT, start_monotonic_ns=time.monotonic_ns(),
+                pid=None, exit_code=None, timed_out=False, reaped=False, start_error=None)
+            process = None
+            try:
+                process = subprocess.Popen(command, cwd=args.runtime, stdin=subprocess.DEVNULL,
+                    stdout=stdout, stderr=stderr, start_new_session=False)
+                row['pid'] = process.pid
+            except BaseException as error:
+                row['start_error'] = repr(error)
+                raise
+            finally:
+                live.append((group, folder, process, stdout, stderr, row))
+        for _, _, process, _, _, row in live:
+            remaining = PROCESS_TIMEOUT - (time.monotonic_ns() - started_ns) / 1e9
+            try:
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(row['command'], PROCESS_TIMEOUT)
+                process.wait(timeout=remaining)
+            except subprocess.TimeoutExpired:
+                row['timed_out'] = True
+                raise
+            row.update(exit_code=process.returncode, reaped=True, end_monotonic_ns=time.monotonic_ns())
+            row['elapsed_seconds'] = (row['end_monotonic_ns'] - row['start_monotonic_ns']) / 1e9
+        for group, folder, process, stdout, stderr, row in live:
+            stdout.close();stderr.close()
+            for channel in ('stdout', 'stderr'):
+                raw = (folder / channel).read_bytes()
+                row[channel] = dict(bytes=len(raw), sha256=SHA(raw))
+            (folder / 'process.json').write_bytes(encode(row) + b'\n')
+            assert row['exit_code'] == 0 and row['reaped'] and not row['timed_out'] and row['stderr']['bytes'] == 0, row
+            worker = json.loads((folder / 'result.json').read_bytes())
+            assert json.loads((folder / 'stdout').read_bytes()) == summary(worker)
+            assert worker['worker_identity']['pid'] == process.pid
+            workers[group] = worker
+        report = combine_workers(workers)
+        ended_ns = time.monotonic_ns()
+        report['elapsed_seconds'] = (ended_ns - started_ns) / 1e9
+        assert report['elapsed_seconds'] <= PROCESS_TIMEOUT
+        report['profile_execution'] = dict(schema='hepta.request-retention.profile-execution.v1',
+            max_parallel_workers=2, timeout_seconds=PROCESS_TIMEOUT, parent_pid=os.getpid(),
+            process_group=os.getpgrp(), start_monotonic_ns=started_ns, end_monotonic_ns=ended_ns,
+            groups=[dict(name=group, profiles=list(PROFILE_GROUPS[group]),
+                raw_value=group == RAW_VALUE_GROUP,
+                result_sha256=SHA((out / 'workers' / group / 'result.json').read_bytes()),
+                process_sha256=SHA((out / 'workers' / group / 'process.json').read_bytes())) for group in PROFILE_GROUPS])
+        passed = True
+    except BaseException as error:
+        report.update(status='FAIL', error=repr(error))
+        (out / 'failure.txt').write_text(traceback.format_exc())
+        raise
+    finally:
+        for _, folder, process, stdout, stderr, row in live:
+            if process is not None and process.poll() is None:
+                process.kill()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    pass
+            stdout.close();stderr.close()
+            if not (folder / 'process.json').exists():
+                if process is not None:
+                    row.update(exit_code=process.returncode, reaped=process.returncode is not None)
+                for channel in ('stdout', 'stderr'):
+                    raw = (folder / channel).read_bytes()
+                    row[channel] = dict(bytes=len(raw), sha256=SHA(raw))
+                (folder / 'process.json').write_bytes(encode(row) + b'\n')
+        save()
+        if not passed:
+            # This process is the leader and launched every worker in its own
+            # group. Killing it also retires any child of an interrupted worker.
+            os.killpg(os.getpid(), signal.SIGKILL)
+    print(json.dumps(summary(report), sort_keys=True), flush=True)
+
+
+def execution_evidence(root, build, folder, report):
+    """Require both actual workers and reread their complete source-bound capture."""
+    import hia_native_result_storage_qualification as qualification
+    from result_storage_registry import regular, require
+    root, build, folder = map(Path, (root, build, folder))
+    execution = report.get('profile_execution', {})
+    require(execution.get('schema') == 'hepta.request-retention.profile-execution.v1'
+        and execution.get('max_parallel_workers') == 2
+        and execution.get('timeout_seconds') == PROCESS_TIMEOUT
+        and type(execution.get('parent_pid')) is int and execution['parent_pid'] > 0
+        and execution.get('process_group') == execution['parent_pid']
+        and [row['name'] for row in execution.get('groups', [])] == list(PROFILE_GROUPS),
+        'complete fixed retention profile execution is missing')
+    begin, end = execution.get('start_monotonic_ns'), execution.get('end_monotonic_ns')
+    require(type(begin) is int and type(end) is int and 0 < begin <= end
+        and (end - begin) / 1e9 == report['elapsed_seconds'] <= PROCESS_TIMEOUT,
+        'retention workers exceeded the unchanged outer deadline')
+    command = qualification.commands(root, build, folder.parent)['retention']
+    outer, outer_stdout, outer_stderr = qualification.process_evidence(
+        folder.parent / 'processes' / 'retention', command, root)
+    require(type(outer.get('pid')) is int and outer['pid'] > 0
+        and execution['parent_pid'] == execution['process_group'] == outer['pid'],
+        'profile workers are not children of the actual outer Popen process')
+    source_sha = SHA(regular(root / 'tests/hia_native/test_result_retention.py'))
+    workers = {};pids = set()
+    for group in execution['groups']:
+        name = group['name'];directory = folder / 'workers' / name
+        raw_process, raw_result = (regular(directory / file) for file in ('process.json', 'result.json'))
+        require(group == dict(name=name, profiles=list(PROFILE_GROUPS[name]), raw_value=name == RAW_VALUE_GROUP,
+            result_sha256=SHA(raw_result), process_sha256=SHA(raw_process)), 'profile completion seal differs')
+        process, worker = json.loads(raw_process), json.loads(raw_result)
+        require(process.get('schema') == 'hepta.request-retention.profile-process.v1'
+            and process.get('command') == command + ['--profile-group', name]
+            and process.get('cwd') == str(root) and process.get('timeout_seconds') == PROCESS_TIMEOUT
+            and process.get('parent_pid') == execution['parent_pid']
+            and process.get('process_group') == execution['process_group']
+            and type(process.get('pid')) is int and process['pid'] > 0 and process['pid'] not in pids
+            and process['pid'] != execution['parent_pid']
+            and process.get('exit_code') == 0 and process.get('reaped') is True
+            and process.get('timed_out') is False and process.get('start_error') is None,
+            'actual profile process custody or completion differs')
+        pids.add(process['pid'])
+        start, finish = process.get('start_monotonic_ns'), process.get('end_monotonic_ns')
+        require(type(start) is int and type(finish) is int and begin <= start <= finish <= end
+            and (finish - start) / 1e9 == process.get('elapsed_seconds') <= PROCESS_TIMEOUT
+            and type(worker.get('elapsed_seconds')) in (int, float)
+            and 0 <= worker['elapsed_seconds'] <= process['elapsed_seconds'],
+            'actual worker lifetime is outside the outer process')
+        require(worker.get('worker_identity') == dict(group=name, pid=process['pid'],
+            parent_pid=execution['parent_pid'], process_group=execution['process_group'],
+            profile_names=list(PROFILE_GROUPS[name]), raw_value=name == RAW_VALUE_GROUP,
+            source_sha256=source_sha), 'executed worker source or disjoint domain differs')
+        for channel in ('stdout', 'stderr'):
+            raw = regular(directory / channel)
+            require(process.get(channel) == dict(bytes=len(raw), sha256=SHA(raw))
+                and (not raw if channel == 'stderr' else json.loads(raw) == summary(worker)),
+                'complete worker process stream differs')
+        workers[name] = worker
+    try:
+        expected = combine_workers(workers)
+    except (AssertionError, KeyError, TypeError, IndexError) as error:
+        raise ValueError('complete worker domain cannot be collected') from error
+    observed = {key: value for key, value in report.items() if key not in ('elapsed_seconds', 'profile_execution')}
+    require(expected == observed, 'collected profile records differ from the actual workers')
+    require(not outer_stderr and json.loads(outer_stdout) == summary(report),
+        'actual outer process did not publish the complete collected profile result')
 
 
 if __name__ == '__main__':

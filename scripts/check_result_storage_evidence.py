@@ -15,6 +15,39 @@ import sys
 import time
 
 
+def retention_worker_controls(root, build, native, mutate, update, field, flip, q):
+    from result_storage_native_evidence import test_module
+    # These controls admit the actual two profile processes independently
+    # of the outer summary. Re-sealing a changed receipt must not admit it.
+    owner = test_module(root, 'test_result_retention')
+    retention = native / 'retention'
+    collected = retention / 'result.json'
+    worker = retention / 'workers' / 'small-and-mixed'
+    admission = lambda: owner.execution_evidence(root, build, retention, q.object_at(collected))
+    reseal = lambda field_name, path: update(lambda row: row['profile_execution']['groups'][0].__setitem__(
+        field_name, q.pin(path)['sha256']))
+    mutate('native-retention-missing-worker', [(collected,
+        update(lambda row: row['profile_execution']['groups'].pop()))], admission)
+    for label, transform in (
+            ('native-retention-worker-timeout', field('timed_out', True)),
+            ('native-retention-worker-command', update(lambda row: row['command'].append('--unobserved'))),
+            ('native-retention-worker-process-group', update(lambda row: row.__setitem__('process_group', row['process_group'] + 1)))):
+        mutate(label, [(worker / 'process.json', transform),
+            (collected, reseal('process_sha256', worker / 'process.json'))], admission)
+    mutate('native-retention-worker-output', [(worker / 'stdout', flip)], admission)
+    mutate('native-retention-worker-domain', [
+        (worker / 'result.json', update(lambda row: row['profiles'].pop())),
+        (collected, reseal('result_sha256', worker / 'result.json'))], admission)
+    mutate('native-retention-overlong-worker', [(worker / 'process.json',
+        update(lambda row: row.__setitem__('end_monotonic_ns', row['end_monotonic_ns'] + 180_000_000_000))),
+        (collected, reseal('process_sha256', worker / 'process.json'))], admission)
+    mutate('native-retention-collected-record', [(collected,
+        update(lambda row: row['profiles'][0]['cases'][0].__setitem__('actual_record_sha256', '0' * 64)))], admission)
+    mutate('native-retention-foreign-parent', [(collected, update(lambda row:
+        row['profile_execution'].update(parent_pid=row['profile_execution']['parent_pid'] + 1,
+            process_group=row['profile_execution']['process_group'] + 1)))], admission)
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in ('root', 'build', 'native', 'original', 'original-processes',
@@ -232,8 +265,9 @@ def main():
             (original / 'retention/result.json',
                 update(lambda row: row['replay']['checks']['raw-value/complete']['command'].append('--unobserved'))),
         ], lambda: original_domain('retention'))
+        retention_worker_controls(root, build, native, mutate, update, field, flip, q)
         complete('after')
-        require(len(report['controls']) == 30 and all(row['passed'] and row['restored'] for row in report['controls']),
+        require(len(report['controls']) == 39 and all(row['passed'] and row['restored'] for row in report['controls']),
             'fixed corruption domain is incomplete')
         report.update(status='PASS', rejected=len(report['controls']), complete_native_domains=13,
             complete_original_domains=9, restored_all_files=True, sources_unchanged=True)

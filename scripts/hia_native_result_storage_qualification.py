@@ -365,6 +365,9 @@ def domain_evidence(root, build, output, domain):
         }
         require(report.get('module') == module(domain) if domain == 'storage_json'
             else report.get('modules') == expected[domain], 'native test did not execute the admitted images')
+        if domain == 'retention':
+            from result_storage_native_evidence import test_module
+            test_module(root, 'test_result_retention').execution_evidence(root, build, folder, report)
         if domain in ('storage_json', 'record_validation'):
             corpus = simple(root, domain, folder, report)
         else:
