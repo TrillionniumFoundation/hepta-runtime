@@ -135,7 +135,7 @@ concurrency:
   group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# The same fresh cold/build bytes feed all five complete native partitions.
+# The same fresh cold/build bytes feed all six complete native partitions.
 # Prepare and native partitions retain 15 minutes; aggregate orchestration gets 30.
 # Every individual suite, owner and stream deadline remains unchanged.
 # The batch partition includes all four atomic-write suites and its full 505 MiB case.
@@ -208,7 +208,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [batch, text, json, config, system]
+        group: [batch, text, view, json, config, system]
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -367,6 +367,23 @@ jobs:
             > "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.stdout" \
             2> "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.stderr"
 
+      - name: Archive complete evidence with original Unix fixture names
+        if: success()
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
+            --source "$RUNNER_TEMP/hia-runtime-native" \
+            --output "$RUNNER_TEMP/hia-native-complete-evidence"
+
+      - name: Retain complete aggregate, originals and immutable shard receipts
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-runtime-native-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-native-complete-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Stage failure diagnostics and archive untouched fixtures
         if: failure()
         run: |
@@ -380,15 +397,5 @@ jobs:
         with:
           name: hia-native-failure-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-aggregate
           path: ${{ runner.temp }}/hia-native-failure-evidence/
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Retain complete aggregate, originals and immutable shard receipts
-        if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: hia-runtime-native-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/hia-runtime-native/
-          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14

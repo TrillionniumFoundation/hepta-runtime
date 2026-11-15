@@ -1,6 +1,6 @@
 """Run the complete native gate across source-bound, independently retained jobs.
 
-One fresh cold/build artifact is admitted by its workflow-produced SHA256. Five
+One fresh cold/build artifact is admitted by its workflow-produced SHA256. Six
 explicit partitions execute every registered suite once. Collection rechecks all
 raw process bytes, immutable build inputs and complete shard inventories before
 the unchanged evidence owners can advance to the original Rust comparisons.
@@ -29,9 +29,9 @@ PARTITIONS = {
     "batch": ("batch_plan", "batch_apply", "atomic_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
-             "delta", "editable_content", "view_render", "view_render_growth", "view_read", "view_params", "view_call",
-             "runtime_mcp", "view_cache", "history", "session_workdir",
-             "file_locks", "file_lock_service"),
+             "delta", "editable_content", "file_locks", "file_lock_service"),
+    "view": ("view_render", "view_render_growth", "view_read", "view_params", "view_call",
+             "runtime_mcp", "view_cache", "history", "session_workdir"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence"),
     "config": ("runtime_config",),
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
@@ -145,7 +145,7 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "json", "config", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if set(partitions) != {"batch", "text", "view", "json", "config", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
         raise ValueError("every native module must belong to exactly one explicit partition")
     result = {group: tuple(name for key in keys for name in
                          (modules[key]["test"], *modules[key].get("additional_tests", ())))

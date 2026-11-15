@@ -435,17 +435,24 @@ python3 -m venv /absolute/path/to/hia-reference-environment
   --rustc /absolute/path/to/rustc
 ```
 
-CI executes the same gate as a fresh prepare job, five explicit native partitions
+CI executes the same gate as a fresh prepare job, six explicit native partitions
 and one aggregate/original-Rust job. The prepare job executes the full cold gate
 and builds every module once. Its exact SHA256 is passed through the workflow;
 every partition checks the full source, compiler, build and invocation identity
-before executing its complete suite list. Batch, text/history/view, JSON,
-configuration/regex and system suites run on separate runners with 10, 50, 16,
-15 and 32 native suites, respectively. Configuration and regex remain together
+before executing its complete suite list. Batch, text, view/history/session, JSON,
+configuration/regex and system suites run on separate runners with 10, 29, 21,
+16, 15 and 32 native suites, respectively. The view partition keeps the caller,
+public MCP and their evidence together; text keeps the ordered file-lock chain.
+Configuration and regex remain together
 with all their evidence dependencies. Prepare and native partition jobs retain
 15 minutes; the aggregate has 30 minutes for collection and all original recipes.
 Every native process retains 180 seconds and the cold/owner limits below are
 unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
+Completed aggregate evidence is archived before upload, preserving raw Unix
+fixture names, symbolic links and FIFO entries inside a non-dereferencing tar.
+The same qualified archive helper retains failed output; its completion status
+is separate from the unchanged test result. The successful workflow requires
+the full archive and diagnostics, with original bytes and the tar receipt.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
 native evidence checks and all 42 original Rust recipe entries. Artifact transport can
