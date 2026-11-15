@@ -34,6 +34,7 @@ SOURCE_NAMES=(
        'batch_write_harness.py','batch_render_reference.py','batch_write_supervisor.py',
        'batch_write_trace_common.py','compare_batch_write_files.py','compare_batch_write_original.py',
        'oracle_batch_write.rs','oracle_batch_render.rs','batch_write_file_plan.json',
+       'compare_batch_write_wide_retained.py','test_batch_write_retained_wide.py',
        'test_batch_plan.py','batch_plan_harness.py','batch_apply_harness.py','batch_apply_reference.py',
        'test_line_endpoint.py','test_line_verify.py','test_editable_content.py','rust_debug_properties.json')),
     *original.QUALIFICATION_PINS,
@@ -696,6 +697,7 @@ def original_evidence(folder,manifest,native_corpus,native_stdout_dir,stdout,*,r
         source_files=pins(root),artifacts=build.inspect_bundle(manifest,source_root=root),
         native=native_evidence(manifest,native_corpus,native_stdout_dir,root=root),
         original_build_is_fresh=True,original_replay_is_fresh=True,outer_timeout_seconds=180,
+        native_wide_mode='completed-current-qualification',native_wide_processes_added=0,retained_native_wide_requests=1,
         inherits_outer_process_group=True,original_processes=84,original_requests=7909,
         body_processes=83,body_requests=1171,renderer_processes=1,renderer_requests=6738,
         exact_trace_comparisons=58,cancellation_partial_order_comparisons=19,concurrent_cases=4,
@@ -740,11 +742,22 @@ def original_evidence(folder,manifest,native_corpus,native_stdout_dir,stdout,*,r
     for name,oracle in [('body','oracle_batch_write.rs'),('render','oracle_batch_render.rs')]:
         commands[name+'-format']=[tools['rustfmt']['path'],'--check','--edition=2024','--config','hard_tabs=true,max_width=100',str(actual_root/'tests/hia_native'/oracle)]
     for name in ('files','kernel','concurrency','wide'):
-        script='compare_batch_write_files.py' if name=='files' else 'test_batch_write_'+name+'.py'
-        commands[name]=[report['python']['path'],'-I','-B',str(actual_root/'tests/hia_native'/script),
-            '--native',str(Path(report['manifest']).parent/'batch-write.elf'),'--original',binaries['body']['path'],
-            '--output',str(actual_output/name)]+(['--reference',str(actual_root)] if name=='files' else [])
-    names=['rustc-version','body-format','render-format','cargo-build','render-build','render-replay','files','kernel','concurrency','wide']
+        if name=='wide':
+            commands[name]=[report['python']['path'],'-I','-B',str(actual_root/'tests/hia_native/compare_batch_write_wide_retained.py'),
+                '--root',str(actual_root),'--bundle',report['manifest'],'--native-corpus',report['native_corpus'],
+                '--native-stdout-dir',report['native_stdout_dir'],'--admission',report['wide_admission_path'],
+                '--admission-sha256',report['wide_admission_sha256'],'--invocation',report['wide_invocation'],
+                '--original',binaries['body']['path'],'--output',str(actual_output/name)]
+        else:
+            script='compare_batch_write_files.py' if name=='files' else 'test_batch_write_'+name+'.py'
+            commands[name]=[report['python']['path'],'-I','-B',str(actual_root/'tests/hia_native'/script),
+                '--native',str(Path(report['manifest']).parent/'batch-write.elf'),'--original',binaries['body']['path'],
+                '--output',str(actual_output/name)]+(['--reference',str(actual_root)] if name=='files' else [])
+    commands['wide-admission-controls']=[report['python']['path'],'-I','-B',str(actual_root/'tests/hia_native/test_batch_write_retained_wide.py'),
+        '--root',str(actual_root),'--bundle',report['manifest'],'--native-corpus',report['native_corpus'],
+        '--native-stdout-dir',report['native_stdout_dir'],'--admission',report['wide_admission_path'],
+        '--invocation',report['wide_invocation'],'--output',str(actual_output/'wide-admission-controls')]
+    names=['rustc-version','body-format','render-format','cargo-build','render-build','render-replay','files','kernel','concurrency','wide','wide-admission-controls']
     exact([row['name'] for row in report['records']],names,'batch actual fresh compile/replay stages omitted')
     require(type(report['outer_process_group'])is int and report['outer_process_group']>0,'batch original outer process group missing')
     for row in report['records']:
@@ -768,23 +781,33 @@ def original_evidence(folder,manifest,native_corpus,native_stdout_dir,stdout,*,r
     require(version.startswith(b'rustc 1.95.0 ') and b'release: 1.95.0\n' in version
         and b'commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\n' in version,'batch actual original compiler version differs')
     for name in ('rustc-version.stderr','body-format.stdout','body-format.stderr','render-format.stdout','render-format.stderr',
-                 'files.stderr','kernel.stderr','concurrency.stderr','wide.stderr'):
+                 'files.stderr','kernel.stderr','concurrency.stderr','wide.stderr','wide-admission-controls.stderr'):
         exact(read(folder/name),b'','batch original qualification emitted unexpected diagnostics')
     renderer_summary=dict(status='PASS',cases=6738,input_bytes=50024901,output_bytes=12229698)
     exact(obj(folder/'render-replay.stderr'),renderer_summary,'batch actual original renderer summary changed')
     from batch_write_trace_common import equal_streams
     renderer_stream=equal_streams(native_corpus/'render/native-output.gz',folder/'render-replay.stdout.gz',True)
     exact(stream_record(folder/'render-replay.stdout.gz',True),RENDER_STREAMS['native-output.gz'],'batch complete original renderer output domain omitted')
+    from compare_batch_write_wide_retained import evidence as retained_wide_evidence, admit_native, ADMISSION
+    admitted=admit_native(Path(native_stdout_dir)/ADMISSION,report['wide_admission_sha256'],report['wide_invocation'],
+        root,manifest,native_corpus,native_stdout_dir)
+    exact(report['wide_admission_before'],admitted,'batch native wide pre-recipe admission changed')
+    exact(report['wide_admission_after'],admitted,'batch native wide post-recipe admission changed')
     comparisons=dict(
         files=files_evidence(folder/'files',folder/'files.stdout',root=root,original_sha=binaries['body']['sha256']),
         kernel=kernel_evidence(folder/'kernel',folder/'kernel.stdout',root=root,original_sha=binaries['body']['sha256']),
         concurrency=kernel_evidence(folder/'concurrency',folder/'concurrency.stdout',root=root,original_sha=binaries['body']['sha256'],concurrent=True),
-        wide=wide_evidence(folder/'wide',folder/'wide.stdout',root=root,original_sha=binaries['body']['sha256']))
+        wide=retained_wide_evidence(folder/'wide',manifest,native_corpus,native_stdout_dir,folder/'wide.stdout',
+            root=root,original_sha=binaries['body']['sha256']))
     exact(report['comparisons'],comparisons,'batch complete original comparisons changed')
+    import test_batch_write_retained_wide as retained_controls
+    controls=retained_controls.evidence(folder/'wide-admission-controls',folder/'wide-admission-controls.stdout',
+        Path(native_stdout_dir)/ADMISSION,report['wide_invocation'],root=root)
+    exact(report['wide_admission_controls'],controls,'batch current-native wide refusal controls changed')
     summary={key:report[key] for key in SUMMARY};summary['result']=file_record(folder/'result.json')
     return dict(schema='hepta.runtime.batch-write-original-evidence.v1',status='PASS',result=file_record(folder/'result.json'),
         stdout=process_stdout(stdout,summary),tools=tools,original_binaries={name:{key:value[key] for key in ('bytes','sha256')} for name,value in binaries.items()},
-        actual_projects=projects,records=report['records'],comparisons=comparisons,
+        actual_projects=projects,records=report['records'],comparisons=comparisons,retained_wide_controls=controls,
         renderer=dict(summary=renderer_summary,complete_output=renderer_stream,stderr=file_record(folder/'render-replay.stderr')),
         original_processes=84,original_requests=7909,body_processes=83,body_requests=1171,renderer_processes=1,renderer_requests=6738,
         retained_inspection_only=True,new_native_calls=0,new_original_calls=0,production_activated=False,whole_runtime_replaced=False)

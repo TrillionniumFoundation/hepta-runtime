@@ -29,7 +29,7 @@ PARTITIONS = {
     "batch": ("batch_plan", "batch_apply", "atomic_write", "write_chain", "batch_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "line_endpoint", "line_verify",
              "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir",
-             "file_locks", "file_lock_service", "workdir_service", "sdk_connection", "public_registry"),
+             "file_locks", "file_lock_service", "workdir_service", "sdk_connection", "public_registry", "serde_error"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence",
              "binary32_json", "typed_result_json", "request_result"),
     "config": ("runtime_config",),
@@ -164,7 +164,7 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
                for names in result.values()):
         raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
     for group in (q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS),
-                  q.batch_write_pipeline.q.SUITES):
+                  q.batch_write_pipeline.q.SUITES, q.serde_error_pipeline.TESTS):
         if not any(all(name in names for name in group)
                    and [names.index(name) for name in group] == sorted(names.index(name) for name in group)
                    for names in result.values()):

@@ -262,6 +262,46 @@ class NativePipelineTests(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, "file-lock"):
                 p.partition_tests(changed)
 
+    def test_diagnostic_capture_resources_and_controls_stay_in_order(self):
+        suites = p.partition_tests()["text"]
+        expected = q.serde_error_pipeline.TESTS
+        self.assertEqual(tuple(name for name in suites if name in expected), expected)
+        for changed in (expected[::-1], (expected[0], expected[2], expected[1])):
+            modules = tuple(dict(row, test=changed[0], additional_tests=changed[1:])
+                            if row["key"] == "serde_error" else row for row in q.MODULES)
+            with self.subTest(order=changed), patch.object(q, "MODULES", modules), \
+                    self.assertRaisesRegex(ValueError, "producer and evidence"):
+                p.partition_tests()
+
+    def test_diagnostic_launcher_and_completed_outer_receipt_are_exact(self):
+        source = self.root / "source"; source.mkdir()
+        output = self.root / "output"; output.mkdir()
+        launcher = source / "fixed_launcher.py"
+        launcher.write_text("import json,sys\nassert sys.argv[1:]==['--phase','base']\n"
+                            "print(json.dumps({'reporting_fixture':True}))\n")
+        name = q.serde_error_pipeline.TESTS[0]
+        command = [sys.executable, "-I", "-B", str(launcher), "--phase", "base"]
+        report = {"phase": "native_components", "checks": []}
+        with patch.object(q, "ROOT", source), \
+                patch.object(q.serde_error_pipeline, "test_commands", return_value={name: command}):
+            for changed in (command + ["--skip"], command[:-1] + ["controls"],
+                            [sys.executable, "-I", "-B", str(source / "tests/hia_native" / name)]):
+                with self.subTest(command=changed), self.assertRaisesRegex(ValueError, "source-owned"):
+                    q.run_native_checks(output, report, (name,), q.qualification_env(),
+                        parallel_tests=(), ordered_groups=(), commands={name: changed})
+                self.assertEqual(report["checks"], [])
+            q.run_native_checks(output, report, (name,), q.qualification_env(),
+                parallel_tests=(), ordered_groups=(), commands={name: command})
+        row, summary = q.serde_error_pipeline.complete(source, output, report, name,
+                                                       command, q.completed_test_summary)
+        self.assertEqual(summary, {"reporting_fixture": True})
+        for field, changed in (("command", command + ["extra"]), ("timeout_seconds", 181),
+                               ("elapsed_seconds", 180.01), ("timed_out", True), ("exit_code", 1)):
+            broken = copy.deepcopy(report); broken["checks"][0][field] = changed
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                q.serde_error_pipeline.complete(source, output, broken, name,
+                                                command, q.completed_test_summary)
+
     def test_artifact_path_symlink_and_special_mode_refusals(self):
         folder = self.root / "data"; folder.mkdir()
         (folder / "plain").write_bytes(b"real")

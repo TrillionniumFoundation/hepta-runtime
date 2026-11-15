@@ -25,6 +25,7 @@ for path in (ROOT / 'scripts', Path(__file__).resolve().parent):
 import hia_native_batch_write_qualification as q
 import prepare_batch_body_original as body
 import prepare_batch_render_original as render
+import compare_batch_write_wide_retained as retained_wide
 from hia_native_batch_write_build import inspect_bundle, read, obj, exact, require, sha, file_record
 
 CLEARED = ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_TARGET', 'CARGO_TARGET_DIR',
@@ -46,7 +47,8 @@ def cleared(name):
     return name in CLEARED or name.startswith('HIA_') or (name.startswith('CARGO_TARGET_') and name.endswith('_RUSTFLAGS'))
 
 
-def compare(root, manifest, native_corpus, native_stdout_dir, output, *, rustc, cargo, rustfmt, offline=False):
+def compare(root, manifest, native_corpus, native_stdout_dir, output, *, rustc, cargo, rustfmt,
+            wide_admission, wide_admission_sha256, wide_invocation, offline=False):
     started = time.monotonic()
     root, manifest = Path(root).resolve(strict=True), Path(manifest).resolve(strict=True)
     native_corpus, native_stdout_dir = Path(native_corpus).resolve(strict=True), Path(native_stdout_dir).resolve(strict=True)
@@ -54,6 +56,8 @@ def compare(root, manifest, native_corpus, native_stdout_dir, output, *, rustc, 
     for name in ('tmp', 'empty-cwd'): (output / name).mkdir(mode=0o700)
     sources = q.pins(root); artifact = inspect_bundle(manifest, source_root=root)
     native = q.native_evidence(manifest, native_corpus, native_stdout_dir, root=root)
+    admitted = retained_wide.admit_native(wide_admission, wide_admission_sha256, wide_invocation,
+        root, manifest, native_corpus, native_stdout_dir, execution=True)
     selected = {name: tool(path) for name, path in [('rustc', rustc), ('cargo', cargo), ('rustfmt', rustfmt)]}
     environment = {name: value for name, value in os.environ.items() if not cleared(name)}
     environment.update(RUSTC=selected['rustc']['path'], CARGO_TARGET_DIR=str(output / 'target'), TMPDIR=str(output / 'tmp'))
@@ -69,6 +73,9 @@ def compare(root, manifest, native_corpus, native_stdout_dir, output, *, rustc, 
             clear_target_rustflags=True, selected={name: environment[name] for name in ('RUSTC', 'CARGO_TARGET_DIR', 'TMPDIR')},
             removed_names=sorted(name for name in os.environ if cleared(name))),
         projects=projects, original_build_is_fresh=True, original_replay_is_fresh=True,
+        native_wide_mode='completed-current-qualification', native_wide_processes_added=0, retained_native_wide_requests=1,
+        wide_admission_path=str(Path(wide_admission).resolve(strict=True)),
+        wide_admission_sha256=wide_admission_sha256, wide_invocation=wide_invocation, wide_admission_before=admitted,
         outer_timeout_seconds=180, inherits_outer_process_group=True, records=[],
         kernel=platform.release(), libc=list(platform.libc_ver()), original_processes=0, original_requests=0,
         production_activated=False, whole_runtime_replaced=False, remote_sftp_closed=False)
@@ -166,15 +173,30 @@ def compare(root, manifest, native_corpus, native_stdout_dir, output, *, rustc, 
         replay_render(render_binary)
         report['comparisons'] = {}
         for name, extra in [('files', ['--reference', str(root)]), ('kernel', []), ('concurrency', []), ('wide', [])]:
-            script = 'compare_batch_write_files.py' if name == 'files' else 'test_batch_write_' + name + '.py'
-            execute(name, [sys.executable, '-I', '-B', str(root / 'tests/hia_native' / script),
-                '--native', str(manifest.parent / 'batch-write.elf'), '--original', str(body_binary),
-                '--output', str(output / name), *extra])
+            if name == 'wide':
+                execute(name, [sys.executable, '-I', '-B', str(root / 'tests/hia_native/compare_batch_write_wide_retained.py'),
+                    '--root', str(root), '--bundle', str(manifest), '--native-corpus', str(native_corpus),
+                    '--native-stdout-dir', str(native_stdout_dir), '--admission', str(wide_admission),
+                    '--admission-sha256', wide_admission_sha256, '--invocation', wide_invocation,
+                    '--original', str(body_binary), '--output', str(output / name)])
+            else:
+                script = 'compare_batch_write_files.py' if name == 'files' else 'test_batch_write_' + name + '.py'
+                execute(name, [sys.executable, '-I', '-B', str(root / 'tests/hia_native' / script),
+                    '--native', str(manifest.parent / 'batch-write.elf'), '--original', str(body_binary),
+                    '--output', str(output / name), *extra])
             if name == 'files': evidence = q.files_evidence(output / name, output / (name + '.stdout'), root=root, original_sha=report['original_binaries']['body']['sha256'])
-            elif name == 'wide': evidence = q.wide_evidence(output / name, output / (name + '.stdout'), root=root, original_sha=report['original_binaries']['body']['sha256'])
+            elif name == 'wide': evidence = retained_wide.evidence(output / name, manifest, native_corpus, native_stdout_dir,
+                output / (name + '.stdout'), root=root, original_sha=report['original_binaries']['body']['sha256'])
             else: evidence = q.kernel_evidence(output / name, output / (name + '.stdout'), root=root,
                 original_sha=report['original_binaries']['body']['sha256'], concurrent=name == 'concurrency')
             report['comparisons'][name] = evidence
+        execute('wide-admission-controls', [sys.executable, '-I', '-B', str(root / 'tests/hia_native/test_batch_write_retained_wide.py'),
+            '--root', str(root), '--bundle', str(manifest), '--native-corpus', str(native_corpus),
+            '--native-stdout-dir', str(native_stdout_dir), '--admission', str(wide_admission),
+            '--invocation', wide_invocation, '--output', str(output / 'wide-admission-controls')])
+        import test_batch_write_retained_wide as retained_controls
+        report['wide_admission_controls'] = retained_controls.evidence(output / 'wide-admission-controls',
+            output / 'wide-admission-controls.stdout', wide_admission, wide_invocation, root=root)
         for name, binary in [('body', body_binary), ('render', render_binary)]:
             exact(file_record(binary), {key: report['original_binaries'][name][key] for key in ('bytes', 'sha256')}, 'batch executed original binary changed')
             exact(q.original_project_evidence(output / (name + '-project'), root, render=name == 'render'), projects[name], 'batch actual compiled original project changed')
@@ -182,6 +204,9 @@ def compare(root, manifest, native_corpus, native_stdout_dir, output, *, rustc, 
         exact(q.pins(root), sources, 'batch original recipe source closure changed')
         exact(inspect_bundle(manifest, source_root=root), artifact, 'batch native image or build receipt changed during replay')
         exact(q.native_evidence(manifest, native_corpus, native_stdout_dir, root=root), native, 'batch retained native corpus changed during original replay')
+        report['wide_admission_after'] = retained_wide.admit_native(wide_admission, wide_admission_sha256, wide_invocation,
+            root, manifest, native_corpus, native_stdout_dir, execution=True)
+        exact(report['wide_admission_after'], admitted, 'batch native wide admission changed during original recipe')
         report.update(status='PASS', original_processes=84, original_requests=7909,
             body_processes=83, body_requests=1171, renderer_processes=1, renderer_requests=6738,
             exact_trace_comparisons=58, cancellation_partial_order_comparisons=19, concurrent_cases=4,
@@ -202,7 +227,12 @@ if __name__ == '__main__':
     parser.add_argument('--root', type=Path, default=ROOT)
     for name in ('bundle', 'native-corpus', 'native-stdout-dir', 'output'): parser.add_argument('--' + name, required=True, type=Path)
     for name in ('rustc', 'cargo', 'rustfmt'): parser.add_argument('--' + name, required=True)
+    parser.add_argument('--wide-admission', type=Path, required=True)
+    parser.add_argument('--wide-admission-sha256', required=True)
+    parser.add_argument('--wide-invocation', required=True)
     parser.add_argument('--offline', action='store_true')
     args = parser.parse_args()
     compare(args.root, args.bundle, args.native_corpus, args.native_stdout_dir, args.output,
-        rustc=args.rustc, cargo=args.cargo, rustfmt=args.rustfmt, offline=args.offline)
+        rustc=args.rustc, cargo=args.cargo, rustfmt=args.rustfmt,
+        wide_admission=args.wide_admission, wide_admission_sha256=args.wide_admission_sha256,
+        wide_invocation=args.wide_invocation, offline=args.offline)

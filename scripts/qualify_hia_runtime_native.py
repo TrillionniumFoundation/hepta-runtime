@@ -69,12 +69,17 @@ import hia_native_file_lock_pipeline as file_lock_pipeline
 import hia_native_connection_qualification as connection_qualification
 import hia_native_public_registry_qualification as public_registry_qualification
 import hia_native_result_qualification as result_qualification
+import hia_native_serde_error_pipeline as serde_error_pipeline
 import hia_native_service_pipeline as service_pipeline
 import hia_native_write_chain_pipeline as write_chain_pipeline
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
+    {"key": "serde_error", "name": "serde-error", "source": "native/serde_error.hepta",
+     "standalone": "filter", "buffer_profile": "serde-json.v1",
+     "manifest_env": "HIA_SERDE_ERROR_MANIFEST", "test": "test_serde_error.py",
+     "additional_tests": ("test_serde_error_resources.py", "test_serde_error_evidence.py")},
     {"key": "batch_write", "name": "batch-write", "source": "native/batch_write.hepta",
      "builder": "batch_write", "manifest_env": "HIA_BATCH_WRITE_BUNDLE",
      "test": "test_batch_write_controller.py",
@@ -362,6 +367,7 @@ def sources() -> dict:
     paths.update(ROOT / name for name in service_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in public_registry_qualification.source_pins(ROOT))
     paths.update(ROOT / name for name in result_qualification.source_pins(ROOT))
+    paths.update(ROOT / name for name in serde_error_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in batch_write_pipeline.q.pins(ROOT))
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
@@ -489,6 +495,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
         config_commands.update(public_registry_qualification.test_commands(ROOT, output, report))
     if set(tests) & set((*result_qualification.TESTS, result_qualification.CONTROL_TEST)):
         config_commands.update(result_qualification.test_commands(ROOT, output, report))
+    if set(tests) & set(serde_error_pipeline.TESTS):
+        config_commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
     if set(tests) & set(batch_write_pipeline.q.SUITES):
         config_commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     def command(name):
@@ -966,6 +974,10 @@ def sdk_connection_evidence(output: Path, report: dict, *, create=False) -> dict
 
 def batch_write_evidence(output: Path, report: dict) -> dict:
     return batch_write_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def serde_error_evidence(output: Path, report: dict) -> dict:
+    return serde_error_pipeline.native_evidence(ROOT, output, report, completed_test_summary)
 
 
 def result_values_evidence(output: Path, report: dict) -> dict:
@@ -2330,6 +2342,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(connection_qualification.test_commands(ROOT, output, report))
     commands.update(public_registry_qualification.test_commands(ROOT, output, report))
     commands.update(result_qualification.test_commands(ROOT, output, report))
+    commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
     commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
@@ -2370,6 +2383,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["sdk_connection_evidence"] = sdk_connection_evidence(output, report, create=True)
     report["public_registry_evidence"] = public_registry_evidence(output, report, create=True)
     report["result_values_evidence"] = result_values_evidence(output, report)
+    report["serde_error_evidence"] = serde_error_evidence(output, report)
     report["batch_write_evidence"] = batch_write_evidence(output, report)
     service_pipeline.prepare_transport(ROOT, output, report, completed_test_summary)
     report["json_evidence"] = json_evidence(output, report)
@@ -2410,6 +2424,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["history_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["result_values_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["result_values_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["serde_error_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["serde_error_evidence"]["corpus_sha256"])
     # The complete batch corpus is also inspected by batch_write_evidence on
     # every admission; preserve the actual completed process and bundle roots.
     batch_names = [report["modules"]["batch_write"]["manifest"]] + [

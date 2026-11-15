@@ -1,10 +1,11 @@
 """Connect batch-write artifacts to mandatory completed aggregate processes."""
 from __future__ import annotations
 from pathlib import Path
+import os
 import sys
 
 import hia_native_batch_write_qualification as q
-from hia_native_batch_write_build import exact, require, read, sha, obj
+from hia_native_batch_write_build import exact, require, read, sha, obj, file_record
 
 KEY = 'batch_write'
 SOURCE = 'native/batch_write.hepta'
@@ -80,11 +81,46 @@ def qualification_evidence(root, output, report, completed):
 
 def original_command(root, output, report, rustc):
     root, output, rustc = Path(root), Path(output), Path(rustc)
+    from compare_batch_write_wide_retained import ADMISSION
+    admission = output / ADMISSION
+    binding = obj(admission)
     return [sys.executable, '-I', '-B', str(root / 'tests/hia_native/compare_batch_write_original.py'),
         '--root', str(root), '--bundle', str(bundle(output, report)),
         '--native-corpus', str(output / 'batch-write'), '--native-stdout-dir', str(output),
         '--output', str(output / 'batch-write-original'), '--rustc', str(rustc),
-        '--cargo', str(rustc.with_name('cargo')), '--rustfmt', str(rustc.with_name('rustfmt'))]
+        '--cargo', str(rustc.with_name('cargo')), '--rustfmt', str(rustc.with_name('rustfmt')),
+        '--wide-admission', str(admission), '--wide-admission-sha256', sha(read(admission)),
+        '--wide-invocation', binding['invocation']]
+
+
+def admit_current_wide(root, output, report, completed):
+    """Bind the already completed native process to the current recipe/run."""
+    from compare_batch_write_wide_retained import create_admission, write_new, current_invocation
+    root, output = Path(root), Path(output)
+    commands = test_commands(root, output, report)
+    completed_process(output, report, completed, 'test_batch_write_wide.py', commands['test_batch_write_wide.py'])
+    check, _ = completed(output, report, 'test_batch_write_wide.py')
+    source_files = q.pins(root)
+    for name, identity in source_files.items():
+        exact(report['source_sha256'].get(name), identity['sha256'], 'batch wide current aggregate source differs')
+    if 'original_shard' in report:
+        invocation = report['original_shard']['invocation']; current_invocation(invocation)
+        exact(report['qualification_pipeline']['invocation'], invocation, 'batch native and original invocations differ')
+        context = dict(mode='ci-original-pipeline', invocation=invocation,
+            native_seal_sha256=report['original_shard']['native_sha256'],
+            native_report=file_record(output / 'original-native-report.json'))
+    else:
+        require(os.environ.get('GITHUB_ACTIONS') != 'true', 'batch CI wide replay requires the workflow-selected native seal')
+        require(type(report.get('started_at')) is str and bool(report['started_at']),
+                'batch aggregate has no current native invocation')
+        invocation = 'aggregate:' + report['started_at']
+        receipt = output / 'batch-write-native-phase.json'
+        write_new(receipt, dict(schema='hepta.runtime.batch-native-completed-phase-snapshot.v1',
+            status='PASS', invocation=invocation, source_root=str(root), source_files=source_files,
+            completed_checks=[check], retained_observation_only=True, new_native_calls=0))
+        context = dict(mode='owned-component-validation', invocation=invocation,
+                       phase_file=receipt.name, phase=file_record(receipt))
+    return create_admission(root, output, bundle(output, report), source_files, check, context)
 
 
 def retained_original(root, output, report, rustc, completed):
@@ -107,6 +143,7 @@ def retained_original(root, output, report, rustc, completed):
 def compare_original(root, output, report, rustc, completed, record_check, env):
     before = qualification_evidence(root, output, report, completed)
     exact(before, report[KEY + '_evidence'], 'batch-write native evidence changed before original replay')
+    admit_current_wide(root, output, report, completed)
     record_check(output, report, name=RUST_CHECK, command=original_command(root, output, report, rustc), env=env, timeout=180)
     result = retained_original(root, output, report, rustc, completed)
     exact(qualification_evidence(root, output, report, completed), before, 'batch-write native evidence changed during original replay')

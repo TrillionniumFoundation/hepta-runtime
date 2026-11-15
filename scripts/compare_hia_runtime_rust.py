@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_service_pipeline as service_pipeline
 import hia_native_public_registry_qualification as public_registry_qualification
 import hia_native_result_qualification as result_qualification
+import hia_native_serde_error_pipeline as serde_error_pipeline
 import hia_native_batch_write_pipeline as batch_write_pipeline
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
                                        PARALLEL_NATIVE_SUITES,
@@ -34,7 +35,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        session_evidence, file_locks_evidence, file_lock_service_evidence,
                                        write_chain_evidence, directory_service_evidence,
                                        workdir_service_evidence, sdk_connection_evidence, public_registry_evidence, result_values_evidence,
-                                       batch_write_evidence, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
+                                       serde_error_evidence, batch_write_evidence, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
@@ -200,6 +201,12 @@ def check_input_pins(output: Path, report: dict) -> None:
         actual = batch_write_pipeline.retained_original(ROOT, output, report, rustc, completed_test_summary)
         if report["original_rust_comparisons"]["batch_write"] != actual:
             raise ValueError("complete original batch-write replay changed")
+    if report.get("serde_error_evidence") != serde_error_evidence(output, report):
+        raise ValueError("complete diagnostic native evidence changed")
+    if "serde_error" in report.get("original_rust_comparisons", {}):
+        actual = serde_error_pipeline.original_evidence(ROOT, output, report, completed_test_summary)
+        if report["original_rust_comparisons"]["serde_error"] != actual:
+            raise ValueError("complete diagnostic original replay changed")
     if report.get("result_values_evidence") != result_values_evidence(output, report):
         raise ValueError("complete typed result native evidence changed")
     for key, domain in result_qualification.KEYS.items():
@@ -1424,6 +1431,18 @@ def compare_sdk_connection(output: Path, report: dict, rustc: Path) -> dict:
                               record_check, qualification_env(), "sdk_connection")
 
 
+def compare_serde_error(output: Path, report: dict, rustc: Path) -> dict:
+    before = serde_error_evidence(output, report)
+    if before != report.get("serde_error_evidence"):
+        raise ValueError("diagnostic native evidence changed before original replay")
+    for name, command in serde_error_pipeline.original_commands(ROOT, output, report, rustc).items():
+        record_check(output, report, name=name, command=command, timeout=180, env=qualification_env())
+    actual = serde_error_pipeline.original_evidence(ROOT, output, report, completed_test_summary)
+    if serde_error_evidence(output, report) != before:
+        raise ValueError("diagnostic native corpus changed during original replay")
+    return actual
+
+
 def compare_result_values(output: Path, report: dict, rustc: Path, domain: str) -> dict:
     before = result_values_evidence(output, report)
     if before != report.get("result_values_evidence"):
@@ -1597,7 +1616,7 @@ def compare_batch_write(output: Path, report: dict, rustc: Path) -> dict:
                                                   record_check, qualification_env())
 
 
-RECIPES = {"batch_write": compare_batch_write, "runtime_bytes": compare_bytes, "text_budget": compare_text,
+RECIPES = {"serde_error": compare_serde_error, "batch_write": compare_batch_write, "runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,

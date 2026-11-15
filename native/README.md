@@ -190,7 +190,7 @@ and symlinks outside those exact fixture roots remain an admission error.
 
 ## Native components
 
-Qualification covers 113 native HIA sources through 45 executable component
+Qualification covers 114 native HIA sources through 46 executable component
 entries; the two scope profiles share their HIA scope owner. The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
@@ -255,7 +255,7 @@ These counts do not count migrated production MCP handlers.
 | [regex_controller.hepta](regex_controller.hepta) | Native continuation controller composing syntax, HIR, NFA and matching with checked child receipts and resource/domain refusals. |
 | [regex_hir.hepta](regex_hir.hepta) | Native regex HIR lowering, flags and class semantics through checked Unicode queries; complete 34,130-row original HIR domain. |
 | [regex_hir_packer.hepta](regex_hir_packer.hepta) | Fixed static native HIR executable with checked Unicode data calls and retained framing/resource refusals. |
-| [regex_match.hepta](regex_match.hepta) | Native regex matching through fixed NFA and Unicode dependencies, covering the complete 65,440 original pattern/haystack cases. |
+| [regex_match.hepta](regex_match.hepta) | Native regex matching through fixed NFA and Unicode dependencies, covering the complete 65,441 original pattern/haystack cases. |
 | [regex_nfa.hepta](regex_nfa.hepta) | Native regex NFA construction and observed original budget boundaries; two unchanged halves cover all 3,584 original cases. Unconstrained resource equivalence remains unqualified. |
 | [regex_pipeline_packer.hepta](regex_pipeline_packer.hepta) | Fixed static native regex pipeline joining syntax, HIR, NFA, matching and immutable Unicode data. |
 | [regex_syntax.hepta](regex_syntax.hepta) | Native regex AST parsing, original diagnostics and typed continuation to immutable Unicode data; complete 18,976-row original syntax domain. |
@@ -510,8 +510,8 @@ commands above remain available for the complete sequential gate.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared gate has 133 native suite processes, one fresh compiler cold
-process and 40 required original recipes. The CI groups additionally retain
+The declared gate has 136 native suite processes, one fresh compiler cold
+process and 41 required original recipes. The CI groups additionally retain
 seven actual Rust-version observations; the sequential entry retains one.
 Each recipe may contain several actual compile/replay checks, all counted from
 completed records. The configuration recipe retains both complete original
@@ -632,7 +632,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all 40 required original Rust recipes succeed. The Python reference domain
+after all 41 required original Rust recipes succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -1304,3 +1304,25 @@ the common build/loader source need actual source-matched refreshes; historical
 proofs keep their prior hashes. This component does not migrate public
 `batch_edit` parameters, authorization, remote SFTP, audit or durable results.
 All 125 production handler records and removal flags remain unchanged.
+
+### Exact JSON parse diagnostics and original batch capture custody
+
+`native/serde_error.hepta` implements the locked `serde_json 1.0.151`
+`from_slice::<Value>` diagnostic boundary with `float_roundtrip` and `raw_value`: validity,
+error category, line, column and complete `Display` bytes. Three mandatory native
+suites retain the ordinary and wide-input corpus, actual static ELF calls and
+16 evidence refusals. The original recipe freshly builds the locked Rust owner
+and replays all 98,701 inputs in two complete streams. The diagnostic result does
+not serialize a Value. The generic Value owner's special-first-key
+`$serde_json::private::RawValue` success conversion remains an explicit gap.
+
+The failed 7c4ef433 native workflows remain failed: the original batch recipe
+repeated a complete native wide execution and reached its unchanged 180-second
+process limit. The revised recipe admits this invocation's sealed full native
+capture, freshly executes the unchanged original Rust wide domain, and compares
+all 1,279,265,842 result bytes and final file contents. It retains the complete
+84 original processes and 7,909 original calls. The retained native capture is
+not reported as another native execution; 13 damaged-capture refusals and three
+accepted controls bind its current invocation, external CI seal and full bytes.
+All per-process and job limits, original native wide suites and production flags
+are unchanged.

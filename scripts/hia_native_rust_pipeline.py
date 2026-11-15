@@ -31,7 +31,7 @@ GROUPS = {
     "state": ("view_cache", "history", "session_workdir", "file_locks", "file_lock_service"),
     "services": ("write_chain", "directory_service", "workdir_service", "sdk_connection", "public_registry"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence",
-             "binary32_json", "typed_result_json", "request_result"),
+             "binary32_json", "typed_result_json", "request_result", "serde_error"),
     "config": ("runtime_config",),
     "system": ("operation_kdf", "operation_aead", "operation_nonce", "operation_record", "system_entropy",
                "operation_scope", "operation_scope_os", "caller_authority", "multi_read_service"),
