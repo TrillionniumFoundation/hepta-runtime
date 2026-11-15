@@ -17,6 +17,9 @@ on:
       - 'scripts/author_public_*'
       - 'scripts/build_public_registry.py'
       - 'scripts/build_result_values.py'
+      - 'scripts/build_result_storage.py'
+      - 'scripts/result_storage_*'
+      - 'scripts/check_result_storage_evidence.py'
       - 'scripts/result_value_registry.py'
       - 'scripts/author_serde_error.py'
       - 'scripts/serde_error_*'
@@ -98,6 +101,9 @@ on:
       - 'scripts/author_public_*'
       - 'scripts/build_public_registry.py'
       - 'scripts/build_result_values.py'
+      - 'scripts/build_result_storage.py'
+      - 'scripts/result_storage_*'
+      - 'scripts/check_result_storage_evidence.py'
       - 'scripts/result_value_registry.py'
       - 'scripts/author_serde_error.py'
       - 'scripts/serde_error_*'
@@ -245,7 +251,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [batch, text, json, config, system]
+        group: [storage, batch, text, json, config, system]
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -494,9 +500,19 @@ jobs:
       invocation: ${{ github.run_id }}-${{ github.run_attempt }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
 
+  original_storage:
+    name: Complete original storage recipes
+    needs: native_collect
+    uses: ./.github/workflows/hia-runtime-original-shard.yml
+    with:
+      group: storage
+      runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+
   qualify:
     name: All native evidence and complete original Rust comparisons
-    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch]
+    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -565,7 +581,8 @@ jobs:
             --shard-sha256 "json=${{ needs.original_json.outputs.sha256 }}" \
             --shard-sha256 "config=${{ needs.original_config.outputs.sha256 }}" \
             --shard-sha256 "system=${{ needs.original_system.outputs.sha256 }}" \
-            --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}"
+            --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
+            --shard-sha256 "storage=${{ needs.original_storage.outputs.sha256 }}"
 
       - name: Reject altered configuration and regex evidence
         id: regex

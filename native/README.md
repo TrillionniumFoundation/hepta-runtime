@@ -14,6 +14,34 @@ partial original-tool coverage; configured remote hosts and complete original
 authorization behavior remain outside that profile. Production activation and
 deletion of the original runtime remain incomplete.
 
+## Private result storage components
+
+The [result storage integration](result_storage_integration.md) adds nine native
+owners for typed retained records, record validation, safe result projections,
+retention decisions, descriptor record I/O, private store directories, archive
+metadata, anchor publication and held archive/shard identity. The fixed profile
+contains 30 compiled modules and six static compositions. These components keep
+the original result and filesystem ordering within their documented private
+interfaces; they do not activate public request retention or replace the shared
+audit and storage lifecycle.
+
+All 13 native domains and nine fresh original Rust recipes are mandatory. Their
+processes retain the existing 180-second limits. The separate storage native
+partition and original group preserve every previous gate and the 15-minute job
+limit. Completed aggregate processes retain their actual PID, wait result,
+complete output and source-bound command; retained observations alone cannot
+replace those process records. After all original groups complete, 25 evidence
+mutations must be refused and every changed byte restored, followed by complete
+native and original re-admission.
+
+The scoped v4 qualification passed all thirteen native domains and 3,953 actual
+original processes covering 34,884 requests. The original count includes
+explicit startup refusals and killed requests; it does not assert that each
+request produced a reply. Its historical failed harness runs remain retained.
+The current integration still requires the fresh aggregate CI gate. Complete
+result storage, public activation and old-stack removal remain false. Readiness,
+audit and later archive acquisition work are separate dependencies.
+
 ## Fixed source baseline
 
 | Input | Exact Git identity |

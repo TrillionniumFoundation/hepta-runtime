@@ -121,7 +121,8 @@ class NativePipelineTests(unittest.TestCase):
         flat = [name for tests in partitions.values() for name in tests]
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(set(flat), set(q.native_tests()))
-        self.assertEqual(set(partitions), {"batch", "text", "json", "config", "system"})
+        self.assertEqual(set(partitions), {"batch", "text", "json", "config", "system", "storage"})
+        self.assertEqual(partitions["storage"], q.storage_pipeline.TESTS)
         config = next(row for row in q.MODULES if row["key"] == "runtime_config")
         self.assertEqual(partitions["config"], (config["test"], *config["additional_tests"]))
         self.assertTrue(set(partitions["config"]).isdisjoint(partitions["json"]))
@@ -152,7 +153,7 @@ class NativePipelineTests(unittest.TestCase):
             with self.subTest(bad=bad), patch.object(q, "MODULES", modules), self.assertRaises(ValueError):
                 p.partition_tests(changed)
 
-    def test_workflow_requires_all_five_partitions_with_unchanged_process_and_job_limits(self):
+    def test_workflow_requires_all_six_partitions_with_unchanged_process_and_job_limits(self):
         workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
         block = workflow.split("\n  native:\n", 1)[1].split("\n  aggregate:\n", 1)[0]
         groups = re.search(r"^        group: \[([^\]]+)\]$", block, re.MULTILINE)
@@ -452,7 +453,7 @@ class NativePipelineTests(unittest.TestCase):
     def test_missing_or_duplicate_shards_cannot_reach_evidence_owners(self):
         source, prepared, report, destination = self.actual_fixture()
         shards = self.root / "shards"; shards.mkdir()
-        for group in ("one", "two", "three", "four", "five"):
+        for group in ("one", "two", "three", "four", "five", "six"):
             shutil.copytree(destination, shards / group)
         output = self.root / "collect"; output.mkdir()
         with patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())), \
@@ -462,12 +463,12 @@ class NativePipelineTests(unittest.TestCase):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
             self.assertEqual(p.read_json(output / "result.json")["status"], "FAIL")
-            shutil.rmtree(shards / "five")
-            with self.assertRaisesRegex(ValueError, "exactly five"):
+            shutil.rmtree(shards / "six")
+            with self.assertRaisesRegex(ValueError, "exactly six"):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
 
-    def test_five_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
+    def test_six_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
         from contextlib import ExitStack
         from datetime import datetime, timezone
         source = self.root / "source"
@@ -506,7 +507,7 @@ class NativePipelineTests(unittest.TestCase):
             evidence = stack.enter_context(patch.object(q, "collect_native_evidence"))
             stack.enter_context(patch.object(q, "finish_native", side_effect=finish))
             result = p.collect(output, self.root / "compiler", "b" * 64, "five-actual-processes", artifacts)
-            self.assertEqual(result["checks"], 6)
+            self.assertEqual(result["checks"], 7)
             evidence.assert_called_once()
             report = p.read_json(output / "result.json")
             self.assertEqual([row["name"] for row in report["checks"][1:]], list(names))

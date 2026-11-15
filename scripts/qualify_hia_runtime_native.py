@@ -70,12 +70,41 @@ import hia_native_connection_qualification as connection_qualification
 import hia_native_public_registry_qualification as public_registry_qualification
 import hia_native_result_qualification as result_qualification
 import hia_native_serde_error_pipeline as serde_error_pipeline
+import hia_native_result_storage_pipeline as storage_pipeline
 import hia_native_service_pipeline as service_pipeline
 import hia_native_write_chain_pipeline as write_chain_pipeline
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
+    {"key": "request_storage_json", "name": "request-storage-json", "source": "native/request_storage_json.hepta",
+     "builder": "result_storage", "manifest_env": "HIA_RESULT_STORAGE_BUILD", "test": "test_result_storage_json.py"},
+    {"key": "request_record_validation", "name": "request-record-validation", "source": "native/request_record_validation.hepta",
+     "builder": "result_storage", "manifest_env": "HIA_RESULT_STORAGE_BUILD", "test": "test_result_record_validation.py"},
+    {"key": "request_safe_dto", "name": "request-safe-dto", "source": "native/request_safe_dto.hepta",
+     "builder": "result_storage", "manifest_env": "HIA_RESULT_STORAGE_BUILD", "test": "test_result_safe_dto.py",
+     "companion_sources": ("native/config_result_owner.hepta", "native/config_result_packer.hepta")},
+    {"key": "request_retention", "name": "request-retention", "source": "native/request_retention.hepta",
+     "builder": "result_storage", "manifest_env": "HIA_RESULT_STORAGE_BUILD", "test": "test_result_retention.py"},
+    {"key": "request_record_io", "name": "request-record-io", "source": "native/request_record_io.hepta",
+     "builder": "result_storage", "manifest_env": "HIA_RESULT_STORAGE_BUILD", "test": "result-storage-record-io",
+     "additional_tests": ("result-storage-record-io-faults",),
+     "companion_sources": ("native/request_record_io_packer.hepta",)},
+    {"key": "request_store_directory", "name": "request-store-directory", "source": "native/request_store_directory.hepta",
+     "builder": "result_storage", "manifest_env": "HIA_RESULT_STORAGE_BUILD", "test": "result-storage-directory",
+     "companion_sources": ("native/request_store_directory_packer.hepta",)},
+    {"key": "request_archive_metadata", "name": "request-archive-metadata", "source": "native/request_archive_metadata.hepta",
+     "builder": "result_storage", "manifest_env": "HIA_RESULT_STORAGE_BUILD", "test": "result-storage-archive-metadata",
+     "additional_tests": ("result-storage-archive-metadata-faults",),
+     "companion_sources": ("native/request_archive_metadata_packer.hepta",)},
+    {"key": "request_archive_publish", "name": "request-archive-publish", "source": "native/request_archive_publish.hepta",
+     "builder": "result_storage", "manifest_env": "HIA_RESULT_STORAGE_BUILD", "test": "result-storage-archive-publish",
+     "additional_tests": ("result-storage-archive-publish-faults",),
+     "companion_sources": ("native/request_archive_publish_packer.hepta",)},
+    {"key": "request_archive_store", "name": "request-archive-store", "source": "native/request_archive_store.hepta",
+     "builder": "result_storage", "manifest_env": "HIA_RESULT_STORAGE_BUILD", "test": "result-storage-archive-store",
+     "additional_tests": ("result-storage-archive-store-faults",),
+     "companion_sources": ("native/request_archive_store_packer.hepta",)},
     {"key": "serde_error", "name": "serde-error", "source": "native/serde_error.hepta",
      "standalone": "filter", "buffer_profile": "serde-json.v1",
      "manifest_env": "HIA_SERDE_ERROR_MANIFEST", "test": "test_serde_error.py",
@@ -368,6 +397,7 @@ def sources() -> dict:
     paths.update(ROOT / name for name in public_registry_qualification.source_pins(ROOT))
     paths.update(ROOT / name for name in result_qualification.source_pins(ROOT))
     paths.update(ROOT / name for name in serde_error_pipeline.sources(ROOT))
+    paths.update(ROOT / name for name in storage_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in batch_write_pipeline.q.pins(ROOT))
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
@@ -416,6 +446,8 @@ def record_check(output: Path, report: dict, *, name: str, command: list[str],
     stdout, stderr = b"", b""
     code, start_error = None, None
     timed_out = False
+    process = None
+    storage_process = storage_pipeline.process_folder(output, name) is not None
     try:
         process = subprocess.Popen(command, cwd=ROOT, env=env, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -429,7 +461,13 @@ def record_check(output: Path, report: dict, *, name: str, command: list[str],
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            stdout, stderr = process.communicate()
+            if storage_process:
+                try:
+                    stdout, stderr = process.communicate(timeout=3)
+                except subprocess.TimeoutExpired as cleanup:
+                    stdout, stderr = cleanup.stdout or b"", cleanup.stderr or b""
+            else:
+                stdout, stderr = process.communicate()
             stdout = stdout if stdout is not None else exc.stdout or b""
             stderr = stderr if stderr is not None else exc.stderr or b""
         code = process.returncode
@@ -449,8 +487,16 @@ def record_check(output: Path, report: dict, *, name: str, command: list[str],
         check["summary"] = process_summary(name, stdout)
     except (ValueError, UnicodeDecodeError):
         pass
+    completion_error = None
+    if storage_process:
+        try:
+            storage_pipeline.finish_actual_process(ROOT, output, check, process, stdout, stderr)
+        except Exception as error:
+            completion_error = error
     report["checks"].append(check)
     save_report(output / "result.json" if report_path is None else report_path, report)
+    if completion_error is not None:
+        raise completion_error
     if start_error or timed_out or code != 0:
         reason = "timed out" if timed_out else "could not start" if start_error else "failed"
         raise RuntimeError(name + " " + reason + "; original stdout/stderr retained")
@@ -497,6 +543,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
         config_commands.update(result_qualification.test_commands(ROOT, output, report))
     if set(tests) & set(serde_error_pipeline.TESTS):
         config_commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
+    if set(tests) & set(storage_pipeline.TESTS):
+        config_commands.update(storage_pipeline.test_commands(ROOT, output, report))
     if set(tests) & set(batch_write_pipeline.q.SUITES):
         config_commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     def command(name):
@@ -978,6 +1026,10 @@ def batch_write_evidence(output: Path, report: dict) -> dict:
 
 def serde_error_evidence(output: Path, report: dict) -> dict:
     return serde_error_pipeline.native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def result_storage_evidence(output: Path, report: dict, *, create: bool = False) -> dict:
+    return storage_pipeline.native_evidence(ROOT, output, report, completed_test_summary, create=create)
 
 
 def result_values_evidence(output: Path, report: dict) -> dict:
@@ -2221,7 +2273,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / SCOPE_OS_FOLDER).mkdir(mode=0o700)
     (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
     for item in MODULES:
-        if item.get("builder") == "result_values":
+        if item.get("builder") == "result_storage":
+            built = storage_pipeline.build_storage(hepta, output / "build", ROOT)
+        elif item.get("builder") == "result_values":
             built = result_qualification.build_result_values(hepta, output / "build", ROOT)
         elif item.get("builder") == "io":
             from hia_native_io_build import build_io
@@ -2343,6 +2397,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(public_registry_qualification.test_commands(ROOT, output, report))
     commands.update(result_qualification.test_commands(ROOT, output, report))
     commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
+    commands.update(storage_pipeline.test_commands(ROOT, output, report))
     commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
@@ -2384,6 +2439,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["public_registry_evidence"] = public_registry_evidence(output, report, create=True)
     report["result_values_evidence"] = result_values_evidence(output, report)
     report["serde_error_evidence"] = serde_error_evidence(output, report)
+    report["result_storage_evidence"] = result_storage_evidence(output, report, create=True)
     report["batch_write_evidence"] = batch_write_evidence(output, report)
     service_pipeline.prepare_transport(ROOT, output, report, completed_test_summary)
     report["json_evidence"] = json_evidence(output, report)
@@ -2426,6 +2482,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["result_values_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["serde_error_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["serde_error_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["result_storage_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["result_storage_evidence"]["corpus_sha256"])
     # The complete batch corpus is also inspected by batch_write_evidence on
     # every admission; preserve the actual completed process and bundle roots.
     batch_names = [report["modules"]["batch_write"]["manifest"]] + [

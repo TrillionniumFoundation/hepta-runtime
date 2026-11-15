@@ -53,6 +53,99 @@ class QualificationReportingTests(unittest.TestCase):
             (folder / name).write_text(prefix + program)
         return root
 
+    def test_storage_actual_completion_binds_wait_pid_and_complete_streams(self):
+        import qualify_hia_runtime_native as qualifier
+        helper = qualifier.storage_pipeline
+        name = helper.NAMES['storage_json']
+        command = [sys.executable, '-I', '-B', '-c',
+            "import json,os;print(json.dumps({'status':'PASS','actual_pid':os.getpid()}))"]
+        qualifier.record_check(self.output, self.report, name=name, command=command, timeout=180)
+        receipt, summary = helper.completed_process(ROOT, self.output, self.report, name,
+            command, qualifier.completed_test_summary)
+        self.assertEqual(receipt['pid'], summary['actual_pid'])
+        self.assertTrue(receipt['process_reaped'])
+        self.assertFalse(receipt['outer_parent_death_cleanup_qualified'])
+        self.assertEqual(receipt['actual_aggregate_check'], self.report['checks'][0])
+        folder = helper.process_folder(self.output, name)
+        original = (folder / 'stdout').read_bytes()
+        (folder / 'stdout').write_bytes(original + b' ')
+        with self.assertRaisesRegex(ValueError, 'stream changed'):
+            helper.completed_process(ROOT, self.output, self.report, name,
+                command, qualifier.completed_test_summary)
+        (folder / 'stdout').write_bytes(original)
+        helper.completed_process(ROOT, self.output, self.report, name,
+            command, qualifier.completed_test_summary)
+
+    def test_storage_control_launcher_imports_under_isolation_from_any_cwd(self):
+        import subprocess
+        import qualify_hia_runtime_native as qualifier
+        helper = qualifier.storage_pipeline
+        command = helper.control_command(ROOT, self.output) + ['--help']
+        actual = subprocess.run(command, cwd=self.output, env=qualifier.qualification_env(),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15, check=False)
+        self.assertEqual(actual.returncode, 0, actual.stderr.decode(errors='replace'))
+        self.assertFalse(actual.stderr)
+        self.assertIn(b'--run-controls', actual.stdout)
+
+    def test_storage_success_retires_its_actual_descendant_group(self):
+        import os
+        import time
+        import qualify_hia_runtime_native as qualifier
+        helper = qualifier.storage_pipeline;name = helper.NAMES['record_validation']
+        pid_file = self.output / 'owned-child.pid'
+        program = ("import subprocess,sys,pathlib,json\n"
+            "p=subprocess.Popen([sys.executable,'-I','-B','-c','import time;time.sleep(60)'],"
+            "stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\n"
+            "pathlib.Path(sys.argv[1]).write_text(str(p.pid))\n"
+            "print(json.dumps({'status':'PASS','owned_child':p.pid}))\n")
+        command = [sys.executable, '-I', '-B', '-c', program, str(pid_file)]
+        qualifier.record_check(self.output, self.report, name=name, command=command, timeout=180)
+        child = int(pid_file.read_text());deadline = time.monotonic() + 3
+        while True:
+            path = Path('/proc') / str(child) / 'stat'
+            if not path.exists() or path.read_text().rsplit(')', 1)[1].split()[0] == 'Z':
+                break
+            if time.monotonic() >= deadline:
+                os.kill(child, 9)
+                self.fail('the source-owned process group retained a live descendant')
+            time.sleep(.005)
+        helper.completed_process(ROOT, self.output, self.report, name,
+            command, qualifier.completed_test_summary)
+
+    def test_storage_failure_and_timeout_preserve_actual_refusals(self):
+        import qualify_hia_runtime_native as qualifier
+        helper = qualifier.storage_pipeline
+        cases = ((helper.NAMES['safe_dto'], "print('original failure',flush=True);raise SystemExit(7)", 180),
+                 (helper.NAMES['retention'], "import time;print('before timeout',flush=True);time.sleep(60)", 1))
+        for name, program, timeout in cases:
+            with self.subTest(name=name), self.assertRaises(RuntimeError):
+                qualifier.record_check(self.output, self.report, name=name,
+                    command=[sys.executable, '-I', '-B', '-c', program], timeout=timeout)
+            row = json.loads((helper.process_folder(self.output, name) / 'result.json').read_bytes())
+            self.assertNotEqual(row['exit_code'], 0)
+            self.assertTrue(row['process_reaped'])
+            self.assertEqual(row['timed_out'], timeout != 180)
+            self.assertTrue((helper.process_folder(self.output, name) / 'stdout').read_bytes())
+
+    def test_storage_completion_refuses_changed_limits_and_consistent_argv_edits(self):
+        import copy
+        import qualify_hia_runtime_native as qualifier
+        helper = qualifier.storage_pipeline;name = helper.NAMES['storage_json']
+        command = [sys.executable, '-I', '-B', '-c', "print('{\"status\":\"PASS\"}')"]
+        qualifier.record_check(self.output, self.report, name=name, command=command, timeout=180)
+        folder = helper.process_folder(self.output, name);path = folder / 'result.json'
+        original = path.read_bytes();baseline = copy.deepcopy(self.report['checks'][0])
+        for key, changed in (('command', command + ['--unobserved']), ('timeout_seconds', 181), ('timed_out', True)):
+            row = copy.deepcopy(baseline);row[key] = changed;self.report['checks'][0] = row
+            private = json.loads(original);private[key] = changed;private['actual_aggregate_check'] = row
+            path.write_text(json.dumps(private))
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                helper.completed_process(ROOT, self.output, self.report, name,
+                    command, qualifier.completed_test_summary)
+        self.report['checks'][0] = baseline;path.write_bytes(original)
+        helper.completed_process(ROOT, self.output, self.report, name,
+            command, qualifier.completed_test_summary)
+
     def test_independent_wait_process_runs_during_sequential_work(self):
         import qualify_hia_runtime_native as qualifier
         root = self.wait_fixture({

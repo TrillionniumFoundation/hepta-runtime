@@ -115,7 +115,8 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def collect(self):
         with patch.object(r, "run_result_values_controls", self.control(p.CONTROLS[0])), \
-             patch.object(r, "run_public_registry_controls", self.control(p.CONTROLS[1])):
+             patch.object(r, "run_public_registry_controls", self.control(p.CONTROLS[1])), \
+             patch.object(r, "run_result_storage_controls", self.control(p.CONTROLS[2])):
             return p.collect(self.output, self.compiler, self.native_sha, self.invocation, self.shards, self.expected)
 
     def change_report(self, group, mutation, *, update_workflow=False):
@@ -131,10 +132,11 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_registry_covers_every_recipe_once_and_keeps_shared_builds_together(self):
         flat = [key for keys in p.groups().values() for key in keys]
-        self.assertEqual(len(flat), 41)
+        self.assertEqual(len(flat), 50)
         self.assertEqual(set(flat), set(r.RECIPES))
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(p.GROUPS["config"], ("runtime_config",))
+        self.assertEqual(p.GROUPS["storage"], tuple(r.storage_pipeline.KEYS))
         self.assertTrue(set(r.result_qualification.KEYS) <= set(p.GROUPS["json"]))
         self.assertTrue(set(r.PARALLEL_RUST_RECIPES) <= set(p.GROUPS["system"]))
         self.assertTrue({"write_chain", "workdir_service"} <= set(p.GROUPS["services"]))
@@ -181,7 +183,7 @@ class OriginalPipelineTests(unittest.TestCase):
         self.assertEqual(set(report["original_rust_comparisons"]), set(r.RECIPES))
         self.assertTrue(all(item["actual_python_process_fixture_only"]
                             for item in report["original_rust_comparisons"].values()))
-        self.assertEqual([row["name"] for row in report["checks"]][-2:], list(p.CONTROLS))
+        self.assertEqual([row["name"] for row in report["checks"]][-len(p.CONTROLS):], list(p.CONTROLS))
         self.assertEqual(report["json_reference_build"], self.json_build)
         p.verify_collected_receipts(self.output, report)
 
@@ -224,7 +226,7 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_missing_group_cannot_become_complete(self):
         shutil.rmtree(self.shards / "config")
-        with self.assertRaisesRegex(ValueError, "exactly seven"):
+        with self.assertRaisesRegex(ValueError, "exactly eight"):
             self.collect()
 
     def test_duplicate_group_cannot_replace_another_group(self):
