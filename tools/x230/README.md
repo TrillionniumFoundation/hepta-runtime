@@ -257,125 +257,82 @@ report hashes or numerical results.
 
 ## Fairness aggregation and comparison gates
 
-`build_x230_fairness_evidence.py` handles the separate fairness schema. It pins
-the reviewed generic evidence helper by SHA256 and retains every raw wave, row,
-refusal, timeout, invalid admission gate, metadata failure and resource sampling
-error. Head and tail rates use the full cell elapsed-time denominator; CPU is
-reported for the complete cell rather than allocated to a role. Their latency
-quantiles include failed calls.
+The current checkout keeps `build_x230_fairness_evidence_v4.py` and
+`x230-fairness-qualified-versions-a24.json`. The v4 builder supports A20/A21,
+A20/A22, A20/A23 and A20/A24 comparisons, together with same-version smoke
+checks. It preserves the earlier statistical and admission calculations and
+pins the completed A20/A21/A22/A23 qualification identities.
 
 ```sh
-python3 build_x230_fairness_evidence.py \
+python3 build_x230_fairness_evidence_v4.py \
   --input "$original_fairness_report" --output "$new_fairness_evidence" \
-  --baseline A20 --candidate A21 --mode comparison \
-  --harness "$measured_fairness_harness" \
-  --base-driver "$measured_observation_driver"
-```
-
-The two helper paths must match the exact hashes recorded by that run; use the
-publication manifest to distinguish measured originals from portable copies.
-A performance comparison is emitted only after checking A20/A21 ABBA order and
-continuous round indices, two rounds per version, 16 waves and 160 calls per
-cell per version, 32 cold read calls per version, complete metadata cursor
-chains and admission receipts, unchanged inputs, and both measured helper
-hashes. It independently recomputes whether a head completed before the first
-tail started, and whether final history records actually completed. A complete
-comparison can still contain explicit RPC failures; success counts, goodput
-and each version's verdict remain separate. The helper does not infer adoption.
-
-For an A20/A20 pipeline check, select `--baseline A20 --candidate A20 --mode
-smoke`. Smoke retains distinct A/B records and never emits a performance
-comparison, even if its call counts happen to match the full experiment.
-Incomplete or invalid comparisons retain their complete available evidence and
-show the unmet comparison requirements. Output files are create-only.
-
-## Qualified version provenance for fairness v2
-
-`build_x230_fairness_evidence_v2.py` preserves the reviewed v1 statistics,
-admission gates, failure retention and separate A/B verdicts. It adds explicit
-qualification provenance for A20/A21 or A20/A22 comparisons. The v1 builder and
-its existing evidence remain unchanged. Both v2 and its qualified-version
-registry are separate artifacts with their own exact hashes.
-
-The registry maps each version label to its binary SHA256, tested-source-map
-SHA256, source-file count and original qualification-report SHA256. Create an
-A22 entry only from its completed, successful qualification; do not prefill
-unmeasured or placeholder hashes. The builder requires matching binary hashes
-in the fairness report and the original qualification report, a qualified
-verdict, successful format/fmt-check/Clippy/test/release stages, and identical
-tested/after source maps. Known A20/A21 entries are pinned; an A22 label cannot
-reuse either known binary, source map or original qualification report.
-
-```sh
-python3 build_x230_fairness_evidence_v2.py \
-  --input "$original_fairness_report" --output "$new_fairness_evidence" \
-  --baseline A20 --candidate A22 --mode comparison \
+  --baseline A20 --candidate A24 --mode comparison \
   --harness "$measured_fairness_harness" \
   --base-driver "$measured_observation_driver" \
-  --registry "$qualified_version_registry" \
+  --registry x230-fairness-qualified-versions-a24.json \
   --baseline-qualification "$original_A20_qualification_report" \
-  --candidate-qualification "$original_A22_qualification_report"
+  --candidate-qualification "$original_A24_qualification_report"
 ```
 
-The two qualification inputs are the complete original
-`qualification-report.json` files retained in the private x230 qualification
-directories. Preserve their exact bytes when copying them locally. The registry
-binds their raw-file SHA256s. A published compact qualification receipt can
-corroborate the binary/source-map values; the registry separately declares the
-original-report hashes. A compact receipt's sanitized or wrapped bytes are not
-the original report and cannot be substituted for these CLI inputs. Original
-qualification reports can contain private paths and belong outside the public
-repository.
+The builder retains every raw wave, row, refusal, timeout, invalid admission
+gate, metadata failure and resource sampling error. Head and tail rates use
+the full cell elapsed-time denominator; CPU is reported for the complete cell,
+including metadata queries, and is not allocated to a role or cold probes.
+Latency quantiles include failed calls. Output files are create-only.
+
+A performance comparison requires ABBA order and continuous round indices,
+two rounds per version, 16 waves and 160 calls per cell per version, 32 cold
+read calls per version, complete metadata cursor chains and admission receipts,
+unchanged inputs, and both measured helper hashes. The builder independently
+recomputes whether a head completed before the first tail started and whether
+final history records actually completed. Incomplete comparisons retain their
+available evidence and unmet requirements. A complete comparison may contain
+RPC failures; success counts, goodput and each version's verdict remain separate.
+For a pipeline check, use the same baseline/candidate label and `--mode smoke`;
+smoke keeps distinct A/B records and never emits a performance comparison.
+
+The registry binds each version's binary SHA256, tested-source-map SHA256,
+source-file count and original qualification-report SHA256. The qualification
+inputs must be the complete original private `qualification-report.json` bytes,
+with successful format/fmt-check/Clippy/test/release stages and identical
+tested/after source maps. A compact published receipt cannot replace them.
+A candidate cannot relabel a known binary, source map or qualification report.
+Do not put private qualification inputs in the public repository.
 
 Source-map hashes use sorted, compact UTF-8 JSON with `(',', ':')` separators
-and no trailing newline. This differs from the newline-terminated evidence-file
-serialization. The v2 helper reads and hashes the original qualification report
-bytes; it does not independently rehash the executable or every source file and
-reports that boundary explicitly. Reconstructing source or binary artifacts is
-a separate verification step.
+and no trailing newline. Evidence-file serialization includes a trailing newline.
+The builder checks original qualification bytes and the measured fairness and
+observation helpers locally; it does not independently rehash executables or
+every source file. Reconstructing those artifacts is a separate verification.
+No provenance check or comparison implies adoption.
 
-Use the exact measured fairness and observation helpers for the run's helper
-hash checks. CPU remains attributed to complete cells, including metadata
-queries; it is not allocated to cold probes. A verified provenance chain does
-not imply successful observations, a performance improvement or adoption.
+### Historical fairness builders
 
-## Qualified version provenance for fairness v3
+The superseded v1–v3 builders and A22/A23 registries are retained at the exact
+pre-cleanup source checkpoint. Use these originals when reproducing an earlier
+output schema; v4 does not emit v1/v2/v3 byte-identical publications. The original
+[historical instructions](https://github.com/TrillionniumFoundation/hepta-runtime/blob/ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97/tools/x230/README.md#fairness-aggregation-and-comparison-gates)
+record their CLI arguments and interpretation.
 
-`build_x230_fairness_evidence_v3.py` adds A23 to the allowed separately qualified
-candidate labels and pins the completed A22 qualification. Existing v1/v2
-builders and their evidence remain unchanged. The v3 statistical and admission
-gate functions are unchanged; the same real A22 input preserves the v2 numerical
-results and verdicts. An A23 label cannot reuse A20, A21 or A22 qualification
-identities. It requires the actual successful original qualification report and
-a registry entry derived from that report, with no placeholder hashes.
+| Original | Purpose | Original registry |
+|----------|---------|-------------------|
+| [v1](https://github.com/TrillionniumFoundation/hepta-runtime/blob/ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97/tools/x230/build_x230_fairness_evidence.py) | A20/A21 statistics and admission gates | No qualification registry |
+| [v2](https://github.com/TrillionniumFoundation/hepta-runtime/blob/ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97/tools/x230/build_x230_fairness_evidence_v2.py) | Adds explicit qualified-version provenance through A22 | [A22 registry](https://github.com/TrillionniumFoundation/hepta-runtime/blob/ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97/tools/x230/x230-fairness-qualified-versions-a22.json) |
+| [v3](https://github.com/TrillionniumFoundation/hepta-runtime/blob/ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97/tools/x230/build_x230_fairness_evidence_v3.py) | Pins A22 and permits separately qualified A23 | [A23 registry](https://github.com/TrillionniumFoundation/hepta-runtime/blob/ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97/tools/x230/x230-fairness-qualified-versions-a23.json) |
 
-Use the v2 command above with the v3 script, `--candidate A23`, and the original
-A23 qualification report plus its matching registry. The qualification input is
-still the raw private report, not a published compact receipt. The two measurement
-helpers must still match the original hashes recorded by the experiment. No
-comparison, provenance check or registry entry implies adoption.
+The retained A24 registry contains the unchanged earlier registry entries.
+`publication-manifest.json` remains the immutable dated publication record:
+its historical paths and original/published hashes describe the artifacts at
+publication time, including the originals now accessible through Git history.
+It is not an inventory of the current checkout.
 
-
-## Qualified version provenance for fairness v4
-
-`build_x230_fairness_evidence_v4.py` and
-`x230-fairness-qualified-versions-a24.json` add the actual, separately qualified
-A24 source and binary. Use the preceding command with the v4 script,
-`--candidate A24`, and this A24 registry. An A24 label must match the complete
-raw qualification report, the actual formatted 150-file source map, and the
-release binary. It cannot borrow another version's qualification.
-
-The earlier helpers and registries remain unchanged. The v4 helper preserves
-v3's statistical calculations, failed rows, admission checks and comparison
-gates. Local analysis replayed both existing A23 fairness attempts with the
-same eleven outcome fields as v3 and rejected 33 invalid provenance cases.
-These two new publication files are exact byte copies of the reviewed inputs.
-
-**No A24 fairness experiment was executed.** The preceding C16 series stopped
-when its second A24 controller failed a master socket ownership check. The
-prepared helper supplies provenance validation for a future experiment; its
-presence does not supply a passing A24 comparison. The complete partial C16
-record and failure explanation are linked from the
+**No A24 fairness experiment was executed.** Local analysis replayed both
+existing A23 fairness attempts with the same eleven outcome fields as v3 and
+rejected 33 invalid provenance cases. The prepared v4 helper and A24 registry
+are exact copies of those reviewed inputs; their presence supplies no passing
+A24 comparison. The preceding C16 series stopped when its second A24 controller
+failed a master socket ownership check. The complete partial C16 record and
+failure explanation are linked from the
 [A24 optimization record](../../docs/X230_OPTIMIZATION_20261023.md#a24-request-local-agent-timeout-qualified-first-comparison-incomplete).
 
 ## D2 diagnostic calibration

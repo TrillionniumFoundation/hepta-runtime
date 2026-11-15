@@ -266,7 +266,7 @@ fn parse_macho(data: &[u8]) -> Result<HeaderInfo> {
 // See LICENSES/REA-MIT.txt for its copyright/license notice.
 /// Subset of REA 6.8.0's known safetensors bit-width table.
 /// Unknown dtypes are retained as unknown, not rejected as absent.
-fn safetensors_bits(dtype: &str) -> Option<u64> {
+pub(super) fn safetensors_bits(dtype: &str) -> Option<u64> {
 	match dtype {
 		"F4" => Some(4),
 		"F6_E2M3" | "F6_E3M2" => Some(6),

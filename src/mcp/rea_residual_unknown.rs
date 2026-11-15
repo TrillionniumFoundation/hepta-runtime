@@ -9,8 +9,8 @@
 //! File admission and blocking-owner cancellation remain with the caller.
 
 use super::{
-	checked_string, child, digest_fields, SourceResult, Validation, AUTHORITY, CONFIDENCE,
-	ISOLATION,
+	checked_string, child, digest_fields, length_checks::js_space, SourceResult, Validation,
+	AUTHORITY, CONFIDENCE, ISOLATION,
 };
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -46,25 +46,6 @@ const DIMENSIONS: &[&str] = &[
 	"strings_names",
 	"cfg",
 ];
-
-// ECMAScript WhiteSpace + LineTerminator. Rust is_whitespace includes NEL and
-// excludes BOM, so using it would change both normalization and stable IDs.
-fn js_space(c: char) -> bool {
-	matches!(
-		c,
-		'\u{0009}'..='\u{000d}'
-			| '\u{0020}'
-			| '\u{00a0}'
-			| '\u{1680}'
-			| '\u{2000}'..='\u{200a}'
-			| '\u{2028}'
-			| '\u{2029}'
-			| '\u{202f}'
-			| '\u{205f}'
-			| '\u{3000}'
-			| '\u{feff}'
-	)
-}
 
 fn trim_field(map: &mut Map<String, Value>, key: &str) {
 	if let Some(Value::String(text)) = map.get_mut(key) {

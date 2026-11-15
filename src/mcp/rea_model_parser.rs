@@ -25,6 +25,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
+use super::super::rea::safetensors_bits;
 use super::{digest_hex, observed_version, Collection, MAX_HEADER_BYTES, MAX_READ_BYTES};
 
 const MAX_ROWS: usize = 100_000;
@@ -482,21 +483,6 @@ fn parse_gguf(mut reader: HeaderReader<'_>) -> Result<Directory> {
 		metadata,
 		limitations,
 	})
-}
-
-// This dtype table follows the existing native REA preview. The REA-derived
-// type mapping retains its upstream attribution in LICENSES/REA-MIT.txt.
-fn safetensors_bits(dtype: &str) -> Option<u64> {
-	match dtype {
-		"F4" => Some(4),
-		"F6_E2M3" | "F6_E3M2" => Some(6),
-		"BOOL" | "I8" | "U8" | "F8_E5M2" | "F8_E4M3" | "F8_E8M0" | "F8_E4M3FNUZ"
-		| "F8_E5M2FNUZ" => Some(8),
-		"I16" | "U16" | "F16" | "BF16" => Some(16),
-		"I32" | "U32" | "F32" => Some(32),
-		"I64" | "U64" | "F64" | "C64" => Some(64),
-		_ => None,
-	}
 }
 
 fn parse_safetensors(mut reader: HeaderReader<'_>, first: [u8; 4]) -> Result<Directory> {

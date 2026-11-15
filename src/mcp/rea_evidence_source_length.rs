@@ -9,7 +9,9 @@
 use super::Validation;
 use serde_json::{json, Value};
 
-fn js_space(c: char) -> bool {
+// ECMAScript WhiteSpace + LineTerminator. Rust is_whitespace includes NEL and
+// excludes BOM, so using it would change both coercion and stable IDs.
+pub(super) fn js_space(c: char) -> bool {
 	matches!(c, '\u{0009}'..='\u{000d}' | '\u{0020}' | '\u{00a0}' | '\u{1680}'
 		| '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}'
 		| '\u{205f}' | '\u{3000}' | '\u{feff}')

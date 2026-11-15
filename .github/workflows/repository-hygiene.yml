@@ -11,6 +11,7 @@ on:
       - 'deploy/dc_replacement_gate.py'
       - 'tests/*ledger_tests.py'
       - 'tests/dc_replacement_gate_tests.py'
+      - 'tests/dc_functional_v*.py'
       - 'deploy/chatgpt_mcp_bridge.py'
       - 'deploy/readonly-bridge/**'
       - 'tests/chatgpt_bridge*'
@@ -26,6 +27,7 @@ on:
       - 'deploy/dc_replacement_gate.py'
       - 'tests/*ledger_tests.py'
       - 'tests/dc_replacement_gate_tests.py'
+      - 'tests/dc_functional_v*.py'
       - 'deploy/chatgpt_mcp_bridge.py'
       - 'deploy/readonly-bridge/**'
       - 'tests/chatgpt_bridge*'
@@ -88,6 +90,21 @@ jobs:
           python3 -B tests/dc_model_origin_ledger_tests.py
           python3 -B tests/model_origin_tool_ledger_tests.py
           python3 -B tests/dc_replacement_gate_tests.py
+      - name: Retained successor source contracts
+        run: |
+          set -euo pipefail
+          # Preserve the reviewed pins from operator-parity; never derive an
+          # expected digest from the candidate being checked.
+          for suite in signal_fixture health_multiread; do
+            python3 -B "tests/dc_functional_v9_${suite}_safety_tests.py" \
+              --expected-signal-harness-sha256 9c19eace90ac21ae70949e7f3718500f44a07f19edbf47350d398cef80c0858a \
+              --expected-health-harness-sha256 6cd20cc16d3982150e0dca549ed4e1440409798bf60e218145b053addd785c77 \
+              --expected-version-helper-sha256 ac6dbe8a29c9a1e1d31712f4862d3895962bd92e3dbf5d805bee15b5466b7059 \
+              --expected-loader-sha256 0b039e2d667314fec32bde7827fd0f9ad01d35b8d3199e73a1e036c7b1eb3dde \
+              --expected-tool-helper-sha256 e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216 \
+              --expected-http-helper-sha256 8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba
+          done
+          python3 -B tests/dc_functional_v10_contract_approval_tests.py
       - name: Install pinned Cargo
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Check package source closure and retired paths
