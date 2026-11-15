@@ -11,7 +11,6 @@ import os
 import pathlib
 import subprocess
 import secrets
-import sys
 
 
 def main():

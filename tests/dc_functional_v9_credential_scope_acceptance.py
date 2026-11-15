@@ -9,7 +9,7 @@ Explicit --local-fixture instead accepts only the fixed search-helper source on
 a private fixture alias, executes it locally, and never qualifies SSH or health.
 """
 from dc_functional_v9_version_pin import add_helper_pins, verify_helper_pins
-import argparse, base64, copy, hashlib, json, os, pathlib, re, secrets, select, signal, socket
+import argparse, base64, copy, hashlib, json, os, pathlib, re, secrets, select, socket
 import subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]

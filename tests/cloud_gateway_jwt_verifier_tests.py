@@ -6,10 +6,8 @@ All keys are test-generated and discarded. No remote keys, OAuth service,
 production agent or public listener is used. Model callers cannot supply a
 verifier identity; only the verified JWT may be mapped into GatewayPolicy.
 """
-import dataclasses
 import hashlib
 import json
-import os
 import pathlib
 import sys
 import tempfile

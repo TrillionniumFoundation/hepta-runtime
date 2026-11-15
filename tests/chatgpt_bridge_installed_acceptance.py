@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse,http.client,json,pathlib,socket
+import argparse,json,pathlib,socket
 
 ALLOWED={"host_list","process_status","file_info","stream_handoff_list","stream_handoff_status","stream_handoff_read","document_read"}
 

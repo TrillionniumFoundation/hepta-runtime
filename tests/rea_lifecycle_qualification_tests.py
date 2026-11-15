@@ -16,7 +16,6 @@ import stat
 import subprocess
 import sys
 import tempfile
-import time
 from types import SimpleNamespace
 import unittest
 from unittest import mock

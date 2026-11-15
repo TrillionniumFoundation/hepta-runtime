@@ -4,7 +4,6 @@ import asyncio
 import base64
 import functools
 import errno
-import hashlib
 import http.server
 import io
 import json

@@ -6,9 +6,7 @@ import os
 from pathlib import Path
 import re
 import shlex
-import stat
 import subprocess
-import sys
 from r22_isolated_six_alias_ssh_benchmark import run_once
 
 HOSTS = ("main", "pocket4", "rog", "mac", "x230", "ai395")

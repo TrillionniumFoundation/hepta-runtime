@@ -22,7 +22,7 @@ import time
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'deploy'))
-from dc_compat.computer import COMPUTER_TOOLS, ComputerManager, _Portal, _X11
+from dc_compat.computer import COMPUTER_TOOLS, ComputerManager, _X11
 from dc_compat.registry import ToolError, ToolRegistry
 
 

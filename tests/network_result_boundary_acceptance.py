@@ -9,7 +9,7 @@ returns a captured fixture. It cannot execute arbitrary commands. Controllers
 and credentials are private direct children. Original production state is not
 opened or changed. Reports contain sizes/hashes, never captured network content.
 """
-import argparse, hashlib, importlib.util, json, os, pathlib, re, secrets, subprocess, sys
+import argparse, hashlib, importlib.util, json, os, pathlib, re, secrets
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('native_fixture',ROOT/'tests/dc_functional_v10_operation_explicit_state_acceptance.py')
 M=importlib.util.module_from_spec(spec);spec.loader.exec_module(M)

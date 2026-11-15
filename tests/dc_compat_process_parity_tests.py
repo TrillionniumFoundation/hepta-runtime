@@ -2,13 +2,11 @@
 """DC process parity through private, real PTYs; no original DC process runs."""
 import asyncio
 import json
-import os
 from pathlib import Path
 import re
 import shlex
 import sys
 import tempfile
-import time
 import unittest
 from unittest import mock
 

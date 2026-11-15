@@ -9,7 +9,6 @@ import hashlib
 import json
 import pathlib
 import re
-import sys
 from runtime_http_acceptance import Client
 
 

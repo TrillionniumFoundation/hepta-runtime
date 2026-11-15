@@ -3,7 +3,6 @@
 """Real rich-PDF, XLS and cache-only formula fixtures; no office process or URLs."""
 import hashlib
 import importlib.util
-import io
 import json
 import os
 import shutil

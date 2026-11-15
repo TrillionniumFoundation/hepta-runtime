@@ -7,8 +7,6 @@ None is evidence for an installed host, live-state compatibility or production
 writer coordination. Subprocess execution is disabled for every test.
 """
 import copy
-import fcntl
-import json
 import os
 import pathlib
 import plistlib

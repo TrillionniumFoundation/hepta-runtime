@@ -609,14 +609,84 @@
     "runtime_validation_reference": {
       "commit": "93d43067bc6e0bac92a686b04cf322c564f66a81",
       "workflow": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43733991865",
-      "qualification": "Read the exact-source workflow for its terminal result; this follow-up preserves its maintained Rust/Cargo/worker/config and test input bytes."
+      "qualification": "Read the exact-source workflow for its terminal result; this follow-up preserves its native Rust/Cargo/worker/config inputs. Python test import cleanup is documented and validated separately."
     },
     "hosted_hygiene": "Read the workflow attached to the published follow-up commit; no future result is asserted here.",
     "independent_source_review": {
+      "maintained_prefixes": [
+        "tests/",
+        "tools/",
+        "scripts/",
+        ".github/",
+        ".agents/",
+        ".config/",
+        "examples/",
+        "benches/"
+      ],
       "maintained_inputs": 597,
-      "maintained_inputs_unchanged": 596,
+      "maintained_inputs_unchanged": 541,
+      "reviewed_maintained_changes": [
+        ".github/workflows/repository-hygiene.yml",
+        "tests/chatgpt_bridge_installed_acceptance.py",
+        "tests/chatgpt_bridge_tests.py",
+        "tests/chatgpt_computer_operator_tests.py",
+        "tests/chatgpt_v10_dual_read_tests.py",
+        "tests/chatgpt_v10_stream_custody_tests.py",
+        "tests/chatgpt_v11_v4_session_binding_tests.py",
+        "tests/checkpoint_backend_acceptance.py",
+        "tests/cloud_gateway_authenticated_catalog_tests.py",
+        "tests/cloud_gateway_jwt_verifier_tests.py",
+        "tests/cloud_gateway_policy_tests.py",
+        "tests/complex_worksheet_tests.py",
+        "tests/criu_external_reconcile.py",
+        "tests/dc_compat_chromium_pdf_tests.py",
+        "tests/dc_compat_client_tests.py",
+        "tests/dc_compat_clipboard_transaction_tests.py",
+        "tests/dc_compat_computer_tests.py",
+        "tests/dc_compat_core_audit_tests.py",
+        "tests/dc_compat_engine_tests.py",
+        "tests/dc_compat_filesystem_tests.py",
+        "tests/dc_compat_gnome_window_tests.py",
+        "tests/dc_compat_process_parity_tests.py",
+        "tests/dc_compat_search_tests.py",
+        "tests/dc_compat_x11_selection_recovery_tests.py",
+        "tests/dc_functional_v6_metadata_acceptance.py",
+        "tests/dc_functional_v9_credential_scope_acceptance.py",
+        "tests/dc_functional_v9_search_six_host_acceptance.py",
+        "tests/dc_parity_full_facade_pins_tests.py",
+        "tests/dc_parity_full_facade_six_host_acceptance.py",
+        "tests/dc_parity_v4_deployment_tests.py",
+        "tests/dc_parity_v4_staging_tests.py",
+        "tests/dc_readonly_inventory_collector_tests.py",
+        "tests/dc_readonly_inventory_tests.py",
+        "tests/effect_owner_enrollment_tests.py",
+        "tests/format_completion_tests.py",
+        "tests/mac_detached_resource_native_acceptance.py",
+        "tests/mac_hia_activation_tests.py",
+        "tests/maintenance_readiness_tests.py",
+        "tests/metadata_preservation_tests.py",
+        "tests/native_checkpoint_acceptance.py",
+        "tests/native_inode_acceptance.py",
+        "tests/network_result_boundary_acceptance.py",
+        "tests/operator_job_identity_mac_acceptance.py",
+        "tests/operator_job_identity_real_acceptance.py",
+        "tests/physical_reboot_acceptance.py",
+        "tests/r22_isolated_real_six_host_ssh_benchmark.py",
+        "tests/rea_java_kernel_probe.py",
+        "tests/rea_lifecycle_qualification_tests.py",
+        "tests/rea_operation_evidence_tests.py",
+        "tests/runtime_unbounded_concurrency_acceptance.py",
+        "tests/s5_power_cycle_acceptance.py",
+        "tests/search_six_host_acceptance.py",
+        "tests/stream_history_tests.py",
+        "tests/sudo_password_namespace.py",
+        "tests/transport_reconcile_acceptance.py"
+      ],
+      "additional_reviewed_sources": [
+        "deploy/dc_compat/gnome_window_install.py"
+      ],
       "custody_checkpoint_only_update": true,
-      "scope": "Read-only independent custody/source comparison, no runtime execution",
+      "scope": "Read-only independent custody/source comparison, with source hashes from separately reviewed import, packaging and CI edits",
       "core_baseline": "93d43067bc6e0bac92a686b04cf322c564f66a81",
       "review_base": "93d43067bc6e0bac92a686b04cf322c564f66a81",
       "core_inputs": 608,
@@ -657,5 +727,1878 @@
         "reason": "RuntimeError: Custody inventory source rows changed: archives/repository-history/completed-audit-evidence-20261115.json"
       }
     ]
+  },
+  "unused_import_cleanup_review": {
+    "review_base": "87f46b066186ef4eef1d227e7d4c9b82313347b3",
+    "reviewed_candidates": 115,
+    "removed_imports": 79,
+    "modified_files": 54,
+    "removed_bytes": 998,
+    "dispositions": {
+      "already_retired": 1,
+      "removed_unused_import": 79,
+      "retained_compiler_directive": 15,
+      "retained_current_REA_ledger_source_pin": 3,
+      "retained_current_source_pin": 11,
+      "retained_independent_frozen_adaptation_source": 6
+    },
+    "source_changes": [
+      {
+        "path": "tests/chatgpt_bridge_installed_acceptance.py",
+        "before": {
+          "bytes": 4316,
+          "git_blob": "93bc91186acb6e7db90698691459460ee6631c26"
+        },
+        "after_import_cleanup": {
+          "bytes": 4304,
+          "git_blob": "c022f4740dee3c4fb6cf12a66720f8a486ed84f0"
+        },
+        "removed_imports": [
+          {
+            "name": "http",
+            "module": "http.client"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/chatgpt_bridge_tests.py",
+        "before": {
+          "bytes": 4775,
+          "git_blob": "ac017611c5da28aa3256a34a9656a148e8288904"
+        },
+        "after_import_cleanup": {
+          "bytes": 4763,
+          "git_blob": "bdb994ebbf3d5a1e5cff6708df0fe252dbfb48b7"
+        },
+        "removed_imports": [
+          {
+            "name": "json",
+            "module": "json"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/chatgpt_computer_operator_tests.py",
+        "before": {
+          "bytes": 6567,
+          "git_blob": "e2ffedd78c2a24c418538a6937d37d4e3227e30c"
+        },
+        "after_import_cleanup": {
+          "bytes": 6540,
+          "git_blob": "ee77f30e2b10ab30488d14d70883331664652fc8"
+        },
+        "removed_imports": [
+          {
+            "name": "asyncio",
+            "module": "asyncio"
+          },
+          {
+            "name": "json",
+            "module": "json"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/chatgpt_v10_dual_read_tests.py",
+        "before": {
+          "bytes": 6817,
+          "git_blob": "7bc6248b789cb5850ad84b9dc408b785e723877c"
+        },
+        "after_import_cleanup": {
+          "bytes": 6785,
+          "git_blob": "38427f5967e8ee6bcd43e87d0af40834a6135826"
+        },
+        "removed_imports": [
+          {
+            "name": "importlib",
+            "module": "importlib.util"
+          },
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/chatgpt_v10_stream_custody_tests.py",
+        "before": {
+          "bytes": 9301,
+          "git_blob": "b0371a254f48a23c46df453d88e79ee959911707"
+        },
+        "after_import_cleanup": {
+          "bytes": 9257,
+          "git_blob": "bb4ce15c653a1f2045960fa7b2b32b70f682b649"
+        },
+        "removed_imports": [
+          {
+            "name": "importlib",
+            "module": "importlib.util"
+          },
+          {
+            "name": "os",
+            "module": "os"
+          },
+          {
+            "name": "stat",
+            "module": "stat"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/chatgpt_v11_v4_session_binding_tests.py",
+        "before": {
+          "bytes": 18322,
+          "git_blob": "865e5808302649bb21342a8be23f1c50cb541340"
+        },
+        "after_import_cleanup": {
+          "bytes": 18312,
+          "git_blob": "39d0e44076416e0a1f378f8096356fd98e7f745e"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/checkpoint_backend_acceptance.py",
+        "before": {
+          "bytes": 5244,
+          "git_blob": "156aa3394e06f0884af2c0fb6311aad9134abfbd"
+        },
+        "after_import_cleanup": {
+          "bytes": 5234,
+          "git_blob": "8a746eb3fc2b212af2fcbe19e551493fc3335670"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/cloud_gateway_authenticated_catalog_tests.py",
+        "before": {
+          "bytes": 9137,
+          "git_blob": "65d671c46b3995c0d4b585bd43a7a34a0fd09b6d"
+        },
+        "after_import_cleanup": {
+          "bytes": 9125,
+          "git_blob": "c884ffebd1a9283467e6ef650d765de1b5a6996f"
+        },
+        "removed_imports": [
+          {
+            "name": "json",
+            "module": "json"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/cloud_gateway_jwt_verifier_tests.py",
+        "before": {
+          "bytes": 16998,
+          "git_blob": "599f0993641af90564df55ef13e1954d8dca028d"
+        },
+        "after_import_cleanup": {
+          "bytes": 16969,
+          "git_blob": "aa473acb9b30890bc4b0ee204ce52d7b2f03b226"
+        },
+        "removed_imports": [
+          {
+            "name": "dataclasses",
+            "module": "dataclasses"
+          },
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/cloud_gateway_policy_tests.py",
+        "before": {
+          "bytes": 33101,
+          "git_blob": "c62d8826b27f0131c875c586fdf681dfe16c7abf"
+        },
+        "after_import_cleanup": {
+          "bytes": 33060,
+          "git_blob": "c4352bb8705e203a6d9901cd4d9a55f3bbbc5d61"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          },
+          {
+            "name": "sqlite3",
+            "module": "sqlite3"
+          },
+          {
+            "name": "DispatchPermit",
+            "module": "cloud_gateway_policy"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/complex_worksheet_tests.py",
+        "before": {
+          "bytes": 8569,
+          "git_blob": "c3ee0291d8128466ad094fa3c2be0ef83693ef41"
+        },
+        "after_import_cleanup": {
+          "bytes": 8559,
+          "git_blob": "1076c0d168d7f0929e3cc52d1655fdd91f40c2cc"
+        },
+        "removed_imports": [
+          {
+            "name": "io",
+            "module": "io"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/criu_external_reconcile.py",
+        "before": {
+          "bytes": 3918,
+          "git_blob": "7d714a30b5d58c9d5cd0a148bf1abf8bd6ed92ca"
+        },
+        "after_import_cleanup": {
+          "bytes": 3907,
+          "git_blob": "b09ab9c70438a9fe740f871cedc658375398f668"
+        },
+        "removed_imports": [
+          {
+            "name": "sys",
+            "module": "sys"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_chromium_pdf_tests.py",
+        "before": {
+          "bytes": 13006,
+          "git_blob": "2ad5e17fa3bc945564fcdaa501d51e2d5f0cf4dd"
+        },
+        "after_import_cleanup": {
+          "bytes": 12974,
+          "git_blob": "6b84e3b087e7730f9124801ed276465622c8234b"
+        },
+        "removed_imports": [
+          {
+            "name": "io",
+            "module": "io"
+          },
+          {
+            "name": "json",
+            "module": "json"
+          },
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_client_tests.py",
+        "before": {
+          "bytes": 3474,
+          "git_blob": "2db291c91f79e172292ddde739a341985770fbac"
+        },
+        "after_import_cleanup": {
+          "bytes": 3442,
+          "git_blob": "44ebf7f421910aef56e8a7e433529fed1f63b95f"
+        },
+        "removed_imports": [
+          {
+            "name": "patch",
+            "module": "unittest.mock"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_clipboard_transaction_tests.py",
+        "before": {
+          "bytes": 27089,
+          "git_blob": "4b5bfb487754b00e8aefe60808a6d32c74ebf388"
+        },
+        "after_import_cleanup": {
+          "bytes": 27074,
+          "git_blob": "ed4d4b109883574313aa542635c3064d762c4dc0"
+        },
+        "removed_imports": [
+          {
+            "name": "hashlib",
+            "module": "hashlib"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_computer_tests.py",
+        "before": {
+          "bytes": 40299,
+          "git_blob": "922bb11d1f9f5d0c43c9892976f15da767516506"
+        },
+        "after_import_cleanup": {
+          "bytes": 40290,
+          "git_blob": "19a244c72bcc6ccc1a4ed2b4c9c2563f738906f9"
+        },
+        "removed_imports": [
+          {
+            "name": "_Portal",
+            "module": "dc_compat.computer"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_core_audit_tests.py",
+        "before": {
+          "bytes": 17953,
+          "git_blob": "35c31429059e5e457efa260fa0abe5d1836b9773"
+        },
+        "after_import_cleanup": {
+          "bytes": 17941,
+          "git_blob": "e21a1c6b221b2034906e14f93004d8ba69d0eacd"
+        },
+        "removed_imports": [
+          {
+            "name": "math",
+            "module": "math"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_engine_tests.py",
+        "before": {
+          "bytes": 12008,
+          "git_blob": "eb142d4a5a9a0f50dd24aa83fce6922c623cd908"
+        },
+        "after_import_cleanup": {
+          "bytes": 11960,
+          "git_blob": "2e19aebb5b6338402bf17764a91f08fdd0de1e19"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          },
+          {
+            "name": "time",
+            "module": "time"
+          },
+          {
+            "name": "mock",
+            "module": "unittest"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_filesystem_tests.py",
+        "before": {
+          "bytes": 18561,
+          "git_blob": "56d7f44aa95842fac0ff274631148dbcab7207b1"
+        },
+        "after_import_cleanup": {
+          "bytes": 18546,
+          "git_blob": "ef33d83100d10976e211ac7a431d91a5bacecfe6"
+        },
+        "removed_imports": [
+          {
+            "name": "hashlib",
+            "module": "hashlib"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_gnome_window_tests.py",
+        "before": {
+          "bytes": 11994,
+          "git_blob": "69790cece6fa9959b8addb586901f0ad0e2eb8b1"
+        },
+        "after_import_cleanup": {
+          "bytes": 11947,
+          "git_blob": "ef9789c122754fe06b1d576270053ad285ab9991"
+        },
+        "removed_imports": [
+          {
+            "name": "hashlib",
+            "module": "hashlib"
+          },
+          {
+            "name": "uuid",
+            "module": "uuid"
+          },
+          {
+            "name": "GNOME_WINDOW_TOOLS",
+            "module": "dc_compat.gnome_window_provider"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true,
+        "after_separate_packaging_assertion_fix": {
+          "bytes": 12024,
+          "git_blob": "e402e972c518c98d0d481bae7f88b9f9b5f72044"
+        }
+      },
+      {
+        "path": "tests/dc_compat_process_parity_tests.py",
+        "before": {
+          "bytes": 10514,
+          "git_blob": "a7c21c647a0090f1b0f25bb488e0b1aa50f46d89"
+        },
+        "after_import_cleanup": {
+          "bytes": 10492,
+          "git_blob": "613c536aff736973192ca2bbaa12159aa170d5a9"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          },
+          {
+            "name": "time",
+            "module": "time"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_search_tests.py",
+        "before": {
+          "bytes": 20971,
+          "git_blob": "3bf46fca0debf167b247d94522f9ff3cead1df7b"
+        },
+        "after_import_cleanup": {
+          "bytes": 20954,
+          "git_blob": "d1d0222dc2d14736a48b85d1f1fffb01c3e519a7"
+        },
+        "removed_imports": [
+          {
+            "name": "threading",
+            "module": "threading"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_compat_x11_selection_recovery_tests.py",
+        "before": {
+          "bytes": 31324,
+          "git_blob": "3440445b532210297c61d4ef995c2b82fe6f527c"
+        },
+        "after_import_cleanup": {
+          "bytes": 31292,
+          "git_blob": "9097b3f01413b8b2b8785362e0eeb4ab6cd74cda"
+        },
+        "removed_imports": [
+          {
+            "name": "threading",
+            "module": "threading"
+          },
+          {
+            "name": "_private_root",
+            "module": "dc_compat.processes"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_functional_v6_metadata_acceptance.py",
+        "before": {
+          "bytes": 19991,
+          "git_blob": "a6db85f1730c7084cac8c82063650215f03a8fe5"
+        },
+        "after_import_cleanup": {
+          "bytes": 19981,
+          "git_blob": "58f4e3ff706b12b29e4fcbf7a2bed367d9614a2d"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_functional_v9_credential_scope_acceptance.py",
+        "before": {
+          "bytes": 31204,
+          "git_blob": "8d1a24336faaac8848f6de4284070018a7ecfc38"
+        },
+        "after_import_cleanup": {
+          "bytes": 31196,
+          "git_blob": "eb22ac78d3498e8a96d5a8cc543ce579147b60b1"
+        },
+        "removed_imports": [
+          {
+            "name": "signal",
+            "module": "signal"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_functional_v9_search_six_host_acceptance.py",
+        "before": {
+          "bytes": 30939,
+          "git_blob": "183931ddc09ea2315eb8141a198f6df70765302f"
+        },
+        "after_import_cleanup": {
+          "bytes": 30917,
+          "git_blob": "69fe36bcc1721d9e0cd04f911f24cccb9f8e93a0"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          },
+          {
+            "name": "stat",
+            "module": "stat"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_parity_full_facade_pins_tests.py",
+        "before": {
+          "bytes": 3589,
+          "git_blob": "c2caee39e87891825e8f492d2e11e2398d4e0bde"
+        },
+        "after_import_cleanup": {
+          "bytes": 3579,
+          "git_blob": "69bc9175bd49d2279fa96f07b87cbf1145fc7fef"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_parity_full_facade_six_host_acceptance.py",
+        "before": {
+          "bytes": 11740,
+          "git_blob": "47a5b3931ef32c8c4559bd8f02243ed872b2fb9b"
+        },
+        "after_import_cleanup": {
+          "bytes": 11725,
+          "git_blob": "80b40557b892aff035412bd00b5b4ed54b761c43"
+        },
+        "removed_imports": [
+          {
+            "name": "hashlib",
+            "module": "hashlib"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_parity_v4_deployment_tests.py",
+        "before": {
+          "bytes": 4151,
+          "git_blob": "b34cfe061218b0fc7da6df02deac93ddc3ff95c0"
+        },
+        "after_import_cleanup": {
+          "bytes": 4141,
+          "git_blob": "8c9d1bdec6d59c6a90a1bb4a43cfabb924ef0ba0"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_parity_v4_staging_tests.py",
+        "before": {
+          "bytes": 3311,
+          "git_blob": "ab7127da476ee8436ea0e1b6ab64c43260ec8821"
+        },
+        "after_import_cleanup": {
+          "bytes": 3299,
+          "git_blob": "d3e22b9b616062338261973c43837b398d981904"
+        },
+        "removed_imports": [
+          {
+            "name": "json",
+            "module": "json"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_readonly_inventory_collector_tests.py",
+        "before": {
+          "bytes": 14419,
+          "git_blob": "e7c531e5732a0c1fd36fa0e0ebd56b8a0c9cc652"
+        },
+        "after_import_cleanup": {
+          "bytes": 14387,
+          "git_blob": "2b90e5f24e9529c2d4dbaf26ceeb1f08fee14878"
+        },
+        "removed_imports": [
+          {
+            "name": "shutil",
+            "module": "shutil"
+          },
+          {
+            "name": "subprocess",
+            "module": "subprocess"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/dc_readonly_inventory_tests.py",
+        "before": {
+          "bytes": 7711,
+          "git_blob": "7365542bc1b131982f61df323319e5412922c52c"
+        },
+        "after_import_cleanup": {
+          "bytes": 7701,
+          "git_blob": "6b1245690fdd3b52b74ea3365c9e03ab8d5d86e6"
+        },
+        "removed_imports": [
+          {
+            "name": "stat",
+            "module": "stat"
+          },
+          {
+            "name": "copy",
+            "module": "copy"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/effect_owner_enrollment_tests.py",
+        "before": {
+          "bytes": 7215,
+          "git_blob": "be4fac08c2153b5629bffcf4a88872658243b45d"
+        },
+        "after_import_cleanup": {
+          "bytes": 7193,
+          "git_blob": "30fd276ac089a13b47c6410b211321f515307983"
+        },
+        "removed_imports": [
+          {
+            "name": "io",
+            "module": "io"
+          },
+          {
+            "name": "stat",
+            "module": "stat"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/format_completion_tests.py",
+        "before": {
+          "bytes": 9740,
+          "git_blob": "1bde8f72f8a410f80a95ffc84118e23e4b014064"
+        },
+        "after_import_cleanup": {
+          "bytes": 9730,
+          "git_blob": "4dc9ed09bb52908e777fd1bb74ceb5e9a3d69059"
+        },
+        "removed_imports": [
+          {
+            "name": "io",
+            "module": "io"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/mac_detached_resource_native_acceptance.py",
+        "before": {
+          "bytes": 6335,
+          "git_blob": "6319b467b2463aa7c4bb783df0d923908ac5f046"
+        },
+        "after_import_cleanup": {
+          "bytes": 6292,
+          "git_blob": "4fe36497fc6064cf0e3652c750b44d331b64c70a"
+        },
+        "removed_imports": [
+          {
+            "name": "shutil",
+            "module": "shutil"
+          },
+          {
+            "name": "subprocess",
+            "module": "subprocess"
+          },
+          {
+            "name": "sys",
+            "module": "sys"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/mac_hia_activation_tests.py",
+        "before": {
+          "bytes": 47942,
+          "git_blob": "e987b8c740ae876bb104bc12ea332e79f4df9ec6"
+        },
+        "after_import_cleanup": {
+          "bytes": 47917,
+          "git_blob": "b38aa170ce3b2f02774a7aa8bf882eb5e9da6521"
+        },
+        "removed_imports": [
+          {
+            "name": "fcntl",
+            "module": "fcntl"
+          },
+          {
+            "name": "json",
+            "module": "json"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/maintenance_readiness_tests.py",
+        "before": {
+          "bytes": 9144,
+          "git_blob": "2f4512d549209fc8b704741462cc40e60b57545d"
+        },
+        "after_import_cleanup": {
+          "bytes": 9134,
+          "git_blob": "2bbb55ce1a559ecdffede0bf4b7689454ddc38b2"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/metadata_preservation_tests.py",
+        "before": {
+          "bytes": 4781,
+          "git_blob": "38d868c8e23fc82a25d71ee8c023083ad0eb2610"
+        },
+        "after_import_cleanup": {
+          "bytes": 4755,
+          "git_blob": "e4e77e3afed6985e2d26b5fb0ad1336e41252b13"
+        },
+        "removed_imports": [
+          {
+            "name": "hashlib",
+            "module": "hashlib"
+          },
+          {
+            "name": "sys",
+            "module": "sys"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/native_checkpoint_acceptance.py",
+        "before": {
+          "bytes": 12970,
+          "git_blob": "53de8e47d1b82947334d31aa8597ddd36bfa679b"
+        },
+        "after_import_cleanup": {
+          "bytes": 12960,
+          "git_blob": "673f4da0630c275c8367aed90b358f39524b0cda"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/native_inode_acceptance.py",
+        "before": {
+          "bytes": 8221,
+          "git_blob": "33ef87aa51e06763114208d0a61a0b455c32f03b"
+        },
+        "after_import_cleanup": {
+          "bytes": 8211,
+          "git_blob": "155b36a53f29de2f41adb6188641b89b2622ea9a"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/network_result_boundary_acceptance.py",
+        "before": {
+          "bytes": 7718,
+          "git_blob": "38b57e7fce10efa5afbd3b18c469f6bd28cd650d"
+        },
+        "after_import_cleanup": {
+          "bytes": 7701,
+          "git_blob": "377b9dcaac5b8ba923889b0ba8c1577ea522092b"
+        },
+        "removed_imports": [
+          {
+            "name": "subprocess",
+            "module": "subprocess"
+          },
+          {
+            "name": "sys",
+            "module": "sys"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/operator_job_identity_mac_acceptance.py",
+        "before": {
+          "bytes": 9266,
+          "git_blob": "4f8d96e4a950f23d47fa03dbd798cc1388dd9bd9"
+        },
+        "after_import_cleanup": {
+          "bytes": 9256,
+          "git_blob": "8ad111f76abd65dc1816e2f58eaed75a4cf3949c"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/operator_job_identity_real_acceptance.py",
+        "before": {
+          "bytes": 18243,
+          "git_blob": "310f2aeab90a53f1b4c70f768e535c65ca0e1e5a"
+        },
+        "after_import_cleanup": {
+          "bytes": 18229,
+          "git_blob": "4884c3f6d957df4eb14187bc0bd303e5b8849239"
+        },
+        "removed_imports": [
+          {
+            "name": "signal",
+            "module": "signal"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/physical_reboot_acceptance.py",
+        "before": {
+          "bytes": 10470,
+          "git_blob": "ad23e80df7da31ff553ca5135627437a5e68d4ff"
+        },
+        "after_import_cleanup": {
+          "bytes": 10455,
+          "git_blob": "7045f226ea9911261ff7a585a66315c9d6618ffe"
+        },
+        "removed_imports": [
+          {
+            "name": "hashlib",
+            "module": "hashlib"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/r22_isolated_real_six_host_ssh_benchmark.py",
+        "before": {
+          "bytes": 6165,
+          "git_blob": "c92f93ca18a24e465820c53c2f198c59cdc9f312"
+        },
+        "after_import_cleanup": {
+          "bytes": 6142,
+          "git_blob": "8f8e2527949d780b3349a9023401f9c62d15161e"
+        },
+        "removed_imports": [
+          {
+            "name": "stat",
+            "module": "stat"
+          },
+          {
+            "name": "sys",
+            "module": "sys"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/rea_java_kernel_probe.py",
+        "before": {
+          "bytes": 5020,
+          "git_blob": "3f6c2bf15c86bfa28c3e99e39071fe133ebc8306"
+        },
+        "after_import_cleanup": {
+          "bytes": 5008,
+          "git_blob": "55957854ebcd4d41d8622299bef9be1966e3e426"
+        },
+        "removed_imports": [
+          {
+            "name": "time",
+            "module": "time"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/rea_lifecycle_qualification_tests.py",
+        "before": {
+          "bytes": 28357,
+          "git_blob": "1de05cab8e9a8ebee2db8adbcd896179fca70375"
+        },
+        "after_import_cleanup": {
+          "bytes": 28345,
+          "git_blob": "36a97c6e68e1da878d031dc8de9def24fbde67d7"
+        },
+        "removed_imports": [
+          {
+            "name": "time",
+            "module": "time"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/rea_operation_evidence_tests.py",
+        "before": {
+          "bytes": 24846,
+          "git_blob": "832ca057af2115a312f3ec4c3f79c0fd5054b700"
+        },
+        "after_import_cleanup": {
+          "bytes": 24831,
+          "git_blob": "bf479748321ea65b46bef9ab05d3f45267bb68aa"
+        },
+        "removed_imports": [
+          {
+            "name": "hashlib",
+            "module": "hashlib"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/runtime_unbounded_concurrency_acceptance.py",
+        "before": {
+          "bytes": 33278,
+          "git_blob": "035c6c296c845fb35457103ed8de0d58d36274c5"
+        },
+        "after_import_cleanup": {
+          "bytes": 33266,
+          "git_blob": "da401d76757090e5804e9ace53571f486dd83cf3"
+        },
+        "removed_imports": [
+          {
+            "name": "stat",
+            "module": "stat"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/s5_power_cycle_acceptance.py",
+        "before": {
+          "bytes": 7169,
+          "git_blob": "9f4e7967a92d966cd88c09652249865257a514ee"
+        },
+        "after_import_cleanup": {
+          "bytes": 7159,
+          "git_blob": "80fabd3a61377c0324dbd5e9410f6dccd94e32cb"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/search_six_host_acceptance.py",
+        "before": {
+          "bytes": 14178,
+          "git_blob": "af80f18943e2a491bc038b16167e9d3e53972bbe"
+        },
+        "after_import_cleanup": {
+          "bytes": 14168,
+          "git_blob": "dd709edf820a3d2bbe2b00fe6fb59197f2b58fa8"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/stream_history_tests.py",
+        "before": {
+          "bytes": 10015,
+          "git_blob": "e37119db8349bed6d2355413180b884eabce5dcf"
+        },
+        "after_import_cleanup": {
+          "bytes": 10012,
+          "git_blob": "c319a9dfa770ac8a7691000f5fddad329824b63d"
+        },
+        "removed_imports": [
+          {
+            "name": "os",
+            "module": "os"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/sudo_password_namespace.py",
+        "before": {
+          "bytes": 4940,
+          "git_blob": "8078c2bc86cde6b3e46313685473d9ae371f576a"
+        },
+        "after_import_cleanup": {
+          "bytes": 4922,
+          "git_blob": "52f291ea8978080086bd8a1431e72b76bf869c2d"
+        },
+        "removed_imports": [
+          {
+            "name": "subprocess",
+            "module": "subprocess"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      },
+      {
+        "path": "tests/transport_reconcile_acceptance.py",
+        "before": {
+          "bytes": 3450,
+          "git_blob": "ebd43e0c6e471ce622ab784e0b166a4ac58f117d"
+        },
+        "after_import_cleanup": {
+          "bytes": 3439,
+          "git_blob": "65fdfaf5d39dd1c3a12160cbf3f959e89d3f29cf"
+        },
+        "removed_imports": [
+          {
+            "name": "sys",
+            "module": "sys"
+          }
+        ],
+        "non_import_ast_identical_for_import_cleanup": true
+      }
+    ],
+    "retained_candidates": [
+      {
+        "path": "tests/chatgpt_v10_dual_read_tests.py",
+        "line": 5,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "annotations changes Python annotation compilation/evaluation; it is not an ordinary imported name. Explicit task constraint preserves all future directives."
+      },
+      {
+        "path": "tests/chatgpt_v10_stream_custody_tests.py",
+        "line": 5,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "annotations changes Python annotation compilation/evaluation; it is not an ordinary imported name. Explicit task constraint preserves all future directives."
+      },
+      {
+        "path": "tests/dc_compat_independence_tests.py",
+        "line": 8,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "annotations changes Python annotation compilation/evaluation; it is not an ordinary imported name. Explicit task constraint preserves all future directives."
+      },
+      {
+        "path": "tests/dc_compat_search_tests.py",
+        "line": 3,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "annotations changes Python annotation compilation/evaluation; it is not an ordinary imported name. Explicit task constraint preserves all future directives."
+      },
+      {
+        "path": "tests/dc_compat_x11_selection_recovery_tests.py",
+        "line": 3,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "annotations changes Python annotation compilation/evaluation; it is not an ordinary imported name. Explicit task constraint preserves all future directives."
+      },
+      {
+        "path": "tests/dc_compat_x11_selection_tests.py",
+        "line": 3,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "annotations changes Python annotation compilation/evaluation; it is not an ordinary imported name. Explicit task constraint preserves all future directives."
+      },
+      {
+        "path": "tests/dc_functional_v10_legacy_concurrent_text_acceptance.py",
+        "line": 13,
+        "name": "os",
+        "module": "os",
+        "disposition": "retained_current_source_pin",
+        "reason": ".github/workflows/operator-parity.yml: fixed sha256sum preflight; tests/dc_functional_v10_contract_approval_tests.py also requires the independently preserved original harness and matching adaptation body."
+      },
+      {
+        "path": "tests/dc_functional_v10_legacy_native_acceptance.py",
+        "line": 12,
+        "name": "os",
+        "module": "os",
+        "disposition": "retained_current_source_pin",
+        "reason": ".github/workflows/operator-parity.yml: fixed sha256sum preflight; tests/dc_functional_v10_contract_approval_tests.py also requires the independently preserved original harness and matching adaptation body."
+      },
+      {
+        "path": "tests/dc_functional_v10_legacy_native_acceptance.py",
+        "line": 32,
+        "name": "canonical",
+        "module": "mcp_tool_contract",
+        "disposition": "retained_current_source_pin",
+        "reason": ".github/workflows/operator-parity.yml: fixed sha256sum preflight; tests/dc_functional_v10_contract_approval_tests.py also requires the independently preserved original harness and matching adaptation body."
+      },
+      {
+        "path": "tests/dc_functional_v5_operator_six_host_acceptance.py",
+        "line": 21,
+        "name": "sys",
+        "module": "sys",
+        "disposition": "already_retired",
+        "reason": "The complete V5 operator entrypoint was retired in the earlier exact-source retirement wave; no current import exists to change."
+      },
+      {
+        "path": "tests/dc_functional_v6_operator_six_host_acceptance.py",
+        "line": 21,
+        "name": "sys",
+        "module": "sys",
+        "disposition": "retained_current_source_pin",
+        "reason": "tests/dc_functional_v9_rollback_ledger_host_acceptance.py: BOOTSTRAP_DEPENDENCIES requires an explicit reviewed dependency manifest; bootstrap_pinned_dependencies and PinnedHelperSourceLoader compare the exact file digest before import. V7/V8 rollback helpers also import source_identity."
+      },
+      {
+        "path": "tests/dc_functional_v7_credential_scope_acceptance.py",
+        "line": 11,
+        "name": "signal",
+        "module": "signal",
+        "disposition": "retained_independent_frozen_adaptation_source",
+        "reason": "The V8 and V9 credential harnesses name this original script with its exact SHA256 in their currently emitted adapted_from_script provenance. Keep the independently frozen adaptation source; these are provenance fields, not a runtime assert."
+      },
+      {
+        "path": "tests/dc_functional_v7_search_six_host_acceptance.py",
+        "line": 17,
+        "name": "os",
+        "module": "os",
+        "disposition": "retained_independent_frozen_adaptation_source",
+        "reason": "The V8 and V9 search harnesses explicitly identify this frozen V7 matrix and its original SHA256 in emitted adapted_from_harness provenance. Keep the independently frozen adaptation source; these are provenance fields, not a runtime assert."
+      },
+      {
+        "path": "tests/dc_functional_v7_search_six_host_acceptance.py",
+        "line": 27,
+        "name": "stat",
+        "module": "stat",
+        "disposition": "retained_independent_frozen_adaptation_source",
+        "reason": "The V8 and V9 search harnesses explicitly identify this frozen V7 matrix and its original SHA256 in emitted adapted_from_harness provenance. Keep the independently frozen adaptation source; these are provenance fields, not a runtime assert."
+      },
+      {
+        "path": "tests/dc_functional_v8_credential_scope_acceptance.py",
+        "line": 11,
+        "name": "signal",
+        "module": "signal",
+        "disposition": "retained_independent_frozen_adaptation_source",
+        "reason": "The V9 credential harness names this original V8 script and SHA256 in emitted adapted_from_V8_named_harness provenance. Keep the independently frozen adaptation source; this is a provenance field, not a runtime assert."
+      },
+      {
+        "path": "tests/dc_functional_v8_search_six_host_acceptance.py",
+        "line": 21,
+        "name": "os",
+        "module": "os",
+        "disposition": "retained_independent_frozen_adaptation_source",
+        "reason": "The V9 search harness names this original V8 script and SHA256 in emitted adapted_from_V8_named_harness provenance. Keep the independently frozen adaptation source; this is a provenance field, not a runtime assert."
+      },
+      {
+        "path": "tests/dc_functional_v8_search_six_host_acceptance.py",
+        "line": 31,
+        "name": "stat",
+        "module": "stat",
+        "disposition": "retained_independent_frozen_adaptation_source",
+        "reason": "The V9 search harness names this original V8 script and SHA256 in emitted adapted_from_V8_named_harness provenance. Keep the independently frozen adaptation source; this is a provenance field, not a runtime assert."
+      },
+      {
+        "path": "tests/dc_functional_v9_health_multiread_safety_tests.py",
+        "line": 19,
+        "name": "subprocess",
+        "module": "subprocess",
+        "disposition": "retained_current_source_pin",
+        "reason": ".github/workflows/operator-parity.yml: fixed sha256sum preflight for this safety suite."
+      },
+      {
+        "path": "tests/dc_parity_concurrent_text_acceptance.py",
+        "line": 13,
+        "name": "os",
+        "module": "os",
+        "disposition": "retained_current_source_pin",
+        "reason": "tests/dc_functional_v10_contract_approval_tests.py: ORIGINAL_HARNESSES source digest and body correspondence to the V10 adaptation."
+      },
+      {
+        "path": "tests/dc_parity_native_acceptance.py",
+        "line": 12,
+        "name": "os",
+        "module": "os",
+        "disposition": "retained_current_source_pin",
+        "reason": "tests/dc_functional_v10_contract_approval_tests.py retains this exact original harness SHA for the V10 legacy projection."
+      },
+      {
+        "path": "tests/dc_parity_native_acceptance.py",
+        "line": 23,
+        "name": "canonical",
+        "module": "mcp_tool_contract",
+        "disposition": "retained_current_source_pin",
+        "reason": "tests/dc_functional_v10_contract_approval_tests.py retains this exact original harness SHA for the V10 legacy projection."
+      },
+      {
+        "path": "tests/dc_parity_workspace_root_guard_acceptance.py",
+        "line": 15,
+        "name": "sys",
+        "module": "sys",
+        "disposition": "retained_current_source_pin",
+        "reason": "tests/dc_functional_v10_contract_approval_tests.py retains this exact original workspace-root harness SHA for the V10 legacy projection."
+      },
+      {
+        "path": "tests/dc_readonly_inventory_collector_tests.py",
+        "line": 5,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "from __future__ import annotations changes annotation evaluation semantics; it is not an ordinary unused binding."
+      },
+      {
+        "path": "tests/hia_native_helper_mcp_integration.py",
+        "line": 11,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "from __future__ import annotations changes annotation evaluation semantics; it is not an ordinary unused binding."
+      },
+      {
+        "path": "tests/mac_detached_resource_native_acceptance.py",
+        "line": 9,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "from __future__ import annotations changes annotation evaluation semantics; it is not an ordinary unused binding."
+      },
+      {
+        "path": "tests/multi_read_six_host_acceptance.py",
+        "line": 10,
+        "name": "hashlib",
+        "module": "hashlib",
+        "disposition": "retained_current_source_pin",
+        "reason": "V8/V9 health/multiread safety suites compare this original harness against the exact expected_old SHA; V9 signal safety also seals its bytes."
+      },
+      {
+        "path": "tests/multi_read_six_host_acceptance.py",
+        "line": 12,
+        "name": "os",
+        "module": "os",
+        "disposition": "retained_current_source_pin",
+        "reason": "V8/V9 health/multiread safety suites compare this original harness against the exact expected_old SHA; V9 signal safety also seals its bytes."
+      },
+      {
+        "path": "tests/rea_evidence_checkpoint_upgrade_tests.py",
+        "line": 10,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "from __future__ import annotations changes annotation evaluation semantics; it is not an ordinary unused binding."
+      },
+      {
+        "path": "tests/rea_evidence_checkpoint_upgrade_tests.py",
+        "line": 19,
+        "name": "shutil",
+        "module": "shutil",
+        "disposition": "retained_current_REA_ledger_source_pin",
+        "reason": "Current REA capability map binds this test path and check-mapping reads its current bytes into the stored runtime source manifest; altering it would invalidate the stored ledger."
+      },
+      {
+        "path": "tests/rea_ghidra_analysis_external.py",
+        "line": 22,
+        "name": "run_observed_worker",
+        "module": "rea_java_kernel_probe",
+        "disposition": "retained_current_REA_ledger_source_pin",
+        "reason": "Current REA capability map binds this helper path and check-mapping reads its bytes into the stored runtime source manifest."
+      },
+      {
+        "path": "tests/rea_ghidra_external.py",
+        "line": 8,
+        "name": "os",
+        "module": "os",
+        "disposition": "retained_current_REA_ledger_source_pin",
+        "reason": "Current REA capability map binds this helper path and check-mapping reads its bytes into the stored runtime source manifest."
+      },
+      {
+        "path": "tests/rea_lifecycle_parallel_tests.py",
+        "line": 5,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "from __future__ import annotations changes annotation evaluation semantics; it is not an ordinary unused binding."
+      },
+      {
+        "path": "tests/rea_lifecycle_qualification_tests.py",
+        "line": 6,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "from __future__ import annotations changes annotation evaluation semantics; it is not an ordinary unused binding."
+      },
+      {
+        "path": "tests/runtime_registry_page_tests.py",
+        "line": 4,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "from __future__ import annotations changes annotation evaluation semantics; it is not an ordinary unused binding."
+      },
+      {
+        "path": "tests/runtime_workflow_owner_tests.py",
+        "line": 4,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "from __future__ import annotations changes annotation evaluation semantics; it is not an ordinary unused binding."
+      },
+      {
+        "path": "tests/test_hia_native_helper_mcp_integration.py",
+        "line": 5,
+        "name": "annotations",
+        "module": "__future__",
+        "disposition": "retained_compiler_directive",
+        "reason": "from __future__ import annotations changes annotation evaluation semantics; it is not an ordinary unused binding."
+      }
+    ],
+    "candidate_coverage": "Complete: each original candidate is classified exactly once",
+    "test_execution": [
+      {
+        "path": "tests/chatgpt_bridge_tests.py",
+        "exit_code": 0,
+        "cases": 9,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/chatgpt_computer_operator_tests.py",
+        "exit_code": 0,
+        "cases": 6,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/chatgpt_v10_dual_read_tests.py",
+        "exit_code": 0,
+        "cases": 16,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/chatgpt_v10_stream_custody_tests.py",
+        "exit_code": 0,
+        "cases": 18,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/chatgpt_v11_v4_session_binding_tests.py",
+        "exit_code": 0,
+        "cases": 14,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/cloud_gateway_authenticated_catalog_tests.py",
+        "exit_code": 0,
+        "cases": 7,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/cloud_gateway_jwt_verifier_tests.py",
+        "exit_code": 0,
+        "cases": 19,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/cloud_gateway_policy_tests.py",
+        "exit_code": 0,
+        "cases": 40,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/complex_worksheet_tests.py",
+        "exit_code": 1,
+        "cases": 10,
+        "summary": "FAILED (errors=10)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_chromium_pdf_tests.py",
+        "exit_code": 1,
+        "cases": 10,
+        "summary": "FAILED (failures=8, errors=1)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_client_tests.py",
+        "exit_code": 0,
+        "cases": 5,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_clipboard_transaction_tests.py",
+        "exit_code": 0,
+        "cases": 24,
+        "summary": "OK (skipped=1)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_computer_tests.py",
+        "exit_code": 0,
+        "cases": 30,
+        "summary": "OK (skipped=23)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_core_audit_tests.py",
+        "exit_code": 0,
+        "cases": 15,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_engine_tests.py",
+        "exit_code": 0,
+        "cases": 11,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_filesystem_tests.py",
+        "exit_code": 1,
+        "cases": 17,
+        "summary": "FAILED (failures=6, errors=1)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_gnome_window_tests.py",
+        "exit_code": 1,
+        "cases": 11,
+        "summary": "FAILED (errors=1, skipped=8)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_process_parity_tests.py",
+        "exit_code": 0,
+        "cases": 7,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_search_tests.py",
+        "exit_code": 1,
+        "cases": 25,
+        "summary": "FAILED (failures=19)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_compat_x11_selection_recovery_tests.py",
+        "exit_code": 1,
+        "cases": 29,
+        "summary": "FAILED (errors=1, skipped=2)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/chatgpt_bridge_installed_acceptance.py",
+        "exit_code": 0,
+        "cases": null,
+        "summary": "PASS complete compile and effect-blocked import; __main__ not executed",
+        "mode": "compile_and_effect_blocked_module_import_only"
+      },
+      {
+        "path": "tests/checkpoint_backend_acceptance.py",
+        "exit_code": 0,
+        "cases": null,
+        "summary": "PASS complete compile and effect-blocked import; __main__ not executed",
+        "mode": "compile_and_effect_blocked_module_import_only"
+      },
+      {
+        "path": "tests/criu_external_reconcile.py",
+        "exit_code": 0,
+        "cases": null,
+        "summary": "PASS complete compile and effect-blocked import; __main__ not executed",
+        "mode": "compile_and_effect_blocked_module_import_only"
+      },
+      {
+        "path": "tests/dc_functional_v6_metadata_acceptance.py",
+        "exit_code": 0,
+        "cases": null,
+        "summary": "PASS complete compile and effect-blocked import; __main__ not executed",
+        "mode": "compile_and_effect_blocked_module_import_only"
+      },
+      {
+        "path": "tests/dc_functional_v9_credential_scope_acceptance.py",
+        "exit_code": 0,
+        "cases": null,
+        "summary": "PASS complete compile and effect-blocked import; __main__ not executed",
+        "mode": "compile_and_effect_blocked_module_import_only"
+      },
+      {
+        "path": "tests/dc_functional_v9_search_six_host_acceptance.py",
+        "exit_code": 0,
+        "cases": null,
+        "summary": "PASS complete compile and effect-blocked import; __main__ not executed",
+        "mode": "compile_and_effect_blocked_module_import_only"
+      },
+      {
+        "path": "tests/chatgpt_current_backends_tests.py",
+        "exit_code": 0,
+        "cases": 44,
+        "summary": "OK",
+        "mode": "downstream_fixture_inheritance_regression"
+      },
+      {
+        "path": "tests/dc_parity_full_facade_pins_tests.py",
+        "exit_code": 0,
+        "cases": 4,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_parity_v4_deployment_tests.py",
+        "exit_code": 0,
+        "cases": 7,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_parity_v4_staging_tests.py",
+        "exit_code": 0,
+        "cases": 4,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/format_completion_tests.py",
+        "exit_code": 1,
+        "cases": 12,
+        "summary": "FAILED (errors=11)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_readonly_inventory_collector_tests.py",
+        "exit_code": 0,
+        "cases": 19,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/dc_readonly_inventory_tests.py",
+        "exit_code": 0,
+        "cases": 37,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/effect_owner_enrollment_tests.py",
+        "exit_code": 0,
+        "cases": 11,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/stream_history_tests.py",
+        "exit_code": 1,
+        "cases": 4,
+        "summary": "FAILED (failures=2)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/mac_hia_activation_tests.py",
+        "exit_code": 0,
+        "cases": 42,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/maintenance_readiness_tests.py",
+        "exit_code": 0,
+        "cases": 11,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/metadata_preservation_tests.py",
+        "exit_code": 0,
+        "cases": 8,
+        "summary": "OK (skipped=2)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/rea_lifecycle_qualification_tests.py",
+        "exit_code": 1,
+        "cases": 50,
+        "summary": "FAILED (errors=1)",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/rea_operation_evidence_tests.py",
+        "exit_code": 0,
+        "cases": 22,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      },
+      {
+        "path": "tests/rea_ghidra_analysis_external_tests.py",
+        "exit_code": 0,
+        "cases": 10,
+        "summary": "OK",
+        "mode": "actual_modified_file_offline_unit_suite"
+      }
+    ],
+    "group_a_summary": {
+      "original_modified_unit_suites_executed": 20,
+      "zero_exit_unit_suites": 14,
+      "discovered_tests_in_zero_exit_suites": 221,
+      "explicit_skips_in_zero_exit_suites": 24,
+      "executed_passing_tests_in_zero_exit_suites": 197,
+      "preexisting_failure_suites_with_identical_before_after_failure_signatures": 6,
+      "inert_acceptance_compile_imports": 6,
+      "additional_downstream_tests": 44
+    },
+    "group_b_summary": {
+      "suite_invocations": 14,
+      "total_cases_reported": 241,
+      "successful_suites": 11,
+      "cases_in_successful_suites": 175,
+      "known_environment_blocked_suites": 3,
+      "skipped_cases_in_successful_suites": 2,
+      "baseline_failure_case_sets_equal": true,
+      "group_b_diff_check": "PASS",
+      "non_import_AST_unchanged_in_all39files": true,
+      "core_source_baseline": "93d43067bc6e0bac92a686b04cf322c564f66a81",
+      "core_inputs_verified_unchanged": 608
+    },
+    "original_failure_comparisons": [
+      {
+        "path": "tests/complex_worksheet_tests.py",
+        "same_original_failure_signature": true,
+        "original_summary": {
+          "summary": "FAILED (errors=10)",
+          "missing_dependencies": [
+            "formulas"
+          ],
+          "missing_paths": [],
+          "unix_socket_denied": false
+        },
+        "matching_failed_cases": 10
+      },
+      {
+        "path": "tests/dc_compat_chromium_pdf_tests.py",
+        "same_original_failure_signature": true,
+        "original_summary": {
+          "summary": "FAILED (failures=8, errors=1)",
+          "missing_dependencies": [
+            "markdown"
+          ],
+          "missing_paths": [],
+          "unix_socket_denied": false
+        },
+        "matching_failed_cases": 9
+      },
+      {
+        "path": "tests/dc_compat_filesystem_tests.py",
+        "same_original_failure_signature": true,
+        "original_summary": {
+          "summary": "FAILED (failures=6, errors=1)",
+          "missing_dependencies": [],
+          "missing_paths": [
+            "/home/qian-qi/.local/lib/hepta-runtime/document-env-formats-20261006/bin/python"
+          ],
+          "unix_socket_denied": false
+        },
+        "matching_failed_cases": 7
+      },
+      {
+        "path": "tests/dc_compat_gnome_window_tests.py",
+        "same_original_failure_signature": true,
+        "original_summary": {
+          "summary": "FAILED (errors=1, skipped=8)",
+          "missing_dependencies": [],
+          "missing_paths": [
+            "/workspace/scratch/18fa0cf67269/hepta-runtime-audit-history/deploy/dc_compat/gnome_window_extension/LICENSE"
+          ],
+          "unix_socket_denied": false
+        },
+        "matching_failed_cases": 1
+      },
+      {
+        "path": "tests/dc_compat_search_tests.py",
+        "same_original_failure_signature": true,
+        "original_summary": {
+          "summary": "FAILED (failures=19)",
+          "missing_dependencies": [],
+          "missing_paths": [],
+          "unix_socket_denied": false
+        },
+        "matching_failed_cases": 19
+      },
+      {
+        "path": "tests/dc_compat_x11_selection_recovery_tests.py",
+        "same_original_failure_signature": true,
+        "original_summary": {
+          "summary": "FAILED (errors=1, skipped=2)",
+          "missing_dependencies": [],
+          "missing_paths": [],
+          "unix_socket_denied": true
+        },
+        "matching_failed_cases": 1
+      },
+      {
+        "path": "tests/format_completion_tests.py",
+        "same_original_failure_signature": true,
+        "cause": "Environment lacks formulas, markdown_it and xlwt; unchanged original test source has the same11 failed cases."
+      },
+      {
+        "path": "tests/stream_history_tests.py",
+        "same_original_failure_signature": true,
+        "cause": "User systemd manager is unavailable; unchanged original test source fails the same2 prepare cases before owner launch."
+      },
+      {
+        "path": "tests/rea_lifecycle_qualification_tests.py",
+        "same_original_failure_signature": true,
+        "cause": "Private child /proc/PID/task/PID/children observation is unavailable; unchanged original test source fails the same1 phase-observation case."
+      }
+    ],
+    "failure_scope": "Original import-cleanup tests retain their observed failures and skips. The GNOME packaging failure is separately repaired below; remaining local limitations are not relabelled as passing tests. Live-host acceptance entrypoints were not executed.",
+    "gnome_packaging_repair": {
+      "problem": "build_package lists LICENSE as an extension-local input, but that file never existed in the tracked extension directory. The root Apache-2.0 LICENSE is the authoritative existing source.",
+      "source_changes": [
+        {
+          "path": "deploy/dc_compat/gnome_window_install.py",
+          "before": {
+            "bytes": 5082,
+            "sha256": "a3a4dee3e3248926a5b5e9c5c183ead8cfcdbfb224c042f3d12980263d903e10",
+            "git_blob": "a7552ac0a7511e15ec5bfbf01b859a393df8c175"
+          },
+          "after": {
+            "bytes": 5186,
+            "sha256": "3bc246297239b7cf21e19a80209019081eb8f1f0c218e7cc505ddbeebafe1d09",
+            "git_blob": "695fc888f61cf737d3d5c8e375ee5fb78eac7941"
+          }
+        },
+        {
+          "path": "tests/dc_compat_gnome_window_tests.py",
+          "before": {
+            "bytes": 11947,
+            "sha256": "3be5fa802c74150320be6c6e8e31dec42084fcd56d294be756c54debaad8fb6f",
+            "git_blob": "ef9789c122754fe06b1d576270053ad285ab9991"
+          },
+          "after": {
+            "bytes": 12024,
+            "sha256": "76d512c2f7f4e34ddbd569eb75b8a4ad59f4fcf0c445c618a8cfb5600dcdbe9a",
+            "git_blob": "e402e972c518c98d0d481bae7f88b9f9b5f72044"
+          }
+        }
+      ],
+      "root_license_unchanged": true,
+      "new_license_copy_added": false,
+      "original_suite": {
+        "exit_code": 0,
+        "discovered": 11,
+        "passed": 3,
+        "skipped": 8,
+        "skip_reason": "GJS/private D-Bus dependencies unavailable; existing suite skip policy unchanged."
+      },
+      "zip": {
+        "archive_bytes": 9294,
+        "sha256": "d9fea2812d0c55f1e55197eb459c3d63133e81e629a7d0763db235faa6bd83c7",
+        "archive_bytes_identical": true,
+        "entry_count": 5,
+        "entries": [
+          {
+            "name": "metadata.json",
+            "bytes": 399,
+            "sha256": "e6ff654446d0124e9995e1432da4839acf805e6acebcf5654ea2a952e579493f",
+            "exact_source_bytes": true
+          },
+          {
+            "name": "extension.js",
+            "bytes": 2147,
+            "sha256": "13f7e45aa93e656ab87257fd8e64213bf63b8892cabee8908f918e25ab414d70",
+            "exact_source_bytes": true
+          },
+          {
+            "name": "logic.js",
+            "bytes": 5343,
+            "sha256": "a2e1d27fe53ff075a18ea9a3fb3b29dcf73147a66d5a4a3fdd7ca77e46ba87c6",
+            "exact_source_bytes": true
+          },
+          {
+            "name": "service.js",
+            "bytes": 5418,
+            "sha256": "e6a215932da3e2391e91b29982417c70417231c8da572d86ca9a1957a83823df",
+            "exact_source_bytes": true
+          },
+          {
+            "name": "LICENSE",
+            "bytes": 11357,
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+            "exact_source_bytes": true
+          }
+        ],
+        "license_source": "LICENSE",
+        "root_license_bytes_identical": true,
+        "install_enable_or_network_executed": false
+      },
+      "ci_regression": "Repository Hygiene executes the three original PackagingTests cases; the full private-bus suite still requires GJS and a private D-Bus environment."
+    },
+    "native_source_reference": "93d43067bc6e0bac92a686b04cf322c564f66a81",
+    "scope": "Import-only AST proof is for the intermediate import edits. The later GNOME packaging assertion update is a separate explicit behavior correction.",
+    "status": "PASS_SOURCE_REVIEW_WITH_EXPLICIT_LOCAL_TEST_LIMITATIONS"
   }
 }

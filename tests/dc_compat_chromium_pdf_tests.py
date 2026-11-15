@@ -3,9 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Fresh private Chrome only; inspect actual PDF geometry/text/rendered pixels."""
 import asyncio
-import io
-import json
-import os
 from pathlib import Path
 import subprocess
 import sys

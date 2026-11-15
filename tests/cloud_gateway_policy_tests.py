@@ -8,9 +8,7 @@ public traffic is accepted or production credentials created by this suite.
 import dataclasses
 import hashlib
 import json
-import os
 import pathlib
-import sqlite3
 import sys
 import tempfile
 import threading
@@ -21,7 +19,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'deploy'))
 from mcp_tool_contract import ToolContract
 from cloud_gateway_policy import (
-    AuthenticatedAgent, AuthenticatedUser, DispatchPermit, GatewayPolicy,
+    AuthenticatedAgent, AuthenticatedUser, GatewayPolicy,
     OnceOnlyLedger, Rejected, TenantBinding,
 )
 

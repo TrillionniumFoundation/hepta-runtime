@@ -5,7 +5,6 @@ Sources retain formula encoding and unselected ZIP payloads; no Excel/office pro
 """
 import hashlib
 import importlib.util
-import io
 import json
 import pathlib
 import tempfile

@@ -14,9 +14,6 @@ import json
 import os
 from pathlib import Path
 import secrets
-import shutil
-import subprocess
-import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src/mcp/runtime/jobs.rs"

@@ -9,12 +9,12 @@ on:
       - 'docs/rea-native/compatibility/**'
       - 'scripts/*verify_rust_consolidation.py'
       - 'deploy/dc_replacement_gate.py'
-      - 'tests/*ledger_tests.py'
-      - 'tests/dc_replacement_gate_tests.py'
-      - 'tests/dc_functional_v*.py'
+      - 'tests/**'
       - 'deploy/chatgpt_mcp_bridge.py'
       - 'deploy/readonly-bridge/**'
-      - 'tests/chatgpt_bridge*'
+      - 'deploy/dc_compat/gnome_window_install.py'
+      - 'deploy/dc_compat/gnome_window_extension/**'
+      - 'LICENSE'
       - 'tools/x230/**'
       - 'Cargo.toml'
       - '.github/workflows/repository-hygiene.yml'
@@ -25,12 +25,12 @@ on:
       - 'docs/rea-native/compatibility/**'
       - 'scripts/*verify_rust_consolidation.py'
       - 'deploy/dc_replacement_gate.py'
-      - 'tests/*ledger_tests.py'
-      - 'tests/dc_replacement_gate_tests.py'
-      - 'tests/dc_functional_v*.py'
+      - 'tests/**'
       - 'deploy/chatgpt_mcp_bridge.py'
       - 'deploy/readonly-bridge/**'
-      - 'tests/chatgpt_bridge*'
+      - 'deploy/dc_compat/gnome_window_install.py'
+      - 'deploy/dc_compat/gnome_window_extension/**'
+      - 'LICENSE'
       - 'tools/x230/**'
       - 'Cargo.toml'
       - '.github/workflows/repository-hygiene.yml'
@@ -69,6 +69,8 @@ jobs:
           python3 -B tests/chatgpt_bridge_tests.py -v
           python3 -B tests/chatgpt_bridge_stdio_tests.py -v
           python3 -B tests/chatgpt_bridge_http_tests.py -v
+      - name: GNOME extension package and private config
+        run: python3 -B tests/dc_compat_gnome_window_tests.py PackagingTests -v
       - name: Retained X230 qualification harnesses
         run: |
           set -euo pipefail

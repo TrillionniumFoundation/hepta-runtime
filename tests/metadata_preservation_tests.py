@@ -2,14 +2,12 @@
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 """Disposable real-file tests for ACL/xattr preservation and atomic failure."""
 import base64
-import hashlib
 import importlib.util
 import json
 import os
 import pathlib
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest import mock

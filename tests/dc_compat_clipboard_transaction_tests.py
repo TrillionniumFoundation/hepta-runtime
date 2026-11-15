@@ -2,7 +2,6 @@
 """Private clipboard offers and real pipe FDs; never the user clipboard."""
 import base64
 from collections import deque
-import hashlib
 import json
 import os
 from pathlib import Path

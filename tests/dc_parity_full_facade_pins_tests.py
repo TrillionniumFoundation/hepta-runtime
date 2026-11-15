@@ -6,7 +6,6 @@ This does not start a tunnel or execute operations. Hosted CI can run it
 without any real workstation, SSH identity, installed native release or token.
 """
 import json
-import os
 import pathlib
 import sys
 import tempfile

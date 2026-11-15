@@ -7,7 +7,6 @@ qualification; the authenticated-MCP acceptance is a separate required test.
 import argparse
 import hashlib
 import json
-import os
 import pathlib
 import secrets
 import subprocess

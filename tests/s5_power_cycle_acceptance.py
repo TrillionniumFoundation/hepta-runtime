@@ -7,7 +7,6 @@ received magic packet and readback of temporary WOL+RTC settings before shutdown
 import argparse
 import datetime
 import json
-import os
 import pathlib
 import re
 import shlex

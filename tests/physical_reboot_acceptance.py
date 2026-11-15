@@ -6,7 +6,6 @@ idle runner briefly, restore it on abort; do not reboot the controller or DC hos
 """
 import argparse
 import datetime
-import hashlib
 import json
 import os
 import pathlib

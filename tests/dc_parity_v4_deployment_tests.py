@@ -3,7 +3,6 @@
 """Offline failure/rollback helper tests; never touch live systemd or credentials."""
 import importlib.util
 import json
-import os
 import pathlib
 import stat
 import tempfile

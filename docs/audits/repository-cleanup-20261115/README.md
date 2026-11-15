@@ -12,7 +12,7 @@ evidence-reader paths and original-source retention.
 | Metric | Original baseline | Current tree |
 | --- | ---: | ---: |
 | Tracked files | 17,673 | 5,306 |
-| Tracked-file bytes | 1,864,002,891 | 161,913,642 |
+| Tracked-file bytes | 1,864,002,891 | 161,980,585 |
 | Python files | 1,986 | 590 |
 
 **12,380 historical files / 1,705,926,359 original bytes** have
@@ -199,13 +199,24 @@ qualification. All public data, receipts and manifests remain intact;
 six current Markdown explanations link back to the original source packages.
 
 This follow-up preserves every one of the preceding 47 manifests and 17,121
-original rows. It adds 321 complete original file identities. All 608 core inputs,
-all 214 embedded references / 141 unique inputs, and maintained test/fixture inputs
-are unchanged from the Rust-validation reference commit `93d43067`. Only the
-custody verifier's immutable checkpoint literal changes among maintained scripts.
+original rows. It adds 321 complete original file identities. All 608 core inputs
+and all 214 embedded references / 141 unique inputs are unchanged from the
+Rust-validation reference commit `93d43067`. The custody verifier's immutable
+checkpoint literal binds the new manifest. Python test import cleanup is recorded
+separately below, with the preserved imports and source identity checks.
 The current branch and HIA custody inventories outside `validation/` remain
 byte-identical. After real deletion, REA mapping and 29 ledger regressions pass,
 with zero reads of retired paths. Original REA parity remains 229 OPEN / 0 qualified.
+
+## Unused test imports
+
+A separate review classifies all 115 static unused-import candidates. It removes 79 unused imports from 54 test files (998 source bytes). Compiler directives, dynamic exports, current source-admission pins and independent frozen qualification inputs retain their required bytes. An old source snapshot is distinguished from a current enforced pin.
+
+For the import-cleanup phase, the AST of every statement other than an import is unchanged; the complete import inventory only loses the reviewed entries. Existing offline tests are run after the actual edits. Live-host acceptance campaigns are not re-executed. The new source has its own Repository Hygiene run; an earlier head's success is not claimed as this head's result. Exact changed files, source identities, candidate dispositions and scoped verification are recorded in the JSON audit records.
+
+The broader offline regression pass also found an existing GNOME package defect: the extension-local LICENSE input had never been tracked. The packager now reads the existing root Apache-2.0 LICENSE, and its existing exact-byte assertion uses that canonical source. No license copy is added. Two resulting ZIP files match byte-for-byte, contain five entries, and retain the complete root license. This behavior correction and assertion update are separate from the import-only AST proof. The three original PackagingTests cases are included in Repository Hygiene.
+
+The local full GNOME suite passes its three packaging/configuration cases and keeps eight original GJS/private-D-Bus dependency skips. Eight other local suites retain environment limitations reproduced with the original test bytes; no failure or skip is reported as a passing execution.
 
 ## Recovery
 
