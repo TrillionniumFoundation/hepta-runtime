@@ -1,0 +1,94 @@
+	fn arguments(
+		&self,
+		host: &str,
+		mode: Mode,
+		socket: &Path,
+		effective: bool,
+	) -> Result<Vec<String>> {
+		let target = self
+			.profile
+			.hosts
+			.get(host)
+			.context("host is outside observation profile")?;
+		let mut args = vec![
+			"/usr/bin/ssh".to_owned(),
+			"-F".into(),
+			self.profile.config.to_string_lossy().into_owned(),
+		];
+		if effective {
+			args.push("-G".into());
+		}
+		args.push("-T".into());
+		let mut options: Vec<(String, String)> = vec![
+			("BatchMode", "yes"),
+			("ConnectTimeout", "8"),
+			("ConnectionAttempts", "1"),
+			("StrictHostKeyChecking", "yes"),
+			("ForwardAgent", "no"),
+			("ForwardX11", "no"),
+			("ClearAllForwardings", "yes"),
+			("PermitLocalCommand", "no"),
+			("RemoteCommand", "none"),
+			("ForkAfterAuthentication", "no"),
+			("ControlPersist", "no"),
+			("ProxyJump", "none"),
+			("ProxyUseFdpass", "no"),
+			("IdentityFile", "none"),
+			("CertificateFile", "none"),
+			("PreferredAuthentications", "publickey"),
+			("PubkeyAuthentication", "yes"),
+			("PasswordAuthentication", "no"),
+			("KbdInteractiveAuthentication", "no"),
+			("GSSAPIAuthentication", "no"),
+			("HostbasedAuthentication", "no"),
+			("PKCS11Provider", "none"),
+			("SecurityKeyProvider", "internal"),
+			("AddKeysToAgent", "no"),
+			("UpdateHostKeys", "no"),
+			("KnownHostsCommand", "none"),
+			("VerifyHostKeyDNS", "no"),
+			("CheckHostIP", "no"),
+			("CanonicalizeHostname", "no"),
+			("GlobalKnownHostsFile", "/dev/null"),
+		]
+		.into_iter()
+		.map(|(key, value)| (key.to_owned(), value.to_owned()))
+		.collect();
+		options.extend([
+			(
+				"IdentityAgent".into(),
+				self.profile.agent.to_string_lossy().into_owned(),
+			),
+			(
+				"UserKnownHostsFile".into(),
+				self.profile.known_hosts.to_string_lossy().into_owned(),
+			),
+			("ControlPath".into(), socket.to_string_lossy().into_owned()),
+			(
+				"ControlMaster".into(),
+				if matches!(mode, Mode::Master) {
+					"yes"
+				} else {
+					"no"
+				}
+				.into(),
+			),
+			(
+				"ProxyCommand".into(),
+				if matches!(mode, Mode::Slave) {
+					"/usr/bin/false"
+				} else {
+					"none"
+				}
+				.into(),
+			),
+		]);
+		for (key, value) in options {
+			args.extend(["-o".into(), format!("{key}={value}")]);
+		}
+		if matches!(mode, Mode::Master) {
+			args.extend(["-N".into(), "-n".into()]);
+		}
+		args.extend(["--".into(), target.clone()]);
+		Ok(args)
+	}

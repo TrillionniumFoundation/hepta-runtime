@@ -1,0 +1,14 @@
+	fn policy_digest(&self) -> Result<[u8; 32]> {
+		self.policy_digest
+			.get_or_init(|| {
+				let bytes = serde_json::to_vec(&self.config)?;
+				let mut digest = [0; 32];
+				digest
+					.copy_from_slice(ring::digest::digest(&ring::digest::SHA256, &bytes).as_ref());
+				Ok(digest)
+			})
+			.as_ref()
+			.copied()
+			.map_err(|error| anyhow!("{error}"))
+	}
+}

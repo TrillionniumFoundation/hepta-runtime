@@ -1,0 +1,106 @@
+--- a/src/mcp/runtime/jobs.rs
++++ b/src/mcp/runtime/jobs.rs
+@@ -4460,15 +4460,6 @@
+ 	};
+ 	let record = check_ref_async(&reference).await?;
+ 	let host = runtime_config()?.host(&record.host)?;
+-	let request = json!({
+-		"job_id": record.id,
+-		"job_dir": record.remote_job_dir,
+-		"request_digest": record.request_digest,
+-		"unit": record.unit,
+-		"stdout_offset": params.stdout_offset.unwrap_or(0),
+-		"stderr_offset": params.stderr_offset.unwrap_or(0),
+-		"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
+-	});
+ 	let output: Value = if super::ssh::observation_pool_requested() {
+ 		use super::ssh::{run_job_observation, JobObservation};
+ 		let observation = if record.system_jobctl {
+@@ -4497,6 +4488,15 @@
+ 		run_jobctl(host, &json!({"op":"read","job_id":record.id,
+             "stdout_offset":params.stdout_offset.unwrap_or(0),"stderr_offset":params.stderr_offset.unwrap_or(0),"limit":params.limit.unwrap_or(16384)})).await?
+ 	} else {
++		let request = json!({
++			"job_id": record.id,
++			"job_dir": record.remote_job_dir,
++			"request_digest": record.request_digest,
++			"unit": record.unit,
++			"stdout_offset": params.stdout_offset.unwrap_or(0),
++			"stderr_offset": params.stderr_offset.unwrap_or(0),
++			"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
++		});
+ 		run_python_json(
+ 			host,
+ 			&bound_remote_code(READ_CODE)?,
+--- a/src/mcp/runtime/ssh_observation_pool.rs
++++ b/src/mcp/runtime/ssh_observation_pool.rs
+@@ -1377,11 +1377,11 @@
+ 	}
+ 	async fn execute(
+ 		self: Arc<Self>,
+-		request: Request,
++		mut request: Request,
+ 		initial: OwnedSemaphorePermit,
+ 		global: Arc<Semaphore>,
+ 	) {
+-		let result = self.clone().execute_inner(&request, initial, global).await;
++		let result = self.clone().execute_inner(&mut request, initial, global).await;
+ 		let _ = request.reply.send(result);
+ 	}
+ 	async fn admission_profile(
+@@ -1421,7 +1421,7 @@
+ 	}
+ 	async fn execute_inner(
+ 		self: Arc<Self>,
+-		request: &Request,
++		request: &mut Request,
+ 		initial: OwnedSemaphorePermit,
+ 		global: Arc<Semaphore>,
+ 	) -> Result<Captured> {
+@@ -1508,7 +1508,7 @@
+ 		}
+ 		drop(stream);
+ 		let mut args = self.arguments(&request.host, Mode::Slave, &master.socket, false)?;
+-		args.push(request.command.clone());
++		args.push(std::mem::take(&mut request.command));
+ 		let output = self
+ 			.captured(
+ 				args,
+--- a/src/mcp/runtime/ssh_observation_pool_tests.rs
++++ b/src/mcp/runtime/ssh_observation_pool_tests.rs
+@@ -989,7 +989,7 @@
+ 			old.active.store(1, Ordering::Release);
+ 			let request_cancel = CancellationToken::new();
+ 			let (reply, _) = oneshot::channel();
+-			let request = Request {
++			let mut request = Request {
+ 				host: "fixture".into(),
+ 				command: "NEVER_DISPATCH".into(),
+ 				input: vec![],
+@@ -1009,7 +1009,7 @@
+ 			let global = permits.clone();
+ 			let task =
+ 				tokio::spawn(
+-					async move { task_core.execute_inner(&request, permit, global).await },
++					async move { task_core.execute_inner(&mut request, permit, global).await },
+ 				);
+ 			timeout(Duration::from_secs(3), async {
+ 				while old.accepting.load(Ordering::Acquire) {
+@@ -2537,7 +2537,7 @@
+ 				agent_control.stall.store(true, Ordering::Release);
+ 				let cancel = CancellationToken::new();
+ 				let (reply, _) = oneshot::channel();
+-				let request = Request {
++				let mut request = Request {
+ 					host: "fixture".into(),
+ 					command: "NEVER_DISPATCH".into(),
+ 					input: vec![],
+@@ -2552,7 +2552,7 @@
+ 				let global = permits.clone();
+ 				let task =
+ 					tokio::spawn(
+-						async move { task_core.execute_inner(&request, permit, global).await },
++						async move { task_core.execute_inner(&mut request, permit, global).await },
+ 					);
+ 				timeout(Duration::from_secs(1), agent_control.entered.notified())
+ 					.await
