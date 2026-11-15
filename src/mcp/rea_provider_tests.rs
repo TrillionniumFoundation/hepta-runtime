@@ -1011,7 +1011,12 @@ fn ghidra_revisions_three_and_four_reject_instruction_profiles_before_worker_adm
 	input.request.operation = StaticOperation::Instructions;
 	input.request.function_address = Some("0x401000".into());
 	for revision in [3, 4] {
-		input.profile.ghidra_engine.as_mut().unwrap().bridge_revision = Some(revision);
+		input
+			.profile
+			.ghidra_engine
+			.as_mut()
+			.unwrap()
+			.bridge_revision = Some(revision);
 		input.request.profile_sha256 = sha256(&serde_json::to_vec(&input.profile).unwrap());
 		assert!(validate_profile(&input.profile).is_err());
 		assert!(validate_worker_request(&input).is_err());
