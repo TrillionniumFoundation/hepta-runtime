@@ -1,0 +1,189 @@
+{
+  "schema": "hepta.independent-framing-security-review.v1",
+  "reviewed_at_utc": "2026-11-15T09:51:39.273784+00:00",
+  "reviewer": "security_audit",
+  "status": "PASS_STATIC_REVIEW_AND_FOCUSED_TEST_EVIDENCE_FULL_CI_REQUIRED",
+  "base_commit": "0414c548c46a2e16a0b58e7595bde7a8c44359ea",
+  "observed_worktree_head": "0414c548c46a2e16a0b58e7595bde7a8c44359ea",
+  "worktree": "/workspace/scratch/d72683e5e62a/runtime-transport-fix",
+  "scope": "Independent read-only code/harness/receipt review. This reviewer ran no build or test and made no repository or remote mutation. Only this scratch report and independent-codec-root-cause.json were written.",
+  "root_cause_evidence": {
+    "path": "/workspace/scratch/d72683e5e62a/runtime-transport-eof-validation/independent-codec-root-cause.json",
+    "sha256": "ac2e8480c08785f107bfecb167cccf29606fd9061824acd5826d1d86186010cd",
+    "codec_region_sha256": "9dd14883eeab5ae216ed7081f235327169f8addc911ee27db252dd408005bc75",
+    "whole_codec_region_byte_identical_between_versions": true
+  },
+  "patch": {
+    "changed_paths": [
+      "src/mcp/rea_mcp_transport_tests.rs"
+    ],
+    "diff_sha256": "1d2336eb1a67b1968aa6d0475a65ef6a8fdc3e436d5f9e06071e35b437d97e08",
+    "final_test_file_sha256": "d997887ca47167839ae53de16d68acb1d044d06a76045b0f712ab9afa5e9b0d5",
+    "only_framing_test_region_changed": true,
+    "all_test_code_outside_that_region_byte_identical": true,
+    "production_and_locks": [
+      {
+        "path": "Cargo.toml",
+        "sha256": "bf00111f6ec88df9df4d0d1d14c125a64ce4f6bdc6724ba20e70498f56dcae7f",
+        "matches_base": true
+      },
+      {
+        "path": "Cargo.lock",
+        "sha256": "1509860cac0e7f26e6a845edfec1c87ae3bd92380ecaa357457e5263e861d631",
+        "matches_base": true
+      },
+      {
+        "path": "src/mcp/rea_mcp_transport.rs",
+        "sha256": "3aca3e49cb4ae779617a5439350da6304fcf275a55fb594baabf9c38f2b96862",
+        "matches_base": true
+      },
+      {
+        "path": "src/mcp/rea_inline_order.rs",
+        "sha256": "67887ec3a1a1e01b7bc2d46edef35eb7f204d98c880fdd455b17bfd9b51917cb",
+        "matches_base": true
+      },
+      {
+        "path": "src/mcp/rea_structured_wire.rs",
+        "sha256": "cae260bb5c7d978283d67417a147950c6a9b334413a07fc7561e1b7b2b915a60",
+        "matches_base": true
+      },
+      {
+        "path": "src/mcp/rea_structured_wire_tests.rs",
+        "sha256": "354f9a4cafd94748a16e8dedfed38128472ab6f465c1a09d7f205d0fa636458c",
+        "matches_base": true
+      }
+    ],
+    "all_other_tracked_paths_including_frozen_fixtures_unchanged_vs_base": true,
+    "new_ignore_attributes": false,
+    "retry_or_skip_configuration_modified": false
+  },
+  "test_assertion_review": [
+    {
+      "name": "sdk_bom_crlf_and_newline_frames_keep_their_behavior",
+      "assessment": "Original key-order assertion is retained for BOM+CRLF and normal LF. Historical EOF acceptance is explicitly moved into the separate changed-semantics test, not silently dropped."
+    },
+    {
+      "name": "eof_without_newline_matches_the_bounded_sdk_framing",
+      "assessment": "Asserts input is valid typed JSON; both actual SDK and adapter return None for selected REA and unrelated view names; private frame slot is cleared and subsequent receive remains None."
+    },
+    {
+      "name": "sdk_line_limit_discards_oversized_frames_without_poisoning_the_next_capture",
+      "assessment": "Constructs valid JSON exceeding actual SDK DEFAULT_MAX_LINE_LENGTH. Both transports must deliver next request id2; full message value matches, bounded frame is true, protocol error absent and raw key order belongs to next frame. Then both end cleanly."
+    },
+    {
+      "name": "raw_capture_limit_stays_stricter_than_the_sdk_line_limit",
+      "assessment": "Uses real frame larger than 10MiB but smaller than 16MiB. SDK accepts its typed JSON and adapter preserves parsed value, while private capture explicitly denies it with unchanged 10485760-byte error and no key-order proof."
+    }
+  ],
+  "harness_review": {
+    "path": "/workspace/scratch/d72683e5e62a/runtime-transport-eof-validation/harness",
+    "real_source_modules_included_by_absolute_path": [
+      "rea_inline_order",
+      "rea_mcp_transport",
+      "rea_structured_wire"
+    ],
+    "real_transport_and_structured_writer_sibling_tests_loaded": true,
+    "transport_or_sdk_mock": false,
+    "helper_checks": [
+      {
+        "name": "RESPONSE_BYTES",
+        "exact_original_item_bytes_present": true,
+        "item_sha256_without_trailing_newlines": "b97b6be40fbcb58496f0bfd340a80ab3e80ea79607504d0807e2e3126b586fd5"
+      },
+      {
+        "name": "Failure",
+        "exact_original_item_bytes_present": true,
+        "item_sha256_without_trailing_newlines": "ba735e2e17f0d73ec5e69015e9dfd15cf6781cac0cb5cdf9a74304166a257a47"
+      },
+      {
+        "name": "response_budget",
+        "exact_original_item_bytes_present": true,
+        "item_sha256_without_trailing_newlines": "49cd721662d702756dd106d671702f2de065c58d8bdd4f42e9c19e4bc3a8f7a9"
+      },
+      {
+        "name": "parse_unique_json_and_helpers",
+        "exact_original_item_bytes_present": true,
+        "item_sha256_without_trailing_newlines": "7de69103d16f658cb83f465e72dbfd49032a4058804ce3149e18a134aa2808e5"
+      }
+    ],
+    "dependency_count_excluding_harness": 105,
+    "all_dependency_versions_sources_checksums_match_original_lock": true,
+    "rmcp_features_match_root_production_plus_dev_client": true,
+    "harness_files": [
+      {
+        "path": "Cargo.toml",
+        "sha256": "8a59bab4cbf63e766f6a314b9ee8418ce542eabe03d85b6cb3e14f83dc32041d"
+      },
+      {
+        "path": "Cargo.lock",
+        "sha256": "71a0785012abf4a0201a26da02eb865f4371b73fd98e490d68dbaa77be0a195a"
+      },
+      {
+        "path": "src/lib.rs",
+        "sha256": "a0a3cd248566e8e7f487bb38bfb545d0cbaa86c3f01862efba640e54fc6892b2"
+      },
+      {
+        "path": "src/rea_contract.rs",
+        "sha256": "b4c35db782c1f7860b4727c3499131e0a6f79b16843d394662bf31dd32455bc5"
+      },
+      {
+        "path": "src/rea_evidence.rs",
+        "sha256": "212f8e68ce8c0e4f0c2a0607bdde9f4c43801061d01afdd61273ed1a128d66f1"
+      }
+    ],
+    "scope_limit": "Focused compilation of actual transport, inline-order, structured writer and their tests, with exact required helper items. It does not compile the full application graph, execute all frozen contract fixtures, or replace hosted full CI."
+  },
+  "reviewed_validation_receipts": [
+    {
+      "receipt": "01-baseline-eof-reproduction.json",
+      "receipt_sha256": "421f6d214a769ac71a063cd4fd03a2463b30ce9933c20b07f0b4fd3bc1035b39",
+      "argv": [
+        "/home/agent/.cargo/bin/cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--lib",
+        "mcp::rea_mcp_transport::tests::sdk_bom_crlf_and_final_line_at_eof_keep_their_behavior",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "source_unchanged_during_command": true,
+      "log": "01-baseline-eof-reproduction.log",
+      "log_sha256": "b521716f11a5c9fd01db58d1b28801852c99fb05ea12d038cff687c4a6006d91"
+    },
+    {
+      "receipt": "02-framing-regressions.json",
+      "receipt_sha256": "d22bad42c71a24d9f44032ee3682606114e57fb9d615dc66e5217be5e0c25fe7",
+      "argv": [
+        "/home/agent/.cargo/bin/cargo",
+        "+1.95.0",
+        "nextest",
+        "run",
+        "--locked",
+        "--offline",
+        "--lib",
+        "--test-threads",
+        "1",
+        "--no-fail-fast",
+        "--retries",
+        "0"
+      ],
+      "exit_code": 0,
+      "source_unchanged_during_command": true,
+      "log": "02-framing-regressions.log",
+      "log_sha256": "4a2de0708a98bde31c83dbfdac8d2c7a3d27be0405aec6c28fa7698892450fec"
+    }
+  ],
+  "focused_result": {
+    "tests_run": 34,
+    "passed": 34,
+    "skipped": 0,
+    "retries": 0,
+    "baseline_original_failure_reproduced_before_edit": true
+  },
+  "compatibility_disclosure": "The accepted behavior change is real: rmcp3.4 delivered some complete JSON EOF tails without LF; rmcp3.9 bounded transport does not. Existing adapter policy delegates framing to SDK. This patch updates explicit parity assertions and documents the change; no virtual LF, decoder bypass, limit removal, or frozen-output oracle rewriting was introduced.",
+  "remaining_gate": "Run the repository required full CI on the final new candidate. The prior 0414 full-suite failure and before-patch reproduction remain preserved as evidence."
+}

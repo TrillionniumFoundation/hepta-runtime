@@ -1,0 +1,150 @@
+{
+  "schema": "hepta.rmcp_framing_upgrade_validation.v1",
+  "finalized_utc": "2026-11-15T09:55:47.689153+00:00",
+  "base_head": "0414c548c46a2e16a0b58e7595bde7a8c44359ea",
+  "fix_commit": "7277e877f571f3722a7d4d5573a565a3b2d4ad0d",
+  "status": "FOCUSED_TESTS_AND_REVIEW_PASS_FULL_CI_REQUIRED",
+  "scope": "One transport test file only; production sources, dependency lock and frozen fixtures unchanged.",
+  "compatibility_change": "rmcp 3.9 actual bounded AsyncRwTransport no longer delivers valid JSON at EOF without LF. The project delegates framing to the SDK; tests explicitly document this tightening, not a wrong-codec-test explanation.",
+  "checks": [
+    {
+      "name": "01-baseline-eof-reproduction",
+      "status": "REPRODUCED_ORIGINAL_TEST_FAILURE",
+      "exit_code": 101,
+      "elapsed_seconds": 74.542,
+      "receipt": "01-baseline-eof-reproduction.json",
+      "log": "01-baseline-eof-reproduction.log",
+      "log_sha256": "b521716f11a5c9fd01db58d1b28801852c99fb05ea12d038cff687c4a6006d91",
+      "source_unchanged": true
+    },
+    {
+      "name": "02-framing-regressions",
+      "status": "PASS",
+      "exit_code": 0,
+      "elapsed_seconds": 9.696,
+      "receipt": "02-framing-regressions.json",
+      "log": "02-framing-regressions.log",
+      "log_sha256": "4a2de0708a98bde31c83dbfdac8d2c7a3d27be0405aec6c28fa7698892450fec",
+      "source_unchanged": true
+    },
+    {
+      "name": "03-repository-format",
+      "status": "PASS",
+      "exit_code": 0,
+      "elapsed_seconds": 2.995,
+      "receipt": "03-repository-format.json",
+      "log": "03-repository-format.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_unchanged": true
+    },
+    {
+      "name": "04-repository-clippy",
+      "status": "NOT_COMPLETED_SIGNAL_9",
+      "exit_code": 101,
+      "elapsed_seconds": 90.055,
+      "receipt": "04-repository-clippy.json",
+      "log": "04-repository-clippy.log",
+      "log_sha256": "31aa4e059ec3ee0a93d278be313fa9b792773dfafe3b9042b401168f1e607e51",
+      "source_unchanged": true
+    },
+    {
+      "name": "05-focused-clippy",
+      "status": "PASS",
+      "exit_code": 0,
+      "elapsed_seconds": 46.652,
+      "receipt": "05-focused-clippy.json",
+      "log": "05-focused-clippy.log",
+      "log_sha256": "200a020134e3632a8bc2d6a7b7544ac89a67cf8c5fd2eb0624436a1bc05294f0",
+      "source_unchanged": true
+    }
+  ],
+  "baseline_test_result": {
+    "run": 1,
+    "passed": 0,
+    "failed": 1,
+    "filtered_out": 30,
+    "reason": "Intentional reproduction before editing; normal real test failure retained, not relabelled as passed or skipped."
+  },
+  "focused_corrected_test_result": {
+    "run": 34,
+    "passed": 34,
+    "failed": 0,
+    "skipped": 0,
+    "retries": 0,
+    "nextest": "0.9.137",
+    "isolated_processes": true,
+    "test_execution_seconds": 2.168
+  },
+  "full_runtime_tests_executed_locally": 0,
+  "full_repository_clippy": {
+    "completed": false,
+    "exit_code": 101,
+    "signal": 9,
+    "signal_name": "SIGKILL",
+    "rust_diagnostics_observed": false,
+    "oom_proven": false,
+    "retried": false,
+    "required_follow_up": "Full strict Clippy on the new hosted exact head and prospective merge"
+  },
+  "harness": {
+    "package_count": 106,
+    "dependency_count": 105,
+    "all_dependency_versions_sources_checksums_in_original_lock": true,
+    "direct_source_modules": [
+      "rea_mcp_transport",
+      "rea_inline_order",
+      "rea_structured_wire"
+    ],
+    "exact_source_helper_items": [
+      "parse_unique_json and unique-key visitor",
+      "response_budget",
+      "Failure",
+      "RESPONSE_BYTES"
+    ],
+    "dead_code_allow_reason": "The focused crate intentionally includes only part of the project; other Clippy lints use -D warnings."
+  },
+  "source": {
+    "commit": "7277e877f571f3722a7d4d5573a565a3b2d4ad0d",
+    "tree": "e011af90db6073b2e98f5b0b0604ef08966c51ce",
+    "parents": [
+      "0414c548c46a2e16a0b58e7595bde7a8c44359ea"
+    ],
+    "message": "test: align stdio framing with bounded rmcp reader",
+    "changed_paths": [
+      "src/mcp/rea_mcp_transport_tests.rs"
+    ],
+    "worktree_status": [],
+    "Cargo_lock_sha256": "1509860cac0e7f26e6a845edfec1c87ae3bd92380ecaa357457e5263e861d631",
+    "test_source_sha256": "d997887ca47167839ae53de16d68acb1d044d06a76045b0f712ab9afa5e9b0d5",
+    "production_transport_sha256": "3aca3e49cb4ae779617a5439350da6304fcf275a55fb594baabf9c38f2b96862"
+  },
+  "independent_review": {
+    "path": "independent-framing-security-review.json",
+    "status": "PASS_STATIC_REVIEW_AND_FOCUSED_TEST_EVIDENCE_FULL_CI_REQUIRED"
+  },
+  "original_hosted_results": {
+    "head": "0414c548c46a2e16a0b58e7595bde7a8c44359ea",
+    "run": 43696649514,
+    "jobs": [
+      {
+        "job": 132758637664,
+        "run": 2630,
+        "passed": 2629,
+        "failed": 1,
+        "skipped": 44
+      },
+      {
+        "job": 132758637878,
+        "run": 2630,
+        "passed": 2629,
+        "failed": 1,
+        "skipped": 44
+      }
+    ],
+    "outcome_preserved_in": "../pr125-ci-watch-0414c548"
+  },
+  "spec_reference": "https://modelcontextprotocol.io/specification/2025-11-25/basic/transports",
+  "spec_scope": "Only supports newline-delimited framing; historical EOF behavior is proved by SDK source and actual transport tests.",
+  "remote_mutations": false,
+  "production_hosts_cloud_tasks_publish": false
+}

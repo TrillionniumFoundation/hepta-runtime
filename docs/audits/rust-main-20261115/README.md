@@ -143,6 +143,28 @@ HTTP 服务无界 schema 缓存涉及当前启用路径；loopback/token 只限�
 两种特性模式的全部 target check、严格 Clippy 与格式检查均通过；这轮本地
 检查未执行 Rust 测试，完整行为仍交由新提交的托管 CI 验证。
 
+### SDK 分帧升级的兼容性边界
+
+rmcp 3.9 的有界 STDIO reader 不再交付 EOF 前没有 LF 的完整 JSON 尾帧；
+旧版 3.4 的 `read_until` 曾接受这种输入。这是实际兼容性收紧，不是测试误用
+`decode_eof`。MCP 的 STDIO 规范以换行划分消息；本项目继续让 SDK 负责分帧，
+不补造换行、不绕过有界 reader。新版默认 16 MiB 行上限同样保留，REA 的
+10 MiB 原始捕获边界仍是独立且更严格的约束。
+
+两版 SDK 的完整 codec 区域逐字节相同，BOM/CRLF 与 JSON 解析代码没有变化。
+候选 `0414c548` 的两个托管 Rust 任务均执行 2,630 项：2,629 passed、1 failed，
+另有 44 skipped；唯一失败是旧的无 LF 尾帧接受预期。原始日志与未运行的后续
+步骤保存在 [0414 托管失败证据](validation/github-pr125-0414c548/README.md)。
+
+后续只修改传输测试：保留 BOM/CRLF 和 LF 正例，明确比较真实 SDK 与包装层的
+EOF 拒收，验证超过 16 MiB 的行丢弃后下一帧恢复、捕获归属，以及 10–16 MiB
+输入仍触发原有 REA 拒绝。生产源码、依赖锁、冻结 fixture 与其他旧测试不变。
+真实模块与 SDK 的薄测试程序先复现原失败，再执行 34 项修订后的相关测试，
+34 passed、0 skipped、0 retries。格式检查通过；本次全仓 Clippy 的 lib-test
+元数据编译被 SIGKILL 终止，退出 101，未记为通过，也未据此断言具体资源原因。
+这些局部检查不代替最终组合的全仓托管 CI。详见
+[SDK 分帧兼容性验证](validation/sdk-framing-compatibility/README.md)。
+
 Python 直接依赖虽固定版本，但未提供完整带 hash 的传递依赖环境；包管理器
 和 runner image 仍是重现性边界。
 
@@ -212,6 +234,17 @@ commit 字节保存在 [publication/](publication/README.md)。
 分支头均为祖先，六个保留引用单独列出，五个重写分支头均未并入；42 份归档
 共验证 5,244 个原始 blob 路径，45 个独立研究文件也保持原字节。
 其含义是历史与源码保管通过，不能解释为生产资格通过。
+
+后续还保存了 [476 中间候选证据](validation/github-pr125-4767ddc/README.md)：
+Cloud 两次全部通过；Rust 预合并全特性完成 2,630 passed、44 skipped 后在下一
+模式编译中被新候选替换而取消，候选任务没有完整 suite 摘要，均不作为最终放行。
+
+[完整 96 个发布提交读回](publication/complete-96-commit-readback.json) 对应截至
+`0414c548` 的 85 个集成提交、一个审计包装提交和两轮各五个修复/证据提交。
+96 个文件树及有序父关系全部一致，95 个原始消息字节完全相同；早期审计包装
+`7f3c795b` 的消息比本地版本仅多一个末尾 LF，该差异单独记录。原始分支提交
+身份全部保持，不把这一审计消息差异称为源代码或原始历史改写。
+
 
 关键只读复核命令：
 
