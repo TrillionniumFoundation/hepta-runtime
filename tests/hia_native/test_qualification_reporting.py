@@ -887,7 +887,7 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
         self.assertEqual(len(MODULES), 53)
-        self.assertEqual(len(migration["native_components"]), 124)
+        self.assertEqual(len(migration["native_components"]), 123)
         self.assertEqual(len(q.native_tests()), 136)
         self.assertEqual(len(RECIPES), 48)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
@@ -1121,6 +1121,12 @@ class QualificationReportingTests(unittest.TestCase):
                          'native/config_json_span.hepta', 'native/config_validation_span.hepta'} <= members)
         self.assertFalse({'native/config_directory_owner.hepta', 'native/config_fs.hepta',
                           'native/config_json.hepta', 'native/config_validation.hepta'} & members)
+        # The former public directory owner has no remaining executable consumer.
+        # Keep its physical retirement and manifest retirement together.
+        retired = 'native/config_directory_owner.hepta'
+        self.assertFalse((ROOT / retired).exists())
+        migration = json.loads((ROOT / 'native/migration.json').read_bytes())
+        self.assertNotIn(retired, {row['source'] for row in migration['native_components']})
         pinned = q.sources()
         for name in (*fs.SOURCE_FILES, *BOUNDARIES, *FIXTURE_BOUNDARIES,
                      'native/runtime_mcp_filesystem_composition.json',

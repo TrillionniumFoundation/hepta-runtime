@@ -204,7 +204,7 @@ activation remain unfinished. The original implementations stay in place.
 
 ## Native components
 
-Qualification covers 124 native HIA sources through 53 executable component
+Qualification covers 123 native HIA sources through 53 executable component
 entries, including 28 HIA packers. Shared owners are compiled in the explicitly
 declared component profiles; they are not counted as additional source files.
 The complete source inventory binds implementation, contracts, builders, tests
