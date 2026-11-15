@@ -121,7 +121,7 @@ async fn run(cli: Cli) -> Result<()> {
 			let transport = match bind {
 				Some(addr) => {
 					// HTTP mode with Streamable HTTP transport.
-					run_http_server(&addr, auth_token_file.as_deref(), runtime_enabled).await
+					run_http_server(&addr, auth_token_file.as_deref()).await
 				}
 				None => {
 					// STDIO mode (default)
@@ -256,19 +256,16 @@ struct HttpAuth {
 	scope: mcp::runtime::caller_scope::AuthenticatedOperatorScope,
 }
 
-fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Option<HttpAuth>> {
+fn load_http_auth(path: Option<&std::path::Path>) -> Result<HttpAuth> {
 	use sha2::{Digest, Sha256};
 	let Some(path) = path else {
-		if required {
-			anyhow::bail!("runtime HTTP mode requires --auth-token-file");
-		}
-		return Ok(None);
+		anyhow::bail!("HTTP MCP requires --auth-token-file");
 	};
 	let token = mcp::runtime::caller_scope::read_private_token(path)?;
-	Ok(Some(HttpAuth {
+	Ok(HttpAuth {
 		token_hash: Sha256::digest(&token).into(),
 		scope: mcp::runtime::caller_scope::AuthenticatedOperatorScope::from_verified_token(&token),
-	}))
+	})
 }
 
 async fn require_http_auth(
@@ -296,16 +293,26 @@ async fn require_http_auth(
 	next.run(request).await
 }
 
-/// Run the MCP server over HTTP with Streamable HTTP transport.
-async fn run_http_server(
-	bind_addr: &str,
-	auth_token_file: Option<&std::path::Path>,
-	auth_required: bool,
-) -> Result<()> {
+/// HTTP exposes privileged local tools even without a runtime configuration.
+/// Require a loopback listener and an encrypted tunnel for remote access.
+fn parse_loopback_http_bind(bind_addr: &str) -> Result<std::net::SocketAddr> {
+	let addr = bind_addr
+		.parse::<std::net::SocketAddr>()
+		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
+	if !addr.ip().is_loopback() {
+		anyhow::bail!("HTTP MCP must bind to loopback; use an SSH or TLS tunnel for remote access");
+	}
+	Ok(addr)
+}
+
+/// Run the MCP server over authenticated Streamable HTTP in every tool mode.
+async fn run_http_server(bind_addr: &str, auth_token_file: Option<&std::path::Path>) -> Result<()> {
 	use rmcp::transport::streamable_http_server::{
 		session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 	};
 
+	let addr = parse_loopback_http_bind(bind_addr)?;
+	let auth = load_http_auth(auth_token_file)?;
 	let ct = tokio_util::sync::CancellationToken::new();
 
 	// Each HTTP session gets a fresh server instance with isolated workdir state.
@@ -316,14 +323,9 @@ async fn run_http_server(
 		StreamableHttpServerConfig::default().with_cancellation_token(ct.child_token()),
 	);
 
-	let auth = load_http_auth(auth_token_file, auth_required)?;
-	let mut protected = axum::Router::new().nest_service("/mcp", service);
-	if let Some(auth) = auth {
-		protected = protected.layer(axum::middleware::from_fn_with_state(
-			auth,
-			require_http_auth,
-		));
-	}
+	let protected = axum::Router::new().nest_service("/mcp", service).layer(
+		axum::middleware::from_fn_with_state(auth, require_http_auth),
+	);
 	let router = axum::Router::new()
 		.route("/healthz", axum::routing::get(|| async { "ok\n" }))
 		.route(
@@ -337,13 +339,6 @@ async fn run_http_server(
 			}),
 		)
 		.merge(protected);
-	let addr = bind_addr
-		.parse::<std::net::SocketAddr>()
-		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
-
-	if auth_required && !addr.ip().is_loopback() {
-		anyhow::bail!("runtime HTTP must bind a loopback address");
-	}
 	let tcp_listener = tokio::net::TcpListener::bind(&addr)
 		.await
 		.map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
@@ -431,3 +426,7 @@ impl tracing::field::Visit for MessageVisitor<'_> {
 		}
 	}
 }
+
+#[cfg(test)]
+#[path = "main_http_tests.rs"]
+mod http_tests;

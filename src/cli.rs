@@ -34,7 +34,7 @@ pub enum Commands {
 		#[arg(long, value_name = "PATH")]
 		path: Option<PathBuf>,
 
-		/// Bind to HTTP server on host:port instead of using stdin/stdout (e.g., "0.0.0.0:12345")
+		/// Serve authenticated HTTP on loopback instead of stdio (e.g., "127.0.0.1:12345")
 		#[arg(long, value_name = "HOST:PORT")]
 		bind: Option<String>,
 
