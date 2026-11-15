@@ -1,0 +1,971 @@
+{
+  "schema": "runtime.ignored-runtime-tests-source-audit.v1",
+  "repository": "TrillionniumFoundation/hepta-runtime",
+  "source_commit": "9a43021137b72316f5345ce660c7f3d00ea93c02",
+  "src_tree_sha": "a00e78e568c83bb2446f2fb568350228cedc6529",
+  "tree_truncated": false,
+  "source_files_scanned": 150,
+  "fetch_failures": [],
+  "ignore_attribute_count": 17,
+  "categories": {
+    "manual_benchmark_or_diagnostic": 12,
+    "private_subprocess_fixture": 4,
+    "private_sample_opt_in": 1
+  },
+  "runtime_remote_fs_feature_mentions": 0,
+  "module_chain_remote_fs_cfg": false,
+  "module_chain": [
+    {
+      "path": "src/lib.rs",
+      "blob": "b1719ba5b4929346edadad3b8c04499a88b76890"
+    },
+    {
+      "path": "src/mcp/mod.rs",
+      "blob": "31e9867c660929950f0ae3b4fc7de1d03efa0d43"
+    },
+    {
+      "path": "src/mcp/runtime/mod.rs",
+      "blob": "3c2a031f49f6130b949e4f35524e45403f0f6a05"
+    }
+  ],
+  "scope": "Static inventory of src/mcp/runtime only. Some declarations additionally require Unix/Linux. This does not establish CI execution, and annotations are not a complete count of all test binaries.",
+  "ignored": [
+    {
+      "path": "src/mcp/runtime/binary_tests.rs",
+      "blob_sha": "f3afe0bfd44b3bcf987168df83c174bfa168ebaf",
+      "line": 91,
+      "attribute": "#[ignore = \"launched only by the bounded isolated file policy test\"]",
+      "fn": "isolated_file_policy_helper",
+      "context": "\t};\n\tassert!(status.success(), \"isolated file policy fixture failed\");\n}\n\n#[test]\n#[ignore = \"launched only by the bounded isolated file policy test\"]\nfn isolated_file_policy_helper() {\n\tassert_eq!(std::env::var(\"HEPTA_A36_FILE_POLICY_FIXTURE\").unwrap(), \"1\");\n\tlet root = tempfile::tempdir().unwrap();\n\tlet config = serde_json::from_value::<super::super::config::RuntimeConfig>(json!({",
+      "category": "private_subprocess_fixture",
+      "remote_fs_cfg": false,
+      "reason": "launched only by the bounded isolated file policy test"
+    },
+    {
+      "path": "src/mcp/runtime/effective_config_tests.rs",
+      "blob_sha": "2a0314c071ae44f3bba8e91f0d6fd6a152616604",
+      "line": 380,
+      "attribute": "#[ignore = \"manual immutable-summary CPU microbenchmark; not native HTTP or process-start TPS\"]",
+      "fn": "effective_config_cache_microbenchmark_six_and_256_hosts",
+      "context": "\t}\n\tconfig\n}\n\n#[test]\n#[ignore = \"manual immutable-summary CPU microbenchmark; not native HTTP or process-start TPS\"]\nfn effective_config_cache_microbenchmark_six_and_256_hosts() {\n\tuse std::hint::black_box;\n\tuse std::time::Instant;\n\tlet measure = |iterations: usize, compute: &dyn Fn() -> String| {",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual immutable-summary CPU microbenchmark; not native HTTP or process-start TPS"
+    },
+    {
+      "path": "src/mcp/runtime/inspect_tests.rs",
+      "blob_sha": "0571cb9bdc618b38e7e3c3864852c1bb2af39b3a",
+      "line": 55,
+      "attribute": "#[ignore = \"manual isolated immutable host projection CPU microbenchmark; not HTTP TPS\"]",
+      "fn": "host_projection_cache_microbenchmark_six_and_256_hosts",
+      "context": "\tassert_eq!(decoded[\"hosts\"][0][\"allow_pty\"], true);\n\tassert_eq!(decoded[\"hosts\"][1][\"allow_pty\"], false);\n}\n\n#[test]\n#[ignore = \"manual isolated immutable host projection CPU microbenchmark; not HTTP TPS\"]\nfn host_projection_cache_microbenchmark_six_and_256_hosts() {\n\tuse std::hint::black_box;\n\tuse std::time::Instant;\n\tfor hosts in [6, 256] {",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual isolated immutable host projection CPU microbenchmark; not HTTP TPS"
+    },
+    {
+      "path": "src/mcp/runtime/inspection_result_tests.rs",
+      "blob_sha": "4811b1dd7b1b77f3132b2449d33210867084d467",
+      "line": 75,
+      "attribute": "#[ignore = \"requires an explicitly supplied private captured network sample\"]",
+      "fn": "exact_rust_current_network_sample_retains_complete_json",
+      "context": "\tassert_eq!(writer.bytes, b\"ab\");\n\tassert_eq!(writer.write(b\"c\").unwrap(), 1);\n\tassert!(writer.write(b\"d\").is_err());\n}\n#[test]\n#[ignore = \"requires an explicitly supplied private captured network sample\"]\nfn exact_rust_current_network_sample_retains_complete_json() {\n\tlet path =\n\t\tstd::env::var(\"HEPTA_PRIVATE_NETWORK_SAMPLE\").expect(\"explicit captured sample path\");\n\tlet bytes = std::fs::read(path).unwrap();",
+      "category": "private_sample_opt_in",
+      "remote_fs_cfg": false,
+      "reason": "requires an explicitly supplied private captured network sample"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_cohort_tail_probe.rs",
+      "blob_sha": "9eacc702d7a2cf2c11cf3f5285f6b92510d3832b",
+      "line": 186,
+      "attribute": "#[ignore = \"manual lookup-only cold-tail diagnosis; not a release MCP benchmark\"]",
+      "fn": "six_callers_uncapped_cold_tail_probe",
+      "context": "\t\t\t.unwrap();\n\t}\n}\n\n#[test]\n#[ignore = \"manual lookup-only cold-tail diagnosis; not a release MCP benchmark\"]\nfn six_callers_uncapped_cold_tail_probe() {\n\tlet root = tempfile::tempdir().unwrap();\n\twrite_fixture(root.path());\n\tassert!(registry_has_content_watch(",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual lookup-only cold-tail diagnosis; not a release MCP benchmark"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_record_read_bench.rs",
+      "blob_sha": "3fb446416248202f576d861ed1354d142830bc6e",
+      "line": 78,
+      "attribute": "#[ignore = \"isolated guarded large-receipt CPU benchmark; no remote effects; allocations unmeasured\"]",
+      "fn": "guarded_receipt_reads_and_complete_comparisons_benchmark",
+      "context": "\t\t_ => panic!(\"unknown benchmark mode\"),\n\t}\n}\n\n#[test]\n#[ignore = \"isolated guarded large-receipt CPU benchmark; no remote effects; allocations unmeasured\"]\nfn guarded_receipt_reads_and_complete_comparisons_benchmark() {\n\tconst CALLS: usize = 64;\n\tlet mut rows = Vec::new();\n\tfor repetition in 0..4 {",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "isolated guarded large-receipt CPU benchmark; no remote effects; allocations unmeasured"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_concurrency_bench.rs",
+      "blob_sha": "6ca9ded87a1f77fe15bcc51b2f929722e162c046",
+      "line": 28,
+      "attribute": "#[ignore = \"isolated cold positive/absent concurrency benchmark; not remote launch TPS\"]",
+      "fn": "cold_positive_and_absent_concurrency_benchmark",
+      "context": "\tvalues.sort_by(f64::total_cmp);\n\tvalues[((values.len() as f64 * percentile).ceil() as usize).saturating_sub(1)]\n}\n\n#[test]\n#[ignore = \"isolated cold positive/absent concurrency benchmark; not remote launch TPS\"]\nfn cold_positive_and_absent_concurrency_benchmark() {\n\tlet root = tempfile::tempdir().unwrap();\n\tlet template: JobRecord = serde_json::from_value(json!({\n\t\t\"id\":\"fixture\", \"host\":\"main\", \"ssh_target\":\"never-connect.invalid\",",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "isolated cold positive/absent concurrency benchmark; not remote launch TPS"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_decode_tests.rs",
+      "blob_sha": "6d7dbff14277694009096c524c20570bb836733b",
+      "line": 358,
+      "attribute": "#[ignore = \"diagnostic only: in-memory concrete/generic owned serde ABBA; no filesystem or remote IO\"]",
+      "fn": "concrete_and_generic_owned_decode_diagnostic",
+      "context": "\tdrop(oversized);\n\treject_both(&path);\n}\n\n#[test]\n#[ignore = \"diagnostic only: in-memory concrete/generic owned serde ABBA; no filesystem or remote IO\"]\nfn concrete_and_generic_owned_decode_diagnostic() {\n\tuse std::time::Instant;\n\n\tconst CALLS: usize = 4096;",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "diagnostic only: in-memory concrete/generic owned serde ABBA; no filesystem or remote IO"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_tests.rs",
+      "blob_sha": "048c466e0f0058e4ecfd0ac27081fec2fd80bde8",
+      "line": 681,
+      "attribute": "#[ignore = \"manual isolated request-binding CPU microbenchmark; not process-start TPS\"]",
+      "fn": "request_binding_microbenchmark_small_and_1mib_stdin",
+      "context": "\tassert_eq!(fingerprint(&digest), fingerprint(&changed));\n\tassert!(!matches_request(&record, &changed).unwrap());\n}\n\n#[test]\n#[ignore = \"manual isolated request-binding CPU microbenchmark; not process-start TPS\"]\nfn request_binding_microbenchmark_small_and_1mib_stdin() {\n\tuse std::hint::black_box;\n\tuse std::time::Instant;\n",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual isolated request-binding CPU microbenchmark; not process-start TPS"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_tests.rs",
+      "blob_sha": "048c466e0f0058e4ecfd0ac27081fec2fd80bde8",
+      "line": 1437,
+      "attribute": "#[ignore = \"manual isolated filesystem microbenchmark; not production TPS\"]",
+      "fn": "positive_reuse_microbenchmark_6000_synthetic_records",
+      "context": "\t\t.contains(\"previous idempotency binding\"));\n}\n\n#[cfg(unix)]\n#[test]\n#[ignore = \"manual isolated filesystem microbenchmark; not production TPS\"]\nfn positive_reuse_microbenchmark_6000_synthetic_records() {\n\tlet root = tempfile::tempdir().unwrap();\n\tlet cache = Mutex::new(ReuseHitCache::default());\n\tlet template = outcome_fixture(ExecutionMode::Operator, false, \"launched\");",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual isolated filesystem microbenchmark; not production TPS"
+    },
+    {
+      "path": "src/mcp/runtime/request_results_growth_tests.rs",
+      "blob_sha": "3bb55c4d809d2b7c9d86052f9adcf01042b9d1d0",
+      "line": 489,
+      "attribute": "#[ignore = \"explicit isolated storage throughput measurement; run separately from functional suites\"]",
+      "fn": "durable_result_storage_parallel_throughput_benchmark",
+      "context": "\tassert_original(root.path(), &next, &bytes);\n}\n\n#[cfg(target_os = \"linux\")]\n#[test]\n#[ignore = \"explicit isolated storage throughput measurement; run separately from functional suites\"]\nfn durable_result_storage_parallel_throughput_benchmark() {\n\tuse std::sync::{\n\t\tatomic::{AtomicUsize, Ordering},\n\t\tArc, Barrier,",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "explicit isolated storage throughput measurement; run separately from functional suites"
+    },
+    {
+      "path": "src/mcp/runtime/request_results_policy_tests.rs",
+      "blob_sha": "6b0d79515ab6abdb90ddc15538736b3f5a7f1def",
+      "line": 233,
+      "attribute": "#[ignore = \"manual isolated immutable-policy CPU microbenchmark; no native HTTP or storage\"]",
+      "fn": "immutable_policy_cache_microbenchmark_six_and_256_hosts",
+      "context": "\t\t}\n\t}\n}\n\n#[test]\n#[ignore = \"manual isolated immutable-policy CPU microbenchmark; no native HTTP or storage\"]\nfn immutable_policy_cache_microbenchmark_six_and_256_hosts() {\n\tuse std::hint::black_box;\n\tuse std::time::Instant;\n\tlet measure = |iterations: usize, compute: &dyn Fn() -> String| {",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual isolated immutable-policy CPU microbenchmark; no native HTTP or storage"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_file_observation_pool_tests.rs",
+      "blob_sha": "7d1fcebbead546bf849aa9a50975d85dcd43d8fa",
+      "line": 124,
+      "attribute": "#[ignore = \"launched only by the bounded isolated file pool test\"]",
+      "fn": "isolated_file_helper",
+      "context": "\t\t);\n\t}\n}\n\n#[tokio::test(flavor = \"current_thread\")]\n#[ignore = \"launched only by the bounded isolated file pool test\"]\nasync fn isolated_file_helper() {\n\tlet kind =\n\t\tstd::env::var(\"HEPTA_A36_FILE_POOL_FIXTURE\").expect(\"isolated file fixture required\");\n\tlet (_root, path, agent, control) = fixture_with_file_policy(true, true).await;",
+      "category": "private_subprocess_fixture",
+      "remote_fs_cfg": false,
+      "reason": "launched only by the bounded isolated file pool test"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_maintenance_tests.rs",
+      "blob_sha": "61da1b65f35241b3951d86da25ea7eee8e74246d",
+      "line": 413,
+      "attribute": "#[ignore = \"private subprocess fixture; invoked by the bounded parent test\"]",
+      "fn": "isolated_helper",
+      "context": "\t\t}\n\t}\n}\n\n#[tokio::test(flavor = \"current_thread\")]\n#[ignore = \"private subprocess fixture; invoked by the bounded parent test\"]\nasync fn isolated_helper() {\n\tlet kind = std::env::var(\"HEPTA_RETIREMENT_TEST_FIXTURE\").unwrap();\n\tlet (_root, path, agent, _) = fixture_with_cold_host(true).await;\n\tlet core = core(&path).await;",
+      "category": "private_subprocess_fixture",
+      "remote_fs_cfg": false,
+      "reason": "private subprocess fixture; invoked by the bounded parent test"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_maintenance_tests.rs",
+      "blob_sha": "61da1b65f35241b3951d86da25ea7eee8e74246d",
+      "line": 458,
+      "attribute": "#[ignore = \"isolated idle observation benchmark; run explicitly on the target host\"]",
+      "fn": "idle_maintenance_benchmark",
+      "context": "}\n\n// Copy this sibling test file into an unchanged baseline checkout to compare\n// the same actor/fixture, timing interval and process counters on both builds.\n#[tokio::test(flavor = \"current_thread\")]\n#[ignore = \"isolated idle observation benchmark; run explicitly on the target host\"]\nasync fn idle_maintenance_benchmark() {\n\tlet seconds: u64 = std::env::var(\"HEPTA_IDLE_MAINTENANCE_SECONDS\")\n\t\t.unwrap_or_else(|_| \"10\".into())\n\t\t.parse()",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "isolated idle observation benchmark; run explicitly on the target host"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "blob_sha": "49871257426757f9d84379d89c8182309d18d30c",
+      "line": 1465,
+      "attribute": "#[ignore = \"launched only by the bounded isolated subprocess test\"]",
+      "fn": "isolated_helper",
+      "context": "\t\tassert!(status.success(), \"isolated fixture failed: {kind}\");\n\t}\n}\n\n#[tokio::test(flavor = \"current_thread\")]\n#[ignore = \"launched only by the bounded isolated subprocess test\"]\nasync fn isolated_helper() {\n\tlet kind = std::env::var(\"HEPTA_A15_TEST_FIXTURE\").expect(\"isolated fixture required\");\n\tlet (root, path, agent, agent_control) = if kind.starts_with(\"fair-\") {\n\t\tfixture_with_cold_host(true).await",
+      "category": "private_subprocess_fixture",
+      "remote_fs_cfg": false,
+      "reason": "launched only by the bounded isolated subprocess test"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_preparation_bench.rs",
+      "blob_sha": "dac1efc853a06e232bf47254cb5bb4d38523da02",
+      "line": 41,
+      "attribute": "#[ignore = \"explicit component ABBA measurement, not a timing assertion\"]",
+      "fn": "fixed_observation_preparation_abba",
+      "context": "\t\t}\n\t}\n}\n\n#[test]\n#[ignore = \"explicit component ABBA measurement, not a timing assertion\"]\nfn fixed_observation_preparation_abba() {\n\tconst ITERATIONS: usize = 2000;\n\tfor (kind, label) in [(0, \"file\"), (1, \"status\"), (2, \"read\")] {\n\t\tlet reference = prepare(false, kind);",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "explicit component ABBA measurement, not a timing assertion"
+    }
+  ],
+  "private_helper_parent_invocations": [
+    {
+      "path": "src/mcp/runtime/binary_tests.rs",
+      "helper": "isolated_file_policy_helper",
+      "parent": "file_observation_policy_selects_only_the_original_longest_read_root",
+      "original_blob_sha": "f3afe0bfd44b3bcf987168df83c174bfa168ebaf",
+      "parent_source": "fn file_observation_policy_selects_only_the_original_longest_read_root() {\n\tuse std::process::{Command, Stdio};\n\tlet mut child = Command::new(std::env::current_exe().unwrap())\n\t\t.args([\n\t\t\t\"--exact\",\n\t\t\t\"mcp::runtime::binary::tests::isolated_file_policy_helper\",\n\t\t\t\"--ignored\",\n\t\t\t\"--nocapture\",\n\t\t])\n\t\t.env(\"HEPTA_A36_FILE_POLICY_FIXTURE\", \"1\")\n\t\t.stdin(Stdio::null())\n\t\t.stdout(Stdio::null())\n\t\t.stderr(Stdio::inherit())\n\t\t.spawn()\n\t\t.unwrap();\n\tlet deadline = std::time::Instant::now() + Duration::from_secs(30);\n\tlet status = loop {\n\t\tif let Some(status) = child.try_wait().unwrap() {\n\t\t\tbreak status;\n\t\t}\n\t\tif std::time::Instant::now() >= deadline {\n\t\t\tchild.kill().unwrap();\n\t\t\tchild.wait().unwrap();\n\t\t\tpanic!(\"isolated file policy fixture deadline\");\n\t\t}\n\t\tstd::thread::sleep(Duration::from_millis(20));\n\t};\n\tassert!(status.success(), \"isolated file policy fixture failed\");\n}\n\n#[test]",
+      "evidence_kind": "static source call with --exact and --ignored; no execution performed by this audit"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_file_observation_pool_tests.rs",
+      "helper": "isolated_file_helper",
+      "parent": "isolated_file_pool_startup_intent_and_no_fallback_fixtures",
+      "original_blob_sha": "7d1fcebbead546bf849aa9a50975d85dcd43d8fa",
+      "parent_source": "fn isolated_file_pool_startup_intent_and_no_fallback_fixtures() {\n\tfor kind in [\"off\", \"refused\", \"enabled\"] {\n\t\tlet mut child = std::process::Command::new(std::env::current_exe().unwrap())\n\t\t\t.args([\"--exact\", \"mcp::runtime::ssh::observation_pool::tests::file_observations::isolated_file_helper\", \"--ignored\", \"--nocapture\"])\n\t\t\t.env(\"HEPTA_A36_FILE_POOL_FIXTURE\", kind)\n\t\t\t.stdin(Stdio::null())\n\t\t\t.stdout(Stdio::null())\n\t\t\t.stderr(Stdio::inherit())\n\t\t\t.spawn().unwrap();\n\t\tlet deadline = std::time::Instant::now() + Duration::from_secs(45);\n\t\tlet status = loop {\n\t\t\tif let Some(status) = child.try_wait().unwrap() {\n\t\t\t\tbreak status;\n\t\t\t}\n\t\t\tif std::time::Instant::now() >= deadline {\n\t\t\t\tchild.kill().unwrap();\n\t\t\t\tchild.wait().unwrap();\n\t\t\t\tpanic!(\"isolated file pool fixture deadline: {kind}\");\n\t\t\t}\n\t\t\tstd::thread::sleep(Duration::from_millis(20));\n\t\t};\n\t\tassert!(\n\t\t\tstatus.success(),\n\t\t\t\"isolated file pool fixture failed: {kind}\"\n\t\t);\n\t}\n}\n\n#[tokio::test(flavor = \"current_thread\")]",
+      "evidence_kind": "static source call with --exact and --ignored; no execution performed by this audit"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_maintenance_tests.rs",
+      "helper": "isolated_helper",
+      "parent": "isolated_master_retirement_preserves_other_hosts_and_cleanup_custody",
+      "original_blob_sha": "61da1b65f35241b3951d86da25ea7eee8e74246d",
+      "parent_source": "fn isolated_master_retirement_preserves_other_hosts_and_cleanup_custody() {\n\tfor kind in [\n\t\t\"slow\",\n\t\t\"renewal\",\n\t\t\"failure\",\n\t\t\"panic\",\n\t\t\"idle\",\n\t\t\"idle-failure\",\n\t\t\"idle-cancel\",\n\t] {\n\t\tlet mut child = std::process::Command::new(std::env::current_exe().unwrap())\n\t\t\t.args([\n\t\t\t\t\"--exact\",\n\t\t\t\t\"mcp::runtime::ssh::observation_pool::tests::maintenance::isolated_helper\",\n\t\t\t\t\"--ignored\",\n\t\t\t\t\"--nocapture\",\n\t\t\t])\n\t\t\t.env(\"HEPTA_RETIREMENT_TEST_FIXTURE\", kind)\n\t\t\t.stdin(Stdio::null())\n\t\t\t.stdout(Stdio::null())\n\t\t\t.stderr(Stdio::inherit())\n\t\t\t.spawn()\n\t\t\t.unwrap();\n\t\tlet deadline = std::time::Instant::now() + Duration::from_secs(30);\n\t\tloop {\n\t\t\tif let Some(status) = child.try_wait().unwrap() {\n\t\t\t\tassert!(status.success(), \"retirement fixture {kind}: {status}\");\n\t\t\t\tbreak;\n\t\t\t}\n\t\t\tif std::time::Instant::now() >= deadline {\n\t\t\t\tchild.kill().unwrap();\n\t\t\t\tlet _ = child.wait();\n\t\t\t\tpanic!(\"retirement fixture {kind} exceeded its original deadline\");\n\t\t\t}\n\t\t\tstd::thread::sleep(Duration::from_millis(20));\n\t\t}\n\t}\n}\n\n#[tokio::test(flavor = \"current_thread\")]",
+      "evidence_kind": "static source call with --exact and --ignored; no execution performed by this audit"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "helper": "isolated_helper",
+      "parent": "isolated_actual_ssh_guard_cancellation_and_ownership_fixtures",
+      "original_blob_sha": "49871257426757f9d84379d89c8182309d18d30c",
+      "parent_source": "fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {\n\tfor kind in [\n\t\t\"off\",\n\t\t\"startup\",\n\t\t\"many-hosts\",\n\t\t\"owner-custody-success\",\n\t\t\"owner-custody-failure\",\n\t\t\"missing\",\n\t\t\"cancel\",\n\t\t\"profile\",\n\t\t\"wrong-thread\",\n\t\t\"admission-cancel\",\n\t\t\"spawn-cancel\",\n\t\t\"proof-failure\",\n\t\t\"validation-cleanup-error-drain\",\n\t\t\"validation-lock-error-drain\",\n\t\t\"renew-singleflight\",\n\t\t\"renew-refused\",\n\t\t\"renew-cleanup\",\n\t\t\"renew-deadline\",\n\t\t\"renew-maintain\",\n\t\t\"renew-retirement\",\n\t\t\"fair-hot-cold\",\n\t\t\"fair-stopped\",\n\t\t\"fair-cancel-deadline\",\n\t\t\"fair-panic\",\n\t\t\"fair-owned-child\",\n\t\t\"fair-renewal\",\n\t\t\"fair-preflight\",\n\t\t\"fair-postverify\",\n\t\t\"socket-parent-bound\",\n\t\t\"agent-startup-unbound-timeout\",\n\t\t\"agent-startup-bound-timeout\",\n\t\t\"agent-startup-final-timeout\",\n\t\t\"agent-initial-timeout\",\n\t\t\"agent-prelease-timeout\",\n\t\t\"agent-postresponse-timeout\",\n\t\t\"agent-master-timeout\",\n\t\t\"agent-renewal-timeout\",\n\t\t\"agent-renewal-cleanup-error\",\n\t\t\"agent-timeout-then-key-change\",\n\t\t\"agent-timeout-then-frame-error\",\n\t\t\"agent-timeout-then-io-error\",\n\t\t\"agent-timeout-then-socket-change\",\n\t\t\"agent-timeout-then-file-change\",\n\t\t\"agent-timeout-then-environment-change\",\n\t] {\n\t\tlet mut child = std::process::Command::new(std::env::current_exe().unwrap())\n\t\t\t.args([\n\t\t\t\t\"--exact\",\n\t\t\t\t\"mcp::runtime::ssh::observation_pool::tests::isolated_helper\",\n\t\t\t\t\"--ignored\",\n\t\t\t\t\"--nocapture\",\n\t\t\t])\n\t\t\t.env(\"HEPTA_A15_TEST_FIXTURE\", kind)\n\t\t\t.stdin(Stdio::null())\n\t\t\t.stdout(Stdio::null())\n\t\t\t.stderr(Stdio::inherit())\n\t\t\t.spawn()\n\t\t\t.unwrap();\n\t\tlet deadline = std::time::Instant::now() + Duration::from_secs(45);\n\t\tlet status = loop {\n\t\t\tif let Some(status) = child.try_wait().unwrap() {\n\t\t\t\tbreak status;\n\t\t\t}\n\t\t\tif std::time::Instant::now() >= deadline {\n\t\t\t\tchild.kill().unwrap();\n\t\t\t\tchild.wait().unwrap();\n\t\t\t\tpanic!(\"isolated fixture deadline: {kind}\");\n\t\t\t}\n\t\t\tstd::thread::sleep(Duration::from_millis(20));\n\t\t};\n\t\tassert!(status.success(), \"isolated fixture failed: {kind}\");\n\t}\n}\n\n#[tokio::test(flavor = \"current_thread\")]",
+      "evidence_kind": "static source call with --exact and --ignored; no execution performed by this audit"
+    }
+  ],
+  "include_edges": [
+    {
+      "parent": "src/mcp/runtime/binary.rs",
+      "parent_blob": "7195d29297e018be1b640f6ad5caab02738a87a5",
+      "child": "binary_tests.rs",
+      "line": 280,
+      "context": "\tq[\"offset\"] = json!(p.offset.unwrap_or(0));\n\trpc(&p.host, &p.path, true, q).await\n}\n\n#[cfg(test)]\n#[path = \"binary_tests.rs\"]\nmod tests;\n\n#[cfg(all(test, any(target_os = \"linux\", target_os = \"macos\")))]"
+    },
+    {
+      "parent": "src/mcp/runtime/effective_config.rs",
+      "parent_blob": "671998a03830f7b6448a14972ca01575d4a2634e",
+      "child": "effective_config_tests.rs",
+      "line": 161,
+      "context": "\t// bounded redacted summary, avoiding repeated private regex compilation.\n\tcached_effective_config(&EFFECTIVE_SUMMARY, || render_effective_config(Ok(config)))\n}\n\n#[cfg(test)]\n#[path = \"effective_config_tests.rs\"]\nmod tests;\n"
+    },
+    {
+      "parent": "src/mcp/runtime/inspect.rs",
+      "parent_blob": "9cc9f7c799c45dd0cef98cef76094c338fc215c8",
+      "child": "inspect_tests.rs",
+      "line": 563,
+      "context": "\t}\n\tvalue\n}\n\n#[cfg(test)]\n#[path = \"inspect_tests.rs\"]\nmod tests;\n\n#[cfg(all(test, unix))]"
+    },
+    {
+      "parent": "src/mcp/runtime/inspection_result.rs",
+      "parent_blob": "6b6fa248e7b84106dc0b4b5dafce5e3379b33b59",
+      "child": "inspection_result_tests.rs",
+      "line": 73,
+      "context": "pub(super) fn network_result(value: &Value) -> Result<String> {\n\tnetwork_result_with_limit(value, LIMIT)\n}\n\n#[cfg(test)]\n#[path = \"inspection_result_tests.rs\"]\nmod tests;\n"
+    },
+    {
+      "parent": "src/mcp/runtime/jobs.rs",
+      "parent_blob": "7b9ca9d1c00f31411265c1dc26a18ead79907ec9",
+      "child": "jobs_tests.rs",
+      "line": 4788,
+      "context": "\t}\n\tOk(text)\n}\n\n#[cfg(test)]\n#[path = \"jobs_tests.rs\"]\nmod tests;\n\n#[cfg(test)]"
+    },
+    {
+      "parent": "src/mcp/runtime/jobs.rs",
+      "parent_blob": "7b9ca9d1c00f31411265c1dc26a18ead79907ec9",
+      "child": "jobs_registry_decode_tests.rs",
+      "line": 4792,
+      "context": "#[cfg(test)]\n#[path = \"jobs_tests.rs\"]\nmod tests;\n\n#[cfg(test)]\n#[path = \"jobs_registry_decode_tests.rs\"]\nmod registry_decode_tests;\n\n#[cfg(test)]"
+    },
+    {
+      "parent": "src/mcp/runtime/jobs.rs",
+      "parent_blob": "7b9ca9d1c00f31411265c1dc26a18ead79907ec9",
+      "child": "jobs_registry_concurrency_bench.rs",
+      "line": 4860,
+      "context": "#[cfg(all(test, target_os = \"linux\"))]\n#[path = \"jobs_observe_request_tests.rs\"]\nmod observe_request_tests;\n\n#[cfg(all(test, unix))]\n#[path = \"jobs_registry_concurrency_bench.rs\"]\nmod registry_concurrency_bench;\n\n#[cfg(all(test, target_os = \"linux\"))]"
+    },
+    {
+      "parent": "src/mcp/runtime/jobs.rs",
+      "parent_blob": "7b9ca9d1c00f31411265c1dc26a18ead79907ec9",
+      "child": "jobs_record_read_bench.rs",
+      "line": 4868,
+      "context": "#[cfg(all(test, target_os = \"linux\"))]\n#[path = \"jobs_record_comparison_tests.rs\"]\nmod record_comparison_tests;\n\n#[cfg(all(test, target_os = \"linux\"))]\n#[path = \"jobs_record_read_bench.rs\"]\nmod record_read_bench;\n"
+    },
+    {
+      "parent": "src/mcp/runtime/jobs_registry_coalescing_tests.rs",
+      "parent_blob": "1f8d9f2d826fff69c84afeb432763d220b6c9dad",
+      "child": "jobs_cohort_tail_probe.rs",
+      "line": 1426,
+      "context": "\t\tassert!(state.active.is_none());\n\t}\n}\n\n#[cfg(target_os = \"linux\")]\n#[path = \"jobs_cohort_tail_probe.rs\"]\nmod tail_probe;\n"
+    },
+    {
+      "parent": "src/mcp/runtime/request_results.rs",
+      "parent_blob": "10bd49baff3482643322e77966ed9449fa7d9f4e",
+      "child": "request_results_growth_tests.rs",
+      "line": 1592,
+      "context": "#[cfg(all(test, unix))]\n#[path = \"request_results_tests.rs\"]\nmod tests;\n\n#[cfg(all(test, unix))]\n#[path = \"request_results_growth_tests.rs\"]\nmod growth_tests;\n\n#[cfg(test)]"
+    },
+    {
+      "parent": "src/mcp/runtime/request_results.rs",
+      "parent_blob": "10bd49baff3482643322e77966ed9449fa7d9f4e",
+      "child": "request_results_policy_tests.rs",
+      "line": 1596,
+      "context": "#[cfg(all(test, unix))]\n#[path = \"request_results_growth_tests.rs\"]\nmod growth_tests;\n\n#[cfg(test)]\n#[path = \"request_results_policy_tests.rs\"]\nmod policy_tests;\n\n#[cfg(all(test, unix))]"
+    },
+    {
+      "parent": "src/mcp/runtime/ssh.rs",
+      "parent_blob": "35f54b9abb26e3f5c61750766168fa4084117362",
+      "child": "ssh_preparation_bench.rs",
+      "line": 729,
+      "context": "#[cfg(all(test, unix))]\n#[path = \"ssh_entry_tests.rs\"]\nmod entry_tests;\n\n#[cfg(test)]\n#[path = \"ssh_preparation_bench.rs\"]\nmod preparation_bench;\n"
+    },
+    {
+      "parent": "src/mcp/runtime/ssh_observation_pool.rs",
+      "parent_blob": "06e327354539a1a6565e2a883473f1e86b0e75ec",
+      "child": "ssh_observation_pool_tests.rs",
+      "line": 1786,
+      "context": "\t\tOk(())\n\t}\n}\n\n#[cfg(test)]\n#[path = \"ssh_observation_pool_tests.rs\"]\nmod tests;\n"
+    },
+    {
+      "parent": "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "parent_blob": "49871257426757f9d84379d89c8182309d18d30c",
+      "child": "ssh_file_observation_pool_tests.rs",
+      "line": 18,
+      "context": "mod agent_timeout;\n\n#[path = \"ssh_observation_socket_publication_tests.rs\"]\nmod socket_publication;\n\n#[path = \"ssh_file_observation_pool_tests.rs\"]\nmod file_observations;\n\n#[path = \"ssh_observation_maintenance_tests.rs\"]"
+    },
+    {
+      "parent": "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "parent_blob": "49871257426757f9d84379d89c8182309d18d30c",
+      "child": "ssh_observation_maintenance_tests.rs",
+      "line": 21,
+      "context": "mod socket_publication;\n\n#[path = \"ssh_file_observation_pool_tests.rs\"]\nmod file_observations;\n\n#[path = \"ssh_observation_maintenance_tests.rs\"]\nmod maintenance;\n\n#[path = \"ssh_observation_owner_custody_tests.rs\"]"
+    }
+  ],
+  "sources": [
+    {
+      "path": "src/mcp/runtime/binary.rs",
+      "blob_sha": "7195d29297e018be1b640f6ad5caab02738a87a5"
+    },
+    {
+      "path": "src/mcp/runtime/binary_observation_source_tests.rs",
+      "blob_sha": "9226f1f54516e664b4e103f5e9e4f0256c48c542"
+    },
+    {
+      "path": "src/mcp/runtime/binary_tests.rs",
+      "blob_sha": "f3afe0bfd44b3bcf987168df83c174bfa168ebaf"
+    },
+    {
+      "path": "src/mcp/runtime/caller_scope.rs",
+      "blob_sha": "a8bbf0dc80afa4e83aaa3c3c29d51a4f5c3b41f7"
+    },
+    {
+      "path": "src/mcp/runtime/caller_scope_tests.rs",
+      "blob_sha": "85dc33890891dc45fd0152608e2890d489341428"
+    },
+    {
+      "path": "src/mcp/runtime/checkpoint.rs",
+      "blob_sha": "2a312abb3fda0ca717b48755b4130e35db3d156b"
+    },
+    {
+      "path": "src/mcp/runtime/checkpoint_tests.rs",
+      "blob_sha": "e53434f09aadf4dd6b39cb2b283e10da8331529b"
+    },
+    {
+      "path": "src/mcp/runtime/config.rs",
+      "blob_sha": "e55d9f536c069b7612f7a7cf81e691fd2394439c"
+    },
+    {
+      "path": "src/mcp/runtime/config_tests.rs",
+      "blob_sha": "a5320a1614deee65cd592dc4f257192d009e83c6"
+    },
+    {
+      "path": "src/mcp/runtime/documents.rs",
+      "blob_sha": "a4e0c14f8d2a9139f4c31d004ae6cf7ea19e7c69"
+    },
+    {
+      "path": "src/mcp/runtime/documents_tests.rs",
+      "blob_sha": "83e16afa2b464b0f8e2a4f0022097cf81715d844"
+    },
+    {
+      "path": "src/mcp/runtime/effect_owner_fence.rs",
+      "blob_sha": "bbb7565103061b79e063e3aa5452ec74d04e4f34"
+    },
+    {
+      "path": "src/mcp/runtime/effect_owner_fence_acquisition_tests.rs",
+      "blob_sha": "69c878983c38c77ac7b36afd57ca9cfa6f1b57ea"
+    },
+    {
+      "path": "src/mcp/runtime/effect_owner_fence_tests.rs",
+      "blob_sha": "b9dc52836e2c371fffac9d0b9c15d4ff4667ffe2"
+    },
+    {
+      "path": "src/mcp/runtime/effective_config.rs",
+      "blob_sha": "671998a03830f7b6448a14972ca01575d4a2634e"
+    },
+    {
+      "path": "src/mcp/runtime/effective_config_tests.rs",
+      "blob_sha": "2a0314c071ae44f3bba8e91f0d6fd6a152616604"
+    },
+    {
+      "path": "src/mcp/runtime/execution.rs",
+      "blob_sha": "541d7bf2ee069ae082b01ac10e0b1ed215927683"
+    },
+    {
+      "path": "src/mcp/runtime/execution_tests.rs",
+      "blob_sha": "09d1c012436ed94aaa6a0c88de040e1ba6ef0b8b"
+    },
+    {
+      "path": "src/mcp/runtime/health.rs",
+      "blob_sha": "34f5cc1ec3c5ee1873eed7fa01b22098d774c755"
+    },
+    {
+      "path": "src/mcp/runtime/health_tests.rs",
+      "blob_sha": "9b66cc96c349672508e20b44da25fe40de9e93f3"
+    },
+    {
+      "path": "src/mcp/runtime/inspect.rs",
+      "blob_sha": "9cc9f7c799c45dd0cef98cef76094c338fc215c8"
+    },
+    {
+      "path": "src/mcp/runtime/inspect_security_tests.rs",
+      "blob_sha": "6ee590e126b64b7ff0850df260c141592a313bd0"
+    },
+    {
+      "path": "src/mcp/runtime/inspect_tests.rs",
+      "blob_sha": "0571cb9bdc618b38e7e3c3864852c1bb2af39b3a"
+    },
+    {
+      "path": "src/mcp/runtime/inspection_result.rs",
+      "blob_sha": "6b6fa248e7b84106dc0b4b5dafce5e3379b33b59"
+    },
+    {
+      "path": "src/mcp/runtime/inspection_result_tests.rs",
+      "blob_sha": "4811b1dd7b1b77f3132b2449d33210867084d467"
+    },
+    {
+      "path": "src/mcp/runtime/jobs.rs",
+      "blob_sha": "7b9ca9d1c00f31411265c1dc26a18ead79907ec9"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_cancel_io_tests.rs",
+      "blob_sha": "9d2b3895c9d8bb4ca24504f6a78a1865d068e6a8"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_cohort_tail_probe.rs",
+      "blob_sha": "9eacc702d7a2cf2c11cf3f5285f6b92510d3832b"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_inventory_cache.rs",
+      "blob_sha": "7537660dc394cfa9d1c19ccc45f67194f9bdc161"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_inventory_cache_tests.rs",
+      "blob_sha": "c6617abf5dcbba385aeec4d60ba260df681f9803"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_inventory_digest_tests.rs",
+      "blob_sha": "ad9fdb3b7c6d26a575983def38aa882d998b392f"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_inventory_source.rs",
+      "blob_sha": "4ddad34263a29743e5cca6ee1cb76c45bbcf058c"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_inventory_source_tests.rs",
+      "blob_sha": "d08db04067b22ea3bb5802da2a7021b962c81bde"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_inventory_streaming_tests.rs",
+      "blob_sha": "24fdc2b1d692b5d4728cf2f2315c97de653b0c14"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_observe_request_tests.rs",
+      "blob_sha": "015230eee55947f655afaabfc51bdd49cec4f654"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_output_durability_tests.rs",
+      "blob_sha": "52412e52cc712c1ad1c515592ff4f6091697330e"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_owner_metadata_tests.rs",
+      "blob_sha": "50c060070f2e0d31382b376045b92574c30379a2"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_owner_publication_tests.rs",
+      "blob_sha": "2408d39a5dca163b0509f3ad23e0be6828a1a9cd"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_pagination_tests.rs",
+      "blob_sha": "a736df5f00211e5ded1ecb16b026e8b9bbf055a1"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_pending_admission_tests.rs",
+      "blob_sha": "6491ca54843e67f51d5cb9bf4e3ac9c3ca584a7e"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_record_comparison_tests.rs",
+      "blob_sha": "a578421ba4015b80e57c1ac6cd349019e162df97"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_record_projection.rs",
+      "blob_sha": "9acab85817d2eeeb10ad2b1e1d127482c116126c"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_record_read_bench.rs",
+      "blob_sha": "3fb446416248202f576d861ed1354d142830bc6e"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_async_tests.rs",
+      "blob_sha": "2a382ff85d85dfd080af88d131f3b52445bdf267"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_coalescing_tests.rs",
+      "blob_sha": "1f8d9f2d826fff69c84afeb432763d220b6c9dad"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_concurrency_bench.rs",
+      "blob_sha": "6ca9ded87a1f77fe15bcc51b2f929722e162c046"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_content_tests.rs",
+      "blob_sha": "e99d3ba6f76f6e97627ecb1a738049b1a4b18eab"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_decode_tests.rs",
+      "blob_sha": "6d7dbff14277694009096c524c20570bb836733b"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_prefill_tests.rs",
+      "blob_sha": "2001940fdb7f7cd4389cdf6ea1aa92c7c2ed8444"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_security_tests.rs",
+      "blob_sha": "c784de4c00e6d8db236190a98e6b49ebccdfaca1"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_staging_durability_tests.rs",
+      "blob_sha": "528d13de0ae758e2e15d1932fe1c0e052e23060f"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_start_io_tests.rs",
+      "blob_sha": "70788050e30cefabe4741674172cb5596ff9cbab"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_terminal_publication_tests.rs",
+      "blob_sha": "748089f7267ff3368b8700199b6995c06383bf79"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_tests.rs",
+      "blob_sha": "048c466e0f0058e4ecfd0ac27081fec2fd80bde8"
+    },
+    {
+      "path": "src/mcp/runtime/mod.rs",
+      "blob_sha": "3c2a031f49f6130b949e4f35524e45403f0f6a05"
+    },
+    {
+      "path": "src/mcp/runtime/multi_read.rs",
+      "blob_sha": "95c3494d381dd25c8281c4881e44d3e6d49ac6fd"
+    },
+    {
+      "path": "src/mcp/runtime/multi_read_tests.rs",
+      "blob_sha": "cfbdc527bda27352d6d6dbbec05a273dfe510af2"
+    },
+    {
+      "path": "src/mcp/runtime/namespace_content_watch_tests.rs",
+      "blob_sha": "1d07f57772dc468d6b6cfd1a608ffecc4e6b47d7"
+    },
+    {
+      "path": "src/mcp/runtime/namespace_drain_budget_tests.rs",
+      "blob_sha": "b6bfc487208242b96eb6e58b6c9e2d5467fee0e7"
+    },
+    {
+      "path": "src/mcp/runtime/namespace_version.rs",
+      "blob_sha": "4672d33a9ede7470a469f619da4dae91f89fcecd"
+    },
+    {
+      "path": "src/mcp/runtime/namespace_version_tests.rs",
+      "blob_sha": "4f8caaa09d5ccc3e0796c3ffacf00b0a07c6111b"
+    },
+    {
+      "path": "src/mcp/runtime/operation_async.rs",
+      "blob_sha": "7636673d55ab4e3eb6c861be021d47a1c36fc227"
+    },
+    {
+      "path": "src/mcp/runtime/operation_async_tests.rs",
+      "blob_sha": "74192e39b71e8d4fba9f762f3465541e57471f1a"
+    },
+    {
+      "path": "src/mcp/runtime/operation_crypto.rs",
+      "blob_sha": "0c07318a6d85efb920069ce4f190c4f2ed56e84f"
+    },
+    {
+      "path": "src/mcp/runtime/operation_crypto_tests.rs",
+      "blob_sha": "6a55889f0c0392fbe3def5ccdcf4b2104f637142"
+    },
+    {
+      "path": "src/mcp/runtime/operator.rs",
+      "blob_sha": "938ca10111700d417582ecafb8323c087b9602ce"
+    },
+    {
+      "path": "src/mcp/runtime/operator_tests.rs",
+      "blob_sha": "7a25a8ddcfb98d2aa0a8aed0a0c0170b30af192c"
+    },
+    {
+      "path": "src/mcp/runtime/private_job_directory_tests.rs",
+      "blob_sha": "a0f5b9ac07acf897b6d8af6a0aa05b9e0d09f355"
+    },
+    {
+      "path": "src/mcp/runtime/privileged_ledger.rs",
+      "blob_sha": "1f94e90017740a6fa5302ca1ab8c7c8f3f738763"
+    },
+    {
+      "path": "src/mcp/runtime/privileged_ledger_tests.rs",
+      "blob_sha": "b6f32f60db026a69022e2f552d779363439c4f00"
+    },
+    {
+      "path": "src/mcp/runtime/pty.rs",
+      "blob_sha": "4b65a935aa44d9085fce138cad109d723628573a"
+    },
+    {
+      "path": "src/mcp/runtime/pty_operator_tests.rs",
+      "blob_sha": "2c8c92b676e083ebf33828d4a0c083fac43cb227"
+    },
+    {
+      "path": "src/mcp/runtime/pty_tests.rs",
+      "blob_sha": "d69544553de9b10d83100e9476610a09a9ec67ca"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_batch.rs",
+      "blob_sha": "6e1f8df35ae39d5cbf4e30b0ad69b3a1866e1cbe"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_batch_tests.rs",
+      "blob_sha": "5962c95bd505399d73628b515da18dfe4e2f0978"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_codec.rs",
+      "blob_sha": "082f13461ed44e59a2970e0d020348dc7eef295b"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_codec_tests.rs",
+      "blob_sha": "357e16258348b59f2f112d1a6f1c8a1edb750fba"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_cold.rs",
+      "blob_sha": "ed9be98ee4ce8952c8f75e4794c97cd7adf0cfe0"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_cold_tests.rs",
+      "blob_sha": "100c1c7e9d22d2e7f607bf318f20e5148fcd1a60"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_content.rs",
+      "blob_sha": "32b5ce04c08e400b8eb4b16248c2cd295308fbc3"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_content_parallel_tests.rs",
+      "blob_sha": "c530fc4566ad495b9409a29fc4ece61eb731fc25"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_content_tests.rs",
+      "blob_sha": "6d9360b908fa64ddaf4e3240e38f5b8a2526ee63"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_directory.rs",
+      "blob_sha": "a0f389b17d774dbe4e10bfef4fb4e3c4f6596d59"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_directory_tests.rs",
+      "blob_sha": "6d5208442bae7617368e80aea16f539bbb6fe6ae"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_index.rs",
+      "blob_sha": "822a864449a35d493e25c1029ec6472c95a1a592"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_index_tests.rs",
+      "blob_sha": "45034bb3dffe2dcdddeea731201c07311237d0ce"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_memory.rs",
+      "blob_sha": "4c6d0900416907b22cce3effc2ce63df0fa0e206"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_memory_tests.rs",
+      "blob_sha": "e444716e7d752715aea9090e622c206fe6a480a4"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_owned_tests.rs",
+      "blob_sha": "18b7ca1937a236e584ce2c3cb6dae12b5f6b582a"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_page_batch_tests.rs",
+      "blob_sha": "b1659b09564a48ba431c427c1c1f4e5dd7e230d9"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_parallel_tests.rs",
+      "blob_sha": "d23cdd2f735aff664f67cf30792bd0c2ff92a8c7"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_runs.rs",
+      "blob_sha": "cff6220889ea17eec2f2bfef1aa4d3d66fa34c6b"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_runs_tests.rs",
+      "blob_sha": "97fe625ed00e26e19338090b1ab6ff5b49278818"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_seal.rs",
+      "blob_sha": "864a8a09558959526fff826a96faff4922b7dd37"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_seal_tests.rs",
+      "blob_sha": "326aad5b796d1853064e6592c67ba15961919840"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_store.rs",
+      "blob_sha": "4396ace2acebe53b5469fa62f3b7530accd5cf46"
+    },
+    {
+      "path": "src/mcp/runtime/request_archive_store_tests.rs",
+      "blob_sha": "d4ba9768905fad29387ee82a7734279dc9ff96e4"
+    },
+    {
+      "path": "src/mcp/runtime/request_async.rs",
+      "blob_sha": "84284108f277983dff2377a50b52ff69f3787f41"
+    },
+    {
+      "path": "src/mcp/runtime/request_async_tests.rs",
+      "blob_sha": "e7330e1f6de3472ff59a1bdd6e4ff2fbe633fa5f"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit.rs",
+      "blob_sha": "984668cfdfcee0a7eb00de14e02086f5ad90bcc0"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_batch.rs",
+      "blob_sha": "c6060b14977e588079cacc3dd76b30593dfb7f35"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_batch_tests.rs",
+      "blob_sha": "0c6a0e79f26b0739f28f6cac7d9f4377a29e0fd0"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_lookup_tests.rs",
+      "blob_sha": "58223639f59b711f0cdaac9fbe0bd943367a42f7"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_query_tests.rs",
+      "blob_sha": "b53c1621290e201437a0f171c3518c707e60b17d"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_stage.rs",
+      "blob_sha": "23e6c18df7bafce408e627cc79f2d6539b28274e"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_stage_tests.rs",
+      "blob_sha": "aa395abc9d505e7a3881f7c27ec0670ae07fcf53"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_sync.rs",
+      "blob_sha": "d5b07f32f840c0bece73bddb751bcee0359dc20c"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_sync_tests.rs",
+      "blob_sha": "34114d1a19ffce24bfc173b14eeca2130da27aa6"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_tests.rs",
+      "blob_sha": "d0e1daf6e06caa62a411ae7c233a2ae44fb2f485"
+    },
+    {
+      "path": "src/mcp/runtime/request_audit_trace.rs",
+      "blob_sha": "4fd2e3983409edce2e7b7fd73016bf57b09d57e2"
+    },
+    {
+      "path": "src/mcp/runtime/request_metadata_trace.rs",
+      "blob_sha": "dfcee90d7b8183ede1e7385d5a1330f840e6f7e4"
+    },
+    {
+      "path": "src/mcp/runtime/request_metadata_trace_tests.rs",
+      "blob_sha": "b0ba6e7bfa72ec8d132bd2b57c491f3c92d4262f"
+    },
+    {
+      "path": "src/mcp/runtime/request_results.rs",
+      "blob_sha": "10bd49baff3482643322e77966ed9449fa7d9f4e"
+    },
+    {
+      "path": "src/mcp/runtime/request_results_growth_tests.rs",
+      "blob_sha": "3bb55c4d809d2b7c9d86052f9adcf01042b9d1d0"
+    },
+    {
+      "path": "src/mcp/runtime/request_results_policy_tests.rs",
+      "blob_sha": "6b0d79515ab6abdb90ddc15538736b3f5a7f1def"
+    },
+    {
+      "path": "src/mcp/runtime/request_results_read_workers_tests.rs",
+      "blob_sha": "91db61e3db7a928f87a6eaed7de998c5d172d56f"
+    },
+    {
+      "path": "src/mcp/runtime/request_results_tests.rs",
+      "blob_sha": "edbe5612da44424a86fd532c7ac6df63222ef73b"
+    },
+    {
+      "path": "src/mcp/runtime/request_usage_batch.rs",
+      "blob_sha": "1874c23d6729976cab8be5926ebbb366abdab4d7"
+    },
+    {
+      "path": "src/mcp/runtime/request_usage_batch_tests.rs",
+      "blob_sha": "85d196aeab897372e2c025c84708eb435ddb3fec"
+    },
+    {
+      "path": "src/mcp/runtime/request_usage_projection_tests.rs",
+      "blob_sha": "904911dae4a4da67686a622fd73d52d392c6310e"
+    },
+    {
+      "path": "src/mcp/runtime/search_globs.rs",
+      "blob_sha": "26fb798b531c7e0e69f10ced96b0079b5268acbc"
+    },
+    {
+      "path": "src/mcp/runtime/search_jobs.rs",
+      "blob_sha": "851193efb9f567130b47641bb00b35a285bf7d99"
+    },
+    {
+      "path": "src/mcp/runtime/search_jobs_tests.rs",
+      "blob_sha": "820729323dc69f33a3015829fd6d1b0916f4601d"
+    },
+    {
+      "path": "src/mcp/runtime/ssh.rs",
+      "blob_sha": "35f54b9abb26e3f5c61750766168fa4084117362"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_direct.rs",
+      "blob_sha": "610c0dfe11b3c607d4bbed05ef29b2dbf9c2b38b"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_direct_entry_tests.rs",
+      "blob_sha": "271b9cc667fbd464b1563bcd1887bc4aa28d8b2b"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_direct_tests.rs",
+      "blob_sha": "40bc60d1cd3d27921014d0ff2246ac2c28fdcf2b"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_entry_tests.rs",
+      "blob_sha": "3099de35281c8f87fe3cf431c7a317f94474e900"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_file_observation_pool_tests.rs",
+      "blob_sha": "7d1fcebbead546bf849aa9a50975d85dcd43d8fa"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_file_observation_tests.rs",
+      "blob_sha": "c5b19d608d72945785fc333ec1ea9afe3ae631b0"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_activity.rs",
+      "blob_sha": "c7a32217857f362ea33639073e396cc16998ec7d"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_agent_timeout_tests.rs",
+      "blob_sha": "75be8917e033df2be38318511cb0484d29acf044"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_maintenance_tests.rs",
+      "blob_sha": "61da1b65f35241b3951d86da25ea7eee8e74246d"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_owner_custody_tests.rs",
+      "blob_sha": "bffed51a6cac53a4528519bf9198c61190bcc45c"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_pool.rs",
+      "blob_sha": "06e327354539a1a6565e2a883473f1e86b0e75ec"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "blob_sha": "49871257426757f9d84379d89c8182309d18d30c"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_postspawn.rs",
+      "blob_sha": "c00ecb1e5de8f88c041e24eb2f673157c87fce46"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_postspawn_tests.rs",
+      "blob_sha": "88509df85591efcfdc8fcfdaa75947b16f0a6b07"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_profile.rs",
+      "blob_sha": "09b254594899586bf03a3e12bc489fdf90d6daa0"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_profile_tests.rs",
+      "blob_sha": "516ee5e9da109a67c24b7c11f2f3f3dc2767f290"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_socket_publication_tests.rs",
+      "blob_sha": "7e5cbb6e4f33b8c0662c3a687a5621685610f708"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_transport_tests.rs",
+      "blob_sha": "190134482a2e9dc5b1220212f54ecd500d8fbbbf"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_validation.rs",
+      "blob_sha": "4e29c01ff41cecefc9494b46bcd2ca15ccc76323"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_validation_tests.rs",
+      "blob_sha": "0c80a8ed4a919286a5912e554aa82d40612b5a55"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_preparation_bench.rs",
+      "blob_sha": "dac1efc853a06e232bf47254cb5bb4d38523da02"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_tests.rs",
+      "blob_sha": "2d14007cd299c703d02b2839a63f8bc687d8c6a5"
+    },
+    {
+      "path": "src/mcp/runtime/stream.rs",
+      "blob_sha": "f4fc1a97ebf6658b2858a2cb52d8e7e9eaeb0e3f"
+    },
+    {
+      "path": "src/mcp/runtime/stream_tests.rs",
+      "blob_sha": "743e7c7b6f92ac7018d8211af045e011cd1a340e"
+    },
+    {
+      "path": "src/mcp/runtime/terminal.rs",
+      "blob_sha": "016e61d8a14518d7c01a8396a5d9e3b762571d03"
+    },
+    {
+      "path": "src/mcp/runtime/terminal_tests.rs",
+      "blob_sha": "35564d795df48cde0e143a1b3d71ca3ec512343d"
+    }
+  ],
+  "arithmetic": {
+    "peer_previously_known_total": 15,
+    "runtime_previously_known": 3,
+    "runtime_newly_identified": 14,
+    "combined_identified": 29,
+    "remaining_to_reconcile_against_reported_40": 11
+  }
+}

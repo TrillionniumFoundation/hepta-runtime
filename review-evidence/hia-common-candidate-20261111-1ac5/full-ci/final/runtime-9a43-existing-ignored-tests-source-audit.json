@@ -1,0 +1,486 @@
+{
+  "schema": "hepta.runtime.existing-ignored-tests-source-audit.v1",
+  "repository": "TrillionniumFoundation/hepta-runtime",
+  "source_commit": "9a43021137b72316f5345ce660c7f3d00ea93c02",
+  "baseline_commit": "09464736e815940ee4c5bf91d36f6c84a3faee2c",
+  "source_tree": "56784c9e064447acfc06e80a9cc235f98c8e91b2",
+  "source_scope": "Linux x86_64. Static inventory accounts for the 40 ignored declarations expected in --all-targets --all-features. Raw final nextest summaries are the authority for run/pass/skipped counts.",
+  "counts": {
+    "all_features_ignored_declarations": 40,
+    "no_default_features_ignored_declarations": 28,
+    "remote_fs_declarations_not_compiled_without_feature": 12
+  },
+  "categories": {
+    "private_subprocess_fixture": 4,
+    "manual_benchmark_or_diagnostic": 14,
+    "private_sample_opt_in": 1,
+    "requires_external_npm_or_node_oracle": 4,
+    "requires_real_owned_linux_backend": 2,
+    "requires_remote_ssh_identity_or_manual_restart": 4,
+    "requires_remote_filesystem_ssh_fixture": 7,
+    "requires_external_worker_or_mcp_ssh_fixture": 4
+  },
+  "baseline_comparison": {
+    "files_changed": [
+      ".github/workflows/hia-common-native-integration.yml",
+      ".github/workflows/hia-native-helper-contract.yml",
+      "config/hia-worker.example.json",
+      "deploy/contracts/hepta-hia-agent-native-v1.json",
+      "docs/HIA_AGENT_NATIVE_MCP.md",
+      "src/mcp/hia_provider.rs",
+      "src/mcp/hia_provider_tests.rs",
+      "src/mcp/hia_scoped_proof_fixture.json",
+      "src/mcp/hia_tool_catalog.json",
+      "tests/hia_native_helper_mcp_integration.py"
+    ],
+    "ignored_source_paths_changed": [],
+    "original_full_ci_workflow_changed": false,
+    "nextest_filter_config_added": false
+  },
+  "original_nextest_commands": [
+    "cargo nextest run --locked --all-targets --all-features --test-threads 1 --retries 0 --no-fail-fast",
+    "cargo nextest run --locked --all-targets --no-default-features --test-threads 1 --retries 0 --no-fail-fast"
+  ],
+  "private_helper_note": "Four ignored declarations are private subprocess entrypoints called explicitly with --ignored by passing nonignored bounded parent tests; runner-level skipped does not imply these helper bodies were never exercised. Parent outcomes must be checked in raw CI logs.",
+  "private_helper_parent_invocations": [
+    {
+      "path": "src/mcp/runtime/binary_tests.rs",
+      "helper": "isolated_file_policy_helper",
+      "parent": "file_observation_policy_selects_only_the_original_longest_read_root"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_file_observation_pool_tests.rs",
+      "helper": "isolated_file_helper",
+      "parent": "isolated_file_pool_startup_intent_and_no_fallback_fixtures"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_maintenance_tests.rs",
+      "helper": "isolated_helper",
+      "parent": "isolated_master_retirement_preserves_other_hosts_and_cleanup_custody"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "helper": "isolated_helper",
+      "parent": "isolated_actual_ssh_guard_cancellation_and_ownership_fixtures"
+    }
+  ],
+  "ignored": [
+    {
+      "path": "src/mcp/fs/fs_tests.rs",
+      "blob_sha": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
+      "line": 6707,
+      "attribute": "#[ignore = \"Requires OCTOFS_TEST_SSH_HOST env var\"]",
+      "fn": "remote_view_create_and_read",
+      "category": "requires_remote_filesystem_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "Requires OCTOFS_TEST_SSH_HOST env var"
+    },
+    {
+      "path": "src/mcp/fs/fs_tests.rs",
+      "blob_sha": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
+      "line": 6743,
+      "attribute": "#[ignore = \"Requires OCTOFS_TEST_SSH_HOST env var\"]",
+      "fn": "remote_str_replace",
+      "category": "requires_remote_filesystem_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "Requires OCTOFS_TEST_SSH_HOST env var"
+    },
+    {
+      "path": "src/mcp/fs/fs_tests.rs",
+      "blob_sha": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
+      "line": 6783,
+      "attribute": "#[ignore = \"Requires OCTOFS_TEST_SSH_HOST env var\"]",
+      "fn": "remote_batch_edit",
+      "category": "requires_remote_filesystem_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "Requires OCTOFS_TEST_SSH_HOST env var"
+    },
+    {
+      "path": "src/mcp/fs/fs_tests.rs",
+      "blob_sha": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
+      "line": 6838,
+      "attribute": "#[ignore = \"Requires OCTOFS_TEST_SSH_HOST env var\"]",
+      "fn": "remote_directory_listing",
+      "category": "requires_remote_filesystem_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "Requires OCTOFS_TEST_SSH_HOST env var"
+    },
+    {
+      "path": "src/mcp/fs/fs_tests.rs",
+      "blob_sha": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
+      "line": 6876,
+      "attribute": "#[ignore = \"Requires OCTOFS_TEST_SSH_HOST env var\"]",
+      "fn": "remote_extract_lines",
+      "category": "requires_remote_filesystem_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "Requires OCTOFS_TEST_SSH_HOST env var"
+    },
+    {
+      "path": "src/mcp/fs/fs_tests.rs",
+      "blob_sha": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
+      "line": 6925,
+      "attribute": "#[ignore = \"Requires OCTOFS_TEST_SSH_HOST env var\"]",
+      "fn": "remote_undo_edit",
+      "category": "requires_remote_filesystem_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "Requires OCTOFS_TEST_SSH_HOST env var"
+    },
+    {
+      "path": "src/mcp/fs/fs_tests.rs",
+      "blob_sha": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
+      "line": 6976,
+      "attribute": "#[ignore = \"Requires OCTOFS_TEST_SSH_HOST env var\"]",
+      "fn": "remote_workdir_set",
+      "category": "requires_remote_filesystem_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "Requires OCTOFS_TEST_SSH_HOST env var"
+    },
+    {
+      "path": "src/mcp/fs/remote_tests.rs",
+      "blob_sha": "232a49c630407d7cd3fbb1af2ff629a620bc7543",
+      "line": 250,
+      "attribute": "#[ignore = \"manual old/new file hex encoding microbenchmark; no remote access\"]",
+      "fn": "benchmark_file_hex_encoding",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": true,
+      "reason": "manual old/new file hex encoding microbenchmark; no remote access"
+    },
+    {
+      "path": "src/mcp/rea_evidence_tests.rs",
+      "blob_sha": "a83d4adc522be0ededa73c27b4cc1151856c589e",
+      "line": 131,
+      "attribute": "#[ignore = \"requires real rea-agents@6.8.0 CLI Evidence from the P0 npm oracle\"]",
+      "fn": "real_npm_reference_evidence_matches_native_subset_identity",
+      "category": "requires_external_npm_or_node_oracle",
+      "remote_fs_cfg": false,
+      "reason": "requires real rea-agents@6.8.0 CLI Evidence from the P0 npm oracle"
+    },
+    {
+      "path": "src/mcp/rea_evidence_tests.rs",
+      "blob_sha": "a83d4adc522be0ededa73c27b4cc1151856c589e",
+      "line": 275,
+      "attribute": "#[ignore = \"requires an independent Node JSON.stringify bit-pattern corpus\"]",
+      "fn": "extensive_ecmascript_finite_number_corpus_matches_native_renderer",
+      "category": "requires_external_npm_or_node_oracle",
+      "remote_fs_cfg": false,
+      "reason": "requires an independent Node JSON.stringify bit-pattern corpus"
+    },
+    {
+      "path": "src/mcp/rea_evidence_tests.rs",
+      "blob_sha": "a83d4adc522be0ededa73c27b4cc1151856c589e",
+      "line": 356,
+      "attribute": "#[ignore = \"requires real published rea-agents@6.8.0 numeric Evidence output from P0 npm CI\"]",
+      "fn": "real_npm_fractional_reference_evidence_matches_native",
+      "category": "requires_external_npm_or_node_oracle",
+      "remote_fs_cfg": false,
+      "reason": "requires real published rea-agents@6.8.0 numeric Evidence output from P0 npm CI"
+    },
+    {
+      "path": "src/mcp/rea_evidence_tests.rs",
+      "blob_sha": "a83d4adc522be0ededa73c27b4cc1151856c589e",
+      "line": 414,
+      "attribute": "#[ignore = \"requires hash-consistent schema-negative records from real published REA npm\"]",
+      "fn": "real_npm_rejected_schema_matrix_is_independently_rejected_by_rust",
+      "category": "requires_external_npm_or_node_oracle",
+      "remote_fs_cfg": false,
+      "reason": "requires hash-consistent schema-negative records from real published REA npm"
+    },
+    {
+      "path": "src/mcp/rea_static_tests.rs",
+      "blob_sha": "46e8a398f63f5079a0aba3e060957ac5541da7b9",
+      "line": 110,
+      "attribute": "#[ignore = \"requires installed GNU readelf on an owned Linux host; run explicitly\"]",
+      "fn": "real_gnu_readelf_inspects_own_test_binary_without_executing_it",
+      "category": "requires_real_owned_linux_backend",
+      "remote_fs_cfg": false,
+      "reason": "requires installed GNU readelf on an owned Linux host; run explicitly"
+    },
+    {
+      "path": "src/mcp/rea_static_tests.rs",
+      "blob_sha": "46e8a398f63f5079a0aba3e060957ac5541da7b9",
+      "line": 186,
+      "attribute": "#[ignore = \"requires installed GNU yes/sleep on an owned Linux host; run explicitly\"]",
+      "fn": "real_backend_output_and_deadline_are_bounded_and_reaped",
+      "category": "requires_real_owned_linux_backend",
+      "remote_fs_cfg": false,
+      "reason": "requires installed GNU yes/sleep on an owned Linux host; run explicitly"
+    },
+    {
+      "path": "src/mcp/runtime/binary_tests.rs",
+      "blob_sha": "f3afe0bfd44b3bcf987168df83c174bfa168ebaf",
+      "line": 91,
+      "attribute": "#[ignore = \"launched only by the bounded isolated file policy test\"]",
+      "fn": "isolated_file_policy_helper",
+      "context": "\t};\n\tassert!(status.success(), \"isolated file policy fixture failed\");\n}\n\n#[test]\n#[ignore = \"launched only by the bounded isolated file policy test\"]\nfn isolated_file_policy_helper() {\n\tassert_eq!(std::env::var(\"HEPTA_A36_FILE_POLICY_FIXTURE\").unwrap(), \"1\");\n\tlet root = tempfile::tempdir().unwrap();\n\tlet config = serde_json::from_value::<super::super::config::RuntimeConfig>(json!({",
+      "category": "private_subprocess_fixture",
+      "remote_fs_cfg": false,
+      "reason": "launched only by the bounded isolated file policy test"
+    },
+    {
+      "path": "src/mcp/runtime/effective_config_tests.rs",
+      "blob_sha": "2a0314c071ae44f3bba8e91f0d6fd6a152616604",
+      "line": 380,
+      "attribute": "#[ignore = \"manual immutable-summary CPU microbenchmark; not native HTTP or process-start TPS\"]",
+      "fn": "effective_config_cache_microbenchmark_six_and_256_hosts",
+      "context": "\t}\n\tconfig\n}\n\n#[test]\n#[ignore = \"manual immutable-summary CPU microbenchmark; not native HTTP or process-start TPS\"]\nfn effective_config_cache_microbenchmark_six_and_256_hosts() {\n\tuse std::hint::black_box;\n\tuse std::time::Instant;\n\tlet measure = |iterations: usize, compute: &dyn Fn() -> String| {",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual immutable-summary CPU microbenchmark; not native HTTP or process-start TPS"
+    },
+    {
+      "path": "src/mcp/runtime/inspect_tests.rs",
+      "blob_sha": "0571cb9bdc618b38e7e3c3864852c1bb2af39b3a",
+      "line": 55,
+      "attribute": "#[ignore = \"manual isolated immutable host projection CPU microbenchmark; not HTTP TPS\"]",
+      "fn": "host_projection_cache_microbenchmark_six_and_256_hosts",
+      "context": "\tassert_eq!(decoded[\"hosts\"][0][\"allow_pty\"], true);\n\tassert_eq!(decoded[\"hosts\"][1][\"allow_pty\"], false);\n}\n\n#[test]\n#[ignore = \"manual isolated immutable host projection CPU microbenchmark; not HTTP TPS\"]\nfn host_projection_cache_microbenchmark_six_and_256_hosts() {\n\tuse std::hint::black_box;\n\tuse std::time::Instant;\n\tfor hosts in [6, 256] {",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual isolated immutable host projection CPU microbenchmark; not HTTP TPS"
+    },
+    {
+      "path": "src/mcp/runtime/inspection_result_tests.rs",
+      "blob_sha": "4811b1dd7b1b77f3132b2449d33210867084d467",
+      "line": 75,
+      "attribute": "#[ignore = \"requires an explicitly supplied private captured network sample\"]",
+      "fn": "exact_rust_current_network_sample_retains_complete_json",
+      "context": "\tassert_eq!(writer.bytes, b\"ab\");\n\tassert_eq!(writer.write(b\"c\").unwrap(), 1);\n\tassert!(writer.write(b\"d\").is_err());\n}\n#[test]\n#[ignore = \"requires an explicitly supplied private captured network sample\"]\nfn exact_rust_current_network_sample_retains_complete_json() {\n\tlet path =\n\t\tstd::env::var(\"HEPTA_PRIVATE_NETWORK_SAMPLE\").expect(\"explicit captured sample path\");\n\tlet bytes = std::fs::read(path).unwrap();",
+      "category": "private_sample_opt_in",
+      "remote_fs_cfg": false,
+      "reason": "requires an explicitly supplied private captured network sample"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_cohort_tail_probe.rs",
+      "blob_sha": "9eacc702d7a2cf2c11cf3f5285f6b92510d3832b",
+      "line": 186,
+      "attribute": "#[ignore = \"manual lookup-only cold-tail diagnosis; not a release MCP benchmark\"]",
+      "fn": "six_callers_uncapped_cold_tail_probe",
+      "context": "\t\t\t.unwrap();\n\t}\n}\n\n#[test]\n#[ignore = \"manual lookup-only cold-tail diagnosis; not a release MCP benchmark\"]\nfn six_callers_uncapped_cold_tail_probe() {\n\tlet root = tempfile::tempdir().unwrap();\n\twrite_fixture(root.path());\n\tassert!(registry_has_content_watch(",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual lookup-only cold-tail diagnosis; not a release MCP benchmark"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_record_read_bench.rs",
+      "blob_sha": "3fb446416248202f576d861ed1354d142830bc6e",
+      "line": 78,
+      "attribute": "#[ignore = \"isolated guarded large-receipt CPU benchmark; no remote effects; allocations unmeasured\"]",
+      "fn": "guarded_receipt_reads_and_complete_comparisons_benchmark",
+      "context": "\t\t_ => panic!(\"unknown benchmark mode\"),\n\t}\n}\n\n#[test]\n#[ignore = \"isolated guarded large-receipt CPU benchmark; no remote effects; allocations unmeasured\"]\nfn guarded_receipt_reads_and_complete_comparisons_benchmark() {\n\tconst CALLS: usize = 64;\n\tlet mut rows = Vec::new();\n\tfor repetition in 0..4 {",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "isolated guarded large-receipt CPU benchmark; no remote effects; allocations unmeasured"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_concurrency_bench.rs",
+      "blob_sha": "6ca9ded87a1f77fe15bcc51b2f929722e162c046",
+      "line": 28,
+      "attribute": "#[ignore = \"isolated cold positive/absent concurrency benchmark; not remote launch TPS\"]",
+      "fn": "cold_positive_and_absent_concurrency_benchmark",
+      "context": "\tvalues.sort_by(f64::total_cmp);\n\tvalues[((values.len() as f64 * percentile).ceil() as usize).saturating_sub(1)]\n}\n\n#[test]\n#[ignore = \"isolated cold positive/absent concurrency benchmark; not remote launch TPS\"]\nfn cold_positive_and_absent_concurrency_benchmark() {\n\tlet root = tempfile::tempdir().unwrap();\n\tlet template: JobRecord = serde_json::from_value(json!({\n\t\t\"id\":\"fixture\", \"host\":\"main\", \"ssh_target\":\"never-connect.invalid\",",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "isolated cold positive/absent concurrency benchmark; not remote launch TPS"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_registry_decode_tests.rs",
+      "blob_sha": "6d7dbff14277694009096c524c20570bb836733b",
+      "line": 358,
+      "attribute": "#[ignore = \"diagnostic only: in-memory concrete/generic owned serde ABBA; no filesystem or remote IO\"]",
+      "fn": "concrete_and_generic_owned_decode_diagnostic",
+      "context": "\tdrop(oversized);\n\treject_both(&path);\n}\n\n#[test]\n#[ignore = \"diagnostic only: in-memory concrete/generic owned serde ABBA; no filesystem or remote IO\"]\nfn concrete_and_generic_owned_decode_diagnostic() {\n\tuse std::time::Instant;\n\n\tconst CALLS: usize = 4096;",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "diagnostic only: in-memory concrete/generic owned serde ABBA; no filesystem or remote IO"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_tests.rs",
+      "blob_sha": "048c466e0f0058e4ecfd0ac27081fec2fd80bde8",
+      "line": 681,
+      "attribute": "#[ignore = \"manual isolated request-binding CPU microbenchmark; not process-start TPS\"]",
+      "fn": "request_binding_microbenchmark_small_and_1mib_stdin",
+      "context": "\tassert_eq!(fingerprint(&digest), fingerprint(&changed));\n\tassert!(!matches_request(&record, &changed).unwrap());\n}\n\n#[test]\n#[ignore = \"manual isolated request-binding CPU microbenchmark; not process-start TPS\"]\nfn request_binding_microbenchmark_small_and_1mib_stdin() {\n\tuse std::hint::black_box;\n\tuse std::time::Instant;\n",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual isolated request-binding CPU microbenchmark; not process-start TPS"
+    },
+    {
+      "path": "src/mcp/runtime/jobs_tests.rs",
+      "blob_sha": "048c466e0f0058e4ecfd0ac27081fec2fd80bde8",
+      "line": 1437,
+      "attribute": "#[ignore = \"manual isolated filesystem microbenchmark; not production TPS\"]",
+      "fn": "positive_reuse_microbenchmark_6000_synthetic_records",
+      "context": "\t\t.contains(\"previous idempotency binding\"));\n}\n\n#[cfg(unix)]\n#[test]\n#[ignore = \"manual isolated filesystem microbenchmark; not production TPS\"]\nfn positive_reuse_microbenchmark_6000_synthetic_records() {\n\tlet root = tempfile::tempdir().unwrap();\n\tlet cache = Mutex::new(ReuseHitCache::default());\n\tlet template = outcome_fixture(ExecutionMode::Operator, false, \"launched\");",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual isolated filesystem microbenchmark; not production TPS"
+    },
+    {
+      "path": "src/mcp/runtime/request_results_growth_tests.rs",
+      "blob_sha": "3bb55c4d809d2b7c9d86052f9adcf01042b9d1d0",
+      "line": 489,
+      "attribute": "#[ignore = \"explicit isolated storage throughput measurement; run separately from functional suites\"]",
+      "fn": "durable_result_storage_parallel_throughput_benchmark",
+      "context": "\tassert_original(root.path(), &next, &bytes);\n}\n\n#[cfg(target_os = \"linux\")]\n#[test]\n#[ignore = \"explicit isolated storage throughput measurement; run separately from functional suites\"]\nfn durable_result_storage_parallel_throughput_benchmark() {\n\tuse std::sync::{\n\t\tatomic::{AtomicUsize, Ordering},\n\t\tArc, Barrier,",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "explicit isolated storage throughput measurement; run separately from functional suites"
+    },
+    {
+      "path": "src/mcp/runtime/request_results_policy_tests.rs",
+      "blob_sha": "6b0d79515ab6abdb90ddc15538736b3f5a7f1def",
+      "line": 233,
+      "attribute": "#[ignore = \"manual isolated immutable-policy CPU microbenchmark; no native HTTP or storage\"]",
+      "fn": "immutable_policy_cache_microbenchmark_six_and_256_hosts",
+      "context": "\t\t}\n\t}\n}\n\n#[test]\n#[ignore = \"manual isolated immutable-policy CPU microbenchmark; no native HTTP or storage\"]\nfn immutable_policy_cache_microbenchmark_six_and_256_hosts() {\n\tuse std::hint::black_box;\n\tuse std::time::Instant;\n\tlet measure = |iterations: usize, compute: &dyn Fn() -> String| {",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "manual isolated immutable-policy CPU microbenchmark; no native HTTP or storage"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_file_observation_pool_tests.rs",
+      "blob_sha": "7d1fcebbead546bf849aa9a50975d85dcd43d8fa",
+      "line": 124,
+      "attribute": "#[ignore = \"launched only by the bounded isolated file pool test\"]",
+      "fn": "isolated_file_helper",
+      "context": "\t\t);\n\t}\n}\n\n#[tokio::test(flavor = \"current_thread\")]\n#[ignore = \"launched only by the bounded isolated file pool test\"]\nasync fn isolated_file_helper() {\n\tlet kind =\n\t\tstd::env::var(\"HEPTA_A36_FILE_POOL_FIXTURE\").expect(\"isolated file fixture required\");\n\tlet (_root, path, agent, control) = fixture_with_file_policy(true, true).await;",
+      "category": "private_subprocess_fixture",
+      "remote_fs_cfg": false,
+      "reason": "launched only by the bounded isolated file pool test"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_maintenance_tests.rs",
+      "blob_sha": "61da1b65f35241b3951d86da25ea7eee8e74246d",
+      "line": 413,
+      "attribute": "#[ignore = \"private subprocess fixture; invoked by the bounded parent test\"]",
+      "fn": "isolated_helper",
+      "context": "\t\t}\n\t}\n}\n\n#[tokio::test(flavor = \"current_thread\")]\n#[ignore = \"private subprocess fixture; invoked by the bounded parent test\"]\nasync fn isolated_helper() {\n\tlet kind = std::env::var(\"HEPTA_RETIREMENT_TEST_FIXTURE\").unwrap();\n\tlet (_root, path, agent, _) = fixture_with_cold_host(true).await;\n\tlet core = core(&path).await;",
+      "category": "private_subprocess_fixture",
+      "remote_fs_cfg": false,
+      "reason": "private subprocess fixture; invoked by the bounded parent test"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_maintenance_tests.rs",
+      "blob_sha": "61da1b65f35241b3951d86da25ea7eee8e74246d",
+      "line": 458,
+      "attribute": "#[ignore = \"isolated idle observation benchmark; run explicitly on the target host\"]",
+      "fn": "idle_maintenance_benchmark",
+      "context": "}\n\n// Copy this sibling test file into an unchanged baseline checkout to compare\n// the same actor/fixture, timing interval and process counters on both builds.\n#[tokio::test(flavor = \"current_thread\")]\n#[ignore = \"isolated idle observation benchmark; run explicitly on the target host\"]\nasync fn idle_maintenance_benchmark() {\n\tlet seconds: u64 = std::env::var(\"HEPTA_IDLE_MAINTENANCE_SECONDS\")\n\t\t.unwrap_or_else(|_| \"10\".into())\n\t\t.parse()",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "isolated idle observation benchmark; run explicitly on the target host"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "blob_sha": "49871257426757f9d84379d89c8182309d18d30c",
+      "line": 1465,
+      "attribute": "#[ignore = \"launched only by the bounded isolated subprocess test\"]",
+      "fn": "isolated_helper",
+      "context": "\t\tassert!(status.success(), \"isolated fixture failed: {kind}\");\n\t}\n}\n\n#[tokio::test(flavor = \"current_thread\")]\n#[ignore = \"launched only by the bounded isolated subprocess test\"]\nasync fn isolated_helper() {\n\tlet kind = std::env::var(\"HEPTA_A15_TEST_FIXTURE\").expect(\"isolated fixture required\");\n\tlet (root, path, agent, agent_control) = if kind.starts_with(\"fair-\") {\n\t\tfixture_with_cold_host(true).await",
+      "category": "private_subprocess_fixture",
+      "remote_fs_cfg": false,
+      "reason": "launched only by the bounded isolated subprocess test"
+    },
+    {
+      "path": "src/mcp/runtime/ssh_preparation_bench.rs",
+      "blob_sha": "dac1efc853a06e232bf47254cb5bb4d38523da02",
+      "line": 41,
+      "attribute": "#[ignore = \"explicit component ABBA measurement, not a timing assertion\"]",
+      "fn": "fixed_observation_preparation_abba",
+      "context": "\t\t}\n\t}\n}\n\n#[test]\n#[ignore = \"explicit component ABBA measurement, not a timing assertion\"]\nfn fixed_observation_preparation_abba() {\n\tconst ITERATIONS: usize = 2000;\n\tfor (kind, label) in [(0, \"file\"), (1, \"status\"), (2, \"read\")] {\n\t\tlet reference = prepare(false, kind);",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "explicit component ABBA measurement, not a timing assertion"
+    },
+    {
+      "path": "src/mcp/server_tests.rs",
+      "blob_sha": "864f376b2fc8af211cf067208e07b53c09cb4ff2",
+      "line": 637,
+      "attribute": "#[ignore = \"requires dedicated hepta-runtime SSH identities and HEPTA_RUNTIME_TEST_CONFIG\"]",
+      "fn": "runtime_remote_execution_recovery_and_policy_e2e",
+      "category": "requires_remote_ssh_identity_or_manual_restart",
+      "remote_fs_cfg": false,
+      "reason": "requires dedicated hepta-runtime SSH identities and HEPTA_RUNTIME_TEST_CONFIG"
+    },
+    {
+      "path": "src/mcp/server_tests.rs",
+      "blob_sha": "864f376b2fc8af211cf067208e07b53c09cb4ff2",
+      "line": 902,
+      "attribute": "#[ignore = \"manual phase one for durable controller restart validation\"]",
+      "fn": "runtime_restart_phase_one_starts_remote_job",
+      "category": "requires_remote_ssh_identity_or_manual_restart",
+      "remote_fs_cfg": false,
+      "reason": "manual phase one for durable controller restart validation"
+    },
+    {
+      "path": "src/mcp/server_tests.rs",
+      "blob_sha": "864f376b2fc8af211cf067208e07b53c09cb4ff2",
+      "line": 949,
+      "attribute": "#[ignore = \"manual phase two for durable controller restart validation\"]",
+      "fn": "runtime_restart_phase_two_recovers_remote_job",
+      "category": "requires_remote_ssh_identity_or_manual_restart",
+      "remote_fs_cfg": false,
+      "reason": "manual phase two for durable controller restart validation"
+    },
+    {
+      "path": "src/mcp/server_tests.rs",
+      "blob_sha": "864f376b2fc8af211cf067208e07b53c09cb4ff2",
+      "line": 985,
+      "attribute": "#[ignore = \"requires dedicated x230 and mac hepta-runtime SSH identities\"]",
+      "fn": "runtime_linux_and_macos_backends_e2e",
+      "category": "requires_remote_ssh_identity_or_manual_restart",
+      "remote_fs_cfg": false,
+      "reason": "requires dedicated x230 and mac hepta-runtime SSH identities"
+    },
+    {
+      "path": "src/utils/json_size_tests.rs",
+      "blob_sha": "ef6c23cdab830f6c207661a76eb51917681b108b",
+      "line": 151,
+      "attribute": "#[ignore = \"CPU_only microbenchmark; allocations_unmeasured; run explicitly in release mode\"]",
+      "fn": "benchmark_escaped_sdk_result_size_counting",
+      "category": "manual_benchmark_or_diagnostic",
+      "remote_fs_cfg": false,
+      "reason": "CPU_only microbenchmark; allocations_unmeasured; run explicitly in release mode"
+    },
+    {
+      "path": "tests/rea_static_external.rs",
+      "blob_sha": "5a8eadf5d9a86df60db275c95717dd148af206cb",
+      "line": 191,
+      "attribute": "#[ignore = \"requires HEPTA_REA_STATIC_REAL_SSH=1, existing localhost SSH/systemd and installed GNU readelf/rustc\"]",
+      "fn": "static_mcp_preserves_original_jobs_across_restart_and_cancels_live_owned_backend",
+      "category": "requires_external_worker_or_mcp_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "requires HEPTA_REA_STATIC_REAL_SSH=1, existing localhost SSH/systemd and installed GNU readelf/rustc"
+    },
+    {
+      "path": "tests/weight_forward_external.rs",
+      "blob_sha": "611f4fb678dd26d201f1855bdb9ae4e0f5a3484d",
+      "line": 198,
+      "attribute": "#[ignore = \"requires HEPTA_WEIGHT_TEST_PYTHON pointing to an existing CPU torch + safetensors environment\"]",
+      "fn": "native_linear_mcp_matches_real_pytorch_across_noop_patch_restore",
+      "category": "requires_external_worker_or_mcp_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "requires HEPTA_WEIGHT_TEST_PYTHON pointing to an existing CPU torch + safetensors environment"
+    },
+    {
+      "path": "tests/weight_mcp_external.rs",
+      "blob_sha": "eacaf637a54dd65aa0440364e48417eaaee40a42",
+      "line": 208,
+      "attribute": "#[ignore = \"requires explicit CPU Python, source worker and authorized localhost SSH\"]",
+      "fn": "real_resident_worker_reuses_jobs_across_mcp_restart_and_rejects_rebinding",
+      "category": "requires_external_worker_or_mcp_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "requires explicit CPU Python, source worker and authorized localhost SSH"
+    },
+    {
+      "path": "tests/weight_mcp_external.rs",
+      "blob_sha": "eacaf637a54dd65aa0440364e48417eaaee40a42",
+      "line": 214,
+      "attribute": "#[ignore = \"requires explicit CPU Python, source worker, native binary and authorized localhost SSH\"]",
+      "fn": "native_client_preserves_real_forward_and_original_jobs_across_mcp_restart",
+      "category": "requires_external_worker_or_mcp_ssh_fixture",
+      "remote_fs_cfg": true,
+      "reason": "requires explicit CPU Python, source worker, native binary and authorized localhost SSH"
+    }
+  ]
+}
