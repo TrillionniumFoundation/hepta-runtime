@@ -10,17 +10,34 @@ permissions:
 jobs:
   verify-release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - name: Locked Linux runtime and root-helper build
+      - name: Install pinned Rust and isolated test runner
         run: |
           rustup toolchain install 1.95.0 --profile minimal
-          cargo +1.95.0 test --locked --all-targets
+          cargo +1.95.0 install --locked --version '=0.9.137' cargo-nextest
+          cargo +1.95.0 nextest --version
+
+      - name: Install integration test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ripgrep python3-jsonschema
+
+      - name: Test in isolated processes
+        run: |
+          umask 022
+          cargo +1.95.0 nextest run --locked --all-targets --all-features \
+            --test-threads 1 --retries 0 --no-fail-fast
           python3 tests/file_capabilities.py
+
+      - name: Locked Linux runtime and root-helper build
+        run: |
           cargo +1.95.0 build --locked --release
           sha256sum target/release/hepta-runtime target/release/hepta-runtime-jobctl
 

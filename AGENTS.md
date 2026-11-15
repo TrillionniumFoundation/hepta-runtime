@@ -3,7 +3,7 @@
 Standalone Rust binary exposing filesystem tools (view, text_editor, batch_edit, extract_lines, shell, workdir) over MCP — stdio or streamable HTTP — with native SSH/SFTP remote file support. Rust 1.95+ · rmcp 3.x · tokio · axum.
 
 ## Commands
-- Build: `cargo build` · Release: `cargo build --release` · Dev run: `cargo run -- mcp` (stdio; add `--bind 0.0.0.0:12345` for HTTP; `RUST_LOG=debug` for logs)
+- Build: `cargo build` · Release: `cargo build --release` · Dev run: `cargo run --bin hepta-runtime -- mcp` (stdio; add `--bind 127.0.0.1:12345 --auth-token-file /private/path/http.token` for HTTP; `RUST_LOG=debug` for logs)
 - Format: `cargo fmt` · Lint: `cargo clippy --all-features -- -D warnings` · Test: `cargo test --all-features` (one suite: `cargo test --all-features <name>`)
 - Coverage: `make coverage` (needs cargo-llvm-cov + llvm-tools-preview; excludes `*_tests.rs`)
 - This checkout auto-syncs to the dev server — run build/test/clippy there (`ssh dev`), not on this machine.

@@ -42,7 +42,8 @@ behavioral parity remains OPEN.
 Use the CI's isolated runner for the full runtime suite:
 `cargo nextest run --locked --all-targets --all-features --test-threads 1 --retries 0 --no-fail-fast`.
 Some historical tests intentionally modify process-global state and require
-separate processes.
+separate processes. The pinned toolchain, CI gates, and manual Linux artifact
+packaging are documented in [CI and private release validation](.agents/release.md).
 
 ## Weight-space research workbench
 
@@ -413,13 +414,35 @@ octofs mcp
 
 #### HTTP
 
-Streamable HTTP transport for remote access or multi-client scenarios.
+Hepta Runtime uses authenticated Streamable HTTP on a loopback address in every
+tool mode, including when no runtime configuration is supplied. The token file
+must be an account-owned, single-link regular file with mode `0600`; token loading
+currently requires Unix descriptor support. Create a private token file once:
 
 ```bash
-octofs mcp --bind 0.0.0.0:12345
+python3 - <<'PY'
+import os
+import pathlib
+import secrets
+
+path = pathlib.Path.home() / ".config" / "hepta-runtime" / "http.token"
+path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+os.fchmod(fd, 0o600)
+with os.fdopen(fd, "w", encoding="ascii") as token:
+    token.write(secrets.token_hex(32) + "\n")
+PY
+
+./target/release/hepta-runtime mcp --bind 127.0.0.1:12345 \
+  --auth-token-file "$HOME/.config/hepta-runtime/http.token"
 ```
 
-Connect clients to `http://localhost:12345/mcp`.
+Connect the MCP client to `http://127.0.0.1:12345/mcp` and configure it to send the
+file's token, without its final newline, as the `X-Hepta-Runtime-Token` header on
+every MCP request. Missing or incorrect tokens return `401`; requests carrying
+an `Origin` header return `403`. For remote clients, use an SSH or TLS tunnel
+whose server-side target is this loopback listener. The local `/healthz` and
+`/readyz` probes remain unauthenticated and do not grant MCP access.
 
 ### Working Directory
 
@@ -740,34 +763,44 @@ octofs/
 
 ## Development
 
+For this Hepta checkout, use the pinned Rust toolchain and isolated test runner:
+
 ```bash
-# Build
-cargo build --release
+# Install CI tool versions
+rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+cargo +1.95.0 install --locked --version '=0.9.137' cargo-nextest
+
+# Build both runtime binaries
+cargo +1.95.0 build --locked --release
 
 # Run tests
-cargo test
+cargo +1.95.0 nextest run --locked --all-targets --all-features \
+  --test-threads 1 --retries 0 --no-fail-fast
 
 # Lint (zero warnings policy)
-cargo clippy
+cargo +1.95.0 clippy --locked --all-targets --all-features -- -D warnings
 
 # Format
-cargo fmt
+cargo +1.95.0 fmt --all
 
 # Run locally
-cargo run -- mcp
+cargo +1.95.0 run --locked --bin hepta-runtime -- mcp
 ```
 
 ### Running Tests
 
 ```bash
-# All tests
-cargo test
+# Library configuration without remote filesystem support
+cargo +1.95.0 nextest run --locked --all-targets --no-default-features \
+  --test-threads 1 --retries 0 --no-fail-fast
 
-# Specific test
-cargo test test_view_file
+# Specific tests, still isolated by process
+cargo +1.95.0 nextest run --locked --all-targets --all-features \
+  --test-threads 1 --retries 0 -E 'test(test_view_file)'
 
-# With output
-cargo test -- --nocapture
+# Include output from successful tests
+cargo +1.95.0 nextest run --locked --all-targets --all-features \
+  --test-threads 1 --retries 0 --no-fail-fast --success-output immediate
 ```
 
 ---
