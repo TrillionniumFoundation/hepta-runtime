@@ -59,6 +59,7 @@ from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
 import hia_native_batch_apply_qualification as batch_apply_qualification
 import hia_native_atomic_write_qualification as atomic_write_qualification
 import hia_native_filesystem_parity_qualification as filesystem_parity_qualification
+import hia_native_text_publication_pipeline as text_publication_pipeline
 from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
                                               qualification_evidence as checked_history_evidence)
 
@@ -83,6 +84,11 @@ MODULES = (
      "standalone": "stdio", "manifest_env": "HIA_PROTOCOL_MANIFEST", "test": "test_runtime_protocol.py"},
     {"key": "text_budget", "name": "text-budget", "source": "native/text_budget.hepta",
      "standalone": "filter", "manifest_env": "HIA_TEXT_MANIFEST", "test": "test_text_budget.py"},
+    {"key": "text_publication", "name": "text-publication", "source": "native/text_publication.hepta",
+     "builder": "text_publication", "manifest_env": "HIA_TEXT_PUBLICATION_MANIFEST",
+     "test": "test_text_publication_native.py",
+     "additional_tests": ("test_text_publication_corpus.py", "test_text_publication_pipeline_evidence.py"),
+     "companion_sources": ("native/text_publication_packer.hepta",)},
     {"key": "terminal_clean", "name": "terminal-clean", "source": "native/terminal_clean.hepta",
      "standalone": "filter", "manifest_env": "HIA_TERMINAL_MANIFEST", "test": "test_shell_native.py"},
     {"key": "shell_gate", "name": "shell-gate", "source": "native/shell_gate.hepta",
@@ -447,6 +453,14 @@ def sources() -> dict:
         "hia_native_request_context_build.py", "hia_native_request_context_qualification.py", "hia_native_request_context_reference.py",
         "hia_native_result_publication_build.py", "hia_native_result_publication_qualification.py",
         "hia_native_result_publication_reference.py", "result_publication_adapter.S",
+        "hia_native_text_publication_build.py", "hia_native_text_publication_evidence.py",
+        "hia_native_text_publication_fixtures.py", "hia_native_text_publication_qualification.py",
+        "hia_native_text_publication_pipeline.py", "hia_native_text_publication_pipeline_evidence.py",
+        "hia_native_text_publication_retirement.py", "hia_native_text_publication_reference.py",
+        "hia_native_text_publication_original_fixtures.py",
+        "qualify_hia_text_publication_native.py", "qualify_hia_text_publication_races.py",
+        "text_publication_children.S", "text_publication_effects.S", "text_publication_engine.S",
+        "text_publication_fixture.S", "text_publication_transport.S",
         "hia_native_request_scope_build.py", "hia_native_request_scope_qualification.py",
         "hia_native_request_scope_reference.py",
         'build_config_fs_probe.py',
@@ -505,7 +519,7 @@ def sources() -> dict:
         "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / ".github/workflows/hia-runtime-shell.yml",
-                  ROOT / "rustfmt.toml"))
+                  ROOT / "rustfmt.toml", ROOT / "authoring/diagnostics.json"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
@@ -690,7 +704,9 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                 else:
                     record_check(output, report, name=name, command=invocation[name], timeout=timeout, env=env,
                                  record_identity=name in {"test_batch_plan_input.py", "test_batch_call_native.py",
-                                                          "test_batch_call_packing.py", "test_batch_call_async.py"})
+                                                          "test_batch_call_packing.py", "test_batch_call_async.py",
+                                                          "test_text_publication_native.py", "test_text_publication_corpus.py",
+                                                          "test_text_publication_pipeline_evidence.py"})
         finally:
             for name in futures:
                 if name not in collected:
@@ -863,6 +879,15 @@ def filesystem_parity_retirement(output: Path, report: dict, *, create: bool = F
     value = filesystem_parity_qualification.retire_fixtures(
         ROOT, output, report, completed_test_summary, create=create)
     return filesystem_parity_qualification.decode(filesystem_parity_qualification.canonical(value))
+
+
+def text_publication_evidence(output: Path, report: dict) -> dict:
+    return text_publication_pipeline.native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def text_publication_retirement(output: Path, report: dict, *, create: bool = False) -> dict:
+    return text_publication_pipeline.retire_fixtures(
+        ROOT, output, report, completed_test_summary, create=create)
 
 
 def filesystem_public_evidence(output: Path, report: dict) -> dict:
@@ -2519,6 +2544,8 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         elif item.get("builder") == "batch_call":
             from hia_native_batch_call_pipeline import environment
             env.update(environment(ROOT, output, report))
+        elif item.get("builder") == "text_publication":
+            env.update(text_publication_pipeline.environment(ROOT, output, report))
         elif item.get("builder") == "effect_fence":
             bundle = json.loads(built.read_bytes())
             env["HIA_FENCE_ASYNC_MANIFEST"] = str(
@@ -2680,6 +2707,8 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "batch_call":
             from hia_native_batch_call_pipeline import build as build_batch_call
             built = build_batch_call(hepta, output, source_root=ROOT, source_sha256=report["source_sha256"])
+        elif item.get("builder") == "text_publication":
+            built = text_publication_pipeline.build(hepta, output, source_root=ROOT)
         elif item.get("builder") == "batch_plan":
             from hia_native_batch_plan_build import build_batch_plan
             built = build_batch_plan(hepta, output / "build", source_root=ROOT)
@@ -2762,6 +2791,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(session_qualification.test_commands(ROOT, output, report))
     commands.update(file_lock_pipeline.test_commands(ROOT, output, report))
     commands.update(filesystem_parity_qualification.test_commands(ROOT, output, report))
+    commands.update(text_publication_pipeline.test_commands(ROOT, output, report))
     from hia_native_filesystem_public_pipeline import test_commands as filesystem_public_commands
     if "test_filesystem_public.py" in tests:
         commands.update(filesystem_public_commands(ROOT, output, report))
@@ -2776,6 +2806,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["request_scope_evidence"] = request_scope_evidence(output, report)
     report["filesystem_parity_evidence"] = filesystem_parity_evidence(output, report)
     report["filesystem_parity_fixture_retirement"] = filesystem_parity_retirement(output, report, create=True)
+    report["text_publication_evidence"] = text_publication_evidence(output, report)
+    report["text_publication_fixture_retirement"] = text_publication_retirement(output, report, create=True)
     report["shell_evidence"] = shell_evidence(output, report)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
@@ -2858,6 +2890,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["filesystem_parity_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["filesystem_parity_fixture_retirement"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["text_publication_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["text_publication_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_render_growth_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_call_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_search_evidence"]["artifact_sha256"])

@@ -28,7 +28,7 @@ import qualify_hia_runtime_native as q
 PARTITIONS = {
     "batch": ("batch_edit_params", "batch_plan_input", "batch_plan", "batch_apply", "batch_diff", "batch_call", "atomic_write",
               "view_cache", "history"),
-    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
+    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "text_publication", "terminal_clean", "shell_gate", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
              "delta", "editable_content", "file_locks", "file_lock_service"),
     "view": ("view_render", "view_render_growth", "view_read", "view_params", "view_call",
@@ -315,6 +315,11 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         # before removing the private effect targets from artifact transport.
         # This native phase cannot depend on the later Rust comparison recipe.
         q.filesystem_parity_retirement(output, report, create=True)
+    if any(row.get("name") == "test_text_publication_native.py" for row in report.get("checks", ())):
+        # This read requires all three Text suites, including the physical
+        # refusals and completed archive. No live target enters a shard.
+        q.text_publication_evidence(output, report)
+        q.text_publication_retirement(output, report, create=True)
     if any(row.get("name") == "test_config_span.py" for row in report.get("checks", ())):
         q.config_span_fixture_retirement(output, report, create=True)
     if any(row.get("name") == "test_batch_call_native.py" for row in report.get("checks", ())):

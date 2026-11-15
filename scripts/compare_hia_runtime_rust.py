@@ -38,6 +38,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        session_evidence,
                                        file_locks_evidence, file_lock_service_evidence,
                                        filesystem_parity_evidence, filesystem_parity_retirement,
+                                       text_publication_evidence, text_publication_retirement,
                                        filesystem_public_evidence, filesystem_public_retirement,
                                        atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
@@ -194,6 +195,14 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required complete native filesystem state, build and kernel evidence differs")
     if report.get("filesystem_parity_fixture_retirement") != filesystem_parity_retirement(output, report):
         raise ValueError("required private filesystem fixture retirement evidence differs")
+    if report.get("text_publication_evidence") != text_publication_evidence(output, report):
+        raise ValueError("required complete Text native publication evidence differs")
+    if report.get("text_publication_fixture_retirement") != text_publication_retirement(output, report):
+        raise ValueError("required complete Text fixture archive differs")
+    if "text_publication" in report.get("original_rust_comparisons", {}):
+        from hia_native_text_publication_reference import retained_original
+        if retained_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["text_publication"]:
+            raise ValueError("required Text original process, full comparison or archive evidence differs")
     if "filesystem_parity" in report.get("original_rust_comparisons", {}):
         rustc = Path(report["rust_compiler"]["invocation_path"])
         retained = retained_filesystem_parity(output, report, rustc)
@@ -385,7 +394,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if sha(manifest) != item["sha256"]:
             raise ValueError("compiled module manifest changed")
         module = json.loads(manifest.read_bytes())
-        if item.get("builder") in {"view_call", "batch_diff", "batch_call"}:
+        if item.get("builder") in {"view_call", "batch_diff", "batch_call", "text_publication"}:
             # Its strict bundle reader above checked every child and packer
             # compiler identity, complete input/output and composed ELF.
             continue
@@ -1890,6 +1899,12 @@ def compare_batch_call(output: Path, report: dict, rustc: Path) -> dict:
                             completed=completed_test_summary, qualification_env=qualification_env)
 
 
+def compare_text_publication(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_text_publication_reference import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check=record_check,
+                            completed=completed_test_summary, qualification_env=qualification_env)
+
+
 
 def compare_config_span(output: Path, report: dict, rustc: Path) -> dict:
     from hia_native_config_span_pipeline import execute_original
@@ -1902,6 +1917,7 @@ def compare_filesystem_public(output: Path, report: dict, rustc: Path) -> dict:
 
 
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
+           "text_publication": compare_text_publication,
            "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
            "request_context": compare_request_context, "response_hints": compare_response_hints,
            "result_publication": compare_result_publication,

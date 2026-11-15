@@ -886,15 +886,73 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
-        self.assertEqual(len(MODULES), 54)
-        self.assertEqual(len(migration["native_components"]), 126)
-        self.assertEqual(len(q.native_tests()), 139)
-        self.assertEqual(len(RECIPES), 49)
+        self.assertEqual(len(MODULES), 55)
+        self.assertEqual(len(migration["native_components"]), 128)
+        self.assertEqual(len(q.native_tests()), 142)
+        self.assertEqual(len(RECIPES), 50)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
         self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
                             for row in migration["legacy_tool_handlers"]))
         for key in ("whole_runtime_replaced", "production_activated", "old_stack_removal_qualified"):
             self.assertIs(migration[key], False)
+
+    def test_text_publication_registration_binds_real_native_and_original_stages(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_text_publication_pipeline as text
+        import hia_native_text_publication_reference as reference
+        entry = next(row for row in MODULES if row['key'] == 'text_publication')
+        expected = (text.NATIVE_TEST, text.CORPUS_TEST, text.EVIDENCE_TEST)
+        self.assertEqual((entry['test'], *entry['additional_tests']), expected)
+        self.assertEqual(entry['builder'], text.KEY)
+        self.assertEqual(entry['source'], 'native/text_publication.hepta')
+        self.assertEqual(entry['companion_sources'], ('native/text_publication_packer.hepta',))
+        self.assertEqual(entry['manifest_env'], 'HIA_TEXT_PUBLICATION_MANIFEST')
+        output = self.output / 'text-command-fixture'
+        manifest = output / text.MANIFEST
+        manifest.parent.mkdir(parents=True)
+        manifest.write_bytes(b'{"reporting_fixture_only":true}\n')
+        descriptor = {'modules': {'text_publication': {'manifest': text.MANIFEST,
+            'source': entry['source'], 'builder': entry['builder'], 'sha256': text.file_pin(manifest)['sha256']}}}
+        commands = text.test_commands(ROOT, output, descriptor)
+        self.assertEqual(tuple(commands), expected)
+        for name in expected:
+            self.assertEqual(commands[name][:4], [sys.executable, '-I', '-B', str(ROOT / 'tests/hia_native' / name)])
+        self.assertEqual(list(output.rglob('*.json')), [manifest])
+        self.assertFalse(set(expected) & set(q.PARALLEL_NATIVE_SUITES))
+        self.assertIn(text.KEY, RECIPES)
+        self.assertNotIn(text.KEY, NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+        self.assertEqual(ORIGINAL_RUNTIME_BLOBS['src/mcp/fs/text_file_write.rs'],
+                         'f531d2a51ea2ad0bdf0e93576e5bb64bf3fbeb43')
+        self.assertEqual(ORIGINAL_RUNTIME_COPIES[
+            reference.ORACLE + '/ordinary/original/text_file_write.rs'], 'src/mcp/fs/text_file_write.rs')
+        pinned = sources()
+        for name in (*text.source_names(ROOT), reference.CONTRACT, *reference.WRAPPERS,
+                     *(reference.ORACLE + '/' + name for name in json.loads((ROOT / reference.CONTRACT).read_bytes())['files']),
+                     'src/mcp/fs/text_file_write.rs', 'authoring/diagnostics.json'):
+            self.assertIn(name, pinned)
+        self.assertEqual(len(reference.source_pins(ROOT, {'source_sha256': pinned})), 30)
+        workflow = (ROOT / '.github/workflows/hia-runtime-native.yml').read_text()
+        for name in ('src/mcp/fs/text_file_write.rs', 'authoring/diagnostics.json'):
+            self.assertEqual(workflow.count("      - '" + name + "'"), 2)
+
+    def test_text_publication_callbacks_keep_recording_and_retirement_separate(self):
+        import compare_hia_runtime_rust as comparison
+        import qualify_hia_runtime_native as q
+        import hia_native_text_publication_pipeline as text
+        import hia_native_text_publication_reference as reference
+        fixture = {'reporting_fixture_only': True}
+        rustc = Path('/selected/1.95/bin/rustc')
+        with patch.object(reference, 'execute_original', return_value=fixture) as called:
+            self.assertEqual(comparison.RECIPES['text_publication'](self.output, self.report, rustc), fixture)
+        called.assert_called_once_with(ROOT, self.output, self.report, rustc,
+            record_check=comparison.record_check, completed=comparison.completed_test_summary,
+            qualification_env=comparison.qualification_env)
+        with patch.object(text, 'native_evidence', return_value=fixture) as called:
+            self.assertEqual(q.text_publication_evidence(self.output, self.report), fixture)
+        called.assert_called_once_with(ROOT, self.output, self.report, q.completed_test_summary)
+        with patch.object(text, 'retire_fixtures', return_value=fixture) as called:
+            self.assertEqual(q.text_publication_retirement(self.output, self.report, create=True), fixture)
+        called.assert_called_once_with(ROOT, self.output, self.report, q.completed_test_summary, create=True)
 
     def test_batch_params_registration_preserves_component_and_original_boundaries(self):
         import qualify_hia_runtime_native as q

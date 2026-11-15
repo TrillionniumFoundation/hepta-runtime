@@ -164,9 +164,13 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(partitions["system"][:3],
                          ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py",
                           "test_filesystem_parity_kernel.py"))
-        self.assertEqual(len(flat), 139)
+        self.assertEqual(len(flat), 142)
         self.assertEqual({name: len(tests) for name, tests in partitions.items()},
-                         {'batch': 20, 'text': 29, 'view': 20, 'json': 16, 'config': 17, 'system': 37})
+                         {'batch': 20, 'text': 32, 'view': 20, 'json': 16, 'config': 17, 'system': 37})
+        text_suites = ('test_text_publication_native.py', 'test_text_publication_corpus.py',
+                       'test_text_publication_pipeline_evidence.py')
+        positions = [partitions['text'].index(name) for name in text_suites]
+        self.assertEqual(positions, list(range(positions[0], positions[0] + 3)))
         self.assertEqual(partitions['system'][-2:],('test_session_workdir.py','test_session_evidence.py'))
         self.assertLess(partitions['view'].index('test_runtime_mcp.py'),
                         partitions['view'].index('test_filesystem_public.py'))
@@ -245,6 +249,36 @@ class NativePipelineTests(unittest.TestCase):
                 selected = dict(report, checks=[{"name": name}])
                 p.export_shard(output, self.root / (name + "-export"), {"files": {}}, selected)
                 called.assert_not_called()
+
+    def test_text_export_validates_complete_evidence_before_retiring_owned_fixtures(self):
+        output = self.root / 'text-shard'
+        output.mkdir()
+        (output / 'whole.bin').write_bytes(b'complete retained Text stream\x00\xff')
+        fixture = output / 'live'
+        fixture.mkdir()
+        (fixture / 'loop').symlink_to(fixture)
+        report = {'checks': [{'name': 'test_text_publication_native.py'}], 'qualification_shard': {}}
+        observed = []
+        def admit(actual_output, actual_report):
+            self.assertEqual((actual_output, actual_report), (output, report))
+            observed.append('admit')
+            return {'reporting_fixture_only': True}
+        def retire(actual_output, actual_report, *, create):
+            self.assertEqual((actual_output, actual_report, create), (output, report, True))
+            self.assertEqual(observed, ['admit'])
+            observed.append('retire')
+            (fixture / 'loop').unlink(); fixture.rmdir()
+            return {'reporting_fixture_only': True}
+        with patch.object(q, 'text_publication_evidence', side_effect=admit), \
+             patch.object(q, 'text_publication_retirement', side_effect=retire):
+            p.export_shard(output, self.root / 'text-export', {'files': {}}, report)
+        self.assertEqual(observed, ['admit', 'retire'])
+        self.assertEqual((self.root / 'text-export/data/whole.bin').read_bytes(), (output / 'whole.bin').read_bytes())
+        with patch.object(q, 'text_publication_evidence', side_effect=ValueError('complete Text evidence absent')), \
+             patch.object(q, 'text_publication_retirement') as retirement, \
+             self.assertRaisesRegex(ValueError, 'complete Text evidence absent'):
+            p.export_shard(output, self.root / 'text-refused', {'files': {}}, report)
+        retirement.assert_not_called()
 
     def test_failure_diagnostics_survive_denied_fixtures_without_mutation(self):
         source = self.root / "failed"; source.mkdir()
