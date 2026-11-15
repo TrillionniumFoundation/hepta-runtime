@@ -1,5 +1,5 @@
 {
-  "blocks": 537,
+  "blocks": 528,
   "constants": {
     "FCACHE": 327680,
     "HIR_MAGIC": 3544423381439304264,
@@ -51,25 +51,41 @@
   "functions": 33,
   "imports": {
     "functions": {
-      "f13": "86464574a32c1cef5d62627143b2d0585aba8a58d6a02de7f9ad562aca6f7bf7",
-      "f14": "9be4d606d52cf2b98e983d8271e46c68e59277641b397e6f9d9c11688a07d861",
-      "f15": "a854ec1bba92a1f2290050523088305db7dfc23df55c7ebe62319cd7632110bc",
       "f17": "a6d77deb8bf5198341828419df0b3b86bf8853735f5e4e3c71840f44c6593382"
     },
     "relocation": {
-      "f13": "f29",
-      "f14": "f30",
-      "f15": "f31",
       "f17": "f32"
     },
     "sha256": "20c3454140533d6ef6161322c0afa7ce23ea95db388cf2f8c3de757c7c4becf6",
     "source": "native/regex_unicode.hepta"
   },
-  "instructions": 2438,
+  "instructions": 2572,
+  "local_word_helpers": {
+    "authoring_source": "def get(w:mutbuf, at:u64) -> u64:\n    value = byte(w, at)\n    value = value | (byte(w, at + 1) << 8)\n    value = value | (byte(w, at + 2) << 16)\n    value = value | (byte(w, at + 3) << 24)\n    value = value | (byte(w, at + 4) << 32)\n    value = value | (byte(w, at + 5) << 40)\n    value = value | (byte(w, at + 6) << 48)\n    value = value | (byte(w, at + 7) << 56)\n    return value\n\ndef read64(s:readbuf, at:u64) -> u64:\n    value = byte(s, at)\n    value = value | (byte(s, at + 1) << 8)\n    value = value | (byte(s, at + 2) << 16)\n    value = value | (byte(s, at + 3) << 24)\n    value = value | (byte(s, at + 4) << 32)\n    value = value | (byte(s, at + 5) << 40)\n    value = value | (byte(s, at + 6) << 48)\n    value = value | (byte(s, at + 7) << 56)\n    return value\n\ndef put(w:mutbuf, at:u64, value:u64) -> u64:\n    store(w, at + 0, value >> 0)\n    store(w, at + 1, value >> 8)\n    store(w, at + 2, value >> 16)\n    store(w, at + 3, value >> 24)\n    store(w, at + 4, value >> 32)\n    store(w, at + 5, value >> 40)\n    store(w, at + 6, value >> 48)\n    store(w, at + 7, value >> 56)\n    return 0\n",
+    "authoring_source_sha256": "bf36384525d36d05f29f21937c712b477b643456f907bcba73ef7460b281614e",
+    "baseline_source_sha256": "34c59b9c7c52b8a6fe9ffc2a2ca01265dbdb9e52afc3bb2e220b0618dd88ef66",
+    "helpers": {
+      "f29": {
+        "after_sha256": "848159156de14dd6d57936243c957ac9d51073d4be81dce96b451cf8e6462a83",
+        "before_sha256": "c3249da6d8f08b2f0b9a1993d61dc6b6ff559a29dccbe4abaa7fb80b28287884"
+      },
+      "f30": {
+        "after_sha256": "8e35f03a98db1aa8b660a9ff5b90350b39b6f4f7485a376f826f9acd49300109",
+        "before_sha256": "785da3432a57d7d94055d004a53e0dfc1fcd3b8d6ddb29dff0cf3b23edb3fd1f"
+      },
+      "f31": {
+        "after_sha256": "d777cd0da8af931235d3f87692324d4cb5cabeca65f560c2f3419666ce0d3680",
+        "before_sha256": "cdec2a04cc609b26ff72b3dac26fc143c34d5048bdd5223193cb018d30c95500"
+      }
+    },
+    "schema": "hepta.runtime.regex-nfa-word-helpers.v1",
+    "scope": "Ordered eight byte accesses; no NFA transition, budget, order, capacity or input-domain change.",
+    "source_sha256": "5df8563300ead7a8ced4433c312f0a9978168bed0ca6ceb52d1cd942c89c25bd"
+  },
   "regex_compiler_closed": false,
   "runtime_python_required": false,
-  "source_bytes": 155959,
-  "source_sha256": "34c59b9c7c52b8a6fe9ffc2a2ca01265dbdb9e52afc3bb2e220b0618dd88ef66",
+  "source_bytes": 160106,
+  "source_sha256": "5df8563300ead7a8ced4433c312f0a9978168bed0ca6ceb52d1cd942c89c25bd",
   "upstream_source_sha256": {
     "builder.rs": "7adf6aba69171f6acd47fea0fec85ba589154fead83f2042a1c6fe9486aa4dbd",
     "compiler.rs": "cc1fbc44f0106049f6c0020ee8beb879415bc2951bb53c9efdf76c8b6c2af816",

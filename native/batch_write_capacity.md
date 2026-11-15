@@ -10,10 +10,9 @@ subject to the explicitly declared borrowed-buffer capacity.
 The private `batch-write.v1` declaration is 512 MiB input, 2 GiB output, and
 3 GiB workspace. Only root image 0 and result renderer 13 use this declaration.
 The existing plan, apply, canonical key, history, cache, read, and atomic-write
-images keep their original declarations. The shared repository's profiles
-have not been changed. The proposed common-file changes are confined to
-`private-common/scripts` and have exact before/after hashes in
-`private-common/profile-change.json`.
+images keep their original declarations. The published common builder and
+loader declare this separate batch profile; this boundary optimization does
+not modify either common file or any existing profile.
 
 ## Why one GiB is insufficient
 
@@ -87,3 +86,11 @@ lengths. A native capture is not an original Rust pass: the separate full
 original owner replay must compare every retained byte before original
 parity is claimed. Earlier failures and older-capacity observations remain
 separate historical evidence.
+
+## Fixed boundary lifetime and capacity
+
+The batch renderer receives its already mapped 2 GiB result span on its first call. The former input-sized initial span caused complete deterministic validation and measurement to run again solely to discover sufficient capacity. The fixed image ID, root phase, request admission, result limit, short-buffer behavior of the direct HIA owner, and all fourteen semantic images are unchanged.
+
+The two pure-call scratch arenas are retired with `madvise(MADV_DONTNEED)` only after the pure invocation and every nested continuation have completed. Its distinct result arena remains live for the plan/apply custody checks. After a renderer reply has been fully copied into the root's disjoint arena and its completion code and length committed, the renderer result arena is also retired before root publication. Cancellation still goes through the existing root continuation and lock release sequence; no borrowed span outlives these retirement points. Every retirement syscall is checked by the existing fatal I/O path.
+
+The previous CI timeouts and the independent local SIGKILL observation are retained as failures. These lifetime and capacity changes do not raise any input, output, memory, operation-count, or time limit. Current native and original qualification must use the newly packed executable; prior executable results are historical observations.

@@ -24,11 +24,11 @@ from hia_native_build import ABI, BUFFER_PROFILES, NativeBuild, json_bytes, writ
 from hia_native_effect_fence_build import COMPILE_FILES, OBSERVER_FIELDS, receipt, process_stdout, verify_sha_import
 
 PROFILE = 'native/workdir_service_profile.json'
-PROFILE_SHA256 = '7af9156e7b77e0e6341a418634ba2f0dcb3cd15353a8190ae8748ee929828d20'
+PROFILE_SHA256 = 'b3d1cd714bcdddf171dddc694e88274735e45f0dd6e8ce08efd781e173350dcb'
 COMPILER = 'd3e2c90173cf733e42b299d0c4274df4b593a12f'
 B3 = 'bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
-ELF = 'b1d92d5e912ac0d2b5fb87983dd94e80192443b4af5dc5fc91e45271e866255d'
-ELF_BYTES = 4630005
+ELF = 'f08948eddd6da7c6f5c7e68d2b6353a1c199ec76a78296c8ba14d3a666399585'
+ELF_BYTES = 4631522
 MEMBER_COUNT = 21
 FRAME_MAGIC = b'HMWDPK02'
 MEMBER_NAMES = ['owner', 'fs', 'json', 'validation', 'identity', 'policy', 'canonical', 'context', 'state', 'value', 'client', 'caller', 'params', 'path', 'raw_canonical', 'regex_syntax', 'regex_unicode_data', 'regex_hir', 'regex_nfa', 'regex_match', 'regex_controller']

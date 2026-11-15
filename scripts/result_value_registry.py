@@ -13,20 +13,20 @@ REMOVED_ENVIRONMENT = ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_TARG
     "CARGO_BUILD_RUSTFLAGS", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER")
 MODULES = {
     "binary32": ("native/binary32_json.hepta",
-        "2f44dc27744129ce56a2ce5bb835594f48aaca02ab75615fefd84e860a31f4b1",
-        "af6d396e1488ab56039bd2edffd5e8979f49ba2f7a0113299ec12026dccdbf13"),
+        "12c13ecc1cfa4bdfebf34fca69e990740f1a3c4d76e947d551f32e818fe7e341",
+        "63ac7956f61f1df83014dd4bee7b750776ab21e79e05e32f38471e680b046457"),
     "typed": ("native/typed_result_json.hepta",
-        "f238c612a77e9a697b457a68dada4b423a7d443a6b5e4c4890e360df7926024f",
-        "6b5f83ad351d6fd613cf059dc42efb520c90ebd541dd75ffde62b29ce6347c3a"),
+        "a9dfe2fec3f35b2ef2bcfaec56229007c75301cccb06a96a36691dc361aa0bec",
+        "fdf581b95d1dfd7d73004807bbc43a797a5353555326ff809c4acd02b6207f68"),
     "request": ("native/request_result.hepta",
-        "1d990c3482c181b64c38027b6b424fbcad365ebc28938a9299fa7666fad4e0c7",
-        "4f73723701dcc0f8a3a8382e0b0386819b13aa93f728031fcfc9a7aec68b4899"),
+        "7bd290ed707687eb764603f62b6d9104b75154f7c6a1189512cf149a00ae2f73",
+        "2b76e9668d2f426070b1b3891a460bfd8de3dc2425e2ab324dc19665dc8abddc"),
     "value": ("native/serde_json.hepta",
         "6c3afb7d322b3c42d89727651aaae7cc1907a7766773e0bff4fdac9b11567a96",
         "1a189af4822ae3f167138f3d90277ca028f891c3b34ff2e7ce0ac50ecc2ee7f2"),
     "bulk": ("tests/hia_native/binary32_bulk.hepta",
-        "d54de644fa87f6794f7b4b0c941161b9a50cee668a0ccb7298030a8607223b0f",
-        "72dfa07f8781d99c7f5bce23496a5316ba8588aed87c2db4c39f24891a3b09a5"),
+        "df23c57ee37d75f7862fe8716f46d2dbb5f640301265486142fad38636aea3c0",
+        "053e29dc4efaf7ffca382100fe4e950d4602b0d61151bc35eee9e321d45a5117"),
 }
 KEYS = {"binary32_json": "binary32", "typed_result_json": "typed", "request_result": "request"}
 TESTS = ("test_binary32_json.py", "test_typed_result_json.py", "test_request_result.py")

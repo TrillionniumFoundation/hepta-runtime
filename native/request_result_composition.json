@@ -41,15 +41,9 @@
   "imports": [
     {
       "functions": {
-        "f14": "d761090ba6af7c88f7516cc943c14d9d2317fb70ded50b6a1b4e3904afaefabb",
-        "f15": "54d5c542fea2ddc6ce9bc43ad142cdd8b8ee56e0b0bf717ee528e7674fe6e3e4",
-        "f16": "0f14a0d7d6c55d8b2b33c8aa6836b85f3d7e51788eb281c3717eae2dd814b7ea",
         "f2": "4121823e9cc27c9fe8146b2bcf2ed7ae33cddb4927819d0088025b7be20da02f"
       },
       "relocation": {
-        "f14": "f22",
-        "f15": "f23",
-        "f16": "f24",
         "f2": "f21"
       },
       "sha256": "89df7b4320fdbd3525450e9446267ae3d54a5b62660d8904fe8f09be36a7fbf9",
@@ -80,6 +74,35 @@
       "source": "native/client_context.hepta"
     }
   ],
+  "local_word_helpers": {
+    "authoring_source": "def get(w:mutbuf, at:u64) -> u64:\n    value = byte(w, at)\n    value = value | (byte(w, at + 1) << 8)\n    value = value | (byte(w, at + 2) << 16)\n    value = value | (byte(w, at + 3) << 24)\n    value = value | (byte(w, at + 4) << 32)\n    value = value | (byte(w, at + 5) << 40)\n    value = value | (byte(w, at + 6) << 48)\n    value = value | (byte(w, at + 7) << 56)\n    return value\n\ndef read64(s:readbuf, at:u64) -> u64:\n    value = byte(s, at)\n    value = value | (byte(s, at + 1) << 8)\n    value = value | (byte(s, at + 2) << 16)\n    value = value | (byte(s, at + 3) << 24)\n    value = value | (byte(s, at + 4) << 32)\n    value = value | (byte(s, at + 5) << 40)\n    value = value | (byte(s, at + 6) << 48)\n    value = value | (byte(s, at + 7) << 56)\n    return value\n\ndef put(w:mutbuf, at:u64, value:u64) -> u64:\n    store(w, at + 0, value >> 0)\n    store(w, at + 1, value >> 8)\n    store(w, at + 2, value >> 16)\n    store(w, at + 3, value >> 24)\n    store(w, at + 4, value >> 32)\n    store(w, at + 5, value >> 40)\n    store(w, at + 6, value >> 48)\n    store(w, at + 7, value >> 56)\n    return 0\n",
+    "authoring_source_sha256": "bf36384525d36d05f29f21937c712b477b643456f907bcba73ef7460b281614e",
+    "functions": {
+      "f14": {
+        "after_sha256": "8fce57426851c75827fd336c30b1cc2c70e19ea479bda309c33d3087c75882ff",
+        "before_sha256": "d761090ba6af7c88f7516cc943c14d9d2317fb70ded50b6a1b4e3904afaefabb",
+        "target": "f22"
+      },
+      "f15": {
+        "after_sha256": "a8d232611c9317cf2e54b336f57cb84fc8e14661f13fdd7debefbfa168651bd3",
+        "before_sha256": "54d5c542fea2ddc6ce9bc43ad142cdd8b8ee56e0b0bf717ee528e7674fe6e3e4",
+        "target": "f23"
+      },
+      "f16": {
+        "after_sha256": "086d8bdbac2e903650589df4f840a01c59b037d1a61288def11f3795acbee615",
+        "before_sha256": "0f14a0d7d6c55d8b2b33c8aa6836b85f3d7e51788eb281c3717eae2dd814b7ea",
+        "target": "f24"
+      }
+    },
+    "names": {
+      "get": "f23",
+      "put": "f24",
+      "read64": "f22"
+    },
+    "schema": "hepta.runtime.fixed-word-helper-derivation.v1",
+    "source": "native/text_budget.hepta",
+    "source_sha256": "89df7b4320fdbd3525450e9446267ae3d54a5b62660d8904fe8f09be36a7fbf9"
+  },
   "old_stack_removal_qualified": false,
   "original_sources": {
     "src/mcp/runtime/request_results.rs": {
@@ -103,9 +126,9 @@
   "public_tool_activation": false,
   "retention_storage_qualified": false,
   "schema": "hepta.request-result.composition.v1",
-  "source_sha256": "1d990c3482c181b64c38027b6b424fbcad365ebc28938a9299fa7666fad4e0c7",
+  "source_sha256": "7bd290ed707687eb764603f62b6d9104b75154f7c6a1189512cf149a00ae2f73",
   "typed_child": "native/typed_result_json.hepta",
-  "typed_child_sha256": "f238c612a77e9a697b457a68dada4b423a7d443a6b5e4c4890e360df7926024f",
+  "typed_child_sha256": "a9dfe2fec3f35b2ef2bcfaec56229007c75301cccb06a96a36691dc361aa0bec",
   "value_child": "native/serde_json.hepta",
   "value_child_sha256": "6c3afb7d322b3c42d89727651aaae7cc1907a7766773e0bff4fdac9b11567a96",
   "whole_runtime_replaced": false

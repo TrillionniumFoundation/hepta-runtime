@@ -35,8 +35,8 @@ slots. The queue fixture is not selected by the production caller.
 The compiler is the unchanged d3e2c90173cf733e42b299d0c4274df4b593a12f
 checkout. Its B3 SHA-256 is
 `bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0`.
-The resulting 5,220,324-byte executable has SHA-256
-`b405a68f6e920ffb8c989168bb787e2b643a62ad7f7a68f9431f9ce018ae8780`.
+The resulting 5,221,841-byte executable has SHA-256
+`84d0cbb0cc646e864b32bf3a4470790c88621ad3c70e5ec7a0cd94784128b5e6`.
 
 Configuration validation source
 `bffa7d3cd65cae422a13589df7a057ff8e01b19bf91f34223cc318f07cb13ecc`

@@ -17,11 +17,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import hia_native_loader as loader
 
-PACKER = '16397e400b4648823f24fbde84fb6ca660e6ea9c46db4f1a8623b2923798572a'
-SOURCE = '454809ddb772120d03decfe9897702047e9cdee658dc7e67a08856bed5f62cb2'
-FRAME = 'cf8efed0b26462be3069d83a8499e9bb3a503ffb24bf9311f5df4b0347a3e125'
-FRAME_BYTES = 5220540
-OUTPUT_BYTES = 5220324
+PACKER = 'fcd27d2971028d0b2e7948e9e688772e2f0b7e6aaece062c417f2b4745b1fac5'
+SOURCE = 'd9c750d727ee857d178bad2c6467946be0da928be690af455e0310a97359e20b'
+FRAME = '3cbde9e5b103f6c10e5c42f414c51565cbbef786d5bee67a40786739aaaabb69'
+FRAME_BYTES = 5222057
+OUTPUT_BYTES = 5221841
 LOADER_OPERATIONS = 'copy; sealed RX native runtime module; fixed ABI call'
 
 

@@ -37,6 +37,18 @@ seconds with a separate three-second cleanup allowance where used. Build and
 reference helpers do not claim complete cleanup after an external SIGKILL of
 their own process.
 
+The fixed eight-byte word helpers in these private owners use eight ordered
+byte accesses instead of a counted loop. The binary32 interval arithmetic and
+the public Value owner are unchanged. Source composition verifies the exact
+new helper IR against a fixed authoring expression and binds the preceding
+helper IR to the pinned binary64 or text-budget source. The typed owner keeps
+29 unchanged imported functions plus three local text-budget word helpers;
+the request owner keeps five unchanged imports plus its three local helpers.
+The typed owner also imports the revised binary32 word helpers. Every bulk
+formatter function remains identical to its production counterpart. All
+qualification domains, byte comparisons and process budgets above remain in
+force.
+
 ## Remaining public lifecycle boundary
 
 These are private typed result seams. They do not activate public tools,

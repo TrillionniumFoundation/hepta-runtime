@@ -26,16 +26,16 @@ from hia_native_effect_fence_build import (
 )
 PROFILE = "native/directory_service_profile.json"
 FENCE_PROFILE = "native/directory_fence_profile.json"
-PROFILE_SHA256 = "fe6df4e643c1e1ebae56e54d0dde366904481fef78ec8c3a483c93bddcc4432e"
+PROFILE_SHA256 = '4030f77fada787492aa457ae40e7c5aab0974cc8986710716ba70434ffe59dcc'
 FENCE_PROFILE_SHA256 = "60cb6fd30777cc92181d1ffb5a6531bc27bbf4720a8f0090d95fba630c1a26f6"
 REGEX_DEPENDENCIES = "native/directory_regex_dependencies.json"
-REGEX_DEPENDENCIES_SHA256 = "8ee3a2b1d6677c9613dfd858c9a25c2e63eac5e80ce04902334968b861259030"
+REGEX_DEPENDENCIES_SHA256 = 'e820a45ed35d944d2c2830feafa6eea7cbd0fb284658221ca4f934da6f3c83a2'
 MEMBER_COUNT = 21
 FRAME_MAGIC = b"HMDSVC02"
-ELF_BYTES = 5220324
+ELF_BYTES = 5221841
 COMPILER = "d3e2c90173cf733e42b299d0c4274df4b593a12f"
 B3 = "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
-ELF = "b405a68f6e920ffb8c989168bb787e2b643a62ad7f7a68f9431f9ce018ae8780"
+ELF = '84d0cbb0cc646e864b32bf3a4470790c88621ad3c70e5ec7a0cd94784128b5e6'
 HELPERS = ("scripts/hia_native_build.py", "scripts/hia_native_loader.py",
            "scripts/hia_native_effect_fence_build.py", "scripts/hia_native_directory_pack_child.py",
            "scripts/hia_native_directory_service_build.py")

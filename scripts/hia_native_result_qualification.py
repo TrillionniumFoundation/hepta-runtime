@@ -72,8 +72,9 @@ def verify_build(root, bundle_path):
     require(bundle.get("schema") == "hepta.result-values.native-build.v1" and bundle.get("sources") == pins
         and bundle.get("compiler_commit") == COMPILER and bundle.get("compiler_sha256") == COMPILER_IMAGE
         and set(bundle.get("modules", {})) == set(MODULES)
-        and bundle.get("composition") == {"typed_result_json": 32, "request_result": 8,
-            "binary32_exact_bulk_functions": 15}
+        and bundle.get("composition") == {"typed_result_json": 29, "request_result": 5,
+            "typed_result_json_local_word_helpers": 3, "request_result_local_word_helpers": 3,
+            "binary32_exact_bulk_functions": 15, "binary32_local_word_helpers": 3}
         and all(bundle.get(k) is False for k in ("fresh_cold_qualified", "production_activated", "whole_runtime_replaced")),
         "result build closure or scope changed")
     modules = {}

@@ -4,8 +4,8 @@ This fixed Linux x86-64 profile contains the actual HIA Workdir parameter
 decoder, public method body, shared request context and SessionWorkdir state,
 installed configuration, path parsing and policy, local canonicalization and
 the complete configuration regex dependency graph. Its executable is
-`b1d92d5e912ac0d2b5fb87983dd94e80192443b4af5dc5fc91e45271e866255d`
-(4,630,005 bytes). All 21 member images and the separate prefix and packer are
+`f08948eddd6da7c6f5c7e68d2b6353a1c199ec76a78296c8ba14d3a666399585`
+(4,631,522 bytes). All 21 member images and the separate prefix and packer are
 compiled by the pinned HIA compiler. The fixed executable has no Rust, Python
 or libc runtime dependency.
 

@@ -24,13 +24,13 @@ from hia_native_atomic_write_build import (
     require, exact, sha, canonical, read, obj, file_record, native_receipt,
 )
 
-PROFILE = 'fbf46e245af10384872bc6d89048faf9239cf9e72581d7248d9abbafbd138f4f'
+PROFILE = 'da6d9783e50fe0e3904e9488a69a77201bb8f6edd5509e768c7e59d398c20ff1'
 ORDER = ('batch_write', 'file_lock_service', 'file_lock_key', 'history', 'atomic_write_shared', 'view_cache', 'local_read', 'file_lock_state', 'editable_content', 'batch_plan', 'line_endpoint', 'line_verify', 'batch_apply', 'batch_render')
 KINDS = (*ORDER, 'utf8_new', 'utf8_original', 'packer')
-PREFIX_BYTES, TABLE, ELF_BYTES = 16928, 16800, 2736334
-ELF_SHA = '1894b2fe978561e242f1217c36e7f63325872f4d6e8140a4b744334ffbd7325c'
-PREFIX_SHA = '449bf0d3cf1fc4cb82e40190c1d86791a3712a81e0516fb4f7d3453128c4321c'
-PACKER_IMAGE = '794b3ac88e9def303fb01b84866a94a6b967cdd5d8ad21f5beddba445eaf018e'
+PREFIX_BYTES, TABLE, ELF_BYTES = 16960, 16832, 2736366
+ELF_SHA = '605f3742eba09253101cd3aee6f5199d51433f2c27e72e2a637f147495e2f38d'
+PREFIX_SHA = '62e04cd93835f389beaf713b8c0cfb8693b4036f8663948827e6603f433074dd'
+PACKER_IMAGE = 'b42ec792d889b6702fd349b9e69666976f881ae85c536d7d2ba76ad38bd6cda3'
 FRAME_SHA = '9dd7a4cc2b1afec2a4489ef0e20ff0b757daa2b2cb72a3b6786fd118d36dc960'
 CAPACITIES = (512 << 20, 1024 << 20, 1152 << 20)
 CHILD = 'scripts/hia_native_batch_write_pack_child.py'
