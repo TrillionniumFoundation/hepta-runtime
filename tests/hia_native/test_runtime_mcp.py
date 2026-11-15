@@ -52,13 +52,16 @@ class Session:
         self.input+=wire+b'\n';self.process.stdin.write(wire+b'\n');self.process.stdin.flush()
     def read(self):
         deadline=time.monotonic()+60
-        while b'\n' not in self.pending:
+        newline=self.pending.find(b'\n')
+        while newline<0:
             remaining=deadline-time.monotonic()
             if remaining<=0 or not select.select([self.process.stdout],[],[],remaining)[0]:raise AssertionError('actual native MCP response timeout')
             piece=os.read(self.process.stdout.fileno(),65536)
             if not piece:raise AssertionError(('actual native MCP EOF',self.process.poll()))
+            previous=len(self.pending)
             self.pending.extend(piece)
-        wire,_,rest=self.pending.partition(b'\n');self.pending=bytearray(rest);self.output+=wire+b'\n'
+            newline=self.pending.find(b'\n',previous)
+        wire=bytes(self.pending[:newline]);del self.pending[:newline+1];self.output+=wire+b'\n'
         COUNTS['actual_elf_responses']+=1;return json.loads(wire),bytes(wire)
     def call(self,value):self.send(value if isinstance(value,bytes) else compact(value));return self.read()
     def ready(self,capabilities=None):return self.call(sdk.initialization({} if capabilities is None else capabilities))

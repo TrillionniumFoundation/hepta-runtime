@@ -435,15 +435,17 @@ python3 -m venv /absolute/path/to/hia-reference-environment
   --rustc /absolute/path/to/rustc
 ```
 
-CI executes the same gate as a fresh prepare job, four explicit native partitions
+CI executes the same gate as a fresh prepare job, five explicit native partitions
 and one aggregate/original-Rust job. The prepare job executes the full cold gate
 and builds every module once. Its exact SHA256 is passed through the workflow;
 every partition checks the full source, compiler, build and invocation identity
-before executing its complete suite list. Batch, text/history/view, JSON and
-system suites run on separate runners with 10, 50, 31 and 32 native suites,
-respectively. Each job retains the original 15-minute
-limit; every native process retains 180 seconds and the cold/owner limits below
-are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
+before executing its complete suite list. Batch, text/history/view, JSON,
+configuration/regex and system suites run on separate runners with 10, 50, 16,
+15 and 32 native suites, respectively. Configuration and regex remain together
+with all their evidence dependencies. Prepare and native partition jobs retain
+15 minutes; the aggregate has 30 minutes for collection and all original recipes.
+Every native process retains 180 seconds and the cold/owner limits below are
+unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
 native evidence checks and all 42 original Rust recipe entries. Artifact transport can
@@ -461,6 +463,11 @@ regular-file bytes, raw Unix names, empty directories and symbolic-link targets
 remain in a checked archive and manifest. The archive stores byte streams without
 following links, and collection revalidates it against all four accepted evidence
 objects before original replay.
+Failed partitions and aggregates first preserve their complete top-level reports
+and process streams outside effect fixtures. A non-dereferencing tar archive
+then retains raw Unix names, symlinks and other fixture entries under a safe
+artifact filename. An unreadable entry, archive warning or timeout leaves an
+explicit incomplete archive receipt; it never changes the original failed result.
 The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The

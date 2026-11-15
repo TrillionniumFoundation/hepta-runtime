@@ -135,8 +135,9 @@ concurrency:
   group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# The same fresh cold/build bytes feed all four complete native partitions.
-# Each job retains the original 15-minute limit; suite/owner limits are unchanged.
+# The same fresh cold/build bytes feed all five complete native partitions.
+# Prepare and native partitions retain 15 minutes; aggregate orchestration gets 30.
+# Every individual suite, owner and stream deadline remains unchanged.
 # The batch partition includes all four atomic-write suites and its full 505 MiB case.
 # The aggregate uses the existing Rust 1.95.0 toolchain for its locked original owner.
 jobs:
@@ -207,7 +208,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [batch, text, json, system]
+        group: [batch, text, json, config, system]
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -269,29 +270,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Capture failure diagnostics outside effect fixtures
+      - name: Stage failure diagnostics and archive untouched fixtures
         if: ${{ always() && steps.shard.outcome != 'success' }}
         run: |
-          python3 -I -B runtime/scripts/hia_native_failure.py \
+          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
             --source "$RUNNER_TEMP/hia-runtime-native" \
-            --destination "$RUNNER_TEMP/hia-native-diagnostics"
+            --output "$RUNNER_TEMP/hia-native-failure-evidence"
 
-      - name: Retain readable partition failure diagnostics
-        if: ${{ always() && steps.shard.outcome != 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-${{ matrix.group }}
-          path: ${{ runner.temp }}/hia-native-diagnostics/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Retain original failure bytes and prepared artifacts
+      - name: Retain failure diagnostics and archive, including incomplete archives
         if: ${{ always() && steps.shard.outcome != 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hia-native-failure-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-${{ matrix.group }}
-          path: ${{ runner.temp }}/hia-runtime-native/
+          path: ${{ runner.temp }}/hia-native-failure-evidence/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -300,7 +291,7 @@ jobs:
     name: All native evidence and complete original Rust comparisons
     needs: [prepare, native]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -376,25 +367,24 @@ jobs:
             > "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.stdout" \
             2> "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.stderr"
 
-      - name: Capture failed aggregate diagnostics outside effect fixtures
+      - name: Stage failure diagnostics and archive untouched fixtures
         if: failure()
         run: |
-          python3 -I -B runtime/scripts/hia_native_failure.py \
+          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
             --source "$RUNNER_TEMP/hia-runtime-native" \
-            --destination "$RUNNER_TEMP/hia-native-diagnostics"
+            --output "$RUNNER_TEMP/hia-native-failure-evidence"
 
-      - name: Retain readable aggregate failure diagnostics
+      - name: Retain failure diagnostics and archive, including incomplete archives
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-aggregate
-          path: ${{ runner.temp }}/hia-native-diagnostics/
-          include-hidden-files: true
+          name: hia-native-failure-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-aggregate
+          path: ${{ runner.temp }}/hia-native-failure-evidence/
           if-no-files-found: error
           retention-days: 14
 
       - name: Retain complete aggregate, originals and immutable shard receipts
-        if: always()
+        if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hia-runtime-native-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}

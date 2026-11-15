@@ -1,6 +1,6 @@
 """Run the complete native gate across source-bound, independently retained jobs.
 
-One fresh cold/build artifact is admitted by its workflow-produced SHA256. Four
+One fresh cold/build artifact is admitted by its workflow-produced SHA256. Five
 explicit partitions execute every registered suite once. Collection rechecks all
 raw process bytes, immutable build inputs and complete shard inventories before
 the unchanged evidence owners can advance to the original Rust comparisons.
@@ -32,7 +32,8 @@ PARTITIONS = {
              "delta", "editable_content", "view_render", "view_render_growth", "view_read", "view_params", "view_call",
              "runtime_mcp", "view_cache", "history", "session_workdir",
              "file_locks", "file_lock_service"),
-    "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
+    "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence"),
+    "config": ("runtime_config",),
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
                "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service"),
@@ -144,7 +145,7 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "json", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if set(partitions) != {"batch", "text", "json", "config", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
         raise ValueError("every native module must belong to exactly one explicit partition")
     result = {group: tuple(name for key in keys for name in
                          (modules[key]["test"], *modules[key].get("additional_tests", ())))
@@ -424,7 +425,7 @@ def collect(output: Path, hepta: Path, expected: str, invocation: str, shards: P
     try:
         folders = sorted(shards.iterdir())
         if len(folders) != len(PARTITIONS) or any(p.is_symlink() or not p.is_dir() for p in folders):
-            raise ValueError("collector requires exactly four complete shard artifacts")
+            raise ValueError(f"collector requires exactly {len(PARTITIONS)} complete shard artifacts")
         parts, copies, all_files, all_directories = {}, {}, {}, set()
         for folder in folders:
             receipt_path, report_path = owned(folder, "shard.json"), owned(folder, "shard-report.json")

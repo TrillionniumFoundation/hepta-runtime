@@ -278,7 +278,7 @@ class NativePipelineTests(unittest.TestCase):
     def test_missing_or_duplicate_shards_cannot_reach_evidence_owners(self):
         source, prepared, report, destination = self.actual_fixture()
         shards = self.root / "shards"; shards.mkdir()
-        for group in ("one", "two", "three", "four"):
+        for group in p.PARTITIONS:
             shutil.copytree(destination, shards / group)
         output = self.root / "collect"; output.mkdir()
         with patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())), \
@@ -288,12 +288,12 @@ class NativePipelineTests(unittest.TestCase):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
             self.assertEqual(p.read_json(output / "result.json")["status"], "FAIL")
-            shutil.rmtree(shards / "four")
-            with self.assertRaisesRegex(ValueError, "exactly four"):
+            shutil.rmtree(shards / "config")
+            with self.assertRaisesRegex(ValueError, "exactly " + str(len(p.PARTITIONS))):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
 
-    def test_four_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
+    def test_all_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
         from contextlib import ExitStack
         from datetime import datetime, timezone
         source = self.root / "source"
@@ -313,7 +313,7 @@ class NativePipelineTests(unittest.TestCase):
             run = self.root / group; run.mkdir()
             report = copy.deepcopy(prepared)
             report.update(status="RUNNING", phase="native_components", native_components_status="RUNNING",
-                qualification_shard={"group": group, "invocation": "four-actual-processes",
+                qualification_shard={"group": group, "invocation": "all-actual-processes",
                                      "prepared_sha256": "b" * 64, "tests": [name]})
             with patch.object(q, "ROOT", source):
                 q.run_native_checks(run, report, (name,), q.qualification_env(), parallel_tests=(),
@@ -331,8 +331,8 @@ class NativePipelineTests(unittest.TestCase):
             stack.enter_context(patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())))
             evidence = stack.enter_context(patch.object(q, "collect_native_evidence"))
             stack.enter_context(patch.object(q, "finish_native", side_effect=finish))
-            result = p.collect(output, self.root / "compiler", "b" * 64, "four-actual-processes", artifacts)
-            self.assertEqual(result["checks"], 5)
+            result = p.collect(output, self.root / "compiler", "b" * 64, "all-actual-processes", artifacts)
+            self.assertEqual(result["checks"], 1 + len(p.PARTITIONS))
             evidence.assert_called_once()
             report = p.read_json(output / "result.json")
             self.assertEqual([row["name"] for row in report["checks"][1:]], list(names))
