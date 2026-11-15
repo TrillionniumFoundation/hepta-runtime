@@ -46,10 +46,23 @@ class EvidenceTests(unittest.TestCase):
     def snapshot(self):
         temporary = tempfile.TemporaryDirectory(prefix='history-evidence-', dir=self.output.parent)
         output = Path(temporary.name) / 'capture'
-        # Public Workdir fixtures include deliberate symlink cycles.
-        # Copy links without following targets; readers still check their owned artifacts.
-        shutil.copytree(self.output, output, copy_function=os.link, symlinks=True)
         self.addCleanup(temporary.cleanup)
+        output.mkdir()
+        # Every admitted byte is copied; unrelated live fixtures are not traversed.
+        files = {**self.actual['artifact_sha256'], **self.actual['corpus_sha256'],
+                 'test_history.py.stdout': self.actual['test_stdout_sha256'],
+                 'test_history.py.stderr': self.actual['test_stderr_sha256']}
+        for relative, digest in sorted(files.items()):
+            path = Path(relative)
+            self.assertFalse(path.is_absolute() or '..' in path.parts)
+            source = self.output / path
+            self.assertEqual(source.resolve(strict=True), source.absolute())
+            self.assertEqual(sha(source.read_bytes()), digest)
+            target = output / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.link(source, target)
+        self.assertEqual({str(path.relative_to(output)) for path in output.rglob('*')
+                          if path.is_file()}, set(files))
         return output, copy.deepcopy(self.report)
 
     def refuses(self, output, report, root=ROOT):
@@ -82,6 +95,9 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(self.actual['native_cases_added_by_replay'], 0)
         self.assertFalse(self.actual['shared_concurrency_qualified'])
         self.assertFalse(self.actual['filesystem_effects_qualified'])
+        output, report = self.snapshot()
+        self.assertEqual(native_evidence(ROOT, output, report, completed_test_summary,
+                                         reference_root=REFERENCE), self.actual)
 
     def test_02_incomplete_actual_invocations_refuse(self):
         for change in ('missing', 'exit', 'timeout', 'count', 'source-claim'):
