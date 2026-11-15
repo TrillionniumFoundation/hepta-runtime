@@ -1,32 +1,32 @@
 {
-  "schema": "hepta.runtime.line-endpoint-abi.v1",
-  "target": "linux-x86_64-lp64",
+  "buffers": [
+    "input",
+    "output",
+    "workspace"
+  ],
   "entry": "f0(readbuf,mutbuf,mutbuf)->u32",
-  "buffers": ["input", "output", "workspace"],
-  "integer_byte_order": "little-endian",
-  "input_limit_bytes": 8388608,
-  "minimum_workspace_bytes": 8,
   "input": {
+    "fields": [
+      "magic:8bytes",
+      "kind:u64",
+      "payload_length:u64",
+      "scalar_bits:u64"
+    ],
     "header_bytes": 32,
-    "magic_ascii": "HIAEP001",
-    "fields": ["magic:8bytes", "kind:u64", "payload_length:u64", "scalar_bits:u64"],
-    "payload_follows_header": true,
     "kinds": {
       "0": "serde_json::Number with as_i64()=Some: scalar_bits contains the two-complement i64; empty payload",
       "1": "serde_json::Number with as_i64()=None: scalar_bits=0; empty payload",
       "2": "serde_json::String: scalar_bits=0; payload is decoded UTF-8 string bytes",
       "3": "Other serde_json::Value: scalar_bits=0; payload is its exact compact Display UTF-8 bytes"
-    }
-  },
-  "output": {
-    "header_bytes": 32,
-    "magic_ascii": "HIAEPR01",
-    "fields": ["magic:8bytes", "tag:u64", "value:u64", "auxiliary:u64"],
-    "tags": {
-      "0": "Domain error: value is reason 1..7, auxiliary is UTF-8 diagnostic length; exact diagnostic follows header",
-      "1": "Endpoint::Number: value is two-complement i64, auxiliary=0; no payload",
-      "2": "Endpoint::Id: value is nonzero LP64 usize, auxiliary contains two lowercase ASCII hex bytes in its low 16 bits; no payload"
     },
+    "magic_ascii": "HIAEP001",
+    "payload_follows_header": true
+  },
+  "input_limit_bytes": null,
+  "integer_byte_order": "little-endian",
+  "legacy_entry": "f18; selected by f0 for HIAEP001",
+  "minimum_workspace_bytes": 8,
+  "output": {
     "error_reasons": {
       "1": "non-i64 JSON number",
       "2": "empty trimmed string",
@@ -35,13 +35,47 @@
       "5": "invalid two-ASCII-hex hash",
       "6": "invalid line value",
       "7": "JSON value has another type"
+    },
+    "fields": [
+      "magic:8bytes",
+      "tag:u64",
+      "value:u64",
+      "auxiliary:u64"
+    ],
+    "header_bytes": 32,
+    "magic_ascii": "HIAEPR01",
+    "tags": {
+      "0": "Domain error: value is reason 1..7, auxiliary is UTF-8 diagnostic length; exact diagnostic follows header",
+      "1": "Endpoint::Number: value is two-complement i64, auxiliary=0; no payload",
+      "2": "Endpoint::Id: value is nonzero LP64 usize, auxiliary contains two lowercase ASCII hex bytes in its low 16 bits; no payload"
     }
   },
-  "return": {
-    "0xffffffff": "Malformed ABI packet, invalid UTF-8, input outside bounded profile, or workspace shorter than 8 bytes",
-    "0xfffffffe": "Complete result does not fit output; output bytes remain unchanged",
-    "other": "Number of initialized output bytes"
-  },
   "ownership": "HIA owns UTF-8 validation, exact Rust Unicode trimming, signed/unsigned parsing, overflow handling, hash validation/case normalization and all diagnostic bytes. JSON Value creation, Number classification and Display serialization are an explicit typed caller boundary.",
-  "scope": "Component parity for parse_endpoint within the bounded byte profile. This is not a complete filesystem tool, JSON decoder, deployed replacement or whole-runtime closure claim."
+  "return": {
+    "0xfffffffe": "Complete result does not fit output; output bytes remain unchanged",
+    "0xffffffff": "Malformed ABI packet, invalid UTF-8, or workspace shorter than 8 bytes",
+    "other": "Initialized output byte count for HIAEP001; fixed 32 for complete HIAEP002"
+  },
+  "schema": "hepta.runtime.line-endpoint-abi.v2",
+  "scope": "Component parity for parse_endpoint with complete admitted input spans. The retained standalone transport profile and actual allocations remain distinct resource constraints. This component is not whole-runtime closure.",
+  "standard_standalone_transport_limit_bytes": 8388608,
+  "target": "linux-x86_64-lp64",
+  "wide": {
+    "actual_lengths_are_u64": true,
+    "complete_output_extent": "32 + auxiliary for tag 0; otherwise 32",
+    "completed_return": 32,
+    "growth_header": [
+      "HGRWS002:8bytes",
+      "kind:u64=2",
+      "required_output_capacity:u64",
+      "reserved:u64=0"
+    ],
+    "growth_return": "0xffffffd0",
+    "header_bytes": 32,
+    "input_magic_ascii": "HIAEP002",
+    "output_magic_ascii": "HIAEPR02",
+    "same_typed_input_and_output_fields": true,
+    "shorter_than_header_return": "0xfffffffe",
+    "unrepresentable_extent_return": "0xfffffffc"
+  }
 }

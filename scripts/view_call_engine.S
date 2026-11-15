@@ -231,6 +231,8 @@ view_pure_retry:
     mov edx, eax
     cmp rax, rdx
     jne view_pure_invalid
+    cmp eax, 0xffffffd0
+    je view_pure_exact_output
     cmp eax, 0xfffffffe
     jne view_pure_return
     cmp r14d, 4
@@ -255,6 +257,40 @@ view_pure_grow_workspace:
     mov rax, [rsp]
     mov [rbx + 16], rax
     jmp view_pure_retry
+/* A pure wide endpoint reports its exact required result extent.  Allocate
+ * once before retrying the same input; no completed child or I/O is replayed. */
+view_pure_exact_output:
+    cmp r14d, 4
+    jne view_pure_invalid
+    cmp r13, 32
+    jb view_pure_invalid
+    mov rax, 0x3230305045414948 /* HIAEP002 */
+    cmp [r12], rax
+    jne view_pure_invalid
+    cmp qword ptr [rbx + 32], 32
+    jb view_pure_invalid
+    mov rcx, [rbx + 24]
+    mov rax, 0x3230305357524748 /* HGRWS002 */
+    cmp [rcx], rax
+    jne view_pure_invalid
+    cmp qword ptr [rcx + 8], 2
+    jne view_pure_invalid
+    cmp qword ptr [rcx + 24], 0
+    jne view_pure_invalid
+    mov rax, [rcx + 16]
+    cmp rax, [rbx + 32]
+    jbe view_pure_invalid
+    test rax, rax
+    js view_pure_resource
+    mov rdx, [rbx + 32]
+view_pure_exact_output_loop:
+    cmp rdx, rax
+    jae view_pure_output_ready
+    shl rdx, 1
+    jc view_pure_resource
+    test rdx, rdx
+    js view_pure_resource
+    jmp view_pure_exact_output_loop
 view_pure_grow_output:
     mov rsi, [rbx + 32]
     mov rdx, rsi
@@ -262,6 +298,8 @@ view_pure_grow_output:
     jc view_pure_resource
     test rdx, rdx
     js view_pure_resource
+view_pure_output_ready:
+    mov rsi, [rbx + 32]
     mov [rsp], rdx
     mov rdi, [rbx + 24]
     call view_resize
@@ -427,9 +465,12 @@ view_run_output_capacity:
     jc view_run_resource
     cmp rax, [rbx + 32]
     jbe view_run_done
+    cmp qword ptr [r14 + 680], 1
+    je view_run_output_wide
     mov ecx, 0xffff0000
     cmp rax, rcx
     jae view_run_resource
+view_run_output_wide:
     mov rdx, [rbx + 32]
 view_run_output_loop:
     cmp rdx, rax
@@ -612,6 +653,21 @@ view_run_output_copy:
     mov rax, [rbp + 40]
     cmp eax, 0xffff0000
     jae view_run_invalid
+    cmp qword ptr [r14 + 544], 4
+    jne view_run_copy_extent
+    cmp eax, 32
+    jne view_run_copy_extent
+    mov rdx, [rbp + 24]
+    mov r8, 0x3230525045414948 /* HIAEPR02 */
+    cmp [rdx], r8
+    jne view_run_copy_extent
+    cmp qword ptr [r14 + 680], 1
+    jne view_run_invalid
+    cmp qword ptr [rdx + 8], 0
+    jne view_run_copy_extent
+    add rax, [rdx + 24]
+    jc view_run_invalid
+view_run_copy_extent:
     cmp rax, [rbp + 32]
     ja view_run_invalid
     cmp rsi, rax
@@ -678,13 +734,20 @@ view_run_done:
 
 /* rdi = fixed image address table, rsi = AT_SECURE. Returns private engine. */
 view_engine_create:
+    xor edx, edx
+    jmp view_engine_create_format
+.global view_engine_create_wide
+view_engine_create_wide:
+    mov edx, 1
+view_engine_create_format:
     push rbp
     push rbx
     push r12
     push r13
     push r14
     push r15
-    sub rsp, 8
+    sub rsp, 24
+    mov [rsp + 8], rdx
     mov r12, rdi
     mov r13, rsi
     mov qword ptr [rsp], 0
@@ -727,6 +790,10 @@ view_engine_create_slot:
     cmp rbp, 19
     jb view_engine_create_slot
     lea rdi, [rip + view_bound_init_frame]
+    cmp qword ptr [rsp + 8], 0
+    je view_engine_create_init_ready
+    lea rdi, [rip + view_bound_wide_init_frame]
+view_engine_create_init_ready:
     mov esi, 16
     call view_call_run
     cmp rax, 32
@@ -744,7 +811,7 @@ view_engine_create_cleanup:
 view_engine_create_cleanup_done:
     mov rax, r13
 view_engine_create_return:
-    add rsp, 8
+    add rsp, 24
     pop r15
     pop r14
     pop r13
@@ -755,6 +822,9 @@ view_engine_create_return:
 .balign 8
 view_bound_init_frame:
     .ascii "HVCLI001"
+    .quad 1
+view_bound_wide_init_frame:
+    .ascii "HVCLI002"
     .quad 1
 view_initial_capacities:
     .quad 131072, 16777216

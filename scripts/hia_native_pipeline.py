@@ -299,7 +299,16 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         # The ordinary-file and public MCP cases intentionally create real
         # links. Retain their complete file bytes and link metadata after all
         # native receipts pass, then retire only those private test targets.
-        q.view_fixture_retirement(output, report, create=True)
+        public = q.runtime_mcp_evidence(output, report)
+        literal = q.view_search_public_evidence(output, report)
+        regex = q.view_regex_search_public_evidence(output, report)
+        q.view_fixture_retirement(output, report, create=True, public=public,
+                                 public_search=literal, public_regex_search=regex)
+        # The public Workdir domain also has FIFO/hardlink/xattr state. Its
+        # richer source-bound archive is read-only in collection; normal
+        # original comparison alone may reconstruct it at the exact origin.
+        q.runtime_mcp_fixture_retirement(output, report, create=True, public=public,
+                                        public_search=literal, public_regex_search=regex)
     if any(row.get("name") == "test_filesystem_parity_kernel.py" for row in report.get("checks", ())):
         # Retain every complete native result, syscall trace and state snapshot
         # before removing the private effect targets from artifact transport.

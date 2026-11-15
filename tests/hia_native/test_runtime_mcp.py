@@ -1,4 +1,4 @@
-"""Actual MCP/view ELF and private-frame controls, retaining all wire bytes.
+"""Actual dynamic MCP/View/Workdir ELF, retaining complete public wire bytes.
 
 SDK fixtures provide inputs only. The separate original-reference reader
 compares complete original protocol errors/headers and selected view text.
@@ -19,6 +19,15 @@ def sibling(name):
     spec=importlib.util.spec_from_file_location('_runtime_mcp_inputs_'+name,path)
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 cases,sdk,router,info,wide=(sibling(name) for name in ('cases','sdk_cases','router_sdk_cases','info_sdk_cases','wide_endpoint_case'))
+def local_module(name,path=None):
+    path=ROOT/'tests/hia_native'/(name+'.py') if path is None else path
+    spec=importlib.util.spec_from_file_location('_public_span_'+name,path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
+public_capture=local_module('runtime_mcp_public_capture')
+span_controls=local_module('runtime_mcp_span_controls')
+span_inputs=local_module('runtime_mcp_span_inputs')
+workdir_cases=local_module('workdir_inputs',ROOT/'tests/hia_native/workdir_oracle/cases.py')
+
 VIEW_IDS=tuple([*range(19),26,28,29,30,35,36,*range(45,51)])
 TYPED_ERRORS={0,1,2,3,11,12,13,14,15,16,17,20,200,201,202,203,206,207,208}
 META_ERRORS={32,33,34,35,101,103,105,209,210}
@@ -27,10 +36,9 @@ def save(path,raw):
     path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(gzip.compress(raw,mtime=0))
     return dict(path=str(path.relative_to(OUTPUT)),bytes=len(raw),sha256=sha(raw))
 def source_identity():
-    path=ROOT/'native/runtime_mcp_sources.json'; raw=path.read_bytes(); spec=json.loads(raw)
-    identities={name:dict(bytes=(ROOT/name).stat().st_size,sha256=sha((ROOT/name).read_bytes())) for name in spec['sources']}
-    assert identities==spec['sources']
-    return dict(manifest_sha256=sha(raw),files=identities)
+    from hia_native_runtime_mcp_build import source_check
+    return source_check(ROOT)
+
 def setup_files(folder,row):
     for action in row['metadata']['setup']:
         path=folder/os.fsdecode(bytes.fromhex(action['path_hex']));path.parent.mkdir(parents=True,exist_ok=True)
@@ -41,78 +49,47 @@ def setup_files(folder,row):
 
 class Session:
     def __init__(self,name,root,*,config=None,expected_exit=0,expected_stderr=b''):
-        self.name=name;self.folder=OUTPUT/'sessions'/name;self.folder.mkdir(parents=True,exist_ok=False)
-        self.command=[str(NativeRuntime.exe)]
-        if config is not None:self.command+=['--runtime-config',str(config)]
-        self.command+=['--session-root',str(root)];self.start=time.monotonic()
-        self.process=subprocess.Popen(self.command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env={'PATH':'','LC_ALL':'C'})
-        self.input=bytearray();self.output=bytearray();self.pending=bytearray();self.closed=False
-        self.expected_exit=expected_exit;self.expected_stderr=expected_stderr
+        self.name=name;self.folder=OUTPUT/'sessions'/name;self.closed=False
+        self.client=public_capture.Public(self.folder,NativeRuntime.exe,root,config,
+            expected_exit=expected_exit,expected_stderr=expected_stderr)
     def send(self,wire):
-        self.input+=wire+b'\n';self.process.stdin.write(wire+b'\n');self.process.stdin.flush()
-    def read(self):
-        deadline=time.monotonic()+60
-        newline=self.pending.find(b'\n')
-        while newline<0:
-            remaining=deadline-time.monotonic()
-            if remaining<=0 or not select.select([self.process.stdout],[],[],remaining)[0]:raise AssertionError('actual native MCP response timeout')
-            piece=os.read(self.process.stdout.fileno(),65536)
-            if not piece:raise AssertionError(('actual native MCP EOF',self.process.poll()))
-            previous=len(self.pending)
-            self.pending.extend(piece)
-            newline=self.pending.find(b'\n',previous)
-        wire=bytes(self.pending[:newline]);del self.pending[:newline+1];self.output+=wire+b'\n'
-        COUNTS['actual_elf_responses']+=1;return json.loads(wire),bytes(wire)
-    def call(self,value):self.send(value if isinstance(value,bytes) else compact(value));return self.read()
+        self.client.exchange(wire+b'\n',0)
+    def call(self,value):
+        wire=value if isinstance(value,bytes) else compact(value)
+        rows=self.client.exchange(wire+b'\n');COUNTS['actual_elf_responses']+=len(rows)
+        return json.loads(rows[0]),rows[0]
     def ready(self,capabilities=None):return self.call(sdk.initialization({} if capabilities is None else capabilities))
     def finish(self,error=False):
         if self.closed:return
-        self.closed=True;self.process.stdin.close()
-        if error and self.process.poll() is None:self.process.kill()
-        self.process.wait(timeout=60);remaining=self.process.stdout.read();stderr=self.process.stderr.read();self.output+=self.pending+remaining
-        record=dict(session=self.name,command=self.command,environment={'PATH':'','LC_ALL':'C'},timeout_seconds=60,
-            exit_code=self.process.returncode,elapsed_seconds=time.monotonic()-self.start,
-            stdin=save(self.folder/'stdin.bin.gz',bytes(self.input)),stdout=save(self.folder/'stdout.bin.gz',bytes(self.output)),stderr=save(self.folder/'stderr.bin.gz',stderr))
-        (self.folder/'process.json').write_bytes(compact(record)+b'\n');RECORDS.append(record);COUNTS['actual_elf_processes']+=1
-        if not error:assert (self.process.returncode,stderr,self.pending,remaining)==(self.expected_exit,self.expected_stderr,b'',b'')
+        self.closed=True;raw=self.client.close(error)
+        record=dict(session=self.name,**raw)
+        for key in ('stdin','stdout','stderr'):
+            record[key]={**record[key],'path':str((self.folder/(key+'.bin.gz')).relative_to(OUTPUT))}
+        (self.folder/'process.json').write_bytes(json.dumps(record,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode()+b'\n')
+        RECORDS.append(record);COUNTS['actual_elf_processes']+=1
     def __enter__(self):return self
     def __exit__(self,kind,value,traceback):self.finish(error=kind is not None)
 
-class SparseState:
-    def __init__(self,module,capacity=256<<20,output=512):
-        self.module,self.capacity,self.output_capacity=module,capacity,output
-        self.maps=[mmap.mmap(-1,n+4096) for n in (capacity,output)]
-        self.workspace=(ctypes.c_char*(capacity+16)).from_buffer(self.maps[0]);self.output=(ctypes.c_char*(output+16)).from_buffer(self.maps[1]);ctypes.memset(self.output,0xA5,output)
-    def read(self,offset,count):return ctypes.string_at(ctypes.addressof(self.workspace)+offset,count)
-    def write(self,offset,raw):ctypes.memmove(ctypes.addressof(self.workspace)+offset,raw,len(raw))
-    def invoke(self,wire):
-        try:
-            out=self.module._invoke_buffers(wire,self.output,self.workspace,self.output_capacity,self.capacity);return len(out),out
-        except NativeRejected as error:return error.code,None
-    def identity(self):return sha(memoryview(self.maps[0])[:self.capacity]),bytes(self.output[:self.output_capacity])
-    def sparse(self):
-        chunks=[];block=1<<20
-        for offset in range(0,self.capacity,block):
-            raw=self.read(offset,min(block,self.capacity-offset))
-            if raw.count(0)!=len(raw):chunks.append((offset,raw))
-        return b'HRMCS001'+struct.pack('<3Q',self.capacity,block,len(chunks))+b''.join(struct.pack('<2Q',offset,len(raw))+raw for offset,raw in chunks)
-    def close(self):
-        self.workspace=self.output=None
-        for mapping in self.maps:mapping.close()
+
+
 
 class NativeRuntime(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from hia_native_runtime_mcp_build import MEMBERS
         cls.manifest=json.loads(MANIFEST.read_bytes());cls.exe=MANIFEST.parent/cls.manifest['elf'];elf=cls.exe.read_bytes()
         assert sha(elf)==cls.manifest['elf_sha256'] and len(elf)==cls.manifest['elf_bytes']
-        cls.members={row['name']:row for row in cls.manifest['members']};assert len(cls.members)==39
+        cls.members={row['name']:row for row in cls.manifest['members']}
+        assert list(cls.members)==[row[0] for row in MEMBERS] and len(cls.members)==46
         for row in cls.members.values():
             path=Path(row['manifest']);data=json.loads(path.read_bytes());image=(path.parent/data['image']).read_bytes()
             assert sha(path.read_bytes())==row['manifest_sha256'] and sha(image)==row['image_sha256']
             assert (path.parent/data['source']).read_bytes()==(ROOT/row['source']).read_bytes()
             assert sha((ROOT/row['source']).read_bytes())==row['source_sha256'] and elf.count(image)==1
         for path,digest in cls.manifest['boundary_sources'].items():assert sha((ROOT/path).read_bytes())==digest
-        cls.files=OUTPUT/'files';cls.files.mkdir();(cls.files/'file').write_bytes(b'alpha\n');COUNTS['actual_embedded_hia_images']=39
+        cls.files=OUTPUT/'files';cls.files.mkdir();(cls.files/'file').write_bytes(b'alpha\n')
+        COUNTS['actual_embedded_hia_images']=46
+
     def view(self,session,arguments,*,identifier=2,metadata=None):
         response,raw=session.call(sdk.call(identifier,arguments,metadata));self.assertEqual(response['id'],identifier);result=response['result']
         self.assertIs(type(result['isError']),bool);self.assertEqual(len(result['content']),1);self.assertEqual(result['content'][0]['type'],'text')
@@ -154,7 +131,7 @@ class NativeRuntime(unittest.TestCase):
                         if version not in {'2024-11-05','2025-03-26','2025-06-18','2025-11-25'}:version='2025-11-25'
                         self.assertEqual(result,dict(protocolVersion=version,**server['initialize']))
                     elif message['method']=='tools/list':
-                        self.assertEqual([tool['name'] for tool in result['tools']],['host_list','effective_config','execution_shadow_admit','view']);self.assertEqual(result['tools'][-1]['inputSchema'],schema)
+                        self.assertEqual([tool['name'] for tool in result['tools']],['host_list','effective_config','execution_shadow_admit','view','workdir']);self.assertEqual(result['tools'][3]['inputSchema'],schema);self.assertEqual(result['tools'][4]['inputSchema'],json.loads((ROOT/'native/workdir_input_schema.json').read_bytes()))
                         header={k:v for k,v in result.items() if k!='tools'};modern=message['params'].get('_meta',{}).get(VERSION)=='2026-07-28';self.assertEqual(header,server['modern_tools_list'] if modern else {})
                     else:self.assertEqual(message['method'],'server/discover');self.assertEqual(result,server['discover'])
                 records.append(dict(case_id=row['case_id'],name=row['name'],session=session.name,
@@ -212,47 +189,18 @@ class NativeRuntime(unittest.TestCase):
             record=dict(case_id=wide.CASE_ID,session=session.name,original_input=save(OUTPUT/'wide/input.bin.gz',wide.original_input()),actual_body=save(OUTPUT/'wide/body.bin.gz',body),
                 actual_response=save(OUTPUT/'wide/response.bin.gz',wire),original_success_body_limit_applied_to_error=False,unrestricted_response_domain_claimed=False)
         (OUTPUT/'wide-case.json').write_bytes(compact(record)+b'\n');COUNTS['large_error_publication_cases']=1;COUNTS['large_error_body_bytes']=len(body)
-    def test_07_private_frame_and_continuation_refusals(self):
-        records=[];positives=[]
-        for name,request in [('gateway',b'HVMGWQ01'+struct.pack('<4Q',2,0,0,0)+b'{}'),('admission',b'HCMADQ01'+struct.pack('<3Q',2,2,0)+b'{}')]:
-            row=self.members[name];manifest=Path(row['manifest'])
-            with NativeModule(manifest,manifest_sha256=row['manifest_sha256']) as module:
-                state=SparseState(module)
-                try:
-                    zero=save(OUTPUT/'private'/(name+'-zero.bin.gz'),state.sparse())
-                    def record(label,wire,before,after,baseline,footer_before,footer_after,code):
-                        index=str(len(records));records.append(dict(owner=name,control=label,return_code=code,buffers_unchanged=True,
-                            input=save(OUTPUT/'private'/(index+'.input.bin.gz'),wire),baseline=baseline,
-                            workspace_capacity=state.capacity,output_capacity=state.output_capacity,
-                            workspace_before_sha256=before[0],workspace_after_sha256=after[0],
-                            footer_before=save(OUTPUT/'private'/(index+'.footer-before.bin.gz'),footer_before),
-                            footer_after=save(OUTPUT/'private'/(index+'.footer-after.bin.gz'),footer_after),
-                            output_before=save(OUTPUT/'private'/(index+'.output-before.bin.gz'),before[1]),
-                            output_after=save(OUTPUT/'private'/(index+'.output-after.bin.gz'),after[1])))
-                    for label,wire in [('empty',b''),('short',request[:7]),('magic',b'BADMAGIC'+request[8:]),('length',request+b'x')]:
-                        before=state.identity();footer_before=state.read(state.capacity-256,256);code,_=state.invoke(wire);after=state.identity();self.assertEqual(code,0xffffffff);self.assertEqual(after,before)
-                        record(label,wire,before,after,zero,footer_before,state.read(state.capacity-256,256),code)
-                    code,_=state.invoke(request);self.assertEqual(code,0xffffffe0);footer=state.capacity-256;yielded_footer=state.read(footer,112)
-                    if name=='gateway':child_row=self.members['params'];child_wire=b'HVPRQ001'+struct.pack('<2Q',2,0)+b'{}'
-                    else:child_row=self.members['value'];child_wire=b'HSJVAL01'+struct.pack('<2Q',1,2)+b'{}'
-                    with NativeModule(Path(child_row['manifest']),manifest_sha256=child_row['manifest_sha256']) as child:
-                        response=child.invoke(child_wire,output_capacity=512,workspace_capacity=32<<20 if name=='gateway' else 256<<20)
-                    state.write(67117056,response);sequence=struct.unpack('<Q',state.read(footer+8,8))[0];state.write(footer+80,struct.pack('<3Q',len(response),sequence,1));original=state.read(footer,112)
-                    ready=save(OUTPUT/'private'/(name+'-ready.bin.gz'),state.sparse())
-                    for offset in (0,8,16,24,32,40,48,56,64,72,88,96,104):
-                        state.write(footer,original);value,=struct.unpack('<Q',original[offset:offset+8]);state.write(footer+offset,struct.pack('<Q',value^0x8000000000000000));before=state.identity();footer_before=state.read(footer,256);code,_=state.invoke(request);after=state.identity()
-                        self.assertEqual(code,0xffffffff);self.assertEqual(after,before);record('continuation-word-'+str(offset),request,before,after,ready,footer_before,state.read(footer,256),code)
-                    state.write(footer,original);code,returned=state.invoke(request);self.assertEqual(code,52 if name=='gateway' else 0xffffffe0);COUNTS['real_child_positive_continuations']+=1
-                    positives.append(dict(owner=name,child=child_row['name'],child_manifest_sha256=child_row['manifest_sha256'],return_code=code,
-                        request=save(OUTPUT/'private'/(name+'.request.bin.gz'),request),
-                        yielded_footer=save(OUTPUT/'private'/(name+'.yielded-footer.bin.gz'),yielded_footer),
-                        child_input=save(OUTPUT/'private'/(name+'.child-input.bin.gz'),child_wire),
-                        actual_child_response=save(OUTPUT/'private'/(name+'.child-response.bin.gz'),response),
-                        completion_footer=save(OUTPUT/'private'/(name+'.completion-footer.bin.gz'),original),
-                        actual_output=save(OUTPUT/'private'/(name+'.positive-output.bin.gz'),bytes(state.output[:state.output_capacity])),
-                        returned_bytes=None if returned is None else len(returned)))
-                finally:state.close()
-        self.assertEqual(len(records),34);(OUTPUT/'private-refusals.json').write_bytes(compact(records)+b'\n');(OUTPUT/'private-positives.json').write_bytes(compact(positives)+b'\n');COUNTS['private_frame_refusals']=34
+    def test_07_wide_continuation_and_exact_needed_controls(self):
+        result=span_controls.run(MANIFEST,OUTPUT/'private',save)
+        self.assertEqual(result['actual_native_calls'],27)
+        (OUTPUT/'private/result.json').write_bytes(compact(result)+b'\n')
+        COUNTS.update(private_frame_refusals=result['invalid_controls'],
+            actual_private_hia_calls=result['actual_native_calls'],
+            real_child_positive_continuations=result['real_child_positive_continuations'],
+            actual_protocol_child_calls=result['actual_protocol_child_calls'],
+            exact_needed_protocol_controls=result['actual_protocol_output_growth_retries'],
+            delivery_only_controls=result['delivery_only_calls'],
+            exact_needed_endpoint_controls=result['exact_needed_output_controls'])
+
 
     def test_08_regex_installation_and_original_error_order(self):
         plans=[('valid',pattern) for pattern in ['a',r'[a-z]+',r'\p{Greek}+',r')|foo(?:','a{327674}']]
@@ -300,6 +248,68 @@ class NativeRuntime(unittest.TestCase):
         COUNTS.update(regex_actual_installed_configs=5,regex_actual_startup_refusals=4,
                        regex_actual_first_error_controls=2,regex_actual_mcp_view_results=5)
 
+    def test_09_public_input_and_output_cross_old_window(self):
+        row=span_inputs.large_view_case();folder=self.files/'over64';folder.mkdir();setup_files(folder,row)
+        request=b'{"jsonrpc":"2.0","id":1001,"method":"tools/call","params":{"name":"view","arguments":{"path":"file","start":"'+b'x'*span_inputs.LARGE_SIZE+b'"}}}'
+        with Session('over64',folder) as session:
+            session.ready();response,wire=session.call(request)
+            result=response['result'];self.assertIs(result['isError'],True)
+            body=result['content'][0]['text'].encode();self.assertGreater(len(body),64<<20)
+            self.assertTrue(body.startswith(b"Invalid 'start':"))
+            record=dict(case_id=1001,session=session.name,
+                original_input=save(OUTPUT/'over64/input.bin.gz',cases.encode_cases([row])),
+                actual_request=save(OUTPUT/'over64/request.bin.gz',request),
+                actual_response=save(OUTPUT/'over64/response.bin.gz',wire),
+                actual_body=save(OUTPUT/'over64/body.bin.gz',body),
+                original_body_compared=False,unrestricted_response_domain_claimed=False)
+            nodes=b'{"jsonrpc":"2.0","id":1002,"method":"ping","unknown":['+b'0,'*262145+b'0]}'
+            reply,_=session.call(nodes);self.assertEqual(reply,dict(jsonrpc='2.0',id=1002,result={}))
+        (OUTPUT/'over64-case.json').write_bytes(compact(record)+b'\n')
+        COUNTS.update(over64_public_cases=1,over64_input_bytes=len(request),over64_body_bytes=len(body),
+            over64_response_bytes=len(wire),public_node_count_controls=1)
+
+    def test_10_public_workdir_actual_files_and_same_session(self):
+        fixture=self.files/'workdir';fixture.mkdir()
+        inputs=workdir_cases.materialized(fixture)
+        selected=[row for row in inputs['scenarios'] if span_inputs.workdir_selected(row)]
+        self.assertEqual(len(selected),42)
+        input_record=dict(scenarios=selected,policies=inputs['policies'])
+        save(OUTPUT/'workdir/inputs.json.gz',compact(input_record))
+        policies={}
+        for name,value in inputs['policies'].items():
+            path=fixture/('policy-'+name+'.json');path.write_bytes(compact(value));policies[name]=path
+        records=[]
+        for scenario in selected:
+            span_inputs.setup_workdir(scenario,fixture)
+            item=scenario['sessions'][0];cwd=Path(os.fsdecode(bytes.fromhex(item['root_hex'])))
+            config=None if inputs['policies'][scenario['policy_id']] is None else policies[scenario['policy_id']]
+            name='workdir-'+str(scenario['scenario_id'])
+            with Session(name,cwd,config=config) as session:
+                for message in item['initial_messages']:
+                    if 'id' in message:session.call(message)
+                    else:session.send(compact(message))
+                for step in scenario['steps']:
+                    if step['action']['kind']!='public':continue
+                    request=step['action']['message'];reply,wire=session.call(request)
+                    self.assertEqual(reply['id'],step['case_id']);self.assertEqual(reply['jsonrpc'],'2.0')
+                    if 'error' in reply:
+                        self.assertEqual(reply['error']['code'],-32602);body=reply['error']['message'].encode();status='protocol-error'
+                    else:
+                        result=reply['result'];self.assertIs(type(result['isError']),bool)
+                        self.assertEqual(len(result['content']),1);self.assertEqual(result['content'][0]['type'],'text')
+                        body=result['content'][0]['text'].encode();status='string-error' if result['isError'] else 'success'
+                    ident=str(step['case_id'])
+                    records.append(dict(case_id=step['case_id'],scenario_id=scenario['scenario_id'],name=step['name'],session=name,
+                        actual_response=save(OUTPUT/'workdir'/(ident+'.response.bin.gz'),wire),
+                        actual_body=save(OUTPUT/'workdir'/(ident+'.body.bin.gz'),body),status=status,
+                        original_reply_compared=False,native_private_state_queried=False))
+        self.assertEqual(len(records),336)
+        (OUTPUT/'workdir-cases.jsonl').write_bytes(b''.join(compact(row)+b'\n' for row in records))
+        COUNTS.update(public_workdir_scenarios=42,public_workdir_calls=336,
+            public_workdir_successes=sum(row['status']=='success' for row in records),
+            public_workdir_string_errors=sum(row['status']=='string-error' for row in records),
+            public_workdir_typed_errors=sum(row['status']=='protocol-error' for row in records))
+
 def main():
     global MANIFEST,OUTPUT
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--manifest',type=Path,default=os.environ.get('HIA_RUNTIME_MCP_MANIFEST'));parser.add_argument('--output',type=Path,default=os.environ.get('HIA_RUNTIME_MCP_CORPUS_DIR'));args=parser.parse_args()
@@ -307,10 +317,10 @@ def main():
     MANIFEST=args.manifest.resolve(strict=True);OUTPUT=args.output.resolve();OUTPUT.mkdir(parents=True,exist_ok=False);start=time.monotonic();sources=source_identity()
     result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(NativeRuntime))
     sources_after=source_identity();assert sources_after==sources
-    report=dict(schema='hepta.runtime.mcp-view-native-tests.v1',status='PASS' if result.wasSuccessful() else 'FAIL',groups=result.testsRun,elapsed_seconds=time.monotonic()-start,counts=dict(COUNTS),manifest_sha256=sha(MANIFEST.read_bytes()),processes=RECORDS,source_binding=sources,sources_unchanged=True,
+    report=dict(schema='hepta.runtime.mcp-view-native-tests.v2',status='PASS' if result.wasSuccessful() else 'FAIL',groups=result.testsRun,elapsed_seconds=time.monotonic()-start,counts=dict(COUNTS),manifest_sha256=sha(MANIFEST.read_bytes()),processes=RECORDS,source_binding=sources,sources_unchanged=True,
         execution=dict(runtime_root=str(ROOT),corpus_root=str(OUTPUT),manifest_path=str(MANIFEST)),
-        complete_sdk_frontend=False,complete_original_tool_catalog=False,original_tool_count=125,implemented_catalog_names=['host_list','effective_config','execution_shadow_admit','view'],
+        complete_sdk_frontend=False,complete_original_tool_catalog=False,original_tool_count=125,implemented_catalog_names=['host_list','effective_config','execution_shadow_admit','view','workdir'],
         directory_content_remote_background_routes_replaced=False,whole_view_replaced=False,response_storage_globally_unbounded=False,full_http_dispatcher_replaced=False,
         current_protocol_error_reference_compared=False,current_original_view_reference_compared=False)
-    (OUTPUT/'result.json').write_bytes(compact(report)+b'\n');print(json.dumps({k:v for k,v in report.items() if k!='processes'},sort_keys=True));raise SystemExit(0 if result.wasSuccessful() else 1)
+    (OUTPUT/'result.json').write_bytes(json.dumps(report,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode()+b'\n');print(json.dumps({k:v for k,v in report.items() if k!='processes'},sort_keys=True));raise SystemExit(0 if result.wasSuccessful() else 1)
 if __name__=='__main__':main()

@@ -21,6 +21,7 @@ import hia_native_pipeline as p
 import hia_native_failure as failure
 import qualify_hia_runtime_native as q
 import hia_native_view_fixture_qualification as fixtures
+import hia_native_runtime_mcp_fixtures as public_fixtures
 
 
 class NativePipelineTests(unittest.TestCase):
@@ -28,6 +29,119 @@ class NativePipelineTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix="hia-pipeline-reporting-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+
+    def public_fixture(self, name="public-owned"):
+        output = self.root / name
+        workdir = output / "runtime-mcp/files/workdir"
+        workdir.mkdir(parents=True)
+        raw = workdir / os.fsdecode(b"raw-\xff")
+        raw.write_bytes(b"complete\0\xff\n")
+        raw.chmod(0o640)
+        os.setxattr(raw, "user.hepta-retention", b"attribute\0\xff")
+        os.link(raw, workdir / "hard")
+        os.symlink(b"missing-\xff", os.fsencode(workdir / "link"))
+        os.mkfifo(workdir / "fifo", 0o600)
+        return output, {"reporting_fixture_only": True, "semantic_calls": 0}
+
+    def test_public_fixture_roundtrip_preserves_bytes_xattrs_and_this_replay_inodes(self):
+        output, binding = self.public_fixture()
+        before = public_fixtures.snapshot(output, public_fixtures.NATIVE)
+        admitted = public_fixtures.retired(output, "native", binding, str(output), create=True)
+        self.assertEqual((admitted["files"], admitted["fifos"], admitted["hardlink_groups"]), (2, 1, 1))
+        self.assertFalse((output / "runtime-mcp/files").exists())
+        with public_fixtures.restored_native(output, admitted, binding, str(output)) as restored:
+            self.assertEqual(public_fixtures.logical(restored), public_fixtures.logical(before))
+            root = output / "runtime-mcp/files/workdir"
+            item = root / os.fsdecode(b"raw-\xff")
+            self.assertEqual(item.read_bytes(), b"complete\0\xff\n")
+            self.assertEqual(os.getxattr(item, "user.hepta-retention"), b"attribute\0\xff")
+            self.assertEqual(item.stat().st_ino, (root / "hard").stat().st_ino)
+            # Exercise the replay's private rename boundary with real inodes;
+            # this mechanical fixture executes no HIA or Rust semantics.
+            held = root.with_name("held-for-reporting-test")
+            original_inode = root.stat().st_ino
+            root.rename(held)
+            root.mkdir()
+            (root / "temporary").write_bytes(b"separate original execution tree")
+            shutil.rmtree(root)
+            held.rename(root)
+            self.assertEqual(root.stat().st_ino, original_inode)
+        result = public_fixtures.retained_reconstruction(output, admitted, str(output))
+        self.assertTrue(result["this_replay_before_after_inode_identity_preserved"])
+        self.assertIs(result["source_inodes_recreated"], False)
+        self.assertEqual(public_fixtures.retired(output, "native", binding, str(output)), admitted)
+
+    def test_public_fixture_rejects_external_hardlinks_and_symlink_roots(self):
+        output, binding = self.public_fixture()
+        outside = self.root / "unrelated"
+        outside.write_bytes(b"preserve unrelated owner")
+        alias = output / "runtime-mcp/files/external-hardlink"
+        os.link(outside, alias)
+        with self.assertRaisesRegex(ValueError, "hardlink leaves"):
+            public_fixtures.retired(output, "native", binding, str(output), create=True)
+        self.assertEqual(outside.read_bytes(), b"preserve unrelated owner")
+        alias.unlink()
+        source = output / "runtime-mcp/files"
+        source.rename(output / "runtime-mcp/held")
+        source.symlink_to(self.root, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "not a directory"):
+            public_fixtures.retired(output, "native", binding, str(output), create=True)
+        self.assertTrue(source.is_symlink())
+        self.assertEqual(outside.read_bytes(), b"preserve unrelated owner")
+
+    def test_public_fixture_refuses_physical_and_resigned_metadata_changes_before_restore(self):
+        output, binding = self.public_fixture()
+        admitted = public_fixtures.retired(output, "native", binding, str(output), create=True)
+        archive = output / "runtime-mcp/retired-fixtures.bin.gz"
+        original = archive.read_bytes()
+        archive.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+        with self.assertRaisesRegex(ValueError, "archive differs"):
+            public_fixtures.retired(output, "native", binding, str(output))
+        archive.write_bytes(original)
+        receipt = output / "runtime-mcp/retired-fixtures.json"
+        original = receipt.read_bytes()
+        for field in ("path_hex", "link_group", "nlink", "mode", "xattrs"):
+            changed = public_fixtures.decode(original)
+            files = [row for row in changed["entries"] if row["kind"] == "file"]
+            if field == "path_hex":
+                files[0][field] = b"runtime-mcp/files/../outside".hex()
+            elif field == "link_group":
+                files[0][field] = b"runtime-mcp/files/outside".hex()
+            elif field == "nlink":
+                files[0][field] += 1
+            elif field == "mode":
+                for row in files:
+                    row[field] ^= 0o040
+            else:
+                for row in files:
+                    row[field] = {}
+            receipt.write_bytes(public_fixtures.encoded(changed))
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                with public_fixtures.restored_native(output, admitted, binding, str(output)):
+                    self.fail("altered archive reached reconstruction")
+            self.assertFalse((output / "runtime-mcp/files").exists())
+            self.assertFalse((output / public_fixtures.RESTORE).exists())
+        receipt.write_bytes(original)
+        self.assertEqual(public_fixtures.retired(output, "native", binding, str(output)), admitted)
+
+    def test_public_fixture_relocated_readers_never_reconstruct_an_old_origin(self):
+        output, binding = self.public_fixture()
+        origin = str(output)
+        admitted = public_fixtures.retired(output, "native", binding, origin, create=True)
+        with public_fixtures.restored_native(output, admitted, binding, origin):
+            pass
+        expected = public_fixtures.retained_reconstruction(output, admitted, origin)
+        moved = self.root / "relocated-output"
+        shutil.copytree(output, moved)
+        shutil.rmtree(output)
+        with patch.object(public_fixtures, "populate", side_effect=AssertionError("reader started reconstruction")):
+            self.assertEqual(public_fixtures.retired(moved, "native", binding, origin), admitted)
+            self.assertEqual(public_fixtures.retained_reconstruction(moved, admitted, origin), expected)
+            with self.assertRaisesRegex(ValueError, "exact admitted native execution origin"):
+                with public_fixtures.restored_native(moved, admitted, binding, origin):
+                    self.fail("relocated evidence started original execution")
+        self.assertFalse(output.exists())
+        self.assertFalse((moved / "runtime-mcp/files").exists())
 
     def test_partition_is_complete_unique_and_keeps_evidence_dependencies(self):
         partitions = p.partition_tests()

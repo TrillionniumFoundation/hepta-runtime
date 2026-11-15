@@ -19,6 +19,7 @@ import struct
 import sys
 
 import hia_native_runtime_mcp_evidence as mcp
+from hia_native_public_exchange_qualification import session_streams as checked_session_streams
 
 NATIVE_SUITE = 'test_view_search_public.py'
 GENERATOR = 'tests/hia_native/view_search_oracle/cases.py'
@@ -68,6 +69,7 @@ def identity(path):
 def sources(root, binding):
     result = {name: value['sha256'] for name, value in binding['files'].items()}
     names = (*PRIVATE_SOURCES, READER, 'scripts/hia_native_runtime_mcp_evidence.py',
+             'scripts/hia_native_public_exchange_qualification.py',
              'scripts/hia_native_view_search_reference.py',
              'tests/hia_native/view_call_oracle/sdk_cases.py', 'native/runtime_mcp_sources.json')
     for name in names:
@@ -160,8 +162,6 @@ def inspect_corpus(root, corpus, evidence=None):
                   'actual_request', 'actual_response', 'actual_body', 'is_error',
                   'private_hooks_used', 'original_mcp_router_executed', 'comparison_domain',
                   'original_body_compared', 'original_body_designated')
-    process_fields = ('session', 'command', 'environment', 'timeout_seconds', 'exit_code',
-                      'elapsed_seconds', 'stdin', 'stdout', 'stderr')
     row_at = process_at = response_count = 0
     totals = {}
     ordered_ids = None
@@ -179,20 +179,9 @@ def inspect_corpus(root, corpus, evidence=None):
         session = protocol + '-' + str(session_id)
         record = processes[process_at]
         process_at += 1
-        exact(sorted(record), sorted(process_fields), 'public process fields differ')
-        exact(record['session'], session, 'public process order/identity')
-        exact(record['command'], [str(paths['manifest_path'].parent / 'runtime-mcp.elf'),
-                                  '--session-root', str(paths['fixture_root'] / session)],
-              'public process command/fixture differs')
-        exact(record['environment'], {'PATH': '', 'LC_ALL': 'C'}, 'public process environment')
-        require(type(record['exit_code']) is int and record['exit_code'] == 0
-                and type(record['timeout_seconds']) is int and record['timeout_seconds'] == 60
-                and mcp.finite(record['elapsed_seconds'], 180), 'public process failed or deadline differs')
-        exact(evidence.object(folder + '/sessions/' + session + '/process.json'), record,
-              'public process receipt copy differs')
-        streams = {key: evidence.stream(folder, record[key], 'sessions/' + session + '/' + key + '.bin.gz')
-                   for key in ('stdin', 'stdout', 'stderr')}
-        exact(streams['stderr'], b'', 'production emitted private fixture receipts or diagnostic')
+        streams = checked_session_streams(evidence, folder, record, session=session,
+            executable=paths['manifest_path'].parent / 'runtime-mcp.elf',
+            cwd=paths['fixture_root'] / session)
         stdin, stdout = io.BytesIO(streams['stdin']), io.BytesIO(streams['stdout'])
         if protocol == 'legacy':
             exact(stdin.readline(), compact(sdk.initialization({})) + b'\n', 'actual legacy initialization input')
@@ -323,7 +312,7 @@ def public_native_evidence(root, output, report, completed):
     exact(str(public['origin']['capture_root'].parent), str(common_corpus.parent),
           'public and common execution output owners differ')
     suite(evidence, report, completed, mcp.NATIVE_SUITE, common_origin,
-          {key: value for key, value in common['report'].items() if key != 'processes'}, groups=8)
+          {key: value for key, value in common['report'].items() if key != 'processes'}, groups=mcp.NATIVE_GROUPS)
     build = mcp.build_evidence(root, output, report, evidence, common['report'])
     exact(descriptor['manifest'], build['manifest'], 'public used a different MCP composition')
     return _native_result(root, output, descriptor, public, build, evidence)

@@ -47,6 +47,8 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/fs/delta_tests.rs": "9d985284554db50fabf6bf79fe28da192bbebb8b",
     "src/mcp/fs/file_ops.rs": "dc43bd59c2dff679b8a741d52d1d7861002c0150",
     "src/mcp/fs/parity_ops.rs": "65a861d8938ddb83af542a7acebb67d20be8a62a",
+    "src/mcp/fs/workdir.rs": "441f32d116380758a92f575e6af7c29acc9260db",
+    "src/mcp/mod.rs": "31e9867c660929950f0ae3b4fc7de1d03efa0d43",
     "src/mcp/fs/fs_tests.rs": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
     "src/mcp/fs/text_editing.rs": "4a8114e72a51238608201e108288294c6282ab20",
     "src/mcp/fs/remote.rs": "b570130be0f545e91160339076388f255bd83abe",

@@ -14,10 +14,10 @@ from hia_native_scope_qualification import embedded_images
 from hia_native_view_cache_qualification import _compiled
 
 FOLDER = 'session-workdir'
-SOURCE = '63b8ea0e9b03c797cae1ecd51aba82a560f70329880e9758ea70612bb4161838'
-IMAGE = 'c7eec562fcbbddf51600521b9df992af70815e58f45b5a8d6ef4d089cb46678e'
-ELF = 'c085844dbfc449f321c1e00dab24ad71010fb3e04b505ddecb1126ead9018414'
-PROOF = '987794656e2e6b5c13a202b368e8396c3a57c9d977a7b4d1c488089ed859c668'
+SOURCE = '1dedf337f8dc5e59c363ee5ade616a9f494f97a264617f91d2d634a0280fa218'
+IMAGE = '687ae923d53c39b261b1d6095cf6a544d649fce51dc3ac15bb496c299a9da750'
+ELF = 'f391cc53a8cf45b7cae2569b5121a9e7b8cbeced5dea619fd76a2177f229fe98'
+PROOF = '821f622ba622bc803c5fe6e121325466e3c5feab1b7f3e692a9e23c5b9d68fb5'
 WORK_BYTES = (16 << 20) + 64
 OWNER = ('native/session_workdir.hepta', 'native/session_workdir_composition.json',
     'native/session_workdir_abi.md', 'scripts/hia_native_session_build.py',

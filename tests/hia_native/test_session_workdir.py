@@ -82,9 +82,13 @@ def main():
         with module.session(workspace_capacity=WORK_BYTES, output_capacity=1024) as state:
             for wire in [packet(1, b'/root'), packet(3, b'x' * 1024), packet(3, b'y')]:
                 state.invoke(wire); counts['native_image_calls'] += 1
-            assert ctypes.string_at(ctypes.addressof(state._workspace) + PATH_BYTES + 64, 1024) == b'y' + b'\0' * 1023
+            header = struct.unpack_from('<8s7Q', state._workspace.raw)
+            assert header == (b'HRSWST02', 5, 1, 1, 0, 0, 1, 0)
+            current_offset = 64 + header[1]
+            assert ctypes.string_at(ctypes.addressof(state._workspace) + current_offset, 1024) == b'y' + b'\0' * 1023
             state.invoke(packet(4)); counts['native_image_calls'] += 1
-            assert ctypes.string_at(ctypes.addressof(state._workspace) + PATH_BYTES + 64, 1024) == bytes(1024)
+            assert struct.unpack_from('<8s7Q', state._workspace.raw) == (b'HRSWST02', 5, 0, 0, 0, 0, 1, 0)
+            assert ctypes.string_at(ctypes.addressof(state._workspace) + current_offset, 1024) == bytes(1024)
             def refuse(wire, code, kind):
                 original = state._workspace.raw[:WORK_BYTES]
                 ctypes.memset(state._output, 0xa5, state.output_capacity)
@@ -103,7 +107,7 @@ def main():
             refuse(packet(1, b'/second'), INVALID, 'state_refusals')
             refuse(packet(3, b'x' * (PATH_BYTES + 1)), CAPACITY, 'capacity_refusals')
             saved = state._workspace.raw[:64]
-            for offset, value in [(0, 0), (8, PATH_BYTES+1), (16, PATH_BYTES+1),
+            for offset, value in [(0, 0), (8, WORK_BYTES-64+1), (16, WORK_BYTES-current_offset+1),
                                   (16, 1), (24, 2), (32, 2), (40, 2), (48, 0), (56, 1)]:
                 ctypes.memmove(ctypes.addressof(state._workspace) + offset, struct.pack('<Q', value), 8)
                 refuse(packet(2), INVALID, 'state_refusals')

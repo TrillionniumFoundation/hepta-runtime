@@ -57,6 +57,26 @@ Ordinary set/reset operations preserve the original nonfallible behavior when
 the lock is poisoned. The closed production call table does not expose the
 qualification poison operation to public MCP requests.
 
+## Shared state and growing borrowed spans
+
+The current owner accepts the legacy `HRSWQ001` frame above and the growing
+`HRSWQ002` frame, both with the same 32-byte request header. Both use a newly
+initialized `HRSWST02` workspace. An old workspace must not be reused with this
+owner. Its first 64 bytes contain eight little-endian words: magic, root length,
+current length, current-present Boolean, poisoned Boolean, applied Boolean,
+initialized word (one), and reserved word (zero). The full root starts at byte
+64; the current path starts immediately after the root. Shrinking or clearing
+the current path zeroes every vacated byte.
+
+The legacy frame retains its 8 MiB path limit, minimum 16 MiB plus 64-byte
+workspace, `HRSWR001` reply and refusal codes. The growing frame uses
+`HRSWR002`, checked 64-bit span lengths and caller-owned workspace/output
+growth. It has no fixed path limit. A caller must preserve this same private
+state across arena growth and must retry delivery without repeating a committed
+state transition. Sharing state between the two frame versions does not grant
+cross-session access. All declared lengths, Boolean values, reserved words and
+the initialized magic are checked before use.
+
 This file defines the integration seam while its implementation is in progress.
 It does not claim a completed owner, production activation, HTTP concurrency,
 the public `workdir` handler, or old-stack removal.

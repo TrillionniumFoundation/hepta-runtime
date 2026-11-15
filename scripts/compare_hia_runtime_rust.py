@@ -30,6 +30,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        view_search_public_evidence, view_regex_search_evidence,
                                        view_regex_search_public_evidence,
                                        view_resource_evidence, runtime_mcp_evidence, view_fixture_retirement,
+                                       runtime_mcp_fixture_retirement,
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
                                        history_evidence, json_evidence, request_context_evidence, result_publication_evidence,
                                        request_scope_evidence, shell_evidence,
@@ -198,6 +199,10 @@ def check_input_pins(output: Path, report: dict) -> None:
             public_search=public_search, regex_search=local_regex_search,
             public_regex_search=public_regex_search):
         raise ValueError("complete owned view test fixture retention differs")
+    if report.get("runtime_mcp_fixture_retirement") != runtime_mcp_fixture_retirement(
+            output, report, public=public_mcp, public_search=public_search,
+            public_regex_search=public_regex_search):
+        raise ValueError("complete public FIFO/hardlink/attribute fixture retention differs")
     local_comparisons = report.get("original_rust_comparisons", {})
     if "runtime_mcp" in local_comparisons:
         if local_comparisons["runtime_mcp"] != compare_runtime_mcp(output, report, None):
@@ -1577,7 +1582,7 @@ def compare_view_regex_search_public(output: Path, report: dict, original: dict,
 
 def compare_runtime_mcp(output: Path, report: dict, rustc: Path | None) -> dict:
     from hia_native_view_call_qualification import compare_original
-    from hia_native_runtime_mcp_reference import compare_reference
+    import hia_native_runtime_mcp_pipeline as public_pipeline
     native = view_call_evidence(output, report)
     if native != report.get("view_call_evidence"):
         raise ValueError("local view native inputs changed before public MCP comparison")
@@ -1586,7 +1591,11 @@ def compare_runtime_mcp(output: Path, report: dict, rustc: Path | None) -> dict:
     original = compare_original(ROOT, output, report, native)
     search_original = compare_view_search(output, report)
     regex_original = compare_view_regex_search(output, report)
-    public = compare_reference(ROOT, output / "runtime-mcp", output / original["original_output"])
+    if rustc is None:
+        public = public_pipeline.retained_original(ROOT, output, report, completed_test_summary)
+    else:
+        public = public_pipeline.execute_original(ROOT, output, report, rustc,
+            record_check, completed_test_summary, qualification_env())
     compare_view_search_public(output, report, search_original, execute=rustc is not None)
     compare_view_regex_search_public(output, report, regex_original, execute=rustc is not None)
     return public

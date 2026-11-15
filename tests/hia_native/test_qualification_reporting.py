@@ -274,7 +274,7 @@ class QualificationReportingTests(unittest.TestCase):
     def test_sorted_report_runs_shared_view_original_before_public_consumer(self):
         import compare_hia_runtime_rust as comparison
         import hia_native_view_call_qualification as view
-        import hia_native_runtime_mcp_reference as public
+        import hia_native_runtime_mcp_pipeline as public
         import hia_native_view_search_public_qualification as public_search
         import hia_native_view_regex_search_public_qualification as public_regex_search
         actual = dict(comparison.RECIPES)
@@ -345,7 +345,8 @@ class QualificationReportingTests(unittest.TestCase):
              patch.object(view, "_original_evidence", return_value={"original_output": "view-call-original"}), \
              patch.object(comparison, "_view_search_original_evidence", side_effect=lambda *args, regex=False:
                           regex_original if regex else search_original), \
-             patch.object(public, "compare_reference", return_value={"fixture": "public-original"}), \
+             patch.object(public, "execute_original", return_value={"fixture": "public-original"}), \
+             patch.object(public, "retained_original", return_value={"fixture": "public-original"}), \
              patch.object(public_search, "compare_public_reference", return_value={"fixture": "public-search-original"}), \
              patch.object(public_regex_search, "compare_public_reference", return_value={"fixture": "public-regex-original"}), \
              patch.object(comparison, "RECIPES", recipes):
@@ -886,7 +887,7 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
         self.assertEqual(len(MODULES), 48)
-        self.assertEqual(len(migration["native_components"]), 104)
+        self.assertEqual(len(migration["native_components"]), 111)
         self.assertEqual(len(q.native_tests()), 130)
         self.assertEqual(len(RECIPES), 43)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
@@ -894,6 +895,36 @@ class QualificationReportingTests(unittest.TestCase):
                             for row in migration["legacy_tool_handlers"]))
         for key in ("whole_runtime_replaced", "production_activated", "old_stack_removal_qualified"):
             self.assertIs(migration[key], False)
+
+    def test_public46_registration_retains_all_build_read_and_original_inputs(self):
+        import qualify_hia_runtime_native as q
+        from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS
+        item = next(row for row in q.MODULES if row["key"] == "runtime_mcp")
+        new_owners = {
+            "native/runtime_mcp_image_packer.hepta", "native/runtime_mcp_protocol.hepta",
+            "native/serde_json_span.hepta", "native/workdir_gateway.hepta",
+            "native/workdir_io.hepta", "native/workdir_params.hepta", "native/workdir_render.hepta",
+        }
+        self.assertLessEqual(new_owners, set(item["companion_sources"]))
+        sources = q.sources()
+        for name in (
+            "scripts/hia_native_runtime_mcp_pipeline.py", "scripts/hia_native_runtime_mcp_fixtures.py",
+            "scripts/hia_native_public_exchange_qualification.py", "scripts/hia_native_runtime_mcp_original.py",
+            "scripts/hia_native_runtime_mcp_adapter.py", "scripts/hia_native_runtime_mcp_pack.py",
+            "scripts/hia_native_workdir_reference.py", "scripts/runtime_mcp_execution_bridge.S",
+            "scripts/runtime_mcp_transport.S", "scripts/runtime_mcp_view_bridge.S",
+            "scripts/runtime_mcp_workdir_io_bridge.S", "tests/hia_native/workdir_oracle/run.py",
+            "tests/hia_native/runtime_mcp_oracle/run.py", "tests/hia_native/test_runtime_mcp_original_evidence.py",
+        ):
+            self.assertEqual(sources[name], q.sha(ROOT / name))
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        for name in ("src/mcp/fs/workdir.rs", "src/mcp/mod.rs"):
+            self.assertIn(name, ORIGINAL_RUNTIME_BLOBS)
+            self.assertEqual(workflow.count("      - '" + name + "'"), 2)
+        self.assertNotIn("test_runtime_mcp_original_evidence.py", q.native_tests())
+        self.assertEqual(item["additional_tests"], (
+            "test_runtime_mcp_evidence.py", "test_view_search_public.py",
+            "test_view_regex_search_public.py", "test_view_regex_search_public_evidence.py"))
 
     def test_filesystem_original_recipe_uses_the_selected_compiler_and_recording_callback(self):
         import compare_hia_runtime_rust as comparison

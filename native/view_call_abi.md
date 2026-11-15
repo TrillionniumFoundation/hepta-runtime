@@ -154,6 +154,17 @@ context qualification. The response is `HVCLINR1`, bound flag, cache epoch and
 session ticket, four u64 words. The table and ticket are never derived from a
 protocol request ID.
 
+`view_engine_create_wide` installs `HVCLI002` for the public wide gateway.
+The request shapes, scope/cache ownership, generation checks and result
+envelope remain the same. The private format word at workspace offset 680
+selects the retained or wide result convention and cannot be changed by
+ordinary requests. Reinstallation must agree with the installed format.
+Wide endpoint calls use `HIAEP002/HIAEPR02`; their complete u64 diagnostic
+extent is independent of the fixed 32-byte successful return. The engine
+retains the complete result buffer and transfers its admitted length to the
+gateway before any buffer is reused. `view_engine_create` and the standalone
+legacy qualification fixture retain `HVCLI001`.
+
 `view_engine_retire` requires a completed ready caller and releases the
 session ticket against the same cache instance, including after growth. It
 keeps result storage alive. `view_engine_destroy` requires successful retire

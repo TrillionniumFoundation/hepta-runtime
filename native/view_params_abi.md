@@ -68,9 +68,32 @@ classification and scalar-emission helpers from `execution_json.hepta`.
 Diagnostics preserve Rust string Debug escaping, including `\0`, `\u{8}` and
 `\u{c}`, and use the actual canonical floating-point spelling produced by
 `serde_json.hepta`. They do not substitute JSON string escaping for Debug.
-The complete result byte count must fit the borrowed ABI's u32 success return
-domain and the actual output allocation. A short output is unchanged; scratch
-is disposable and can be overwritten on either success or refusal.
+For `HVPRQ001`, the complete result byte count must fit the borrowed ABI's u32
+success return domain and the actual output allocation. A short output is
+unchanged; scratch is disposable and can be overwritten on either success
+or refusal.
+
+## Wide private projection
+
+`HVPRQ002` accepts the same canonical Value frame and produces `HVPRR002` with
+the same 96-byte header. Completion returns exactly 96. Status 0 keeps the
+complete five-span payload and status 1 keeps the complete typed diagnostic;
+their u64 header lengths determine the initialized extent. The wide caller
+checks the full extent against the actual allocation before reading it.
+
+The wide interface also returns a 96-byte header for a resource decision.
+Status 2 requests workspace capacity, status 3 requests output capacity, and
+status 4 reports an unrepresentable resource requirement. The required u64
+capacity is at offset 88; status 4 uses zero. Other payload-length fields are
+zero in these decisions. If fewer than 96 output bytes are available, the
+entry still returns `0xfffffffe` without writing output. Growth can repeat
+this pure projection; it does not repeat a filesystem or session effect.
+
+`view_params_composition.json` records the exact retained helpers and the
+adapted diagnostic emitter separately. That emitter now maintains a full u64
+cursor, while the Unicode classification and scalar formatting helpers remain
+bound to their original source ASTs. Both private interfaces preserve the
+same public typed diagnostics and parameter order.
 
 This projection does not independently claim the public router, capability
 resolver, session latch, filesystem policy, or the later `view` branch. Those
