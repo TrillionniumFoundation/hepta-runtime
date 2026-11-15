@@ -1,0 +1,72 @@
+{
+  "changed_runtime_sources": {
+    "cache_owner_binding.py": {
+      "bytes": 24060,
+      "git_blob": "eaebc2b6998b0a692299a3f1cc21d49434debd47",
+      "sha256": "6c168095e4b12d03f777ed36e32465ef634831ef932ce320933d15457552428e"
+    },
+    "generated/r36_campaign.py": {
+      "bytes": 89950,
+      "git_blob": "09953653fe27270c17f942be10f5d5a07634080a",
+      "sha256": "d53769b5f1a9ceb9b5c310b53894ede12b012f8c543e4a8e03a5adb655188417"
+    },
+    "mac-launchers-01/r36_campaign.py": {
+      "bytes": 89950,
+      "git_blob": "09953653fe27270c17f942be10f5d5a07634080a",
+      "sha256": "d53769b5f1a9ceb9b5c310b53894ede12b012f8c543e4a8e03a5adb655188417"
+    }
+  },
+  "exact_ci_result": null,
+  "finding": {
+    "cause": "Identifier namespace substitution also changed one quoted JSON field name. The original postflight schema uses native_terminal.",
+    "field_access_after": "post['native_terminal']",
+    "field_access_before": "post['r36_owner_native_terminal']",
+    "function_identifier_preserved": "r36_owner_native_terminal",
+    "phase": "independent static review before target execution",
+    "prior_package_executed": false
+  },
+  "git_tree_or_ref_changed": false,
+  "host_calls": 0,
+  "local_metadata_check_history": [
+    {
+      "attempt": 1,
+      "result": "KeyError: r36_owner_relative_identity",
+      "scope": "The reviewer initially assumed one namespace prefix for all six helper names. No target function was imported or called."
+    },
+    {
+      "attempt": 2,
+      "result": "passed",
+      "scope": "Used the six explicit actual function-name mappings; all AST Constant sequences exactly equal the original cold preparer."
+    }
+  ],
+  "performance_result": null,
+  "prior_owner": "530d943e94b93095759c6f4ac2239e959541dce7",
+  "prior_package_manifest": "8081ee9ef2aeca4efcf8d5d2054097237d8ad72a",
+  "prior_parent": "3dac13a69802c872721523838613a3a70b3510c9",
+  "prior_preparation_catalog": "d2a2927560e8d08acc545a65e36ebaccfafe21b0",
+  "qualification_result": null,
+  "related_metadata": {
+    "bundle_and_examples": "Regenerated source identities only; actual qualification, CI and measurement values remain unsealed.",
+    "readme": "Appended this preparation correction; prior complete package remains immutable in Git.",
+    "source_builder": "Updated to restore the literal field name after namespacing so this corrected source is reproducible."
+  },
+  "runtime_root": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+  "schema": "hepta-r36-cold-parent-json-key-amendment/v1",
+  "static_verification": {
+    "all_ast_constants_equal_to_original_cold_preparer_for": [
+      "closed_stages",
+      "native_streams",
+      "native_terminal",
+      "relative_identity",
+      "validate_c1_owner",
+      "validate_owner_documents"
+    ],
+    "ast_parse": true,
+    "embedded_owner_and_linux_mac_parent_copies_identical": true,
+    "inverse_replacement_recovers_entire_prior_source_bytes": true,
+    "one_literal_replacement_per_runtime_source": true,
+    "other_runtime_tools_and_sealer_bytes_unchanged": true
+  },
+  "status": "UNSEALED_SOURCE_PREPARATION",
+  "target_functions_executed": 0
+}

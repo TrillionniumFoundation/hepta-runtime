@@ -1,0 +1,170 @@
+{
+  "schema": "hepta-r36-cold-qualification-archive-independent-review/v1",
+  "reviewer": "/root/audit_acceptance",
+  "verdict": "no_blocking_static_findings",
+  "scope": "Narrow static adaptation review of the unsealed cold-only R36 qualification collector and pure local ACTUAL sealer. This is not a qualification, archive execution, or performance result.",
+  "runtime_root": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+  "sources": {
+    "collector": {
+      "git_blob": "c9f77f78859a35a9b88efb57994f3703e76cca72",
+      "bytes": 48044,
+      "sha256": "9e0f610ed2d056609cb03e421a4f861186f7a0950da56c1e83f643aa089b7ee9"
+    },
+    "sealer": {
+      "git_blob": "34fc89ec14cbc019dd25c7867f59ad9ca9a7df95",
+      "bytes": 11218,
+      "sha256": "1774b85856dd61ffa0ab1aaa5e97ee56a0f94ffb8da34b945c9a628b732d0eb6"
+    }
+  },
+  "references": {
+    "collector": {
+      "git_blob": "983ef6005208c690ac61e49ca03c2091b9017be1",
+      "bytes": 45144,
+      "sha256": "3e150f1a3d9c1640a1c89932d2c9fc994e8b149113b524bbc8c86a3a52fd2ce4"
+    },
+    "sealer": {
+      "git_blob": "771457505534298e87a4cb3e7efd14b5ce11dadc",
+      "bytes": 11760,
+      "sha256": "c3d78b8c153ce3b1c1e8d74e442455b84998606eb2cbd24c02bb5d02dca61f9a"
+    }
+  },
+  "actual_installation": {
+    "receipt": {
+      "git_blob": "396ddf2cc70f15fa8d36bb413a2dea9939107390",
+      "bytes": 4357,
+      "sha256": "f4398b24ee9c3a3fa2de926f5cc4b8d3c4fe8532520019caa4719d12f7d139a2"
+    },
+    "native": {
+      "git_blob": "10a2e7ba13545158ea2cc2fa3fd9d8ef1a8676bd",
+      "bytes": 729,
+      "sha256": "2057c82f066c6fb70e1cf7e8aebdd2fe7da74f6b2f0721b1c1dcd42fea7ffaf8"
+    },
+    "read": {
+      "git_blob": "fad4c396d4f71de4dcb72374c0b95c2554b153df",
+      "bytes": 1097,
+      "sha256": "5f9444aa8013268cb395a2a45a1da65c8b694bb38b245342d2dbc6a8a68c9c46"
+    },
+    "start": {
+      "git_blob": "2a6ad14f050e18a8363322ed986f23917be4b47a",
+      "bytes": 1171,
+      "sha256": "932ca3d75fc4f4d538aa26abca38ce856344ad9cef41d93025050d1ee83d2849"
+    },
+    "qualification_start": {
+      "git_blob": "e2bd7af3df7ee79f6ce6d9d152cf2bf5ee177dc6",
+      "bytes": 1344,
+      "sha256": "cfb4565d0cbecbb0a3bbf9ae3e0c7a63df52c6b0248a61b1234c4e3a1b87780c"
+    },
+    "proof": {
+      "job_id": "1a1b1caaabc-fc05-7ad2",
+      "streams": {
+        "stdout": {
+          "bytes": 253,
+          "sha256": "06718af0d7b5dcb235722411eaa2e9b40e509898dbcb5e88db0a29acf081c697"
+        },
+        "stderr": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "members": 22,
+      "qualification_started_job": "1a1b1cb4862-fc05-7ad9"
+    },
+    "original_text_reencoded": false,
+    "large_request_fingerprint_values": "Not used, copied, or reserialized by this review; whole raw original text hashes were checked."
+  },
+  "selection": {
+    "fixed_original_count": 30,
+    "installed_member_count": 22,
+    "other_fixed_count": 8,
+    "future_actual_paths": 7,
+    "installed_member_identity_comparison": "Every original installation receipt member equals the corresponding collector PINNED bytes/SHA256.",
+    "candidate": "Twelve frozen candidate members including the package manifest, the accepted R24 baseline, exactly two production/test source paths, and the two actual new test names; no D2 diagnostic source or old R36 audit-cache source is substituted.",
+    "source_and_harness": "Successful collection requires all 220 final compile-input paths, including original Python inputs, plus all 19 original qualification harness files. Source input/tested/after, final map and accepted R24-plus-two-path construction are bound.",
+    "logs": "All eight qualification-stage original stdout/stderr logs remain hashed against the original report. Full isolated-test input inventory and every compressed original stdout/stderr case log remain checked against the already-run original audit, without decompressing cases or executing that auditor.",
+    "elf_scope": "The three retained runtime digests are taken from and checked against actual original qualification receipts. No large test ELF or runtime ELF body is reread by this collector.",
+    "archive_sources": "The collector itself is not selected into its own archive; the existing private-key scanner remains unchanged."
+  },
+  "cold_only_adaptation": {
+    "preparer": "eb92d39c54380c2c3bf67a8e4f3fa11a3e3769c5",
+    "input": "163b5e8e09618755198832db5551f781d3a6a4c7",
+    "closure": "a82d5a3b5566a76437ee40733c0428c2ab3f7b89",
+    "verified_fields": [
+      "build_mode=cold-only",
+      "preparation_attempt=cold-02",
+      "new_empty_target_created=true on success",
+      "cache_reused=false",
+      "cache_transferred_by_rename=false",
+      "ownership_transfer_applicable=false",
+      "cache_to_transfer=null",
+      "cache_deletions=0",
+      "new_full_cache_copy_bytes=0"
+    ],
+    "historical_owner_evidence": "The 28 D2 owner references remain historical document provenance. No absent D2 target or cache transfer is asserted.",
+    "prior_failure": "The original distinct pre-qualifier wrapper failure 1a1b1bedd38-fc05-7a99 is named in the successful cold preparation history; this first cold qualification is not mislabeled as a benchmark rerun. Its former ROOT and evidence are not altered.",
+    "candidate_schema": "hepta-x230-r36-candidate-draft/v1 / lazy-scratch-draft-03",
+    "future_fields": "The four pre-execution actual_r36_* input fields remain null. Qualification counts, native outcome and three ELF digests are populated only from later original receipts."
+  },
+  "static_checks": {
+    "local_ast_parse_only": [
+      "archive_r36_qualification.py",
+      "seal_collector.py"
+    ],
+    "collector_exact_top_level_functions": [
+      "need",
+      "sha",
+      "encoded",
+      "stamp",
+      "tool_sha256",
+      "native_terminal",
+      "original_streams",
+      "main"
+    ],
+    "collector_namespace_only_functions": [
+      "require_sealed",
+      "summary",
+      "collect",
+      "create_archive",
+      "verify_archive"
+    ],
+    "collector_adapted_functions": [
+      "installation_summary",
+      "qualified_summary"
+    ],
+    "sealer_exact_helpers": [
+      "need",
+      "identity",
+      "encode",
+      "read"
+    ],
+    "collection_nested_reader_and_directory": "Preserved by the whole collect() namespace-only comparison.",
+    "isolated_audit_tail": "Read and compared to the D2 reference; the original test inventory/gzip-log and runtime-digest checks are retained.",
+    "limits": {
+      "selected_total_bytes": 33554432,
+      "file_bytes": 8388608,
+      "manifest_bytes": 2097152,
+      "file_count": 8192
+    },
+    "security_io": "Original stable descriptor/path stamps, regular/nlink checks, no-follow reader, credential-name and private-key scanning, create-only archive outputs, bounded gzip/tar validation and zero-extraction verification remain in the inherited functions.",
+    "future_guard": "ACTUAL is None in the source. Public summary/collection/create/verify paths retain the unsealed guard before collection/output."
+  },
+  "sealer_review": {
+    "input": "Exact seven future paths; original preparation/native-terminal/full native-read mandatory. A success requires all seven actual receipts.",
+    "outcome": "Taken from the original complete, durable, nontruncated native terminal and original full stream. No qualification success or count is supplied by the template.",
+    "successful_bindings": "Eight actual zero stage return codes, real source map, real isolated summary/audit, actual three-runtime inventory; no preselected numeric test count.",
+    "failure_behavior": "A failed original terminal remains failed. Later receipts may be absent; available failed-stage fields and raw evidence are retained without upgrading failure to success.",
+    "source_injection": "One AST assignment named ACTUAL, required to be the original None; the sealer parses resulting source but does not import or execute it.",
+    "output": "Fresh absolute create-only directory with collector, actual-pins.json and seal-manifest.json; originals and template are reread before writing.",
+    "boundaries": "The sealer does not claim that the target archive or future qualification has already run. Installation evidence is rehashed by collection."
+  },
+  "review_limits": [
+    "All four source bodies and the original 4357-byte installation receipt plus four installation/launch raw documents were independently fetched and Git/SHA256/length checked.",
+    "The 22 installed-member identities were independently compared to PINNED and the frozen candidate/input interfaces were read; this review does not claim a new full reread of every selected future file or every one of the 30 static bodies.",
+    "Only local AST/text/JSON/hash operations were performed. No target module was imported, no collector/sealer/auditor/qualifier was run, and no host call, compiler, test, benchmark, Git tree or ref mutation occurred."
+  ],
+  "actual_qualification_result": null,
+  "actual_archive_result": null,
+  "performance_result": null,
+  "host_calls": 0,
+  "target_functions_executed": 0,
+  "git_tree_or_ref_mutations": 0
+}

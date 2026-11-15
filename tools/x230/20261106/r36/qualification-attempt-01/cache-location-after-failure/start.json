@@ -1,0 +1,34 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-B",
+      "-c",
+      "import os,json,stat,shutil\nfrom pathlib import Path\nroots=[Path('/home/qian/hepta-runtime-validation-cost-20261106-d2'),Path('/home/qian/hepta-runtime-validation-scratch-20261106-r36')]\nrows=[]\nfor root in roots:\n row={'root':str(root),'exists':os.path.lexists(root)}\n if root.is_dir() and not root.is_symlink():\n  row['children']=[]\n  for p in sorted(root.iterdir()):\n   s=p.lstat();v={'name':p.name,'mode':stat.S_IMODE(s.st_mode),'directory':stat.S_ISDIR(s.st_mode),'regular':stat.S_ISREG(s.st_mode),'bytes':s.st_size}\n   if v['directory'] and ('target' in p.name or 'cache' in p.name or p.name=='source'):\n    v['children']=[q.name for q in p.iterdir()][:100]\n    if p.name=='source':\n     v['target_children']={q.name:[x.name for x in q.iterdir()][:40] for q in p.iterdir() if q.is_dir() and not q.is_symlink() and ('target' in q.name or 'cache' in q.name)}\n   row['children'].append(v)\n rows.append(row)\ndisk=shutil.disk_usage('/home/qian')\nprint(json.dumps({'schema':'hepta-r36-cache-location-read-only/v1','roots':rows,'disk':{'total':disk.total,'used':disk.used,'free':disk.free},'cache_modified':False},sort_keys=True))\n"
+    ],
+    "created_unix_ms": 1793983595047,
+    "cwd": "/home/qian",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "x230",
+    "id": "1a1b1c14227-fc05-7aa7",
+    "idempotency_key": "x230-r36-scratch-d2-cache-location-after-preparation-failure-20261106-01",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian/.local/state/hepta-runtime-mac-worker/jobs/1a1b1c14227-fc05-7aa7",
+    "request_digest": "d9fb07515b52884e5c87f008791da7a741dd81e8e593689d94affb41c52ec183",
+    "request_fingerprint": 15707156171390617678,
+    "ssh_target": "x230-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1b1c14227-fc05-7aa7"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1b1c14227-fc05-7aa7"
+  },
+  "local_record_pending": false,
+  "reused": false
+}

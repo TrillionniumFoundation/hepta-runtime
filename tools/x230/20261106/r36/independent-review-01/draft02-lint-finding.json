@@ -1,0 +1,56 @@
+{
+  "schema": "hepta-r36-lazy-static-clippy-finding/v1",
+  "finding_state": "static_source_diagnosis_not_an_executed_qualification_failure",
+  "draft_profile": "a9cf676711b1ebb90af899def4620007968f1ad2",
+  "line": 305,
+  "expression": "buffer.get_or_insert_with(|| [0; VERIFY_BUFFER_BYTES])",
+  "lint": "clippy::unnecessary_lazy_evaluations",
+  "default_category": "style",
+  "qualification_effect": "Original cargo clippy -- -D warnings would reject this lint unless explicitly suppressed; no suppression was found in the R24 ancestor modules or Cargo.toml.",
+  "official_sources": [
+    {
+      "repository": "rust-lang/rust-clippy",
+      "ref": "rust-1.95.0",
+      "path": "unnecessary_lazy_eval.rs",
+      "url": "https://github.com/rust-lang/rust-clippy/blob/rust-1.95.0/clippy_lints/src/methods/unnecessary_lazy_eval.rs",
+      "git_blob": "2869547650f31a918dbb7a3badb190fd211bd507",
+      "bytes": 3289,
+      "sha256": "bcea3f307ecc4fb29c2a30bc604f7c146c9750fd720cebc4c521ba5fdf3bf3cf"
+    },
+    {
+      "repository": "rust-lang/rust-clippy",
+      "ref": "rust-1.95.0",
+      "path": "eager_or_lazy.rs",
+      "url": "https://github.com/rust-lang/rust-clippy/blob/rust-1.95.0/clippy_utils/src/eager_or_lazy.rs",
+      "git_blob": "d184744162e4e9b1343bb99d44f482bb68c90dc2",
+      "bytes": 14241,
+      "sha256": "264c95a57f04699db95c4e4ce2388a5f39009b16e357b344c32b31fd8338fb36"
+    },
+    {
+      "repository": "rust-lang/rust-clippy",
+      "ref": "rust-1.95.0",
+      "path": "mod.rs",
+      "url": "https://github.com/rust-lang/rust-clippy/blob/rust-1.95.0/clippy_lints/src/methods/mod.rs",
+      "git_blob": "74db7ae03ba0b30c89235c6a96dd6e15fd8ff020",
+      "bytes": 197203,
+      "sha256": "7524d3836843e4daca16d9e6a57c0c4957e37e10654e595a5cbaf09ae8c0b706"
+    }
+  ],
+  "evidence": [
+    "methods/mod.rs routes get_or_insert_with to unnecessary_lazy_eval::check.",
+    "The checker recognizes an Option receiver and a zero-argument closure, then calls switch_to_eager_eval on the closure body.",
+    "The eagerness visitor keeps array Repeat, constant paths and literals Eager and does not test the array size.",
+    "The proposed named function item is not an ExprKind::Closure argument, so this checker does not apply to it; Option::get_or_insert_with retains lazy function invocation."
+  ],
+  "ancestors_checked": [
+    "Cargo.toml",
+    "src/lib.rs",
+    "src/mcp/mod.rs",
+    "src/mcp/runtime/mod.rs",
+    "src/mcp/runtime/ssh.rs",
+    "src/mcp/runtime/ssh_observation_pool.rs"
+  ],
+  "no_target_execution": true,
+  "no_host_calls": true,
+  "candidate_production_semantics_otherwise": "No blocking change identified in the complete read, nine check_current statements, descriptor/path stamps, error priority, or scratch ownership."
+}

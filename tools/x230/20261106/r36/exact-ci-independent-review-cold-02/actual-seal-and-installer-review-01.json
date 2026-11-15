@@ -1,0 +1,171 @@
+{
+  "schema": "hepta-r36-cold-exact-ci-actual-seal-install-independent-review/v1",
+  "reviewer": "/root/audit_acceptance",
+  "verdict": "no_blocking_static_findings",
+  "scope": "Only actual constant injection, actual qualification/parent identities, and minimal create-only transport adaptation. The original exact-CI protocol was previously reviewed and is not re-executed here.",
+  "prior_template_review": "e7c21342c3a9f75171b14be858a925d7876745d6",
+  "sources": {
+    "materializer": {
+      "git_blob": "731af87cd3ea5324c3761e7a73d30882b3bd4e8d",
+      "bytes": 25717,
+      "sha256": "9011fc8425a334157f7e18e3f307e92dffc245a91380135318a0d7ebe1dc9b1a"
+    },
+    "launcher": {
+      "git_blob": "548ef8fede42dd124c89b197f50bd966cb94b690",
+      "bytes": 6887,
+      "sha256": "1ee3a1f1b8595dd58191c4424ac2bbab718eea03448d3decfc25544b2e120428"
+    },
+    "runner": {
+      "git_blob": "b957608721f8848b662105d1c714c3c59cb40fde",
+      "bytes": 15196,
+      "sha256": "f0a89af2ea85bda7007cc74b62a97e578231549ac9f0171e41c84a69510fa4b0"
+    },
+    "installer": {
+      "git_blob": "1bac1048be1e209fbf7081cafca3ca2b7cb76da4",
+      "bytes": 6990,
+      "sha256": "ec685d8fbc169893c491c70bfef2863c7568e699df10efa75ab3268c7c1e7897"
+    }
+  },
+  "references": {
+    "materializer": {
+      "git_blob": "43a85f5b61e0fce956617ff9b84f296079381fdb",
+      "bytes": 25130,
+      "sha256": "35ef70e5661c6e40f30a250b5f5d5e489c2e35711e5e50c69a921580e1b3ddea"
+    },
+    "launcher": {
+      "git_blob": "01de6e3566fbf9656a89611f7e861b053a9c5a41",
+      "bytes": 4642,
+      "sha256": "7dd64082abbbfb21000efdc8222dfa1bd118be5bfce33d4c391550e59b8bfc0b"
+    },
+    "runner": {
+      "git_blob": "b957608721f8848b662105d1c714c3c59cb40fde",
+      "bytes": 15196,
+      "sha256": "f0a89af2ea85bda7007cc74b62a97e578231549ac9f0171e41c84a69510fa4b0"
+    },
+    "installer": {
+      "git_blob": "3ea933b05e83d2330fbf27a723b42fe32be6ba12",
+      "bytes": 7110,
+      "sha256": "aac71a770ddf62052dbc42f2384dcb4ea43575d123ec5300f161f6a685fa80f0"
+    }
+  },
+  "sealed_metadata": {
+    "bindings": {
+      "git_blob": "af83a2312c81c3a847054c0bcd7f4e85f1a3ce4e",
+      "bytes": 1541,
+      "sha256": "4e1810535fa9a7e4a2945f962fcbc3b3a1918e88f7e670d44ce2e815a3ba2890"
+    },
+    "pins": {
+      "git_blob": "fa41093b52c239989c09abc3c7f2a579e3555e07",
+      "bytes": 3752,
+      "sha256": "1da1fa2e5cc6182ded90a23042e7beb019f7729670a2d3085e0e8f6eccb772cc"
+    },
+    "package_manifest": {
+      "git_blob": "d1bd1e5c68adfd4adc906e4cb46a934e203caf51",
+      "bytes": 2192,
+      "sha256": "8bc77a3a37a3a1b4fa2c2af3b0b24be384e05907a6f959855b5974732b74a7b9"
+    },
+    "seal_manifest": {
+      "git_blob": "0729b649934f84ee9cae183e694da6dddc6add2b",
+      "bytes": 4614,
+      "sha256": "27ce171a582e3dcb90f671ac589f008ad1f3eb5cb590870f3f9f15ffbd66d5f7"
+    },
+    "deployment_manifest": {
+      "git_blob": "458e0dd2742b874ad46263928fc5306ed8a55e9c",
+      "bytes": 2332,
+      "sha256": "f488437914a1a715eeb55347995f723087a76e8669f6cf4fe9669c5e3678e77a"
+    },
+    "launch_command": {
+      "git_blob": "1bc15c6df7712a63034983c84d0c1571c864fc76",
+      "bytes": 562,
+      "sha256": "7fa9b035b5a556a0a93f973f94076baf79122f1b6f291348686a244e1069d6dd"
+    }
+  },
+  "actual_qualification": {
+    "job_id": "1a1b1cb4862-fc05-7ad9",
+    "counts": {
+      "passed": 1647,
+      "failed": 0,
+      "ignored": 34,
+      "selected": 1681,
+      "retries": 0
+    },
+    "source_map_sha256": "b9eff66ea8b14eca80d16069a59588a551fcf6feff0ac4c991690425df65462a",
+    "parent": {
+      "git_blob": "56f4a6e90dcd92d269c8b480c3e4ddcd9406d5a6",
+      "bytes": 90946,
+      "sha256": "070f53cec7359bfa3f390f45edd135f417d0013dbf091e35dd7334e0cefc0045"
+    },
+    "comparison": "The eight qualification-related CI pins match the actual parent sealer receipt; the patch matches the frozen R36 candidate and the parent matches the exact newly sealed source. These are qualification facts, not a future CI result."
+  },
+  "constant_injection": {
+    "materializer_changed_names": [
+      "JOB_ID",
+      "SOURCE_MAP_SHA",
+      "ISOLATED_SUMMARY_SHA",
+      "ISOLATED_AUDIT_SHA",
+      "QUALIFICATION_REPORT_SHA",
+      "PREPARATION_SHA",
+      "NATIVE_TERMINAL_SHA",
+      "PARENT_SHA",
+      "QUALIFICATION_BINDINGS_SHA",
+      "FROZEN_COUNTS"
+    ],
+    "launcher_changed_names": [
+      "SPEC"
+    ],
+    "every_original_value_None": true,
+    "restore_original_assignment_source_spans_recovers_complete_templates": true,
+    "runner_bytes_identical": true,
+    "fixed_auditor_and_workflow": "Exact actual bytes/SHA256 match the reviewed sealer FIXED_FILES constants; no source or audit behavior changes.",
+    "binding_interface": "The original six-key qualification interface remains intact, with the newly sealed parent independently installed at ROOT/tools-01/r36_campaign.py."
+  },
+  "formatted_source_custody": {
+    "before": "preparation.source_before_qualification == candidate.candidate_compile_inputs == qualification.source_input",
+    "after": "preparation.source_after_qualification == qualification.source_tested == qualification.source_after == actual source-map",
+    "current": "The parent separately requires the current source projection equal the actual source-map and exactly the original two changed paths against accepted R24.",
+    "preformat_map_is_not_assumed_equal_to_formatted_map": true
+  },
+  "transport": {
+    "reference_installer": "3ea933b05e83d2330fbf27a723b42fe32be6ba12",
+    "identical_helper_bytes": [
+      "identity",
+      "pinned_archive",
+      "create"
+    ],
+    "fixed_destinations": 11,
+    "manifest_rows": 10,
+    "member_payload_bytes": 78987,
+    "target_set": "Six CI tool files, qualification bindings, actual pins, seal manifest, launch command, and deployment manifest. No tools-01 or parent destination.",
+    "changes": "R36 cold ROOT/schema and actual archive/manifest/size constants; replace two D2 foundation payloads with one qualification-bindings file, remove the unused foundation directory mkdir/fsync, adjust exact counts and the corresponding receipt label.",
+    "max_expanded_expression": "1024 * 1024",
+    "preserved": "Original stable pinned-archive read, bounded gzip, regular/nonlink canonical tar-member allowlist, full manifest/hash checks before output, create-only claim, O_EXCL/NOFOLLOW files, readback/fsync, retained interrupted partial output, and no CI/compile invocation.",
+    "archive": {
+      "bytes": 20506,
+      "sha256": "1e7ee183d9e3b67c2cc6b59a4fff5cbc3182c786c5b7b70207cf51136ed72c7f"
+    },
+    "deployment_manifest_checks": "All ten listed identities were independently compared with the actual local/Git source and metadata bodies; total plus manifest is 78,987 bytes."
+  },
+  "local_checks": {
+    "source_AST_parse": true,
+    "materializer_launcher_reverse_whole_text": true,
+    "installer_AST_parse": true,
+    "metadata_history": [
+      {
+        "attempt": 1,
+        "result": "reviewer metadata extraction ValueError from ast.literal_eval on MAX_EXPANDED=1024*1024; ast.parse itself succeeded; no target code ran"
+      },
+      {
+        "attempt": 2,
+        "result": "Passed after comparing the unchanged MAX_EXPANDED expression structurally and literal-reading only literal fields. No source change."
+      }
+    ]
+  },
+  "limits": [
+    "This review did not independently decompress or extract the binary deployment tar. The author's local zero-extraction artifact check remains separately available for root's transport verification.",
+    "No CI tool, parent binder, installer, auditor, compiler, benchmark, or host API was executed during this review."
+  ],
+  "actual_ci_result": null,
+  "host_calls": 0,
+  "target_functions_executed": 0,
+  "git_tree_or_ref_mutations": 0
+}

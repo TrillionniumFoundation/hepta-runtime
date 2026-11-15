@@ -1,0 +1,105 @@
+{
+  "schema": "hepta-r36-cold02-ci-archive-staging-plan/v1",
+  "root": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+  "execute_only_after_original_measurement_window_closed": true,
+  "new_files": [
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-ci-tools-01/archive_r36_ci.py",
+      "git_blob": "cae71930227ff950e6462ab9683223e6c19e146d",
+      "bytes": 37201,
+      "sha256": "f084dc3d49df223ff71bea7c1a48d3aa56554b9c2eed93f2ae8bc4a77d4275a7",
+      "write_policy": "Exact original bytes; create-only. No source transformation."
+    }
+  ],
+  "provenance_kept_separately_in_git": {
+    "actual_pins": "c5798cba96ca02a4c6679dfe4968423b342590d9",
+    "seal_receipt": "50e7b1fc6bab5aa8c273ce1048c1227d4485d4b4",
+    "unsealed_source_peer_review": "fdce4e7df14a84e3ad6a4f4d278bd050358e776d"
+  },
+  "required_existing_originals": [
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-01/nextest-output-audit.json",
+      "bytes": 719,
+      "sha256": "703bf8b18b5fe2a4fae9a11a8ff08a20cd896d871e0d4896fb67622477cf340a",
+      "git_blob": "f0ba1a619e5f3cb23e08ccfa17ed8bbd3b7852df"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-01/report.json",
+      "bytes": 14538,
+      "sha256": "6c999d14b5807ac142f28d4bbbe7cdd0d34916174c31576fafef9a3defc64a8c",
+      "git_blob": "e374248ad0bf5dabf1796385d527ed4297bb6088"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-installation-01.json",
+      "bytes": 2425,
+      "sha256": "8e09ec14bcdf976c70727f92582b41076ad7b0fc86573eca1b646a96975844d2",
+      "git_blob": "54350d6b59470c653a1be06178536cfc69bd36cb"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-installation-started-01.json",
+      "bytes": 395,
+      "sha256": "eec3a8cfe629414d478a10595d12182335c40156dfbf4ed948d1991b90a40050",
+      "git_blob": "62574cac7b7c70d933a3e2ee0bfddf48bb0f4216"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-native-01.json",
+      "bytes": 731,
+      "sha256": "50144ff14a925ec804691ccc4f52911962fec614d72f1760b604a16ba87b253d",
+      "git_blob": "535c3c6a87bae2bc4898bbbde64c5476a59c79be"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-native-read-01.json",
+      "bytes": 5210,
+      "sha256": "ed9041dc509e6209d483b1aa8d22a718203b3e508e35349354887bfe9360e2c2",
+      "git_blob": "fc24271bf7a1bcac0dcc1781aaf510a0357b264c"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-plan-01.json",
+      "bytes": 553513,
+      "sha256": "6420870f52beb75b0158acb695a6a092d29d3ad366f27452d629d630cd698773",
+      "git_blob": "2e3139bfa157fe7e3f4d70bbfd316ce01f308240"
+    }
+  ],
+  "other_fixed_inputs": {
+    "count": 19,
+    "description": "The eleven existing actual CI deployment payloads, separately installed original parent, and seven original Q records are already pinned by the collector; no recursive owner archive or new compiler inputs."
+  },
+  "native_create": {
+    "executable": "/usr/bin/python3",
+    "args": [
+      "-B",
+      "-u",
+      "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-ci-tools-01/archive_r36_ci.py",
+      "--kind",
+      "ci"
+    ],
+    "cwd": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+    "env": {},
+    "timeout_seconds": 300,
+    "idempotency_key": "x230-r36-validation-scratch-cold02-ci-evidence-first-20261106-01",
+    "execution_owner": "root",
+    "submitted_by_this_agent": false
+  },
+  "outputs": [
+    "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-evidence-01.tar.gz",
+    "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-evidence-01.manifest.json",
+    "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/rust-ci-evidence-01.compact.json"
+  ],
+  "subsequent_same_source_verify": {
+    "executable": "python3",
+    "args": [
+      "-B",
+      "EXACT_SEALED_COLLECTOR",
+      "--verify",
+      "EXACT_COMPLETE_ARCHIVE",
+      "--expected-sha256",
+      "ACTUAL_WHOLE_ARCHIVE_SHA256"
+    ],
+    "extract_files": false,
+    "execute_archived_code": false
+  },
+  "native_evidence_policy": "Preserve the original metadata job terminal and all original read pages separately. Keep partial output and reconcile the original job on any failure; no overwrite or automatic retry.",
+  "archive_executed_by_this_agent": false,
+  "archive_verified_by_this_agent": false,
+  "performance_acceptance_claim": false
+}
