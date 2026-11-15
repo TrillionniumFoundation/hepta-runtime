@@ -9,6 +9,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -29,6 +30,49 @@ class NativePipelineTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix="hia-pipeline-reporting-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+
+    def test_runtime_sparse_checkouts_include_declared_source_closure(self):
+        import hia_native_text_publication_pipeline as text_publication
+        required = set(q.sources()) | set(q.PACKERS) | set(text_publication.source_names(ROOT))
+        for item in q.MODULES:
+            required.add(item['source'])
+            required.update(item.get('companion_sources', ()))
+        self.assertIn('authoring/diagnostics.json', required)
+        expression = r'(?ms)^      - name: Checkout exact runtime source\n(.*?)(?=^      - |\Z)'
+
+        def check(workflow):
+            checkouts = list(re.finditer(expression, workflow))
+            self.assertEqual(len(checkouts), 3)
+            for checkout in checkouts:
+                body = checkout.group(1)
+                self.assertIn('          path: runtime\n', body)
+                self.assertNotIn('sparse-checkout-cone-mode: false', body)
+                selection = re.search(r'(?m)^          sparse-checkout: \|\n((?:            [^\n]+\n)+)', body)
+                self.assertIsNotNone(selection)
+                roots = [Path(line.strip()) for line in selection.group(1).splitlines()]
+                self.assertEqual(len(roots), len(set(roots)))
+                self.assertTrue(all(not path.is_absolute() and '..' not in path.parts for path in roots))
+                # Cone mode keeps root files, files in selected ancestors,
+                # and the complete subtree of each selected directory.
+                for name in sorted(required):
+                    parent = Path(name).parent
+                    included = parent == Path('.') or any(
+                        parent == root or root in parent.parents or parent in root.parents
+                        for root in roots)
+                    self.assertTrue(included, 'sparse checkout excludes declared source: ' + name)
+            push, pull = workflow.split('  pull_request:', 1)
+            for trigger in (push, pull.split('\nconcurrency:', 1)[0]):
+                self.assertIn("      - 'authoring/diagnostics.json'", trigger)
+            return checkouts
+
+        workflow = (ROOT / '.github/workflows/hia-runtime-native.yml').read_text()
+        checkouts = check(workflow)
+        for index, checkout in enumerate(checkouts):
+            changed = checkout.group(0).replace('\n            authoring\n', '\n', 1)
+            self.assertNotEqual(changed, checkout.group(0))
+            candidate = workflow[:checkout.start()] + changed + workflow[checkout.end():]
+            with self.subTest(checkout=index), self.assertRaisesRegex(AssertionError, 'authoring/diagnostics.json'):
+                check(candidate)
 
     def public_fixture(self, name="public-owned"):
         output = self.root / name
