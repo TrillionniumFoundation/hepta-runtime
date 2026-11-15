@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -25,6 +26,8 @@ import hia_native_artifact_bundle as bundle_transport
 import hia_native_pipeline as native
 import qualify_hia_runtime_native as q
 import compare_hia_runtime_rust as r
+
+REAL_GIT_HEAD = q.git_head
 
 
 class OriginalPipelineTests(unittest.TestCase):
@@ -55,7 +58,7 @@ class OriginalPipelineTests(unittest.TestCase):
             if "original_qualification_pipeline" in report:
                 p.verify_collected_receipts(output, report)
         cls.patches = [patch.object(q, "ROOT", cls.source), patch.object(q, "sources", return_value=cls.source_map),
-                      patch.object(q, "git_head", return_value="a" * 40),
+                      patch.object(q, "git_head", autospec=True, return_value="a" * 40),
                       patch.object(r, "check_input_pins", side_effect=fixture_admission),
                       patch.object(r.service_pipeline, "original_fixture_transport", return_value={"fixture_only": True})]
         for item in cls.patches:
@@ -130,7 +133,8 @@ class OriginalPipelineTests(unittest.TestCase):
              patch.object(r, "run_public_registry_controls", self.control(p.CONTROLS[1])), \
              patch.object(r, "run_result_storage_controls", self.control(p.CONTROLS[2])), \
              patch.object(r, "run_audit_readiness_controls", self.control(p.CONTROLS[3])), \
-             patch.object(r, "run_audit_activity_controls", self.control(p.CONTROLS[4])):
+             patch.object(r, "run_audit_activity_controls", self.control(p.CONTROLS[4])), \
+             patch.object(r, "run_audit_stamp_controls", self.control(p.CONTROLS[5])):
             return p.collect(self.output, self.compiler, self.native_sha, self.invocation,
                              self.shards, self.expected, **kwargs)
 
@@ -159,7 +163,8 @@ class OriginalPipelineTests(unittest.TestCase):
              patch.object(r, "run_public_registry_controls", self.control(p.CONTROLS[1])), \
              patch.object(r, "run_result_storage_controls", self.control(p.CONTROLS[2])), \
              patch.object(r, "run_audit_readiness_controls", self.control(p.CONTROLS[3])), \
-             patch.object(r, "run_audit_activity_controls", self.control(p.CONTROLS[4])):
+             patch.object(r, "run_audit_activity_controls", self.control(p.CONTROLS[4])), \
+             patch.object(r, "run_audit_stamp_controls", self.control(p.CONTROLS[5])):
             return p.complete_collection(self.output, self.compiler, self.native_sha,
                 kwargs.get("invocation", self.invocation), kwargs.get("expected", self.expected), *args)
 
@@ -176,7 +181,7 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_registry_covers_every_recipe_once_and_keeps_shared_builds_together(self):
         flat = [key for keys in p.groups().values() for key in keys]
-        self.assertEqual(len(flat), 62)
+        self.assertEqual(len(flat), 64)
         self.assertEqual(set(flat), set(r.RECIPES))
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(p.GROUPS["config"], ("runtime_config",))
@@ -186,7 +191,7 @@ class OriginalPipelineTests(unittest.TestCase):
                                                    "request_archive_metadata", "request_archive_publish",
                                                    "request_archive_store"))
         self.assertEqual(p.GROUPS["storage_types"] + p.GROUPS["storage_files"], tuple(r.storage_pipeline.KEYS))
-        self.assertEqual(p.GROUPS["audit"], tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS))
+        self.assertEqual(p.GROUPS["audit"], tuple(r.stamp_pipeline.KEYS) + tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS))
         self.assertTrue(set(r.result_qualification.KEYS) <= set(p.GROUPS["json"]))
         self.assertTrue(set(r.PARALLEL_RUST_RECIPES) <= set(p.GROUPS["system"]))
         self.assertTrue({"write_chain", "workdir_service"} <= set(p.GROUPS["services"]))
@@ -242,13 +247,28 @@ class OriginalPipelineTests(unittest.TestCase):
         self.assertGreater(report["original_collection_elapsed_seconds"],
                            report["original_collection_completion_elapsed_seconds"])
 
+    def test_staged_completion_uses_real_zero_argument_checkout_head_api(self):
+        args = self.prepare_collection()
+        git_directory = self.source / ".git"
+        self.assertFalse(git_directory.exists())
+        # This is only Git metadata for the explicit process-reporting fixture.
+        # No source is staged and no local commit is created.
+        subprocess.run(["git", "init", "--quiet", str(self.source)], check=True)
+        try:
+            (git_directory / "HEAD").write_text("a" * 40 + "\n")
+            with patch.object(q, "git_head", REAL_GIT_HEAD):
+                self.assertEqual(q.git_head(), "a" * 40)
+                self.assertEqual(self.complete(args)["status"], "PASS")
+        finally:
+            shutil.rmtree(git_directory)
+
     def test_staged_completion_requires_workflow_digest_and_same_head_invocation_and_sources(self):
         bundle, digest, artifacts = self.prepare_collection()
         with self.assertRaisesRegex(ValueError, "successful workflow job SHA256"):
             self.complete((bundle, "f" * 64, artifacts))
         with self.assertRaisesRegex(ValueError, "another head, invocation or source seal"):
             self.complete((bundle, digest, artifacts), invocation="12345-2")
-        with patch.object(q, "git_head", return_value="b" * 40):
+        with patch.object(q, "git_head", new=lambda: "b" * 40):
             with self.assertRaisesRegex(ValueError, "another head, invocation or source seal"):
                 self.complete((bundle, digest, artifacts))
         changed = dict(self.expected); changed["audit"] = "c" * 64

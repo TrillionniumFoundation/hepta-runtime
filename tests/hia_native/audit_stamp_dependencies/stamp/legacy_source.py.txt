@@ -1,0 +1,500 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(w) < WORK or length(o) < 2368:
+        return CAPACITY
+    if length(s) != 24 or load(s, 0) != REQUEST_MAGIC:
+        return INVALID
+    operation = load(s, 8)
+    if operation < 1 or operation > 3:
+        return INVALID
+    if get(w, 0) == 0:
+        fill_range(w, 0, 32768, 0)
+        put(w, 0, STATE_MAGIC)
+    if get(w, 0) != STATE_MAGIC:
+        return INVALID
+    if get(w, PHASE) == 0:
+        if operation == 1:
+            if load(s, 16) != 0 or get(w, LIVE) != 0 or get(w, LEASE) != 0 or get(w, ANCHOR_LEASE) != 0 or get(w, TEMP_LIVE) != 0:
+                return INVALID
+            if get(w, GENERATION) == 18446744073709551615:
+                return INVALID
+        else:
+            if get(w, LIVE) != 1 or get(w, LEASE) == 0 or load(s, 16) != get(w, LEASE):
+                return INVALID
+        put(w, OPERATION, operation)
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, WORK_LENGTH, length(w))
+        put(w, DIAGNOSTIC, 0)
+        put(w, ERRNO, 0)
+        copy_range(w, s, SNAPSHOT, 0, 24)
+        if operation == 3:
+            return finish(o, w)
+        if operation == 2:
+            put(w, LEASE, 0)
+            return cleanup(o, w)
+        names(w)
+        put(w, CREATING, 0)
+        put(w, PINNED_LENGTH, 0)
+        return metadata(w, 0, 1)
+    if get(w, OUTPUT_LENGTH) != length(o) or get(w, WORK_LENGTH) != length(w):
+        return INVALID
+    at = 0
+    while at < 24:
+        if byte(s, at) != byte(w, SNAPSHOT + at):
+            return INVALID
+        at = at + 1
+    if not acknowledged(w):
+        return INVALID
+    return resume(o, w)
+
+def acknowledged(w:mutbuf) -> bool:
+    if get(w, ACTION) != ACTION_MAGIC or get(w, ACTION + 8) != get(w, SEQUENCE) or get(w, ACTION + 64) != get(w, SEQUENCE):
+        return False
+    at = 0
+    while at < 6:
+        if get(w, ACTION + 16 + at * 8) != get(w, SAVED_ACTION + at * 8):
+            return False
+        at = at + 1
+    if get(w, ACTION + 88) != 0 or get(w, ACTION + 80) > 4095:
+        return False
+    if get(w, ACTION + 80) != 0 and get(w, ACTION + 72) != 0:
+        return False
+    if get(w, ACTION + 16) >= 100:
+        if get(w, ACTION + 80) != 0:
+            return False
+        at = 0
+        while at < get(w, ACTION + 40):
+            if byte(w, CHILD_REQUEST + at) != byte(w, REQUEST_COPY + at):
+                return False
+            at = at + 1
+    return True
+
+def resume(o:mutbuf, w:mutbuf) -> u32:
+    phase = get(w, PHASE)
+    result = get(w, ACTION + 72)
+    error = get(w, ACTION + 80)
+    if phase >= 1 and phase <= 9:
+        return acquire_resume(o, w, phase, result, error)
+    if phase >= 10 and phase <= 17:
+        return publish_resume(o, w, phase, result, error)
+    if phase >= 50 and phase <= 54:
+        return metadata_resume(o, w, phase, result, error)
+    if phase == 300:
+        if error == 0 and result != 0:
+            return INVALID
+        put(w, TEMP_LIVE, 0)
+        return effect(w, 7, 2, 0, 0, 0, 301)
+    if phase == 301 or phase == 302:
+        if error == 0 and result != 0:
+            return INVALID
+        return cleanup(o, w)
+    if phase == 303:
+        if error != 0 or not anchor_closed(w, result):
+            return INVALID
+        return cleanup(o, w)
+    return INVALID
+
+def acquire_resume(o:mutbuf, w:mutbuf, phase:u64, result:u64, error:u64) -> u32:
+    if phase == 1:
+        if error != 0:
+            return fail(o, w, 23, error)
+        copy_range(w, w, ROOT_STAMP, STAT, 144)
+        return anchor_call(w, 1, 0, 2)
+    if phase == 2:
+        if error != 0 or not anchor_result(w, result):
+            return INVALID
+        diagnostic = get(w, CHILD_REPLY + 8)
+        if diagnostic == 23 and get(w, CHILD_REPLY + 16) == 2:
+            return effect(w, 1, 1, LEGACY_NAME, 19, 0, 3)
+        if diagnostic != 0:
+            return fail(o, w, diagnostic, get(w, CHILD_REPLY + 16))
+        if get(w, PROJECTION + 64) != get(w, ROOT_STAMP) or get(w, PROJECTION + 72) != get(w, ROOT_STAMP + 8):
+            return fail(o, w, 10, 0)
+        return effect(w, 1, 1, LEGACY_NAME, 19, 0, 6)
+    if phase == 3:
+        if error == 2:
+            put(w, CREATING, 1)
+            return effect(w, 3, 0, LEGACY_NAME, 19, 448, 4)
+        if error == 0:
+            if result != 1:
+                return INVALID
+            put(w, LIVE, 1)
+        return fail(o, w, 12, 0)
+    if phase == 4:
+        if error != 0:
+            return fail(o, w, 23, error)
+        if result != 0:
+            return INVALID
+        return effect(w, 4, 0, 0, 0, 0, 5)
+    if phase == 5:
+        if error == 4:
+            return effect(w, 4, 0, 0, 0, 0, 5)
+        if error != 0:
+            return fail(o, w, 23, error)
+        if result != 0:
+            return INVALID
+        return effect(w, 1, 1, LEGACY_NAME, 19, 0, 6)
+    if phase == 6:
+        if error != 0:
+            return fail(o, w, 23, error)
+        if result != 1:
+            return INVALID
+        put(w, LIVE, 1)
+        return metadata(w, 1, 7)
+    if phase == 7:
+        if error != 0:
+            return fail(o, w, 23, error)
+        copy_range(w, w, LEGACY_STAMP, STAT, 144)
+        if (get(w, STAT + 24) & 61440) != 16384:
+            return fail(o, w, 13, 0)
+        return effect(w, 5, 0, STAT + 144, 8, 0, 8)
+    if phase == 8:
+        if error != 0 or result != 0:
+            return INVALID
+        if (get(w, LEGACY_STAMP + 24) >> 32) != get(w, STAT + 144) or (get(w, LEGACY_STAMP + 24) & 4095) != 448:
+            return fail(o, w, 13, 0)
+        put(w, CHILD_REQUEST, NAMESPACE_REQUEST)
+        put(w, CHILD_REQUEST + 8, 1)
+        put(w, CHILD_REQUEST + 16, 0)
+        put(w, CHILD_REQUEST + 24, get(w, METADATA_CACHE))
+        return child(w, 101, 32, 72, 9)
+    if phase == 9:
+        if error != 0 or result != 72 or get(w, CHILD_REPLY) != NAMESPACE_RESPONSE or get(w, CHILD_REPLY + 64) > 2:
+            return INVALID
+        put(w, METADATA_CACHE, get(w, CHILD_REPLY + 64))
+        kind = get(w, CHILD_REPLY + 8)
+        if kind == 0:
+            if get(w, CHILD_REPLY + 16) != 23 or get(w, CHILD_REPLY + 24) == 0 or get(w, CHILD_REPLY + 24) > 4095:
+                return INVALID
+            return fail(o, w, 23, get(w, CHILD_REPLY + 24))
+        if kind != 1 and kind != 2:
+            return INVALID
+        if get(w, CREATING) == 0:
+            if get(w, PROJECTION + 80) != get(w, LEGACY_STAMP) or get(w, PROJECTION + 88) != get(w, LEGACY_STAMP + 8):
+                return fail(o, w, 11, 0)
+            return acquired(o, w)
+        put(w, CHILD_REQUEST, ENTROPY_REQUEST)
+        put(w, CHILD_REQUEST + 8, 32)
+        put(w, CHILD_REQUEST + 16, 0)
+        return child(w, 102, 24, 32, 10)
+    return INVALID
+
+def publish_resume(o:mutbuf, w:mutbuf, phase:u64, result:u64, error:u64) -> u32:
+    if phase == 10:
+        if error != 0:
+            return INVALID
+        if result == 4294967293 or result == 4294967292:
+            return fail(o, w, 14, 0)
+        if result != 32:
+            return INVALID
+        temporary_name(w)
+        put(w, WRITE_LENGTH, serialize_anchor(w))
+        put(w, WRITE_POSITION, 0)
+        return effect(w, 6, 2, TEMP_NAME, 84, 384, 11)
+    if phase == 11:
+        if error != 0:
+            return fail(o, w, 23, error)
+        if result != 2:
+            return INVALID
+        put(w, TEMP_LIVE, 1)
+        return write_more(w)
+    if phase == 12:
+        if error == 4:
+            return write_more(w)
+        if error != 0:
+            return fail(o, w, 23, error)
+        count = get(w, WRITE_POSITION)
+        if result > get(w, WRITE_LENGTH) - count:
+            return INVALID
+        if result == 0:
+            return fail(o, w, 15, 0)
+        count = count + result
+        put(w, WRITE_POSITION, count)
+        if count < get(w, WRITE_LENGTH):
+            return write_more(w)
+        return effect(w, 4, 2, 0, 0, 0, 13)
+    if phase == 13:
+        if error == 4:
+            return effect(w, 4, 2, 0, 0, 0, 13)
+        if error != 0:
+            return fail(o, w, 23, error)
+        if result != 0:
+            return INVALID
+        return effect(w, 13, 0, TEMP_NAME, 84, ANCHOR_NAME, 14)
+    if phase == 14:
+        if error != 0:
+            return fail(o, w, 23, error)
+        if result != 0:
+            return INVALID
+        return effect(w, 14, 0, TEMP_NAME, 84, 0, 15)
+    if phase == 15:
+        if error != 0:
+            return fail(o, w, 23, error)
+        if result != 0:
+            return INVALID
+        return effect(w, 4, 0, 0, 0, 0, 16)
+    if phase == 16:
+        if get(w, TEMP_LIVE) == 1:
+            if error == 4:
+                return effect(w, 4, 0, 0, 0, 0, 16)
+            if error != 0:
+                return fail(o, w, 23, error)
+            if result != 0:
+                return INVALID
+            put(w, TEMP_LIVE, 0)
+            return effect(w, 7, 2, 0, 0, 0, 16)
+        if error == 0 and result != 0:
+            return INVALID
+        return anchor_call(w, 1, 0, 17)
+    if phase == 17:
+        if error != 0 or not anchor_result(w, result):
+            return INVALID
+        if get(w, CHILD_REPLY + 8) != 0:
+            return fail(o, w, get(w, CHILD_REPLY + 8), get(w, CHILD_REPLY + 16))
+        return acquired(o, w)
+    return INVALID
+
+def anchor_result(w:mutbuf, size:u64) -> bool:
+    if size < 64 or size > 2368 or get(w, CHILD_REPLY) != ANCHOR_RESPONSE or get(w, CHILD_REPLY + 48) != 0 or get(w, CHILD_REPLY + 56) > 2:
+        return False
+    diagnostic = get(w, CHILD_REPLY + 8)
+    error = get(w, CHILD_REPLY + 16)
+    if diagnostic == 0:
+        if error != 0 or get(w, CHILD_REPLY + 24) == 0 or get(w, CHILD_REPLY + 32) > 2048 or get(w, CHILD_REPLY + 40) != 256:
+            return False
+        if size != 320 + get(w, CHILD_REPLY + 32) or not projection_valid(w):
+            return False
+        put(w, ANCHOR_LEASE, get(w, CHILD_REPLY + 24))
+        put(w, PINNED_LENGTH, get(w, CHILD_REPLY + 32))
+        copy_range(w, w, PROJECTION, CHILD_REPLY + 64, 256)
+        copy_range(w, w, PINNED_BYTES, CHILD_REPLY + 320, get(w, PINNED_LENGTH))
+    else:
+        if diagnostic > 7 and diagnostic != 23 and diagnostic != 24:
+            return False
+        if size != 64 or get(w, CHILD_REPLY + 24) != 0 or get(w, CHILD_REPLY + 32) != 0 or get(w, CHILD_REPLY + 40) != 0:
+            return False
+        if diagnostic == 23:
+            if error == 0 or error > 4095:
+                return False
+        else:
+            if error != 0:
+                return False
+    put(w, METADATA_CACHE, get(w, CHILD_REPLY + 56))
+    return True
+
+def projection_valid(w:mutbuf) -> bool:
+    if get(w, CHILD_REPLY + 64) != PROJECTION_MAGIC or get(w, CHILD_REPLY + 72) != 2:
+        return False
+    at = 16
+    while at < 256:
+        if at < 64 or at >= 96:
+            if get(w, CHILD_REPLY + 64 + at) != 0:
+                return False
+        at = at + 8
+    return True
+
+def anchor_closed(w:mutbuf, size:u64) -> bool:
+    if size != 64 or get(w, CHILD_REPLY) != ANCHOR_RESPONSE or get(w, CHILD_REPLY + 56) > 2:
+        return False
+    at = 8
+    while at < 56:
+        if get(w, CHILD_REPLY + at) != 0:
+            return False
+        at = at + 8
+    put(w, METADATA_CACHE, get(w, CHILD_REPLY + 56))
+    return True
+
+def acquired(o:mutbuf, w:mutbuf) -> u32:
+    if get(w, LIVE) != 1 or get(w, ANCHOR_LEASE) == 0 or get(w, TEMP_LIVE) != 0:
+        return INVALID
+    put(w, GENERATION, get(w, GENERATION) + 1)
+    put(w, LEASE, get(w, GENERATION))
+    return finish(o, w)
+
+def anchor_call(w:mutbuf, operation:u64, lease:u64, phase:u64) -> u32:
+    put(w, CHILD_REQUEST, ANCHOR_REQUEST)
+    put(w, CHILD_REQUEST + 8, operation)
+    put(w, CHILD_REQUEST + 16, lease)
+    put(w, CHILD_REQUEST + 24, get(w, METADATA_CACHE))
+    return child(w, 100, 32, 4096, phase)
+
+def child(w:mutbuf, kind:u64, size:u64, capacity:u64, phase:u64) -> u32:
+    copy_range(w, w, REQUEST_COPY, CHILD_REQUEST, size)
+    return pending(w, kind, 0, CHILD_REQUEST, size, CHILD_REPLY, capacity, phase)
+
+def write_more(w:mutbuf) -> u32:
+    at = get(w, WRITE_POSITION)
+    return effect(w, 12, 2, JSON_BYTES + at, get(w, WRITE_LENGTH) - at, 0, 12)
+
+def fail(o:mutbuf, w:mutbuf, diagnostic:u64, error:u64) -> u32:
+    put(w, DIAGNOSTIC, diagnostic)
+    put(w, ERRNO, error)
+    return cleanup(o, w)
+
+def cleanup(o:mutbuf, w:mutbuf) -> u32:
+    if get(w, TEMP_LIVE) == 1:
+        return effect(w, 14, 0, TEMP_NAME, 84, 0, 300)
+    if get(w, LIVE) == 1:
+        put(w, LIVE, 0)
+        return effect(w, 7, 1, 0, 0, 0, 302)
+    if get(w, ANCHOR_LEASE) != 0:
+        lease = get(w, ANCHOR_LEASE)
+        put(w, ANCHOR_LEASE, 0)
+        return anchor_call(w, 4, lease, 303)
+    put(w, LEASE, 0)
+    put(w, PINNED_LENGTH, 0)
+    fill_range(w, PROJECTION, 256, 0)
+    fill_range(w, PINNED_BYTES, 2048, 0)
+    return finish(o, w)
+
+def finish(o:mutbuf, w:mutbuf) -> u32:
+    put(w, PHASE, 0)
+    fill_range(o, 0, 64, 0)
+    put(o, 0, RESPONSE_MAGIC)
+    put(o, 8, get(w, DIAGNOSTIC))
+    put(o, 16, get(w, ERRNO))
+    put(o, 24, get(w, LEASE))
+    if get(w, DIAGNOSTIC) == 0 and (get(w, OPERATION) == 1 or get(w, OPERATION) == 3):
+        count = get(w, PINNED_LENGTH)
+        put(o, 32, count)
+        put(o, 40, 256)
+        copy_range(o, w, 64, PROJECTION, 256)
+        copy_range(o, w, 320, PINNED_BYTES, count)
+        return 320 + count
+    return 64
+
+def metadata(w:mutbuf, slot:u64, target:u64) -> u32:
+    if slot > 1 or get(w, METADATA_CACHE) > 2:
+        return INVALID
+    put(w, METADATA_SLOT, slot)
+    put(w, METADATA_RETURN, target)
+    if get(w, METADATA_CACHE) == 2:
+        return effect(w, 2, slot, STAT, 144, 0, 50)
+    return effect(w, 8, slot, STATX, 256, 0, 51)
+
+def metadata_done(o:mutbuf, w:mutbuf, error:u64) -> u32:
+    return acquire_resume(o, w, get(w, METADATA_RETURN), 0, error)
+
+def metadata_failed(o:mutbuf, w:mutbuf, error:u64) -> u32:
+    put(w, METADATA_ERROR, error)
+    if get(w, METADATA_CACHE) == 1:
+        return metadata_done(o, w, error)
+    return effect(w, 9, 0, 0, 0, 0, 53)
+
+def metadata_probe(o:mutbuf, w:mutbuf, error:u64) -> u32:
+    if error == 14:
+        put(w, METADATA_CACHE, 1)
+        return metadata_done(o, w, get(w, METADATA_ERROR))
+    put(w, METADATA_CACHE, 2)
+    return effect(w, 2, get(w, METADATA_SLOT), STAT, 144, 0, 50)
+
+def metadata_resume(o:mutbuf, w:mutbuf, phase:u64, result:u64, error:u64) -> u32:
+    if result != 0:
+        return INVALID
+    if phase == 50:
+        return metadata_done(o, w, error)
+    if phase == 51:
+        if error == 38:
+            return effect(w, 10, get(w, METADATA_SLOT), STAT, 144, 0, 52)
+        if error != 0:
+            return metadata_failed(o, w, error)
+        normalize_statx(w)
+        put(w, METADATA_CACHE, 1)
+        return metadata_done(o, w, 0)
+    if phase == 52:
+        if error != 0:
+            return metadata_failed(o, w, error)
+        put(w, METADATA_CACHE, 1)
+        return metadata_done(o, w, 0)
+    if phase == 53:
+        if error == 38:
+            return effect(w, 11, 0, 0, 0, 0, 54)
+        return metadata_probe(o, w, error)
+    if phase == 54:
+        if error == 0:
+            return INVALID
+        return metadata_probe(o, w, error)
+    return INVALID
+
+def write_decimal(w:mutbuf, start:u64, value:u64) -> u64:
+    at = start
+    if value == 0:
+        store(w, at, 48)
+        return at + 1
+    while value != 0:
+        store(w, at, 48 + value % 10)
+        at = at + 1
+        value = value // 10
+    left = start
+    right = at - 1
+    while left < right:
+        saved = byte(w, left)
+        store(w, left, byte(w, right))
+        store(w, right, saved)
+        left = left + 1
+        right = right - 1
+    return at
+
+def serialize_anchor(w:mutbuf) -> u64:
+    at = literal(w, JSON_BYTES, 1)
+    at = write_decimal(w, at, get(w, ROOT_STAMP))
+    at = literal(w, at, 2)
+    at = write_decimal(w, at, get(w, ROOT_STAMP + 8))
+    at = literal(w, at, 3)
+    at = write_decimal(w, at, get(w, LEGACY_STAMP))
+    at = literal(w, at, 4)
+    at = write_decimal(w, at, get(w, LEGACY_STAMP + 8))
+    store(w, at, 125)
+    return at + 1 - JSON_BYTES
+
+def temporary_name(w:mutbuf) -> u64:
+    at = literal(w, TEMP_NAME, 5)
+    i = 0
+    while i < 32:
+        value = byte(w, CHILD_REPLY + i)
+        hi = value >> 4
+        lo = value & 15
+        store(w, at + i * 2, choose(hi < 10, hi + 48, hi + 87))
+        store(w, at + i * 2 + 1, choose(lo < 10, lo + 48, lo + 87))
+        i = i + 1
+    at = literal(w, at + 64, 6)
+    store(w, at, 0)
+    return at
+
+def effect(w:mutbuf, kind:u64, slot:u64, span:u64, count:u64, argument:u64, phase:u64) -> u32:
+    return pending(w, kind, slot, span, count, argument, 0, phase)
+
+def pending(w:mutbuf, kind:u64, slot:u64, span:u64, count:u64, argument:u64, capacity:u64, phase:u64) -> u32:
+    sequence = get(w, SEQUENCE)
+    if sequence == 18446744073709551615:
+        return INVALID
+    sequence = sequence + 1
+    put(w, SEQUENCE, sequence)
+    put(w, PHASE, phase)
+    fill_range(w, ACTION, 96, 0)
+    put(w, ACTION, ACTION_MAGIC)
+    put(w, ACTION + 8, sequence)
+    put(w, ACTION + 16, kind)
+    put(w, ACTION + 24, slot)
+    put(w, ACTION + 32, span)
+    put(w, ACTION + 40, count)
+    put(w, ACTION + 48, argument)
+    put(w, ACTION + 56, capacity)
+    at = 0
+    while at < 6:
+        put(w, SAVED_ACTION + at * 8, get(w, ACTION + 16 + at * 8))
+        at = at + 1
+    return EFFECT
+
+def copy_range(o:mutbuf, s:readbuf, to:u64, start:u64, count:u64) -> u64:
+    at = 0
+    while at < count:
+        store(o, to + at, byte(s, start + at))
+        at = at + 1
+    return count
+
+def fill_range(o:mutbuf, start:u64, count:u64, value:u64) -> u64:
+    at = 0
+    while at < count:
+        store(o, start + at, value)
+        at = at + 1
+    return count

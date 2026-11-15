@@ -73,12 +73,15 @@ import hia_native_serde_error_pipeline as serde_error_pipeline
 import hia_native_result_storage_pipeline as storage_pipeline
 import hia_native_audit_pipeline as audit_pipeline
 import hia_native_activity_pipeline as activity_pipeline
+import hia_native_stamp_pipeline as stamp_pipeline
 import hia_native_service_pipeline as service_pipeline
 import hia_native_write_chain_pipeline as write_chain_pipeline
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
+    {'key': 'request_audit_stamp', 'name': 'request-audit-stamp', 'source': 'native/request_audit_stamp.hepta', 'builder': 'audit_stamp', 'manifest_env': 'HIA_AUDIT_STAMP_BUILD', 'test': 'audit-stamp-stamp', 'additional_tests': ('audit-stamp-stamp-kernel', 'audit-stamp-stamp-controls'), 'companion_sources': ('native/request_audit_stamp_namespace.hepta', 'native/request_audit_stamp_legacy_dependency.hepta', 'native/request_audit_stamp_packer.hepta')},
+    {'key': 'request_audit_cache_stamp', 'name': 'request-audit-cache-stamp', 'source': 'native/request_audit_cache_stamp.hepta', 'builder': 'audit_stamp', 'manifest_env': 'HIA_AUDIT_STAMP_BUILD', 'test': 'audit-stamp-cache-stamp', 'additional_tests': ('audit-stamp-cache-stamp-kernel', 'audit-stamp-cache-stamp-controls'), 'companion_sources': ('native/request_audit_cache_stamp_packer.hepta',)},
     {'key': 'request_audit_active', 'name': 'request-audit-active', 'source': 'native/request_audit_active.hepta', 'builder': 'audit_activity', 'manifest_env': 'HIA_AUDIT_ACTIVITY_BUILD', 'test': 'audit-activity-active', 'additional_tests': ('audit-activity-active-controls',), 'companion_sources': ('native/request_audit_active_packer.hepta',)},
     {'key': 'request_audit_active_publication', 'name': 'request-audit-active-publication', 'source': 'native/request_audit_active_publication.hepta', 'builder': 'audit_activity', 'manifest_env': 'HIA_AUDIT_ACTIVITY_BUILD', 'test': 'audit-activity-active-publication', 'additional_tests': ('audit-activity-active-publication-controls',)},
     {'key': 'request_audit_hot_cache', 'name': 'request-audit-hot-cache', 'source': 'native/request_audit_hot_cache.hepta', 'builder': 'audit_activity', 'manifest_env': 'HIA_AUDIT_ACTIVITY_BUILD', 'test': 'audit-activity-hot-cache', 'additional_tests': ('audit-activity-hot-cache-controls',)},
@@ -415,6 +418,7 @@ def sources() -> dict:
     paths.update(ROOT / name for name in storage_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in audit_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in activity_pipeline.sources(ROOT))
+    paths.update(ROOT / name for name in stamp_pipeline.sources(ROOT))
     paths.add(ROOT / "scripts/hia_native_artifact_bundle.py")
     paths.update(ROOT / name for name in batch_write_pipeline.q.pins(ROOT))
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
@@ -465,7 +469,7 @@ def record_check(output: Path, report: dict, *, name: str, command: list[str],
     code, start_error = None, None
     timed_out = False
     process = None
-    process_owner = next((owner for owner in (storage_pipeline, audit_pipeline, activity_pipeline)
+    process_owner = next((owner for owner in (storage_pipeline, audit_pipeline, activity_pipeline, stamp_pipeline)
                           if owner.process_folder(output, name) is not None), None)
     storage_process = process_owner is not None
     try:
@@ -569,6 +573,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
         config_commands.update(audit_pipeline.test_commands(ROOT, output, report))
     if set(tests) & set(activity_pipeline.TESTS):
         config_commands.update(activity_pipeline.test_commands(ROOT, output, report))
+    if set(tests) & set(stamp_pipeline.TESTS):
+        config_commands.update(stamp_pipeline.test_commands(ROOT, output, report))
     if set(tests) & set(batch_write_pipeline.q.SUITES):
         config_commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     def command(name):
@@ -1062,6 +1068,10 @@ def audit_readiness_evidence(output: Path, report: dict, *, create: bool = False
 
 def audit_activity_evidence(output: Path, report: dict, *, create: bool = False) -> dict:
     return activity_pipeline.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def audit_stamp_evidence(output: Path, report: dict, *, create: bool = False) -> dict:
+    return stamp_pipeline.native_evidence(ROOT, output, report, completed_test_summary, create=create)
 
 
 def result_values_evidence(output: Path, report: dict) -> dict:
@@ -2305,7 +2315,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / SCOPE_OS_FOLDER).mkdir(mode=0o700)
     (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
     for item in MODULES:
-        if item.get("builder") == "audit_activity":
+        if item.get("builder") == "audit_stamp":
+            built = stamp_pipeline.build_stamp(hepta, output / "build", ROOT)
+        elif item.get("builder") == "audit_activity":
             built = activity_pipeline.build_activity(hepta, output / "build", ROOT)
         elif item.get("builder") == "audit_readiness":
             built = audit_pipeline.build_audit(hepta, output / "build", ROOT)
@@ -2436,6 +2448,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(storage_pipeline.test_commands(ROOT, output, report))
     commands.update(audit_pipeline.test_commands(ROOT, output, report))
     commands.update(activity_pipeline.test_commands(ROOT, output, report))
+    commands.update(stamp_pipeline.test_commands(ROOT, output, report))
     commands.update(batch_write_pipeline.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
@@ -2480,6 +2493,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["result_storage_evidence"] = result_storage_evidence(output, report, create=True)
     report["audit_readiness_evidence"] = audit_readiness_evidence(output, report, create=True)
     report["audit_activity_evidence"] = audit_activity_evidence(output, report, create=True)
+    report["audit_stamp_evidence"] = audit_stamp_evidence(output, report, create=True)
     report["batch_write_evidence"] = batch_write_evidence(output, report)
     service_pipeline.prepare_transport(ROOT, output, report, completed_test_summary)
     report["json_evidence"] = json_evidence(output, report)
@@ -2525,9 +2539,11 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["result_storage_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["audit_readiness_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["audit_activity_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["audit_stamp_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["result_storage_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["audit_readiness_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["audit_activity_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["audit_stamp_evidence"]["corpus_sha256"])
     # The complete batch corpus is also inspected by batch_write_evidence on
     # every admission; preserve the actual completed process and bundle roots.
     batch_names = [report["modules"]["batch_write"]["manifest"]] + [

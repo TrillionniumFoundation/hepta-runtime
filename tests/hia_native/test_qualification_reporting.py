@@ -53,6 +53,76 @@ class QualificationReportingTests(unittest.TestCase):
             (folder / name).write_text(prefix + program)
         return root
 
+    def test_stamp_registry_keeps_real_and_scripted_cache_domains_separate(self):
+        import qualify_hia_runtime_native as qualifier
+        helper = qualifier.stamp_pipeline
+        entries = {item['key']: item for item in MODULES}
+        self.assertEqual(set(helper.KEYS), {'request_audit_stamp', 'request_audit_cache_stamp'})
+        self.assertEqual(len(helper.TESTS), 6)
+        self.assertEqual(tuple(name for key in helper.KEYS for name in
+            (entries[key]['test'], *entries[key]['additional_tests'])), helper.TESTS)
+        self.assertTrue(set(helper.KEYS) <= set(RECIPES))
+        self.assertEqual(entries['request_audit_hot_cache']['builder'], 'audit_activity')
+        self.assertEqual({entries[key]['builder'] for key in helper.KEYS}, {'audit_stamp'})
+        self.assertEqual(len(helper.CONTROL_LABELS), 19)
+        self.assertEqual(set(helper.reference.DOMAINS), {'stamp', 'cache_stamp'})
+        self.assertFalse(helper.profile(ROOT)['scripted_children'])
+        self.assertFalse(helper.profile(ROOT)['cold_snapshot_admitted'])
+        self.assertTrue(set(helper.sources(ROOT)) <= set(sources()))
+
+    def test_stamp_actual_process_refuses_changed_bytes_and_consistent_deadline_edit(self):
+        import copy
+        import qualify_hia_runtime_native as qualifier
+        helper = qualifier.stamp_pipeline
+        name = helper.NAMES['stamp']
+        command = [sys.executable, '-I', '-B', '-c',
+            "import json,os;print(json.dumps({'status':'PASS','actual_pid':os.getpid()}))"]
+        qualifier.record_check(self.output, self.report, name=name, command=command, timeout=180)
+        observed, summary = helper.completed_process(ROOT, self.output, self.report, name,
+            command, qualifier.completed_test_summary)
+        self.assertEqual(observed['pid'], summary['actual_pid'])
+        self.assertTrue(observed['process_reaped'])
+        folder = helper.process_folder(self.output, name)
+        raw = (folder / 'stdout').read_bytes()
+        (folder / 'stdout').write_bytes(raw + b' ')
+        with self.assertRaisesRegex(ValueError, 'stream changed'):
+            helper.completed_process(ROOT, self.output, self.report, name,
+                command, qualifier.completed_test_summary)
+        (folder / 'stdout').write_bytes(raw)
+        baseline = copy.deepcopy(self.report['checks'][0])
+        receipt = (folder / 'result.json').read_bytes()
+        for key, value in (('timeout_seconds', 181), ('command', command + ['unobserved']),
+                ('timed_out', True)):
+            check = copy.deepcopy(baseline);check[key] = value
+            changed = json.loads(receipt);changed[key] = value;changed['actual_aggregate_check'] = check
+            self.report['checks'][0] = check
+            (folder / 'result.json').write_text(json.dumps(changed))
+            with self.subTest(field=key), self.assertRaises(ValueError):
+                helper.completed_process(ROOT, self.output, self.report, name,
+                    command, qualifier.completed_test_summary)
+        self.report['checks'][0] = baseline
+        (folder / 'result.json').write_bytes(receipt)
+        self.assertEqual(helper.completed_process(ROOT, self.output, self.report, name,
+            command, qualifier.completed_test_summary), (observed, summary))
+
+    def test_stamp_failure_keeps_real_pid_partial_stdout_and_refuses_admission(self):
+        import qualify_hia_runtime_native as qualifier
+        helper = qualifier.stamp_pipeline
+        name = helper.NAMES['cache_stamp']
+        command = [sys.executable, '-I', '-B', '-c',
+            "print('partial real output',flush=True);raise SystemExit(9)"]
+        with self.assertRaises(RuntimeError):
+            qualifier.record_check(self.output, self.report, name=name, command=command, timeout=180)
+        folder = helper.process_folder(self.output, name)
+        receipt = json.loads((folder / 'result.json').read_bytes())
+        self.assertEqual(receipt['exit_code'], 9)
+        self.assertTrue(receipt['process_reaped'])
+        self.assertGreater(receipt['pid'], 0)
+        self.assertEqual((folder / 'stdout').read_bytes(), b'partial real output\n')
+        with self.assertRaises(ValueError):
+            helper.completed_process(ROOT, self.output, self.report, name,
+                command, qualifier.completed_test_summary)
+
     def test_storage_word_derivation_refuses_consistently_rehashed_edits(self):
         import copy
         import hashlib

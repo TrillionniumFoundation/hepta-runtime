@@ -26,7 +26,7 @@ import qualify_hia_runtime_native as q
 import compare_hia_runtime_rust as r
 
 GROUPS = {
-    "audit": (tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS)),
+    "audit": (tuple(r.stamp_pipeline.KEYS) + tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS)),
     "storage_types": tuple(key for key, domain in r.storage_pipeline.KEYS.items()
                            if domain in r.storage_pipeline.q.PURE),
     "storage_files": tuple(key for key, domain in r.storage_pipeline.KEYS.items()
@@ -46,7 +46,7 @@ NATIVE_SEAL = "original-native.json"
 NATIVE_REPORT = "original-native-report.json"
 SHARD_SEAL = "original-shard.json"
 SHARD_REPORT = "original-shard-report.json"
-CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls", "result-storage-evidence-controls", "audit-readiness-evidence-controls", "audit-activity-evidence-controls")
+CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls", "result-storage-evidence-controls", "audit-readiness-evidence-controls", "audit-activity-evidence-controls", "audit-stamp-evidence-controls")
 COLLECTED_STATUS = "ORIGINALS_COLLECTED"
 COLLECTED_PHASE = "awaiting_quiescent_evidence_controls"
 
@@ -70,7 +70,7 @@ def groups() -> dict[str, tuple[str, ...]]:
             or GROUPS["storage_files"] != tuple(key for key, domain in r.storage_pipeline.KEYS.items()
                                                if domain not in r.storage_pipeline.q.PURE)):
         raise ValueError("storage originals require every independent type and filesystem recipe")
-    if GROUPS["audit"] != (tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS)):
+    if GROUPS["audit"] != (tuple(r.stamp_pipeline.KEYS) + tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS)):
         raise ValueError("audit originals require their complete independent group")
     return GROUPS
 
@@ -448,6 +448,7 @@ def finish_collection(output: Path, report: dict, started: float) -> dict:
     r.run_result_storage_controls(output, report)
     r.run_audit_readiness_controls(output, report)
     r.run_audit_activity_controls(output, report)
+    r.run_audit_stamp_controls(output, report)
     report.update(status="PASS", phase="complete", rust_comparison_status="PASS")
     # No PASS report is written until the complete control tail, workflow
     # receipts, source, all native/original bytes and restored modes pass.
@@ -480,7 +481,7 @@ def complete_collection(output: Path, hepta: Path, native_sha: str, invocation: 
     transport.validate_manifest(manifest)
     wanted_sources = {"native": native_sha, **expected}
     if (manifest["schema"] != transport.COLLECTION_SCHEMA
-            or manifest["head"] != q.git_head(q.ROOT) or manifest["invocation"] != invocation
+            or manifest["head"] != q.git_head() or manifest["invocation"] != invocation
             or {key: value["seal_sha256"] for key, value in manifest["sources"].items()} != wanted_sources):
         raise ValueError("collection belongs to another head, invocation or source seal")
     transport.restore(bundle, source_artifacts, output, collection_sha, collection=True)

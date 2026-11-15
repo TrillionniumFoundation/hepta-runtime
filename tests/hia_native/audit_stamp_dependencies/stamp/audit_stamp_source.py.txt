@@ -1,0 +1,95 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(w) < WORK or length(o) < 160:
+        return CAPACITY
+    if length(s) != 16 or load(s, 0) != REQUEST_MAGIC or load(s, 8) != 1:
+        return INVALID
+    if get(w, 0) == 0:
+        fill_range(w, 0, 32768, 0)
+        put(w, 0, STATE_MAGIC)
+    if get(w, 0) != STATE_MAGIC:
+        return INVALID
+    if get(w, PHASE) == 0:
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, WORK_LENGTH, length(w))
+        copy_range(w, s, SNAPSHOT, 0, 16)
+        return metadata(w, 0, 1)
+    if get(w, OUTPUT_LENGTH) != length(o) or get(w, WORK_LENGTH) != length(w):
+        return INVALID
+    at = 0
+    while at < 16:
+        if byte(s, at) != byte(w, SNAPSHOT + at):
+            return INVALID
+        at = at + 1
+    if not acknowledged(w):
+        return INVALID
+    phase = get(w, PHASE)
+    result = get(w, ACTION + 72)
+    error = get(w, ACTION + 80)
+    if phase >= 50 and phase <= 54:
+        return metadata_resume(o, w, phase, result, error)
+    return stamp_resume(o, w, phase, result, error)
+
+def stamp_resume(o:mutbuf, w:mutbuf, phase:u64, result:u64, error:u64) -> u32:
+    if phase == 1:
+        if error != 0:
+            return answer(o, w, 23, error)
+        if result != 0:
+            return INVALID
+        if (get(w, STAT + 24) & 61440) != 16384:
+            return answer(o, w, 16, 0)
+        return effect(w, 5, 0, STAT + 144, 8, 0, 8)
+    if phase == 8:
+        if error != 0 or result != 0:
+            return INVALID
+        if (get(w, STAT + 24) >> 32) != get(w, STAT + 144) or (get(w, STAT + 24) & 4095) != 448:
+            return answer(o, w, 16, 0)
+        put(w, CHILD_REQUEST, NAMESPACE_REQUEST)
+        put(w, CHILD_REQUEST + 8, 1)
+        put(w, CHILD_REQUEST + 16, 0)
+        put(w, CHILD_REQUEST + 24, get(w, METADATA_CACHE))
+        copy_range(w, w, REQUEST_COPY, CHILD_REQUEST, 32)
+        fill_range(w, CHILD_REPLY, 72, 0)
+        return pending(w, 101, 0, CHILD_REQUEST, 32, CHILD_REPLY, 72, 9)
+    if phase == 9:
+        if error != 0 or result != 72 or get(w, CHILD_REPLY) != NAMESPACE_RESPONSE or get(w, CHILD_REPLY + 64) > 2:
+            return INVALID
+        kind = get(w, CHILD_REPLY + 8)
+        if kind == 0 or kind == 1:
+            at = 32
+            while at < 64:
+                if byte(w, CHILD_REPLY + at) != 0:
+                    return INVALID
+                at = at + 1
+        if kind == 0:
+            if get(w, CHILD_REPLY + 16) != 23 or get(w, CHILD_REPLY + 24) == 0 or get(w, CHILD_REPLY + 24) > 4095:
+                return INVALID
+            put(w, METADATA_CACHE, get(w, CHILD_REPLY + 64))
+            return answer(o, w, 23, get(w, CHILD_REPLY + 24))
+        if kind != 1 and kind != 2:
+            return INVALID
+        if kind == 2 and (get(w, CHILD_REPLY + 16) != 0 or get(w, CHILD_REPLY + 24) != 0):
+            return INVALID
+        put(w, METADATA_CACHE, get(w, CHILD_REPLY + 64))
+        return answer(o, w, 0, 0)
+    return INVALID
+
+def answer(o:mutbuf, w:mutbuf, diagnostic:u64, error:u64) -> u32:
+    fill_range(o, 0, 160, 0)
+    put(o, 0, RESPONSE_MAGIC)
+    put(o, 8, diagnostic)
+    put(o, 16, error)
+    if diagnostic == 23 and error == 2:
+        put(o, 24, 1)
+    put(w, PHASE, 0)
+    if diagnostic != 0:
+        return 48
+    put(o, 32, 112)
+    put(o, 48, STAMP_MAGIC)
+    put(o, 56, get(w, STAT))
+    put(o, 64, get(w, STAT + 8))
+    put(o, 72, get(w, STAT + 88))
+    put(o, 80, get(w, STAT + 96))
+    put(o, 88, get(w, STAT + 104))
+    put(o, 96, get(w, STAT + 112))
+    copy_range(o, w, 104, CHILD_REPLY + 8, 56)
+    return 160

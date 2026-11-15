@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qualify_hia_runtime_native as q
 
 PARTITIONS = {
-    "audit": (tuple(q.audit_pipeline.KEYS) + tuple(q.activity_pipeline.KEYS)),
+    "audit": (tuple(q.stamp_pipeline.KEYS) + tuple(q.audit_pipeline.KEYS) + tuple(q.activity_pipeline.KEYS)),
     "storage": tuple(q.storage_pipeline.KEYS),
     "batch": ("batch_plan", "batch_apply", "atomic_write", "write_chain", "batch_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "line_endpoint", "line_verify",
@@ -152,7 +152,7 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
         raise ValueError("the complete configuration and regex owner requires its independent partition")
     if partitions["storage"] != tuple(q.storage_pipeline.KEYS):
         raise ValueError("the complete storage family requires its independent partition")
-    if partitions["audit"] != (tuple(q.audit_pipeline.KEYS) + tuple(q.activity_pipeline.KEYS)):
+    if partitions["audit"] != (tuple(q.stamp_pipeline.KEYS) + tuple(q.audit_pipeline.KEYS) + tuple(q.activity_pipeline.KEYS)):
         raise ValueError("the complete audit family requires its independent partition")
     result = {group: tuple(name for key in keys for name in
                          (modules[key]["test"], *modules[key].get("additional_tests", ())))
@@ -170,7 +170,7 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
                for names in result.values()):
         raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
     for group in (q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS),
-                  q.batch_write_pipeline.q.SUITES, q.serde_error_pipeline.TESTS, q.storage_pipeline.TESTS, q.audit_pipeline.TESTS, q.activity_pipeline.TESTS):
+                  q.batch_write_pipeline.q.SUITES, q.serde_error_pipeline.TESTS, q.storage_pipeline.TESTS, q.audit_pipeline.TESTS, q.activity_pipeline.TESTS, q.stamp_pipeline.TESTS):
         if not any(all(name in names for name in group)
                    and [names.index(name) for name in group] == sorted(names.index(name) for name in group)
                    for names in result.values()):

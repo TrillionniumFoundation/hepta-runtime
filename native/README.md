@@ -502,32 +502,33 @@ python3 -m venv /absolute/path/to/hia-reference-environment
   --rustc /absolute/path/to/rustc
 ```
 
-CI executes the complete gate through one fresh prepare job, five native
-partitions, seven original-reference groups and a final evidence collector. The
+CI executes the complete gate through one fresh prepare job, seven native
+partitions, ten original-reference groups, and two final evidence jobs. The
 prepare job executes the full cold gate and builds every module once. Each
 native partition admits that workflow-produced SHA256 and the full source,
 compiler, build and invocation identity before running its complete suite list.
-Batch, text/history/view, JSON, configuration/regex and system suites run on
-separate runners. Configuration keeps all fifteen existing suites in their
-original order; the three result byte owners remain in the JSON partition.
-Each job retains 15 minutes, each native suite retains 180 seconds, and every
-original recipe and compiler cold deadline remains unchanged.
+Batch, text/history/view, JSON, configuration/regex, system, storage and audit
+suites run on separate runners. Each job retains 15 minutes, each native suite
+retains 180 seconds, and every original recipe and compiler cold deadline
+remains unchanged.
 
-A separate native collector admits all five completed partitions and seals the
-whole native corpus. Every original group starts from those exact bytes. The
-forty required recipes are assigned once to bytes, state, services, JSON,
-configuration, system and batch groups. The two generic JSON recipes share one
-fresh locked build; the three result recipes share another. Workdir and Write
-stay together through their original fixture retirement, and the two independent
-OS reference workers retain their separate concurrent process receipts.
+A separate native collector admits all seven completed partitions and seals
+the whole native corpus. Every original group starts from those exact bytes.
+The 64 required recipes are assigned once to bytes, state, services, JSON,
+configuration, system, batch, storage types, storage files and audit groups.
+The two generic JSON recipes share one fresh locked build; the three result
+recipes share another. Workdir and Write stay together through their original
+fixture retirement, and the two independent OS reference workers retain their
+separate concurrent process receipts.
 
 Each successful original job publishes its own seal SHA256 through a dedicated
-workflow output. The final collector requires all seven supplied identities,
-every recipe, every actual completed process and all retained source, binary,
-input/output and compiler bytes. A partial group cannot claim aggregate PASS.
-The final mutation controls run only after every reference job has completed.
-Both native and original shard reports remain retained and are rechecked at
-later evidence admission. ZIP-lost executable modes are restored only after all
+workflow output. The first final job admits all ten supplied identities, every
+recipe and actual completed process, then retains an `ORIGINALS_COLLECTED`
+bundle. This intermediate status is not PASS. A separate completion job binds
+the external bundle SHA, head, invocation and all shard seals before restoring
+the complete evidence. It runs every quiescent mutation family and the final
+complete input check before writing PASS; the regex controls and final artifact
+export remain mandatory. ZIP-lost executable modes are restored only after all
 owned regular-file bytes pass; directory inventories preserve empty snapshots.
 
 Failed jobs upload a separately captured diagnostic tree, including raw inputs,
@@ -1392,3 +1393,22 @@ excluded from the completed evidence set. The workflow logs the index SHA256.
 and all source artifacts to reconstruct the complete tree in a new directory.
 Transport is separately tested and does not execute or replace semantic gates.
 All per-process deadlines and fifteen-minute workflow job limits remain unchanged.
+
+## Real Stamp and persistent cache methods
+
+The two private Stamp components add six actual native suites and two fresh
+locked original Rust recipes. Held-descriptor metadata and shared Namespace
+are real children for `archive_stamp`, `cache_hot_owned`,
+`hot_snapshot_cached`, and `update_cached_completion`. Complete ordinary and
+kernel observations cover 126 processes and 507 requests per implementation,
+with 71 separately labeled borrowed-state controls. Nineteen evidence mutations
+require exact restoration and complete readmission. The frozen portable
+contract is in [audit_stamp_integration.md](audit_stamp_integration.md); the
+actual aggregate process join is in
+[audit_stamp_aggregate.md](audit_stamp_aggregate.md).
+
+Cold snapshot, complete Archive acquisition, Ticket admission/finish and public
+dispatch remain unqualified. The existing scripted hot-cache component remains
+a separate historical and current test domain. All 125 production handlers
+remain `not_ported`, and all replacement, activation and removal flags remain
+false.
