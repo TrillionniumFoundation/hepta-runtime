@@ -152,6 +152,24 @@ Landlock 与可选 pypdf 的两项 skip。完整 Rust nextest 在大型 lib test
 阶段被 SIGKILL，零项执行，未记为通过。详细计数、命令、源码和环境观察见
 各 `validation/` 子目录。托管 CI 以汇总 PR 的实际 check run 为准。
 
+首次汇总 PR #125 的托管 Rust CI（run `43686118845`，head `7f3c795b`）
+在 exact-head 和 prospective-merge 两个 job 中都完成了大型测试编译；两边均为
+2,629 项执行、2,626 通过、3 失败，另有 44 项跳过。三项失败均指向 REA
+overflow 未识别形状回退的原文顺序契约。修复让该回退委托当前 `wire()`；
+历史 native 捕获的旧投影仅在对应历史测试中明确重建，并增加直接经过生产
+overflow 分派的冻结 ELF 原文回归。原始 fixture、四份 frame 哈希和逐字节
+断言未改。首次失败及后续跳过步骤完整保留在
+[首次 PR CI 证据](validation/github-pr125-7f3c795b/README.md)。
+
+同次 Cloud PR job 暴露了路由器测试在 SQLite 保存和线程启动之前设置 150 ms
+租约的时序竞态；对应 push job 的 Router 46、Colab 69、Kaggle 76 项均通过。
+测试修复等待真实认证 gate 和持久化 PREPARING 状态后才推进受控墙上时间，
+保留真实线程、锁、SQLite 和竞争计划断言，不改变生产逻辑。修复后本地 Router
+46/46 通过。REA 最终修复的格式及生产库/二进制严格 Clippy 通过；all-targets
+Clippy 的 lib-test 元数据编译被 SIGKILL，零项 Rust 测试执行，详见
+[修复检查证据](validation/rea-overflow-fix/README.md)。修复后的完整托管测试
+仍须由新 head 的实际结果确认，不能把首次 CI 或本地生产编译写成通过。
+
 由于终端无 Git 写入凭据，85 个新集成提交通过 GitHub 插件按原拓扑发布。
 其文件树逐项相等；原有分支提交 ID 不变，新集成提交的 SHA 对照与完整原始
 commit 字节保存在 [publication/](publication/README.md)。
