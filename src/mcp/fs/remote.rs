@@ -310,8 +310,9 @@ mod sftp {
 			&mut self,
 			server_public_key: &PublicKeyOrCertificate,
 		) -> Result<bool, Self::Error> {
-			// A certificate is trusted via its certified key: russh verifies the
-			// certificate signature before this call, and known_hosts stores plain keys.
+			// Default preferences do not advertise host-certificate algorithms.
+			// Russh verifies the KEX signature, not the certificate's CA trust;
+			// this existing known_hosts policy compares plain public keys only.
 			let server_key = server_public_key.public_key();
 			match russh::keys::check_known_hosts(&self.host, self.port, &server_key) {
 				Ok(true) => Ok(true),

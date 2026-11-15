@@ -56,7 +56,7 @@ flate2 = "=1.1.10"
 x509-parser = { version = "=0.18.1", default-features = false }
 ruzstd = { version = "=0.9.1", default-features = false, features = ["std", "hash"] }
 zlib-rs = { version = "=0.6.8", default-features = false, features = ["std"] }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "process", "fs", "sync", "signal", "io-std", "io-util", "net"] }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "process", "fs", "sync", "signal", "io-std", "io-util", "net"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["float_roundtrip", "raw_value"] }
 anyhow = "1.0.104"
@@ -74,7 +74,7 @@ tracing = { version = "0.1", features = ["std"] }
 clap = { version = "4.6.6", features = ["derive"] }
 
 # MCP SDK
-rmcp = { version = "3.1.4", features = ["server", "macros", "transport-io", "transport-streamable-http-server"] }
+rmcp = { version = "3.9.0", features = ["server", "macros", "transport-io", "transport-streamable-http-server"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 
@@ -83,7 +83,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 # release with the RUSTSEC-2023-0071 (Marvin) fix, so RSA keys are unsupported —
 # use ed25519/ecdsa keys and host keys instead. The `ring` crypto backend (not
 # aws-lc-rs) is chosen because the Alpine/musl release builds have no cmake.
-russh = { version = "0.63", optional = true, default-features = false, features = ["flate2", "ring"] }
+russh = { version = "0.65.0", optional = true, default-features = false, features = ["flate2", "ring"] }
 russh-sftp = { version = "3.0", optional = true }
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -95,7 +95,7 @@ tempfile = "3.27.0"
 serial_test = "3.5.0"
 # Client feature for the in-process delivery tests in `server_tests.rs`;
 # feature unification applies it to test builds only, never the shipped bin.
-rmcp = { version = "3.1.4", features = ["client"] }
+rmcp = { version = "3.9.0", features = ["client"] }
 
 [profile.dev]
 opt-level = 1
