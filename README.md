@@ -32,6 +32,7 @@ Ghidra/JDK and Chrome remain explicit engine dependencies for their routes.
 - [Local browser capture through the existing job owner](docs/rea-native/LOCAL_BROWSER_CAPTURE.md)
 - [Exact native weight artifacts and restoration](docs/weight-runtime/NATIVE_ARTIFACTS.md)
 - [Native F32 Linear calculation and independent comparison](docs/weight-runtime/NATIVE_LINEAR.md)
+- [Native semantic replay joined to exact continuation certificates](docs/weight-semantic-certificate.md)
 
 The [frozen REA 6.8.0 compatibility ledger](docs/rea-native/compatibility/README.md)
 tracks all 229 upstream tools, their implementation scope and remaining behavior

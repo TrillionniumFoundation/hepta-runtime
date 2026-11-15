@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! MCP schemas, tool routing and the shared runtime request-audit boundary.
+
 //! MCP server handlers, session state, and tool parameter schemas.
 
 use std::sync::{Arc, RwLock};
@@ -40,6 +42,8 @@ use super::request_ctx;
 use super::runtime;
 use super::weight_bellman;
 use super::weight_certificate;
+use super::weight_semantic;
+use super::weight_semantic_certificate;
 use super::McpToolCall;
 use super::{hia_contract, hia_provider};
 use super::{
@@ -300,6 +304,8 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"weight_linear_ridge_plan",
 	"weight_bellman_plan",
 	"weight_continuation_certificate",
+	"weight_semantic_replay",
+	"weight_semantic_certificate",
 	"weight_open",
 	"weight_call",
 	"weight_status",
@@ -2814,6 +2820,44 @@ impl OctofsServer {
 		Parameters(params): Parameters<weight_certificate::CertificateParams>,
 	) -> Result<String, String> {
 		weight_certificate::verify(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Replay a Native Endpoint Policy and Teacher",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Reconstruct causal decision states, 85 input features, 49 hidden coefficients, network scores, legal masks and finite-horizon Bellman teacher Q for one explicit renewal endpoint profile in Rust. Requires exact request, compiled core-source and target-contract SHA256 values; checks checkpoint and public schedule bytes internally. At most 2 MiB request, 128 traces of six steps, 8192 cache states and a 30-second cooperative core deadline. One non-queued worker retains its permit after caller cancellation. Uses supplied transition tables, current-at-due observations and sensor-only repair; this is not First-Passage/Reset or a general NDU optimizer. Rounded binary64 results do not authenticate external sources or extend an existing certificate. No file or process access by the replay, parameter editing, independent holdout, task-value improvement or production eligibility."
+	)]
+	async fn weight_semantic_replay(
+		&self,
+		Parameters(params): Parameters<weight_semantic::SemanticReplayParams>,
+	) -> Result<String, String> {
+		weight_semantic::replay(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Replay and Verify a Native Continuation Witness",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Execute the fixed native endpoint semantic core and join its causal states, hidden bytes, legal masks and first-maximum teacher targets directly to the exact continuation checker. One checkpoint and public schedule, 1..128 traces, 1..256 source-row/competitor/multiplier comparisons; every trace must be covered. Caller-supplied hidden vectors, Q scores, masks, targets and states are forbidden. Compiled join/adapter/core/contract/checker/arithmetic source identities are pinned, not the complete executable. One worker shared with semantic replay retains admission through parsing, replay, join, proof and bounded serialization, even after caller cancellation. The 30-second outer cooperative cutoff is passed to both semantic replay and the exact checker; neither phase renews it, and late serialized results are refused. This is not a hard wall-clock process kill. At most 3 MiB canonical request and 1 MiB result. Checks the original fixed 147-coefficient ball without witness search. No file/process access, model edit, external-source authentication, general First-Passage/Reset or NDU, independent holdout, task-value improvement or production eligibility."
+	)]
+	async fn weight_semantic_certificate(
+		&self,
+		Parameters(params): Parameters<weight_semantic_certificate::SemanticCertificateParams>,
+	) -> Result<String, String> {
+		weight_semantic_certificate::verify(params)
 			.await
 			.map_err(|error| error.to_string())
 	}

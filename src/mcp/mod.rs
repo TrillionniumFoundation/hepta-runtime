@@ -13,6 +13,8 @@
 // limitations under the License.
 //! Runtime tools, native analysis workers and per-session context.
 
+//! MCP tool modules and per-call workspace context.
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -78,6 +80,8 @@ pub mod weight_guard_journal;
 pub mod weight_native;
 pub mod weight_norm;
 pub mod weight_ridge;
+pub mod weight_semantic;
+pub mod weight_semantic_certificate;
 pub mod weight_tensor;
 
 // Session working directory is now stored per-server-instance (see server.rs).
