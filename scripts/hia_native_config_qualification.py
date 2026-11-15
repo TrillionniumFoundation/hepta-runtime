@@ -18,6 +18,7 @@ OWN = ['native/config_execution_schema.json',
  'native/config_mcp.hepta',
  'native/config_mcp_composition.json',
  'native/config_mcp_packer.hepta',
+ 'native/config_publication_adapter.json',
  'native/config_owner.hepta',
  'native/config_owner_abi.md',
  'native/config_owner_composition.json',
@@ -62,6 +63,9 @@ DEPENDENCIES = ['Cargo.lock',
  'native/filter_packer.hepta',
  'native/serde_filter_packer.hepta',
  'native/serde_json.hepta',
+ 'native/result_publication.hepta',
+ 'native/result_publication_abi.md',
+ 'native/result_publication_composition.json',
  'scripts/generate_hia_transport.py',
  'scripts/hia_native_build.py',
  'scripts/hia_native_loader.py',
@@ -133,11 +137,11 @@ MODULES = {'execution': {'buffer_profile': 'history.v1',
           'source_sha256': '7cb065173fdb3bf266e1f234a18f8f309865d57db4c07d26e750047e4ec10ccb',
           'workspace_capacity': 268435456},
  'mcp': {'buffer_profile': 'history.v1',
-         'image_sha256': '98b5327b5a58cada14e5b0613a628bd37d82f63b1cf9a5b547a690cfd4268054',
+         'image_sha256': 'c7d025f49fb5b5d82e09d8ef11a71126f3f96cb65113e848b83180e495b00d02',
          'input_capacity': 134217728,
          'output_capacity': 134217728,
          'source': 'native/config_mcp.hepta',
-         'source_sha256': 'c1ab64af16fc1f74c4cafd35df4580e59907ca886af07ef6539d636f46672f48',
+         'source_sha256': 'e57a4496fe9bf24372b4ebf8ed0deaeb62d5a3cc1de7e3750df40957b7d4796f',
          'workspace_capacity': 268435456},
  'owner': {'buffer_profile': 'history.v1',
            'image_sha256': '933715c9f0f4c03b70b7379c738a435115d1974eb29a3434e6f25c1c45667502',
@@ -146,6 +150,13 @@ MODULES = {'execution': {'buffer_profile': 'history.v1',
            'source': 'native/config_owner.hepta',
            'source_sha256': '5f9e4cbaf8b8652a3a9eb05bdeccb90149258c9851a5fd8095465ea6cd12e5eb',
            'workspace_capacity': 268435456},
+ 'publication': {'buffer_profile': 'standard',
+                 'image_sha256': 'ec0f5e9586d8668817d13ba4f9385e1f8d04cc7dc14f6cb1ead4e023b8b20af9',
+                 'input_capacity': 8388608,
+                 'output_capacity': 8388608,
+                 'source': 'native/result_publication.hepta',
+                 'source_sha256': '279d3c385ea3b7a67d5de14d24ee1a16154a64f87a23cee467c30576f7c69842',
+                 'workspace_capacity': 33554432},
  'validation': {'buffer_profile': 'serde-json.v1',
                 'image_sha256': 'bb4a71d5a4fed80b99db5c7a0a3004ae21c979ca154089946d9d3373b56178c3',
                 'input_capacity': 16777216,
@@ -191,10 +202,10 @@ EXECUTABLES = {'fixture': {'adapter_source': 'scripts/config_owner_adapter.S',
         'prefix_sha256': '2e6f0d53a58189f5f84fa595b1caacd680fe8fe6fe904df8025abda00ee90e88',
         'schema': 'hepta.runtime.config-fs-probe.v1'},
  'mcp': {'adapter_source': 'scripts/config_mcp_adapter.S',
-         'adapter_source_sha256': 'ddf23ec032d5abbe819c5da7614f819d9d39e409bd2b4939487bd0a32a892dae',
-         'elf_bytes': 2960506,
-         'elf_sha256': '48c03c387cd499afee10bafe1fc809bd7b9a3e906e19ac580c8cf63ff7a30391',
-         'holes': [1008, 1115, 1152, 1226, 1189, 1071, 2440, 2912, 2998, 2244],
+         'adapter_source_sha256': 'f2d0920ca3468f8c38bdc52b0a6d1f34e59560d278fc31cfc65c7a0c4e24db2f',
+         'elf_bytes': 3073850,
+         'elf_sha256': 'd1859e6b9daf64853414a66739b107fb5d8802b390a146f49bcb45e4e7e62168',
+         'holes': [1008, 1115, 1152, 1226, 1189, 1071, 2449, 2921, 3007, 2253, 6296],
          'member_names': ['owner',
                           'fs',
                           'json',
@@ -204,11 +215,12 @@ EXECUTABLES = {'fixture': {'adapter_source': 'scripts/config_owner_adapter.S',
                           'execution',
                           'execution_json',
                           'execution_core',
-                          'value'],
+                          'value',
+                          'publication'],
          'packer_source': 'native/config_mcp_packer.hepta',
-         'packer_source_sha256': '00cc4feabc8461e3bf9c99c3baacc61b15cd771b44e4050ef37b87abfd83062f',
-         'prefix_bytes': 5147,
-         'prefix_sha256': '20e45d438ffad43939b45cb53640637fe4765baf9187f0ae9b20e70261d9c82b',
+         'packer_source_sha256': '6ef606c8776f007945cf86a554449c76a1fcf9fb7ec54087e9af09a690a23809',
+         'prefix_bytes': 6591,
+         'prefix_sha256': '65eb7b0062d1db99d504224524929129fd1e91cc11d20e42b4602f214c115fce',
          'schema': 'hepta.runtime.config-mcp-native.v1'},
  'owner': {'adapter_source': 'scripts/config_owner_adapter.S',
            'adapter_source_sha256': '129d046c76bc8b0c07b5250860a1a21bb1a040965be35b1266a6a03167a8f038',
@@ -236,7 +248,7 @@ COUNTS=(
  {'explicit_regex_dependency_cases':4,'native_calls':4049,'original_digest_cases':21,'original_semantic_cases':1837,'original_typed_refusals':201,'real_static_elf_runs':5},
  {'actual_elf_requests':61,'configuration_read_byte_comparisons':5,'eof_retirement_controls':1,'lock_admission_refusals':6,'retained_pair_and_release_controls':16},
  {'actual_elf_requests':73,'actual_lock_custody_controls':4,'actual_startup_refusals':7,'environment_default_controls':7,'exact_name_alias_order_controls':9,'failed_reinstallation_controls':3,'immutable_source_and_path_controls':8,'persistent_query_cache_controls':9,'production_install_authority_refusals':1},
- {'above_old_protocol_node_limit':1,'actual_elf_responses':60,'actual_execution_chain_controls':4,'actual_value_controls':6,'embedded_images_verified':10,'exact_installed_host_controls':3,'final_eof_frame_controls':1,'immutable_authority_controls':4,'lock_custody_controls':4,'missing_null_empty_default_controls':8,'native_number_controls':4,'protocol_profile_refusals':4})
+ {'above_old_protocol_node_limit':1,'actual_elf_responses':60,'actual_execution_chain_controls':4,'actual_value_controls':6,'embedded_images_verified':11,'exact_installed_host_controls':3,'final_eof_frame_controls':1,'immutable_authority_controls':4,'lock_custody_controls':4,'missing_null_empty_default_controls':8,'native_number_controls':4,'protocol_profile_refusals':4})
 sha=lambda raw:hashlib.sha256(raw).hexdigest()
 
 def require(ok,message):
@@ -263,6 +275,10 @@ def source_pins(root):
     values={name:sha(read(root/name)) for name in sorted(paths)}
     for row in MODULES.values():require(values[row['source']]==row['source_sha256'],'HIA source changed: '+row['source'])
     for row in EXECUTABLES.values():require(values[row['packer_source']]==row['packer_source_sha256'],'HIA packer changed')
+    require(values['scripts/config_mcp_adapter.S']==EXECUTABLES['mcp']['adapter_source_sha256'],'fixed publication adapter changed')
+    publication=object_at(root/'native/config_publication_adapter.json')
+    expected={'schema':'hepta.runtime.config-publication-adapter.v1','adapter_sha256':values['scripts/config_mcp_adapter.S'],'owner_source':MODULES['publication']['source'],'owner_source_sha256':MODULES['publication']['source_sha256'],'owner_image_sha256':MODULES['publication']['image_sha256'],'handoff_module':5,'new_image':10,'same_owner_as_fixture':True,'production_stderr_unchanged':True,'fixture_write_ack_trace':True,'production_write_ack_trace':False,'external_ofd_flags_changed':False,'filesystem_callers_replaced':False,'whole_runtime_replaced':False,'no_application_cumulative_quota_from_windows_or_chunks':True,'bounded_by_lp64_and_real_resources':True}
+    exact({k:publication.get(k) for k in expected},expected,'result publication adapter binding or scope changed')
     return values
 def launch(root,script,args):
     code='import runpy,sys; root=sys.argv[1]; script=sys.argv[2]; sys.path[:0]=[root+"/scripts",root+"/tests/hia_native"]; sys.argv=sys.argv[2:]; runpy.run_path(script,run_name="__main__")'
@@ -339,7 +355,7 @@ def _build_at(root,output,path,*,hepta=None):
     expected={'schema':'hepta.runtime.config-build-process.v1','exit_code':0,'timed_out':False,'cleanup_timed_out':False,'start_error':None,'timeout_seconds':180,'cleanup_seconds':3,'source_pins':pins,'source_pins_after':pins,'stdout_sha256':sha(stdout),'stderr_sha256':sha(stderr),'cwd':str(root)}
     exact({k:receipt.get(k) for k in expected},expected,'actual build process receipt differs');finite(receipt['elapsed_seconds'],183)
     command=receipt['command'];require(len(command)==13 and command[:7]==launch(root,'scripts/build_hia_config_service.py',[]) and command[7]=='--hepta' and command[9:] == ['--build-root',str(build),'--output',str(path)],'fixed build command differs')
-    exact(json.loads(stdout),{'output':str(path),'modules':12,'executables':['fs','owner','fixture','mcp']},'actual build stdout is incomplete')
+    exact(json.loads(stdout),{'output':str(path),'modules':13,'executables':['fs','owner','fixture','mcp']},'actual build stdout is incomplete')
     require(stderr==b'' and set(bundle['modules'])==set(MODULES) and set(bundle['executables'])==set(EXECUTABLES),'build inventory changed')
     modules={}
     for name,want in MODULES.items():
@@ -372,14 +388,17 @@ def _build_at(root,output,path,*,hepta=None):
             at+=len(image)
         require(at==len(elf) and sha(prefix)==want['prefix_sha256'],'fixed prefix/layout differs')
         if name=='fs':frame=b'HIAFLT01'+struct.pack('<Q',len(images[0]))+images[0]
-        else:frame=(b'HCFGMCP2' if name=='mcp' else b'HCFGPCK1')+b''.join(struct.pack('<Q',len(i)) for i in images)+bytes(8)+b''.join(images)
+        else:frame=(b'HCFGMCP3' if name=='mcp' else b'HCFGPCK1')+b''.join(struct.pack('<Q',len(i)) for i in images)+bytes(8)+b''.join(images)
         require(m['pack_input_sha256']==sha(frame),'actual pack frame identity changed')
         if name!='fs':require(artifact(output,artifacts,ep.parent/'pack.input.bin')==frame,'retained pack frame changed')
         if name in ['owner','fixture']:require(m['fixture_admin_reinstallation']==(name=='fixture') and m['caller_configuration_installation'] is False,'fixture authority differs')
         if name=='mcp':
-            exact(m['call_edges'],{'0':[1,2,3,4],'5':[0,6,9],'6':[0,7,8]},'call authority differs')
+            exact(m['call_edges'],{'0':[1,2,3,4],'5':[0,6,9,10],'6':[0,7,8]},'call authority differs')
             require(m['only_effect_owner']==1 and m['protocol_version']=='2025-06-18' and m['caller_configuration_installation'] is False,'MCP startup/effect authority differs')
             exact(m['tool_names'],['host_list','effective_config','execution_shadow_admit'],'advertised tools changed')
+            expected_publication={'result_publication_image_id':10,'result_publication_source':MODULES['publication']['source'],'result_publication_source_sha256':MODULES['publication']['source_sha256'],'result_publication_image_sha256':MODULES['publication']['image_sha256'],'result_publication_handoff':'config_mcp.tool_result fixed envelope prefix and original text span','filesystem_hint_callers_replaced':False,'publication_fixture_is_production':False,'regex_compilation_closed':False}
+            exact({k:m.get(k) for k in expected_publication},expected_publication,'typed text publication owner or scope differs')
+            exact({k:m.get(k) for k in ['builder_source_sha256','generic_build_sha256','generic_loader_sha256']},{'builder_source_sha256':pins['scripts/build_config_mcp_service.py'],'generic_build_sha256':pins['scripts/hia_native_build.py'],'generic_loader_sha256':pins['scripts/hia_native_loader.py']},'actual MCP build source closure differs')
         executables[name]={'manifest':ep.relative_to(output).as_posix(),'sha256':sha(read(ep)),'elf_sha256':sha(elf)}
     require([x['name'] for x in bundle['records']]==['filesystem','owner','fixture','mcp'],'sub-build records incomplete')
     for row in bundle['records']:
@@ -460,6 +479,7 @@ def native_evidence(root,output,report,completed_test_summary,create=False):
             stored=json.loads(artifact(output,artifacts,output/'config-native/receipts/report.json'));exact(stored,summary,'receipt-control stdout differs')
             exact({k:summary.get(k) for k in ['native_calls','corrupt_receipt_offsets','capacity_initialization_committed','synthetic_child_receipts','actual_child_semantics_in_separate_static_elf_suite']},{'native_calls':38,'corrupt_receipt_offsets':list(range(0,112,8)),'capacity_initialization_committed':False,'synthetic_child_receipts':True,'actual_child_semantics_in_separate_static_elf_suite':True},'receipt controls incomplete')
             require(summary['manifest_sha256']==bundle['modules']['mcp']['sha256'] and summary['source_sha256']==MODULES['mcp']['source_sha256'],'receipt owner differs')
+            require(summary.get('typed_text_publication_handoff_checked') is True,'typed text publication receipt was not checked')
         for claim in ['complete_runtime','complete_config_owner','production_activated','regex_compilation_closed']:
             if claim in summary:require(summary[claim] is False,'native report overstates scope')
         records.append({'name':name,'command':check['command'],'exit':0,'elapsed':check['elapsed_seconds'],'stdout_sha256':check['stdout_sha256'],'stderr_sha256':check['stderr_sha256'],'completed_test_summary':summary})

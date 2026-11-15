@@ -1,4 +1,4 @@
-"""Actual static ten-image MCP, administrator startup and immutable authority.
+"""Actual static eleven-image MCP, administrator startup and immutable authority.
 
 The original SDK result-byte replay is a separate Cargo-backed recipe. These
 tests execute the same fixed ELF, with no interpreter or subprocess fallback.
@@ -9,8 +9,8 @@ import argparse,collections,copy,fcntl,hashlib,json,os,select,subprocess,tempfil
 ROOT=Path(__file__).resolve().parents[2]
 MANIFEST=None;OUTPUT=None;COUNTS=collections.Counter();TRANSCRIPT=[]
 sha=lambda b:hashlib.sha256(b).hexdigest()
-NAMES=['owner','fs','json','validation','identity','mcp','execution','execution_json','execution_core','value']
-SOURCES={**{name:'config_'+name for name in NAMES[:6]},'execution':'execution_controller','execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json'}
+NAMES=['owner','fs','json','validation','identity','mcp','execution','execution_json','execution_core','value','publication']
+SOURCES={**{name:'config_'+name for name in NAMES[:6]},'execution':'execution_controller','execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json','publication':'result_publication'}
 
 def compact(value):return json.dumps(value,ensure_ascii=False,separators=(',',':')).encode()
 def request(name,args=b'{}',ident=1):
@@ -62,14 +62,14 @@ class NativeConfigMCP(unittest.TestCase):
         cls.metadata=json.loads(MANIFEST.read_bytes());cls.exe=MANIFEST.parent/cls.metadata['executable'];elf=cls.exe.read_bytes()
         assert sha(elf)==cls.metadata['elf_sha256'] and len(elf)==cls.metadata['elf_bytes']
         assert sha((ROOT/'scripts/config_mcp_adapter.S').read_bytes())==cls.metadata['adapter_source_sha256']
-        assert [m['id'] for m in cls.metadata['members']]==list(range(10))
+        assert [m['id'] for m in cls.metadata['members']]==list(range(11))
         for name,m in zip(NAMES,cls.metadata['members'],strict=True):
             assert m['name']==name
             assert sha((ROOT/'native'/(SOURCES[name]+'.hepta')).read_bytes())==m['source_sha256']
             path=Path(m['manifest']);data=json.loads(path.read_bytes());image=(path.parent/data['image']).read_bytes()
             assert sha(path.read_bytes())==m['manifest_sha256'] and sha(image)==m['image_sha256']
             assert elf[m['offset']:m['offset']+len(image)]==image
-        COUNTS['embedded_images_verified']=10
+        COUNTS['embedded_images_verified']=11
     def tool(self,s,name,args=b'{}',ident=1,error=False):
         value,wire=s.call(request(name,args,ident));self.assertEqual(value['id'],ident)
         self.assertEqual(set(value['result']),{'content','isError'});self.assertEqual(value['result']['isError'],error)

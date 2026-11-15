@@ -27,9 +27,9 @@ import qualify_hia_runtime_native as q
 
 PARTITIONS = {
     "batch": ("batch_plan", "batch_apply", "atomic_write"),
-    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "request_context", "response_hints",
+    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "request_context", "response_hints", "result_publication",
              "line_endpoint", "line_verify",
-             "delta", "editable_content", "view_render", "view_cache", "history"),
+             "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",

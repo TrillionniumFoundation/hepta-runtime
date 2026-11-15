@@ -1,11 +1,38 @@
-"""Build an actual static ten-image administrator-configured MCP service."""
+"""Build an actual static eleven-image administrator-configured MCP service."""
 from pathlib import Path
 import argparse,hashlib,json,re,struct,subprocess,sys
 ROOT=Path(__file__).resolve().parents[1]
 sha=lambda b:hashlib.sha256(b).hexdigest()
-NAMES=['owner','fs','json','validation','identity','mcp','execution','execution_json','execution_core','value']
+NAMES=['owner','fs','json','validation','identity','mcp','execution','execution_json','execution_core','value','publication']
 SOURCES={**{name:'config_'+name for name in NAMES[:6]},'execution':'execution_controller',
-         'execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json'}
+         'execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json','publication':'result_publication'}
+
+def packer_source(prefix, holes):
+    from generate_hia_transport import document
+    from hepta.hia_agent_assembly import render_assembly
+    from tools.generate_hia_elf_linker import SOURCE as HELPERS
+    source='def pack(s:readbuf, o:mutbuf, w:mutbuf) -> u32:\n'
+    source+='    if length(s) < 115 or length(s) > 8388608:\n        return 4294967295\n'
+    source+=f"    if uint(s, 0, 8) != {int.from_bytes(b'HCFGMCP3','little')} or uint(s, 96, 8) != 0:\n        return 4294967295\n"
+    source+='    total = 0\n    i = 0\n    while i < 11:\n        part = uint(s, 8 + i * 8, 8)\n        if part == 0 or part > 1048576:\n            return 4294967295\n        total = total + part\n        i = i + 1\n    if length(s) != 104 + total:\n        return 4294967295\n'
+    source+=f'    size = {len(prefix)} + total\n    if size > 8388608 or length(o) < size:\n        return 4294967294\n'
+    source+='    write_prefix(o)\n'
+    source+='    write(o, 96, size, 8)\n    write(o, 104, size, 8)\n'
+    source+=f'    at = {len(prefix)}\n    pos = 104\n'
+    for i,hole in enumerate(holes):
+        source+=f'    part = uint(s, {8+i*8}, 8)\n    write(o, {hole}, at - {hole+4}, 4)\n    copy_bytes(s, o, pos, at, part)\n    at = at + part\n    pos = pos + part\n'
+    source+='    return size\n\ndef write_prefix(o:mutbuf) -> u64:\n'
+    chunks=[list(range(at,min(at+1024,len(prefix)),8)) for at in range(0,len(prefix),1024)]
+    for i in range(len(chunks)):source+=f'    prefix_chunk_{i}(o)\n'
+    source+='    return 0\n'
+    for i,chunk in enumerate(chunks):
+        source+=f'\ndef prefix_chunk_{i}(o:mutbuf) -> u64:\n'
+        for at in chunk:
+            raw=prefix[at:at+8];source+=f'    write(o, {at}, {int.from_bytes(raw,"little")}, {len(raw)})\n'
+        source+='    return 0\n'
+    source+=HELPERS[HELPERS.index('\ndef uint('):]
+    raw=render_assembly(document(source,'runtime_config_mcp_packer')).encode()
+    return raw
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -22,7 +49,7 @@ def main():
     from hepta.hia_agent_assembly import render_assembly
     from tools.generate_hia_elf_linker import SOURCE as HELPERS
     build=NativeBuild(a.hepta,a.build_root);build.bootstrap()
-    names=NAMES;profiles=['history.v1','standard','serde-json.v1','history.v1','history.v1','history.v1','history.v1','history.v1','history.v1','serde-json.v1']
+    names=NAMES;profiles=['history.v1','standard','serde-json.v1','history.v1','history.v1','history.v1','history.v1','history.v1','history.v1','serde-json.v1','standard']
     members=[];images=[]
     for index,(name,profile) in enumerate(zip(names,profiles)):
         path=getattr(a,name+'_manifest').resolve(strict=True);m=json.loads(path.read_bytes())
@@ -53,33 +80,11 @@ def main():
     prefix=header+(work/'adapter.bin').read_bytes()
     for hole in holes:
         if prefix[hole-1:hole+4]!=b'\xe8\0\0\0\0':raise ValueError('native call hole differs')
-    source='def pack(s:readbuf, o:mutbuf, w:mutbuf) -> u32:\n'
-    source+='    if length(s) < 106 or length(s) > 8388608:\n        return 4294967295\n'
-    source+=f"    if uint(s, 0, 8) != {int.from_bytes(b'HCFGMCP2','little')} or uint(s, 88, 8) != 0:\n        return 4294967295\n"
-    for i in range(10):
-        source+=f'    n{i} = uint(s, {8+i*8}, 8)\n    if n{i} == 0 or n{i} > 1048576:\n        return 4294967295\n'
-    source+='    total = n0 + n1 + n2 + n3 + n4 + n5 + n6 + n7 + n8 + n9\n    if length(s) != 96 + total:\n        return 4294967295\n'
-    source+=f'    size = {len(prefix)} + total\n    if size > 8388608 or length(o) < size:\n        return 4294967294\n'
-    source+='    write_prefix(o)\n'
-    source+='    write(o, 96, size, 8)\n    write(o, 104, size, 8)\n'
-    source+=f'    at = {len(prefix)}\n    pos = 96\n'
-    for i,hole in enumerate(holes):
-        source+=f'    write(o, {hole}, at - {hole+4}, 4)\n    copy_bytes(s, o, pos, at, n{i})\n    at = at + n{i}\n    pos = pos + n{i}\n'
-    source+='    return size\n\ndef write_prefix(o:mutbuf) -> u64:\n'
-    chunks=[list(range(at,min(at+1024,len(prefix)),8)) for at in range(0,len(prefix),1024)]
-    for i in range(len(chunks)):source+=f'    prefix_chunk_{i}(o)\n'
-    source+='    return 0\n'
-    for i,chunk in enumerate(chunks):
-        source+=f'\ndef prefix_chunk_{i}(o:mutbuf) -> u64:\n'
-        for at in chunk:
-            raw=prefix[at:at+8];source+=f'    write(o, {at}, {int.from_bytes(raw,"little")}, {len(raw)})\n'
-        source+='    return 0\n'
-    source+=HELPERS[HELPERS.index('\ndef uint('):]
-    raw=render_assembly(document(source,'runtime_config_mcp_packer')).encode()
+    raw=packer_source(prefix,holes)
     packer=ROOT/'native/config_mcp_packer.hepta'
     if packer.read_bytes()!=raw:raise ValueError('frozen HIA composition packer differs from the fixed adapter')
     manifest=build.compile(a.name+'-packer',packer,standalone=None)
-    frame=b'HCFGMCP2'+b''.join(struct.pack('<Q',len(image)) for image in images)+bytes(8)+b''.join(images)
+    frame=b'HCFGMCP3'+b''.join(struct.pack('<Q',len(image)) for image in images)+bytes(8)+b''.join(images)
     with NativeModule(manifest,manifest_sha256=sha(manifest.read_bytes())) as module:
         elf=module.invoke(frame,output_capacity=len(prefix)+sum(map(len,images)),workspace_capacity=4096)
     expected=bytearray(prefix);struct.pack_into('<QQ',expected,96,len(elf),len(elf));at=len(prefix)
@@ -100,10 +105,14 @@ def main():
                 packer_source_sha256=sha(raw),packer_manifest=str(manifest.resolve()),packer_manifest_sha256=sha(manifest.read_bytes()),
                 builder_source_sha256=sha(Path(__file__).read_bytes()),
                 generic_build_sha256=sha((ROOT/'scripts/hia_native_build.py').read_bytes()),generic_loader_sha256=sha((ROOT/'scripts/hia_native_loader.py').read_bytes()),
-                call_edges={'0':[1,2,3,4],'5':[0,6,9],'6':[0,7,8]},only_effect_owner=1,
+                call_edges={'0':[1,2,3,4],'5':[0,6,9,10],'6':[0,7,8]},only_effect_owner=1,
                 administrator_startup_event=0,caller_configuration_installation=False,protocol_version='2025-06-18',
                 tool_names=['host_list','effective_config','execution_shadow_admit'],
-                fixture_admin_reinstallation=False,complete_config_owner=False,regex_compilation_closed=False,
+                fixture_admin_reinstallation=False,complete_config_owner=False,
+                result_publication_image_id=10,result_publication_source='native/result_publication.hepta',
+                result_publication_source_sha256=members[10]['source_sha256'],result_publication_image_sha256=members[10]['image_sha256'],
+                result_publication_handoff='config_mcp.tool_result fixed envelope prefix and original text span',
+                filesystem_hint_callers_replaced=False,publication_fixture_is_production=False,regex_compilation_closed=False,
                 fresh_cold_qualified=False)
     (work/'manifest.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
     print(json.dumps({'manifest':str((work/'manifest.json').resolve()),'elf_sha256':sha(elf),'elf_bytes':len(elf),'configuration_from_stdin':False}))

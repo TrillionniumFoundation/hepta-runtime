@@ -87,12 +87,14 @@ tool and old-stack-removal declarations therefore remain incomplete.
 ## Installed configuration and MCP composition
 
 The [configuration scope](config_scope.md) and [private owner contract](config_owner_abi.md)
-cover six native semantic owners and four fixed HIA packers. The ten-image static
+cover the configuration owners and four fixed HIA packers. The eleven-image static
 stdio profile provides `host_list`, `effective_config` and `execution_shadow_admit`.
 Startup owns configuration installation, actual lock descriptors and immutable
 host identity; tool input cannot install a configuration or supply an authority
 receipt. Its fixed call table connects generic JSON Value parsing, typed schemas,
-installed exact-host lookup and the native shadow controller.
+installed exact-host lookup and the native shadow controller. Its tool-result
+path hands the original text and trusted JSON-RPC prefix to the same growable
+result owner qualified below. A complete response is not escaped a second time.
 
 Six mandatory native suites cover 35 test groups. The focused observed version
 passes 6,580 typed calls, 4,049 semantic calls, 61 filesystem requests, 73 owner
@@ -114,9 +116,9 @@ changed recipe bytes or the fresh repository aggregate.
 
 ## Native components
 
-Qualification covers 59 native HIA sources through 35 executable component
-entries, including 15 HIA packers; the two scope profiles share their HIA scope
-owner. The complete source closure binds 528 files. The shadow entry
+Qualification covers 62 native HIA sources through 37 executable component
+entries, including 16 HIA packers; the two scope profiles share their HIA scope
+owner. The complete source closure binds 558 files. The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
 as qualification-only. The 16 other test HIA fixtures are recorded separately.
@@ -129,6 +131,7 @@ These counts do not count migrated production MCP handlers.
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
 | [request_context.hepta](request_context.hepta) | Private nested hint queues, insertion-order deduplication, drain/exit/destruction and a dispatcher-owned view-cache association |
 | [response_hints.hepta](response_hints.hepta) | Exact original response text composition from a complete drained hint list, including empty hints and every valid Unicode scalar |
+| [result_publication.hepta](result_publication.hepta) | Growable private result construction, incremental original hint/JSON serialization and partial-ACK publication lifecycle |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
 | [batch_plan.hepta](batch_plan.hepta) | Original typed batch admission, operation parsing and endpoint planning, complete ordered diagnostics and full 50-operation / 5 MiB file domains |
 | [batch_apply.hepta](batch_apply.hepta) | Original ordered batch conflicts, duplicate/noise diagnostics, full application through EditableContent, Rust Debug escaping and fixed plan-to-apply composition |
@@ -141,6 +144,7 @@ These counts do not count migrated production MCP handlers.
 | [view_filter_packer.hepta](view_filter_packer.hepta) | Static filter for the explicit view-render capacity profile, with exact compiled-image binding |
 | [view_cache.hepta](view_cache.hepta) | Persistent serial cache state, lifecycle, per-value limit, invalidation, poisoned-lock behavior and native view-plan application |
 | [history.hepta](history.hepta) | Persistent serial original undo snapshots, ten-entry per-file eviction, 64 MiB global budget, stale queue events and exact push/pop/lifecycle behavior |
+| [session_workdir.hepta](session_workdir.hepta) | Private per-session root/current path state, exact poisoned-lock behavior and the one-time first-tool atomic latch |
 | [fence_json.hepta](fence_json.hepta) | Exact original typed owner/job serde projection, duplicate-known rejection and IgnoredAny grammar |
 | [serde_json.hepta](serde_json.hepta) | Locked Value ordering, integer/float classification and compact finite-number serialization |
 | [serde_filter_packer.hepta](serde_filter_packer.hepta) | Static filter for the explicit serde-json.v1 16/64/256 MiB profile |
@@ -251,6 +255,24 @@ The retained observation is in
 Shared file locks, canonical path keys, filesystem writes and production undo
 routing remain separate owners; a serial snapshot store alone does not replace
 the `undo_edit` handler.
+
+The [private session owner](session_workdir_abi.md) retains an immutable root,
+optional current path, original poisoned-lock behavior and the first-tool atomic
+latch in one session-owned workspace. Its native suite replays all 4,914
+original-owner rows, including complete 8 MiB path values, with 5,043 image
+calls. Eight persistent ELF sessions separately replay 320 smaller wire frames;
+that fixture domain does not stand in for the wide image corpus. The original
+recipe freshly compiles the unchanged `SessionWorkdir` methods, genuinely
+poisons nine original locks and checks the atomic latch with 64 Rust threads.
+The native side admits 64 serialized entries against the same private state.
+Fifteen evidence controls bind the complete streams, images, private call table,
+compiler receipts and actual process commands. An independent invocation of the
+three unified qualification entries passed in 18.807 seconds using verified
+compiler artifacts; this is a focused run, not a fresh full compiler-cold claim.
+First-capabilities policy/OS checks, the public `workdir` handler and concurrent
+HTTP session ownership remain caller work. No production handler is activated
+by this state component.
+
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
 The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
@@ -317,13 +339,13 @@ and one aggregate/original-Rust job. The prepare job executes the full cold gate
 and builds every module once. Its exact SHA256 is passed through the workflow;
 every partition checks the full source, compiler, build and invocation identity
 before executing its complete suite list. Batch, text/history/view, JSON and
-system suites run on separate runners with 10, 21, 22 and 32 native suites,
+system suites run on separate runners with 10, 25, 22 and 32 native suites,
 respectively. Each job retains the original 15-minute
 limit; every native process retains 180 seconds and the cold/owner limits below
 are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
-native evidence checks and all 30 original Rust recipes. Artifact transport can
+native evidence checks and all 32 original Rust recipes. Artifact transport can
 strip executable permissions; only byte-verified owned regular files have their
 recorded ordinary permissions restored. The aggregate retains the original
 partition reports and rechecks them before and after the original comparisons.
@@ -336,11 +358,14 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 85 native suite processes, the fresh compiler cold process,
-30 required original Rust recipes and one Rust-version process: 149 recorded
+The declared run has 89 native suite processes, the fresh compiler cold process,
+32 required original Rust recipes and one Rust-version process: 156 recorded
 checks in a complete successful aggregate. The two JSON recipes share one locked
 Cargo build and each perform a complete independent replay. The two request-context
 recipes share another fresh locked Cargo build and two original execution processes.
+The result-publication recipe has its own locked build and complete-byte replay.
+The session recipe contributes one outer aggregate check and retains four nested
+processes for Rust identity, compilation, complete replay and the concurrent latch.
 A component's retained historical
 comparison is not a fresh aggregate invocation.
 The OS-scope, authority-transport and file-info-guard suites run through two
@@ -455,7 +480,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all 27 required original Rust recipes succeed. The Python reference domain
+after all 29 required original Rust recipes succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -1112,6 +1137,73 @@ not implement that scheduler, retain an original `Arc` object, or authenticate a
 cache association. The bounded image, its test transport and a successful Rust
 comparison therefore do not qualify production task-local routing or removal
 of the original request dispatcher.
+
+## Result construction and publication
+
+The [result owner](result_publication_abi.md) constructs a private result before
+publication, validates UTF-8 across input fragments, and seals every base/hint
+record before a publisher can begin. It preserves the original empty-hint and
+warning/newline behavior, then emits raw text, a JSON string, a legacy MCP result,
+or the result behind a trusted JSON-RPC prefix. Caller-owned hints are already
+drained; this owner does not add a second deduplication rule.
+
+The arena starts at 128 KiB and can grow through an explicit native continuation.
+It stores offsets rather than pointers, so a relocated mapping keeps the same
+object. There is no application-wide total-result or chunk-count quota. LP64
+integer limits, available address space and actual allocation failures remain
+resource limits. The 64 KiB publication window is a transfer unit, not a limit
+on the completed response. The earlier full-frame response composer remains a
+bounded component and is not used to cap this growable result path.
+
+START transfers ownership to the publisher. Actual writes and their returned
+byte counts are recorded separately; START alone does not prove an OS write.
+PULL retains an outstanding window, and ACK accepts only the actual positive
+portion of that window. A new window cannot replace unacknowledged bytes.
+Cancellation and retirement preserve the observed confirmed-byte count and
+reject stale generation/sequence acknowledgements. The fixed source-owned
+Linux boundary grows the mapping and performs writes without a Python, Rust,
+libc or dynamic-loader runtime dependency. It preserves inherited open-file
+status flags on normal completion and every tested failure path.
+
+The eleven mandatory native groups execute **32,183 direct HIA calls** across
+146 private sessions, including 60 actual driver mapping relocations. They retain
+**90 complete semantic inputs and 88,906,008 output bytes**, including all valid
+Unicode scalars, split UTF-8, control characters, empty and repeated hints,
+4,097 hints and responses larger than 8 MiB and 16 MiB. Invalid/state/capacity
+refusals and six private counter controls remain separate from original semantic
+comparisons. The suite also executes **11 actual static ELF processes**. Five
+successful publisher processes retain **25,543,155 complete stdout bytes**;
+partial writes and EAGAIN counts are recomputed from each run's actual kernel
+receipts rather than fixed to one machine's scheduling.
+
+A separate actual ELF control restricts its address space, observes a real
+mremap allocation failure, confirms the old object can still accept a fitting
+append, restores the resource limit and retries the identical large append.
+It then exercises cancellation, stale ACK refusal and a new generation using
+23 retained protocol frames. These private controls are not counted as kernel
+writes or as extra original Rust semantics. The initial descriptor-flag failure
+remains a failed development observation; the repaired boundary has a fresh
+strict 180-second native run. Focused native results do not claim a fresh compiler
+cold run.
+
+The independent Rust recipe extracts the exact original append function from
+the frozen runtime and uses its locked serde_json and rmcp versions. Its fresh
+build retains 180 seconds and its full replay 120 seconds. It compares every
+captured semantic byte and all five actual publisher outputs, including the real
+SDK normalization for legacy peers. Source manifests, compiled images, complete
+stdio, exact invocations and deadlines are re-read by the aggregate. The evidence
+suite independently checks refusal of altered or incomplete captures.
+
+The installed configuration profile now uses this same HIA owner for actual
+MCP tool-result delivery. Its existing six suites and the complete **1,119 SDK
+protocol responses** pass after the integration. That configuration corpus has
+a maximum observed response of 1,427 bytes; the larger actual publisher tests
+are independent same-owner executions, not large configuration responses.
+The nine filesystem/shell callers still need their real dispatcher, session,
+I/O and cancellation joins. In particular, a writer that has already committed
+an effect must not acquire a new result-size error during publication. This
+component does not claim those callers, a concurrent request scheduler, or the
+complete runtime has been replaced.
 
 ## Remaining migration work and cleanup
 

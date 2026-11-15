@@ -46,11 +46,17 @@ def main():
         assert (word(FOOTER+32),word(FOOTER+40),word(FOOTER+56),word(FOOTER+64))==(33550336,24,100667392,67108864)
         response=struct.pack('<8s3Q',b'HRCFGM01',0,0,2)+b'{}';ctypes.memmove(w+word(FOOTER+56),response,len(response))
         word(FOOTER+80,len(response));word(FOOTER+88,word(FOOTER+8));word(FOOTER+96,1)
-        code,data=invoke(s,raw);count+=1;assert code==len(data) and json.loads(data)['result']=={'content':[{'type':'text','text':'{}'}],'isError':False}
+        code,data=invoke(s,raw);count+=1
+        assert code==0xffffffd1 and data==b''
+        assert word(FOOTER+160)==int.from_bytes(b'HRPPUB01','little')
+        assert (word(FOOTER+168),word(FOOTER+176),word(FOOTER+192),word(FOOTER+200))==(100667424,2,0,1)
+        prefix=ctypes.string_at(s._output,word(FOOTER+184))
+        assert prefix==b'{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":'
+        assert ctypes.string_at(w+word(FOOTER+168),word(FOOTER+176))==b'{}'
         # A resume with another input span is refused before consuming its
         # pending typed child result; no invocation is reinterpreted as startup.
         prepared();assert invoke(s,raw+b' ')[0]==INVALID;count+=2
         word(P+1024,0);assert json.loads(invoke(s,ping)[1])['result']=={};count+=1
-    report={'schema':'hepta.runtime.config-mcp-receipts.v1','status':'PASS','groups':4,'native_calls':count,'corrupt_receipt_offsets':receipt_controls,'capacity_initialization_committed':False,'synthetic_child_receipts':True,'actual_child_semantics_in_separate_static_elf_suite':True,'elapsed':time.monotonic()-start,'manifest_sha256':sha(mpath.read_bytes()),'source_sha256':sha((ROOT/'native/config_mcp.hepta').read_bytes())}
+    report={'schema':'hepta.runtime.config-mcp-receipts.v1','status':'PASS','groups':4,'native_calls':count,'corrupt_receipt_offsets':receipt_controls,'capacity_initialization_committed':False,'synthetic_child_receipts':True,'typed_text_publication_handoff_checked':True,'actual_child_semantics_in_separate_static_elf_suite':True,'elapsed':time.monotonic()-start,'manifest_sha256':sha(mpath.read_bytes()),'source_sha256':sha((ROOT/'native/config_mcp.hepta').read_bytes())}
     (out/'report.json').write_text(json.dumps(report,sort_keys=True,indent=2)+'\n');print(json.dumps(report,sort_keys=True))
 if __name__=='__main__':main()

@@ -61,9 +61,11 @@ from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
 from hia_native_json_qualification import (COMPONENTS as JSON_COMPONENTS, TRANSPORT_REPORT as JSON_TRANSPORT_REPORT,
                                            qualification_evidence as checked_json_evidence)
 from hia_native_request_context_qualification import qualification_evidence as checked_request_context_evidence
+from hia_native_result_publication_qualification import qualification_evidence as checked_result_publication_evidence
 import hia_native_execution_qualification as execution_qualification
 import hia_native_effect_fence_qualification as effect_fence_qualification
 import hia_native_config_qualification as config_qualification
+import hia_native_session_qualification as session_qualification
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -79,6 +81,10 @@ MODULES = (
     {"key": "response_hints", "name": "response-hints", "source": "native/response_hints.hepta",
      "standalone": "filter", "manifest_env": "HIA_RESPONSE_HINTS_MANIFEST", "test": "test_response_hints.py",
      "additional_tests": ("test_request_context_transport.py", "test_request_context_evidence.py")},
+    {"key": "result_publication", "name": "result-publication", "source": "native/result_publication.hepta",
+     "builder": "result_publication", "manifest_env": "HIA_RESULT_PUBLICATION_FIXTURE_MANIFEST",
+     "test": "test_result_publication.py", "additional_tests": ("test_result_publication_evidence.py",),
+     "companion_sources": ("native/result_publication_packer.hepta",)},
     {"key": "line_endpoint", "name": "line-endpoint", "source": "native/line_endpoint.hepta",
      "standalone": None, "manifest_env": "HIA_ENDPOINT_MANIFEST", "test": "test_line_endpoint.py"},
     {"key": "line_verify", "name": "line-verify", "source": "native/line_verify.hepta",
@@ -110,6 +116,9 @@ MODULES = (
     {"key": "history", "name": "history", "source": "native/history.hepta",
      "builder": "history", "manifest_env": "HIA_HISTORY_BUNDLE", "test": "test_history.py",
      "additional_tests": ("test_history_evidence.py",)},
+    {"key": "session_workdir", "name": "session-workdir", "source": "native/session_workdir.hepta",
+     "builder": "session_workdir", "manifest_env": "HIA_SESSION_BUNDLE", "test": "test_session_workdir.py",
+     "additional_tests": ("test_session_evidence.py",)},
     {"key": "fence_json", "name": "fence-json", "source": "native/fence_json.hepta",
      "standalone": "filter", "manifest_env": "HIA_FENCE_JSON_MANIFEST", "test": "test_fence_json.py"},
     {"key": "serde_json", "name": "serde-json", "source": "native/serde_json.hepta",
@@ -238,6 +247,8 @@ def sources() -> dict:
         "hia_native_view_cache_build.py", "hia_native_view_cache_qualification.py",
         "hia_native_history_build.py", "hia_native_history_qualification.py", "hia_native_json_qualification.py",
         "hia_native_request_context_build.py", "hia_native_request_context_qualification.py", "hia_native_request_context_reference.py",
+        "hia_native_result_publication_build.py", "hia_native_result_publication_qualification.py",
+        "hia_native_result_publication_reference.py", "result_publication_adapter.S",
         'build_config_fs_probe.py',
         'build_config_mcp_service.py',
         'build_config_owner_probe.py',
@@ -249,6 +260,7 @@ def sources() -> dict:
         'hia_native_config_reference.py',
         'hia_native_config_qualification.py',
         "hia_native_execution_build.py", "hia_native_execution_qualification.py",
+        "hia_native_session_build.py", "hia_native_session_qualification.py",
         "hia_native_effect_fence_build.py", "hia_native_effect_fence_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
@@ -575,6 +587,10 @@ def request_context_evidence(output: Path, report: dict) -> dict:
     return checked_request_context_evidence(ROOT, output, report, completed_test_summary)
 
 
+def result_publication_evidence(output: Path, report: dict) -> dict:
+    return checked_result_publication_evidence(ROOT, output, report, completed_test_summary)
+
+
 def entropy_evidence(output: Path, report: dict) -> dict:
     return checked_entropy_evidence(ROOT, output, report, completed_test_summary)
 
@@ -872,6 +888,10 @@ def history_evidence(output: Path, report: dict) -> dict:
 
 def config_evidence(output: Path, report: dict, *, create: bool = False) -> dict:
     return config_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def session_evidence(output: Path, report: dict) -> dict:
+    return session_qualification.qualification_evidence(ROOT, output, report, completed_test_summary)
 
 
 def effect_fence_evidence(output: Path, report: dict) -> dict:
@@ -1997,6 +2017,8 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_RESPONSE_HINTS_CORPUS_DIR": str(output / "response-hints-rust-oracle"),
         "HIA_REQUEST_CONTEXT_TRANSPORT_DIR": str(output / "request-context-transport"),
         "HIA_REQUEST_CONTEXT_QUALIFICATION_OUTPUT": str(output),
+        "HIA_RESULT_PUBLICATION_CORPUS_DIR": str(output / "result-publication"),
+        "HIA_RESULT_PUBLICATION_QUALIFICATION_OUTPUT": str(output),
         "HIA_ENDPOINT_CORPUS_DIR": str(output / "endpoint-rust-oracle"),
         "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
         "HIA_EDITABLE_CORPUS_DIR": str(output / EDITABLE_FOLDER),
@@ -2066,6 +2088,9 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
                 output / "build" / bundle["members"]["production"]["manifest"])
             env["HIA_FENCE_ASYNC_SINGLE_MANIFEST"] = str(
                 output / "build" / bundle["members"]["queue_fixture"]["manifest"])
+        elif item.get("builder") == "result_publication":
+            bundle = json.loads(built.read_bytes())
+            env["HIA_RESULT_PUBLICATION_MANIFEST"] = str(output / "build" / bundle["owner_manifest"])
         elif item.get("builder") == "authority_composition":
             env["HIA_AUTHORITY_MANIFEST"] = str(built.parent / "module_00.json")
             env["HIA_AUTHORITY_LOADER_MANIFEST"] = str(built.parent / "module_08.json")
@@ -2132,8 +2157,14 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "history":
             from hia_native_history_build import build_history
             built = build_history(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "session_workdir":
+            from hia_native_session_build import build_session
+            built = build_session(hepta, output / "build", source_root=ROOT, reference_root=ROOT)
         elif item.get("builder") == "runtime_config":
             built = config_qualification.build_config(hepta, output / "build", ROOT)
+        elif item.get("builder") == "result_publication":
+            from hia_native_result_publication_build import build_result_publication
+            built = build_result_publication(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "execution_shadow":
             from hia_native_execution_build import build_execution
             built = build_execution(hepta, output / "build", source_root=ROOT)
@@ -2192,6 +2223,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands = batch_apply_test_commands(output, output / report["modules"]["batch_apply"]["manifest"])
     commands.update(execution_test_commands(output, report))
     commands.update(config_qualification.test_commands(ROOT, output, report))
+    commands.update(session_qualification.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
@@ -2199,6 +2231,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
 
 def collect_native_evidence(output: Path, report: dict) -> None:
     report["request_context_evidence"] = request_context_evidence(output, report)
+    report["result_publication_evidence"] = result_publication_evidence(output, report)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
     report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -2223,6 +2256,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["view_render_evidence"] = view_render_evidence(output, report)
     report["view_cache_evidence"] = view_cache_evidence(output, report)
     report["history_evidence"] = history_evidence(output, report)
+    report["session_evidence"] = session_evidence(output, report)
     report["json_evidence"] = json_evidence(output, report)
     report["execution_evidence"] = execution_evidence(output, report)
     report["effect_fence_evidence"] = effect_fence_evidence(output, report)
@@ -2245,6 +2279,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"] = {
         "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
     report["rust_oracle_inputs"].update(report["request_context_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["result_publication_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update({
         ENTROPY_FOLDER + "/" + name: sha(output / ENTROPY_FOLDER / name) for name in ENTROPY_CORPUS_FILES})
     report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])
