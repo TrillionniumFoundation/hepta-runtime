@@ -184,7 +184,8 @@ def compare_reference(root: Path, native_corpus: Path, original_output: Path) ->
                              original_outer_server_view_method_executed=False)
     return dict(schema='hepta.runtime.mcp-view-original-comparison.v1',status='PASS',counts=counts,
                 shared_original_processes=9,new_original_processes=0,new_native_calls=0,
-                native_processes=98,native_responses=192,all_192_responses_compared_as_complete_original_server_replies=False,
+                native_processes=109,native_responses=222,all_native_responses_compared_as_complete_original_server_replies=False,
+                added_regex_controls_compared_to_original_view=False,
                 whole_view_replaced=False,whole_runtime_replaced=False,complete_sdk_frontend=False,
                 full_original_tool_catalog_compared=False,response_storage_globally_unbounded=False,
                 artifact_sha256=dict(sorted(evidence.artifact_sha256.items())),

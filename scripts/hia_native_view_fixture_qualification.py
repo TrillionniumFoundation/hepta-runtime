@@ -14,7 +14,8 @@ from hia_native_result_publication_qualification import decode, exact, require, 
 RECEIPT = "view-call/retired-fixtures.json"
 ARCHIVE = "view-call/retired-fixtures.bin.gz"
 MAGIC = b"HVFIX001"
-FIXTURE = re.compile(r"(?:view-call/caller/files-[0-9]+|view-call/wide/files|runtime-mcp/files)\Z")
+FIXTURE = re.compile(r"(?:view-call/caller/files-[0-9]+|view-call/wide/files|"
+                     r"view-search/files-(?:100(?:[0-5][0-9]|6[0-3])|20000)|runtime-mcp/files)\Z")
 HEX = re.compile(r"(?:[0-9a-f]{2})+\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 

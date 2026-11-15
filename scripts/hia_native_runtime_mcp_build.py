@@ -54,6 +54,12 @@ MEMBERS = [
     ("render", "view_render", "history.v1"),
     ("request_context", "request_context", "standard"),
     ("view_error", "view_error", "standard"),
+    ("regex_syntax", "regex_syntax", "history.v1"),
+    ("regex_unicode_data", "regex_unicode_data", "standard"),
+    ("regex_hir", "regex_hir", "history.v1"),
+    ("regex_nfa", "regex_nfa", "history.v1"),
+    ("regex_match", "regex_match", "history.v1"),
+    ("regex_controller", "regex_controller", "history.v1"),
 ]
 BASE = "scripts/config_mcp_adapter.S"
 BOUNDARIES = [
@@ -100,7 +106,7 @@ def adapter_source(root: Path, images: dict[str, Path]) -> str:
     source = replace_once(source, "    cmp qword ptr [r14 + FOOTER + 120], 0\n    je startup_completed\n", "    cmp qword ptr [r14 + FOOTER + 120], 0\n    je startup_completed\n    cmp qword ptr [r14 + FOOTER + 120], 4\n    je startup_completed\n")
     source = replace_once(source, "startup_completed:\n    test eax, eax\n    jz frame_next\n", "startup_completed:\n    test eax, eax\n    jz runtime_install_private\n")
     source = replace_once(source, "    mov rax, [rdx + 16]\n    cmp rax, 9\n    je mcp_value_call\n", "    mov rax, [rdx + 16]\n    cmp rax, 11\n    jae runtime_mcp_extra_call\n    cmp rax, 9\n    je mcp_value_call\n")
-    for name, _, _ in MEMBERS[:11]:
+    for name, _, _ in MEMBERS[:11] + MEMBERS[31:]:
         source = replace_once(source, "\n" + name + "_call_displacement:\n    .long 0", "\n" + name + "_call_displacement:\n    .long runtime_image_" + name + " - (. + 4)")
     source += "\n" + "\n".join((root / p).read_text() for p in BOUNDARIES)
     for table, slots in [("runtime_extra_image_table", EXTRA), ("runtime_view_image_table", VIEW)]:
@@ -212,6 +218,9 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name: str = "runtime-mcp",
         "linker_source_sha256": sha(linker_source.read_bytes()),
         "linker_manifest": str(linker), "linker_manifest_sha256": sha(linker.read_bytes()),
         "extra_table": EXTRA, "view_table": VIEW, "runtime_host_semantics": False,
+        "regex_local_call_edges": {"3":[15],"15":[10,12,13,14],"10":[11],"12":[11],"14":[11]},
+        "regex_selector_members": {"3":"validation","10":"regex_syntax","11":"regex_unicode_data","12":"regex_hir","13":"regex_nfa","14":"regex_match","15":"regex_controller"},
+        "regex_compilation_closed": False, "unconstrained_regex_resources_closed": False,
         "public_configuration_from_stdin": False, "public_private_instance_selectors": False,
         "complete_sdk_frontend": False, "whole_view_replaced": False, "whole_runtime_replaced": False,
         "directory_content_remote_routes_replaced": False,

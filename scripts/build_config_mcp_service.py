@@ -1,24 +1,24 @@
-"""Build an actual static eleven-image administrator-configured MCP service."""
+"""Build an actual static seventeen-image administrator-configured MCP service."""
 from pathlib import Path
 import argparse,hashlib,json,re,struct,subprocess,sys
 ROOT=Path(__file__).resolve().parents[1]
 sha=lambda b:hashlib.sha256(b).hexdigest()
-NAMES=['owner','fs','json','validation','identity','mcp','execution','execution_json','execution_core','value','publication']
+NAMES=['owner','fs','json','validation','identity','mcp','execution','execution_json','execution_core','value','publication','regex_syntax','regex_unicode_data','regex_hir','regex_nfa','regex_match','regex_controller']
 SOURCES={**{name:'config_'+name for name in NAMES[:6]},'execution':'execution_controller',
-         'execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json','publication':'result_publication'}
+         'execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json','publication':'result_publication',**{name:name for name in NAMES[11:]}}
 
 def packer_source(prefix, holes):
     from generate_hia_transport import document
     from hepta.hia_agent_assembly import render_assembly
     from tools.generate_hia_elf_linker import SOURCE as HELPERS
     source='def pack(s:readbuf, o:mutbuf, w:mutbuf) -> u32:\n'
-    source+='    if length(s) < 115 or length(s) > 8388608:\n        return 4294967295\n'
-    source+=f"    if uint(s, 0, 8) != {int.from_bytes(b'HCFGMCP3','little')} or uint(s, 96, 8) != 0:\n        return 4294967295\n"
-    source+='    total = 0\n    i = 0\n    while i < 11:\n        part = uint(s, 8 + i * 8, 8)\n        if part == 0 or part > 1048576:\n            return 4294967295\n        total = total + part\n        i = i + 1\n    if length(s) != 104 + total:\n        return 4294967295\n'
+    source+='    if length(s) < 169 or length(s) > 8388608:\n        return 4294967295\n'
+    source+=f"    if uint(s, 0, 8) != {int.from_bytes(b'HCFGMCP3','little')} or uint(s, 144, 8) != 0:\n        return 4294967295\n"
+    source+='    total = 0\n    i = 0\n    while i < 17:\n        part = uint(s, 8 + i * 8, 8)\n        if part == 0 or part > 1048576:\n            return 4294967295\n        total = total + part\n        i = i + 1\n    if length(s) != 152 + total:\n        return 4294967295\n'
     source+=f'    size = {len(prefix)} + total\n    if size > 8388608 or length(o) < size:\n        return 4294967294\n'
     source+='    write_prefix(o)\n'
     source+='    write(o, 96, size, 8)\n    write(o, 104, size, 8)\n'
-    source+=f'    at = {len(prefix)}\n    pos = 104\n'
+    source+=f'    at = {len(prefix)}\n    pos = 152\n'
     for i,hole in enumerate(holes):
         source+=f'    part = uint(s, {8+i*8}, 8)\n    write(o, {hole}, at - {hole+4}, 4)\n    copy_bytes(s, o, pos, at, part)\n    at = at + part\n    pos = pos + part\n'
     source+='    return size\n\ndef write_prefix(o:mutbuf) -> u64:\n'
@@ -49,7 +49,7 @@ def main():
     from hepta.hia_agent_assembly import render_assembly
     from tools.generate_hia_elf_linker import SOURCE as HELPERS
     build=NativeBuild(a.hepta,a.build_root);build.bootstrap()
-    names=NAMES;profiles=['history.v1','standard','serde-json.v1','history.v1','history.v1','history.v1','history.v1','history.v1','history.v1','serde-json.v1','standard']
+    names=NAMES;profiles=['history.v1','standard','serde-json.v1','history.v1','history.v1','history.v1','history.v1','history.v1','history.v1','serde-json.v1','standard','history.v1','standard','history.v1','history.v1','history.v1','history.v1']
     members=[];images=[]
     for index,(name,profile) in enumerate(zip(names,profiles)):
         path=getattr(a,name+'_manifest').resolve(strict=True);m=json.loads(path.read_bytes())
@@ -105,7 +105,9 @@ def main():
                 packer_source_sha256=sha(raw),packer_manifest=str(manifest.resolve()),packer_manifest_sha256=sha(manifest.read_bytes()),
                 builder_source_sha256=sha(Path(__file__).read_bytes()),
                 generic_build_sha256=sha((ROOT/'scripts/hia_native_build.py').read_bytes()),generic_loader_sha256=sha((ROOT/'scripts/hia_native_loader.py').read_bytes()),
-                call_edges={'0':[1,2,3,4],'5':[0,6,9,10],'6':[0,7,8]},only_effect_owner=1,
+                call_edges={'0':[1,2,3,4],'5':[0,6,9,10],'6':[0,7,8],'3':[16],'16':[11,13,14,15],'11':[12],'13':[12],'15':[12]},only_effect_owner=1,
+                regex_local_call_edges={'3':[15],'15':[10,12,13,14],'10':[11],'12':[11],'14':[11]},
+                regex_selector_members={'3':'validation','10':'regex_syntax','11':'regex_unicode_data','12':'regex_hir','13':'regex_nfa','14':'regex_match','15':'regex_controller'},
                 administrator_startup_event=0,caller_configuration_installation=False,protocol_version='2025-06-18',
                 tool_names=['host_list','effective_config','execution_shadow_admit'],
                 fixture_admin_reinstallation=False,complete_config_owner=False,
@@ -113,7 +115,7 @@ def main():
                 result_publication_source_sha256=members[10]['source_sha256'],result_publication_image_sha256=members[10]['image_sha256'],
                 result_publication_handoff='config_mcp.tool_result fixed envelope prefix and original text span',
                 filesystem_hint_callers_replaced=False,publication_fixture_is_production=False,regex_compilation_closed=False,
-                fresh_cold_qualified=False)
+                fresh_cold_qualified=False,unconstrained_regex_resources_closed=False)
     (work/'manifest.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
     print(json.dumps({'manifest':str((work/'manifest.json').resolve()),'elf_sha256':sha(elf),'elf_bytes':len(elf),'configuration_from_stdin':False}))
 

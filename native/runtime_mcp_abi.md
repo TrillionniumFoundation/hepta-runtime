@@ -1,14 +1,16 @@
 # HIA MCP ordinary-file view composition
 
 This composition is the implemented stdio profile for the three existing
-configuration tools and ordinary local-file `view`. All protocol decisions,
+configuration tools, ordinary local-file `view` and its literal content-search
+branch. All protocol decisions,
 capability admission, typed parameters, session initialization, path policy,
 view state, cache contents, rendering and JSON publication execute in the
-31 compiled HIA images. The assembly boundary supplies fixed child addresses,
+37 compiled HIA images. The assembly boundary supplies fixed child addresses,
 borrow validation, allocation, system calls and transport of HIA completions.
 
-It is not the complete 125-tool runtime. Directory view, content search,
-remote view, background resources, the complete SDK service surface and HTTP
+It is not the complete 125-tool runtime. Directory view, regular-expression
+content search, alternative-path search, remote view, background resources,
+the complete SDK service surface and HTTP
 dispatch remain unfinished. Input and gateway storage are a declared build
 profile, not a proof that the original public success domain is bounded.
 
@@ -83,6 +85,40 @@ Existing slots for configuration, execution, canonical JSON and publication
 remain their original fixed owners. The source proof is
 `runtime_mcp_composition.json`.
 
+### Installed configuration regex dependency
+
+The original 31 physical members retain their indices. The result-publication
+owner remains physical member 10, and six fixed regex images are appended at
+31–36. Configuration admission invokes the actual HIA regex controller before
+the owner creates its state directory or installs the configuration. Later
+configuration queries and view policy checks use the same installed owner;
+they do not reload an edited configuration file.
+
+The regex subtree uses its source-owned private selectors. Those selectors are
+not physical image indices in either executable:
+
+| Private selector | Owner | Config physical index | Public MCP physical index |
+|---|---|---|---|
+| 3 | validation | 3 | 3 |
+| 10 | regex syntax | 11 | 31 |
+| 11 | Unicode data | 12 | 32 |
+| 12 | HIR | 13 | 33 |
+| 13 | NFA | 14 | 34 |
+| 14 | matcher | 15 | 35 |
+| 15 | regex controller | 16 | 36 |
+
+The only private regex edges are 3→15, 15→10/12/13/14 and 10/12/14→11.
+The build manifest records these as `regex_local_call_edges` and binds each
+selector to its member name in `regex_selector_members`. The config manifest's
+separate `call_edges` uses physical indices, including frontend 5→publication
+10. Fixed assembly call holes bind names to the actual compiled images; public
+requests cannot choose a regex selector or image address.
+
+`runtime_mcp_regex_composition.json` records both parent commits and the
+unchanged publication and regex machine subtrees. This dependency closes the
+installed configuration path exercised by the focused tests. It does not claim
+arbitrary-size regex resources or public regular-expression content search.
+
 ### Metadata admission
 
 Request: `HCMADQ01 | op | a_len | b_len | a | b`.
@@ -138,6 +174,30 @@ executes the public blank/exists/is-directory prelude. The private `HVCPI001`
 fixture entry is never used here. Scope OPEN remains inside the real view
 controller after typed, session and policy admission.
 
+A nonblank `content` with `regex` false instead uses the private `HVCSQ001`
+frame. Its 64-byte header contains flags, raw-path length, resolved-path length,
+the full content-pattern length, the typed context u64 and two zero words.
+Payload order is raw path, resolved Unix path and the complete untrimmed
+pattern. The same child slot 6 executes the same public existence/directory
+prelude and opens the same private request scope. Public JSON cannot choose
+this frame's magic or any of its bindings. Blank content keeps the ordinary
+route; a true regex flag remains a distinct unfinished route.
+
+Literal search precedes endpoint parsing, so start/end/full do not select an
+ordinary render operation. The source-owned caller retains the original
+5 MiB metadata check, then invokes the raw reader through EOF and applies the
+original lossy UTF-8 conversion. Later file growth is not a cumulative read
+quota. Context above i64::MAX becomes zero as in the original Value conversion.
+Line matching, merged context ranges, line hashes and the original 8 MiB
+successful-body gate run in HIA. No view-cache mutation occurs in this branch.
+The resulting complete text uses the same gateway borrow and result publisher.
+
+The reader's separate `HVRDB001` operation 5 is an internal raw-read entry;
+the original `HVRDQ001` strict-read frame continues to reject operation 5.
+Only successful raw or strict snapshots are available to the caller. The
+engine's synchronized fixture can retain either snapshot in a logical read
+receipt, while production receipt and fixture-ACK flags remain disabled.
+
 Return `0xffffffe0` asks the mechanical boundary to execute an admitted child.
 `0xffffffff` is malformed private framing/continuation, `0xfffffffe` capacity,
 `0xfffffffc` resource failure and `0xffffffc1` an explicitly unfinished route.
@@ -169,23 +229,39 @@ writer, HTTP cancellation or concurrent dispatcher theorem.
 
 ## Reproducible evidence
 
-`build_runtime_mcp(hepta, build_root, source_root=checkout)` compiles all 31
+`build_runtime_mcp(hepta, build_root, source_root=checkout)` compiles all 37
 members by default and invokes the pinned upstream HIA ELF linker. CI supplies
 an isolated `build/runtime_mcp-bundle` with the already independently admitted
 compiler bootstrap. An explicit development manifest-reuse option is recorded
 per member; formal qualification rejects any reused member.
 
-`test_runtime_mcp.py` runs 7 actual groups. `test_runtime_mcp_evidence.py` runs
-5 groups with 40 independent evidence refusals and no new native/Rust calls.
+The required `test_runtime_mcp.py` gate contains 8 groups, including actual
+configuration installation, regex startup refusals and first-error ordering.
+The required `test_runtime_mcp_evidence.py` gate contains 5 groups with 45
+independent evidence refusals and no new native/Rust calls. These describe the
+required gate shape; completed process counts, timings and outcomes belong to
+the source-bound execution report, not a claim that a gate has already run.
 The native reader validates complete process streams, sparse private-state
 captures, actual compile receipts, assembler object bytes, all 24 fixed child
 address relocations and the full linked machine-text/program-header relation.
+
+The separate `test_view_search_public.py` producer uses the same fixed MCP
+executable and the one independent literal-search case generator. It records
+complete requests, replies and bodies in an independent capture directory;
+its transient files belong to `runtime-mcp/files/literal-search`. It does not
+read a Rust output or start a Rust process. The later reference consumer runs
+after admission of the shared ordinary-view and search original recipes.
+Complete-body comparisons and controls with a different resolved-path context
+are reported separately. Native capture alone leaves the original-reference
+status `NOT_RUN`.
 
 `compare_reference` reuses the same nine real processes admitted by the
 `view_call_original` reference recipe. Its output separates complete SDK
 protocol-error objects, explicit SDK/get-info/list projections, the exact raw
 and cleaned schemas, 31 complete ordinary-file bodies (six in one cache
 session), and the one complete large error. It does not compare fixture body
-text with file text or label all 192 public replies complete original-server
-equivalence. Only final source, readers, tests and assets belong in the final
+text with file text or label all public replies complete original-server
+equivalence. The added regex controls are checked separately and are not
+counted as original `Server::view` comparisons. Only final source, readers,
+tests and assets belong in the final
 repository; authoring scripts and development captures are not runtime inputs.

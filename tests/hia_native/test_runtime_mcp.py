@@ -40,13 +40,14 @@ def setup_files(folder,row):
         else:raise AssertionError('selected public case has an unsupported setup action')
 
 class Session:
-    def __init__(self,name,root,*,config=None):
+    def __init__(self,name,root,*,config=None,expected_exit=0,expected_stderr=b''):
         self.name=name;self.folder=OUTPUT/'sessions'/name;self.folder.mkdir(parents=True,exist_ok=False)
         self.command=[str(NativeRuntime.exe)]
         if config is not None:self.command+=['--runtime-config',str(config)]
         self.command+=['--session-root',str(root)];self.start=time.monotonic()
         self.process=subprocess.Popen(self.command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env={'PATH':'','LC_ALL':'C'})
         self.input=bytearray();self.output=bytearray();self.pending=bytearray();self.closed=False
+        self.expected_exit=expected_exit;self.expected_stderr=expected_stderr
     def send(self,wire):
         self.input+=wire+b'\n';self.process.stdin.write(wire+b'\n');self.process.stdin.flush()
     def read(self):
@@ -70,7 +71,7 @@ class Session:
             exit_code=self.process.returncode,elapsed_seconds=time.monotonic()-self.start,
             stdin=save(self.folder/'stdin.bin.gz',bytes(self.input)),stdout=save(self.folder/'stdout.bin.gz',bytes(self.output)),stderr=save(self.folder/'stderr.bin.gz',stderr))
         (self.folder/'process.json').write_bytes(compact(record)+b'\n');RECORDS.append(record);COUNTS['actual_elf_processes']+=1
-        if not error:assert (self.process.returncode,stderr,self.pending,remaining)==(0,b'',b'',b'')
+        if not error:assert (self.process.returncode,stderr,self.pending,remaining)==(self.expected_exit,self.expected_stderr,b'',b'')
     def __enter__(self):return self
     def __exit__(self,kind,value,traceback):self.finish(error=kind is not None)
 
@@ -101,14 +102,14 @@ class NativeRuntime(unittest.TestCase):
     def setUpClass(cls):
         cls.manifest=json.loads(MANIFEST.read_bytes());cls.exe=MANIFEST.parent/cls.manifest['elf'];elf=cls.exe.read_bytes()
         assert sha(elf)==cls.manifest['elf_sha256'] and len(elf)==cls.manifest['elf_bytes']
-        cls.members={row['name']:row for row in cls.manifest['members']};assert len(cls.members)==31
+        cls.members={row['name']:row for row in cls.manifest['members']};assert len(cls.members)==37
         for row in cls.members.values():
             path=Path(row['manifest']);data=json.loads(path.read_bytes());image=(path.parent/data['image']).read_bytes()
             assert sha(path.read_bytes())==row['manifest_sha256'] and sha(image)==row['image_sha256']
             assert (path.parent/data['source']).read_bytes()==(ROOT/row['source']).read_bytes()
             assert sha((ROOT/row['source']).read_bytes())==row['source_sha256'] and elf.count(image)==1
         for path,digest in cls.manifest['boundary_sources'].items():assert sha((ROOT/path).read_bytes())==digest
-        cls.files=OUTPUT/'files';cls.files.mkdir();(cls.files/'file').write_bytes(b'alpha\n');COUNTS['actual_embedded_hia_images']=31
+        cls.files=OUTPUT/'files';cls.files.mkdir();(cls.files/'file').write_bytes(b'alpha\n');COUNTS['actual_embedded_hia_images']=37
     def view(self,session,arguments,*,identifier=2,metadata=None):
         response,raw=session.call(sdk.call(identifier,arguments,metadata));self.assertEqual(response['id'],identifier);result=response['result']
         self.assertIs(type(result['isError']),bool);self.assertEqual(len(result['content']),1);self.assertEqual(result['content'][0]['type'],'text')
@@ -249,6 +250,52 @@ class NativeRuntime(unittest.TestCase):
                         returned_bytes=None if returned is None else len(returned)))
                 finally:state.close()
         self.assertEqual(len(records),34);(OUTPUT/'private-refusals.json').write_bytes(compact(records)+b'\n');(OUTPUT/'private-positives.json').write_bytes(compact(positives)+b'\n');COUNTS['private_frame_refusals']=34
+
+    def test_08_regex_installation_and_original_error_order(self):
+        plans=[('valid',pattern) for pattern in ['a',r'[a-z]+',r'\p{Greek}+',r')|foo(?:','a{327674}']]
+        plans += [('invalid',pattern) for pattern in ['(',r'\w{500}','a{327675}',r'(?-u:\xFF)']]
+        plans += [('first-error-late','('),('first-error-early','(')]
+        rows=[]
+        for index,(kind,pattern) in enumerate(plans):
+            name='regex-'+str(index);folder=self.files/name;folder.mkdir();(folder/'file').write_bytes(b'regex installed\n')
+            state=folder/'controller-state';config=folder/'runtime-config.json'
+            action=dict(executable='/echo',allow_extra_args=True,extra_arg_patterns=[pattern])
+            value=dict(state_dir=str(state),controller_workspace_roots=[str(folder)],
+                hosts={'h':dict(ssh_target='private-target',remote_state_dir='/private-state',privileged_actions={'inspect':action})})
+            diagnostic=b'host `h` privileged action `inspect` has invalid argument regex\n'
+            if kind.startswith('first-error-'):
+                action['extra_arg_patterns']=['a',pattern]
+                value['hosts']['h']['privileged_actions']={'middle':action,'zlast':{'executable':'relative'}}
+                diagnostic=b'host `h` privileged action `middle` has invalid argument regex\n'
+                if kind=='first-error-early':
+                    value['hosts']['h']['privileged_actions']['afirst']={'executable':'relative'}
+                    diagnostic=b'host `h` has invalid privileged action `afirst`\n'
+            initial=compact(value);config.write_bytes(initial)
+            row=dict(case_id=index,kind=kind,pattern=pattern,session=name,
+                initial_config=save(OUTPUT/'regex'/(str(index)+'.initial-config.json.gz'),initial),
+                rewritten_config=None,state_directory_exists_after=False)
+            if kind=='valid':
+                with Session(name,folder,config=config) as session:
+                    session.ready()
+                    request=lambda ident,tool:dict(jsonrpc='2.0',id=ident,method='tools/call',params=dict(name=tool,arguments={}))
+                    first,_=session.call(request(2,'host_list'));effective,_=session.call(request(3,'effective_config'))
+                    first_text=first['result']['content'][0]['text'];effective_text=effective['result']['content'][0]['text']
+                    self.assertFalse(first['result']['isError']);self.assertFalse(effective['result']['isError'])
+                    self.assertIn('inspect',first_text);self.assertNotIn('inspect',effective_text)
+                    self.assertEqual(json.loads(effective_text)['hosts'][0]['named_privileged_action_count'],1)
+                    result,body,_=self.view(session,{'path':'file'},identifier=4)
+                    self.assertFalse(result['isError']);self.assertTrue(body.endswith(b'|regex installed'))
+                    action['extra_arg_patterns']=['('];rewritten=compact(value);config.write_bytes(rewritten)
+                    row['rewritten_config']=save(OUTPUT/'regex'/(str(index)+'.rewritten-config.json.gz'),rewritten)
+                    after,_=session.call(request(5,'host_list'));after_effective,_=session.call(request(6,'effective_config'))
+                    self.assertEqual(after['result'],first['result']);self.assertEqual(after_effective['result'],effective['result'])
+            else:
+                with Session(name,folder,config=config,expected_exit=78,expected_stderr=diagnostic):pass
+            row['state_directory_exists_after']=state.exists()
+            self.assertEqual(row['state_directory_exists_after'],kind=='valid');rows.append(row)
+        (OUTPUT/'regex-cases.json').write_bytes(compact(rows)+b'\n')
+        COUNTS.update(regex_actual_installed_configs=5,regex_actual_startup_refusals=4,
+                       regex_actual_first_error_controls=2,regex_actual_mcp_view_results=5)
 
 def main():
     global MANIFEST,OUTPUT

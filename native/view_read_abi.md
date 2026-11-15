@@ -1,7 +1,7 @@
 # Ordinary local `view` read boundary
 
 This owner is being integrated into the ordinary local regular-file branch of
-`view`. It owns actual path-following metadata and strict UTF-8 reads to EOF.
+`view`. It owns actual path-following metadata, strict UTF-8 reads and separate raw byte reads to EOF.
 It does not introduce the atomic-reader policy's no-follow, single-link,
 identity-freeze or 64 KiB total-read restrictions. The caller retains the
 original 5 MiB metadata checks and the two independent reads for a range.
@@ -25,6 +25,18 @@ zero reserved words, followed by the exact Unix path bytes.
 | 3 | Cancel the current private generation; no path bytes. |
 | 4 | Drop a terminal generation and its owned snapshot; no path bytes. |
 
+A separate 64-byte `HVRDB001` frame accepts only operation 5, a raw read to
+EOF, with the same generation/path/reserved layout. It performs the same
+actual open/read/close and retains every byte, including invalid UTF-8 and
+NUL content. The old `HVRDQ001` magic continues to reject operation 5; the raw
+magic rejects operations 1 through 4. Cancellation and drop use the original
+operation 3/4 frames with the private active generation. This separation
+preserves all original strict-read admission and failure behavior.
+
+Raw reads do not perform UTF-8 validation. The literal-search HIA caller
+converts the complete successful snapshot with the original lossy UTF-8
+semantics after EOF; a read error cannot be replaced by a decoding result.
+
 A begin frame remains immutable until terminal completion. Re-invoking that
 same frame advances only an admitted completion or returns the existing pending
 effect/result. It does not repeat a completed read. A new begin is accepted only
@@ -35,7 +47,7 @@ are dispatcher bookkeeping, not public request IDs or authorization tokens.
 The fixed 80-byte result is `HVRDR001`, generation, original operation, outcome,
 errno, mode, metadata size, snapshot offset, snapshot length, and completed read
 attempt count. Outcomes are 0 success, 1 OS error, 2 embedded-NUL path, 3 invalid
-UTF-8, 4 cancelled, and 5 dropped. Only successful operation 2 exposes a snapshot
+UTF-8, 4 cancelled, and 5 dropped. Only successful operations 2 and 5 expose a snapshot
 span. It remains immutable in the private workspace until drop. The trusted
 caller borrows that span; no pointer is retained across allocation or relocation.
 

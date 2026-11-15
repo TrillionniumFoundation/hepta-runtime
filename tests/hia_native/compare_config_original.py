@@ -1,9 +1,9 @@
 """Execute four complete original domains on ai395 or CI with one Cargo build.
 
 The native executables are actual packed HIA images. Rust is only a reference;
-it is never invoked by a runtime service. Typed parse failure codes and four
-explicit regex dependency refusals have the documented, separate comparison
-domains. Every other retained result/error byte is compared exactly.
+it is never invoked by a runtime service. Typed parse failure codes retain their documented comparison domain. All
+configuration-regex validation result bytes are compared exactly; the former
+four dependency refusals are no longer accepted.
 """
 from pathlib import Path
 import argparse,gzip,hashlib,json,os,shutil,subprocess,sys,tempfile,time
@@ -12,9 +12,9 @@ sys.path[:0]=[str(ROOT/'scripts'),str(ROOT/'tests/hia_native')]
 from hia_native_config_reference import prepare_original_reference,check_project
 import config_owner_cases as owner
 import config_mcp_sessions as mcp
+from config_regex_original_cases import compare_regex_owners,compare_regex_mcp
 
 sha=lambda raw:hashlib.sha256(raw).hexdigest()
-PENDING=[450,451,452,454]
 
 def checked_corpus(path,cases):
     meta=json.loads((path/'native-corpus.json').read_bytes())
@@ -27,7 +27,7 @@ def checked_corpus(path,cases):
     return data,meta
 
 def replay_lines(name,binary,corpus,output,records,environment):
-    expected=6491 if name=='typed' else 2063
+    expected={'typed':6491,'semantics':2063,'regex':3694}[name]
     raw,metadata=checked_corpus(corpus,expected);started=time.monotonic()
     command=[str(binary)];cwd=Path.cwd()
     done=subprocess.run(command,input=raw['requests'],capture_output=True,env=environment,timeout=180)
@@ -38,15 +38,13 @@ def replay_lines(name,binary,corpus,output,records,environment):
     controls={'exact_results':0,'typed_refusals':0,'explicit_regex_dependency':0}
     for index,(native,original) in enumerate(zip(raw['native_output'].splitlines(),done.stdout.splitlines(),strict=True)):
         nc,np=native.split(b':',1);rc,rp=original.split(b':',1)
-        if name=='semantics' and index in PENDING:
-            assert nc==b'fffffffc' and rc in [b'00000000',b'00000001'];controls['explicit_regex_dependency']+=1
-        elif nc==b'ffffffff':
+        if nc==b'ffffffff':
             assert rc==nc and np==b'';controls['typed_refusals']+=1
         elif name=='typed' and nc==b'fffffffd':
             assert rc==nc and np==b'';controls['typed_refusals']+=1
         else:
             assert native==original,(name,index,native[:128],original[:128]);controls['exact_results']+=1
-    if name=='semantics':assert metadata['explicit_incomplete_regex_indices']==PENDING and controls['explicit_regex_dependency']==4
+    if name=='semantics':assert metadata['explicit_incomplete_regex_indices']==[] and controls['explicit_regex_dependency']==0
     record['comparison']=controls
     return record
 
@@ -82,7 +80,7 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--repo',type=Path,required=True);p.add_argument('--native-results',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--cargo',type=Path,required=True);p.add_argument('--rustc',type=Path,required=True);p.add_argument('--offline',action='store_true');a=p.parse_args()
     repo=a.repo.resolve(strict=True);result_path=a.native_results.resolve(strict=True);out=a.output.resolve();out.mkdir(parents=True,exist_ok=False,mode=0o700)
     native=json.loads(result_path.read_bytes());assert native['status']=='PASS'
-    native_record_sha=sha(result_path.read_bytes());inputs={str(p):sha(p.read_bytes()) for p in [Path(__file__),ROOT/'scripts/hia_native_config_reference.py',*[ROOT/'tests/hia_native'/n for n in ['config_mcp_cases.py','config_mcp_sessions.py','config_fs_cases.py','config_owner_cases.py','config_semantics_cases.py','test_config_fs.py','test_config_owner.py','config_reference_sources.json','config_reference.tar.gz']]]}
+    native_record_sha=sha(result_path.read_bytes());inputs={str(p):sha(p.read_bytes()) for p in [Path(__file__),ROOT/'scripts/hia_native_config_reference.py',*[ROOT/'tests/hia_native'/n for n in ['config_regex_original_cases.py','config_mcp_cases.py','config_mcp_sessions.py','config_fs_cases.py','config_owner_cases.py','config_semantics_cases.py','test_config_fs.py','test_config_owner.py','config_reference_sources.json','config_reference.tar.gz']]]}
     prepared=prepare_original_reference(repo,out/'project');project=out/'project';before=sha((project/'reference-inputs.json').read_bytes());records=[]
     binaries={}
     for name in ['owner','fixture','mcp']:
@@ -96,20 +94,24 @@ def main():
         (out/(label+'.stdout')).write_bytes(done.stdout);(out/(label+'.stderr')).write_bytes(done.stderr)
         records.append({'name':label,'command':command,'exit':done.returncode,'elapsed':time.monotonic()-started,'stdout_sha256':sha(done.stdout),'stderr_sha256':sha(done.stderr)})
         if done.returncode:raise AssertionError((label,done.stderr[-4096:]))
+        if label=='rust-version':assert done.stdout.startswith(b'rustc 1.95.0 ')
     refs={name:project/'target/release'/('hia-runtime-config-'+name) for name in ['typed','semantics','owner','mcp']}
     refhash={name:sha(path.read_bytes()) for name,path in refs.items()}
     typed=replay_lines('typed',refs['typed'],Path(native['corpora']['typed']),out,records,env)
     semantics=replay_lines('semantics',refs['semantics'],Path(native['corpora']['semantics']),out,records,env)
+    regex_semantics=replay_lines('regex',refs['semantics'],Path(native['corpora']['regex']),out,records,env)
     installed=compare_owners(binaries['owner'],binaries['fixture'],refs['owner'],out)
     protocol=compare_mcp(binaries['mcp'],refs['mcp'],out)
+    regex_installed=compare_regex_owners(binaries['fixture'],refs['owner'],out/'regex-owner')
+    regex_protocol=compare_regex_mcp(binaries['mcp'],refs['mcp'],out/'regex-mcp')
     check_project(project,prepared)
     assert sha((project/'reference-inputs.json').read_bytes())==before and sha(result_path.read_bytes())==native_record_sha
     assert all(sha(Path(path).read_bytes())==digest for path,digest in inputs.items())
     assert all(sha(path.read_bytes())==refhash[name] for name,path in refs.items())
     # Recheck every original source after the entire execution, without rebuilding.
     for name,want in prepared['original_sources'].items():assert sha((repo/name).read_bytes())==want['sha256']
-    report={'schema':'hepta.runtime.config-original-comparison.v1','status':'PASS','source_unchanged':True,'native_result_sha256':native_record_sha,'inputs':inputs,'reference_input_sha256':before,'reference_executables':refhash,'registry_packages':100,'one_shared_cargo_build':True,'records':records,'domains':{'typed':typed,'semantics':semantics,'installed':installed,'mcp':protocol},'total_reference_input_cases':9735,'complete_config_owner':False,'regex_compilation_closed':False,'original_rust_runtime_fallback':False}
+    report={'schema':'hepta.runtime.config-original-comparison.v1','status':'PASS','source_unchanged':True,'native_result_sha256':native_record_sha,'inputs':inputs,'reference_input_sha256':before,'reference_executables':refhash,'registry_packages':100,'one_shared_cargo_build':True,'records':records,'domains':{'typed':typed,'semantics':semantics,'installed':installed,'mcp':protocol},'regex_domains':{'semantics':regex_semantics,'installed':regex_installed,'mcp':regex_protocol},'total_reference_input_cases':13460,'baseline_reference_input_cases':9735,'complete_config_owner':False,'regex_compilation_closed':False,'unconstrained_regex_resources_closed':False,'original_rust_runtime_fallback':False}
     (out/'report.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
-    print(json.dumps({k:v for k,v in report.items() if k not in ['records','domains','inputs']},sort_keys=True))
+    print(json.dumps({k:v for k,v in report.items() if k not in ['records','domains','regex_domains','inputs']},sort_keys=True))
 
 if __name__=='__main__':main()

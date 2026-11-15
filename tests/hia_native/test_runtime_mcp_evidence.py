@@ -89,14 +89,14 @@ class EvidenceControls(unittest.TestCase):
             else:change(row);edits=[]
             physical=json.dumps(report,sort_keys=True,separators=(',',':'),allow_nan=True).encode()+b'\n'
             edits.append(('outer-control.json',physical))
-            self.edits(label,edits,lambda:q.completed_suite(ROOT,self.output,q.decode((self.output/'outer-control.json').read_bytes()),completed,name,7))
+            self.edits(label,edits,lambda:q.completed_suite(ROOT,self.output,q.decode((self.output/'outer-control.json').read_bytes()),completed,name,8))
 
     def test_02_sources_and_actual_build(self):
         source_root=Path(self.temporary.name)/'source';source_root.mkdir()
         names=['native/runtime_mcp_sources.json',*self.baseline['source_binding']['files']]
         for name in names:
             path=source_root/name;path.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/name,path)
-        for label,name in [('source-owner','native/runtime_mcp.hepta'),('source-public-schema','native/view_input_schema.json')]:
+        for label,name in [('source-owner','native/runtime_mcp.hepta'),('source-public-schema','native/view_input_schema.json'),('source-regex-owner','native/regex_controller.hepta')]:
             path=source_root/name;raw=path.read_bytes();pending=path.with_name(path.name+'.changed');pending.write_bytes(raw+b' ');pending.replace(path)
             with self.assertRaises(ValueError):q.source_identity(source_root)
             CONTROLS.append(label);pending.write_bytes(raw);pending.replace(path)
@@ -104,6 +104,7 @@ class EvidenceControls(unittest.TestCase):
             ('build-compiler-pin',lambda value:value.__setitem__('compiler_commit','0'*40)),
             ('build-fresh-claim-type',lambda value:value['members'][0].__setitem__('fresh_compile','true')),
             ('build-member-origin',lambda value:value['members'][0].__setitem__('manifest','/different-origin/modules/member/manifest.json')),
+            ('build-regex-selector',lambda value:value['regex_selector_members'].__setitem__('15','publication')),
         ]:
             value=copy.deepcopy(self.bundle);change(value);raw=q.compact(value)+b'\n'
             report=copy.deepcopy(self.report);report['modules']['runtime_mcp']['sha256']=q.sha(raw)
@@ -133,6 +134,15 @@ class EvidenceControls(unittest.TestCase):
         self.row_edit('public-router-fixture-claim',q.FOLDER+'/router-cases.jsonl',lambda rows:rows[0].__setitem__('original_fixture_body_text_compared',True))
         self.row_edit('public-catalog-fixture-claim',q.FOLDER+'/info-cases.jsonl',lambda rows:rows[0].__setitem__('full_original_tool_catalog_compared',True))
         self.json_edit('public-wide-unbounded-claim',q.FOLDER+'/wide-case.json',lambda value:value.__setitem__('unrestricted_response_domain_claimed',True),self.public_probe)
+        self.json_edit('regex-state-before-validation',q.FOLDER+'/regex-cases.json',
+                       lambda rows:rows[5].__setitem__('state_directory_exists_after',True),self.public_probe)
+        self.json_edit('regex-first-error-order',q.FOLDER+'/regex-cases.json',
+                       lambda rows:rows[10].__setitem__('kind','first-error-late'),self.public_probe)
+        name=q.FOLDER+'/regex-cases.json';rows=q.decode((self.output/name).read_bytes())
+        descriptor=rows[0]['initial_config'];path=q.FOLDER+'/'+descriptor['path']
+        raw=gzip.decompress((self.output/path).read_bytes())+b' '
+        descriptor.update(bytes=len(raw),sha256=q.sha(raw))
+        self.edits('regex-complete-initial-config',[(name,q.compact(rows)+b'\n'),(path,gzip.compress(raw,mtime=0))],self.public_probe)
         for label,key in [('public-original-input','original_input'),('public-complete-body','actual_body'),('public-complete-response','actual_response')]:
             name=q.FOLDER+'/view-cases.jsonl';rows=[q.decode(row) for row in (self.output/name).read_bytes().splitlines()]
             descriptor=rows[1][key];path=q.FOLDER+'/'+descriptor['path'];raw=gzip.decompress((self.output/path).read_bytes())+b'x'

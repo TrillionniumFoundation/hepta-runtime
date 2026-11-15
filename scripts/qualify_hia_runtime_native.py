@@ -144,7 +144,8 @@ MODULES = (
                            "native/view_render.hepta", "native/request_context.hepta",
                            "native/view_error.hepta", "native/view_call_packer.hepta"),
      "test": "test_view_call_sync.py",
-     "additional_tests": ("test_view_call_wide.py", "test_view_call_resources.py", "test_view_call_evidence.py")},
+     "additional_tests": ("test_view_call_wide.py", "test_view_call_resources.py", "test_view_call_evidence.py",
+                          "test_view_search.py", "test_view_search_native_evidence.py")},
     {"key": "runtime_mcp", "name": "runtime-mcp", "source": "native/runtime_mcp.hepta",
      "builder": "runtime_mcp", "manifest_env": "HIA_RUNTIME_MCP_MANIFEST",
      "companion_sources": ("native/config_directory_owner.hepta", "native/config_fs.hepta",
@@ -160,8 +161,12 @@ MODULES = (
                            "native/view_call.hepta", "native/view_read.hepta", "native/line_endpoint.hepta",
                            "native/file_lock_key.hepta", "native/request_scope_lifecycle.hepta",
                            "native/request_cache_lease.hepta", "native/view_cache.hepta",
-                           "native/view_render.hepta", "native/request_context.hepta", "native/view_error.hepta"),
-     "test": "test_runtime_mcp.py", "additional_tests": ("test_runtime_mcp_evidence.py",)},
+                           "native/view_render.hepta", "native/request_context.hepta", "native/view_error.hepta",
+                           "native/regex_syntax.hepta", "native/regex_unicode_data.hepta",
+                           "native/regex_hir.hepta", "native/regex_nfa.hepta",
+                           "native/regex_match.hepta", "native/regex_controller.hepta"),
+     "test": "test_runtime_mcp.py", "additional_tests": ("test_runtime_mcp_evidence.py",
+                                                         "test_view_search_public.py")},
     {"key": "view_cache", "name": "view-cache", "source": "native/view_cache.hepta",
      "standalone": None, "manifest_env": "HIA_CACHE_MANIFEST", "test": "test_view_cache.py",
      "additional_tests": ("test_view_cache_evidence.py",)},
@@ -191,11 +196,33 @@ MODULES = (
     {"key": "runtime_config", "name": "runtime-config", "source": "native/config_owner.hepta",
      "builder": "runtime_config", "manifest_env": "HIA_CONFIG_BUILD", "test": "test_config_json.py",
      "additional_tests": ("test_config_semantics.py", "test_config_fs.py", "test_config_owner.py",
-                          "test_config_mcp.py", "test_config_mcp_receipts.py"),
+                          "test_config_mcp.py", "test_config_mcp_receipts.py",
+                          "test_regex_unicode.py",
+                          "test_regex_syntax.py",
+                          "test_regex_hir.py",
+                          "test_regex_nfa_0.py",
+                          "test_regex_nfa_1.py",
+                          "test_regex_match.py",
+                          "test_regex_pipeline.py",
+                          "test_regex_controls.py",
+                          "test_config_regex.py"),
      "companion_sources": ("native/config_json.hepta", "native/config_validation.hepta",
                            "native/config_identity.hepta", "native/config_fs.hepta", "native/config_mcp.hepta",
+                           "native/result_publication.hepta",
                            "native/config_fs_packer.hepta", "native/config_owner_packer.hepta",
-                           "native/config_owner_fixture_packer.hepta", "native/config_mcp_packer.hepta")},
+                           "native/config_owner_fixture_packer.hepta", "native/config_mcp_packer.hepta",
+                           "native/config_regex_packer.hepta",
+                           "native/regex_controller.hepta",
+                           "native/regex_hir.hepta",
+                           "native/regex_hir_packer.hepta",
+                           "native/regex_match.hepta",
+                           "native/regex_nfa.hepta",
+                           "native/regex_pipeline_packer.hepta",
+                           "native/regex_syntax.hepta",
+                           "native/regex_syntax_packer.hepta",
+                           "native/regex_unicode.hepta",
+                           "native/regex_unicode_data.hepta",
+                           "native/regex_unicode_packer.hepta")},
     {"key": "execution_shadow", "name": "execution-shadow", "source": "native/execution_shadow.hepta",
      "builder": "execution_shadow", "manifest_env": "HIA_EXECUTION_BUNDLE",
      "companion_sources": ("native/execution_json.hepta", "native/execution_controller.hepta"),
@@ -310,7 +337,9 @@ def sources() -> dict:
         "hia_native_view_resource_qualification.py",
         "hia_native_view_fixture_qualification.py",
         "hia_native_view_read_build.py", "hia_native_view_call_build.py",
-        "hia_native_view_call_qualification.py", "view_read_adapter.S",
+        "hia_native_view_call_qualification.py", "hia_native_view_search_qualification.py",
+        "hia_native_view_search_reference.py", "hia_native_view_search_public_qualification.py",
+        "view_read_adapter.S",
         "view_call_adapter.S", "view_call_fixture_controls.S", "view_call_engine.S",
         "view_call_read_bridge.S", "view_call_key_bridge.S", "view_call_scope_bridge.S",
         "hia_native_runtime_mcp_build.py", "hia_native_runtime_mcp_evidence.py",
@@ -332,6 +361,14 @@ def sources() -> dict:
         'config_schema.py',
         'hia_native_config_reference.py',
         'hia_native_config_qualification.py',
+        "build_regex_probe.py",
+        "config_regex_adapter.S",
+        "hia_native_regex_qualification.py",
+        "hia_native_regex_reference.py",
+        "regex_hir_adapter.S",
+        "regex_pipeline_adapter.S",
+        "regex_syntax_adapter.S",
+        "regex_unicode_adapter.S",
         "hia_native_execution_build.py", "hia_native_execution_qualification.py",
         "hia_native_session_build.py", "hia_native_session_qualification.py",
         "hia_native_file_lock_build.py", "hia_native_file_lock_qualification.py",
@@ -975,6 +1012,11 @@ def view_call_evidence(output: Path, report: dict) -> dict:
     return qualification_evidence(ROOT, output, report, native)
 
 
+def view_search_evidence(output: Path, report: dict) -> dict:
+    from hia_native_view_search_qualification import qualification_evidence
+    return qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
 def view_resource_evidence(output: Path, report: dict) -> dict:
     return checked_view_resource_evidence(ROOT, output, report, completed_test_summary)
 
@@ -984,13 +1026,24 @@ def runtime_mcp_evidence(output: Path, report: dict) -> dict:
     return qualification_evidence(ROOT, output, report, completed_test_summary)
 
 
+def view_search_public_evidence(output: Path, report: dict) -> dict:
+    from hia_native_view_search_public_qualification import public_native_evidence
+    return public_native_evidence(ROOT, output, report, completed_test_summary)
+
+
 def view_fixture_retirement(output: Path, report: dict, *, create=False,
-                            native: dict | None = None, public: dict | None = None) -> dict:
+                            native: dict | None = None, public: dict | None = None,
+                            search: dict | None = None, public_search: dict | None = None) -> dict:
     from hia_native_view_fixture_qualification import retire_fixtures
     native = view_call_evidence(output, report) if native is None else native
     public = runtime_mcp_evidence(output, report) if public is None else public
-    fixtures = tuple(sorted([*native['transient_fixture_directories'], 'runtime-mcp/files']))
-    return retire_fixtures(output, fixtures, {'view_call': native, 'runtime_mcp': public}, create=create)
+    search = view_search_evidence(output, report) if search is None else search
+    public_search = view_search_public_evidence(output, report) if public_search is None else public_search
+    fixtures = tuple(sorted([*native['transient_fixture_directories'],
+                             *search['transient_fixture_directories'], 'runtime-mcp/files']))
+    return retire_fixtures(output, fixtures,
+        {'view_call': native, 'view_search': search, 'runtime_mcp': public,
+         'view_search_public': public_search}, create=create)
 
 
 def json_evidence(output: Path, report: dict) -> dict:
@@ -2161,6 +2214,9 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_VIEW_PARAMS_CAPTURE_DIR": str(output / "view-call/params"),
         "HIA_VIEW_WIDE_CAPTURE_DIR": str(output / "view-call/wide"),
         "HIA_VIEW_CALL_QUALIFICATION_OUTPUT": str(output),
+        "HIA_VIEW_SEARCH_CAPTURE_DIR": str(output / "view-search"),
+        "HIA_VIEW_SEARCH_QUALIFICATION_OUTPUT": str(output),
+        "HIA_VIEW_SEARCH_PUBLIC_CAPTURE_DIR": str(output / "view-search-public"),
         "HIA_VIEW_RESOURCE_CAPTURE_DIR": str(output / "view-call/resources"),
         "HIA_RUNTIME_MCP_CORPUS_DIR": str(output / "runtime-mcp"),
         "HIA_RUNTIME_MCP_QUALIFICATION_OUTPUT": str(output),
@@ -2213,6 +2269,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_FENCE_QUALIFICATION_OUTPUT": str(output),
         "HIA_CONFIG_JSON_CORPUS_DIR": str(output / "config-native/typed-corpus"),
         "HIA_CONFIG_SEMANTICS_CORPUS_DIR": str(output / "config-native/semantics-corpus"),
+        "HIA_REGEX_OUTPUT_DIR": str(output / "regex-native"),
     })
     env.update({variable: str(output / SCOPE_OS_FOLDER / receipt)
                 for _, variable, receipt, _, _ in SCOPE_OS_SUITES})
@@ -2241,6 +2298,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
     env["HIA_CACHE_ELF_MANIFEST"] = str(output / report["cache_composition"]["manifest"])
     env["HIA_REQUEST_CONTEXT_ELF_MANIFEST"] = str(output / report["request_context_composition"]["manifest"])
     env["HIA_VIEW_PARAMS_VALUE_MANIFEST"] = env["HIA_SERDE_JSON_MANIFEST"]
+    env["HIA_VIEW_SEARCH_FIXTURE_MANIFEST"] = env["HIA_VIEW_CALL_FIXTURE_MANIFEST"]
     return env
 
 
@@ -2365,6 +2423,16 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         "value_manifest": report["modules"]["serde_json"]["manifest"],
         "corpora": {name: "view-call/" + name for name in ("read", "params", "caller", "wide")},
     }
+    # The literal domain uses the same admitted caller executable. It does not
+    # add an alias builder or count the shared HIA owners a second time.
+    report["view_search"] = {
+        "manifest": report["modules"]["view_call"]["manifest"],
+        "corpus": "view-search",
+    }
+    report["view_search_public"] = {
+        "manifest": report["modules"]["runtime_mcp"]["manifest"],
+        "corpus": "view-search-public",
+    }
     from hia_native_composition_build import ModuleSpec, build_composition
     nonce_fixture = build_composition(hepta, output / "build", [
         ModuleSpec("nonce-hex-fixture", ROOT / "tests/hia_native/nonce_hex_transport.hepta",
@@ -2385,6 +2453,7 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / "batch-apply").mkdir()
     (output / "atomic-write").mkdir()
     (output / "config-native").mkdir()
+    (output / "regex-native").mkdir()
     (output / "file-locks").mkdir()
     (output / "file-lock-service").mkdir()
     return builder
@@ -2437,10 +2506,13 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["view_render_evidence"] = view_render_evidence(output, report)
     report["view_render_growth_evidence"] = view_render_growth_evidence(output, report)
     report["view_call_evidence"] = view_call_evidence(output, report)
+    report["view_search_evidence"] = view_search_evidence(output, report)
     report["view_resource_evidence"] = view_resource_evidence(output, report)
     report["runtime_mcp_evidence"] = runtime_mcp_evidence(output, report)
+    report["view_search_public_evidence"] = view_search_public_evidence(output, report)
     report["view_fixture_retirement"] = view_fixture_retirement(output, report, create=True,
-        native=report["view_call_evidence"], public=report["runtime_mcp_evidence"])
+        native=report["view_call_evidence"], public=report["runtime_mcp_evidence"],
+        search=report["view_search_evidence"], public_search=report["view_search_public_evidence"])
     report["view_cache_evidence"] = view_cache_evidence(output, report)
     report["history_evidence"] = history_evidence(output, report)
     report["session_evidence"] = session_evidence(output, report)
@@ -2472,8 +2544,10 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_render_growth_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_call_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["view_search_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_resource_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["runtime_mcp_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["view_search_public_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["shell_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update({

@@ -120,38 +120,54 @@ tool and old-stack-removal declarations therefore remain incomplete.
 
 ## Installed configuration and MCP composition
 
-The [configuration scope](config_scope.md) and [private owner contract](config_owner_abi.md)
-cover the configuration owners and four fixed HIA packers. The eleven-image static
-stdio profile provides `host_list`, `effective_config` and `execution_shadow_admit`.
-Startup owns configuration installation, actual lock descriptors and immutable
-host identity; tool input cannot install a configuration or supply an authority
-receipt. Its fixed call table connects generic JSON Value parsing, typed schemas,
-installed exact-host lookup and the native shadow controller. Its tool-result
-path hands the original text and trusted JSON-RPC prefix to the same growable
-result owner qualified below. A complete response is not escaped a second time.
+The [configuration scope](config_scope.md), [private owner contract](config_owner_abi.md)
+and [regex ABI](regex_abi.md) bind the installed configuration to native Unicode
+data/query, syntax, HIR, NFA, matching and continuation owners. The fixed
+seventeen-image stdio profile provides `host_list`, `effective_config` and
+`execution_shadow_admit`. Startup owns installation, retained lock descriptors
+and immutable host identity. The eleven-image installed-owner profile and the
+MCP profile both execute the configured regex dependencies through checked
+source/image identities and fixed calls.
 
-Six mandatory native suites cover 35 test groups. The focused observed version
-passes 6,580 typed calls, 4,049 semantic calls, 61 filesystem requests, 73 owner
-requests, 60 actual MCP responses and 38 continuation-receipt controls. The
-aggregate executes these as six separately retained processes under the existing
-180-second limits. Its original reference recipe performs one locked Cargo build
-of four entries, compares 6,491 typed inputs, 2,063 semantic inputs, 62 installed
-owner scenarios and 1,119 complete SDK protocol responses. The latter two domains
-execute both native and original binaries on identical fixture paths.
+The tool-result path retains the qualified growable result-publication owner at
+image 10. It receives original text and the trusted JSON-RPC prefix, preserves
+write acknowledgements and never escapes a complete response a second time.
 
-Four semantic corpus entries still require complete regular-expression
-compilation. They are explicitly recorded as pending, separately from exact
-comparisons, and prevent a complete configuration-owner claim. The original
-owner comparison also documents excluded diagnostic categories and opaque node
-identity. The original recipe now permits fetching its exact locked dependencies
-on a fresh CI runner; `--offline` remains an explicit development option. Both
-paths use the selected Rust compiler. Historical focused runs cannot qualify
-changed recipe bytes or the fresh repository aggregate.
+Fifteen mandatory native processes retain the original six configuration suites
+and add nine complete regex suites. NFA construction is split into two fixed
+halves covering all 3,584 cases; each process retains its existing 180-second
+limit. Native evidence admission checks every actual process, source/image pair,
+ELF stream and complete corpus before creating compatibility results.
+
+Two fresh original comparison wrappers run inside the existing configuration
+recipe. Each wrapper retains all of its real compiler and replay processes.
+The configuration wrapper compiles four entries with 100 locked dependencies and
+compares 13,460 typed, semantic, installed-owner, MCP and startup-refusal cases,
+including 3,694 extended semantic inputs. The regex wrapper compiles its locked
+five-dependency reference and replays 6,560 Unicode, 18,976 AST, 34,130 HIR,
+3,584 NFA and 65,440 matching cases: 128,690 complete inputs plus the capture-name
+predicate projection. Original Rust 1.95 is selected explicitly. Both original
+results and the unchanged native evidence are re-admitted after execution.
+
+After every original recipe finishes, a separate check runs against the inactive
+qualification directory. Its 14 altered-evidence cases cover missing or changed
+actual processes, timeout/SIGKILL, source/ELF changes, duplicate NFA cases after
+rehashing, incomplete original replay and missing startup-failure observations.
+It restores all changed bytes and performs six complete baseline admissions.
+These checks add no native or original semantic calls.
+
+The frozen focused run passed all fifteen native processes and both fresh
+original recipes, followed by the evidence controls. That observation belongs
+to the exact preserved handoff; the repository integration requires a fresh
+complete aggregate. Unconstrained regex arena/resource equivalence, original
+meta-engine resource optimizations, complete configuration-owner parity and
+public production routing remain unqualified. The complete-runtime and
+old-stack-removal declarations remain false.
 
 ## Native components
 
-Qualification covers 88 native HIA sources through 47 executable component
-entries, including 21 HIA packers. Shared owners are compiled in the explicitly
+Qualification covers 100 native HIA sources through 47 executable component
+entries, including 26 HIA packers. Shared owners are compiled in the explicitly
 declared component profiles; they are not counted as additional source files.
 The complete source inventory binds implementation, contracts, builders, tests
 and the retained original references. The shadow entry
@@ -197,15 +213,27 @@ These counts do not count migrated production MCP handlers.
 | [execution_json.hepta](execution_json.hepta) | Original execution serde types, direct and canonical Value admission, strict unknown-field rules and exact typed error messages |
 | [execution_controller.hepta](execution_controller.hepta) | Fixed typed admission, installed-host lookup and core validation order, with checked private child continuations |
 | [config_json.hepta](config_json.hepta) | Original typed configuration schemas and defaults |
-| [config_validation.hepta](config_validation.hepta) | Configuration validation order and normalization; four regex cases remain pending |
+| [config_validation.hepta](config_validation.hepta) | Original validation order and immutable configuration normalization, with fixed resumable calls into native regex syntax, HIR, NFA and matching. Unconstrained regex resource equivalence and complete production routing remain unqualified. |
 | [config_identity.hepta](config_identity.hepta) | Effective configuration serialization and installed identity digest |
 | [config_fs.hepta](config_fs.hepta) | Actual startup file/state operations and retained lock descriptors |
 | [config_owner.hepta](config_owner.hepta) | Private installed configuration, exact host lookup and immutable cached responses |
 | [config_mcp.hepta](config_mcp.hepta) | Persistent stdio controller for the three configured tools |
 | [config_fs_packer.hepta](config_fs_packer.hepta) | Static filesystem qualification executable |
-| [config_owner_packer.hepta](config_owner_packer.hepta) | Static startup owner with five fixed images |
-| [config_owner_fixture_packer.hepta](config_owner_fixture_packer.hepta) | Immutable test profile for reinstallation controls |
-| [config_mcp_packer.hepta](config_mcp_packer.hepta) | Static MCP executable with ten fixed native images |
+| [config_owner_packer.hepta](config_owner_packer.hepta) | Fixed eleven-image static startup owner, including six regex dependency images and preserving private configuration installation and actual descriptor lifetime. |
+| [config_owner_fixture_packer.hepta](config_owner_fixture_packer.hepta) | Fixed eleven-image qualification-only startup reinstallation profile with the complete regex dependency chain; never enabled by public MCP input. |
+| [config_mcp_packer.hepta](config_mcp_packer.hepta) | Fixed seventeen-image static MCP executable. Result publication remains image 10. Validation image 3 calls physical regex controller 16; syntax 11, HIR 13, NFA 14 and matcher 15 use immutable Unicode image 12. Original private regex selectors are mapped separately to these fixed images. Only the configuration filesystem image owns its OS effects. |
+| [config_regex_packer.hepta](config_regex_packer.hepta) | Fixed native configuration-validation profile joining the original validation owner to all required regex children. |
+| [regex_controller.hepta](regex_controller.hepta) | Native continuation controller composing syntax, HIR, NFA and matching with checked child receipts and resource/domain refusals. |
+| [regex_hir.hepta](regex_hir.hepta) | Native regex HIR lowering, flags and class semantics through checked Unicode queries; complete 34,130-row original HIR domain. |
+| [regex_hir_packer.hepta](regex_hir_packer.hepta) | Fixed static native HIR executable with checked Unicode data calls and retained framing/resource refusals. |
+| [regex_match.hepta](regex_match.hepta) | Native regex matching through fixed NFA and Unicode dependencies, covering the complete 65,440 original pattern/haystack cases. |
+| [regex_nfa.hepta](regex_nfa.hepta) | Native regex NFA construction and observed original budget boundaries; two unchanged halves cover all 3,584 original cases. Unconstrained resource equivalence remains unqualified. |
+| [regex_pipeline_packer.hepta](regex_pipeline_packer.hepta) | Fixed static native regex pipeline joining syntax, HIR, NFA, matching and immutable Unicode data. |
+| [regex_syntax.hepta](regex_syntax.hepta) | Native regex AST parsing, original diagnostics and typed continuation to immutable Unicode data; complete 18,976-row original syntax domain. |
+| [regex_syntax_packer.hepta](regex_syntax_packer.hepta) | Fixed static native syntax executable with checked Unicode data calls and retained framing/receipt refusals. |
+| [regex_unicode.hepta](regex_unicode.hepta) | Native Unicode class/property admission and range serialization, with complete 6,560-row original domain and Rust 1.95 capture-identifier predicate projection. |
+| [regex_unicode_data.hepta](regex_unicode_data.hepta) | Immutable original Unicode tables encoded in native HIA, supplying checked private range queries to syntax, HIR and matching owners. |
+| [regex_unicode_packer.hepta](regex_unicode_packer.hepta) | Fixed static native Unicode query executable generated by HIA; includes the immutable Unicode data dependency. |
 | [effect_owner_fence.hepta](effect_owner_fence.hepta) | Original owner/state/predecessor admission and exact semantic results |
 | [effect_fence_fs.hepta](effect_fence_fs.hepta) | Descriptor custody, filesystem validation and real Linux failure/race controls |
 | [effect_fence_manager.hepta](effect_fence_manager.hepta) | Private asynchronous acquisition, worker cancellation and live permit lifetime |
@@ -412,7 +440,7 @@ and one aggregate/original-Rust job. The prepare job executes the full cold gate
 and builds every module once. Its exact SHA256 is passed through the workflow;
 every partition checks the full source, compiler, build and invocation identity
 before executing its complete suite list. Batch, text/history/view, JSON and
-system suites run on separate runners with 10, 47, 22 and 32 native suites,
+system suites run on separate runners with 10, 50, 31 and 32 native suites,
 respectively. Each job retains the original 15-minute
 limit; every native process retains 180 seconds and the cold/owner limits below
 are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
@@ -427,17 +455,17 @@ content snapshots through artifact ZIP transport. The atomic writer's live
 effect targets are retired only after complete snapshots, full content gzips,
 raw traces and all actual process outputs pass their evidence checks. Retirement
 records bind that accepted evidence; no semantic call is added or reconstructed.
-The local-view caller and public MCP tests likewise retire only their private
+The local-view caller, literal-search and public MCP tests likewise retire only their private
 live filesystem fixtures after complete native evidence passes. Their final
 regular-file bytes, raw Unix names, empty directories and symbolic-link targets
 remain in a checked archive and manifest. The archive stores byte streams without
-following links, and collection revalidates it against both accepted evidence
+following links, and collection revalidates it against all four accepted evidence
 objects before original replay.
 The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 111 native suite processes, the fresh compiler cold process,
+The declared run has 123 native suite processes, the fresh compiler cold process,
 42 required original Rust recipe entries and one Rust-version process. Aggregate
 process records, nested original processes, direct native calls and actual ELF
 processes are reported separately by the completed execution. Recipe entries
@@ -450,11 +478,15 @@ the complete semantic traces through actual Tokio task-local polls and Arc lifet
 The session recipe contributes one outer aggregate check and retains four nested
 processes for Rust identity, compilation, complete replay and the concurrent latch.
 The local reader, typed-parameter and view-caller entries share one fresh locked
-build and nine original processes. The public MCP reference entry strictly reads
-that same completed execution, adding no original process. It distinguishes
+build and nine original processes. Literal search adds one separate shared
+three-process reference and a required post-reference evidence-control process.
+The public MCP reference entry strictly reads those completed executions,
+adding no original process. It distinguishes
 complete view/error bodies from explicit SDK fixture projections. The two
 renderer domains each retain their own fresh original compilation and replay.
-A component's retained historical
+The configuration recipe retains two fresh original processes. Fourteen evidence
+controls then run against the inactive complete aggregate and preserve a separate
+receipt without adding semantic calls. A component's retained historical
 comparison is not a fresh aggregate invocation.
 The OS-scope, authority-transport and file-info-guard suites run through two
 independent worker slots. The JSON Value and JSON transport suites execute in
@@ -568,7 +600,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all 31 required original Rust recipes succeed. The Python reference domain
+after all 42 required original Rust recipe entries succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -1021,8 +1053,9 @@ own fresh original Rust recipe. Existing corpus overlap adds no new native case.
 The local-file composition joins ordinary read observations, typed parameters,
 canonical cache keys, a growable session cache, request lifetime and the original
 base-result gate. Its read, typed, complete caller and wide-endpoint captures
-are independently verified. The public MCP composition and every remaining
-directory/search/remote branch have their own qualification boundary.
+are independently verified. Literal file search uses the same caller image with
+its own complete execution evidence. The public MCP composition and remaining
+directory, regex-search and remote branches have separate qualification boundaries.
 
 ### Local view call and public MCP composition
 
@@ -1042,6 +1075,7 @@ is not substituted for this reader.
 | Complete local call | 58 cases in 46 ELF processes: 56 public-input cases and two explicitly private raw `PathSource` cases |
 | Wide endpoint | One additional complete endpoint Value produces a 19,000,091-byte original error, retained through the final caller output |
 | Engine resource cleanup | Ten actual kernel controls and one separate test-fixture compilation; zero HIA semantic or original Rust calls |
+| Literal file search | 72 complete cases in 65 caller ELF processes, including 71 literal searches and one real whole-file cache preparation |
 
 Thirteen caller cases share one actual process and the same cache. They cover
 unbound requests, cancellation after a cache effect, a later request observing
@@ -1051,17 +1085,41 @@ cache effects. The output allocation survives scope retirement until the
 publisher has copied it. Private traces are enabled only by the standalone
 fixture entry; callable production bridges start with tracing disabled.
 
-The separate 31-image MCP profile connects installed configuration, full client
+Literal search preserves raw-byte reads followed by Rust-compatible lossy UTF-8,
+line splitting, literal substring matching, context-range merging and original
+line identifiers. It preserves metadata-before-read order and the original
+5 MiB metadata limit, while a later growing read remains separately observed.
+Search does not populate the whole-file delta cache. Its original typed `i64`
+context conversion and final 8 MiB successful-result gate remain distinct from
+native buffer-growth requests. The raw-read operation has its own private
+`HVRDB001` envelope; the existing `HVRDQ001` operation range remains unchanged.
+
+The native search suite retains every process stream, complete caller input,
+visible body, raw read snapshot, cache probe and logical I/O receipt. Its native
+evidence controls run before original comparison. A separate fresh locked Rust
+wrapper executes exactly three original processes, then a six-group test rejects
+42 altered original/cross-comparison records. That original test is required
+after the fresh replay and is never registered as a pre-reference native suite.
+The original nine-process view group and this three-process search group are
+each executed once; the three component entries do not multiply those counts.
+
+The separate 37-image MCP profile connects installed configuration, full client
 capabilities, typed parameters, the session workdir latch, canonical path
 policy, local view and the growable result publisher. Its executable is emitted
 by the pinned native HIA ELF linker. The assembler supplies fixed syscall and
 borrowed-buffer boundaries; the running service needs no Python, Rust or libc.
 The profile currently exposes the three configuration tools and `view`, with
 an explicit 8 MiB input-line profile and 64 MiB gateway reply profile. Those
-carrier bounds, directory/content/remote/background routes and the full HTTP
+carrier bounds, directory/regex/remote/background routes and the full HTTP
 lifecycle still prevent a complete production replacement claim.
 
-The public test domain retains 98 actual ELF processes and 192 complete replies.
+The configuration/ordinary-view public test domain retains 109 actual ELF
+processes and 222 complete replies, including the appended configuration regex
+sessions. The separate public literal-search producer retains its own actual
+110 ELF processes, 175 complete replies and 120 tool calls. After the shared
+search replay, the reference consumer compares 112 designated response bodies
+in full. Eight separate path-resolution controls retain their different public
+resolved-path context and are not counted as identical original response bodies.
 Original comparison is split by what the reference actually executes: the SDK
 adapter fixture proves metadata admission and typed/error fields; the original
 `get_info` fixture proves server fields but has an empty tool list; the schema

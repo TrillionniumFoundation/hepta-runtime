@@ -814,7 +814,10 @@ view_logical_enabled:
     mov r13, [rbx + 24]
     mov r14d, 80
     cmp qword ptr [r13 + 16], 2
+    je view_logical_snapshot
+    cmp qword ptr [r13 + 16], 5
     jne view_logical_header
+view_logical_snapshot:
     cmp qword ptr [r13 + 24], 0
     jne view_logical_header
     mov rax, [r13 + 56]

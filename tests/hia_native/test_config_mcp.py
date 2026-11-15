@@ -1,4 +1,4 @@
-"""Actual static eleven-image MCP, administrator startup and immutable authority.
+"""Actual static seventeen-image MCP, administrator startup and immutable authority.
 
 The original SDK result-byte replay is a separate Cargo-backed recipe. These
 tests execute the same fixed ELF, with no interpreter or subprocess fallback.
@@ -9,8 +9,8 @@ import argparse,collections,copy,fcntl,hashlib,json,os,select,subprocess,tempfil
 ROOT=Path(__file__).resolve().parents[2]
 MANIFEST=None;OUTPUT=None;COUNTS=collections.Counter();TRANSCRIPT=[]
 sha=lambda b:hashlib.sha256(b).hexdigest()
-NAMES=['owner','fs','json','validation','identity','mcp','execution','execution_json','execution_core','value','publication']
-SOURCES={**{name:'config_'+name for name in NAMES[:6]},'execution':'execution_controller','execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json','publication':'result_publication'}
+NAMES=['owner', 'fs', 'json', 'validation', 'identity', 'mcp', 'execution', 'execution_json', 'execution_core', 'value', 'publication', 'regex_syntax', 'regex_unicode_data', 'regex_hir', 'regex_nfa', 'regex_match', 'regex_controller']
+SOURCES={**{name:'config_'+name for name in NAMES[:6]},'execution':'execution_controller','execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json','publication':'result_publication',**{name:name for name in NAMES[11:]}}
 
 def compact(value):return json.dumps(value,ensure_ascii=False,separators=(',',':')).encode()
 def request(name,args=b'{}',ident=1):
@@ -62,14 +62,14 @@ class NativeConfigMCP(unittest.TestCase):
         cls.metadata=json.loads(MANIFEST.read_bytes());cls.exe=MANIFEST.parent/cls.metadata['executable'];elf=cls.exe.read_bytes()
         assert sha(elf)==cls.metadata['elf_sha256'] and len(elf)==cls.metadata['elf_bytes']
         assert sha((ROOT/'scripts/config_mcp_adapter.S').read_bytes())==cls.metadata['adapter_source_sha256']
-        assert [m['id'] for m in cls.metadata['members']]==list(range(11))
+        assert [m['id'] for m in cls.metadata['members']]==list(range(17))
         for name,m in zip(NAMES,cls.metadata['members'],strict=True):
             assert m['name']==name
             assert sha((ROOT/'native'/(SOURCES[name]+'.hepta')).read_bytes())==m['source_sha256']
             path=Path(m['manifest']);data=json.loads(path.read_bytes());image=(path.parent/data['image']).read_bytes()
             assert sha(path.read_bytes())==m['manifest_sha256'] and sha(image)==m['image_sha256']
             assert elf[m['offset']:m['offset']+len(image)]==image
-        COUNTS['embedded_images_verified']=11
+        COUNTS['embedded_images_verified']=17
     def tool(self,s,name,args=b'{}',ident=1,error=False):
         value,wire=s.call(request(name,args,ident));self.assertEqual(value['id'],ident)
         self.assertEqual(set(value['result']),{'content','isError'});self.assertEqual(value['result']['isError'],error)
@@ -158,6 +158,48 @@ class NativeConfigMCP(unittest.TestCase):
             done=subprocess.run([str(self.exe),'--runtime-config',str(path)],input=initial,capture_output=True,timeout=30,env={'PATH':'','LC_ALL':'C'})
             self.assertEqual((done.returncode,done.stderr),(0,b''));self.assertEqual(json.loads(done.stdout)['result']['protocolVersion'],'2025-06-18')
             COUNTS['actual_elf_responses']+=1;COUNTS['final_eof_frame_controls']=1
+
+    def test_06_regex_installation_before_state_effects(self):
+        with tempfile.TemporaryDirectory(prefix='hia-config-regex-mcp-') as td:
+            root=Path(td);path=root/'config'
+            for i,pattern in enumerate(['a',r'[a-z]+',r'\p{Greek}+',r')|foo(?:','a{327674}']):
+                state=root/('valid-'+str(i));value=config(state)
+                value['hosts']['h']['privileged_actions']={'inspect':{'executable':'/echo','allow_extra_args':True,'extra_arg_patterns':[pattern]}}
+                path.write_bytes(compact(value))
+                with Session(self.exe,path) as s:
+                    s.ready();first,_=self.tool(s,'host_list');effective,_=self.tool(s,'effective_config')
+                    self.assertIn('inspect',first)
+                    self.assertEqual(json.loads(effective)['hosts'][0]['named_privileged_action_count'],1)
+                    self.assertNotIn('inspect',effective)
+                    self.assertFalse(lock_is_free(state/'controller.owner.lock'))
+                    value['hosts']['h']['privileged_actions']['inspect']['extra_arg_patterns']=['(']
+                    path.write_bytes(compact(value))
+                    self.assertEqual(self.tool(s,'host_list')[0],first)
+                    self.assertEqual(self.tool(s,'effective_config')[0],effective)
+                    self.tool(s,'execution_shadow_admit',compact(fixture()))
+                self.assertTrue(lock_is_free(state/'controller.owner.lock'))
+                COUNTS['regex_actual_installed_configs']+=1
+            for i,pattern in enumerate(['(',r'\w{500}','a{327675}',r'(?-u:\xFF)']):
+                state=root/('invalid-'+str(i));value=config(state)
+                value['hosts']['h']['privileged_actions']={'inspect':{'executable':'/echo','allow_extra_args':True,'extra_arg_patterns':[pattern]}}
+                path.write_bytes(compact(value))
+                done=subprocess.run([str(self.exe),'--runtime-config',str(path)],input=b'',capture_output=True,timeout=30,env={'PATH':'','LC_ALL':'C'})
+                self.assertEqual((done.returncode,done.stdout,done.stderr),(78,b'',b'host `h` privileged action `inspect` has invalid argument regex\n'))
+                self.assertFalse(state.exists())
+                COUNTS['regex_actual_startup_refusals']+=1
+
+    def test_07_first_error_and_public_projection(self):
+        with tempfile.TemporaryDirectory(prefix='hia-config-regex-order-') as td:
+            root=Path(td);path=root/'config'
+            for i,early in enumerate([False,True]):
+                state=root/str(i);value=config(state)
+                value['hosts']['h']['privileged_actions']={'middle':{'executable':'/echo','allow_extra_args':True,'extra_arg_patterns':['a','(']},'zlast':{'executable':'relative'}}
+                if early:value['hosts']['h']['privileged_actions']['afirst']={'executable':'relative'}
+                path.write_bytes(compact(value))
+                done=subprocess.run([str(self.exe),'--runtime-config',str(path)],input=b'',capture_output=True,timeout=30,env={'PATH':'','LC_ALL':'C'})
+                text=b'host `h` has invalid privileged action `afirst`\n'if early else b'host `h` privileged action `middle` has invalid argument regex\n'
+                self.assertEqual((done.returncode,done.stdout,done.stderr),(78,b'',text));self.assertFalse(state.exists())
+                COUNTS['regex_actual_first_error_controls']+=1
 
 def main():
     global MANIFEST,OUTPUT

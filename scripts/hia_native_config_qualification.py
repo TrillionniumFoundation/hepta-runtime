@@ -1,13 +1,15 @@
-"""Bind actual configuration builds, six native suites and four original domains.
+"""Bind actual configuration/regex builds, all native suites and original domains.
 
 No service policy is executed here. Only create=True may publish the compatibility
-result, and only after all six real aggregate process records have been verified.
+result, and only after every declared real aggregate process record has been verified.
 """
 from pathlib import Path
 import ast,gzip,hashlib,importlib.util,json,math,os,re,signal,struct,subprocess,sys,time,tomllib
 from hia_native_build import HEPTA_COMMIT,check_dependency,json_bytes
 from hia_native_entropy_qualification import read,native_receipt,inspect_elf
 from hia_native_view_cache_qualification import _compiled
+import hia_native_regex_qualification as regex_qualification
+PROFILE=json.loads((Path(__file__).resolve().parents[1]/"native/config_regex_profile.json").read_bytes())
 
 OWN = ['native/config_execution_schema.json',
  'native/config_fs.hepta',
@@ -87,168 +89,21 @@ DEPENDENCIES = ['Cargo.lock',
  'src/mcp/weight_config.rs',
  'src/utils/json_size.rs']
 
-MODULES = {'execution': {'buffer_profile': 'history.v1',
-               'image_sha256': '1713343da50f0651d05fa561fd958d3ac14a5cecaa5f97bec13a7f517707419a',
-               'input_capacity': 134217728,
-               'output_capacity': 134217728,
-               'source': 'native/execution_controller.hepta',
-               'source_sha256': '5ab993340f2f9bf8b1f6f295098570291307d5bd564332174c2d136454167a10',
-               'workspace_capacity': 268435456},
- 'execution_core': {'buffer_profile': 'history.v1',
-                    'image_sha256': '3bbc3adac5227351c0baedbf64eeadbf8c64671341bb36f12674ef90ccaf2f08',
-                    'input_capacity': 134217728,
-                    'output_capacity': 134217728,
-                    'source': 'native/execution_shadow.hepta',
-                    'source_sha256': '65aa4097e00ed497ab38efe4ddf515de99eaf45abeb7ad2829af4381e7704713',
-                    'workspace_capacity': 268435456},
- 'execution_json': {'buffer_profile': 'history.v1',
-                    'image_sha256': 'd6fd8b1bd60eec2951bd9825edb22b0a5832da2cd99da5117c3169c3c60c0e9a',
-                    'input_capacity': 134217728,
-                    'output_capacity': 134217728,
-                    'source': 'native/execution_json.hepta',
-                    'source_sha256': 'd1e1610120fcadd72960f04b742ad6bfcfc3bc430a2b828463f3ab2af1268f14',
-                    'workspace_capacity': 268435456},
- 'fs': {'buffer_profile': 'standard',
-        'image_sha256': '8cebd33c8e6d3f88de31424cb82ddf1e36ccd00d0e38a8d7318590997c1c915e',
-        'input_capacity': 8388608,
-        'output_capacity': 8388608,
-        'source': 'native/config_fs.hepta',
-        'source_sha256': 'dd55aa68e4479514e052f1ed8c8ec65f024a9f2fef3c5aa86d4cfeb28992ff9d',
-        'workspace_capacity': 33554432},
- 'identity': {'buffer_profile': 'serde-json.v1',
-              'image_sha256': '4d07bbc0b299237b9c935d3a16aa21d641b75d881a2b7de3adfd443cce30db8d',
-              'input_capacity': 16777216,
-              'output_capacity': 67108864,
-              'source': 'native/config_identity.hepta',
-              'source_sha256': '59c849f25aa88c5dc9a86b8dc1990889a17abfbedc5d58557e193689894710ad',
-              'workspace_capacity': 268435456},
- 'identity_composed': {'buffer_profile': 'history.v1',
-                       'image_sha256': '4d07bbc0b299237b9c935d3a16aa21d641b75d881a2b7de3adfd443cce30db8d',
-                       'input_capacity': 134217728,
-                       'output_capacity': 134217728,
-                       'source': 'native/config_identity.hepta',
-                       'source_sha256': '59c849f25aa88c5dc9a86b8dc1990889a17abfbedc5d58557e193689894710ad',
-                       'workspace_capacity': 268435456},
- 'json': {'buffer_profile': 'serde-json.v1',
-          'image_sha256': 'f241ddb43f90c2677dd018dfaba0ab68dc760951174b8722dda6dced69b526f9',
-          'input_capacity': 16777216,
-          'output_capacity': 67108864,
-          'source': 'native/config_json.hepta',
-          'source_sha256': '7cb065173fdb3bf266e1f234a18f8f309865d57db4c07d26e750047e4ec10ccb',
-          'workspace_capacity': 268435456},
- 'mcp': {'buffer_profile': 'history.v1',
-         'image_sha256': 'c7d025f49fb5b5d82e09d8ef11a71126f3f96cb65113e848b83180e495b00d02',
-         'input_capacity': 134217728,
-         'output_capacity': 134217728,
-         'source': 'native/config_mcp.hepta',
-         'source_sha256': 'e57a4496fe9bf24372b4ebf8ed0deaeb62d5a3cc1de7e3750df40957b7d4796f',
-         'workspace_capacity': 268435456},
- 'owner': {'buffer_profile': 'history.v1',
-           'image_sha256': '933715c9f0f4c03b70b7379c738a435115d1974eb29a3434e6f25c1c45667502',
-           'input_capacity': 134217728,
-           'output_capacity': 134217728,
-           'source': 'native/config_owner.hepta',
-           'source_sha256': '5f9e4cbaf8b8652a3a9eb05bdeccb90149258c9851a5fd8095465ea6cd12e5eb',
-           'workspace_capacity': 268435456},
- 'publication': {'buffer_profile': 'standard',
-                 'image_sha256': 'ec0f5e9586d8668817d13ba4f9385e1f8d04cc7dc14f6cb1ead4e023b8b20af9',
-                 'input_capacity': 8388608,
-                 'output_capacity': 8388608,
-                 'source': 'native/result_publication.hepta',
-                 'source_sha256': '279d3c385ea3b7a67d5de14d24ee1a16154a64f87a23cee467c30576f7c69842',
-                 'workspace_capacity': 33554432},
- 'validation': {'buffer_profile': 'serde-json.v1',
-                'image_sha256': 'bb4a71d5a4fed80b99db5c7a0a3004ae21c979ca154089946d9d3373b56178c3',
-                'input_capacity': 16777216,
-                'output_capacity': 67108864,
-                'source': 'native/config_validation.hepta',
-                'source_sha256': 'd742645d8a112fe890c5f9f95aaa019bf685b8000e7e21d31a3289bf794e0f11',
-                'workspace_capacity': 268435456},
- 'validation_composed': {'buffer_profile': 'history.v1',
-                         'image_sha256': 'bb4a71d5a4fed80b99db5c7a0a3004ae21c979ca154089946d9d3373b56178c3',
-                         'input_capacity': 134217728,
-                         'output_capacity': 134217728,
-                         'source': 'native/config_validation.hepta',
-                         'source_sha256': 'd742645d8a112fe890c5f9f95aaa019bf685b8000e7e21d31a3289bf794e0f11',
-                         'workspace_capacity': 268435456},
- 'value': {'buffer_profile': 'serde-json.v1',
-           'image_sha256': '1a189af4822ae3f167138f3d90277ca028f891c3b34ff2e7ce0ac50ecc2ee7f2',
-           'input_capacity': 16777216,
-           'output_capacity': 67108864,
-           'source': 'native/serde_json.hepta',
-           'source_sha256': '6c3afb7d322b3c42d89727651aaae7cc1907a7766773e0bff4fdac9b11567a96',
-           'workspace_capacity': 268435456}}
+MODULES=PROFILE['modules']
 
-EXECUTABLES = {'fixture': {'adapter_source': 'scripts/config_owner_adapter.S',
-             'adapter_source_sha256': 'df7aaff783afc9474dc054025f1747bce8a9c050a495dfbbe92a5c210d360969',
-             'elf_bytes': 1382823,
-             'elf_sha256': '0a7c171f6add30df84ca9932a29596256a34daee742bb542396b9ce21d4cf7bc',
-             'holes': [800, 844, 881, 955, 918],
-             'member_names': ['owner', 'fs', 'json', 'validation', 'identity'],
-             'packer_source': 'native/config_owner_fixture_packer.hepta',
-             'packer_source_sha256': '5a9ddd8cc21e2b9e7b3358ba7f17d80d3750d35776f1858a6a9f5898e6d81659',
-             'prefix_bytes': 3239,
-             'prefix_sha256': '9f19136b717f3380e94ed0687f8a87ee3e2a7264b5e7b23ee04b131a5df6d98f',
-             'schema': 'hepta.runtime.config-owner-native.v1'},
- 'fs': {'adapter_source': 'scripts/config_fs_adapter.S',
-        'adapter_source_sha256': 'fabd07fd4c9000daa9b98a653490bba40f18371e5bc6e11068a7f316b505b54c',
-        'elf_bytes': 111103,
-        'elf_sha256': '53477ced0bd5211a4e5af10df08178ef5498604e1760cba0c9fa7d59f6de3ad4',
-        'holes': [347],
-        'member_names': ['fs'],
-        'packer_source': 'native/config_fs_packer.hepta',
-        'packer_source_sha256': 'e70df3d2482c0a8ff7a6fd7bd394ea8c424bef7ee0e69d06b51c02ec18dddfb3',
-        'prefix_bytes': 1761,
-        'prefix_sha256': '2e6f0d53a58189f5f84fa595b1caacd680fe8fe6fe904df8025abda00ee90e88',
-        'schema': 'hepta.runtime.config-fs-probe.v1'},
- 'mcp': {'adapter_source': 'scripts/config_mcp_adapter.S',
-         'adapter_source_sha256': 'f2d0920ca3468f8c38bdc52b0a6d1f34e59560d278fc31cfc65c7a0c4e24db2f',
-         'elf_bytes': 3073850,
-         'elf_sha256': 'd1859e6b9daf64853414a66739b107fb5d8802b390a146f49bcb45e4e7e62168',
-         'holes': [1008, 1115, 1152, 1226, 1189, 1071, 2449, 2921, 3007, 2253, 6296],
-         'member_names': ['owner',
-                          'fs',
-                          'json',
-                          'validation',
-                          'identity',
-                          'mcp',
-                          'execution',
-                          'execution_json',
-                          'execution_core',
-                          'value',
-                          'publication'],
-         'packer_source': 'native/config_mcp_packer.hepta',
-         'packer_source_sha256': '6ef606c8776f007945cf86a554449c76a1fcf9fb7ec54087e9af09a690a23809',
-         'prefix_bytes': 6591,
-         'prefix_sha256': '65eb7b0062d1db99d504224524929129fd1e91cc11d20e42b4602f214c115fce',
-         'schema': 'hepta.runtime.config-mcp-native.v1'},
- 'owner': {'adapter_source': 'scripts/config_owner_adapter.S',
-           'adapter_source_sha256': '129d046c76bc8b0c07b5250860a1a21bb1a040965be35b1266a6a03167a8f038',
-           'elf_bytes': 1382786,
-           'elf_sha256': 'f143000b8d43856d9327ed0c86ccf013dc3377b51843f7b4f2103b1aaa7ca215',
-           'holes': [763, 807, 844, 918, 881],
-           'member_names': ['owner', 'fs', 'json', 'validation', 'identity'],
-           'packer_source': 'native/config_owner_packer.hepta',
-           'packer_source_sha256': '9933db64317c014781cab45b9f893f62b4f877745c86f967ace5c67f2d0a3c49',
-           'prefix_bytes': 3202,
-           'prefix_sha256': '1e070733cf57d6743f4c5d8a9cffbf78ee5de37613ed4d0b0e20b0c6ac24f956',
-           'schema': 'hepta.runtime.config-owner-native.v1'}}
+EXECUTABLES=PROFILE['executables']
 
 # Two immutable-authority requests contain the actual random fixture pathname.
 # Their observed hashes remain retained; only those request fields vary across
 # runs. Every response and all other request bytes have a fixed fingerprint.
-MCP_TRANSCRIPT_SHA = 'd5ba383f8ff5517d6a4ed3ec4377c46b5b4ffe2ebd982130c6889cc0fc11ffb0'
+MCP_TRANSCRIPT_SHA=PROFILE['mcp_transcript_sha256']
 COMPILER_SHA='bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
-TESTS=('test_config_json.py','test_config_semantics.py','test_config_fs.py','test_config_owner.py','test_config_mcp.py','test_config_mcp_receipts.py')
-GROUPS=(5,6,8,7,5,4)
+CONFIG_TESTS=('test_config_json.py','test_config_semantics.py','test_config_fs.py','test_config_owner.py','test_config_mcp.py','test_config_mcp_receipts.py')
+TESTS=CONFIG_TESTS+regex_qualification.TESTS
+GROUPS=tuple(PROFILE['config_test_groups'])
 STREAMS={'typed-corpus':(6491,15953009,'87a619c1f79f22d4e8f5074856d0e49ed4fd475bf2809deb91e79d492f65b7c1',2946846,'7d72f4df20f45a0b2317782dec628048360a79b724d008231d5f6a46439fb9f7'),
- 'semantics-corpus':(2063,12206335,'b817774c48233e843a9b7b5f3f1577a0306846946694ca9f6be1c4e0517ddee2',3801646,'7c0348f29ade8b26c1e86ec642146e3b3ab4271474f2fa0954ed7e67eaebdf86')}
-COUNTS=(
- {'native_calls':6580,'original_domain_cases':6491,'real_elf_runs':6},
- {'explicit_regex_dependency_cases':4,'native_calls':4049,'original_digest_cases':21,'original_semantic_cases':1837,'original_typed_refusals':201,'real_static_elf_runs':5},
- {'actual_elf_requests':61,'configuration_read_byte_comparisons':5,'eof_retirement_controls':1,'lock_admission_refusals':6,'retained_pair_and_release_controls':16},
- {'actual_elf_requests':73,'actual_lock_custody_controls':4,'actual_startup_refusals':7,'environment_default_controls':7,'exact_name_alias_order_controls':9,'failed_reinstallation_controls':3,'immutable_source_and_path_controls':8,'persistent_query_cache_controls':9,'production_install_authority_refusals':1},
- {'above_old_protocol_node_limit':1,'actual_elf_responses':60,'actual_execution_chain_controls':4,'actual_value_controls':6,'embedded_images_verified':11,'exact_installed_host_controls':3,'final_eof_frame_controls':1,'immutable_authority_controls':4,'lock_custody_controls':4,'missing_null_empty_default_controls':8,'native_number_controls':4,'protocol_profile_refusals':4})
+ 'semantics-corpus':(2063,12206335,'b817774c48233e843a9b7b5f3f1577a0306846946694ca9f6be1c4e0517ddee2',3801380,'2432dc5bd65694895ddb055a72d59126bd031087a88fb7ba8d838107b4be8748')}
+COUNTS=tuple(PROFILE['config_test_counts'])
 sha=lambda raw:hashlib.sha256(raw).hexdigest()
 
 def require(ok,message):
@@ -270,8 +125,9 @@ def confined(output,value):
 def artifact(output,values,path):
     raw=read(path);require(path.is_relative_to(output),'artifact escaped output');values[path.relative_to(output).as_posix()]=sha(raw);return raw
 def source_pins(root):
-    paths=set(OWN+DEPENDENCIES)
-    paths.update(['scripts/hia_native_entropy_qualification.py','scripts/hia_native_view_cache_qualification.py'])
+    paths=set(OWN+DEPENDENCIES+regex_qualification.OWN)
+    paths.update(['native/config_regex_profile.json','native/config_regex_adapter_composition.json','native/config_regex_owner_adapter_composition.json','tests/hia_native/config_regex_session.py','tests/hia_native/config_regex_original_cases.py'])
+    paths.update(['scripts/hia_native_entropy_qualification.py','scripts/hia_native_view_cache_qualification.py','scripts/hia_native_scope_qualification.py','scripts/check_hia_native_inventory.py'])
     values={name:sha(read(root/name)) for name in sorted(paths)}
     for row in MODULES.values():require(values[row['source']]==row['source_sha256'],'HIA source changed: '+row['source'])
     for row in EXECUTABLES.values():require(values[row['packer_source']]==row['packer_source_sha256'],'HIA packer changed')
@@ -332,7 +188,7 @@ def _standalone(root,output,path,meta,image,compiler,artifacts):
     require(standalone['transport']=='filter' and standalone['runtime_python_required'] is False and standalone['runtime_libc_required'] is False,'filter runtime changed')
     require(sha(elf)==standalone['sha256'] and elf[-len(image):]==image,'filter image changed')
     exact(standalone['inspection'],inspect_elf(elf),'filter ELF inspection changed')
-    packer_source=read(root/'native/serde_filter_packer.hepta');cache=output/'build/packers'/sha(packer_source)
+    packer_source=read(root/('native/filter_packer.hepta'if meta.get('buffer_profile','standard')=='standard'else'native/serde_filter_packer.hepta'));cache=output/'build/packers'/sha(packer_source)
     packer=artifact(output,artifacts,cache/'packer.image.bin');pm=object_at(cache/'manifest.json');artifact(output,artifacts,cache/'manifest.json')
     require(artifact(output,artifacts,cache/'source.hepta')==packer_source and pm['source_sha256']==sha(packer_source),'filter packer source changed')
     native_receipt(pm['compile_receipt'],image=compiler,source=packer_source,output=artifact(output,artifacts,cache/'packer.output.bin'),produced=packer)
@@ -345,66 +201,90 @@ def _standalone(root,output,path,meta,image,compiler,artifacts):
 def _build_at(root,output,path,*,hepta=None):
     root=root.resolve(strict=True);output=output.resolve(strict=True);path=confined(output,path);build=output/'build';artifacts={}
     bundle=object_at(path);raw=artifact(output,artifacts,path);pins=source_pins(root)
-    require(path==build/'config-build.json' and bundle['schema']=='hepta.runtime.config-native-build.v1','wrong bundle path/schema')
-    require(bundle['compiler_commit']==HEPTA_COMMIT and bundle['compiler_sha256']==COMPILER_SHA and bundle['fresh_cold_qualified'] is False,'compiler or closure claim differs')
+    require(path==build/'config-build.json'and bundle['schema']=='hepta.runtime.config-native-build.v2','wrong bundle path/schema')
+    require(bundle['compiler_commit']==HEPTA_COMMIT and bundle['compiler_sha256']==COMPILER_SHA and bundle['fresh_cold_qualified']is False,'compiler or closure claim differs')
+    require(bundle['runtime_python_required']is False and bundle['unconstrained_regex_resources_closed']is False,'runtime/dependency claim differs')
     compiler=artifact(output,artifacts,build/'bootstrap/B3.image.bin');bootstrap=object_at(build/'bootstrap/bootstrap.json');artifact(output,artifacts,build/'bootstrap/bootstrap.json')
     require(sha(compiler)==COMPILER_SHA and bootstrap['dependency']['commit']==HEPTA_COMMIT,'pinned compiler changed')
     if hepta is not None:exact(bootstrap['dependency'],check_dependency(Path(hepta).resolve(strict=True)),'compiler source closure differs')
     receipt=object_at(build/'config-build.receipt.json');artifact(output,artifacts,build/'config-build.receipt.json')
     stdout=artifact(output,artifacts,build/'config-build.stdout');stderr=artifact(output,artifacts,build/'config-build.stderr')
     expected={'schema':'hepta.runtime.config-build-process.v1','exit_code':0,'timed_out':False,'cleanup_timed_out':False,'start_error':None,'timeout_seconds':180,'cleanup_seconds':3,'source_pins':pins,'source_pins_after':pins,'stdout_sha256':sha(stdout),'stderr_sha256':sha(stderr),'cwd':str(root)}
-    exact({k:receipt.get(k) for k in expected},expected,'actual build process receipt differs');finite(receipt['elapsed_seconds'],183)
-    command=receipt['command'];require(len(command)==13 and command[:7]==launch(root,'scripts/build_hia_config_service.py',[]) and command[7]=='--hepta' and command[9:] == ['--build-root',str(build),'--output',str(path)],'fixed build command differs')
-    exact(json.loads(stdout),{'output':str(path),'modules':13,'executables':['fs','owner','fixture','mcp']},'actual build stdout is incomplete')
-    require(stderr==b'' and set(bundle['modules'])==set(MODULES) and set(bundle['executables'])==set(EXECUTABLES),'build inventory changed')
+    exact({k:receipt.get(k)for k in expected},expected,'actual build process receipt differs');finite(receipt['elapsed_seconds'],183)
+    command=receipt['command'];require(len(command)==13 and command[:7]==launch(root,'scripts/build_hia_config_service.py',[])and command[7]=='--hepta'and command[9:]==['--build-root',str(build),'--output',str(path)],'fixed build command differs')
+    exact(json.loads(stdout),{'output':str(path),'modules':20,'executables':['fs','owner','fixture','mcp','regex_unicode','regex_syntax','regex_hir','regex_regex','regex_validation'],'sha256':sha(raw)},'actual build stdout is incomplete')
+    require(stderr==b''and set(bundle['modules'])==set(MODULES)and set(bundle['executables'])==set(EXECUTABLES),'build inventory changed')
     modules={}
     for name,want in MODULES.items():
         ref=bundle['modules'][name];mp=confined(output,ref['path']);require(sha(read(mp))==ref['sha256'],'module reference changed')
         meta,image=_compiled_module(root,output,mp,want,compiler,artifacts)
-        if name in ['json','validation','identity']:_standalone(root,output,mp,meta,image,compiler,artifacts)
-        else:require(meta['standalone'] is None,'unexpected standalone module')
+        if want['standalone']:_standalone(root,output,mp,meta,image,compiler,artifacts)
+        else:require(meta['standalone']is None,'unexpected standalone module')
         modules[name]={'path':mp,'meta':meta,'image':image}
     executables={}
     for name,want in EXECUTABLES.items():
         ref=bundle['executables'][name];ep=confined(output,ref['path']);m=object_at(ep);artifact(output,artifacts,ep)
-        require(sha(read(ep))==ref['sha256'],'executable manifest changed')
-        exact({k:m.get(k) for k in ['schema','elf_sha256','elf_bytes','prefix_bytes','prefix_sha256','packer_source_sha256','adapter_source_sha256']},{k:want[k] for k in ['schema','elf_sha256','elf_bytes','prefix_bytes','prefix_sha256','packer_source_sha256','adapter_source_sha256']},'fixed executable identity differs')
-        require(m['compiler_commit']==HEPTA_COMMIT and m['compiler_sha256']==COMPILER_SHA and m['complete_config_owner'] is False and m['fresh_cold_qualified'] is False,'executable authority claim changed')
-        elf=artifact(output,artifacts,confined(ep.parent,m['executable']));inspect_elf(elf);require((len(elf),sha(elf))==(want['elf_bytes'],want['elf_sha256']),'fixed ELF bytes differ')
+        require(sha(read(ep))==ref['sha256'],'executable manifest changed');regex=name.startswith('regex_')
+        keys=['schema','prefix_bytes','prefix_sha256','packer_source_sha256','adapter_source_sha256']
+        exact({k:m.get(k)for k in keys},{k:want[k]for k in keys},'fixed executable identity differs')
+        require(m['compiler_commit']==HEPTA_COMMIT and m['compiler_sha256']==COMPILER_SHA and m['fresh_cold_qualified']is False,'executable compiler claim changed')
+        elf=artifact(output,artifacts,confined(ep.parent,m['executable']));inspect_elf(elf)
+        require((len(elf),sha(elf))==(want['elf_bytes'],want['elf_sha256']),'fixed ELF bytes differ')
+        exact((m.get('executable_bytes'if regex else'elf_bytes'),m.get('executable_sha256'if regex else'elf_sha256')),(len(elf),sha(elf)),'executable manifest body differs')
         packpath=confined(output,m['packer_manifest']);require(sha(read(packpath))==m['packer_manifest_sha256'],'packer manifest changed')
         _compiled_module(root,output,packpath,{'source':want['packer_source'],'buffer_profile':'standard','source_sha256':want['packer_source_sha256'],'input_capacity':8<<20,'output_capacity':8<<20,'workspace_capacity':32<<20},compiler,artifacts)
         prefix=bytearray(elf[:want['prefix_bytes']]);struct.pack_into('<QQ',prefix,96,0,0);at=want['prefix_bytes'];images=[]
-        member_rows=m.get('members')
-        if name=='fs':require(m['module_manifest']==str(modules['fs']['path']) and m['module_manifest_sha256']==bundle['modules']['fs']['sha256'],'filesystem child differs')
-        else:require(type(member_rows) is list and len(member_rows)==len(want['member_names']),'image table incomplete')
-        for i,(key,hole) in enumerate(zip(want['member_names'],want['holes'],strict=True)):
-            actualkey=key+'_composed' if key in ['validation','identity'] else key;child=modules[actualkey];image=child['image'];images.append(image)
+        rows=m.get('members')
+        if name=='fs':require(m['module_manifest']==str(modules['fs']['path'])and m['module_manifest_sha256']==bundle['modules']['fs']['sha256'],'filesystem child differs')
+        else:require(type(rows)is list and len(rows)==len(want['member_names']),'image table incomplete')
+        for i,(key,ident,hole)in enumerate(zip(want['member_names'],want['member_ids'],want['holes'],strict=True)):
+            child=modules[key];image=child['image'];images.append(image)
             require(elf[hole-1]==0xe8 and hole+4+struct.unpack_from('<i',elf,hole)[0]==at and elf[at:at+len(image)]==image,'native image/call target differs');struct.pack_into('<I',prefix,hole,0)
-            if member_rows is not None:
-                row=member_rows[i];expected={'id':i,'name':key,'manifest':str(child['path']),'manifest_sha256':sha(read(child['path'])),'source_sha256':sha(read(root/MODULES[actualkey]['source'])),'image_sha256':sha(image),'image_bytes':len(image),'offset':at,'call_displacement_offset':hole}
-                expected.update({k:MODULES[actualkey][k] for k in ['buffer_profile','input_capacity','output_capacity','workspace_capacity']})
-                if name=='mcp':expected['source']=MODULES[actualkey]['source']
-                exact({k:row.get(k) for k in expected},expected,'fixed image table changed')
+            if rows is not None:
+                expected={'id':ident,'manifest':str(child['path']),'manifest_sha256':sha(read(child['path'])),'source':MODULES[key]['source'],'source_sha256':sha(read(root/MODULES[key]['source'])),'image_sha256':sha(image),'image_bytes':len(image),'offset':at,'call_displacement_offset':hole,'buffer_profile':MODULES[key]['buffer_profile']}
+                if not regex:
+                    expected.update({k:MODULES[key][k]for k in ['input_capacity','output_capacity','workspace_capacity']})
+                    expected['name']='identity'if key=='identity_composed'else'validation'if key=='validation_composed'else key
+                exact({k:rows[i].get(k)for k in expected},expected,'fixed image table changed')
             at+=len(image)
-        require(at==len(elf) and sha(prefix)==want['prefix_sha256'],'fixed prefix/layout differs')
-        if name=='fs':frame=b'HIAFLT01'+struct.pack('<Q',len(images[0]))+images[0]
-        else:frame=(b'HCFGMCP3' if name=='mcp' else b'HCFGPCK1')+b''.join(struct.pack('<Q',len(i)) for i in images)+bytes(8)+b''.join(images)
+        require(at==len(elf)and sha(prefix)==want['prefix_sha256'],'fixed prefix/layout differs')
+        frame=want['frame_magic'].encode()+b''.join(struct.pack('<Q',len(image))for image in images)+(bytes(8)if want['frame_reserved_word']else b'')+b''.join(images)
         require(m['pack_input_sha256']==sha(frame),'actual pack frame identity changed')
         if name!='fs':require(artifact(output,artifacts,ep.parent/'pack.input.bin')==frame,'retained pack frame changed')
-        if name in ['owner','fixture']:require(m['fixture_admin_reinstallation']==(name=='fixture') and m['caller_configuration_installation'] is False,'fixture authority differs')
+        if name!='fs':exact(m['call_edges'],want['call_edges'],'call authority differs')
+        if name in ['owner','fixture','mcp']:
+            require(m['fixture_admin_reinstallation']==(name=='fixture')and m['caller_configuration_installation']is False,'fixture authority differs')
+            require(m['only_effect_owner']==1 and m['unconstrained_regex_resources_closed']is False and m['complete_config_owner']is False,'startup/effect authority differs')
         if name=='mcp':
-            exact(m['call_edges'],{'0':[1,2,3,4],'5':[0,6,9,10],'6':[0,7,8]},'call authority differs')
-            require(m['only_effect_owner']==1 and m['protocol_version']=='2025-06-18' and m['caller_configuration_installation'] is False,'MCP startup/effect authority differs')
+            require(m['protocol_version']=='2025-06-18','protocol version differs')
             exact(m['tool_names'],['host_list','effective_config','execution_shadow_admit'],'advertised tools changed')
+            physical_edges={'0':[1,2,3,4],'5':[0,6,9,10],'6':[0,7,8],
+                            '3':[16],'16':[11,13,14,15],'11':[12],'13':[12],'15':[12]}
+            exact(m['call_edges'],physical_edges,'physical MCP call authority differs')
+            exact(m.get('regex_local_call_edges'),{'3':[15],'15':[10,12,13,14],
+                  '10':[11],'12':[11],'14':[11]},'regex local continuation authority differs')
+            exact(m.get('regex_selector_members'),{'3':'validation','10':'regex_syntax',
+                  '11':'regex_unicode_data','12':'regex_hir','13':'regex_nfa',
+                  '14':'regex_match','15':'regex_controller'},'regex selector/member mapping differs')
             expected_publication={'result_publication_image_id':10,'result_publication_source':MODULES['publication']['source'],'result_publication_source_sha256':MODULES['publication']['source_sha256'],'result_publication_image_sha256':MODULES['publication']['image_sha256'],'result_publication_handoff':'config_mcp.tool_result fixed envelope prefix and original text span','filesystem_hint_callers_replaced':False,'publication_fixture_is_production':False,'regex_compilation_closed':False}
             exact({k:m.get(k) for k in expected_publication},expected_publication,'typed text publication owner or scope differs')
             exact({k:m.get(k) for k in ['builder_source_sha256','generic_build_sha256','generic_loader_sha256']},{'builder_source_sha256':pins['scripts/build_config_mcp_service.py'],'generic_build_sha256':pins['scripts/hia_native_build.py'],'generic_loader_sha256':pins['scripts/hia_native_loader.py']},'actual MCP build source closure differs')
+        if regex:
+            require(m['runtime_python_required']is False and m['runtime_libc_required']is False and m['unconstrained_regex_resources_closed']is False,'regex boundary claim changed')
+            require([r['name']for r in m['records']]==['assemble','relocations','text','symbols'],'regex assembly process incomplete')
+            for r in m['records']:
+                require(r['exit']==0 and r['timeout_seconds']==30,'regex assembly did not complete');finite(r['elapsed'],30)
+                for stream in ['stdout','stderr']:require(sha(artifact(output,artifacts,ep.parent/(r['name']+'.'+stream)))==r[stream+'_sha256'],'actual assembly output differs')
+            for source,digest in m['inputs'].items():
+                source=Path(source);require(source.is_relative_to(root)or source.is_relative_to(output),'regex build input escaped source/artifacts')
+                require(sha(read(source))==digest,'regex build input changed')
         executables[name]={'manifest':ep.relative_to(output).as_posix(),'sha256':sha(read(ep)),'elf_sha256':sha(elf)}
-    require([x['name'] for x in bundle['records']]==['filesystem','owner','fixture','mcp'],'sub-build records incomplete')
+    require([r['name']for r in bundle['records']]==['fs','owner','fixture','mcp'],'sub-build records incomplete')
     for row in bundle['records']:
-        require(row['exit']==0,'sub-build did not complete')
-        for stream in ['stdout','stderr']:require(sha(artifact(output,artifacts,build/(row['name']+'.'+stream)))==row[stream+'_sha256'],'sub-build actual output changed')
-    return {'schema':'hepta.runtime.config-build-evidence.v1','source_pins':pins,'bundle_sha256':sha(raw),'modules':bundle['modules'],'executables':executables,'artifact_sha256':artifacts}
+        require(row['exit']==0 and row['timeout_seconds']==180,'sub-build did not complete');finite(row['elapsed'])
+        for stream in ['stdout','stderr']:require(sha(artifact(output,artifacts,build/('cfg-regex-'+row['name']+'.'+stream)))==row[stream+'_sha256'],'sub-build actual output changed')
+    return {'schema':'hepta.runtime.config-build-evidence.v2','source_pins':pins,'bundle_sha256':sha(raw),'modules':bundle['modules'],'executables':executables,'artifact_sha256':artifacts}
+
 
 def build_evidence(root,output,report):
     owner=report['modules']['runtime_config'];require(owner.get('builder')=='runtime_config','builder changed')
@@ -416,7 +296,10 @@ def test_commands(root,output,report):
     path=confined(output,report['modules']['runtime_config']['manifest']);bundle=object_at(path)
     modules={k:confined(output,v['path']) for k,v in bundle['modules'].items()};exes={k:confined(output,v['path']) for k,v in bundle['executables'].items()}
     args=[['--manifest',modules['json']],sum((['--'+n+'-manifest',modules[n]] for n in ['json','validation','identity']),[]),['--manifest',exes['fs']],['--manifest',exes['owner'],'--fixture-manifest',exes['fixture']],['--manifest',exes['mcp'],'--output',output/'config-native/mcp'],['--manifest',modules['mcp'],'--output',output/'config-native/receipts']]
-    return {name:launch(root,'tests/hia_native/'+name,argv) for name,argv in zip(TESTS,args,strict=True)}
+    args[1]+=['--validation-elf-manifest',exes['regex_validation']]
+    commands={name:launch(root,'tests/hia_native/'+name,argv) for name,argv in zip(CONFIG_TESTS,args,strict=True)}
+    commands.update({name:launch(root,'tests/hia_native/'+name,[])for name in regex_qualification.TESTS})
+    return commands
 
 def _suite(output,report,completed,name,groups,command):
     check,summary=completed(output,report,name)
@@ -443,7 +326,7 @@ def _corpus(output,folder,build,artifacts):
         exact({k:meta.get(k) for k in ['source_sha256','image_sha256','manifest_sha256']},{'source_sha256':MODULES['json']['source_sha256'],'image_sha256':MODULES['json']['image_sha256'],'manifest_sha256':build['modules']['json']['sha256']},'typed corpus owner differs')
         require(sum(meta['categories'].values())==6491,'typed category count differs')
     else:
-        exact(meta.get('explicit_incomplete_regex_indices'),[450,451,452,454],'regex incompleteness changed')
+        exact(meta.get('explicit_incomplete_regex_indices'),[],'regex dependency refusal reintroduced')
         exact(meta['manifests'],{n:build['modules'][n]['sha256'] for n in ['json','validation','identity']},'semantic corpus manifests differ')
         exact(meta['sources'],{n:MODULES[n]['source_sha256'] for n in ['json','validation','identity']},'semantic corpus sources differ')
         require(meta['original_output_sha256']=='f749e18917afe6cc798749dd09418bd0682bec2dde92863c4548b26a4f583cbc','original semantic baseline changed')
@@ -453,7 +336,7 @@ def native_evidence(root,output,report,completed_test_summary,create=False):
     root=Path(root).resolve(strict=True);output=Path(output).resolve(strict=True)
     built=build_evidence(root,output,report);bundle=object_at(output/'build/config-build.json');artifacts=dict(built['artifact_sha256']);commands=test_commands(root,output,report);records=[]
     summaries={}
-    for i,(name,groups) in enumerate(zip(TESTS,GROUPS,strict=True)):
+    for i,(name,groups) in enumerate(zip(CONFIG_TESTS,GROUPS,strict=True)):
         check,summary=_suite(output,report,completed_test_summary,name,groups,commands[name]);summaries[name]=summary
         for suffix in ['stdout','stderr']:artifact(output,artifacts,output/(name+'.'+suffix))
         finite(summary.get('elapsed_seconds',summary.get('elapsed')))
@@ -470,7 +353,7 @@ def native_evidence(root,output,report,completed_test_summary,create=False):
             exact({k:v for k,v in stored.items() if k!='transcript'},summary,'MCP actual stdout differs from retained report')
             require(summary.get('source_unchanged') is True and summary.get('manifest_sha256')==bundle['executables']['mcp']['sha256'],'tested MCP executable differs')
             transcript=[]
-            require(type(stored['transcript']) is list and len(stored['transcript'])==59,'actual MCP transcript incomplete')
+            require(type(stored['transcript']) is list and len(stored['transcript'])==PROFILE['mcp_transcript_count'],'actual MCP transcript incomplete')
             for index,row in enumerate(stored['transcript']):
                 require(set(row)=={'request_bytes','request_sha256','response_bytes','response_sha256'} and all(type(row[k]) is int and 0<=row[k]<=8<<20 for k in ['request_bytes','response_bytes']) and all(type(row[k]) is str and re.fullmatch('[0-9a-f]{64}',row[k]) for k in ['request_sha256','response_sha256']),'actual MCP transcript record malformed')
                 transcript.append({k:v for k,v in row.items() if index not in [39,41] or k not in ['request_bytes','request_sha256']})
@@ -484,15 +367,17 @@ def native_evidence(root,output,report,completed_test_summary,create=False):
             if claim in summary:require(summary[claim] is False,'native report overstates scope')
         records.append({'name':name,'command':check['command'],'exit':0,'elapsed':check['elapsed_seconds'],'stdout_sha256':check['stdout_sha256'],'stderr_sha256':check['stderr_sha256'],'completed_test_summary':summary})
     corpora={n:_corpus(output,n,built,artifacts) for n in STREAMS}
+    regex=regex_qualification.native_evidence(root,output,report,completed_test_summary,bundle,built,commands,source_pins(root),create=create)
+    artifacts.update(regex['artifact_sha256'])
     compatible={'schema':'hepta.runtime.config-native-tests.v1','status':'PASS','source_unchanged':True,'inputs':source_pins(root),'build_sha256':built['bundle_sha256'],'records':records,
-                'modules':bundle['modules'],'executables':bundle['executables'],'corpora':{'typed':str(output/'config-native/typed-corpus'),'semantics':str(output/'config-native/semantics-corpus')},
-                'actual_completed_suites':6,'actual_test_groups':35,'complete_config_owner':False,'regex_compilation_closed':False,'fresh_cold_qualified':False}
+                'modules':bundle['modules'],'executables':bundle['executables'],'corpora':{'typed':str(output/'config-native/typed-corpus'),'semantics':str(output/'config-native/semantics-corpus'),'regex':str(output/'regex-native/config-corpus')},
+                'actual_completed_suites':6,'actual_dependency_suites':9,'regex_dependency_result_sha256':regex['compatibility_result_sha256'],'actual_test_groups':38,'complete_config_owner':False,'regex_compilation_closed':False,'fresh_cold_qualified':False}
     path=output/'config-native/result.json';encoded=json_bytes(compatible)
     if create:
         require(not path.exists(),'compatibility result already exists; refusing replacement')
         with path.open('xb') as stream:stream.write(encoded)
     require(artifact(output,artifacts,path)==encoded,'compatibility result was not derived from all six actual records')
-    return {'schema':'hepta.runtime.config-native-evidence.v1','status':'PASS','source_pins':source_pins(root),'build':built,'tests':summaries,'corpora':corpora,
+    return {'schema':'hepta.runtime.config-native-evidence.v1','status':'PASS','source_pins':source_pins(root),'build':built,'tests':summaries,'corpora':corpora,'regex_dependency':regex,
             'compatibility_result_sha256':sha(encoded),'artifact_sha256':artifacts,
             'corpus_sha256':{str((Path('config-native')/n/f)):artifacts[str(Path('config-native')/n/f)] for n in STREAMS for f in ['native-corpus.json','requests.hex','native-output.txt']},
             'native_calls_added_by_evidence_admission':0,'complete_config_owner':False,'regex_compilation_closed':False,'whole_runtime_replaced':False,'old_stack_removal_qualified':False}
@@ -531,20 +416,20 @@ def original_evidence(root,output,report,completed_test_summary):
     folder=output/'config-original';project=folder/'project';artifacts={}
     for name in ['config-rust-compare.stdout','config-rust-compare.stderr']:artifact(output,artifacts,output/name)
     original=object_at(folder/'report.json');artifact(output,artifacts,folder/'report.json')
-    exact({k:v for k,v in original.items() if k not in ['records','domains','inputs']},summary,'actual original stdout differs from retained report')
-    expected={'schema':'hepta.runtime.config-original-comparison.v1','status':'PASS','source_unchanged':True,'native_result_sha256':native['compatibility_result_sha256'],'registry_packages':100,'one_shared_cargo_build':True,'total_reference_input_cases':9735,'complete_config_owner':False,'regex_compilation_closed':False,'original_rust_runtime_fallback':False}
+    exact({k:v for k,v in original.items() if k not in ['records','domains','regex_domains','inputs']},summary,'actual original stdout differs from retained report')
+    expected={'schema':'hepta.runtime.config-original-comparison.v1','status':'PASS','source_unchanged':True,'native_result_sha256':native['compatibility_result_sha256'],'registry_packages':100,'one_shared_cargo_build':True,'total_reference_input_cases':13460,'baseline_reference_input_cases':9735,'unconstrained_regex_resources_closed':False,'complete_config_owner':False,'regex_compilation_closed':False,'original_rust_runtime_fallback':False}
     exact({k:original.get(k) for k in expected},expected,'original completion/coverage differs')
     prepared=_reference_inputs(root,project,artifacts,output)
     require(sha(read(project/'reference-inputs.json'))==original['reference_input_sha256'],'reference source receipt changed')
     require(set(original['reference_executables'])=={'typed','semantics','owner','mcp'},'reference executable inventory incomplete')
     for name,digest in original['reference_executables'].items():
         raw=artifact(output,artifacts,project/'target/release'/('hia-runtime-config-'+name));require(sha(raw)==digest and raw.startswith(b'\x7fELF'),'actual original executable changed')
-    expected_inputs=[root/'tests/hia_native'/n for n in ['compare_config_original.py','config_mcp_cases.py','config_mcp_sessions.py','config_fs_cases.py','config_owner_cases.py','config_semantics_cases.py','test_config_fs.py','test_config_owner.py','config_reference_sources.json','config_reference.tar.gz']]+[root/'scripts/hia_native_config_reference.py']
+    expected_inputs=[root/'tests/hia_native'/n for n in ['compare_config_original.py','config_regex_original_cases.py','config_mcp_cases.py','config_mcp_sessions.py','config_fs_cases.py','config_owner_cases.py','config_semantics_cases.py','test_config_fs.py','test_config_owner.py','config_reference_sources.json','config_reference.tar.gz']]+[root/'scripts/hia_native_config_reference.py']
     bundle=object_at(output/'build/config-build.json')
     for name in ['owner','fixture','mcp']:
         ep=confined(output,bundle['executables'][name]['path']);expected_inputs.extend([ep,ep.parent/object_at(ep)['executable']])
     exact(original['inputs'],{str(p):sha(read(p)) for p in expected_inputs},'original runner/native/source custody changed')
-    records=original['records'];require([r['name'] for r in records]==['rust-version','build','typed','semantics'],'original shared build/replays incomplete')
+    records=original['records'];require([r['name'] for r in records]==['rust-version','build','typed','semantics','regex'],'original shared build/replays incomplete')
     for record in records:
         require(record['exit']==0,'original child failed');finite(record['elapsed'])
         name=record['name'];out=read(folder/(name+'.stdout')) if name in ['rust-version','build'] else _gzip(folder/(name+'.stdout.gz'))
@@ -556,14 +441,13 @@ def original_evidence(root,output,report,completed_test_summary):
             corpus=STREAMS[name+'-corpus']
             exact({k:record.get(k) for k in ['command','cwd','request_bytes','request_sha256']},{'command':[str(project/'target/release'/('hia-runtime-config-'+name))],'cwd':str(root),'request_bytes':corpus[1],'request_sha256':corpus[2]},'original executable invocation/input differs')
     require(set(original['domains'])=={'typed','semantics','installed','mcp'},'original domain missing or added')
-    expected_comparisons={'typed':{'exact_results':1879,'typed_refusals':4612,'explicit_regex_dependency':0},'semantics':{'exact_results':1858,'typed_refusals':201,'explicit_regex_dependency':4}}
+    expected_comparisons={'typed':{'exact_results':1879,'typed_refusals':4612,'explicit_regex_dependency':0},'semantics':{'exact_results':1862,'typed_refusals':201,'explicit_regex_dependency':0}}
     for name,stream_name in [('typed','typed-corpus'),('semantics','semantics-corpus')]:
         row=original['domains'][name];exact(row,next(v for v in records if v['name']==name),'original replay record differs');exact(row['native_corpus'],native['corpora'][stream_name],'original replay used a different native corpus');exact(row['comparison'],expected_comparisons[name],'original coverage classifications differ')
         raw=_gzip(folder/(name+'.stdout.gz'),row['stdout_bytes'],row['stdout_sha256'],STREAMS[stream_name][0]);expected_native=read(output/'config-native'/stream_name/'native-output.txt')
         for i,(n,r) in enumerate(zip(expected_native.splitlines(),raw.splitlines(),strict=True)):
             nc,np=n.split(b':',1);rc,rp=r.split(b':',1)
-            if name=='semantics' and i in [450,451,452,454]:require(nc==b'fffffffc' and rc in [b'00000000',b'00000001'],'regex boundary was misclassified')
-            elif nc in ([b'ffffffff',b'fffffffd'] if name=='typed' else [b'ffffffff']):require(nc==rc and not np,'typed refusal differs')
+            if nc in ([b'ffffffff',b'fffffffd'] if name=='typed' else [b'ffffffff']):require(nc==rc and not np,'typed refusal differs')
             else:require(n==r,'full original value bytes differ')
     installed=object_at(folder/'owner-comparison.json');artifact(output,artifacts,folder/'owner-comparison.json');rows=installed['observations']
     source=ast.parse(read(root/'tests/hia_native/config_owner_cases.py'));names={}
@@ -591,5 +475,10 @@ def original_evidence(root,output,report,completed_test_summary):
     for key in ['requests_sha256','responses_sha256','request_bytes','response_bytes']:exact(mr['native'][key],mr['original'][key],'full original MCP stream differs')
     require(mr['native']['requests_sha256']=='0bf7b1898182fe413546664cebc7c9c459bb68039579c9dcc5a16b9bd3a2b4a7' and mr['native']['responses_sha256']=='c8e56dd033e4f06b4028226a5a739e160fbfa0e5961c7ac25038d419649358c5','fixed MCP reference domain changed')
     exact(original['domains']['mcp'],{'cases':1119,'report_sha256':sha(read(folder/'mcp/report.json')),'requests_sha256':mr['native']['requests_sha256'],'responses_sha256':mr['native']['responses_sha256']},'MCP report binding differs')
+    regex_qualification.configuration_original_evidence(root,output,original,native,artifacts)
     require(native_evidence(root,output,report,completed_test_summary)==native,'native evidence changed during reference admission')
-    return {'schema':'hepta.runtime.config-original-evidence.v1','status':'PASS','source_pins':source_pins(root),'domains':original['domains'],'original_executables':original['reference_executables'],'registry_packages':100,'artifact_sha256':artifacts,'corpus_sha256':{k:v for k,v in artifacts.items() if k.endswith('.gz')},'native_calls_added_by_evidence_admission':0,'native_binary_requests_in_original_recipe':1364,'whole_runtime_replaced':False,'old_stack_removal_qualified':False}
+    return {'schema':'hepta.runtime.config-original-evidence.v1','status':'PASS','source_pins':source_pins(root),'domains':original['domains'],'original_executables':original['reference_executables'],'registry_packages':100,'artifact_sha256':artifacts,'corpus_sha256':{k:v for k,v in artifacts.items() if k.endswith('.gz')},'native_calls_added_by_evidence_admission':0,'native_binary_requests_in_original_recipe':1430,'native_startup_refusal_processes_in_original_recipe':4,'whole_runtime_replaced':False,'old_stack_removal_qualified':False}
+
+def regex_original_evidence(root,output,report,completed_test_summary):
+    native=native_evidence(root,output,report,completed_test_summary)
+    return regex_qualification.original_evidence(root,output,report,completed_test_summary,native['regex_dependency'],source_pins(Path(root)))

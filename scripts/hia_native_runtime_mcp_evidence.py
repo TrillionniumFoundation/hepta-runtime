@@ -23,25 +23,33 @@ from hia_native_runtime_mcp_build import MEMBERS, BASE, BOUNDARIES, EXTRA, VIEW,
 FOLDER = 'runtime-mcp'
 NATIVE_SUITE = 'test_runtime_mcp.py'
 EVIDENCE_SUITE = 'test_runtime_mcp_evidence.py'
-SOURCE_MANIFEST_SHA256 = '798cbcd2b8947480387721a88e7f672b04bb76ffd4f1292ae84c49ad59d606aa'
+SOURCE_MANIFEST_SHA256 = 'e3c5a8a35dac54a44c7c2918b18d05e9d8b8ae1b7516ac185e7f75cfc056951b'
 LINKER_SOURCE_SHA256 = '66063b0e8d9b244a8ccec27a31554fe8e77f309ac1fc981286e63befa7559cef'
 COMPILER_SHA256 = 'bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
 VIEW_IDS = tuple([*range(19), 26, 28, 29, 30, 35, 36, *range(45, 51)])
 TYPED_ERRORS = {0,1,2,3,11,12,13,14,15,16,17,20,200,201,202,203,206,207,208}
 META_ERRORS = {32,33,34,35,101,103,105,209,210}
-COUNTS = dict(actual_elf_processes=98, actual_elf_responses=192, actual_embedded_hia_images=31,
+COUNTS = dict(actual_elf_processes=109, actual_elf_responses=222, actual_embedded_hia_images=37,
               actual_policy_and_shared_config_controls=7, actual_public_ordinary_view_cases=31,
               large_error_body_bytes=19000091, large_error_publication_cases=1,
               observable_session_latch_controls=3, private_frame_refusals=34,
               real_child_positive_continuations=2, same_session_cache_cases=6,
               sdk_info_input_cases=13, sdk_metadata_error_controls=9,
-              sdk_router_input_cases=54, sdk_typed_protocol_error_controls=19)
+              sdk_router_input_cases=54, sdk_typed_protocol_error_controls=19,
+              regex_actual_installed_configs=5,regex_actual_startup_refusals=4,
+              regex_actual_first_error_controls=2,regex_actual_mcp_view_results=5)
+REGEX_PLANS = [('valid',pattern) for pattern in ['a',r'[a-z]+',r'\p{Greek}+',r')|foo(?:','a{327674}']]
+REGEX_PLANS += [('invalid',pattern) for pattern in ['(',r'\w{500}','a{327675}',r'(?-u:\xFF)']]
+REGEX_PLANS += [('first-error-late','('),('first-error-early','(')]
+REGEX_LOCAL_CALL_EDGES = {'3':[15],'15':[10,12,13,14],'10':[11],'12':[11],'14':[11]}
+REGEX_SELECTOR_MEMBERS = {'3':'validation','10':'regex_syntax','11':'regex_unicode_data',
+                        '12':'regex_hir','13':'regex_nfa','14':'regex_match','15':'regex_controller'}
 FALSE_FLAGS = ('complete_sdk_frontend', 'complete_original_tool_catalog',
                'directory_content_remote_background_routes_replaced', 'whole_view_replaced',
                'response_storage_globally_unbounded', 'full_http_dispatcher_replaced',
                'current_protocol_error_reference_compared', 'current_original_view_reference_compared')
 EVIDENCE_GROUPS = 5
-EVIDENCE_CONTROLS = 40
+EVIDENCE_CONTROLS = 45
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 
 
@@ -177,7 +185,7 @@ def completed_suite(root, output, report, completed, name, groups):
 def native_header(report, binding):
     exact(report.get('schema'), 'hepta.runtime.mcp-view-native-tests.v1', 'native schema differs')
     exact(report.get('status'), 'PASS', 'native suite did not pass')
-    exact(report.get('groups'), 7, 'native groups differ')
+    exact(report.get('groups'), 8, 'native groups differ')
     exact(report.get('counts'), COUNTS, 'native count inventory differs')
     require(finite(report.get('elapsed_seconds'), 180), 'native elapsed time differs')
     exact(report.get('source_binding'), binding, 'native executed source closure differs')
@@ -216,18 +224,30 @@ def session_streams(evidence, folder, report):
         elif name == 'installed-policy':
             suffix = ['--runtime-config', str(Path(origin['corpus_root']) / 'files/runtime-config.json'),
                       '--session-root', str(Path(origin['corpus_root']) / 'files/allowed')]
+        elif name.startswith('regex-'):
+            require(name in {'regex-'+str(i) for i in range(len(REGEX_PLANS))}, 'unknown regex case')
+            directory=Path(origin['corpus_root'])/'files'/name
+            suffix=['--runtime-config',str(directory/'runtime-config.json'),'--session-root',str(directory)]
         exact(command[1:], suffix, 'session arguments differ')
         exact(record['environment'], {'PATH': '', 'LC_ALL': 'C'}, 'session inherited an unexpected environment')
-        require(type(record['exit_code']) is int and record['exit_code'] == 0
+        refused = name.startswith('regex-') and REGEX_PLANS[int(name[6:])][0]!='valid'
+        expected_exit = 78 if refused else 0
+        require(type(record['exit_code']) is int and record['exit_code'] == expected_exit
                 and type(record['timeout_seconds']) is int and record['timeout_seconds'] == 60
                 and finite(record['elapsed_seconds'], 180), 'session did not finish successfully')
         exact(evidence.object(folder + '/sessions/' + name + '/process.json'), record, 'session process copy differs')
         streams = {key: evidence.stream(folder, record[key], 'sessions/' + name + '/' + key + '.bin.gz')
                    for key in ('stdin', 'stdout', 'stderr')}
-        require(streams['stderr'] == b'', 'production emitted private receipt or unexpected stderr')
-        require(streams['stdin'].endswith(b'\n') and streams['stdout'].endswith(b'\n'), 'protocol line incomplete')
-        requests = [decode(line) for line in streams['stdin'][:-1].split(b'\n')]
-        replies = [decode(line) for line in streams['stdout'][:-1].split(b'\n')]
+        if refused:
+            _,_,expected_error=regex_configuration(origin['corpus_root'],int(name[6:]))
+            for key,expected in dict(stdin=b'',stdout=b'',stderr=expected_error).items():
+                exact(streams[key],expected,'regex startup did not refuse before MCP: '+key)
+            requests=[];replies=[]
+        else:
+            require(streams['stderr'] == b'', 'production emitted private receipt or unexpected stderr')
+            require(streams['stdin'].endswith(b'\n') and streams['stdout'].endswith(b'\n'), 'protocol line incomplete')
+            requests = [decode(line) for line in streams['stdin'][:-1].split(b'\n')]
+            replies = [decode(line) for line in streams['stdout'][:-1].split(b'\n')]
         requested = [message for message in requests if 'id' in message]
         require(len(requested) == len(replies), 'raw reply count differs from actual requests')
         for request, reply in zip(requested, replies):
@@ -235,8 +255,8 @@ def session_streams(evidence, folder, report):
             exact(reply.get('id'), request['id'], 'response correlation differs')
             require(('result' in reply) != ('error' in reply), 'ambiguous response outcome')
         sessions[name] = dict(record=record, streams=streams, requests=requests, replies=replies,
-                              reply_lines=streams['stdout'][:-1].split(b'\n'))
-    require(len(sessions) == 98 and sum(len(s['replies']) for s in sessions.values()) == 192,
+                              reply_lines=streams['stdout'][:-1].split(b'\n') if replies else [])
+    require(len(sessions) == 109 and sum(len(s['replies']) for s in sessions.values()) == 222,
             'complete process/response inventory differs')
     return sessions
 
@@ -249,6 +269,65 @@ def content(reply):
     exact(sorted(item), ['text', 'type'], 'text content fields differ')
     require(item['type'] == 'text' and type(item['text']) is str, 'text content differs')
     return result, item['text'].encode()
+
+
+def regex_configuration(origin, index):
+    kind,pattern=REGEX_PLANS[index]
+    directory=Path(origin)/'files'/('regex-'+str(index))
+    action=dict(executable='/echo',allow_extra_args=True,extra_arg_patterns=[pattern])
+    value=dict(state_dir=str(directory/'controller-state'),controller_workspace_roots=[str(directory)],
+               hosts={'h':dict(ssh_target='private-target',remote_state_dir='/private-state',privileged_actions={'inspect':action})})
+    error=b'host `h` privileged action `inspect` has invalid argument regex\n'
+    if kind.startswith('first-error-'):
+        action['extra_arg_patterns']=['a',pattern]
+        value['hosts']['h']['privileged_actions']={'middle':action,'zlast':{'executable':'relative'}}
+        error=b'host `h` privileged action `middle` has invalid argument regex\n'
+        if kind=='first-error-early':
+            value['hosts']['h']['privileged_actions']['afirst']={'executable':'relative'}
+            error=b'host `h` has invalid privileged action `afirst`\n'
+    initial=compact(value)
+    rewritten=None
+    if kind=='valid':
+        action['extra_arg_patterns']=['(']
+        rewritten=compact(value)
+    return initial,rewritten,error
+
+
+def regex_cases(root,evidence,folder,report,sessions):
+    rows=decode(evidence.read(folder+'/regex-cases.json'))
+    require(type(rows) is list and len(rows)==len(REGEX_PLANS),'regex installation corpus differs')
+    modules=generators(root)
+    for index,(row,(kind,pattern)) in enumerate(zip(rows,REGEX_PLANS)):
+        name='regex-'+str(index)
+        exact(sorted(row),['case_id','initial_config','kind','pattern','rewritten_config','session','state_directory_exists_after'],
+              'regex case fields differ')
+        exact((row['case_id'],row['kind'],row['pattern'],row['session']),(index,kind,pattern,name),'regex case identity differs')
+        require(type(row['state_directory_exists_after']) is bool and row['state_directory_exists_after']==(kind=='valid'),
+                'regex state admission observation differs')
+        initial,rewritten,error=regex_configuration(report['execution']['corpus_root'],index)
+        exact(evidence.stream(folder,row['initial_config'],'regex/'+str(index)+'.initial-config.json.gz'),initial,
+              'regex startup configuration bytes differ')
+        session=sessions[name]
+        if kind!='valid':
+            require(row['rewritten_config'] is None,'refused regex was installed or rewritten')
+            for key,expected in dict(stdin=b'',stdout=b'',stderr=error).items():
+                exact(session['streams'][key],expected,'regex complete refusal differs: '+key)
+            continue
+        exact(evidence.stream(folder,row['rewritten_config'],'regex/'+str(index)+'.rewritten-config.json.gz'),rewritten,
+              'post-installation config mutation differs')
+        request=lambda ident,tool:dict(jsonrpc='2.0',id=ident,method='tools/call',params=dict(name=tool,arguments={}))
+        expected=[modules['sdk_cases'].initialization({}),request(2,'host_list'),request(3,'effective_config'),
+                  modules['sdk_cases'].call(4,{'path':'file'}),request(5,'host_list'),request(6,'effective_config')]
+        exact(session['streams']['stdin'],b''.join(compact(v)+b'\n' for v in expected),'regex installed request sequence differs')
+        replies=session['replies'];require(len(replies)==6,'regex installed replies differ')
+        first,text=content(replies[1]);effective,projection=content(replies[2]);view,body=content(replies[3])
+        require(not first['isError'] and not effective['isError'] and not view['isError'],'valid regex configuration failed')
+        require(b'inspect' in text and b'inspect' not in projection and body.endswith(b'|regex installed'),
+                'regex configuration did not reach the actual public view and publisher')
+        exact(decode(projection)['hosts'][0]['named_privileged_action_count'],1,'regex redacted projection differs')
+        exact(replies[4]['result'],first,'installed host list changed after config-file rewrite')
+        exact(replies[5]['result'],effective,'installed redacted config changed after config-file rewrite')
+    return rows
 
 
 def public_cases(root, evidence, folder, report, sessions):
@@ -307,6 +386,8 @@ def public_cases(root, evidence, folder, report, sessions):
     require(len(body) == 19000091, 'wide error body was shortened')
     expected_request = b'{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"view","arguments":' + generator.arguments() + b'}}'
     exact(session['streams']['stdin'].split(b'\n')[1], expected_request, 'wide public input bytes differ')
+    regex=regex_cases(root,evidence,folder,report,sessions)
+    used.update('regex-'+str(i) for i in range(len(REGEX_PLANS)))
     remaining = set(sessions) - used
     exact(sorted(remaining), ['first-empty-cap-consumes-latch', 'installed-policy', 'legacy-invalid-whole-cap-fallback', 'typed-before-latch'], 'behavioral control sessions differ')
     first = sessions['typed-before-latch']['replies']
@@ -319,7 +400,7 @@ def public_cases(root, evidence, folder, report, sessions):
     for index, expected in [(2,b'outside configured controller workspaces'),(3,b'Octofs background resources are disabled in runtime mode'),(4,b'path must not contain an empty root'),(5,b'outside configured controller workspaces')]:
         result, text = content(policy[index]); require(result['isError'] is True and expected in text, 'installed policy or same authority control differs')
     require(all(content(policy[i])[0]['isError'] is False for i in (6,7)), 'configuration tools stopped using the installed authority')
-    return dict(router=rows_by_kind['router'], info=rows_by_kind['info'], view=view_rows, wide=wide)
+    return dict(router=rows_by_kind['router'], info=rows_by_kind['info'], view=view_rows, wide=wide,regex=regex)
 
 
 def sparse_prefix(raw):
@@ -473,7 +554,7 @@ def elf_structure(elf, obj, images):
         struct.pack_into('<Q',text,offset,0x400100+value+addend)
     exact(bytes(text),elf[256:rx[5]], 'complete ELF machine text differs from actual assembled object/relocations')
     return dict(bytes=len(elf),sha256=sha(elf),entry=0x4000e8,program_headers=['PT_LOAD_RX','PT_LOAD_RW_EMPTY','PT_GNU_STACK_RW'],
-                interpreter=None,libc=False,fixed_child_address_relocations=24,embedded_images=31)
+                interpreter=None,libc=False,fixed_child_address_relocations=24,embedded_images=37)
 
 
 def build_evidence(root, output, report, evidence, capture):
@@ -526,6 +607,10 @@ def build_evidence(root, output, report, evidence, capture):
     expected_boundaries={path:sha((root/path).read_bytes()) for path in (BASE,*BOUNDARIES)}
     exact(bundle['boundary_sources'],expected_boundaries,'mechanical boundary sources differ')
     exact(bundle['extra_table'],EXTRA,'extra child table differs');exact(bundle['view_table'],VIEW,'view child table differs')
+    exact(bundle['regex_local_call_edges'],REGEX_LOCAL_CALL_EDGES,'regex private call graph differs')
+    exact(bundle['regex_selector_members'],REGEX_SELECTOR_MEMBERS,'regex private selector binding differs')
+    require(bundle.get('regex_compilation_closed') is False and bundle.get('unconstrained_regex_resources_closed') is False,
+            'regex profile made an unqualified closure claim')
     stem=str(folder.relative_to(output))+'/'
     combined=evidence.read(stem+'combined.S'); exact(combined,adapter_source(root,original_images).encode(),'assembled boundary is not the current exact composition')
     require(sha(combined)==bundle['assembled_source_sha256'],'assembled source hash differs')
@@ -566,11 +651,11 @@ def build_evidence(root, output, report, evidence, capture):
     exact((bundle['public_line_profile_bytes'],bundle['gateway_reply_profile_bytes'],bundle['result_publication_grows']),
           (8<<20,64<<20,True),'declared profile differs')
     return dict(manifest=owner['manifest'],manifest_sha256=sha(raw),elf=structure,fresh_member_compiles=fresh,
-                member_count=31,all_members_freshly_compiled=fresh==31,compiler_commit=HEPTA_COMMIT,compiler_image_sha256=COMPILER_SHA256)
+                member_count=37,all_members_freshly_compiled=fresh==37,compiler_commit=HEPTA_COMMIT,compiler_image_sha256=COMPILER_SHA256)
 
 
 def native_evidence(root: Path, output: Path, report: dict, completed) -> dict:
-    sources=source_identity(root); _, summary=completed_suite(root,output,report,completed,NATIVE_SUITE,7)
+    sources=source_identity(root); _, summary=completed_suite(root,output,report,completed,NATIVE_SUITE,8)
     evidence=Evidence(output); capture=inspect_corpus(root,output/FOLDER,evidence)
     exact(summary,{key:value for key,value in capture['report'].items() if key!='processes'},'suite stdout differs from complete corpus report')
     build=build_evidence(root,output,report,evidence,capture['report'])
@@ -585,7 +670,7 @@ def native_evidence(root: Path, output: Path, report: dict, completed) -> dict:
 
 def qualification_evidence(root: Path, output: Path, report: dict, completed) -> dict:
     native=native_evidence(root,output,report,completed)
-    require(native['composition']['all_members_freshly_compiled'] is True,'formal qualification requires all 31 fresh member compiles')
+    require(native['composition']['all_members_freshly_compiled'] is True,'formal qualification requires all 37 fresh member compiles')
     check,summary=completed_suite(root,output,report,completed,EVIDENCE_SUITE,EVIDENCE_GROUPS)
     expected=dict(schema='hepta.runtime.mcp-view-evidence-tests.v1',status='PASS',groups=EVIDENCE_GROUPS,
                   refusal_controls=EVIDENCE_CONTROLS,failures=0,errors=0,skipped=0,new_native_calls=0,new_original_processes=0,
