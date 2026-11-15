@@ -304,6 +304,14 @@ def worker_trace_evidence(root, value, *, mode, inherited, artifact):
             "effect fence actual worker/task exit domain differs")
     events = value["events"]
     require(type(events) is list, "effect fence worker events missing")
+    early = value.get("initial_stops_before_clone")
+    require(type(early) is list and all(type(item) is dict and set(item) == {"tid", "status", "announced_by"}
+            and type(item["tid"]) is int and type(item["status"]) is int and type(item["announced_by"]) is int
+            and item["status"] == 0x137f and item["announced_by"] == value["owned_parent"]
+            and str(item["tid"]) in exits and item["tid"] != value["owned_parent"] for item in early)
+            and len({item["tid"] for item in early}) == len(early)
+            and {item["tid"] for item in early} <= {event["tid"] for event in events if event["kind"] == "kernel_clone"},
+            "effect fence unannounced initial stop was not confirmed by the owned parent")
     kinds = Counter(event.get("kind") for event in events)
     require(kinds["armed_fixed_owner_ud2"] == kinds["actual_kernel_sigill"] == kinds["worker_sys_exit"] == 1
             and kinds["retire_after_clear_tid"] == 2 and kinds["kernel_task_reaped"] == len(exits)
@@ -525,6 +533,14 @@ def suite_evidence(root, folder, kind, summary, artifacts):
                         "effect fence unpolled/preflight path performed native effects")
         result["actual_syscall_traces"] = {name: sha(raw) for name, raw in traces.items()}
     elif kind == "worker":
+        exact(summary.get("controlled_wait_order_cases"), ["clone-before-initial-stop",
+            "initial-stop-before-clone", "unknown-noninitial-signal", "unknown-terminal-status",
+            "duplicate-initial-stop", "second-unconfirmed-worker",
+            "clone-message-mismatches-held-worker", "clone-announcer-is-not-owned-parent"],
+            "effect fence controlled wait-order regression differs")
+        exact(summary.get("controlled_wait_order_native_calls"), 0,
+              "effect fence pure wait-order controls overclaim kernel execution")
+        result["controlled_wait_order_cases"] = summary["controlled_wait_order_cases"]
         rows = retained_reports(folder, summary["kernel_reports"], ("admission-ordinary-mask.json",
             "admission-blocked-sigill.json", "cache-ordinary-mask.json", "cache-blocked-sigill.json"))
         result["worker_controls"] = [worker_trace_evidence(root, json.loads(raw),

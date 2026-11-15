@@ -104,6 +104,27 @@ def native_address(raw, offset):
     return found[0]
 
 
+def retain_unannounced_stop(parent, tid, status, live, held):
+    """Hold an early initial stop without reading or restarting its task."""
+    assert os.WIFSTOPPED(status)
+    if tid in live:
+        return False
+    assert tid > 0 and tid != parent and os.WSTOPSIG(status) == signal.SIGSTOP and status >> 16 == 0
+    # This fixture only clones from its one parent, which cannot issue the
+    # next clone while its current PTRACE_EVENT_CLONE stop remains pending.
+    assert not held
+    held[tid] = status
+    return True
+
+
+def confirm_owned_worker(parent, announcer, child, live, held):
+    """Bind an initial stop only to the owned parent's GETEVENTMSG result."""
+    assert announcer == parent and announcer in live and child > 0 and child not in live
+    assert not held or set(held) == {child}
+    live.add(child)
+    return held.pop(child, None)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", required=True, type=Path)
@@ -131,6 +152,7 @@ def main():
     retired_regions = set()
     pending_retirement = None
     failure = None
+    held_stops, early_stops = {}, []
     pid = os.fork()
     if pid == 0:
         try:
@@ -143,6 +165,12 @@ def main():
             os.write(2, (str(error) + "\n").encode())
             os._exit(76)
     live.add(pid)
+
+    def initial_worker_stop(tid):
+        assert tid in live and tid != pid and tid not in initial_masks
+        initial_masks[tid] = blocked(tid)
+        events.append({"kind": "initial_worker_mask", "tid": tid, "mask": initial_masks[tid]})
+
     try:
         got, status = os.waitpid(pid, 0)
         assert got == pid and os.WIFSTOPPED(status) and os.WSTOPSIG(status) == signal.SIGTRAP
@@ -152,23 +180,25 @@ def main():
         while live:
             tid, status = os.waitpid(-1, WALL)
             if os.WIFEXITED(status) or os.WIFSIGNALED(status):
-                assert tid in live
+                assert tid in live and (tid != pid or not held_stops)
                 live.remove(tid)
                 exits[tid] = os.waitstatus_to_exitcode(status)
                 events.append({"kind": "kernel_task_reaped", "tid": tid, "exit": exits[tid]})
                 continue
-            assert os.WIFSTOPPED(status) and tid in live
+            if retain_unannounced_stop(pid, tid, status, live, held_stops):
+                continue
             sig, event = os.WSTOPSIG(status), status >> 16
             if event == 3:
                 child = ctypes.c_ulonglong()
                 ptrace(GETEVENTMSG, tid, 0, ctypes.byref(child))
-                assert tid == pid and child.value not in live
-                live.add(child.value)
+                initial_status = confirm_owned_worker(pid, tid, child.value, live, held_stops)
                 events.append({"kind": "kernel_clone", "tid": child.value})
+                if initial_status is not None:
+                    early_stops.append({"tid": child.value, "status": initial_status, "announced_by": tid})
+                    initial_worker_stop(child.value)
+                    ptrace(SYSCALL, child.value)
             elif sig == signal.SIGSTOP and tid != pid:
-                assert tid not in initial_masks
-                initial_masks[tid] = blocked(tid)
-                events.append({"kind": "initial_worker_mask", "tid": tid, "mask": initial_masks[tid]})
+                initial_worker_stop(tid)
             elif sig == (signal.SIGTRAP | 0x80):
                 op, value = syscall_info(tid)
                 if op == 1:
@@ -242,7 +272,7 @@ def main():
             else:
                 raise AssertionError(("unexpected owned ptrace stop", tid, sig, event))
             ptrace(SYSCALL, tid)
-        assert exits[pid] == 0 and all(code == 0 for code in exits.values())
+        assert not held_stops and exits[pid] == 0 and all(code == 0 for code in exits.values())
         assert injected is not None and restored
         cleanup = [e["fd"] for e in events if e["kind"] == "fault_cleanup_close"]
         assert sorted(cleanup) == sorted(injected["owned_fds"])
@@ -255,17 +285,18 @@ def main():
         failure = repr(error)
         raise
     finally:
-        if live:
+        if live or held_stops:
             try:
                 os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            while live:
+            while live or held_stops:
                 tid, status = os.waitpid(-1, WALL)
                 if os.WIFEXITED(status) or os.WIFSIGNALED(status):
                     live.discard(tid)
+                    held_stops.pop(tid, None)
                     exits[tid] = os.waitstatus_to_exitcode(status)
-                elif os.WIFSTOPPED(status):
+                elif os.WIFSTOPPED(status) and tid in live:
                     ptrace(SYSCALL, tid, 0, signal.SIGKILL)
         report = {"schema": "hepta.effect-fence.actual-worker-fault.v1",
                   "status": "PASS" if failure is None else "FAIL", "failure": failure,
@@ -273,8 +304,9 @@ def main():
                   "executable_sha256": hashlib.sha256(raw).hexdigest(),
                   "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
                   "supervisor_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                  "owned_parent": pid, "all_owned_tasks_reaped": not live,
+                  "owned_parent": pid, "all_owned_tasks_reaped": not live and not held_stops,
                   "exit_statuses": exits, "events": events,
+                  "initial_stops_before_clone": early_stops,
                   "fault_is_synthetic": True, "kernel_sigill_is_actual": restored,
                   "complete_effect_fence_owner": False}
         args.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")

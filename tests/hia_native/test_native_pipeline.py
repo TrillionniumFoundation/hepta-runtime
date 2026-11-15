@@ -44,6 +44,10 @@ class NativePipelineTests(unittest.TestCase):
              "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
              "test_atomic_write_policy.py", "test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
              "test_atomic_write_evidence.py"))
+        self.assertEqual(partitions["system"][:3],
+                         ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py",
+                          "test_filesystem_parity_kernel.py"))
+        self.assertEqual(len(flat), 130)
         for bad in ("missing", "duplicate", "unknown", "new_module", "split_ordered"):
             changed = copy.deepcopy(p.PARTITIONS)
             modules = q.MODULES
@@ -61,6 +65,60 @@ class NativePipelineTests(unittest.TestCase):
                                 if row["key"] == "runtime_bytes" else row for row in modules)
             with self.subTest(bad=bad), patch.object(q, "MODULES", modules), self.assertRaises(ValueError):
                 p.partition_tests(changed)
+
+    def test_filesystem_export_requires_retirement_before_artifact_inventory(self):
+        output = self.root / "filesystem-shard"
+        capture = output / "filesystem-parity/native/captures-v1"
+        capture.mkdir(parents=True)
+        native_bytes = b"complete reporting-fixture result\x00\xff"
+        (capture / "retained.bin").write_bytes(native_bytes)
+        outside = self.root / "outside"
+        outside.write_bytes(b"unrelated bytes")
+        fixture = capture / "private-target"
+        fixture.mkdir()
+        (fixture / "alias").symlink_to(outside)
+        report = {"checks": [{"name": "test_filesystem_parity_kernel.py"}],
+                  "qualification_shard": {"reporting_fixture_only": True}}
+        destination = self.root / "filesystem-export"
+        retirement = output / "filesystem-parity/retired-fixtures.json"
+
+        def retire(actual_output, actual_report, *, create):
+            self.assertEqual((actual_output, actual_report, create), (output, report, True))
+            self.assertEqual((capture / "retained.bin").read_bytes(), native_bytes)
+            self.assertTrue((fixture / "alias").is_symlink())
+            # Only tests dispatch ordering. The actual filesystem evidence
+            # helper separately admits retained bytes before touching targets.
+            (fixture / "alias").unlink()
+            fixture.rmdir()
+            retirement.write_text('{"reporting_fixture_only":true}\n')
+            return {"reporting_fixture_only": True}
+
+        with patch.object(q, "filesystem_parity_retirement", side_effect=retire) as called:
+            p.export_shard(output, destination, {"files": {}}, report)
+        called.assert_called_once_with(output, report, create=True)
+        self.assertEqual((destination / "data/filesystem-parity/native/captures-v1/retained.bin").read_bytes(),
+                         native_bytes)
+        self.assertEqual((destination / "data/filesystem-parity/retired-fixtures.json").read_bytes(),
+                         retirement.read_bytes())
+        self.assertFalse((destination / "data/filesystem-parity/native/captures-v1/private-target").exists())
+        self.assertEqual(outside.read_bytes(), b"unrelated bytes")
+
+    def test_filesystem_export_refuses_unadmitted_kernel_and_skips_unrelated_shards(self):
+        output = self.root / "filesystem-failed-shard"
+        output.mkdir()
+        (output / "retained.bin").write_bytes(b"preserve actual failure")
+        report = {"checks": [{"name": "test_filesystem_parity_kernel.py"}], "qualification_shard": {}}
+        destination = self.root / "filesystem-refused-export"
+        with patch.object(q, "filesystem_parity_retirement", side_effect=ValueError("native evidence incomplete")), \
+                self.assertRaisesRegex(ValueError, "native evidence incomplete"):
+            p.export_shard(output, destination, {"files": {}}, report)
+        self.assertEqual(list((destination / "data").iterdir()), [])
+        self.assertEqual((output / "retained.bin").read_bytes(), b"preserve actual failure")
+        for name in ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py", "unrelated.py"):
+            with self.subTest(name=name), patch.object(q, "filesystem_parity_retirement") as called:
+                selected = dict(report, checks=[{"name": name}])
+                p.export_shard(output, self.root / (name + "-export"), {"files": {}}, selected)
+                called.assert_not_called()
 
     def test_failure_diagnostics_survive_denied_fixtures_without_mutation(self):
         source = self.root / "failed"; source.mkdir()

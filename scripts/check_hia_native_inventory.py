@@ -46,6 +46,7 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/fs/core_tests.rs": "9e04e88dc52734af0d8f9eebb30c6c9fbb2d0d06",
     "src/mcp/fs/delta_tests.rs": "9d985284554db50fabf6bf79fe28da192bbebb8b",
     "src/mcp/fs/file_ops.rs": "dc43bd59c2dff679b8a741d52d1d7861002c0150",
+    "src/mcp/fs/parity_ops.rs": "65a861d8938ddb83af542a7acebb67d20be8a62a",
     "src/mcp/fs/fs_tests.rs": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
     "src/mcp/fs/text_editing.rs": "4a8114e72a51238608201e108288294c6282ab20",
     "src/mcp/fs/remote.rs": "b570130be0f545e91160339076388f255bd83abe",
@@ -69,6 +70,10 @@ ORIGINAL_RUNTIME_BLOBS = {
     "src/mcp/runtime/operation_crypto.rs": "0c07318a6d85efb920069ce4f190c4f2ed56e84f",
 }
 
+ORIGINAL_RUNTIME_COPIES = {
+    "tests/hia_native/filesystem_parity/oracle/original_parity_ops.rs": "src/mcp/fs/parity_ops.rs",
+}
+
 
 def check_original_sources(root: Path) -> dict:
     """Bind copied oracle bodies to the exact original owner files, not an index flag."""
@@ -82,6 +87,12 @@ def check_original_sources(root: Path) -> dict:
         if blob != expected:
             raise ValueError("original runtime reference differs from pinned baseline: " + name)
         result[name] = {"git_blob": blob, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+    for copied, original in ORIGINAL_RUNTIME_COPIES.items():
+        path = root / copied
+        if not path.is_file() or path.is_symlink() or path.resolve() != path:
+            raise ValueError("copied original reference must be a regular unsymlinked file: " + copied)
+        if path.read_bytes() != (root / original).read_bytes():
+            raise ValueError("copied original reference differs from complete pinned owner: " + copied)
     return result
 
 

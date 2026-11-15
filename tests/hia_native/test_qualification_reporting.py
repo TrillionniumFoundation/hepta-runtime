@@ -17,7 +17,7 @@ from qualify_hia_runtime_native import (MODULES, file_info_evidence, io_referenc
 from qualify_hia_runtime_native import FILE_INFO_SUITES, validate_file_info_guard_times
 from compare_hia_runtime_rust import run as compare_rust
 from compare_hia_runtime_rust import RECIPES, NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS
-from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
+from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, ORIGINAL_RUNTIME_COPIES, check_original_sources
 from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
 from hia_native_entropy_qualification import (SUITES as ENTROPY_SUITES, completion as entropy_completion,
                                              exact_counts as entropy_counts, kernel_cases,
@@ -815,6 +815,110 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn('file_info_service', PYTHON_REFERENCE_COMPONENTS)
         self.assertNotIn('file_info_service', RECIPES)
 
+    def test_filesystem_registry_keeps_native_and_original_domains_separate(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_filesystem_parity_qualification as filesystem
+        entry = next(item for item in MODULES if item["key"] == "filesystem_parity")
+        expected = ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py",
+                    "test_filesystem_parity_kernel.py")
+        self.assertEqual((entry["test"], *entry["additional_tests"]), expected)
+        self.assertEqual(entry["builder"], "filesystem_parity")
+        self.assertEqual(entry["manifest_env"], "HIA_FILESYSTEM_PARITY_MANIFEST")
+        self.assertEqual(entry["source"], "native/filesystem_parity.hepta")
+        self.assertEqual(entry["companion_sources"], ("native/filesystem_parity_packer.hepta",))
+        command_output = self.output / "not-created-by-command-generation"
+        manifest = command_output / "build/filesystem-parity/source-identity/manifest.json"
+        descriptor = {"modules": {"filesystem_parity": {
+            "manifest": str(manifest.relative_to(command_output))}}}
+        commands = filesystem.test_commands(ROOT, command_output, descriptor)
+        self.assertEqual(tuple(commands), expected)
+        for name in expected:
+            self.assertEqual(commands[name][:4], [sys.executable, "-I", "-B",
+                                                  str(ROOT / "tests/hia_native" / name)])
+        for name, owner, destination in (
+                (expected[0], manifest.parent / "owner/manifest.json", "state"),
+                (expected[1], manifest, "build-controls"),
+                (expected[2], manifest, "native/captures-v1")):
+            command = commands[name]
+            self.assertEqual(command[command.index("--manifest") + 1], str(owner))
+            self.assertEqual(command[command.index("--output") + 1],
+                             str(command_output / "filesystem-parity" / destination))
+        cross_device = Path(commands[expected[2]][-1])
+        self.assertEqual(cross_device.parent, Path("/dev/shm"))
+        self.assertNotEqual(cross_device, filesystem.cross_root(command_output / "different", "native"))
+        self.assertFalse(command_output.exists())
+        for name in ("../outside/manifest.json", "/outside/manifest.json"):
+            with self.subTest(manifest=name), self.assertRaises(ValueError):
+                filesystem.test_commands(ROOT, command_output,
+                    {"modules": {"filesystem_parity": {"manifest": name}}})
+        self.assertFalse(set(expected) & set(q.PARALLEL_NATIVE_SUITES))
+        self.assertIn("filesystem_parity", RECIPES)
+        self.assertNotIn("filesystem_parity", NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+        self.assertEqual(ORIGINAL_RUNTIME_BLOBS["src/mcp/fs/parity_ops.rs"],
+                         "65a861d8938ddb83af542a7acebb67d20be8a62a")
+        self.assertEqual(ORIGINAL_RUNTIME_COPIES[
+            "tests/hia_native/filesystem_parity/oracle/original_parity_ops.rs"], "src/mcp/fs/parity_ops.rs")
+        pinned = sources()
+        for name in (entry["source"], *entry["companion_sources"],
+                     "native/filesystem_parity_layout.json", "native/filesystem_parity_composition.json",
+                     "scripts/hia_native_filesystem_parity_build.py",
+                     "scripts/hia_native_filesystem_parity_reference.py",
+                     "scripts/hia_native_filesystem_parity_qualification.py",
+                     "src/mcp/fs/parity_ops.rs",
+                     "tests/hia_native/filesystem_parity/oracle/original_parity_ops.rs",
+                     *("tests/hia_native/" + name for name in expected)):
+            self.assertIn(name, pinned)
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        self.assertEqual(workflow.count("      - 'src/mcp/fs/parity_ops.rs'"), 2)
+        before_native, native_and_qualify = workflow.split("\n  native:\n", 1)
+        native_job, qualify_job = native_and_qualify.split("\n  qualify:\n", 1)
+        install = "sudo apt-get install --no-install-recommends -y strace"
+        self.assertNotIn(install, before_native)
+        self.assertEqual(native_job.count(install), 1)
+        self.assertIn("if: matrix.group == 'system'", native_job)
+        self.assertEqual(qualify_job.count(install), 1)
+        filesystem_controls = "runtime/tests/hia_native/filesystem_parity/qualify_pipeline.py"
+        self.assertNotIn(filesystem_controls, before_native + native_job)
+        self.assertEqual(qualify_job.count(filesystem_controls), 1)
+        self.assertLess(qualify_job.index("runtime/scripts/compare_hia_runtime_rust.py"),
+                        qualify_job.index(filesystem_controls))
+        self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
+        self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
+        migration = json.loads((ROOT / "native/migration.json").read_bytes())
+        self.assertEqual(len(MODULES), 48)
+        self.assertEqual(len(migration["native_components"]), 104)
+        self.assertEqual(len(q.native_tests()), 130)
+        self.assertEqual(len(RECIPES), 43)
+        self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
+        self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
+                            for row in migration["legacy_tool_handlers"]))
+        for key in ("whole_runtime_replaced", "production_activated", "old_stack_removal_qualified"):
+            self.assertIs(migration[key], False)
+
+    def test_filesystem_original_recipe_uses_the_selected_compiler_and_recording_callback(self):
+        import compare_hia_runtime_rust as comparison
+        import hia_native_filesystem_parity_qualification as filesystem
+        import qualify_hia_runtime_native as q
+        rustc = Path("/selected/1.95/bin/rustc")
+        # This is an orchestration-only sentinel, never a native/original PASS.
+        result = {"reporting_fixture_only": True, "native_trace_time_extent": (1.25, 2.5)}
+        stored = {"reporting_fixture_only": True, "native_trace_time_extent": [1.25, 2.5]}
+        with patch.object(filesystem, "compare_original", return_value=result) as actual:
+            self.assertEqual(comparison.RECIPES["filesystem_parity"](self.output, self.report, rustc), stored)
+        actual.assert_called_once_with(ROOT, self.output, self.report, rustc,
+                                       comparison.record_check, comparison.completed_test_summary)
+        with patch.object(filesystem, "retained_original", return_value=result) as retained:
+            self.assertEqual(comparison.retained_filesystem_parity(self.output, self.report, rustc), stored)
+        retained.assert_called_once_with(ROOT, self.output, self.report, rustc,
+                                         comparison.completed_test_summary)
+        with patch.object(filesystem, "native_evidence", return_value=result) as native:
+            self.assertEqual(q.filesystem_parity_evidence(self.output, self.report), stored)
+        native.assert_called_once_with(ROOT, self.output, self.report, q.completed_test_summary)
+        with patch.object(filesystem, "retire_fixtures", return_value=result) as retirement:
+            self.assertEqual(q.filesystem_parity_retirement(self.output, self.report), stored)
+        retirement.assert_called_once_with(ROOT, self.output, self.report, q.completed_test_summary, create=False)
+        self.assertIsInstance(result["native_trace_time_extent"], tuple)
+
     def test_json_registry_retains_two_original_domains_and_exact_named_profile(self):
         from hia_native_json_qualification import COMPONENTS, source_inputs
         declared = {item['key']: item for item in MODULES}
@@ -1100,7 +1204,7 @@ class QualificationReportingTests(unittest.TestCase):
 
     def test_every_copied_original_owner_is_pinned_to_baseline_bytes(self):
         fixture = self.output / "reference"
-        for name in ORIGINAL_RUNTIME_BLOBS:
+        for name in (*ORIGINAL_RUNTIME_BLOBS, *ORIGINAL_RUNTIME_COPIES):
             path = fixture / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes((ROOT / name).read_bytes())
@@ -1113,6 +1217,24 @@ class QualificationReportingTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "differs from pinned baseline"):
                     check_original_sources(fixture)
                 path.write_bytes(original)
+        for name in ORIGINAL_RUNTIME_COPIES:
+            path = fixture / name
+            original = path.read_bytes()
+            with self.subTest(copied_owner=name):
+                # Alter a byte outside the extracted local_linux module. The
+                # complete original file, not just the extracted body, binds it.
+                path.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+                with self.assertRaisesRegex(ValueError, "differs from complete pinned owner"):
+                    check_original_sources(fixture)
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, "regular unsymlinked"):
+                    check_original_sources(fixture)
+                path.symlink_to(ROOT / name)
+                with self.assertRaisesRegex(ValueError, "regular unsymlinked"):
+                    check_original_sources(fixture)
+                path.unlink()
+                path.write_bytes(original)
+        self.assertEqual(set(check_original_sources(fixture)), set(ORIGINAL_RUNTIME_BLOBS))
 
     def test_cold_summary_flag_cannot_replace_the_actual_report(self):
         import hashlib

@@ -58,6 +58,7 @@ from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
 
 import hia_native_batch_apply_qualification as batch_apply_qualification
 import hia_native_atomic_write_qualification as atomic_write_qualification
+import hia_native_filesystem_parity_qualification as filesystem_parity_qualification
 from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
                                               qualification_evidence as checked_history_evidence)
 
@@ -117,6 +118,11 @@ MODULES = (
      "additional_tests": ("test_atomic_write_kernel.py", "test_atomic_write_boundary.py",
                           "test_atomic_write_evidence.py"),
      "companion_sources": ("native/atomic_write_packer.hepta",)},
+    {"key": "filesystem_parity", "name": "filesystem-parity", "source": "native/filesystem_parity.hepta",
+     "builder": "filesystem_parity", "manifest_env": "HIA_FILESYSTEM_PARITY_MANIFEST",
+     "test": "test_filesystem_parity_state.py",
+     "additional_tests": ("test_filesystem_parity_build.py", "test_filesystem_parity_kernel.py"),
+     "companion_sources": ("native/filesystem_parity_packer.hepta",)},
     {"key": "delta", "name": "delta", "source": "native/delta.hepta",
      "standalone": "filter", "manifest_env": "HIA_DELTA_MANIFEST", "test": "test_delta.py"},
     {"key": "editable_content", "name": "editable-content", "source": "native/editable_content.hepta",
@@ -390,6 +396,8 @@ def sources() -> dict:
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
         "hia_native_batch_apply_build.py", "hia_native_batch_apply_qualification.py",
         "hia_native_atomic_write_build.py", "hia_native_atomic_write_qualification.py",
+        "hia_native_filesystem_parity_build.py", "hia_native_filesystem_parity_reference.py",
+        "hia_native_filesystem_parity_qualification.py",
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
@@ -718,6 +726,19 @@ def result_publication_evidence(output: Path, report: dict) -> dict:
 
 def request_scope_evidence(output: Path, report: dict) -> dict:
     return checked_request_scope_evidence(ROOT, output, report, completed_test_summary)
+
+
+def filesystem_parity_evidence(output: Path, report: dict) -> dict:
+    value = filesystem_parity_qualification.native_evidence(ROOT, output, report, completed_test_summary)
+    # Trace extents are tuples in memory; reports retain the owner's exact
+    # canonical JSON value so a reloaded report compares without type drift.
+    return filesystem_parity_qualification.decode(filesystem_parity_qualification.canonical(value))
+
+
+def filesystem_parity_retirement(output: Path, report: dict, *, create: bool = False) -> dict:
+    value = filesystem_parity_qualification.retire_fixtures(
+        ROOT, output, report, completed_test_summary, create=create)
+    return filesystem_parity_qualification.decode(filesystem_parity_qualification.canonical(value))
 
 
 def shell_evidence(output: Path, report: dict) -> dict:
@@ -2361,6 +2382,7 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / ENTROPY_FOLDER).mkdir(mode=0o700)
     (output / SCOPE_OS_FOLDER).mkdir(mode=0o700)
     (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
+    (output / "filesystem-parity/native").mkdir(mode=0o700, parents=True)
     for item in MODULES:
         if item.get("builder") == "io":
             from hia_native_io_build import build_io
@@ -2432,6 +2454,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "atomic_write":
             from hia_native_atomic_write_build import build_atomic_write
             built = build_atomic_write(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "filesystem_parity":
+            from hia_native_filesystem_parity_build import build_filesystem_parity
+            built = build_filesystem_parity(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "batch_plan":
             from hia_native_batch_plan_build import build_batch_plan
             built = build_batch_plan(hepta, output / "build", source_root=ROOT)
@@ -2510,6 +2535,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(config_qualification.test_commands(ROOT, output, report))
     commands.update(session_qualification.test_commands(ROOT, output, report))
     commands.update(file_lock_pipeline.test_commands(ROOT, output, report))
+    commands.update(filesystem_parity_qualification.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
@@ -2519,6 +2545,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["request_context_evidence"] = request_context_evidence(output, report)
     report["result_publication_evidence"] = result_publication_evidence(output, report)
     report["request_scope_evidence"] = request_scope_evidence(output, report)
+    report["filesystem_parity_evidence"] = filesystem_parity_evidence(output, report)
+    report["filesystem_parity_fixture_retirement"] = filesystem_parity_retirement(output, report, create=True)
     report["shell_evidence"] = shell_evidence(output, report)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
@@ -2584,6 +2612,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["request_context_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["result_publication_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["filesystem_parity_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["filesystem_parity_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_render_growth_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_call_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_search_evidence"]["artifact_sha256"])

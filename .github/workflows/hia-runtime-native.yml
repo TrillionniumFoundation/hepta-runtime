@@ -36,6 +36,7 @@ on:
       - 'src/mcp/fs/core_tests.rs'
       - 'src/mcp/fs/delta_tests.rs'
       - 'src/mcp/fs/file_ops.rs'
+      - 'src/mcp/fs/parity_ops.rs'
       - 'src/mcp/fs/fs_tests.rs'
       - 'src/mcp/fs/text_editing.rs'
       - 'src/mcp/fs/remote.rs'
@@ -98,6 +99,7 @@ on:
       - 'src/mcp/fs/core_tests.rs'
       - 'src/mcp/fs/delta_tests.rs'
       - 'src/mcp/fs/file_ops.rs'
+      - 'src/mcp/fs/parity_ops.rs'
       - 'src/mcp/fs/fs_tests.rs'
       - 'src/mcp/fs/text_editing.rs'
       - 'src/mcp/fs/remote.rs'
@@ -210,6 +212,12 @@ jobs:
       matrix:
         group: [batch, text, view, json, config, system]
     steps:
+      - name: Install filesystem syscall trace observer
+        if: matrix.group == 'system'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y strace
+
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -293,6 +301,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - name: Install filesystem syscall trace observer
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y strace
+
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -356,6 +369,16 @@ jobs:
           python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --rustc "$(rustup which --toolchain 1.95.0 rustc)"
+
+      - name: Reject altered filesystem phase evidence
+        run: |
+          timeout --signal=KILL 180 python3 -I -B runtime/tests/hia_native/filesystem_parity/qualify_pipeline.py \
+            --repo "$GITHUB_WORKSPACE/runtime" \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --report "$RUNNER_TEMP/hia-runtime-native/result.json" \
+            --controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls" \
+            > "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls.stdout" \
+            2> "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls.stderr"
 
       - name: Reject altered configuration and regex evidence
         run: |

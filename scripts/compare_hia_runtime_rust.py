@@ -36,6 +36,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        execution_evidence, effect_fence_evidence, config_evidence,
                                        session_evidence,
                                        file_locks_evidence, file_lock_service_evidence,
+                                       filesystem_parity_evidence, filesystem_parity_retirement,
                                        atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
@@ -155,6 +156,15 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required batch application complete native execution evidence differs")
     if report.get("atomic_write_evidence") != atomic_write_evidence(output, report):
         raise ValueError("required atomic policy, kernel, boundary or refusal evidence differs")
+    if report.get("filesystem_parity_evidence") != filesystem_parity_evidence(output, report):
+        raise ValueError("required complete native filesystem state, build and kernel evidence differs")
+    if report.get("filesystem_parity_fixture_retirement") != filesystem_parity_retirement(output, report):
+        raise ValueError("required private filesystem fixture retirement evidence differs")
+    if "filesystem_parity" in report.get("original_rust_comparisons", {}):
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        retained = retained_filesystem_parity(output, report, rustc)
+        if report["original_rust_comparisons"]["filesystem_parity"] != retained:
+            raise ValueError("required complete original filesystem invocation or retained corpus differs")
     if "atomic_write" in report.get("original_rust_comparisons", {}):
         rustc = Path(report["rust_compiler"]["invocation_path"])
         if report["original_rust_comparisons"]["atomic_write"] != atomic_write_original_evidence(output, report, rustc):
@@ -324,7 +334,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get(compiler_field) != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "file_locks", "file_lock_service", "view_read", "runtime_mcp"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "filesystem_parity", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "file_locks", "file_lock_service", "view_read", "runtime_mcp"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1781,6 +1791,18 @@ def compare_session_workdir(output: Path, report: dict, rustc: Path) -> dict:
                               record_check, qualification_env())
 
 
+def compare_filesystem_parity(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_filesystem_parity_qualification as q
+    value = q.compare_original(ROOT, output, report, rustc, record_check, completed_test_summary)
+    return q.decode(q.canonical(value))
+
+
+def retained_filesystem_parity(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_filesystem_parity_qualification as q
+    value = q.retained_original(ROOT, output, report, rustc, completed_test_summary)
+    return q.decode(q.canonical(value))
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
            "request_context": compare_request_context, "response_hints": compare_response_hints,
@@ -1802,7 +1824,8 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "operation_kdf": compare_operation_kdf, "operation_aead": compare_operation_aead,
            "operation_nonce": compare_operation_nonce, "operation_record": compare_operation_record,
            "system_entropy": compare_system_entropy, "operation_scope": compare_operation_scope,
-           "caller_authority": compare_caller_authority}
+           "caller_authority": compare_caller_authority,
+           "filesystem_parity": compare_filesystem_parity}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}

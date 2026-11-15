@@ -4,6 +4,7 @@ import fcntl
 import hashlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -11,10 +12,52 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fence_async_support import Fixture, Session, COUNTS, ROWS
+from fence_worker_supervisor import retain_unannounced_stop, confirm_owned_worker
 
 EVIDENCE = Path(os.environ["HIA_FENCE_WORKER_CORPUS_DIR"])
 EVIDENCE.mkdir(parents=True, exist_ok=True)
 REPORTS = []
+WAIT_ORDER_CONTROLS = []
+
+
+def controlled_wait_order(test):
+    """Pure event-order controls; these do not execute or simulate kernel IO."""
+    parent, worker = 100, 101
+    stopped = (signal.SIGSTOP << 8) | 0x7f
+    live, held = {parent}, {}
+    test.assertIsNone(confirm_owned_worker(parent, parent, worker, live, held))
+    test.assertFalse(retain_unannounced_stop(parent, worker, stopped, live, held))
+    test.assertEqual((live, held), ({parent, worker}, {}))
+    WAIT_ORDER_CONTROLS.append("clone-before-initial-stop")
+
+    live, held = {parent}, {}
+    test.assertTrue(retain_unannounced_stop(parent, worker, stopped, live, held))
+    test.assertEqual((live, held), ({parent}, {worker: stopped}))
+    test.assertEqual(confirm_owned_worker(parent, parent, worker, live, held), stopped)
+    test.assertEqual((live, held), ({parent, worker}, {}))
+    WAIT_ORDER_CONTROLS.append("initial-stop-before-clone")
+
+    def rejected(name, action, live, held):
+        before = (live.copy(), held.copy())
+        with test.assertRaises(AssertionError):
+            action()
+        test.assertEqual((live, held), before)
+        WAIT_ORDER_CONTROLS.append(name)
+
+    live, held = {parent}, {}
+    rejected("unknown-noninitial-signal", lambda: retain_unannounced_stop(
+        parent, worker, (signal.SIGILL << 8) | 0x7f, live, held), live, held)
+    rejected("unknown-terminal-status", lambda: retain_unannounced_stop(
+        parent, worker, 0, live, held), live, held)
+    test.assertTrue(retain_unannounced_stop(parent, worker, stopped, live, held))
+    rejected("duplicate-initial-stop", lambda: retain_unannounced_stop(
+        parent, worker, stopped, live, held), live, held)
+    rejected("second-unconfirmed-worker", lambda: retain_unannounced_stop(
+        parent, worker + 1, stopped, live, held), live, held)
+    rejected("clone-message-mismatches-held-worker", lambda: confirm_owned_worker(
+        parent, parent, worker + 1, live, held), live, held)
+    rejected("clone-announcer-is-not-owned-parent", lambda: confirm_owned_worker(
+        parent, worker + 1, worker, live, held), live, held)
 
 
 class FaultSession(Session):
@@ -105,6 +148,7 @@ class WorkerFaultTests(unittest.TestCase):
         self.admission(False)
 
     def test_02_inherited_blocked_signal_admission(self):
+        controlled_wait_order(self)
         self.admission(True)
 
     def test_03_actual_query_worker_trap_and_global_poison(self):
@@ -117,7 +161,7 @@ class WorkerFaultTests(unittest.TestCase):
 if __name__ == "__main__":
     started = time.monotonic()
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(WorkerFaultTests))
-    exact = result.testsRun == 4 and not any((result.failures, result.errors, result.skipped,
+    exact = result.testsRun == 4 and len(WAIT_ORDER_CONTROLS) == 8 and not any((result.failures, result.errors, result.skipped,
         result.expectedFailures, result.unexpectedSuccesses)) and COUNTS == {
         "processes": 4, "closed_processes": 4, "requests": 38, "responses": 38}
     raw = b"".join(json.dumps(row, sort_keys=True).encode() + b"\n" for row in ROWS)
@@ -128,6 +172,8 @@ if __name__ == "__main__":
               "skipped": len(result.skipped), "expected_failures": len(result.expectedFailures),
               "unexpected_successes": len(result.unexpectedSuccesses), "counts": COUNTS,
               "elapsed_seconds": time.monotonic() - started, "kernel_reports": REPORTS,
+              "controlled_wait_order_cases": WAIT_ORDER_CONTROLS,
+              "controlled_wait_order_native_calls": 0,
               "cases_sha256": hashlib.sha256(raw).hexdigest(),
               "sources": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (
                   Path(__file__), Path(__file__).with_name("fence_worker_supervisor.py"),
