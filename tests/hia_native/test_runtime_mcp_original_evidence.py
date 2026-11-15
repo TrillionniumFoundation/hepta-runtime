@@ -38,6 +38,7 @@ class OriginalEvidence(unittest.TestCase):
     if error.errno!=errno.EXDEV:raise
     shutil.copyfile(cls.output/name,target)
   source_names=set(source_identity(ROOT)['files'])|set(SOURCE_FILES)
+  source_names.update(native['span_raw_value']['source_inputs']['files'])
   for oracle in ('view_call_oracle','workdir_oracle'):
    source=module(oracle+'_source',ROOT/'tests/hia_native'/oracle/'verify_sources.py')
    source_names.update(source.SOURCE_FILES)

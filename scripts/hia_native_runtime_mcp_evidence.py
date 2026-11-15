@@ -14,7 +14,7 @@ NATIVE_SUITE='test_runtime_mcp.py'
 EVIDENCE_SUITE='test_runtime_mcp_evidence.py'
 NATIVE_GROUPS=10
 EVIDENCE_GROUPS=5
-SOURCE_MANIFEST_SHA256='a2a39ac053e70e8a9d7091827438129a4d4ad0233e7bae2a7d423c256cab0654'
+SOURCE_MANIFEST_SHA256='c615a9254139b2f012074d2a0f1629ec7c08a640b8af12a1bc1a13b79caecefb'
 LINKER_SOURCE_SHA256='66063b0e8d9b244a8ccec27a31554fe8e77f309ac1fc981286e63befa7559cef'
 COMPILER_SHA256='bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
 EVIDENCE_CONTROLS=57
@@ -766,6 +766,15 @@ def qualification_evidence(root:Path,output:Path,report:dict,completed)->dict:
         native['artifacts'].append(dict(path=name,bytes=len(raw),sha256=sha(raw)))
     native['evidence_controls']=dict(groups=EVIDENCE_GROUPS,refusals=EVIDENCE_CONTROLS,controls=controls,
         stdout_sha256=check['stdout_sha256'],stderr_sha256=check['stderr_sha256'])
+    from hia_native_span_raw_value_qualification import qualification_evidence as span_evidence
+    extension=span_evidence(root,output,report,completed)
+    existing={row['path']:row for row in native['artifacts']}
+    for row in extension['artifacts']:
+        if row['path'] in existing:exact(existing[row['path']],row,'span artifact overlaps with different bytes')
+        existing[row['path']]=row
+    native['artifact_sha256'].update(extension['artifact_sha256'])
+    native['artifacts']=[existing[name] for name in sorted(existing)]
+    native['span_raw_value']=extension
     return native
 
 def private_refusals(evidence,folder):

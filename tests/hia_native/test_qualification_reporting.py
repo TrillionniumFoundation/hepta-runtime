@@ -276,6 +276,7 @@ class QualificationReportingTests(unittest.TestCase):
         import compare_hia_runtime_rust as comparison
         import hia_native_view_call_qualification as view
         import hia_native_runtime_mcp_pipeline as public
+        import hia_native_span_raw_value_qualification as span
         import hia_native_view_search_public_qualification as public_search
         import hia_native_view_regex_search_public_qualification as public_regex_search
         actual = dict(comparison.RECIPES)
@@ -348,6 +349,7 @@ class QualificationReportingTests(unittest.TestCase):
                           regex_original if regex else search_original), \
              patch.object(public, "execute_original", return_value={"fixture": "public-original"}), \
              patch.object(public, "retained_original", return_value={"fixture": "public-original"}), \
+             patch.object(span, "compare_original", return_value={"fixture": "span-original"}) as span_original, \
              patch.object(public_search, "compare_public_reference", return_value={"fixture": "public-search-original"}), \
              patch.object(public_regex_search, "compare_public_reference", return_value={"fixture": "public-regex-original"}), \
              patch.object(comparison, "RECIPES", recipes):
@@ -374,6 +376,9 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertEqual([self.report["original_rust_comparisons"][key] for key in providers],
                          [{"original_output": "view-call-original"}] * 3)
         self.assertEqual(set(self.report["original_rust_comparisons"]), selected)
+        span_original.assert_called_once()
+        self.assertEqual(self.report["original_rust_comparisons"]["runtime_mcp"],
+                         {"fixture": "public-original", "span_raw_value": {"fixture": "span-original"}})
         self.assertTrue(all(row["exit_code"] == 0 and row["timed_out"] is False
                             for row in self.report["checks"]))
 
@@ -817,6 +822,102 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn('file_info_service', PYTHON_REFERENCE_COMPONENTS)
         self.assertNotIn('file_info_service', RECIPES)
 
+    def test_bellman_commitment_registers_its_own_complete_reference_domain(self):
+        import hia_native_bellman_commitment_qualification as b
+        import hia_native_pipeline as pipeline
+        import qualify_hia_runtime_native as q
+        self.assertIs(RECIPES["bellman_commitment"], b.compare_original)
+        self.assertEqual(next(item for item in MODULES if item["key"] == "bellman_commitment"), b.MODULE)
+        self.assertEqual(b.MODULE["buffer_profile"], "serde-json.v1")
+        self.assertIn(b.TEST, pipeline.partition_tests()["system"])
+        self.assertTrue(set(b.FILES) <= set(q.sources()))
+        self.assertEqual(len(b.original_commands(self.output, Path("/selected/rustc"))), 8)
+        for name, (command, timeout) in b.original_commands(self.output, Path("/selected/rustc")).items():
+            if "-build-" in name:
+                self.assertEqual(command[0], "/selected/cargo")
+                self.assertIn('--locked', command)
+                self.assertIn('build.rustc="/selected/rustc"', command)
+                self.assertIn('--target-dir', command)
+                self.assertEqual('--release' in command, name.endswith('release'))
+                self.assertEqual(timeout, 180)
+        for name, value in b.SCOPE.items():
+            self.assertEqual(value, 0 if name == 'native_cases_added_by_reference' else False)
+
+    def test_bellman_commitment_reference_cargo_cannot_drift_with_refreshed_file_hashes(self):
+        import hashlib
+        import shutil
+        import hia_native_bellman_commitment_qualification as b
+        fixture = self.output / "commitment-source"
+        names = (*b.FILES, 'native/bellman_commitment_component.json',
+                 'native/migration.json', 'native/migration_target.json')
+        for name in names:
+            target = fixture / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
+        self.assertEqual(len(b.source_evidence(fixture)['target_files']), 3)
+        relative = b.REFERENCE + '/Cargo.lock'
+        original = (fixture / relative).read_bytes()
+        (fixture / relative).write_bytes(original + b'\n')
+        component_path = fixture / 'native/bellman_commitment_component.json'
+        component = json.loads(component_path.read_bytes())
+        component['files'][relative] = b.identity(original + b'\n')
+        component_path.write_text(json.dumps(component))
+        with self.assertRaisesRegex(ValueError, 'exact original reference differs'):
+            b.source_evidence(fixture)
+        (fixture / relative).write_bytes(original)
+        shutil.copyfile(ROOT / 'native/bellman_commitment_component.json', component_path)
+        snapshot = fixture / 'native/migration_target.json'
+        target = json.loads(snapshot.read_bytes())
+        next(row for row in target['source_files'] if row['path'] == 'Cargo.lock')['git_blob'] = '0' * 40
+        snapshot.write_text(json.dumps(target))
+        inventory = fixture / 'native/migration.json'
+        data = json.loads(inventory.read_bytes())
+        data['migration_target']['sha256'] = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+        inventory.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, 'current target Git blob'):
+            b.source_evidence(fixture)
+
+    def test_bellman_commitment_rejects_registry_and_compiler_environment_substitution(self):
+        import hia_native_bellman_commitment_qualification as b
+        target = (ROOT / b.REFERENCE / 'Cargo.lock').read_bytes()
+        locked = (ROOT / b.DRIVERS / 'reference.Cargo.lock').read_bytes()
+        self.assertEqual(len(b.checked_registry(target, locked)), 27)
+        package = b.checked_registry(target, locked)[0]
+        altered = locked.replace(package['checksum'].encode(), b'0' * 64, 1)
+        with self.assertRaisesRegex(ValueError, 'version/checksum differs'):
+            b.checked_registry(target, altered)
+        inherited = {'PATH': '/bin', 'RUSTC': '/unselected/rustc', 'RUSTFLAGS': '--cfg changed',
+                     'CARGO_PROFILE_RELEASE_OPT_LEVEL': '0', 'RUSTC_WORKSPACE_WRAPPER': '/wrapper',
+                     'CARGO_BUILD_RUSTFLAGS': '--cfg build_override',
+                     'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS': '--cfg target_override'}
+        env, receipt = b.reference_environment(inherited, Path('/selected/rustc'))
+        self.assertEqual(env, {'PATH': '/bin', 'RUSTC': '/selected/rustc', 'CARGO_ENCODED_RUSTFLAGS': ''})
+        self.assertEqual(receipt['removed_inherited_variables'],
+                         ['CARGO_BUILD_RUSTFLAGS', 'CARGO_PROFILE_RELEASE_OPT_LEVEL',
+                          'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS', 'RUSTC_WORKSPACE_WRAPPER', 'RUSTFLAGS'])
+        self.assertEqual(inherited['RUSTC'], '/unselected/rustc')
+
+    def test_bellman_commitment_cargo_feature_receipt_requires_roundtrip_and_original_versions(self):
+        import copy
+        import hia_native_bellman_commitment_qualification as b
+        component = json.loads((ROOT / 'native/bellman_commitment_component.json').read_bytes())
+        packages = [{'id': 'root', 'name': 'hia-bellman-commitment-reference', 'version': '0.1.0', 'source': None}]
+        nodes = [{'id': 'root', 'features': []}]
+        for key, features in component['reference_features'].items():
+            name, version = key.split('@')
+            packages.append({'id': key, 'name': name, 'version': version, 'source': 'registry'})
+            nodes.append({'id': key, 'features': features})
+        fixture = {'packages': packages, 'resolve': {'nodes': nodes}}
+        self.assertEqual(b.metadata_evidence(json.dumps(fixture).encode(), component), component['reference_features'])
+        changed = copy.deepcopy(fixture)
+        next(row for row in changed['resolve']['nodes'] if row['id'] == 'serde_json@1.0.151')['features'].remove('float_roundtrip')
+        with self.assertRaisesRegex(ValueError, 'feature closure differs'):
+            b.metadata_evidence(json.dumps(changed).encode(), component)
+        changed = copy.deepcopy(fixture)
+        next(row for row in changed['packages'] if row['id'] == 'sha2@0.11.0')['version'] = '0.11.1'
+        with self.assertRaisesRegex(ValueError, 'feature closure differs'):
+            b.metadata_evidence(json.dumps(changed).encode(), component)
+
     def test_bellman_registers_three_actual_suites_and_distinct_reference_domains(self):
         import hia_native_bellman_qualification as b
         import hia_native_pipeline as pipeline
@@ -987,10 +1088,10 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
-        self.assertEqual(len(MODULES), 59)
-        self.assertEqual(len(migration["native_components"]), 128)
-        self.assertEqual(len(q.native_tests()), 151)
-        self.assertEqual(len(RECIPES), 53)
+        self.assertEqual(len(MODULES), 60)
+        self.assertEqual(len(migration["native_components"]), 129)
+        self.assertEqual(len(q.native_tests()), 154)
+        self.assertEqual(len(RECIPES), 54)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
         self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
                             for row in migration["legacy_tool_handlers"]))
@@ -1013,6 +1114,9 @@ class QualificationReportingTests(unittest.TestCase):
             "scripts/hia_native_public_exchange_qualification.py", "scripts/hia_native_runtime_mcp_original.py",
             "scripts/hia_native_runtime_mcp_adapter.py", "scripts/hia_native_runtime_mcp_pack.py",
             "scripts/hia_native_workdir_reference.py", "scripts/runtime_mcp_execution_bridge.S",
+            "scripts/hia_native_span_raw_value_qualification.py",
+            "tests/hia_native/span_raw_value_cases.py", "tests/hia_native/span_sdk_cases.json",
+            "tests/hia_native/span_json_oracle.rs", "tests/hia_native/span_sdk_oracle.rs",
             "scripts/runtime_mcp_transport.S", "scripts/runtime_mcp_view_bridge.S",
             "scripts/runtime_mcp_workdir_io_bridge.S", "tests/hia_native/workdir_oracle/run.py",
             "tests/hia_native/runtime_mcp_oracle/run.py", "tests/hia_native/test_runtime_mcp_original_evidence.py",
@@ -1025,7 +1129,8 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertNotIn("test_runtime_mcp_original_evidence.py", q.native_tests())
         self.assertEqual(item["additional_tests"], (
             "test_runtime_mcp_evidence.py", "test_view_search_public.py",
-            "test_view_regex_search_public.py", "test_view_regex_search_public_evidence.py"))
+            "test_view_regex_search_public.py", "test_view_regex_search_public_evidence.py",
+            "test_runtime_mcp_raw_value.py", "test_runtime_mcp_raw_value_evidence.py"))
 
     def test_filesystem_original_recipe_uses_the_selected_compiler_and_recording_callback(self):
         import compare_hia_runtime_rust as comparison

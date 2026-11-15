@@ -75,11 +75,13 @@ import hia_native_file_lock_pipeline as file_lock_pipeline
 import hia_native_shell_qualification as shell_qualification
 import hia_native_shell_capture_gate as capture_gate
 import hia_native_bellman_qualification as bellman_qualification
+import hia_native_bellman_commitment_qualification as bellman_commitment_qualification
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
     *bellman_qualification.MODULES,
+    bellman_commitment_qualification.MODULE,
     {"key": "runtime_bytes", "name": "runtime-bytes", "source": "native/runtime_bytes.hepta",
      "standalone": "filter", "manifest_env": "HIA_BYTES_MANIFEST", "test": "test_runtime_bytes.py"},
     {"key": "runtime_protocol", "name": "runtime-protocol", "source": "native/runtime_protocol.hepta",
@@ -206,7 +208,9 @@ MODULES = (
      "test": "test_runtime_mcp.py", "additional_tests": ("test_runtime_mcp_evidence.py",
                                                          "test_view_search_public.py",
                                                          "test_view_regex_search_public.py",
-                                                         "test_view_regex_search_public_evidence.py")},
+                                                         "test_view_regex_search_public_evidence.py",
+                                                         "test_runtime_mcp_raw_value.py",
+                                                         "test_runtime_mcp_raw_value_evidence.py")},
     {"key": "view_cache", "name": "view-cache", "source": "native/view_cache.hepta",
      "standalone": None, "manifest_env": "HIA_CACHE_MANIFEST", "test": "test_view_cache.py",
      "additional_tests": ("test_view_cache_evidence.py",)},
@@ -371,6 +375,7 @@ def sources() -> dict:
     paths.update(ROOT / "scripts" / name for name in (
         "hia_native_build.py", "hia_native_loader.py", "generate_hia_transport.py",
         "hia_native_bellman_build.py", "hia_native_bellman_qualification.py",
+        "hia_native_bellman_commitment_build.py", "hia_native_bellman_commitment_qualification.py",
         "hia_native_io_build.py", "hia_native_composition_build.py", "hia_native_record_build.py", "hia_native_cold.py",
         "hia_native_entropy_build.py", "hia_native_entropy_qualification.py",
         "hia_native_scope_build.py", "hia_native_scope_qualification.py",
@@ -387,6 +392,7 @@ def sources() -> dict:
         "view_call_adapter.S", "view_call_fixture_controls.S", "view_call_engine.S",
         "view_call_read_bridge.S", "view_call_key_bridge.S", "view_call_scope_bridge.S",
         "hia_native_runtime_mcp_build.py", "hia_native_runtime_mcp_evidence.py",
+        "hia_native_span_raw_value_qualification.py",
         "hia_native_runtime_mcp_reference.py", "hia_native_runtime_mcp_original.py",
         "hia_native_runtime_mcp_adapter.py", "hia_native_runtime_mcp_pack.py",
         "hia_native_runtime_mcp_pipeline.py", "hia_native_runtime_mcp_fixtures.py",
@@ -2740,6 +2746,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
     env.update({
         "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
         "HIA_BELLMAN_QUALIFICATION_OUTPUT": str(output),
+        "HIA_BELLMAN_COMMITMENT_QUALIFICATION_OUTPUT": str(output),
         "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
         "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
         "HIA_TERMINAL_CORPUS_DIR": str(output / "terminal-clean"),
@@ -3078,6 +3085,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
 
 def collect_native_evidence(output: Path, report: dict) -> None:
     report["bellman_evidence"] = bellman_qualification.native_evidence(output, report)
+    report["bellman_commitment_evidence"] = bellman_commitment_qualification.native_evidence(output, report)
     report["request_context_evidence"] = request_context_evidence(output, report)
     report["result_publication_evidence"] = result_publication_evidence(output, report)
     report["request_scope_evidence"] = request_scope_evidence(output, report)

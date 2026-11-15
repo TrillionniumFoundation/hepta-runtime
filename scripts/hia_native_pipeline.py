@@ -40,7 +40,7 @@ PARTITIONS = {
     "system": ("filesystem_parity", "binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
                "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service",
-               "finite_binary64", "bellman_core"),
+               "finite_binary64", "bellman_core", "bellman_commitment"),
 }
 BUILD_SEAL = "native-build.json"
 BUILD_REPORT = "prepared-report.json"

@@ -75,6 +75,7 @@ from hia_native_request_scope_reference import (compare_original as compare_requ
 import hia_native_shell_qualification as shell_qualification
 import hia_native_shell_capture_gate as capture_gate
 import hia_native_bellman_qualification as bellman_qualification
+import hia_native_bellman_commitment_qualification as bellman_commitment_qualification
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
                                                 REFERENCE_ROWS as BATCH_PLAN_ROWS)
@@ -133,6 +134,12 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required matching-source full cold evidence differs")
     if report.get("bellman_evidence") != bellman_qualification.native_evidence(output, report):
         raise ValueError("required Bellman native hardware/corpus/static evidence differs")
+    if report.get("bellman_commitment_evidence") != bellman_commitment_qualification.native_evidence(output, report):
+        raise ValueError("required Bellman typed commitment native evidence differs")
+    if "bellman_commitment" in report.get("original_rust_comparisons", {}):
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        if report["original_rust_comparisons"]["bellman_commitment"] != bellman_commitment_qualification.original_evidence(output, report, rustc):
+            raise ValueError("required actual current-target Bellman typed commitment replay differs")
     if "bellman_core" in report.get("original_rust_comparisons", {}):
         rustc = Path(report["rust_compiler"]["invocation_path"])
         if report["original_rust_comparisons"]["bellman_core"] != bellman_qualification.original_evidence(output, report, rustc):
@@ -1649,7 +1656,10 @@ def compare_runtime_mcp(output: Path, report: dict, rustc: Path | None) -> dict:
             record_check, completed_test_summary, qualification_env())
     compare_view_search_public(output, report, search_original, execute=rustc is not None)
     compare_view_regex_search_public(output, report, regex_original, execute=rustc is not None)
-    return public
+    from hia_native_span_raw_value_qualification import compare_original as compare_span_original
+    extension = compare_span_original(ROOT, output, report, rustc,
+        record_check, completed_test_summary, qualification_env())
+    return dict(public, span_raw_value=extension)
 
 
 def compare_render_corpus(output: Path, report: dict, rustc: Path, *, growth: bool) -> dict:
@@ -2220,7 +2230,8 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "system_entropy": compare_system_entropy, "operation_scope": compare_operation_scope,
            "caller_authority": compare_caller_authority,
            "filesystem_parity": compare_filesystem_parity,
-           "bellman_core": bellman_qualification.compare_original}
+           "bellman_core": bellman_qualification.compare_original,
+           "bellman_commitment": bellman_commitment_qualification.compare_original}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}

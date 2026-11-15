@@ -35,24 +35,31 @@ ABI and composition manifests define each owner's scope:
 | --- | --- |
 | Text and files | Byte/protocol primitives, line endpoints, text budgets, batch planning/application, atomic writes, filesystem parity, delta, editable content, history and locks |
 | Read services | Path policy/canonicalization, stat/version, local I/O, multi-read, file-info, view parameters/calls/rendering/cache and literal/regex search |
-| JSON and numbers | Locked serde-compatible JSON/number behavior, private RawValue expansion, finite binary64 arithmetic and private Bellman numerical core |
+| JSON and numbers | Locked serde-compatible JSON/number behavior, private RawValue expansion at typed boundaries, finite binary64 arithmetic, private Bellman numerical core and canonical commitment |
 | Identity and requests | Caller authority, KDF/AEAD/nonce/records, entropy, operation/request scope, request context and result publication |
 | Configuration and sessions | Configuration, regex syntax/HIR/NFA/matching, client/session context and workdir state |
 | Shell and effects | Admission, terminal cleaning, execution composition, effect fences, prepared processes, foreground/output/background state and capture preparation |
 | MCP composition | Catalog/admission/protocol, view/workdir gateways, static image packers and public exchange/reference fixtures |
 
-Bellman's private core excludes public JSON, canonical commitment/plan identity,
-deadline and async permit/cancellation ownership. Each other owner or public
-composition also retains its declared limits. Complete service closure still
+The Bellman numerical core and its separate commitment owner cover typed
+calculation, canonical serialization, and request/plan hashing. The commitment
+owner accepts the implementation digest only through its trusted private
+input. Public JSON admission, installed implementation authority, deadline and
+async permit/cancellation ownership remain separate work. Each other owner or
+public composition also retains its declared limits. Complete service closure still
 requires production routing, persistence/restart and unknown-outcome recovery,
 SSH/SFTP/HTTP/PTY, full editing/delta behavior, REA, documents/worksheets, model
 workers, deployment ownership and additional platforms.
 
-The shared `serde_json.hepta` owner includes private RawValue expansion. The
-separate `serde_json_span.hepta` parser used by the public frontend still needs
-the same behavior with correct source-span ownership. Its current literal
-wrapper behavior is an open semantic gap; a passing shared-parser comparison
-does not qualify that frontend.
+Both `serde_json.hepta` and the public frontend's `serde_json_span.hepta` include
+private RawValue expansion. The frontend distinguishes generic Value positions,
+the typed argument map, selected request IDs, typed string fields and ignored
+struct fields. It retains the SDK's silent-discard and protocol-error routes,
+including reuse of the connection by a following valid request. Complete
+original public comparisons and the additional typed-boundary Rust replays
+are independently required; the shared-parser comparison alone does not
+qualify the frontend. [The public ABI](runtime_mcp_abi.md) records the exact
+scope, capacity continuation and error precedence.
 
 ## Inventory and target checks
 

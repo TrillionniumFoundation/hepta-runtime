@@ -182,7 +182,7 @@ def checked_native(bundle_path,folder,*,source_root=ROOT,hepta,stdout):
     exact(controller['sources'],{'controller':SOURCES['execution_controller'],'typed':SOURCES['execution_json'],'core':SOURCES['execution_shadow'],'value':source_pins(root)['native/serde_json.hepta']},'controller child sources changed')
     exact({k:controller['images'][k] for k in ('controller','typed','core')},
           {'controller':IMAGES['execution_controller'],'typed':IMAGES['execution_json'],'core':IMAGES['execution_shadow']},'controller child images changed')
-    require(controller['images']['value']=='ab5681bf8b5e8f06ee789e9b21f25871585cd1fb183a768f300d6f5400106fc1','Value child image changed')
+    require(controller['images']['value']=='d57ad9ee16270929bbaac78219c7ac54e3ad2ab64de2e6a4fe3f29236706f22c','Value child image changed')
     for name,wanted in STREAMS.items():
         path=folder/name;actual=stream_identity(path);require(actual==wanted,'complete corpus differs: '+name);artifact(path)
     for sub,report in [('core',core),('json',js)]:

@@ -1,4 +1,4 @@
-name: HIA Bellman Private Numerical Core
+name: HIA Bellman Numerical and Commitment Components
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
     paths:
       - 'native/finite_binary64.hepta'
       - 'native/bellman_core*'
+      - 'native/bellman_commitment*'
+      - 'native/serde_json.hepta'
+      - 'native/binary_codec.hepta'
+      - 'native/serde_filter_packer.hepta'
       - 'native/filter_packer.hepta'
       - 'native/migration*.json'
       - 'scripts/hia_native_bellman*'
@@ -19,6 +23,10 @@ on:
     paths:
       - 'native/finite_binary64.hepta'
       - 'native/bellman_core*'
+      - 'native/bellman_commitment*'
+      - 'native/serde_json.hepta'
+      - 'native/binary_codec.hepta'
+      - 'native/serde_filter_packer.hepta'
       - 'native/filter_packer.hepta'
       - 'native/migration*.json'
       - 'scripts/hia_native_bellman*'
@@ -37,9 +45,10 @@ concurrency:
   group: hia-bellman-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# This focused gate qualifies numerical behavior using a fresh source-checked
+# This focused gate qualifies numerical and typed commitment behavior using a fresh source-checked
 # compiler fixed point. The ordinary aggregate additionally requires Hepta's
-# complete cold gate. Public JSON, deadline, async and MCP routing are separate.
+# complete cold gate. Public admission, installed digest authority, deadline,
+# async lifetime, response rendering and MCP routing are separate.
 jobs:
   bellman:
     name: HIA arithmetic and Bellman versus original Rust debug and optimized
@@ -55,7 +64,7 @@ jobs:
           sparse-checkout: |
             native
             scripts
-            tests/hia_native/bellman
+            tests/hia_native
       - name: Checkout fixed HIA compiler
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -73,6 +82,7 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /Cargo.toml
+            /Cargo.lock
             /src/mcp/weight_bellman.rs
       - name: Verify identities and install original compiler
         env:
@@ -89,6 +99,10 @@ jobs:
           from hia_native_bellman_qualification import source_evidence, REFERENCE
           source_evidence()
           assert Path('original/src/mcp/weight_bellman.rs').read_bytes() == (Path('runtime') / REFERENCE).read_bytes()
+          import hia_native_bellman_commitment_qualification as commitment
+          commitment.source_evidence()
+          for name in commitment.TARGET_PINS:
+              assert (Path('original') / name).read_bytes() == (Path('runtime') / commitment.REFERENCE / Path(name).name).read_bytes()
           PY
       - name: Build native images and compare complete independent streams
         run: |
@@ -131,12 +145,20 @@ jobs:
               child = json.loads((output / name / 'report.json').read_bytes())
               assert child['status'] == 'PASS' and child[field] == expected, name
           PY
+      - name: Qualify registered typed commitment against independent original
+        run: |
+          python3 -I -B runtime/scripts/hia_native_bellman_commitment_build.py \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --original "$GITHUB_WORKSPACE/original" \
+            --output "$RUNNER_TEMP/hia-bellman-commitment"
       - name: Retain actual input, output, build and failure evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hia-bellman-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/hia-bellman-core/
+          path: |
+            ${{ runner.temp }}/hia-bellman-core/
+            ${{ runner.temp }}/hia-bellman-commitment/
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
