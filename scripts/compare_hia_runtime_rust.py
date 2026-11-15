@@ -23,6 +23,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_service_pipeline as service_pipeline
+import hia_native_public_registry_qualification as public_registry_qualification
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
                                        PARALLEL_NATIVE_SUITES,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
@@ -30,7 +31,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        history_evidence, json_evidence, execution_evidence, effect_fence_evidence, config_evidence,
                                        session_evidence, file_locks_evidence, file_lock_service_evidence,
                                        write_chain_evidence, directory_service_evidence,
-                                       workdir_service_evidence, sdk_connection_evidence,
+                                       workdir_service_evidence, sdk_connection_evidence, public_registry_evidence,
                                        atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
@@ -187,6 +188,17 @@ def check_input_pins(output: Path, report: dict) -> None:
                           ROOT, output, report, rustc, completed_test_summary, key))
             if report["original_rust_comparisons"][key] != actual:
                 raise ValueError("required actual service original invocation changed: " + key)
+    if report.get("public_registry_evidence") != public_registry_evidence(output, report):
+        raise ValueError("required public registry native process evidence differs")
+    if "public_registry" in report.get("original_rust_comparisons", {}):
+        actual = public_registry_qualification.original_evidence(ROOT, output, report, completed_test_summary)
+        if report["original_rust_comparisons"]["public_registry"] != actual:
+            raise ValueError("required actual public registry original replay differs")
+    if "public_registry_evidence_controls" in report:
+        if report["public_registry_evidence_controls"] != public_registry_control_evidence(output, report):
+            raise ValueError("actual public registry evidence controls differ")
+    elif report.get("status") == "PASS":
+        raise ValueError("completed aggregate omitted public registry evidence controls")
     if "service_original_fixture_retirement" in report:
         rustc = Path(report["rust_compiler"]["invocation_path"])
         actual = service_pipeline.original_fixture_transport(ROOT, output, report, rustc, completed_test_summary)
@@ -250,7 +262,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir", "file_locks", "file_lock_service", "write_chain", "directory_service", "workdir_service", "sdk_connection"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir", "file_locks", "file_lock_service", "write_chain", "directory_service", "workdir_service", "sdk_connection", "public_registry"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1102,7 +1114,9 @@ def atomic_write_original_evidence(output: Path, report: dict, rustc: Path) -> d
             raise ValueError("atomic original compiler or Cargo executable changed")
     fixtures = tuple(f"atomic-write-original/{kind}-kernel/{index:04d}-{case['name']}/fixture"
                      for kind in ("native", "original") for index, case in enumerate(q.case_module.cases()))
-    atomic_write_retire_fixtures(output, fixtures, folder / "retired-fixtures.json", evidence)
+    # The original driver retires these only after complete native and Rust
+    # kernel evidence is admitted, including when their semantic comparison fails.
+    # original_comparison_evidence above verifies that exact retained receipt.
     return {"schema": "hepta.runtime.atomic-write-required-original.v1", "status": "PASS",
         "reference_kind": "complete unchanged Linux Local atomic_write, actual std::Path and std::io properties",
         "compiled_by_qualification_recipe": True, "completed_process": completed, "reference_evidence": evidence,
@@ -1125,9 +1139,6 @@ def compare_atomic_write(output: Path, report: dict, rustc: Path) -> dict:
     completed = q.original_comparison_evidence(folder, output / report["modules"]["atomic_write"]["manifest"],
         output / "atomic-write/policy", source_root=ROOT, reference_root=ROOT,
         stdout=output / "atomic-write-rust-compare.stdout")
-    fixtures = tuple(f"atomic-write-original/{kind}-kernel/{index:04d}-{case['name']}/fixture"
-                     for kind in ("native", "original") for index, case in enumerate(q.case_module.cases()))
-    atomic_write_retire_fixtures(output, fixtures, folder / "retired-fixtures.json", completed, create=True)
     result = atomic_write_original_evidence(output, report, rustc)
     if atomic_write_evidence(output, report) != native:
         raise ValueError("atomic native execution evidence changed during original replay")
@@ -1390,6 +1401,90 @@ def compare_sdk_connection(output: Path, report: dict, rustc: Path) -> dict:
                               record_check, qualification_env(), "sdk_connection")
 
 
+def compare_public_registry(output: Path, report: dict, rustc: Path) -> dict:
+    before = public_registry_evidence(output, report)
+    if before != report.get("public_registry_evidence"):
+        raise ValueError("public registry native evidence changed before original replay")
+    command = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_public_registry_original.py"),
+               "--repo", str(ROOT), "--build", str(output / "build/public-registry-build.json"),
+               "--output", str(output / "public-registry-original"),
+               "--cargo", str(executable(str(rustc.with_name("cargo")))),
+               "--rustc", str(rustc), "--rustfmt", str(executable(str(rustc.with_name("rustfmt"))))]
+    record_check(output, report, name="public-registry-rust-compare", command=command,
+                 timeout=180, env=qualification_env())
+    result = public_registry_qualification.original_evidence(ROOT, output, report, completed_test_summary)
+    if public_registry_evidence(output, report) != before:
+        raise ValueError("public registry native evidence changed during original replay")
+    return result
+
+
+PUBLIC_REGISTRY_CONTROL_LABELS = (
+    "missing-actual-native-completion", "nonzero-native-exit", "native-timeout",
+    "changed-actual-native-command", "nonzero-original-exit", "changed-original-deadline",
+    "incomplete-native-session-report", "omitted-native-response-session",
+    "changed-actual-native-request-custody", "changed-actual-embedded-router-image",
+    "changed-compiled-router-image", "rehashed-empty-native-compiler-observer",
+    "changed-native-packer-input", "changed-executed-HIA-source", "missing-private-receipt-control",
+    "omitted-original-response-session", "missing-actual-original-build", "changed-original-executable",
+    "changed-whole-original-wrapper", "changed-locked-SDK-source",
+)
+
+
+def public_registry_control_command(output: Path) -> list[str]:
+    return [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/check_public_registry_evidence.py"),
+            "--repo", str(ROOT), "--output", str(output),
+            "--report", str(output / "public-registry-controls-input.json"),
+            "--result", str(output / "public-registry-evidence-controls.json")]
+
+
+def public_registry_control_evidence(output: Path, report: dict) -> dict:
+    """Admit the real quiescent corruption process and its unchanged evidence."""
+    helper = public_registry_qualification
+    name = "public-registry-evidence-controls"
+    snapshot = helper.object_at(output / "public-registry-controls-input.json")
+    prior = [row for row in report["checks"] if row.get("name") != name]
+    if snapshot.get("checks") != prior:
+        raise ValueError("public evidence controls did not observe the complete prior process set")
+    for key in ("source_sha256", "modules", "public_registry_evidence", "original_rust_comparisons",
+                "compiler_checkout", "compiler_commit", "compiler_image_sha256"):
+        if snapshot.get(key) != report.get(key):
+            raise ValueError("public evidence control input changed: " + key)
+    row, summary = completed_test_summary(output, report, name)
+    out, err = helper.completed(output, name, row, public_registry_control_command(output), ROOT, 180, aggregate=True)
+    value = helper.object_at(output / "public-registry-evidence-controls.json")
+    baseline = helper.original_evidence(ROOT, output, snapshot, completed_test_summary)
+    expected = helper.sha(helper.encoded(baseline))
+    if (err or json.loads(out) != summary or summary != value
+            or row.get("phase") != "original_rust_comparison"
+            or value.get("schema") != "hepta.public-registry.evidence-controls.v1"
+            or value.get("status") != "PASS" or value.get("rejections") != 20
+            or value.get("full_baseline_admissions") != 22
+            or value.get("actual_native_calls_added") != 0 or value.get("actual_rust_calls_added") != 0
+            or value.get("restored_file_bytes_and_modes") is not True
+            or value.get("report_sha256") != sha(output / "public-registry-controls-input.json")
+            or value.get("baseline_evidence_sha256") != expected or value.get("final_evidence_sha256") != expected
+            or tuple(item.get("label") for item in value.get("controls", ())) != PUBLIC_REGISTRY_CONTROL_LABELS
+            or any(item.get("rejected") is not True or not item.get("exception") for item in value["controls"])):
+        raise ValueError("public evidence corruption/restoration domain is incomplete")
+    helper.duration(value.get("elapsed_seconds"), 180)
+    names = ("public-registry-controls-input.json", "public-registry-evidence-controls.json",
+             name + ".stdout", name + ".stderr")
+    return {"schema": "hepta.public-registry.aggregate-controls.v1", "status": "PASS",
+            "artifact_sha256": {item: sha(output / item) for item in names},
+            "rejections": 20, "full_baseline_admissions": 22,
+            "actual_native_calls_added": 0, "actual_rust_calls_added": 0}
+
+
+def run_public_registry_controls(output: Path, report: dict) -> None:
+    # Every original recipe, including the two parallel OS workers, is already
+    # drained. The separate immutable input avoids a self-referential report SHA.
+    with (output / "public-registry-controls-input.json").open("xb") as stream:
+        stream.write(public_registry_qualification.encoded(report))
+    record_check(output, report, name="public-registry-evidence-controls",
+                 command=public_registry_control_command(output), timeout=180, env=qualification_env())
+    report["public_registry_evidence_controls"] = public_registry_control_evidence(output, report)
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "atomic_write": compare_atomic_write,
@@ -1398,6 +1493,7 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "file_locks": compare_file_locks, "file_lock_service": compare_file_lock_service,
            "write_chain": compare_write_chain, "directory_service": compare_directory_service,
            "workdir_service": compare_workdir_service, "sdk_connection": compare_sdk_connection,
+           "public_registry": compare_public_registry,
            "fence_json": compare_fence_json, "serde_json": compare_serde_json, "execution_shadow": compare_execution,
            "effect_fence": compare_effect_fence, "runtime_config": compare_config,
            "operation_scope_os": compare_operation_scope_os,
@@ -1524,6 +1620,8 @@ def run(output: Path, rustc_name: str) -> dict:
             raise ValueError("not all required Rust reference recipes completed")
         report["service_original_fixture_retirement"] = service_pipeline.original_fixture_transport(
             ROOT, output, report, rustc, completed_test_summary, create=True)
+        check_input_pins(output, report)
+        run_public_registry_controls(output, report)
         check_input_pins(output, report)
         if sha(rustc) != compiler_sha:
             raise ValueError("original Rust compiler executable changed during comparison")

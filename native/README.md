@@ -142,10 +142,42 @@ manifest, complete process streams and domain-specific evidence admission.
 The write chain keeps its declared 512 MiB input, 1 GiB output and 1,152 MiB
 workspace profile. It does not claim arbitrary `usize` resource equivalence or
 the separate batch-edit final response. Directory and workdir remote execution,
-ordinary public connection dispatch, durable request admission/audit/results and
+complete public connection dispatch, durable request admission/audit/results and
 production activation remain outside these four private profiles. The workdir
 startup snapshot does not itself implement repeated public initialization or
 the expanded argument domain of a complete public SDK caller.
+
+## Public installed-method registry
+
+The [public registry profile](public_registry_scope.md) connects the persistent
+SDK connection to exactly three installed methods: `host_list`, `effective_config`
+and `execution_shadow_admit`. Its fixed 17-image executable accepts administrator
+configuration only at startup, uses the original catalog and typed parameter
+behavior, and preserves modern/legacy negotiation and repeated initialization.
+It embeds the same configuration, execution and regex owners already qualified
+above. The [private ABI](public_registry_abi.md) keeps calls and immutable startup
+authority separate from ordinary tool arguments.
+
+The aggregate registers three additional native suites and one fresh Rust 1.95
+recipe, each with its unchanged 180-second process limit. The native suites run
+164 actual ELF processes and 1,070 responses, plus 119 direct router entries with
+explicitly synthetic child completions. The original recipe freshly builds the
+locked 100-package reference, verifies all 175 rmcp crate files, and compares
+152 native and 152 original sessions: 1,036 complete responses per side. It binds
+ten exact original server blocks, the HIA catalog predicate and 54 original
+configuration/execution blocks.
+
+After all original recipe workers have terminated, an additional retained
+process rejects 20 damaged-source, image, corpus and completion observations and
+performs 22 full evidence admissions. Its stdout, stderr, exit status, duration
+and exact immutable report input are checked before the aggregate can pass.
+This control process adds no native or Rust semantic calls.
+
+The original `server.rs::call_tool` caller binding, audit, cancellation completion
+and durable result chain are still outside this composition. This profile does
+not mark any of the 125 production handlers as replaced, advertise unimplemented
+tools, or qualify old-stack removal. The SDK default-handler fixture and the
+private workdir/directory profiles retain their separate qualification domains.
 
 Admission rechecks the actual compiler/packer results, source closure, full raw
 process streams, complete SDK source inventory and every original replay.

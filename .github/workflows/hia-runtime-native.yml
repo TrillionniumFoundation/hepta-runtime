@@ -11,6 +11,9 @@ on:
       - 'scripts/build_regex_probe.py'
       - 'scripts/prepare_chain_original.py'
       - 'scripts/connection_registry.py'
+      - 'scripts/public_*'
+      - 'scripts/author_public_*'
+      - 'scripts/build_public_registry.py'
       - 'scripts/*.S'
       - 'scripts/build_connection_fixture.py'
       - 'scripts/build_native_connection.py'
@@ -80,6 +83,9 @@ on:
       - 'scripts/build_regex_probe.py'
       - 'scripts/prepare_chain_original.py'
       - 'scripts/connection_registry.py'
+      - 'scripts/public_*'
+      - 'scripts/author_public_*'
+      - 'scripts/build_public_registry.py'
       - 'scripts/*.S'
       - 'scripts/build_connection_fixture.py'
       - 'scripts/build_native_connection.py'
@@ -371,7 +377,7 @@ jobs:
             --prepared-sha256 "${{ needs.prepare.outputs.prepared_sha256 }}" \
             --shards "$RUNNER_TEMP/hia-native-shards"
 
-      - name: Compare all declared original owners and Rust references
+      - name: Compare all declared original owners and verify public registry evidence
         env:
           RUSTUP_TOOLCHAIN: 1.95.0
         run: |

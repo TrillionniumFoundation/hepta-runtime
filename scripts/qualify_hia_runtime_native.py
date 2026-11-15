@@ -66,6 +66,7 @@ import hia_native_config_qualification as config_qualification
 import hia_native_session_qualification as session_qualification
 import hia_native_file_lock_pipeline as file_lock_pipeline
 import hia_native_connection_qualification as connection_qualification
+import hia_native_public_registry_qualification as public_registry_qualification
 import hia_native_service_pipeline as service_pipeline
 import hia_native_write_chain_pipeline as write_chain_pipeline
 
@@ -152,6 +153,11 @@ MODULES = (
                           "test_sdk_connection_elf.py", "test_sdk_connection_controls.py"),
      "companion_sources": ("native/sdk_message.hepta", "native/sdk_default_fixture.hepta",
                            "native/sdk_connection_packer.hepta")},
+    {"key": "public_registry", "name": "public-registry", "source": "native/public_tool_dispatch.hepta",
+     "builder": "public_registry", "manifest_env": "HIA_PUBLIC_REGISTRY_BUILD",
+     "test": "run_public_registry_cases.py",
+     "additional_tests": ("test_public_registry_controls.py", "test_public_registry_elf.py"),
+     "companion_sources": ("native/public_runtime_packer.hepta",)},
     {"key": "fence_json", "name": "fence-json", "source": "native/fence_json.hepta",
      "standalone": "filter", "manifest_env": "HIA_FENCE_JSON_MANIFEST", "test": "test_fence_json.py"},
     {"key": "serde_json", "name": "serde-json", "source": "native/serde_json.hepta",
@@ -337,6 +343,7 @@ def sources() -> dict:
                   ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
     paths.update(ROOT / name for name in service_pipeline.sources(ROOT))
+    paths.update(ROOT / name for name in public_registry_qualification.source_pins(ROOT))
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
 
@@ -459,6 +466,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                         if set(tests) & set(service_pipeline.DIRECTORY_TESTS) else {})
     config_commands.update({name: command for name, command in service_commands.items()
                             if name in service_pipeline.DIRECTORY_TESTS})
+    if set(tests) & set(public_registry_qualification.TESTS):
+        config_commands.update(public_registry_qualification.test_commands(ROOT, output, report))
     def command(name):
         prefix = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
         argv = commands.get(name, prefix)
@@ -839,49 +848,8 @@ def atomic_write_retained_files(output: Path, directory: Path, *, fixtures: tupl
 
 def atomic_write_retire_fixtures(output: Path, fixtures: tuple[str, ...], receipt: Path,
                                  evidence: dict, *, create: bool = False) -> dict:
-    """Retire only owned live targets after their complete evidence is admitted."""
-    expected = {"schema": "hepta.runtime.atomic-write-fixture-retirement.v1", "status": "PASS",
-        "fixture_directories": list(fixtures), "complete_evidence_sha256":
-            atomic_write_qualification.sha(atomic_write_qualification.canonical(evidence)),
-        "semantic_invocations_added": 0}
-    if receipt.exists():
-        if receipt.is_symlink() or atomic_write_qualification.obj(receipt) != expected:
-            raise ValueError("atomic fixture retirement receipt differs")
-    elif create:
-        if output.is_symlink() or output.resolve(strict=True) != output:
-            raise ValueError("atomic fixture retirement root differs")
-        paths = []
-        for name in fixtures:
-            relative = Path(name)
-            if relative.is_absolute() or ".." in relative.parts or relative.name != "fixture":
-                raise ValueError("atomic fixture retirement path escaped its owner")
-            path = output / relative
-            info = path.lstat()
-            if path.resolve() != path or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
-                raise ValueError("atomic live fixture is not an owned real directory")
-            paths.append(path)
-        # Children have already been reaped. Make only owned directories
-        # traversable; leave symlinks untouched and use fd-based rmtree.
-        if not shutil.rmtree.avoids_symlink_attacks:
-            raise ValueError("atomic fixture retirement requires descriptor-based removal")
-        for path in paths:
-            path.chmod(0o700)
-            for base, dirs, _ in os.walk(path, followlinks=False):
-                for name in dirs:
-                    child = Path(base) / name
-                    info = child.lstat()
-                    if stat.S_ISDIR(info.st_mode):
-                        if info.st_uid != os.getuid():
-                            raise ValueError("atomic live fixture contains an unowned directory")
-                        child.chmod(0o700, follow_symlinks=False)
-            shutil.rmtree(path)
-        with receipt.open("x") as stream:
-            stream.write(json.dumps(expected, sort_keys=True, indent=2) + "\n")
-    else:
-        raise ValueError("completed atomic fixture retirement receipt is missing")
-    if any((output / name).exists() or (output / name).is_symlink() for name in fixtures):
-        raise ValueError("retired atomic live fixture reappeared")
-    return expected
+    """Share the same checked target retirement with the original replay driver."""
+    return atomic_write_qualification.retire_fixtures(output, fixtures, receipt, evidence, create=create)
 
 
 def atomic_write_completed_process(output: Path, report: dict, name: str, command: list[str],
@@ -971,6 +939,10 @@ def workdir_service_evidence(output: Path, report: dict) -> dict:
 
 def sdk_connection_evidence(output: Path, report: dict, *, create=False) -> dict:
     return connection_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def public_registry_evidence(output: Path, report: dict, *, create=False) -> dict:
+    return public_registry_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
 
 
 def session_evidence(output: Path, report: dict) -> dict:
@@ -2252,6 +2224,8 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
             built = build_workdir_service(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "sdk_connection":
             built = connection_qualification.build_connection(hepta, output / "build", ROOT)
+        elif item.get("builder") == "public_registry":
+            built = public_registry_qualification.build_public_registry(hepta, output / "build", ROOT)
         elif item.get("builder") == "runtime_config":
             built = config_qualification.build_config(hepta, output / "build", ROOT)
         elif item.get("builder") == "execution_shadow":
@@ -2318,6 +2292,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(write_chain_pipeline.test_commands(ROOT, output, report))
     commands.update(service_pipeline.test_commands(ROOT, output, report))
     commands.update(connection_qualification.test_commands(ROOT, output, report))
+    commands.update(public_registry_qualification.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
@@ -2355,6 +2330,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["directory_service_evidence"] = directory_service_evidence(output, report)
     report["workdir_service_evidence"] = workdir_service_evidence(output, report)
     report["sdk_connection_evidence"] = sdk_connection_evidence(output, report, create=True)
+    report["public_registry_evidence"] = public_registry_evidence(output, report, create=True)
     service_pipeline.prepare_transport(ROOT, output, report, completed_test_summary)
     report["json_evidence"] = json_evidence(output, report)
     report["execution_evidence"] = execution_evidence(output, report)
@@ -2405,7 +2381,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["corpus_sha256"])
-    for key in ("directory_service", "workdir_service", "sdk_connection"):
+    for key in ("directory_service", "workdir_service", "sdk_connection", "public_registry"):
         report["rust_oracle_inputs"].update(report[key + "_evidence"]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report[key + "_evidence"]["corpus_sha256"])
     write_manifest = write_chain_pipeline.bundle(output, report)

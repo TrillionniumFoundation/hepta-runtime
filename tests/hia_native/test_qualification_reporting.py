@@ -210,6 +210,42 @@ class QualificationReportingTests(unittest.TestCase):
                         ordered_groups=(), commands={name: argv}, timeout=5)
         self.assertEqual(len(self.report["checks"]), 1)
 
+    def test_public_registry_declares_full_frozen_source_and_reference_domains(self):
+        import qualify_hia_runtime_native as q
+        import compare_hia_runtime_rust as comparison
+        import hia_native_pipeline as pipeline
+        helper = q.public_registry_qualification
+        entry = {row["key"]: row for row in MODULES}["public_registry"]
+        self.assertEqual((entry["test"], *entry["additional_tests"]), helper.TESTS)
+        self.assertEqual(entry["source"], "native/public_tool_dispatch.hepta")
+        self.assertEqual(entry["companion_sources"], ("native/public_runtime_packer.hepta",))
+        self.assertEqual(len(helper.source_pins(ROOT)), 72)
+        self.assertTrue(set(helper.source_pins(ROOT)) <= set(sources()))
+        self.assertIs(comparison.RECIPES["public_registry"], comparison.compare_public_registry)
+        self.assertTrue(set(helper.TESTS) <= set(pipeline.partition_tests()["text"]))
+        self.assertEqual(len(set(comparison.PUBLIC_REGISTRY_CONTROL_LABELS)), 20)
+        self.assertEqual(comparison.public_registry_control_command(self.output)[-2:],
+                         ["--result", str(self.output / "public-registry-evidence-controls.json")])
+
+    def test_public_registry_launcher_rejects_changed_binary_or_appended_arguments(self):
+        import qualify_hia_runtime_native as q
+        helper = q.public_registry_qualification
+        name = helper.TESTS[0]
+        root = self.wait_fixture({name: "print(json.dumps({'actual_public_launcher':True}))\n"})
+        expected = [sys.executable, "-I", "-B", str(root / "tests/hia_native" / name),
+                    "--binary", str(root / "declared.elf")]
+        with patch.object(q, "ROOT", root), patch.object(helper, "test_commands", return_value={name: expected}):
+            q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                ordered_groups=(), commands={name: expected}, timeout=5)
+            self.assertEqual(self.report["checks"][0]["command"], expected)
+            self.assertEqual(json.loads((self.output / (name + ".stdout")).read_bytes()),
+                             {"actual_public_launcher": True})
+            for argv in (expected + ["--not-executed"], expected[:-1] + ["/foreign.elf"], expected[:4]):
+                with self.subTest(command=argv), self.assertRaises(ValueError):
+                    q.run_native_checks(self.output, self.report, (name,), {}, parallel_tests=(),
+                        ordered_groups=(), commands={name: argv}, timeout=5)
+        self.assertEqual(len(self.report["checks"]), 1)
+
     def original_worker_fixture(self, *, serial_code=0, worker_code=0, blocked=False):
         import compare_hia_runtime_rust as comparison
         root = self.wait_fixture({
@@ -368,6 +404,118 @@ class QualificationReportingTests(unittest.TestCase):
         (self.output / "atomic-reporting.stdout").write_bytes(b"{}\n")
         with self.assertRaises(ValueError):
             q.atomic_write_completed_process(self.output, self.report, "atomic-reporting", command)
+
+    def test_atomic_inode_custody_distinguishes_replacements_and_closes_every_pin(self):
+        import errno
+        import os
+        import stat
+        import hia_native_atomic_write_qualification as owner
+        from atomic_write_cases import PinnedIdentities, snapshot, semantic_snapshot
+        fixture = self.output / "fixture"; fixture.mkdir()
+        target = fixture / "target"; target.write_bytes(b"original object")
+        unchanged = fixture / "unchanged"; unchanged.write_bytes(b"retained object")
+        os.link(unchanged, fixture / "hardlink")
+        (fixture / "symlink").symlink_to("target")
+        denied = fixture / "denied"; denied.mkdir(); (denied / "inside").write_bytes(b"private")
+        denied.chmod(0)
+        receipt_path = self.output / "identity-custody.json"
+        try:
+            with PinnedIdentities(receipt_path) as pins:
+                before = snapshot(fixture, self.output / "before", identity_pins=pins)
+                self.assertEqual(stat.S_IMODE(denied.stat().st_mode), 0)
+                original = next(p for p in pins.receipt["pins"] if p["path"] == b"target".hex())
+                for value in (b"first replacement", b"second replacement"):
+                    temporary = fixture / "replacement"; temporary.write_bytes(value)
+                    temporary.replace(target)
+                self.assertEqual(os.fstat(original["fd"]).st_nlink, 0)
+                self.assertNotEqual(os.fstat(original["fd"]).st_ino, target.stat().st_ino)
+                self.assertTrue(all(not os.get_inheritable(fd) for fd in pins.handles))
+                after = snapshot(fixture, self.output / "after")
+                pins.after_snapshot(before)
+                handles = list(pins.handles)
+            owner.identity_custody(pins.receipt, before)
+            self.assertEqual(json.loads(receipt_path.read_bytes()), pins.receipt)
+            states = {bytes.fromhex(r["path"]): r for r in semantic_snapshot(before, after)}
+            self.assertFalse(states[b"target"]["identity_retained"])
+            self.assertTrue(states[b"unchanged"]["identity_retained"])
+            self.assertTrue(states[b"symlink"]["identity_retained"])
+            self.assertEqual(states[b"hardlink"]["same_inode_paths"], [b"hardlink".hex(), b"unchanged".hex()])
+            for fd in handles:
+                with self.assertRaises(OSError) as closed:
+                    os.fstat(fd)
+                self.assertEqual(closed.exception.errno, errno.EBADF)
+        finally:
+            denied.chmod(0o700)
+
+    def test_atomic_inode_custody_rejects_missing_lifetimes_and_preserves_failure(self):
+        import copy
+        import errno
+        import os
+        import hia_native_atomic_write_qualification as owner
+        from atomic_write_cases import PinnedIdentities, snapshot
+        fixture = self.output / "fixture"; fixture.mkdir(); (fixture / "target").write_bytes(b"object")
+        with PinnedIdentities(self.output / "good.json") as pins:
+            before = snapshot(fixture, identity_pins=pins)
+            snapshot(fixture); pins.after_snapshot(before)
+        bad_receipts = []
+        for key, value in (("flags", os.O_RDONLY), ("pins", []), ("observed_after_snapshot", False),
+                           ("all_closes_verified", False), ("closed_fds", []),
+                           ("close_errors", [{"fd": 0, "error": "close failed"}]), ("body_error", "failed")):
+            bad = copy.deepcopy(pins.receipt); bad[key] = value; bad_receipts.append(bad)
+        for change in (lambda r: r["pins"][0].update(inheritable=True),
+                       lambda r: r["pins"][0]["after"].update(inode=0),
+                       lambda r: r["pins"][0]["before"].update(inode=0),
+                       lambda r: r["pins"][0].update(fd=True),
+                       lambda r: r["pins"][1].update(fd=r["pins"][0]["fd"])):
+            bad = copy.deepcopy(pins.receipt); change(bad); bad_receipts.append(bad)
+        for bad in bad_receipts:
+            with self.subTest(receipt=bad), self.assertRaises(ValueError):
+                owner.identity_custody(bad, before)
+        failed_path = self.output / "failed.json"
+        with self.assertRaisesRegex(RuntimeError, "original observation failure"):
+            with PinnedIdentities(failed_path) as failed:
+                snapshot(fixture, identity_pins=failed)
+                handles = list(failed.handles)
+                raise RuntimeError("original observation failure")
+        retained = json.loads(failed_path.read_bytes())
+        self.assertIn("original observation failure", retained["body_error"])
+        self.assertTrue(retained["all_closes_verified"])
+        for fd in handles:
+            with self.assertRaises(OSError) as closed:
+                os.fstat(fd)
+            self.assertEqual(closed.exception.errno, errno.EBADF)
+        with self.assertRaises(ValueError):
+            owner.identity_custody(retained, before)
+
+    def test_atomic_original_retirement_preserves_mismatch_and_both_writer_evidence(self):
+        import hia_native_atomic_write_qualification as owner
+        folder = self.output / "original"; folder.mkdir()
+        outside = self.output / "outside"; outside.mkdir(); (outside / "sentinel").write_bytes(b"outside")
+        receipts = {kind: {"reporting_fixture_only": True, "writer": kind} for kind in ("native", "original")}
+        for kind in receipts:
+            for index, case in enumerate(owner.case_module.cases()):
+                entry = folder / (kind + "-kernel") / f"{index:04d}-{case['name']}"
+                fixture = entry / "fixture"; fixture.mkdir(parents=True)
+                (fixture / "outside").symlink_to(outside, target_is_directory=True)
+                denied = fixture / "denied"; denied.mkdir(); (denied / "target").write_bytes(b"owned live target")
+                denied.chmod(0)
+                (entry / "observation.json").write_bytes(b"complete retained observation fixture\n")
+        mismatch = [{"name": "reporting-fixture", "field": "semantic_snapshot", "native": True, "original": False}]
+        (folder / "mismatches.json").write_text(json.dumps(mismatch))
+        record = owner.original_fixture_retirement(folder, receipts, create=True)
+        self.assertEqual(len(record["fixture_directories"]), 302)
+        self.assertEqual(owner.original_fixture_retirement(folder, receipts), record)
+        self.assertEqual(json.loads((folder / "mismatches.json").read_bytes()), mismatch)
+        self.assertEqual((outside / "sentinel").read_bytes(), b"outside")
+        for path in record["fixture_directories"]:
+            fixture = folder / path
+            self.assertFalse(fixture.exists())
+            self.assertEqual((fixture.parent / "observation.json").read_bytes(), b"complete retained observation fixture\n")
+        with self.assertRaises(ValueError):
+            owner.original_fixture_retirement(folder, {"native": receipts["native"]})
+        changed = dict(receipts, original={"reporting_fixture_only": True, "writer": "changed"})
+        with self.assertRaises(ValueError):
+            owner.original_fixture_retirement(folder, changed)
 
     def test_atomic_live_target_retirement_preserves_full_evidence_and_outside_paths(self):
         import qualify_hia_runtime_native as q
