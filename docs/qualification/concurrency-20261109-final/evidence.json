@@ -1,0 +1,1043 @@
+{
+  "schema": "hepta.concurrency-final-audit.v1",
+  "date": "2026-11-09",
+  "generated_at_utc": "2026-11-09T14:47:11.570981+00:00",
+  "record_state": "runtime_validation_and_activation_complete_hosted_ci_pending",
+  "implementation": {
+    "commit": "09464736e815940ee4c5bf91d36f6c84a3faee2c",
+    "tree": "47d589e794d4cba3104b477af2ee752330231753",
+    "baseline_commit": "826c462699a27ed6afa83298440acb732b726af5",
+    "policy": "unbounded_by_runtime",
+    "jobctl_source_sha256": "575e7b74f26f7ddada5f19ffafd6b9597307b565ac69de3c8091346fa516dc81"
+  },
+  "supplemental_changes": [
+    {
+      "area": "isolated_job_processes",
+      "former_limit": 64,
+      "current_behavior": "TasksMax=infinity; DynamicUser, permissions, CPU, memory, timeouts and owner identity remain enforced",
+      "paths": [
+        "src/bin/jobctl.rs",
+        "src/jobctl_tests.rs"
+      ]
+    },
+    {
+      "area": "isolated_job_registry",
+      "former_limit": 128,
+      "current_behavior": "New admission does not count retained directories; original records and terminal receipts remain retained",
+      "paths": [
+        "src/bin/jobctl.rs",
+        "src/jobctl_tests.rs"
+      ]
+    },
+    {
+      "area": "search_receipt_admission",
+      "former_limit": 1024,
+      "current_behavior": "No total retained-receipt admission gate in native or target Python search worker",
+      "paths": [
+        "src/mcp/runtime/search_jobs.rs",
+        "src/mcp/runtime/search_jobs_tests.rs",
+        "src/mcp/runtime/search_worker.py",
+        "tests/search_worker_tests.py"
+      ]
+    },
+    {
+      "area": "weight_session_intents",
+      "former_limit": 1024,
+      "current_behavior": "No retained-intent count gate; prior ownership intents remain intact",
+      "paths": [
+        "src/mcp/weight.rs",
+        "src/mcp/weight_tests.rs"
+      ]
+    },
+    {
+      "area": "legacy_facade_request_ids",
+      "former_limit": 4096,
+      "current_behavior": "Pending IDs and retired-response tombstones remain complete without a count admission gate",
+      "paths": [
+        "deploy/chatgpt_full_operator.py",
+        "tests/full_operator_cancel_tests.py"
+      ]
+    },
+    {
+      "area": "unused_retention_module",
+      "current_behavior": "Removed unused, unregistered files without altering historical qualifications",
+      "paths": [
+        "src/mcp/runtime/retention_limits.rs",
+        "src/mcp/runtime/retention_limits_tests.rs"
+      ]
+    },
+    {
+      "area": "native_http_readiness_observation",
+      "current_behavior": "Read the matching JSON-RPC response without requiring persistent SSE EOF; reject acknowledgments and unrelated responses as completion",
+      "paths": [
+        "deploy/runtime_http_probe.py",
+        "tests/runtime_http_probe_tests.py"
+      ]
+    }
+  ],
+  "verification": {
+    "jobctl_actual_sources": {
+      "state": "passed",
+      "passed": 53,
+      "failed": 0,
+      "ignored": 0,
+      "reported_test_seconds": 2.54,
+      "runner_elapsed_seconds": 246.712,
+      "source_before_after_unchanged": true,
+      "scope": "actual repository jobctl sources with an isolated validation manifest; no systemd deployment",
+      "bound_sources": {
+        "src/bin/jobctl.rs": "575e7b74f26f7ddada5f19ffafd6b9597307b565ac69de3c8091346fa516dc81",
+        "src/jobctl_tests.rs": "86b2838f15b9f2563ebc479a5ab42aaf79f2cf786f6ad3f8137fdf4b55a7fdd8",
+        "src/jobctl_engine_scratch_tests.rs": "16510ad8ac7778db8d302812928bee4ce009388f86d9523827ed1058ecc8bafa",
+        "src/mcp/rea_engine_job_owner.rs": "2025571154747e012e40fe8493bf73d50f4bc1d13b58a7c877b942c9237f9d78",
+        "src/mcp/rea_engine_scratch.rs": "f46cbdf947df157cc420f6ff1babb2ddd77b3c8f6d2bdc101318a45c8b4f47b6"
+      },
+      "status_receipt": {
+        "name": "jobctl-focused-status.json",
+        "sha256": "7bf7498b637b24554972e9a2e4c8f9d4c8fbf76a5d18de854f379af929827826",
+        "bytes": 1618,
+        "raw_artifact_published": false
+      },
+      "log": {
+        "name": "jobctl-focused.log",
+        "sha256": "9bb7504d9fbd5be3f9fec6c93e38d3b550b7f183c6e34912159e2ffd32ae0766",
+        "bytes": 6597,
+        "raw_artifact_published": false
+      }
+    },
+    "python_followup": {
+      "state": "passed",
+      "total_passed": 100,
+      "provenance": "Actual executor stdout observed and reported by auxiliary_limits; separate original logs were not archived, so no log hashes are asserted",
+      "suites": [
+        {
+          "command": "python3 tests/search_worker_tests.py",
+          "passed": 17,
+          "reported_test_seconds": 26.276
+        },
+        {
+          "command": "python3 -m unittest discover -s tests -p 'full_operator_*tests.py'",
+          "passed": 77,
+          "reported_test_seconds": 52.661
+        },
+        {
+          "command": "python3 tests/chatgpt_computer_operator_tests.py",
+          "scope": "computer operator composition",
+          "passed": 6,
+          "reported_test_seconds": 5.854
+        }
+      ]
+    },
+    "native_http_probe": {
+      "state": "passed",
+      "passed": 5,
+      "reported_test_seconds": 0.513,
+      "provenance": "Actual executor output observed by root; no separate original log hash is asserted",
+      "test_entrypoint": "tests/runtime_http_probe_tests.py"
+    },
+    "rea_mapping": {
+      "state": "passed",
+      "ledger_tests_passed": 29,
+      "normal_mapping_exit_code": 0,
+      "strict_parity_exit_code": 3,
+      "open_tools": 229,
+      "qualified_tools": 0,
+      "mapped_source_files": 318,
+      "checkpoint": "docs/qualification/rea-concurrency-source-projection-20261109-r4/README.md",
+      "ledger_sha256": "2c7005526589b81609415b415d37e2892491cf6949e63d7a62b0a682cc0a48b0",
+      "source_manifest_sha256": "c3950c5241041224e3dda49c5a4814776c3ab66aafccbc12a2e5bc51a0f7d495",
+      "raw_reference_authenticity": "NOT_REVERIFIED",
+      "behavioral_qualification": "NOT_RERUN"
+    },
+    "cloud_whole_crate_check_attempts": [
+      {
+        "state": "failed",
+        "exit_code": 101,
+        "elapsed_seconds": 1.826,
+        "observed_failure": "no_space_left_on_device_os_error_28",
+        "counts_as_passing_gate": false,
+        "status_receipt": {
+          "name": "metadata-status-initial-nospace.json",
+          "sha256": "93f0c89280f4a691cedbe965e086c2a6279b3a6997416f9edaddd2dbc0838528",
+          "bytes": 1740,
+          "raw_artifact_published": false
+        },
+        "log": {
+          "name": "check-initial-nospace.log",
+          "sha256": "77fb4d726f084982ae1334c8c11fb9e3dde236a96c7770448edb6f743950f5eb",
+          "bytes": 191,
+          "raw_artifact_published": false
+        }
+      },
+      {
+        "state": "failed",
+        "exit_code": 101,
+        "elapsed_seconds": 504.812,
+        "observed_failure": "compiler_terminated_by_SIGKILL_signal_9",
+        "counts_as_passing_gate": false,
+        "status_receipt": {
+          "name": "metadata-status.json",
+          "sha256": "37fe74012010b250aaa15670afdf86954192e3efd9febac7a416fd156666db21",
+          "bytes": 1804,
+          "raw_artifact_published": false
+        },
+        "log": {
+          "name": "check.log",
+          "sha256": "7c4f9fceec6a0adc8b26313a89866baa7a29532001e732cd0ce90a860a8d5391",
+          "bytes": 14884,
+          "raw_artifact_published": false
+        }
+      }
+    ],
+    "baseline_hosted_ci": {
+      "commit": "826c462699a27ed6afa83298440acb732b726af5",
+      "run_id": 42623379852,
+      "url": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/42623379852",
+      "status": "completed",
+      "conclusion": "success",
+      "provenance": "GitHub Actions API observation reported by root",
+      "qualifies_supplemental_commit": false
+    },
+    "rog_final_source": {
+      "state": "passed",
+      "commit": "09464736e815940ee4c5bf91d36f6c84a3faee2c",
+      "git_tree": "47d589e794d4cba3104b477af2ee752330231753",
+      "input_file_count": 1452,
+      "src_file_count": 425,
+      "source_manifest_sha256": "91ffe46e62722e26e040c894e30f423052c5371db7efb14e343f5378441d2200",
+      "src_tree_sha256": "776dfffdf19f6d4d3009e027166b7c5ec20739e29e0b7c906fd38af69a11f6b2",
+      "source_matches_before": true,
+      "source_matches_after": true,
+      "source_changes_after": [],
+      "finished_utc": "2026-11-09T14:49:02.213274+00:00",
+      "stages": [
+        {
+          "name": "01-fmt",
+          "exit_code": 0,
+          "elapsed_seconds": 1.71,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "02-check",
+          "exit_code": 0,
+          "elapsed_seconds": 33.899,
+          "log_sha256": "e103f45379e01d472f2e8a83020a682a293979847537a2f818616603cd3d49f4"
+        },
+        {
+          "name": "03-clippy",
+          "exit_code": 0,
+          "elapsed_seconds": 41.929,
+          "log_sha256": "f4ce46f49333da2a4485b97c28f1912cc1685c345cdce2ea33e114db1775d272"
+        },
+        {
+          "name": "04-nextest",
+          "exit_code": 0,
+          "elapsed_seconds": 554.175,
+          "log_sha256": "850da0c18dde357c9fd7dfc4a33747b213fe56a2c4b11ade46e03160244d18d1"
+        }
+      ],
+      "validation_receipt": {
+        "name": "validation-status.json",
+        "bytes": 4668,
+        "sha256": "924121183bb5663a1ff63d7d18ee44641f7377d407de22869f4714e5148b0373",
+        "raw_artifact_published": false
+      },
+      "tests_run": 2395,
+      "passed": 2395,
+      "failed": 0,
+      "skipped": 40,
+      "test_binaries": 19,
+      "test_execution_seconds": 146.453,
+      "nextest_total_seconds": 554.175,
+      "skip_qualifications_promoted": false,
+      "original_job": {
+        "job_id": "1a1c0be81ba-11c5a-4f",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_confirmed": true,
+        "automatic_retry": false
+      },
+      "nextest_log": {
+        "name": "04-nextest.log",
+        "bytes": 729434,
+        "sha256": "850da0c18dde357c9fd7dfc4a33747b213fe56a2c4b11ade46e03160244d18d1",
+        "raw_artifact_published": false
+      }
+    }
+  },
+  "recovered_baseline_release": {
+    "implementation_commit": "826c462699a27ed6afa83298440acb732b726af5",
+    "source_tree": "fc34c18deeed0964c9bedb557a8385d72013273d",
+    "runtime_binary": {
+      "sha256": "8969ebef564d162fdeb539be3b59fce9c511550f44eb4282655c3fc06d85f989",
+      "bytes": 16837440
+    },
+    "build": {
+      "state": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 179.237,
+      "toolchain": "1.98.0-aarch64-apple-darwin",
+      "source_inputs_unchanged": true,
+      "receipt": {
+        "name": "native-build-r2.json",
+        "sha256": "aee5d2ae876936083f325145f94ec9fd9e2a8801261da84d4759e08445761f06",
+        "bytes": 1205,
+        "raw_artifact_published": false
+      }
+    },
+    "native_proofs": [
+      {
+        "host": "mac",
+        "state": "passed",
+        "complete": true,
+        "checks": 75,
+        "independent_jobs": 32,
+        "client_peak_outstanding_rpc": 32,
+        "new_key_retries": 0,
+        "failures": [],
+        "binary_sha256": "8969ebef564d162fdeb539be3b59fce9c511550f44eb4282655c3fc06d85f989",
+        "receipt": {
+          "name": "native-acceptance-mac-r2.report.json",
+          "sha256": "b10458dddcf86483d928e0cbe29484a0ebf3144354ff62526783cacd1c7550d6",
+          "bytes": 729543,
+          "raw_artifact_published": false
+        }
+      },
+      {
+        "host": "rog",
+        "state": "passed",
+        "complete": true,
+        "checks": 75,
+        "independent_jobs": 32,
+        "client_peak_outstanding_rpc": 32,
+        "new_key_retries": 0,
+        "failures": [],
+        "binary_sha256": "8969ebef564d162fdeb539be3b59fce9c511550f44eb4282655c3fc06d85f989",
+        "receipt": {
+          "name": "native-acceptance-rog-r2.report.json",
+          "sha256": "f809ab5c7ef87a4f950e3e7f45288dd62ba1b66707f1342b70d008fbf7e7ba02",
+          "bytes": 724937,
+          "raw_artifact_published": false
+        }
+      }
+    ],
+    "activation_attempts": [
+      {
+        "attempt": "original",
+        "runtime_commit": "826c462699a27ed6afa83298440acb732b726af5",
+        "phase": "rollback_failed",
+        "touched_tunnel_count": 0,
+        "verified_tunnel_count": 0,
+        "rollback_error_count": 1,
+        "receipt": {
+          "name": "original-deployment-state.json",
+          "sha256": "ee8daf764995b0c2437fb4c13754c67268f4f3f1d246408d0d4fd6df91eca359",
+          "bytes": 411,
+          "raw_artifact_published": false
+        },
+        "failure_type": "RuntimeError",
+        "original_job": {
+          "job_id": "1a1c07dac49-5e21-a9a",
+          "state": "failed",
+          "exit_code": 1,
+          "output_complete": true,
+          "output_durable": true,
+          "terminal_publication_confirmed": true,
+          "automatic_retry": false
+        },
+        "job_status_receipt": {
+          "name": "activation-original-status.json",
+          "sha256": "eee6a1813a712e67cd5c8a2edb4b70bf938fb4237b8ef1c4e3c36ebd80b6809b",
+          "bytes": 730,
+          "raw_artifact_published": false
+        }
+      },
+      {
+        "attempt": "audited",
+        "runtime_commit": "826c462699a27ed6afa83298440acb732b726af5",
+        "phase": "rollback_failed",
+        "touched_tunnel_count": 1,
+        "verified_tunnel_count": 0,
+        "rollback_error_count": 1,
+        "receipt": {
+          "name": "deployment-state-audited.json",
+          "sha256": "a00eedc2df59095aa78863a659247fffe379158c3354f1bbcd2abd8f49e4874f",
+          "bytes": 1323,
+          "raw_artifact_published": false
+        },
+        "failure_type": "RuntimeError",
+        "observed_launchctl_bootstrap_exit_code": 5
+      },
+      {
+        "attempt": "audited_r2",
+        "runtime_commit": "826c462699a27ed6afa83298440acb732b726af5",
+        "phase": "completed",
+        "touched_tunnel_count": 2,
+        "verified_tunnel_count": 2,
+        "rollback_error_count": 0,
+        "receipt": {
+          "name": "deployment-state-audited-r2.json",
+          "sha256": "d73530c10ccbf6763e4cead0cf7adf0a360aef93c5de1c7696c6153f4d80ccc7",
+          "bytes": 4228,
+          "raw_artifact_published": false
+        }
+      }
+    ],
+    "independent_read": {
+      "read_only": true,
+      "observed_at_utc": "2026-11-09T14:28:32.067742+00:00",
+      "controller_loaded": true,
+      "mapped_runtime_matches": true,
+      "current_matches_staged_release": true,
+      "runtime_binary_sha256": "8969ebef564d162fdeb539be3b59fce9c511550f44eb4282655c3fc06d85f989",
+      "runtime_configuration_unchanged": true,
+      "controller_service_definition_unchanged": true,
+      "authentication_token_unchanged": true,
+      "effective_concurrent_execution": "unbounded_by_runtime",
+      "tunnels": [
+        {
+          "ordinal": 1,
+          "binary_sha256": "754bfa627d6fb2f779daa42e91782af85ce1b01a3bfbae99065ac82326e3f7e1",
+          "binary_matches_staged": true,
+          "configuration_matches_staged": true,
+          "service_definition_matches_staged": true,
+          "live": true,
+          "ready": true,
+          "dispatcher": {
+            "state": "accepting",
+            "status": "ok",
+            "limited": false,
+            "pool_limit": 0,
+            "accepting": true
+          },
+          "control_plane": {
+            "state": "polling",
+            "status": "ok",
+            "limited": false
+          },
+          "runtime_lifecycle": "running"
+        },
+        {
+          "ordinal": 2,
+          "binary_sha256": "754bfa627d6fb2f779daa42e91782af85ce1b01a3bfbae99065ac82326e3f7e1",
+          "binary_matches_staged": true,
+          "configuration_matches_staged": true,
+          "service_definition_matches_staged": true,
+          "live": true,
+          "ready": true,
+          "dispatcher": {
+            "state": "accepting",
+            "status": "ok",
+            "limited": false,
+            "pool_limit": 0,
+            "accepting": true
+          },
+          "control_plane": {
+            "state": "polling",
+            "status": "ok",
+            "limited": false
+          },
+          "runtime_lifecycle": "running"
+        }
+      ],
+      "receipt": {
+        "name": "recovery-independent-read-stdout.json",
+        "sha256": "813f8331e120596255250400d20caf92ee4a6c10d35ffa702e87cef7ab3271fe",
+        "bytes": 5531,
+        "raw_artifact_published": false
+      }
+    },
+    "post_switch_preservation": {
+      "passed": true,
+      "preserved_controller_records": 49790,
+      "preserved_worker_requests": 10028,
+      "original_records_missing": 0,
+      "original_records_changed": 0,
+      "receipt": {
+        "name": "audit-post-switch-verification.json",
+        "sha256": "f3ff8d7f367d0a465156620c59c7727cf3437e55b0019457b26fc10789ffde35",
+        "bytes": 786,
+        "raw_artifact_published": false
+      }
+    },
+    "qualifies_supplemental_commit": false
+  },
+  "linux_helper_deployment": {
+    "decision": "no_op_no_existing_helper",
+    "deployment_targets": [],
+    "new_installations_performed": false,
+    "services_or_policies_modified": false,
+    "historical_registries_preserved": true,
+    "all_configured_linux_execution_modes": "operator",
+    "planned_source_sha256": "575e7b74f26f7ddada5f19ffafd6b9597307b565ac69de3c8091346fa516dc81",
+    "inventory": [
+      {
+        "host": "rog",
+        "helper_installed": false,
+        "root_job_policy_installed": false,
+        "helper_sudoers_installed": false,
+        "active_isolated_units": 0,
+        "running_helper_processes": 0,
+        "inspection_euid": 0,
+        "process_inspection_permission_denials": 0,
+        "machine": "x86_64",
+        "system_libc": "glibc 2.43",
+        "default_rustc": "rustc 1.94.0 (4a4ef493e 2026-03-02)",
+        "installed_linux_targets_for_default_toolchain": [
+          "x86_64-unknown-linux-gnu"
+        ],
+        "historical_registry_present": true,
+        "inspection_job_id": "1a1c0b6f903-11c5a-30",
+        "inspection_state": "succeeded",
+        "inspection_exit_code": 0,
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_confirmed": true,
+        "original_stdout": {
+          "host": "rog",
+          "job_id": "1a1c0b6f903-11c5a-30",
+          "file": "rog.stdout.json",
+          "bytes": 2351,
+          "sha256": "7e38fcb6fe0493e0f82b562f772cb3b8f398dc33310a89f4ea89a5b3480f2c6b",
+          "state": "succeeded",
+          "exit_code": 0,
+          "output_complete": true,
+          "output_durable": true,
+          "terminal_publication_confirmed": true
+        }
+      },
+      {
+        "host": "pocket4",
+        "helper_installed": false,
+        "root_job_policy_installed": false,
+        "helper_sudoers_installed": false,
+        "active_isolated_units": 0,
+        "running_helper_processes": 0,
+        "inspection_euid": 0,
+        "process_inspection_permission_denials": 0,
+        "machine": "x86_64",
+        "system_libc": "glibc 2.43",
+        "default_rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+        "installed_linux_targets_for_default_toolchain": [
+          "x86_64-unknown-linux-gnu"
+        ],
+        "historical_registry_present": true,
+        "inspection_job_id": "1a1c0b7346f-11c5a-31",
+        "inspection_state": "succeeded",
+        "inspection_exit_code": 0,
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_confirmed": true,
+        "original_stdout": {
+          "host": "pocket4",
+          "job_id": "1a1c0b7346f-11c5a-31",
+          "file": "pocket4.stdout.json",
+          "bytes": 2459,
+          "sha256": "663e5205e203018417169b2c30cd9676899de362cda534fc2b94a40b79bc762b",
+          "state": "succeeded",
+          "exit_code": 0,
+          "output_complete": true,
+          "output_durable": true,
+          "terminal_publication_confirmed": true
+        }
+      },
+      {
+        "host": "x230",
+        "helper_installed": false,
+        "root_job_policy_installed": false,
+        "helper_sudoers_installed": false,
+        "active_isolated_units": 0,
+        "running_helper_processes": 0,
+        "inspection_euid": 0,
+        "process_inspection_permission_denials": 0,
+        "machine": "x86_64",
+        "system_libc": "glibc 2.39",
+        "default_rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+        "installed_linux_targets_for_default_toolchain": [
+          "x86_64-unknown-linux-gnu"
+        ],
+        "historical_registry_present": true,
+        "inspection_job_id": "1a1c0b7c0d4-11c5a-33",
+        "inspection_state": "succeeded",
+        "inspection_exit_code": 0,
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_confirmed": true,
+        "original_stdout": {
+          "host": "x230",
+          "job_id": "1a1c0b7c0d4-11c5a-33",
+          "file": "x230.stdout.json",
+          "bytes": 2344,
+          "sha256": "66906bcd042a69dbf89771f3a07f65506f988c0cba8b2fbcba54c2aeafe8ce9f",
+          "state": "succeeded",
+          "exit_code": 0,
+          "output_complete": true,
+          "output_durable": true,
+          "terminal_publication_confirmed": true
+        }
+      },
+      {
+        "host": "desktop",
+        "helper_installed": false,
+        "root_job_policy_installed": false,
+        "helper_sudoers_installed": false,
+        "active_isolated_units": 0,
+        "running_helper_processes": 0,
+        "inspection_euid": 0,
+        "process_inspection_permission_denials": 0,
+        "machine": "x86_64",
+        "system_libc": "glibc 2.39",
+        "default_rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+        "installed_linux_targets_for_default_toolchain": [
+          "aarch64-unknown-linux-gnu",
+          "aarch64-unknown-linux-musl",
+          "x86_64-unknown-linux-gnu",
+          "x86_64-unknown-linux-musl"
+        ],
+        "historical_registry_present": false,
+        "inspection_job_id": "1a1c0b8b0d8-11c5a-38",
+        "inspection_state": "succeeded",
+        "inspection_exit_code": 0,
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_confirmed": true,
+        "original_stdout": {
+          "host": "desktop",
+          "job_id": "1a1c0b8b0d8-11c5a-38",
+          "file": "desktop.stdout.json",
+          "bytes": 1961,
+          "sha256": "72f75904d56deda7a7dba96de292349d2e88bcb7eeba3c3ddbf5c6a0316545c3",
+          "state": "succeeded",
+          "exit_code": 0,
+          "output_complete": true,
+          "output_durable": true,
+          "terminal_publication_confirmed": true
+        }
+      },
+      {
+        "host": "ai395",
+        "helper_installed": false,
+        "root_job_policy_installed": false,
+        "helper_sudoers_installed": false,
+        "active_isolated_units": 0,
+        "running_helper_processes": 0,
+        "inspection_euid": 0,
+        "process_inspection_permission_denials": 0,
+        "machine": "x86_64",
+        "system_libc": "glibc 2.43",
+        "default_rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "installed_linux_targets_for_default_toolchain": [
+          "x86_64-unknown-linux-gnu"
+        ],
+        "historical_registry_present": false,
+        "inspection_job_id": "1a1c0b84eea-11c5a-36",
+        "inspection_state": "succeeded",
+        "inspection_exit_code": 0,
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_confirmed": true,
+        "original_stdout": {
+          "host": "ai395",
+          "job_id": "1a1c0b84eea-11c5a-36",
+          "file": "ai395.stdout.json",
+          "bytes": 1786,
+          "sha256": "7021ceeb234c27cece19e7e208540f8c918688f38a374d76e85eb6403a66da0f",
+          "state": "succeeded",
+          "exit_code": 0,
+          "output_complete": true,
+          "output_durable": true,
+          "terminal_publication_confirmed": true
+        }
+      }
+    ],
+    "private_inventory": {
+      "name": "inventory.json",
+      "sha256": "b56b3ae08cbebaa5b1aac480f65f9c302236ed6e5f956dbf7f80090e02443f1d",
+      "bytes": 65425,
+      "raw_artifact_published": false
+    },
+    "private_receipt_index": {
+      "name": "receipt-index.json",
+      "sha256": "c3418629dc559f360f2833b990cc3270921a5ba7596153eda61c57f933bdd752",
+      "bytes": 2447,
+      "raw_artifact_published": false
+    }
+  },
+  "pending": {
+    "current_commit_hosted_ci": {
+      "state": "in_progress",
+      "commit": "09464736e815940ee4c5bf91d36f6c84a3faee2c",
+      "passing_result_attested": false,
+      "observed_at_utc": "2026-11-09T15:02:13Z",
+      "provenance": "GitHub Actions API observation reported by root",
+      "observation_time_precision": "second",
+      "run_id": 42634535094,
+      "url": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/42634535094",
+      "conclusion": null,
+      "job_progress_observed_after_run_status": {
+        "prospective_merge": "Test in isolated processes",
+        "exact_head": "Install pinned nextest",
+        "failure_observed": false
+      },
+      "prior_observations": [
+        {
+          "observed_at_utc": "2026-11-09 14:48 UTC",
+          "precision": "minute",
+          "state": "queued",
+          "jobs_queued": 2,
+          "logs_available": false
+        },
+        {
+          "observed_at_utc": "2026-11-09T14:56:10Z",
+          "precision": "second",
+          "state": "queued",
+          "conclusion": null
+        }
+      ]
+    }
+  },
+  "preserved_previous_records": [
+    {
+      "path": "docs/qualification/concurrency-20261109/README.md",
+      "sha256": "b58dde2610f58b965f6f98db1a468e74869e44fcd15a2283e55ba90be0e55094",
+      "bytes": 13438
+    },
+    {
+      "path": "docs/qualification/concurrency-20261109/evidence.json",
+      "sha256": "c0e93b22fd4e7ad8f9116549f7e8201de043b3ba43244f5008ad54a59121149c",
+      "bytes": 21107
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r4/README.md",
+      "sha256": "d0f416d6b34643d2b127bd66ad024b355d83e03da32cf8b406fa79a0c1b7d17d",
+      "bytes": 4892
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r4/REA_6_8_0_LEDGER.before.json",
+      "sha256": "b58bc5059c8d37b8ce5aa1764d696db77a50c92e7b2a0d25b3cc85e8286131c2",
+      "bytes": 779164
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r4/ledger-tests.log",
+      "sha256": "c2fca340e9367d43d7462dea1919c95216f969ee9329df77ffa2a907868f473d",
+      "bytes": 4786
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r4/mapping-checks.json",
+      "sha256": "5ab8632766c5e7570a3c63141758101d6cb53e12bef8643f45d5406a6b6c5591",
+      "bytes": 3449
+    },
+    {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r4/source-projection-refresh.json",
+      "sha256": "099dd0b122c21593c2a76d3a8246e711cd97e54ee9f2c19051fcb6f1efd838aa",
+      "bytes": 11566
+    }
+  ],
+  "privacy": {
+    "tokens_configurations_private_paths_and_raw_receipts_published": false,
+    "public_projection": "Necessary source/binary/artifact hashes, finite test counts, outcome states and configured host aliases only"
+  },
+  "supplemental_native_candidate": {
+    "state": "build_and_acceptance_passed",
+    "commit": "09464736e815940ee4c5bf91d36f6c84a3faee2c",
+    "tree": "47d589e794d4cba3104b477af2ee752330231753",
+    "build": {
+      "exit_code": 0,
+      "elapsed_seconds": 151.05,
+      "toolchain": "1.98.0-aarch64-apple-darwin",
+      "source_inputs_unchanged": true,
+      "original_artifacts_unchanged": true,
+      "binaries": {
+        "hepta-effect-ownerctl": {
+          "sha256": "44bc74e81bcc1fec2cc6e8c706cf537751c772e3b98f664f14b8e8ea9040fae3",
+          "bytes": 419168
+        },
+        "hepta-runtime": {
+          "sha256": "ad7850e6f07eb8311895602e684fc0fc89a40cad81b0b32ef1a08caddf2775af",
+          "bytes": 16837440
+        },
+        "hepta-runtime-jobctl": {
+          "sha256": "dfde1e7045e166ea04541a7c657f37fb5bc0c1b3feb6d0a1a42ac9f7acef04ce",
+          "bytes": 603072
+        }
+      },
+      "receipt": {
+        "name": "native-build.json",
+        "bytes": 1433,
+        "sha256": "b5c8b4ef69bcf7d3a1fc22a4d768b8bb66dfd763bcbcc1b2768e65e35344bb13",
+        "raw_artifact_published": false
+      },
+      "original_job": {
+        "job_id": "1a1c0c24b6f-11c5a-59",
+        "state": "succeeded",
+        "exit_code": 0,
+        "automatic_retry": false,
+        "cancelled": false,
+        "timed_out": false,
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_confirmed": true
+      },
+      "original_job_receipt": {
+        "name": "build-job-status.json",
+        "bytes": 731,
+        "sha256": "a5ab53b2b5a741bcea7de336cb4701fcc84153b4f1856c0c0eeee4ed62ce3bae",
+        "raw_artifact_published": false
+      }
+    },
+    "native_acceptance": [
+      {
+        "host": "mac",
+        "checks": 75,
+        "complete": true,
+        "exit_code": 0,
+        "failures": [],
+        "passed": true,
+        "report_sha256": "eb1506c632314bf39ec05e1213e9e710cee16627fe09357b8c1bcfb8b37c78b2",
+        "report_byte_copy_state": "complete_full_file_sha256_verified",
+        "binary_sha256": "ad7850e6f07eb8311895602e684fc0fc89a40cad81b0b32ef1a08caddf2775af",
+        "count": 32,
+        "client_peak_outstanding_rpc": 32,
+        "new_key_retries": 0,
+        "live_state_opened_by_candidate": false,
+        "remote_cancellation_calls": 0,
+        "ssh_children_peak": 32,
+        "report_bytes": 730553,
+        "report_receipt": {
+          "name": "native-acceptance-mac.report.json",
+          "bytes": 730553,
+          "sha256": "eb1506c632314bf39ec05e1213e9e710cee16627fe09357b8c1bcfb8b37c78b2",
+          "raw_artifact_published": false
+        },
+        "provenance": "Complete original report bytes parsed locally and independently reread on the host; count and peaks are observed fields, not inferred from the number of checks."
+      },
+      {
+        "host": "rog",
+        "checks": 75,
+        "complete": true,
+        "exit_code": 0,
+        "failures": [],
+        "passed": true,
+        "report_sha256": "34c85285e497340c1d74550c696dd0d4e3e6a01fd3a3be4e1b69806d3a3ec465",
+        "report_byte_copy_state": "complete_full_file_sha256_verified",
+        "binary_sha256": "ad7850e6f07eb8311895602e684fc0fc89a40cad81b0b32ef1a08caddf2775af",
+        "count": 32,
+        "client_peak_outstanding_rpc": 32,
+        "new_key_retries": 0,
+        "live_state_opened_by_candidate": false,
+        "remote_cancellation_calls": 0,
+        "ssh_children_peak": 32,
+        "report_bytes": 720597,
+        "report_receipt": {
+          "name": "native-acceptance-rog.report.json",
+          "bytes": 720597,
+          "sha256": "34c85285e497340c1d74550c696dd0d4e3e6a01fd3a3be4e1b69806d3a3ec465",
+          "raw_artifact_published": false
+        },
+        "provenance": "Complete original report bytes parsed locally and independently reread on the host; count and peaks are observed fields, not inferred from the number of checks."
+      }
+    ],
+    "activated_at_candidate_receipt": false,
+    "build_and_acceptance_receipt": {
+      "name": "build-and-acceptance.json",
+      "bytes": 795,
+      "sha256": "14bb4649b8f37a0a59bcc3bc4bfc6838abf33e9df54a8b5a7b40f35665d14f15",
+      "raw_artifact_published": false
+    },
+    "previous_attempts": [
+      {
+        "state": "failed_before_compilation",
+        "phase": "git_fetch",
+        "compilation_started": false,
+        "provenance": "Original failed durable-job receipt and executor observation; preserved separately from the later successful candidate",
+        "subprocess_exit_code": 128,
+        "original_job": {
+          "job_id": "1a1c0bc4878-11c5a-4a",
+          "state": "failed",
+          "exit_code": 1,
+          "output_complete": true,
+          "output_durable": true,
+          "terminal_publication_confirmed": true
+        },
+        "status_receipt": {
+          "name": "final-09464736-r1-status.json",
+          "bytes": 730,
+          "sha256": "87c5b6207bfeee19188dd34b98fc918d5b1f17f9bfcf1b73fb736abfcdb6538f",
+          "raw_artifact_published": false
+        }
+      }
+    ]
+  },
+  "last_updated_at_utc": "2026-11-09T15:08:36.218136Z",
+  "final_live_activation": {
+    "state": "completed",
+    "commit": "09464736e815940ee4c5bf91d36f6c84a3faee2c",
+    "tree": "47d589e794d4cba3104b477af2ee752330231753",
+    "completed_at_utc": "2026-11-09T14:59:04.451423Z",
+    "runtime_binary_sha256": "ad7850e6f07eb8311895602e684fc0fc89a40cad81b0b32ef1a08caddf2775af",
+    "reviewed_plan_sha256": "931b5632f379e450253524b4bb0ce2ee7ffb7048f6ccf8838f5b65df228ff6ce",
+    "controller_service_loaded": true,
+    "mapped_runtime_image_verified": true,
+    "concurrent_execution": "unbounded_by_runtime",
+    "configured_host_aliases": 7,
+    "all_three_services_replaced_gracefully": true,
+    "scoped_replacement_after_grace_timeout": false,
+    "activation_receipt": {
+      "name": "activation-state.json",
+      "bytes": 5115,
+      "sha256": "9e124160a1afd3243bfdf5037ae367b00bce2ba2238d2b44984fa731c3935ab6",
+      "raw_artifact_published": false
+    },
+    "stage_original_job": {
+      "job_id": "1a1c0ce0990-11c5a-79",
+      "state": "succeeded",
+      "exit_code": 0,
+      "automatic_retry": false,
+      "cancelled": false,
+      "timed_out": false,
+      "output_complete": true,
+      "output_durable": true,
+      "terminal_publication_confirmed": true
+    },
+    "stage_original_job_receipt": {
+      "name": "stage-job-status.json",
+      "bytes": 729,
+      "sha256": "a8f1d662308ca3fa01caa8881ff036dbd106fecdd243c145d351fbd0846b3316",
+      "raw_artifact_published": false
+    },
+    "admission_reconciliation": {
+      "initial_observation": "MCP transport error after activation was requested",
+      "reconciliation": "The same idempotency key returned the existing original job; no second activation effect was created.",
+      "same_idempotency_key_reused": true,
+      "retried_launch": false,
+      "original_job": {
+        "job_id": "1a1c0d137a3-11c5a-80",
+        "state": "succeeded",
+        "exit_code": 0,
+        "automatic_retry": false,
+        "cancelled": false,
+        "timed_out": false,
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_confirmed": true
+      },
+      "receipt": {
+        "name": "activation-reconcile.json",
+        "bytes": 2098,
+        "sha256": "8585ccec3bd6589a33c766d87500f9505665f2ef41d9f7f22849911e93fab713",
+        "raw_artifact_published": false
+      }
+    },
+    "independent_postcheck": {
+      "passed": true,
+      "read_only": true,
+      "observed_at_utc": "2026-11-09T15:01:49.768508Z",
+      "mapped_runtime_image_verified": true,
+      "both_release_manifests_and_binaries_verified": true,
+      "original_artifacts_unchanged": true,
+      "runtime_config_auth_launchd_tunnel_bytes_unchanged": true,
+      "preserved_records": {
+        "controller_jobs": {
+          "changed": 0,
+          "checked": 49790,
+          "missing": 0,
+          "original_count": 49790
+        },
+        "worker_requests": {
+          "changed": 0,
+          "checked": 10028,
+          "missing": 0,
+          "original_count": 10028
+        }
+      },
+      "tunnels": [
+        {
+          "ordinal": 1,
+          "service_loaded": true,
+          "live": true,
+          "ready": true,
+          "runtime_lifecycle": "running",
+          "dispatcher": {
+            "state": "accepting",
+            "status": "ok",
+            "limited": false,
+            "pool_limit": 0,
+            "accepting": true,
+            "active": 0,
+            "completed": 51,
+            "failures": 0,
+            "timeouts": 0
+          },
+          "control_plane": {
+            "state": "polling",
+            "status": "ok",
+            "limited": false,
+            "consecutive_failures": 0
+          }
+        },
+        {
+          "ordinal": 2,
+          "service_loaded": true,
+          "live": true,
+          "ready": true,
+          "runtime_lifecycle": "running",
+          "dispatcher": {
+            "state": "accepting",
+            "status": "ok",
+            "limited": false,
+            "pool_limit": 0,
+            "accepting": true,
+            "active": 0,
+            "completed": 21,
+            "failures": 0,
+            "timeouts": 0
+          },
+          "control_plane": {
+            "state": "polling",
+            "status": "ok",
+            "limited": false,
+            "consecutive_failures": 0
+          }
+        }
+      ],
+      "receipt": {
+        "name": "postcheck-stdout.json",
+        "bytes": 4523,
+        "sha256": "8f84dbc926ed03d6203eba27712078754f8e213132cbe15d23b78ca24c6948a9",
+        "raw_artifact_published": false
+      },
+      "original_job": {
+        "job_id": "1a1c0d43f25-336d-9",
+        "state": "succeeded",
+        "exit_code": 0,
+        "automatic_retry": false,
+        "cancelled": false,
+        "timed_out": false,
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_confirmed": true
+      },
+      "original_job_receipt": {
+        "name": "postcheck-job-status.json",
+        "bytes": 729,
+        "sha256": "29bd87357040b8abdc7b9cdde30569c3e4060e8e5f8cd90d982f5a67a3b1a8ae",
+        "raw_artifact_published": false
+      }
+    },
+    "independent_connector_effective_config_readback": {
+      "observed_at_utc": "2026-11-09 15:01:15 UTC",
+      "concurrent_execution": "unbounded_by_runtime",
+      "host_aliases": 7,
+      "all_execution_modes_operator": true,
+      "source_identity_provenance": "The separate activation receipt and mapped-process-image observation bind the source and binary; configuration output alone does not establish binary identity.",
+      "receipt": {
+        "name": "root-effective-config-readback.json",
+        "bytes": 5563,
+        "sha256": "063e4bddaa4913eb5d79292989bbd967a48a0eeaca42a3eb3ff6489a798fa632",
+        "raw_artifact_published": false
+      }
+    }
+  }
+}
