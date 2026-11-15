@@ -2,6 +2,10 @@
 
 日期：2026-11-15（America/New_York）。
 
+已完成的一次性验证资料保存在[固定历史树](https://github.com/TrillionniumFoundation/hepta-runtime/tree/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation)；
+其中的 Python 记录器、临时 Cargo harness 和原始日志已从当前树清退。所有失败、部分完成、
+跳过与成功记录保留原字节；下文证据链接固定到同一提交，可恢复完整原目录进行复核。
+
 ## 已完成的结果
 
 Rust 分支收拢已经完成：汇总 [PR #125](https://github.com/TrillionniumFoundation/hepta-runtime/pull/125)
@@ -150,7 +154,7 @@ HTTP 服务无界 schema 缓存涉及当前启用路径；loopback/token 只限�
 消除授权客户端造成的内存增长。两个客户端/OAuth 问题的相关 features 没有
 启用，其余密码库、SSH agent-server 与底层接口风险逐项区分可达性。
 原始非零报告、八份公告、工具与数据库身份以及撤回版本复核保存在
-[初始依赖审计](validation/dependency-initial-4767ddc/dependency-audit-initial-4767ddc.md)。
+[初始依赖审计](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/dependency-initial-4767ddc/dependency-audit-initial-4767ddc.md)。
 修复版本的实际锁文件和独立复扫应另存记录，不覆盖本次失败证据，也不能将
 固定数据库匹配归零解释为整体 CVE clearance 或生产资格。
 
@@ -163,11 +167,11 @@ HTTP 服务无界 schema 缓存涉及当前启用路径；loopback/token 只限�
 覆盖 360/360 个 registry 版本：0 yanked、0 checksum 不一致、0 覆盖缺口；
 352 份原始响应按原 SHA-256 验证后压缩保留。311 个版本声明的 MSRV 均不高于
 1.95，49 个未声明版本另列。详见
-[修复与本地检查](validation/dependency-repair/README.md)及
-[独立依赖和注册表复核](validation/dependency-registry-1509860c/dependency-verification-summary.md)。
+[修复与本地检查](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/dependency-repair/README.md)及
+[独立依赖和注册表复核](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/dependency-registry-1509860c/dependency-verification-summary.md)。
 两种特性模式的全部 target check、严格 Clippy 与格式检查均通过；这轮本地
 检查未执行 Rust 测试；后续完整行为验证已由 e425 的托管 CI 完成，见
-[最终 CI 记录](validation/github-pr125-e425d92b/README.md)。
+[最终 CI 记录](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/github-pr125-e425d92b/README.md)。
 
 ### SDK 分帧升级的兼容性边界
 
@@ -180,7 +184,7 @@ rmcp 3.9 的有界 STDIO reader 不再交付 EOF 前没有 LF 的完整 JSON 尾
 两版 SDK 的完整 codec 区域逐字节相同，BOM/CRLF 与 JSON 解析代码没有变化。
 候选 `0414c548` 的两个托管 Rust 任务均执行 2,630 项：2,629 passed、1 failed，
 另有 44 skipped；唯一失败是旧的无 LF 尾帧接受预期。原始日志与未运行的后续
-步骤保存在 [0414 托管失败证据](validation/github-pr125-0414c548/README.md)。
+步骤保存在 [0414 托管失败证据](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/github-pr125-0414c548/README.md)。
 
 后续只修改传输测试：保留 BOM/CRLF 和 LF 正例，明确比较真实 SDK 与包装层的
 EOF 拒收，验证超过 16 MiB 的行丢弃后下一帧恢复、捕获归属，以及 10–16 MiB
@@ -189,7 +193,7 @@ EOF 拒收，验证超过 16 MiB 的行丢弃后下一帧恢复、捕获归属�
 34 passed、0 skipped、0 retries。格式检查通过；本次全仓 Clippy 的 lib-test
 元数据编译被 SIGKILL 终止，退出 101，未记为通过，也未据此断言具体资源原因。
 这些局部检查不代替最终组合的全仓托管 CI。详见
-[SDK 分帧兼容性验证](validation/sdk-framing-compatibility/README.md)。
+[SDK 分帧兼容性验证](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/sdk-framing-compatibility/README.md)。
 
 Python 直接依赖虽固定版本，但未提供完整带 hash 的传递依赖环境；包管理器
 和 runner image 仍是重现性边界。
@@ -225,7 +229,7 @@ Python 直接依赖虽固定版本，但未提供完整带 hash 的传递依赖�
 
 ## 验证与清理记录
 
-本目录的 `validation/` 和 `verification.json` 保存实际结果；远端合并、
+上述固定历史树中的验证资料与本目录的 `verification.json` 保存实际结果；远端合并、
 默认分支和引用清理结果由汇总 PR 的最终说明及 GitHub 当前引用状态记录。
 只将 exit 0 的对应命令记为通过；失败、skip、环境不支持和未执行分别记录。
 早期子分支的成功不代替最终组合源码的检查。
@@ -236,7 +240,7 @@ Python 直接依赖虽固定版本，但未提供完整带 hash 的传递依赖�
 已最小修复并 33/33 复跑通过。其余受阻位置为 AF_UNIX、`/proc` 接口，另外有
 Landlock 与可选 pypdf 的两项 skip。完整 Rust nextest 在大型 lib test 编译
 阶段被 SIGKILL，零项执行，未记为通过。详细计数、命令、源码和环境观察见
-各 `validation/` 子目录。托管 CI 以汇总 PR 的实际 check run 为准。
+上述固定历史树中的各验证子目录。托管 CI 以汇总 PR 的实际 check run 为准。
 
 首次汇总 PR #125 的托管 Rust CI（run `43686118845`，head `7f3c795b`）
 在 exact-head 和 prospective-merge 两个 job 中都完成了大型测试编译；两边均为
@@ -245,7 +249,7 @@ overflow 未识别形状回退的原文顺序契约。修复让该回退委托�
 历史 native 捕获的旧投影仅在对应历史测试中明确重建，并增加直接经过生产
 overflow 分派的冻结 ELF 原文回归。原始 fixture、四份 frame 哈希和逐字节
 断言未改。首次失败及后续跳过步骤完整保留在
-[首次 PR CI 证据](validation/github-pr125-7f3c795b/README.md)。
+[首次 PR CI 证据](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/github-pr125-7f3c795b/README.md)。
 
 同次 Cloud PR job 暴露了路由器测试在 SQLite 保存和线程启动之前设置 150 ms
 租约的时序竞态；对应 push job 的 Router 46、Colab 69、Kaggle 76 项均通过。
@@ -253,7 +257,7 @@ overflow 分派的冻结 ELF 原文回归。原始 fixture、四份 frame 哈希
 保留真实线程、锁、SQLite 和竞争计划断言，不改变生产逻辑。修复后本地 Router
 46/46 通过。REA 最终修复的格式及生产库/二进制严格 Clippy 通过；all-targets
 Clippy 的 lib-test 元数据编译被 SIGKILL，零项 Rust 测试执行，详见
-[修复检查证据](validation/rea-overflow-fix/README.md)。修复后的完整托管测试
+[修复检查证据](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/rea-overflow-fix/README.md)。修复后的完整托管测试
 由后续 e425 的完整托管结果确认；首次失败与本地生产编译仍分别记录，不混记为通过。
 
 由于终端无 Git 写入凭据，85 个新集成提交通过 GitHub 插件按原拓扑发布。
@@ -265,7 +269,7 @@ commit 字节保存在 [publication/](publication/README.md)。
 共验证 5,244 个原始 blob 路径，45 个独立研究文件也保持原字节。
 其含义是历史与源码保管通过，不能解释为生产资格通过。
 
-后续还保存了 [476 中间候选证据](validation/github-pr125-4767ddc/README.md)：
+后续还保存了 [476 中间候选证据](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/github-pr125-4767ddc/README.md)：
 Cloud 两次全部通过；Rust 预合并全特性完成 2,630 passed、44 skipped 后在下一
 模式编译中被新候选替换而取消，候选任务没有完整 suite 摘要，均不作为最终放行。
 

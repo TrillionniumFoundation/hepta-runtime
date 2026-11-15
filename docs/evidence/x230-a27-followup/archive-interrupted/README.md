@@ -49,3 +49,12 @@ this r02 corrects only that schema-label issue, without rerunning the experiment
 Credential
 or raw response fields use hash receipts; they are never decoded for public
 exposure. No input, frozen package, runtime, or remote host is modified.
+
+## Historical publisher source
+
+The [original interrupted-r02 publisher](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/evidence/x230-a27-followup/archive-interrupted/build_interrupted_publication_r02.py)
+is retained at that exact Git revision. Reproducing the transformation requires
+the fixed private archive, transfer proof and frozen dependencies declared in
+the source. All public interruption evidence and original receipts remain
+unchanged. The publication manifests retain the historical source paths and
+hashes; they are not current-checkout inventories.

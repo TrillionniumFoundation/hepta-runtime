@@ -47,3 +47,12 @@ published: its generic policy left raw file identity tuples. This fresh r02
 corrects publication only, without repeating any experiment or changing raw
 evidence. The earlier dependency-key collision refusal happened before any
 publication write; the logged schema adaptation preserved every value.
+
+## Historical publisher source
+
+The [original completed-r02 publisher](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/evidence/x230-a27/build_completed_publication_r02.py)
+is retained at that exact Git revision. It requires the fixed private inputs
+and frozen dependency layout declared in its source. The public evidence and
+original publication receipts remain unchanged. Package manifests describe
+the historical publication, including its original source paths and hashes;
+they are not inventories of the current checkout.

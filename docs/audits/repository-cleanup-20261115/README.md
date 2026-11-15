@@ -11,22 +11,24 @@ evidence-reader paths and original-source retention.
 
 | Metric | Original baseline | Current tree |
 | --- | ---: | ---: |
-| Tracked files | 17,673 | 5,626 |
-| Tracked-file bytes | 1,864,002,891 | 170,708,342 |
-| Python files | 1,986 | 600 |
+| Tracked files | 17,673 | 5,306 |
+| Tracked-file bytes | 1,864,002,891 | 161,912,853 |
+| Python files | 1,986 | 590 |
 
-**12,059 historical files / 1,697,040,311 original bytes** have
-left the current tree, including **1,387 Python
+**12,380 historical files / 1,705,926,359 original bytes** have
+left the current tree, including **1,397 Python
 files**. New audit/verification files account for the difference between gross
 retirements and net file counts. These are tracked-file measurements, not Git
 compressed-pack sizes or GitHub Linguist percentages.
 
-The latest review removes eleven more superseded entrypoint/registry files and
+The internal review removes eleven superseded entrypoint/registry files and
 consolidates two identical Rust rules: safetensors dtype widths and ECMAScript
 whitespace. Four Rust files change; the retained function bodies are byte-identical
 to their originals. The other 604 core inputs, Cargo, model workers, cloud-compute
 helpers and all embedded reference inputs remain unchanged. Required non-Rust
 interfaces, independent references and frozen source contracts remain in use.
+A final reader-based pass also retires 321 completed audit/evidence files while
+preserving all maintained runtime and test inputs from `93d43067`.
 
 ## Why the repository contains other languages
 
@@ -41,9 +43,9 @@ interfaces, independent references and frozen source contracts remain in use.
 | `scripts/` | 45 | Qualification, evidence admission and independent differential oracles |
 | `experiments/` | 58 | Independent model studies and reproducible evaluation |
 | `qualification/` | 1 | Frozen standalone Rust study verifier |
-| `docs/` | 49 | Currently bound reference bundles and reproducible audit evidence |
+| `docs/` | 39 | REA reference bundles and original qualification fixtures |
 | `.github/` | 2 | Current browser qualification bootstrap and tests |
-| Total | 600 | |
+| Total | 590 | |
 
 All **17** Python helpers under `src/mcp/runtime` are actual Rust embedded inputs.
 They implement configured document, worksheet, binary-file, metadata, process,
@@ -60,9 +62,12 @@ have actual source uses. There are no unresolved module paths or unused whole
 Rust source files in that graph. `Cargo.toml`, `Cargo.lock` and `vendor/ruzstd`
 remain unchanged; the manifest participates in persistent request identity.
 
-The remaining 49 Python files under docs are individually accounted for:
-39 belong to currently bound REA reference bundles, four to A27 public
-recalculation/publication evidence and six to the current Rust integration audit.
+The remaining 39 Python files under docs preserve REA reference and qualification
+inputs: 37 have direct manifest/hash bindings, and two are original umask022
+launch fixtures whose commands, binary pins and environment remain documented
+in their qualification packages. The final pass retires six completed audit
+snapshots and four historical publisher copies; current public recomputation
+uses the maintained `tools/` code.
 The 58 model-study scripts and the frozen standalone study verifier remain
 reproducible research inputs. [inventory.json](inventory.json) contains their
 per-root paths and binding/reader reasons.
@@ -76,7 +81,8 @@ per-root paths and binding/reader reasons.
 | Continued historical directory review | 2,039 | 114,186,765 |
 | Expired workflows/script and standalone harness snapshots | 6 | 62,797 |
 | Superseded acceptance and X230 publisher entrypoints/registries | 11 | 191,032 |
-| Total | 12,059 | 1,697,040,311 |
+| Completed Rust audit validation and A27 publisher copies | 321 | 8,886,048 |
+| Total | 12,380 | 1,705,926,359 |
 
 The continued directory review removes forty complete X230, DC and REA history
 roots, the withdrawn native checkpoint prototype and an obsolete source recovery
@@ -102,7 +108,7 @@ weightspace study also retains its exact frozen compilation inputs.
 
 ## Original-source retention
 
-[Five repository history manifests](../../../archives/repository-history/README.md)
+[Six repository history manifests](../../../archives/repository-history/README.md)
 and [42 Rust variant manifests](../../../archives/rust-branches/README.md) preserve
 every original source identity. The continued review retains all previous
 **15,065 original rows**, adds **2,045 exact original file rows**, and changes only
@@ -170,11 +176,36 @@ canonical regeneration changed exactly nine identity scalars, followed by 29
 passing ledger tests and a passing mapping check. All 229 tool rows stay OPEN,
 with zero qualified tools; strict parity still refuses as expected.
 
-The latest manifest adds eleven exact original rows while preserving every one
+The internal-review manifest adds eleven exact original rows while preserving every one
 of the earlier 46 manifests and 17,110 original rows. Original failures, receipts,
 qualification input lists and publication manifests keep their original bytes.
 Full exact-source Rust validation is required for the helper consolidation.
 See the attached GitHub workflow, not an ancestor run, for its terminal outcome.
+
+## Completed audit and publisher follow-up
+
+A further exact-reader review corrected the previous retention classification
+for ten documentation Python files. Six were one-shot Rust audit snapshots;
+four were A27 private-archive publishers, including one exact copy of a retained
+tools implementation. They are not inputs to the current public recalculator.
+
+The complete Rust `validation/` subtree (317 files / 8,759,153 bytes) now lives at
+its exact original Git revision, together with all original failed, interrupted,
+partial and successful attempts. Four publisher source files add 126,895 bytes
+of retirement. The actual public A27 recomputation still passes 2,176 operation
+rows and 32 cells. Its original overall adoption decision remains false, and
+every individual gate outcome is unchanged. There is no new workload or renewed
+qualification. All public data, receipts and manifests remain intact;
+six current Markdown explanations link back to the original source packages.
+
+This follow-up preserves every one of the preceding 47 manifests and 17,121
+original rows. It adds 321 complete original file identities. All 608 core inputs,
+all 214 embedded references / 141 unique inputs, and maintained test/fixture inputs
+are unchanged from the Rust-validation reference commit `93d43067`. Only the
+custody verifier's immutable checkpoint literal changes among maintained scripts.
+The current branch and HIA custody inventories outside `validation/` remain
+byte-identical. After real deletion, REA mapping and 29 ledger regressions pass,
+with zero reads of retired paths. Original REA parity remains 229 OPEN / 0 qualified.
 
 ## Recovery
 
