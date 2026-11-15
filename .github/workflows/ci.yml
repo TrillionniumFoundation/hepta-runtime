@@ -49,7 +49,9 @@ jobs:
   runtime-head-ci:
     name: Rust exact-head validation
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # The integrated all-feature checks used up to 46 minutes before the second
+    # feature-mode test build and release link. Keep all gates with enough time.
+    timeout-minutes: 150
     steps:
       - name: Checkout exact source HEAD
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -311,7 +313,8 @@ jobs:
     name: Rust prospective-merge validation
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # Budget both feature-mode test builds and the release link without dropping checks.
+    timeout-minutes: 150
     steps:
       - name: Checkout GitHub prospective merge
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
