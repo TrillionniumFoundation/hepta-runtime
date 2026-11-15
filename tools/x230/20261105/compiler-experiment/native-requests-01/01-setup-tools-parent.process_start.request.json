@@ -1,0 +1,17 @@
+{
+  "args": [
+    "-I",
+    "-B",
+    "-c",
+    "import json, os, stat\nfrom pathlib import Path\np = Path('/home/qian/hepta-runtime-optimization-20261105-b96-compiler-preflight-tools-01')\no = Path('/home/qian/hepta-runtime-optimization-20261105-b96-compiler-preflight-01')\nif p.parent.resolve(strict=True) != p.parent or p.parent.stat().st_uid != os.geteuid():\n    raise ValueError('tools parent ancestor is not canonical/account-owned')\nif os.path.lexists(o):\n    raise FileExistsError('preflight output already exists; no changes')\nos.umask(0o077)\nos.mkdir(p, 0o700)\ns = p.lstat()\nif not stat.S_ISDIR(s.st_mode) or s.st_uid != os.geteuid() or stat.S_IMODE(s.st_mode) != 0o700:\n    raise ValueError('fresh tools parent ownership/mode differs; never chmod')\nfor directory in (p, p.parent):\n    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)\n    try:\n        os.fsync(fd)\n    finally:\n        os.close(fd)\nif os.path.lexists(o):\n    raise FileExistsError('preflight output appeared; do not stage/run')\nprint(json.dumps({'schema':'hepta-compiler-preflight-tools-parent/v1','passed':True,'path':str(p),'created_fresh':True,'uid':s.st_uid,'mode':oct(stat.S_IMODE(s.st_mode)),'device':s.st_dev,'inode':s.st_ino,'output_absent':True,'existing_path_repaired':False},sort_keys=True))\n"
+  ],
+  "env": {
+    "LANG": "C",
+    "LC_ALL": "C",
+    "PATH": "/usr/bin:/bin"
+  },
+  "executable": "/usr/bin/python3",
+  "host": "x230",
+  "idempotency_key": "hepta-x230-b96-compiler-preflight-tools-20261105-01",
+  "timeout_seconds": 15
+}
