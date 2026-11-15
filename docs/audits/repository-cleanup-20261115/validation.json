@@ -257,8 +257,8 @@
     "retirement_manifest": "archives/repository-history/superseded-harnesses-20261115.json",
     "retired_files": 11,
     "retired_bytes": 191032,
-    "retained_inventory_checkpoint": "b27890bf2e4be06feea5729a57731ed071eb31bc",
-    "retained_inventory_checkpoint_includes_this_wave": false,
+    "retained_inventory_checkpoint": "b7b5ceda57f65faa962fd0622784a85ebca36d49",
+    "retained_inventory_checkpoint_includes_this_wave": true,
     "rust_pure_helper_comparison": {
       "base": "ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97",
       "original_files": {
@@ -408,7 +408,27 @@
       "new_historical_links": {
         "targets": 7,
         "status": "PASS"
-      }
+      },
+      "checkpoint_refusal_probes": [
+        {
+          "case": "delete_manifest",
+          "exit_code": 1,
+          "result": "REJECTED",
+          "reason": "RuntimeError: Required custody manifests are missing: ['archives/repository-history/superseded-harnesses-20261115.json']"
+        },
+        {
+          "case": "shrink_inventory",
+          "exit_code": 1,
+          "result": "REJECTED",
+          "reason": "RuntimeError: Custody inventory retired files changed: archives/repository-history/superseded-harnesses-20261115.json"
+        },
+        {
+          "case": "change_original_blob",
+          "exit_code": 1,
+          "result": "REJECTED",
+          "reason": "RuntimeError: Custody inventory source rows changed: archives/repository-history/superseded-harnesses-20261115.json"
+        }
+      ]
     },
     "hosted_validation": {
       "status": "PENDING_AT_SOURCE_PUBLICATION",
@@ -418,6 +438,33 @@
       "Local environment has no Rust toolchain; no local Cargo success is asserted.",
       "Original REA parity remains OPEN and DC full replacement remains false.",
       "Frozen evidence bundles, external library APIs, dynamic imports and separate persistent-state contracts remain retained."
-    ]
+    ],
+    "independent_source_comparison": {
+      "scope": "Read-only independent custody/source comparison, no runtime execution",
+      "core_baseline": "a404d4f1bf540fb94f65ef3707145eed07eef183",
+      "review_base": "ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97",
+      "core_inputs": 608,
+      "core_inputs_unchanged": 604,
+      "reviewed_core_changes": [
+        "src/mcp/rea.rs",
+        "src/mcp/rea_evidence_source_length.rs",
+        "src/mcp/rea_model_parser.rs",
+        "src/mcp/rea_residual_unknown.rs"
+      ],
+      "original_manifests": 46,
+      "original_source_rows": 17110,
+      "new_manifests": [
+        {
+          "path": "archives/repository-history/superseded-harnesses-20261115.json",
+          "files": 11,
+          "bytes": 191032
+        }
+      ],
+      "deleted_files": 11,
+      "embedded_references": 214,
+      "embedded_unique_inputs": 141,
+      "problems": [],
+      "status": "PASS"
+    }
   }
 }
