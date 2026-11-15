@@ -1,18 +1,44 @@
-"""Build an actual static sixteen-image administrator-configured MCP service."""
+"""Build an actual static seventeen-image administrator-configured MCP service."""
 from pathlib import Path
 import argparse,hashlib,json,re,struct,subprocess,sys
 ROOT=Path(__file__).resolve().parents[1]
 sha=lambda b:hashlib.sha256(b).hexdigest()
-NAMES=['owner','fs','json','validation','identity','mcp','execution','execution_json','execution_core','value','regex_syntax','regex_unicode_data','regex_hir','regex_nfa','regex_match','regex_controller']
+NAMES=['owner','fs','json','validation','identity','mcp','execution','execution_json','execution_core','value','publication','regex_syntax','regex_unicode_data','regex_hir','regex_nfa','regex_match','regex_controller']
 SOURCES={**{name:'config_'+name for name in NAMES[:6]},'execution':'execution_controller',
-         'execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json',
-         **{name:name for name in NAMES[10:]}}
+         'execution_json':'execution_json','execution_core':'execution_shadow','value':'serde_json','publication':'result_publication',**{name:name for name in NAMES[11:]}}
+
+def packer_source(prefix, holes):
+    from generate_hia_transport import document
+    from hepta.hia_agent_assembly import render_assembly
+    from tools.generate_hia_elf_linker import SOURCE as HELPERS
+    source='def pack(s:readbuf, o:mutbuf, w:mutbuf) -> u32:\n'
+    source+='    if length(s) < 169 or length(s) > 8388608:\n        return 4294967295\n'
+    source+=f"    if uint(s, 0, 8) != {int.from_bytes(b'HCFGMCP3','little')} or uint(s, 144, 8) != 0:\n        return 4294967295\n"
+    source+='    total = 0\n    i = 0\n    while i < 17:\n        part = uint(s, 8 + i * 8, 8)\n        if part == 0 or part > 1048576:\n            return 4294967295\n        total = total + part\n        i = i + 1\n    if length(s) != 152 + total:\n        return 4294967295\n'
+    source+=f'    size = {len(prefix)} + total\n    if size > 8388608 or length(o) < size:\n        return 4294967294\n'
+    source+='    write_prefix(o)\n'
+    source+='    write(o, 96, size, 8)\n    write(o, 104, size, 8)\n'
+    source+=f'    at = {len(prefix)}\n    pos = 152\n'
+    for i,hole in enumerate(holes):
+        source+=f'    part = uint(s, {8+i*8}, 8)\n    write(o, {hole}, at - {hole+4}, 4)\n    copy_bytes(s, o, pos, at, part)\n    at = at + part\n    pos = pos + part\n'
+    source+='    return size\n\ndef write_prefix(o:mutbuf) -> u64:\n'
+    chunks=[list(range(at,min(at+1024,len(prefix)),8)) for at in range(0,len(prefix),1024)]
+    for i in range(len(chunks)):source+=f'    prefix_chunk_{i}(o)\n'
+    source+='    return 0\n'
+    for i,chunk in enumerate(chunks):
+        source+=f'\ndef prefix_chunk_{i}(o:mutbuf) -> u64:\n'
+        for at in chunk:
+            raw=prefix[at:at+8];source+=f'    write(o, {at}, {int.from_bytes(raw,"little")}, {len(raw)})\n'
+        source+='    return 0\n'
+    source+=HELPERS[HELPERS.index('\ndef uint('):]
+    raw=render_assembly(document(source,'runtime_config_mcp_packer')).encode()
+    return raw
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--hepta',type=Path,required=True);p.add_argument('--build-root',type=Path,default=ROOT/'build')
     p.add_argument('--runtime',type=Path,default=ROOT)
-    p.add_argument('--name',required=True);p.add_argument('--author-packer',action='store_true')
+    p.add_argument('--name',required=True)
     for name in NAMES:p.add_argument('--'+name.replace('_','-')+'-manifest',type=Path,required=True)
     a=p.parse_args();sys.path.insert(0,str(ROOT/'scripts'))
     sys.path.insert(1,str(a.runtime.resolve(strict=True)/'scripts'))
@@ -23,7 +49,7 @@ def main():
     from hepta.hia_agent_assembly import render_assembly
     from tools.generate_hia_elf_linker import SOURCE as HELPERS
     build=NativeBuild(a.hepta,a.build_root);build.bootstrap()
-    names=NAMES;profiles=['history.v1','standard','serde-json.v1','history.v1','history.v1','history.v1','history.v1','history.v1','history.v1','serde-json.v1','history.v1','standard','history.v1','history.v1','history.v1','history.v1']
+    names=NAMES;profiles=['history.v1','standard','serde-json.v1','history.v1','history.v1','history.v1','history.v1','history.v1','history.v1','serde-json.v1','standard','history.v1','standard','history.v1','history.v1','history.v1','history.v1']
     members=[];images=[]
     for index,(name,profile) in enumerate(zip(names,profiles)):
         path=getattr(a,name+'_manifest').resolve(strict=True);m=json.loads(path.read_bytes())
@@ -54,29 +80,8 @@ def main():
     prefix=header+(work/'adapter.bin').read_bytes()
     for hole in holes:
         if prefix[hole-1:hole+4]!=b'\xe8\0\0\0\0':raise ValueError('native call hole differs')
-    source='def pack(s:readbuf, o:mutbuf, w:mutbuf) -> u32:\n'
-    source+='    if length(s) < 160 or length(s) > 8388608:\n        return 4294967295\n'
-    source+=f"    if uint(s, 0, 8) != {int.from_bytes(b'HCFGMCP3','little')} or uint(s, 136, 8) != 0:\n        return 4294967295\n"
-    source+='    total = 144\n    index = 0\n    while index < 16:\n        n = uint(s, 8 + index * 8, 8)\n        if n == 0 or n > 1048576 or n > length(s) - total:\n            return 4294967295\n        total = total + n\n        index = index + 1\n    if total != length(s):\n        return 4294967295\n'
-    source+=f'    size = {len(prefix)} + total - 144\n    if size > 8388608 or length(o) < size:\n        return 4294967294\n'
-    source+='    write_prefix(o)\n    write(o, 96, size, 8)\n    write(o, 104, size, 8)\n'
-    source+=f'    at = {len(prefix)}\n    pos = 144\n'
-    for i,hole in enumerate(holes):
-        source+=f'    n = uint(s, {8+i*8}, 8)\n    write(o, {hole}, at - {hole+4}, 4)\n    copy_bytes(s, o, pos, at, n)\n    at = at + n\n    pos = pos + n\n'
-    source+='    return size\n\ndef write_prefix(o:mutbuf) -> u64:\n'
-    chunks=[list(range(at,min(at+1024,len(prefix)),8)) for at in range(0,len(prefix),1024)]
-    for i in range(len(chunks)):source+=f'    prefix_chunk_{i}(o)\n'
-    source+='    return 0\n'
-    for i,chunk in enumerate(chunks):
-        source+=f'\ndef prefix_chunk_{i}(o:mutbuf) -> u64:\n'
-        for at in chunk:
-            raw=prefix[at:at+8];source+=f'    write(o, {at}, {int.from_bytes(raw,"little")}, {len(raw)})\n'
-        source+='    return 0\n'
-    source+=HELPERS[HELPERS.index('\ndef uint('):]
-    raw=render_assembly(document(source,'runtime_config_mcp_packer')).encode()
+    raw=packer_source(prefix,holes)
     packer=ROOT/'native/config_mcp_packer.hepta'
-    if a.author_packer:
-        with packer.open('xb') as target:target.write(raw)
     if packer.read_bytes()!=raw:raise ValueError('frozen HIA composition packer differs from the fixed adapter')
     manifest=build.compile(a.name+'-packer',packer,standalone=None)
     frame=b'HCFGMCP3'+b''.join(struct.pack('<Q',len(image)) for image in images)+bytes(8)+b''.join(images)
@@ -100,10 +105,16 @@ def main():
                 packer_source_sha256=sha(raw),packer_manifest=str(manifest.resolve()),packer_manifest_sha256=sha(manifest.read_bytes()),
                 builder_source_sha256=sha(Path(__file__).read_bytes()),
                 generic_build_sha256=sha((ROOT/'scripts/hia_native_build.py').read_bytes()),generic_loader_sha256=sha((ROOT/'scripts/hia_native_loader.py').read_bytes()),
-                call_edges={'0':[1,2,3,4],'5':[0,6,9],'6':[0,7,8],'3':[15],'15':[10,12,13,14],'10':[11],'12':[11],'14':[11]},only_effect_owner=1,
+                call_edges={'0':[1,2,3,4],'5':[0,6,9,10],'6':[0,7,8],'3':[16],'16':[11,13,14,15],'11':[12],'13':[12],'15':[12]},only_effect_owner=1,
+                regex_local_call_edges={'3':[15],'15':[10,12,13,14],'10':[11],'12':[11],'14':[11]},
+                regex_selector_members={'3':'validation','10':'regex_syntax','11':'regex_unicode_data','12':'regex_hir','13':'regex_nfa','14':'regex_match','15':'regex_controller'},
                 administrator_startup_event=0,caller_configuration_installation=False,protocol_version='2025-06-18',
                 tool_names=['host_list','effective_config','execution_shadow_admit'],
-                fixture_admin_reinstallation=False,complete_config_owner=False,regex_compilation_closed=False,
+                fixture_admin_reinstallation=False,complete_config_owner=False,
+                result_publication_image_id=10,result_publication_source='native/result_publication.hepta',
+                result_publication_source_sha256=members[10]['source_sha256'],result_publication_image_sha256=members[10]['image_sha256'],
+                result_publication_handoff='config_mcp.tool_result fixed envelope prefix and original text span',
+                filesystem_hint_callers_replaced=False,publication_fixture_is_production=False,regex_compilation_closed=False,
                 fresh_cold_qualified=False,unconstrained_regex_resources_closed=False)
     (work/'manifest.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
     print(json.dumps({'manifest':str((work/'manifest.json').resolve()),'elf_sha256':sha(elf),'elf_bytes':len(elf),'configuration_from_stdin':False}))

@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import gzip
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -25,9 +26,15 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
                                        PARALLEL_NATIVE_SUITES,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
+                                       view_render_growth_evidence, view_call_evidence, view_search_evidence,
+                                       view_search_public_evidence,
+                                       view_resource_evidence, runtime_mcp_evidence, view_fixture_retirement,
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
-                                       history_evidence, json_evidence, execution_evidence, effect_fence_evidence, config_evidence,
-                                       session_evidence, file_locks_evidence, file_lock_service_evidence,
+                                       history_evidence, json_evidence, request_context_evidence, result_publication_evidence,
+                                       request_scope_evidence, shell_evidence,
+                                       execution_evidence, effect_fence_evidence, config_evidence,
+                                       session_evidence,
+                                       file_locks_evidence, file_lock_service_evidence,
                                        atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
@@ -46,11 +53,20 @@ from hia_native_entropy_qualification import (FOLDER as ENTROPY_FOLDER, KERNEL_R
 from hia_native_scope_qualification import FOLDER as SCOPE_FOLDER, ORACLE_COUNTS as SCOPE_ORACLE_COUNTS
 from hia_native_editable_qualification import FOLDER as EDITABLE_FOLDER, CASES as EDITABLE_CASES
 from hia_native_view_qualification import FOLDER as VIEW_FOLDER, CASES as VIEW_CASES, stream_identity as view_stream_identity
+from hia_native_view_growth_qualification import (FOLDER as VIEW_GROWTH_FOLDER, CASES as VIEW_GROWTH_CASES,
+                                                 stream_identity as view_growth_stream_identity)
 from hia_native_view_cache_qualification import compare_original as compare_cache_original
 from hia_native_authority_qualification import compare_original as compare_authority_original
 from hia_native_history_qualification import compare_original as compare_history_original
 from hia_native_json_qualification import (compare_original as compare_json_original,
                                            check_original_receipts as check_json_original_receipts)
+from hia_native_request_context_reference import (compare_original as compare_request_original,
+                                                  check_original_receipts as check_request_original_receipts)
+from hia_native_result_publication_reference import (compare_original as compare_publication_original,
+                                                     check_original_receipts as check_publication_original_receipts)
+from hia_native_request_scope_reference import (compare_original as compare_request_scope_original,
+                                                check_original_receipts as check_request_scope_original_receipts)
+import hia_native_shell_qualification as shell_qualification
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
                                                 REFERENCE_ROWS as BATCH_PLAN_ROWS)
@@ -144,8 +160,66 @@ def check_input_pins(output: Path, report: dict) -> None:
             raise ValueError("required actual atomic original invocation or retained corpus differs")
     if report.get("view_render_evidence") != view_render_evidence(output, report):
         raise ValueError("required complete view byte-domain/cache-plan/transport evidence differs")
+    if report.get("view_render_growth_evidence") != view_render_growth_evidence(output, report):
+        raise ValueError("required growing view snapshots and physical evidence differ")
+    local_view = view_call_evidence(output, report)
+    if report.get("view_call_evidence") != local_view:
+        raise ValueError("required local view reader, typed parameters and complete caller evidence differ")
+    local_search = view_search_evidence(output, report)
+    if report.get("view_search_evidence") != local_search:
+        raise ValueError("required literal search native producer and complete corpus evidence differ")
+    if report.get("view_resource_evidence") != view_resource_evidence(output, report):
+        raise ValueError("required view engine allocation/cleanup process evidence differs")
+    public_mcp = runtime_mcp_evidence(output, report)
+    if report.get("runtime_mcp_evidence") != public_mcp:
+        raise ValueError("required complete public MCP execution and evidence controls differ")
+    public_search = view_search_public_evidence(output, report)
+    if report.get("view_search_public_evidence") != public_search:
+        raise ValueError("required complete public literal search producer evidence differs")
+    if report.get("view_fixture_retirement") != view_fixture_retirement(
+            output, report, native=local_view, public=public_mcp, search=local_search,
+            public_search=public_search):
+        raise ValueError("complete owned view test fixture retention differs")
+    local_comparisons = report.get("original_rust_comparisons", {})
+    if "runtime_mcp" in local_comparisons:
+        if local_comparisons["runtime_mcp"] != compare_runtime_mcp(output, report, None):
+            raise ValueError("required public MCP original comparison differs")
+    if any(key in local_comparisons for key in ("view_read", "view_params", "view_call")):
+        from hia_native_view_call_qualification import compare_original as checked_view_original
+        original = checked_view_original(ROOT, output, report, local_view)
+        for key in ("view_read", "view_params", "view_call"):
+            if key in local_comparisons and local_comparisons[key] != original:
+                raise ValueError("shared original view execution or retained complete bytes differ")
+    if (any(key in local_comparisons for key in ("view_read", "view_params", "view_call", "runtime_mcp"))
+            or "view_search_original_comparison" in report
+            or "view_search_public_original_comparison" in report
+            or any(row.get("name") in VIEW_SEARCH_ORIGINAL_CHECKS for row in report["checks"])):
+        # These two wrappers are required even though search shares the view
+        # component/recipe entry. A successful nine-process view comparison
+        # cannot stand in for the additional three original search processes.
+        search_original = compare_view_search(output, report, native=local_search)
+        if "runtime_mcp" in local_comparisons or "view_search_public_original_comparison" in report:
+            compare_view_search_public(output, report, search_original, native=public_search)
     if report.get("json_evidence") != json_evidence(output, report):
         raise ValueError("required JSON actual native/ELF/corpus evidence differs")
+    if report.get("request_context_evidence") != request_context_evidence(output, report):
+        raise ValueError("required request context state/response/transport evidence differs")
+    check_request_original_receipts(ROOT, output, report, completed_test_summary)
+    if report.get("result_publication_evidence") != result_publication_evidence(output, report):
+        raise ValueError("required result publication construction/ELF/write evidence differs")
+    check_publication_original_receipts(ROOT, output, report, completed_test_summary)
+    if report.get("request_scope_evidence") != request_scope_evidence(output, report):
+        raise ValueError("required request continuation/cache lease/native refusal evidence differs")
+    check_request_scope_original_receipts(ROOT, output, report, completed_test_summary)
+    if report.get("shell_evidence") != shell_evidence(output, report):
+        raise ValueError("required complete native shell evidence changed")
+    for key in shell_qualification.COMPONENTS:
+        if key in report.get("original_rust_comparisons", {}):
+            rustc = Path(report["rust_compiler"]["invocation_path"])
+            expected = shell_qualification.original_evidence(ROOT, output, report, key, rustc,
+                executable(str(rustc.with_name("cargo"))), completed_test_summary)
+            if report["original_rust_comparisons"][key] != expected:
+                raise ValueError("required fresh shell original evidence changed")
     if report.get("execution_evidence") != execution_evidence(output, report):
         raise ValueError("required execution typed/core/controller evidence differs")
     if report.get("effect_fence_evidence") != effect_fence_evidence(output, report):
@@ -227,10 +301,15 @@ def check_input_pins(output: Path, report: dict) -> None:
         if sha(manifest) != item["sha256"]:
             raise ValueError("compiled module manifest changed")
         module = json.loads(manifest.read_bytes())
+        if item.get("builder") == "view_call":
+            # Its strict bundle reader above checked every child and packer
+            # compiler identity, complete input/output and composed ELF.
+            continue
+        compiler_field = "compiler_image_sha256" if item.get("builder") == "runtime_mcp" else "compiler_sha256"
         if (module.get("compiler_commit") != HEPTA_COMMIT
-                or module.get("compiler_sha256") != report["compiler_image_sha256"]):
+                or module.get(compiler_field) != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir", "file_locks", "file_lock_service"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "file_locks", "file_lock_service", "view_read", "runtime_mcp"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1184,17 +1263,267 @@ def compare_editable_content(output: Path, report: dict, rustc: Path) -> dict:
 
 
 def compare_view_render(output: Path, report: dict, rustc: Path) -> dict:
-    evidence = view_render_evidence(output, report)
-    if evidence != report.get("view_render_evidence"):
+    return compare_render_corpus(output, report, rustc, growth=False)
+
+
+def compare_view_render_growth(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_render_corpus(output, report, rustc, growth=True)
+
+
+VIEW_SEARCH_ORIGINAL_CHECKS = ("view_search_original", "test_view_search_original_evidence.py")
+VIEW_SEARCH_CONTROLS_FOLDER = "view-search-original-evidence"
+VIEW_SEARCH_CONTROL_NAMES = {
+    "test_01_typed_json": ("duplicate-key", "nan-token", "infinity-token", "overflow-float",
+        "boolean-is-not-uint", "nested-boolean-is-not-count"),
+    "test_02_actual_process_receipts": ("missing-timed_out", "missing-timeout_seconds", "spawn-error",
+        "boolean-exit", "float-deadline", "zero-elapsed", "different-command", "malformed-stream-pin"),
+    "test_03_artifact_paths": ("parent-traversal", "absolute-path", "inward-file-symlink",
+        "inward-parent-symlink", "directory-artifact", "fifo-artifact"),
+    "test_04_actual_io_and_complete_records": ("boolean-case-id", "io-occurrence-gap",
+        "raw-snapshot-length", "boolean-read-count", "complete-visible-body-byte",
+        "unreferenced-output-blob", "missing-actual-read-event", "mutation-at-wrong-io"),
+    "test_05_cancel_and_cache": ("boolean-publication-count", "missing-cancel-base",
+        "unexpected-cancel-hint", "cancel-base-byte-differs", "search-mutated-existing-cache",
+        "error-status-below-result-limit"),
+    "test_06_complete_byte_comparison": ("full-byte-input.gz", "full-byte-body.gz",
+        "full-byte-base.gz", "full-byte-snapshot.gz", "native-io-order",
+        "native-success-not-boolean", "search-used-text-read", "whole-prime-used-raw-read"),
+}
+
+
+def _view_search_check(output: Path, report: dict, name: str, command: list[str], summary: dict) -> dict:
+    """Admit one required aggregate wrapper and both complete actual streams."""
+    import hia_native_view_search_reference as reference
+    rows = [row for row in report["checks"] if row.get("name") == name]
+    reference.need(len(rows) == 1, "exactly one completed literal search wrapper is required: " + name)
+    row = rows[0]
+    reference.keys(row, ("name", "phase", "command", "exit_code", "timed_out", "timeout_seconds",
+        "elapsed_seconds", "stdout_sha256", "stderr_sha256", "stdout_bytes", "stderr_bytes", "summary"),
+        "literal search wrapper receipt")
+    for key, expected in dict(name=name, phase="original_rust_comparison", command=command,
+                               exit_code=0, timed_out=False, timeout_seconds=180, summary=summary).items():
+        reference.exact(row[key], expected, "literal search wrapper " + key)
+    elapsed = row["elapsed_seconds"]
+    reference.need(type(elapsed) in (int, float) and math.isfinite(elapsed) and 0 < elapsed <= 180,
+                   "literal search wrapper elapsed time differs")
+    artifacts = {}
+    for stream in ("stdout", "stderr"):
+        relative = name + "." + stream
+        raw = reference.inside(output, relative).read_bytes()
+        reference.exact(len(raw), row[stream + "_bytes"], "literal search wrapper complete stream length")
+        reference.exact(digest(raw), row[stream + "_sha256"], "literal search wrapper complete stream hash")
+        artifacts[relative] = digest(raw)
+        if stream == "stdout":
+            reference.exact(reference.decode(raw), summary, "literal search wrapper complete JSON stdout")
+        elif name == VIEW_SEARCH_ORIGINAL_CHECKS[0]:
+            reference.exact(raw, b"", "literal search original wrapper stderr")
+    return artifacts
+
+
+def _view_search_original_evidence(output: Path, report: dict, native: dict) -> dict:
+    """Re-read actual native provenance, fresh original bytes and post-replay controls."""
+    import hia_native_view_search_reference as reference
+    original = output / reference.ORACLE_OUTPUT_FOLDER
+    corpus = reference.inside(output, native["corpus"] + "/native-cases.jsonl").parent
+    baseline = reference.reference_evidence(ROOT, original, native_corpus=corpus)
+    reference.exact(baseline["status"], "COMPLETE_BYTE_PARITY_REQUIRES_NATIVE_ADMISSION",
+                    "complete original search comparison")
+    result = reference.decode(reference.inside(original, "result.json").read_bytes())
+    reference.exact(result["status"], "BYTES_EQUAL_REQUIRES_NATIVE_ADMISSION", "fresh search replay status")
+    reference.exact(result["explicit_offline"], False, "aggregate search build offline selection")
+    producer = [row for row in report["checks"] if row.get("name") == "test_view_search.py"]
+    reference.need(len(producer) == 1, "exactly one actual native search producer is required")
+    command = producer[0].get("command")
+    reference.need(type(command) is list and len(command) == 4 and all(type(item) is str for item in command)
+        and Path(command[0]).is_absolute() and command[1:3] == ["-I", "-B"]
+        and Path(command[3]).is_absolute(), "native search producer command shape differs")
+    recorded_root = Path(command[3]).parents[2]
+    reference.exact(command[3], str(recorded_root / "tests/hia_native/test_view_search.py"),
+                    "native search producer source path")
+    recorded_output = Path(result["build_environment"]["CARGO_TARGET_DIR"]).parent
+    reference.exact(recorded_output.name, reference.ORACLE_OUTPUT_FOLDER, "fresh search output folder")
+    cargo = result["processes"][1]["command"][0]
+    rustc = result["build_environment"]["RUSTC"]
+    reference.exact(rustc, report["rust_compiler"]["invocation_path"], "aggregate search Rust invocation")
+    reference.exact(cargo, str(Path(rustc).with_name("cargo")), "aggregate search Cargo invocation")
+    original_command = [command[0], "-I", "-B",
+        str(recorded_root / "tests/hia_native/view_search_oracle/run.py"),
+        "--runtime-root", str(recorded_root), "--output", str(recorded_output),
+        "--cargo", cargo, "--rustc", rustc,
+        "--native-corpus", str(recorded_output.parent / native["corpus"])]
+    artifacts = dict(native["artifact_sha256"])
+    source_pins = dict(native["source_sha256"])
+
+    def merge(destination, additions):
+        for name, pin in additions.items():
+            if name in destination:
+                reference.exact(pin, destination[name], "shared search evidence pin " + name)
+            destination[name] = pin
+
+    merge(artifacts, {reference.ORACLE_OUTPUT_FOLDER + "/" + name: pin
+                      for name, pin in baseline["artifact_sha256"].items()})
+    merge(source_pins, baseline["source_sha256"])
+    merge(artifacts, _view_search_check(output, report, VIEW_SEARCH_ORIGINAL_CHECKS[0], original_command, result))
+    capture = VIEW_SEARCH_CONTROLS_FOLDER
+    captured = {}
+    for filename in ("baseline.json", "result.json"):
+        relative = capture + "/" + filename
+        raw = reference.inside(output, relative).read_bytes()
+        artifacts[relative] = digest(raw)
+        captured[filename] = raw
+    reference.exact(captured["baseline.json"], reference.canonical(baseline), "post-original complete baseline")
+    controls = reference.decode(captured["result.json"])
+    test_relative = "tests/hia_native/" + VIEW_SEARCH_ORIGINAL_CHECKS[1]
+    reader_relative = "scripts/hia_native_view_search_reference.py"
+    for relative in (test_relative, reader_relative, "scripts/compare_hia_runtime_rust.py"):
+        merge(source_pins, {relative: sha(reference.inside(ROOT, relative))})
+    expected = dict(schema="hepta.runtime.view-search-original-controls.v1", status="PASS",
+        groups=6, controls=42, rejected=42, expected_groups=6, expected_controls=42,
+        actual_hia_calls=0, actual_rust_processes=0, control_records_are_execution_claims=False,
+        reader_sha256=source_pins[reader_relative], test_sha256=source_pins[test_relative],
+        baseline_sha256=digest(reference.canonical(baseline)),
+        whole_view_migrated=False, whole_runtime_replaced=False)
+    reference.keys(controls, (*expected, "controls_detail"), "post-original control summary")
+    for key, value in expected.items():
+        reference.exact(controls[key], value, "post-original control " + key)
+    details = controls["controls_detail"]
+    wanted = [(group, name) for group, names in VIEW_SEARCH_CONTROL_NAMES.items() for name in names]
+    reference.need(type(details) is list and len(details) == len(wanted) == 42,
+                   "post-original complete control inventory differs")
+    for row, (group, name) in zip(details, wanted):
+        reference.keys(row, ("group", "name", "rejected", "error_type", "message"), "post-original control")
+        for key, value in dict(group=group, name=name, rejected=True, error_type="AssertionError").items():
+            reference.exact(row[key], value, "post-original control " + key)
+        reference.need(type(row["message"]) is str and bool(row["message"]), "post-original refusal lacks its error")
+    controls_command = [command[0], "-I", "-B", str(recorded_root / test_relative)]
+    merge(artifacts, _view_search_check(output, report, VIEW_SEARCH_ORIGINAL_CHECKS[1], controls_command, controls))
+    positions = [next(index for index, row in enumerate(report["checks"]) if row["name"] == name)
+                 for name in ("test_view_search.py", *VIEW_SEARCH_ORIGINAL_CHECKS)]
+    reference.need(positions == sorted(positions), "search original or rejection controls ran before their producer")
+    return dict(schema="hepta.runtime.view-search-original-comparison.v1", status="PASS",
+        original_output=reference.ORACLE_OUTPUT_FOLDER, corpus=native["corpus"],
+        fresh_original_processes=3, shared_original_recipe=True,
+        required_original_checks=list(VIEW_SEARCH_ORIGINAL_CHECKS),
+        native_producer_evidence_sha256=digest(reference.canonical(native)),
+        reference=baseline, evidence_controls=controls, native_cases_added_by_replay=0,
+        artifact_sha256=dict(sorted(artifacts.items())), source_sha256=dict(sorted(source_pins.items())),
+        original_mcp_router_executed=False, whole_view_migrated=False, whole_runtime_replaced=False)
+
+
+def compare_view_search(output: Path, report: dict, rustc: Path | None = None,
+                        *, execute: bool = False, native: dict | None = None) -> dict:
+    """Share three original processes and one later rejection suite across view entries."""
+    import hia_native_view_search_reference as reference
+    native = view_search_evidence(output, report) if native is None else native
+    reference.exact(native, report.get("view_search_evidence"), "admitted native search evidence")
+    rows = {name: [row for row in report["checks"] if row.get("name") == name]
+            for name in VIEW_SEARCH_ORIGINAL_CHECKS}
+    reference.need(all(len(value) <= 1 for value in rows.values()), "duplicate shared search original wrapper")
+    original = output / reference.ORACLE_OUTPUT_FOLDER
+    if not rows[VIEW_SEARCH_ORIGINAL_CHECKS[0]]:
+        if not execute or rustc is None:
+            raise ValueError("fresh literal search original recipe has not executed")
+        reference.need(not rows[VIEW_SEARCH_ORIGINAL_CHECKS[1]], "search rejection suite precedes original execution")
+        reference.need(not original.exists() and not original.is_symlink(), "unrecorded search original output exists")
+        corpus = reference.inside(output, native["corpus"] + "/native-cases.jsonl").parent
+        command = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/view_search_oracle/run.py"),
+            "--runtime-root", str(ROOT), "--output", str(original),
+            "--cargo", str(executable(str(rustc.with_name("cargo")))), "--rustc", str(rustc),
+            "--native-corpus", str(corpus)]
+        record_check(output, report, name=VIEW_SEARCH_ORIGINAL_CHECKS[0], command=command,
+                     timeout=180, env=qualification_env())
+    if not rows[VIEW_SEARCH_ORIGINAL_CHECKS[1]]:
+        if not execute:
+            raise ValueError("literal search original evidence controls have not executed")
+        capture = output / VIEW_SEARCH_CONTROLS_FOLDER
+        reference.need(not capture.exists() and not capture.is_symlink(), "unrecorded search original controls exist")
+        corpus = reference.inside(output, native["corpus"] + "/native-cases.jsonl").parent
+        env = qualification_env()
+        env.update(HIA_VIEW_SEARCH_ORIGINAL_OUTPUT=str(original), HIA_VIEW_SEARCH_NATIVE_CORPUS=str(corpus),
+                   HIA_VIEW_SEARCH_ORIGINAL_EVIDENCE_CAPTURE_DIR=str(capture))
+        record_check(output, report, name=VIEW_SEARCH_ORIGINAL_CHECKS[1],
+            command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / VIEW_SEARCH_ORIGINAL_CHECKS[1])],
+            timeout=180, env=env)
+    result = _view_search_original_evidence(output, report, native)
+    if "view_search_original_comparison" in report:
+        reference.exact(result, report["view_search_original_comparison"], "retained search original comparison")
+    elif not execute:
+        raise ValueError("required literal search original comparison was not recorded")
+    else:
+        report["view_search_original_comparison"] = result
+        save_report(output / "result.json", report)
+    return result
+
+
+def compare_view_call_group(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_view_call_qualification import compare_original
+    native = view_call_evidence(output, report)
+    if native != report.get("view_call_evidence"):
+        raise ValueError("local view native inputs changed before original replay")
+    # All three component entries share this one fresh locked build and its
+    # nine recorded processes. Later entries strictly re-read the same result.
+    original = compare_original(ROOT, output, report, native, record_check=record_check,
+                                cargo=executable(str(rustc.with_name("cargo"))), rustc=rustc)
+    compare_view_search(output, report, rustc, execute=True)
+    return original
+
+
+def compare_view_search_public(output: Path, report: dict, original: dict,
+                               *, execute: bool = False, native: dict | None = None) -> dict:
+    """Read public search bytes against the already admitted shared original."""
+    import hia_native_view_search_reference as reference
+    from hia_native_view_search_public_qualification import compare_public_reference
+    native = view_search_public_evidence(output, report) if native is None else native
+    reference.exact(native, report.get("view_search_public_evidence"), "admitted public search native evidence")
+    reference.exact(original, report.get("view_search_original_comparison"), "prior shared search original evidence")
+    relative = native["corpus"]
+    reference.need(type(relative) is str and relative != "" and not Path(relative).is_absolute()
+        and ".." not in Path(relative).parts and str(Path(relative)) == relative,
+        "public search corpus is not a canonical relative path")
+    reference.exact(original["original_output"], reference.ORACLE_OUTPUT_FOLDER, "shared search original folder")
+    result = compare_public_reference(ROOT, output / relative, output / original["original_output"])
+    if "view_search_public_original_comparison" in report:
+        reference.exact(result, report["view_search_public_original_comparison"], "retained public search original comparison")
+    elif not execute:
+        raise ValueError("required public literal search original comparison was not recorded")
+    else:
+        report["view_search_public_original_comparison"] = result
+        save_report(output / "result.json", report)
+    return result
+
+
+def compare_runtime_mcp(output: Path, report: dict, rustc: Path | None) -> dict:
+    from hia_native_view_call_qualification import compare_original
+    from hia_native_runtime_mcp_reference import compare_reference
+    native = view_call_evidence(output, report)
+    if native != report.get("view_call_evidence"):
+        raise ValueError("local view native inputs changed before public MCP comparison")
+    if runtime_mcp_evidence(output, report) != report.get("runtime_mcp_evidence"):
+        raise ValueError("public MCP native inputs changed before original comparison")
+    original = compare_original(ROOT, output, report, native)
+    search_original = compare_view_search(output, report)
+    public = compare_reference(ROOT, output / "runtime-mcp", output / original["original_output"])
+    compare_view_search_public(output, report, search_original, execute=rustc is not None)
+    return public
+
+
+def compare_render_corpus(output: Path, report: dict, rustc: Path, *, growth: bool) -> dict:
+    evidence_reader = view_render_growth_evidence if growth else view_render_evidence
+    evidence_key = "view_render_growth_evidence" if growth else "view_render_evidence"
+    cases = VIEW_GROWTH_CASES if growth else VIEW_CASES
+    stream_identity = view_growth_stream_identity if growth else view_stream_identity
+    stem = "view-render-growth" if growth else "view-render"
+    evidence = evidence_reader(output, report)
+    if evidence != report.get(evidence_key):
         raise ValueError("view native read snapshots or rendered bytes changed before original Rust replay")
-    folder = output / VIEW_FOLDER
+    folder = output / (VIEW_GROWTH_FOLDER if growth else VIEW_FOLDER)
     source = ROOT / "tests/hia_native/oracle_view_render.rs"
     binary = folder / "original-view.elf"
-    rust_compile(output, report, rustc, key="view-render-rust", source=source, binary=binary,
+    rust_compile(output, report, rustc, key=stem + "-rust", source=source, binary=binary,
                  extra=("-C", "overflow-checks=off"))
     binary_hash = sha(binary)
     replay = folder / "original-replay"
-    row = record_check(output, report, name="view-render-rust-compare",
+    row = record_check(output, report, name=stem + "-rust-compare",
         command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_view_original.py"),
                  "--source", str(source), "--binary", str(binary),
                  "--requests", str(folder / "requests.hex.gz"),
@@ -1203,19 +1532,19 @@ def compare_view_render(output: Path, report: dict, rustc: Path) -> dict:
         env=qualification_env(), timeout=60)
     observed = json.loads(row.stdout)
     if (row.stderr or observed.get("status") != "PASS" or type(observed.get("cases")) is not int
-            or observed["cases"] != VIEW_CASES or observed.get("run_exit_code") != 0
+            or observed["cases"] != cases or observed.get("run_exit_code") != 0
             or observed.get("compiled_by_qualification_recipe") is not True
             or observed.get("native_and_rust_output_sha256") != evidence["native_output_sha256"]
             or observed.get("raw_output_bytes") != evidence["native_output_bytes"]
             or observed.get("executable", {}).get("sha256") != binary_hash
             or observed.get("inputs_before") != observed.get("inputs_after")
             or json.loads((replay / "result.json").read_bytes()) != observed
-            or view_stream_identity(replay / "rust-output.txt.gz", evidence["native_output_bytes"]) != (
+            or stream_identity(replay / "rust-output.txt.gz", evidence["native_output_bytes"]) != (
                 evidence["native_output_bytes"], evidence["native_output_sha256"])
-            or sha(binary) != binary_hash or view_render_evidence(output, report) != evidence):
+            or sha(binary) != binary_hash or evidence_reader(output, report) != evidence):
         raise ValueError("original view complete ordered responses or source custody differ")
-    result = {"schema": "hepta.runtime.view-render-rust-comparison.v1", "status": "PASS",
-              "cases": VIEW_CASES, "native_cases_added_by_replay": 0,
+    result = {"schema": "hepta.runtime." + stem + "-rust-comparison.v1", "status": "PASS",
+              "cases": cases, "native_cases_added_by_replay": 0,
               "reference_kind": "unchanged original range, file render, cache, delta and result gate methods with independent read fixtures",
               "input_sha256": evidence["input_sha256"], "native_output_sha256": evidence["native_output_sha256"],
               "original_output_sha256": observed["native_and_rust_output_sha256"],
@@ -1257,6 +1586,36 @@ def compare_fence_json(output: Path, report: dict, rustc: Path) -> dict:
 def compare_serde_json(output: Path, report: dict, rustc: Path) -> dict:
     return compare_json_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
         "serde_json", completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
+def compare_request_context(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_request_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
+        "request_context", completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
+def compare_response_hints(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_request_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
+        "response_hints", completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
+def compare_result_publication(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_publication_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
+        completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
+def compare_request_scope(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_request_scope_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
+        completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
+def compare_terminal_clean(output: Path, report: dict, rustc: Path) -> dict:
+    return shell_qualification.compare_original(ROOT, output, report, "terminal_clean", rustc,
+        executable(str(rustc.with_name("cargo"))), completed_test_summary, record_check, qualification_env)
+
+
+def compare_shell_gate(output: Path, report: dict, rustc: Path) -> dict:
+    return shell_qualification.compare_original(ROOT, output, report, "shell_gate", rustc,
+        executable(str(rustc.with_name("cargo"))), completed_test_summary, record_check, qualification_env)
 
 
 def retained_execution_original(output: Path, report: dict) -> dict:
@@ -1348,9 +1707,16 @@ def compare_session_workdir(output: Path, report: dict, rustc: Path) -> dict:
 
 
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
+           "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
+           "request_context": compare_request_context, "response_hints": compare_response_hints,
+           "result_publication": compare_result_publication,
+           "request_scope_lifecycle": compare_request_scope,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
+           "view_render_growth": compare_view_render_growth,
+           "view_read": compare_view_call_group, "view_params": compare_view_call_group,
+           "view_call": compare_view_call_group, "runtime_mcp": compare_runtime_mcp,
            "view_cache": compare_view_cache, "history": compare_history, "session_workdir": compare_session_workdir,
            "file_locks": compare_file_locks, "file_lock_service": compare_file_lock_service,
            "fence_json": compare_fence_json, "serde_json": compare_serde_json, "execution_shadow": compare_execution,
@@ -1426,12 +1792,17 @@ def run_rust_recipes(output: Path, report: dict, rustc: Path) -> None:
             save_report(output / "result.json", report)
             return failure
         try:
-            for key in report["modules"]:
+            # Reports sort JSON keys when saved; that order can put a consumer
+            # before its shared original producer. The recipe registry declares
+            # dependencies in execution order (local view before public MCP).
+            for key in RECIPES:
+                if key not in report["modules"]:
+                    continue
                 if key in futures:
                     failure = collect(key)
                     if failure is not None:
                         raise failure
-                elif key in RECIPES:
+                else:
                     report["original_rust_comparisons"][key] = RECIPES[key](output, report, rustc)
                     save_report(output / "result.json", report)
         finally:
@@ -1500,11 +1871,19 @@ def main() -> int:
     parser.add_argument("--rustc", default="rustc", help="Rust compiler executable; CI supplies its pinned path")
     args = parser.parse_args()
     result = run(args.output.resolve(strict=True), args.rustc)
-    print(json.dumps({"status": result["status"], "rust_comparison_status": result["rust_comparison_status"],
-                      "compiler_cold_status": result.get("compiler_cold_status"),
-                      "retained_python_comparison_status": result.get("retained_python_comparison_status"),
-                      "report": str(args.output.resolve() / "result.json"),
-                      "check_processes": len(result["checks"]), "whole_runtime_replaced": False}, sort_keys=True))
+    summary = {"status": result["status"], "rust_comparison_status": result["rust_comparison_status"],
+               "compiler_cold_status": result.get("compiler_cold_status"),
+               "retained_python_comparison_status": result.get("retained_python_comparison_status"),
+               "report": str(args.output.resolve() / "result.json"),
+               "check_processes": len(result["checks"]), "whole_runtime_replaced": False}
+    if result["status"] != "PASS":
+        summary["error"] = result.get("error")
+        summary["failed_processes"] = [
+            {key: row.get(key) for key in ("name", "exit_code", "timed_out", "start_error",
+                                          "elapsed_seconds", "timeout_seconds")}
+            for row in result["checks"]
+            if row.get("exit_code") != 0 or row.get("timed_out") is not False or row.get("start_error")]
+    print(json.dumps(summary, sort_keys=True))
     return 0 if result["status"] == "PASS" else 1
 
 

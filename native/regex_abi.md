@@ -2,21 +2,21 @@
 
 These components execute HIA compiled by the pinned native compiler. They do not call Rust, Python, libc, an external regex service, or a dynamically selected plugin. The original reference crates are test dependencies only: regex 1.13.1, regex-syntax 0.8.11, regex-automata 0.4.18, aho-corasick 1.1.5 and memchr 2.8.3, with the exact original Cargo checksums.
 
-The installed configuration route is real: administrator startup invokes `config_owner`, which invokes the validator twice in the original load/init order; the validator calls the native regex controller for each `extra_arg_patterns` element. Its first failing pattern produces the original validation error before state-directory preparation. The current MCP service still advertises only `host_list`, `effective_config` and `execution_shadow_admit`. This change does not implement or advertise `privileged_run`, and does not authorize a command merely because a pattern matched.
+The installed configuration route is real: administrator startup invokes `config_owner`, which invokes the validator twice in the original load/init order; the validator calls the native regex controller for each `extra_arg_patterns` element. Its first failing pattern produces the original validation error before state-directory preparation. The standalone configuration MCP service advertises `host_list`, `effective_config` and `execution_shadow_admit`; the separate combined runtime MCP profile also connects `view`. This dependency does not implement or advertise `privileged_run`, and does not authorize a command merely because a pattern matched.
 
 ## Fixed call graph
 
-| Global image | Owner | Allowed children |
-|---:|---|---|
-| 3 | Configuration validation | 15 |
-| 10 | Syntax/AST | 11 |
-| 11 | Immutable Unicode data | None |
-| 12 | HIR translation | 11 |
-| 13 | Forward/reverse Thompson NFA | None |
-| 14 | Boolean NFA matching | 11 |
-| 15 | Regex controller | 10, 12, 13, 14 |
+| Owner | Local selector | Configuration image | Combined runtime image | Allowed child selectors |
+|---|---:|---:|---:|---|
+| Configuration validation | 3 | 3 | 3 | 15 |
+| Syntax/AST | 10 | 11 | 31 | 11 |
+| Immutable Unicode data | 11 | 12 | 32 | None |
+| HIR translation | 12 | 13 | 33 | 11 |
+| Forward/reverse Thompson NFA | 13 | 14 | 34 | None |
+| Boolean NFA matching | 14 | 15 | 35 | 11 |
+| Regex controller | 15 | 16 | 36 | 10, 12, 13, 14 |
 
-Only the existing configuration filesystem image 1 may yield an OS effect. The regex subtree is pure byte-memory computation. Its module IDs, call offsets, images, source hashes and private workspaces are fixed by the build profile. Neither tool arguments nor configuration text can select another executable, module or child span.
+Local selectors remain unchanged when the fixed subtree is placed in either composition. The 17-image configuration and 37-image combined runtime keep result publication at physical image 10; their builders bind each regex selector to the exact physical image shown above. Within configuration/regex validation, only the existing configuration filesystem image 1 may yield an OS effect. The regex subtree is pure byte-memory computation. Its module IDs, call offsets, images, source hashes and private workspaces are fixed by the build profile. Neither tool arguments nor configuration text can select another executable, module or child span.
 
 Every component uses `f0(readbuf, mutbuf, mutbuf) -> u32`. Ordinary return values are exact output byte counts. `0xffffffff` rejects malformed internal input or receipts; `0xfffffffe` indicates insufficient buffers; `0xffffffe0` yields a fixed child continuation. Parser/translation/NFA domain refusals use their documented `0xfffffffd` code, and the parser separately distinguishes private arena exhaustion. A refusal never publishes a partial output. Input, output, private scratch, state and continuation footer spans are checked independently.
 

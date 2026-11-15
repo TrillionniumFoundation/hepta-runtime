@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_pipeline as p
 import hia_native_failure as failure
 import qualify_hia_runtime_native as q
+import hia_native_view_fixture_qualification as fixtures
 
 
 class NativePipelineTests(unittest.TestCase):
@@ -277,7 +278,7 @@ class NativePipelineTests(unittest.TestCase):
     def test_missing_or_duplicate_shards_cannot_reach_evidence_owners(self):
         source, prepared, report, destination = self.actual_fixture()
         shards = self.root / "shards"; shards.mkdir()
-        for group in ("one", "two", "three", "four"):
+        for group in p.PARTITIONS:
             shutil.copytree(destination, shards / group)
         output = self.root / "collect"; output.mkdir()
         with patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())), \
@@ -287,12 +288,12 @@ class NativePipelineTests(unittest.TestCase):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
             self.assertEqual(p.read_json(output / "result.json")["status"], "FAIL")
-            shutil.rmtree(shards / "four")
-            with self.assertRaisesRegex(ValueError, "exactly four"):
+            shutil.rmtree(shards / "config")
+            with self.assertRaisesRegex(ValueError, "exactly " + str(len(p.PARTITIONS))):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
 
-    def test_four_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
+    def test_all_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
         from contextlib import ExitStack
         from datetime import datetime, timezone
         source = self.root / "source"
@@ -312,7 +313,7 @@ class NativePipelineTests(unittest.TestCase):
             run = self.root / group; run.mkdir()
             report = copy.deepcopy(prepared)
             report.update(status="RUNNING", phase="native_components", native_components_status="RUNNING",
-                qualification_shard={"group": group, "invocation": "four-actual-processes",
+                qualification_shard={"group": group, "invocation": "all-actual-processes",
                                      "prepared_sha256": "b" * 64, "tests": [name]})
             with patch.object(q, "ROOT", source):
                 q.run_native_checks(run, report, (name,), q.qualification_env(), parallel_tests=(),
@@ -330,8 +331,8 @@ class NativePipelineTests(unittest.TestCase):
             stack.enter_context(patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())))
             evidence = stack.enter_context(patch.object(q, "collect_native_evidence"))
             stack.enter_context(patch.object(q, "finish_native", side_effect=finish))
-            result = p.collect(output, self.root / "compiler", "b" * 64, "four-actual-processes", artifacts)
-            self.assertEqual(result["checks"], 5)
+            result = p.collect(output, self.root / "compiler", "b" * 64, "all-actual-processes", artifacts)
+            self.assertEqual(result["checks"], 1 + len(p.PARTITIONS))
             evidence.assert_called_once()
             report = p.read_json(output / "result.json")
             self.assertEqual([row["name"] for row in report["checks"][1:]], list(names))
@@ -349,6 +350,67 @@ class NativePipelineTests(unittest.TestCase):
             path = output / (names[0] + ".stderr"); path.write_bytes(b"later corruption")
             with self.assertRaisesRegex(ValueError, "artifact bytes differ"):
                 p.verify_pipeline_receipts(output, report)
+
+
+    def test_view_fixture_retirement_retains_lossless_content_before_removal(self):
+        output = self.root / "output"
+        caller = output / "view-call/caller/files-0"
+        public = output / "runtime-mcp/files"
+        caller.mkdir(parents=True)
+        public.mkdir(parents=True)
+        outside = self.root / "outside.bin"
+        outside.write_bytes(b"untouched outside fixture")
+        content = b"complete native fixture\0\xff"
+        raw = caller / os.fsdecode(b"invalid-\xff")
+        raw.write_bytes(content)
+        (caller / "empty.bin").write_bytes(b"")
+        (caller / "outside-link").symlink_to(outside)
+        (caller / "empty-directory").mkdir()
+        os.link(raw, public / "same-inode.bin")
+        names = ("runtime-mcp/files", "view-call/caller/files-0")
+        evidence = {"kind": "synthetic pipeline reporting control", "native_calls": 0}
+        proof = fixtures.retire_fixtures(output, names, evidence, create=True)
+        self.assertEqual(proof["regular_files"], 3)
+        self.assertEqual(proof["symlinks"], 1)
+        self.assertEqual(proof["content_bytes"], len(content) * 2)
+        self.assertEqual(proof["semantic_invocations_added"], 0)
+        self.assertFalse(caller.exists())
+        self.assertFalse(public.exists())
+        self.assertEqual(outside.read_bytes(), b"untouched outside fixture")
+        self.assertEqual(fixtures.retire_fixtures(output, names, evidence), proof)
+        self.assertEqual(set(p.inventory(output)[0]), {fixtures.RECEIPT, fixtures.ARCHIVE})
+        with self.assertRaisesRegex(ValueError, "complete admitted execution"):
+            fixtures.retire_fixtures(output, names, {"different": "evidence"})
+        receipt = output / fixtures.RECEIPT
+        original = receipt.read_bytes()
+        altered = json.loads(original)
+        row = next(item for item in altered["entries"] if item["kind"] == "file" and item["bytes"])
+        row["sha256"] = "f" * 64
+        receipt.write_bytes(fixtures.encoded(altered))
+        with self.assertRaisesRegex(ValueError, "complete retained fixture file content"):
+            fixtures.retire_fixtures(output, names, evidence)
+        receipt.write_bytes(original)
+        caller.mkdir()
+        with self.assertRaisesRegex(ValueError, "reappeared"):
+            fixtures.retire_fixtures(output, names, evidence)
+
+    def test_view_fixture_retirement_refuses_alias_roots_and_wider_paths(self):
+        output = self.root / "output"
+        target = self.root / "outside"
+        target.mkdir()
+        (target / "keep").write_bytes(b"keep")
+        alias = output / "view-call/caller/files-0"
+        alias.parent.mkdir(parents=True)
+        alias.symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            fixtures.retire_fixtures(output, ("view-call/caller/files-0",), {}, create=True)
+        self.assertEqual((target / "keep").read_bytes(), b"keep")
+        self.assertTrue(alias.is_symlink())
+        self.assertFalse((output / fixtures.ARCHIVE).exists())
+        for name in ("../outside", "view-call", "view-call/caller", "runtime-mcp/sessions"):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "owned test domain"):
+                fixtures.retire_fixtures(output, (name,), {}, create=True)
+
 
 
 if __name__ == "__main__":

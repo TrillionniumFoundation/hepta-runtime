@@ -1,4 +1,5 @@
-/* Sixteen fixed HIA images. Administrator startup is followed by newline MCP. */
+/* Seventeen fixed HIA images. Administrator startup is followed by newline MCP.
+ * Image 10 owns text publication; six regex images use their private local selectors. */
 .intel_syntax noprefix
 .section .text
 .global _start
@@ -338,6 +339,8 @@ native_return:
     je startup_completed
     jmp fatal /* No external binary-query production path. */
 mcp_completed:
+    cmp eax, 0xffffffd1
+    je mcp_publication
     cmp rax, ROOT_OUTPUT_CAP
     ja fatal
     test rax, rax
@@ -1236,6 +1239,354 @@ bare_fatal:
     mov edi, 112
     mov eax, 60
     syscall
+
+
+/* Only config_mcp's typed text-result handoff can enter this publisher. */
+.global publication_call_displacement
+.equ PUB_SRC, 4096
+.equ PUB_DST, 73728
+.equ PUB_WINDOW, 65600
+.equ PUB_GROW, 0xffffffd0
+.equ PUB_RESOURCE, 0xfffffffc
+mcp_publication:
+    push r15
+    push r14
+    push r13
+    push r12
+    push rbx
+    push rbp
+    sub rsp, 64
+    mov rbx, rsp
+    mov rax, 0x3130425550505248
+    cmp [r14 + FOOTER + 160], rax
+    jne pub_early_invalid
+    cmp qword ptr [r14 + FOOTER + 168], 100667424
+    jne pub_early_invalid
+    cmp qword ptr [r14 + FOOTER + 176], 67108832
+    ja pub_early_invalid
+    cmp qword ptr [r14 + FOOTER + 184], ROOT_OUTPUT_CAP
+    ja pub_early_invalid
+    cmp qword ptr [r14 + FOOTER + 192], 1
+    ja pub_early_invalid
+    cmp qword ptr [r14 + FOOTER + 200], 1
+    jne pub_early_invalid
+    lea rax, [r15 + OUTPUT]
+    mov [rbx], rax
+    mov rax, [r14 + FOOTER + 184]
+    mov [rbx + 8], rax
+    lea rax, [r14 + 100667424]
+    mov [rbx + 16], rax
+    mov rax, [r14 + FOOTER + 176]
+    mov [rbx + 24], rax
+    mov rax, [r14 + FOOTER + 192]
+    mov [rbx + 32], rax
+    xor r12d, r12d
+    xor r14d, r14d
+    xor r15d, r15d
+    mov esi, 262144
+    call pub_allocate
+    cmp rax, -4095
+    jae pub_fail_resource
+    mov r12, rax
+    mov esi, 131072
+    call pub_allocate
+    cmp rax, -4095
+    jae pub_fail_resource
+    mov r14, rax
+    mov r15d, 131072
+    mov qword ptr [r12 + 256], 1
+    mov edi, 13
+    lea rsi, [r12 + 256]
+    xor edx, edx
+    mov r10d, 8
+    mov eax, 13
+    syscall
+    test rax, rax
+    js pub_fail_io
+    mov edi, 1
+    call pub_make_request
+    mov qword ptr [r12 + PUB_SRC + 32], 3
+    mov rax, [rbx + 32]
+    mov [r12 + PUB_SRC + 40], rax
+    call pub_invoke
+    cmp rax, 64
+    jne pub_fail_invalid
+    mov rsi, [rbx]
+    mov rcx, [rbx + 8]
+    mov edi, 13
+    call pub_import
+    mov rsi, [rbx + 16]
+    mov rcx, [rbx + 24]
+    mov edi, 2
+    call pub_import
+    mov edi, 3
+    call pub_make_request
+    call pub_invoke
+    cmp rax, 64
+    jne pub_fail_invalid
+    mov edi, 7
+    call pub_make_request
+    call pub_invoke
+    cmp rax, 64
+    jne pub_fail_invalid
+    mov edi, 8
+    call pub_make_request
+    call pub_invoke
+    cmp rax, 64
+    jne pub_fail_invalid
+    jmp pub_publish_next
+pub_import:
+    push rbp
+    mov [r12 + 160], rsi
+    mov [r12 + 168], rcx
+    mov [r12 + 176], rdi
+pub_import_next:
+    cmp qword ptr [r12 + 168], 0
+    je pub_import_done
+    mov rdi, [r12 + 176]
+    call pub_make_request
+    mov rcx, [r12 + 168]
+    cmp rcx, 65536
+    jbe pub_import_size
+    mov ecx, 65536
+pub_import_size:
+    mov [r12 + PUB_SRC + 48], rcx
+    lea rax, [rcx + 64]
+    mov [r12 + 8], rax
+    sub [r12 + 168], rcx
+    mov rsi, [r12 + 160]
+    add [r12 + 160], rcx
+    lea rdi, [r12 + PUB_SRC + 64]
+    rep movsb
+    call pub_invoke
+    cmp eax, PUB_RESOURCE
+    je pub_import_resource
+    cmp rax, 64
+    jne pub_import_invalid
+    jmp pub_import_next
+pub_import_resource:
+    pop rbp
+    jmp pub_fail_resource
+pub_import_invalid:
+    pop rbp
+    jmp pub_fail_invalid
+pub_import_done:
+    pop rbp
+    ret
+pub_write_receipt:
+    /* Production stderr remains unchanged. The exact shared write/ACK loop
+     * has a retaining fixture; MCP tests capture complete actual wire bytes. */
+    ret
+pub_success:
+    xor ebp, ebp
+    jmp pub_release
+pub_fail_invalid:
+    mov ebp, 2
+    jmp pub_release
+pub_fail_io:
+    mov ebp, 74
+    jmp pub_release
+pub_fail_resource:
+    mov ebp, 75
+pub_release:
+    mov [rbx + 40], rbp
+    test r14, r14
+    jz pub_release_transport
+    mov rdi, r14
+    mov rsi, r15
+    mov eax, 11
+    syscall
+pub_release_transport:
+    test r12, r12
+    jz pub_restore
+    mov rdi, r12
+    mov esi, 262144
+    mov eax, 11
+    syscall
+pub_restore:
+    mov rsp, rbx
+    mov eax, [rbx + 40]
+    add rsp, 64
+    pop rbp
+    pop rbx
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    test eax, eax
+    jnz pub_return_failure
+    mov edi, 1
+    lea rsi, [rip + newline]
+    mov edx, 1
+    call write_exact
+    test eax, eax
+    jnz fatal
+    jmp frame_next
+pub_return_failure:
+    mov ebp, eax
+    jmp cleanup_all
+pub_early_invalid:
+    add rsp, 64
+    pop rbp
+    pop rbx
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    jmp fatal
+
+pub_publish_next:
+    mov edi, 9
+    call pub_make_request
+    call pub_invoke
+    cmp rax, 64
+    jb pub_fail_invalid
+    cmp rax, PUB_WINDOW
+    ja pub_fail_invalid
+    sub rax, 64
+    mov [r12 + 64], rax
+    test rax, rax
+    jz pub_publication_done
+    mov rax, [r12 + PUB_DST + 32]
+    mov [r12 + 48], rax
+    mov rax, [r12 + PUB_DST + 40]
+    mov [r12 + 56], rax
+pub_write_attempt:
+    mov edi, 1
+    lea rsi, [r12 + PUB_DST + 64]
+    mov rdx, [r12 + 64]
+    mov eax, 1
+    syscall
+    mov [r12 + 72], rax
+    test rax, rax
+    jle pub_write_wait_or_fail
+    mov edi, 10
+    call pub_make_request
+    mov rax, [r12 + 48]
+    mov [r12 + PUB_SRC + 24], rax
+    mov rax, [r12 + 56]
+    mov [r12 + PUB_SRC + 32], rax
+    mov rax, [r12 + 72]
+    mov [r12 + PUB_SRC + 40], rax
+    call pub_invoke
+    mov [r12 + 88], rax
+    call pub_write_receipt
+    cmp qword ptr [r12 + 88], 64
+    jne pub_fail_invalid
+    jmp pub_publish_next
+pub_write_wait_or_fail:
+    mov qword ptr [r12 + 88], -1
+    call pub_write_receipt
+    mov rax, [r12 + 72]
+    cmp rax, -4
+    je pub_write_attempt
+    cmp rax, -11
+    jne pub_fail_io
+    mov dword ptr [r12 + 128], 1
+    mov dword ptr [r12 + 132], 4
+pub_wait_writable:
+    lea rdi, [r12 + 128]
+    mov esi, 1
+    mov rdx, -1
+    mov eax, 7
+    syscall
+    cmp rax, -4
+    je pub_wait_writable
+    cmp rax, 1
+    jne pub_fail_io
+    jmp pub_write_attempt
+pub_publication_done:
+    cmp qword ptr [r12 + PUB_DST + 24], 4
+    jne pub_fail_invalid
+    mov edi, 12
+    call pub_make_request
+    call pub_invoke
+    cmp rax, 64
+    jne pub_fail_invalid
+    jmp pub_success
+
+/* Private mapping growth is only between image invocations. Source and output
+ * are in the disjoint fixed transport mapping; no old arena pointer survives. */
+pub_invoke:
+    lea rdi, [r12 + PUB_SRC]
+    mov rsi, [r12 + 8]
+    lea rdx, [r12 + PUB_DST]
+    mov ecx, PUB_WINDOW
+    mov r8, r14
+    mov r9, r15
+    sub rsp, 8
+    .byte 0xe8
+publication_call_displacement:
+    .long 0
+    add rsp, 8
+    mov rdx, rax
+    shr rdx, 32
+    jnz pub_fail_invalid
+    cmp eax, PUB_GROW
+    je pub_grow_arena
+    cmp rax, 64
+    jne pub_invoke_return
+    cmp qword ptr [r12 + PUB_SRC + 8], 1
+    jne pub_invoke_return
+    mov qword ptr [r12 + 32], 0
+pub_invoke_return:
+    ret
+pub_grow_arena:
+    mov rax, 0x31304f5247505248
+    cmp [r14 + 512], rax
+    jne pub_fail_invalid
+    mov rax, [r12 + 32]
+    inc rax
+    jz pub_fail_invalid
+    cmp [r14 + 520], rax
+    jne pub_fail_invalid
+    cmp [r14 + 240], rax
+    jne pub_fail_invalid
+    mov [r12 + 32], rax
+    mov rdx, [r14 + 528]
+    cmp rdx, r15
+    jbe pub_fail_invalid
+    test rdx, rdx
+    js pub_resource_return
+    mov [r12 + 96], rdx
+    mov rdi, r14
+    mov rsi, r15
+    mov r10d, 1
+    xor r8d, r8d
+    mov eax, 25
+    syscall
+    cmp rax, -4095
+    jae pub_resource_return
+    mov r14, rax
+    mov r15, [r12 + 96]
+    jmp pub_invoke
+pub_resource_return:
+    mov eax, PUB_RESOURCE
+    ret
+
+pub_make_request:
+    push rdi
+    lea rdi, [r12 + PUB_SRC]
+    mov ecx, 8
+    xor eax, eax
+    rep stosq
+    pop rdi
+    mov rax, 0x3130303051505248
+    mov [r12 + PUB_SRC], rax
+    mov [r12 + PUB_SRC + 8], rdi
+    mov rax, [r14 + 8]
+    mov [r12 + PUB_SRC + 16], rax
+    mov qword ptr [r12 + 8], 64
+    ret
+pub_allocate:
+    xor edi, edi
+    mov edx, 3
+    mov r10d, 34
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    ret
 
 /* HIA regex-only child subtree; no descriptor or effect capability. */
 regex_invoke:

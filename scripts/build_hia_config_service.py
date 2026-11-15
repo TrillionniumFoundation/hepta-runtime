@@ -16,7 +16,7 @@ def main():
     hepta=a.hepta.resolve(strict=True);root=a.build_root.resolve();builder=NativeBuild(hepta,root);builder.bootstrap();modules={}
     declarations=[('json','config_json','serde-json.v1','filter'),('validation','config_validation','history.v1',None),('identity','config_identity','serde-json.v1','filter'),
         ('identity_composed','config_identity','history.v1',None),('owner','config_owner','history.v1',None),('mcp','config_mcp','history.v1',None),
-        ('execution','execution_controller','history.v1',None),('execution_json','execution_json','history.v1',None),('execution_core','execution_shadow','history.v1',None),('value','serde_json','serde-json.v1',None)]
+        ('execution','execution_controller','history.v1',None),('execution_json','execution_json','history.v1',None),('execution_core','execution_shadow','history.v1',None),('value','serde_json','serde-json.v1',None),('publication','result_publication','standard',None)]
     declarations += [(name,name,'standard'if name in ['regex_unicode','regex_unicode_data']else'history.v1','filter'if name=='regex_unicode_data'else None)for name in ['regex_unicode','regex_unicode_data','regex_syntax','regex_hir','regex_nfa','regex_match','regex_controller']]
     for name,source,profile,standalone in declarations:
         modules[name]=builder.compile(a.prefix+'-'+name.replace('_','-'),ROOT/'native'/(source+'.hepta'),standalone=standalone,buffer_profile=profile)
@@ -36,7 +36,7 @@ def main():
     owner=run('owner','build_config_owner_probe.py',common+['--name',a.prefix+'-owner']+owner_args)
     fixture=run('fixture','build_config_owner_probe.py',common+['--name',a.prefix+'-fixture','--fixture-admin']+owner_args)
     mcp_args=owner_args[:]
-    for name in ['mcp','execution','execution_json','execution_core','value']:mcp_args+=['--'+name.replace('_','-')+'-manifest',modules[name]]
+    for name in ['mcp','execution','execution_json','execution_core','value','publication']:mcp_args+=['--'+name.replace('_','-')+'-manifest',modules[name]]
     mcp=run('mcp','build_config_mcp_service.py',common+['--name',a.prefix+'-mcp']+mcp_args)
     by_source={source:modules[name]for name,source,_,_ in declarations};by_source['config_identity']=modules['identity_composed']
     executables={name:Path(item['manifest'])for name,item in [('fs',fs),('owner',owner),('fixture',fixture),('mcp',mcp)]}

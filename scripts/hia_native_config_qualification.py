@@ -1,7 +1,7 @@
-"""Bind actual configuration builds, six native suites and four original domains.
+"""Bind actual configuration/regex builds, all native suites and original domains.
 
 No service policy is executed here. Only create=True may publish the compatibility
-result, and only after all six real aggregate process records have been verified.
+result, and only after every declared real aggregate process record has been verified.
 """
 from pathlib import Path
 import ast,gzip,hashlib,importlib.util,json,math,os,re,signal,struct,subprocess,sys,time,tomllib
@@ -20,6 +20,7 @@ OWN = ['native/config_execution_schema.json',
  'native/config_mcp.hepta',
  'native/config_mcp_composition.json',
  'native/config_mcp_packer.hepta',
+ 'native/config_publication_adapter.json',
  'native/config_owner.hepta',
  'native/config_owner_abi.md',
  'native/config_owner_composition.json',
@@ -64,6 +65,9 @@ DEPENDENCIES = ['Cargo.lock',
  'native/filter_packer.hepta',
  'native/serde_filter_packer.hepta',
  'native/serde_json.hepta',
+ 'native/result_publication.hepta',
+ 'native/result_publication_abi.md',
+ 'native/result_publication_composition.json',
  'scripts/generate_hia_transport.py',
  'scripts/hia_native_build.py',
  'scripts/hia_native_loader.py',
@@ -127,6 +131,10 @@ def source_pins(root):
     values={name:sha(read(root/name)) for name in sorted(paths)}
     for row in MODULES.values():require(values[row['source']]==row['source_sha256'],'HIA source changed: '+row['source'])
     for row in EXECUTABLES.values():require(values[row['packer_source']]==row['packer_source_sha256'],'HIA packer changed')
+    require(values['scripts/config_mcp_adapter.S']==EXECUTABLES['mcp']['adapter_source_sha256'],'fixed publication adapter changed')
+    publication=object_at(root/'native/config_publication_adapter.json')
+    expected={'schema':'hepta.runtime.config-publication-adapter.v1','adapter_sha256':values['scripts/config_mcp_adapter.S'],'owner_source':MODULES['publication']['source'],'owner_source_sha256':MODULES['publication']['source_sha256'],'owner_image_sha256':MODULES['publication']['image_sha256'],'handoff_module':5,'new_image':10,'same_owner_as_fixture':True,'production_stderr_unchanged':True,'fixture_write_ack_trace':True,'production_write_ack_trace':False,'external_ofd_flags_changed':False,'filesystem_callers_replaced':False,'whole_runtime_replaced':False,'no_application_cumulative_quota_from_windows_or_chunks':True,'bounded_by_lp64_and_real_resources':True}
+    exact({k:publication.get(k) for k in expected},expected,'result publication adapter binding or scope changed')
     return values
 def launch(root,script,args):
     code='import runpy,sys; root=sys.argv[1]; script=sys.argv[2]; sys.path[:0]=[root+"/scripts",root+"/tests/hia_native"]; sys.argv=sys.argv[2:]; runpy.run_path(script,run_name="__main__")'
@@ -204,7 +212,7 @@ def _build_at(root,output,path,*,hepta=None):
     expected={'schema':'hepta.runtime.config-build-process.v1','exit_code':0,'timed_out':False,'cleanup_timed_out':False,'start_error':None,'timeout_seconds':180,'cleanup_seconds':3,'source_pins':pins,'source_pins_after':pins,'stdout_sha256':sha(stdout),'stderr_sha256':sha(stderr),'cwd':str(root)}
     exact({k:receipt.get(k)for k in expected},expected,'actual build process receipt differs');finite(receipt['elapsed_seconds'],183)
     command=receipt['command'];require(len(command)==13 and command[:7]==launch(root,'scripts/build_hia_config_service.py',[])and command[7]=='--hepta'and command[9:]==['--build-root',str(build),'--output',str(path)],'fixed build command differs')
-    exact(json.loads(stdout),{'output':str(path),'modules':19,'executables':['fs','owner','fixture','mcp','regex_unicode','regex_syntax','regex_hir','regex_regex','regex_validation'],'sha256':sha(raw)},'actual build stdout is incomplete')
+    exact(json.loads(stdout),{'output':str(path),'modules':20,'executables':['fs','owner','fixture','mcp','regex_unicode','regex_syntax','regex_hir','regex_regex','regex_validation'],'sha256':sha(raw)},'actual build stdout is incomplete')
     require(stderr==b''and set(bundle['modules'])==set(MODULES)and set(bundle['executables'])==set(EXECUTABLES),'build inventory changed')
     modules={}
     for name,want in MODULES.items():
@@ -250,6 +258,17 @@ def _build_at(root,output,path,*,hepta=None):
         if name=='mcp':
             require(m['protocol_version']=='2025-06-18','protocol version differs')
             exact(m['tool_names'],['host_list','effective_config','execution_shadow_admit'],'advertised tools changed')
+            physical_edges={'0':[1,2,3,4],'5':[0,6,9,10],'6':[0,7,8],
+                            '3':[16],'16':[11,13,14,15],'11':[12],'13':[12],'15':[12]}
+            exact(m['call_edges'],physical_edges,'physical MCP call authority differs')
+            exact(m.get('regex_local_call_edges'),{'3':[15],'15':[10,12,13,14],
+                  '10':[11],'12':[11],'14':[11]},'regex local continuation authority differs')
+            exact(m.get('regex_selector_members'),{'3':'validation','10':'regex_syntax',
+                  '11':'regex_unicode_data','12':'regex_hir','13':'regex_nfa',
+                  '14':'regex_match','15':'regex_controller'},'regex selector/member mapping differs')
+            expected_publication={'result_publication_image_id':10,'result_publication_source':MODULES['publication']['source'],'result_publication_source_sha256':MODULES['publication']['source_sha256'],'result_publication_image_sha256':MODULES['publication']['image_sha256'],'result_publication_handoff':'config_mcp.tool_result fixed envelope prefix and original text span','filesystem_hint_callers_replaced':False,'publication_fixture_is_production':False,'regex_compilation_closed':False}
+            exact({k:m.get(k) for k in expected_publication},expected_publication,'typed text publication owner or scope differs')
+            exact({k:m.get(k) for k in ['builder_source_sha256','generic_build_sha256','generic_loader_sha256']},{'builder_source_sha256':pins['scripts/build_config_mcp_service.py'],'generic_build_sha256':pins['scripts/hia_native_build.py'],'generic_loader_sha256':pins['scripts/hia_native_loader.py']},'actual MCP build source closure differs')
         if regex:
             require(m['runtime_python_required']is False and m['runtime_libc_required']is False and m['unconstrained_regex_resources_closed']is False,'regex boundary claim changed')
             require([r['name']for r in m['records']]==['assemble','relocations','text','symbols'],'regex assembly process incomplete')
@@ -343,6 +362,7 @@ def native_evidence(root,output,report,completed_test_summary,create=False):
             stored=json.loads(artifact(output,artifacts,output/'config-native/receipts/report.json'));exact(stored,summary,'receipt-control stdout differs')
             exact({k:summary.get(k) for k in ['native_calls','corrupt_receipt_offsets','capacity_initialization_committed','synthetic_child_receipts','actual_child_semantics_in_separate_static_elf_suite']},{'native_calls':38,'corrupt_receipt_offsets':list(range(0,112,8)),'capacity_initialization_committed':False,'synthetic_child_receipts':True,'actual_child_semantics_in_separate_static_elf_suite':True},'receipt controls incomplete')
             require(summary['manifest_sha256']==bundle['modules']['mcp']['sha256'] and summary['source_sha256']==MODULES['mcp']['source_sha256'],'receipt owner differs')
+            require(summary.get('typed_text_publication_handoff_checked') is True,'typed text publication receipt was not checked')
         for claim in ['complete_runtime','complete_config_owner','production_activated','regex_compilation_closed']:
             if claim in summary:require(summary[claim] is False,'native report overstates scope')
         records.append({'name':name,'command':check['command'],'exit':0,'elapsed':check['elapsed_seconds'],'stdout_sha256':check['stdout_sha256'],'stderr_sha256':check['stderr_sha256'],'completed_test_summary':summary})

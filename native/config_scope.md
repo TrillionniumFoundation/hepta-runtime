@@ -1,4 +1,4 @@
-# Administrator configuration and the sixteen-image MCP profile
+# Administrator configuration and the seventeen-image MCP profile
 
 This profile is an actual static Linux x86-64 executable. It reads an
 administrator-selected configuration at startup, retains the original two
@@ -47,19 +47,26 @@ record validation, matching the original first-error order.
 | 0 | `config_owner.hepta` | 1, 2, 3, 4 | None |
 | 1 | `config_fs.hepta` | None | Enumerated configuration filesystem effects |
 | 2 | `config_json.hepta` | None | None |
-| 3 | `config_validation.hepta` | 15 | None |
+| 3 | `config_validation.hepta` | 16 | None |
 | 4 | `config_identity.hepta` | None | None |
-| 5 | `config_mcp.hepta` | 0, 6, 9 | None |
+| 5 | `config_mcp.hepta` | 0, 6, 9, 10 | None |
 | 6 | `execution_controller.hepta` | 0, 7, 8 | None |
 | 7 | `execution_json.hepta` | None | None |
 | 8 | `execution_shadow.hepta` | None | None |
 | 9 | `serde_json.hepta` | None | None |
-| 10 | `regex_syntax.hepta` | 11 | None |
-| 11 | `regex_unicode_data.hepta` | None | None |
-| 12 | `regex_hir.hepta` | 11 | None |
-| 13 | `regex_nfa.hepta` | None | None |
-| 14 | `regex_match.hepta` | 11 | None |
-| 15 | `regex_controller.hepta` | 10, 12, 13, 14 | None |
+| 10 | `result_publication.hepta` | None | Private result ownership and write acknowledgements |
+| 11 | `regex_syntax.hepta` | 12 | None |
+| 12 | `regex_unicode_data.hepta` | None | None |
+| 13 | `regex_hir.hepta` | 12 | None |
+| 14 | `regex_nfa.hepta` | None | None |
+| 15 | `regex_match.hepta` | 12 | None |
+| 16 | `regex_controller.hepta` | 11, 13, 14, 15 | None |
+
+Regex HIA continuations keep their original private selectors: validation 3
+requests controller 15; the controller requests syntax 10, HIR 12, NFA 13 and
+matcher 14, and syntax/HIR/matcher request data 11. The adapter maps these
+selectors to the named physical images above. Its metadata records both domains
+separately; private selector 10 never authorizes the public result publisher.
 
 The builder verifies every actual embedded image, the immutable adapter prefix,
 relative call displacements, native HIA packer output, compiler identity, and
@@ -69,12 +76,23 @@ route retains the current caller context and separate monotonic call sequences.
 Only image 1 may yield a syscall effect. The fixed boundary is not a general
 foreign function interface.
 
+Image 5 may transfer a typed text-result span and its validated JSON-RPC prefix
+to image 10. The fixed adapter supplies a separate private growable mapping;
+the HIA owner stores offsets across relocation, validates complete UTF-8 before
+publication, and emits bounded JSON windows. The adapter advances the owner
+only by actual successful write counts. This route never re-escapes an existing
+complete JSON-RPC response as text. The original non-text protocol responses
+retain their existing transport path.
+
 The executable lazily maps 3,707,834,368 bytes of virtual address space. It does
 not clear all image workspaces eagerly. Regions above 2 GiB use zero-extended
 register arithmetic. All borrowed child buffers, persistent configuration,
 controller workspaces and call footers have disjoint fixed spans. The standard,
 `history.v1` and `serde-json.v1` buffer profiles retain their existing definitions;
 the profile names do not grant authority.
+Result publication additionally maps a 262,144-byte transport span and an
+initial 131,072-byte arena. Arena growth preserves the live object on failure
+and does not modify the shared stdout open-file-description flags.
 
 ## Configuration data contracts
 
@@ -137,6 +155,13 @@ therefore emits `content` and `isError` without `resultType`. The original
 effective_config byte-budget calculation uses its distinct direct Serialize
 representation, including its original overhead; that calculation is unchanged.
 All text and IDs are escaped with the qualified native serializer.
+Text tool results use image 10's incremental serializer, including the zero-hint
+base-chain path; the prefix retains the existing ID and envelope serializer.
+The complete owned result is sealed before the first write. Partial writes,
+EINTR and EAGAIN retain the pending bytes, while cancellation or fatal output
+failure retires the owner without relabelling an already completed tool effect
+as a tool-capacity failure. Actual write/ACK receipts are retained by the
+separate qualification fixture; production stderr remains unchanged.
 
 This is a declared MCP subset, not a claim of complete SDK parsing/concurrency.
 Outside arguments it retains the existing strict protocol duplicate policy.
@@ -154,13 +179,27 @@ they are not described as original unlimited-domain equivalence. Public summary
 limits retain the original 256 host entries and 262,144-byte effective_config
 wire budget.
 
+The result publisher introduces no application-level cumulative quota from
+its output window or a fixed number of chunks. LP64 representation, checked
+counters and actual memory/I/O resources still apply. This does not remove the
+upstream configuration profile's explicit input and installed-arena bounds,
+or replace the nine original filesystem hint callers and their scheduler.
+
 No finite native profile alone proves complete handling of all administrator
 regex programs, unconstrained source sizes, or the original general concurrent
 installation API. Those remain follow-up owners.
 
 ## Reproduction and original comparison
 
-`scripts/build_hia_config_service.py` compiles 18 distinct components (19 manifest names including the unchanged validation alias), and packs nine executables: the filesystem probe, eleven-image installed owner and trusted fixture, sixteen-image MCP service, and five fixed dependency probes. `run_config_native.py` executes six original configuration suites plus nine dependency suites, each with its unchanged 180-second process limit and three-second cleanup bound. It retains actual stdout, complete corpus bytes and embedded-image bindings. This does not replace the repository compiler cold gate.
+`scripts/build_hia_config_service.py` compiles 19 module profiles from 18 HIA
+owner sources. Identity has two buffer profiles; the unchanged validation alias
+brings the manifest-name count to 20. It packs nine executables: the filesystem
+probe, eleven-image installed owner and trusted fixture, seventeen-image MCP
+service, and five fixed dependency probes. `run_config_native.py` executes six
+configuration suites plus nine dependency suites, each with its unchanged
+180-second process limit and three-second cleanup bound. It retains actual
+stdout, complete corpus bytes and embedded-image bindings. This does not
+replace the repository compiler cold gate.
 
 The original configuration recipe prepares the existing four-bin project, verifies 54 unchanged original source blocks and exactly 100 locked registry packages, and shares one Cargo build across complete typed, semantic, installed-owner and actual rmcp domains. The additional configuration/regex domain contains 3,694 cases; the former four regex refusals are exact comparisons. All 62 baseline owner scenarios and 1,119 baseline SDK responses remain, plus three regex owner profiles/42 response pairs, four MCP profiles/24 response pairs, and four startup-failure pairs.
 

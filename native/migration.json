@@ -27,7 +27,7 @@
     },
     {
       "source": "native/line_endpoint.hepta",
-      "scope": "Original line-endpoint parsing and exact error formatting at a typed serde Value boundary, including Unicode trim, signed/unsigned integer parsing and N:hh normalization. JSON classification/serialization remains the caller boundary.",
+      "scope": "Original line-endpoint parsing and exact error formatting at a typed serde Value boundary, including full-u64 Unicode scanning, signed/unsigned integer parsing and N:hh normalization. Oversized canonical Value diagnostics retain all original bytes. JSON classification/serialization remains the caller boundary.",
       "legacy_call_sites_replaced": false
     },
     {
@@ -67,7 +67,7 @@
     },
     {
       "source": "native/view_render.hepta",
-      "scope": "Internal original view range/render/prepare decisions over independent read snapshots, exact line IDs, cache plan, delta selection and 8 MiB result gate. Complete 5 MiB file and maximum-line workspace domains use an explicit transport profile; actual file reads, session cache storage and production handler replacement remain separate owners.",
+      "scope": "Original view range/render/prepare decisions over independent complete read snapshots with full-u64 endpoints/counts and no semantic input-frame cap; exact line IDs, cache plan, delta selection and original 8 MiB base-result gate. Existing filter and independent 33 MiB double-snapshot growth domains are qualified separately. Production routing remains separate.",
       "legacy_call_sites_replaced": false
     },
     {
@@ -206,6 +206,36 @@
       "legacy_call_sites_replaced": false
     },
     {
+      "source": "native/request_context.hepta",
+      "scope": "Private scoped-future request context state with nested scopes, complete duplicate-preserving hint queues, ordered deduplicating peek/drain, cache aliases and explicit destruction. Fixed-workspace capacity refusals preserve state. Actual async scheduler ownership, Arc cache capability lifetime, unbounded allocation and production caller replacement remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/response_hints.hepta",
+      "scope": "Exact original append_hints UTF-8 response bytes after a validated native drain result, including unchanged empty-hint results and original warning/newline formatting. Real native executable join is qualified separately; production MCP response delivery remains a caller owner.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/request_scope_lifecycle.hepta",
+      "scope": "Private explicit request continuation and context ownership through the actual existing HIA context and cache-lease children. Ordinary await, cancellation tombstones, failed initialization, hint destruction and single late completion retirement preserve their distinct lifetimes. Existing-context initialization failure preserves the original child. Public dispatcher attachment, arbitrary concurrent futures and all nine production callers remain separate work.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/request_cache_lease.hepta",
+      "scope": "Private monotonic shared-cache clone leases in the supplied relocatable arena. Session, request and publication clones own separate references; the final release invokes actual cache destruction, while request cancellation cannot consume a worker-owned clone. The original unbounded allocation domain, concurrent synchronization and production session selection remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/result_publication.hepta",
+      "scope": "Private growable result construction, cross-fragment UTF-8 validation, complete sealing, original hint composition and incremental JSON publication. The fixed native boundary owns actual write and partial-ACK lifecycle without an application-wide total-result quota. The installed config MCP profile consumes this owner; production filesystem callers, asynchronous request ownership and whole-runtime adoption remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/result_publication_packer.hepta",
+      "scope": "HIA packing of the exact source-owned Linux x86-64 result-publication boundary with private owner and publisher qualification entry points. Kernel memory growth/write receipts and inherited descriptor flags are checked separately; no interpreter or semantic runtime fallback.",
+      "legacy_call_sites_replaced": false
+    },
+    {
       "source": "native/execution_shadow.hepta",
       "scope": "Original typed shadow intent validation, canonical struct JSON, domain-separated SHA256 and non-authorizing result. Complete 73,349-row original corpus; no reservation, process or ledger effect. Installed host and MCP owners are separate.",
       "legacy_call_sites_replaced": false
@@ -292,7 +322,7 @@
     },
     {
       "source": "native/config_mcp_packer.hepta",
-      "scope": "Fixed sixteen-image static MCP executable. Validation image 3 calls regex controller 15; syntax 10, HIR 12, NFA 13 and matcher 14 use immutable Unicode image 11 through checked call targets. Only the filesystem image owns OS effects.",
+      "scope": "Fixed seventeen-image static configuration MCP executable preserving the original private result-publication owner at image10 and adding six regex execution images through explicit local-selector to physical-member mapping. Only the filesystem image owns configuration OS effects; production activation and unconstrained resources remain unqualified.",
       "legacy_call_sites_replaced": false
     },
     {
@@ -301,13 +331,93 @@
       "legacy_call_sites_replaced": false
     },
     {
-      "source": "native/file_lock_state.hepta",
-      "scope": "Original FILE_LOCKS lease, weak/strong reference, fair queue, cancellation, sweep and poisoned-lock state; complete raw key storage and arena growth. The composed service supplies actual cross-thread serialization. Upper write-guard ownership remains separate.",
+      "source": "native/file_lock_key.hepta",
+      "scope": "Original local canonical key including realpath failure fallback and lexical normalization; exact remote host/port/path formatting. Native Linux filesystem effects are qualified; SSH/SFTP effects are separate. The same byte-identical key owner is called by the ordinary local-file view engine.",
       "legacy_call_sites_replaced": false
     },
     {
-      "source": "native/file_lock_key.hepta",
-      "scope": "Original local canonical key including realpath failure fallback and lexical normalization; exact remote host/port/path formatting. Native Linux filesystem effects are qualified; SSH/SFTP effects are separate.",
+      "source": "native/view_call.hepta",
+      "scope": "Original local regular-file and literal-content-search ordering over typed parameters, separate metadata/read snapshots, growable owners, request scope, hints and the final base-body gate. Literal search preserves lossy UTF-8, original context conversion, line identifiers and merged match ranges without mutating the whole-file cache. Native fixed ELF fixtures include private cancellation and raw-PathSource controls. Directory, regex-search, remote and production dispatcher closure remain separate.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/view_call_packer.hepta",
+      "scope": "HIA packaging of the immutable local-view syscall boundary and ten fixed HIA images into one Linux x86-64 ELF. Private fixture controls and binary receipts are enabled only by the standalone fixture entry; callable production bridges default to disabled trace.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/view_error.hepta",
+      "scope": "Unchanged native OS-error text owner imported from the qualified atomic-write composition for original local view read/key diagnostics; no filesystem effect authority.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/view_params.hepta",
+      "scope": "Typed SDK-equivalent view parameter extraction from complete JSON Values, exact original missing/type errors, canonical start/end Values and fixed private output framing. Original SDK adapter and cleaned published schema are compared separately; no host-side parameter interpretation at runtime.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/view_read.hepta",
+      "scope": "Original local file metadata, strict UTF-8 reads and a separately framed raw-byte read used by literal search, with unbounded total-byte accounting in a growing owned arena. Separate observations preserve existence/stat/read order, original symlink behavior, cleanup and private completion identity; the original HVRDQ001 operation domain is unchanged.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/view_read_packer.hepta",
+      "scope": "HIA packaging of the fixed Linux local reader fixture, with bounded read windows, growing snapshot storage, actual syscall receipts and balanced opaque descriptor retirement; no runtime interpreter or public MCP route.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/config_directory_owner.hepta",
+      "scope": "Installed private configuration lifecycle and local/remote path policy queries reused by the MCP view session. The same configuration workspace answers every query; public JSON cannot install authority. Its complete production routing remains separate.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/client_context.hepta",
+      "scope": "Native locked-SDK ClientCapabilities admission and private legacy/request metadata resolution, including whole-value rejection for malformed known siblings. The public MCP profile joins the original adapter reference domain; complete SDK and arbitrary-size metadata remain incomplete.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/session_context.hepta",
+      "scope": "Original first-call session initialization and working-directory selection joined to the same private session, installed path policy and actual canonical directory owner. Private metadata is supplied only after public client-capability admission; concurrent dispatcher activation remains incomplete.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/local_path_policy.hepta",
+      "scope": "Original local path admission joined to installed configuration and actual canonical filesystem effects, including protection order and policy before the view body. The qualified fixed-capacity local profile does not replace configured remote execution.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/canonical_path.hepta",
+      "scope": "Native Linux canonical path and directory-query continuations with a fixed syscall boundary. The public view profile uses the actual owner for session initialization and policy; it does not expose caller-selected child addresses or raw effect capability.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/path_source.hepta",
+      "scope": "Original path-source parsing and resolution before local view execution. The public profile retains the original raw path after policy checks; SSH/SFTP and background resource execution remain separate unfinished routes.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/runtime_mcp.hepta",
+      "scope": "Persistent public stdio composition of 37 fixed HIA images: configuration tools, SDK metadata admission, typed ordinary-file and literal-search view, session/workdir/path policy, real view/cache ownership and complete JSON publication. The 8 MiB input-line and 64 MiB gateway profiles are explicit limits; full 125-tool, HTTP, concurrent and arbitrary-size parity remain unfinished.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/runtime_mcp_catalog.hepta",
+      "scope": "HIA-native configuration/view tool catalog, original cleaned ViewParams schema, initialization and discovery response assets. The four-tool public profile is distinct from the original complete 125-tool catalog; SDK fixture projections are counted separately from complete response comparisons.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/runtime_mcp_admission.hepta",
+      "scope": "Private initialization and per-request protocol metadata state over actual canonical Value and ClientCapabilities owners. Preserves tested original legacy fallback, modern metadata priority and future-version downgrade; complete SDK service behavior remains unfinished.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/view_gateway.hepta",
+      "scope": "Actual typed view parameters followed by same-session initialization/workdir, installed path policy and the private local-file view engine, including literal content search. Copies the complete caller body before growing result publication consumes it; directory, regex-search, remote routes and unbounded gateway storage remain incomplete.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/file_lock_state.hepta",
+      "scope": "Original FILE_LOCKS lease, weak/strong reference, fair queue, cancellation, sweep and poisoned-lock state; complete raw key storage and arena growth. The composed service supplies actual cross-thread serialization. Upper write-guard ownership remains separate.",
       "legacy_call_sites_replaced": false
     },
     {
@@ -328,6 +438,16 @@
     {
       "source": "native/file_lock_service_packer.hepta",
       "scope": "Fixed three-image static Linux service boundary with four actual native threads, shared CAS/futex serialization, growing owned arenas and checked direct call edges.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/terminal_clean.hepta",
+      "scope": "Original UTF-8 shell output normalization, exact ANSI/OSC regular-expression behavior, CR progress redraw, Unicode backspace/control/whitespace rules, and repeated-line accounting. Explicit caller-buffer capacity refusals; shell process capture, lifecycle and production routing remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/shell_gate.hepta",
+      "scope": "Original deterministic shell misuse admission, SSH-body recursion, shell token/segment boundaries, raw Unix workdir prefix rules, redirect and in-place edit decisions, and git-stash detection with exact messages. Explicit workspace capacity refusals; process spawn, cancellation, durable output and production routing remain separate owners.",
       "legacy_call_sites_replaced": false
     },
     {
