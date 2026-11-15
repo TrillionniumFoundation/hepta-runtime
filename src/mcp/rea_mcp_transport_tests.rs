@@ -355,12 +355,95 @@ async fn cancelling_a_receive_keeps_partial_line_and_outbound_send_available() {
 }
 
 #[tokio::test]
-async fn sdk_bom_crlf_and_final_line_at_eof_keep_their_behavior() {
-	for (prefix, suffix) in [("\u{feff}", "\r\n"), ("", "")] {
+async fn sdk_bom_crlf_and_newline_frames_keep_their_behavior() {
+	for (prefix, suffix) in [("\u{feff}", "\r\n"), ("", "\n")] {
 		let line = call_line("rea_get_evidence_bundle", r#"{"z":1,"a":2}"#, 1);
 		let message = decode(format!("{prefix}{}{suffix}", line.trim_end())).await;
 		assert_eq!(raw(&message).object_keys(&[]).unwrap(), ["z", "a"]);
 	}
+}
+
+#[tokio::test]
+async fn eof_without_newline_matches_the_bounded_sdk_framing() {
+	// rmcp 3.9's bounded reader requires LF, unlike 3.4's read_until path.
+	// The adapter delegates framing to the SDK; valid JSON alone is not a frame.
+	for name in ["rea_get_evidence_bundle", "view"] {
+		let line = call_line(name, r#"{"z":1,"a":2}"#, 1);
+		let bytes = line.trim_end().as_bytes().to_vec();
+		serde_json::from_slice::<RxJsonRpcMessage<RoleServer>>(&bytes).unwrap();
+		let mut sdk = AsyncRwTransport::<RoleServer, _, _>::new_server(
+			Cursor::new(bytes.clone()),
+			tokio::io::sink(),
+		);
+		let mut transport = ReaMcpTransport::new(Cursor::new(bytes), tokio::io::sink());
+		assert!(
+			sdk.receive().await.is_none(),
+			"unterminated SDK frame: {name}"
+		);
+		assert!(
+			transport.receive().await.is_none(),
+			"unterminated REA frame: {name}"
+		);
+		assert!(transport.frame.lock().unwrap().is_none());
+		assert!(transport.receive().await.is_none());
+	}
+}
+
+#[tokio::test]
+async fn sdk_line_limit_discards_oversized_frames_without_poisoning_the_next_capture() {
+	use rmcp::transport::async_rw::DEFAULT_MAX_LINE_LENGTH;
+	let oversized = call_line(
+		"rea_get_evidence_bundle",
+		&format!(
+			r#"{{"oversized":"{}"}}"#,
+			"x".repeat(DEFAULT_MAX_LINE_LENGTH)
+		),
+		1,
+	);
+	assert!(oversized.len() > DEFAULT_MAX_LINE_LENGTH);
+	let next = call_line("rea_get_evidence_bundle", r#"{"z":1,"a":2}"#, 2);
+	let bytes = format!("{oversized}{next}").into_bytes();
+	let mut sdk = AsyncRwTransport::<RoleServer, _, _>::new_server(
+		Cursor::new(bytes.clone()),
+		tokio::io::sink(),
+	);
+	let mut transport = ReaMcpTransport::new(Cursor::new(bytes), tokio::io::sink());
+	let expected = serde_json::to_value(sdk.receive().await.unwrap()).unwrap();
+	let message = transport.receive().await.unwrap();
+	assert_eq!(expected["id"], 2);
+	assert_eq!(serde_json::to_value(&message).unwrap(), expected);
+	assert!(raw(&message).has_bounded_frame());
+	assert!(raw(&message).protocol_error().is_none());
+	assert_eq!(raw(&message).object_keys(&[]).unwrap(), ["z", "a"]);
+	assert!(sdk.receive().await.is_none());
+	assert!(transport.receive().await.is_none());
+}
+
+#[tokio::test]
+async fn raw_capture_limit_stays_stricter_than_the_sdk_line_limit() {
+	use rmcp::transport::async_rw::DEFAULT_MAX_LINE_LENGTH;
+	let line = call_line(
+		"rea_get_evidence_bundle",
+		&format!(r#"{{"large":"{}"}}"#, "x".repeat(MAX_CAPTURE_BYTES)),
+		1,
+	);
+	assert!(line.len() > MAX_CAPTURE_BYTES);
+	assert!(line.len() < DEFAULT_MAX_LINE_LENGTH);
+	let mut sdk = AsyncRwTransport::<RoleServer, _, _>::new_server(
+		Cursor::new(line.clone().into_bytes()),
+		tokio::io::sink(),
+	);
+	let mut transport = ReaMcpTransport::new(Cursor::new(line.into_bytes()), tokio::io::sink());
+	let expected = serde_json::to_value(sdk.receive().await.unwrap()).unwrap();
+	let message = transport.receive().await.unwrap();
+	assert_eq!(serde_json::to_value(&message).unwrap(), expected);
+	assert!(!raw(&message).has_bounded_frame());
+	assert!(raw(&message).object_keys(&[]).is_none());
+	assert!(raw(&message)
+		.protocol_error()
+		.unwrap()
+		.message
+		.contains("10485760-byte"));
 }
 
 #[tokio::test]
