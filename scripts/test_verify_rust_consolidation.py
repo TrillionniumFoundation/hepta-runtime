@@ -264,6 +264,85 @@ class ArchiveCustodyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Archived blob is unavailable"):
             self.verify_archive()
 
+    def verify_continuity(self, baseline, revision="HEAD"):
+        return verification.verify_inventory_continuity(
+            self.root, revision, verification.read_tree(self.root, revision), baseline)
+
+    def test_inventory_continuity_accepts_original_and_pre_cleanup_revisions(self):
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        report = self.verify_continuity(baseline)
+        self.assertEqual(report["retention_inventory_status"], "PASS")
+        self.assertEqual(report["retention_inventory_manifests"], 2)
+        self.assertEqual(report["retention_inventory_source_rows"], 2)
+        prior = self.verify_continuity(baseline, self.source)
+        self.assertEqual(prior["retention_inventory_status"], "not_applicable_before_cleanup")
+
+    def test_inventory_continuity_cannot_drop_row_to_hide_lost_original(self):
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        self.archive["paths"] = []
+        self.save()
+        (self.root / ".git/objects" / self.blob[:2] / self.blob[2:]).unlink()
+        with self.assertRaisesRegex(RuntimeError, "Custody inventory source rows changed"):
+            self.verify_continuity(baseline)
+
+    def test_inventory_continuity_requires_both_kinds_of_manifest(self):
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        for path in (self.archive_path, self.history_path):
+            with self.subTest(path=path):
+                (self.root / path).unlink()
+                self.commit()
+                with self.assertRaisesRegex(RuntimeError, "Required custody manifests are missing"):
+                    self.verify_continuity(baseline)
+                self.save()
+
+    def test_inventory_continuity_rejects_consistent_retired_root_removal(self):
+        # Both directory inventories are initially exact. Removing a complete
+        # root and adjusting totals would satisfy the per-manifest check, but
+        # must not erase its original failure bytes from the required scope.
+        self.history["retired_roots"].append("docs/")
+        self.history["paths"].append({
+            "path": self.documentation_path, "source_blob": self.documentation_blob,
+            "source_mode": "100644", "bytes": len(self.original_documentation)})
+        self.history["file_count"] = 2
+        self.history["byte_count"] += len(self.original_documentation)
+        (self.root / self.documentation_path).unlink()
+        self.save()
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        self.history["retired_roots"] = ["docs/"]
+        self.history["paths"] = self.history["paths"][1:]
+        self.history["file_count"] = 1
+        self.history["byte_count"] = len(self.original_documentation)
+        self.save()
+        (self.root / ".git/objects" / self.failure_blob[:2] / self.failure_blob[2:]).unlink()
+        self.assertEqual(self.verify_history()["repository_history_files"], 1)
+        with self.assertRaisesRegex(RuntimeError, "Custody inventory retired roots changed"):
+            self.verify_continuity(baseline)
+
+    def test_inventory_continuity_cannot_substitute_another_valid_ancestor(self):
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        self.archive["source_commit"] = baseline
+        self.archive["source_tree"] = self.command("rev-parse", "HEAD^{tree}").decode().strip()
+        self.archive["paths"][0]["source_blob"] = verification.read_tree(
+            self.root, baseline)["src/legacy.rs"][2]
+        self.save()
+        self.assertEqual(self.verify_archive()["original_source_paths_checked"], 1)
+        with self.assertRaisesRegex(RuntimeError, "Custody inventory source identity changed"):
+            self.verify_continuity(baseline)
+
+    def test_inventory_continuity_allows_additional_manifests(self):
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        self.write("archives/rust-branches/additional/manifest.json", json.dumps(self.archive).encode())
+        self.commit()
+        self.assertEqual(self.verify_continuity(baseline)["retention_inventory_status"], "PASS")
+        self.assertEqual(self.verify_archive()["archive_manifests"], 2)
+
+    def test_inventory_continuity_rejects_unrelated_history(self):
+        baseline = self.command("rev-parse", "HEAD").decode().strip()
+        unrelated = self.command("commit-tree", self.source_tree,
+                                 input_bytes=b"Unrelated revision\n").decode().strip()
+        with self.assertRaisesRegex(RuntimeError, "unrelated to the retention inventory baseline"):
+            self.verify_continuity(baseline, unrelated)
+
     def test_shallow_history_requires_explicit_fetch(self):
         shallow = Path(self.temporary.name) / "shallow"
         self.command("clone", "--quiet", "--depth", "1", self.root.as_uri(), str(shallow))

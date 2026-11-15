@@ -134,8 +134,8 @@ source pin was changed and no old receipt was represented as a current pass.
 tests cover exact recovery, invalid tree/blob/mode/path, unknown/non-ancestor
 source, shallow history, missing original objects, incomplete/duplicate inventories
 and old-schema compatibility. The complete candidate verifier checks 149 merged
-Rust refs,42 branch manifests,5,277 original paths and all9,708 historical paths.
-Independent diff verification accounts for exactly9,923 deletions with no extras.
+Rust refs, 42 branch manifests, 5,277 original paths and all 9,708 historical paths.
+Independent diff verification accounts for exactly 9,923 deletions with no extras.
 
 Both all-feature and no-default-feature target checks and formatting passed on
 the unchanged production inputs before a local environment reset. Clippy then
@@ -143,16 +143,48 @@ failed because the shared disk was full; that failure is not a code-quality pass
 The candidate was reconstructed from the exact original commit and rechecked;
 no unverifiable temporary commit identity is used as the published source.
 
-Fresh reconstructed bridge checks pass9 unit,16 stdio and1 legacy-import test.
-The4 HTTP tests fail both before and after because local AF_UNIX creation is
-denied. Unchanged X230 suites previously yielded88 passes and10 AF_UNIX setup
-errors. REA mapping passed;362 regression tests yielded361 passes and1 missing
+Fresh reconstructed bridge checks pass 9 unit, 16 stdio and 1 legacy-import test.
+The 4 HTTP tests fail both before and after because local AF_UNIX creation is
+denied. Unchanged X230 suites previously yielded 88 passes and 10 AF_UNIX setup
+errors. REA mapping passed; 362 regression tests yielded 361 passes and 1 missing
 /proc child-observation error. These are failed local suites, not complete passes.
 GitHub's exact-commit Repository Hygiene workflow runs those host-dependent paths
 independently; consult the run attached to the published commit for its result.
 
 No full runtime-suite pass, deployment, HIA activation, model improvement or
 performance improvement is inferred from cleanup/source custody alone.
+
+### Independent review and inventory continuity
+
+An independent review reproduced the full tracked-file inventory, all 9,923
+deletions, the 429-file Rust module closure and the 608 unchanged core inputs.
+All 214 Rust `include_str!` / `include_bytes!` inputs remain present. The active
+code and workflow scan found no direct references to the 27 retired roots.
+
+The review found a gap in the ongoing custody check: deleting a complete manifest
+or an archive source row could remove its original object from the verification
+scope. The verifier now binds the required 43 manifests and 14,985 source rows
+to the first complete cleanup commit,
+`a7a80a18b40a34aaaf2a41b1b19e82eac36ed336`. Existing source identities and retired
+roots must remain complete; new manifests may be added. Seven additional real-Git
+regressions cover these failures and the supported historical-revision boundary.
+All 23 custody tests passed locally, as did the complete verifier for the cleanup
+commit and the original main revision. This continuity contract requires keeping
+the cleanup commit in ancestry: use a merge commit or fast-forward, not a squash
+or rebase of the cleanup history.
+
+The exact cleanup commit also passed the complete hosted
+[Repository Hygiene run](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43727225157):
+16 original custody tests, 9 bridge unit tests, 16 stdio tests, all 4 HTTP tests,
+98 X230 regressions, the REA mapping check and 362 REA regressions. Cargo listed
+1,443 package paths / 118,329,328 existing-file bytes and retained all 474 runtime
+source inputs. These hosted observations resolve the earlier host-capability
+failures for that commit; the earlier local failures remain recorded.
+
+The root `AGENTS.md` now uses the actual Hepta Runtime identity and the pinned
+process-isolated nextest commands. Existing permission and release instructions
+are preserved. See [validation.json](validation.json) for the exact observations;
+the follow-up commit's CI is reported separately from its cleanup ancestor.
 
 ## Recovery
 

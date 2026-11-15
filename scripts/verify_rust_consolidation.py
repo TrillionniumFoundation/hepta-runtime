@@ -12,6 +12,12 @@ import re
 import subprocess
 
 
+# The first complete cleanup inventory is immutable history. Later retirement
+# may change disposition or add a new manifest, but cannot erase an existing
+# source row merely to avoid checking its original object.
+RETENTION_INVENTORY_BASELINE = "a7a80a18b40a34aaaf2a41b1b19e82eac36ed336"
+
+
 def git(root, *args, check=True, input_bytes=None):
     # Verification must neither substitute local replacement objects nor fetch
     # missing history as a hidden side effect in a partial clone.
@@ -70,6 +76,65 @@ def blob_sizes(root, identities):
                                + ". Fetch missing objects explicitly and rerun; no automatic fetch is performed.")
         sizes[identity] = int(fields[2])
     return sizes
+
+
+def verify_inventory_continuity(root, revision, tree, baseline):
+    """Keep the cleanup's original custody inventory complete in descendants."""
+    baseline = object_id(baseline, "retention inventory baseline")
+    git(root, "rev-parse", "--verify", baseline + "^{commit}")
+    if git(root, "merge-base", "--is-ancestor", baseline, revision, check=False).returncode:
+        if git(root, "merge-base", "--is-ancestor", revision, baseline, check=False).returncode == 0:
+            # A caller may explicitly inspect an original pre-cleanup revision.
+            # Its v1 materialized custody still gets the ordinary verification.
+            return {"retention_inventory_baseline": baseline,
+                    "retention_inventory_status": "not_applicable_before_cleanup"}
+        raise RuntimeError("Reviewed revision is unrelated to the retention inventory baseline")
+
+    original_tree = read_tree(root, baseline)
+    required = sorted(path for path in original_tree
+        if (path.startswith("archives/rust-branches/") and path.endswith("/manifest.json")
+            and path.count("/") == 3)
+        or (path.startswith("archives/repository-history/") and path.endswith(".json")
+            and path.count("/") == 2))
+    if not required:
+        raise RuntimeError("Retention inventory baseline has no custody manifests")
+    missing = sorted(set(required) - set(tree))
+    if missing:
+        raise RuntimeError("Required custody manifests are missing: " + repr(missing))
+
+    checked = 0
+    for path in required:
+        original = json.loads(git(root, "show", baseline + ":" + path).stdout)
+        current = json.loads(git(root, "show", revision + ":" + path).stdout)
+        if any(current.get(key) != original.get(key) for key in ("source_commit", "source_tree")):
+            raise RuntimeError("Custody inventory source identity changed: " + path)
+        historical = path.startswith("archives/repository-history/")
+        if historical and current.get("retired_roots") != original.get("retired_roots"):
+            raise RuntimeError("Custody inventory retired roots changed: " + path)
+
+        def source_rows(data):
+            rows = data.get("paths")
+            if not isinstance(rows, list):
+                raise RuntimeError("Custody inventory paths must be a list: " + path)
+            sources = {}
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise RuntimeError("Malformed custody inventory row: " + path)
+                name = relative_path(row.get("path"), path + " source path")
+                if name in sources:
+                    raise RuntimeError("Duplicate custody inventory source path: " + name)
+                binding = (row.get("source_blob"), row.get("source_mode"))
+                sources[name] = binding + (row.get("bytes"),) if historical else binding
+            return sources
+
+        expected, actual = source_rows(original), source_rows(current)
+        if actual != expected:
+            raise RuntimeError("Custody inventory source rows changed: " + path)
+        checked += len(expected)
+    return {"retention_inventory_baseline": baseline,
+            "retention_inventory_status": "PASS",
+            "retention_inventory_manifests": len(required),
+            "retention_inventory_source_rows": checked}
 
 
 def verify_archive_manifests(root, revision, tree):
@@ -280,6 +345,8 @@ def verify(root, revision):
     tree = read_tree(root, revision)
     if any(path.startswith("native/") for path in tree):
         raise RuntimeError("Native rewrite directory was included in Rust main")
+    inventory_result = verify_inventory_continuity(root, revision, tree,
+                                                 RETENTION_INVENTORY_BASELINE)
     archive_result = verify_archive_manifests(root, revision, tree)
     history_result = verify_repository_history(root, revision, tree)
     study = "qualification/weightspace-rs-study-20261110"
@@ -289,6 +356,7 @@ def verify(root, revision):
     return {"schema": "hepta.rust-consolidation-verification.v2", "revision": revision,
         "original_branches": len(branches), "integrated_rust_refs": len(required),
         "protected_refs": len(preserved), "protected_rewrites_included": included_rewrites,
+        **inventory_result,
         **archive_result,
         **history_result,
         "standalone_study_unchanged": True, "native_rewrite_directory_included": False,

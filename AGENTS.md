@@ -1,10 +1,13 @@
-# Octofs — AGENTS.md
+# Hepta Runtime — AGENTS.md
 
-Standalone Rust binary exposing filesystem tools (view, text_editor, batch_edit, extract_lines, shell, workdir) over MCP — stdio or streamable HTTP — with native SSH/SFTP remote file support. Rust 1.95+ · rmcp 3.x · tokio · axum.
+Policy-enforced multi-host Rust MCP runtime derived from Octofs, with native filesystem and artifact operations, durable process ownership, and optional Python/Java helpers for configured routes. Supports stdio and streamable HTTP, including native SSH/SFTP remote file access. Rust 1.95.0 · rmcp 3.x · tokio · axum.
 
 ## Commands
-- Build: `cargo build` · Release: `cargo build --release` · Dev run: `cargo run --bin hepta-runtime -- mcp` (stdio; add `--bind 127.0.0.1:12345 --auth-token-file /private/path/http.token` for HTTP; `RUST_LOG=debug` for logs)
-- Format: `cargo fmt` · Lint: `cargo clippy --all-features -- -D warnings` · Test: `cargo test --all-features` (one suite: `cargo test --all-features <name>`)
+- Toolchain: Rust **1.95.0**, cargo-nextest **0.9.137**; see `.agents/release.md` for the current CI gates.
+- Build: `cargo +1.95.0 build --locked` · Release: `cargo +1.95.0 build --locked --release --bins --examples` · Dev run: `cargo +1.95.0 run --locked --bin hepta-runtime -- mcp` (stdio; add `--bind 127.0.0.1:12345 --auth-token-file /private/path/http.token` for HTTP; `RUST_LOG=debug` for logs)
+- Format: `cargo +1.95.0 fmt --all` · Check: `cargo +1.95.0 check --locked --all-targets --all-features` · Lint: `cargo +1.95.0 clippy --locked --all-targets --all-features -- -D warnings`
+- Test: set `umask 022` as CI does, then run `cargo +1.95.0 nextest run --locked --all-targets --all-features --test-threads 1 --retries 0 --no-fail-fast` (filter one test with `-E 'test(test_view_file)'`). Some tests modify process-global state and require separate processes.
+- Run check, lint and tests again with `--no-default-features` in place of `--all-features` to cover library use without `remote-fs`.
 - Coverage: `make coverage` (needs cargo-llvm-cov + llvm-tools-preview; excludes `*_tests.rs`)
 - This checkout auto-syncs to the dev server — run build/test/clippy there (`ssh dev`), not on this machine.
 
@@ -33,7 +36,7 @@ Standalone Rust binary exposing filesystem tools (view, text_editor, batch_edit,
 - Comments explain why, not what; module-level doc comment on every file.
 
 ## Done
-- `cargo fmt --check` · `cargo clippy --all-features -- -D warnings` · `cargo test --all-features` — all exit 0, run on the dev server
+- `cargo +1.95.0 fmt --all -- --check`, the locked all-target check/lint/nextest commands above in both feature configurations, and `cargo +1.95.0 build --locked --all-features --release --bins --examples` — all exit 0, run on the dev server. The additional Python/reference and shipped-binary gates are listed in `.agents/release.md` and `.github/workflows/ci.yml`.
 - New/changed behaviour has tests (sibling `*_tests.rs` units + `fs_tests.rs` integration, happy path and error cases); copyright header present on every touched `.rs` file
 
 ## Gotchas
