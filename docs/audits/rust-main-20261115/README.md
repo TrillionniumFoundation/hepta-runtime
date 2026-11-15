@@ -7,7 +7,11 @@
 用户要求审计整个仓库，将 Rust 开发分支合入 `main` 并清理已整合的
 Rust 分支，同时保持新的 HIA 重写分支。
 
-初始快照包含 **155 个远端分支、79 个 open PR**。默认分支为
+初始分支快照包含 **155 个远端分支**，最初 GitHub search 观察到 79 个 open
+PR。后续直接 REST 完整分页发现搜索漏掉 17 个既有 Rust PR；本次汇总 PR
+#125 创建后的完整清单为 97 个 open：93 个 Rust PR、三个保留的 HIA PR 和
+#125。原搜索快照保留原样；完整对照、覆盖依据及 #120 保留 head 的特殊关系见
+[PR 清单补充](pr-inventory-supplement.md)。初始默认分支为
 `hepta-runtime-base`，提交 `ba574f2a6a1b74e85191c58d7bec011720736bb9`，
 当时不存在 `main`。所有分支具有共同历史；没有把无关 Git 历史强接到项目中。
 
@@ -97,7 +101,7 @@ clone 仍按设计被资格入口拒绝，未为本次运行降低约束。
 
 ## 依赖、工作流与凭据检查
 
-当前 `Cargo.lock` 有 362 个 package 条目，无 `rsa` crate 或指向该 crate 的
+依赖修复前候选 `4767ddc0` 的 `Cargo.lock` 有 362 个 package 条目，无 `rsa` crate 或指向该 crate 的
 依赖边。registry 包均带 checksum，来源是 crates.io；非 registry 包只有根包
 和仓库内 ruzstd，根 manifest 的唯一 patch 也是该本地目录。此结论针对锁定
 依赖图，不表示所有 RSA 算法或证书功能不存在。tunnel client 补丁的实际字节
@@ -113,9 +117,20 @@ release 仍手动触发，只构建并上传私有候选 artifact，不自动部
 8 处匹配均为文件引用或拒绝/隔离测试中的合成数据。没有输出凭据值；这一检查
 不覆盖每个历史 blob，不能表述成整个 Git 历史绝无秘密。
 
-当前环境没有 `cargo-audit` 和现成 advisory 数据库，因此本轮没有新的
-RustSec/CVE clearance。Python 直接依赖虽固定版本，但未提供完整带 hash 的
-传递依赖环境；包管理器和 runner image 仍是重现性边界。
+最初环境没有 `cargo-audit` 和现成 advisory 数据库；后续独立取得官方
+cargo-audit 0.23.0 并核对发布资产 SHA-256，使用官方 advisory-db 提交
+`4ef2df8e806a65e2f1ecc14f56f51249062b23d6` 对候选 `4767ddc0` 完整锁文件扫描。
+结果为 **6 条漏洞公告、2 条 unsound 提示，退出码 1，ignore 为空**。其中 MCP
+HTTP 服务无界 schema 缓存涉及当前启用路径；loopback/token 只限制入口，不能
+消除授权客户端造成的内存增长。两个客户端/OAuth 问题的相关 features 没有
+启用，其余密码库、SSH agent-server 与底层接口风险逐项区分可达性。
+原始非零报告、八份公告、工具与数据库身份以及撤回版本复核保存在
+[初始依赖审计](validation/dependency-initial-4767ddc/dependency-audit-initial-4767ddc.md)。
+修复版本的实际锁文件和独立复扫应另存记录，不覆盖本次失败证据，也不能将
+固定数据库匹配归零解释为整体 CVE clearance 或生产资格。
+
+Python 直接依赖虽固定版本，但未提供完整带 hash 的传递依赖环境；包管理器
+和 runner image 仍是重现性边界。
 
 ## 仍需如实保留的边界
 
@@ -136,6 +151,11 @@ RustSec/CVE clearance。Python 直接依赖虽固定版本，但未提供完整�
    资料，也不把历史结果升级成这次组合的行为证明。
 6. **源码合并与生产切换是不同验收。** 原有真实 SSH 负向实验、原始会话移交、
    生产吞吐和独立 Final-use authority 的 HOLD 不能由本次分支合并消除。
+7. **旧 SFTP 文件入口使用首次连接信任（TOFU）。** `src/mcp/fs/remote.rs` 对
+   已知匹配公钥接受、未知公钥记录后接受，对不匹配或检查错误拒绝；这需要可信
+   的首次连接环境，不是预置固定主机密钥策略，也不应称为 CA/principal 证书
+   信任验证。operator runtime 的 OpenSSH 执行路径另有
+   `StrictHostKeyChecking=yes`，两者不能混为一谈。
 
 ## 验证与清理记录
 
