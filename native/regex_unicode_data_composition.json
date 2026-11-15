@@ -57,10 +57,109 @@
     "write15": "f10"
   },
   "functions": 18,
-  "instructions": 8101,
+  "instructions": 8164,
   "regex_compiler_closed": false,
   "runtime_python_required": false,
-  "source_bytes": 453194,
-  "source_sha256": "2f0d1d943be4870386d81a6c9c230712701e1890feac56bcd2390ea83cbe22d2",
+  "source_bytes": 455579,
+  "source_sha256": "53a5ec4d585f0828cb4734071972bc695dcd06ef5291b1060c0bcda4390555e9",
+  "symbol_slot_read_revision": {
+    "asset_unchanged": true,
+    "baseline_source_sha256": "2f0d1d943be4870386d81a6c9c230712701e1890feac56bcd2390ea83cbe22d2",
+    "malformed_or_capacity_entry_paths_unchanged": true,
+    "narrow_reads": [
+      "count: table + size*8, low two bytes",
+      "symbol: table + 128 + ordinal*8, low two bytes",
+      "cursor/end at offsets 0/32, low two bytes; reservoir/available/failed at 8/16/24, low one byte"
+    ],
+    "narrow_writes": [
+      "cursor at 0, low two bytes; reservoir/available/failed at 8/16/24, low one byte; remaining already-zero high bytes unchanged"
+    ],
+    "new_full_cold_executions": 0,
+    "private_state_induction": {
+      "bit_reader_failure": "Unchanged f4 b6 commits only the whole-u64 failed flag=1; it does not commit partially-refilled local reservoir, availability or cursor. Persisted values and their six zero high bytes remain unchanged.",
+      "bit_reader_request_bounds": {
+        "block_headers": [
+          1,
+          2
+        ],
+        "distance_extra_bits": [
+          1,
+          13
+        ],
+        "dynamic_headers": [
+          5,
+          5,
+          4,
+          3
+        ],
+        "dynamic_repeats": [
+          2,
+          3,
+          7
+        ],
+        "length_extra_bits": [
+          1,
+          5
+        ],
+        "stored_block_lengths": [
+          16,
+          16
+        ],
+        "stored_bytes": [
+          8
+        ]
+      },
+      "bit_reader_success": "Unchanged f4 refills only while available<n; n<=16. It commits reservoir shifted by n, remaining available<=7, cursor<=63632 through complete-u64 f3 writes.",
+      "initial_state": "Unchanged f0 b8 clears all [0,8192) before any decoding, writes whole-u64 cursor 8192 and end 63632 through unchanged f3.",
+      "installation": "Unchanged f10/f11..f17 write only compressed bytes [8192,63632) and whole-u64 cursor; f0 resets cursor to 8192 before f9.",
+      "mutable_borrow_contract": "Input/output/workspace are disjoint, stable borrows for the synchronous public f0 call; arbitrary direct f6 entry and concurrent external state mutation are not this public ABI.",
+      "other_state_writer": "Unchanged f9 stored-block alignment writes whole-u64 zero to reservoir/available; no table/output/compressed writer aliases state offsets [0,40).",
+      "representation": "Cursor/end fit u16; persisted reservoir<256, availability<=7, failed<=1 fit u8 before every f6 read. f4 refills into local variables only, and its failure branch does not commit them. Complete-u64 writers and bounded narrow writes inductively preserve all six/seven omitted zero high bytes.",
+      "symbol_failure": "If failed was already set, f6 preserves bit state. EOF or no-code sets failed=1; the other state retains the same bounds. Cursor low-two-byte and reservoir/availability/failed low-one-byte writes preserve all already-zero high bytes.",
+      "symbol_success": "f6 consumes at most one bit at a time, refills one byte only when availability is zero and cursor<end; commits position<=63632, reservoir<256, available<=7, failed<=1."
+    },
+    "public_entry_ast_unchanged": true,
+    "replaced_functions": [
+      "f6"
+    ],
+    "request_context_source_unchanged": true,
+    "table_construction": {
+      "arbitrary_external_f6_entry_is_not_public_abi": true,
+      "caller_initialized_prefix": "f0 b8 clears bytes [0,8192) on each accepted call before installation or decoding",
+      "count_maximum": 288,
+      "count_slot_initialization": "f5 b0 clears all 128 count bytes",
+      "count_updates": "f5 b5 writes the complete u64 count through unchanged f3",
+      "length_zero_symbols_not_read": true,
+      "successful_constructed_tables_only": "f7 and f8 reject failed f5 construction before f6 is reached",
+      "symbol_maximum": 287,
+      "symbol_slots": "f5 b14 writes the complete u64 source ordinal through unchanged f3",
+      "table_bases": [
+        128,
+        2560,
+        3072
+      ]
+    },
+    "unchanged_function_ast_sha256": {
+      "f0": "c1f686b772813112125b0ba09fe695b4042e15a70d19208953de304927549f45",
+      "f1": "8e315bc756bf6cd8eb3f1c0daf7019399ca3723419df40a19f36e10274782e9d",
+      "f10": "012eb9d0feaa417a918753c0824cc788e1d6ecdf995e88cc556c56230e82b90c",
+      "f11": "bbb84e53c5df486faff004d97b9dbbf1310c5afa41036b4ac51781d0b3e12ab7",
+      "f12": "c038bfffb7b8ec35dbbac99ea2f2f4c8fd5f5582efbec4da5dae590f8faa25ea",
+      "f13": "81fa2e7afb801502fb337e39da08a16c91607034f8e6cd9fe9dbdb0581c206a4",
+      "f14": "ab761b493ba72153a30d6894e5ed21e38d23620d813e63f1adc6edf715356408",
+      "f15": "4094a554b0922f2ad8b660a9902693c990d483254b4535c7908358c1bdc7ba17",
+      "f16": "90917779df6e0c87b4870d709f60cb7f3d3cffb71a08d2a2281891d7f8d7cee7",
+      "f17": "d21b3daf671d6200300844b0c73dcafbf13b754b7e9a4f92c8660661eca5d83c",
+      "f2": "e50c266c83519ba4dca10d15586bf092016dd1ddd8b737c6251f11f66d8a74de",
+      "f3": "7656128c6e9e2339d38faab8e17c3c9279a0d719e5b2c7ee0af9561ae78c66b8",
+      "f4": "1eef04d24cdd94c0048dfa121aebab51512a2239a9c476b7793066dc3476610d",
+      "f5": "0f4d8892498b1263a542dc7f6ac9dd9d04968ae4092ec5e6a9d048540dbb919b",
+      "f7": "280c632b15feba5a53b3383f305f1d2286fd2b4a440f255fd1543792cdd56a0b",
+      "f8": "37d929f3e33b3efcd23fb3c5c52d1282fb7bb676c0ccbfc839924ba8e3ca9b96",
+      "f9": "1ccd74e76350121da30aef1a82ff18d21cadd6ac971dbc704a9d4ba090b01f8d"
+    },
+    "workspace_extent_unchanged": true,
+    "zero_high_bytes_precondition_produced_by_unchanged_owner": true
+  },
   "workspace_bytes": 63632
 }
