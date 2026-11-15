@@ -1,0 +1,34 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-B",
+      "-c",
+      "import os,stat,hashlib,json\nfrom pathlib import Path\nroot=Path('/home/qian/hepta-runtime-optimization-20261105-r31')\nexpected={\n'observation-evidence-01.tar.gz':(3150234,'b3e443d4a871b7d77f809d55b161be0e29ced8c722382a7a68bba66668a610d5'),\n'observation-evidence-01.manifest.json':(1084771,'ba545dd018a8b771991c7ec21293466443a0b1f4c250fb193c9969ab9222ac1c'),\n'observation-evidence-01.compact.json':(37631,'646a999d0834fccbb27ffccb076504d81d2abed1511ef2f5ca80cd07c71f38a1'),\n'archive_r31_observation.py':(37313,'296d84668c1703361cb3dfe6b3a8b0849aed561d125f4a39988a44cda21fd7dc')}\nstamp=lambda s:(s.st_dev,s.st_ino,s.st_mode,s.st_nlink,s.st_size,s.st_mtime_ns,s.st_ctime_ns)\nfiles=[]\nfor name,(size,digest) in expected.items():\n p=root/name;before=p.lstat()\n assert stat.S_ISREG(before.st_mode) and before.st_nlink==1 and before.st_size==size and size<=8*1024*1024\n fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC)\n sha256=hashlib.sha256();git=hashlib.sha1(b'blob '+str(size).encode()+b'\\0');seen=0\n with os.fdopen(fd,'rb') as stream:\n  assert stamp(before)==stamp(os.fstat(stream.fileno()))\n  while True:\n   b=stream.read(min(65536,size+1-seen))\n   if not b:break\n   seen+=len(b);assert seen<=size\n   sha256.update(b);git.update(b)\n  after=os.fstat(stream.fileno())\n assert stamp(before)==stamp(after)==stamp(p.lstat()) and seen==size and sha256.hexdigest()==digest\n files.append({'path':str(p),'bytes':seen,'sha256':sha256.hexdigest(),'git_blob_sha1':git.hexdigest(),'version':':'.join(map(str,(before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns))),'stable_stat':True})\nprint(json.dumps({'schema':'hepta-r31-stable-git-object-identities/v1','files':files,'programs_or_benchmarks_run':False},sort_keys=True))\n"
+    ],
+    "created_unix_ms": 1793930538569,
+    "cwd": "/home/qian",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "x230",
+    "id": "1a1ae97ae49-fc05-6064",
+    "idempotency_key": "x230-r31-observation-git-object-identities-20261106-01",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian/.local/state/hepta-runtime-mac-worker/jobs/1a1ae97ae49-fc05-6064",
+    "request_digest": "e3b45811997286e3fd271d3e4608f703e7b63f59b624476bce0cd2adca6b8c8d",
+    "request_fingerprint": 16407836175029667555,
+    "ssh_target": "x230-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1ae97ae49-fc05-6064"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1ae97ae49-fc05-6064"
+  },
+  "local_record_pending": false,
+  "reused": false
+}
