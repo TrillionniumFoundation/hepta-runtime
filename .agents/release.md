@@ -1,8 +1,8 @@
 # Hepta Runtime — CI and private release validation
 
 The checked-in workflows under `.github/workflows/` define this fork's current
-behavior. The Octofs installation and distribution material retained in README
-describes upstream packages; it does not describe a Hepta publishing pipeline.
+behavior. README links the original Octofs installation and distribution material as
+upstream reference; it does not describe a Hepta publishing pipeline.
 
 ## Runtime CI
 
@@ -66,12 +66,25 @@ an operator host or change active services.
 ## Documentation and version metadata
 
 Use the Hepta build and deployment instructions at the beginning of README and
-the source/binary qualification receipts under `docs/qualification/`. Retained
-upstream Octofs package names, `.mcpb` bundles, registry entries, badges and
-release links are upstream references. Neither `server.json` nor a Cargo.toml
+the source/binary qualification receipts under `docs/qualification/`. Linked upstream Octofs packages, bundles and registry entries are upstream
+references. Neither `server.json` nor a Cargo.toml
 version change enables a publishing workflow.
 
 Describe any new packaging or distribution behavior in the same change that
 implements it. Preserve the identity and stated scope of historical receipts;
 new source, current source-mapping checks, and qualification of an installed
 service require their own evidence.
+
+## Source package identity
+
+The supported Git checkout uses a local `[patch.crates-io]` decoder under
+`vendor/ruzstd`. Ordinary registry packaging omits nested packages and does not
+apply the root patch to consumers. Its file list is not a supported release
+contract. Historical retirement reduces that list without changing the manual
+release workflow's tracked `deploy/` payload.
+
+`src/mcp/weight_guard_journal.rs` embeds the complete Cargo manifest in persistent
+request identity. Packaging-only manifest edits can therefore change journal
+selection after rebuilding. The repository cleanup preserves `Cargo.toml` and
+`Cargo.lock` byte-for-byte; future packaging changes need their own identity
+compatibility assessment.

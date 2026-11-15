@@ -1,0 +1,104 @@
+name: Repository Hygiene
+
+on:
+  push:
+    branches: [main, 'codex/**']
+    paths:
+      - 'archives/**'
+      - 'scripts/*verify_rust_consolidation.py'
+      - 'deploy/chatgpt_mcp_bridge.py'
+      - 'deploy/readonly-bridge/**'
+      - 'tests/chatgpt_bridge*'
+      - 'tools/x230/**'
+      - 'Cargo.toml'
+      - '.github/workflows/repository-hygiene.yml'
+  pull_request:
+    paths:
+      - 'archives/**'
+      - 'scripts/*verify_rust_consolidation.py'
+      - 'deploy/chatgpt_mcp_bridge.py'
+      - 'deploy/readonly-bridge/**'
+      - 'tests/chatgpt_bridge*'
+      - 'tools/x230/**'
+      - 'Cargo.toml'
+      - '.github/workflows/repository-hygiene.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-hygiene:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source and retained history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact checkout
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Verify complete historical source custody
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scripts -p 'test_verify_rust_consolidation.py' -v
+          python3 -B scripts/verify_rust_consolidation.py | tee "$RUNNER_TEMP/archive-custody.json"
+      - name: Both bridge entry points and standalone deployment
+        run: |
+          set -euo pipefail
+          python3 -B tests/chatgpt_bridge_tests.py -v
+          python3 -B tests/chatgpt_bridge_stdio_tests.py -v
+          python3 -B tests/chatgpt_bridge_http_tests.py -v
+      - name: Retained X230 qualification harnesses
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s tools/x230/20261028 -p '*_tests.py' -v
+          python3 -B -m unittest discover -s tools/x230/20261029 -p '*_tests.py' -v
+          python3 -B -m unittest discover -s tools/x230/20261030 -p '*_tests.py' -v
+      - name: Install qualification schema dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3-jsonschema
+      - name: Retained REA evidence consumers
+        run: |
+          set -euo pipefail
+          python3 -B scripts/rea_compatibility_ledger.py check-mapping
+          python3 -B -m unittest discover -s tests -p 'rea_*tests.py' -v
+      - name: Install pinned Cargo
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Check package source closure and retired paths
+        run: |
+          set -euo pipefail
+          cargo +1.95.0 package --list > "$RUNNER_TEMP/cargo-package-files.txt"
+          python3 - <<'PYCODE'
+          import json, os
+          from pathlib import Path
+          paths = (Path(os.environ['RUNNER_TEMP']) / 'cargo-package-files.txt').read_text().splitlines()
+          retired = json.loads(Path('archives/repository-history/20261115.json').read_text())
+          unexpected = [p for p in paths if p.startswith(tuple(retired['retired_roots']))]
+          if unexpected:
+              raise SystemExit('Retired package paths: ' + repr(unexpected))
+          required = [str(p) for p in Path('src').rglob('*') if p.is_file()]
+          missing = sorted(set(required) - set(paths))
+          if missing:
+              raise SystemExit('Missing runtime package inputs: ' + repr(missing))
+          package_bytes = sum(Path(p).stat().st_size for p in paths if Path(p).is_file())
+          print(json.dumps({'package_paths': len(paths), 'existing_file_bytes': package_bytes, 'runtime_inputs': len(required)}))
+          PYCODE
+      - name: Retain source custody report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: repository-hygiene-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/archive-custody.json
+            ${{ runner.temp }}/cargo-package-files.txt
+          if-no-files-found: warn

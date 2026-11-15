@@ -1,77 +1,55 @@
-# Contributing to Octofs
+# Contributing to Hepta Runtime
 
-Thank you for your interest in contributing! This document provides guidelines for contributing to Octofs.
+Use a Git checkout, including the patched `vendor/ruzstd` crate and embedded
+helpers. See [repository layout](docs/REPOSITORY_LAYOUT.md) for ownership and
+archive rules. CI pins Rust 1.95.0 and cargo-nextest 0.9.137.
 
-## Code of Conduct
-
-Be respectful and constructive. We're all here to build something great.
-
-## How to Contribute
-
-### Reporting Bugs
-
-- Check if the bug has already been reported
-- Include clear reproduction steps
-- Provide environment details (OS, Rust version, Octofs version)
-- Include relevant logs or error messages
-
-### Suggesting Features
-
-- Open an issue with the "Feature Request" template
-- Explain the use case and problem you're solving
-- Be open to discussion and iteration
-
-### Pull Requests
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Ensure tests pass: `cargo test`
-5. Ensure clippy passes: `cargo clippy -- -D warnings`
-6. Format code: `cargo fmt`
-7. Commit with clear messages
-8. Push and open a Pull Request
-
-## Development Setup
+## Build and validation
 
 ```bash
-# Clone your fork
-git clone https://github.com/YOUR_USERNAME/octofs.git
-cd octofs
-
-# Build
-cargo build
-
-# Run tests
-cargo test
-
-# Run with debug logging
-RUST_LOG=debug cargo run
+cargo +1.95.0 fmt --all -- --check
+cargo +1.95.0 check --locked --all-targets --all-features
+cargo +1.95.0 check --locked --all-targets --no-default-features
+cargo +1.95.0 clippy --locked --all-targets --all-features -- -D warnings
+cargo +1.95.0 clippy --locked --all-targets --no-default-features -- -D warnings
+cargo +1.95.0 nextest run --locked --all-targets --all-features \
+  --test-threads 1 --retries 0 --no-fail-fast
+cargo +1.95.0 nextest run --locked --all-targets --no-default-features \
+  --test-threads 1 --retries 0 --no-fail-fast
+cargo +1.95.0 build --locked --release --bins --examples
 ```
 
-## Code Standards
+The complete suite needs isolated processes because some tests change global
+state. Workflows also run Python/JavaScript references, deployment checks and
+native integrations; see [CI validation](.agents/release.md). Preserve failures
+and report unavailable host capabilities explicitly.
 
-- **Zero clippy warnings** — All code must pass `cargo clippy`
-- **Tests** — Add tests for new functionality
-- **Documentation** — Update README.md for user-facing changes
-- **Commit messages** — Use clear, descriptive commit messages
+For local MCP development:
 
-## Project Structure
-
-```
-src/
-├── main.rs           # Entry point
-├── cli.rs            # CLI parsing
-└── mcp/
-    ├── server.rs     # MCP protocol
-    └── fs/           # Filesystem tools
+```bash
+RUST_LOG=debug cargo +1.95.0 run --locked --bin hepta-runtime -- mcp
 ```
 
-## Questions?
+## Changes and reviews
 
-- Open an issue for questions
-- Join discussions in existing issues
+Use focused branches and describe the problem, changed behavior and actual
+validation. Preserve copyright notices, hard-tab formatting and sibling Rust test
+modules. Read [tool authoring](.agents/tool-authoring.md) and
+[remote SSH](.agents/remote-ssh.md) guidance for those areas.
 
-## License
+Python/Java helpers embedded by Rust are source dependencies. Keep independent
+oracles that active tests use. Routine generated logs, binaries and run outputs
+belong in workflow artifacts unless a maintained consumer requires them in Git.
+Preserve each experiment's original result.
 
-By contributing, you agree that your contributions will be licensed under the Apache-2.0 License.
+Retired historical files must remain in a reachable original commit with complete
+path/blob/mode inventories under `archives/`. Verify those records using
+`python3 scripts/verify_rust_consolidation.py` from a full-history clone. The
+Repository Hygiene workflow exercises archive refusals and active bridge, X230
+and REA regression paths.
+
+## Reporting and license
+
+Include source commit, platform, command and complete error in bug reports. Follow
+[SECURITY.md](SECURITY.md) for vulnerabilities. Contributions use
+[Apache-2.0](LICENSE); original Octofs copyright and attribution remain.

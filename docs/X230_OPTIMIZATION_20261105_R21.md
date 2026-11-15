@@ -6,7 +6,7 @@
 
 STATUS 的两个原生 Linux 场景测得 fresh-helper CPU 下降约 13%，但代码未变的 READ 同时下降约 6%。CANCEL 的两个原生场景分别下降约 8% 和 11%，它的 READ 对照却上升约 3%。这些数字支持继续验证延后导入这一机制，同时表明有限 ABBA 测量存在不可忽略的对照波动；它们不能直接换算为六机吞吐、常驻内存或最大并发能力的收益。
 
-完整文件身份、原始包位置和各结果的来源列在附属 [evidence-identities.json](../tools/x230/20261105/r21/evidence-identities.json)。本文用短源码标识区分实验，不把长哈希表放入正文。
+完整文件身份、原始包位置和各结果的来源列在附属 [evidence-identities.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/evidence-identities.json)。本文用短源码标识区分实验，不把长哈希表放入正文。
 
 ## 被测对象与证据链
 
@@ -21,7 +21,7 @@ STATUS 的两个原生 Linux 场景测得 fresh-helper CPU 下降约 13%，但�
 
 R20 正式六机工具曾准备、审查并安装，但没有执行。STATUS-only 中间态在正式性能测量前被组合后的 R21 取代；保留其完整资格与所有组件结果，避免再运行一次已经不打算采用的整链候选。
 
-实际 [component-chain-01.json](../tools/x230/20261105/r21/component-chain-01.json) 绑定 `c908… → 2f751c… → 1f1f08…` 两段来源、两份真实 producer 语义报告、实际工具与计划，以及当前 R21 文件的完整字节。第一段只改变 `STATUS_CODE`，第二段只改变 `CANCEL_CODE`；其它 Rust 文本、READ／START 等嵌入式代码保持字节相同，六段 Python 去掉 import 后的 AST 相同。完整 [production.diff](../tools/x230/20261105/r21/production.diff) 可直接审阅。
+实际 [component-chain-01.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/component-chain-01.json) 绑定 `c908… → 2f751c… → 1f1f08…` 两段来源、两份真实 producer 语义报告、实际工具与计划，以及当前 R21 文件的完整字节。第一段只改变 `STATUS_CODE`，第二段只改变 `CANCEL_CODE`；其它 Rust 文本、READ／START 等嵌入式代码保持字节相同，六段 Python 去掉 import 后的 AST 相同。完整 [production.diff](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/production.diff) 可直接审阅。
 
 这条链没有把早期冷进程测试改写为最终源码的直接测试：STATUS 的原测试对象是 `2f751c…`，CANCEL 的实际候选才是最终 `1f1f08…`。链内明确记录 `final_was_directly_coldprocess_tested=false`。creator、资格 launcher 和 verifier 共用冻结的链验证策略并重读实际文件；完整构建／测试日志审计、组件 raw 离线审计以及最终 Git 源码绑定是另行完成的证据层，不声称同一链策略有两套独立实现。
 
@@ -51,7 +51,7 @@ CPU 是串行启动并回收的 fresh child 的 `RUSAGE_CHILDREN` user+system �
 
 READ 在两 arm 的执行脚本字节相同，却同样出现 CPU 与 wall 下降。因此不能把 STATUS 约 13% 的完整差异都归因于代码，也不直接用 READ 百分比相减当成经过证明的因果校正。mock 的小幅回退完整保留，不当作生产 systemd／Mac 性能结论。
 
-独立 [cold offline audit](../tools/x230/20261105/r20/reviews/cold/x230-cold-offline-audit-01.json) 从全部 raw 进程记录、stdout/stderr、时钟端点、累计计数器和固定夹具重算结果，14 项检查通过。原 archive 的 840 个成员另经外部 manifest 核对大小、SHA、原路径与模式；其中语义夹具故意包含的非私有模式也按原记录验证，未用解包后的权限替代原始证据。该测量的 `ru_maxrss` 是累计 child 高水位观察，不能证明单 helper 的 RSS 或每次调用分配下降。
+独立 [cold offline audit](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r20/reviews/cold/x230-cold-offline-audit-01.json) 从全部 raw 进程记录、stdout/stderr、时钟端点、累计计数器和固定夹具重算结果，14 项检查通过。原 archive 的 840 个成员另经外部 manifest 核对大小、SHA、原路径与模式；其中语义夹具故意包含的非私有模式也按原记录验证，未用解包后的权限替代原始证据。该测量的 `ru_maxrss` 是累计 child 高水位观察，不能证明单 helper 的 RSS 或每次调用分配下降。
 
 ## CANCEL 冷进程与自有目标实测
 
@@ -67,7 +67,7 @@ CANCEL 对照直接使用 `2f751c…` 与 `1f1f08…`，固定三场景 ABBA，�
 
 helper 的 CPU 采样在目标进程 wait/reap 前结束；66 个目标的回收和 CPU 另行记录，不混入 helper 分子。离线审计核对 294 个不同 PID/start-ticks 身份；全部 helper 的 CPU 总量为 12.400775 秒，另行排除的目标 CPU 总量为 2.458898 秒。这两项是完整试验生命周期计数，不是表中三个 benchmark 场景均值的简单相加。观察到的 30,984 KiB child HWM 仍是累计高水位，不能当作单次取消的内存占用。
 
-这些是真实 fresh helper 与受控自有目标的本机组件证据，尚不包含 SSH 端到端多机取消吞吐。完整 [CANCEL raw archive](../tools/x230/20261105/r20/evidence/cancelprocess-01.tar.gz) 含 1,918 个原始 probe 文件和 4 个冻结输入，另带 manifest。独立审计第 02 版的 15 项检查全部通过，重算 screen 为 true。
+这些是真实 fresh helper 与受控自有目标的本机组件证据，尚不包含 SSH 端到端多机取消吞吐。完整 [CANCEL raw archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r20/evidence/cancelprocess-01.tar.gz) 含 1,918 个原始 probe 文件和 4 个冻结输入，另带 manifest。独立审计第 02 版的 15 项检查全部通过，重算 screen 为 true。
 
 ### 保留首次离线审计失败及修正
 
@@ -75,7 +75,7 @@ helper 的 CPU 采样在目标进程 wait/reap 前结束；66 个目标的回收
 
 具体而言，binding mismatch 可在 BOUND 中提前退出，尚未执行 CANCEL 顶层导入；非 Linux mock 又会主动导入模块以安装 mock。另有三个 B 异常路径在退出时观察到 `subprocess` 已加载，但现有记录没有定位由谁导入，不能把原因写成已证明的异常格式化行为。
 
-原失败报告、两个 auditor 原文、差异、修正说明、两次 invocation 与 stdout/stderr 共 12 件材料由 [audit-evidence-manifest-01.json](../tools/x230/20261105/r20/reviews/cancel/audit-evidence-manifest-01.json) 全量列出。通过的第 02 版没有覆盖第 01 版。
+原失败报告、两个 auditor 原文、差异、修正说明、两次 invocation 与 stdout/stderr 共 12 件材料由 [audit-evidence-manifest-01.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r20/reviews/cancel/audit-evidence-manifest-01.json) 全量列出。通过的第 02 版没有覆盖第 01 版。
 
 ## 被拒绝的 request-hash 缓冲方向
 
@@ -94,11 +94,11 @@ helper 的 CPU 采样在目标进程 wait/reap 前结束；66 个目标的回收
 
 两个大 escaped 场景在各自全部四个 block 中改善，但这不能覆盖小请求失败。64 B 的两个 small 场景更是四个 block 全部回退。按预先约定的停止规则，本轮结束这一方向，不继续扫 buffer 大小，也不采用条件性的 hash-buffer integration draft。
 
-CPU 只计 digest loop，包含两 arm 共同的 full-hash 相等断言，排除启动、fixture、warmup 和资源读取。全部 worker 的生命周期 HWM 在 4 KiB 试验为 21,098,496 B，在 64 B 试验为 21,102,592 B，均没有建立 RSS 收益证据。不能从 fragment 减少单独推断栈初始化就是小请求回退的原因。四个 block 的完整方向和资源列表保留在 [4 KiB 结果](../tools/x230/20261105/r20/reviews/hash4096/RESULTS.md) 与 [64 B 结果](../tools/x230/20261105/r20/reviews/hash64/RESULTS.md)。
+CPU 只计 digest loop，包含两 arm 共同的 full-hash 相等断言，排除启动、fixture、warmup 和资源读取。全部 worker 的生命周期 HWM 在 4 KiB 试验为 21,098,496 B，在 64 B 试验为 21,102,592 B，均没有建立 RSS 收益证据。不能从 fragment 减少单独推断栈初始化就是小请求回退的原因。四个 block 的完整方向和资源列表保留在 [4 KiB 结果](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r20/reviews/hash4096/RESULTS.md) 与 [64 B 结果](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r20/reviews/hash64/RESULTS.md)。
 
 ## 剩余同类路径与停止标准
 
-本轮还检查了其余 helper 中的 `subprocess` 使用。START 的新作业路径实际需要 `run`／`Popen`，嵌入 supervisor 同样需要启动子进程；常规同键复用已在 Rust 中返回，不会重新执行这段 operator Python helper。READ 原本就没有该模块导入。因而没有把这次延后导入机械扩展到仍需模块的路径。具体范围见 [remaining-helper-imports-01.json](../tools/x230/20261105/r21/reviews/remaining-helper-imports-01.json)；这是一项源码检查，不是额外性能测量。
+本轮还检查了其余 helper 中的 `subprocess` 使用。START 的新作业路径实际需要 `run`／`Popen`，嵌入 supervisor 同样需要启动子进程；常规同键复用已在 Rust 中返回，不会重新执行这段 operator Python helper。READ 原本就没有该模块导入。因而没有把这次延后导入机械扩展到仍需模块的路径。具体范围见 [remaining-helper-imports-01.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/reviews/remaining-helper-imports-01.json)；这是一项源码检查，不是额外性能测量。
 
 此前 workers=1／4、请求分配和 buffer 复用的实际取舍沿用 [R19 报告的停止点](X230_OPTIMIZATION_20261104_R19.md#当前停止点) 及其引用的 R16–R18 记录。本轮保持 workers=2、arena=1、完整请求 digest、nonce／UID／pidfd 校验、持久化顺序和容量策略。当前源码已经使用 ring SHA256，不能将换用 ring 再计为新优化。
 
@@ -112,9 +112,9 @@ R20 在新的空 target 中完成 format、fmt-check、harness tests、all-targe
 
 完整资格阶段耗时 1,997.827 秒，随后独立验收耗时 13.020 秒，31 项检查全部通过。源码前／中／后 281 文件全等，219 个编译输入保持一致；实际 jobctl 新产物通过严格基线 SHA 与逐字节比较。新 runtime 与 driver 分别绑定本次实际产物，不根据源码变化小就推定二进制相同。
 
-原 [R20 qualification archive](../tools/x230/20261105/r20/evidence/qualification-01.tar.gz) 保留 3,362 个源码／收据／完整日志文件和 embedded manifest。8 个 ELF 没有作为二进制内容入包；导出时的稳定全文件 SHA，已在离线 sidecar 中逐项对齐 acceptance 的 3 个 release 与 5 个 retained test binaries 的 exact path、SHA 和可用 size。这是实际远端字节身份与原验收的绑定，不声称在本地复现 ELF。
+原 [R20 qualification archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r20/evidence/qualification-01.tar.gz) 保留 3,362 个源码／收据／完整日志文件和 embedded manifest。8 个 ELF 没有作为二进制内容入包；导出时的稳定全文件 SHA，已在离线 sidecar 中逐项对齐 acceptance 的 3 个 release 与 5 个 retained test binaries 的 exact path、SHA 和可用 size。这是实际远端字节身份与原验收的绑定，不声称在本地复现 ELF。
 
-独立 [qualified-source-binding-01.json](../tools/x230/20261105/r20/reviews/qualification/qualified-source-binding-01.json) 核对七份 219 输入 map、三份 281 全树快照及实际产物，10 项检查通过。R20 `src` 树重新算得 `7e5e1984…`，其 218 个未改输入的 SHA256↔Git blob 对应关系来自固定 R19 提交和已发布完整证明，改变的 jobs.rs 本地重新哈希。该证明没有冒称重新下载了所有 218 个叶字节，也不绑定尚未产生的最终发布 commit。
+独立 [qualified-source-binding-01.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r20/reviews/qualification/qualified-source-binding-01.json) 核对七份 219 输入 map、三份 281 全树快照及实际产物，10 项检查通过。R20 `src` 树重新算得 `7e5e1984…`，其 218 个未改输入的 SHA256↔Git blob 对应关系来自固定 R19 提交和已发布完整证明，改变的 jobs.rs 本地重新哈希。该证明没有冒称重新下载了所有 218 个叶字节，也不绑定尚未产生的最终发布 commit。
 
 R21 沿用成功的显式构建环境白名单，四种 Cargo／rustc wrapper 环境键全部缺席，不设为空字符串；这样保留 R19 已诊断并验证的构建身份约束。仍使用冻结原 qualifier、offline／locked Rust 1.95、jobs=2，以及原测试 runner／auditor，不因资格耗时而跳过阶段。
 
@@ -124,9 +124,9 @@ R21 的最终源码经真实 component chain 绑定后，在新的空 target 中
 
 原始 archive 保留 3,364 个 payload 文件和 embedded manifest，8 个 ELF 的完整远端字节身份逐项匹配实际 acceptance；归档共 1,483,427 B。正式测量结束后以 46 个固定 version 分片完整回传，SHA 全等，0 transport errors／retries。安全解包逐项核对 3,365 个成员及 8 个省略 ELF 身份。
 
-随后用冻结原 isolated-test audit 函数重新读取 1,647 条命令和 3,294 份 gzip stdout／stderr，完整枚举、精确判决和九项确定性字段均与原 audit 相同。离线适配仅映射两个确切文本路径，并为五个已省略 ELF 提供与 actual acceptance 对齐的完整远端 SHA 见证；原 audit 与支持函数体未改，未执行测试，也没有声称本地重新哈希 ELF。六项 raw-replay 检查通过；[可读摘要](../tools/x230/20261105/r21/reviews/qualification-raw-replay-summary-01.json) 指向 local-review 包中保留的完整 1,494,181 B 结果。
+随后用冻结原 isolated-test audit 函数重新读取 1,647 条命令和 3,294 份 gzip stdout／stderr，完整枚举、精确判决和九项确定性字段均与原 audit 相同。离线适配仅映射两个确切文本路径，并为五个已省略 ELF 提供与 actual acceptance 对齐的完整远端 SHA 见证；原 audit 与支持函数体未改，未执行测试，也没有声称本地重新哈希 ELF。六项 raw-replay 检查通过；[可读摘要](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/reviews/qualification-raw-replay-summary-01.json) 指向 local-review 包中保留的完整 1,494,181 B 结果。
 
-最终 [qualified-source-binding-01.json](../tools/x230/20261105/r21/reviews/qualified-source-binding-01.json) 的 12 项检查全部通过，独立重建两段 component chain，核对七份 219 输入 map、三份 281 全树快照和三个真实 release 产物。候选 `src` 树为 `5f814d4f…`，其中 218 个未改输入的 SHA256↔Git blob 关系来自已发布的固定 R19 证明，改变的 jobs.rs 从完整候选字节重新计算。这个 qualified 证明描述的是被拒绝的 R21 候选，不是本次仍保留的 R19 源码树。
+最终 [qualified-source-binding-01.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/reviews/qualified-source-binding-01.json) 的 12 项检查全部通过，独立重建两段 component chain，核对七份 219 输入 map、三份 281 全树快照和三个真实 release 产物。候选 `src` 树为 `5f814d4f…`，其中 218 个未改输入的 SHA256↔Git blob 关系来自已发布的固定 R19 证明，改变的 jobs.rs 从完整候选字节重新计算。这个 qualified 证明描述的是被拒绝的 R21 候选，不是本次仍保留的 R19 源码树。
 
 | 项目 | R21 实际值 |
 |---|---|
@@ -138,7 +138,7 @@ R21 的最终源码经真实 component chain 绑定后，在新的空 target 中
 
 ## 六机验收：固定口径与实际结果
 
-正式对照为 R19 A → 最终 R21 B，固定历史六台主机 ai395、mac、main、pocket4、rog、x230。历史拓扑中的 main 是独立 Linux 机器，不能替换成连接器当前同名别名。workers=2、`MALLOC_ARENA_MAX=1`，资格结束及自有进程回收后按原计划静置 90 秒。完整 [measurement-plan-01.json](../tools/x230/20261105/r21/measurement-plan-01.json) 在正式测量前冻结；计划值和实际结果在本节明确区分。
+正式对照为 R19 A → 最终 R21 B，固定历史六台主机 ai395、mac、main、pocket4、rog、x230。历史拓扑中的 main 是独立 Linux 机器，不能替换成连接器当前同名别名。workers=2、`MALLOC_ARENA_MAX=1`，资格结束及自有进程回收后按原计划静置 90 秒。完整 [measurement-plan-01.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/measurement-plan-01.json) 在正式测量前冻结；计划值和实际结果在本节明确区分。
 
 ### 已完成作业的 native observation
 
@@ -173,7 +173,7 @@ C1 的吞吐和 p95 均失败；C8 吞吐仍在 −5% 范围内，但 p95 超过
 
 C1 两个相邻配对的吞吐均下降；C8／C16 的吞吐和尾部配对方向不一致。B 的各档两轮 rate 跨度约为 4.99%、5.08%、5.36%，A 分别为 2.82%、2.18%、1.27%。C1 的 pooled p50 只上升 0.31%，但 B 最大延迟为 7,689.391 ms，A 为 1,156.678 ms；这些是原样本的分布观察，不足以单独定位网络、主机负载或代码原因。所有样本均保留，没有删去慢调用、改门槛或重跑以取得另一组结果。
 
-最大 B 延迟已定位到 round 2 的 pocket4 `process_read`：7,689.390513 ms，RPC id 41，job `1a16a40534e-b1270-4`，开始于 2026-11-05T02:26:58.208766+00:00。其原 transport 帧位于 `round-2-B/first/transport-responses.jsonl` 的 offset 24,879，长 615 B；原帧完整 SHA 与提取字节均已核对。READ helper 在该候选中没有改动，但当前证据没有定位这次延迟的原因，不能据此排除该样本或归因于网络。A 的最大值来自 round 0 的同一主机 `process_status`。两个调用均成功、没有自动重试；具体原帧和身份见 [C1 maximum identities](../tools/x230/20261105/r21/reviews/c1-max-identities-01.json)。
+最大 B 延迟已定位到 round 2 的 pocket4 `process_read`：7,689.390513 ms，RPC id 41，job `1a16a40534e-b1270-4`，开始于 2026-11-05T02:26:58.208766+00:00。其原 transport 帧位于 `round-2-B/first/transport-responses.jsonl` 的 offset 24,879，长 615 B；原帧完整 SHA 与提取字节均已核对。READ helper 在该候选中没有改动，但当前证据没有定位这次延迟的原因，不能据此排除该样本或归因于网络。A 的最大值来自 round 0 的同一主机 `process_status`。两个调用均成功、没有自动重试；具体原帧和身份见 [C1 maximum identities](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/reviews/c1-max-identities-01.json)。
 
 `native_regression_screen_passed=false` 与整体 `passed=true` 同时出现是预定语义：后者说明功能、来源和清理阶段完成，性能拒绝仍继续执行剩余容量与生命周期检查；它不表示可以采用候选。
 
@@ -256,7 +256,7 @@ launch 的 wall 均值下降 8.727%，但该 phase controller CPU 均值上升 1
 
 100 ms 采样可能漏掉短命或重父进程，tree RSS 非同时求和且可能重复计共享页。PID 消失、权限不足、字段缺失等原错误计数及 trace 身份均保留在 JSON 和完整 raw 中；不可把缺失当零。重启 controller 单列，不混入主 controller 的两个样本。没有量化每调用磁盘 I/O 节省，日志/归档/返回字节数只表示证据或输出大小。
 
-完整的 12 个 native 计时窗口、44 个 lifecycle phase 原计数器、资源缺测计数与机器阶段快照保存在 [campaign-metrics-01.json](../tools/x230/20261105/r21/reviews/campaign-metrics-01.json)，便于复查汇总公式与范围。主 controller 最高采样 RSS 约 17.2 MiB，主阶段 tree RSS 约 106.1–121.3 MiB；后者包含子进程、非同一时刻采样且共享页可能重复，不能当作精确独占占用。
+完整的 12 个 native 计时窗口、44 个 lifecycle phase 原计数器、资源缺测计数与机器阶段快照保存在 [campaign-metrics-01.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/reviews/campaign-metrics-01.json)，便于复查汇总公式与范围。主 controller 最高采样 RSS 约 17.2 MiB，主阶段 tree RSS 约 106.1–121.3 MiB；后者包含子进程、非同一时刻采样且共享页可能重复，不能当作精确独占占用。
 
 ## 保留的开发、导出和传输异常
 
@@ -297,9 +297,9 @@ R21 新增的四类包与 R20 证据一并闭合：
 
 资格、campaign 和 Mac 包分别为 1,483,427 B、5,204,365 B 和 15,653 B；完整 SHA、Git blob、全部被选路径和本地 review 成员在索引中绑定。离线 qualification 的 9 项 export、6 项 raw-replay、12 项 source checks 全通过，campaign 的七个冻结分析入口与原汇总相等，Mac 独立审计 24 项检查通过。三包固定 version 下载分别为 46、80、1 个分片，均 0 transport errors／retries。没有重跑正式性能试验。
 
-Mac holder 的 SSH foreground 命令成功返回，所持 agent 已 wait/reap，自有 agent 目录和 socket 的退出后不存在记录也由随后导出独立观察。Mac footer 保留远端 `passed=true` 与 `native_regression_screen_passed=false`，但没有 X230 report SHA；[orchestration-final-01.json](../tools/x230/20261105/r21/reviews/orchestration-final-01.json) 将真实 Mac report／bootstrap 身份、footer 路径与另行读取的 X230 完整 control report 跨包绑定，不声称 Mac exporter 独立读取过 X230 report。五个 campaign 外层阶段、四轮 lifecycle 和全部记录的自有子进程完成并回收，没有在途远端任务。
+Mac holder 的 SSH foreground 命令成功返回，所持 agent 已 wait/reap，自有 agent 目录和 socket 的退出后不存在记录也由随后导出独立观察。Mac footer 保留远端 `passed=true` 与 `native_regression_screen_passed=false`，但没有 X230 report SHA；[orchestration-final-01.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/reviews/orchestration-final-01.json) 将真实 Mac report／bootstrap 身份、footer 路径与另行读取的 X230 完整 control report 跨包绑定，不声称 Mac exporter 独立读取过 X230 report。五个 campaign 外层阶段、四轮 lifecycle 和全部记录的自有子进程完成并回收，没有在途远端任务。
 
-凭证、私钥、agent socket、target ELF／object／rlib 与重复展开目录不入证据包。ELF 仅按明确的原始全文件身份见证关联，没有冒称本地复现机器码。离线工具、原计划、原始归档、代码差分与精确执行命令可从 [README](../tools/x230/20261105/r21/README.md) 和索引逐项追溯。
+凭证、私钥、agent socket、target ELF／object／rlib 与重复展开目录不入证据包。ELF 仅按明确的原始全文件身份见证关联，没有冒称本地复现机器码。离线工具、原计划、原始归档、代码差分与精确执行命令可从 [README](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r21/README.md) 和索引逐项追溯。
 
 ## 最终决定与可复查停止点
 

@@ -285,19 +285,19 @@ performance, device performance or production qualification.
 
 ## Preserved evidence and remaining work
 
-The [C2 evidence archive](../qualification/rea-p0p5-679ccf-20261106/candidate-c2/README.md)
+The [C2 evidence archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/docs/qualification/rea-p0p5-679ccf-20261106/candidate-c2/README.md)
 is closed and independently verified. It contains **8,356 tar members /
 909,550,361 uncompressed bytes**, stored in **three gzip-stream parts /
 158,213,599 compressed bytes**. The complete compressed-stream SHA-256 is
 `42babdf174ece0ec10cb642374197aa9a69b5b6760b6b7cfc6ea0bbf1703cbb6`.
-The [parts manifest](../qualification/rea-p0p5-679ccf-20261106/candidate-c2/parts-manifest.json)
+The [parts manifest](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/docs/qualification/rea-p0p5-679ccf-20261106/candidate-c2/parts-manifest.json)
 fixes their order and each part's bytes and digest. Each part is at most 60 MiB.
 
 The frozen delivery contains **58 files / 179,522,013 bytes**. Publication adds
 two unchanged custody witnesses—the flattened delivery list and the finalizer's
 original outer—in `publication-custody/`, giving **60 archive/custody files /
 179,539,537 bytes**. These filesystem counts are separate from tar-member counts.
-The [flattened list](../qualification/rea-p0p5-679ccf-20261106/candidate-c2/publication-custody/delivery-files.flat.json)
+The [flattened list](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/docs/qualification/rea-p0p5-679ccf-20261106/candidate-c2/publication-custody/delivery-files.flat.json)
 is 11,928 bytes, SHA-256
 `59041df8666920c7ca5ce29ecb88c960385b063734b1056a7ed1e4dff3621662`.
 
@@ -306,7 +306,7 @@ bytes and digest, all parts and the final gzip EOF. It rehashed 7,491 desktop
 original/provenance objects, including the 7,443 fixed desktop selection objects;
 the separate x230 postflight rechecked all 31 selected original identities and
 the exact owned file set. No candidate or engine was executed by archiving.
-The [file index](../qualification/rea-p0p5-679ccf-20261106/candidate-c2/file-index.json)
+The [file index](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/docs/qualification/rea-p0p5-679ccf-20261106/candidate-c2/file-index.json)
 maps original host paths to member names, duplicates and explicit omissions.
 
 | Archive custody role | Actual original job | Complete durable terminal |
@@ -316,7 +316,7 @@ maps original host paths to member names, duplicates and explicit omissions.
 | Independent consumer | `1a1b0e88003-fc05-73e3` | succeeded / 0; stdout 289 bytes, stderr 0 |
 | Delivery finalizer | `1a1b0ee68b3-fc05-741c` | succeeded / 0; stdout 882 bytes, stderr 0 |
 
-The [completion record](../qualification/rea-p0p5-679ccf-20261106/candidate-c2/completion.json)
+The [completion record](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/docs/qualification/rea-p0p5-679ccf-20261106/candidate-c2/completion.json)
 is 9,727 bytes, SHA-256
 `c33e2dbdf0a2d328c928e7c90f6f00de93a7b8e7f100cc69005d605bce40e89f`.
 The independent verification is 50,611 bytes, SHA-256

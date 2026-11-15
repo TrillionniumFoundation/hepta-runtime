@@ -336,7 +336,7 @@ counted as a performance sample.
 The candidate counted pretty-JSON bytes before any filesystem effect, then serialized again
 through a 16 KiB BufWriter, explicitly flushed, and used `into_parts` to avoid Drop retries.
 It retained oversize-before-temp behavior and file-sync/rename/directory-sync ordering.
-The [probe report](../tools/x230/20261103/experiments/persistence-probe.md) and
+The [probe report](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/experiments/persistence-probe.md) and
 [raw evidence](../tests/evidence/20261103-x230-r11/persistence-probe.json) preserve all samples.
 
 This used fixed JobRecord-like `serde_json::Value` data, not the production JobRecord type.
@@ -375,8 +375,8 @@ It reused serde_json 1.0.151 with rustc 1.95.0, nice 15, CPUQuota 50%, 512 MiB, 
 The first setup job `1a1a0f6cbe9-96a-6bca` failed on an incorrect Cargo.lock path before
 compilation. Its traceback is retained; the single authorized correction kept the Rust source
 and measurement design unchanged. Exact commands are in the
-[correction launcher](../tools/x230/20261103/experiments/launch_persistence_probe_v2.py).
-The [executed Rust source](../tools/x230/20261103/experiments/persistence_probe.rs) already
+[correction launcher](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/experiments/launch_persistence_probe_v2.py).
+The [executed Rust source](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/experiments/persistence_probe.rs) already
 contains the required 2026 copyright and Apache-2.0 header; its executed hash is unchanged.
 
 ## Recovery evidence and scope
@@ -397,8 +397,8 @@ its own sampler errors. Sampled resource peaks/tree CPU remain lower bounds, not
 Neither run establishes target reboot, physical power-loss survival, WAN partition tolerance,
 production owner transfer, or transactional exactly-once external effects; the original reports
 do not record Git commit identities. Reproduction inputs are the
-[six-running canary](../tools/x230/20261103/recovery/x230_six_running_recovery_canary.py) and
-[owned SSH interruption helper](../tools/x230/20261103/recovery/owned_ssh_interruption.py).
+[six-running canary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/recovery/x230_six_running_recovery_canary.py) and
+[owned SSH interruption helper](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261103/recovery/owned_ssh_interruption.py).
 
 ## Publication and interpretation
 

@@ -1,0 +1,106 @@
+{
+  "schema": "hepta.repository-cleanup-validation.v1",
+  "baseline": "a404d4f1bf540fb94f65ef3707145eed07eef183",
+  "observations_before_environment_reset": {
+    "cargo_fmt": "PASS",
+    "cargo_check_all_targets_all_features": "PASS (17.349 seconds after restoring Cargo.toml)",
+    "cargo_check_all_targets_no_default_features": "PASS (79.393 seconds)",
+    "cargo_clippy_all_features": "FAIL: ENOSPC, no code-quality pass",
+    "cargo_clippy_no_default_features": "NOT_RUN after preceding failure",
+    "x230": {
+      "20261028": {
+        "pass": 47,
+        "error": 10,
+        "reason": "AF_UNIX creation denied"
+      },
+      "20261029": {
+        "pass": 6,
+        "error": 0
+      },
+      "20261030": {
+        "pass": 35,
+        "error": 0
+      }
+    },
+    "rea_mapping": "PASS",
+    "rea_regressions": {
+      "total": 362,
+      "pass": 361,
+      "error": 1,
+      "reason": "required /proc child observation unavailable"
+    }
+  },
+  "fresh_reconstruction_checks": {
+    "archive_unit_tests": {
+      "passed": 16
+    },
+    "bridge_unit_tests": {
+      "passed": 9
+    },
+    "bridge_stdio_tests": {
+      "passed": 16
+    },
+    "legacy_bridge_import_test": {
+      "passed": 1
+    },
+    "bridge_http_tests": {
+      "baseline_failures": 4,
+      "candidate_failures": 4,
+      "reason": "AF_UNIX creation denied before binding"
+    },
+    "core_inputs_unchanged": 608,
+    "exact_deletion_paths": 9923,
+    "updated_documentation_rows": 19,
+    "materialized_original_archive_rows": 118,
+    "history_retained_archive_rows": 5126
+  },
+  "hosted_validation": "Read Repository Hygiene run for the exact published commit; not yet observed when this file was written.",
+  "limitations": [
+    "No complete full-runtime nextest pass claimed locally",
+    "No deployment or HIA activation",
+    "Full Git history retains original storage cost"
+  ],
+  "independent_review": {
+    "cleanup_commit": "a7a80a18b40a34aaaf2a41b1b19e82eac36ed336",
+    "baseline_commit": "a404d4f1bf540fb94f65ef3707145eed07eef183",
+    "core_inputs_unchanged": 608,
+    "rust_module_closure": {
+      "reachable_files": 429,
+      "unresolved_modules": 0,
+      "orphan_files": 0
+    },
+    "rust_embedded_inputs_present": 214,
+    "exact_deletion_paths": 9923,
+    "exact_removed_bytes": 1528547962,
+    "custody_tests": {
+      "passed": 23,
+      "original": 16,
+      "added": 7
+    },
+    "complete_verifier_cleanup_commit": "PASS",
+    "complete_verifier_pre_cleanup_commit": "PASS; inventory continuity explicitly not applicable before cleanup",
+    "required_manifests": 43,
+    "required_source_rows": 14985,
+    "issue_fixed": "Missing manifests or source rows could hide original objects from subsequent custody verification.",
+    "merge_contract": "Preserve the complete cleanup commit in ancestry; merge commit or fast-forward."
+  },
+  "hosted_cleanup_validation": {
+    "commit": "a7a80a18b40a34aaaf2a41b1b19e82eac36ed336",
+    "workflow": "Repository Hygiene",
+    "run_id": 43727225157,
+    "job_id": 132851708690,
+    "url": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43727225157",
+    "conclusion": "success",
+    "custody_tests": 16,
+    "bridge_unit_tests": 9,
+    "bridge_stdio_tests": 16,
+    "bridge_http_tests": 4,
+    "x230_tests": 98,
+    "rea_tests": 362,
+    "rea_mapping": "PASS",
+    "cargo_package_paths": 1443,
+    "cargo_package_existing_file_bytes": 118329328,
+    "runtime_source_inputs": 474,
+    "follow_up_commit_validation": "Consult the CI run attached to that exact commit; ancestor results are separate."
+  }
+}

@@ -110,7 +110,7 @@ future production adoption. This finite result does not establish global optimal
 
 ## Evidence and remaining limits
 
-The [R27 index](../tools/x230/20261105/r27/README.md) links the exact source, original
+The [R27 index](https://github.com/TrillionniumFoundation/hepta-runtime/blob/a404d4f1bf540fb94f65ef3707145eed07eef183/tools/x230/20261105/r27/README.md) links the exact source, original
 failed attempt, complete successful text outputs, native identities, dependency
 inventory, arithmetic and independent review. The successful report is 16,368
 bytes, SHA-256 `75c5cef16803e0a3135cdb44ceb93f7ed4958e1e8ecde8179fb1caaec03901fa`.

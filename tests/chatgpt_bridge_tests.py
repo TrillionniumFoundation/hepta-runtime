@@ -3,14 +3,32 @@ import importlib.util
 import json
 import os
 import pathlib
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location("chatgpt_bridge",ROOT/"deploy/chatgpt_mcp_bridge.py")
 B=importlib.util.module_from_spec(spec);spec.loader.exec_module(B)
 
 class ChatGPTBridge(unittest.TestCase):
+    def test_compatibility_entry_point_keeps_module_globals_patchable(self):
+        with mock.patch.object(B,"ALLOWED_TOOLS",{"fixture_read"}):
+            self.assertIsNone(B.inspect_request({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fixture_read","arguments":{}}}))
+            self.assertIsNotNone(B.inspect_request({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"host_list","arguments":{}}}))
+
+    def test_deployment_source_remains_standalone(self):
+        with tempfile.TemporaryDirectory() as d:
+            bridge=pathlib.Path(d)/"bridge.py"
+            shutil.copyfile(ROOT/"deploy/readonly-bridge/bridge.py",bridge)
+            result=subprocess.run([sys.executable,"-I","-B",str(bridge),"--help"],cwd=d,capture_output=True,text=True,timeout=5)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertIn("--token-file",result.stdout)
+            self.assertIn("--stdio",result.stdout)
+
     def test_allowlist_is_exact_and_read_only(self):
         self.assertEqual(B.ALLOWED_TOOLS,{
             "host_list","process_status","file_info",
