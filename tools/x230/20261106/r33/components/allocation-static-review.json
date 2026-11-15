@@ -1,0 +1,1012 @@
+{
+  "schema": "hepta-r32-r33-allocation-raw-static-review/v1",
+  "source_commit": "2e2057d1af4d0205ee84933484beb5d598d72fe1",
+  "source_tree": "a010c744b35bffb92ea1d513c1d2b6dad7ebca5a",
+  "components": [
+    {
+      "component": "r32",
+      "raw": {
+        "git_path": "tools/x230/20261106/r33/components/r32-run-01.jsonl",
+        "bytes": 106523,
+        "sha256": "dfba82fb3c1b036f6245bb1d342b71621c5b23a3aaf79d47fd0c926ca86d9e66",
+        "git_blob_sha1": "cd921da92168415ec1d1dc766029774f9d3c5df9"
+      },
+      "row_count": 274,
+      "row_kind_counts": {
+        "header": 1,
+        "source": 2,
+        "control": 10,
+        "sample": 256,
+        "case_summary": 4,
+        "summary": 1
+      },
+      "sample_rows": 256,
+      "derived_measured_calls": 16384,
+      "source_labels": [
+        {
+          "kind": "source",
+          "arm": "A",
+          "source_sha256": "a62169343c2a08c38d69925f33fdc7551cf4be7b4b7f50cf89683f652a8f853a",
+          "absolute_sha256": "abcbace6885c69e01809cce9f7521ed9c4c274dcea82ebad706ddd9b33a22251",
+          "open_absolute_sha256": "ff5b6f0c618543d79095c47bc98127919b7ea8c84593743d8afd1b7055498111",
+          "row_number": 2
+        },
+        {
+          "kind": "source",
+          "arm": "B",
+          "source_sha256": "525d5b71600c53f1bedfcad89f9c1cfb590b80e38d5fb88bf0a00bf9b7b20d77",
+          "absolute_sha256": "abcbace6885c69e01809cce9f7521ed9c4c274dcea82ebad706ddd9b33a22251",
+          "open_absolute_sha256": "d5c5c7187989df822a86fe01392b242f2530492967aa1ba3f7a64259be308e52",
+          "row_number": 3
+        }
+      ],
+      "controls": [
+        {
+          "kind": "control",
+          "name": "repeated_separators_and_tail",
+          "both_arms_matched": true,
+          "row_number": 4
+        },
+        {
+          "kind": "control",
+          "name": "root_without_directory_flag",
+          "both_arms_matched": true,
+          "row_number": 5
+        },
+        {
+          "kind": "control",
+          "name": "empty",
+          "both_arms_matched": true,
+          "errno": null,
+          "error": "unsupported observation profile path",
+          "row_number": 6
+        },
+        {
+          "kind": "control",
+          "name": "relative",
+          "both_arms_matched": true,
+          "errno": null,
+          "error": "unsupported observation profile path",
+          "row_number": 7
+        },
+        {
+          "kind": "control",
+          "name": "dot",
+          "both_arms_matched": true,
+          "errno": null,
+          "error": "unsupported observation profile path",
+          "row_number": 8
+        },
+        {
+          "kind": "control",
+          "name": "dotdot",
+          "both_arms_matched": true,
+          "errno": null,
+          "error": "unsupported observation profile path",
+          "row_number": 9
+        },
+        {
+          "kind": "control",
+          "name": "non_utf8",
+          "both_arms_matched": true,
+          "errno": null,
+          "error": "observation profile path is not UTF-8",
+          "row_number": 10
+        },
+        {
+          "kind": "control",
+          "name": "file_as_directory",
+          "both_arms_matched": true,
+          "errno": 20,
+          "error": "Not a directory (os error 20)",
+          "row_number": 11
+        },
+        {
+          "kind": "control",
+          "name": "leaf_symlink",
+          "both_arms_matched": true,
+          "errno": 40,
+          "error": "Too many levels of symbolic links (os error 40)",
+          "row_number": 12
+        },
+        {
+          "kind": "control",
+          "name": "parent_symlink",
+          "both_arms_matched": true,
+          "errno": 20,
+          "error": "Not a directory (os error 20)",
+          "row_number": 13
+        }
+      ],
+      "original_header": {
+        "kind": "header",
+        "schema": "hepta-r32-open-absolute-allocation/v1",
+        "hostname": "qian-ThinkPad-X230",
+        "kernel": "6.8.0-142-generic",
+        "arch": "x86_64",
+        "pid": 3857557,
+        "fixture_root": "/tmp/hepta-r32-alloc-a6fbf791158f43747a9801634b6603f8",
+        "rounds": 16,
+        "calls_per_block": 64,
+        "warmup_calls_per_block": 16,
+        "order": [
+          "A",
+          "B",
+          "B",
+          "A"
+        ],
+        "timing_is_performance_evidence": false,
+        "scope": "instrumented real Rust functions; no whole-runtime claim",
+        "row_number": 1
+      },
+      "original_terminal": {
+        "kind": "summary",
+        "functional_passed": true,
+        "fixture_removed": true,
+        "fd_inventory_unchanged": true,
+        "passed": true,
+        "expected_sample_rows": 256,
+        "automatic_rerun": false,
+        "whole_runtime_claim": false,
+        "errors": [],
+        "row_number": 274
+      },
+      "package": {
+        "bytes": 41759,
+        "sha256": "56970b466cf4899cbab76e8f356153bc67f6cb2a640b81bc01ac19bab7b6f970",
+        "git_blob_sha1": "0a347908dbe7fde0cd9c9f260e3545e87ca312eb"
+      },
+      "package_manifest_file_count": 17,
+      "case_results": [
+        {
+          "case": "root",
+          "normal_components": 0,
+          "samples": 64,
+          "calls_per_arm": 2048,
+          "summed_raw_counters": {
+            "A": {
+              "alloc": 0,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 0,
+              "alloc_bytes": 0,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 0
+            },
+            "B": {
+              "alloc": 0,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 0,
+              "alloc_bytes": 0,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 0
+            }
+          },
+          "allocation_and_reallocation_requests_per_call": {
+            "A": 0,
+            "B": 0
+          },
+          "request_reduction_fraction": null,
+          "original_benefit_flag": false,
+          "original_summary_row": 78
+        },
+        {
+          "case": "shallow_file",
+          "normal_components": 3,
+          "samples": 64,
+          "calls_per_arm": 2048,
+          "summed_raw_counters": {
+            "A": {
+              "alloc": 8192,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 8192,
+              "alloc_bytes": 249856,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 249856
+            },
+            "B": {
+              "alloc": 6144,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 6144,
+              "alloc_bytes": 118784,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 118784
+            }
+          },
+          "allocation_and_reallocation_requests_per_call": {
+            "A": 4,
+            "B": 3
+          },
+          "request_reduction_fraction": 0.25,
+          "original_benefit_flag": true,
+          "original_summary_row": 143
+        },
+        {
+          "case": "deep_file",
+          "normal_components": 9,
+          "samples": 64,
+          "calls_per_arm": 2048,
+          "summed_raw_counters": {
+            "A": {
+              "alloc": 20480,
+              "alloc_zeroed": 0,
+              "realloc": 4096,
+              "dealloc": 20480,
+              "alloc_bytes": 286720,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 786432,
+              "dealloc_bytes": 679936
+            },
+            "B": {
+              "alloc": 18432,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 18432,
+              "alloc_bytes": 155648,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 155648
+            }
+          },
+          "allocation_and_reallocation_requests_per_call": {
+            "A": 12,
+            "B": 9
+          },
+          "request_reduction_fraction": 0.25,
+          "original_benefit_flag": true,
+          "original_summary_row": 208
+        },
+        {
+          "case": "directory",
+          "normal_components": 8,
+          "samples": 64,
+          "calls_per_arm": 2048,
+          "summed_raw_counters": {
+            "A": {
+              "alloc": 18432,
+              "alloc_zeroed": 0,
+              "realloc": 2048,
+              "dealloc": 18432,
+              "alloc_bytes": 276480,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 262144,
+              "dealloc_bytes": 407552
+            },
+            "B": {
+              "alloc": 16384,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 16384,
+              "alloc_bytes": 145408,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 145408
+            }
+          },
+          "allocation_and_reallocation_requests_per_call": {
+            "A": 10,
+            "B": 8
+          },
+          "request_reduction_fraction": 0.19999999999999996,
+          "original_benefit_flag": true,
+          "original_summary_row": 273
+        }
+      ],
+      "internal_consistency_errors": [],
+      "internal_consistency_verified": true
+    },
+    {
+      "component": "r33",
+      "raw": {
+        "git_path": "tools/x230/20261106/r33/components/r33-run-01.jsonl",
+        "bytes": 122141,
+        "sha256": "9037dc7f8c1e1cdc068ae2a18a77f2511e4930b9c2d01402b5ee0029d7a1ea35",
+        "git_blob_sha1": "f5af553c1c1fbeddec2022769a99e2f01024fd4d"
+      },
+      "row_count": 283,
+      "row_kind_counts": {
+        "header": 1,
+        "source": 2,
+        "cache_construct": 4,
+        "control": 11,
+        "sample": 256,
+        "case_summary": 4,
+        "cache_release": 4,
+        "summary": 1
+      },
+      "sample_rows": 256,
+      "derived_measured_calls": 16384,
+      "source_labels": [
+        {
+          "kind": "source",
+          "arm": "A",
+          "source_sha256": "a62169343c2a08c38d69925f33fdc7551cf4be7b4b7f50cf89683f652a8f853a",
+          "absolute_sha256": "abcbace6885c69e01809cce9f7521ed9c4c274dcea82ebad706ddd9b33a22251",
+          "open_sha256": "ff5b6f0c618543d79095c47bc98127919b7ea8c84593743d8afd1b7055498111",
+          "open_name": "R24_and_R31_open_absolute_false",
+          "row_number": 2
+        },
+        {
+          "kind": "source",
+          "arm": "B",
+          "source_sha256": "8a8721585d9c5e06e8962a6d3a3f4d1976e694ce641d41254f5e693ae81e3007",
+          "absolute_sha256": "abcbace6885c69e01809cce9f7521ed9c4c274dcea82ebad706ddd9b33a22251",
+          "open_sha256": "4418fc032f1b0d5e33cc71300253444ad65dd10488d5164aed5d9517310b0c59",
+          "open_name": "R33_PinnedFile_open_path",
+          "row_number": 3
+        }
+      ],
+      "controls": [
+        {
+          "kind": "control",
+          "phase": "open_method",
+          "name": "repeated_separators_and_tail",
+          "both_arms_matched": true,
+          "row_number": 8
+        },
+        {
+          "kind": "control",
+          "phase": "cold_syntax_precondition",
+          "name": "empty",
+          "both_arms_matched": true,
+          "B_open_path_called": false,
+          "error": "unsupported observation profile path",
+          "row_number": 9
+        },
+        {
+          "kind": "control",
+          "phase": "cold_syntax_precondition",
+          "name": "relative",
+          "both_arms_matched": true,
+          "B_open_path_called": false,
+          "error": "unsupported observation profile path",
+          "row_number": 10
+        },
+        {
+          "kind": "control",
+          "phase": "cold_syntax_precondition",
+          "name": "dot",
+          "both_arms_matched": true,
+          "B_open_path_called": false,
+          "error": "unsupported observation profile path",
+          "row_number": 11
+        },
+        {
+          "kind": "control",
+          "phase": "cold_syntax_precondition",
+          "name": "dotdot",
+          "both_arms_matched": true,
+          "B_open_path_called": false,
+          "error": "unsupported observation profile path",
+          "row_number": 12
+        },
+        {
+          "kind": "control",
+          "phase": "cold_syntax_precondition",
+          "name": "nul",
+          "both_arms_matched": true,
+          "B_open_path_called": false,
+          "error": "unsupported observation profile path",
+          "row_number": 13
+        },
+        {
+          "kind": "control",
+          "phase": "cold_syntax_precondition",
+          "name": "non_utf8",
+          "both_arms_matched": true,
+          "B_open_path_called": false,
+          "error": "observation profile path is not UTF-8",
+          "row_number": 14
+        },
+        {
+          "kind": "control",
+          "phase": "open_method",
+          "name": "leaf_symlink",
+          "both_arms_matched": true,
+          "errno": 40,
+          "error": "Too many levels of symbolic links (os error 40)",
+          "row_number": 15
+        },
+        {
+          "kind": "control",
+          "phase": "open_method",
+          "name": "parent_symlink",
+          "both_arms_matched": true,
+          "errno": 20,
+          "error": "Not a directory (os error 20)",
+          "row_number": 16
+        },
+        {
+          "kind": "control",
+          "phase": "open_method",
+          "name": "missing_leaf",
+          "both_arms_matched": true,
+          "errno": 2,
+          "error": "No such file or directory (os error 2)",
+          "row_number": 17
+        },
+        {
+          "kind": "control",
+          "phase": "open_method",
+          "name": "ancestor_replaced_after_cache",
+          "both_arms_matched": true,
+          "errno": 20,
+          "error": "Not a directory (os error 20)",
+          "row_number": 18
+        }
+      ],
+      "original_header": {
+        "kind": "header",
+        "schema": "hepta-r33-pinned-path-allocation/v1",
+        "hostname": "qian-ThinkPad-X230",
+        "kernel": "6.8.0-142-generic",
+        "arch": "x86_64",
+        "pid": 3859618,
+        "fixture_root": "/tmp/hepta-r33-alloc-1d34773a950215e1e127746847a3e9a9",
+        "rounds": 16,
+        "calls_per_block": 64,
+        "warmup_calls_per_block": 16,
+        "order": [
+          "A",
+          "B",
+          "B",
+          "A"
+        ],
+        "A_directory_argument": false,
+        "root_and_directory_are_method_edge_shapes": true,
+        "full_load_or_verify_exercised": false,
+        "R24_R31_profile_bytes_identical": true,
+        "timing_measured": false,
+        "rss_measured": false,
+        "scope": "instrumented original open function and method; separate cache construction and release; no whole-runtime claim",
+        "row_number": 1
+      },
+      "original_terminal": {
+        "kind": "summary",
+        "functional_passed": true,
+        "fixture_removed": true,
+        "fd_inventory_unchanged": true,
+        "passed": true,
+        "expected_sample_rows": 256,
+        "expected_cache_construct_rows": 4,
+        "expected_cache_release_rows": 4,
+        "automatic_rerun": false,
+        "rss_claim": false,
+        "whole_runtime_claim": false,
+        "errors": [],
+        "row_number": 283
+      },
+      "package": {
+        "bytes": 55046,
+        "sha256": "349bb5652f6b16bf18b89902d30f6c815d33d73d206a7650e9a77412eb6eac77",
+        "git_blob_sha1": "32f628b7f3b8ed580c21489d7e7c6ec93eedda99"
+      },
+      "package_manifest_file_count": 19,
+      "case_results": [
+        {
+          "case": "root",
+          "normal_components": 0,
+          "samples": 64,
+          "calls_per_arm": 2048,
+          "summed_raw_counters": {
+            "A": {
+              "alloc": 0,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 0,
+              "alloc_bytes": 0,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 0,
+              "realloc_previous_bytes": 0
+            },
+            "B": {
+              "alloc": 0,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 0,
+              "alloc_bytes": 0,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 0,
+              "realloc_previous_bytes": 0
+            }
+          },
+          "allocation_and_reallocation_requests_per_call": {
+            "A": 0,
+            "B": 0
+          },
+          "request_reduction_fraction": null,
+          "original_benefit_flag": false,
+          "original_summary_row": 83,
+          "cache": {
+            "construct": {
+              "kind": "cache_construct",
+              "case": "root",
+              "arm": "B",
+              "expression_sha256": "7dfd74ec368212d2b08bdf9ca4a0e82fcb2d7612062f819b06d5a056404a8e90",
+              "scope": "cache_expression_and_holder_only",
+              "full_load_exercised": false,
+              "counts": {
+                "alloc": 1,
+                "alloc_zeroed": 0,
+                "realloc": 0,
+                "dealloc": 0,
+                "alloc_bytes": 16,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 0,
+                "dealloc_bytes": 0,
+                "realloc_previous_bytes": 0
+              },
+              "live_allocation_requests": 1,
+              "live_requested_bytes": 16,
+              "normal_components": 0,
+              "cstring_payload_with_nuls_bytes": 0,
+              "cstring_descriptor_bytes": 0,
+              "holder_bytes": 16,
+              "fd_inventory_unchanged": true,
+              "constructed": true,
+              "error": null,
+              "row_number": 4
+            },
+            "release": {
+              "kind": "cache_release",
+              "case": "root",
+              "arm": "B",
+              "counts": {
+                "alloc": 0,
+                "alloc_zeroed": 0,
+                "realloc": 0,
+                "dealloc": 1,
+                "alloc_bytes": 0,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 0,
+                "dealloc_bytes": 16,
+                "realloc_previous_bytes": 0
+              },
+              "construction_plus_release_counts": {
+                "alloc": 1,
+                "alloc_zeroed": 0,
+                "realloc": 0,
+                "dealloc": 1,
+                "alloc_bytes": 16,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 0,
+                "dealloc_bytes": 16,
+                "realloc_previous_bytes": 0
+              },
+              "remaining_allocation_requests": 0,
+              "remaining_requested_bytes": 0,
+              "balanced": true,
+              "fd_inventory_unchanged": true,
+              "rss_claim": false,
+              "row_number": 84
+            },
+            "derived_remaining_allocation_requests": 0,
+            "derived_remaining_requested_bytes": 0
+          }
+        },
+        {
+          "case": "shallow_file",
+          "normal_components": 3,
+          "samples": 64,
+          "calls_per_arm": 2048,
+          "summed_raw_counters": {
+            "A": {
+              "alloc": 8192,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 8192,
+              "alloc_bytes": 249856,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 249856,
+              "realloc_previous_bytes": 0
+            },
+            "B": {
+              "alloc": 0,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 0,
+              "alloc_bytes": 0,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 0,
+              "realloc_previous_bytes": 0
+            }
+          },
+          "allocation_and_reallocation_requests_per_call": {
+            "A": 4,
+            "B": 0
+          },
+          "request_reduction_fraction": 1,
+          "original_benefit_flag": true,
+          "original_summary_row": 149,
+          "cache": {
+            "construct": {
+              "kind": "cache_construct",
+              "case": "shallow_file",
+              "arm": "B",
+              "expression_sha256": "7dfd74ec368212d2b08bdf9ca4a0e82fcb2d7612062f819b06d5a056404a8e90",
+              "scope": "cache_expression_and_holder_only",
+              "full_load_exercised": false,
+              "counts": {
+                "alloc": 5,
+                "alloc_zeroed": 0,
+                "realloc": 0,
+                "dealloc": 1,
+                "alloc_bytes": 186,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 0,
+                "dealloc_bytes": 64,
+                "realloc_previous_bytes": 0
+              },
+              "live_allocation_requests": 4,
+              "live_requested_bytes": 122,
+              "normal_components": 3,
+              "cstring_payload_with_nuls_bytes": 58,
+              "cstring_descriptor_bytes": 48,
+              "holder_bytes": 16,
+              "fd_inventory_unchanged": true,
+              "constructed": true,
+              "error": null,
+              "row_number": 5
+            },
+            "release": {
+              "kind": "cache_release",
+              "case": "shallow_file",
+              "arm": "B",
+              "counts": {
+                "alloc": 0,
+                "alloc_zeroed": 0,
+                "realloc": 0,
+                "dealloc": 4,
+                "alloc_bytes": 0,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 0,
+                "dealloc_bytes": 122,
+                "realloc_previous_bytes": 0
+              },
+              "construction_plus_release_counts": {
+                "alloc": 5,
+                "alloc_zeroed": 0,
+                "realloc": 0,
+                "dealloc": 5,
+                "alloc_bytes": 186,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 0,
+                "dealloc_bytes": 186,
+                "realloc_previous_bytes": 0
+              },
+              "remaining_allocation_requests": 0,
+              "remaining_requested_bytes": 0,
+              "balanced": true,
+              "fd_inventory_unchanged": true,
+              "rss_claim": false,
+              "row_number": 150
+            },
+            "derived_remaining_allocation_requests": 0,
+            "derived_remaining_requested_bytes": 0
+          }
+        },
+        {
+          "case": "deep_file",
+          "normal_components": 9,
+          "samples": 64,
+          "calls_per_arm": 2048,
+          "summed_raw_counters": {
+            "A": {
+              "alloc": 20480,
+              "alloc_zeroed": 0,
+              "realloc": 4096,
+              "dealloc": 20480,
+              "alloc_bytes": 286720,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 786432,
+              "dealloc_bytes": 679936,
+              "realloc_previous_bytes": 393216
+            },
+            "B": {
+              "alloc": 0,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 0,
+              "alloc_bytes": 0,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 0,
+              "realloc_previous_bytes": 0
+            }
+          },
+          "allocation_and_reallocation_requests_per_call": {
+            "A": 12,
+            "B": 0
+          },
+          "request_reduction_fraction": 1,
+          "original_benefit_flag": true,
+          "original_summary_row": 215,
+          "cache": {
+            "construct": {
+              "kind": "cache_construct",
+              "case": "deep_file",
+              "arm": "B",
+              "expression_sha256": "7dfd74ec368212d2b08bdf9ca4a0e82fcb2d7612062f819b06d5a056404a8e90",
+              "scope": "cache_expression_and_holder_only",
+              "full_load_exercised": false,
+              "counts": {
+                "alloc": 11,
+                "alloc_zeroed": 0,
+                "realloc": 2,
+                "dealloc": 1,
+                "alloc_bytes": 300,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 384,
+                "dealloc_bytes": 256,
+                "realloc_previous_bytes": 192
+              },
+              "live_allocation_requests": 10,
+              "live_requested_bytes": 236,
+              "normal_components": 9,
+              "cstring_payload_with_nuls_bytes": 76,
+              "cstring_descriptor_bytes": 144,
+              "holder_bytes": 16,
+              "fd_inventory_unchanged": true,
+              "constructed": true,
+              "error": null,
+              "row_number": 6
+            },
+            "release": {
+              "kind": "cache_release",
+              "case": "deep_file",
+              "arm": "B",
+              "counts": {
+                "alloc": 0,
+                "alloc_zeroed": 0,
+                "realloc": 0,
+                "dealloc": 10,
+                "alloc_bytes": 0,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 0,
+                "dealloc_bytes": 236,
+                "realloc_previous_bytes": 0
+              },
+              "construction_plus_release_counts": {
+                "alloc": 11,
+                "alloc_zeroed": 0,
+                "realloc": 2,
+                "dealloc": 11,
+                "alloc_bytes": 300,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 384,
+                "dealloc_bytes": 492,
+                "realloc_previous_bytes": 192
+              },
+              "remaining_allocation_requests": 0,
+              "remaining_requested_bytes": 0,
+              "balanced": true,
+              "fd_inventory_unchanged": true,
+              "rss_claim": false,
+              "row_number": 216
+            },
+            "derived_remaining_allocation_requests": 0,
+            "derived_remaining_requested_bytes": 0
+          }
+        },
+        {
+          "case": "directory",
+          "normal_components": 8,
+          "samples": 64,
+          "calls_per_arm": 2048,
+          "summed_raw_counters": {
+            "A": {
+              "alloc": 18432,
+              "alloc_zeroed": 0,
+              "realloc": 2048,
+              "dealloc": 18432,
+              "alloc_bytes": 276480,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 262144,
+              "dealloc_bytes": 407552,
+              "realloc_previous_bytes": 131072
+            },
+            "B": {
+              "alloc": 0,
+              "alloc_zeroed": 0,
+              "realloc": 0,
+              "dealloc": 0,
+              "alloc_bytes": 0,
+              "alloc_zeroed_bytes": 0,
+              "realloc_requested_bytes": 0,
+              "dealloc_bytes": 0,
+              "realloc_previous_bytes": 0
+            }
+          },
+          "allocation_and_reallocation_requests_per_call": {
+            "A": 10,
+            "B": 0
+          },
+          "request_reduction_fraction": 1,
+          "original_benefit_flag": true,
+          "original_summary_row": 281,
+          "cache": {
+            "construct": {
+              "kind": "cache_construct",
+              "case": "directory",
+              "arm": "B",
+              "expression_sha256": "7dfd74ec368212d2b08bdf9ca4a0e82fcb2d7612062f819b06d5a056404a8e90",
+              "scope": "cache_expression_and_holder_only",
+              "full_load_exercised": false,
+              "counts": {
+                "alloc": 10,
+                "alloc_zeroed": 0,
+                "realloc": 1,
+                "dealloc": 1,
+                "alloc_bytes": 279,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 128,
+                "dealloc_bytes": 128,
+                "realloc_previous_bytes": 64
+              },
+              "live_allocation_requests": 9,
+              "live_requested_bytes": 215,
+              "normal_components": 8,
+              "cstring_payload_with_nuls_bytes": 71,
+              "cstring_descriptor_bytes": 128,
+              "holder_bytes": 16,
+              "fd_inventory_unchanged": true,
+              "constructed": true,
+              "error": null,
+              "row_number": 7
+            },
+            "release": {
+              "kind": "cache_release",
+              "case": "directory",
+              "arm": "B",
+              "counts": {
+                "alloc": 0,
+                "alloc_zeroed": 0,
+                "realloc": 0,
+                "dealloc": 9,
+                "alloc_bytes": 0,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 0,
+                "dealloc_bytes": 215,
+                "realloc_previous_bytes": 0
+              },
+              "construction_plus_release_counts": {
+                "alloc": 10,
+                "alloc_zeroed": 0,
+                "realloc": 1,
+                "dealloc": 10,
+                "alloc_bytes": 279,
+                "alloc_zeroed_bytes": 0,
+                "realloc_requested_bytes": 128,
+                "dealloc_bytes": 343,
+                "realloc_previous_bytes": 64
+              },
+              "remaining_allocation_requests": 0,
+              "remaining_requested_bytes": 0,
+              "balanced": true,
+              "fd_inventory_unchanged": true,
+              "rss_claim": false,
+              "row_number": 282
+            },
+            "derived_remaining_allocation_requests": 0,
+            "derived_remaining_requested_bytes": 0
+          }
+        }
+      ],
+      "internal_consistency_errors": [],
+      "internal_consistency_verified": true
+    }
+  ],
+  "source_piece_bindings": [
+    {
+      "package": "r32",
+      "member": "extracted/A_absolute.rs",
+      "bytes": 437,
+      "sha256": "abcbace6885c69e01809cce9f7521ed9c4c274dcea82ebad706ddd9b33a22251",
+      "occurrences_in_published_source": 1,
+      "published_source": "R24 baseline"
+    },
+    {
+      "package": "r32",
+      "member": "extracted/A_open_absolute.rs",
+      "bytes": 785,
+      "sha256": "ff5b6f0c618543d79095c47bc98127919b7ea8c84593743d8afd1b7055498111",
+      "occurrences_in_published_source": 1,
+      "published_source": "R24 baseline"
+    },
+    {
+      "package": "r32",
+      "member": "extracted/B_open_absolute.rs",
+      "bytes": 771,
+      "sha256": "d5c5c7187989df822a86fe01392b242f2530492967aa1ba3f7a64259be308e52",
+      "occurrences_in_published_source": 1,
+      "published_source": "R33 PR99 head"
+    },
+    {
+      "package": "r33",
+      "member": "extracted/A_absolute.rs",
+      "bytes": 437,
+      "sha256": "abcbace6885c69e01809cce9f7521ed9c4c274dcea82ebad706ddd9b33a22251",
+      "occurrences_in_published_source": 1,
+      "published_source": "R24 baseline"
+    },
+    {
+      "package": "r33",
+      "member": "extracted/A_open_absolute.rs",
+      "bytes": 785,
+      "sha256": "ff5b6f0c618543d79095c47bc98127919b7ea8c84593743d8afd1b7055498111",
+      "occurrences_in_published_source": 1,
+      "published_source": "R24 baseline"
+    },
+    {
+      "package": "r33",
+      "member": "extracted/B_absolute.rs",
+      "bytes": 437,
+      "sha256": "abcbace6885c69e01809cce9f7521ed9c4c274dcea82ebad706ddd9b33a22251",
+      "occurrences_in_published_source": 1,
+      "published_source": "R33 PR99 head"
+    },
+    {
+      "package": "r33",
+      "member": "extracted/B_open_path.rs",
+      "bytes": 706,
+      "sha256": "4418fc032f1b0d5e33cc71300253444ad65dd10488d5164aed5d9517310b0c59",
+      "occurrences_in_published_source": 1,
+      "published_source": "R33 PR99 head"
+    },
+    {
+      "package": "r33",
+      "member": "extracted/B_cache_expression.rs",
+      "bytes": 270,
+      "sha256": "7dfd74ec368212d2b08bdf9ca4a0e82fcb2d7612062f819b06d5a056404a8e90",
+      "occurrences_in_published_source": 1,
+      "published_source": "R33 PR99 head"
+    }
+  ],
+  "source_boundary": {
+    "r24_profile_sha256": "a62169343c2a08c38d69925f33fdc7551cf4be7b4b7f50cf89683f652a8f853a",
+    "r33_component_input_preformat_sha256": "8a8721585d9c5e06e8962a6d3a3f4d1976e694ce641d41254f5e693ae81e3007",
+    "r33_published_formatted_sha256": "0aa75f16ac55285f536c72c0ffcbea13fcc74ab2c735cd3b04108b475ab0ba34",
+    "whole_r33_profile_bytes_identical": false,
+    "all_measured_method_and_expression_pieces_occur_exactly_once_in_bound_published_source": true
+  },
+  "scope": {
+    "analysis_only": true,
+    "new_component_runs": 0,
+    "new_rust_builds": 0,
+    "original_programs_or_auditors_executed": 0,
+    "archive_payload_files_extracted": 0,
+    "whole_runtime_performance_or_RSS_established": false,
+    "full_PinnedFile_load_or_verify_exercised": false,
+    "original_build_failures_erased": false,
+    "build_logs_reaudited": false,
+    "unreported_failed_attempts_ruled_out": false
+  },
+  "limits": [
+    "Source labels and frozen source/package members were reconciled statically; this does not re-execute or independently trace the original functional/FD system calls.",
+    "The R33 one-field holder counts cached opener work and exact cache construction/final release; it omits the rest of production PinnedFile load/verify.",
+    "Root and directory in R33 are method edge shapes with A directory=false; they are not successful full regular-file PinnedFile loads.",
+    "R33 invalid syntax controls are cold preconditions; B_open_path_called=false. No direct invalid-path-validation claim is made for the cached method.",
+    "Rust allocation request and requested-byte accounting is not allocator usable size, arena retention or process RSS; no timing/CPU/throughput/concurrency metric was measured.",
+    "Frozen package preparation status predates the successful raw executions. Original earlier build failures and build receipts are separate; this review does not relabel or re-audit them."
+  ],
+  "known_prior_build_failure": {
+    "component": "r32",
+    "attempt": "build-01",
+    "job_id": "1a1ae6fdbf2-fc05-5f97",
+    "reported_cause": "The original build environment PATH did not resolve rustc.",
+    "evidence_scope": "Parent execution provenance; the original native/build records are tracked separately and were not read or reverified by this static review.",
+    "failed_attempt_reclassified": false,
+    "component_rerun_caused_by_this_review": false
+  }
+}

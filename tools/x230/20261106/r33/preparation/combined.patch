@@ -1,0 +1,331 @@
+diff --git a/src/mcp/runtime/ssh_observation_profile.rs b/src/mcp/runtime/ssh_observation_profile.rs
+--- a/src/mcp/runtime/ssh_observation_profile.rs
++++ b/src/mcp/runtime/ssh_observation_profile.rs
+@@ -86,6 +86,8 @@
+ #[derive(Clone)]
+ struct PinnedFile {
+ 	path: PathBuf,
++	// Only immutable path syntax is shared. No descriptor or resolution is cached.
++	path_components: Arc<[std::ffi::CString]>,
+ 	stamp: Stamp,
+ 	digest: [u8; 32],
+ 	reference: Option<Arc<[u8]>>,
+@@ -115,20 +117,20 @@
+ pub(super) fn open_absolute(path: &Path, directory: bool) -> Result<File> {
+ 	absolute(path)?;
+ 	let mut current = File::open("/")?;
+-	let parts: Vec<_> = path
++	let mut parts = path
+ 		.components()
+ 		.filter_map(|v| match v {
+ 			Component::Normal(v) => Some(v),
+ 			_ => None,
+ 		})
+-		.collect();
+-	for (index, part) in parts.iter().enumerate() {
++		.peekable();
++	while let Some(part) = parts.next() {
+ 		let name = std::ffi::CString::new(part.as_encoded_bytes())?;
+ 		let flags = libc::O_RDONLY
+ 			| libc::O_NOFOLLOW
+ 			| libc::O_NONBLOCK
+ 			| libc::O_CLOEXEC
+-			| if index + 1 < parts.len() || directory {
++			| if parts.peek().is_some() || directory {
+ 				libc::O_DIRECTORY
+ 			} else {
+ 				0
+@@ -152,12 +154,11 @@
+ }
+ 
+ fn checked_file(
+-	path: &Path,
++	file: File,
+ 	maximum: usize,
+ 	private: bool,
+ 	executable: bool,
+ ) -> Result<(File, Stamp)> {
+-	let file = open_absolute(path, false)?;
+ 	let before = file.metadata()?;
+ 	if !before.is_file()
+ 		|| before.nlink() != 1
+@@ -184,7 +185,7 @@
+ }
+ 
+ fn verify_read(
+-	path: &Path,
++	reopen: impl FnOnce() -> Result<File>,
+ 	file: &File,
+ 	stamp: &Stamp,
+ 	length: usize,
+@@ -193,7 +194,7 @@
+ 	if length as u64 != stamp.len
+ 		|| length > maximum
+ 		|| *stamp != Stamp::of(&file.metadata()?)
+-		|| *stamp != Stamp::of(&open_absolute(path, false)?.metadata()?)
++		|| *stamp != Stamp::of(&reopen()?.metadata()?)
+ 	{
+ 		bail!("observation profile input changed");
+ 	}
+@@ -206,12 +207,13 @@
+ 	private: bool,
+ 	executable: bool,
+ ) -> Result<(Stamp, Vec<u8>)> {
+-	let (mut file, stamp) = checked_file(path, maximum, private, executable)?;
++	let (mut file, stamp) =
++		checked_file(open_absolute(path, false)?, maximum, private, executable)?;
+ 	let mut bytes = Vec::with_capacity(stamp.len as usize);
+ 	Read::by_ref(&mut file)
+ 		.take(maximum as u64 + 1)
+ 		.read_to_end(&mut bytes)?;
+-	verify_read(path, &file, &stamp, bytes.len(), maximum)?;
++	verify_read(|| open_absolute(path, false), &file, &stamp, bytes.len(), maximum)?;
+ 	Ok((stamp, bytes))
+ }
+ 
+@@ -255,9 +257,20 @@
+ 		if expected.is_some_and(|pin| hex_digest(pin).ok() != Some(digest)) {
+ 			bail!("observation profile byte pin mismatch");
+ 		}
++		// Cold reads and expected pins must succeed before retaining path syntax.
++		let path_components = path
++			.components()
++			.filter_map(|part| match part {
++				Component::Normal(part) => Some(part),
++				_ => None,
++			})
++			.map(|part| std::ffi::CString::new(part.as_encoded_bytes()))
++			.collect::<std::result::Result<Vec<_>, _>>()?
++			.into();
+ 		Ok((
+ 			Self {
+ 				path: path.to_owned(),
++				path_components,
+ 				stamp,
+ 				digest,
+ 				reference: None,
+@@ -268,8 +281,31 @@
+ 			bytes,
+ 		))
+ 	}
++	fn open_path(&self) -> Result<File> {
++		// Start at a fresh root descriptor on every check. Cached names never
++		// stand in for resolving the current directories and final inode.
++		let mut current = File::open("/")?;
++		for (index, name) in self.path_components.iter().enumerate() {
++			let flags = libc::O_RDONLY
++				| libc::O_NOFOLLOW
++				| libc::O_NONBLOCK
++				| libc::O_CLOEXEC
++				| if index + 1 < self.path_components.len() {
++					libc::O_DIRECTORY
++				} else {
++					0
++				};
++			let fd = unsafe { libc::openat(current.as_raw_fd(), name.as_ptr(), flags) };
++			if fd < 0 {
++				return Err(std::io::Error::last_os_error().into());
++			}
++			current = unsafe { File::from_raw_fd(fd) };
++		}
++		Ok(current)
++	}
+ 	fn verify_identity(&self) -> Result<()> {
+-		let (_, stamp) = checked_file(&self.path, self.maximum, self.private, self.executable)?;
++		let (_, stamp) =
++			checked_file(self.open_path()?, self.maximum, self.private, self.executable)?;
+ 		if stamp != self.stamp {
+ 			bail!("observation profile changed after complete validation");
+ 		}
+@@ -281,7 +317,7 @@
+ 	fn verify_checked(&self, check_current: &impl Fn() -> Result<()>) -> Result<()> {
+ 		check_current()?;
+ 		let (mut file, stamp) =
+-			checked_file(&self.path, self.maximum, self.private, self.executable)?;
++			checked_file(self.open_path()?, self.maximum, self.private, self.executable)?;
+ 		check_current()?;
+ 		if stamp != self.stamp {
+ 			bail!("observation profile changed");
+@@ -319,7 +355,7 @@
+ 			check_current()?;
+ 		}
+ 		check_current()?;
+-		verify_read(&self.path, &file, &stamp, length, self.maximum)?;
++		verify_read(|| self.open_path(), &file, &stamp, length, self.maximum)?;
+ 		check_current()?;
+ 		let content_matches = match &self.reference {
+ 			Some(reference) => matches_reference && length == reference.len(),
+diff --git a/src/mcp/runtime/ssh_observation_profile_tests.rs b/src/mcp/runtime/ssh_observation_profile_tests.rs
+--- a/src/mcp/runtime/ssh_observation_profile_tests.rs
++++ b/src/mcp/runtime/ssh_observation_profile_tests.rs
+@@ -59,6 +59,170 @@
+ 			"accepted {line}"
+ 		);
+ 	}
++}
++
++#[test]
++fn absolute_walk_keeps_directory_and_component_boundaries() {
++	use std::os::unix::ffi::OsStrExt;
++
++	let root = tempfile::tempdir().unwrap();
++	let directory = root.path().join("nested");
++	std::fs::create_dir(&directory).unwrap();
++	let file = directory.join("file");
++	std::fs::write(&file, b"owned path fixture").unwrap();
++	let expected = Stamp::of(&std::fs::metadata(&file).unwrap());
++	let separators = PathBuf::from(format!("/{}/nested///file/", root.path().display()));
++	for path in [&file, &separators] {
++		let opened = open_absolute(path, false).unwrap();
++		assert_eq!(Stamp::of(&opened.metadata().unwrap()), expected);
++		assert!(open_absolute(path, true).is_err());
++	}
++	for path in [Path::new("/"), directory.as_path()] {
++		for require_directory in [false, true] {
++			assert!(
++				open_absolute(path, require_directory)
++					.unwrap()
++					.metadata()
++					.unwrap()
++					.is_dir()
++			);
++		}
++	}
++	for path in ["", "relative", "/invalid/../file", "/invalid/./file"] {
++		assert_eq!(
++			open_absolute(Path::new(path), false).unwrap_err().to_string(),
++			"unsupported observation profile path"
++		);
++	}
++	let non_utf8 = Path::new(std::ffi::OsStr::from_bytes(b"/invalid/\xff"));
++	assert_eq!(
++		open_absolute(non_utf8, false).unwrap_err().to_string(),
++		"observation profile path is not UTF-8"
++	);
++	let alias = root.path().join("alias");
++	symlink(&directory, &alias).unwrap();
++	assert!(open_absolute(&alias, true).is_err());
++	assert!(open_absolute(&alias.join("file"), false).is_err());
++}
++
++#[test]
++fn cached_pins_reopen_live_ancestors_without_following_aliases() {
++	let root = tempfile::tempdir().unwrap();
++	let directory = root.path().join("层级");
++	std::fs::create_dir(&directory).unwrap();
++	let path = directory.join("pin");
++	let bytes = b"fresh ancestor resolution";
++	std::fs::write(&path, bytes).unwrap();
++	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
++	let spelling = PathBuf::from(format!("/{}/层级///pin/", root.path().display()));
++	let (pin, _) = PinnedFile::load(&spelling, None, bytes.len(), true, false).unwrap();
++	let cloned = pin.clone();
++	assert!(Arc::ptr_eq(&pin.path_components, &cloned.path_components));
++	for pin in [&pin, &cloned] {
++		pin.verify_identity().unwrap();
++		pin.verify().unwrap();
++	}
++	let retired = root.path().join("retired");
++	std::fs::rename(&directory, &retired).unwrap();
++	symlink(&retired, &directory).unwrap();
++	for pin in [&pin, &cloned] {
++		assert!(pin.verify_identity().is_err());
++		assert!(pin.verify().is_err());
++	}
++	std::fs::remove_file(&directory).unwrap();
++	std::fs::create_dir(&directory).unwrap();
++	std::fs::write(&path, bytes).unwrap();
++	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
++	// The old leaf still exists, but the current path reaches a different inode.
++	for pin in [&pin, &cloned] {
++		assert!(pin.verify_identity().is_err());
++		assert!(pin.verify().is_err());
++	}
++}
++
++#[test]
++fn cached_pins_keep_final_reopen_and_read_error_precedence() {
++	use std::cell::Cell;
++
++	let root = tempfile::tempdir().unwrap();
++	let directory = root.path().join("current");
++	std::fs::create_dir(&directory).unwrap();
++	let path = directory.join("pin");
++	let bytes = b"unchanged leaf stamp";
++	std::fs::write(&path, bytes).unwrap();
++	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
++	let (pin, _) = PinnedFile::load(&path, None, bytes.len(), true, false).unwrap();
++	let mut file = pin.open_path().unwrap();
++	let stamp = Stamp::of(&file.metadata().unwrap());
++	let mut read = Vec::new();
++	file.read_to_end(&mut read).unwrap();
++	assert_eq!(read.as_slice(), bytes.as_slice());
++	let checks = Cell::new(0);
++	pin.verify_checked(&|| {
++		checks.set(checks.get() + 1);
++		Ok(())
++	})
++	.unwrap();
++	// Use the existing check boundary after the complete read, before verify_read.
++	let before_reopen = checks.get() - 2;
++	checks.set(0);
++	let error = pin
++		.verify_checked(&|| {
++			checks.set(checks.get() + 1);
++			if checks.get() == before_reopen {
++				let retired = root.path().join("retired");
++				std::fs::rename(&directory, &retired).unwrap();
++				symlink(&retired, &directory).unwrap();
++			}
++			Ok(())
++		})
++		.unwrap_err();
++	assert_eq!(checks.get(), before_reopen);
++	// Renaming an ancestor does not change the open leaf: only a fresh path walk
++	// can find the alias, including on the final post-read verification.
++	assert_eq!(stamp, Stamp::of(&file.metadata().unwrap()));
++	assert!(matches!(
++		error.downcast_ref::<std::io::Error>().unwrap().raw_os_error(),
++		Some(libc::ENOTDIR) | Some(libc::ELOOP)
++	));
++	for (length, maximum) in [(read.len() - 1, read.len()), (read.len(), read.len() - 1)] {
++		let error = verify_read(|| pin.open_path(), &file, &stamp, length, maximum).unwrap_err();
++		assert_eq!(error.to_string(), "observation profile input changed");
++	}
++	file.set_permissions(std::fs::Permissions::from_mode(0o644))
++		.unwrap();
++	let error = verify_read(|| pin.open_path(), &file, &stamp, read.len(), read.len()).unwrap_err();
++	assert_eq!(error.to_string(), "observation profile input changed");
++}
++
++#[test]
++fn pin_loading_keeps_path_io_and_inode_errors_before_expected_digest() {
++	for path in [Path::new("relative"), Path::new("/invalid/\0")] {
++		let error = PinnedFile::load(path, Some("invalid"), 1024, true, false)
++			.err()
++			.unwrap();
++		assert_eq!(error.to_string(), "unsupported observation profile path");
++	}
++	let root = tempfile::tempdir().unwrap();
++	let path = root.path().join("pin");
++	let error = PinnedFile::load(&path, Some("invalid"), 1024, true, false)
++		.err()
++		.unwrap();
++	assert_eq!(
++		error.downcast_ref::<std::io::Error>().unwrap().raw_os_error(),
++		Some(libc::ENOENT)
++	);
++	std::fs::write(&path, b"cold pin validation").unwrap();
++	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
++	let error = PinnedFile::load(&path, Some("invalid"), 1024, true, false)
++		.err()
++		.unwrap();
++	assert_eq!(error.to_string(), "unsupported observation profile inode or byte bound");
++	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
++	let error = PinnedFile::load(&path, Some("invalid"), 1024, true, false)
++		.err()
++		.unwrap();
++	assert_eq!(error.to_string(), "observation profile byte pin mismatch");
+ }
+ 
+ #[test]

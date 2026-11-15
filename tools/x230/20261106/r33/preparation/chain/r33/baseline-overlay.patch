@@ -1,0 +1,84 @@
+diff --git a/src/mcp/runtime/ssh_observation_profile.rs b/src/mcp/runtime/ssh_observation_profile.rs
+index b3cca3455cd695c6a3570ff768d5dd97ef8c7ad4..4ad621f3f7492ba1a2ca098fe0b3b86a53e3af34 100644
+--- a/src/mcp/runtime/ssh_observation_profile.rs
++++ b/src/mcp/runtime/ssh_observation_profile.rs
+@@ -115,20 +115,20 @@
+ pub(super) fn open_absolute(path: &Path, directory: bool) -> Result<File> {
+ 	absolute(path)?;
+ 	let mut current = File::open("/")?;
+-	let parts: Vec<_> = path
++	let mut parts = path
+ 		.components()
+ 		.filter_map(|v| match v {
+ 			Component::Normal(v) => Some(v),
+ 			_ => None,
+ 		})
+-		.collect();
+-	for (index, part) in parts.iter().enumerate() {
++		.peekable();
++	while let Some(part) = parts.next() {
+ 		let name = std::ffi::CString::new(part.as_encoded_bytes())?;
+ 		let flags = libc::O_RDONLY
+ 			| libc::O_NOFOLLOW
+ 			| libc::O_NONBLOCK
+ 			| libc::O_CLOEXEC
+-			| if index + 1 < parts.len() || directory {
++			| if parts.peek().is_some() || directory {
+ 				libc::O_DIRECTORY
+ 			} else {
+ 				0
+diff --git a/src/mcp/runtime/ssh_observation_profile_tests.rs b/src/mcp/runtime/ssh_observation_profile_tests.rs
+index f988a9567d08a236a9d5ec76abe24446369dbc0b..6ad578be2945fefaec448955420da129f9c0d1af 100644
+--- a/src/mcp/runtime/ssh_observation_profile_tests.rs
++++ b/src/mcp/runtime/ssh_observation_profile_tests.rs
+@@ -59,6 +59,50 @@
+ 			"accepted {line}"
+ 		);
+ 	}
++}
++
++#[test]
++fn absolute_walk_keeps_directory_and_component_boundaries() {
++	use std::os::unix::ffi::OsStrExt;
++
++	let root = tempfile::tempdir().unwrap();
++	let directory = root.path().join("nested");
++	std::fs::create_dir(&directory).unwrap();
++	let file = directory.join("file");
++	std::fs::write(&file, b"owned path fixture").unwrap();
++	let expected = Stamp::of(&std::fs::metadata(&file).unwrap());
++	let separators = PathBuf::from(format!("/{}/nested///file/", root.path().display()));
++	for path in [&file, &separators] {
++		let opened = open_absolute(path, false).unwrap();
++		assert_eq!(Stamp::of(&opened.metadata().unwrap()), expected);
++		assert!(open_absolute(path, true).is_err());
++	}
++	for path in [Path::new("/"), directory.as_path()] {
++		for require_directory in [false, true] {
++			assert!(
++				open_absolute(path, require_directory)
++					.unwrap()
++					.metadata()
++					.unwrap()
++					.is_dir()
++			);
++		}
++	}
++	for path in ["", "relative", "/invalid/../file", "/invalid/./file"] {
++		assert_eq!(
++			open_absolute(Path::new(path), false).unwrap_err().to_string(),
++			"unsupported observation profile path"
++		);
++	}
++	let non_utf8 = Path::new(std::ffi::OsStr::from_bytes(b"/invalid/\xff"));
++	assert_eq!(
++		open_absolute(non_utf8, false).unwrap_err().to_string(),
++		"observation profile path is not UTF-8"
++	);
++	let alias = root.path().join("alias");
++	symlink(&directory, &alias).unwrap();
++	assert!(open_absolute(&alias, true).is_err());
++	assert!(open_absolute(&alias.join("file"), false).is_err());
+ }
+ 
+ #[test]

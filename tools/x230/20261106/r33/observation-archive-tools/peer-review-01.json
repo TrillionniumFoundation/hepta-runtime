@@ -1,0 +1,108 @@
+{
+  "schema": "hepta-r33-observation-archive-independent-static-review/v1",
+  "reviewer": "/root/review_optimization",
+  "outcome": "no_blocking_issue_found_in_reviewed_scope",
+  "reviewed_script": {
+    "path": "/tmp/hepta-runtime-recovery-20261106/r33-observation-archive/sealed-01/archive_r33_observation.py",
+    "bytes": 39336,
+    "sha256": "d9aedf45f00d9e7a525de89d348aca7081be4df480b747b4464d4fdc0fb313ce"
+  },
+  "reference": {
+    "path": "reference/archive_r31_observation.py",
+    "bytes": 37313,
+    "sha256": "296d84668c1703361cb3dfe6b3a8b0849aed561d125f4a39988a44cda21fd7dc"
+  },
+  "draft": {
+    "path": "draft-01/archive_r33_observation.unsealed.py",
+    "bytes": 37479,
+    "sha256": "5cd9078f5b4b667844c52d66be98dbf8f87498b1e40627a2302ec203c3cca27a"
+  },
+  "scope": {
+    "local_source_read": true,
+    "python_ast_parse_and_literal_assignment_read": true,
+    "local_original_receipt_hashes_and_stream_lengths_recomputed": true,
+    "collector_executed": false,
+    "original_auditors_executed": false,
+    "archive_created_or_verified": false,
+    "remote_calls": false,
+    "reviewed_source_modified": false,
+    "performance_retest": false
+  },
+  "checks": [
+    "All 13 function source segments are byte-identical between the unsealed draft and sealed final; sealing changes top-level receipt identities and state.",
+    "collect, main, terminal, streams_from_reads and source_path are byte-identical to the pinned R31 reference. member_path changes only the R33 label.",
+    "verify_archive changes only the expected archive schema and holder constant name from the R31 reference; bounded gzip/tar processing and zero filesystem extraction are preserved.",
+    "create_archive rejects an unsealed or missing-pin collector before collection or any output creation. Its R31 create-only body is otherwise preserved apart from schema/selection/holder names.",
+    "The 64 MiB total/archive-sidecars bound, 8 MiB per-file bound, 8192-file bound, O_EXCL output creation, no-follow regular-file input checks, stable read stamps, credential/ELF exclusions and final membership/hash verification remain present.",
+    "All 100 sealed PINNED values are concrete lowercase 64-character hexadecimal SHA256 strings. Seven available original evidence files were independently rehashed and matched their pins.",
+    "The selected namespace is first campaign-01/holder-01 and lifecycle-01. No R31 preflight-failure chain is relabeled as an R33 attempt.",
+    "Actual original parent workflow passed=True is retained separately from observation_gate_passed=False and performance_gates_passed=False with C8 regression rejection. candidate_adopted=False is explicit.",
+    "The original lifecycle materializer is failed/exit 1 and its complete original 741-byte stderr contains the original observation gate rejection. Normal lifecycle performance ABBA and saturation stay unestablished.",
+    "The original postflight receipt is a required, exactly pinned member. This is evidence preservation, not a new measurement or a reexecution of its checks."
+  ],
+  "independently_rehashed_originals": [
+    {
+      "file": "observation-holder-native-01.json",
+      "bytes": 729,
+      "sha256": "75db248004f17466ef27224f18f16a04b3e09dc79f56b99e6e048b576cdb1de7"
+    },
+    {
+      "file": "observation-holder-read-01.json",
+      "bytes": 1234,
+      "sha256": "d0a240af344178a2100c5a566d36538bd14507afa42522b394f7dc263f4540f2"
+    },
+    {
+      "file": "lifecycle-materialization-native-01.json",
+      "bytes": 726,
+      "sha256": "c3aba684de1cf5365a68e211ea166350896fec1fa343c46fb2d95030603b4445"
+    },
+    {
+      "file": "lifecycle-materialization-read-01.json",
+      "bytes": 2566,
+      "sha256": "b82a35165962f3d1bbf9e059385b7fdeaef636d8d9811fa1d145c74caebf7d66"
+    },
+    {
+      "file": "observation-postflight-01.json",
+      "bytes": 4873,
+      "sha256": "975c0a362e8faecf24eb6fdaa9a6ee57557a2776b94e7d54dc814d8b8104861f"
+    },
+    {
+      "file": "parent-report.json",
+      "bytes": 129082,
+      "sha256": "248110d67b4e93ae40c4acbb63166af4f7e1365146df6918077e31869a0dbff1"
+    },
+    {
+      "file": "summary.json",
+      "bytes": 13509,
+      "sha256": "8c2633a55d461802fbb9c5ed8c6b14b2e0715a70da9300a246e44e4351b80f1b"
+    }
+  ],
+  "original_stream_review": [
+    {
+      "job_id": "1a1aecd302a-fc05-6294",
+      "state": "succeeded",
+      "exit_code": 0,
+      "stdout_bytes": 297,
+      "stderr_bytes": 0,
+      "terminal_publication_confirmed": true,
+      "offset_zero_to_final_eof": true,
+      "text_hex_seen_stored_equal": true
+    },
+    {
+      "job_id": "1a1aed5c50a-fc05-6301",
+      "state": "failed",
+      "exit_code": 1,
+      "stdout_bytes": 0,
+      "stderr_bytes": 741,
+      "terminal_publication_confirmed": true,
+      "offset_zero_to_final_eof": true,
+      "text_hex_seen_stored_equal": true
+    }
+  ],
+  "limitations": [
+    "This is a static source and retained local receipt review, not a successful remote collector execution or archive verification receipt.",
+    "Only the seven locally supplied originals listed above were independently rehashed in this review; the other pinned paths remain enforced by the collector at its later actual collection.",
+    "The archive may preserve binding errors reported by summary; it does not convert workflow completion, archive creation or verification into candidate adoption or performance success.",
+    "Separate output writes are create-only but not a single transactional publication; I/O interruption can leave partial outputs which must remain visible and must not be automatically deleted or retried."
+  ]
+}

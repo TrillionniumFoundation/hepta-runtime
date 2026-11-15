@@ -1,0 +1,121 @@
+{
+  "schema": "hepta-r33-exact-ci-archiver-static-review/v1",
+  "reviewed_utc": "2026-11-06T02:50:36.370Z",
+  "artifact": {
+    "filename": "archive_r33_exact_ci.py",
+    "bytes": 25888,
+    "sha256": "c2d5dcb6db54fedcda728ca658e217578bb852ccb84e4c81bf7a1ac58ca30633"
+  },
+  "reference": {
+    "path": "tools/x230/20261105/r31/exact-ci/archive_r31_followup.py",
+    "commit": "b9cea9e4295280900b77514947fd02fedb8acdb7",
+    "bytes": 25814,
+    "sha256": "f1b542cf0abfb7f761c1493bf65c95a446a9d37a8f3ead524a5cfbb470eb4dce",
+    "git_blob_sha1": "4968b84def37baf0ba2add0819bac1f4ff74d7ff"
+  },
+  "result": "No blocking issue identified in this static review.",
+  "blocking_findings": [],
+  "checks": {
+    "python_ast_parsed_without_execution": true,
+    "byte_identical_functions": [
+      "need",
+      "sha",
+      "encoded",
+      "stamp",
+      "collect",
+      "terminal",
+      "streams_from_reads",
+      "main"
+    ],
+    "changed_functions": [
+      "read_names",
+      "summary",
+      "create_archive",
+      "verify_archive"
+    ],
+    "added_functions": [],
+    "removed_functions": [],
+    "stdlib_only_imports": [
+      "import argparse",
+      "import gzip",
+      "import hashlib",
+      "import io",
+      "import json",
+      "import os",
+      "from pathlib import Path, PurePosixPath",
+      "import re",
+      "import stat",
+      "import sys",
+      "import tarfile"
+    ],
+    "fixed_root": "/home/qian/hepta-runtime-optimization-20261106-r33",
+    "bounded_original_read_and_tar_verify_retained": true,
+    "limits": {
+      "selected_bytes": 67108864,
+      "single_file_bytes": 8388608,
+      "files": 8192,
+      "manifest_bytes": 2097152
+    },
+    "source_target_test_ELF_profile_credential_exclusions_retained": true,
+    "no_follow_regular_single_link_stable_stat_reads_retained": true,
+    "create_only_outputs": [
+      "exact-ci-evidence-01.tar.gz",
+      "exact-ci-evidence-01.manifest.json",
+      "exact-ci-evidence-01.compact.json"
+    ],
+    "payload_extraction_or_archived_program_execution_present": false,
+    "changes_reviewed": [
+      "R33 root, immutable qualification/CI job IDs, source/report/tool pins and attempt 01/schema labels.",
+      "R31 attempt-01 planning failure is no longer a prerequisite of this first actual R33 CI archive; the historical R31 failure remains separate evidence.",
+      "New sealed-package and qualification binding checks use only already collected fixed data and append discrepancies without discarding original reports.",
+      "Reported successful nextest counts are compared with the original qualified counts; failed report outcomes remain representable.",
+      "Reported success, native terminal state, original nextest audit and source/child closure remain separate from archive-byte verification."
+    ],
+    "published_qualification_pin_checks": [
+      {
+        "archiver_path": "qualification-terminal-status-01.json",
+        "published_bytes": 731,
+        "published_sha256": "d342cfc8c9976544f76e7f650ee8108d141a448bfbc7c47880d073e2987ad6f4",
+        "pinned_sha256": "d342cfc8c9976544f76e7f650ee8108d141a448bfbc7c47880d073e2987ad6f4",
+        "matches": true
+      },
+      {
+        "archiver_path": "qualification-01/report.json",
+        "published_bytes": 83360,
+        "published_sha256": "00aed358a852cbdb9a54b9e97f6a63f66baf28b824dc4383ef900c8125d264a4",
+        "pinned_sha256": "00aed358a852cbdb9a54b9e97f6a63f66baf28b824dc4383ef900c8125d264a4",
+        "matches": true
+      },
+      {
+        "archiver_path": "qualification-01/source-map.json",
+        "published_bytes": 24156,
+        "published_sha256": "b3260c858e507f3661da233a9d05fec80399b48ba12fdce250ad29eeca0ba09e",
+        "pinned_sha256": "b3260c858e507f3661da233a9d05fec80399b48ba12fdce250ad29eeca0ba09e",
+        "matches": true
+      }
+    ]
+  },
+  "required_execution_inputs": {
+    "original_qualification_job_id": "1a1ae8ce865-fc05-603f",
+    "original_ci_job_id": "1a1aeb583b3-fc05-6176",
+    "actual_plan_sha256_required": true,
+    "plan_copy_bytes_must_match": true,
+    "original_native_terminal_and_complete_contiguous_reads_required": true,
+    "core_report_plan_and_binding_files_required": true
+  },
+  "scope": {
+    "archiver_executed": false,
+    "archiver_tests_executed": false,
+    "new_benchmark_or_original_auditor_execution": false,
+    "mac_or_x230_calls": 0,
+    "source_modified": false,
+    "all_remote_actual_input_bytes_independently_verified": false,
+    "reported_passed_is_not_an_independently_rerun_ci_result": true
+  },
+  "limits": [
+    "This reviews the exact frozen script and its diff against the approved published R31 collector. It does not execute the new archive path.",
+    "Only the published qualification terminal, report and source-map pins were independently checked here; the remaining actual remote pins/native receipts and the real plan SHA are enforced at original creation time.",
+    "A failed or aborted report is retained when the mandatory core files and native receipts exist. Missing prerequisites cause refusal rather than a fabricated archive.",
+    "Successful archive membership verification does not establish CI pass, hosted Actions pass, performance adoption or a new auditor run."
+  ]
+}
