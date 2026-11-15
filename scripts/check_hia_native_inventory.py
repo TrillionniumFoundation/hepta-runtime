@@ -17,10 +17,13 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
+from check_hia_native_target import inspect_target
 
 RUNTIME_BASE_COMMIT = "a0dcdda1991ec536d5e2d252c006a778993fa566"
 RUNTIME_BASE_TREE = "98d96c88d54082637c27f1cbfae61a66d0dd81e7"
 ORIGINAL_RUNTIME_BLOBS = {
+    "src/mcp/fs/background.rs": "32d887d98269d9db2b3adf979567c417a2e38db6",
+    "src/mcp/fs/background_tests.rs": "6ab06ae4c8eb673bbc15a8aa9a3de799810a42fe",
     "src/mcp/fs/shell.rs": "3a232a5b5cbaa5693ccfcf6c5d1c5d686f20df9f",
     "src/mcp/fs/shell_tests.rs": "aaf5477c6435a7ef30402535a0ddf36762d093ad",
     'src/mcp/hia_contract.rs': 'f5a17e918d7b4fedf0bbc220c5e9fa8f42c69f09',
@@ -110,6 +113,7 @@ def inspect(root: Path) -> dict:
     if (document["runtime_base_commit"], document["runtime_base_tree"]) != (RUNTIME_BASE_COMMIT, RUNTIME_BASE_TREE):
         raise ValueError("inventory runtime baseline differs from the original reference pin")
     original_sources = check_original_sources(root)
+    target_coverage = inspect_target(root, document)
     server = (root / "src/mcp/server.rs").read_text()
     declared = re.findall(r"#\[tool\(.*?\)\]\s*async fn (\w+)", server, re.S)
     rows = document["legacy_tool_handlers"]
@@ -164,6 +168,7 @@ def inspect(root: Path) -> dict:
         "native_sources": native_sources,
         "legacy_tool_count": len(rows),
         "native_production_tool_count": 0,
+        "target_coverage": target_coverage,
         "remaining_tool_families": dict(sorted(Counter(row["family"] for row in rows).items())),
         "remaining_system_owners": [item["name"] for item in document["remaining_system_owners"]],
         "whole_runtime_replaced": False,

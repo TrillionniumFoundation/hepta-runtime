@@ -1,0 +1,108 @@
+{
+  "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+  "derived_parent": {
+    "additional_parameter": "v2:u64",
+    "authoring_definition": "def parent_prefix(s:readbuf, w:mutbuf, size:u64) -> u64:\n    head = prefix(s, 64, 64 + size)\n    body = 64\n    if head != 0:\n        body = 65\n    end = trim_right(s, body, 64 + size, w)\n    if end == body:\n        if head == 2:\n            return 0\n        return 18446744073709551615\n    back_cut(s, body, end, w)\n    return trim_right(s, body, wget(w, 32), w) - 64",
+    "authoring_definition_sha256": "16b97cb985e1d65f46a86e05b5569ccff5c512037bd02f39836e76f145e628dc",
+    "buffer_slice_instruction_required": false,
+    "change": "New HIA wrapper takes explicit raw path prefix length; original whole-buffer length(s) becomes 64+size. The five path/scratch helpers and request-u64 helper retain exact bodies under ID relocation.",
+    "complete_body_reconstruction_verified": true,
+    "inserted_prefix_extent_line": "  v4:u64 = int.add.wrap(v3,v2)\n",
+    "new_body": "fn f3(v0:readbuf,v1:mutbuf,v2:u64) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:mutbuf,v2:u64)\n  v3:u64 = const() {\"value\":64}\n  v4:u64 = int.add.wrap(v3,v2)\n  v5:u64 = call(v0,v3,v4) {\"function\":\"f14\"}\n  v6:u64 = const() {\"value\":0}\n  v7:bool = compare.ne(v5,v6)\n  v8:u64 = const() {\"value\":65}\n  v9:u64 = select(v7,v8,v3)\n  v10:u64 = call(v0,v9,v4,v1) {\"function\":\"f16\"}\n  v11:bool = compare.eq(v10,v9)\n  branch v11 b1(v0,v1,v5) b2(v0,v1,v9,v10)\nblock b1(v12:readbuf,v13:mutbuf,v15:u64)\n  v24:u64 = const() {\"value\":2}\n  v25:bool = compare.eq(v15,v24)\n  v26:u64 = const() {\"value\":0}\n  v27:u64 = const() {\"value\":18446744073709551615}\n  v28:u64 = select(v25,v26,v27)\n  ret(v28)\nblock b2(v18:readbuf,v19:mutbuf,v22:u64,v23:u64)\n  v29:u64 = call(v18,v22,v23,v19) {\"function\":\"f15\"}\n  v30:u64 = const() {\"value\":32}\n  v31:u64 = call(v19,v30) {\"function\":\"f18\"}\n  v32:u64 = call(v18,v22,v31,v19) {\"function\":\"f16\"}\n  v33:u64 = const() {\"value\":64}\n  v34:u64 = int.sub.wrap(v32,v33)\n  ret(v34)\nend\n",
+    "new_body_sha256": "abae40c9b9c6419dae407575b2c4435aaee9be91f671e8cfd4dd47ece20ffec0",
+    "new_function": "f3",
+    "original_body": "fn f6(v0:readbuf,v1:mutbuf) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:mutbuf)\n  v2:u64 = const() {\"value\":64}\n  v3:usize = buffer.len(v0)\n  v4:u64 = int.cast(v3) {\"mode\":\"wrap\"}\n  v5:u64 = call(v0,v2,v4) {\"function\":\"f2\"}\n  v6:u64 = const() {\"value\":0}\n  v7:bool = compare.ne(v5,v6)\n  v8:u64 = const() {\"value\":65}\n  v9:u64 = select(v7,v8,v2)\n  v10:usize = buffer.len(v0)\n  v11:u64 = int.cast(v10) {\"mode\":\"wrap\"}\n  v12:u64 = call(v0,v9,v11,v1) {\"function\":\"f5\"}\n  v13:bool = compare.eq(v12,v9)\n  branch v13 b1(v0,v1,v5) b2(v0,v1,v9,v12)\nblock b1(v14:readbuf,v15:mutbuf,v16:u64)\n  v24:u64 = const() {\"value\":2}\n  v25:bool = compare.eq(v16,v24)\n  v26:u64 = const() {\"value\":0}\n  v27:u64 = const() {\"value\":18446744073709551615}\n  v28:u64 = select(v25,v26,v27)\n  ret(v28)\nblock b2(v19:readbuf,v20:mutbuf,v22:u64,v23:u64)\n  v29:u64 = call(v19,v22,v23,v20) {\"function\":\"f4\"}\n  v30:u64 = const() {\"value\":32}\n  v31:u64 = call(v20,v30) {\"function\":\"f17\"}\n  v32:u64 = call(v19,v22,v31,v20) {\"function\":\"f5\"}\n  v33:u64 = const() {\"value\":64}\n  v34:u64 = int.sub.wrap(v32,v33)\n  ret(v34)\nend\n",
+    "original_body_sha256": "c4ed6b41dd95150b365b60f32ac17db195ab6c68be2a33cdd184dcb10202e003",
+    "original_body_unchanged": false,
+    "original_function": "f6",
+    "prefix_extent_anchor": "  v3:u64 = const() {\"value\":64}\n",
+    "removed_whole_buffer_length_lines": [
+      "  v3:usize = buffer.len(v0)\n",
+      "  v4:u64 = int.cast(v3) {\"mode\":\"wrap\"}\n",
+      "  v10:usize = buffer.len(v0)\n",
+      "  v11:u64 = int.cast(v10) {\"mode\":\"wrap\"}\n"
+    ],
+    "ssa_relocation": {
+      "v11": "v4",
+      "v12": "v10",
+      "v13": "v11",
+      "v14": "v12",
+      "v15": "v13",
+      "v16": "v15",
+      "v19": "v18",
+      "v2": "v3",
+      "v20": "v19"
+    }
+  },
+  "functions": [
+    {
+      "new_body": "fn f14(v0:readbuf,v1:u64,v2:u64) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:u64,v2:u64)\n  v3:bool = compare.eq(v1,v2)\n  branch v3 b1(v0) b2(v0,v1,v2)\nblock b1(v4:readbuf)\n  v10:u64 = const() {\"value\":0}\n  ret(v10)\nblock b2(v7:readbuf,v8:u64,v9:u64)\n  v11:usize = int.cast(v8) {\"mode\":\"wrap\"}\n  v12:u8 = buffer.load(v7,v11)\n  v13:u64 = int.cast(v12) {\"mode\":\"wrap\"}\n  v14:u64 = const() {\"value\":47}\n  v15:bool = compare.eq(v13,v14)\n  branch v15 b3(v7) b4(v7,v8,v9)\nblock b3(v16:readbuf)\n  v22:u64 = const() {\"value\":1}\n  ret(v22)\nblock b4(v19:readbuf,v20:u64,v21:u64)\n  v23:usize = int.cast(v20) {\"mode\":\"wrap\"}\n  v24:u8 = buffer.load(v19,v23)\n  v25:u64 = int.cast(v24) {\"mode\":\"wrap\"}\n  v26:u64 = const() {\"value\":46}\n  v27:bool = compare.eq(v25,v26)\n  branch v27 b5(v19,v20,v21) b11(v19)\nblock b5(v28:readbuf,v29:u64,v30:u64)\n  v34:u64 = int.sub.wrap(v30,v29)\n  v35:u64 = const() {\"value\":1}\n  v36:bool = compare.eq(v34,v35)\n  branch v36 b8(v28,v36) b7(v28,v29)\nblock b7(v37:readbuf,v38:u64)\n  v45:u64 = const() {\"value\":1}\n  v46:u64 = int.add.wrap(v38,v45)\n  v47:usize = int.cast(v46) {\"mode\":\"wrap\"}\n  v48:u8 = buffer.load(v37,v47)\n  v49:u64 = int.cast(v48) {\"mode\":\"wrap\"}\n  v50:u64 = const() {\"value\":47}\n  v51:bool = compare.eq(v49,v50)\n  jump b8(v37,v51)\nblock b8(v41:readbuf,v44:bool)\n  branch v44 b9(v41) b11(v41)\nblock b9(v52:readbuf)\n  v58:u64 = const() {\"value\":2}\n  ret(v58)\nblock b11(v59:readbuf)\n  v62:u64 = const() {\"value\":0}\n  ret(v62)\nend\n",
+      "new_body_sha256": "17c528fa67769a7301ebdfc012ff19d2f85fc23a89399677b2fd160e24519f26",
+      "new_function": "f14",
+      "only_function_and_call_id_relocation": true,
+      "original_body": "fn f2(v0:readbuf,v1:u64,v2:u64) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:u64,v2:u64)\n  v3:bool = compare.eq(v1,v2)\n  branch v3 b1(v0) b2(v0,v1,v2)\nblock b1(v4:readbuf)\n  v10:u64 = const() {\"value\":0}\n  ret(v10)\nblock b2(v7:readbuf,v8:u64,v9:u64)\n  v11:usize = int.cast(v8) {\"mode\":\"wrap\"}\n  v12:u8 = buffer.load(v7,v11)\n  v13:u64 = int.cast(v12) {\"mode\":\"wrap\"}\n  v14:u64 = const() {\"value\":47}\n  v15:bool = compare.eq(v13,v14)\n  branch v15 b3(v7) b4(v7,v8,v9)\nblock b3(v16:readbuf)\n  v22:u64 = const() {\"value\":1}\n  ret(v22)\nblock b4(v19:readbuf,v20:u64,v21:u64)\n  v23:usize = int.cast(v20) {\"mode\":\"wrap\"}\n  v24:u8 = buffer.load(v19,v23)\n  v25:u64 = int.cast(v24) {\"mode\":\"wrap\"}\n  v26:u64 = const() {\"value\":46}\n  v27:bool = compare.eq(v25,v26)\n  branch v27 b5(v19,v20,v21) b11(v19)\nblock b5(v28:readbuf,v29:u64,v30:u64)\n  v34:u64 = int.sub.wrap(v30,v29)\n  v35:u64 = const() {\"value\":1}\n  v36:bool = compare.eq(v34,v35)\n  branch v36 b8(v28,v36) b7(v28,v29)\nblock b7(v37:readbuf,v38:u64)\n  v45:u64 = const() {\"value\":1}\n  v46:u64 = int.add.wrap(v38,v45)\n  v47:usize = int.cast(v46) {\"mode\":\"wrap\"}\n  v48:u8 = buffer.load(v37,v47)\n  v49:u64 = int.cast(v48) {\"mode\":\"wrap\"}\n  v50:u64 = const() {\"value\":47}\n  v51:bool = compare.eq(v49,v50)\n  jump b8(v37,v51)\nblock b8(v41:readbuf,v44:bool)\n  branch v44 b9(v41) b11(v41)\nblock b9(v52:readbuf)\n  v58:u64 = const() {\"value\":2}\n  ret(v58)\nblock b11(v59:readbuf)\n  v62:u64 = const() {\"value\":0}\n  ret(v62)\nend\n",
+      "original_body_sha256": "064d1c16e792c20117fb523403d74910928703b227fce4236aee41709630ff7a",
+      "original_function": "f2"
+    },
+    {
+      "new_body": "fn f15(v0:readbuf,v1:u64,v2:u64,v3:mutbuf) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:u64,v2:u64,v3:mutbuf)\n  jump b1(v0,v1,v2,v3,v2)\nblock b1(v4:readbuf,v5:u64,v6:u64,v7:mutbuf,v8:u64)\n  v9:bool = compare.gt(v8,v5)\n  branch v9 b2(v4,v5,v6,v7,v8) b3(v4,v5,v6,v7,v8,v9)\nblock b2(v10:readbuf,v11:u64,v12:u64,v13:mutbuf,v14:u64)\n  v22:u64 = const() {\"value\":1}\n  v23:u64 = int.sub.wrap(v14,v22)\n  v24:usize = int.cast(v23) {\"mode\":\"wrap\"}\n  v25:u8 = buffer.load(v10,v24)\n  v26:u64 = int.cast(v25) {\"mode\":\"wrap\"}\n  v27:u64 = const() {\"value\":47}\n  v28:bool = compare.ne(v26,v27)\n  jump b3(v10,v11,v12,v13,v14,v28)\nblock b3(v16:readbuf,v17:u64,v18:u64,v19:mutbuf,v20:u64,v21:bool)\n  branch v21 b4(v16,v17,v18,v19,v20) b5(v16,v17,v18,v19,v20)\nblock b4(v29:readbuf,v30:u64,v31:u64,v32:mutbuf,v33:u64)\n  v39:u64 = const() {\"value\":1}\n  v40:u64 = int.sub.wrap(v33,v39)\n  jump b1(v29,v30,v31,v32,v40)\nblock b5(v34:readbuf,v35:u64,v36:u64,v37:mutbuf,v38:u64)\n  v41:bool = compare.gt(v38,v35)\n  v42:u64 = const() {\"value\":1}\n  v43:u64 = int.sub.wrap(v38,v42)\n  v44:u64 = select(v41,v43,v38)\n  v45:u64 = const() {\"value\":16}\n  v46:u64 = call(v37,v45,v38) {\"function\":\"f19\"}\n  v47:u64 = const() {\"value\":24}\n  v48:u64 = call(v37,v47,v36) {\"function\":\"f19\"}\n  v49:u64 = const() {\"value\":32}\n  v50:u64 = call(v37,v49,v44) {\"function\":\"f19\"}\n  v51:u64 = const() {\"value\":0}\n  ret(v51)\nend\n",
+      "new_body_sha256": "12d136707f402f9977932ac93933d80d5a3ec7ec79ccd15706a15299c820aeaf",
+      "new_function": "f15",
+      "only_function_and_call_id_relocation": true,
+      "original_body": "fn f4(v0:readbuf,v1:u64,v2:u64,v3:mutbuf) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:u64,v2:u64,v3:mutbuf)\n  jump b1(v0,v1,v2,v3,v2)\nblock b1(v4:readbuf,v5:u64,v6:u64,v7:mutbuf,v8:u64)\n  v9:bool = compare.gt(v8,v5)\n  branch v9 b2(v4,v5,v6,v7,v8) b3(v4,v5,v6,v7,v8,v9)\nblock b2(v10:readbuf,v11:u64,v12:u64,v13:mutbuf,v14:u64)\n  v22:u64 = const() {\"value\":1}\n  v23:u64 = int.sub.wrap(v14,v22)\n  v24:usize = int.cast(v23) {\"mode\":\"wrap\"}\n  v25:u8 = buffer.load(v10,v24)\n  v26:u64 = int.cast(v25) {\"mode\":\"wrap\"}\n  v27:u64 = const() {\"value\":47}\n  v28:bool = compare.ne(v26,v27)\n  jump b3(v10,v11,v12,v13,v14,v28)\nblock b3(v16:readbuf,v17:u64,v18:u64,v19:mutbuf,v20:u64,v21:bool)\n  branch v21 b4(v16,v17,v18,v19,v20) b5(v16,v17,v18,v19,v20)\nblock b4(v29:readbuf,v30:u64,v31:u64,v32:mutbuf,v33:u64)\n  v39:u64 = const() {\"value\":1}\n  v40:u64 = int.sub.wrap(v33,v39)\n  jump b1(v29,v30,v31,v32,v40)\nblock b5(v34:readbuf,v35:u64,v36:u64,v37:mutbuf,v38:u64)\n  v41:bool = compare.gt(v38,v35)\n  v42:u64 = const() {\"value\":1}\n  v43:u64 = int.sub.wrap(v38,v42)\n  v44:u64 = select(v41,v43,v38)\n  v45:u64 = const() {\"value\":16}\n  v46:u64 = call(v37,v45,v38) {\"function\":\"f18\"}\n  v47:u64 = const() {\"value\":24}\n  v48:u64 = call(v37,v47,v36) {\"function\":\"f18\"}\n  v49:u64 = const() {\"value\":32}\n  v50:u64 = call(v37,v49,v44) {\"function\":\"f18\"}\n  v51:u64 = const() {\"value\":0}\n  ret(v51)\nend\n",
+      "original_body_sha256": "e6fa1b5a220b5461eeb50e63c070575408168484735a2193af038a81cf5e182f",
+      "original_function": "f4"
+    },
+    {
+      "new_body": "fn f16(v0:readbuf,v1:u64,v2:u64,v3:mutbuf) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:u64,v2:u64,v3:mutbuf)\n  jump b1(v0,v1,v2,v3)\nblock b1(v4:readbuf,v5:u64,v6:u64,v7:mutbuf)\n  v8:bool = compare.gt(v6,v5)\n  branch v8 b2(v4,v5,v6,v7) b3(v4,v6,v7)\nblock b2(v9:readbuf,v10:u64,v11:u64,v12:mutbuf)\n  v17:u64 = call(v9,v10,v11,v12) {\"function\":\"f15\"}\n  v18:u64 = const() {\"value\":16}\n  v19:u64 = call(v12,v18) {\"function\":\"f18\"}\n  v20:bool = compare.eq(v11,v19)\n  branch v20 b5(v9,v10,v11,v12,v20) b4(v9,v10,v11,v12)\nblock b3(v13:readbuf,v15:u64,v16:mutbuf)\n  ret(v15)\nblock b4(v21:readbuf,v22:u64,v23:u64,v24:mutbuf)\n  v31:u64 = const() {\"value\":16}\n  v32:u64 = call(v24,v31) {\"function\":\"f18\"}\n  v33:u64 = int.sub.wrap(v23,v32)\n  v34:u64 = const() {\"value\":1}\n  v35:bool = compare.eq(v33,v34)\n  branch v35 b6(v21,v22,v23,v24) b5(v21,v22,v23,v24,v35)\nblock b5(v26:readbuf,v27:u64,v28:u64,v29:mutbuf,v30:bool)\n  branch v30 b8(v26,v27,v29) b9(v26,v28,v29)\nblock b6(v36:readbuf,v37:u64,v38:u64,v39:mutbuf)\n  v48:u64 = const() {\"value\":16}\n  v49:u64 = call(v39,v48) {\"function\":\"f18\"}\n  v50:usize = int.cast(v49) {\"mode\":\"wrap\"}\n  v51:u8 = buffer.load(v36,v50)\n  v52:u64 = int.cast(v51) {\"mode\":\"wrap\"}\n  v53:u64 = const() {\"value\":46}\n  v54:bool = compare.eq(v52,v53)\n  jump b5(v36,v37,v38,v39,v54)\nblock b8(v55:readbuf,v56:u64,v58:mutbuf)\n  v63:u64 = const() {\"value\":32}\n  v64:u64 = call(v58,v63) {\"function\":\"f18\"}\n  jump b1(v55,v56,v64,v58)\nblock b9(v59:readbuf,v61:u64,v62:mutbuf)\n  ret(v61)\nend\n",
+      "new_body_sha256": "f1eb86848ee146376eac88ea0540bdf5c17f0b7ccf66f96c86b0e590679ee4ec",
+      "new_function": "f16",
+      "only_function_and_call_id_relocation": true,
+      "original_body": "fn f5(v0:readbuf,v1:u64,v2:u64,v3:mutbuf) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:u64,v2:u64,v3:mutbuf)\n  jump b1(v0,v1,v2,v3)\nblock b1(v4:readbuf,v5:u64,v6:u64,v7:mutbuf)\n  v8:bool = compare.gt(v6,v5)\n  branch v8 b2(v4,v5,v6,v7) b3(v4,v6,v7)\nblock b2(v9:readbuf,v10:u64,v11:u64,v12:mutbuf)\n  v17:u64 = call(v9,v10,v11,v12) {\"function\":\"f4\"}\n  v18:u64 = const() {\"value\":16}\n  v19:u64 = call(v12,v18) {\"function\":\"f17\"}\n  v20:bool = compare.eq(v11,v19)\n  branch v20 b5(v9,v10,v11,v12,v20) b4(v9,v10,v11,v12)\nblock b3(v13:readbuf,v15:u64,v16:mutbuf)\n  ret(v15)\nblock b4(v21:readbuf,v22:u64,v23:u64,v24:mutbuf)\n  v31:u64 = const() {\"value\":16}\n  v32:u64 = call(v24,v31) {\"function\":\"f17\"}\n  v33:u64 = int.sub.wrap(v23,v32)\n  v34:u64 = const() {\"value\":1}\n  v35:bool = compare.eq(v33,v34)\n  branch v35 b6(v21,v22,v23,v24) b5(v21,v22,v23,v24,v35)\nblock b5(v26:readbuf,v27:u64,v28:u64,v29:mutbuf,v30:bool)\n  branch v30 b8(v26,v27,v29) b9(v26,v28,v29)\nblock b6(v36:readbuf,v37:u64,v38:u64,v39:mutbuf)\n  v48:u64 = const() {\"value\":16}\n  v49:u64 = call(v39,v48) {\"function\":\"f17\"}\n  v50:usize = int.cast(v49) {\"mode\":\"wrap\"}\n  v51:u8 = buffer.load(v36,v50)\n  v52:u64 = int.cast(v51) {\"mode\":\"wrap\"}\n  v53:u64 = const() {\"value\":46}\n  v54:bool = compare.eq(v52,v53)\n  jump b5(v36,v37,v38,v39,v54)\nblock b8(v55:readbuf,v56:u64,v58:mutbuf)\n  v63:u64 = const() {\"value\":32}\n  v64:u64 = call(v58,v63) {\"function\":\"f17\"}\n  jump b1(v55,v56,v64,v58)\nblock b9(v59:readbuf,v61:u64,v62:mutbuf)\n  ret(v61)\nend\n",
+      "original_body_sha256": "6c3b9acb665bf34cefee045160de654064f459a0829d7c4df12adc252b92c472",
+      "original_function": "f5"
+    },
+    {
+      "new_body": "fn f17(v0:readbuf,v1:u64) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:u64)\n  v2:u64 = const() {\"value\":0}\n  jump b1(v0,v1,v2,v2)\nblock b1(v3:readbuf,v4:u64,v5:u64,v6:u64)\n  v7:u64 = const() {\"value\":8}\n  v8:bool = compare.lt(v6,v7)\n  branch v8 b2(v3,v4,v5,v6) b3(v3,v5)\nblock b2(v9:readbuf,v10:u64,v11:u64,v12:u64)\n  v17:u64 = int.add.wrap(v10,v12)\n  v18:usize = int.cast(v17) {\"mode\":\"wrap\"}\n  v19:u8 = buffer.load(v9,v18)\n  v20:u64 = int.cast(v19) {\"mode\":\"wrap\"}\n  v21:u64 = const() {\"value\":8}\n  v22:u64 = int.mul.wrap(v12,v21)\n  v23:u64 = int.shl.checked(v20,v22)\n  v24:u64 = bit.or(v11,v23)\n  v25:u64 = const() {\"value\":1}\n  v26:u64 = int.add.wrap(v12,v25)\n  jump b1(v9,v10,v24,v26)\nblock b3(v13:readbuf,v15:u64)\n  ret(v15)\nend\n",
+      "new_body_sha256": "ea9ae4858843313b3f1a506fad9593bfea7af0196e2ea402267ec232599d5c75",
+      "new_function": "f17",
+      "only_function_and_call_id_relocation": true,
+      "original_body": "fn f16(v0:readbuf,v1:u64) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:readbuf,v1:u64)\n  v2:u64 = const() {\"value\":0}\n  jump b1(v0,v1,v2,v2)\nblock b1(v3:readbuf,v4:u64,v5:u64,v6:u64)\n  v7:u64 = const() {\"value\":8}\n  v8:bool = compare.lt(v6,v7)\n  branch v8 b2(v3,v4,v5,v6) b3(v3,v5)\nblock b2(v9:readbuf,v10:u64,v11:u64,v12:u64)\n  v17:u64 = int.add.wrap(v10,v12)\n  v18:usize = int.cast(v17) {\"mode\":\"wrap\"}\n  v19:u8 = buffer.load(v9,v18)\n  v20:u64 = int.cast(v19) {\"mode\":\"wrap\"}\n  v21:u64 = const() {\"value\":8}\n  v22:u64 = int.mul.wrap(v12,v21)\n  v23:u64 = int.shl.checked(v20,v22)\n  v24:u64 = bit.or(v11,v23)\n  v25:u64 = const() {\"value\":1}\n  v26:u64 = int.add.wrap(v12,v25)\n  jump b1(v9,v10,v24,v26)\nblock b3(v13:readbuf,v15:u64)\n  ret(v15)\nend\n",
+      "original_body_sha256": "005676827ea87e66e198151ec7b071df4a3d606992aef304f9985c6c6bf667ac",
+      "original_function": "f16"
+    },
+    {
+      "new_body": "fn f18(v0:mutbuf,v1:u64) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:mutbuf,v1:u64)\n  v2:u64 = const() {\"value\":0}\n  jump b1(v0,v1,v2,v2)\nblock b1(v3:mutbuf,v4:u64,v5:u64,v6:u64)\n  v7:u64 = const() {\"value\":8}\n  v8:bool = compare.lt(v6,v7)\n  branch v8 b2(v3,v4,v5,v6) b3(v3,v5)\nblock b2(v9:mutbuf,v10:u64,v11:u64,v12:u64)\n  v17:u64 = int.add.wrap(v10,v12)\n  v18:usize = int.cast(v17) {\"mode\":\"wrap\"}\n  v19:u8 = buffer.load(v9,v18)\n  v20:u64 = int.cast(v19) {\"mode\":\"wrap\"}\n  v21:u64 = const() {\"value\":8}\n  v22:u64 = int.mul.wrap(v12,v21)\n  v23:u64 = int.shl.checked(v20,v22)\n  v24:u64 = bit.or(v11,v23)\n  v25:u64 = const() {\"value\":1}\n  v26:u64 = int.add.wrap(v12,v25)\n  jump b1(v9,v10,v24,v26)\nblock b3(v13:mutbuf,v15:u64)\n  ret(v15)\nend\n",
+      "new_body_sha256": "d72ff9b37d3488b56afa846d45f598433ea120d46fe4562128b81ceaa0f8a215",
+      "new_function": "f18",
+      "only_function_and_call_id_relocation": true,
+      "original_body": "fn f17(v0:mutbuf,v1:u64) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:mutbuf,v1:u64)\n  v2:u64 = const() {\"value\":0}\n  jump b1(v0,v1,v2,v2)\nblock b1(v3:mutbuf,v4:u64,v5:u64,v6:u64)\n  v7:u64 = const() {\"value\":8}\n  v8:bool = compare.lt(v6,v7)\n  branch v8 b2(v3,v4,v5,v6) b3(v3,v5)\nblock b2(v9:mutbuf,v10:u64,v11:u64,v12:u64)\n  v17:u64 = int.add.wrap(v10,v12)\n  v18:usize = int.cast(v17) {\"mode\":\"wrap\"}\n  v19:u8 = buffer.load(v9,v18)\n  v20:u64 = int.cast(v19) {\"mode\":\"wrap\"}\n  v21:u64 = const() {\"value\":8}\n  v22:u64 = int.mul.wrap(v12,v21)\n  v23:u64 = int.shl.checked(v20,v22)\n  v24:u64 = bit.or(v11,v23)\n  v25:u64 = const() {\"value\":1}\n  v26:u64 = int.add.wrap(v12,v25)\n  jump b1(v9,v10,v24,v26)\nblock b3(v13:mutbuf,v15:u64)\n  ret(v15)\nend\n",
+      "original_body_sha256": "696577faf12c5d10bd1cba91aee7f717471833f9403bd49bff89f564d2867cc6",
+      "original_function": "f17"
+    },
+    {
+      "new_body": "fn f19(v0:mutbuf,v1:u64,v2:u64) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:mutbuf,v1:u64,v2:u64)\n  v3:u64 = const() {\"value\":0}\n  jump b1(v0,v1,v2,v3)\nblock b1(v4:mutbuf,v5:u64,v6:u64,v7:u64)\n  v8:u64 = const() {\"value\":8}\n  v9:bool = compare.lt(v7,v8)\n  branch v9 b2(v4,v5,v6,v7) b3(v4,v6)\nblock b2(v10:mutbuf,v11:u64,v12:u64,v13:u64)\n  v18:u64 = int.add.wrap(v11,v13)\n  v19:u64 = const() {\"value\":8}\n  v20:u64 = int.mul.wrap(v13,v19)\n  v21:u64 = int.shr.checked(v12,v20)\n  v22:usize = int.cast(v18) {\"mode\":\"wrap\"}\n  v23:u8 = int.cast(v21) {\"mode\":\"wrap\"}\n  _ = buffer.store(v10,v22,v23)\n  v24:u64 = const() {\"value\":1}\n  v25:u64 = int.add.wrap(v13,v24)\n  jump b1(v10,v11,v12,v25)\nblock b3(v14:mutbuf,v16:u64)\n  ret(v16)\nend\n",
+      "new_body_sha256": "4487643880a4af61afbc13c780e84516f959d4a16cfde8ba3faa1393e1f53fbf",
+      "new_function": "f19",
+      "only_function_and_call_id_relocation": true,
+      "original_body": "fn f18(v0:mutbuf,v1:u64,v2:u64) -> (u64) effects(read,write,trap) entry(b0)\nblock b0(v0:mutbuf,v1:u64,v2:u64)\n  v3:u64 = const() {\"value\":0}\n  jump b1(v0,v1,v2,v3)\nblock b1(v4:mutbuf,v5:u64,v6:u64,v7:u64)\n  v8:u64 = const() {\"value\":8}\n  v9:bool = compare.lt(v7,v8)\n  branch v9 b2(v4,v5,v6,v7) b3(v4,v6)\nblock b2(v10:mutbuf,v11:u64,v12:u64,v13:u64)\n  v18:u64 = int.add.wrap(v11,v13)\n  v19:u64 = const() {\"value\":8}\n  v20:u64 = int.mul.wrap(v13,v19)\n  v21:u64 = int.shr.checked(v12,v20)\n  v22:usize = int.cast(v18) {\"mode\":\"wrap\"}\n  v23:u8 = int.cast(v21) {\"mode\":\"wrap\"}\n  _ = buffer.store(v10,v22,v23)\n  v24:u64 = const() {\"value\":1}\n  v25:u64 = int.add.wrap(v13,v24)\n  jump b1(v10,v11,v12,v25)\nblock b3(v14:mutbuf,v16:u64)\n  ret(v16)\nend\n",
+      "original_body_sha256": "fb7ba3fdf771e9e890f90a97be7e658fb87cfd49445c883e83b788a100cbc610",
+      "original_function": "f18"
+    }
+  ],
+  "private_authoring_generator_required_at_build_or_runtime": false,
+  "relocation": {
+    "f16": "f17",
+    "f17": "f18",
+    "f18": "f19",
+    "f2": "f14",
+    "f4": "f15",
+    "f5": "f16"
+  },
+  "schema": "hepta.runtime.shell-capture-mkdir-reuse.v1",
+  "source": "native/shell_capture_path.hepta",
+  "source_sha256": "ce3f9ab277ad16cdcfb27c860fc97203de5dc0790072da5ff5f186632f7c69c2",
+  "target": "native/shell_capture_mkdir.hepta",
+  "target_sha256": "251b0c83afea0a050c2a71644b2c8e3246c6039888366408c3b98beb17ccaff6",
+  "transform": "Six complete helper bodies change declaration/call IDs only. The derived parent wrapper is separate, explicitly changed HIA source."
+}

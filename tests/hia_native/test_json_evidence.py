@@ -69,7 +69,7 @@ class JSONEvidenceTests(unittest.TestCase):
             for name in self.pins['files']:
                 target = root / name
                 target.parent.mkdir(parents=True, exist_ok=True)
-                os.link(ROOT / name, target)
+                shutil.copyfile(ROOT / name, target)
             for row in report['checks']:
                 if row['name'] in self.actual['tests']:
                     row['command'] = [row['command'][0], '-I', '-B', str(root / 'tests/hia_native' / row['name'])]

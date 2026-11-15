@@ -16,7 +16,7 @@ from qualify_hia_runtime_native import (MODULES, file_info_evidence, io_referenc
                                        qualification_env, record_check, sources)
 from qualify_hia_runtime_native import FILE_INFO_SUITES, validate_file_info_guard_times
 from compare_hia_runtime_rust import run as compare_rust
-from compare_hia_runtime_rust import RECIPES, NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS
+from compare_hia_runtime_rust import RECIPES, NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS, HARDWARE_REFERENCE_COMPONENTS
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, ORIGINAL_RUNTIME_COPIES, check_original_sources
 from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
 from hia_native_entropy_qualification import (SUITES as ENTROPY_SUITES, completion as entropy_completion,
@@ -234,7 +234,8 @@ class QualificationReportingTests(unittest.TestCase):
                 command=[sys.executable, "-I", str(root / "tests/hia_native/serial.py")], timeout=5)
             return {"serial_complete": True}
         self.report.update(modules={"serial": {}, "operation_scope_os": {}}, original_rust_comparisons={})
-        with patch.object(comparison, "RECIPES", {"serial": serial, "operation_scope_os": worker}):
+        with patch.object(comparison, "RECIPES", {"serial": serial, "operation_scope_os": worker}), \
+                patch.object(comparison, "MODULES", ({"key": "serial"}, {"key": "operation_scope_os"})):
             comparison.run_rust_recipes(self.output, self.report, Path(sys.executable))
 
     def test_original_os_worker_overlaps_main_and_retains_private_records(self):
@@ -808,13 +809,113 @@ class QualificationReportingTests(unittest.TestCase):
 
     def test_every_component_has_one_explicit_reference_domain(self):
         declared = {item['key'] for item in MODULES}
-        domains = (set(RECIPES), NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS)
+        domains = (set(RECIPES), NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS, HARDWARE_REFERENCE_COMPONENTS)
         self.assertEqual(declared, set.union(*domains))
         for left in range(len(domains)):
             for right in range(left + 1, len(domains)):
                 self.assertFalse(domains[left] & domains[right])
         self.assertIn('file_info_service', PYTHON_REFERENCE_COMPONENTS)
         self.assertNotIn('file_info_service', RECIPES)
+
+    def test_bellman_registers_three_actual_suites_and_distinct_reference_domains(self):
+        import hia_native_bellman_qualification as b
+        import hia_native_pipeline as pipeline
+        import qualify_hia_runtime_native as q
+        self.assertEqual(HARDWARE_REFERENCE_COMPONENTS, {"finite_binary64"})
+        self.assertIs(RECIPES["bellman_core"], b.compare_original)
+        self.assertNotIn("finite_binary64", RECIPES)
+        for item in b.MODULES:
+            self.assertEqual(next(row for row in q.MODULES if row["key"] == item["key"]), item)
+            self.assertEqual(item["standalone"], "filter")
+            self.assertNotIn("builder", item)
+            self.assertIn(item["source"], q.sources())
+        tests = pipeline.partition_tests()["system"]
+        self.assertEqual(tuple(name for name in tests if name in b.TESTS), b.TESTS)
+        self.assertEqual(len(b.TESTS), 3)
+        commands = b.original_commands(self.output, Path("/selected/rustc"))
+        self.assertEqual(len(commands), 6)
+        for label in ("debug", "optimized"):
+            command, timeout = commands["bellman-rust-build-" + label]
+            self.assertEqual(command[0], "/selected/rustc")
+            self.assertIn("--edition=2021", command)
+            self.assertEqual("-O" in command, label == "optimized")
+            self.assertEqual(timeout, 180)
+        self.assertIn(b.REFERENCE, q.sources())
+        for key in ("whole_handler_replaced", "whole_runtime_replaced", "production_activated", "old_stack_removal_qualified"):
+            self.assertIs(b.SCOPE[key], False)
+
+    def test_bellman_original_copy_must_match_sealed_current_target_blob(self):
+        import hashlib
+        import shutil
+        import hia_native_bellman_qualification as b
+        fixture = self.output / "bellman-source"
+        names = ["native/bellman_core_component.json", "native/migration.json", "native/migration_target.json", b.REFERENCE]
+        component = json.loads((ROOT / names[0]).read_bytes())
+        for name in component["files"]:
+            prefix = "native" if name.endswith((".hepta", ".md")) else "scripts" if name.startswith("hia_native_") else "tests/hia_native/bellman"
+            names.append(prefix + "/" + name)
+        for name in names:
+            path = fixture / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, path)
+        self.assertEqual(b.source_evidence(fixture)["original_sha256"], b.ORIGINAL_SHA256)
+        copied = fixture / b.REFERENCE
+        original = copied.read_bytes()
+        copied.write_bytes(original + b"\n// changed reference\n")
+        with self.assertRaisesRegex(ValueError, "reference copy differs"):
+            b.source_evidence(fixture)
+        copied.write_bytes(original)
+        snapshot = fixture / "native/migration_target.json"
+        target = json.loads(snapshot.read_bytes())
+        next(row for row in target["source_files"] if row["path"] == "src/mcp/weight_bellman.rs")["git_blob"] = "0" * 40
+        snapshot.write_text(json.dumps(target))
+        inventory = fixture / "native/migration.json"
+        data = json.loads(inventory.read_bytes())
+        data["migration_target"]["sha256"] = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+        inventory.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "current target Git blob"):
+            b.source_evidence(fixture)
+
+    def test_bellman_stream_parser_uses_eight_byte_input_headers(self):
+        import struct
+        import hia_native_bellman_qualification as b
+        inputs = struct.pack("<Q", 3) + b"abc" + struct.pack("<Q", 1) + b"x"
+        outputs = struct.pack("<QQ", 0, 3) + b"abc" + struct.pack("<QQ", 1, 1) + b"x"
+        self.assertEqual(b.packet_counts(inputs, output=False), (2, 0))
+        self.assertEqual(b.packet_counts(outputs, output=True), (2, 1))
+        for raw, output in ((inputs[:-1], False), (inputs + b"x", False), (outputs[:-1], True),
+                            (outputs + b"x", True), (struct.pack("<QQ", 2, 0), True)):
+            with self.subTest(output=output, raw=raw), self.assertRaises(ValueError):
+                b.packet_counts(raw, output=output)
+
+    def test_bellman_actual_process_requires_command_input_and_complete_streams(self):
+        import copy
+        import hia_native_bellman_qualification as b
+        self.report["phase"] = "original_rust_comparison"
+        command = [sys.executable, "-I", "-B", "-c",
+                   "import sys; assert sys.stdin.buffer.read() == b'complete-input'; sys.stdout.buffer.write(bytes([0,255]))"]
+        record_check(self.output, self.report, name="bellman-reporting-fixture", command=command,
+                     timeout=5, input_bytes=b"complete-input")
+        self.report["checks"][0]["stdin"] = b.identity(b"complete-input")
+        def check(report):
+            return b.checked_process(self.output, report, "bellman-reporting-fixture", command,
+                                     phase="original_rust_comparison", timeout=5, stdin=b"complete-input")
+        self.assertEqual(check(self.report)[1], bytes([0, 255]))
+        for field, value in (("command", command[:-1]), ("phase", "native_components"), ("exit_code", False),
+                             ("timed_out", True), ("timeout_seconds", 1), ("stdout_bytes", 1),
+                             ("stdin", b.identity(b"partial-input")), ("elapsed_seconds", True)):
+            changed = copy.deepcopy(self.report)
+            changed["checks"][0][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                check(changed)
+        changed = copy.deepcopy(self.report)
+        changed["checks"].append(copy.deepcopy(changed["checks"][0]))
+        with self.assertRaisesRegex(ValueError, "one completed process"):
+            check(changed)
+        captured = self.output / "bellman-reporting-fixture.stdout"
+        captured.write_bytes(b"changed-complete-output")
+        with self.assertRaises(ValueError):
+            check(self.report)
 
     def test_filesystem_registry_keeps_native_and_original_domains_separate(self):
         import qualify_hia_runtime_native as q
@@ -886,10 +987,10 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
-        self.assertEqual(len(MODULES), 48)
-        self.assertEqual(len(migration["native_components"]), 111)
-        self.assertEqual(len(q.native_tests()), 130)
-        self.assertEqual(len(RECIPES), 43)
+        self.assertEqual(len(MODULES), 59)
+        self.assertEqual(len(migration["native_components"]), 128)
+        self.assertEqual(len(q.native_tests()), 151)
+        self.assertEqual(len(RECIPES), 53)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
         self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
                             for row in migration["legacy_tool_handlers"]))
@@ -958,14 +1059,15 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertEqual(declared['fence_json']['test'], 'test_fence_json.py')
         entry = declared['serde_json']
         self.assertEqual((entry['test'], *entry['additional_tests']),
-                         ('test_serde_json.py', 'test_serde_json_transport.py', 'test_json_evidence.py'))
+                         ('test_serde_json.py', 'test_serde_json_transport.py', 'test_serde_json_raw_value.py',
+                          'test_json_evidence.py', 'test_serde_json_raw_value_evidence.py'))
         self.assertEqual(entry['buffer_profile'], 'serde-json.v1')
         self.assertEqual(entry['companion_sources'], ('native/serde_filter_packer.hepta',))
         self.assertIn('src/mcp/runtime/effect_owner_fence.rs', ORIGINAL_RUNTIME_BLOBS)
         self.assertTrue(set(source_inputs(ROOT)['files']) <= set(sources()))
         inherited = {key: '/outside/fixture' for key in (
             'HIA_FENCE_JSON_MANIFEST', 'HIA_SERDE_JSON_MANIFEST', 'HIA_FENCE_JSON_CORPUS_DIR',
-            'HIA_SERDE_JSON_CORPUS_DIR', 'HIA_JSON_QUALIFICATION_OUTPUT', 'HIA_JSON_REFERENCE_ROOT',
+            'HIA_SERDE_JSON_CORPUS_DIR', 'HIA_RAW_VALUE_CORPUS_DIR', 'HIA_JSON_QUALIFICATION_OUTPUT', 'HIA_JSON_REFERENCE_ROOT',
             'HIA_SERDE_JSON_TRANSPORT_REPORT')}
         self.assertEqual(qualification_env(dict(inherited, PATH='/usr/bin')), {'PATH': '/usr/bin'})
 

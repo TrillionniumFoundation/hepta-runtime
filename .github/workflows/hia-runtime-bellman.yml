@@ -1,0 +1,142 @@
+name: HIA Bellman Private Numerical Core
+
+on:
+  push:
+    branches: ['codex/**', main]
+    paths:
+      - 'native/finite_binary64.hepta'
+      - 'native/bellman_core*'
+      - 'native/filter_packer.hepta'
+      - 'native/migration*.json'
+      - 'scripts/hia_native_bellman*'
+      - 'scripts/hia_native_build.py'
+      - 'scripts/hia_native_loader.py'
+      - 'tests/hia_native/bellman/**'
+      - 'tests/hia_native/test*bellman*.py'
+      - 'tests/hia_native/test_finite_binary64.py'
+      - '.github/workflows/hia-runtime-bellman.yml'
+  pull_request:
+    paths:
+      - 'native/finite_binary64.hepta'
+      - 'native/bellman_core*'
+      - 'native/filter_packer.hepta'
+      - 'native/migration*.json'
+      - 'scripts/hia_native_bellman*'
+      - 'scripts/hia_native_build.py'
+      - 'scripts/hia_native_loader.py'
+      - 'tests/hia_native/bellman/**'
+      - 'tests/hia_native/test*bellman*.py'
+      - 'tests/hia_native/test_finite_binary64.py'
+      - '.github/workflows/hia-runtime-bellman.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-bellman-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# This focused gate qualifies numerical behavior using a fresh source-checked
+# compiler fixed point. The ordinary aggregate additionally requires Hepta's
+# complete cold gate. Public JSON, deadline, async and MCP routing are separate.
+jobs:
+  bellman:
+    name: HIA arithmetic and Bellman versus original Rust debug and optimized
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            tests/hia_native/bellman
+      - name: Checkout fixed HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Checkout independent original Bellman source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original
+          ref: 737acf6f901e46c57b0b4374e323e0d1132e0d49
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /src/mcp/weight_bellman.rs
+      - name: Verify identities and install original compiler
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C original rev-parse HEAD)" = 737acf6f901e46c57b0b4374e323e0d1132e0d49
+          rustup toolchain install 1.95.0 --profile minimal
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, str(Path('runtime/scripts').resolve()))
+          from hia_native_bellman_qualification import source_evidence, REFERENCE
+          source_evidence()
+          assert Path('original/src/mcp/weight_bellman.rs').read_bytes() == (Path('runtime') / REFERENCE).read_bytes()
+          PY
+      - name: Build native images and compare complete independent streams
+        run: |
+          python3 -I -B runtime/scripts/hia_native_bellman_build.py \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --runtime "$GITHUB_WORKSPACE/runtime" \
+            --sources "$GITHUB_WORKSPACE/runtime/native" \
+            --drivers "$GITHUB_WORKSPACE/runtime/tests/hia_native/bellman" \
+            --original "$GITHUB_WORKSPACE/original/src/mcp/weight_bellman.rs" \
+            --output "$RUNNER_TEMP/hia-bellman-core"
+      - name: Check complete gate status and bounded claims
+        env:
+          BELLMAN_OUTPUT: ${{ runner.temp }}/hia-bellman-core
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          output = Path(os.environ['BELLMAN_OUTPUT'])
+          component = json.loads(Path('runtime/native/bellman_core_component.json').read_bytes())
+          report = json.loads((output / 'REPORT.json').read_bytes())
+          assert report['status'] == 'PASS' and report['original_replay_completed'] is True
+          for field in ('whole_handler_replaced', 'production_activated', 'old_stack_removal_qualified'):
+              assert report[field] is False, field
+          assert report['original_source_sha256'] == component['original_sha256']
+          assert report['shared_helper_graph_sha256'] == component['shared_integer_arithmetic_graph_sha256']
+          for name in ('finite_binary64.hepta', 'bellman_core.hepta'):
+              assert report['hia_source_sha256'][name] == component['files'][name]['sha256']
+          assert len(report['native_manifests']) == 2
+          for relative, expected in report['native_manifests'].items():
+              raw = (output / relative).read_bytes()
+              assert hashlib.sha256(raw).hexdigest() == expected
+              manifest = json.loads(raw)
+              assert manifest['compiler_commit'] == component['compiler_commit']
+              assert manifest['compiler_sha256'] == component['compiler_image_sha256']
+          for name, field, expected in (
+              ('arithmetic', 'total', component['fixed_probe_cases']),
+              ('bellman', 'native_graph_cases', component['graph_cases']),
+              ('signed-zero', 'native_graph_cases', component['signed_zero_graph_cases']),
+          ):
+              child = json.loads((output / name / 'report.json').read_bytes())
+              assert child['status'] == 'PASS' and child[field] == expected, name
+          PY
+      - name: Retain actual input, output, build and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-bellman-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-bellman-core/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

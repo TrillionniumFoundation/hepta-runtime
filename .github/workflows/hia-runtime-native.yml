@@ -67,6 +67,16 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'rustfmt.toml'
+      - 'scripts/shell_process_adapter.S'
+      - 'scripts/shell_output_adapter.S'
+      - 'scripts/shell_foreground_adapter.S'
+      - 'scripts/shell_capture_mkdir_adapter.S'
+      - 'scripts/shell_capture_file_adapter.S'
+      - 'scripts/shell_capture_prepare_adapter.S'
+      - 'scripts/qualify_hia_shell_capture_prepare_original.py'
+      - 'tests/oracles/shell_capture_prepare/**'
+      - 'scripts/qualify_hia_shell_process.py'
+      - '.github/workflows/hia-runtime-shell-process.yml'
   pull_request:
     paths:
       - 'native/**'
@@ -132,6 +142,16 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'rustfmt.toml'
+      - 'scripts/shell_process_adapter.S'
+      - 'scripts/shell_output_adapter.S'
+      - 'scripts/shell_foreground_adapter.S'
+      - 'scripts/shell_capture_mkdir_adapter.S'
+      - 'scripts/shell_capture_file_adapter.S'
+      - 'scripts/shell_capture_prepare_adapter.S'
+      - 'scripts/qualify_hia_shell_capture_prepare_original.py'
+      - 'tests/oracles/shell_capture_prepare/**'
+      - 'scripts/qualify_hia_shell_process.py'
+      - '.github/workflows/hia-runtime-shell-process.yml'
   workflow_dispatch:
 
 permissions:
@@ -141,7 +161,7 @@ concurrency:
   group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# The same fresh cold/build bytes feed all six complete native partitions.
+# The same fresh cold/build bytes feed all seven complete native partitions.
 # Prepare and native partitions retain 15 minutes; aggregate orchestration gets 30.
 # Every individual suite, owner and stream deadline remains unchanged.
 # The batch partition includes all four atomic-write suites and its full 505 MiB case.
@@ -165,6 +185,7 @@ jobs:
             scripts
             src
             tests/hia_native
+            tests/oracles/shell_capture_prepare
             .github
 
       - name: Checkout pinned HIA compiler
@@ -186,6 +207,12 @@ jobs:
         env:
           EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+
+      - name: Verify source coverage and evidence snapshot controls
+        run: |
+          python3 -I -B runtime/tests/hia_native/test_migration_target.py
+          python3 -I -B runtime/tests/hia_native/test_evidence_snapshot.py
+          python3 -I -B runtime/tests/hia_native/test_native_pipeline.py
 
       - name: Replay full cold gate and seal all native build artifacts
         id: prepare
@@ -214,10 +241,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [batch, text, view, json, config, system]
+        group: [batch, text, shell, view, json, config, system]
     steps:
       - name: Install filesystem syscall trace observer
-        if: matrix.group == 'system'
+        if: matrix.group == 'system' || matrix.group == 'shell'
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y strace
@@ -233,6 +260,7 @@ jobs:
             scripts
             src
             tests/hia_native
+            tests/oracles/shell_capture_prepare
             .github
 
       - name: Checkout pinned HIA compiler
@@ -321,6 +349,7 @@ jobs:
             scripts
             src
             tests/hia_native
+            tests/oracles/shell_capture_prepare
             .github
 
       - name: Checkout pinned HIA compiler

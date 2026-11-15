@@ -20,7 +20,7 @@ terminator. The payload limit is 8,388,608 bytes, including JSON whitespace.
 | Operation | Input payload | Successful output |
 | --- | --- | --- |
 | 1 | Complete raw JSON document | Exact compact `serde_json::Value` serialization |
-| 2 | Complete JSON number, with optional JSON whitespace | Two words: number tag and raw value bits |
+| 2 | Complete JSON value deserializing to a number, including enabled RawValue wrappers, with optional JSON whitespace | Two words: number tag and raw value bits |
 | 3 | One eight-byte finite binary64 bit pattern | Exact finite-number JSON text |
 
 Operation 2 tags are `3` for `u64`, `4` for `i64` represented as a two's-complement
@@ -52,8 +52,9 @@ Operation 1 therefore preserves these behaviors:
 - Every input value is parsed and every number is admitted before duplicate
   replacement. An overflowing or malformed value does not become valid merely
   because a later occurrence would replace its key.
-- A complete single document is required. Container depth 127 is accepted;
-  depth 128 is refused, matching the original generic `Value` recursion gate.
+- A complete single document is required. Each serde deserializer context accepts
+  container depth 127 and refuses depth 128. The enabled RawValue first-key
+  branch creates a fresh context, as described below.
 - Strings preserve Unicode scalar content, including embedded NUL. JSON output
   uses the original short control escapes and lowercase `\u00xx` escapes,
   preserves ordinary non-ASCII UTF-8 and does not escape `/` unnecessarily.
@@ -67,6 +68,49 @@ Examples include `-0` becoming `-0.0`, `1e-5` becoming `0.00001`,
 `1e+16`. These examples and the numerical boundary corpus were executed by
 the actual locked Rust dependency; Python floating-point formatting is not
 used as a compatibility oracle.
+
+## Enabled raw_value first-key behavior
+
+The locked `serde_json` feature changes ordinary `Value` deserialization, even
+when the caller has not requested the `RawValue` type. Before object sorting or
+duplicate selection, the first decoded key is classified. If it is exactly
+`$serde_json::private::RawValue`, its value must be a JSON string. The decoded
+string is parsed as a new complete `Value` document. Extra members in the outer
+object are refused. The same key in a later position remains an ordinary key;
+its serialized order does not cause a second interpretation of the result.
+Escaped spellings of the first key have the same meaning as unescaped spellings.
+
+Each decoded document receives the original independent 127-container budget.
+For example, 126 enclosing arrays around one raw wrapper whose string holds
+127 arrays can produce a 253-array result. This is the original series of
+separate parser contexts, not an increase to any context's depth limit. Nested
+raw wrappers are resolved iteratively. Invalid inner values and overflowing
+numbers remain invalid even when a later duplicate key would overwrite them.
+Operation 2 follows the actual original `Value`-then-`as_number` implementation,
+so a raw wrapper whose final value is a number returns its original tag/bits.
+
+The no-wrapper execution path retains its original parser, arena, number
+classification and serializer. The wrapper path makes one private copy of the
+input and one private flattened stream, each bounded by the original framed
+input size. Decoded raw strings replace their own spans in the private copy;
+the caller's input is never changed. Every original or decoded document is
+validated before expansion, and the final arena is decoded without a depth
+stack. Its parent and sibling records also support results deeper than one
+individual parser's 127-container limit.
+
+The raw-context control stack has 64 entries within the existing private
+scratch region. Nested raw wrappers require repeated JSON quotation and
+escaping; reaching 64 nested wrappers cannot fit the retained 8 MiB source
+limit. This implementation bound therefore excludes no representable source
+in the declared profile. Both temporary byte spans lie above the arena's
+checked work limit. The original 16/64/256 MiB transport profile is unchanged.
+Small caller workspaces can explicitly refuse the additional private storage.
+The ordinary number-only operation still uses its original 8 KiB workspace.
+
+The same complete numeric validation, stable duplicate selection, measurement
+and publication phases follow expansion. Parsing, workspace and output-capacity
+refusals leave every output byte unchanged. This implements the enabled
+`Value` conversion; it does not add raw lexical `RawValue` storage or serialization.
 
 ## Native organization and output atomicity
 
@@ -142,3 +186,15 @@ generic and typed frames. Each exported corpus must be replayed by that actual
 locked reference, and its complete stdout must equal the native output file.
 Historical comparison evidence does not substitute for a fresh aggregate
 reference replay or the compiler's full cold gate.
+
+### RawValue regression domain
+
+`test_serde_json_raw_value.py` runs against the same source-bound native module.
+It preserves the existing ordinary corpus and adds a separate exported domain
+through `HIA_RAW_VALUE_CORPUS_DIR`: wrapped representable original Value and
+number payloads, exact and escaped first keys, later ordinary keys, duplicate
+validation, independent depth boundaries, nested contexts, full 8 MiB source
+and node-arena cases, refusal output canaries and scratch recovery. Invalid
+UTF-8 cannot occur as a decoded JSON string; those original invalid-byte cases
+remain in the unchanged ordinary corpus. The extension's complete exported
+frames require fresh replay by the original locked Rust oracle.

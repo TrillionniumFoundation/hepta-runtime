@@ -1,6 +1,6 @@
 """Run the complete native gate across source-bound, independently retained jobs.
 
-One fresh cold/build artifact is admitted by its workflow-produced SHA256. Six
+One fresh cold/build artifact is admitted by its workflow-produced SHA256. Seven
 explicit partitions execute every registered suite once. Collection rechecks all
 raw process bytes, immutable build inputs and complete shard inventories before
 the unchanged evidence owners can advance to the original Rust comparisons.
@@ -27,16 +27,20 @@ import qualify_hia_runtime_native as q
 
 PARTITIONS = {
     "batch": ("batch_plan", "batch_apply", "atomic_write"),
-    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
+    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
              "delta", "editable_content", "file_locks", "file_lock_service"),
+    "shell": ("terminal_clean", "shell_gate", "shell_process", "shell_background_text", "shell_outcome",
+              "shell_output_io", "shell_foreground", "shell_capture_path", "shell_capture_mkdir",
+              "shell_capture_file", "shell_capture_prepare"),
     "view": ("view_render", "view_render_growth", "view_read", "view_params", "view_call",
              "runtime_mcp", "view_cache", "history", "session_workdir"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence"),
     "config": ("runtime_config",),
     "system": ("filesystem_parity", "binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
-               "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service"),
+               "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service",
+               "finite_binary64", "bellman_core"),
 }
 BUILD_SEAL = "native-build.json"
 BUILD_REPORT = "prepared-report.json"
@@ -145,7 +149,7 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "view", "json", "config", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if set(partitions) != {"batch", "text", "shell", "view", "json", "config", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
         raise ValueError("every native module must belong to exactly one explicit partition")
     result = {group: tuple(name for key in keys for name in
                          (modules[key]["test"], *modules[key].get("additional_tests", ())))
@@ -314,6 +318,19 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         # before removing the private effect targets from artifact transport.
         # This native phase cannot depend on the later Rust comparison recipe.
         q.filesystem_parity_retirement(output, report, create=True)
+    if any(row.get("name") == "hia_native_shell_process_qualification.py" for row in report.get("checks", ())):
+        # The evidence suite already retired all exact transient targets; this
+        # read validates the stable snapshot before any artifact is sealed.
+        q.shell_process_evidence(output, report)
+    if any(row.get("name") == q.SHELL_OUTCOME_TEST for row in report.get("checks", ())):
+        q.shell_outcome_evidence(output, report)
+    if any(row.get("name") == q.SHELL_OUTPUT_TEST for row in report.get("checks", ())):
+        q.shell_output_evidence(output, report)
+    if any(row.get("name") in q.SHELL_FOREGROUND_TESTS for row in report.get("checks", ())):
+        q.shell_foreground_evidence(output, report)
+    for item in q.capture_gate.MODULES:
+        if any(row.get("name") == item["test"] for row in report.get("checks", ())):
+            q.capture_gate.native_evidence(output, report, item["key"])
     files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
     for name in directories:
         if name not in seal.get("directories", ()):

@@ -1,0 +1,83 @@
+{
+  "files": {
+    "Cargo.lock": {
+      "bytes": 90148,
+      "git_blob_sha1": "dec7d4e88dbae3e9e2415e98a55400bc1f81f939",
+      "sha256": "7f39704b92d5fc762a98a5313949034db464ca9485827b19b5dde7aa69902d43"
+    },
+    "Cargo.toml": {
+      "bytes": 4157,
+      "git_blob_sha1": "246f38e394de474fa0d55297b6b93cea40b77393",
+      "sha256": "377e7dca547f0ff0d832fb28cf01862a6d84b4b6ed42c8b36dae9075cbbbb78f"
+    },
+    "src/mcp/fs/background.rs": {
+      "bytes": 9434,
+      "git_blob_sha1": "32d887d98269d9db2b3adf979567c417a2e38db6",
+      "sha256": "826394f843a0891dfbe8b0b6986dad40d85b53e20a497cb4ddb04838a185f065"
+    }
+  },
+  "original_test_count": 0,
+  "required_rust_version": "1.95.0",
+  "required_target": "x86_64-unknown-linux-gnu",
+  "reviewed_standard_library_sources": {
+    "fs": {
+      "bytes": 123250,
+      "git_blob_sha1": "cf6f9594c0027af9755a4518b1460a7db92a36ff",
+      "sha256": "bac06d50380e9bc8e7a95a89d209cd9aabe0970e4ec589e5d265ccc44a70f9c4",
+      "url": "https://github.com/rust-lang/rust/blob/1.95.0/library/std/src/fs.rs"
+    },
+    "path": {
+      "bytes": 134544,
+      "git_blob_sha1": "bf27df7b0428169a4308ebf413e732f3479754fe",
+      "sha256": "2c41294523392663a73fa3da08864427a05bdd8ff0fff0bd157c0236680593bf",
+      "url": "https://github.com/rust-lang/rust/blob/1.95.0/library/std/src/path.rs"
+    },
+    "unix": {
+      "bytes": 88655,
+      "git_blob_sha1": "7db474544f04abc75e2d66ec007ebe4799a491d3",
+      "sha256": "77c6419ee048c348d9ed4bef226ce6ceb735d6077d0eb9f6bcac0ef46fa7b86d",
+      "url": "https://github.com/rust-lang/rust/blob/1.95.0/library/std/src/sys/fs/unix.rs"
+    }
+  },
+  "runtime_call": {
+    "bytes": 114,
+    "end": 4557,
+    "sha256": "58744c47cf868d3918b6faec495acf3d5027fa7099d3cfb9d98da145a03b8f58",
+    "source": "src/mcp/fs/background.rs",
+    "start": 4443
+  },
+  "schema": "hepta.runtime.shell-capture-mkdir-original-source.v1",
+  "scope": [
+    "The transport directly calls the linked, fixed Rust standard-library create_dir_all.",
+    "The runtime call and complete Tokio bridge are retained as source provenance; no Tokio executor is claimed.",
+    "Each case starts a fresh reference process before any Rust filesystem metadata call.",
+    "The inherited cwd, UID and umask are controlled by the actual Python process launcher.",
+    "Only seed-zero cases have an original fresh-process counterpart; private std cache state is observed through syscall traces, never written.",
+    "Rust returns raw OS errors or the local NUL InvalidInput domain; no inferred errno is substituted.",
+    "Original tests, async cancellation, global concurrent cache, capture preparation and registry publication remain unqualified."
+  ],
+  "source_commit": "93f320a8e02b522e4bafd4a2cf346d68069ec74b",
+  "source_repository": "https://github.com/TrillionniumFoundation/hepta-runtime",
+  "tokio_bridge": {
+    "bytes": 1872,
+    "package": {
+      "checksum": "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed",
+      "dependencies": [
+        "bytes",
+        "libc",
+        "mio",
+        "pin-project-lite",
+        "signal-hook-registry",
+        "socket2",
+        "tokio-macros",
+        "windows-sys 0.61.2"
+      ],
+      "name": "tokio",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.53.1"
+    },
+    "sha256": "f8725f3c97faa50e7d719130ba577da612e54bedc9fcfb16738d583bf4a69a41",
+    "source": "review/tokio_create_dir_all.rs",
+    "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/fs/create_dir_all.rs"
+  }
+}
