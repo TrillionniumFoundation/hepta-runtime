@@ -12,10 +12,10 @@ import re
 import subprocess
 
 
-# The first complete cleanup inventory is immutable history. Later retirement
+# This complete cleanup checkpoint includes both retirement waves. Later work
 # may change disposition or add a new manifest, but cannot erase an existing
 # source row merely to avoid checking its original object.
-RETENTION_INVENTORY_BASELINE = "a7a80a18b40a34aaaf2a41b1b19e82eac36ed336"
+RETENTION_INVENTORY_BASELINE = "cc18b5b399cfa594dfbaa9e4046ba2c376dbc6d3"
 
 
 def git(root, *args, check=True, input_bytes=None):

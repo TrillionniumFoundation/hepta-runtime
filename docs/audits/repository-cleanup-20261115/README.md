@@ -221,6 +221,13 @@ the October 31 concurrency harness opens its adjacent RSS helper with
 `O_NOFOLLOW` and verifies its pinned bytes. Wrappers or symlinks would violate
 those maintained input contracts.
 
+The second immutable inventory checkpoint is
+[`cc18b5b3`](https://github.com/TrillionniumFoundation/hepta-runtime/commit/cc18b5b399cfa594dfbaa9e4046ba2c376dbc6d3).
+The current verifier binds all **44 manifests / 15,065 original source rows** to
+that ancestor, including the new 80-file inventory. Removing its complete manifest
+or any source row must fail verification. Both cleanup checkpoints remain in Git
+ancestry; use a merge commit or fast-forward, without squashing/rebasing them.
+
 All 608 core inputs remain unchanged from the original baseline, including all
 474 runtime source inputs and the complete model-worker/cloud-compute code.
 `inventory.json` contains cumulative current-tree metrics; earlier per-commit
