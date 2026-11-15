@@ -8,6 +8,8 @@ on:
       - 'feature/rea-native-foundation-*'
     paths:
       - '.github/workflows/rea-browser-real.yml'
+      - '.github/scripts/rea_browser_session.py'
+      - '.github/scripts/test_rea_browser_session.py'
 
 permissions:
   contents: read
@@ -32,12 +34,15 @@ jobs:
         with:
           node-version: '24.22.1'
 
+      - name: Temporary browser process lifecycle regressions
+        run: python3 -B -m unittest discover -s .github/scripts -p test_rea_browser_session.py -v
+
       - name: Real browser and loopback-only test HTTP server
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/rea-real-cdp"
           profile="$RUNNER_TEMP/rea-cdp-chrome-profile"
-          mkdir -p "$evidence/html" "$profile"
+          mkdir -p "$evidence/html"
           node --version | tee "$evidence/node-version.txt"
           google-chrome --version | tee "$evidence/chrome-version.txt"
           cat > "$evidence/html/fixture.html" <<'HTML'
@@ -54,23 +59,12 @@ jobs:
               print(sock.getsockname()[1])
           PY
           )"
-          python3 -m http.server "$port" --bind 127.0.0.1 \
-            --directory "$evidence/html" > "$evidence/http-server.log" 2>&1 &
-          http_pid=$!
-          google-chrome --headless=new --no-sandbox --disable-gpu \
-            --disable-dev-shm-usage --disable-background-networking \
-            --no-first-run --no-default-browser-check --disable-extensions \
-            --remote-debugging-address=127.0.0.1 --remote-debugging-port=0 \
-            --remote-allow-origins='*' --user-data-dir="$profile" \
-            about:blank > "$evidence/chrome.log" 2>&1 &
-          chrome_pid=$!
-          cleanup() {
-            kill "$chrome_pid" "$http_pid" 2>/dev/null || true
-            wait "$chrome_pid" 2>/dev/null || true
-            wait "$http_pid" 2>/dev/null || true
-            rm -rf "$profile"
-          }
-          trap cleanup EXIT
+          cat > "$evidence/probe.sh" <<'BASH'
+          set -euo pipefail
+          evidence=$1
+          profile=$2
+          port=$3
+          chrome_pid=$4
           for i in $(seq 1 100); do
             test -s "$profile/DevToolsActivePort" && break
             if ! kill -0 "$chrome_pid" 2>/dev/null; then
@@ -170,8 +164,12 @@ jobs:
           assert observation["navigationFrameIdPresent"] is True
           assert observation["productionAdapterQualified"] is False
           PY
-          # The trap tears down the temporary browser and server and removes
-          # the ephemeral profile. No claim of remote/CDP credential isolation.
+          BASH
+          python3 -B .github/scripts/rea_browser_session.py \
+            --profile "$profile" --evidence "$evidence" --port "$port" -- \
+            bash "$evidence/probe.sh" "$evidence" "$profile" "$port"
+          # The owner reaps its private process trees before removing the profile.
+          # No claim of remote/CDP credential isolation.
 
       - name: Preserve CDP events, source identity and failure diagnostics
         if: always()
