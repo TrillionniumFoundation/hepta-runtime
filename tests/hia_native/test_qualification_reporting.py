@@ -1160,6 +1160,53 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertTrue(set(create.SOURCE_FILES) <= set(q.sources()))
         self.assertTrue(all(value is False for value in create.SCOPE.values()))
 
+    def create_manifest_fixture(self, *, key="local_create_file"):
+        import compare_hia_runtime_rust as original
+        declared = next(item for item in MODULES if item["key"] == key)
+        manifest = self.output / "manifest.json"
+        module = {"schema": "hepta.runtime.local-create-native.v1", "compiler_commit": HEPTA_COMMIT,
+                  "compiler_sha256": "1" * 64, "executable": "local-create.elf"}
+        manifest.write_text(json.dumps(module))
+        report = {"compiler_image_sha256": "1" * 64, "modules": {key: {
+            "source": declared["source"], "builder": declared.get("builder", "borrowed_bytes"),
+            "manifest": manifest.name, "sha256": original.sha(manifest)}}}
+        return original, manifest, module, report
+
+    def test_compiled_local_create_bundle_invokes_the_strict_build_reader(self):
+        original, manifest, module, report = self.create_manifest_fixture()
+        self.assertNotIn("source", module)
+        self.assertNotIn("image", module)
+        with patch.object(original.local_create_qualification.blocking, "verify_build", return_value=module) as reader:
+            original.check_compiled_modules(self.output, report)
+        reader.assert_called_once_with(manifest, source_root=ROOT)
+        with patch.object(original.local_create_qualification.blocking, "verify_build",
+                          side_effect=ValueError("fixture complete ELF differs")) as reader:
+            with self.assertRaisesRegex(ValueError, "complete ELF differs"):
+                original.check_compiled_modules(self.output, report)
+        reader.assert_called_once_with(manifest, source_root=ROOT)
+
+    def test_compiled_manifest_refuses_invalid_bundle_and_missing_flat_artifacts(self):
+        original, manifest, module, report = self.create_manifest_fixture()
+        original.local_create_qualification.blocking.build_sources(ROOT)
+        with self.assertRaises(ValueError):
+            original.check_compiled_modules(self.output, report)
+        original, manifest, module, report = self.create_manifest_fixture(key="runtime_bytes")
+        with self.assertRaisesRegex(ValueError, "flat native module omitted.*source"):
+            original.check_compiled_modules(self.output, report)
+
+    def test_compiled_local_create_registry_manifest_and_compiler_are_required(self):
+        import copy
+        original, manifest, module, report = self.create_manifest_fixture()
+        for name in ("registry", "manifest", "compiler"):
+            changed = copy.deepcopy(report)
+            if name == "registry": changed["modules"]["local_create_file"]["source"] = "native/other.hepta"
+            elif name == "manifest": changed["modules"]["local_create_file"]["sha256"] = "0" * 64
+            else: changed["compiler_image_sha256"] = "0" * 64
+            with self.subTest(name=name), patch.object(original.local_create_qualification.blocking,
+                                                      "verify_build") as reader:
+                with self.assertRaises(ValueError): original.check_compiled_modules(self.output, changed)
+                reader.assert_not_called()
+
     def test_every_component_has_one_explicit_reference_domain(self):
         declared = {item['key'] for item in MODULES}
         domains = (set(RECIPES), NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS, HARDWARE_REFERENCE_COMPONENTS)

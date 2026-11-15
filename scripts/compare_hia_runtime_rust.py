@@ -509,6 +509,11 @@ def check_input_pins(output: Path, report: dict) -> None:
                     or any(row not in report["checks"] or row["exit_code"] != 0
                            or row["timed_out"] is not False for row in rows)):
                 raise ValueError("independent original reference completion differs: " + key)
+    check_compiled_modules(output, report)
+
+
+def check_compiled_modules(output: Path, report: dict) -> None:
+    """Reopen each registered build according to its explicit manifest schema."""
     declared = {item["key"]: item for item in MODULES}
     for key, item in report["modules"].items():
         expected = declared[key]
@@ -553,7 +558,14 @@ def check_input_pins(output: Path, report: dict) -> None:
                     or sha(manifest.parent / "policy.image.bin") != policy.get("image_sha256")):
                 raise ValueError("native IO policy image changed")
             continue
+        if item.get("builder") == "local_create":
+            # This is a packed composition. Reopen its complete fixed source,
+            # child image, packer arrays and ELF through the existing owner.
+            local_create_qualification.blocking.verify_build(manifest, source_root=ROOT)
+            continue
         for label in ("source", "image"):
+            if label not in module or label + "_sha256" not in module:
+                raise ValueError("flat native module omitted its declared artifact: " + label)
             if sha(manifest.parent / module[label]) != module[label + "_sha256"]:
                 raise ValueError("compiled module artifact changed: " + label)
         standalone = module.get("standalone")
