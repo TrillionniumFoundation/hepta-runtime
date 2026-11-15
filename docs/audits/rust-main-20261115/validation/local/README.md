@@ -18,8 +18,10 @@
   最初 nextest 编译被 SIGKILL，执行了零个 Rust 测试。该记录中的 64 条 effect
   路由是当时 WSP 组合的数字；REA 最终合并后为 66 条，不能混用。
 
-后续完整 nextest 记录会单独注明源码、退出码和编译 profile。为控制此执行器
-内存，使用单个 build job、关闭增量编译、debug info 和优化；这与托管 CI 的
-默认 dev/test profile 不同。所有测试仍隔离运行，串行、零重试、不遇错即停。
-托管 CI 保留自身的原始 profile，并分别检查 PR exact HEAD 与 prospective
-merge。
+`nextest-all-result.json` 和完整日志记录最终组合在 `4e857d68` 的全量尝试：
+316.773 秒后退出 101，lib test 的 rustc 被 signal 9（SIGKILL）终止，没有
+Rust 源码错误诊断，**零个测试执行**。这不是一次成功测试，且没有仅凭 SIGKILL
+声称已经证明具体系统杀进程原因。为控制执行器资源，此次使用单个 build job、
+关闭增量编译、debug info 和优化；这与托管 CI 的声明 dev/test profile 不同。
+没有删除测试或增加重试来隐藏失败。托管 CI 保留声明的 profile，也将编译
+并发设为 1，并分别检查 PR exact HEAD 与 prospective merge。
