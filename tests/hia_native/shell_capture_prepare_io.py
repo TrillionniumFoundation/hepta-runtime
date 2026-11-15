@@ -328,11 +328,12 @@ def run_case(folder,spec,manifest,metadata,executable):
         completed=time.monotonic_ns();observed['completed']={'exit_code':child.returncode,'observed_ns':completed}
         for name,raw in [('stdin.bin',stdin),('stdout.bin',stdout),('stderr.bin',stderr)]:write_new(folder/name,raw)
         write_new(folder/'observation.json',packed(observed))
-        receipt=dict(schema='hepta.runtime.shell-capture-prepare-process.v1',argv=argv,cwd=str(work),environment=environment_record(env),
+        receipt=dict(schema='hepta.runtime.shell-capture-prepare-process.v2',argv=argv,cwd=str(work),environment=environment_record(env),
             umask=spec['umask'],pid=child.pid,parent_pid=os.getpid(),uid=os.getuid(),gid=os.getgid(),deadline_seconds=30,timed_out=timed_out,
             failure=failure,exit_code=child.returncode,monotonic_started_ns=started,monotonic_completed_ns=completed,
             unix_started_ns=unix_started,unix_completed_ns=time.time_ns(),native_manifest={'path':str(manifest),**pin(ordinary(manifest))},
-            executable_before=tool_before,executable_after=pin(ordinary(executable)),streams={name:pin(ordinary(folder/name)) for name in ('stdin.bin','stdout.bin','stderr.bin')})
+            executable_before=tool_before,executable_after=pin(ordinary(executable)),streams={name:pin(ordinary(folder/name)) for name in ('stdin.bin','stdout.bin','stderr.bin')},
+            audit_files={name:cf.audit_origin(folder/name) for name in ('effects.bin','entries.bin')})
         write_new(folder/'execution.json',packed(receipt));after=cf.tree_snapshot(work);write_new(folder/'after.json',packed(after))
         write_new(folder/'retirement.json',packed(retire(work,after)))
     need(failure is None and child.returncode==0,'actual native process failed')
@@ -802,10 +803,8 @@ def verify_observations(folder,spec,receipt,observed,native):
                  'transport FD identity changed')
         for fd,name,extent in ((ready[3],'effects.bin',trace_end),(ready[4],'entries.bin',entry_end)):
             row=fds[fd];info=cf.fdinfo(bytes.fromhex(row['fdinfo_hex']))
-            need(cf.identity(row['stat'])==cf.identity(cf.stat_row((folder/name).lstat())) and
-                 row['link_hex']==os.fsencode(folder/name).hex(),'audit FD actual file identity')
-            need(info['position']==extent and info['inode']==row['stat']['inode'] and row['stat']['size']==extent and
-                 info['flags']==0xa8001,'audit FD exact position/flags')
+            cf.verify_audit_fd(row,receipt['audit_files'][name]['stat'],folder/name,extent)
+            need(info['flags']==0xa8001,'audit FD exact position/flags')
         tree=cf.check_tree(tree_rows)
         for token,node in live.items():
             fd=node['fd'];row=fds[fd];info=cf.fdinfo(bytes.fromhex(row['fdinfo_hex']))
@@ -828,7 +827,7 @@ def verify_case(folder,spec,manifest,metadata,executable):
     folder=Path(folder).absolute();plain_dir(folder);work=folder/'work'
     need(read_json(folder/'spec.json')==spec,'registered exact case spec')
     receipt=read_json(folder/'execution.json');observed=read_json(folder/'observation.json')
-    need(receipt.get('schema')=='hepta.runtime.shell-capture-prepare-process.v1' and
+    need(receipt.get('schema')=='hepta.runtime.shell-capture-prepare-process.v2' and
          receipt.get('argv')==[str(executable),'--capture-prepare-fixture',str(folder)] and receipt.get('cwd')==str(work),
          'actual process recipe')
     need(all(type(receipt.get(k)) is int and receipt[k]>0 for k in
@@ -849,6 +848,7 @@ def verify_case(folder,spec,manifest,metadata,executable):
     need(read_json(folder/'input.json')==dict(wires_hex=[w.hex() for w in wires],output_capacity=384+3*n,
         workspace_capacity=1792+4*n,private_sequence_seed=spec['sequence_seed'],paths_hex=[p.hex() for p in paths]),'registered complete input')
     native=verify_trace(folder,spec,wires,receipt,observed)
+    cf.verify_audit_origins(folder,receipt)
     before,after=read_json(folder/'before.json'),read_json(folder/'after.json')
     verify_trees(folder,spec,receipt,observed,native,before,after)
     verify_observations(folder,spec,receipt,observed,native);verify_retirement(folder,after)
@@ -954,6 +954,9 @@ CONTROL_ERRORS={
     'retired_payload':'publication and retired complete fixture tree',
     'missing_footer':'missing effect footer or trailing bytes',
     'source_snapshot':'sealed source bytes',
+    'audit_fd_inode':'audit FD file identity',
+    'audit_final_extent':'producer audit final extent',
+    'audit_file_alias':'producer audit files alias',
 }
 
 def mutation(name,baseline):
@@ -1064,6 +1067,35 @@ def mutation(name,baseline):
         js(path,observation);path=prefix+'retirement.json';retired=decoded(get(path));retired['final_snapshot']=pin(packed(value));js(path,retired)
     elif name=='missing_footer':
         path=prefix+'effects.bin';changed[path]=get(path)[:-256]
+    elif name=='audit_fd_inode':
+        path=prefix+'observation.json';value=decoded(get(path))
+        fd=struct.unpack('<8Q',get(prefix+'stdout.bin')[:64])[3]
+        row=next(r for r in value['initial']['fds'] if r['fd']==fd)
+        row['stat']['inode']+=1;raw=bytes.fromhex(row['fdinfo_hex'])
+        row['fdinfo_hex']=b''.join(b'ino:\t'+str(row['stat']['inode']).encode()+b'\n'
+            if line.startswith(b'ino:') else line for line in raw.splitlines(keepends=True)).hex()
+        js(path,value)
+    elif name=='audit_final_extent':
+        path=prefix+'execution.json';value=decoded(get(path))
+        value['audit_files']['effects.bin']['stat']['size']+=1;js(path,value)
+    elif name=='audit_file_alias':
+        path=prefix+'execution.json';value=decoded(get(path))
+        origin=value['audit_files']['effects.bin']['stat']
+        for key in ('device','inode'):value['audit_files']['entries.bin']['stat'][key]=origin[key]
+        js(path,value);path=prefix+'observation.json';value=decoded(get(path))
+        fd=struct.unpack('<8Q',get(prefix+'stdout.bin')[:64])[4]
+        def alias_snapshots(node):
+            if isinstance(node,dict):
+                if 'fds' in node:
+                    row=next(r for r in node['fds'] if r['fd']==fd)
+                    for key in ('device','inode'):row['stat'][key]=origin[key]
+                    raw=bytes.fromhex(row['fdinfo_hex'])
+                    row['fdinfo_hex']=b''.join(b'ino:\t'+str(origin['inode']).encode()+b'\n'
+                        if line.startswith(b'ino:') else line for line in raw.splitlines(keepends=True)).hex()
+                for child in node.values():alias_snapshots(child)
+            elif isinstance(node,list):
+                for child in node:alias_snapshots(child)
+        alias_snapshots(value);js(path,value)
     else:
         path='source-snapshots/native/shell_capture_prepare.hepta';raw=bytearray(get(path));raw[0]^=1;changed[path]=bytes(raw)
     for case in {p.split('/')[1] for p in changed if p.startswith('cases/')}:
@@ -1071,6 +1103,11 @@ def mutation(name,baseline):
         for stream in ('stdin.bin','stdout.bin','stderr.bin'):
             target=prefix+stream
             if target in changed:receipt['streams'][stream]=pin(changed[target]);touched=True
+        for stream in ('effects.bin','entries.bin'):
+            target=prefix+stream
+            if target in changed:
+                receipt['audit_files'][stream]['content']=pin(changed[target])
+                receipt['audit_files'][stream]['stat']['size']=len(changed[target]);touched=True
         if touched:js(path,receipt)
         if prefix+'effects.bin' in changed or prefix+'entries.bin' in changed:
             path=prefix+'observation.json';value=decoded(get(path))
@@ -1142,6 +1179,7 @@ def verify_reader_process(folder, corpus, manifest, inputs, expected_error=None)
 def run_controls(corpus, manifest):
     root = corpus/'controls'; root.mkdir(); names = [s['name'] for s in case_specs()]
     baseline = {name:ordinary(corpus/name) for name in core_names(names)}
+    baseline_identities = {name:cf.observed_identity(corpus/name) for name in baseline}
     write_new(root/'baseline-report.json', baseline['report.json']); rows = []
     for name, expected_error in CONTROL_ERRORS.items():
         folder = root/name; changes = mutation(name, baseline); modified = []
@@ -1149,6 +1187,7 @@ def run_controls(corpus, manifest):
             identities = {}
             for path, raw in changes.items():
                 modified.append(path); identities[path] = replace_ordinary(corpus/path, raw)
+                need(identities[path] == baseline_identities[path], 'physical mutation producer identity changed')
             inputs = dict(baseline); inputs.update(changes)
             receipt, value = reader_process(folder, corpus, manifest, inputs)
             change_rows = []
@@ -1166,11 +1205,14 @@ def run_controls(corpus, manifest):
                 replace_ordinary(corpus/path, baseline[path])
     inputs = {name:ordinary(corpus/name) for name in baseline}
     need(inputs == baseline, 'baseline bytes not fully restored')
+    restored_identities = {name:cf.observed_identity(corpus/name) for name in baseline}
+    need(restored_identities == baseline_identities, 'baseline producer identities not restored')
     reader_process(root/'restored-positive', corpus, manifest, baseline)
     verify_reader_process(root/'restored-positive', corpus, manifest, baseline)
-    report = dict(schema='hepta.runtime.shell-capture-prepare-physical-controls.v1', status='PASS',
+    report = dict(schema='hepta.runtime.shell-capture-prepare-physical-controls.v2', status='PASS',
                   recorded_directory=str(root), names=list(CONTROL_ERRORS), controls=rows,
                   baseline_inputs={n:pin(raw) for n,raw in baseline.items()},
+                  baseline_identities=baseline_identities, restored_identities=restored_identities,
                   restored_positive={n:pin(ordinary(root/'restored-positive'/n)) for n in ('execution.json','stdout.bin','stderr.bin')})
     write_new(root/'report.json', packed(report))
     return verify_controls(corpus, manifest)
@@ -1178,7 +1220,7 @@ def run_controls(corpus, manifest):
 def verify_controls(corpus, manifest):
     root = corpus/'controls'; plain_dir(root)
     report = read_json(root/'report.json')
-    need(report.get('schema') == 'hepta.runtime.shell-capture-prepare-physical-controls.v1' and
+    need(report.get('schema') == 'hepta.runtime.shell-capture-prepare-physical-controls.v2' and
          report.get('status') == 'PASS' and report.get('recorded_directory') == str(root) and
          report.get('names') == list(CONTROL_ERRORS), 'complete physical control report')
     need(set(os.listdir(root)) == {'report.json','baseline-report.json','restored-positive'} | set(CONTROL_ERRORS), 'physical control inventory')
@@ -1188,6 +1230,23 @@ def verify_controls(corpus, manifest):
     baseline['report.json'] = ordinary(root/'baseline-report.json')
     need(decoded(baseline['report.json']) == current, 'exact restored baseline report')
     need(report.get('baseline_inputs') == {n:pin(raw) for n,raw in baseline.items()}, 'complete baseline byte identities')
+    origins = report.get('baseline_identities'); restored = report.get('restored_identities')
+    need(type(origins) is dict and type(restored) is dict and set(origins) == set(restored) == set(baseline),
+         'complete physical producer identity inventory')
+    for path in baseline:
+        cf.origin_identity(origins[path]); cf.origin_identity(restored[path])
+        need(origins[path] == restored[path], 'restored physical producer identity changed')
+        current = (corpus/path).lstat()
+        need(current.st_mode == origins[path]['mode'] and current.st_nlink == 1,
+             'transported physical evidence mode/type')
+    need(len({(r['device'],r['inode']) for r in origins.values()}) == len(origins),
+         'physical producer identity aliases different files')
+    for name in names:
+        execution = decoded(baseline['cases/'+name+'/execution.json'])
+        for stream in ('effects.bin','entries.bin'):
+            original = execution['audit_files'][stream]['stat']
+            need(origins['cases/'+name+'/'+stream] == {key:original[key] for key in
+                 ('device','inode','mode','uid','gid','nlink')}, 'physical producer audit origin differs')
     rows = report['controls']
     need([r.get('name') for r in rows] == list(CONTROL_ERRORS), 'named control coverage')
     for row in rows:
@@ -1201,10 +1260,8 @@ def verify_controls(corpus, manifest):
             before, after = ordinary(folder/(prefix+'.before.bin')), ordinary(folder/(prefix+'.after.bin'))
             need(before == baseline[path] and after == expected[path] and before != after, 'exact named physical mutation bytes')
             need(change['before'] == pin(before) and change['after'] == pin(after), 'physical changed byte pins')
-            actual = (corpus/path).lstat(); physical = change['physical_identity']
-            need(type(physical) is dict and set(physical) == {'device','inode','mode'} and
-                 all(type(x) is int and x >= 0 for x in physical.values()) and physical ==
-                 {'device':actual.st_dev,'inode':actual.st_ino,'mode':actual.st_mode} and stat.S_ISREG(actual.st_mode) and actual.st_nlink == 1,
+            physical = cf.origin_identity(change['physical_identity'])
+            need(physical == origins[path],
                  'physical mutation preserved original identity')
             members |= {prefix+'.before.bin',prefix+'.after.bin'}
         need(set(os.listdir(folder)) == members, 'complete physical change evidence')
