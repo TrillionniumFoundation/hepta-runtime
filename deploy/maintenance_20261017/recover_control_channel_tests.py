@@ -132,7 +132,7 @@ class RecoveryTests(unittest.TestCase):
                     self.assertEqual(code, 1)
                     self.assertEqual(starts, [])
                     self.assertEqual(report['service_action'], 'none')
-                    self.assertIn('dependency', report['error'])
+                    self.assertIn('dependencies', report['error'])
 
     def test_automatic_activation_hooks_never_start_other_units(self):
         for field in ('Upholds', 'OnFailure', 'OnSuccess'):
