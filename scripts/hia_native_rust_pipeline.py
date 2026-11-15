@@ -26,6 +26,7 @@ import qualify_hia_runtime_native as q
 import compare_hia_runtime_rust as r
 
 GROUPS = {
+    "audit": tuple(r.audit_pipeline.KEYS),
     "storage": tuple(r.storage_pipeline.KEYS),
     "bytes": ("runtime_bytes", "text_budget", "line_verify", "editable_content", "line_endpoint",
               "delta", "binary_codec", "policy", "view_render"),
@@ -42,12 +43,12 @@ NATIVE_SEAL = "original-native.json"
 NATIVE_REPORT = "original-native-report.json"
 SHARD_SEAL = "original-shard.json"
 SHARD_REPORT = "original-shard-report.json"
-CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls", "result-storage-evidence-controls")
+CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls", "result-storage-evidence-controls", "audit-readiness-evidence-controls")
 
 
 def groups() -> dict[str, tuple[str, ...]]:
     flat = tuple(key for keys in GROUPS.values() for key in keys)
-    if (set(GROUPS) != {"bytes", "state", "services", "json", "config", "system", "batch", "storage"}
+    if (set(GROUPS) != {"bytes", "state", "services", "json", "config", "system", "batch", "storage", "audit"}
             or len(flat) != len(set(flat)) or set(flat) != set(r.RECIPES)):
         raise ValueError("every original recipe must belong to exactly one declared group")
     for together in (("fence_json", "serde_json"), tuple(r.result_qualification.KEYS),
@@ -58,6 +59,8 @@ def groups() -> dict[str, tuple[str, ...]]:
         raise ValueError("configuration and regex require their complete independent recipe")
     if GROUPS["storage"] != tuple(r.storage_pipeline.KEYS):
         raise ValueError("storage originals require their complete independent group")
+    if GROUPS["audit"] != tuple(r.audit_pipeline.KEYS):
+        raise ValueError("audit originals require their complete independent group")
     return GROUPS
 
 
@@ -360,7 +363,7 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
     try:
         folders = sorted(shards.iterdir())
         if len(folders) != len(groups()) or any(path.is_symlink() or not path.is_dir() for path in folders):
-            raise ValueError("collector requires exactly eight complete original shard artifacts")
+            raise ValueError("collector requires exactly nine complete original shard artifacts")
         parts, files, copies, directories = {}, {}, {}, set()
         for folder in folders:
             if set(path.name for path in folder.iterdir()) != {"data", SHARD_SEAL, SHARD_REPORT}:
@@ -419,6 +422,7 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
         r.run_result_values_controls(output, report)
         r.run_public_registry_controls(output, report)
         r.run_result_storage_controls(output, report)
+        r.run_audit_readiness_controls(output, report)
         r.check_input_pins(output, report)
         report.update(status="PASS", phase="complete", rust_comparison_status="PASS",
                       original_collection_elapsed_seconds=time.monotonic() - started,

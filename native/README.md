@@ -1361,3 +1361,34 @@ not reported as another native execution; 13 damaged-capture refusals and three
 accepted controls bind its current invocation, external CI seal and full bytes.
 All per-process and job limits, original native wide suites and production flags
 are unchanged.
+
+
+## Private audit and readiness qualification
+
+The audit/readiness family adds nine independent owners and seventeen HIA sources:
+typed audit JSON, readiness from the administrator root path, held audit directory
+leases, record read/write/remove, bounded entry enumeration, STORE_LOCK, and the
+retention caller policy. Its independent native and original groups retain all
+24 native process domains and nine fresh Rust recipes. The original domains use
+151 unchanged source blocks and 8,041 requests across 1,293 semantic processes;
+the retention caller's child effects are explicitly scripted. The 25 evidence
+controls reject changed outputs, invocation receipts, images, source maps and
+incomplete corpora, then re-admit every original and native domain after restoring
+the exact bytes. See `audit_readiness_integration.md` for the private boundaries.
+All 125 production handlers and the full replacement/removal flags remain unchanged.
+
+### Complete evidence without duplicate uploads
+
+The 0e491e PR completed every native/original admission but its final duplicate
+upload reached the existing fifteen-minute job limit. That cancelled result is
+retained. The same-head push completed successfully. The final artifact now stores
+`aggregate-bundle.json` and only newly produced aggregate/control files. Its index
+names the exact successful native artifact and every original shard by head, run,
+attempt and external seal SHA256, and records every file's bytes, mode and source,
+including empty directory modes. Those independently retained artifacts continue
+to hold every compiler, source, full corpus and original output byte; nothing is
+excluded from the completed evidence set. The workflow logs the index SHA256.
+`scripts/hia_native_artifact_bundle.py restore` requires that SHA256, the bundle,
+and all source artifacts to reconstruct the complete tree in a new directory.
+Transport is separately tested and does not execute or replace semantic gates.
+All per-process deadlines and fifteen-minute workflow job limits remain unchanged.

@@ -1,0 +1,254 @@
+// Copyright 2026 Muvon Un Limited
+// SPDX-License-Identifier: Apache-2.0
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AuditStoreAccess {
+	Exclusive,
+	#[cfg(unix)]
+	Shared,
+}
+#[derive(Default)]
+struct AuditStoreQueue {
+	next_ticket: u64,
+	active: bool,
+	readers: usize,
+	reader_poisoned: bool,
+	waiting: VecDeque<(u64, AuditStoreAccess)>,
+}
+#[derive(Default)]
+struct AuditStoreLock {
+	inner: Mutex<()>,
+	queue: Mutex<AuditStoreQueue>,
+	changed: std::sync::Condvar,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StoreLockFailure {
+	Deadline,
+	Unavailable,
+}
+#[must_use = "the store guard must cover the protected operation"]
+struct AuditStoreGuard<'a> {
+	lock: &'a AuditStoreLock,
+	inner: Option<std::sync::MutexGuard<'a, ()>>,
+}
+#[must_use = "finish the read guard while the final snapshot state remains locked"]
+struct AuditSharedGuard<'a> {
+	lock: &'a AuditStoreLock,
+	deadline: Instant,
+	active: bool,
+	// A panic must publish poison on the same thread that owns this operation.
+	_not_send: std::marker::PhantomData<std::sync::MutexGuard<'a, ()>>,
+}
+impl AuditStoreLock {
+	fn cancel(&self, queue: &mut AuditStoreQueue, ticket: u64) {
+		queue.waiting.retain(|queued| queued.0 != ticket);
+		self.changed.notify_all();
+	}
+
+	fn release(&self) {
+		// Cleanup releases custody during unwinding without clearing poison.
+		let mut queue = self.queue.lock().unwrap_or_else(|error| error.into_inner());
+		queue.active = false;
+		self.changed.notify_all();
+	}
+
+	fn acquire(
+		&self,
+		deadline: Option<Instant>,
+	) -> std::result::Result<AuditStoreGuard<'_>, StoreLockFailure> {
+		if deadline.is_some_and(|limit| Instant::now() >= limit) {
+			return Err(StoreLockFailure::Deadline);
+		}
+		let mut queue = self
+			.queue
+			.lock()
+			.map_err(|_| StoreLockFailure::Unavailable)?;
+		if deadline.is_some_and(|limit| Instant::now() >= limit) {
+			return Err(StoreLockFailure::Deadline);
+		}
+		if queue.reader_poisoned {
+			return Err(StoreLockFailure::Unavailable);
+		}
+		let ticket = queue.next_ticket;
+		queue.next_ticket = ticket.checked_add(1).ok_or(StoreLockFailure::Unavailable)?;
+		queue
+			.waiting
+			.push_back((ticket, AuditStoreAccess::Exclusive));
+		loop {
+			if deadline.is_some_and(|limit| Instant::now() >= limit) {
+				self.cancel(&mut queue, ticket);
+				return Err(StoreLockFailure::Deadline);
+			}
+			if queue.reader_poisoned {
+				self.cancel(&mut queue, ticket);
+				return Err(StoreLockFailure::Unavailable);
+			}
+			if !queue.active
+				&& queue.readers == 0
+				&& queue.waiting.front() == Some(&(ticket, AuditStoreAccess::Exclusive))
+			{
+				queue.waiting.pop_front();
+				queue.active = true;
+				break;
+			}
+			let waited = match deadline {
+				Some(limit) => self
+					.changed
+					.wait_timeout(queue, limit.saturating_duration_since(Instant::now()))
+					.map(|(queue, _)| queue)
+					.map_err(|error| error.into_inner().0),
+				None => self.changed.wait(queue).map_err(|error| error.into_inner()),
+			};
+			queue = match waited {
+				Ok(queue) => queue,
+				Err(mut queue) => {
+					self.cancel(&mut queue, ticket);
+					return Err(StoreLockFailure::Unavailable);
+				}
+			};
+		}
+		drop(queue);
+		let mut guard = AuditStoreGuard {
+			lock: self,
+			inner: None,
+		};
+		if deadline.is_some_and(|limit| Instant::now() >= limit) {
+			return Err(StoreLockFailure::Deadline);
+		}
+		// The former owner drops inner before releasing its FIFO reservation.
+		// No second, unbounded wait is introduced after admission.
+		match self.inner.try_lock() {
+			Ok(inner) => guard.inner = Some(inner),
+			Err(std::sync::TryLockError::Poisoned(error)) => {
+				drop(error.into_inner());
+				return Err(StoreLockFailure::Unavailable);
+			}
+			Err(std::sync::TryLockError::WouldBlock) => {
+				return Err(StoreLockFailure::Unavailable);
+			}
+		}
+		if deadline.is_some_and(|limit| Instant::now() >= limit) {
+			return Err(StoreLockFailure::Deadline);
+		}
+		Ok(guard)
+	}
+
+	#[cfg(unix)]
+	fn acquire_shared(
+		&self,
+		deadline: Instant,
+	) -> std::result::Result<AuditSharedGuard<'_>, StoreLockFailure> {
+		if Instant::now() >= deadline {
+			return Err(StoreLockFailure::Deadline);
+		}
+		let mut queue = self
+			.queue
+			.lock()
+			.map_err(|_| StoreLockFailure::Unavailable)?;
+		if Instant::now() >= deadline {
+			return Err(StoreLockFailure::Deadline);
+		}
+		if queue.reader_poisoned || self.inner.is_poisoned() {
+			return Err(StoreLockFailure::Unavailable);
+		}
+		let ticket = queue.next_ticket;
+		queue.next_ticket = ticket.checked_add(1).ok_or(StoreLockFailure::Unavailable)?;
+		queue.waiting.push_back((ticket, AuditStoreAccess::Shared));
+		loop {
+			if Instant::now() >= deadline {
+				self.cancel(&mut queue, ticket);
+				return Err(StoreLockFailure::Deadline);
+			}
+			if queue.reader_poisoned || self.inner.is_poisoned() {
+				self.cancel(&mut queue, ticket);
+				return Err(StoreLockFailure::Unavailable);
+			}
+			if !queue.active && queue.waiting.front() == Some(&(ticket, AuditStoreAccess::Shared)) {
+				queue.waiting.pop_front();
+				queue.readers += 1;
+				// Let the next adjacent reader observe its own admission condition.
+				self.changed.notify_all();
+				break;
+			}
+			queue = match self
+				.changed
+				.wait_timeout(queue, deadline.saturating_duration_since(Instant::now()))
+			{
+				Ok((queue, _)) => queue,
+				Err(error) => {
+					let (mut queue, _) = error.into_inner();
+					self.cancel(&mut queue, ticket);
+					return Err(StoreLockFailure::Unavailable);
+				}
+			};
+		}
+		drop(queue);
+		let guard = AuditSharedGuard {
+			lock: self,
+			deadline,
+			active: true,
+			_not_send: std::marker::PhantomData,
+		};
+		if Instant::now() >= deadline {
+			return Err(StoreLockFailure::Deadline);
+		}
+		Ok(guard)
+	}
+}
+impl AuditSharedGuard<'_> {
+	fn finish(mut self) -> std::result::Result<(), StoreLockFailure> {
+		let mut queue = match self.lock.queue.lock() {
+			Ok(queue) => queue,
+			Err(error) => {
+				drop(error.into_inner());
+				return Err(StoreLockFailure::Unavailable);
+			}
+		};
+		// This critical section is the success boundary. A peer that already
+		// finished is not retroactively revoked by later poison publication.
+		let mut result = if queue.reader_poisoned || self.lock.inner.is_poisoned() {
+			Err(StoreLockFailure::Unavailable)
+		} else if Instant::now() >= self.deadline {
+			Err(StoreLockFailure::Deadline)
+		} else {
+			Ok(())
+		};
+		match queue.readers.checked_sub(1) {
+			Some(readers) => queue.readers = readers,
+			None => {
+				queue.reader_poisoned = true;
+				result = Err(StoreLockFailure::Unavailable);
+			}
+		}
+		self.active = false;
+		self.lock.changed.notify_all();
+		result
+	}
+}
+impl Drop for AuditSharedGuard<'_> {
+	fn drop(&mut self) {
+		if !self.active {
+			return;
+		}
+		let mut queue = self
+			.lock
+			.queue
+			.lock()
+			.unwrap_or_else(|error| error.into_inner());
+		if std::thread::panicking() {
+			queue.reader_poisoned = true;
+		}
+		match queue.readers.checked_sub(1) {
+			Some(readers) => queue.readers = readers,
+			None => queue.reader_poisoned = true,
+		}
+		self.active = false;
+		self.lock.changed.notify_all();
+	}
+}
+impl Drop for AuditStoreGuard<'_> {
+	fn drop(&mut self) {
+		// Keep standard mutex poison and release inner before the FIFO turn.
+		drop(self.inner.take());
+		self.lock.release();
+	}
+}

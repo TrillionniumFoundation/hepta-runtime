@@ -27,6 +27,7 @@ import hia_native_public_registry_qualification as public_registry_qualification
 import hia_native_result_qualification as result_qualification
 import hia_native_serde_error_pipeline as serde_error_pipeline
 import hia_native_result_storage_pipeline as storage_pipeline
+import hia_native_audit_pipeline as audit_pipeline
 import hia_native_batch_write_pipeline as batch_write_pipeline
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
                                        PARALLEL_NATIVE_SUITES,
@@ -36,7 +37,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        session_evidence, file_locks_evidence, file_lock_service_evidence,
                                        write_chain_evidence, directory_service_evidence,
                                        workdir_service_evidence, sdk_connection_evidence, public_registry_evidence, result_values_evidence,
-                                       serde_error_evidence, result_storage_evidence, batch_write_evidence, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
+                                       serde_error_evidence, result_storage_evidence, audit_readiness_evidence, batch_write_evidence, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
@@ -217,6 +218,19 @@ def check_input_pins(output: Path, report: dict) -> None:
             raise ValueError("complete storage evidence controls changed")
     elif report.get("status") == "PASS":
         raise ValueError("completed aggregate omitted storage evidence controls")
+    if report.get("audit_readiness_evidence") != audit_readiness_evidence(output, report):
+        raise ValueError("complete audit native evidence changed")
+    for key, domain in audit_pipeline.KEYS.items():
+        if key in report.get("original_rust_comparisons", {}):
+            actual = audit_pipeline.original_evidence(ROOT, output, report, completed_test_summary, domain)
+            if report["original_rust_comparisons"][key] != actual:
+                raise ValueError("complete original audit evidence changed: " + key)
+    if "audit_readiness_evidence_controls" in report:
+        if report["audit_readiness_evidence_controls"] != audit_pipeline.control_evidence(
+                ROOT, output, report, completed_test_summary):
+            raise ValueError("complete audit evidence controls changed")
+    elif report.get("status") == "PASS":
+        raise ValueError("completed aggregate omitted audit evidence controls")
     if "serde_error" in report.get("original_rust_comparisons", {}):
         actual = serde_error_pipeline.original_evidence(ROOT, output, report, completed_test_summary)
         if report["original_rust_comparisons"]["serde_error"] != actual:
@@ -306,7 +320,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir", "file_locks", "file_lock_service", "write_chain", "directory_service", "workdir_service", "sdk_connection", "public_registry", "result_values", "batch_write", "result_storage"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir", "file_locks", "file_lock_service", "write_chain", "directory_service", "workdir_service", "sdk_connection", "public_registry", "result_values", "batch_write", "result_storage", "audit_readiness"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1475,6 +1489,24 @@ def run_result_storage_controls(output: Path, report: dict) -> None:
     storage_pipeline.run_controls(ROOT, output, report, completed_test_summary, record_check, qualification_env())
 
 
+def compare_audit_readiness(output: Path, report: dict, rustc: Path, domain: str) -> dict:
+    before = audit_readiness_evidence(output, report)
+    if before != report.get("audit_readiness_evidence"):
+        raise ValueError("audit native corpus changed before original execution")
+    command = audit_pipeline.original_command(ROOT, output, report, rustc,
+        executable(str(rustc.with_name("cargo"))), domain)
+    record_check(output, report, name=audit_pipeline.RUST_NAMES[domain],
+        command=command, timeout=180, env=qualification_env())
+    actual = audit_pipeline.original_evidence(ROOT, output, report, completed_test_summary, domain)
+    if audit_readiness_evidence(output, report) != before:
+        raise ValueError("audit native corpus changed during complete original replay")
+    return actual
+
+
+def run_audit_readiness_controls(output: Path, report: dict) -> None:
+    audit_pipeline.run_controls(ROOT, output, report, completed_test_summary, record_check, qualification_env())
+
+
 def compare_result_values(output: Path, report: dict, rustc: Path, domain: str) -> dict:
     before = result_values_evidence(output, report)
     if before != report.get("result_values_evidence"):
@@ -1677,6 +1709,8 @@ PYTHON_REFERENCE_COMPONENTS = {"native_io", "stat_version", "local_service", "fi
 
 RECIPES.update({key: (lambda output, report, rustc, domain=domain:
     compare_result_storage(output, report, rustc, domain)) for key, domain in storage_pipeline.KEYS.items()})
+RECIPES.update({key: (lambda output, report, rustc, domain=domain:
+    compare_audit_readiness(output, report, rustc, domain)) for key, domain in audit_pipeline.KEYS.items()})
 
 
 PARALLEL_RUST_RECIPES = {
@@ -1803,6 +1837,7 @@ def run(output: Path, rustc_name: str) -> dict:
         run_result_values_controls(output, report)
         run_public_registry_controls(output, report)
         run_result_storage_controls(output, report)
+        run_audit_readiness_controls(output, report)
         check_input_pins(output, report)
         if sha(rustc) != compiler_sha:
             raise ValueError("original Rust compiler executable changed during comparison")

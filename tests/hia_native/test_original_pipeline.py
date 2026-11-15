@@ -116,7 +116,8 @@ class OriginalPipelineTests(unittest.TestCase):
     def collect(self):
         with patch.object(r, "run_result_values_controls", self.control(p.CONTROLS[0])), \
              patch.object(r, "run_public_registry_controls", self.control(p.CONTROLS[1])), \
-             patch.object(r, "run_result_storage_controls", self.control(p.CONTROLS[2])):
+             patch.object(r, "run_result_storage_controls", self.control(p.CONTROLS[2])), \
+             patch.object(r, "run_audit_readiness_controls", self.control(p.CONTROLS[3])):
             return p.collect(self.output, self.compiler, self.native_sha, self.invocation, self.shards, self.expected)
 
     def change_report(self, group, mutation, *, update_workflow=False):
@@ -132,11 +133,12 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_registry_covers_every_recipe_once_and_keeps_shared_builds_together(self):
         flat = [key for keys in p.groups().values() for key in keys]
-        self.assertEqual(len(flat), 50)
+        self.assertEqual(len(flat), 59)
         self.assertEqual(set(flat), set(r.RECIPES))
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(p.GROUPS["config"], ("runtime_config",))
         self.assertEqual(p.GROUPS["storage"], tuple(r.storage_pipeline.KEYS))
+        self.assertEqual(p.GROUPS["audit"], tuple(r.audit_pipeline.KEYS))
         self.assertTrue(set(r.result_qualification.KEYS) <= set(p.GROUPS["json"]))
         self.assertTrue(set(r.PARALLEL_RUST_RECIPES) <= set(p.GROUPS["system"]))
         self.assertTrue({"write_chain", "workdir_service"} <= set(p.GROUPS["services"]))
@@ -226,7 +228,7 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_missing_group_cannot_become_complete(self):
         shutil.rmtree(self.shards / "config")
-        with self.assertRaisesRegex(ValueError, "exactly eight"):
+        with self.assertRaisesRegex(ValueError, "exactly nine"):
             self.collect()
 
     def test_duplicate_group_cannot_replace_another_group(self):

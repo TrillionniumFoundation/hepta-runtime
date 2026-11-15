@@ -20,10 +20,15 @@ on:
       - 'scripts/build_result_storage.py'
       - 'scripts/result_storage_*'
       - 'scripts/check_result_storage_evidence.py'
+      - 'scripts/build_audit_readiness.py'
+      - 'scripts/audit_readiness_*'
+      - 'scripts/check_audit_readiness_evidence.py'
       - 'scripts/result_value_registry.py'
       - 'scripts/author_serde_error.py'
       - 'scripts/serde_error_*'
       - 'src/mcp/runtime/request_results.rs'
+      - 'src/mcp/runtime/request_archive_store.rs'
+      - 'src/mcp/runtime/request_audit_trace.rs'
       - 'src/mcp/runtime/request_audit.rs'
       - 'scripts/*.S'
       - 'scripts/build_connection_fixture.py'
@@ -104,10 +109,15 @@ on:
       - 'scripts/build_result_storage.py'
       - 'scripts/result_storage_*'
       - 'scripts/check_result_storage_evidence.py'
+      - 'scripts/build_audit_readiness.py'
+      - 'scripts/audit_readiness_*'
+      - 'scripts/check_audit_readiness_evidence.py'
       - 'scripts/result_value_registry.py'
       - 'scripts/author_serde_error.py'
       - 'scripts/serde_error_*'
       - 'src/mcp/runtime/request_results.rs'
+      - 'src/mcp/runtime/request_archive_store.rs'
+      - 'src/mcp/runtime/request_audit_trace.rs'
       - 'src/mcp/runtime/request_audit.rs'
       - 'scripts/*.S'
       - 'scripts/build_connection_fixture.py'
@@ -251,7 +261,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [storage, batch, text, json, config, system]
+        group: [audit, storage, batch, text, json, config, system]
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -510,9 +520,19 @@ jobs:
       invocation: ${{ github.run_id }}-${{ github.run_attempt }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
 
+  original_audit:
+    name: Complete original audit and readiness recipes
+    needs: native_collect
+    uses: ./.github/workflows/hia-runtime-original-shard.yml
+    with:
+      group: audit
+      runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+
   qualify:
     name: All native evidence and complete original Rust comparisons
-    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage]
+    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage, original_audit]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -582,7 +602,8 @@ jobs:
             --shard-sha256 "config=${{ needs.original_config.outputs.sha256 }}" \
             --shard-sha256 "system=${{ needs.original_system.outputs.sha256 }}" \
             --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
-            --shard-sha256 "storage=${{ needs.original_storage.outputs.sha256 }}"
+            --shard-sha256 "storage=${{ needs.original_storage.outputs.sha256 }}" \
+            --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}"
 
       - name: Reject altered configuration and regex evidence
         id: regex
@@ -595,15 +616,36 @@ jobs:
             > "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.stdout" \
             2> "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.stderr"
 
+
+      - name: Index all retained evidence and export only new aggregate bytes
+        id: bundle
+        run: |
+          python3 -I -B runtime/scripts/hia_native_artifact_bundle.py export \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --destination "$RUNNER_TEMP/hia-aggregate-bundle" \
+            --head "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
+            --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}" \
+            --shard-sha256 "storage=${{ needs.original_storage.outputs.sha256 }}" \
+            --shard-sha256 "bytes=${{ needs.original_bytes.outputs.sha256 }}" \
+            --shard-sha256 "state=${{ needs.original_state.outputs.sha256 }}" \
+            --shard-sha256 "services=${{ needs.original_services.outputs.sha256 }}" \
+            --shard-sha256 "json=${{ needs.original_json.outputs.sha256 }}" \
+            --shard-sha256 "config=${{ needs.original_config.outputs.sha256 }}" \
+            --shard-sha256 "system=${{ needs.original_system.outputs.sha256 }}" \
+            --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Capture failed aggregate diagnostics outside live caches
-        if: ${{ always() && (steps.collect.outcome != 'success' || steps.regex.outcome != 'success') }}
+        if: ${{ always() && (steps.collect.outcome != 'success' || steps.regex.outcome != 'success' || steps.bundle.outcome != 'success') }}
         run: |
           python3 -I -B runtime/scripts/hia_native_failure.py \
             --source "$RUNNER_TEMP/hia-runtime-native" \
             --destination "$RUNNER_TEMP/hia-native-diagnostics"
 
       - name: Retain readable aggregate failure diagnostics
-        if: ${{ always() && (steps.collect.outcome != 'success' || steps.regex.outcome != 'success') }}
+        if: ${{ always() && (steps.collect.outcome != 'success' || steps.regex.outcome != 'success' || steps.bundle.outcome != 'success') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-aggregate
@@ -612,12 +654,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Retain complete aggregate, originals and immutable shard receipts
+      - name: Retain complete aggregate index and new evidence with immutable source artifacts
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hia-runtime-native-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/hia-runtime-native/
+          path: ${{ runner.temp }}/hia-aggregate-bundle/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
