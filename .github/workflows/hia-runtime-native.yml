@@ -347,6 +347,38 @@ jobs:
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --rustc "$(rustup which --toolchain 1.95.0 rustc)"
 
+      - name: Stage actual failure reports without changing owned fixtures
+        if: failure()
+        id: failure_reports
+        run: |
+          python3 -I -B - "$RUNNER_TEMP/hia-runtime-native" "$RUNNER_TEMP/hia-native-failure-reports" <<'PY'
+          import hashlib, json, pathlib, stat, sys
+          source, destination = map(pathlib.Path, sys.argv[1:])
+          destination.mkdir(mode=0o700)
+          retained = {}
+          if source.is_dir():
+              for path in sorted(source.iterdir()):
+                  selected = (path.name == 'result.json' or path.name.endswith(
+                      ('.stdout', '.stderr', '.execution.json', '-failure.txt')))
+                  if selected and stat.S_ISREG(path.lstat().st_mode):
+                      raw = path.read_bytes()
+                      (destination / path.name).write_bytes(raw)
+                      retained[path.name] = {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
+          (destination / 'retained-reports.json').write_text(json.dumps(
+              {'schema': 'hepta.runtime.failure-reports.v1', 'source': str(source),
+               'files': retained, 'fixture_permissions_changed': False}, sort_keys=True) + '\n')
+          print(json.dumps({'retained_failure_reports': len(retained), 'fixture_permissions_changed': False}))
+          PY
+
+      - name: Retain failure report and complete process streams separately
+        if: failure() && steps.failure_reports.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-failure-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-aggregate
+          path: ${{ runner.temp }}/hia-native-failure-reports/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Retain complete aggregate, originals and immutable shard receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -116,12 +116,12 @@ changed recipe bytes or the fresh repository aggregate.
 
 ## Native components
 
-Qualification covers 62 native HIA sources through 37 executable component
+Qualification covers 64 native HIA sources through 38 executable component
 entries, including 16 HIA packers; the two scope profiles share their HIA scope
-owner. The complete source closure binds 558 files. The shadow entry
+owner. The complete source closure binds 577 files. The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
-as qualification-only. The 16 other test HIA fixtures are recorded separately.
+as qualification-only. The 17 other test HIA fixtures are recorded separately.
 These counts do not count migrated production MCP handlers.
 
 | Source | Implemented behavior |
@@ -130,6 +130,8 @@ These counts do not count migrated production MCP handlers.
 | [runtime_protocol.hepta](runtime_protocol.hepta) | Strict JSON, JSON-RPC IDs/errors, protocol negotiation, initialization lifecycle, native tool responses and line hashing |
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
 | [request_context.hepta](request_context.hepta) | Private nested hint queues, insertion-order deduplication, drain/exit/destruction and a dispatcher-owned view-cache association |
+| [request_scope_lifecycle.hepta](request_scope_lifecycle.hepta) | Private request entry, checked continuation suspension/resumption, cancellation, hint retirement and cache-reference ownership |
+| [request_cache_lease.hepta](request_cache_lease.hepta) | Shared cache ownership across session, request and publisher lifetimes, checked clones/releases and destruction on last release |
 | [response_hints.hepta](response_hints.hepta) | Exact original response text composition from a complete drained hint list, including empty hints and every valid Unicode scalar |
 | [result_publication.hepta](result_publication.hepta) | Growable private result construction, incremental original hint/JSON serialization and partial-ACK publication lifecycle |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
@@ -339,13 +341,13 @@ and one aggregate/original-Rust job. The prepare job executes the full cold gate
 and builds every module once. Its exact SHA256 is passed through the workflow;
 every partition checks the full source, compiler, build and invocation identity
 before executing its complete suite list. Batch, text/history/view, JSON and
-system suites run on separate runners with 10, 25, 22 and 32 native suites,
+system suites run on separate runners with 10, 28, 22 and 32 native suites,
 respectively. Each job retains the original 15-minute
 limit; every native process retains 180 seconds and the cold/owner limits below
 are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
-native evidence checks and all 32 original Rust recipes. Artifact transport can
+native evidence checks and all 33 original Rust recipes. Artifact transport can
 strip executable permissions; only byte-verified owned regular files have their
 recorded ordinary permissions restored. The aggregate retains the original
 partition reports and rechecks them before and after the original comparisons.
@@ -358,12 +360,14 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 89 native suite processes, the fresh compiler cold process,
-32 required original Rust recipes and one Rust-version process: 156 recorded
+The declared run has 92 native suite processes, the fresh compiler cold process,
+33 required original Rust recipes and one Rust-version process: 161 recorded
 checks in a complete successful aggregate. The two JSON recipes share one locked
 Cargo build and each perform a complete independent replay. The two request-context
 recipes share another fresh locked Cargo build and two original execution processes.
 The result-publication recipe has its own locked build and complete-byte replay.
+The request-scope recipe separately builds its locked original owner and replays
+the complete semantic traces through actual Tokio task-local polls and Arc lifetimes.
 The session recipe contributes one outer aggregate check and retains four nested
 processes for Rust identity, compilation, complete replay and the concurrent latch.
 A component's retained historical
@@ -1137,6 +1141,59 @@ not implement that scheduler, retain an original `Arc` object, or authenticate a
 cache association. The bounded image, its test transport and a successful Rust
 comparison therefore do not qualify production task-local routing or removal
 of the original request dispatcher.
+
+## Request scope and shared cache lifetime
+
+The [request lifecycle](request_scope_lifecycle_abi.md) joins the native context
+and cache owners through a private fixed call table. OPEN follows typed argument
+admission, session-workdir preparation and the caller's path-policy boundary.
+It clones the session's cache reference, initializes its own context and enters
+that context. A failed OPEN only releases resources acquired by that attempt;
+it does not destroy an already existing context. ACCESS, PUSH, DRAIN and CACHE
+require the active private binding. YIELD and RESUME admit only the current
+continuation, so a late or duplicated completion cannot reactivate a retired
+request. Spawned work and heartbeat processing receive no implicit binding.
+
+CANCEL discards this request's hint state and releases its cache reference.
+Completed cache effects are not rolled back. A publisher that already accepted
+ownership retains its independent reference until its own completion, even if
+the request and session have retired. The cache lease owner destroys the same
+cache instance only on the final release. Its live-reference records grow with
+the supplied private arena; there is no fixed reference-count quota. This does
+not yet qualify a production allocator or an unbounded cache-content arena.
+The convenience CACHE operation retains the explicit eight-MiB transport
+profile, and the original one-MiB per-value cache rule remains unchanged.
+
+The three mandatory native suites execute **8,414 lifecycle requests across
+13 actual ELF processes**, **41 direct boundary refusals**, and **42 physical
+evidence-refusal controls**. Two boundary inputs exceed the standard profile;
+they are recorded separately from standard-profile executions. Another boundary
+case retains one issued child request without claiming child execution. Complete
+input, output, stderr and before/after workspace bytes are retained. The native
+semantic corpus contains **8,355 original-domain observations**, **46 native-only
+refusals** and **13 private existing-context controls**. The fresh integrated
+focused run passed all three actual processes in 43.395 seconds under unchanged
+180-second per-process limits and admitted 336 retained artifacts. It reused the
+verified compiler and does not claim a fresh full cold build.
+
+The original recipe extracts the frozen runtime's complete request-context
+module and original ViewCache implementation. Its fresh locked build uses the
+14 production-lock-verified dependencies and retains 180 seconds; the complete
+replay retains 120 seconds. The observed fresh original run compared all 8,355
+semantic observations, including **94 actual TaskLocalFuture polls**, **49
+context accessor observations**, **24 original cache methods** and **8,221 Arc
+observations**. It also retains 45 lifecycle-adapter observations, 16 continuation
+poll observations and 1,448 complete payload bytes. Real Tokio abort, panic,
+spawn-without-inheritance and final Weak-reference checks are exercised. The
+downloaded complete original streams were independently re-read. That focused
+remote reference is not a same-root aggregate invocation; every aggregate must
+perform its own build and replay against its own native corpus.
+
+These components establish private request and shared-cache lifetime rules.
+Production dispatcher entry, concurrent scheduling, growable cache allocation,
+the actual view caller and asynchronous stdio publication still need their
+complete joins. No public session identifier can select this private state,
+and no production-handler or old-stack-removal claim is advanced here.
 
 ## Result construction and publication
 

@@ -216,6 +216,16 @@
       "legacy_call_sites_replaced": false
     },
     {
+      "source": "native/request_scope_lifecycle.hepta",
+      "scope": "Private explicit request continuation and context ownership through the actual existing HIA context and cache-lease children. Ordinary await, cancellation tombstones, failed initialization, hint destruction and single late completion retirement preserve their distinct lifetimes. Existing-context initialization failure preserves the original child. Public dispatcher attachment, arbitrary concurrent futures and all nine production callers remain separate work.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/request_cache_lease.hepta",
+      "scope": "Private monotonic shared-cache clone leases in the supplied relocatable arena. Session, request and publication clones own separate references; the final release invokes actual cache destruction, while request cancellation cannot consume a worker-owned clone. The original unbounded allocation domain, concurrent synchronization and production session selection remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
       "source": "native/result_publication.hepta",
       "scope": "Private growable result construction, cross-fragment UTF-8 validation, complete sealing, original hint composition and incremental JSON publication. The fixed native boundary owns actual write and partial-ACK lifecycle without an application-wide total-result quota. The installed config MCP profile consumes this owner; production filesystem callers, asynchronous request ownership and whole-runtime adoption remain separate owners.",
       "legacy_call_sites_replaced": false

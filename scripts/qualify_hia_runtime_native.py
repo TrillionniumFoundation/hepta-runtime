@@ -62,6 +62,7 @@ from hia_native_json_qualification import (COMPONENTS as JSON_COMPONENTS, TRANSP
                                            qualification_evidence as checked_json_evidence)
 from hia_native_request_context_qualification import qualification_evidence as checked_request_context_evidence
 from hia_native_result_publication_qualification import qualification_evidence as checked_result_publication_evidence
+from hia_native_request_scope_qualification import qualification_evidence as checked_request_scope_evidence
 import hia_native_execution_qualification as execution_qualification
 import hia_native_effect_fence_qualification as effect_fence_qualification
 import hia_native_config_qualification as config_qualification
@@ -85,6 +86,11 @@ MODULES = (
      "builder": "result_publication", "manifest_env": "HIA_RESULT_PUBLICATION_FIXTURE_MANIFEST",
      "test": "test_result_publication.py", "additional_tests": ("test_result_publication_evidence.py",),
      "companion_sources": ("native/result_publication_packer.hepta",)},
+    {"key": "request_scope_lifecycle", "name": "request-scope-lifecycle", "source": "native/request_scope_lifecycle.hepta",
+     "builder": "request_scope", "manifest_env": "HIA_REQUEST_SCOPE_MANIFEST",
+     "test": "test_request_scope_lifecycle.py",
+     "additional_tests": ("test_request_scope_boundaries.py", "test_request_scope_evidence.py"),
+     "companion_sources": ("native/request_cache_lease.hepta",)},
     {"key": "line_endpoint", "name": "line-endpoint", "source": "native/line_endpoint.hepta",
      "standalone": None, "manifest_env": "HIA_ENDPOINT_MANIFEST", "test": "test_line_endpoint.py"},
     {"key": "line_verify", "name": "line-verify", "source": "native/line_verify.hepta",
@@ -249,6 +255,8 @@ def sources() -> dict:
         "hia_native_request_context_build.py", "hia_native_request_context_qualification.py", "hia_native_request_context_reference.py",
         "hia_native_result_publication_build.py", "hia_native_result_publication_qualification.py",
         "hia_native_result_publication_reference.py", "result_publication_adapter.S",
+        "hia_native_request_scope_build.py", "hia_native_request_scope_qualification.py",
+        "hia_native_request_scope_reference.py",
         'build_config_fs_probe.py',
         'build_config_mcp_service.py',
         'build_config_owner_probe.py',
@@ -589,6 +597,10 @@ def request_context_evidence(output: Path, report: dict) -> dict:
 
 def result_publication_evidence(output: Path, report: dict) -> dict:
     return checked_result_publication_evidence(ROOT, output, report, completed_test_summary)
+
+
+def request_scope_evidence(output: Path, report: dict) -> dict:
+    return checked_request_scope_evidence(ROOT, output, report, completed_test_summary)
 
 
 def entropy_evidence(output: Path, report: dict) -> dict:
@@ -2019,6 +2031,9 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_REQUEST_CONTEXT_QUALIFICATION_OUTPUT": str(output),
         "HIA_RESULT_PUBLICATION_CORPUS_DIR": str(output / "result-publication"),
         "HIA_RESULT_PUBLICATION_QUALIFICATION_OUTPUT": str(output),
+        "HIA_REQUEST_SCOPE_CORPUS_DIR": str(output / "request-scope"),
+        "HIA_REQUEST_SCOPE_BOUNDARY_DIR": str(output / "request-scope-boundaries"),
+        "HIA_REQUEST_SCOPE_QUALIFICATION_OUTPUT": str(output),
         "HIA_ENDPOINT_CORPUS_DIR": str(output / "endpoint-rust-oracle"),
         "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
         "HIA_EDITABLE_CORPUS_DIR": str(output / EDITABLE_FOLDER),
@@ -2165,6 +2180,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "result_publication":
             from hia_native_result_publication_build import build_result_publication
             built = build_result_publication(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "request_scope":
+            from hia_native_request_scope_build import build_request_scope
+            built = build_request_scope(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "execution_shadow":
             from hia_native_execution_build import build_execution
             built = build_execution(hepta, output / "build", source_root=ROOT)
@@ -2186,6 +2204,8 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         report["modules"][item["key"]] = {
             "manifest": str(built.relative_to(output)), "sha256": sha(built), "source": item["source"],
             "builder": item.get("builder", "borrowed_bytes")}
+        if item.get("builder") == "request_scope":
+            report["request_scope_composition"] = dict(report["modules"][item["key"]])
         if item.get("builder") == "authority_composition":
             report["modules"][item["key"]].update(
                 probe_manifest=str(probe.relative_to(output)), probe_sha256=sha(probe))
@@ -2232,6 +2252,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
 def collect_native_evidence(output: Path, report: dict) -> None:
     report["request_context_evidence"] = request_context_evidence(output, report)
     report["result_publication_evidence"] = result_publication_evidence(output, report)
+    report["request_scope_evidence"] = request_scope_evidence(output, report)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
     report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -2280,6 +2301,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
         "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
     report["rust_oracle_inputs"].update(report["request_context_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["result_publication_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update({
         ENTROPY_FOLDER + "/" + name: sha(output / ENTROPY_FOLDER / name) for name in ENTROPY_CORPUS_FILES})
     report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])
