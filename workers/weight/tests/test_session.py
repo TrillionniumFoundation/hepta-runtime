@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch as mock_patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch
 from fixtures import fixture
@@ -11,7 +12,7 @@ from weight_runtime.artifacts import ArtifactStore
 from weight_runtime.errors import WeightError
 from weight_runtime.hooks import install_hooks
 from weight_runtime.patches import tensor_sha256
-from weight_runtime.providers import TorchProvider
+from weight_runtime.providers import TorchProvider, load_provider
 from weight_runtime.session import Session
 
 
@@ -28,6 +29,41 @@ class SessionTests(unittest.TestCase):
 
     def output(self, result):
         return self.session.store.load_tensors(result["outputs"]["artifact_id"])["output"]
+
+    def assert_failed_admission_closes_provider(self, reason):
+        root = self.root / reason
+        root.mkdir()
+        params = fixture(root)
+        failed = Session("failed-" + reason)
+        captured = []
+        def load(*args):
+            provider = load_provider(*args)
+            captured.append(provider)
+            return provider
+        with ExitStack() as stack:
+            stack.enter_context(mock_patch("weight_runtime.providers.load_provider", side_effect=load))
+            if reason == "identity":
+                params["expected_model_id"] = "0" * 64
+            else:
+                stack.enter_context(mock_patch("weight_runtime.session.atomic_create", side_effect=OSError("receipt write failed")))
+            with self.assertRaises((WeightError, OSError)):
+                failed.open(params)
+        self.assertIsNone(failed.provider)
+        self.assertTrue(failed.closed)
+        self.assertEqual(len(captured), 1)
+        self.assertIsNone(captured[0].module)
+        self.assertEqual(captured[0].parameters, {})
+        with self.assertRaises(WeightError) as error:
+            failed.probe({"inputs": {"x": [[1., 2.]]}})
+        self.assertEqual(error.exception.code, "SESSION_STATE")
+        with self.assertRaises(WeightError):
+            failed.open(params)
+
+    def test_failed_expected_model_identity_never_admits_live_provider(self):
+        self.assert_failed_admission_closes_provider("identity")
+
+    def test_failed_admission_receipt_never_admits_live_provider(self):
+        self.assert_failed_admission_closes_provider("receipt")
 
     def test_forward_capture_patch_replay_restore_seal(self):
         inputs = {"x": [[2., 1.], [-1., 3.]]}

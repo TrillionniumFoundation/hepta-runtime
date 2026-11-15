@@ -101,6 +101,30 @@ The same tokenizer path is exposed as `make_laya_encoder` so production encoding
 parity can be checked without loading model weights. Input receipts retain the
 field order and the actual encoded tensor identity.
 
+`current100k_value` is a separate **USD regression** provider. Its model fields are
+`source_dir`, `source_tree_sha256`, `base_dir`, `base_manifest_sha256`, `head_path`
+and `head_sha256`; optional `expected_base_id` and `task_contract_sha256` bind the
+complete task. The FP32 head must contain exactly `value.weight` (1 by 768) and
+`value.bias` (1). It does not use the Laya price/action heads or seven-option text.
+See [CURRENT100K.md](../../docs/weight-runtime/CURRENT100K.md) for its input schema.
+
+Current100k preserves row-wise tokenization/encoding without truncation, masked
+mean pooling, FP32 L2 normalization, and one batch Linear readout. Named outputs
+are `features`, `value_scaled`, and raw `value_usd = 100 * value_scaled`. Regression
+rejects `softmax_output` before spending a forward. The original prospective
+collector's 15 USD output bound is a separate frozen evaluation contract.
+
+The resident session retains the loaded model and a bounded Current100k feature
+cache. Keys bind pinned encoder/backend/task identities and actual token tensors.
+Only unchanged encoder results can be reused for head edits. Captures,
+interventions and encoder patches bypass cache reads and writes. A probe with
+`bypass_feature_cache:true` performs an explicit recomputation, including the
+final parent-restoration check. Cache hits still consume the logical forward
+budget. Probe receipts separately report `input_prepare_seconds`, actual encoder
+examples, hits, misses, bypasses and retained payload size under `computation`.
+This process-local cache is discarded at close; recovery does not fabricate cache
+hits or restore unmeasured savings.
+
 `mit_qwen_reference` is an optional CPU bridge to the independently verified replay
 adapter. It requires `reference_root` and `adapter_source_sha256` (the replay
 directory's `.py` source-tree digest). Targets are restricted to the verified
@@ -117,6 +141,8 @@ BF16 replacement.
   selected names, paging, optional hashes/statistics. `export_tensor:true` plus
   `tensor` retains a bounded parameter or optional `rows`/`columns` matrix block.
 - `probe`: `inputs`, optional `patch_id`, `captures`, and `softmax_output`.
+  `bypass_feature_cache` is an optional boolean; `softmax_output` is invalid for
+  regression providers. Task and computation receipts accompany retained outputs.
 - `intervene`: probe plus `interventions`. Hooks select `module`,
   `where:"input"|"output"` and optional tuple `tensor_index`. `select:"markers"`
   captures Laya markers in semantic order; `select:"tokens"` uses explicit
@@ -156,6 +182,32 @@ can change hashes without increasing a numeric coordinate count.
 The reference numeric screen uses unique effective weights across the whole loaded
 model and individual target tensor norms. It is explicitly research-only and **not**
 the old adapter-only production plasticity rule. `production_eligible` stays false.
+
+## Complete research workflow
+
+The existing typed operations support the fixed-budget experiment orchestrator in
+`weight_runtime/mechanism.py`. `experiments/weight/mechanism_experiment.py` provides
+a pinned-config/plan CLI with immutable completion/failure receipts. It constructs
+all predeclared doses and seeded controls before probing, compares identical
+encoded inputs, checks random-control norms after real dtype compilation and
+serialization, and recomputes the final parent without cached encoder features.
+Controls whose realized norms fail the declared tolerance are reported as invalid;
+their coefficient is not searched after results are seen.
+
+`experiments/weight/current100k_baselines.py` compares the parent, constants,
+label-fitted bias calibration, capped closed-form ridge and capped short head
+training using one pinned development feature matrix. This explicit experiment
+is outside the no-training worker. It records actual gradient/optimizer counts,
+serialization/reload/scoring time and missing shared encoding/Astra costs. These
+development scores do not establish future benefit.
+
+`experiments/weight/evaluation/current100k_handoff.py` independently imports the
+original fixed-window Current100k assessment and its exact ordered outcome
+snapshot. It binds original requests/commands, pre-open completion times, heads,
+registration and source provenance, recomputes descriptive USD scores and retains
+pending/censored/source-unavailable denominators. It cannot issue an adoption
+decision or replace the source evaluator's fixed statistical rules. The prior
+classification/Brier evaluator retains its own task contract.
 
 ## Tests
 

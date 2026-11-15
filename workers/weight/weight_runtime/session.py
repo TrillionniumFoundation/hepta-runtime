@@ -1,6 +1,7 @@
 """Stateful no-gradient experiments, retained evidence and bounded typed operations."""
 from contextlib import ExitStack
 import math
+import os
 import time
 
 from .artifacts import ArtifactStore, PathPolicy, atomic_create
@@ -38,18 +39,39 @@ class Session:
         torch.set_grad_enabled(False)
         from .providers import load_provider
         started = time.monotonic()
-        self.provider = load_provider(params.get("provider", "torch_sequential"), params["model"], self.policy, self.store)
-        need(math.isfinite(self.provider.global_squared_norm), "NONFINITE", "Non-finite base norm")
-        if params.get("expected_model_id") is not None:
-            need(params["expected_model_id"] == self.provider.model_id, "IDENTITY_MISMATCH", "Model identity differs")
-        self.open_spec_id = digest(params)
-        state = {"schema": "hepta.weight.session.v1", "session_id": self.session_id,
-                 "open_spec_id": self.open_spec_id, "model_id": self.provider.model_id,
-                 "backend_id": self.provider.backend_id, "limits": self.limits,
-                 "construction_kind": "DirectWeightEdit", "training_allowed": False,
-                 "production_activation_allowed": False}
-        atomic_create(self.policy.output / "session.json", canonical(state) + b"\n")
-        return {**state, "model": self.provider.describe(), "load_seconds": time.monotonic() - started,
+        provider = None
+        try:
+            provider = load_provider(params.get("provider", "torch_sequential"), params["model"], self.policy, self.store)
+            need(math.isfinite(provider.global_squared_norm), "NONFINITE", "Non-finite base norm")
+            if params.get("expected_model_id") is not None:
+                need(params["expected_model_id"] == provider.model_id, "IDENTITY_MISMATCH", "Model identity differs")
+            self.open_spec_id = digest(params)
+            state = {"schema": "hepta.weight.session.v1", "session_id": self.session_id,
+                     "open_spec_id": self.open_spec_id, "model_id": provider.model_id,
+                     "backend_id": provider.backend_id, "limits": self.limits,
+                     "construction_kind": "DirectWeightEdit", "training_allowed": False,
+                     "production_activation_allowed": False}
+            description = provider.describe()
+            atomic_create(self.policy.output / "session.json", canonical(state) + b"\n")
+        except BaseException:
+            # A rejected identity or failed admission receipt must never leave a
+            # live graph available through probe/patch after open reports failure.
+            self.closed = True
+            if provider is not None:
+                try:
+                    provider.close()
+                except Exception as cleanup_error:
+                    # Preserve the admission failure, including during recovery,
+                    # while retaining the secondary cleanup error in worker logs.
+                    try:
+                        os.write(2, canonical({"event": "failed_open_cleanup_error",
+                                               "exception_type": type(cleanup_error).__name__,
+                                               "message": str(cleanup_error)[:2048]}) + b"\n")
+                    except OSError:
+                        pass
+            raise
+        self.provider = provider
+        return {**state, "model": description, "load_seconds": time.monotonic() - started,
                 "output_root": str(self.policy.output),
                 "supported_ops": ["inspect", "probe", "intervene", "analyze", "patch", "seal", "query", "close"]}
 
@@ -129,8 +151,14 @@ class Session:
         self._active()
         import torch
         from .hooks import install_hooks
+        need(not (self.provider.task_kind == "regression" and "softmax_output" in params),
+             "TASK_SEMANTICS", "Regression values cannot be converted to class probabilities")
+        need(type(params.get("bypass_feature_cache", False)) is bool,
+             "INVALID_ARGUMENT", "bypass_feature_cache must be boolean")
+        prepare_started = time.monotonic()
         inputs = params["inputs"]
         args, kwargs, meta = self.provider.prepare_inputs(inputs)
+        prepare_seconds = time.monotonic() - prepare_started
         examples = integer(meta["examples"], "examples", 1, self.limits["max_forward_examples"])
         need(self.forward_examples + examples <= self.limits["max_forward_examples"], "FORWARD_BUDGET", "Forward example budget exhausted")
         interventions = params.get("interventions", [])
@@ -144,6 +172,8 @@ class Session:
         with ExitStack() as stack:
             stack.enter_context(torch.inference_mode())
             stack.enter_context(self.provider.temporary_patch(replacements))
+            stack.enter_context(self.provider.probe_context(replacements, params.get("captures", []), interventions,
+                                                           params.get("bypass_feature_cache", False)))
             install_hooks(self.provider, self.store, params.get("captures", []), interventions,
                           captured, stack, self.limits["max_capture_elements"])
             model_started = time.monotonic()
@@ -161,6 +191,10 @@ class Session:
                 "input": meta}) if captured else None
         need(all(p.grad is None for p in self.provider.module.parameters()), "GRADIENT_STATE", "Unexpected gradient storage")
         record = {"input": meta, "input_spec": inputs, "patch_id": params.get("patch_id"), "outputs": output_ref,
+                  "task_kind": self.provider.task_kind,
+                  "computation": dict(self.provider.last_probe_metrics),
+                  "input_prepare_seconds": prepare_seconds,
+                  "bypass_feature_cache": params.get("bypass_feature_cache", False),
                   "activations": capture_ref, "captures": params.get("captures", []), "interventions": interventions,
                   "forward_seconds": time.monotonic() - started, "forward_examples": examples,
                   "model_forward_seconds": model_seconds,
@@ -169,6 +203,8 @@ class Session:
                   "mode": "DEVELOPMENT_OBSERVATION", "is_prospective_evaluation": False}
         evidence = self._evidence("intervention" if intervention else "probe", record)
         return {"evidence": evidence, "input": meta, "outputs": output_ref, "activations": capture_ref,
+                "task_kind": self.provider.task_kind, "computation": record["computation"],
+                "input_prepare_seconds": prepare_seconds,
                 "forward_seconds": record["forward_seconds"], "model_forward_seconds": model_seconds,
                 "total_forward_examples": self.forward_examples}
 

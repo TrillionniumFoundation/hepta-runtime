@@ -18,6 +18,7 @@ def source_tree_identity(root):
 
 class TorchProvider:
     name = "torch_sequential"
+    task_kind = "tensor"
 
     def __init__(self, module, identity, store, allowed_targets=None, freeze_parameters=True):
         import torch
@@ -105,8 +106,15 @@ class TorchProvider:
             return value
         raise WeightError("UNSUPPORTED_OUTPUT", "Provider must expose named tensor outputs")
 
+    @contextmanager
+    def probe_context(self, replacements, captures, interventions, force_uncached=False):
+        """Providers may account for work or bypass caches for instrumented probes."""
+        self.last_probe_metrics = {"feature_cache_enabled": False}
+        yield
+
     def describe(self):
         return {"provider": self.name, "model_id": self.model_id, "identity": self.identity,
+                "task_kind": self.task_kind,
                 "backend_id": self.backend_id, "backend": self.backend,
                 "capabilities": ["inspect", "probe", "intervene", "analyze", "patch", "seal", "query"],
                 "allowed_patch_targets": sorted(self.allowed_targets),
@@ -164,6 +172,7 @@ def load_sequential(config, policy, store):
 
 class LayaProvider(TorchProvider):
     name = "laya"
+    task_kind = "classification"
 
     def __init__(self, cell, tokenizer, identity, store, encode, allowed_targets=None):
         self.tokenizer, self.encode = tokenizer, encode
@@ -314,6 +323,9 @@ def load_provider(name, config, policy, store):
         return load_sequential(config, policy, store)
     if name == "laya":
         return load_laya(config, policy, store)
+    if name == "current100k_value":
+        from .current100k import load_current100k
+        return load_current100k(config, policy, store)
     if name == "mit_qwen_reference":
         from .qwen import load_qwen
         return load_qwen(config, policy, store)

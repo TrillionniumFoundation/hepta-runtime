@@ -1,0 +1,16 @@
+--- a/research/neuron_learning/laya_cell/current100k_weight_shadow_eval.py
++++ b/research/neuron_learning/laya_cell/current100k_weight_shadow_eval.py
+@@ -134,8 +134,11 @@
+    W.require(W.sha(p['training_dataset_path'])==p['training_dataset_sha256'],'SHADOW_TRAINING_DATA_CHANGED')
+    manifest,requests,bindings,issues=ingress(p['producer_registration'],p['period_sha256'])
+    report=current(self.config,now,event_cutoff_ms=min(now,p['outcome_end_ms']))
+-   if not report.get('components',{}).get('EUR.USD',{}).get('ledger_complete'):
+-    issues.append({'reason':'CURRENT_LEDGER_REPLAY_UNAVAILABLE'})
++   ledger=report.get('components',{}).get('EUR.USD',{})
++   if not ledger.get('ledger_complete'):
++    issues.append({'reason':'CURRENT_LEDGER_REPLAY_UNAVAILABLE','instrument':'EUR.USD',
++                   'upstream_reason':str(ledger.get('reason') or report.get('reason')
++                                         or 'CURRENT_LEDGER_REASON_UNAVAILABLE')[:2000]})
+    # A partial final replay cannot establish the population denominator. Keep
+    # the last completed assessment intact; main publishes a separate failure.
+    if now>=p['outcome_end_ms'] and issues and not self.strict_review:

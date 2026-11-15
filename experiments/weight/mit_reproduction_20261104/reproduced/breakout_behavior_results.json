@@ -1,0 +1,55 @@
+{
+  "source_commit": "4d09ba6d6a7e891dd8063974dfe81b3d78e3494f",
+  "environment": "MinAtar 1.0.15 Breakout source embedded in published prompt",
+  "environment_source_sha256": "e57d96f99b2cfeed904418644c5689fc5dee6926076f34f8b1774dd69786117d",
+  "sticky_action_probability": 0.1,
+  "max_episode_steps": 10000,
+  "actions_sampled_from_softmax": true,
+  "seed_start": 20261103,
+  "training_steps": 0,
+  "fitting_or_model_selection": false,
+  "random_control_seed": 871031,
+  "random_control": "Fixed random signs; same sparse support and per-tensor Frobenius norms as constructed network",
+  "sparse_dense_check": {
+    "states": 1000,
+    "max_logit_absolute_error": 0.0,
+    "tolerance": 0.0001
+  },
+  "results": {
+    "published": {
+      "episodes": 1000,
+      "mean_score": 519.696,
+      "standard_error": 7.448962520151825,
+      "normal_95pct_ci": [
+        505.09603346050244,
+        534.2959665394976
+      ],
+      "mean_steps": 7432.854,
+      "capped_episodes": 521
+    },
+    "zero_weight": {
+      "episodes": 1000,
+      "mean_score": 0.564,
+      "standard_error": 0.02320436257349989,
+      "normal_95pct_ci": [
+        0.5185194493559402,
+        0.6094805506440597
+      ],
+      "mean_steps": 11.748,
+      "capped_episodes": 0
+    },
+    "random_sign": {
+      "episodes": 1000,
+      "mean_score": 0.449,
+      "standard_error": 0.017020243496750822,
+      "normal_95pct_ci": [
+        0.4156403227463684,
+        0.4823596772536316
+      ],
+      "mean_steps": 10.522,
+      "capped_episodes": 0
+    }
+  },
+  "wall_seconds": 39.550277675998586,
+  "claim_boundary": "Independent new-seed behavioral replay of fixed published weights, with zero-weight and norm-matched random-sign controls. PPO checkpoints absent; published PPO comparison not rerun."
+}
