@@ -33,12 +33,13 @@ ABI and composition manifests define each owner's scope:
 
 | Domain | Native owners and compositions |
 | --- | --- |
-| Text and files | Byte/protocol primitives, line endpoints, text budgets, batch planning/application, atomic writes, exclusive local creation, filesystem parity, delta, editable content, history and locks |
+| Text and files | Byte/protocol primitives, line endpoints, text budgets, typed batch planning, application and annotated diff, atomic writes, exclusive local creation, filesystem parity, delta, editable content, history and locks |
 | Read services | Path policy/canonicalization, stat/version, local I/O, multi-read, file-info, view parameters/calls/rendering/cache and literal/regex search |
 | JSON and numbers | Locked serde-compatible JSON/number behavior, private RawValue expansion at typed boundaries, finite binary64 arithmetic, private Bellman numerical core and canonical commitment |
 | Identity and requests | Caller authority, KDF/AEAD/nonce/records, entropy, operation/request scope, request context and result publication |
 | Configuration and sessions | Configuration, regex syntax/HIR/NFA/matching, client/session context and workdir state |
 | Shell and effects | Admission, terminal cleaning, execution composition, effect fences, prepared processes, foreground/output/background state and capture preparation |
+| Retained results | Private safe DTO admission, typed record JSON, retention and validation, record I/O, directory leases, archive metadata, publication and store graphs |
 | MCP composition | Catalog/admission/protocol, view/workdir gateways, static image packers and public exchange/reference fixtures |
 
 The Bellman numerical core and its separate commitment owner cover typed
@@ -63,12 +64,59 @@ scope, capacity continuation and error precedence.
 
 The private [Local Create owner](local_create_file_abi.md) preserves exclusive
 pathname creation, 2 MiB write chunks, partial writes, interrupted syscalls,
-WriteZero and one-close descriptor retirement. Three registered suites cover
-its complete state, actual filesystem behavior, build provenance and evidence
-refusals. Its seven recorded original processes freshly build the locked
-Rust reference and replay all kernel, competing-create and file-size fault
-inputs. Full create orchestration, asynchronous cancellation, cache publication
-and public admission retain their separate qualification boundaries.
+WriteZero and one-close descriptor retirement. Seven registered suites cover
+the blocking leaf, segmented poll continuation, held completion ordering,
+actual filesystem behavior, build provenance and evidence refusals. Twelve
+recorded original commands freshly build two locked Rust references and
+replay the 357 ordinary and 43 held root processes. This retains the original
+Tokio 1.53.1 reference profile; the target Tokio 1.53.3, full create
+orchestration, cancellation, cache publication and public admission require
+their separate qualification boundaries.
+
+The [Text Editor parameter owner](text_editor_params_abi.md) projects all four
+commands and six fields from the shared canonical map. Two native suites
+retain 1,992 semantic inputs and complete capacity/continuation records. Its
+separate fresh locked reference uses the unchanged target types and exact
+serde 1.0.229 / serde_json 1.0.151 dependency profile. Typed projection does
+not activate a filesystem handler or replace a public route.
+
+## Public local filesystem composition
+
+The explicitly selected [58-image public stdio profile](filesystem_public_abi.md)
+advertises eight tools: `host_list`, `effective_config`,
+`execution_shadow_admit`, `view`, `workdir`, `directory_create`, `file_move` and
+`directory_move`. The three local filesystem methods call the actual typed,
+fence, shared Session, installed configuration, path-policy, request-scope,
+canonical-key, descriptor-effect, cache and publication owners. JSON fields do
+not select private state or internal child instances. The real fence permit is
+held across each admitted method and released after its terminal completion.
+
+A separately linked observer executable shares exactly the same 58 freshly
+compiled images. It has two real Session/cache instances and one shared installed
+configuration/fence owner. This private observer is never selected by public
+stdin. The mandatory native producer runs 28 observed processes for all 323
+public attempts plus nine explicit cache/filesystem controls. A separate 26
+ordinary-stdio processes cover 317 public attempts and five filesystem controls,
+including real EOF and BrokenPipe. These two domains overlap and their totals
+must not be added as independent semantic cases.
+
+Native admission reads complete source, compiler, linker/packer, both ELF images,
+all 68 fixed patches, actual streams, state snapshots and syscall/continuation
+records before the unchanged Rust reference runs. Only then are the owned test
+files archived with their full bytes, raw Unix names, modes, attributes, hardlink
+relationships, symbolic-link targets and FIFOs. The original stage reconstructs
+the same absolute paths, runs the fresh fixed-Rust-1.95 reference and requires
+complete response/state/filesystem comparison plus six groups of 42 physical
+evidence refusals. Pure retained readers never restore paths or start HIA/Rust.
+
+The configuration span owner also serves these public methods. Its remote-policy
+op8 borrows the complete input and grows an error response before changing state;
+it no longer expands unrelated work regions for a long path. Its legacy u32
+success channel remains an explicit representability boundary. Configured-fence
+focused observations and larger remote-policy errors are separate evidence from
+the 323-attempt SDK domain. Remote filesystem execution, general concurrent HTTP
+routing, unconstrained regex resources, the full 136-handler production target and production
+activation remain unfinished. The original implementations stay in place.
 
 ## Inventory and target checks
 
@@ -114,14 +162,22 @@ python3 -m venv /absolute/path/to/hia-reference-environment
   --rustc /absolute/path/to/rustc
 ```
 
-Both phases are required. CI uses one fresh cold/build job, eight native
-partitions, a native collector, seven original comparison partitions and the
-final collector. The registry contains 73 component builds, 198 native suites,
-67 original Rust recipes and 169 HIA sources. The ten independent rendering,
-cache, history and session suites occupy `view_components`; the seventeen
-read, parameter, caller and public MCP suites retain their producer order and
+Both phases are required. CI uses one fresh cold/build job, nine native
+partitions, a native collector, eight original comparison partitions and the
+final collector. The registry contains 86 component builds, 220 native suites,
+80 original Rust recipes and 193 HIA sources. The ten independent rendering,
+cache, history and session suites occupy `view_components`; the eighteen
+read, parameter, caller, public MCP and filesystem suites retain their producer order and
 fixture retirement together in `view`. Each suite and original recipe still
 executes exactly once under its existing process and job deadline.
+
+The independent `storage` groups retain all thirteen native processes, nine
+fresh original recipes, twenty-five retained evidence refusal controls and
+five additional RawValue controls. Their thirty
+images and six private graphs must be rebuilt against the current shared
+owners; prior branch receipts do not qualify changed JSON or regex children.
+Public admission, the global archive mutex and restart/cancellation behavior
+remain outside the private storage contracts.
 
 Original receipts preserve shared process attribution and the two fresh typed
 span reference builds, including their compiler version, materialized source,

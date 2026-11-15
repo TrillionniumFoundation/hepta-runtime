@@ -1,10 +1,20 @@
 # Public registry qualification and integration
 
 The new owner is the actual HIA `public_tool_dispatch` module and its fixed
-17-image connection/configuration composition. Existing SDK, configuration,
-regex and execution source files remain byte-identical prerequisites. The
-compiler remains pinned to d3e2c901; this component does not introduce another
-cold gate or replace the existing full compiler qualification.
+17-image connection/configuration composition. The profile binds the current
+shared regex syntax, Unicode, HIR and NFA images. The other thirteen member
+sources, the native adapter and the HIA packer remain unchanged. The compiler
+remains pinned to d3e2c901; this component does not introduce another cold gate
+or replace the existing full compiler qualification.
+
+The current profile SHA-256 is
+`e41371914278c6e2b0dcd45ccdd1328d085981fb5fa9579c9c7d8609203ccdc7`.
+Its actual HIA packer produces a 4,629,489-byte ELF with SHA-256
+`24f03090c0d5b8b2de0d063142c9545876cee46f976397378c09d05cc760fc38`.
+Member positions and the complete packer input are derived from the newly
+compiled images. The normalized kernel prefix is unchanged. Qualification
+must repeat every existing native and fresh original case against this graph;
+historical observations do not qualify the changed regex children.
 
 `scripts/build_public_registry.py` compiles all 17 member images and the HIA
 packer from source. Final builds need no assembler. Its retained files include

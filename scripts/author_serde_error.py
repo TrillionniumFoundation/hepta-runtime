@@ -14,7 +14,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 CANONICAL = lambda value: json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
-VALUE_SHA = '6c3afb7d322b3c42d89727651aaae7cc1907a7766773e0bff4fdac9b11567a96'
+VALUE_SHA = 'ef9dd3a567acf523257c4245c022b8cefa9b3ddb83075e826f129b1a1f341d18'
 UTF8_SHA = '89df7b4320fdbd3525450e9446267ae3d54a5b62660d8904fe8f09be36a7fbf9'
 LITERALS = {
     1: b'EOF while parsing a list', 2: b'EOF while parsing an object',

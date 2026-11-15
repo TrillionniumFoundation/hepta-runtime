@@ -29,29 +29,20 @@ import hia_native_result_publication_reference as publication_reference
 import hia_native_request_scope_reference as scope_reference
 
 GROUPS = {
-    "bytes": ("runtime_bytes", "text_budget", "line_verify", "editable_content", "view_render",
-              "view_render_growth", "view_read", "view_params", "view_call", "runtime_mcp",
-              "line_endpoint", "delta", "binary_codec", "policy",),
-    "state": ("terminal_clean", "shell_gate", "shell_process", "shell_background_text", "shell_outcome",
-              "shell_output_io", "shell_foreground", "shell_capture_path", "shell_capture_mkdir",
-              "shell_capture_file", "shell_capture_prepare", "view_cache", "history", "session_workdir",
-              "file_locks", "file_lock_service",),
-    "services": ("write_chain", "directory_service", "workdir_service", "sdk_connection",
-              "public_registry",),
-    "json": ("serde_error", "request_context", "response_hints", "result_publication",
-              "request_scope_lifecycle", "binary32_json", "typed_result_json", "request_result",
-              "fence_json", "serde_json", "execution_shadow", "effect_fence",),
-    "config": ("runtime_config", "runtime_config_span"),
-    "system": ("operation_scope_os", "multi_read_service", "operation_kdf", "operation_aead",
-              "operation_nonce", "operation_record", "system_entropy", "operation_scope",
-              "caller_authority", "bellman_core", "bellman_commitment", "local_create_file",),
-    "batch": ("batch_write", "batch_plan", "batch_apply", "batch_edit_params", "atomic_write", "filesystem_parity",),
+    "storage": tuple(r.storage_pipeline.KEYS),
+    'bytes': ('runtime_bytes', 'text_budget', 'line_verify', 'editable_content', 'view_render', 'view_render_growth', 'view_read', 'view_params', 'view_call', 'runtime_mcp', 'line_endpoint', 'delta', 'binary_codec', 'policy', 'filesystem_public', 'text_editor_params'),
+    'state': ('terminal_clean', 'shell_gate', 'shell_process', 'shell_background_text', 'shell_outcome', 'shell_output_io', 'shell_foreground', 'shell_capture_path', 'shell_capture_mkdir', 'shell_capture_file', 'shell_capture_prepare', 'view_cache', 'history', 'session_workdir', 'file_locks', 'file_lock_service'),
+    'services': ('write_chain', 'directory_service', 'workdir_service', 'sdk_connection', 'public_registry'),
+    'json': ('serde_error', 'request_context', 'response_hints', 'result_publication', 'request_scope_lifecycle', 'binary32_json', 'typed_result_json', 'request_result', 'fence_json', 'serde_json', 'execution_shadow', 'effect_fence'),
+    'config': ('runtime_config', 'runtime_config_span'),
+    'system': ('operation_scope_os', 'multi_read_service', 'operation_kdf', 'operation_aead', 'operation_nonce', 'operation_record', 'system_entropy', 'operation_scope', 'caller_authority', 'bellman_core', 'bellman_commitment', 'local_create_file'),
+    'batch': ('batch_write', 'batch_plan', 'batch_apply', 'batch_edit_params', 'batch_plan_input', 'batch_diff', 'atomic_write', 'filesystem_parity'),
 }
 NATIVE_SEAL = "original-native.json"
 NATIVE_REPORT = "original-native-report.json"
 SHARD_SEAL = "original-shard.json"
 SHARD_REPORT = "original-shard-report.json"
-CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls")
+CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls", "result-storage-evidence-controls")
 REFERENCE_OWNERS = {
     "json_reference_build": ("fence_json", "serde_json"),
     "request_context_reference": ("request_context", "response_hints"),
@@ -67,7 +58,7 @@ REFERENCE_OWNERS = {
 
 def groups() -> dict[str, tuple[str, ...]]:
     flat = tuple(key for keys in GROUPS.values() for key in keys)
-    if (set(GROUPS) != {"bytes", "state", "services", "json", "config", "system", "batch"}
+    if (set(GROUPS) != {"bytes", "state", "services", "json", "config", "system", "batch", "storage"}
             or len(flat) != len(set(flat)) or set(flat) != set(r.RECIPES)):
         raise ValueError("every original recipe must belong to exactly one declared group")
     for together in (("fence_json", "serde_json"), tuple(r.result_qualification.KEYS),
@@ -81,6 +72,8 @@ def groups() -> dict[str, tuple[str, ...]]:
             raise ValueError("original group differs from its source-declared producer order")
     if GROUPS["config"] != ("runtime_config", "runtime_config_span"):
         raise ValueError("configuration and regex require their complete independent recipe")
+    if GROUPS["storage"] != tuple(r.storage_pipeline.KEYS):
+        raise ValueError("storage originals require their complete independent group")
     return GROUPS
 
 
@@ -607,7 +600,7 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
     try:
         folders = sorted(shards.iterdir())
         if len(folders) != len(groups()) or any(path.is_symlink() or not path.is_dir() for path in folders):
-            raise ValueError("collector requires exactly seven complete original shard artifacts")
+            raise ValueError("collector requires exactly eight complete original shard artifacts")
         parts, files, copies, directories = {}, {}, {}, set()
         for folder in folders:
             if set(path.name for path in folder.iterdir()) != {"data", SHARD_SEAL, SHARD_REPORT}:
@@ -667,6 +660,7 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
         # parallel reference worker is active during these mutation controls.
         r.run_result_values_controls(output, report)
         r.run_public_registry_controls(output, report)
+        r.run_result_storage_controls(output, report)
         r.check_input_pins(output, report)
         report.update(status="PASS", phase="complete", rust_comparison_status="PASS",
                       original_collection_elapsed_seconds=time.monotonic() - started,

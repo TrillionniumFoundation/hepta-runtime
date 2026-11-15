@@ -27,6 +27,7 @@ import hia_native_service_pipeline as service_pipeline
 import hia_native_public_registry_qualification as public_registry_qualification
 import hia_native_result_qualification as result_qualification
 import hia_native_serde_error_pipeline as serde_error_pipeline
+import hia_native_result_storage_pipeline as storage_pipeline
 import hia_native_batch_write_pipeline as batch_write_pipeline
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
                                        PARALLEL_NATIVE_SUITES,
@@ -44,7 +45,8 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        session_evidence, file_locks_evidence, file_lock_service_evidence, filesystem_parity_evidence,
                                        filesystem_parity_retirement, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        write_chain_evidence, directory_service_evidence, workdir_service_evidence, sdk_connection_evidence,
-                                       public_registry_evidence, result_values_evidence, serde_error_evidence, batch_write_evidence,
+                                       public_registry_evidence, result_values_evidence, serde_error_evidence, result_storage_evidence, batch_write_evidence,
+                                       filesystem_public_evidence, filesystem_public_retirement,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
@@ -79,7 +81,8 @@ import hia_native_shell_qualification as shell_qualification
 import hia_native_shell_capture_gate as capture_gate
 import hia_native_bellman_qualification as bellman_qualification
 import hia_native_bellman_commitment_qualification as bellman_commitment_qualification
-import hia_native_local_create_qualification as local_create_qualification
+import hia_native_local_create_pipeline as local_create_qualification
+import hia_native_text_editor_params_qualification as text_editor_params_qualification
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
                                                 REFERENCE_ROWS as BATCH_PLAN_ROWS)
@@ -139,8 +142,18 @@ def check_input_pins(output: Path, report: dict) -> None:
             or report.get("compiler_cold_status") != "PASS"
             or report.get("compiler_cold_evidence") != cold):
         raise ValueError("required matching-source full cold evidence differs")
+    if report.get("text_editor_params_evidence") != text_editor_params_qualification.native_evidence(output, report):
+        raise ValueError("required Text Editor parameter native evidence differs")
+    if "text_editor_params" in report.get("original_rust_comparisons", {}):
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        if report["original_rust_comparisons"]["text_editor_params"] != text_editor_params_qualification.original_evidence(output, report, rustc):
+            raise ValueError("required target Text Editor type replay differs")
     if report.get("local_create_file_evidence") != local_create_qualification.native_evidence(output, report):
         raise ValueError("required local-create source/native evidence differs")
+    if report.get("local_create_segments_evidence") != local_create_qualification.segments.native_evidence(output, report):
+        raise ValueError("required segmented Create source/native evidence differs")
+    if report.get("local_create_async_held_evidence") != local_create_qualification.held.native_evidence(output, report):
+        raise ValueError("required held Create source/native evidence differs")
     if "local_create_file" in report.get("original_rust_comparisons", {}):
         rustc = Path(report["rust_compiler"]["invocation_path"])
         if report["original_rust_comparisons"]["local_create_file"] != local_create_qualification.original_evidence(output, report, rustc):
@@ -189,6 +202,20 @@ def check_input_pins(output: Path, report: dict) -> None:
     if "batch_edit_params" in report.get("original_rust_comparisons", {}):
         if batch_params_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["batch_edit_params"]:
             raise ValueError("registered batch parameter original evidence differs")
+    from hia_native_batch_plan_input_pipeline import native_evidence as batch_input_native
+    from hia_native_batch_plan_input_pipeline import retained_original as batch_input_original
+    if batch_input_native(ROOT, output, report, completed_test_summary) != report.get("batch_plan_input_evidence"):
+        raise ValueError("registered batch Planner input native evidence differs")
+    if "batch_plan_input" in report.get("original_rust_comparisons", {}):
+        if batch_input_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["batch_plan_input"]:
+            raise ValueError("registered batch Planner input original evidence differs")
+    from hia_native_batch_diff_pipeline import native_evidence as batch_diff_native
+    from hia_native_batch_diff_pipeline import retained_original as batch_diff_original
+    if batch_diff_native(ROOT, output, report, completed_test_summary) != report.get("batch_diff_evidence"):
+        raise ValueError("registered complete batch diff native evidence differs")
+    if "batch_diff" in report.get("original_rust_comparisons", {}):
+        if batch_diff_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["batch_diff"]:
+            raise ValueError("registered complete batch diff original evidence differs")
     if report.get("batch_plan_evidence") != batch_plan_evidence(output, report):
         raise ValueError("required complete batch input/endpoint/large-result evidence differs")
     if report.get("batch_apply_evidence") != batch_apply_evidence(output, report):
@@ -226,6 +253,16 @@ def check_input_pins(output: Path, report: dict) -> None:
     public_mcp = runtime_mcp_evidence(output, report)
     if report.get("runtime_mcp_evidence") != public_mcp:
         raise ValueError("required complete public MCP execution and evidence controls differ")
+    public_filesystem = filesystem_public_evidence(output, report)
+    if report.get("filesystem_public_evidence") != public_filesystem:
+        raise ValueError("required public filesystem native-only evidence differs")
+    if report.get("filesystem_public_fixture_retirement") != filesystem_public_retirement(
+            output, report, native=public_filesystem):
+        raise ValueError("required public filesystem fixture archival differs")
+    if "filesystem_public" in report.get("original_rust_comparisons", {}):
+        from hia_native_filesystem_public_pipeline import retained_original as filesystem_public_original
+        if filesystem_public_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["filesystem_public"]:
+            raise ValueError("required fresh public filesystem original or physical refusal evidence differs")
     public_search = view_search_public_evidence(output, report)
     if report.get("view_search_public_evidence") != public_search:
         raise ValueError("required complete public literal search producer evidence differs")
@@ -385,6 +422,19 @@ def check_input_pins(output: Path, report: dict) -> None:
             raise ValueError("complete original batch-write replay changed")
     if report.get("serde_error_evidence") != serde_error_evidence(output, report):
         raise ValueError("complete diagnostic native evidence changed")
+    if report.get("result_storage_evidence") != result_storage_evidence(output, report):
+        raise ValueError("complete storage native evidence changed")
+    for key, domain in storage_pipeline.KEYS.items():
+        if key in report.get("original_rust_comparisons", {}):
+            actual = storage_pipeline.original_evidence(ROOT, output, report, completed_test_summary, domain)
+            if report["original_rust_comparisons"][key] != actual:
+                raise ValueError("complete original storage evidence changed: " + key)
+    if "result_storage_evidence_controls" in report:
+        if report["result_storage_evidence_controls"] != storage_pipeline.control_evidence(
+                ROOT, output, report, completed_test_summary):
+            raise ValueError("complete storage evidence controls changed")
+    elif report.get("status") == "PASS":
+        raise ValueError("completed aggregate omitted storage evidence controls")
     if "serde_error" in report.get("original_rust_comparisons", {}):
         actual = serde_error_pipeline.original_evidence(ROOT, output, report, completed_test_summary)
         if report["original_rust_comparisons"]["serde_error"] != actual:
@@ -471,16 +521,16 @@ def check_input_pins(output: Path, report: dict) -> None:
         if sha(manifest) != item["sha256"]:
             raise ValueError("compiled module manifest changed")
         module = json.loads(manifest.read_bytes())
-        if item.get("builder") == "view_call":
+        if item.get("builder") in {"view_call", "batch_diff"}:
             # Its strict bundle reader above checked every child and packer
             # compiler identity, complete input/output and composed ELF.
             continue
-        compiler_field = "compiler_image_sha256" if item.get("builder") == "runtime_mcp" else "compiler_sha256"
+        compiler_field = "compiler_image_sha256" if item.get("builder") in {"runtime_mcp", "filesystem_public"} else "compiler_sha256"
         compiler = capture_gate.compiler_identity(output, report, key) if key in capture_gate.KEYS else module
         if (compiler.get("compiler_commit") != HEPTA_COMMIT
                 or compiler.get(compiler_field) != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {'composition', 'record_composition', 'scope_composition', 'scope_os_composition', 'entropy', 'authority_composition', 'batch_plan', 'batch_edit_params', 'batch_apply', 'atomic_write', 'filesystem_parity', 'history', 'execution_shadow', 'effect_fence', 'runtime_config', 'runtime_config_span', 'result_publication', 'session_workdir', 'request_scope', 'file_locks', 'file_lock_service', 'view_read', 'runtime_mcp', 'shell_process', 'shell_outcome', 'shell_output', 'shell_foreground', *capture_gate.KEYS, 'write_chain', 'directory_service', 'workdir_service', 'sdk_connection', 'public_registry', 'result_values', 'batch_write'}:
+        if item.get("builder") in {'composition', 'record_composition', 'scope_composition', 'scope_os_composition', 'entropy', 'authority_composition', 'batch_plan', 'batch_edit_params', 'text_editor_params', 'batch_plan_input', 'filesystem_public', 'batch_apply', 'atomic_write', 'filesystem_parity', 'history', 'execution_shadow', 'effect_fence', 'runtime_config', 'runtime_config_span', 'result_publication', 'session_workdir', 'request_scope', 'file_locks', 'file_lock_service', 'view_read', 'runtime_mcp', 'shell_process', 'shell_outcome', 'shell_output', 'shell_foreground', *capture_gate.KEYS, 'write_chain', 'directory_service', 'workdir_service', 'sdk_connection', 'public_registry', 'result_values', 'batch_write', 'result_storage'}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -2316,6 +2366,24 @@ def compare_serde_error(output: Path, report: dict, rustc: Path) -> dict:
     return actual
 
 
+def compare_result_storage(output: Path, report: dict, rustc: Path, domain: str) -> dict:
+    before = result_storage_evidence(output, report)
+    if before != report.get("result_storage_evidence"):
+        raise ValueError("storage native corpus changed before original execution")
+    command = storage_pipeline.original_command(ROOT, output, report, rustc,
+        executable(str(rustc.with_name("cargo"))), domain)
+    record_check(output, report, name=storage_pipeline.RUST_NAMES[domain],
+        command=command, timeout=180, env=qualification_env())
+    actual = storage_pipeline.original_evidence(ROOT, output, report, completed_test_summary, domain)
+    if result_storage_evidence(output, report) != before:
+        raise ValueError("storage native corpus changed during complete original replay")
+    return actual
+
+
+def run_result_storage_controls(output: Path, report: dict) -> None:
+    storage_pipeline.run_controls(ROOT, output, report, completed_test_summary, record_check, qualification_env())
+
+
 def compare_result_values(output: Path, report: dict, rustc: Path, domain: str) -> dict:
     before = result_values_evidence(output, report)
     if before != report.get("result_values_evidence"):
@@ -2495,8 +2563,26 @@ def compare_batch_edit_params(output: Path, report: dict, rustc: Path) -> dict:
                             completed=completed_test_summary, qualification_env=qualification_env)
 
 
+def compare_batch_plan_input(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_batch_plan_input_pipeline import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check=record_check,
+                            completed=completed_test_summary, qualification_env=qualification_env)
+
+
+def compare_batch_diff(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_batch_diff_pipeline import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check=record_check,
+                            completed=completed_test_summary, qualification_env=qualification_env)
+
+
+
 def compare_config_span(output: Path, report: dict, rustc: Path) -> dict:
     from hia_native_config_span_pipeline import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check, completed_test_summary)
+
+
+def compare_filesystem_public(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_filesystem_public_pipeline import execute_original
     return execute_original(ROOT, output, report, rustc, record_check, completed_test_summary)
 
 
@@ -2515,6 +2601,8 @@ RECIPES = {"serde_error": compare_serde_error, "batch_write": compare_batch_writ
            "request_scope_lifecycle": compare_request_scope,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "batch_edit_params": compare_batch_edit_params,
+           "batch_plan_input": compare_batch_plan_input,
+           "batch_diff": compare_batch_diff,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
            "view_render_growth": compare_view_render_growth,
@@ -2540,7 +2628,9 @@ RECIPES = {"serde_error": compare_serde_error, "batch_write": compare_batch_writ
            "filesystem_parity": compare_filesystem_parity,
            "bellman_core": bellman_qualification.compare_original,
            "bellman_commitment": bellman_commitment_qualification.compare_original,
-           "local_create_file": local_create_qualification.compare_original}
+           "local_create_file": local_create_qualification.compare_original,
+           "filesystem_public": compare_filesystem_public,
+           "text_editor_params": text_editor_params_qualification.compare_original}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}
@@ -2551,6 +2641,9 @@ HARDWARE_REFERENCE_COMPONENTS = {"finite_binary64"}
 # These are checked in check_input_pins against the native process evidence and
 # original Python source identities. They are not counted as Rust comparisons.
 PYTHON_REFERENCE_COMPONENTS = {"native_io", "stat_version", "local_service", "file_info_service"}
+
+RECIPES.update({key: (lambda output, report, rustc, domain=domain:
+    compare_result_storage(output, report, rustc, domain)) for key, domain in storage_pipeline.KEYS.items()})
 
 
 PARALLEL_RUST_RECIPES = {
@@ -2604,7 +2697,7 @@ def original_process_attribution(report: dict, keys: tuple[str, ...]) -> dict[st
                 or len(names) != len(set(names))):
             raise ValueError("original recipe omitted its unique actual process records")
         if key == "local_create_file" and names != list(local_create_qualification.PROCESS_NAMES):
-            raise ValueError("local-create requires its exact seven ordered original processes")
+            raise ValueError("local-create requires its exact twelve ordered original processes")
         if key in wanted:
             if names != mapping[wanted[key]]:
                 raise ValueError("shared original recipe does not retain its producer's complete process set")
@@ -2771,6 +2864,7 @@ def run(output: Path, rustc_name: str) -> dict:
         check_input_pins(output, report)
         run_result_values_controls(output, report)
         run_public_registry_controls(output, report)
+        run_result_storage_controls(output, report)
         check_input_pins(output, report)
         if sha(rustc) != compiler_sha:
             raise ValueError("original Rust compiler executable changed during comparison")

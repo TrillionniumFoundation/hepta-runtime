@@ -27,18 +27,9 @@ runtime_grow_view_owned:
     mov qword ptr [rsp + 16], 1
     mov qword ptr [rbx + 48], 0
     mov qword ptr [rbx + 56], 0
-    mov rax, [r15 + 16]
-    test rax, rax
-    jnz runtime_grow_view_ready
-    lea rdi, [rip + runtime_grow_view_images]
-    mov rsi, [r15 + 32]
-    call view_engine_create_wide
+    call runtime_grow_view_ensure
     cmp rax, -4095
     jae runtime_grow_view_resource
-    mov [r14 + 16], rax
-    cmp qword ptr [r14 + 80], 0
-    je runtime_grow_view_ready
-    mov qword ptr [rax + 96], 1 /* Only the private capture enables I/O receipts. */
 runtime_grow_view_ready:
     mov r15, rax
     mov rdi, r12
@@ -103,6 +94,26 @@ runtime_grow_view_stack:
     pop rbp
     ret
 
+.global runtime_grow_view_ensure
+/* r15 is the exact session extra engine; the caller cannot select a table. */
+runtime_grow_view_ensure:
+    mov rax, [r15 + 16]
+    test rax, rax
+    jnz runtime_grow_view_ensure_done
+    sub rsp, 8
+    lea rdi, [rip + runtime_grow_view_images]
+    mov rsi, [r15 + 32]
+    call view_engine_create_wide
+    add rsp, 8
+    cmp rax, -4095
+    jae runtime_grow_view_ensure_done
+    mov [r15 + 16], rax
+    cmp qword ptr [r15 + 80], 0
+    je runtime_grow_view_ensure_done
+    mov qword ptr [rax + 96], 1
+runtime_grow_view_ensure_done:
+    ret
+
 /* The trusted caller has consumed the last output borrow before releasing. */
 runtime_grow_view_release:
     push rbx
@@ -116,6 +127,30 @@ runtime_grow_view_release:
     jne runtime_grow_view_release_invalid
     cmp qword ptr [r15 + 520 + 12 * 64], 0
     jne runtime_grow_view_release_invalid
+    cmp qword ptr [r15 + 512 + 23 * 64], 0
+    jne runtime_grow_view_release_invalid
+    cmp qword ptr [r15 + 520 + 23 * 64], 0
+    jne runtime_grow_view_release_invalid
+    mov rdx, [r15 + 8]
+    mov rdx, [rdx + 23 * 64 + 8]
+    test rdx, rdx
+    jz runtime_grow_view_release_proxies
+    cmp qword ptr [rdx + 8], 0
+    jne runtime_grow_view_release_invalid
+    cmp qword ptr [rdx + 416], 0
+    jne runtime_grow_view_release_invalid
+runtime_grow_view_release_proxies:
+    mov ecx, 29
+runtime_grow_view_release_proxy_admit:
+    mov rdx, rcx
+    shl rdx, 6
+    cmp qword ptr [r15 + rdx + 512], 0
+    jne runtime_grow_view_release_invalid
+    cmp qword ptr [r15 + rdx + 520], 0
+    jne runtime_grow_view_release_invalid
+    inc ecx
+    cmp ecx, 33
+    jb runtime_grow_view_release_proxy_admit
     mov r15, rax
     cmp qword ptr [r15 + 32], 0
     jne runtime_grow_view_release_destroy
@@ -132,6 +167,18 @@ runtime_grow_view_release_destroy:
     xor eax, eax
     mov ecx, 7
     rep stosq
+    mov qword ptr [r12 + 216], 0
+    mov ebx, 29
+runtime_grow_view_release_proxy_clear:
+    mov rdi, rbx
+    shl rdi, 6
+    add rdi, [r12 + 8]
+    add rdi, 8
+    mov ecx, 7
+    rep stosq
+    inc ebx
+    cmp ebx, 33
+    jb runtime_grow_view_release_proxy_clear
 runtime_grow_view_release_empty:
     xor eax, eax
     jmp runtime_grow_view_release_done

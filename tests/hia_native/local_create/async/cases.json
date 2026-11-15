@@ -1,0 +1,1083 @@
+{
+  "case_count": 43,
+  "cases": [
+    {
+      "contract_items": [
+        1,
+        11
+      ],
+      "expected_calls": {
+        "close": 0,
+        "open": 0,
+        "write": 0
+      },
+      "expected_file_bytes": null,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "unpolled_cancel",
+      "options": {},
+      "scenario": "unpolled_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        1
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "open_inflight_cancel",
+      "options": {},
+      "scenario": "open_inflight_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        2
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "open_ready_cancel",
+      "options": {},
+      "scenario": "open_ready_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        2,
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "open_ready_close_cancel",
+      "options": {},
+      "scenario": "open_ready_close_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        4
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 2097152,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "write1_inflight_cancel",
+      "options": {},
+      "scenario": "write1_inflight_cancel",
+      "size": 2097153
+    },
+    {
+      "contract_items": [
+        5
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 2
+      },
+      "expected_file_bytes": 4194304,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "write2_inflight_cancel",
+      "options": {},
+      "scenario": "write2_inflight_cancel",
+      "size": 4194305
+    },
+    {
+      "contract_items": [
+        7
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 3,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "flush_inflight_cancel",
+      "options": {},
+      "scenario": "flush_inflight_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        3
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 2097152,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "open_ready_poll_cancel",
+      "options": {},
+      "scenario": "open_ready_poll_cancel",
+      "size": 2097153
+    },
+    {
+      "contract_items": [
+        6
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 2097152,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "write_ready_cancel",
+      "options": {},
+      "scenario": "write_ready_cancel",
+      "size": 2097153
+    },
+    {
+      "contract_items": [
+        6
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 2
+      },
+      "expected_file_bytes": 4194304,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "write_ready_poll_cancel",
+      "options": {},
+      "scenario": "write_ready_poll_cancel",
+      "size": 4194305
+    },
+    {
+      "contract_items": [
+        3,
+        7
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "empty_ready_poll_cancel",
+      "options": {},
+      "scenario": "empty_ready_poll_cancel",
+      "size": 0
+    },
+    {
+      "contract_items": [
+        7
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 3,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "last_ready_poll_cancel",
+      "options": {},
+      "scenario": "last_ready_poll_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        2
+      ],
+      "expected_calls": {
+        "close": 0,
+        "open": 0,
+        "write": 0
+      },
+      "expected_file_bytes": null,
+      "expected_result": {
+        "error": 0,
+        "kind": 2,
+        "outcome": "result"
+      },
+      "name": "nul_normal",
+      "options": {
+        "kind": 2,
+        "nul": true
+      },
+      "scenario": "normal",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        1,
+        2
+      ],
+      "expected_calls": {
+        "close": 0,
+        "open": 0,
+        "write": 0
+      },
+      "expected_file_bytes": null,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "nul_inflight",
+      "options": {
+        "nul": true
+      },
+      "scenario": "nul_inflight_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        2
+      ],
+      "expected_calls": {
+        "close": 0,
+        "open": 0,
+        "write": 0
+      },
+      "expected_file_bytes": null,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "nul_ready",
+      "options": {
+        "nul": true
+      },
+      "scenario": "nul_ready_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        2,
+        3
+      ],
+      "expected_calls": {
+        "close": 0,
+        "open": 0,
+        "write": 0
+      },
+      "expected_file_bytes": null,
+      "expected_result": {
+        "error": 0,
+        "kind": 2,
+        "outcome": "result"
+      },
+      "name": "nul_poll",
+      "options": {
+        "kind": 2,
+        "nul": true
+      },
+      "scenario": "nul_ready_poll_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        2,
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "empty_ready",
+      "options": {},
+      "scenario": "open_ready_close_cancel",
+      "size": 0
+    },
+    {
+      "contract_items": [
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "completion_empty",
+      "options": {},
+      "scenario": "completion_before_wait",
+      "size": 0
+    },
+    {
+      "contract_items": [
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 3,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "completion_bytes",
+      "options": {},
+      "scenario": "completion_before_wait",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 3,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "fd0_normal",
+      "options": {
+        "fd0": true
+      },
+      "scenario": "normal",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        1,
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "fd0_cancel",
+      "options": {
+        "fd0": true
+      },
+      "scenario": "open_inflight_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 4
+      },
+      "expected_file_bytes": 2097189,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "partial_eintr_normal",
+      "options": {
+        "injections": [
+          {
+            "index": 1,
+            "kind": "partial",
+            "operation": "write",
+            "value": 17
+          },
+          {
+            "index": 2,
+            "kind": "errno",
+            "operation": "write",
+            "value": 4
+          }
+        ]
+      },
+      "scenario": "normal",
+      "size": 2097189
+    },
+    {
+      "contract_items": [
+        4,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 3
+      },
+      "expected_file_bytes": 2097152,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "partial_eintr_cancel",
+      "options": {
+        "injections": [
+          {
+            "index": 1,
+            "kind": "partial",
+            "operation": "write",
+            "value": 17
+          },
+          {
+            "index": 2,
+            "kind": "errno",
+            "operation": "write",
+            "value": 4
+          }
+        ]
+      },
+      "scenario": "write1_inflight_cancel",
+      "size": 2097189
+    },
+    {
+      "contract_items": [
+        1,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 2,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "open_eintr_cancel",
+      "options": {
+        "injections": [
+          {
+            "index": 1,
+            "kind": "errno",
+            "operation": "open",
+            "value": 4
+          }
+        ]
+      },
+      "scenario": "open_inflight_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "error": 0,
+        "kind": 3,
+        "outcome": "result"
+      },
+      "name": "write_zero_normal",
+      "options": {
+        "expected_bytes": 0,
+        "injections": [
+          {
+            "index": 1,
+            "kind": "zero",
+            "operation": "write"
+          }
+        ],
+        "kind": 3
+      },
+      "scenario": "normal",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        4,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "write_zero_cancel",
+      "options": {
+        "expected_bytes": 0,
+        "injections": [
+          {
+            "index": 1,
+            "kind": "zero",
+            "operation": "write"
+          }
+        ]
+      },
+      "scenario": "write1_inflight_cancel",
+      "size": 2097189
+    },
+    {
+      "contract_items": [
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 2
+      },
+      "expected_file_bytes": 17,
+      "expected_result": {
+        "error": 5,
+        "kind": 1,
+        "outcome": "result"
+      },
+      "name": "late_error_normal",
+      "options": {
+        "error": 5,
+        "expected_bytes": 17,
+        "injections": [
+          {
+            "index": 1,
+            "kind": "partial",
+            "operation": "write",
+            "value": 17
+          },
+          {
+            "index": 2,
+            "kind": "errno",
+            "operation": "write",
+            "value": 5
+          }
+        ],
+        "kind": 1
+      },
+      "scenario": "normal",
+      "size": 2097189
+    },
+    {
+      "contract_items": [
+        4,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 2
+      },
+      "expected_file_bytes": 17,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "late_error_cancel",
+      "options": {
+        "expected_bytes": 17,
+        "injections": [
+          {
+            "index": 1,
+            "kind": "partial",
+            "operation": "write",
+            "value": 17
+          },
+          {
+            "index": 2,
+            "kind": "errno",
+            "operation": "write",
+            "value": 5
+          }
+        ]
+      },
+      "scenario": "write1_inflight_cancel",
+      "size": 2097189
+    },
+    {
+      "contract_items": [
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 3,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "close_eintr_normal",
+      "options": {
+        "injections": [
+          {
+            "index": 1,
+            "kind": "close_errno",
+            "operation": "close",
+            "value": 4
+          }
+        ]
+      },
+      "scenario": "normal",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        2,
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "close_eintr_cancel",
+      "options": {
+        "injections": [
+          {
+            "index": 1,
+            "kind": "close_errno",
+            "operation": "close",
+            "value": 4
+          }
+        ]
+      },
+      "scenario": "open_ready_close_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        2,
+        7
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "baseline_empty",
+      "options": {},
+      "scenario": "normal",
+      "size": 0
+    },
+    {
+      "contract_items": [
+        7
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 3,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "baseline_bytes",
+      "options": {},
+      "scenario": "normal",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        2,
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "fd0_ready_close",
+      "options": {
+        "fd0": true
+      },
+      "scenario": "open_ready_close_cancel",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        4,
+        8,
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 3
+      },
+      "expected_file_bytes": 2097152,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "fd0_partial_cancel",
+      "options": {
+        "fd0": true,
+        "injections": [
+          {
+            "index": 1,
+            "kind": "partial",
+            "operation": "write",
+            "value": 17
+          },
+          {
+            "index": 2,
+            "kind": "errno",
+            "operation": "write",
+            "value": 4
+          }
+        ]
+      },
+      "scenario": "write1_inflight_cancel",
+      "size": 2097189
+    },
+    {
+      "contract_items": [
+        5,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 4
+      },
+      "expected_file_bytes": 4194304,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "second_partial_cancel",
+      "options": {
+        "injections": [
+          {
+            "index": 2,
+            "kind": "partial",
+            "operation": "write",
+            "value": 17
+          },
+          {
+            "index": 3,
+            "kind": "errno",
+            "operation": "write",
+            "value": 4
+          }
+        ]
+      },
+      "scenario": "write2_inflight_cancel",
+      "size": 4194341
+    },
+    {
+      "contract_items": [
+        5,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 2
+      },
+      "expected_file_bytes": 2097152,
+      "expected_result": {
+        "error": 0,
+        "kind": 3,
+        "outcome": "result"
+      },
+      "name": "second_zero_normal",
+      "options": {
+        "expected_bytes": 2097152,
+        "injections": [
+          {
+            "index": 2,
+            "kind": "zero",
+            "operation": "write"
+          }
+        ],
+        "kind": 3
+      },
+      "scenario": "normal",
+      "size": 4194341
+    },
+    {
+      "contract_items": [
+        5,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 2
+      },
+      "expected_file_bytes": 2097152,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "second_zero_cancel",
+      "options": {
+        "expected_bytes": 2097152,
+        "injections": [
+          {
+            "index": 2,
+            "kind": "zero",
+            "operation": "write"
+          }
+        ]
+      },
+      "scenario": "write2_inflight_cancel",
+      "size": 4194341
+    },
+    {
+      "contract_items": [
+        5,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 3
+      },
+      "expected_file_bytes": 2097169,
+      "expected_result": {
+        "error": 5,
+        "kind": 1,
+        "outcome": "result"
+      },
+      "name": "second_late_normal",
+      "options": {
+        "error": 5,
+        "expected_bytes": 2097169,
+        "injections": [
+          {
+            "index": 2,
+            "kind": "partial",
+            "operation": "write",
+            "value": 17
+          },
+          {
+            "index": 3,
+            "kind": "errno",
+            "operation": "write",
+            "value": 5
+          }
+        ],
+        "kind": 1
+      },
+      "scenario": "normal",
+      "size": 4194341
+    },
+    {
+      "contract_items": [
+        5,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 3
+      },
+      "expected_file_bytes": 2097169,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "second_late_cancel",
+      "options": {
+        "expected_bytes": 2097169,
+        "injections": [
+          {
+            "index": 2,
+            "kind": "partial",
+            "operation": "write",
+            "value": 17
+          },
+          {
+            "index": 3,
+            "kind": "errno",
+            "operation": "write",
+            "value": 5
+          }
+        ]
+      },
+      "scenario": "write2_inflight_cancel",
+      "size": 4194341
+    },
+    {
+      "contract_items": [
+        7,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 3
+      },
+      "expected_file_bytes": 37,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "flush_partial_cancel",
+      "options": {
+        "injections": [
+          {
+            "index": 1,
+            "kind": "partial",
+            "operation": "write",
+            "value": 17
+          },
+          {
+            "index": 2,
+            "kind": "errno",
+            "operation": "write",
+            "value": 4
+          }
+        ]
+      },
+      "scenario": "flush_inflight_cancel",
+      "size": 37
+    },
+    {
+      "contract_items": [
+        1,
+        8
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 2,
+        "write": 1
+      },
+      "expected_file_bytes": 3,
+      "expected_result": {
+        "error": 0,
+        "kind": 0,
+        "outcome": "result"
+      },
+      "name": "open_eintr_normal",
+      "options": {
+        "injections": [
+          {
+            "index": 1,
+            "kind": "errno",
+            "operation": "open",
+            "value": 4
+          }
+        ]
+      },
+      "scenario": "normal",
+      "size": 3
+    },
+    {
+      "contract_items": [
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 0
+      },
+      "expected_file_bytes": 0,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "repeat_pending_open",
+      "options": {},
+      "scenario": "repeat_pending_open",
+      "size": 2097189
+    },
+    {
+      "contract_items": [
+        11
+      ],
+      "expected_calls": {
+        "close": 1,
+        "open": 1,
+        "write": 1
+      },
+      "expected_file_bytes": 2097152,
+      "expected_result": {
+        "outcome": "cancelled"
+      },
+      "name": "repeat_pending_write",
+      "options": {},
+      "scenario": "repeat_pending_write",
+      "size": 2097189
+    }
+  ],
+  "chunk_bytes": 2097152,
+  "content_pattern": "byte[i] = i % 251",
+  "private_scheduling_profile": "locked Tokio 1.53.1 / current-thread / max_blocking_threads=1 / original 2MiB Buf",
+  "process_deadline_seconds": 60,
+  "qualifier_deadline_seconds": 180,
+  "schema": "hepta.runtime.local-create-held-cases.v1",
+  "scope": {
+    "arbitrary_tokio_budget_qualified": false,
+    "full_create_file_spec_qualified": false,
+    "old_stack_removal_qualified": false,
+    "private_create_local_file": true,
+    "public_handler_qualified": false,
+    "runtime_shutdown_qualified": false,
+    "whole_runtime_replaced": false
+  }
+}

@@ -25,9 +25,9 @@ close. A zero-byte write is WriteZero. Open retries only EINTR. The owned
 descriptor is retired before one close attempt; close errors do not replace
 the original result and close is never retried.
 
-This owner qualifies a blocking leaf. Tokio future polling, buffered acceptance,
-task cancellation and already-running blocking-worker lifetime remain separate
-owners. The full `create_file_spec` existence diagnostic, parent-directory
+This owner qualifies a blocking leaf. A same-owner development async entry is isolated behind HLCARQ01. Its
+controlled scheduler, buffered acceptance and cancellation qualify separately
+from this preserved blocking contract. The full `create_file_spec` existence diagnostic, parent-directory
 creation, remote branch, `note_create`, text-editor dispatch and public
 authorization are not supplied by this private interface. Production activation,
 whole-runtime replacement and old-stack-removal flags remain false.
@@ -110,3 +110,22 @@ processes retain all inputs, outputs, effect records and complete before/after
 file contents. Fresh locked Rust 1.95.0 executes the unchanged target function.
 Two live-process race controls require exactly one creator and one EEXIST
 result with the successful caller's complete bytes.
+
+## Segmented async candidate
+
+The first entry delegates HLCREQ01 to the original f0; all sixteen original
+function ASTs and names remain exact. HLCARQ01 uses the same 64-byte path/content
+shape, a private invocation generation and commands for initialize, poll, real
+queue admission, worker continuation, inline close, drop, real reap and poll
+continuation. Metadata begins after the original owned core extent. Native
+mechanism calls are serialized; real syscalls run outside that mutex.
+
+A successful queue advances accepted bytes, while core written bytes remain
+actual completed bytes. A WRITE ticket keeps its original two-MiB end even when
+the core prepares the next effect. Cancellation cannot split one active poll,
+and cannot truncate an already admitted chunk. Ready orphan descriptors close
+inline before cancellation is published; an in-flight worker retains its input
+and descriptor until real completion and exactly one close. Real wait/reap
+precedes backing retirement. Runtime shutdown, panicking blocking tasks,
+arbitrary cooperative-budget behavior and public handler/cache integration
+remain outside this candidate's current qualification.

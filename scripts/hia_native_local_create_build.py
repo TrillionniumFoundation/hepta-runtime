@@ -46,7 +46,7 @@ def source_evidence(root: Path = ROOT) -> dict:
     if any(digest(read(root / name)) != expected for name, expected in files.items()):
         raise ValueError("local-create source bytes differ")
     prefix = bytes.fromhex(metadata["prefix_hex"])
-    if (len(prefix) != 1632 or prefix[96:112] != bytes(16)
+    if (len(prefix) != 5632 or prefix[96:112] != bytes(16)
             or digest(prefix) != metadata.get("prefix_sha256")):
         raise ValueError("local-create fixed prefix differs")
     return {"component_sha256": digest(read(root / COMPONENT)), **metadata}

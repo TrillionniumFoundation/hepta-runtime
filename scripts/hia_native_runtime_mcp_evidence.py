@@ -8,17 +8,17 @@ from __future__ import annotations
 import gzip,hashlib,importlib.util,io,json,math,os,re,stat,struct,sys
 from pathlib import Path
 from hia_native_build import HEPTA_COMMIT,HEPTA_TREE,BUFFER_PROFILES,json_bytes
-from hia_native_runtime_mcp_build import MEMBERS,BASE,BOUNDARIES,TRANSPORT,EXTRA,VIEW,CONFIG,CONFIG_SYMBOLS,FALSE_FLAGS,adapter_source,source_check
+from hia_native_runtime_mcp_build import MEMBERS,BASE,BOUNDARIES,TRANSPORT,EXTRA,VIEW,CONFIG,CONFIG_SYMBOLS,FENCE,FALSE_FLAGS,adapter_source,source_check
 FOLDER='runtime-mcp'
 NATIVE_SUITE='test_runtime_mcp.py'
 EVIDENCE_SUITE='test_runtime_mcp_evidence.py'
 NATIVE_GROUPS=10
 EVIDENCE_GROUPS=5
-SOURCE_MANIFEST_SHA256='b4d99c1c468e5653834c5c1002a8400ea2c088073939d02411671abcc92a2cbf'
+SOURCE_MANIFEST_SHA256='9cb703d14b84b9281b439c0fa22541ec11e83b898797a0deb9454df33ff705fa'
 LINKER_SOURCE_SHA256='66063b0e8d9b244a8ccec27a31554fe8e77f309ac1fc981286e63befa7559cef'
 COMPILER_SHA256='bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
-EVIDENCE_CONTROLS=57
-COUNTS=dict(actual_elf_processes=152,actual_elf_responses=572,actual_embedded_hia_images=46,
+EVIDENCE_CONTROLS=65
+COUNTS=dict(actual_elf_processes=152,actual_elf_responses=572,actual_embedded_hia_images=58,
     actual_policy_and_shared_config_controls=7,actual_public_ordinary_view_cases=31,
     large_error_body_bytes=19000091,large_error_publication_cases=1,observable_session_latch_controls=3,
     over64_body_bytes=67108977,over64_input_bytes=67108978,over64_public_cases=1,over64_response_bytes=67109070,
@@ -152,7 +152,7 @@ def native_header(report,binding):
     exact(report.get('source_binding'),binding,'executed source closure differs')
     require(report.get('sources_unchanged') is True,'native source changed')
     for flag in NATIVE_FALSE_FLAGS:require(report.get(flag) is False,'unqualified native claim: '+flag)
-    exact(report.get('implemented_catalog_names'),['host_list','effective_config','execution_shadow_admit','view','workdir'],
+    exact(report.get('implemented_catalog_names'),['host_list','effective_config','execution_shadow_admit','view','workdir','directory_create','file_move','directory_move'],
           'implemented tool inventory differs')
     exact(report.get('original_tool_count'),125,'original tool inventory differs')
 
@@ -531,22 +531,24 @@ def link_plan(obj,images):
     struct.pack_into('<IIQQQQQQ',prefix,176,0x6474e551,6,0,0,0,0,0,16)
     prefix[232:256]=bytes.fromhex('31ed4883e4f0e8000000004889c7b83c0000000f050f0b00')
     struct.pack_into('<i',prefix,239,13+symbols['_start']);prefix[256:extent]=text
-    order=['owner','execution']
-    for slot,name in enumerate(EXTRA):
-        if name is not None and slot not in (11,20) and name not in order:order.append(name)
-    for name in CONFIG+[row[0] for row in MEMBERS[35:]]:
+    order=[]
+    for name in EXTRA:
+        if name is not None and name not in order:order.append(name)
+    for name,source,profile in MEMBERS:
         if name not in order:order.append(name)
-    require(len(order)==len(images)==46 and set(order)==set(images),'physical member graph differs')
+    require(len(order)==len(images)==58 and set(order)==set(images),'physical member graph differs')
+    exact(order[-5:],FENCE,'native fence signal image range differs')
     patches=[]
     for symbol,name in zip(CONFIG_SYMBOLS,CONFIG):patches.append((2,256+symbols[symbol+'_call_displacement'],order.index(name)))
-    extra_slots=[11,20]+[slot for slot,name in enumerate(EXTRA) if name is not None and slot not in (11,20)]
+    for name in FENCE:patches.append((2,256+symbols[name+'_call_displacement'],order.index(name)))
+    extra_slots=[slot for slot,name in enumerate(EXTRA) if name is not None]
     for slot in extra_slots:patches.append((1,256+symbols['grow_fixture_images']+slot*8,order.index(EXTRA[slot])))
     for slot,name in enumerate(VIEW):patches.append((1,256+symbols['runtime_grow_view_images']+slot*8,order.index(name)))
-    require(len(patches)==56 and len({at for _,at,_ in patches})==56,'fixed image address patch inventory differs')
+    require(len(patches)==68 and len({at for _,at,_ in patches})==68,'fixed image address patch inventory differs')
     for kind,at,index in patches:
-        require(256<=at and at+(8 if kind==1 else 4)<=extent and 0<=index<46,'image patch escaped actual prefix')
+        require(256<=at and at+(8 if kind==1 else 4)<=extent and 0<=index<58,'image patch escaped actual prefix')
     raw_images=[images[name] for name in order]
-    packed=(b'HIAIMG02'+struct.pack('<4Q',len(prefix),46,len(patches),0)+prefix
+    packed=(b'HIAIMG02'+struct.pack('<4Q',len(prefix),58,len(patches),0)+prefix
             +b''.join(struct.pack('<Q',len(image)) for image in raw_images)
             +b''.join(struct.pack('<3Q',*patch) for patch in patches)+b''.join(raw_images))
     expected=bytearray(prefix);positions=[]
@@ -565,7 +567,7 @@ def elf_structure(elf,obj,images):
     plan=link_plan(obj,images);exact(elf,plan['elf'],'complete HIA-produced ELF differs from object and fixed member bytes')
     return dict(bytes=len(elf),sha256=sha(elf),entry=0x4000e8,
         program_headers=['PT_LOAD_RX','PT_LOAD_RW_EMPTY','PT_GNU_STACK_RW'],interpreter=None,libc=False,
-        fixed_child_address_patches=56,embedded_images=46,actual_hia_stages=2)
+        fixed_child_address_patches=68,embedded_images=58,actual_hia_stages=2)
 
 def admitted_module(evidence,build_root,origin_build_root,row,source,compiler,dependency,*,profile,name):
     path=mapped_manifest(build_root,row['manifest'],origin_build_root);stem=str(path.parent.relative_to(evidence.output))+'/'
@@ -643,6 +645,7 @@ def build_evidence(root,output,report,evidence,capture):
     exact(bundle.get('config_table'),CONFIG,'installed configuration table differs')
     exact(bundle.get('extra_table'),EXTRA,'public private child table differs')
     exact(bundle.get('view_table'),VIEW,'actual View child table differs')
+    exact(bundle.get('fence_table'),FENCE,'native fence image table differs')
     expected_boundaries={name:sha(owned(root,name).read_bytes()) for name in (BASE,TRANSPORT,*BOUNDARIES)}
     exact(bundle.get('boundary_sources'),expected_boundaries,'mechanical boundary source differs')
     combined=evidence.read(stem+'combined.S')
@@ -651,7 +654,7 @@ def build_evidence(root,output,report,evidence,capture):
     obj=evidence.read(stem+'bridge.o');require(sha(obj)==bundle.get('object_sha256'),'actual assembler object differs')
     plan=link_plan(obj,images)
     exact(bundle.get('physical_image_members'),plan['order'],'physical/private image mapping differs')
-    exact(bundle.get('physical_images'),46,'physical image count differs')
+    exact(bundle.get('physical_images'),58,'physical image count differs')
     link=bundle.get('link');packed=bundle.get('pack')
     require(type(link) is dict and type(packed) is dict,'actual two-stage receipts absent')
     link_source_path=mapped_manifest(build_root,link['manifest'],origin_build_root)
@@ -677,7 +680,7 @@ def build_evidence(root,output,report,evidence,capture):
           'public ELF declaration differs')
     pack_output=evidence.read(stem+'pack.output.bin')
     exact(pack_output,b'HIAIMR02'+struct.pack('<3Q',0,len(elf),0)+elf,'complete HIA packer output differs')
-    workcap=(64+46*8+4095)&~4095;workspace=bytearray(workcap)
+    workcap=(64+58*8+4095)&~4095;workspace=bytearray(workcap)
     struct.pack_into('<QQ',workspace,8,plan['text_end'],len(elf))
     for index,offset in enumerate(plan['positions']):struct.pack_into('<Q',workspace,64+8*index,offset)
     exact(evidence.read(stem+'pack.workspace.bin'),bytes(workspace),'complete packer private workspace differs')
@@ -725,9 +728,20 @@ def finish_build_evidence(root,output,evidence,bundle,capture,stem,elf,obj,image
           dict(shared_session_slot=6,shared_installed_config_owner_slot=11,public_frontend_slot=18,protocol_slot=19,
                frontend_transport_fixed_input_limit=None,frontend_reply_fixed_byte_limit=None,json_nesting_depth_policy=128,
                result_publication_grows=True,semantic_qualification='NOT_RUN'),'build slot/profile declaration differs')
+    exact({k:bundle.get(k) for k in ('private_instance_fixture','fixture_sessions','fixture_pseudo_selectors',
+        'actual_fixture_private_selectors','filesystem_gateway_slot','filesystem_caller_slot','filesystem_io_slot',
+        'filesystem_fence_slot','native_fence_slot','view_scope_cache_alias_slots','config_span_owner_control_offsets',
+        'config_span_footer_from_capacity','implemented_tools','filesystem_sdk_semantic_qualification')},
+        dict(private_instance_fixture=False,fixture_sessions=None,fixture_pseudo_selectors=[],
+        actual_fixture_private_selectors=False,filesystem_gateway_slot=21,filesystem_caller_slot=23,filesystem_io_slot=24,
+        filesystem_fence_slot=27,native_fence_slot=28,view_scope_cache_alias_slots={'29':6,'30':5,'31':7,'32':8},
+        config_span_owner_control_offsets=[1024,1032],config_span_footer_from_capacity=256,
+        implemented_tools=['host_list','effective_config','execution_shadow_admit','view','workdir',
+            'directory_create','file_move','directory_move'],filesystem_sdk_semantic_qualification='NOT_RUN'),
+        'public filesystem graph or private-only selectors differ')
     structure=elf_structure(elf,obj,images)
-    return dict(manifest=owner['manifest'],manifest_sha256=sha(raw),elf=structure,member_count=46,
-        fresh_member_compiles=fresh,all_members_freshly_compiled=fresh==46,fresh_linker_compiles=1,fresh_packer_compiles=1,
+    return dict(manifest=owner['manifest'],manifest_sha256=sha(raw),elf=structure,member_count=58,
+        fresh_member_compiles=fresh,all_members_freshly_compiled=fresh==58,fresh_linker_compiles=1,fresh_packer_compiles=1,
         compiler_commit=HEPTA_COMMIT,compiler_image_sha256=COMPILER_SHA256,fresh_cold_qualified=False,
         config_execution_capacity_closed=False,unconstrained_regex_resources_closed=False)
 
@@ -749,7 +763,7 @@ def native_evidence(root:Path,output:Path,report:dict,completed)->dict:
 
 def qualification_evidence(root:Path,output:Path,report:dict,completed)->dict:
     native=native_evidence(root,output,report,completed)
-    require(native['composition']['all_members_freshly_compiled'] is True,'formal qualification requires 46 fresh native image compiles')
+    require(native['composition']['all_members_freshly_compiled'] is True,'formal qualification requires 58 fresh native image compiles')
     check,summary=completed_suite(root,output,report,completed,EVIDENCE_SUITE,EVIDENCE_GROUPS)
     expected=dict(schema='hepta.runtime.mcp-view-evidence-tests.v2',status='PASS',groups=EVIDENCE_GROUPS,
         refusal_controls=EVIDENCE_CONTROLS,failures=0,errors=0,skipped=0,new_native_calls=0,new_original_processes=0,

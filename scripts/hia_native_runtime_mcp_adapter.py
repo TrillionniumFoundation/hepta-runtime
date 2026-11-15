@@ -5,7 +5,7 @@ The public entry takes no external selectors. Old entries remain available.
 """
 import hashlib
 
-BASE_SHA='f6bd57471e25621547786f76da2e076f37d0e375d2d25bd009e5575b17d8ba54'
+BASE_SHA='c4b99fafb1ff25f5b88093a07a29e0a601043db02d947b1e8aebfd4c5493b06f'
 
 def replace(text,old,new):
     if text.count(old)!=1:raise ValueError('public bridge anchor differs: '+old[:100])
@@ -17,12 +17,14 @@ def combine(adapter,transport):
     adapter=replace(adapter,'_start:\n    cld\n','.type _start, @function\n_start:\n    add rsp, 8 /* Actual HIA linker entry call. */\n    cld\n')
     adapter=replace(adapter,'    cmp qword ptr [rbx], 3\n    jne argv_fatal\n',
         '    call grow_config_auxv\n    cmp qword ptr [rbx], 1\n    je grow_config_absent\n    cmp qword ptr [rbx], 3\n    jne argv_fatal\n')
-    adapter=replace(adapter,'    cmp qword ptr [r14 + FOOTER + 120], 0\n    je startup_completed\n',
-        '    cmp qword ptr [r14 + FOOTER + 120], 0\n    je startup_completed\n    cmp qword ptr [r14 + FOOTER + 120], 4\n    je startup_completed\n')
+    adapter=replace(adapter,'    cmp qword ptr [rdx + 120], 0\n    je startup_completed\n',
+        '    cmp qword ptr [rdx + 120], 0\n    je startup_completed\n    cmp qword ptr [rdx + 120], 4\n    je startup_completed\n')
     adapter=replace(adapter,'startup_completed:\n    test eax, eax\n    jz frame_next\n',
         'startup_completed:\n    test eax, eax\n    jz public_span_start\n')
     adapter=replace(adapter,'mcp_owner_completed:\n',
         'mcp_owner_completed:\n    cmp qword ptr [r15 + 784], 3\n    je runtime_config_query_return\n')
+    adapter=replace(adapter,'    cmp qword ptr [r15 + 784], 0\n    jne cfg_resource /* Legacy MCP5 still owns its distinct output borrow. */\n',
+        '    cmp qword ptr [r15 + 784], 3\n    je runtime_config_query_growth_return\n    cmp qword ptr [r15 + 784], 0\n    jne cfg_resource /* Legacy MCP5 still owns its distinct output borrow. */\n')
     adapter=replace(adapter,'    mov rbx, rsp\n    mov rax, 0x3130425550505248\n',
         '    mov rbx, rsp\n    mov qword ptr [rbx + 48], 0\n    mov rax, 0x3130425550505248\n')
     adapter=replace(adapter,'    mov [rbx + 32], rax\n    xor r12d, r12d\n',
@@ -55,14 +57,30 @@ runtime_config_query:
     jne runtime_config_query_bad
     cmp qword ptr [r15 + 872], 0
     jne runtime_config_query_bad
+    mov rax, [r15 + CG_OWNER]
+    mov r9, [r15 + CG_OWNER + 8]
+    test rax, rax
+    jz runtime_config_query_bad
+    cmp r9, 256
+    jb runtime_config_query_bad
     mov [r15 + 832], rdi
     mov [r15 + 840], rsi
     mov [r15 + 848], rdx
     mov [r15 + 856], rcx
     mov qword ptr [r15 + 784], 3
-    mov qword ptr [r15 + ROOT_WORK + FOOTER + 120], 1
+    lea rax, [rax + r9 - 256]
+    mov qword ptr [rax + 120], 1
     jmp owner_resume
 runtime_config_query_return:
+    cmp eax, 0xffff0000
+    jae runtime_config_query_end
+    mov qword ptr [r15 + CG_DELIVERY], 0
+    jmp runtime_config_query_end
+runtime_config_query_growth_return:
+    /* Keep the completed child and HIA relocation state. The extra engine
+     * owns this output mapping and retries the same request after growth. */
+    mov eax, 0xffffffd0
+runtime_config_query_end:
     mov qword ptr [r15 + 784], 0
     jmp runtime_config_query_restore
 runtime_config_query_bad:
@@ -110,4 +128,4 @@ runtime_publication_span_return:
     ret
 '''
 
-HELPERS = '\n/* The absent configuration is initialized by owner kind4, never synthesized. */\ngrow_config_absent:\n    mov qword ptr [r15 + 24], 0\n    mov qword ptr [r15 + ROOT_WORK + FOOTER + 120], 4\n    jmp owner_resume\n\n/* Observe actual process AT_SECURE for the shared native I/O bridge. */\ngrow_config_auxv:\n    mov rcx, [rbx]\n    lea rcx, [rbx + rcx * 8 + 16]\ngrow_config_environment_end:\n    mov rax, [rcx]\n    add rcx, 8\n    test rax, rax\n    jnz grow_config_environment_end\ngrow_config_auxv_next:\n    mov rax, [rcx]\n    test rax, rax\n    jz grow_config_auxv_done\n    cmp rax, 23\n    jne grow_config_auxv_advance\n    mov rax, [rcx + 8]\n    mov [r15 + 904], rax\ngrow_config_auxv_advance:\n    add rcx, 16\n    jmp grow_config_auxv_next\ngrow_config_auxv_done:\n    ret\n'
+HELPERS = '\n/* The absent configuration is initialized by owner kind4, never synthesized. */\ngrow_config_absent:\n    mov qword ptr [r15 + 24], 0\n    mov rax, [r15 + CG_OWNER]\n    add rax, [r15 + CG_OWNER + 8]\n    sub rax, 256\n    mov qword ptr [rax + 120], 4\n    jmp owner_resume\n\n/* Observe actual process AT_SECURE for the shared native I/O bridge. */\ngrow_config_auxv:\n    mov rcx, [rbx]\n    lea rcx, [rbx + rcx * 8 + 16]\ngrow_config_environment_end:\n    mov rax, [rcx]\n    add rcx, 8\n    test rax, rax\n    jnz grow_config_environment_end\ngrow_config_auxv_next:\n    mov rax, [rcx]\n    test rax, rax\n    jz grow_config_auxv_done\n    cmp rax, 23\n    jne grow_config_auxv_advance\n    mov rax, [rcx + 8]\n    mov [r15 + 904], rax\ngrow_config_auxv_advance:\n    add rcx, 16\n    jmp grow_config_auxv_next\ngrow_config_auxv_done:\n    ret\n'

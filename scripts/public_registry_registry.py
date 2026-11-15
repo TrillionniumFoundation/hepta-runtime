@@ -8,7 +8,7 @@ import json
 
 COMPILER = "d3e2c90173cf733e42b299d0c4274df4b593a12f"
 COMPILER_IMAGE = "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
-PROFILE_SHA = '7b0cc202216d6023b62909150e1be3e036a7a1c9e86c8746a9ebb35aeea669a9'
+PROFILE_SHA = 'e41371914278c6e2b0dcd45ccdd1328d085981fb5fa9579c9c7d8609203ccdc7'
 TESTS = ("run_public_registry_cases.py", "test_public_registry_controls.py", "test_public_registry_elf.py")
 FOLDERS = ("cases", "controls", "elf")
 REMOVED_ENVIRONMENT = ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_TARGET", "CARGO_TARGET_DIR",

@@ -109,10 +109,10 @@ def source_pins(source_root=ROOT):
                            ("filesystem_parity_composition.json", COMPOSITION_SOURCE)):
         exact(pins["native/" + name]["sha256"], expected, "filesystem source pin differs: " + name)
     exact(pins["scripts/hia_native_build.py"]["sha256"],
-          "7b01d602d50835f2b73a2b7b39761c0cef08a372493985161d59184d52c0dcb2",
+          "02cc0f23764d3a2bc6c1325e2ed5beb7986a6b64b22827c6ddcb10d2799de7d1",
           "filesystem compiler driver differs")
     exact(pins["scripts/hia_native_loader.py"]["sha256"],
-          "331b1fdc693df44847723f7171a1338918d1558f1cdc48f558cd29b32f2971e2",
+          "58e2fe0492379340d7471a7857e1aa5de1a9a5d1e37a118852278b131bb1fe06",
           "filesystem native loader differs")
     proof = obj(root / "native/filesystem_parity_composition.json")
     exact(proof["source_sha256"], OWNER_SOURCE, "filesystem composition owner differs")

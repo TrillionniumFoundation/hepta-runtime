@@ -11,6 +11,13 @@ stdio protocol owner, and Linux ELF transport packers. The produced executables 
 libc, or a dynamic loader. A pinned Hepta compiler and explicit Python build
 and test drivers produce and verify those executables.
 
+The explicitly selected native stdio service now advertises eight tools:
+`host_list`, `effective_config`, `execution_shadow_admit`, `view`, `workdir`,
+`directory_create`, `file_move` and `directory_move`. Its local filesystem
+methods use the same installed configuration and Session state as the other
+native calls. The separate two-session observer and complete original-reference
+checks are described in the [public filesystem contract](native/filesystem_public_abi.md).
+
 The production target has 136 registered tool handlers, including 11 added
 since the 125-handler historical comparison baseline. The existing production
 runtime still owns those handlers, durable processes, host authorization, SSH,
@@ -19,9 +26,9 @@ and its [exact target snapshot](native/migration_target.json) record these
 remaining owners. The native profile's passing component tests do not qualify
 removal of those owners or production activation.
 
-The executable registry declares 169 HIA sources, 73 component builds, 198
-native suites and 67 original Rust comparison recipes. CI preserves their
-complete domains across eight native partitions and seven original comparison
+The executable registry declares 193 HIA sources, 86 component builds, 220
+native suites and 80 original Rust comparison recipes. CI preserves their
+complete domains across nine native partitions and eight original comparison
 partitions. These registry counts do not change the production qualification
 status recorded in the migration inventory.
 
