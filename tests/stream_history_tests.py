@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 """Raw pre-handoff history and live-pipe continuity tests."""
-import base64,hashlib,importlib.util,json,os,pathlib,subprocess,sys,tempfile,time,unittest
+import base64,hashlib,importlib.util,json,pathlib,subprocess,sys,tempfile,time,unittest
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 BROKER=ROOT/'src/mcp/runtime/stream_broker.py'

@@ -25,7 +25,8 @@ def build_package(output):
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for name in FILES:
-            path = source / name
+            path = (pathlib.Path(__file__).resolve().parents[2] / 'LICENSE'
+                    if name == 'LICENSE' else source / name)
             info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
             info.external_attr = 0o100644 << 16
             archive.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED)

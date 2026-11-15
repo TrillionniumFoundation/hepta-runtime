@@ -12,7 +12,6 @@ import stat
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from types import SimpleNamespace
 import unittest
@@ -20,7 +19,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'deploy'))
 from dc_compat import x11_selection as selection
-from dc_compat.processes import _private_root, _publish
+from dc_compat.processes import _publish
 
 
 class RecoveryBoundaryTests(unittest.TestCase):

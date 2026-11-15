@@ -11,7 +11,6 @@ untouched. All test controllers have private, throwaway credentials.
 import argparse
 import concurrent.futures
 import datetime
-import hashlib
 import json
 import os
 import pathlib

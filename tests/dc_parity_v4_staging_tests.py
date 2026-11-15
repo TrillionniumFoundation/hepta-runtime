@@ -6,7 +6,6 @@ No native services, tunnel processes, SSH peers, user credentials or actual
 release directories are accessed or modified.
 """
 import hashlib
-import json
 import pathlib
 import sys
 import tempfile

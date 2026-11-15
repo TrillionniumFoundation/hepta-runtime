@@ -7,7 +7,6 @@ Same numeric PID, random memory, unread internal-pipe bytes and log offset verif
 import argparse
 import hashlib
 import json
-import os
 import pathlib
 import secrets
 import shlex

@@ -45,3 +45,22 @@ public hashes are separate. Frozen source bundles are separate artifacts.
 Native statuses, transfer chunk receipts, complete reports and all failures
 remain visible within their privacy policy. This operation made no remote
 call and ran no compilation, qualification or workload.
+
+## Reproduction and historical publisher source
+
+The maintained [publisher](../../../tools/x230/a27-followup/build_prepared_path_publication.py)
+retains the exact bytes of the former evidence-directory copy. Its private
+inputs and frozen dependencies are still required for full publication.
+The [original published copy](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/evidence/x230-a27-followup/build_prepared_path_publication.py)
+remains available at that exact revision. The unchanged package manifests
+and publication receipts describe the historical package and its source hashes,
+not the current checkout's file set.
+
+The independent public arithmetic check still runs from the repository root:
+
+```bash
+python3 tools/x230/a27-followup/recompute_prepared_path_public.py
+```
+
+It consumes the retained public operation ledger and analysis, verifies all
+2,176 rows and 32 cells, and recomputes the original gates without private inputs.

@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import subprocess
 import threading
-import time
 from rea_java_external import private_write
 
 

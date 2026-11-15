@@ -8,7 +8,6 @@ import json
 import os
 import pathlib
 import secrets
-import subprocess
 import sys
 import tempfile
 import time

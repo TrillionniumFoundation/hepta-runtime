@@ -1,7 +1,6 @@
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 """GNOME bridge policy + real GJS/Gio private-bus tests; no live Shell changes."""
 import asyncio
-import hashlib
 import json
 import os
 import pathlib
@@ -10,12 +9,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import uuid
 import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'deploy'))
-from dc_compat.gnome_window_provider import GnomeWindowManager, GNOME_WINDOW_TOOLS, read_private_config
+from dc_compat.gnome_window_provider import GnomeWindowManager, read_private_config
 from dc_compat.gnome_window_install import build_package, prepare_config
 from dc_compat.registry import ToolError
 
@@ -178,7 +176,8 @@ class PackagingTests(unittest.TestCase):
             with zipfile.ZipFile(a) as archive:
                 self.assertEqual(set(archive.namelist()), set(first['files']))
                 for name in archive.namelist():
-                    self.assertEqual(archive.read(name), (EXTENSION / name).read_bytes())
+                    source = ROOT / 'LICENSE' if name == 'LICENSE' else EXTENSION / name
+                    self.assertEqual(archive.read(name), source.read_bytes())
                 metadata = json.loads(archive.read('metadata.json'))
                 self.assertEqual(metadata['shell-version'], ['46'])
                 self.assertNotIn('config.json', archive.namelist())

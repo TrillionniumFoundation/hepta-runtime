@@ -5,7 +5,6 @@ import json
 import pathlib
 import tempfile
 import unittest
-from unittest.mock import patch
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'deploy/hepta_computer_client.py'
 spec = importlib.util.spec_from_file_location('hepta_computer_client', SOURCE)

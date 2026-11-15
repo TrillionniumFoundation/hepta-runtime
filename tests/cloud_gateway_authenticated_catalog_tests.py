@@ -7,7 +7,6 @@ or certify production OAuth, signed agent certificates or an HTTP listener.
 """
 import dataclasses
 import hashlib
-import json
 import pathlib
 import sys
 import tempfile

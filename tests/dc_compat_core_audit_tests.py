@@ -3,7 +3,6 @@
 import asyncio
 import http.client
 import json
-import math
 import pathlib
 import sqlite3
 import sys

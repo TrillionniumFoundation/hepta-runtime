@@ -11,7 +11,8 @@ are preserved at their exact Git revisions and indexed here.
 | [obsolete-entrypoints-20261115.json](obsolete-entrypoints-20261115.json) | `151d74efcf25` | 6 | 62,797 |
 | [x230-20261028-20261115.json](x230-20261028-20261115.json) | `136ff99783d4` | 80 | 54,051,755 |
 | [superseded-harnesses-20261115.json](superseded-harnesses-20261115.json) | `ad7cabe9ccd3` | 11 | 191,032 |
-| Total | | 11,844 | 1,690,404,315 |
+| [completed-audit-evidence-20261115.json](completed-audit-evidence-20261115.json) | `93d43067bc6e` | 321 | 8,886,048 |
+| Total | | 12,165 | 1,699,290,363 |
 
 Every row records the original path, Git blob, file mode and byte count. The
 separate [Rust branch index](../rust-branches/README.md) also retains the original
@@ -45,6 +46,14 @@ publishers v1-v3, redundant A22/A23 registries and a fixed-path A25 publisher.
 Their exact originals are in
 [`ad7cabe9`](https://github.com/TrillionniumFoundation/hepta-runtime/tree/ad7cabe9ccd3a56f19bbf9d26c2df9de48099f97).
 The maintained successor programs and original publication receipts stay intact.
+
+The completed Rust audit validation subtree is also preserved as one complete
+original directory at
+[`93d43067`](https://github.com/TrillionniumFoundation/hepta-runtime/tree/93d43067bc6e0bac92a686b04cf322c564f66a81).
+Its original dependency, framing, Chrome, Python and CI failures are not discarded
+or relabelled. Four A27 publisher source copies use the same ancestor. Their public
+data and current recomputation tools remain in the checkout; dated publication
+manifests still describe their original historical packages.
 
 ## Read or reproduce originals
 

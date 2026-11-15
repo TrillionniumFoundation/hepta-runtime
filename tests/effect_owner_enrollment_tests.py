@@ -3,11 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Synthetic admission-enrollment tests. No live services are touched."""
 import importlib.util
-import io
 import json
 import os
 from pathlib import Path
-import stat
 import tempfile
 import unittest
 from unittest import mock

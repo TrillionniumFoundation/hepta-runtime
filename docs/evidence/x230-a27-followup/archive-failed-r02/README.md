@@ -56,3 +56,12 @@ not establish either as the cause. Follow-on phase or branch diagnostics are
 separate experiments and are not incorporated here. No workload, remote
 operation, runtime change, fixture cleanup, or analyzer rerun is performed
 by this create-only publication transformation.
+
+## Historical publisher source
+
+The [original failed-r02 publisher](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/evidence/x230-a27-followup/archive-failed-r02/build_failed_publication.py)
+is retained at that exact Git revision. Reproducing the transformation requires
+the fixed private archive, transfer proof and frozen dependencies declared in
+the source. All public failure evidence and original receipts remain unchanged.
+The publication manifests retain the historical source paths and hashes;
+they are not current-checkout inventories.

@@ -2,6 +2,9 @@
 
 本记录汇总已完成的合并、引用清理、独立回读和追加 Chrome CI 修复；历史失败与资格限制均保留。
 
+本文链接的已完成验证快照保存在[固定历史目录](https://github.com/TrillionniumFoundation/hepta-runtime/tree/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation)。
+本次清退保留原始失败、部分完成、跳过及成功记录的完整字节和身份；恢复该提交即可按原目录复核。
+
 ## 提交与验收身份
 
 - 汇总 PR：[#125](https://github.com/TrillionniumFoundation/hepta-runtime/pull/125)
@@ -36,7 +39,7 @@ Rust PR run [43701857912](https://github.com/TrillionniumFoundation/hepta-runtim
 Python 唯一 skip 出现在 search-worker suite；日志未直接给出原因，结合固定源码
 唯一 skip 分支推断为缺少可选 pypdf，未将该项计为通过。
 
-[完整 CI 记录](../validation/github-pr125-e425d92b/README.md)保留全部原始日志、
+[完整 CI 记录](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/github-pr125-e425d92b/README.md)保留全部原始日志、
 三个 GitHub artifact ZIP 与 digest 校验、逐步骤状态、计数脚本和环境复测依据。
 /proc、Landlock、X230 Unix socket 等此前本地受限路径的对应托管测试已通过。
 
@@ -149,7 +152,7 @@ main 合并后额外触发的 Chrome CDP run [43709528201](https://github.com/Tr
 保存的真实 CDP 观测已满足原五项断言。原清理代码从历史提交 `14a5b75d` 起没有变化，
 main 触发暴露了这一既有 CI 生命周期缺口；失败早于本次分支删除，不能归因于删除。
 具体残留 writer 在该次运行中没有进程树证据，未把推测写成实测。见
-[原始失败证据](../validation/github-main-737acf6f-cdp/README.md)。
+[原始失败证据](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/github-main-737acf6f-cdp/README.md)。
 
 修复提交 [`14fc20aa`](https://github.com/TrillionniumFoundation/hepta-runtime/commit/14fc20aabd0650784664fc9659f53936430622df)
 只改变三个 CI 文件：浏览器 workflow、专用 owner 和回归。原 CDP JavaScript 及五项
@@ -158,7 +161,7 @@ leader 身份，通过 subreaper 收养后代，以内核 wait 状态判断整�
 有界 TERM/KILL、reap 后才删除 profile。它覆盖迟到的收养，以及 leader 显示 Z 但
 其他线程仍写入的边界；保留原 probe 非零状态，并严格报告 lifecycle/cleanup 失败。
 
-[本地修复记录](../validation/cdp-lifecycle-repair/README.md)保存最终 8/8 真实进程回归。
+[本地修复记录](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/cdp-lifecycle-repair/README.md)保存最终 8/8 真实进程回归。
 本地 procfs 缺少 task/children，实际验证 PPID 过滤的 stat 兼容路径；原始受阻尝试也
 另行保留，不能混写成通过。独立静态审查与源码、日志 hash 绑定通过。
 
@@ -169,7 +172,7 @@ cleanup 产物记录 probe、cleanup、final 退出码均为 0，无 lifecycle/c
 三个本次 session、18 个唯一 PID 已 reap，live children 为空，profile 已删除，
 本次真实浏览器清理仅需 TERM、未升级 KILL。它仍明确报告 productionAdapterQualified=false。
 完整来源、日志、artifact 和 digest 见
-[真实 Chrome 修复验证](../validation/github-cdp-repair-14fc20aa/README.md)。
+[真实 Chrome 修复验证](https://github.com/TrillionniumFoundation/hepta-runtime/blob/93d43067bc6e0bac92a686b04cf322c564f66a81/docs/audits/rust-main-20261115/validation/github-cdp-repair-14fc20aa/README.md)。
 
 [发布及源码差异核验](../publication/cdp-lifecycle-repair/runtime-source-unchanged.json)确认
 除这三个 CI 文件外，所有路径、mode 和 blob 与 e425 完全相同，Cargo.lock SHA 不变，

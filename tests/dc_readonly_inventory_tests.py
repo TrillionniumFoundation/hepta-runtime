@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """Fail-closed and terminal/output distinction regression tests; owned temp files only."""
-import unittest,tempfile,pathlib,os,json,stat,importlib.util,copy
+import unittest,tempfile,pathlib,os,json,importlib.util
 S=importlib.util.spec_from_file_location('core',pathlib.Path(__file__).resolve().parents[1]/'deploy/inventory_host_readonly.py');C=importlib.util.module_from_spec(S);S.loader.exec_module(C)
 class Tests(unittest.TestCase):
  def setUp(self):

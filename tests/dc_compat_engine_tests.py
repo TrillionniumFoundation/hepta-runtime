@@ -4,15 +4,12 @@ import asyncio
 import base64
 import hashlib
 import json
-import os
 import pathlib
 import sys
 import tempfile
-import time
 import unittest
 import urllib.error
 import urllib.request
-from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'deploy'))
 from dc_compat.configuration import CompatConfig

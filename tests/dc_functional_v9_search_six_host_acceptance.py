@@ -20,7 +20,6 @@ import concurrent.futures
 import datetime
 import hashlib
 import json
-import os
 import pathlib
 import secrets
 import shlex
@@ -30,7 +29,6 @@ import time
 import traceback
 import uuid
 import re
-import stat
 import sys
 import urllib.error
 import urllib.request

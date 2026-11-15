@@ -4,9 +4,7 @@
 """Offline no-effects tests for the separate V10+V4 read-custody adapter."""
 from __future__ import annotations
 
-import importlib.util
 import json
-import os
 from pathlib import Path
 import tempfile
 import unittest
