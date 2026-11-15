@@ -161,7 +161,8 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(partitions["system"][:3],
                          ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py",
                           "test_filesystem_parity_kernel.py"))
-        self.assertEqual(len(flat), 130)
+        self.assertEqual(len(flat), 132)
+        self.assertEqual(partitions['config'][-2:], ('test_config_span.py', 'test_config_span_evidence.py'))
         for bad in ("missing", "duplicate", "unknown", "new_module", "split_ordered"):
             changed = copy.deepcopy(p.PARTITIONS)
             modules = q.MODULES

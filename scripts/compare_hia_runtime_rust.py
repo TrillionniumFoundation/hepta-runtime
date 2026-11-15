@@ -256,6 +256,17 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required effect fence actual process/lifetime/kernel evidence differs")
     if report.get("config_evidence") != config_evidence(output, report):
         raise ValueError("required configuration native evidence differs")
+    from hia_native_config_span_pipeline import qualification_evidence as span_native
+    from hia_native_config_span_pipeline import native_fixture_evidence as span_retired
+    from hia_native_config_span_pipeline import retained_original as span_original
+    span = span_native(ROOT, output, report, completed_test_summary)
+    if span != report.get("config_span_evidence"):
+        raise ValueError("required native configuration span evidence differs")
+    if span_retired(ROOT, output, report, completed_test_summary, native=span) != report.get("config_span_fixture_retirement"):
+        raise ValueError("required configuration span fixture retirement differs")
+    if "runtime_config_span" in report.get("original_rust_comparisons", {}):
+        if report["original_rust_comparisons"]["runtime_config_span"] != span_original(ROOT, output, report, completed_test_summary):
+            raise ValueError("required fresh configuration span original comparison differs")
     if "runtime_config" in report.get("original_rust_comparisons", {}):
         if report["original_rust_comparisons"]["runtime_config"] != retained_config_original(output, report):
             raise ValueError("required complete original configuration evidence differs")
@@ -339,7 +350,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get(compiler_field) != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "filesystem_parity", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "file_locks", "file_lock_service", "view_read", "runtime_mcp"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "filesystem_parity", "history", "execution_shadow", "effect_fence", "runtime_config", "runtime_config_span", "result_publication", "session_workdir", "request_scope", "file_locks", "file_lock_service", "view_read", "runtime_mcp"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1812,6 +1823,11 @@ def retained_filesystem_parity(output: Path, report: dict, rustc: Path) -> dict:
     return q.decode(q.canonical(value))
 
 
+def compare_config_span(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_config_span_pipeline import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check, completed_test_summary)
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
            "request_context": compare_request_context, "response_hints": compare_response_hints,
@@ -1827,6 +1843,7 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "file_locks": compare_file_locks, "file_lock_service": compare_file_lock_service,
            "fence_json": compare_fence_json, "serde_json": compare_serde_json, "execution_shadow": compare_execution,
            "effect_fence": compare_effect_fence, "runtime_config": compare_config,
+           "runtime_config_span": compare_config_span,
            "operation_scope_os": compare_operation_scope_os,
            "line_endpoint": compare_endpoint, "delta": compare_delta, "binary_codec": compare_codec,
            "policy": compare_policy, "multi_read_service": compare_multi_read,

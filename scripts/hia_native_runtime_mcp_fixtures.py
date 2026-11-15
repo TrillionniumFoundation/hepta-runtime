@@ -393,8 +393,8 @@ def replace_journal(output, value):
         os.replace(os.fsencode(temporary), name, src_dir_fd=fd, dst_dir_fd=fd)
 
 
-def metadata(output, row):
-    relative = name_bytes(row["path_hex"], NATIVE)
+def metadata(output, row, *, roots=NATIVE):
+    relative = name_bytes(row["path_hex"], roots)
     with parent_fd(output, relative) as (fd, name):
         before = os.stat(name, dir_fd=fd, follow_symlinks=False)
         require(before.st_uid == row["uid"] == os.getuid(), "reconstructed fixture uid differs")
@@ -418,15 +418,15 @@ def metadata(output, row):
               "reconstructed fixture identity changed while applying metadata")
 
 
-def populate(output, entries, archive, expected, created):
+def populate(output, entries, archive, expected, created, *, roots=NATIVE):
     # Open only descriptor-relative children. No archived symlink is traversed.
     directories = sorted((row for row in entries if row["kind"] == "directory"),
                          key=lambda row: (bytes.fromhex(row["path_hex"]).count(b"/"), row["path_hex"]))
     for row in directories:
-        relative = name_bytes(row["path_hex"], NATIVE)
+        relative = name_bytes(row["path_hex"], roots)
         with parent_fd(output, relative) as (fd, name):
             os.mkdir(name, mode=0o700, dir_fd=fd)
-            if relative in {root.encode() for root in NATIVE}:
+            if relative in {root.encode() for root in roots}:
                 info = os.stat(name, dir_fd=fd, follow_symlinks=False)
                 created.append(dict(path_hex=relative.hex(), source_device=info.st_dev, source_inode=info.st_ino))
     opened = None
@@ -437,7 +437,7 @@ def populate(output, entries, archive, expected, created):
             return
         if block is None:
             require(opened is None, "reconstructed fixture file overlap")
-            with parent_fd(output, name_bytes(row["path_hex"], NATIVE)) as (fd, name):
+            with parent_fd(output, name_bytes(row["path_hex"], roots)) as (fd, name):
                 child = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
                                 0o600, dir_fd=fd)
             opened = os.fdopen(child, "wb")
@@ -449,7 +449,7 @@ def populate(output, entries, archive, expected, created):
             opened.close()
             opened = None
     try:
-        read_archive(output, entries, NATIVE, archive, expected, consume)
+        read_archive(output, entries, roots, archive, expected, consume)
     finally:
         if opened is not None:
             opened.close()
@@ -457,9 +457,9 @@ def populate(output, entries, archive, expected, created):
         kind = row["kind"]
         if kind == "directory" or (kind == "file" and row["link_group"] == row["path_hex"]):
             continue
-        with parent_fd(output, name_bytes(row["path_hex"], NATIVE)) as (fd, name):
+        with parent_fd(output, name_bytes(row["path_hex"], roots)) as (fd, name):
             if kind == "file":
-                with parent_fd(output, name_bytes(row["link_group"], NATIVE)) as (source_fd, source_name):
+                with parent_fd(output, name_bytes(row["link_group"], roots)) as (source_fd, source_name):
                     info = os.stat(source_name, dir_fd=source_fd, follow_symlinks=False)
                     require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid(),
                             "reconstructed hardlink target is not an owned regular file")
@@ -472,7 +472,7 @@ def populate(output, entries, archive, expected, created):
     # Keep directories traversable until all content and metadata are in place.
     for row in sorted(entries, key=lambda row: (row["kind"] == "directory",
                                                -bytes.fromhex(row["path_hex"]).count(b"/"), row["path_hex"])):
-        metadata(output, row)
+        metadata(output, row, roots=roots)
 
 
 @contextmanager

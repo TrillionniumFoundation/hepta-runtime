@@ -33,7 +33,7 @@ PARTITIONS = {
     "view": ("view_render", "view_render_growth", "view_read", "view_params", "view_call",
              "runtime_mcp", "view_cache", "history", "session_workdir"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence"),
-    "config": ("runtime_config",),
+    "config": ("runtime_config", "runtime_config_span"),
     "system": ("filesystem_parity", "binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
                "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service"),
@@ -314,6 +314,8 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         # before removing the private effect targets from artifact transport.
         # This native phase cannot depend on the later Rust comparison recipe.
         q.filesystem_parity_retirement(output, report, create=True)
+    if any(row.get("name") == "test_config_span.py" for row in report.get("checks", ())):
+        q.config_span_fixture_retirement(output, report, create=True)
     files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
     for name in directories:
         if name not in seal.get("directories", ()):

@@ -886,15 +886,45 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
-        self.assertEqual(len(MODULES), 48)
-        self.assertEqual(len(migration["native_components"]), 111)
-        self.assertEqual(len(q.native_tests()), 130)
-        self.assertEqual(len(RECIPES), 43)
+        self.assertEqual(len(MODULES), 49)
+        self.assertEqual(len(migration["native_components"]), 116)
+        self.assertEqual(len(q.native_tests()), 132)
+        self.assertEqual(len(RECIPES), 44)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
         self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
                             for row in migration["legacy_tool_handlers"]))
         for key in ("whole_runtime_replaced", "production_activated", "old_stack_removal_qualified"):
             self.assertIs(migration[key], False)
+
+    def test_config_span_registry_requires_native_capture_and_fresh_original(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_config_span_pipeline as span
+        from check_hia_native_inventory import ORIGINAL_RUNTIME_COPIES
+        item = next(row for row in q.MODULES if row['key'] == 'runtime_config_span')
+        owners = {'native/config_directory_owner_span.hepta', 'native/config_fs_span.hepta',
+                  'native/config_json_span.hepta', 'native/config_validation_span.hepta',
+                  'native/directory_move_guard.hepta'}
+        self.assertEqual({item['source'], *item['companion_sources']}, owners)
+        self.assertEqual((item['test'], *item['additional_tests']), span.TESTS)
+        self.assertIn('runtime_config_span', RECIPES)
+        self.assertNotIn('runtime_config_span', NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+        report = {'modules': {'runtime_config_span': {'manifest': span.MANIFEST}}}
+        output = self.output / 'uncreated-config-span'
+        commands = span.test_commands(ROOT, output, report)
+        self.assertEqual(set(commands), set(span.TESTS))
+        self.assertIn(str(output / span.MANIFEST), commands[span.TESTS[0]])
+        self.assertIn(str(output / 'config-span/native'), commands[span.TESTS[1]])
+        self.assertFalse(output.exists())
+        for path in ('/outside/result.json', '../outside/result.json'):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                span.test_commands(ROOT, output, {'modules': {'runtime_config_span': {'manifest': path}}})
+        self.assertEqual(ORIGINAL_RUNTIME_COPIES['tests/hia_native/config_span/guard_original/original/config.rs'],
+                         'src/mcp/runtime/config.rs')
+        pinned = q.sources()
+        for name in (*owners, *span.SOURCE_FILES, 'native/config_span_sources.json',
+                     'scripts/config_mcp_grow_adapter.S',
+                     'tests/hia_native/config_span/guard_original/strict_reference.py'):
+            self.assertIn(name, pinned)
 
     def test_public46_registration_retains_all_build_read_and_original_inputs(self):
         import qualify_hia_runtime_native as q

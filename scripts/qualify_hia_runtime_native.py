@@ -210,6 +210,11 @@ MODULES = (
      "companion_sources": ("native/serde_filter_packer.hepta",),
      "manifest_env": "HIA_SERDE_JSON_MANIFEST", "test": "test_serde_json.py",
      "additional_tests": ("test_serde_json_transport.py", "test_json_evidence.py")},
+    {"key": "runtime_config_span", "name": "runtime-config-span", "source": "native/config_directory_owner_span.hepta",
+     "builder": "runtime_config_span", "manifest_env": "HIA_CONFIG_SPAN_BUILD", "test": "test_config_span.py",
+     "additional_tests": ("test_config_span_evidence.py",),
+     "companion_sources": ("native/config_fs_span.hepta", "native/config_json_span.hepta",
+                           "native/config_validation_span.hepta", "native/directory_move_guard.hepta")},
     {"key": "runtime_config", "name": "runtime-config", "source": "native/config_owner.hepta",
      "builder": "runtime_config", "manifest_env": "HIA_CONFIG_BUILD", "test": "test_config_json.py",
      "additional_tests": ("test_config_semantics.py", "test_config_fs.py", "test_config_owner.py",
@@ -386,6 +391,11 @@ def sources() -> dict:
         'config_schema.py',
         'hia_native_config_reference.py',
         'hia_native_config_qualification.py',
+        'hia_native_config_span_build.py',
+        'hia_native_config_span_qualification.py',
+        'hia_native_config_span_pipeline.py',
+        'hia_native_config_span_fixtures.py',
+        'config_mcp_grow_adapter.S',
         "build_regex_probe.py",
         "config_regex_adapter.S",
         "hia_native_regex_qualification.py",
@@ -1119,6 +1129,16 @@ def history_evidence(output: Path, report: dict) -> dict:
 
 def config_evidence(output: Path, report: dict, *, create: bool = False) -> dict:
     return config_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def config_span_evidence(output: Path, report: dict) -> dict:
+    from hia_native_config_span_pipeline import qualification_evidence
+    return qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def config_span_fixture_retirement(output: Path, report: dict, *, create=False, native=None) -> dict:
+    from hia_native_config_span_pipeline import native_fixture_evidence
+    return native_fixture_evidence(ROOT, output, report, completed_test_summary, create=create, native=native)
 
 
 def file_locks_evidence(output: Path, report: dict) -> dict:
@@ -2438,6 +2458,11 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
             built = build_file_lock_service(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "runtime_config":
             built = config_qualification.build_config(hepta, output / "build", ROOT)
+        elif item.get("builder") == "runtime_config_span":
+            from hia_native_config_span_build import build_config_span
+            nested = output / "build/config-span-bundle"
+            shutil.copytree(output / "build/bootstrap", nested / "build/bootstrap")
+            built = build_config_span(hepta, nested, source_root=ROOT)
         elif item.get("builder") == "result_publication":
             from hia_native_result_publication_build import build_result_publication
             built = build_result_publication(hepta, output / "build", source_root=ROOT)
@@ -2533,6 +2558,7 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / "batch-apply").mkdir()
     (output / "atomic-write").mkdir()
     (output / "config-native").mkdir()
+    (output / "config-span").mkdir()
     (output / "regex-native").mkdir()
     (output / "file-locks").mkdir()
     (output / "file-lock-service").mkdir()
@@ -2550,6 +2576,8 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands = batch_apply_test_commands(output, output / report["modules"]["batch_apply"]["manifest"])
     commands.update(execution_test_commands(output, report))
     commands.update(config_qualification.test_commands(ROOT, output, report))
+    from hia_native_config_span_pipeline import test_commands as config_span_commands
+    commands.update(config_span_commands(ROOT, output, report))
     commands.update(session_qualification.test_commands(ROOT, output, report))
     commands.update(file_lock_pipeline.test_commands(ROOT, output, report))
     commands.update(filesystem_parity_qualification.test_commands(ROOT, output, report))
@@ -2612,6 +2640,9 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["execution_evidence"] = execution_evidence(output, report)
     report["effect_fence_evidence"] = effect_fence_evidence(output, report)
     report["config_evidence"] = config_evidence(output, report, create=True)
+    report["config_span_evidence"] = config_span_evidence(output, report)
+    report["config_span_fixture_retirement"] = config_span_fixture_retirement(
+        output, report, create=True, native=report["config_span_evidence"])
     scope_os_manifest = output / report["modules"]["operation_scope_os"]["manifest"]
     capture_scope_os_corpus(ROOT, output / SCOPE_OS_FOLDER, scope_os_profile(ROOT, scope_os_manifest))
     report["operation_scope_os_evidence"] = operation_scope_os_evidence(output, report)
@@ -2667,6 +2698,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["effect_fence_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["config_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["config_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["config_span_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["config_span_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["artifact_sha256"])

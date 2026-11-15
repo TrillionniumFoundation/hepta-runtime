@@ -74,6 +74,8 @@ ORIGINAL_RUNTIME_BLOBS = {
 
 ORIGINAL_RUNTIME_COPIES = {
     "tests/hia_native/filesystem_parity/oracle/original_parity_ops.rs": "src/mcp/fs/parity_ops.rs",
+    "tests/hia_native/config_span/guard_original/original/config.rs": "src/mcp/runtime/config.rs",
+    "tests/hia_native/config_span/guard_original/original/runtime.Cargo.lock": "Cargo.lock",
 }
 
 
