@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib, importlib.util, io, json, math, os, struct, subprocess, sys, tomllib
 from pathlib import Path
 from hia_native_bellman_qualification import (digest, identity, read, decode, exact,
-    packet_counts, checked_process)
+    packet_counts, checked_process, verify_target_revision)
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVERS = "tests/hia_native/bellman/commitment"
@@ -76,7 +76,7 @@ def source_evidence(root=ROOT):
     target_raw=read(root/"native/migration_target.json");target=decode(target_raw)
     exact(migration.get("migration_target"),{"path":"native/migration_target.json","sha256":digest(target_raw)},
           "commitment migration target binding differs")
-    if target.get("target_commit")!=ORIGINAL_COMMIT: raise ValueError("commitment target commit differs")
+    verify_target_revision(target)
     bound={}
     import hashlib
     for name,pin in TARGET_PINS.items():
@@ -97,6 +97,7 @@ def source_evidence(root=ROOT):
         raise ValueError("commitment composition scope/source differs")
     return {"component_sha256":digest(raw),"source_files":actual,"target_files":bound,
             "original_commit":ORIGINAL_COMMIT,"migration_target_sha256":digest(target_raw),
+            "migration_target_commit":target["target_commit"],"migration_target_tree":target["target_tree"],
             "compiler_commit":component["compiler_commit"],"compiler_sha256":component["compiler_image_sha256"],
             "native_image_sha256":component["native_image_sha256"],"standalone_sha256":component["standalone_sha256"],
             "composition":composition,"reference_registry_packages":packages}

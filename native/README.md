@@ -9,7 +9,7 @@ handlers**; no production handler is declared replaced. `whole_runtime_replaced`
 
 | Input | Exact Git identity |
 | --- | --- |
-| Production target (`main` snapshot) | `737acf6f901e46c57b0b4374e323e0d1132e0d49` |
+| Production target (`main` snapshot) | `d3d75c30719db966b004756f610007a7c723729e` |
 | Historical comparison baseline | `a0dcdda1991ec536d5e2d252c006a778993fa566` |
 | Hepta compiler | `d3e2c90173cf733e42b299d0c4274df4b593a12f` |
 | Native platform | Linux x86-64, LP64, SysV AMD64 |
@@ -18,7 +18,7 @@ handlers**; no production handler is declared replaced. `whole_runtime_replaced`
 owners and remaining system owners. Its digest-bound
 [migration_target.json](migration_target.json) separately records the target:
 **474 files under `src/`, plus `Cargo.toml` and `Cargo.lock`**. Relative to the
-historical source, **49 source files were added, 47 changed, and both Cargo
+historical source, **49 source files were added, 51 changed, and both Cargo
 files changed**. The historical inventory has **125 handlers**; the target adds
 11 across REA and weights. Old parity does not qualify these new or changed
 owners.
@@ -166,7 +166,7 @@ Both phases are required. CI uses one fresh cold/build job, nine native
 partitions, a native collector, eight original comparison partitions and the
 final collector. The registry contains 86 component builds, 220 native suites,
 80 original Rust recipes and 193 HIA sources. The ten independent rendering,
-cache, history and session suites occupy `view_components`; the eighteen
+cache, history and session suites occupy `view_components`; the twenty
 read, parameter, caller, public MCP and filesystem suites retain their producer order and
 fixture retirement together in `view`. Each suite and original recipe still
 executes exactly once under its existing process and job deadline.

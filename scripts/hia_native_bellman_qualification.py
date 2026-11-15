@@ -58,6 +58,22 @@ def exact(actual, expected, message):
     encode = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     if encode(actual) != encode(expected): raise ValueError(message)
 
+
+# Original reference provenance is immutable. Later inventories are admitted only
+# for these reviewed revisions and still require exact per-file Git blob bytes.
+REVIEWED_TARGET_TREES = {
+    ORIGINAL_COMMIT: ("76652098f4b5bcad487071f2eaefd82d7fed219c", "82b2e890a91cad1b43fcd7e1da9ca92c8650d67f"),
+    "d3d75c30719db966b004756f610007a7c723729e": ("612e145513961556ac8844b5cc978f9b5175e4d4", "9dfb8f0bba9c9334964b93ad1c3b89f586f67e8f"),
+}
+
+def verify_target_revision(target):
+    commit = target.get("target_commit")
+    if type(commit) is not str or commit not in REVIEWED_TARGET_TREES:
+        raise ValueError("Bellman migration revision has not been reviewed")
+    if (target.get("target_tree"), target.get("target_src_tree")) != REVIEWED_TARGET_TREES[commit]:
+        raise ValueError("Bellman migration revision tree binding differs")
+
+
 def source_evidence(root=ROOT):
     root = Path(root).resolve()
     component_raw = read(root / "native/bellman_core_component.json")
@@ -85,8 +101,7 @@ def source_evidence(root=ROOT):
     exact(inventory.get("migration_target"), {"path": "native/migration_target.json",
           "sha256": digest(target_raw)}, "Bellman migration target binding differs")
     target = decode(target_raw)
-    if target.get("target_commit") != ORIGINAL_COMMIT:
-        raise ValueError("Bellman original is not the declared migration target")
+    verify_target_revision(target)
     rows = [row for row in target["source_files"] if row["path"] == "src/mcp/weight_bellman.rs"]
     original = read(root / REFERENCE)
     blob = hashlib.sha1(b"blob " + str(len(original)).encode() + b"\0" + original).hexdigest()
@@ -96,6 +111,7 @@ def source_evidence(root=ROOT):
                    "bytes": len(original)}, "Bellman original copy differs from current target Git blob")
     return {"component_sha256": digest(component_raw), "migration_target_sha256": digest(target_raw),
             "original_commit": ORIGINAL_COMMIT, "original_source": REFERENCE,
+            "migration_target_commit": target["target_commit"], "migration_target_tree": target["target_tree"],
             "original_sha256": ORIGINAL_SHA256, "original_git_blob": blob,
             "compiler_commit": component["compiler_commit"],
             "compiler_image_sha256": component["compiler_image_sha256"],

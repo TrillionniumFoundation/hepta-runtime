@@ -332,6 +332,7 @@ def run_case(folder,spec,manifest,metadata,executable):
             umask=spec['umask'],pid=child.pid,parent_pid=os.getpid(),uid=os.getuid(),gid=os.getgid(),deadline_seconds=30,timed_out=timed_out,
             failure=failure,exit_code=child.returncode,monotonic_started_ns=started,monotonic_completed_ns=completed,
             unix_started_ns=unix_started,unix_completed_ns=time.time_ns(),native_manifest={'path':str(manifest),**pin(ordinary(manifest))},
+            audit_files=cf.audit_files_snapshot(folder),
             executable_before=tool_before,executable_after=pin(ordinary(executable)),streams={name:pin(ordinary(folder/name)) for name in ('stdin.bin','stdout.bin','stderr.bin')})
         write_new(folder/'execution.json',packed(receipt));after=cf.tree_snapshot(work);write_new(folder/'after.json',packed(after))
         write_new(folder/'retirement.json',packed(retire(work,after)))
@@ -785,6 +786,7 @@ def verify_observations(folder,spec,receipt,observed,native):
         if index==1:need(row['received_ns']>=last,'publication preceded last effect gate')
         else:need(row['sent_ns']>=observed['requests'][index-2]['observed_ns'],'external requests overlapped')
         timeline.append((row['process'],step['live_handles'],step['effect_end'],step['entry_end'],row['tree']))
+    audit_files=cf.verify_audit_files(folder,receipt)
     first_identity=initial['identity'];descriptor_identity={}
     for snapshot,ledger,trace_end,entry_end,tree_rows in timeline:
         ident=cf.process_identity(bytes.fromhex(snapshot['stat_hex']))
@@ -802,7 +804,7 @@ def verify_observations(folder,spec,receipt,observed,native):
                  'transport FD identity changed')
         for fd,name,extent in ((ready[3],'effects.bin',trace_end),(ready[4],'entries.bin',entry_end)):
             row=fds[fd];info=cf.fdinfo(bytes.fromhex(row['fdinfo_hex']))
-            need(cf.identity(row['stat'])==cf.identity(cf.stat_row((folder/name).lstat())) and
+            need(cf.identity(row['stat'])==cf.identity(audit_files[name]['stat']) and
                  row['link_hex']==os.fsencode(folder/name).hex(),'audit FD actual file identity')
             need(info['position']==extent and info['inode']==row['stat']['inode'] and row['stat']['size']==extent and
                  info['flags']==0xa8001,'audit FD exact position/flags')
@@ -953,6 +955,8 @@ CONTROL_ERRORS={
     'fd_flags':'actual capture FD flags/position',
     'retired_payload':'publication and retired complete fixture tree',
     'missing_footer':'missing effect footer or trailing bytes',
+    'audit_inode':'audit FD actual file identity',
+    'audit_extent':'audit retained bytes/stat',
     'source_snapshot':'sealed source bytes',
 }
 
@@ -976,6 +980,19 @@ def mutation(name,baseline):
                 n=q(raw,at+8);yield 'result',at+16,n;at+=16+n
     if name in ('missing_case','duplicate_case'):
         report['case_names']=report['case_names'][:-1] if name=='missing_case' else report['case_names']+[report['case_names'][0]]
+    elif name in ('audit_inode','audit_extent'):
+        path = 'cases/new_capture/'+('observation.json' if name == 'audit_inode' else 'execution.json')
+        value = decoded(get(path))
+        if name == 'audit_inode':
+            target = os.fsencode(folder/'cases/new_capture/effects.bin').hex()
+            row = next(r for r in value['initial']['fds'] if r['link_hex'] == target)
+            row['stat']['inode'] += 1
+            raw = bytes.fromhex(row['fdinfo_hex'])
+            row['fdinfo_hex'] = b''.join(b'ino:\t'+str(row['stat']['inode']).encode()+b'\n' if line.startswith(b'ino:') else line
+                                      for line in raw.splitlines(keepends=True)).hex()
+        else:
+            value['audit_files']['effects.bin']['stat']['size'] += 1
+        js(path,value)
     elif name=='input_frame':
         path=prefix+'stdin.bin';raw=bytearray(get(path));raw[96]^=1;changed[path]=bytes(raw)
     elif name in ('parent_order','sequence_result'):
@@ -1071,6 +1088,10 @@ def mutation(name,baseline):
         for stream in ('stdin.bin','stdout.bin','stderr.bin'):
             target=prefix+stream
             if target in changed:receipt['streams'][stream]=pin(changed[target]);touched=True
+        for audit in ('effects.bin','entries.bin'):
+            target = 'cases/'+case+'/'+audit
+            if target in changed:
+                receipt['audit_files'][audit].update(pin(changed[target])); touched = True
         if touched:js(path,receipt)
         if prefix+'effects.bin' in changed or prefix+'entries.bin' in changed:
             path=prefix+'observation.json';value=decoded(get(path))
@@ -1091,6 +1112,7 @@ def reader_process(folder, corpus, manifest, inputs):
     argv = [str(interpreter), str(ROOT/'tests/hia_native/shell_capture_prepare_io.py'),
             '--native-manifest', str(manifest), '--verify-core', str(corpus)]
     env = {'PATH':'/usr/bin:/bin', 'LANG':'C', 'LC_ALL':'C', 'PYTHONDONTWRITEBYTECODE':'1'}
+    physical_before = cf.control_identities(corpus, inputs)
     before = {name:pin(ordinary(corpus/name)) for name in inputs}
     need(before == {name:pin(raw) for name,raw in inputs.items()}, 'physical reader inputs before')
     tool = pin(ordinary(interpreter)); source = pin(ordinary(ROOT/'tests/hia_native/shell_capture_prepare_io.py'))
@@ -1109,12 +1131,14 @@ def reader_process(folder, corpus, manifest, inputs):
                    monotonic_started_ns=start, monotonic_completed_ns=finish,
                    unix_started_ns=unix_start, unix_completed_ns=time.time_ns(),
                    interpreter_before=tool, interpreter_after=pin(ordinary(interpreter)), source=source,
+                   physical_inputs_before=physical_before, physical_inputs_after=cf.control_identities(corpus, inputs),
                    inputs_before=before, inputs_after=after, stdout=pin(stdout), stderr=pin(stderr))
     write_new(folder/'execution.json', packed(receipt))
-    need(before == after and receipt['interpreter_before'] == receipt['interpreter_after'] and not timed_out, 'reader process modified inputs')
+    need(before == after and receipt['physical_inputs_before'] == receipt['physical_inputs_after'] and
+         receipt['interpreter_before'] == receipt['interpreter_after'] and not timed_out, 'reader process modified inputs')
     return receipt, decoded(stdout)
 
-def verify_reader_process(folder, corpus, manifest, inputs, expected_error=None):
+def verify_reader_process(folder, corpus, manifest, inputs, physical_identities, expected_error=None):
     receipt = read_json(folder/'execution.json'); interpreter = Path(sys.executable).resolve()
     argv = [str(interpreter), str(ROOT/'tests/hia_native/shell_capture_prepare_io.py'),
             '--native-manifest', str(manifest), '--verify-core', str(corpus)]
@@ -1128,6 +1152,8 @@ def verify_reader_process(folder, corpus, manifest, inputs, expected_error=None)
          0 <= receipt['monotonic_completed_ns']-receipt['monotonic_started_ns'] <= 30_000_000_000, 'actual reader process time')
     need(receipt.get('interpreter_before') == receipt.get('interpreter_after') == pin(ordinary(interpreter)) and
          receipt.get('source') == pin(ordinary(ROOT/'tests/hia_native/shell_capture_prepare_io.py')), 'actual reader executable/source')
+    cf.check_control_identities(physical_identities, inputs)
+    need(receipt.get('physical_inputs_before') == receipt.get('physical_inputs_after') == physical_identities, 'reader producer physical identities')
     expected = {n:pin(raw) for n,raw in inputs.items()}
     need(receipt.get('inputs_before') == receipt.get('inputs_after') == expected, 'complete reader process input identities')
     stdout, stderr = ordinary(folder/'stdout.bin'), ordinary(folder/'stderr.bin')
@@ -1142,6 +1168,7 @@ def verify_reader_process(folder, corpus, manifest, inputs, expected_error=None)
 def run_controls(corpus, manifest):
     root = corpus/'controls'; root.mkdir(); names = [s['name'] for s in case_specs()]
     baseline = {name:ordinary(corpus/name) for name in core_names(names)}
+    baseline_identities = cf.control_identities(corpus, baseline)
     write_new(root/'baseline-report.json', baseline['report.json']); rows = []
     for name, expected_error in CONTROL_ERRORS.items():
         folder = root/name; changes = mutation(name, baseline); modified = []
@@ -1149,6 +1176,7 @@ def run_controls(corpus, manifest):
             identities = {}
             for path, raw in changes.items():
                 modified.append(path); identities[path] = replace_ordinary(corpus/path, raw)
+                need(identities[path] == baseline_identities[path], 'mutation original producer identity')
             inputs = dict(baseline); inputs.update(changes)
             receipt, value = reader_process(folder, corpus, manifest, inputs)
             change_rows = []
@@ -1163,13 +1191,14 @@ def run_controls(corpus, manifest):
                              process={n:pin(ordinary(folder/n)) for n in ('execution.json','stdout.bin','stderr.bin')}))
         finally:
             for path in modified:
-                replace_ordinary(corpus/path, baseline[path])
+                need(replace_ordinary(corpus/path, baseline[path]) == baseline_identities[path], 'restored original producer identity')
     inputs = {name:ordinary(corpus/name) for name in baseline}
     need(inputs == baseline, 'baseline bytes not fully restored')
     reader_process(root/'restored-positive', corpus, manifest, baseline)
-    verify_reader_process(root/'restored-positive', corpus, manifest, baseline)
+    verify_reader_process(root/'restored-positive', corpus, manifest, baseline, baseline_identities)
     report = dict(schema='hepta.runtime.shell-capture-prepare-physical-controls.v1', status='PASS',
                   recorded_directory=str(root), names=list(CONTROL_ERRORS), controls=rows,
+                  baseline_identities=baseline_identities,
                   baseline_inputs={n:pin(raw) for n,raw in baseline.items()},
                   restored_positive={n:pin(ordinary(root/'restored-positive'/n)) for n in ('execution.json','stdout.bin','stderr.bin')})
     write_new(root/'report.json', packed(report))
@@ -1188,6 +1217,8 @@ def verify_controls(corpus, manifest):
     baseline['report.json'] = ordinary(root/'baseline-report.json')
     need(decoded(baseline['report.json']) == current, 'exact restored baseline report')
     need(report.get('baseline_inputs') == {n:pin(raw) for n,raw in baseline.items()}, 'complete baseline byte identities')
+    baseline_identities = report.get('baseline_identities')
+    cf.check_control_identities(baseline_identities, baseline)
     rows = report['controls']
     need([r.get('name') for r in rows] == list(CONTROL_ERRORS), 'named control coverage')
     for row in rows:
@@ -1201,20 +1232,16 @@ def verify_controls(corpus, manifest):
             before, after = ordinary(folder/(prefix+'.before.bin')), ordinary(folder/(prefix+'.after.bin'))
             need(before == baseline[path] and after == expected[path] and before != after, 'exact named physical mutation bytes')
             need(change['before'] == pin(before) and change['after'] == pin(after), 'physical changed byte pins')
-            actual = (corpus/path).lstat(); physical = change['physical_identity']
-            need(type(physical) is dict and set(physical) == {'device','inode','mode'} and
-                 all(type(x) is int and x >= 0 for x in physical.values()) and physical ==
-                 {'device':actual.st_dev,'inode':actual.st_ino,'mode':actual.st_mode} and stat.S_ISREG(actual.st_mode) and actual.st_nlink == 1,
-                 'physical mutation preserved original identity')
+            need(change['physical_identity'] == baseline_identities[path], 'physical mutation preserved original identity')
             members |= {prefix+'.before.bin',prefix+'.after.bin'}
         need(set(os.listdir(folder)) == members, 'complete physical change evidence')
         inputs = dict(baseline); inputs.update(expected)
-        verify_reader_process(folder, corpus, manifest, inputs, CONTROL_ERRORS[name])
+        verify_reader_process(folder, corpus, manifest, inputs, baseline_identities, CONTROL_ERRORS[name])
         need(row.get('changes') == pin(ordinary(folder/'changes.json')) and row.get('process') ==
              {n:pin(ordinary(folder/n)) for n in ('execution.json','stdout.bin','stderr.bin')}, 'actual control process pins')
     positive = root/'restored-positive'; plain_dir(positive)
     need(set(os.listdir(positive)) == {'execution.json','stdout.bin','stderr.bin'}, 'restored positive members')
-    verify_reader_process(positive, corpus, manifest, baseline)
+    verify_reader_process(positive, corpus, manifest, baseline, baseline_identities)
     need(report.get('restored_positive') == {n:pin(ordinary(positive/n)) for n in ('execution.json','stdout.bin','stderr.bin')}, 'restored positive pins')
     return dict(status='PASS', physical_negative_controls=len(CONTROL_ERRORS), reader_processes=len(CONTROL_ERRORS)+1,
                 exact_named_mutations_reconstructed=True, all_baseline_bytes_restored=True,

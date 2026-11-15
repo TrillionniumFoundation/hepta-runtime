@@ -496,7 +496,7 @@ def admitted(runtime, reference_build, native_corpus, native_manifest, native, r
     evidence = native.read_evidence(native_corpus, native_manifest, require_full=True)
     need(evidence.get("status") == "PASS" and evidence["counts"]["cases"] == 34
          and evidence["counts"]["retired_fixtures"] == 34
-         and evidence["physical_controls"]["physical_negative_controls"] == 15,
+         and evidence["physical_controls"]["physical_negative_controls"] == 17,
          "complete native file corpus/retirement/control admission")
     baseline = {"path": str(native_corpus), "manifest": {"path": str(native_manifest), **pin(native.ordinary(native_manifest))},
                 "report": pin(native.ordinary(native_corpus / "report.json")), "evidence": evidence}

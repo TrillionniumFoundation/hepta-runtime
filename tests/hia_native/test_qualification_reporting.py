@@ -1201,6 +1201,19 @@ class QualificationReportingTests(unittest.TestCase):
         for key in ("whole_handler_replaced", "whole_runtime_replaced", "production_activated", "old_stack_removal_qualified"):
             self.assertIs(b.SCOPE[key], False)
 
+    def test_bellman_target_revision_preserves_original_provenance_and_pins_trees(self):
+        import hia_native_bellman_qualification as b
+        self.assertEqual(b.ORIGINAL_COMMIT, "737acf6f901e46c57b0b4374e323e0d1132e0d49")
+        for commit, (tree, source_tree) in b.REVIEWED_TARGET_TREES.items():
+            valid = dict(target_commit=commit, target_tree=tree, target_src_tree=source_tree)
+            b.verify_target_revision(valid)
+            for field in ("target_tree", "target_src_tree"):
+                with self.subTest(commit=commit, field=field), self.assertRaisesRegex(ValueError, "tree binding"):
+                    b.verify_target_revision(dict(valid, **{field: "0" * 40}))
+            for invalid in (None, [], "0" * 40):
+                with self.subTest(commit=invalid), self.assertRaisesRegex(ValueError, "not been reviewed"):
+                    b.verify_target_revision(dict(valid, target_commit=invalid))
+
     def test_bellman_original_copy_must_match_sealed_current_target_blob(self):
         import hashlib
         import shutil
