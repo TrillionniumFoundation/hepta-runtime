@@ -12,7 +12,7 @@ import sys
 sys.dont_write_bytecode = True
 
 BUILD_READER_SHA = '44850ccdd0e63c50b3f04cb45ba80d2266ca64710ae24f2aa46e96cc031d2afa'
-BUILD_PRIMITIVE_SHA = '93970e2ba2ff2fdd696f6f6a28e299d030861a0f1b7aa2200b285bd0b5982cde'
+BUILD_PRIMITIVE_SHA = '9b66e3866a6f20f7e0e10f5f7c639a3d2854f02c25eb768b258faf4817676231'
 
 
 def load(path, name, expected=None):

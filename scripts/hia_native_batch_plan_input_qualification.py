@@ -16,7 +16,7 @@ from hia_native_view_call_qualification import Evidence,_producer,canonical,dige
 
 COMMIT='d3e2c90173cf733e42b299d0c4274df4b593a12f'
 COMPILER='bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
-SOURCE_PROFILE='37913829c74e6efe3128dd1e7da8685b3458fb6eb2a9632efc1a05a4be0e673f'
+SOURCE_PROFILE='5331a23065c850fbfefb3f2b7cfc981544b57b5caa2705b07ba680586ab8afa9'
 INVALID,CAPACITY,CALL=0xffffffff,0xfffffffe,0xffffffe0
 OWNERS={1:('value','serde_json_span'),2:('params','batch_edit_params'),3:('editable','editable_content'),
         4:('input','batch_plan_input'),5:('plan','batch_plan'),6:('endpoint','line_endpoint'),7:('verify','line_verify')}
