@@ -11,8 +11,8 @@ It is a repository cleanup audit, not a complete security or runtime qualificati
 
 Hepta Runtime is a Rust application with active Python and Java engine boundaries.
 Historical experiments and repeated source snapshots inflated the checkout and
-language counts. The cleanup removes **9,923 historical files / 1,528,547,962 bytes**
-from the current tree, including **1,247 Python files**, with every original
+language counts. The cleanup removes **10,003 historical files / 1,582,599,717 bytes**
+from the current tree, including **1,256 Python files**, with every original
 preserved in reachable Git history. It also consolidates a genuinely duplicated
 bridge implementation. [inventory.json](inventory.json) records exact metrics.
 
@@ -57,12 +57,13 @@ bytes) and pinned independent Node REA reference scripts remain unchanged.
 
 | Current-tree retirement | Files | Original bytes |
 | --- | ---: | ---: |
-| Historical material in 27 complete roots | 9,708 | 1,521,911,966 |
+| Historical material in 29 complete roots | 9,788 | 1,575,963,721 |
 | Duplicate branch source files under archives/rust-branches/*/files | 215 | 6,635,996 |
-| Total | 9,923 | 1,528,547,962 |
+| Total | 10,003 | 1,582,599,717 |
 
-The [complete history manifest](../../../archives/repository-history/20261115.json)
-records every original path, blob, mode and length. Its roots cover historical
+The [initial history manifest](../../../archives/repository-history/20261115.json)
+and [October 28 follow-up manifest](../../../archives/repository-history/x230-20261028-20261115.json)
+record every original path, blob, mode and length. Their roots cover historical
 source recovery, older HIA review artifacts, November 3–6 and selected A-series
 X230 campaigns, and seven self-contained old REA/DC evidence collections. Original
 successes, failures, partial attempts and raw outputs retain their exact bytes and
@@ -185,6 +186,48 @@ The root `AGENTS.md` now uses the actual Hepta Runtime identity and the pinned
 process-isolated nextest commands. Existing permission and release instructions
 are preserved. See [validation.json](validation.json) for the exact observations;
 the follow-up commit's CI is reported separately from its cleanup ancestor.
+
+## Follow-up review and complete retirement
+
+The independently reviewed first cleanup is merged as
+[`110c7355`](https://github.com/TrillionniumFoundation/hepta-runtime/commit/110c73556ebab3ca589bbe5485150deb67167711),
+with the same tree as `136ff997`. A further complete inventory retired the
+remaining October 28 X230 evidence collections: 47 files / 34,526,828 bytes in
+`tools/x230/20261028/evidence/` and 33 files / 19,524,927 bytes in
+`tests/evidence/20261028-x230/`. All 80 originals, including nine Python diagnostic
+scripts, are bound to reachable source `136ff997` in the second history manifest.
+The 19 top-level October 28 harness inputs and the October 29–30 harnesses stay
+unchanged. Their source enumeration does not include the retired nested evidence;
+current tests construct temporary evidence and the packer/analyzer accepts an
+explicit input path. Forty-four report links and two directory mentions now point
+to the exact originals. Failure, partial and success records retain their bytes.
+
+The follow-up also updates the architecture guide to the actual runtime modules,
+uses process-isolated nextest for `make coverage`, and repairs three preexisting
+source links in the live R11/R12 reports. The two corresponding current-document
+blob pins are updated while their original source identities stay unchanged.
+Cargo's hygiene check now uses every repository-history manifest, so later
+retirements cannot escape its package-path check. Coverage itself was not run.
+
+The active-language review found no byte-identical duplicate source file under
+`src`, `workers`, `deploy`, `scripts` or `tools/cloud-compute`, and no duplicate
+Python AST function of at least ten lines after normalizing its name/docstring.
+The deployment versions remain a live import chain:
+`chatgpt_computer_operator` → `chatgpt_v11_layered_read` →
+`chatgpt_v10_dual_read` → `chatgpt_full_operator`.
+Two duplicate-looking harness pairs remain for a concrete reason: the DC v10
+acceptance pair is explicitly required byte-identical by its contract test, and
+the October 31 concurrency harness opens its adjacent RSS helper with
+`O_NOFOLLOW` and verifies its pinned bytes. Wrappers or symlinks would violate
+those maintained input contracts.
+
+All 608 core inputs remain unchanged from the original baseline, including all
+474 runtime source inputs and the complete model-worker/cloud-compute code.
+`inventory.json` contains cumulative current-tree metrics; earlier per-commit
+observations in this document remain identified by their original commits.
+The follow-up's local October 28–30 checks returned 88 passes and ten AF_UNIX
+setup errors; exact hosted validation must be read for the published follow-up
+commit, independently of successful ancestor checks.
 
 ## Recovery
 

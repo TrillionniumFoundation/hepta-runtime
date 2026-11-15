@@ -61,16 +61,16 @@ evidence of such a deployment.
 | Parent source | `f0f1c1da4e62404fc800df0f186db5948b4ad38d` |
 | Retained R3 runtime SHA-256 | `5e670e58d1c8067df594fcc256a2b88bd52cb60a443cadb36e2a7dc0f49effa7` |
 | R3 reference source path | `/home/qian/hepta-runtime-optimization-20261028/source-r3` |
-| Historical R4b compiler-input map | 192 compiler inputs, retained as [source-map-r4b.json](../tools/x230/20261028/evidence/r4/source-map-r4b.json). SHA-256 `764a406e4eb08ad380996f793315cebbe275bab5b00a8bc23af4a9c2b3deaac5`. These inputs are frozen as R4b and do not qualify R4e. |
+| Historical R4b compiler-input map | 192 compiler inputs, retained as [source-map-r4b.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/source-map-r4b.json). SHA-256 `764a406e4eb08ad380996f793315cebbe275bab5b00a8bc23af4a9c2b3deaac5`. These inputs are frozen as R4b and do not qualify R4e. |
 | Historical qualified R4b release SHA-256 | `5cadde76ecfa7f5de5be9450668a249968cce5d81b810df672e5f38a9c1bae5e` |
-| R3-control libtest source / executable | `source-r4-control`; SHA-256 `73e538f910786b4675975305ec25188eadf6b23a5a1cc14725bfe8d3efdea3fe`. Test-only source changes are described below. The original control report and source-difference receipt are retained as `control-r4/report.json` and `control-r4/control-source-diff.json` in the [original evidence archive](../tools/x230/20261028/evidence/r4/evidence-package.tar.gz). |
+| R3-control libtest source / executable | `source-r4-control`; SHA-256 `73e538f910786b4675975305ec25188eadf6b23a5a1cc14725bfe8d3efdea3fe`. Test-only source changes are described below. The original control report and source-difference receipt are retained as `control-r4/report.json` and `control-r4/control-source-diff.json` in the [original evidence archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/evidence-package.tar.gz). |
 | Rejected R4a libtest source / executable | Retained `source-r4a`; SHA-256 `09e987f2c2a8f5f456578b409befb83a6b10aed6399bf4a75bb6d13a006da1da`. |
 | R4b diagnostic libtest source / executable | `source-r4`; SHA-256 `c9069ee70d10f72a36660a6f87c0039da38eeb194356e2da1e2fa009f0c62a07`. This is a test executable, not the qualified release artifact. |
 | Historical R4b qualification result | All eight gates passed: 1,513 Rust cases passed, 0 failed, 25 ignored; 57 Python harness tests passed. Qualification report SHA-256 `431af6273220311b8e7bd9c4542bc0daf4db291c21e6525ec252e6ed4da0aa8b`. Subsequent performance rejection does not change this correctness result. |
 | Historical R4c diagnostic source | `/home/qian/hepta-runtime-optimization-20261028/source-r4c`. The release comparison completed; its source map, runtime and report identities are recorded below. It did not receive complete qualification. |
 | Historical R4d diagnostic source | `/home/qian/hepta-runtime-optimization-20261028/source-r4d`. Its completed release comparison and exact identities are recorded below. Early registration was not adopted; complete qualification was not started. |
 | Qualified R4e source | `/home/qian/hepta-runtime-optimization-20261028/source-r4e`. Its own eight qualification gates passed. The 192-input source map and final runtime match the completed release MCP comparison; the qualified libtest executable was used for the final Rust comparison. Exact bindings are recorded below. |
-| GitHub publication | The commit containing this report on `perf/x230-concurrency-recovery-20261028`, continuing [PR #77](https://github.com/TrillionniumFoundation/hepta-runtime/pull/77). The [publication boundary](../tools/x230/20261028/evidence/r4/publication-boundary.json) binds the 14 intended code changes to the exact qualified source and R3 parent. |
+| GitHub publication | The commit containing this report on `perf/x230-concurrency-recovery-20261028`, continuing [PR #77](https://github.com/TrillionniumFoundation/hepta-runtime/pull/77). The [publication boundary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/publication-boundary.json) binds the 14 intended code changes to the exact qualified source and R3 parent. |
 
 The R3-control, R4a and R4b diagnostic source directories are beneath
 `/home/qian/hepta-runtime-optimization-20261028/`. The benchmark runner retained
@@ -295,7 +295,7 @@ weakened or replaced.
 ### Formal candidate qualification
 
 **R4e completed all eight qualification gates.** The
-[qualified bindings](../tools/x230/20261028/evidence/r4/qualification-bindings.json)
+[qualified bindings](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/qualification-bindings.json)
 are tied to the original qualification report and independent exact-case audit,
 not to dependency prewarming or an earlier candidate's receipts.
 
@@ -318,9 +318,9 @@ not to dependency prewarming or an earlier candidate's receipts.
 | Qualified runtime | `8469fe7afdf560f4c501e5162cd7926957fade695118e9b9b72f1594ed861248` |
 | Qualified libtest executable | `0ed9d036f073c8ef4f476ab7dbc9a0307c3e996f874aaa55c17662f2046d9926` |
 
-The [current source map](../tools/x230/20261028/evidence/r4/source-map.json) has
+The [current source map](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/source-map.json) has
 SHA-256 `7b5903e0e11666b926ff8dbdba28e3009c2ab4382f8e579d0c54bea1f4410c25`.
-The [R4e publication boundary](../tools/x230/20261028/evidence/r4/publication-boundary.json),
+The [R4e publication boundary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/publication-boundary.json),
 SHA-256 `43a16e5105b7fc32875ed04e9fbfabc2d6e5ff85fcf0d142f68a245b055a17b8`,
 passes the byte comparisons for all 192 qualified compiler inputs and all 19
 qualified harness files. It permits 14 selected code changes: 6 Rust files and
@@ -330,7 +330,7 @@ the R3 parent tree plus selected changes, not the whole older local checkout.
 Documentation and retained evidence are additional deliberate publication entries.
 
 R4b's original map and boundary remain in `source-map-r4b.json` and
-[publication-boundary-r4b.json](../tools/x230/20261028/evidence/r4/publication-boundary-r4b.json).
+[publication-boundary-r4b.json](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/publication-boundary-r4b.json).
 They are historical receipts and have not been relabeled as R4e qualification.
 The separately bound eight-stage native run and one-stage extended soak have both
 completed. Their results retain separate schemas, reports and workload scopes.
@@ -346,7 +346,7 @@ packaging, not a Rust source fix, replacement executable, retry of a failed Rust
 case or full qualification. The failed preflight evidence is retained separately;
 it must not be overwritten or counted as a passing diagnostic.
 
-The [R4e source-handoff preflight](../tools/x230/20261028/evidence/r4/diagnostics/r4e-source-handoff-preflight.json)
+The [R4e source-handoff preflight](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/diagnostics/r4e-source-handoff-preflight.json)
 also stopped a local transfer when its expected test-file hash was stale, before
 any working-tree write, host request, Rust case or performance call. The final two
 fixture edits were independently re-reviewed and their exact hash accepted before
@@ -542,8 +542,8 @@ R4e each have sixteen. Whole runner elapsed time includes fixture preparation an
 reproducibility, not used as the throughput denominator.
 
 The retained original reports, source maps, command journals and raw stdout/stderr
-are included in the [original evidence archive](../tools/x230/20261028/evidence/r4/evidence-package.tar.gz).
-Its [manifest](../tools/x230/20261028/evidence/r4/evidence-manifest.json) records each
+are included in the [original evidence archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/evidence-package.tar.gz).
+Its [manifest](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/evidence-manifest.json) records each
 member's original path, identity, length and SHA-256. The report hashes above
 identify the completed measurements; the tables do not substitute for those
 original files.
@@ -721,7 +721,7 @@ concurrent CPU reduction, so R4e returns to the R4c registration point.
 The four ABBA rounds completed all 5,184 planned calls with zero failed calls and
 1,296 locally denied SSH attempts per round. Original report SHA-256:
 `cd335fc1eecf67787ab4b6a9e7d92d179a319b31c5b8570b1c2cff6370eafc71`.
-The [retained R4d compact summary](../tools/x230/20261028/evidence/r4/cohort-r4d-diagnostic-compact.json)
+The [retained R4d compact summary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/cohort-r4d-diagnostic-compact.json)
 contains each arm, comparison group and round completion status. The diagnostic
 runtime SHA-256 is
 `416284f84a3b8a4aa85816afb3550d3bbd7db2aefdb71e06a52e65b8d06eb112`,
@@ -774,7 +774,7 @@ Original Cargo receipts verify `opt_level=1`, `debuginfo=0`, debug assertions an
 overflow checks enabled for both executables. This is the libtest measurement
 profile, distinct from the release MCP comparison.
 
-The [R4e Rust compact summary](../tools/x230/20261028/evidence/r4/rust-r4e-compact.json)
+The [R4e Rust compact summary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/rust-r4e-compact.json)
 has SHA-256 `6e992de2cdf792a225e42af5de2c8a97123b621036ffa89f31ae7d53ad44d9b9`;
 the original report is
 `27265e12a3f71acca9dd5d3a961d6f196368731df0a6a5d13f841b6b85e9bf99`.
@@ -845,7 +845,7 @@ measured gains motivated the subsequently completed qualification. The binding
 checks below connect this measurement to that qualified release. The completed
 native validation is recorded separately and uses its own workload and baseline.
 
-The [retained R4e compact summary](../tools/x230/20261028/evidence/r4/cohort-r4e-compact.json)
+The [retained R4e compact summary](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/cohort-r4e-compact.json)
 contains both arms, all phase groups and all four round outcomes. The measured
 identities are:
 
@@ -983,7 +983,7 @@ exhausted.
 
 ### R4e native validation: eight completed stages and original-job recovery
 
-The [native compact report](../tools/x230/20261028/evidence/r4/native-r4-compact.json)
+The [native compact report](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/native-r4-compact.json)
 records `passed=true`, `complete=true`, all eight stages executed once and passed,
 zero automatic retries, no unexecuted stage and a passed final input-integrity
 check. Each original stage helper returned 0 without timeout and was reaped while
@@ -1002,9 +1002,9 @@ throughput uses the measured call-cell times below, not the full cohort interval
 | Forwarded lease nonce | `b8e9574bdb393d153d35603c31a66058` |
 
 The native cohort nonce and forwarded lease nonce have different namespaces.
-The [main lease receipt](../tools/x230/20261028/evidence/r4/leases/native-main-report.json)
+The [main lease receipt](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/leases/native-main-report.json)
 binds its completion to the SHA of the
-[remote lease receipt](../tools/x230/20261028/evidence/r4/leases/native-remote-report.json),
+[remote lease receipt](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/leases/native-remote-report.json),
 which binds the original native report SHA above. Both leases passed with one
 launch, no automatic retry, return code 0 and original direct-child reaping.
 The main SSH child and remote runner child each retained custody until their
@@ -1108,7 +1108,7 @@ These observed cell durations are distinct from helper startup, cleanup and the
 full native-run timestamps. The original stage's `helper_elapsed_seconds` is
 **128.93093385896645 seconds**. The compact report retained a null generic
 `elapsed_seconds` field; the helper duration is taken from the full original
-native report, as recorded in the [publication preparation receipt](../tools/x230/20261028/evidence/r4/publication-preparation.json).
+native report, as recorded in the [publication preparation receipt](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/publication-preparation.json).
 
 Across the 27 cells, cell p95 ranged from 433.973 to 913.323 ms and cell p99 from
 452.462 to 961.132 ms. These are ranges of per-cell percentiles, not a pooled
@@ -1134,7 +1134,7 @@ receipts, independently of the completed 120-second native stage.
 
 ### R4e extended six-host C8 soak: completed independently
 
-The [extended compact report](../tools/x230/20261028/evidence/r4/extended-r4-compact.json)
+The [extended compact report](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/extended-r4-compact.json)
 uses schema `hepta-x230-extended-file-soak/v1`. It records `passed=true`,
 `complete=true`, one executed controller/helper stage, return code 0, no timeout,
 zero automatic retries and successful final input integrity. The original helper
@@ -1153,8 +1153,8 @@ eight-stage native protocol and its 120-second soak.
 
 The extended report supplies no native-style cohort nonce; the nonce above
 belongs only to its forwarded lease. The
-[main lease](../tools/x230/20261028/evidence/r4/leases/extended-main-report.json)
-binds the [remote lease](../tools/x230/20261028/evidence/r4/leases/extended-remote-report.json),
+[main lease](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/leases/extended-main-report.json)
+binds the [remote lease](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/leases/extended-remote-report.json),
 which binds the original extended-report SHA. Both receipts have
 `report_kind=extended-soak`, one launch, no retry, return code 0 and actual original
 child reaping with retained custody. The report's qualification, audit and runtime
@@ -1260,7 +1260,7 @@ also needs its own concrete hypothesis and controlled comparison. This iteration
 therefore preserves the qualified R4e bytes for publication with the completed
 evidence package and its verified source boundary.
 
-An [initial evidence export](../tools/x230/20261028/evidence/r4/diagnostics/evidence-export-r01.json)
+An [initial evidence export](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/diagnostics/evidence-export-r01.json)
 failed during the collector's self-screen because its own source contained the
 literal PuTTY marker used by the credential scanner. Splitting that source literal
 into adjacent byte strings preserved the AST, compiled regex bytes and flags;
@@ -1270,7 +1270,7 @@ failure and no test or external-effect replay.
 
 ### Original evidence package and byte verification
 
-The [package index](../tools/x230/20261028/evidence/r4/package-index.json) binds the
+The [package index](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/package-index.json) binds the
 archive, manifest and publication receipts. The archive retains the rejected
 iterations and their original failures alongside final R4e qualification,
 comparisons, recovery and soak artifacts. It contains no executable artifacts,
@@ -1278,15 +1278,15 @@ live job state, trust material, private keys or environment dumps.
 
 | Artifact | Exact size / integrity |
 | --- | --- |
-| [Original evidence archive](../tools/x230/20261028/evidence/r4/evidence-package.tar.gz) | 26,023,585 bytes; SHA-256 `a9d799c7b1e719c5da6424c26fc37cef7860c85538ac5aed5f1418ea40d2517d` |
+| [Original evidence archive](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/evidence-package.tar.gz) | 26,023,585 bytes; SHA-256 `a9d799c7b1e719c5da6424c26fc37cef7860c85538ac5aed5f1418ea40d2517d` |
 | Original file payloads | 6,789 files; 131,321,244 bytes before compression. The additional `metadata.json` member is the manifest. |
-| [Original manifest](../tools/x230/20261028/evidence/r4/evidence-manifest.json) | 7,362,748 bytes; SHA-256 `eb89e12c98a96040f98cc89620f0b73dd03dc4bd9ad12417270e58bfd2d7c29a` |
-| [Publication preparation](../tools/x230/20261028/evidence/r4/publication-preparation.json) | Archive size/hash, all 6,789 individual payload hashes, exact member set, safe regular member types and the 14 qualified code files verified after transfer. |
-| [Archive/lease joins](../tools/x230/20261028/evidence/r4/archive-lease-joins.json) | Both main completion receipts join to the original remote lease, original report and remote heartbeat/runner logs by full recorded identity, size and hash. Original source references remain bound by separate qualification/publication maps. |
+| [Original manifest](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/evidence-manifest.json) | 7,362,748 bytes; SHA-256 `eb89e12c98a96040f98cc89620f0b73dd03dc4bd9ad12417270e58bfd2d7c29a` |
+| [Publication preparation](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/publication-preparation.json) | Archive size/hash, all 6,789 individual payload hashes, exact member set, safe regular member types and the 14 qualified code files verified after transfer. |
+| [Archive/lease joins](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/archive-lease-joins.json) | Both main completion receipts join to the original remote lease, original report and remote heartbeat/runner logs by full recorded identity, size and hash. Original source references remain bound by separate qualification/publication maps. |
 
 Main-host lease reports and their original heartbeat/SSH logs are retained
-separately under [leases/](../tools/x230/20261028/evidence/r4/leases/).
-The [independent local lease review](../tools/x230/20261028/evidence/r4/leases/independent-local-review.json)
+separately under [leases/](https://github.com/TrillionniumFoundation/hepta-runtime/tree/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/leases/).
+The [independent local lease review](https://github.com/TrillionniumFoundation/hepta-runtime/blob/136ff99783d48d67a6bb1babfba4ad1631310257/tools/x230/20261028/evidence/r4/leases/independent-local-review.json)
 records its narrower local-only scope; the later archive/lease join above closes
 its original-archive verification gap. Native and extended leases retain 42 and
 39 main heartbeats respectively, one launch each, zero retries, the actual child

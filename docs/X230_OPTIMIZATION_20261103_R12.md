@@ -103,7 +103,7 @@ these boundaries and the deferred proposal to reuse remote request validation.
 
 ### Single-pass receipt encoding
 
-[jobs_persistence.rs](../src/mcp/runtime/jobs_persistence.rs) uses string lengths,
+[jobs_persistence.rs](https://github.com/TrillionniumFoundation/hepta-runtime/blob/fd37e1aeed7f945b352d2a45bc13a8200cdb79fa/src/mcp/runtime/jobs_persistence.rs) uses string lengths,
 array counts, and a fixed allowance to reserve likely encoding capacity. It does
 not scan string contents or perform a second encoding pass. Small receipts retain
 a small initial reservation; larger receipts reserve their hint and use
