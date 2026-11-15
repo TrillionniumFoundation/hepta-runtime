@@ -1,0 +1,132 @@
+# Hepta Runtime 全仓审计与 Rust 分支收拢
+
+日期：2026-11-15（America/New_York）。
+
+## 任务与证据范围
+
+用户要求审计整个仓库，将 Rust 开发分支合入 `main` 并清理已整合的
+Rust 分支，同时保持新的 HIA 重写分支。
+
+初始快照包含 **155 个远端分支、79 个 open PR**。默认分支为
+`hepta-runtime-base`，提交 `ba574f2a6a1b74e85191c58d7bec011720736bb9`，
+当时不存在 `main`。所有分支具有共同历史；没有把无关 Git 历史强接到项目中。
+
+审计覆盖全部引用、完整 Git 文件树、63 个最大 Rust 分支头的差异和历史，
+并深入核对 HTTP 认证、路径策略、远端执行、原始进程保管、幂等/恢复、
+文件原子创建、REA、Weight-Space、CI 和证据生成路径。
+原始清单、分支处理依据及失败实验原文定位保存在本目录 JSON 文件中。
+这项代码和证据审计不声称穷尽所有漏洞或证明生产部署安全。
+
+Rust 集成从 `a0dcdda1991ec536d5e2d252c006a778993fa566` 开始。
+它是 Rust/Python HIA 适配器的固定基线，不含新的 `native/*.hepta` 重写树。
+后续经过真实内容合并、语义冲突处理和明确的历史变体归档；未用一次全局
+`ours` 选择替代源代码审阅。
+
+## 保留的 HIA 引用
+
+| 分支 | 初始提交 | 保留原因 |
+|---|---|---|
+| `codex/hia-runtime-native-20261114-bd947b55` | `ddab6e5c35444a4987d9e2bcc037f1ac895a2954` | 原生 HIA 重写，PR #121 |
+| `codex/hia-request-context-20261114-7c666` | `64a0c9587f9bf6feed64e188c481402b2b16d998` | 原生请求/文件组件，PR #122 |
+| `codex/hia-shell-native-20261115-194042` | `93f320a8e02b522e4bafd4a2cf346d68069ec74b` | HIA shell 组件；#123 已合入重写线 |
+| `codex/hia-shell-lifecycle-20261115-194042` | `b67ba64602a18a2c8743fe33821c3f96f1f6f725` | HIA 进程生命周期，PR #124 |
+| `recovery/hia-bd947-20261114` | `557220f220eb9b2e6c26a5e1c51f3546059eb236` | HIA 恢复引用 |
+| `codex/hia-archive-source-retention-20261111-f9aa` | `a0dcdda1991ec536d5e2d252c006a778993fa566` | #121 的 base；原生迁移清单也固定其 commit/tree |
+
+最后一项虽然是 Rust 适配器基线，仍属于 HIA 迁移的固定依赖。删除它可能
+自动关闭或改动正在进行的 HIA PR，所以它的内容进入 `main`，引用保持不动。
+目标结构是一个日常 Rust 开发分支 `main`，加上述 HIA 重写及依赖引用。
+
+原生迁移清单仍记录 `whole_runtime_replaced=false`、
+`old_stack_removal_qualified=false`、`production_activated=false`。
+本次 Rust 合并不改变这些 HIA 状态，也不把 HIA 的 CI 结果当成 Rust 候选的验收。
+
+## 分支整合原则与实际内容
+
+149 个非保留分支的原始提交必须全部成为集成提交的祖先，之后才可清理引用。
+普通内容合并和归档合并都保留父提交；未对原始分支做 squash、重写或丢弃历史。
+
+主要实际新增/整合内容包括：
+
+- 当前无并发数量上限基线上的后台大目录分页（#116），保留完整源校验和有限
+  保管字节预算。较旧 #115 的两工作线程/硬缓存入口方案保留为历史变体。
+- Colab/Kaggle provider、账户启动器和云计算路由源码及其本地契约测试。
+- 可选的私有启动配置凭据、受控 macOS 配置转换工具及原始资格记录。
+- Weight-Space 的 exact certificate、Bellman、trust-region、guard journal、
+  cohort owner、semantic replay 和 semantic certificate。
+- 45 个独立 Weight-Space Rust 研究文件保持原始 blob，不登记为根 Cargo
+  workspace 或 MCP 生产组件。
+- REA checkpoint/resume、instruction window、source-map embedded-content
+  UTF-16 position、错误顺序和恢复协议；保留较新的完整 Evidence readback。
+- 旧分支中有效但遗漏的安全改进，以及独立源校验工具、部署恢复依赖图检查。
+
+REA 合并特意保留既有 Ghidra revision 2/3/4 分析桥的原始字节和 revision 4
+GPL helper/path 检查。C3 指令桥的确切字节放在单独文件，只为新的 revision 2
+instruction 路径使用；没有重绑定历史桥的哈希或重新引入固定并发闸门。
+
+42 个历史/被替代变体位于 `archives/rust-branches/`。每个 manifest 记录原始
+commit/tree、冲突来源、每个路径的 blob 和处理理由。例如 R25/R26/R30/R31/
+R33/R34/R35/R36 的原始性能拒绝，以及 R27/router-cache 的未完成验收仍然成立。
+归档源码可复现，不会因合并分支而自动获得性能采用资格。
+
+## 修复的具体问题
+
+| 编号 | 原问题 | 本次修复与回归依据 |
+|---|---|---|
+| SEC-01 | 不带 `--runtime-config` 的 HTTP MCP 可以绕过令牌认证，甚至监听公网地址 | 所有 HTTP 模式统一要求私有 token 文件和 loopback；保留 Origin 拒绝、常量时间令牌比较及 credential scope；新增真实 HTTP 401/403/授权请求测试 |
+| SEC-02 | 先词法折叠 `link/..` 再解析符号链接，可授权一个实际访问到工作区外的路径 | 按真实文件系统语义解析原始路径；不存在的普通后缀与 dangling symlink 分开处理；覆盖现有文件、新文件及正常路径 |
+| SEC-03 | Mac/Python 和 PTY 缺少原先物理 cwd 约束，省略 cwd 也可绕过配置根 | 配置执行根时要求 cwd；物理目录检查后持有 cwd 描述符；只改变子进程 cwd，保留监督器自己的私有 job 目录和 receipt 所有权 |
+| SEC-04 | 本地 CREATE 的 exists-then-write 竞态可能覆盖另一调用刚创建的文件或跟随 dangling symlink | 使用 `create_new` 原子占有目标；成功后才更新 delta cache；确定性双调用测试验证恰好一个成功 |
+| CI-01 | 当前主 CI 不识别 `main` | 补齐 push/PR 分支过滤，保持 exact-head 与 prospective-merge、两种 feature 模式和隔离测试 |
+
+SEC-03 已用实际嵌入的 Python supervisor 做临时目录实验：允许目录退出 0；
+符号链接越界和缺失 cwd 均退出 127 且没有业务效果；terminal/witness 始终位于
+原 job 目录。对应 Rust 回归也纳入最终组合测试。
+
+对旧安全分支逐项核对后保留较强当前实现：私有状态根的 UID/0700 验证、Linux
+`RENAME_NOREPLACE` 和 Darwin `RENAME_EXCL`、typed minimal audit、完整幂等
+身份绑定、nofollow receipt、fsync 顺序及取消后原始 SSH 子进程的 guard 保管。
+两个旧保护实际遗漏（HTTP 通用认证和物理 cwd）已适配到新实现，而非简单归档。
+
+## 仍需如实保留的边界
+
+1. **旧本地 view/editor 路径仍有检查到 I/O 的竞态。** 静态符号链接/父目录
+   绕过和 CREATE 竞态已经单独修复，但普通路径检查之后的读写并非全部绑定
+   描述符。不能宣称所有旧文件工具对恶意并发目录替换均安全。
+2. **远端配置根的祖先目录需要可信且稳定。** `fileio.py` 的 root open 对
+   最后一个组件使用 `O_NOFOLLOW`，并不逐个固定所有祖先；打开后的子路径使用
+   描述符遍历。这不是完整的全路径无竞态根证明。
+3. **无并发数量上限是明确策略。** 字节预算、超时、原操作身份和子进程清理
+   仍存在，但总负载依赖 OS/provider 的实际资源限制。本次不把代码测试写成
+   0.25 CPU / 2 GiB hostile-envelope 已通过。
+4. **共享操作员 token 不是独立 ChatGPT 调用者身份。** 当前代码仍明确报告
+   `authenticated_chatgpt_caller_isolation: false`。
+5. **REA 完整兼容性仍未建立。** 合并后的结构性清单是 37 个 native interface；
+   229 个冻结上游工具中 187 absent、23 partial、19 related，0 qualified、
+   229 OPEN。重新生成当前源码映射只证明清单与源码一致，不重新认证原始参考
+   资料，也不把历史结果升级成这次组合的行为证明。
+6. **源码合并与生产切换是不同验收。** 原有真实 SSH 负向实验、原始会话移交、
+   生产吞吐和独立 Final-use authority 的 HOLD 不能由本次分支合并消除。
+
+## 验证与清理记录
+
+本目录的 `validation/`、`verification.json` 和最终执行记录保存实际结果。
+只将 exit 0 的对应命令记为通过；失败、skip、环境不支持和未执行分别记录。
+早期子分支的成功不代替最终组合源码的检查。
+
+关键只读复核命令：
+
+```sh
+python3 scripts/verify_rust_consolidation.py --revision main
+cargo +1.95.0 fmt --all -- --check
+cargo +1.95.0 check --locked --all-targets --all-features
+cargo +1.95.0 check --locked --all-targets --no-default-features
+cargo +1.95.0 clippy --locked --all-targets --all-features -- -D warnings
+cargo +1.95.0 clippy --locked --all-targets --no-default-features -- -D warnings
+cargo +1.95.0 nextest run --locked --all-targets --all-features --test-threads 1 --retries 0 --no-fail-fast
+python3 -B scripts/rea_compatibility_ledger.py check-mapping
+```
+
+清理阶段只删除已在 `main` 中保管的原始 Rust 分支，并以期望旧 SHA 检查每次
+删除。分支若被其他工作推进，必须重新检查，不能按旧清单盲删。
+新的 HIA 重写、它们的 PR 和固定基线均不进入修改/删除集合。
