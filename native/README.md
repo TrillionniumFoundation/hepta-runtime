@@ -199,3 +199,14 @@ belong outside Git. Required executable fixtures and raw Unix filenames,
 symlinks or FIFOs remain inside qualified evidence archives. Git history keeps
 the former development narrative; this document describes the current layout
 and its qualification requirements.
+
+
+The private [complete Local Create composition](local_create_spec_abi.md) has a
+separate target Tokio 1.53.3 reference. It joins the existing source/parent,
+whole-worker mkdir, segmented exclusive-write, inline-close, canonical-key and
+ViewCache owners in the original body order. Five registered suites retain
+38 ordinary and 15 held-boundary native cases, complete response/file/cache
+observations, 20,207 typed calls and strict build/evidence controls. Six actual
+original processes freshly build and replay the unchanged selected source with
+Rust 1.95.0. This qualification does not activate the public TextEditor gateway,
+change the older leaf's Tokio provenance, or qualify removal of the old runtime.

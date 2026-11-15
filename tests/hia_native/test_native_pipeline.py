@@ -262,7 +262,7 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(partitions["system"][:3],
                          ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py",
                           "test_filesystem_parity_kernel.py"))
-        self.assertEqual(len(flat), 220)
+        self.assertEqual(len(flat), 225)
         self.assertLess(partitions['view'].index('test_runtime_mcp.py'),
                         partitions['view'].index('test_filesystem_public.py'))
         self.assertNotIn('test_filesystem_public_original_evidence.py', flat)
@@ -360,6 +360,17 @@ class NativePipelineTests(unittest.TestCase):
         changed["view"] = tuple(reversed(changed["view"]))
         with self.assertRaisesRegex(ValueError, "public View"):
             p.partition_tests(changed)
+
+    def test_complete_local_create_evidence_stays_after_its_producers(self):
+        item = q.local_create_spec_qualification.MODULE
+        tests = (item["test"], *item["additional_tests"])
+        actual = p.partition_tests()["system"]
+        self.assertEqual(tuple(name for name in actual if name in tests), tests)
+        changed = dict(item)
+        changed["additional_tests"] = tuple(reversed(item["additional_tests"]))
+        modules = tuple(changed if row["key"] == item["key"] else row for row in q.MODULES)
+        with patch.object(q, "MODULES", modules), self.assertRaisesRegex(ValueError, "producer and evidence"):
+            p.partition_tests()
 
     def test_workflow_requires_all_partitions_with_unchanged_process_and_job_limits(self):
         workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
@@ -840,9 +851,9 @@ class ShellProcessPipelineTests(unittest.TestCase):
     def test_shell_registry_keeps_process_text_and_original_domains_distinct(self):
         import compare_hia_runtime_rust as original
         from check_hia_native_inventory import inspect
-        self.assertEqual(len(q.MODULES), 86)
-        self.assertEqual(len(q.native_tests()), 220)
-        self.assertEqual(len(original.RECIPES), 80)
+        self.assertEqual(len(q.MODULES), 87)
+        self.assertEqual(len(q.native_tests()), 225)
+        self.assertEqual(len(original.RECIPES), 81)
         self.assertEqual(q.SHELL_PROCESS_TESTS, (
             "shell_process_state.py", "shell_process_transport.py",
             "hia_native_shell_process_qualification.py", "shell_process_evidence_controls.py"))
@@ -865,7 +876,7 @@ class ShellProcessPipelineTests(unittest.TestCase):
         self.assertNotIn("shell_foreground", original.NEW_COMPONENTS)
         self.assertIs(original.RECIPES["shell_foreground"], original.compare_shell_foreground)
         inventory = inspect(ROOT)
-        self.assertEqual(len(inventory["native_sources"]), 193)
+        self.assertEqual(len(inventory["native_sources"]), 195)
         self.assertEqual(inventory["legacy_tool_count"], 125)
         self.assertEqual(inventory["native_production_tool_count"], 0)
         self.assertIs(inventory["whole_runtime_replaced"], False)

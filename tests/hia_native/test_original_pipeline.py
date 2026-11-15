@@ -132,6 +132,8 @@ class OriginalPipelineTests(unittest.TestCase):
                         names = reference.CHECKS
                 if key == "local_create_file":
                     names = r.local_create_qualification.PROCESS_NAMES
+                if key == "local_create_spec":
+                    names = r.local_create_spec_qualification.PROCESS_NAMES
                 if key == "view_read":
                     names = (*names, *r.VIEW_SEARCH_ORIGINAL_CHECKS, *r.VIEW_REGEX_SEARCH_ORIGINAL_CHECKS)
                 deadlines = {name: timeout for name, (component, timeout) in r.RUST_PROCESS_DEADLINES.items()
@@ -296,7 +298,7 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_registry_covers_every_recipe_once_and_keeps_shared_builds_together(self):
         flat = [key for keys in p.groups().values() for key in keys]
-        self.assertEqual(len(flat), 80)
+        self.assertEqual(len(flat), 81)
         self.assertEqual(set(flat), set(r.RECIPES))
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(p.GROUPS["config"], ("runtime_config", "runtime_config_span"))
@@ -334,6 +336,30 @@ class OriginalPipelineTests(unittest.TestCase):
                 self.change_report("system", lambda part: part["rust_recipe_processes"].update(
                     local_create_file=names), update_workflow=True)
                 with self.assertRaisesRegex(ValueError, "exact twelve ordered original processes"):
+                    self.collect()
+
+    def test_complete_local_create_keeps_all_six_actual_processes(self):
+        self.assertIn("local_create_spec", p.GROUPS["system"])
+        part = native.read_json(self.shards / "system" / p.SHARD_REPORT)
+        self.assertEqual(part["rust_recipe_processes"]["local_create_spec"],
+                         list(r.local_create_spec_qualification.PROCESS_NAMES))
+        owners = r.original_process_attribution(part, p.GROUPS["system"])
+        for name in r.local_create_spec_qualification.PROCESS_NAMES:
+            self.assertEqual(owners[name], "local_create_spec")
+            row = next(row for row in part["checks"] if row["name"] == name)
+            self.assertEqual(row["timeout_seconds"], 180)
+            self.assertEqual(row["exit_code"], 0)
+
+    def test_complete_local_create_refuses_missing_reordered_or_invented_processes(self):
+        original = list(r.local_create_spec_qualification.PROCESS_NAMES)
+        variants = (original[:-1], original[::-1], ["invented-spec-build", *original[1:]],
+                    [*original, "invented-spec-process"])
+        for names in variants:
+            with self.subTest(names=names):
+                self.setUp()
+                self.change_report("system", lambda part: part["rust_recipe_processes"].update(
+                    local_create_spec=names), update_workflow=True)
+                with self.assertRaisesRegex(ValueError, "exact six ordered original processes"):
                     self.collect()
 
     def test_workflow_keeps_independent_hash_outputs_and_original_job_deadlines(self):

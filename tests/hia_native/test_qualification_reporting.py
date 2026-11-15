@@ -1207,6 +1207,44 @@ class QualificationReportingTests(unittest.TestCase):
                 with self.assertRaises(ValueError): original.check_compiled_modules(self.output, changed)
                 reader.assert_not_called()
 
+    def test_complete_local_create_registers_five_suites_six_processes_and_sources(self):
+        import hia_native_local_create_spec_qualification as spec
+        import hia_native_local_create_spec_state_qualification as state
+        import hia_native_pipeline as pipeline
+        import qualify_hia_runtime_native as q
+        self.assertIs(RECIPES["local_create_spec"], spec.compare_original)
+        self.assertEqual(next(item for item in MODULES if item["key"] == "local_create_spec"), spec.MODULE)
+        names = (spec.MODULE["test"], *spec.MODULE["additional_tests"])
+        self.assertEqual(names, ("test_local_create_spec_build.py", "test_local_create_spec_state.py",
+            "test_local_create_spec_semantics.py", "test_local_create_spec_held.py",
+            "test_local_create_spec_evidence.py"))
+        self.assertEqual(tuple(name for name in pipeline.partition_tests()["system"] if name in names), names)
+        self.assertEqual(len(spec.PROCESS_NAMES), 6)
+        self.assertEqual(len(set(spec.PROCESS_NAMES)), 6)
+        self.assertTrue(set(spec.SOURCE_FILES) <= set(q.sources()))
+        self.assertTrue(set(state.SOURCE_FILES) <= set(q.sources()))
+        self.assertTrue(spec.SCOPE["local_serial_profile_only"])
+        self.assertEqual(spec.SCOPE["target_tokio"], "1.53.3")
+        for field in ("public_handler_qualified", "full_create_file_spec_qualified",
+                      "runtime_shutdown_qualified", "arbitrary_tokio_budget_qualified",
+                      "production_activated", "whole_runtime_replaced", "old_stack_removal_qualified"):
+            self.assertIs(spec.SCOPE[field], False)
+        actual = spec.source_evidence(ROOT)
+        self.assertTrue(actual["migration_target_binding"]["complete_selected_files_equal"])
+
+    def test_complete_local_create_bundle_requires_its_strict_build_reader(self):
+        original, manifest, module, report = self.create_manifest_fixture(key="local_create_spec")
+        with patch.object(original.local_create_spec_qualification, "verify_build", return_value={}) as check:
+            original.check_compiled_modules(self.output, report)
+            check.assert_called_once_with(manifest, source_root=ROOT)
+        with patch.object(original.local_create_spec_qualification, "verify_build",
+                          side_effect=ValueError("changed full Local child image")):
+            with self.assertRaisesRegex(ValueError, "changed full Local child image"):
+                original.check_compiled_modules(self.output, report)
+        original.local_create_spec_qualification.build_sources(ROOT)
+        with self.assertRaises(ValueError):
+            original.check_compiled_modules(self.output, report)
+
     def test_every_component_has_one_explicit_reference_domain(self):
         declared = {item['key'] for item in MODULES}
         domains = (set(RECIPES), NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS, HARDWARE_REFERENCE_COMPONENTS)
@@ -1412,10 +1450,10 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
-        self.assertEqual(len(MODULES), 86)
-        self.assertEqual(len(migration["native_components"]), 193)
-        self.assertEqual(len(q.native_tests()), 220)
-        self.assertEqual(len(RECIPES), 80)
+        self.assertEqual(len(MODULES), 87)
+        self.assertEqual(len(migration["native_components"]), 195)
+        self.assertEqual(len(q.native_tests()), 225)
+        self.assertEqual(len(RECIPES), 81)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
         self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
                             for row in migration["legacy_tool_handlers"]))

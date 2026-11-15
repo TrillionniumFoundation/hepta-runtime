@@ -26,8 +26,8 @@ and its [exact target snapshot](native/migration_target.json) record these
 remaining owners. The native profile's passing component tests do not qualify
 removal of those owners or production activation.
 
-The executable registry declares 193 HIA sources, 86 component builds, 220
-native suites and 80 original Rust comparison recipes. CI preserves their
+The executable registry declares 195 HIA sources, 87 component builds, 225
+native suites and 81 original Rust comparison recipes. CI preserves their
 complete domains across nine native partitions and eight original comparison
 partitions. These registry counts do not change the production qualification
 status recorded in the migration inventory.

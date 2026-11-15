@@ -82,6 +82,7 @@ import hia_native_shell_capture_gate as capture_gate
 import hia_native_bellman_qualification as bellman_qualification
 import hia_native_bellman_commitment_qualification as bellman_commitment_qualification
 import hia_native_local_create_pipeline as local_create_qualification
+import hia_native_local_create_spec_qualification as local_create_spec_qualification
 import hia_native_text_editor_params_qualification as text_editor_params_qualification
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
@@ -158,6 +159,12 @@ def check_input_pins(output: Path, report: dict) -> None:
         rustc = Path(report["rust_compiler"]["invocation_path"])
         if report["original_rust_comparisons"]["local_create_file"] != local_create_qualification.original_evidence(output, report, rustc):
             raise ValueError("required current-target local-create replay differs")
+    if report.get("local_create_spec_evidence") != local_create_spec_qualification.native_evidence(output, report):
+        raise ValueError("required complete Local Create native evidence differs")
+    if "local_create_spec" in report.get("original_rust_comparisons", {}):
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        if report["original_rust_comparisons"]["local_create_spec"] != local_create_spec_qualification.original_evidence(output, report, rustc):
+            raise ValueError("required complete Local Create original replay differs")
     if report.get("bellman_evidence") != bellman_qualification.native_evidence(output, report):
         raise ValueError("required Bellman native hardware/corpus/static evidence differs")
     if report.get("bellman_commitment_evidence") != bellman_commitment_qualification.native_evidence(output, report):
@@ -562,6 +569,9 @@ def check_compiled_modules(output: Path, report: dict) -> None:
             # This is a packed composition. Reopen its complete fixed source,
             # child image, packer arrays and ELF through the existing owner.
             local_create_qualification.blocking.verify_build(manifest, source_root=ROOT)
+            continue
+        if item.get("builder") == "local_create_spec":
+            local_create_spec_qualification.verify_build(manifest, source_root=ROOT)
             continue
         for label in ("source", "image"):
             if label not in module or label + "_sha256" not in module:
@@ -2641,6 +2651,7 @@ RECIPES = {"serde_error": compare_serde_error, "batch_write": compare_batch_writ
            "bellman_core": bellman_qualification.compare_original,
            "bellman_commitment": bellman_commitment_qualification.compare_original,
            "local_create_file": local_create_qualification.compare_original,
+           "local_create_spec": local_create_spec_qualification.compare_original,
            "filesystem_public": compare_filesystem_public,
            "text_editor_params": text_editor_params_qualification.compare_original}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
@@ -2710,6 +2721,8 @@ def original_process_attribution(report: dict, keys: tuple[str, ...]) -> dict[st
             raise ValueError("original recipe omitted its unique actual process records")
         if key == "local_create_file" and names != list(local_create_qualification.PROCESS_NAMES):
             raise ValueError("local-create requires its exact twelve ordered original processes")
+        if key == "local_create_spec" and names != list(local_create_spec_qualification.PROCESS_NAMES):
+            raise ValueError("complete Local Create requires its exact six ordered original processes")
         if key in wanted:
             if names != mapping[wanted[key]]:
                 raise ValueError("shared original recipe does not retain its producer's complete process set")

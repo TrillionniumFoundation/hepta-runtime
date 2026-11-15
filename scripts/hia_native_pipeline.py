@@ -43,7 +43,7 @@ PARTITIONS = {
     "system": ("filesystem_parity", "binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
                "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service",
-               "finite_binary64", "bellman_core", "bellman_commitment", "local_create_file", "directory_service"),
+               "finite_binary64", "bellman_core", "bellman_commitment", "local_create_file", "local_create_spec", "directory_service"),
 }
 BUILD_SEAL = "native-build.json"
 BUILD_REPORT = "prepared-report.json"
@@ -181,7 +181,9 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
                for names in result.values()):
         raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
     for group in (q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS),
-                  q.batch_write_pipeline.q.SUITES, q.serde_error_pipeline.TESTS, q.storage_pipeline.TESTS):
+                  q.batch_write_pipeline.q.SUITES, q.serde_error_pipeline.TESTS, q.storage_pipeline.TESTS,
+                  (q.local_create_spec_qualification.MODULE["test"],
+                   *q.local_create_spec_qualification.MODULE["additional_tests"])):
         if not any(all(name in names for name in group)
                    and [names.index(name) for name in group] == sorted(names.index(name) for name in group)
                    for names in result.values()):

@@ -35,7 +35,7 @@ GROUPS = {
     'services': ('write_chain', 'directory_service', 'workdir_service', 'sdk_connection', 'public_registry'),
     'json': ('serde_error', 'request_context', 'response_hints', 'result_publication', 'request_scope_lifecycle', 'binary32_json', 'typed_result_json', 'request_result', 'fence_json', 'serde_json', 'execution_shadow', 'effect_fence'),
     'config': ('runtime_config', 'runtime_config_span'),
-    'system': ('operation_scope_os', 'multi_read_service', 'operation_kdf', 'operation_aead', 'operation_nonce', 'operation_record', 'system_entropy', 'operation_scope', 'caller_authority', 'bellman_core', 'bellman_commitment', 'local_create_file'),
+    'system': ('operation_scope_os', 'multi_read_service', 'operation_kdf', 'operation_aead', 'operation_nonce', 'operation_record', 'system_entropy', 'operation_scope', 'caller_authority', 'bellman_core', 'bellman_commitment', 'local_create_file', 'local_create_spec'),
     'batch': ('batch_write', 'batch_plan', 'batch_apply', 'batch_edit_params', 'batch_plan_input', 'batch_diff', 'atomic_write', 'filesystem_parity'),
 }
 NATIVE_SEAL = "original-native.json"

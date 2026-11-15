@@ -78,6 +78,7 @@ import hia_native_shell_capture_gate as capture_gate
 import hia_native_bellman_qualification as bellman_qualification
 import hia_native_bellman_commitment_qualification as bellman_commitment_qualification
 import hia_native_local_create_pipeline as local_create_qualification
+import hia_native_local_create_spec_qualification as local_create_spec_qualification
 import hia_native_text_editor_params_qualification as text_editor_params_qualification
 import hia_native_connection_qualification as connection_qualification
 import hia_native_public_registry_qualification as public_registry_qualification
@@ -91,6 +92,7 @@ import hia_native_write_chain_pipeline as write_chain_pipeline
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
     local_create_qualification.MODULE,
+    local_create_spec_qualification.MODULE,
     text_editor_params_qualification.MODULE,
     *bellman_qualification.MODULES,
     bellman_commitment_qualification.MODULE,
@@ -536,7 +538,9 @@ def sources() -> dict:
         "hia_native_local_create_pipeline.py", "hia_native_local_create_segments_qualification.py",
         "hia_native_local_create_async_qualification.py",
         "hia_native_text_editor_params_qualification.py",
-        "local_create_adapter.S",
+        "local_create_adapter.S", "local_create_spec_adapter.S",
+        "hia_native_local_create_spec_build.py", "hia_native_local_create_spec_qualification.py",
+        "hia_native_local_create_spec_state_qualification.py",
         "hia_native_io_build.py", "hia_native_composition_build.py", "hia_native_record_build.py", "hia_native_cold.py",
         "hia_native_entropy_build.py", "hia_native_entropy_qualification.py",
         "hia_native_scope_build.py", "hia_native_scope_qualification.py",
@@ -3015,6 +3019,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_BELLMAN_COMMITMENT_QUALIFICATION_OUTPUT": str(output),
         "HIA_LOCAL_CREATE_OUTPUT": str(output / "local-create"),
         "HIA_LOCAL_CREATE_QUALIFICATION_OUTPUT": str(output),
+        "HIA_LOCAL_CREATE_SPEC_OUTPUT": str(output / "local-create-spec"),
         "HIA_TEXT_EDITOR_PARAMS_QUALIFICATION_OUTPUT": str(output),
         "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
         "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
@@ -3196,6 +3201,9 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "local_create":
             from hia_native_local_create_build import build_local_create
             built = build_local_create(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "local_create_spec":
+            from hia_native_local_create_spec_build import build_local_create_spec
+            built = build_local_create_spec(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "entropy":
             from hia_native_entropy_build import build_entropy
             built = build_entropy(hepta, output / "build")
@@ -3435,6 +3443,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
 def collect_native_evidence(output: Path, report: dict) -> None:
     report["text_editor_params_evidence"] = text_editor_params_qualification.native_evidence(output, report)
     report["local_create_file_evidence"] = local_create_qualification.native_evidence(output, report)
+    report["local_create_spec_evidence"] = local_create_spec_qualification.native_evidence(output, report)
     report["local_create_segments_evidence"] = local_create_qualification.segments.native_evidence(output, report)
     report["local_create_async_held_evidence"] = local_create_qualification.held.native_evidence(output, report)
     report["bellman_evidence"] = bellman_qualification.native_evidence(output, report)
@@ -3537,6 +3546,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
         "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
     report["rust_oracle_inputs"].update(report["text_editor_params_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["local_create_file_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["local_create_spec_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["local_create_segments_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["local_create_async_held_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["request_context_evidence"]["artifact_sha256"])
