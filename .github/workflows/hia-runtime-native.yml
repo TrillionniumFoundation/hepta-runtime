@@ -15,6 +15,8 @@ on:
       - 'scripts/config_mcp_adapter.S'
       - 'scripts/config_owner_adapter.S'
       - 'scripts/shell_process_adapter.S'
+      - 'scripts/shell_output_adapter.S'
+      - 'scripts/shell_foreground_adapter.S'
       - 'scripts/qualify_hia_shell_process.py'
       - 'scripts/config_schema.py'
       - 'scripts/hia_native_config_reference.py'
@@ -83,6 +85,8 @@ on:
       - 'scripts/config_mcp_adapter.S'
       - 'scripts/config_owner_adapter.S'
       - 'scripts/shell_process_adapter.S'
+      - 'scripts/shell_output_adapter.S'
+      - 'scripts/shell_foreground_adapter.S'
       - 'scripts/qualify_hia_shell_process.py'
       - 'scripts/config_schema.py'
       - 'scripts/hia_native_config_reference.py'
@@ -365,6 +369,10 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: 1.95.0
         run: |
+          if ! command -v strace; then
+            sudo apt-get update
+            sudo apt-get install --yes strace
+          fi
           rustup toolchain install 1.95.0 --profile minimal --component rustfmt
           python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \
             --output "$RUNNER_TEMP/hia-runtime-native" \

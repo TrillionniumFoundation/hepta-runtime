@@ -15,3 +15,4 @@
 //! Original owner included in full; fixture accessors have no replacement body.
 include!("original_shell.rs");
 include!("shell_fixture.rs");
+include!("shell_outcome_fixture.rs");

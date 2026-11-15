@@ -306,26 +306,36 @@ class ShellProcessPipelineTests(unittest.TestCase):
     def registry_report(self):
         return {"phase": "native_components", "checks": [], "modules": {
             "shell_process": {"manifest": "build/shell-process/manifest.json"},
-            "shell_background_text": {"manifest": "build/modules/shell-background-text/manifest.json"}}}
+            "shell_background_text": {"manifest": "build/modules/shell-background-text/manifest.json"},
+            "shell_outcome": {"manifest": "build/shell-outcome/manifest.json"},
+            "shell_output_io": {"manifest": "build/shell-output/manifest.json"},
+            "shell_foreground": {"manifest": "build/shell-foreground/manifest.json"}}}
 
     def test_shell_registry_keeps_process_text_and_original_domains_distinct(self):
         import compare_hia_runtime_rust as original
         from check_hia_native_inventory import inspect
-        self.assertEqual(len(q.MODULES), 42)
-        self.assertEqual(len(q.native_tests()), 100)
-        self.assertEqual(len(original.RECIPES), 37)
+        self.assertEqual(len(q.MODULES), 45)
+        self.assertEqual(len(q.native_tests()), 104)
+        self.assertEqual(len(original.RECIPES), 40)
         self.assertEqual(q.SHELL_PROCESS_TESTS, (
             "shell_process_state.py", "shell_process_transport.py",
             "hia_native_shell_process_qualification.py", "shell_process_evidence_controls.py"))
         text = p.partition_tests()["text"]
-        required = (*q.SHELL_PROCESS_TESTS, q.SHELL_BACKGROUND_TEST)
+        required = (*q.SHELL_PROCESS_TESTS, q.SHELL_BACKGROUND_TEST,
+                    q.SHELL_OUTCOME_TEST, q.SHELL_OUTPUT_TEST, *q.SHELL_FOREGROUND_TESTS)
         self.assertEqual(tuple(name for name in text if name in required), required)
         self.assertNotIn("shell_process", original.NEW_COMPONENTS)
         self.assertNotIn("shell_background_text", original.NEW_COMPONENTS)
         self.assertIs(original.RECIPES["shell_process"], original.compare_shell_process)
         self.assertIs(original.RECIPES["shell_background_text"], original.compare_shell_background)
+        self.assertNotIn("shell_outcome", original.NEW_COMPONENTS)
+        self.assertNotIn("shell_output_io", original.NEW_COMPONENTS)
+        self.assertIs(original.RECIPES["shell_outcome"], original.compare_shell_outcome)
+        self.assertIs(original.RECIPES["shell_output_io"], original.compare_shell_output)
+        self.assertNotIn("shell_foreground", original.NEW_COMPONENTS)
+        self.assertIs(original.RECIPES["shell_foreground"], original.compare_shell_foreground)
         inventory = inspect(ROOT)
-        self.assertEqual(len(inventory["native_sources"]), 69)
+        self.assertEqual(len(inventory["native_sources"]), 74)
         self.assertEqual(inventory["legacy_tool_count"], 125)
         self.assertEqual(inventory["native_production_tool_count"], 0)
         self.assertIs(inventory["whole_runtime_replaced"], False)
@@ -336,10 +346,20 @@ class ShellProcessPipelineTests(unittest.TestCase):
         for relative in (
                 "native/shell_process.hepta", "native/shell_process_packer.hepta",
                 "native/shell_background_text.hepta",
+                "native/shell_outcome.hepta", "native/shell_outcome_reuse.json",
+                "native/shell_output_io.hepta", "native/shell_output_packer.hepta",
+                "native/shell_output_layout.json",
+                "native/shell_foreground_controller.hepta", "native/shell_foreground_packer.hepta",
+                "native/shell_foreground_layout.json",
                 "scripts/hia_native_shell_process_build.py",
                 "scripts/hia_native_shell_process_qualification.py",
                 "scripts/hia_native_shell_process_reference.py",
                 "scripts/hia_native_shell_process_evidence.py",
+                "scripts/hia_native_shell_outcome_build.py", "scripts/hia_native_shell_outcome_qualification.py",
+                "scripts/hia_native_shell_output_build.py", "scripts/hia_native_shell_output_qualification.py",
+                "scripts/shell_output_adapter.S", "scripts/hia_native_failure_evidence.py",
+                "scripts/hia_native_shell_foreground_build.py", "scripts/hia_native_shell_foreground_qualification.py",
+                "scripts/shell_foreground_adapter.S",
                 "scripts/shell_process_adapter.S", "scripts/qualify_hia_shell_process.py",
                 ".github/workflows/hia-runtime-shell-process.yml",
                 "tests/hia_native/shell_process_state.py",
@@ -347,9 +367,47 @@ class ShellProcessPipelineTests(unittest.TestCase):
                 "tests/hia_native/shell_process_cases.py",
                 "tests/hia_native/shell_process_evidence_controls.py",
                 "tests/hia_native/shell_background_text.py",
+                "tests/hia_native/shell_outcome_state.py", "tests/hia_native/shell_outcome_cases.py",
+                "tests/hia_native/shell_output_io.py", "tests/hia_native/shell_output_original_io.py",
+                "tests/hia_native/shell_foreground_controller.py", "tests/hia_native/shell_foreground_io.py",
                 "src/mcp/fs/background.rs", "src/mcp/fs/background_tests.rs"):
             with self.subTest(relative=relative):
                 self.assertEqual(source.get(relative), q.sha(ROOT / relative))
+
+    def test_shell_output_launchers_reject_partial_or_foreign_builds_before_execution(self):
+        report = self.registry_report()
+        commands = {**q.shell_outcome_test_commands(self.root, report),
+                    **q.shell_output_test_commands(self.root, report),
+                    **q.shell_foreground_test_commands(self.root, report)}
+        for name, command in commands.items():
+            variants = [command + ["--case", "normal"], command + ["--verify", "/foreign"]]
+            for option in ("--native-manifest", "--outcome-manifest", "--output"):
+                if option in command:
+                    foreign = list(command)
+                    foreign[foreign.index(option) + 1] = str(self.root / "foreign")
+                    variants.append(foreign)
+                    index = command.index(option)
+                    variants.append(command[:index] + command[index + 2:])
+            for mutated in variants:
+                with self.subTest(name=name, argv=mutated), patch.object(q, "record_check") as run:
+                    with self.assertRaisesRegex(ValueError, "source-owned suite"):
+                        q.run_native_checks(self.root, report, (name,), q.qualification_env(),
+                            parallel_tests=(), ordered_groups=(), commands={name: mutated})
+                    run.assert_not_called()
+        self.assertEqual(report["checks"], [])
+
+    def test_shell_output_original_recipe_requires_same_gate_process_and_outcome(self):
+        import compare_hia_runtime_rust as original
+        report = self.registry_report()
+        order = original.rust_recipe_order(report)
+        self.assertLess(order.index("shell_process"), order.index("shell_outcome"))
+        self.assertLess(order.index("shell_outcome"), order.index("shell_output_io"))
+        self.assertLess(order.index("shell_output_io"), order.index("shell_foreground"))
+        for missing in ("shell_process", "shell_outcome", "shell_output_io"):
+            incomplete = json.loads(json.dumps(report))
+            del incomplete["modules"][missing]
+            with self.subTest(missing=missing), self.assertRaisesRegex(ValueError, "producer must precede"):
+                original.rust_recipe_order(incomplete)
 
     def progress_rows(self, original=False):
         module = q._shell_test_module("shell_process_cases.py")
@@ -426,6 +484,95 @@ class ShellProcessPipelineTests(unittest.TestCase):
         name, report = self.actual_progress(folder, rows, raw=raw)
         with self.assertRaisesRegex(ValueError, "duplicate real-OS shell progress field"):
             q.completed_test_summary(folder, report, name)
+
+    def io_progress_rows(self, output_io):
+        module = q._shell_test_module(q.SHELL_OUTPUT_TEST if output_io else q.SHELL_FOREGROUND_TESTS[1])
+        specifications = module.specs() if output_io else module.specifications()
+        rows = [{"case": case["name"], "status": "NATIVE_IO_PASS" if output_io else "ACTUAL_NATIVE_PASS"}
+                for case in specifications]
+        if output_io:
+            for row in rows:
+                row.update(effects=1, outcome=True)
+        summary = {"schema": "hepta.runtime.shell-output-io-read.v1" if output_io else
+                   "hepta.runtime.shell-foreground-io-read.v1", "status": "PASS",
+                   "cases": len(rows), "retired_fixtures": len(rows), "complete_registered_corpus": True,
+                   "actual_native_process_wait": not output_io, "native_phase_cases_added_by_reference": 0}
+        if output_io:
+            summary.update(effects=len(rows), io_only=False)
+        return rows + [summary]
+
+    def actual_io_progress(self, folder, name, rows, raw=None):
+        folder.mkdir()
+        wire = raw if raw is not None else b"".join((json.dumps(row) + "\n").encode() for row in rows)
+        program = folder / "progress.py"
+        program.write_text("import sys\nsys.stdout.buffer.write(" + repr(wire) + ")\n")
+        report = {"phase": "reporting-regression", "checks": []}
+        q.record_check(folder, report, name=name, command=[sys.executable, "-I", "-B", str(program)], timeout=2)
+        return report
+
+    def test_actual_io_progress_binds_every_case_and_complete_final_reader_result(self):
+        for output_io, names in ((True, (q.SHELL_OUTPUT_TEST, "shell-output-native")),
+                                 (False, (q.SHELL_FOREGROUND_TESTS[1], "shell-foreground-native"))):
+            for name in names:
+                rows = self.io_progress_rows(output_io)
+                folder = self.root / name
+                report = self.actual_io_progress(folder, name, rows)
+                _, summary = q.completed_test_summary(folder, report, name)
+                self.assertEqual(summary, rows[-1])
+                q.bind_shell_io_progress(folder, name, rows[-1], rows[:-1])
+                wrong = copy.deepcopy(rows[-1]); wrong["unrecorded_claim"] = True
+                with self.assertRaisesRegex(ValueError, "final stdout differs"):
+                    q.bind_shell_io_progress(folder, name, wrong, rows[:-1])
+                wrong = copy.deepcopy(rows[:-1]); wrong[0]["unrecorded_claim"] = True
+                with self.assertRaisesRegex(ValueError, "case stdout differs"):
+                    q.bind_shell_io_progress(folder, name, rows[-1], wrong)
+
+    def test_actual_io_trailing_pass_cannot_cover_malformed_or_incomplete_progress(self):
+        mutations = {
+            "missing": lambda rows: rows.pop(0),
+            "duplicate": lambda rows: rows.__setitem__(0, dict(rows[1])),
+            "reordered": lambda rows: rows.__setitem__(slice(0, 2), list(reversed(rows[:2]))),
+            "failed": lambda rows: rows[0].update(status="FAIL"),
+            "unknown": lambda rows: rows[0].update(case="not-registered"),
+            "extra_field": lambda rows: rows[0].update(ignored=False),
+            "boolean_count": lambda rows: rows[-1].update(cases=True),
+            "boolean_retired": lambda rows: rows[-1].update(retired_fixtures=True),
+            "partial": lambda rows: rows[-1].update(complete_registered_corpus=False),
+            "wrong_wait": lambda rows: rows[-1].update(actual_native_process_wait="true"),
+            "new_semantics": lambda rows: rows[-1].update(native_phase_cases_added_by_reference=1),
+            "extra_summary": lambda rows: rows.append(dict(rows[-1])),
+        }
+        for output_io, name in ((True, q.SHELL_OUTPUT_TEST), (False, q.SHELL_FOREGROUND_TESTS[1])):
+            changes = dict(mutations)
+            if output_io:
+                changes.update({"boolean_effects": lambda rows: rows[0].update(effects=True),
+                                "zero_effects": lambda rows: rows[0].update(effects=0),
+                                "integer_outcome": lambda rows: rows[0].update(outcome=1),
+                                "wrong_total": lambda rows: rows[-1].update(effects=1),
+                                "io_only": lambda rows: rows[-1].update(io_only=True)})
+            for label, change in changes.items():
+                rows = self.io_progress_rows(output_io); change(rows)
+                folder = self.root / (name + "-" + label)
+                report = self.actual_io_progress(folder, name, rows)
+                with self.subTest(suite=name, mutation=label), self.assertRaises(ValueError):
+                    q.completed_test_summary(folder, report, name)
+                self.assertNotIn("summary", report["checks"][0])
+                self.assertEqual(report["checks"][0]["exit_code"], 0)
+
+    def test_actual_io_progress_refuses_duplicate_json_fields_and_nonfinite_values(self):
+        for output_io, name in ((True, q.SHELL_OUTPUT_TEST), (False, q.SHELL_FOREGROUND_TESTS[1])):
+            rows = self.io_progress_rows(output_io)
+            raw = b"".join((json.dumps(row) + "\n").encode() for row in rows)
+            bad = raw.replace(b'"status": ', b'"status": "FAIL", "status": ', 1)
+            folder = self.root / (name + "-duplicate-json")
+            report = self.actual_io_progress(folder, name, rows, raw=bad)
+            with self.assertRaisesRegex(ValueError, "duplicate shell IO progress field"):
+                q.completed_test_summary(folder, report, name)
+            rows[-1]["extra"] = float("nan")
+            folder = self.root / (name + "-nonfinite-json")
+            report = self.actual_io_progress(folder, name, rows)
+            with self.assertRaisesRegex(ValueError, "nonfinite shell IO progress value"):
+                q.completed_test_summary(folder, report, name)
 
     def test_shell_launcher_refuses_partial_or_foreign_cli_before_start(self):
         report = self.registry_report()
@@ -574,8 +721,11 @@ class ShellProcessPipelineTests(unittest.TestCase):
             original.rust_recipe_order({"modules": {"shell_background_text": {}}})
         with self.assertRaisesRegex(ValueError, "module inventory"):
             original.rust_recipe_order({"modules": {"unregistered": {}}})
-        reversed_modules = tuple(reversed(original.MODULES))
-        with patch.object(original, "MODULES", reversed_modules), self.assertRaisesRegex(ValueError, "producer must precede"):
+        expected_order = original.rust_recipe_order(report)
+        with patch.object(original, "MODULES", tuple(reversed(original.MODULES))):
+            self.assertEqual(original.rust_recipe_order(report), expected_order)
+        reversed_recipes = dict(reversed(tuple(original.RECIPES.items())))
+        with patch.object(original, "RECIPES", reversed_recipes), self.assertRaisesRegex(ValueError, "producer must precede"):
             original.rust_recipe_order(report)
 
 

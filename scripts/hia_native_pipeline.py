@@ -27,7 +27,7 @@ import qualify_hia_runtime_native as q
 
 PARTITIONS = {
     "batch": ("batch_plan", "batch_apply", "atomic_write"),
-    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "shell_process", "shell_background_text", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
+    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "shell_process", "shell_background_text", "shell_outcome", "shell_output_io", "shell_foreground", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
              "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
@@ -291,6 +291,12 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         # The evidence suite already retired all exact transient targets; this
         # read validates the stable snapshot before any artifact is sealed.
         q.shell_process_evidence(output, report)
+    if any(row.get("name") == q.SHELL_OUTCOME_TEST for row in report.get("checks", ())):
+        q.shell_outcome_evidence(output, report)
+    if any(row.get("name") == q.SHELL_OUTPUT_TEST for row in report.get("checks", ())):
+        q.shell_output_evidence(output, report)
+    if any(row.get("name") in q.SHELL_FOREGROUND_TESTS for row in report.get("checks", ())):
+        q.shell_foreground_evidence(output, report)
     files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
     for name in directories:
         if name not in seal.get("directories", ()):

@@ -94,10 +94,48 @@ and the full 3,456-case background corpus. They retain exact original source
 spans and full request/response bytes. The background observed-tail projection
 does not claim to have executed file reads.
 
-The ordinary aggregate keeps the previous 95 native suites and 35 original
-recipes, adding five suites and two recipes. The focused shell-process workflow
-is an earlier qualification entry; it does not replace the fresh full compiler
-cold gate or the ordinary aggregate. Before artifact transport, transient
+The [outcome owner](shell_outcome_abi.md) consumes typed wait and read results.
+It owns original error priority, raw-byte UTF-8 lossiness, independent terminal
+cleanup, stream joining, the post-clean 8 MiB result check, exit-status text and
+promotion text/URI. The original leaf bodies are retained with only function-ID
+relocation; the u64 cleaner composition preserves their operation order. Raw
+and cleaned lengths remain u64. Successful calls return the fixed 40-byte
+header extent, with the complete response extent carried separately as u64.
+The full 78,083-case native corpus includes all low 16-bit wait-status patterns,
+signed errno boundaries, complete error priority, malformed UTF-8 and result
+size boundaries. The unchanged Rust statement projections consume those exact
+inputs after the native phase; their complete result bytes must match.
+
+The [output I/O owner](shell_output_io_abi.md) reads the prepared capture paths
+and passes its complete typed loan to the actual outcome entry during the native
+phase. Its required OS corpus records real file effects, descriptor and inode
+custody, cancellation and buffer guards. Six shared scenarios also execute the
+unchanged original owner under complete syscall tracing: ordinary files,
+missing paths, a directory in place of a capture file, a nonzero exit with a read
+error, and pathname replacement while the old descriptors remain open. The
+comparison admits only already-recorded native bytes. The native fixture still
+supplies the wait result; this does not qualify production process-to-I/O wiring.
+
+The [foreground controller](shell_foreground_controller_abi.md) has a separate
+composed fixture. HIA consumes the actual process foreground event and starts
+the output owner immediately, while any quiet orphan continues its own wait
+lifetime. Fixed asynchronous capabilities preserve progress during blocking
+I/O; HIA selects the operations and owns the cache handoff and outcome call.
+The native corpus retains the complete 96-byte foreground event, command,
+typed read loan and actual outcome. Its reader must establish wait/reap,
+tracker removal, foreground publication and the HIA call to output processing
+in their causal order. The separate original comparison reuses the same gate's
+six fully verified original IO probes and fresh Rust build. It compares full
+command, loan and outcome bytes without adding native cases or original
+processes. Original raw wait bits remain unobservable; original hints are
+retained without claiming native hint execution.
+
+The ordinary aggregate retains every existing native suite and original recipe
+and requires separate process, background, outcome, output-I/O and foreground
+composition evidence.
+The focused shell-process workflow is an earlier qualification entry; it does
+not replace the fresh full compiler cold gate or the ordinary aggregate.
+Before artifact transport, transient
 work/tmp targets are snapshotted and retired under the process evidence
 owner; captured logs, traces and receipts remain. Collection restores only
 byte-verified file modes and rechecks exact recorded paths and retirement

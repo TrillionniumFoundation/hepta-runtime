@@ -92,6 +92,16 @@ MODULES = (
     {"key": "shell_background_text", "name": "shell-background-text",
      "source": "native/shell_background_text.hepta", "standalone": None,
      "manifest_env": "HIA_SHELL_BACKGROUND_TEXT_MANIFEST", "test": "shell_background_text.py"},
+    {"key": "shell_outcome", "name": "shell-outcome", "source": "native/shell_outcome.hepta",
+     "builder": "shell_outcome", "manifest_env": "HIA_SHELL_OUTCOME_MANIFEST",
+     "test": "shell_outcome_state.py"},
+    {"key": "shell_output_io", "name": "shell-output", "source": "native/shell_output_io.hepta",
+     "builder": "shell_output", "manifest_env": "HIA_SHELL_OUTPUT_MANIFEST",
+     "test": "shell_output_io.py", "companion_sources": ("native/shell_output_packer.hepta",)},
+    {"key": "shell_foreground", "name": "shell-foreground", "source": "native/shell_foreground_controller.hepta",
+     "builder": "shell_foreground", "manifest_env": "HIA_SHELL_FOREGROUND_MANIFEST",
+     "test": "shell_foreground_controller.py", "additional_tests": ("shell_foreground_io.py",),
+     "companion_sources": ("native/shell_foreground_packer.hepta",)},
     {"key": "request_context", "name": "request-context", "source": "native/request_context.hepta",
      "standalone": None, "manifest_env": "HIA_REQUEST_CONTEXT_MANIFEST", "test": "test_request_context.py"},
     {"key": "response_hints", "name": "response-hints", "source": "native/response_hints.hepta",
@@ -288,6 +298,11 @@ def sources() -> dict:
         "qualify_hia_shell_native.py",
         "hia_native_shell_process_build.py", "hia_native_shell_process_qualification.py",
         "hia_native_shell_process_reference.py", "hia_native_shell_process_evidence.py",
+        "hia_native_shell_outcome_build.py", "hia_native_shell_outcome_qualification.py",
+        "hia_native_shell_output_build.py", "hia_native_shell_output_qualification.py",
+        "hia_native_shell_foreground_build.py", "hia_native_shell_foreground_qualification.py",
+        "shell_foreground_adapter.S",
+        "hia_native_failure_evidence.py", "shell_output_adapter.S",
         "shell_process_adapter.S", "qualify_hia_shell_process.py",
         "hia_native_effect_fence_build.py", "hia_native_effect_fence_qualification.py",
         "hia_native_line_verify_qualification.py",
@@ -298,7 +313,6 @@ def sources() -> dict:
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
         "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py",
-        "hia_native_failure_evidence.py",
         "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
                   ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / ".github/workflows/hia-runtime-shell.yml",
@@ -328,6 +342,8 @@ def save_report(path: Path, result: dict) -> None:
 def process_summary(name: str, stdout: bytes) -> dict:
     if name in ("hia_native_shell_process_qualification.py", "shell-process-rust-compare"):
         return shell_process_progress_summary(stdout, original=name == "shell-process-rust-compare")
+    if name in ("shell_output_io.py", "shell-output-native", "shell_foreground_io.py", "shell-foreground-native"):
+        return shell_io_progress_records(name, stdout)[-1]
     if name != "test_batch_plan.py":
         return json.loads(stdout)
     # This suite retains two complete-domain progress records before its final
@@ -427,7 +443,14 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                        if set(tests) & set(config_qualification.TESTS) else {})
     shell_commands = (shell_process_test_commands(output, report)
                       if set(tests) & {*SHELL_PROCESS_TESTS, SHELL_BACKGROUND_TEST} else {})
-    exact_commands = {**config_commands, **shell_commands}
+    outcome_commands = (shell_outcome_test_commands(output, report)
+                        if SHELL_OUTCOME_TEST in tests else {})
+    output_commands = (shell_output_test_commands(output, report)
+                       if SHELL_OUTPUT_TEST in tests else {})
+    foreground_commands = (shell_foreground_test_commands(output, report)
+                           if set(tests) & set(SHELL_FOREGROUND_TESTS) else {})
+    exact_commands = {**config_commands, **shell_commands, **outcome_commands,
+                      **output_commands, **foreground_commands}
     def command(name):
         prefix = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
         argv = commands.get(name, prefix)
@@ -642,6 +665,70 @@ SHELL_PROCESS_TESTS = (
     "hia_native_shell_process_qualification.py", "shell_process_evidence_controls.py",
 )
 SHELL_BACKGROUND_TEST = "shell_background_text.py"
+SHELL_OUTCOME_TEST = "shell_outcome_state.py"
+SHELL_OUTPUT_TEST = "shell_output_io.py"
+SHELL_FOREGROUND_TESTS = ("shell_foreground_controller.py", "shell_foreground_io.py")
+
+
+def shell_io_progress_records(name: str, stdout: bytes) -> list[dict]:
+    """Admit the complete serial progress protocol, including its final report."""
+    output_io = name in (SHELL_OUTPUT_TEST, "shell-output-native")
+    if not output_io and name not in (SHELL_FOREGROUND_TESTS[1], "shell-foreground-native"):
+        raise ValueError("unknown shell IO progress suite")
+    module = _shell_test_module(SHELL_OUTPUT_TEST if output_io else SHELL_FOREGROUND_TESTS[1])
+    specifications = module.specs() if output_io else module.specifications()
+    names = [row["name"] for row in specifications]
+    count = 20 if output_io else 12
+    if len(names) != count or len(set(names)) != count:
+        raise ValueError("registered shell IO progress inventory differs")
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate shell IO progress field")
+            result[key] = value
+        return result
+
+    def nonfinite(_):
+        raise ValueError("nonfinite shell IO progress value")
+
+    rows = [json.loads(line, object_pairs_hook=unique_object, parse_constant=nonfinite)
+            for line in stdout.splitlines()]
+    if len(rows) != count + 1:
+        raise ValueError("shell IO progress omitted or added a record")
+    fields = {"case", "status", "effects", "outcome"} if output_io else {"case", "status"}
+    expected_status = "NATIVE_IO_PASS" if output_io else "ACTUAL_NATIVE_PASS"
+    for expected_name, row in zip(names, rows[:-1]):
+        if (type(row) is not dict or set(row) != fields
+                or row.get("case") != expected_name or row.get("status") != expected_status):
+            raise ValueError("shell IO progress case/order/status differs")
+        if output_io and (type(row["effects"]) is not int or row["effects"] < 1
+                          or type(row["outcome"]) is not bool):
+            raise ValueError("shell IO progress effect/outcome type differs")
+    summary = rows[-1]
+    schema = "hepta.runtime.shell-output-io-read.v1" if output_io else "hepta.runtime.shell-foreground-io-read.v1"
+    if (type(summary) is not dict or summary.get("schema") != schema or summary.get("status") != "PASS"
+            or type(summary.get("cases")) is not int or summary["cases"] != count
+            or summary.get("complete_registered_corpus") is not True
+            or type(summary.get("retired_fixtures")) is not int or summary["retired_fixtures"] != count
+            or summary.get("actual_native_process_wait") is not (not output_io)
+            or type(summary.get("native_phase_cases_added_by_reference")) is not int
+            or summary["native_phase_cases_added_by_reference"] != 0):
+        raise ValueError("shell IO aggregate progress differs")
+    if output_io and (summary.get("io_only") is not False
+                      or type(summary.get("effects")) is not int
+                      or summary["effects"] != sum(row["effects"] for row in rows[:-1])):
+        raise ValueError("shell IO aggregate effects/scope differs")
+    return rows
+
+
+def bind_shell_io_progress(output: Path, name: str, evidence: dict, cases: list[dict]) -> None:
+    rows = shell_io_progress_records(name, (output / (name + ".stdout")).read_bytes())
+    if json_bytes(rows[-1]) != json_bytes(evidence):
+        raise ValueError("shell IO final stdout differs from complete retained evidence")
+    if json_bytes(rows[:-1]) != json_bytes(cases):
+        raise ValueError("shell IO case stdout differs from complete retained evidence")
 
 
 def _shell_test_module(name: str):
@@ -678,6 +765,30 @@ def shell_process_test_commands(output: Path, report: dict) -> dict[str, list[st
             "--native-manifest", str(background),
             "--output", str(output / "shell-background-text/native")],
     }
+
+
+def shell_outcome_test_commands(output: Path, report: dict) -> dict[str, list[str]]:
+    manifest = output / report["modules"]["shell_outcome"]["manifest"]
+    return {SHELL_OUTCOME_TEST: [sys.executable, "-I", "-B",
+        str(ROOT / "tests/hia_native/shell_outcome_state.py"),
+        "--native-manifest", str(manifest), "--output", str(output / "shell-outcome/native")]}
+
+
+def shell_output_test_commands(output: Path, report: dict) -> dict[str, list[str]]:
+    manifest = output / report["modules"]["shell_output_io"]["manifest"]
+    outcome = output / report["modules"]["shell_outcome"]["manifest"]
+    return {SHELL_OUTPUT_TEST: [sys.executable, "-I", "-B",
+        str(ROOT / "tests/hia_native/shell_output_io.py"),
+        "--native-manifest", str(manifest), "--outcome-manifest", str(outcome),
+        "--output", str(output / "shell-output/native")]}
+
+
+def shell_foreground_test_commands(output: Path, report: dict) -> dict[str, list[str]]:
+    manifest = output / report["modules"]["shell_foreground"]["manifest"]
+    return {name: [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name),
+                  "--native-manifest", str(manifest),
+                  "--output", str(output / "shell-foreground" / folder)]
+            for name, folder in zip(SHELL_FOREGROUND_TESTS, ("state", "native"))}
 
 
 def shell_process_progress_summary(stdout: bytes, *, original: bool) -> dict:
@@ -843,6 +954,139 @@ def shell_background_evidence(output: Path, report: dict) -> dict:
         "corpus_sha256": shell_retained_files(output, (folder,)),
         "original_rust_compared": False, "filesystem_reads_qualified": False,
         "whole_runtime_replaced": False, "production_activated": False, "old_stack_removal_qualified": False,
+    }
+
+
+def shell_outcome_evidence(output: Path, report: dict) -> dict:
+    manifest = output / report["modules"]["shell_outcome"]["manifest"]
+    folder = output / "shell-outcome/native"
+    command = shell_outcome_test_commands(output, report)[SHELL_OUTCOME_TEST]
+    completed = shell_completed_process(output, report, SHELL_OUTCOME_TEST, command,
+        phase="native_components", timeout=180)
+    result = _shell_test_module(SHELL_OUTCOME_TEST).read_evidence(folder, native_manifest=manifest)
+    if result.get("status") != "PASS" or result.get("counts", {}).get("semantic_cases") != 78083:
+        raise ValueError("complete shell outcome native semantic/control evidence differs")
+    captured = json.loads((folder / "report.json").read_bytes())
+    if (captured.get("recorded_directory") != str(folder)
+            or captured.get("native", {}).get("manifest_path") != str(manifest)):
+        raise ValueError("shell outcome evidence path or current build binding differs")
+    return {
+        "schema": "hepta.runtime.shell-outcome-required-native.v1", "status": "PASS",
+        "native": result, "completed_process": completed,
+        "artifact_sha256": shell_retained_files(output, (manifest.parent,)),
+        "corpus_sha256": shell_retained_files(output, (folder,)),
+        "original_rust_compared": False, "filesystem_reads_qualified": False,
+        "whole_runtime_replaced": False, "production_activated": False,
+        "production_shell_execution_qualified": False, "old_stack_removal_qualified": False,
+    }
+
+
+def shell_output_evidence(output: Path, report: dict) -> dict:
+    manifest = output / report["modules"]["shell_output_io"]["manifest"]
+    outcome = output / report["modules"]["shell_outcome"]["manifest"]
+    folder = output / "shell-output/native"
+    command = shell_output_test_commands(output, report)[SHELL_OUTPUT_TEST]
+    completed = shell_completed_process(output, report, SHELL_OUTPUT_TEST, command,
+        phase="native_components", timeout=180)
+    result = _shell_test_module(SHELL_OUTPUT_TEST).read_evidence(
+        folder, native_manifest=manifest, outcome_manifest=outcome, require_full=True)
+    if (result.get("schema") != "hepta.runtime.shell-output-io-read.v1"
+            or result.get("status") != "PASS" or result.get("cases") != 20
+            or result.get("complete_registered_corpus") is not True
+            or result.get("shared_original_io_cases") != 6
+            or result.get("io_only") is not False or result.get("retired_fixtures") != 20
+            or result.get("native_phase_cases_added_by_reference") != 0
+            or result.get("actual_native_process_wait") is not False):
+        raise ValueError("complete shell output IO and actual outcome evidence differs")
+    captured = json.loads((folder / "report.json").read_bytes())
+    if (captured.get("producer_folder") != str(folder)
+            or captured.get("native_manifest") != str(manifest)
+            or captured.get("outcome_manifest") != str(outcome)):
+        raise ValueError("shell output evidence path or current builds differ")
+    progress = []
+    for case in captured["cases"]:
+        retained = json.loads((folder / "cases" / case["name"] / "result.json").read_bytes())
+        progress.append({"case": case["name"], "status": "NATIVE_IO_PASS",
+                         "effects": retained["validation"]["effects"],
+                         "outcome": retained["outcome"] is not None})
+    bind_shell_io_progress(output, SHELL_OUTPUT_TEST, result, progress)
+    metadata = json.loads(manifest.read_bytes())
+    build_root = manifest.parent.parent
+    artifacts = shell_retained_files(output, (
+        manifest.parent, (build_root / metadata["owner_manifest"]).parent,
+        (build_root / metadata["packer_manifest"]).parent, outcome.parent))
+    return {
+        "schema": "hepta.runtime.shell-output-required-native.v1", "status": "PASS",
+        "native": result, "completed_process": completed,
+        "artifact_sha256": artifacts, "corpus_sha256": shell_retained_files(output, (folder,)),
+        "original_rust_compared": False, "actual_native_process_wait": False,
+        "native_phase_cases_added_by_reference": 0,
+        "whole_runtime_replaced": False, "production_activated": False,
+        "production_shell_execution_qualified": False, "old_stack_removal_qualified": False,
+    }
+
+
+def shell_foreground_evidence(output: Path, report: dict) -> dict:
+    manifest = output / report["modules"]["shell_foreground"]["manifest"]
+    completed = {name: shell_completed_process(output, report, name, command,
+        phase="native_components", timeout=180)
+        for name, command in shell_foreground_test_commands(output, report).items()}
+    state_folder = output / "shell-foreground/state"
+    native_folder = output / "shell-foreground/native"
+    state = _shell_test_module(SHELL_FOREGROUND_TESTS[0]).read_evidence(state_folder, native_manifest=manifest)
+    native = _shell_test_module(SHELL_FOREGROUND_TESTS[1]).read_evidence(
+        native_folder, native_manifest=manifest, require_full=True)
+    captured = json.loads((state_folder / "report.json").read_bytes())
+    counts = captured.get("counts", {})
+    if (state.get("status") != "PASS"
+            or captured.get("schema") != "hepta.runtime.shell-foreground-controller-corpus.v1"
+            or captured.get("recorded_directory") != str(state_folder)
+            or captured.get("native", {}).get("manifest_path") != str(manifest)
+            or any(type(counts.get(key)) is not int for key in (
+                "semantic_cases", "native_control_cases", "actual_native_entries",
+                "complete_guarded_buffer_snapshots"))
+            or counts != {"semantic_cases": 20, "native_control_cases": 84,
+                          "actual_native_entries": 810,
+                          "complete_guarded_buffer_snapshots": 4860}):
+        raise ValueError("complete HIA foreground controller state evidence differs")
+    if (native.get("schema") != "hepta.runtime.shell-foreground-io-read.v1"
+            or native.get("status") != "PASS" or native.get("complete_registered_corpus") is not True
+            or type(native.get("cases")) is not int or type(native.get("retired_fixtures")) is not int
+            or native.get("cases") != 12 or native.get("retired_fixtures") != 12
+            or native.get("shared_original_io_cases") != 6
+            or native.get("actual_native_process_wait") is not True
+            or native.get("native_phase_cases_added_by_reference") != 0):
+        raise ValueError("complete real foreground wait/IO/outcome evidence differs")
+    progress = [{"case": case["name"], "status": "ACTUAL_NATIVE_PASS"}
+                for case in _shell_test_module(SHELL_FOREGROUND_TESTS[1]).specifications()]
+    bind_shell_io_progress(output, SHELL_FOREGROUND_TESTS[1], native, progress)
+    metadata = json.loads(manifest.read_bytes())
+    build_root = manifest.parent.parent
+    folders = [manifest.parent, (build_root / metadata["controller_manifest"]).parent,
+               (build_root / metadata["packer_manifest"]).parent]
+    for field, key in (("process_manifest", "shell_process"),
+                       ("output_manifest", "shell_output_io"),
+                       ("outcome_manifest", "shell_outcome")):
+        dependency = output / report["modules"][key]["manifest"]
+        if (metadata.get(field) != str(dependency)
+                or metadata.get(field + "_sha256") != sha(dependency)):
+            raise ValueError("foreground component dependency differs from this same gate: " + key)
+        folders.append(dependency.parent)
+        if key in ("shell_process", "shell_output_io"):
+            component = json.loads(dependency.read_bytes())
+            component_root = dependency.parent.parent
+            folders.extend((component_root / component[name]).parent
+                           for name in ("owner_manifest", "packer_manifest"))
+    return {
+        "schema": "hepta.runtime.shell-foreground-required-native.v1", "status": "PASS",
+        "state": state, "native": native, "completed_processes": completed,
+        "artifact_sha256": shell_retained_files(output, tuple(folders)),
+        "corpus_sha256": shell_retained_files(output, (state_folder, native_folder)),
+        "actual_native_process_wait": True, "original_rust_compared": False,
+        "native_phase_cases_added_by_reference": 0,
+        "capture_preparation_qualified": False, "background_registry_qualified": False,
+        "whole_runtime_replaced": False, "production_activated": False,
+        "production_shell_execution_qualified": False, "old_stack_removal_qualified": False,
     }
 
 
@@ -2441,6 +2685,18 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "shell_process":
             from hia_native_shell_process_build import build_shell_process
             built = build_shell_process(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "shell_outcome":
+            from hia_native_shell_outcome_build import build_shell_outcome
+            built = build_shell_outcome(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "shell_output":
+            from hia_native_shell_output_build import build_shell_output
+            built = build_shell_output(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "shell_foreground":
+            from hia_native_shell_foreground_build import build_shell_foreground
+            built = build_shell_foreground(hepta, output / "build", source_root=ROOT,
+                process_manifest=output / report["modules"]["shell_process"]["manifest"],
+                output_manifest=output / report["modules"]["shell_output_io"]["manifest"],
+                outcome_manifest=output / report["modules"]["shell_outcome"]["manifest"])
         elif item.get("builder") == "atomic_write":
             from hia_native_atomic_write_build import build_atomic_write
             built = build_atomic_write(hepta, output / "build", source_root=ROOT)
@@ -2497,6 +2753,12 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
                                                Path(report["compiler_checkout"])))
     if set(tests) & {*SHELL_PROCESS_TESTS, SHELL_BACKGROUND_TEST}:
         commands.update(shell_process_test_commands(output, report))
+    if SHELL_OUTCOME_TEST in tests:
+        commands.update(shell_outcome_test_commands(output, report))
+    if SHELL_OUTPUT_TEST in tests:
+        commands.update(shell_output_test_commands(output, report))
+    if set(tests) & set(SHELL_FOREGROUND_TESTS):
+        commands.update(shell_foreground_test_commands(output, report))
     return {name: command for name, command in commands.items() if name in tests}
 
 
@@ -2507,6 +2769,9 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["shell_evidence"] = shell_evidence(output, report)
     report["shell_process_evidence"] = shell_process_evidence(output, report)
     report["shell_background_evidence"] = shell_background_evidence(output, report)
+    report["shell_outcome_evidence"] = shell_outcome_evidence(output, report)
+    report["shell_output_evidence"] = shell_output_evidence(output, report)
+    report["shell_foreground_evidence"] = shell_foreground_evidence(output, report)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
     report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -2557,7 +2822,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["result_publication_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["shell_evidence"]["artifact_sha256"])
-    for key in ("shell_process_evidence", "shell_background_evidence"):
+    for key in ("shell_process_evidence", "shell_background_evidence", "shell_outcome_evidence",
+                "shell_output_evidence", "shell_foreground_evidence"):
         report["rust_oracle_inputs"].update(report[key]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report[key]["corpus_sha256"])
     report["rust_oracle_inputs"].update({

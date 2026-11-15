@@ -17,10 +17,20 @@
 mod background_render;
 mod fixture;
 mod mcp;
+mod outcome_render;
 mod utils;
 
 fn main() -> std::process::ExitCode {
 	let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+	if arguments == ["--outcome-render"] {
+		return match outcome_render::run() {
+			Ok(()) => std::process::ExitCode::SUCCESS,
+			Err(error) => {
+				eprintln!("outcome render transport: {error:#}");
+				std::process::ExitCode::FAILURE
+			}
+		};
+	}
 	if arguments == ["--background-render"] {
 		return match background_render::run() {
 			Ok(()) => std::process::ExitCode::SUCCESS,
@@ -31,7 +41,7 @@ fn main() -> std::process::ExitCode {
 		};
 	}
 	if arguments != ["--fixture"] {
-		eprintln!("usage: hepta-shell-process-original-oracle --fixture | --background-render");
+		eprintln!("usage: hepta-shell-process-original-oracle --fixture | --background-render | --outcome-render");
 		return std::process::ExitCode::from(2);
 	}
 	let runtime = match tokio::runtime::Builder::new_multi_thread()

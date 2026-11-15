@@ -1,4 +1,4 @@
-name: HIA Shell Process and Background Owners
+name: HIA Shell Process, Output and Background Owners
 
 on:
   push:
@@ -6,8 +6,14 @@ on:
     paths:
       - 'native/shell_process*'
       - 'native/shell_background*'
+      - 'native/shell_outcome*'
+      - 'native/shell_output*'
+      - 'native/shell_foreground*'
       - 'scripts/*hia*shell*'
       - 'scripts/shell_process_adapter.S'
+      - 'scripts/shell_output_adapter.S'
+      - 'scripts/shell_foreground_adapter.S'
+      - 'scripts/hia_native_failure_evidence.py'
       - 'tests/hia_native/*shell*'
       - 'tests/hia_native/shell_process_oracle/**'
       - 'src/mcp/fs/shell.rs'
@@ -25,8 +31,14 @@ on:
     paths:
       - 'native/shell_process*'
       - 'native/shell_background*'
+      - 'native/shell_outcome*'
+      - 'native/shell_output*'
+      - 'native/shell_foreground*'
       - 'scripts/*hia*shell*'
       - 'scripts/shell_process_adapter.S'
+      - 'scripts/shell_output_adapter.S'
+      - 'scripts/shell_foreground_adapter.S'
+      - 'scripts/hia_native_failure_evidence.py'
       - 'tests/hia_native/*shell*'
       - 'tests/hia_native/shell_process_oracle/**'
       - 'src/mcp/fs/shell.rs'
@@ -51,7 +63,7 @@ concurrency:
 
 jobs:
   shell-process:
-    name: Native process lifecycle and unchanged original Rust
+    name: Native process and output owners against unchanged original Rust
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -74,6 +86,10 @@ jobs:
         run: |
           test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
           rustup toolchain install 1.95.0 --profile minimal
+          if ! command -v strace; then
+            sudo apt-get update
+            sudo apt-get install --yes strace
+          fi
       - name: Execute complete focused qualification
         env:
           RUSTUP_TOOLCHAIN: 1.95.0
@@ -83,8 +99,23 @@ jobs:
             --output "$RUNNER_TEMP/hia-shell-process" \
             --rustc "$(rustup which --toolchain 1.95.0 rustc)" \
             --cargo "$(rustup which --toolchain 1.95.0 cargo)"
-      - name: Retain actual inputs, outputs, and failure evidence
-        if: always()
+      - name: Stage failed process reports and untouched fixtures
+        if: failure()
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
+            --source "$RUNNER_TEMP/hia-shell-process" \
+            --output "$RUNNER_TEMP/hia-shell-failure-evidence"
+      - name: Retain failure diagnostics and archive, including incomplete archives
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-shell-process-failure-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-shell-failure-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain complete actual inputs and outputs
+        if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hia-shell-process-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}

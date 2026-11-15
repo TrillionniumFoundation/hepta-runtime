@@ -28,7 +28,8 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
                                        history_evidence, json_evidence, request_context_evidence, result_publication_evidence,
                                        request_scope_evidence, shell_evidence,
-                                       shell_process_evidence, shell_background_evidence,
+                                       shell_process_evidence, shell_background_evidence, shell_outcome_evidence,
+                                       shell_output_evidence, shell_foreground_evidence,
                                        shell_completed_process, shell_retained_files,
                                        execution_evidence, effect_fence_evidence, config_evidence,
                                        session_evidence,
@@ -172,6 +173,12 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required native shell process evidence changed")
     if report.get("shell_background_evidence") != shell_background_evidence(output, report):
         raise ValueError("required native shell background evidence changed")
+    if report.get("shell_outcome_evidence") != shell_outcome_evidence(output, report):
+        raise ValueError("required native shell outcome evidence changed")
+    if report.get("shell_output_evidence") != shell_output_evidence(output, report):
+        raise ValueError("required native shell output IO/outcome evidence changed")
+    if report.get("shell_foreground_evidence") != shell_foreground_evidence(output, report):
+        raise ValueError("required native foreground process/IO/outcome evidence changed")
     comparisons = report.get("original_rust_comparisons", {})
     if "shell_process" in comparisons:
         rustc = Path(report["rust_compiler"]["invocation_path"])
@@ -181,6 +188,18 @@ def check_input_pins(output: Path, report: dict) -> None:
         rustc = Path(report["rust_compiler"]["invocation_path"])
         if comparisons["shell_background_text"] != shell_background_original_evidence(output, report, rustc):
             raise ValueError("required fresh original background byte evidence changed")
+    if "shell_outcome" in comparisons:
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        if comparisons["shell_outcome"] != shell_outcome_original_evidence(output, report, rustc):
+            raise ValueError("required fresh original shell outcome evidence changed")
+    if "shell_output_io" in comparisons:
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        if comparisons["shell_output_io"] != shell_output_original_evidence(output, report, rustc):
+            raise ValueError("required original/native real output IO evidence changed")
+    if "shell_foreground" in comparisons:
+        rustc = Path(report["rust_compiler"]["invocation_path"])
+        if comparisons["shell_foreground"] != shell_foreground_original_evidence(output, report, rustc):
+            raise ValueError("required original/native complete foreground evidence changed")
     for key in shell_qualification.COMPONENTS:
         if key in report.get("original_rust_comparisons", {}):
             rustc = Path(report["rust_compiler"]["invocation_path"])
@@ -263,7 +282,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "shell_process"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "shell_process", "shell_outcome", "shell_output", "shell_foreground"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1521,9 +1540,193 @@ def compare_shell_background(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def shell_outcome_original_command(output: Path, report: dict, rustc: Path) -> list[str]:
+    manifest = output / report["modules"]["shell_outcome"]["manifest"]
+    base = output / "shell-process-original"
+    return [sys.executable, "-I", "-B", str(ROOT / "scripts/hia_native_shell_outcome_qualification.py"),
+        "--runtime", str(ROOT), "--reference-build", str(base / "build"),
+        "--native-corpus", str(output / "shell-outcome/native"),
+        "--native-manifest", str(manifest), "--output", str(base / "outcome"),
+        "--rustc", str(rustc), "--cargo", str(executable(str(rustc.with_name("cargo"))))]
+
+
+def shell_outcome_original_evidence(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_shell_outcome_qualification as outcome
+    base = output / "shell-process-original"
+    original_process = shell_process_original_evidence(output, report, rustc)
+    if report.get("original_rust_comparisons", {}).get("shell_process") != original_process:
+        raise ValueError("outcome replay does not reuse this gate's complete fresh shell reference")
+    command = shell_outcome_original_command(output, report, rustc)
+    completed = shell_completed_process(output, report, "shell-outcome-rust-compare", command,
+        phase="original_rust_comparison", timeout=300)
+    manifest = output / report["modules"]["shell_outcome"]["manifest"]
+    result = outcome.read_evidence(ROOT, base / "build", output / "shell-outcome/native",
+        manifest, base / "outcome", rustc, executable(str(rustc.with_name("cargo"))))
+    if (result.get("comparison", {}).get("counts", {}).get("semantic_cases") != 78083
+            or result.get("original_rust_compared") is not True
+            or result.get("fresh_original_rust_build_qualified") is not True
+            or result.get("reference_report_sha256") != original_process["reference_build"]["report_sha256"]):
+        raise ValueError("complete original outcome byte projection or fresh build binding differs")
+    return {
+        "schema": "hepta.runtime.shell-outcome-required-original.v1", "status": "PASS",
+        "compiled_by_qualification_recipe": True, "reused_same_gate_shell_reference": True,
+        "completed_process": completed, "comparison": result,
+        "retained_files_sha256": shell_retained_files(output, (base / "outcome",)),
+        "semantic_cases": 78083, "native_phase_cases_added_by_reference": 0,
+        "original_rust_compared": True, "native_filesystem_reads_qualified": False,
+        "production_shell_execution_qualified": False, "production_activated": False,
+        "whole_runtime_replaced": False, "old_stack_removal_qualified": False,
+    }
+
+
+def compare_shell_outcome(output: Path, report: dict, rustc: Path) -> dict:
+    before = shell_outcome_evidence(output, report)
+    if before != report.get("shell_outcome_evidence"):
+        raise ValueError("required native outcome evidence changed before original replay")
+    original_process = shell_process_original_evidence(output, report, rustc)
+    if report.get("original_rust_comparisons", {}).get("shell_process") != original_process:
+        raise ValueError("fresh process reference must complete before outcome replay")
+    command = shell_outcome_original_command(output, report, rustc)
+    record_check(output, report, name="shell-outcome-rust-compare", command=command,
+        timeout=300, env=qualification_env())
+    result = shell_outcome_original_evidence(output, report, rustc)
+    if shell_outcome_evidence(output, report) != before:
+        raise ValueError("required native outcome evidence changed during original replay")
+    return result
+
+
+def shell_output_original_command(output: Path, report: dict, rustc: Path) -> list[str]:
+    manifest = output / report["modules"]["shell_output_io"]["manifest"]
+    outcome = output / report["modules"]["shell_outcome"]["manifest"]
+    base = output / "shell-process-original"
+    return [sys.executable, "-I", "-B", str(ROOT / "scripts/hia_native_shell_output_qualification.py"),
+        "--runtime", str(ROOT), "--reference-build", str(base / "build"),
+        "--native-corpus", str(output / "shell-output/native"),
+        "--native-manifest", str(manifest), "--outcome-manifest", str(outcome),
+        "--output", str(base / "output-io"),
+        "--rustc", str(rustc), "--cargo", str(executable(str(rustc.with_name("cargo"))))]
+
+
+def shell_output_original_evidence(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_shell_output_qualification as output_io
+    base = output / "shell-process-original"
+    process = shell_process_original_evidence(output, report, rustc)
+    outcome = shell_outcome_original_evidence(output, report, rustc)
+    comparisons = report.get("original_rust_comparisons", {})
+    if comparisons.get("shell_process") != process or comparisons.get("shell_outcome") != outcome:
+        raise ValueError("output IO replay requires this gate's fresh process and complete outcome evidence")
+    command = shell_output_original_command(output, report, rustc)
+    completed = shell_completed_process(output, report, "shell-output-rust-compare", command,
+        phase="original_rust_comparison", timeout=300)
+    manifest = output / report["modules"]["shell_output_io"]["manifest"]
+    outcome_manifest = output / report["modules"]["shell_outcome"]["manifest"]
+    result = output_io.read_evidence(ROOT, base / "build", output / "shell-output/native",
+        manifest, outcome_manifest, base / "output-io", rustc, executable(str(rustc.with_name("cargo"))))
+    if (result.get("paired_real_io_cases") != 6 or result.get("original_rust_compared") is not True
+            or result.get("fresh_original_rust_build_qualified") is not True
+            or result.get("native_phase_cases_added_by_reference") != 0
+            or result.get("actual_native_process_wait") is not False
+            or result.get("reference_report_sha256") != process["reference_build"]["report_sha256"]):
+        raise ValueError("original/native complete real IO comparison or fresh build binding differs")
+    return {
+        "schema": "hepta.runtime.shell-output-required-original.v1", "status": "PASS",
+        "compiled_by_qualification_recipe": True, "reused_same_gate_shell_reference": True,
+        "completed_process": completed, "comparison": result,
+        "retained_files_sha256": shell_retained_files(output, (base / "output-io",)),
+        "paired_real_io_cases": 6, "native_phase_cases_added_by_reference": 0,
+        "original_rust_compared": True, "actual_native_process_wait": False,
+        "production_shell_execution_qualified": False, "production_activated": False,
+        "whole_runtime_replaced": False, "old_stack_removal_qualified": False,
+    }
+
+
+def compare_shell_output(output: Path, report: dict, rustc: Path) -> dict:
+    before = shell_output_evidence(output, report)
+    if before != report.get("shell_output_evidence"):
+        raise ValueError("required native IO/outcome evidence changed before original replay")
+    process = shell_process_original_evidence(output, report, rustc)
+    outcome = shell_outcome_original_evidence(output, report, rustc)
+    comparisons = report.get("original_rust_comparisons", {})
+    if comparisons.get("shell_process") != process or comparisons.get("shell_outcome") != outcome:
+        raise ValueError("fresh process and complete outcome comparison must precede output IO replay")
+    command = shell_output_original_command(output, report, rustc)
+    record_check(output, report, name="shell-output-rust-compare", command=command,
+        timeout=300, env=qualification_env())
+    result = shell_output_original_evidence(output, report, rustc)
+    if shell_output_evidence(output, report) != before:
+        raise ValueError("required native IO/outcome evidence changed during original replay")
+    return result
+
+
+def shell_foreground_original_command(output: Path, report: dict, rustc: Path) -> list[str]:
+    manifest = output / report["modules"]["shell_foreground"]["manifest"]
+    base = output / "shell-process-original"
+    return [sys.executable, "-I", "-B", str(ROOT / "scripts/hia_native_shell_foreground_qualification.py"),
+        "--runtime", str(ROOT), "--reference-build", str(base / "build"),
+        "--original-io-corpus", str(base / "output-io/original-io"),
+        "--native-corpus", str(output / "shell-foreground/native"),
+        "--native-manifest", str(manifest), "--output", str(base / "foreground"),
+        "--rustc", str(rustc), "--cargo", str(executable(str(rustc.with_name("cargo"))))]
+
+
+def shell_foreground_original_evidence(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_shell_foreground_qualification as foreground
+    base = output / "shell-process-original"
+    paired = shell_output_original_evidence(output, report, rustc)
+    if report.get("original_rust_comparisons", {}).get("shell_output_io") != paired:
+        raise ValueError("foreground replay must reuse this gate's completed original real IO corpus")
+    command = shell_foreground_original_command(output, report, rustc)
+    completed = shell_completed_process(output, report, "shell-foreground-rust-compare", command,
+        phase="original_rust_comparison", timeout=300)
+    manifest = output / report["modules"]["shell_foreground"]["manifest"]
+    result = foreground.read_evidence(ROOT, base / "build", base / "output-io/original-io",
+        output / "shell-foreground/native", manifest, base / "foreground", rustc,
+        executable(str(rustc.with_name("cargo"))))
+    if (result.get("paired_real_foreground_cases") != 6
+            or result.get("original_rust_compared") is not True
+            or result.get("fresh_original_rust_build_qualified") is not True
+            or result.get("actual_native_process_wait") is not True
+            or result.get("native_phase_cases_added_by_reference") != 0
+            or result.get("original_processes_added_by_comparison") != 0
+            or result.get("reference_report_sha256") != paired["comparison"]["reference_report_sha256"]
+            or result.get("original_io_report_sha256") != paired["comparison"]["original_io"]["report"]["sha256"]):
+        raise ValueError("complete original/native foreground bytes or same-gate evidence differ")
+    return {
+        "schema": "hepta.runtime.shell-foreground-required-original.v1", "status": "PASS",
+        "compiled_by_qualification_recipe": True, "reused_same_gate_shell_reference": True,
+        "reused_same_gate_real_original_io": True,
+        "completed_process": completed, "comparison": result,
+        "retained_files_sha256": shell_retained_files(output, (base / "foreground",)),
+        "paired_real_foreground_cases": 6, "native_phase_cases_added_by_reference": 0,
+        "original_processes_added_by_comparison": 0,
+        "original_rust_compared": True, "actual_native_process_wait": True,
+        "production_shell_execution_qualified": False, "production_activated": False,
+        "whole_runtime_replaced": False, "old_stack_removal_qualified": False,
+    }
+
+
+def compare_shell_foreground(output: Path, report: dict, rustc: Path) -> dict:
+    before = shell_foreground_evidence(output, report)
+    if before != report.get("shell_foreground_evidence"):
+        raise ValueError("required native foreground evidence changed before original comparison")
+    paired = shell_output_original_evidence(output, report, rustc)
+    if report.get("original_rust_comparisons", {}).get("shell_output_io") != paired:
+        raise ValueError("fresh original real IO comparison must precede foreground composition")
+    record_check(output, report, name="shell-foreground-rust-compare",
+        command=shell_foreground_original_command(output, report, rustc),
+        timeout=300, env=qualification_env())
+    result = shell_foreground_original_evidence(output, report, rustc)
+    if shell_foreground_evidence(output, report) != before:
+        raise ValueError("required native foreground evidence changed during original comparison")
+    return result
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
            "shell_process": compare_shell_process, "shell_background_text": compare_shell_background,
+           "shell_outcome": compare_shell_outcome,
+           "shell_output_io": compare_shell_output,
+           "shell_foreground": compare_shell_foreground,
            "request_context": compare_request_context, "response_hints": compare_response_hints,
            "result_publication": compare_result_publication,
            "request_scope_lifecycle": compare_request_scope,
@@ -1557,17 +1760,22 @@ PARALLEL_RUST_RECIPES = {
 }
 
 
-RUST_RECIPE_DEPENDENCIES = {"shell_background_text": ("shell_process",)}
+RUST_RECIPE_DEPENDENCIES = {"shell_background_text": ("shell_process",),
+                            "shell_outcome": ("shell_process",),
+                            "shell_output_io": ("shell_process", "shell_outcome"),
+                            "shell_foreground": ("shell_process", "shell_outcome", "shell_output_io")}
 
 
 def rust_recipe_order(report: dict) -> tuple[str, ...]:
-    """Use registered producer order after a sorted JSON report is reloaded."""
+    """Use recipe declaration order after a sorted JSON report is reloaded."""
     registered = tuple(item["key"] for item in MODULES)
     selected = report.get("modules")
     if (len(set(registered)) != len(registered) or type(selected) is not dict
-            or set(selected) - set(registered)):
+            or set(selected) - set(registered) or set(RECIPES) - set(registered)):
         raise ValueError("original recipe module inventory differs from its registered owners")
-    ordered = tuple(key for key in registered if key in selected)
+    if set(selected) - RECIPES.keys() - NEW_COMPONENTS - PYTHON_REFERENCE_COMPONENTS:
+        raise ValueError("selected original module has no registered reference recipe")
+    ordered = tuple(key for key in RECIPES if key in selected)
     positions = {key: index for index, key in enumerate(ordered)}
     for consumer, dependencies in RUST_RECIPE_DEPENDENCIES.items():
         if consumer in positions and any(

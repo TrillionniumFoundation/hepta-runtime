@@ -115,3 +115,33 @@ rustc=None, cargo=None) independently rereads that evidence without execution.
 Passing these tests qualifies these observed and pure domains only. It does not
 qualify a complete production Shell handler, background filesystem owner,
 registry integration, whole-runtime replacement, or old-stack removal.
+
+## Foreground and promotion result projection
+
+`--outcome-render` accepts little-endian u64 lengths followed by complete
+`HSHOUT01` frames from `native/shell_outcome_abi.md`. It emits the fixed u64
+return value 40, a u64 extent and the complete `HSHOUR01` response for each
+semantic frame. Complete text and URI lengths are u64; the entry's u32 return
+does not limit the response to four gigabytes.
+
+Operation 1 passes typed wait/stdout/stderr Results to the exact original
+1775-byte foreground result statement span. It uses the original lossy UTF-8
+conversion, terminal cleaner, merge, size check and exit handling. Operation 2
+uses the exact original 781-byte promotion return span, original stash helper
+and original resource URI function. Both projections retain half-open source
+offsets and SHA256 digests in the manifest. The complete original owner files
+and all 21 tests remain present and unchanged.
+
+Operation 3 calls `std::io::Error::from_raw_os_error` and its Display on the
+entire signed i32 domain. Its comparison environment is Linux GNU, C locale.
+Result carriers also admit a complete UTF-8 Display string, the original
+OutOfMemory error-kind conversion, and `io::Error::other("background task
+failed")`. These are explicit typed error projections; they do not claim that
+an allocation or Tokio blocking task actually failed.
+
+No projection reads or removes capture files, waits for a child, registers a
+background job or sends a notification. Real operations and their complete
+syscall evidence belong to the separate output-I/O and process suites.
+Invalid and capacity controls are native transport cases, not Rust semantic
+results. No successful projection qualifies production routing or removal of
+the original stack.
