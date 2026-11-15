@@ -1,6 +1,6 @@
 {
   "schema": "hepta.rea.capability-map.v1",
-  "runtime_baseline": "d771f977246c6e3b7b73d6b4f3a26df000432dda",
+  "runtime_baseline": "5cb31e9f48aa6bbd1ac91ef0db5c55344ac8d79d",
   "interfaces": {
     "rea_inspect_artifact": {
       "source_paths": [
@@ -190,7 +190,9 @@
         "src/native_observation_wire.rs",
         "src/mcp/rea_ghidra_contract_v4.rs",
         "src/mcp/rea_ghidra_analysis_1214_v4.java",
-        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+        "src/mcp/rea_ghidra_inventory_1214_v4.java",
+        "src/mcp/rea_ghidra_instructions.rs",
+        "src/mcp/rea_ghidra_instructions_bridge.java"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -207,9 +209,10 @@
         "src/mcp/rea_ghidra_contract_v4_tests.rs",
         "tests/rea_ghidra_v4_api.py",
         "src/mcp/rea_engine_profile_tests.rs",
-        "src/mcp/rea_engine_ghidra_tests.rs"
+        "src/mcp/rea_engine_ghidra_tests.rs",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open. A separate instruction-only revision-2 bridge retains the C3 12.2 complete bounded Listing window; existing revision-2 analysis bridge bytes are unchanged. Instruction requests are rejected for revisions 3 and 4. This combined source has no inherited instruction-operation qualification."
     },
     "rea_static_start": {
       "source_paths": [
@@ -243,7 +246,9 @@
         "src/native_observation_wire.rs",
         "src/mcp/rea_ghidra_contract_v4.rs",
         "src/mcp/rea_ghidra_analysis_1214_v4.java",
-        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+        "src/mcp/rea_ghidra_inventory_1214_v4.java",
+        "src/mcp/rea_ghidra_instructions.rs",
+        "src/mcp/rea_ghidra_instructions_bridge.java"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -263,9 +268,10 @@
         "src/mcp/rea_ghidra_contract_v4_tests.rs",
         "tests/rea_ghidra_v4_api.py",
         "src/mcp/rea_engine_profile_tests.rs",
-        "src/mcp/rea_engine_ghidra_tests.rs"
+        "src/mcp/rea_engine_ghidra_tests.rs",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open. A separate instruction-only revision-2 bridge retains the C3 12.2 complete bounded Listing window; existing revision-2 analysis bridge bytes are unchanged. Instruction requests are rejected for revisions 3 and 4. This combined source has no inherited instruction-operation qualification."
     },
     "rea_static_status": {
       "source_paths": [
@@ -294,7 +300,9 @@
         "src/native_observation_wire.rs",
         "src/mcp/rea_ghidra_contract_v4.rs",
         "src/mcp/rea_ghidra_analysis_1214_v4.java",
-        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+        "src/mcp/rea_ghidra_inventory_1214_v4.java",
+        "src/mcp/rea_ghidra_instructions.rs",
+        "src/mcp/rea_ghidra_instructions_bridge.java"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -311,9 +319,10 @@
         "src/mcp/rea_ghidra_contract_v4_tests.rs",
         "tests/rea_ghidra_v4_api.py",
         "src/mcp/rea_engine_profile_tests.rs",
-        "src/mcp/rea_engine_ghidra_tests.rs"
+        "src/mcp/rea_engine_ghidra_tests.rs",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open. A separate instruction-only revision-2 bridge retains the C3 12.2 complete bounded Listing window; existing revision-2 analysis bridge bytes are unchanged. Instruction requests are rejected for revisions 3 and 4. This combined source has no inherited instruction-operation qualification."
     },
     "rea_static_read": {
       "source_paths": [
@@ -343,7 +352,9 @@
         "src/native_observation_wire.rs",
         "src/mcp/rea_ghidra_contract_v4.rs",
         "src/mcp/rea_ghidra_analysis_1214_v4.java",
-        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+        "src/mcp/rea_ghidra_inventory_1214_v4.java",
+        "src/mcp/rea_ghidra_instructions.rs",
+        "src/mcp/rea_ghidra_instructions_bridge.java"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -361,9 +372,10 @@
         "src/mcp/rea_ghidra_contract_v4_tests.rs",
         "tests/rea_ghidra_v4_api.py",
         "src/mcp/rea_engine_profile_tests.rs",
-        "src/mcp/rea_engine_ghidra_tests.rs"
+        "src/mcp/rea_engine_ghidra_tests.rs",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open. A separate instruction-only revision-2 bridge retains the C3 12.2 complete bounded Listing window; existing revision-2 analysis bridge bytes are unchanged. Instruction requests are rejected for revisions 3 and 4. This combined source has no inherited instruction-operation qualification."
     },
     "rea_static_cancel": {
       "source_paths": [
@@ -392,7 +404,9 @@
         "src/native_observation_wire.rs",
         "src/mcp/rea_ghidra_contract_v4.rs",
         "src/mcp/rea_ghidra_analysis_1214_v4.java",
-        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+        "src/mcp/rea_ghidra_inventory_1214_v4.java",
+        "src/mcp/rea_ghidra_instructions.rs",
+        "src/mcp/rea_ghidra_instructions_bridge.java"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -410,9 +424,10 @@
         "src/mcp/rea_ghidra_contract_v4_tests.rs",
         "tests/rea_ghidra_v4_api.py",
         "src/mcp/rea_engine_profile_tests.rs",
-        "src/mcp/rea_engine_ghidra_tests.rs"
+        "src/mcp/rea_engine_ghidra_tests.rs",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open. A separate instruction-only revision-2 bridge retains the C3 12.2 complete bounded Listing window; existing revision-2 analysis bridge bytes are unchanged. Instruction requests are rejected for revisions 3 and 4. This combined source has no inherited instruction-operation qualification."
     },
     "rea_verify_evidence": {
       "source_paths": [
@@ -538,15 +553,20 @@
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/mcp/qualification.json",
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/summary.json",
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/upstream/qualification.json",
-        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json"
+        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json",
+        "src/mcp/rea_source_map_content.rs"
       ],
       "tests": [
         "src/mcp/rea_source_map_tests.rs",
         "scripts/rea-source-map-reference.mjs",
         "scripts/rea-source-map-upstream-reference.mjs",
-        "tests/rea_source_map_mcp.py"
+        "tests/rea_source_map_mcp.py",
+        "src/mcp/rea_source_map_content_tests.rs",
+        "scripts/rea-source-map-content-reference.mjs",
+        "tests/fixtures/rea_source_map/content-position-rea-6_8_0.json",
+        "tests/fixtures/rea_source_map/content-position-rea-6_8_0.provenance.json"
       ],
-      "scope": "Native bounded version-3 map declarations and across-line greatest-position lookup, including embedded indexed maps, all coincident records and source-bound collection paging. No source URL fetch, browser acquisition, source equivalence, retained upstream views or REA Evidence identity."
+      "scope": "Bounded admitted-byte native source-map decoding with explicit embedded-content states and UTF-16 position/offset observations. Source/code presence and historical finite tests do not qualify this new candidate or the full upstream trace operation; the report remains a non-REA declaration."
     },
     "rea_inspect_asar": {
       "source_paths": [
@@ -674,11 +694,15 @@
         "src/mcp/rea_mcp_transport.rs",
         "src/mcp/rea_response_encoding.rs",
         "src/mcp/rea_response_order.rs",
-        "src/mcp/rea_structured_wire.rs"
+        "src/mcp/rea_structured_wire.rs",
+        "src/mcp/rea_overflow_order.rs"
       ],
       "tests": [
         "src/mcp/rea_apk_evidence_tests.rs",
-        "src/mcp/rea_apk_mcp_input_tests.rs"
+        "src/mcp/rea_apk_mcp_input_tests.rs",
+        "src/mcp/rea_contract_overflow_tests.rs",
+        "scripts/rea_overflow_error_fixture.py",
+        "tests/fixtures/rea_evidence_file/overflow-error-text-original-rea-6_8_0-679ccf.json"
       ],
       "scope": "Frozen inspect_apk_signature MCP route for static observations, complete retained Evidence, default summaries and selected signing pages. Separate from the native mathematical verification preview; no platform trust claim."
     },
@@ -819,7 +843,9 @@
         "src/mcp/rea_residual_unknown.rs",
         "src/mcp/rea_response_encoding.rs",
         "src/mcp/rea_response_order.rs",
-        "src/mcp/rea_structured_wire.rs"
+        "src/mcp/rea_structured_wire.rs",
+        "src/mcp/rea_failure_order.rs",
+        "src/mcp/rea_overflow_order.rs"
       ],
       "tests": [
         "scripts/rea_evidence_import_fixtures.mjs",
@@ -846,9 +872,111 @@
         "scripts/rea_elf_evidence_family_qualification.py",
         "tests/rea_elf_evidence_family_qualification_tests.py",
         "scripts/rea_elf_evidence_family_evidence.py",
-        "tests/rea_elf_evidence_family_evidence_tests.py"
+        "tests/rea_elf_evidence_family_evidence_tests.py",
+        "scripts/rea_overflow_error_fixture.py",
+        "src/mcp/rea_contract_failure_tests.rs",
+        "src/mcp/rea_contract_overflow_tests.rs",
+        "src/mcp/rea_evidence_root_string_tests.rs",
+        "tests/fixtures/rea_evidence_file/import-error-text-original-118-rea-6_8_0-679ccf.json",
+        "tests/fixtures/rea_evidence_file/import-error-text-original-rea-6_8_0-679ccf.json",
+        "tests/fixtures/rea_evidence_file/overflow-error-text-original-rea-6_8_0-679ccf.json",
+        "tests/fixtures/rea_evidence_root_string/node-probe.js",
+        "tests/fixtures/rea_evidence_root_string/node-probe.stdout",
+        "tests/fixtures/rea_evidence_root_string/original-116-valid-json-control-12.json",
+        "tests/fixtures/rea_evidence_root_string/original-controls.json",
+        "tests/fixtures/rea_evidence_root_string/producer-r2.py",
+        "tests/fixtures/rea_evidence_root_string/producer-run.stdout",
+        "tests/fixtures/rea_evidence_root_string/provenance.json"
       ],
-      "scope": "Frozen public import_evidence_bundle route authenticates complete records, residual-unknown revisions, all revision references and current-head dependency cycles, canonical manifests and process-capture normalized results before atomically merging into this session. Preserves original record-only reimport versus unknown-bearing metadata replacement, union conflict rollback and original schema-exception responses. Linux file admission has explicit native estimated materialization/token/depth budgets; the original 8 MiB parser threshold is not treated as a file-size limit. Public differential and cancellation evidence is bound separately to each tested binary; no complete cross-platform or multi-host replacement qualification is declared. The import-only ordered error projection follows independently captured original producer order for its admitted error profile; unknown native diagnostics retain their complete previous representation. The public differential compares complete CallToolResult objects without parsing embedded text. ASCII and horizontal-whitespace batching preserve both acquisition passes and the existing digest, UTF-8, token, EOF and cancellation checks; performance remains subject to actual same-input measurement."
+      "scope": "Frozen public import_evidence_bundle route authenticates complete records, residual-unknown revisions, all revision references and current-head dependency cycles, canonical manifests and process-capture normalized results before atomically merging into this session. Preserves original record-only reimport versus unknown-bearing metadata replacement, union conflict rollback and original schema-exception responses. Linux file admission has explicit native estimated materialization/token/depth budgets; the original 8 MiB parser threshold is not treated as a file-size limit. Public differential and cancellation evidence is bound separately to each tested binary; no complete cross-platform or multi-host replacement qualification is declared. The exact observed invalid-JSON, bundle-integrity, import-input and missing/wrong-kind file error families preserve original content.text member order. The captured 118-case oracle contains 38 JSON application errors and four plain SDK exceptions; extra fields, richer unobserved issue shapes, other operations and native-profile failures retain their prior projection. The finite comparator separately requires nonempty parsed-value, error-member-order and exact UTF-8 error-text gates. Complete transport-frame serialization remains an independent open boundary. Candidate results are recorded only after actual binary execution. A complete unrepresentable root-string type proof is delivered only after bounded grammar completion, physical EOF, both read digests, descriptor/name identity, conservative materialization accounting, actual close and the final cancellation check. No JSON value is fabricated; nested unpaired surrogates and non-finite numeric values remain explicit representation gaps. The 21 real original controls provide 18 expected exact refusals and three declared gaps; candidate execution is required. The full-result gate additionally compares all fields of the original unparsed CallToolResult objects, with 112 results kept separate from the cancellation lifecycle. Both independently captured import-error fixture sets are retained. ASCII and horizontal-whitespace batching preserve both acquisition passes and the existing digest, UTF-8, token, EOF and cancellation checks; performance remains subject to actual same-input measurement."
+    },
+    "rea_evidence_session_checkpoint": {
+      "source_paths": [
+        "src/mcp/rea_evidence_checkpoint.rs",
+        "src/mcp/rea_evidence_checkpoint_linux.rs",
+        "src/mcp/rea_evidence_checkpoint_store.rs",
+        "src/mcp/rea_evidence_checkpoint_state.rs",
+        "src/mcp/rea_evidence_checkpoint_order.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_evidence_file.rs",
+        "src/mcp/rea_evidence_source.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/runtime/caller_scope.rs",
+        "src/mcp/runtime/request_results.rs",
+        "docs/rea-native/EVIDENCE_CHECKPOINTS.md"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_checkpoint_tests.rs",
+        "src/mcp/rea_evidence_checkpoint_order_tests.rs",
+        "tests/rea_evidence_checkpoint_external.rs",
+        "tests/rea_evidence_checkpoint_http.py",
+        "tests/fixtures/rea_evidence_checkpoint/unknown-verified.json",
+        "tests/fixtures/rea_evidence_checkpoint/provenance.json",
+        "tests/fixtures/rea_evidence_checkpoint/producer-run.stdout"
+      ],
+      "scope": "Separate native Linux extension: explicitly checkpoint complete retained Evidence, Unknown history, first producer origin and imported object order for the verified private HTTP operator credential under the current complete policy. Content identity binds canonical payload, retention sidecar, schema/profile and authority; create-only publication owns files, lock and admission through actual directory sync. Identical state reconciles the same ID. No automatic persistence, stdio persistent authority, shared-credential user isolation or original REA operation equivalence. Explicit 2048-record, 8192-Unknown-revision, 128 MiB bundle, 16 MiB sidecar, native parser, 32 checkpoint/stage and 256 MiB total-store limits; all-or-nothing refusal, no silent truncation. Actual candidate qualification is recorded separately."
+    },
+    "rea_evidence_session_list": {
+      "source_paths": [
+        "src/mcp/rea_evidence_checkpoint.rs",
+        "src/mcp/rea_evidence_checkpoint_linux.rs",
+        "src/mcp/rea_evidence_checkpoint_store.rs",
+        "src/mcp/rea_evidence_checkpoint_state.rs",
+        "src/mcp/rea_evidence_checkpoint_order.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_evidence_file.rs",
+        "src/mcp/rea_evidence_source.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/runtime/caller_scope.rs",
+        "src/mcp/runtime/request_results.rs",
+        "docs/rea-native/EVIDENCE_CHECKPOINTS.md"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_checkpoint_tests.rs",
+        "src/mcp/rea_evidence_checkpoint_order_tests.rs",
+        "tests/rea_evidence_checkpoint_external.rs",
+        "tests/rea_evidence_checkpoint_http.py",
+        "tests/fixtures/rea_evidence_checkpoint/unknown-verified.json",
+        "tests/fixtures/rea_evidence_checkpoint/provenance.json",
+        "tests/fixtures/rea_evidence_checkpoint/producer-run.stdout"
+      ],
+      "scope": "Separate native Linux extension: bounded complete checkpoint catalog under verified private HTTP credential and current policy. Every visible checkpoint is authenticated; incomplete staging is omitted but consumes storage quota. Pages bind the complete ordered checkpoint set, owner and policy through catalog_sha256, required for continuation beyond offset zero; catalog drift and corruption refuse. Does not mutate Evidence session state or qualify original REA pagination."
+    },
+    "rea_evidence_session_resume": {
+      "source_paths": [
+        "src/mcp/rea_evidence_checkpoint.rs",
+        "src/mcp/rea_evidence_checkpoint_linux.rs",
+        "src/mcp/rea_evidence_checkpoint_store.rs",
+        "src/mcp/rea_evidence_checkpoint_state.rs",
+        "src/mcp/rea_evidence_checkpoint_order.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_evidence_file.rs",
+        "src/mcp/rea_evidence_source.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/runtime/caller_scope.rs",
+        "src/mcp/runtime/request_results.rs",
+        "docs/rea-native/EVIDENCE_CHECKPOINTS.md",
+        "scripts/rea_evidence_checkpoint_upgrade.py"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_checkpoint_tests.rs",
+        "src/mcp/rea_evidence_checkpoint_order_tests.rs",
+        "tests/rea_evidence_checkpoint_external.rs",
+        "tests/rea_evidence_checkpoint_http.py",
+        "tests/fixtures/rea_evidence_checkpoint/unknown-verified.json",
+        "tests/fixtures/rea_evidence_checkpoint/provenance.json",
+        "tests/fixtures/rea_evidence_checkpoint/producer-run.stdout",
+        "tests/rea_evidence_checkpoint_upgrade_tests.py",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/call-003-cold-complete.json",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/call-026-unknown-verified-complete.json",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/native-b2-apk-summary.result.json",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/native-c25-cold-empty.http",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/provenance.json",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/wire-0055-sent.json.gz",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/wire-0056-received.json.gz",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/wire.jsonl"
+      ],
+      "scope": "Separate native Linux extension: explicit same-credential/same-policy checkpoint restore into an empty session. Revalidates canonical bytes, complete Evidence and Unknown graph, strict complete object-order sidecar, private inode/directory bindings and final empty-state/cancellation checks before atomic publication. Does not reopen source artifacts, dispatch providers or automatically load another session. Unsupported versions, authority changes, corruption, nonempty sessions and native budgets are refused. Not full multi-host or production recovery qualification."
     }
   },
   "family_defaults": {
@@ -1493,7 +1621,7 @@
       "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
     },
     "read_function_instructions": {
-      "implementation": "related_facility",
+      "implementation": "partial_operation",
       "native_routes": [
         "rea_static_profiles",
         "rea_static_start",
@@ -1501,8 +1629,35 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
-      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+      "scope": "Native Ghidra revision 2 instructions operation for an explicitly selected canonical ELF function entry. Fixed restricted analysis returns the complete observed Listing within 4096-row/65536-UTF8-byte bounds, exact inclusive AddressSet ranges and symbol metadata, initialized-memory byte rows and text digest. No target execution; a bound violation fails the complete observation.",
+      "missing": "Actual same-candidate original/native Ghidra comparison and lifecycle gates remain required. Original default analysis, terminal-call and Borland SEH boundary heuristics, persistent document lifecycle, full Evidence and other providers remain unimplemented or unqualified. Empty Listing and loader-adjusted bytes retain explicit limitations.",
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_instructions.rs",
+        "src/mcp/rea_static_summary.rs",
+        "docs/rea-ghidra-instructions.md"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_instructions_tests.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "src/mcp/rea_static_summary_tests.rs",
+        "tests/rea_ghidra_instructions_contract.mjs",
+        "tests/fixtures/rea_ghidra_instructions/contract-window.json",
+        "tests/fixtures/rea_ghidra_instructions/owned-instructions.S"
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "related_auxiliary_capabilities": [
+        "static_worker"
+      ]
     },
     "inspect_native_load_image": {
       "implementation": "related_facility",
@@ -1622,8 +1777,13 @@
       "native_routes": [
         "rea_get_evidence_bundle"
       ],
-      "scope": "Frozen public complete and summary session readback with retained records, authenticated imported revisions and original-value serialization. New sessions start empty.",
-      "missing": "Every frozen filter/error/oversize and producer boundary plus complete multi-host durable recovery beyond the finite source/binary-bound public gates."
+      "scope": "Frozen public complete and summary session readback with retained records, authenticated imported revisions and original-value serialization. New sessions start empty. Separate native checkpoint/resume/list extensions can explicitly preserve complete session state under the verified HTTP credential and unchanged policy; they do not alter this operation's fresh-session behavior.",
+      "missing": "Every frozen filter/error/oversize and producer boundary plus complete multi-host durable recovery beyond the finite source/binary-bound public gates.",
+      "related_runtime_routes": [
+        "rea_evidence_session_checkpoint",
+        "rea_evidence_session_resume",
+        "rea_evidence_session_list"
+      ]
     },
     "export_evidence_bundle": {
       "implementation": "partial_operation",
@@ -1634,24 +1794,27 @@
       "missing": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers plus complete multi-host recovery qualification beyond finite import/export closure."
     },
     "import_evidence_bundle": {
-      "implementation": "partial_operation",
-      "native_routes": [
-        "rea_import_evidence_bundle"
-      ],
-      "scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile. Bounded small-file JSON observation retains pinned EOF and non-EOF diagnostics and typed string-root rejection while preserving late read, UTF-8, quota and cancellation failures.",
-      "missing": "Unrepresentable V8 diagnostic windows that split UTF-16 surrogate pairs, nested unpaired-surrogate and numeric-overflow representation profiles, and syntax beyond the finite captured corpus; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits remain explicit profile differences.",
-      "related_runtime_routes": [
-        "rea_verify_evidence",
-        "rea_retain_preview",
-        "rea_read_preview",
-        "rea_inspect_analysis_view"
-      ],
       "extra_gates": [
         "bundle_auth_and_unknowns",
         "retention_and_pagination",
         "effects_and_recovery",
         "cross_host_recovery"
-      ]
+      ],
+      "implementation": "partial_operation",
+      "missing": "Unrepresentable V8 diagnostic windows that split UTF-16 surrogate pairs, nested unpaired-surrogate and numeric-overflow representation profiles, and syntax beyond the finite captured corpus; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits remain explicit profile differences.",
+      "native_routes": [
+        "rea_import_evidence_bundle"
+      ],
+      "related_runtime_routes": [
+        "rea_verify_evidence",
+        "rea_retain_preview",
+        "rea_read_preview",
+        "rea_inspect_analysis_view",
+        "rea_evidence_session_checkpoint",
+        "rea_evidence_session_resume",
+        "rea_evidence_session_list"
+      ],
+      "scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile. Bounded small-file JSON observation retains pinned EOF and non-EOF diagnostics and typed string-root rejection while preserving late read, UTF-8, quota and cancellation failures."
     },
     "open_binary": {
       "implementation": "related_facility",
@@ -2434,8 +2597,8 @@
       "related_auxiliary_capabilities": [
         "source_map_worker"
       ],
-      "scope": "Native decoding of explicitly admitted local source-map JSON and a finite actual-REA point projection: across-line greatest generated position, all coincident candidates, section/source/name declarations and embedded-content hashes.",
-      "missing": "Exact upstream input/default/target selection and acquisition; authenticated script/application context; source URL resolution and embedded-content UTF-16 offset verification; complete Evidence/profile/typed outcomes; retained views and operation-specific recovery. The native report is not upstream REA Evidence.",
+      "scope": "Native decoding of explicitly admitted local source-map JSON with across-line greatest generated position, coincident candidates, sections/source/name declarations and embedded-content hashes. Embedded source content now exposes absent/null/text states and bounded UTF-16 line/column/offset observations, including CRLF, CR, LF, U+2028, U+2029 and astral positions; all nested leaves share one line budget.",
+      "missing": "Exact upstream input/default/target selection and acquisition; authenticated script/application context; source URL resolution; complete Evidence/profile/typed outcomes; retained views and operation-specific recovery. The retained original point corpus includes six explicit surrogate gaps, so complete upstream source-location equivalence remains unqualified. The native report is not upstream REA Evidence.",
       "dependencies": [],
       "extra_gates": [
         "js_graph_semantics",
@@ -2591,7 +2754,10 @@
         "src/mcp/rea_ghidra_analysis_1214_v4.java",
         "src/mcp/rea_ghidra_inventory_1214_v4.java",
         "src/mcp/rea_engine_profile.rs",
-        "src/mcp/rea_engine_ghidra.rs"
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_instructions.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_instructions_bridge.java"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -2605,9 +2771,10 @@
         "src/mcp/rea_ghidra_contract_v4_tests.rs",
         "tests/rea_ghidra_v4_api.py",
         "src/mcp/rea_engine_profile_tests.rs",
-        "src/mcp/rea_engine_ghidra_tests.rs"
+        "src/mcp/rea_engine_ghidra_tests.rs",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open.",
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open. A separate instruction-only revision-2 bridge retains the C3 12.2 complete bounded Listing window; existing revision-2 analysis bridge bytes are unchanged. Instruction requests are rejected for revisions 3 and 4. This combined source has no inherited instruction-operation qualification.",
       "upstream_tools": []
     },
     "archive_worker": {
@@ -2725,15 +2892,20 @@
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/mcp/qualification.json",
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/summary.json",
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/upstream/qualification.json",
-        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json"
+        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json",
+        "src/mcp/rea_source_map_content.rs"
       ],
       "tests": [
         "src/mcp/rea_source_map_tests.rs",
         "scripts/rea-source-map-reference.mjs",
         "scripts/rea-source-map-upstream-reference.mjs",
-        "tests/rea_source_map_mcp.py"
+        "tests/rea_source_map_mcp.py",
+        "src/mcp/rea_source_map_content_tests.rs",
+        "scripts/rea-source-map-content-reference.mjs",
+        "tests/fixtures/rea_source_map/content-position-rea-6_8_0.json",
+        "tests/fixtures/rea_source_map/content-position-rea-6_8_0.provenance.json"
       ],
-      "scope": "Internal admitted-byte native source-map decoder with fixed limits, real MCP cancellation/deadline kill and reap, and explicit non-REA declaration output.",
+      "scope": "Bounded admitted-byte native source-map decoding with explicit embedded-content states and UTF-16 position/offset observations. Source/code presence and historical finite tests do not qualify this new candidate or the full upstream trace operation; the report remains a non-REA declaration.",
       "upstream_tools": [
         "trace_web_source_location"
       ]

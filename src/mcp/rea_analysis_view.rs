@@ -80,7 +80,7 @@ fn file_failure(error: FileReadError, path: &str) -> Failure {
 					"content_issues":[{"path":[],"reason":"invalid_format","expected":"JSON","message":message}]}}),
 			)
 		}
-		FileReadError::RootString => {
+		FileReadError::RootString(_) => {
 			source_failure(rea_evidence_source::reject_string_root(false), Some(path))
 		}
 		FileReadError::Cancelled => Failure::cancelled(OP),

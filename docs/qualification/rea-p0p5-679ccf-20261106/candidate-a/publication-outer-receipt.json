@@ -1,0 +1,262 @@
+{
+  "schema": "hepta.rea.candidate-a.publication-outer-receipt.v1",
+  "status": "completed",
+  "archive_publication_completed": true,
+  "source_commit": "c25e4cef0610816bfd1263b69d3dd63e4114aa49",
+  "source_git_tree": "c6db025f5902570bd63520751cf84c57505eb6f4",
+  "binding_sha256": "7cee8cc6f6f141fcee5a744ae831ae0b24987e4e428bd91eb936c6ae3257503f",
+  "binary_sha256": "9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90",
+  "archive": {
+    "bytes": 35492249,
+    "path": "candidate-a-observations.tar.gz",
+    "sha256": "eeac4da8ba4af748cfc100a266772390dd53009050d4c18835ce1cd4f542f708"
+  },
+  "file_index": {
+    "bytes": 6029724,
+    "sha256": "9d6d730c07f2d6de9b15b638a85bce3a8f7afa0e6a23ef2e8e6f17c149aaf700"
+  },
+  "readme": {
+    "bytes": 6933,
+    "sha256": "ff251cda405c17d3400944fb19f107f53e6846d2af6ed7c1a1dd2b9621a92887"
+  },
+  "archive_verification": {
+    "bytes": 1385,
+    "sha256": "c6fd848d56a2f5ec716c67d72cad0a3d92f8010d23e6f9eeac167d1b2586dfe3"
+  },
+  "independent_consumer": {
+    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-publication/docs/qualification/rea-p0p5-679ccf-20261106/candidate-a/archive-independent-consumer.json",
+    "bytes": 13695,
+    "sha256": "e37fb58b3d6694cec921c34c95f0a6f6e1f6037c95abe39c6b1cbf8d471dddbb"
+  },
+  "member_count": 5056,
+  "uncompressed_bytes": 399045783,
+  "omitted_count": 99,
+  "original_regular_sources_unchanged": 4157,
+  "actual_jobs": [
+    {
+      "label": "One stream package plus per-member verification",
+      "host": "desktop",
+      "job_id": "1a1aec14950-fc05-6205",
+      "launch": {
+        "audit_recorded": true,
+        "job": {
+          "args": [
+            "-c",
+            "exec /usr/bin/python3 -B - <<'PY'\nimport hashlib,sys,types\nfrom pathlib import Path\nroot=Path('/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/a-publication-packaging-r1')\npins={'package_candidate_a.py':'3036cf4fbbe5f491ad59d8b7aebc30001623cec41ec3f8d256fec8032b4c19d2','verify_archive.py':'0e959f973654d4c0cd819cd36f02061aea9a5d59532aabb8c94022ddb9b9e6c9'}\nsources={}\nfor name,want in pins.items():\n raw=(root/name).read_bytes()\n assert hashlib.sha256(raw).hexdigest()==want\n sources[name]=raw\nmodule=types.ModuleType('verify_archive')\nmodule.__file__=str(root/'verify_archive.py')\nexec(compile(sources['verify_archive.py'],module.__file__,'exec'),module.__dict__)\nsys.modules['verify_archive']=module\nsys.argv=[str(root/'package_candidate_a.py'),'--execute']\nexec(compile(sources['package_candidate_a.py'],sys.argv[0],'exec'),{'__name__':'__main__','__file__':sys.argv[0]})\nPY"
+          ],
+          "created_unix_ms": 1793933265232,
+          "cwd": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/a-publication-packaging-r1",
+          "env_keys": [],
+          "executable": "/bin/sh",
+          "execution_mode": "operator",
+          "host": "desktop",
+          "id": "1a1aec14950-fc05-6205",
+          "idempotency_key": "rea-a-publication-pack-closed-evidence-r1-679ccf-20261106",
+          "launch_error": null,
+          "launch_state": "launched",
+          "remote_job_dir": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1aec14950-fc05-6205",
+          "request_digest": "01de762225426e8e06eaa61cd21cabbd476ada6f58fd8e9fbb12a06550ab2c44",
+          "request_fingerprint": 134674927893769870,
+          "ssh_target": "desktop-ts",
+          "system_jobctl": false,
+          "unit": "hepta-runtime-job-1a1aec14950-fc05-6205"
+        },
+        "launch": {
+          "backend": "systemd",
+          "launcher_pid": null,
+          "ok": true,
+          "unit": "hepta-runtime-job-1a1aec14950-fc05-6205"
+        },
+        "local_record_pending": false,
+        "reused": false
+      },
+      "status": {
+        "at_unix_ms": 1793933293625,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a1aec14950-fc05-6205",
+        "launch_nonce": "44ddf332c02c3fd84f1b7a0c3c87df56",
+        "log_bytes": {
+          "stderr": {
+            "seen": 0,
+            "stored": 0
+          },
+          "stdout": {
+            "seen": 1068,
+            "stored": 1068
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "state": "succeeded",
+        "terminal_publication_confirmed": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      },
+      "reads": [
+        {
+          "audit_recorded": true,
+          "job_id": "1a1aec14950-fc05-6205",
+          "stderr": {
+            "bytes_hex": "",
+            "eof": true,
+            "next_offset": 0,
+            "offset": 0,
+            "size": 0,
+            "text": ""
+          },
+          "stdout": {
+            "bytes_hex": "7b2261726368697665223a207b226279746573223a2033353439323234392c202270617468223a202263616e6469646174652d612d6f62736572766174696f6e732e7461722e677a222c2022736861323536223a202265656163346461386261346166373438636663313030613236363737323339306464353330303930353064346331383833356365316364346635343266373038227d2c202263616e6469646174655f6578656375746564223a2066616c73652c202264657374696e6174696f6e223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d7075626c69636174696f6e2f646f63732f7175616c696669636174696f6e2f7265612d703070352d3637396363662d32303236313130362f63616e6469646174652d61222c20226769745f6f725f696e6465785f6d757461746564223a2066616c73652c2022676c6f62616c5f737461747573223a20224e4f5f474f222c2022696e646578223a207b226279746573223a20363032393732342c2022736861323536223a202239643664373330633037663264366465396231356236333861383562636533613866376166613065366132336566326538653666313763313439616166373030227d2c20226d656d6265725f636f756e74223a20353035362c20226f6d69747465645f6279746573223a203330323134323839312c20226f6d69747465645f636f756e74223a2039392c20226f726967696e616c5f726567756c61725f636f756e74223a20343135372c20226f726967696e616c5f736f75726365735f756e6368616e676564223a20747275652c20226f757465725f7465726d696e616c5f636f6c6c6563746564223a2066616c73652c20227075626c69636174696f6e5f766572696669636174696f6e223a207b226279746573223a20313338352c2022736861323536223a202263366664383438643536613266356563373136633637643732636164306133643932663830313064323365366639656561633136376431623235383664666533227d2c2022726561646d65223a207b226279746573223a20363933332c2022736861323536223a202266663235316364613430356331376433343030393434666231396631303766353365363834366432616636656437633161316464326239363231613932383837227d2c2022736368656d61223a202268657074612e7265612e63616e6469646174652d612e7061636b6167696e672d726573756c742e7631222c2022736f757263655f636865636b6f75745f7772697474656e223a2066616c73652c2022736f757263655f636f6d6d6974223a202263323565346365663036313038313662666431323633623639643364643633653431313461613439222c2022756e636f6d707265737365645f6279746573223a203339393034353738337d0a",
+            "eof": true,
+            "next_offset": 1068,
+            "offset": 0,
+            "size": 1068,
+            "text": "{\"archive\": {\"bytes\": 35492249, \"path\": \"candidate-a-observations.tar.gz\", \"sha256\": \"eeac4da8ba4af748cfc100a266772390dd53009050d4c18835ce1cd4f542f708\"}, \"candidate_executed\": false, \"destination\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-publication/docs/qualification/rea-p0p5-679ccf-20261106/candidate-a\", \"git_or_index_mutated\": false, \"global_status\": \"NO_GO\", \"index\": {\"bytes\": 6029724, \"sha256\": \"9d6d730c07f2d6de9b15b638a85bce3a8f7afa0e6a23ef2e8e6f17c149aaf700\"}, \"member_count\": 5056, \"omitted_bytes\": 302142891, \"omitted_count\": 99, \"original_regular_count\": 4157, \"original_sources_unchanged\": true, \"outer_terminal_collected\": false, \"publication_verification\": {\"bytes\": 1385, \"sha256\": \"c6fd848d56a2f5ec716c67d72cad0a3d92f8010d23e6f9eeac167d1b2586dfe3\"}, \"readme\": {\"bytes\": 6933, \"sha256\": \"ff251cda405c17d3400944fb19f107f53e6846d2af6ed7c1a1dd2b9621a92887\"}, \"schema\": \"hepta.rea.candidate-a.packaging-result.v1\", \"source_checkout_written\": false, \"source_commit\": \"c25e4cef0610816bfd1263b69d3dd63e4114aa49\", \"uncompressed_bytes\": 399045783}\n"
+          }
+        }
+      ],
+      "all_stream_bytes_collected": true
+    },
+    {
+      "label": "Independent consumer of written archive/index and 32 exact copies",
+      "host": "desktop",
+      "job_id": "1a1aec38260-fc05-621f",
+      "launch": {
+        "audit_recorded": true,
+        "job": {
+          "args": [
+            "-c",
+            "exec /usr/bin/python3 -B - <<'PY'\nimport hashlib\nfrom pathlib import Path\np=Path('/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/a-publication-packaging-r1/consume_published_candidate_a.py')\nraw=p.read_bytes()\nassert hashlib.sha256(raw).hexdigest()=='79e043c0bb9077a734d08643275835d730c4bdf01ad1c79aeb891a149ae4d535'\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\nPY"
+          ],
+          "created_unix_ms": 1793933410912,
+          "cwd": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/a-publication-packaging-r1",
+          "env_keys": [],
+          "executable": "/bin/sh",
+          "execution_mode": "operator",
+          "host": "desktop",
+          "id": "1a1aec38260-fc05-621f",
+          "idempotency_key": "rea-a-publication-independent-consumer-r1-679ccf-20261106",
+          "launch_error": null,
+          "launch_state": "launched",
+          "remote_job_dir": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1aec38260-fc05-621f",
+          "request_digest": "8c0a24eb16fb8dd440ddcf3cf9b65237e26736fed4355c16baaf16d3931c8d74",
+          "request_fingerprint": 10090918507198517000,
+          "ssh_target": "desktop-ts",
+          "system_jobctl": false,
+          "unit": "hepta-runtime-job-1a1aec38260-fc05-621f"
+        },
+        "launch": {
+          "backend": "systemd",
+          "launcher_pid": null,
+          "ok": true,
+          "unit": "hepta-runtime-job-1a1aec38260-fc05-621f"
+        },
+        "local_record_pending": false,
+        "reused": false
+      },
+      "status": {
+        "at_unix_ms": 1793933416224,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a1aec38260-fc05-621f",
+        "launch_nonce": "ad3bee0a283793a582280c2bd0de4cf5",
+        "log_bytes": {
+          "stderr": {
+            "seen": 0,
+            "stored": 0
+          },
+          "stdout": {
+            "seen": 2078,
+            "stored": 2078
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "state": "succeeded",
+        "terminal_publication_confirmed": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      },
+      "reads": [
+        {
+          "audit_recorded": true,
+          "job_id": "1a1aec38260-fc05-621f",
+          "stderr": {
+            "bytes_hex": "",
+            "eof": true,
+            "next_offset": 0,
+            "offset": 0,
+            "size": 0,
+            "text": ""
+          },
+          "stdout": {
+            "bytes_hex": "7b226279746573223a2031333639352c202263616e6469646174655f6578656375746564223a2066616c73652c202263726564656e7469616c5f6964656e746974795f6f6e6c79223a205b7b22617263686976655f70617468223a206e756c6c2c20226279746573223a20323637342c20226f726967696e616c5f70617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f6f776e65642d7265616c2d61706b2d72332f776f726b73706163652f6b657973746f72652f746573742d6f6e6c792e703132222c2022726561736f6e223a202247656e6572617465642063726564656e7469616c2f707269766174652d6b657920636f6e7461696e65723b20636f6e74656e74206578636c756465642066726f6d207075626c69636174696f6e3b206f726967696e616c2072657461696e6564222c2022736861323536223a202238623463356138376362386164626664373165383338323461353563343238373662323734343966656536323833616562393236656365653533336436656230227d5d2c2022676c6f62616c5f737461747573223a20224e4f5f474f222c20226d656d62657273223a20353035362c20227265706f7274223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d7075626c69636174696f6e2f646f63732f7175616c696669636174696f6e2f7265612d703070352d3637396363662d32303236313130362f63616e6469646174652d612f617263686976652d696e646570656e64656e742d636f6e73756d65722e6a736f6e222c202272756e74696d655f6964656e746974795f6f6e6c79223a205b7b226279746573223a2035303635363938342c20226f726967696e616c5f70617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f68657074612d72756e74696d65222c2022736861323536223a202239636465363632333430333035313536353131373765336438616231313362326236663637346565373631393632383363373138373433343861306236633930222c2022736f757263655f6c6162656c223a202265766964656e6365227d2c207b226279746573223a2035303635363938342c20226f726967696e616c5f70617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f70726f76696465722d67617465732d72312f30312d6768696472612f776f726b73706163652f68657074612d72756e74696d652d7175616c6966696564222c2022736861323536223a202239636465363632333430333035313536353131373765336438616231313362326236663637346565373631393632383363373138373433343861306236633930222c2022736f757263655f6c6162656c223a202265766964656e6365227d2c207b226279746573223a2035303635363938342c20226f726967696e616c5f70617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f70726f76696465722d67617465732d72312f30322d6a6164782f776f726b73706163652f68657074612d72756e74696d652d7175616c6966696564222c2022736861323536223a202239636465363632333430333035313536353131373765336438616231313362326236663637346565373631393632383363373138373433343861306236633930222c2022736f757263655f6c6162656c223a202265766964656e6365227d2c207b226279746573223a2035303635363938342c20226f726967696e616c5f70617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f70726f76696465722d67617465732d72312f30332d6368726f6d652f776f726b73706163652f68657074612d72756e74696d652d7175616c6966696564222c2022736861323536223a202239636465363632333430333035313536353131373765336438616231313362326236663637346565373631393632383363373138373433343861306236633930222c2022736f757263655f6c6162656c223a202265766964656e6365227d2c207b226279746573223a2034353330353733362c20226f726967696e616c5f70617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d6368726f6d652d63617573616c2d6d63702d32303236313130352d72312f68657074612d72756e74696d652d7175616c6966696564222c2022736861323536223a202262383066663234613738616665623266323061363538663166646536643661323063393839646638363939643934383566336332626330623236653738393833222c2022736f757263655f6c6162656c223a2022686973746f726963616c2d6368726f6d652d726564227d5d2c2022736861323536223a202265333766623538623364363639346365633932316333346339356630613666366531663630333763393561626533396336623163626638643437316464646262222c202273756d6d6172795f636f70696573223a2033322c2022756e636f6d707265737365645f6279746573223a203339393034353738337d0a",
+            "eof": true,
+            "next_offset": 2078,
+            "offset": 0,
+            "size": 2078,
+            "text": "{\"bytes\": 13695, \"candidate_executed\": false, \"credential_identity_only\": [{\"archive_path\": null, \"bytes\": 2674, \"original_path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/owned-real-apk-r3/workspace/keystore/test-only.p12\", \"reason\": \"Generated credential/private-key container; content excluded from publication; original retained\", \"sha256\": \"8b4c5a87cb8adbfd71e83824a55c42876b27449fee6283aeb926ecee533d6eb0\"}], \"global_status\": \"NO_GO\", \"members\": 5056, \"report\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-publication/docs/qualification/rea-p0p5-679ccf-20261106/candidate-a/archive-independent-consumer.json\", \"runtime_identity_only\": [{\"bytes\": 50656984, \"original_path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/hepta-runtime\", \"sha256\": \"9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90\", \"source_label\": \"evidence\"}, {\"bytes\": 50656984, \"original_path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/provider-gates-r1/01-ghidra/workspace/hepta-runtime-qualified\", \"sha256\": \"9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90\", \"source_label\": \"evidence\"}, {\"bytes\": 50656984, \"original_path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/provider-gates-r1/02-jadx/workspace/hepta-runtime-qualified\", \"sha256\": \"9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90\", \"source_label\": \"evidence\"}, {\"bytes\": 50656984, \"original_path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/provider-gates-r1/03-chrome/workspace/hepta-runtime-qualified\", \"sha256\": \"9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90\", \"source_label\": \"evidence\"}, {\"bytes\": 45305736, \"original_path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-chrome-causal-mcp-20261105-r1/hepta-runtime-qualified\", \"sha256\": \"b80ff24a78afeb2f20a658f1fde6d6a20c989df8699d9485f3c2bc0b26e78983\", \"source_label\": \"historical-chrome-red\"}], \"sha256\": \"e37fb58b3d6694cec921c34c95f0a6f6e1f6037c95abe39c6b1cbf8d471dddbb\", \"summary_copies\": 32, \"uncompressed_bytes\": 399045783}\n"
+          }
+        }
+      ],
+      "all_stream_bytes_collected": true
+    }
+  ],
+  "executed_publication_code": {
+    "package": {
+      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/a-publication-packaging-r1/package_candidate_a.py",
+      "bytes": 39218,
+      "sha256": "3036cf4fbbe5f491ad59d8b7aebc30001623cec41ec3f8d256fec8032b4c19d2"
+    },
+    "verifier": {
+      "path": "verify_archive.py",
+      "bytes": 2449,
+      "sha256": "0e959f973654d4c0cd819cd36f02061aea9a5d59532aabb8c94022ddb9b9e6c9"
+    },
+    "consumer": {
+      "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/a-publication-packaging-r1/consume_published_candidate_a.py",
+      "bytes": 4296,
+      "sha256": "79e043c0bb9077a734d08643275835d730c4bdf01ad1c79aeb891a149ae4d535"
+    }
+  },
+  "candidate_executed": false,
+  "candidate_tests_rerun": false,
+  "source_checkout_written": false,
+  "git_or_index_mutated": false,
+  "existing_publication_docs_or_ledger_modified": false,
+  "original_red_reclassified": false,
+  "candidate_b_results_included": false,
+  "credential_contents_included": false,
+  "complete_replacement_qualified": false,
+  "production_qualified": false,
+  "github_ci_passed": false,
+  "global_status": "NO_GO"
+}

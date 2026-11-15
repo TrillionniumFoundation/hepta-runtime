@@ -1,0 +1,44 @@
+--- preparation-r1/verify_publication.py
++++ preparation-r2/verify_publication.py
+@@ -31,15 +31,17 @@
+ consume(plan['packager']);consume(plan['a_lineage_packager']);consume(plan['split_module'])
+ A=B.load_module(plan['a_lineage_packager'],'archive_original_A_custody')
+ M=B.load_module(plan['split_module'],'archive_independent_split_verifier')
+-def outer(path,expected_sha,host,command,cwd,key):
++def outer(path,expected_sha,host,command,cwd,key,timeout,limits):
+  raw,pin=observed(path,2*1024**2);require(pin['sha256']==expected_sha,'literal original outer pin differs')
+  doc=json.loads(raw);require(doc['schema']=='hepta.rea.c2.archive.literal-outer.v1','outer document schema')
++ require(plan['launch_api']==doc['launch_api']=='process_start','original native launch API differs')
+  start=doc['start'];job=start['job'];request=doc['launch_request'];status=doc['status']
+  require(job['host']==host and job['execution_mode']=='operator' and job['executable']=='/bin/sh'
+          and job['args']==['-c',command] and job['cwd']==cwd and job['idempotency_key']==key
+-         and start['launch']['ok'] and not start['reused'],'original invocation differs')
+- require(request['host']==host and request['shell']=='/bin/sh' and request['command']==command
+-         and request['cwd']==cwd and request['idempotency_key']==key,'original launch request differs')
++         and job['env_keys']==[] and start['launch']['ok'] and not start['reused'],'original invocation differs')
++ expected_request={'host':host,'executable':'/bin/sh','args':['-c',command],'cwd':cwd,
++                   'idempotency_key':key,'timeout_seconds':timeout,**limits}
++ require(request==expected_request,'exact original process_start request or budget differs')
+  require(status['job_id']==job['id'] and status['state']=='succeeded' and status['exit_code']==0
+          and status['output_complete'] and status['output_durable'] and status['terminal_publication_confirmed']
+          and not status['automatic_retry'] and not status['cancelled'] and not status['timed_out'],'original terminal incomplete')
+@@ -63,7 +65,8 @@
+  return json.loads(bytes(streams['stdout'])),{'literal_outer':pin,'job_id':job['id'],'state':status['state'],'exit_code':0,
+          'complete':True,'durable':True,'terminal_publication_confirmed':True}
+ published,producer=outer(args.outer,args.outer_sha256,'desktop',
+- plan['archive_command_template'].replace('@PLAN_SHA@',args.expected_plan_sha256),str(P),plan['archive_idempotency_key'])
++ plan['archive_command_template'].replace('@PLAN_SHA@',args.expected_plan_sha256),str(P),plan['archive_idempotency_key'],
++ plan['archive_timeout_seconds'],plan['archive_resource_limits'])
+ require(published['status']=='PACKED_PENDING_INDEPENDENT_VERIFICATION' and published['qualified'] is False,'archive producer result not pending')
+ result=json.loads(consume(published['result']))
+ require(result['candidate']==plan['candidate'] and not result['candidate_executed'] and not result['git_or_index_mutated']
+@@ -84,7 +87,8 @@
+ actual_desktop_count=B.originals_unchanged(A,index['entries'])
+ require(actual_desktop_count==index['desktop_originals_rehashed_after'],'original desktop set count changed')
+ remote,remote_terminal=outer(args.remote_outer,args.remote_outer_sha256,'x230',
+- plan['remote_postflight_command'],plan['remote_cwd'],plan['remote_idempotency_key'])
++ plan['remote_postflight_command'],plan['remote_cwd'],plan['remote_idempotency_key'],
++ plan['remote_timeout_seconds'],plan['remote_resource_limits'])
+ expected=json.loads(consume(plan['remote_inventory'],1024*1024))
+ require(remote['schema']=='hepta.rea.c2.archive.x230-postflight.v1' and remote['host']=='x230'
+         and remote['original_inventory_sha256']==plan['remote_inventory']['sha256']

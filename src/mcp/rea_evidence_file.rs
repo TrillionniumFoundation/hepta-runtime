@@ -126,7 +126,7 @@ pub(super) enum FileReadError {
 	},
 	/// A complete JSON.parse string whose escaped UTF-16 cannot become a Rust
 	/// string. Callers may reject its known root type; no value is fabricated.
-	RootString,
+	RootString(RootStringProof),
 	Cancelled,
 	NativeProfileGap {
 		feature: &'static str,
@@ -149,7 +149,7 @@ impl fmt::Display for FileReadError {
 			Self::InvalidJson { message, .. } | Self::Unexpected { message } => {
 				f.write_str(message)
 			}
-			Self::RootString => f.write_str(
+			Self::RootString(_) => f.write_str(
 				"Evidence JSON root is a string outside the Rust Unicode representation",
 			),
 			Self::Cancelled => f.write_str("Evidence file acquisition cancelled"),
@@ -185,6 +185,10 @@ enum OrderNode {
 
 #[derive(Debug, Default)]
 pub(super) struct ObjectOrder(OrderNode);
+
+#[path = "rea_evidence_checkpoint_order.rs"]
+mod checkpoint_order;
+pub(super) use checkpoint_order::StoredObjectOrder;
 
 impl ObjectOrder {
 	/// Move the exact parser-owned record subtrees after bundle authentication.
@@ -244,6 +248,24 @@ pub(super) struct OwnedJson {
 	pub selected_path: String,
 	pub input_bytes: u64,
 	pub sha256: String,
+}
+
+/// Negative schema evidence for one acquired complete root string. Private fields
+/// and no Deserialize/constructor prevent callers from manufacturing this fact.
+/// The owner constructs it only after the source descriptor actually closes and
+/// cancellation is checked again. It is never a parsed or substituted JSON value.
+#[derive(Debug, Serialize)]
+pub(super) struct RootStringProof {
+	selected_path: String,
+	input_bytes: u64,
+	sha256: String,
+}
+
+#[cfg(target_os = "linux")]
+struct RootStringCandidate {
+	selected_path: String,
+	input_bytes: u64,
+	sha256: String,
 }
 
 fn gap(feature: &'static str, details: Value) -> FileReadError {
@@ -542,12 +564,51 @@ fn read_blocking(
 	active(&cancellation)?;
 	let _ = normalized_error_path(path)?;
 	let (mut file, before) = open_confined(Path::new(path), roots, &cancellation)?;
-	let result = read_admitted(&mut file, &before, path, roots, &cancellation, limits);
+	let mut root_string = None;
+	let result = read_admitted(
+		&mut file,
+		&before,
+		path,
+		roots,
+		&cancellation,
+		limits,
+		&mut root_string,
+	);
+	// Close the actual source descriptor with the original representation error
+	// still intact. A failed close must not be mistaken for a schema rejection.
 	let result = close_result(file, result);
-	if result.is_ok() {
-		active(&cancellation)?;
+	finish_after_close(result, root_string, &cancellation)
+}
+
+#[cfg(target_os = "linux")]
+fn finish_after_close(
+	result: Result<OwnedJson>,
+	root_string: Option<RootStringCandidate>,
+	cancellation: &CancellationToken,
+) -> Result<OwnedJson> {
+	match (result, root_string) {
+		(Ok(value), _) => {
+			active(cancellation)?;
+			Ok(value)
+		}
+		(
+			Err(FileReadError::NativeProfileGap {
+				feature: "json-diagnostic-or-value-representation",
+				..
+			}),
+			Some(candidate),
+		) => {
+			active(cancellation)?;
+			Err(FileReadError::RootString(RootStringProof {
+				selected_path: candidate.selected_path,
+				input_bytes: candidate.input_bytes,
+				sha256: candidate.sha256,
+			}))
+		}
+		// In particular, never promote a representation error nested inside a
+		// Cleanup failure. The retained candidate alone is not a closed proof.
+		(result, _) => result,
 	}
-	result
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -568,7 +629,9 @@ fn read_admitted(
 	roots: &[PathBuf],
 	cancellation: &CancellationToken,
 	limits: NativeJsonLimits,
+	root_string: &mut Option<RootStringCandidate>,
 ) -> Result<OwnedJson> {
+	*root_string = None;
 	let small = before.len() <= NATIVE_JSON_THRESHOLD;
 	let mut first_digest = None;
 	let mut early_error = None;
@@ -624,24 +687,55 @@ fn read_admitted(
 	let observed = state.borrow();
 	// Syntax diagnostics and known root-type rejections must describe the same
 	// complete bytes validated in the first pass, not a changed second read.
-	if observed.eof
-		&& (observed.input_bytes != before.len()
-			|| first_digest
-				.as_ref()
-				.is_some_and(|digest| digest != &observed.digest()))
-	{
-		return Err(changed());
+	if observed.eof {
+		ensure_complete_read(&observed, before.len(), first_digest.as_deref())?;
+	}
+	if small
+		&& observed.eof
+		&& observed.complete_root_string
+		&& observed.syntax_diagnostic.is_none()
+		&& observed.failure.is_none()
+		&& first_digest
+			.as_ref()
+			.is_some_and(|digest| digest == &observed.digest())
+		&& matches!(
+			&parsed,
+			Err(FileReadError::NativeProfileGap {
+				feature: "json-diagnostic-or-value-representation",
+				..
+			})
+		) {
+		// serde can stop at an unpaired surrogate before visit_string charges
+		// its payload. Use the whole checked source as a conservative upper
+		// bound; an early representation refusal never bypasses native budgets.
+		let estimated = observed
+			.input_bytes
+			.checked_mul(2)
+			.and_then(|bytes| bytes.checked_add(64))
+			.and_then(|bytes| observed.materialized.checked_add(bytes));
+		if estimated.is_none_or(|bytes| bytes > limits.max_materialized_bytes) {
+			return Err(gap(
+				"native-json-materialization-budget",
+				json!({
+					"estimated_materialized_bytes": estimated,
+					"max_materialized_bytes": limits.max_materialized_bytes,
+					"reason": "complete-root-string proof requires a conservative materialization bound"
+				}),
+			));
+		}
+		// Both full reads, the source fd and the current confined name have
+		// passed their fences. This private candidate is not yet deliverable:
+		// read_blocking must still close the source and check cancellation.
+		*root_string = Some(RootStringCandidate {
+			selected_path: path.into(),
+			input_bytes: observed.input_bytes,
+			sha256: observed.digest(),
+		});
 	}
 	drop(observed);
 	let value = parsed?;
 	let observed = state.borrow();
-	if observed.input_bytes != before.len()
-		|| first_digest
-			.as_ref()
-			.is_some_and(|digest| digest != &observed.digest())
-	{
-		return Err(changed());
-	}
+	ensure_complete_read(&observed, before.len(), first_digest.as_deref())?;
 	let sha256 = observed.digest();
 	drop(observed);
 	Ok(OwnedJson {
@@ -651,6 +745,17 @@ fn read_admitted(
 		input_bytes: before.len(),
 		sha256,
 	})
+}
+
+#[cfg(target_os = "linux")]
+fn ensure_complete_read(state: &State, expected: u64, first_digest: Option<&str>) -> Result<()> {
+	if !state.eof
+		|| state.input_bytes != expected
+		|| first_digest.is_some_and(|digest| digest != state.digest().as_str())
+	{
+		return Err(changed());
+	}
+	Ok(())
 }
 
 #[cfg(target_os = "linux")]
@@ -978,16 +1083,13 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 			}
 			// The value parser rejected this same input, and the independently
 			// bounded observer reached physical EOF under the small-file profile.
-			// Complete root strings are rejected by each caller's object schema;
-			// they are never substituted, retained or treated as decoded values.
+			// A complete root-string observation remains a representation gap
+			// here. Only the file owner can supply custody and close guarantees.
 			// IoRead can report EOF while filling a Unicode escape after an
 			// earlier invalid unit. Keep the observer\'s first syntax failure.
 			if (error.is_syntax() || error.is_eof()) && state.small && state.eof {
 				if let Some(message) = state.syntax_diagnostic.take() {
 					return Err(invalid_json(&message, false));
-				}
-				if state.complete_root_string {
-					return Err(FileReadError::RootString);
 				}
 			}
 			Err(gap(
@@ -999,6 +1101,24 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 			))
 		}
 	}
+}
+
+#[cfg(target_os = "linux")]
+/// Reuse the native materialization/token/depth fence for already captured
+/// private checkpoint bytes. Descriptor admission remains the store owner's job.
+pub(super) fn parse_checkpoint_json(
+	bytes: &[u8],
+	cancellation: &CancellationToken,
+) -> Result<(Value, ObjectOrder)> {
+	active(cancellation)?;
+	let state = Rc::new(RefCell::new(State::new(
+		cancellation.clone(),
+		NativeJsonLimits::default(),
+		bytes.len() as u64 <= NATIVE_JSON_THRESHOLD,
+	)));
+	let parsed = parse_reader(std::io::Cursor::new(bytes), bytes.len() as u64, state)?;
+	active(cancellation)?;
+	Ok((parsed.value, ObjectOrder(parsed.order)))
 }
 
 #[cfg(target_os = "linux")]
@@ -1162,3 +1282,7 @@ impl<'de> Visitor<'de> for Seed {
 #[cfg(all(test, target_os = "linux"))]
 #[path = "rea_evidence_file_tests.rs"]
 mod tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "rea_evidence_root_string_tests.rs"]
+mod root_string_tests;

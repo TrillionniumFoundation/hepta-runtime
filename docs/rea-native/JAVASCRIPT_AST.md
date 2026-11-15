@@ -41,13 +41,16 @@ selected sources does not change their graph identity.
 
 The graph hash identifies the complete copied source set and its parser profile;
 it is not a checksum of all graph result rows. Changes to analysis or collection
-ordering semantics must advance the versioned
-`hepta.javascript-selected-source-graph.v3` profile. Version 3 binds the deferred
-lexical Electron alias resolution; both v1 and v2 continuation identities are
-refused even when the selected bytes and grammars are unchanged. A real late-alias
-fixture produced zero Electron rows in the old worker and one after the repair
-while retaining its v2 identity, so the alias repair must advance this profile.
-The original REA projection remains finite; this version change does not establish
+ordering semantics must advance the versioned profile. The current profile is
+`hepta.javascript-selected-source-graph.v4`. Version 4 binds transparent
+BrowserWindow options-wrapper analysis. It refuses v1, v2 and v3 continuation
+identities even when the selected bytes and grammars are unchanged.
+
+Historically, version 3 bound deferred lexical Electron alias resolution. A real
+late-alias fixture produced zero Electron rows in the earlier worker and one
+after the repair while retaining its v2 identity, which required the v3 advance.
+That historical alias correction remains part of the current v4 analysis.
+The original REA projection remains finite; profile changes do not establish
 full application-graph or Evidence equivalence. Independent reads of several
 files do not constitute an atomic filesystem snapshot. Results use the native
 `hepta.rea-javascript-graph.v1` record format and explicitly set
@@ -101,10 +104,11 @@ the native graph does not read compiler settings or infer the absence of a
 runtime dependency from `type_only: true`.
 See the [TypeScript option reference](https://www.typescriptlang.org/tsconfig/verbatimModuleSyntax.html).
 
-Pure inline type reexports now carry the same syntactic classification as pure
-inline type imports. The analysis profile advances to v2, which also changes
-`graph_sha256` and refuses continuation tokens from the previous semantics.
-The report exposes that version as `analysis_profile`.
+The historical v2 change gave pure inline type reexports the same syntactic
+classification as pure inline type imports. That change advanced
+`graph_sha256` and refused continuation tokens from the earlier semantics.
+The current v4 profile retains this classification; the report exposes the
+current version as `analysis_profile`.
 
 The additional independent check parses fourteen authored declarations with a
 separately selected TypeScript compiler, compares those observations with the
@@ -120,6 +124,53 @@ node scripts/qualify_javascript_type_erasure.mjs /absolute/hepta-runtime /absolu
 
 This finite comparison does not qualify arbitrary TypeScript emit options, a
 live Electron application, or the upstream REA contract.
+
+## BrowserWindow preload wrappers
+
+Profile v4 unwraps parentheses and transparent TypeScript expressions before
+inspecting a BrowserWindow options object. The finite regression covers a plain
+object, a parenthesized object, `as const`, `satisfies`, a type assertion, a
+non-null assertion, and nested parentheses around `webPreferences` and its
+preload literal. These remain static syntax observations. Dynamic values,
+spreads and shadowed constructors retain their existing unknown or exclusion
+boundaries.
+
+The [preload-wrapper harness](../../scripts/qualify_javascript_preload_wrappers.mjs)
+uses seven authored fixtures and two independent oracle observations. Node's
+TypeScript transformation and a stub constructor observe only those authored
+inert fixtures. The
+[recorded original REA projection](../../tests/fixtures/rea_javascript/preload-original-rea-6_8_0-679ccf.json)
+comes from actual `rea-agents@6.8.0` public `analyze_javascript_application`
+calls on the unchanged source bytes, including the original `.ts` files.
+That original tool observed the literal preload in all seven cases; the c759
+native baseline missed six.
+
+Before invoking the candidate worker, the harness checks the fixed original
+fixture-file SHA256, the seven case identities, their grammars, exact source
+bytes and source SHA256 values. It compares the same
+`preload_declaration_present` and `literal_preload` fields against both oracles
+and reports each match separately. A case passes only when both oracles agree,
+both match the worker, and the worker satisfies the v4 profile and non-execution
+contract.
+
+```text
+node scripts/qualify_javascript_preload_wrappers.mjs /absolute/hepta-runtime /absolute/new-receipt.json
+```
+
+Candidate A at `c25e4cef0610816bfd1263b69d3dd63e4114aa49` passed all seven
+dual-oracle cases and seven additional complete raw-worker replays. Its frozen
+runtime SHA-256 is
+`9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90`;
+the independently bound summary SHA-256 is
+`57947c2de3514b85e3ac6761c360fae7b5c5aa696fab8e0ad48f219ff641cdf7`.
+The Node and actual original observations agreed in every case. This records
+only that candidate. Every subsequent source/binary combination requires its
+own source-bound replay and complete terminal observation.
+This finite check covers preload-declaration presence and literal paths; it
+does not qualify full application graphs, public Envelopes, Evidence or Electron
+runtime behavior. The overall decision remains **HOLD / NO_GO**.
+See the [P0–P5 continuation](P0P5_CONTINUATION_20261105_679CCF.md) for the pinned
+original identities and remaining qualification work.
 
 ## Remaining scope
 

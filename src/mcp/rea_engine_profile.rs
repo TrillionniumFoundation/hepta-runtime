@@ -99,6 +99,10 @@ pub(crate) fn validate_ghidra(profile: &ReaStaticProfile) -> Result<()> {
 			.allowed_operations
 			.iter()
 			.any(|operation| *operation != super::StaticOperation::Inventory))
+		|| (matches!(engine.bridge_revision, Some(3 | 4))
+			&& profile
+				.allowed_operations
+				.contains(&super::StaticOperation::Instructions))
 		|| profile.java_engine.is_some()
 		|| !absolute_normal_path(&engine.java_home)
 		|| !absolute_normal_path(&engine.installation_root)

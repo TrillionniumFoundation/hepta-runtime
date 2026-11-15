@@ -58,5 +58,49 @@ class PublicImportComparisonTests(unittest.TestCase):
             h.compare_observation(row,changed)
 
 
+    def original_error_row(self, result):
+        response={'result':copy.deepcopy(result)}
+        value=q.tool_value(response)
+        return {'arguments':{},'value':value,'orders':h.orders(value),
+                'raw_error_text':h.raw_error_text(response),'response':response}
+
+    def test_full_result_comparison_keeps_the_raw_error_gate(self):
+        row=self.original_error_row(self.result)
+        changed=copy.deepcopy(row)
+        changed['raw_error_text']['utf8_sha256']='0'*64
+        result=h.compare_observation(row,changed)
+        self.assertEqual(result['complete_call_tool_result_status'],'PASS')
+        self.assertEqual(result['raw_error_text_status'],'FAIL')
+        self.assertEqual(result['status'],'FAIL')
+
+    def test_full_result_comparison_keeps_the_error_member_order_gate(self):
+        row=self.original_error_row(self.result)
+        changed=copy.deepcopy(row)
+        error=next(x for x in changed['orders']
+                   if x['representation']=='error-text' and x['path']==['error'])
+        error['keys'].reverse()
+        result=h.compare_observation(row,changed)
+        self.assertEqual(result['complete_call_tool_result_status'],'PASS')
+        self.assertEqual(result['error_text_order']['status'],'FAIL')
+        self.assertEqual(result['status'],'FAIL')
+
+    def test_original_plain_sdk_errors_remain_outside_json_error_gates(self):
+        fixture=json.loads((ROOT/'tests/fixtures/rea_evidence_file/'
+            'import-error-text-original-118-rea-6_8_0-679ccf.json').read_text())
+        cases=[case for case in fixture['cases'] if case['kind']=='plain']
+        self.assertEqual(len(cases),4)
+        for case in cases:
+            response=json.loads(bytes.fromhex(case['response_wire_hex']))
+            row=self.original_error_row(response['result'])
+            result=h.compare_observation(row,copy.deepcopy(row))
+            self.assertEqual(result['status'],'PASS',case['id'])
+            self.assertEqual(result['complete_call_tool_result_status'],'PASS')
+            self.assertEqual(result['raw_error_text_status'],'NOT_APPLICABLE')
+            self.assertEqual(result['error_text_order']['status'],'NOT_APPLICABLE')
+            changed=copy.deepcopy(row)
+            changed['response']['result']['content'][0]['text']+='!'
+            self.assertEqual(h.compare_observation(row,changed)['status'],'FAIL')
+
+
 if __name__=='__main__':
     unittest.main()

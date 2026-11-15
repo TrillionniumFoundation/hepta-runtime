@@ -284,6 +284,46 @@ def worker_configuration(root):
             "privileged_actions": {}}}}
 
 
+
+def private_authority(root, run_id, role, provision=False):
+    """Provision or read only this run's explicitly selected private fence."""
+    root = marker(root, run_id)
+    require(role in ("worker", "controller"), "unknown private authority role")
+    authority = safe_path(root / (role + "-authority"))
+    state = safe_path(root / (role + "-state"))
+    directory_ids = {}
+    for label, path in (("authority", authority), ("state", state)):
+        info = path.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid()
+                and stat.S_IMODE(info.st_mode) == 0o700,
+                "private authority/state directory is not owned mode 0700")
+        directory_ids[label] = {key: getattr(info, "st_" + key)
+                               for key in ("dev", "ino", "mode", "uid")}
+    config = checked_file(root / (role + "-config.json"), 16384)
+    config_raw = config.pop("data")
+    require(json.loads(config_raw)["state_dir"] == str(state),
+            "private authority state differs from its actual configuration")
+    document = {"schema": "hepta-effect-owner-fence-v1", "owner": "v4", "epoch": 1,
+                "phase": "admitting", "state_root": str(state),
+                "predecessor_state_root": None}
+    if provision:
+        require(not tuple(authority.iterdir()), "fresh private authority is not empty")
+        write_new(authority / ".owner.lock", b"", 0o600)
+        write_new(authority / ".owner.json", encoded(document), 0o600)
+        sync_directory(authority)
+    lock = checked_file(authority / ".owner.lock", 4096)
+    owner = checked_file(authority / ".owner.json", 4096)
+    require(lock.pop("data") == b"" and owner.pop("data") == encoded(document),
+            "private owner lock/document bytes differ")
+    for row in (lock, owner):
+        require(row["uid"] == os.geteuid() and stat.S_IMODE(row["mode"]) == 0o600
+                and row["nlink"] == 1, "private owner record is not an owned 0600 single-link file")
+    return {"schema": "hepta.rea.private-owner-authority.v1", "role": role,
+            "run_id": run_id, "root": str(root), "authority": str(authority),
+            "state_root": str(state), "directories": directory_ids,
+            "configuration": config, "owner_document": document,
+            "lock": lock, "owner": owner, "required_fence": True}
+
 def create_root(root, run_id, source):
     root = safe_path(root)
     require(root.parent.is_dir(), "private parent must already exist")
@@ -297,9 +337,11 @@ def create_root(root, run_id, source):
     write_new(root / "bin" / "ssh", SSH_WRAPPER, 0o500)
     write_new(root / "worker-token", (secrets.token_hex(32) + "\n").encode())
     write_new(root / "worker-config.json", encoded(worker_configuration(root)))
+    authority = private_authority(root, run_id, "worker", provision=True)
     sync_directory(root)
     return {"root": str(root), "owner": json.loads((root / "owner.json").read_text()),
-            "runner_sha256": digest(source), "platform": platform_profile()}
+            "runner_sha256": digest(source), "platform": platform_profile(),
+            "authority_before": authority}
 
 
 class HttpClient:
@@ -447,6 +489,8 @@ def host_action(request):
                     "disabled_read_roots_rejection": denied}
         finally:
             client.disconnect()
+    if action == "authority":
+        return private_authority(root, request["run_id"], "worker")
     if action == "binary":
         return checked_file(root / "hepta-runtime")
     if action == "job_snapshot":
@@ -513,9 +557,11 @@ def bootstrap_finish(run_id):
     write_new(root / "bin" / "ssh", SSH_WRAPPER, 0o500)
     write_new(root / "worker-token", (secrets.token_hex(32) + "\n").encode())
     write_new(root / "worker-config.json", encoded(worker_configuration(root)))
+    authority = private_authority(root, run_id, "worker", provision=True)
     sync_directory(root)
     return {"root": str(root), "owner": json.loads((root / "owner.json").read_text()),
-            "runner_sha256": digest(source), "platform": platform_profile()}
+            "runner_sha256": digest(source), "platform": platform_profile(),
+            "authority_before": authority}
 
 
 class Host:
@@ -775,6 +821,8 @@ def execute(args):
                 "allowed_write_path_prefixes": [str(host.root)], "privileged_actions": {}}
         write_new(root / "controller-config.json", encoded(configuration))
         receipt["configuration_sha256"] = digest(encoded(configuration))
+        receipt["controller_authority_before"] = private_authority(
+            root, run_id, "controller", provision=True)
         port = hosts[0].action("port")["port"]
         wire = (root / "evidence" / "mcp-wire.jsonl").open("xb")
 
@@ -960,6 +1008,15 @@ def execute(args):
                 after = host.action("binary")
                 require(after["sha256"] == args.runtime_sha256, "staged final binary changed")
                 receipt["hosts"][host.name]["binary_after"] = after
+                authority_after = host.action("authority")
+                require(authority_after == receipt["hosts"][host.name]["authority_before"],
+                        "original private worker authority changed")
+                receipt["hosts"][host.name]["authority_after"] = authority_after
+            if "controller_authority_before" in receipt:
+                authority_after = private_authority(root, run_id, "controller")
+                require(authority_after == receipt["controller_authority_before"],
+                        "original private controller authority changed")
+                receipt["controller_authority_after"] = authority_after
             receipt["transport_fixture_after"] = transport_profile(root, args.x230_ssh_alias)
             require(receipt["transport_fixture_after"] == receipt["transport_fixture"],
                     "fixture SSH policy, executable or configured trust files changed")
