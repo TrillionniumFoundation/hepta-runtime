@@ -25,6 +25,13 @@ the original result and filesystem ordering within their documented private
 interfaces; they do not activate public request retention or replace the shared
 audit and storage lifecycle.
 
+The storage graph's private Value image and retention owner use six fixed
+eight-byte word helpers. Their remaining 68 IR functions are unchanged, and
+the build reconstructs the exact prior retention source to verify Record IO's
+unchanged imported closure. The generic Value owner and its separately tracked
+RawValue success gap are unchanged. This derivation preserves the complete
+retention domain and the original 180-second process limit.
+
 All 13 native domains and nine fresh original Rust recipes are mandatory. Their
 processes retain the existing 180-second limits. The separate storage native
 partition and original group preserve every previous gate and the 15-minute job

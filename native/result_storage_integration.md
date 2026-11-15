@@ -27,7 +27,7 @@ working tree. It initially adds 267 files without changing a baseline file.
 
 Each owner has an adjacent `_abi.md` and `_composition.json`. The fixed build
 profile is `native/result_storage_profile.json`, SHA-256
-`f04a2f90cb8033526112c67194390dadef489d73811edef8087a87142d343dc9`.
+`8038eddd75fe8abfb96d92a05c6bd2c436af6f52385bc9eea26d551c3cfbdb44`.
 It declares 30 actual HIA images and six static executable graphs, including
 the immutable configuration graph needed by safe DTO and retention.
 
@@ -43,6 +43,41 @@ profile. The current generic Value child also retains its previously disclosed
 special first-key RawValue success gap. A separately qualified replacement is
 required before claiming that full input domain. All production and complete
 runtime flags remain false.
+
+## Fixed word operations and completed-process ordering
+
+The follow-up to `86b5099550d92a4a9433257926929cb7656203f5` addresses two
+observed failures without changing any case or deadline. That commit's native
+PR exceeded the 180-second retention limit. Its native push completed every
+native and original group, but final re-admission mistakenly treated the later
+storage evidence-control process as an earlier process in the public-control
+snapshot. Both failed qualifications remain historical failures.
+
+The private `result_storage_value.hepta` replaces exactly three loop-based
+eight-byte word helpers with explicit byte operations in the same order. Its
+other 44 IR functions are unchanged. The retention owner uses the same three
+helpers and preserves its other 24 IR functions. All offsets, wrap arithmetic,
+individual byte loads/stores, trap order, resource limits, output admission,
+and persistent state transitions remain in the original domain. No generic
+Value, Record IO, common loader, compiler, or original Rust implementation is
+replaced by this private derivation.
+
+`scripts/result_storage_words.py` rebuilds the fixed helpers from their
+source-owned authoring text. It independently checks all preserved functions
+and reconstructs the complete prior retention source, whose digest must equal
+the frozen baseline. Record IO retains its existing imported helper and exact
+image; its import proof explicitly selects that reconstructed baseline rather
+than falsely naming the changed current function. The seven reporting controls
+reject coordinated edits to function bytes and their claimed digests, original
+imports, authoring text, and child routing. The separately qualified RawValue
+success repair is still not part of this graph.
+
+Each public evidence-control snapshot must equal the exact complete prefix
+before its unique actual process record. A later independent storage control
+does not retroactively become part of that prefix. Missing, duplicated,
+reordered, altered, and future process records remain rejected. The collector
+still requires the complete fixed final process set and all three successful
+evidence-control processes.
 
 ## Actual native entry points
 

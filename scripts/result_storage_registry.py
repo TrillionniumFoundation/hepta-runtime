@@ -7,7 +7,7 @@ import hashlib
 import json
 
 PROFILE = "native/result_storage_profile.json"
-PROFILE_SHA = "f04a2f90cb8033526112c67194390dadef489d73811edef8087a87142d343dc9"
+PROFILE_SHA = "8038eddd75fe8abfb96d92a05c6bd2c436af6f52385bc9eea26d551c3cfbdb44"
 COMPILER = "d3e2c90173cf733e42b299d0c4274df4b593a12f"
 COMPILER_IMAGE = "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
 ORIGINAL = "src/mcp/runtime/request_results.rs"
@@ -48,7 +48,9 @@ def build_sources(root):
         "native/result_storage_child_rebinding.json", "scripts/result_storage_registry.py",
         "scripts/build_result_storage.py", "scripts/hia_native_build.py",
         "scripts/hia_native_loader.py", "scripts/generate_hia_transport.py",
-        "scripts/result_storage_pack_child.py", "native/filter_packer.hepta"}
+        "scripts/result_storage_pack_child.py", "scripts/result_storage_words.py",
+        "native/result_storage_value_composition.json", "native/serde_json.hepta",
+        "native/text_budget.hepta", "native/filter_packer.hepta"}
     names.update(item["source"] for item in fixed["modules"].values())
     names.update(item["layout"] for item in fixed["graphs"].values())
     for stem in fixed["owners"].values():

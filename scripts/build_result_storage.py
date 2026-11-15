@@ -23,7 +23,7 @@ def source_composition(root, hepta):
     """Check imported IR and its complete call relocation before compilation."""
     root, hepta = Path(root), Path(hepta)
     sys.path.insert(0, str(hepta))
-    from hepta.hia_agent_assembly import assemble_program
+    from hepta.hia_agent_assembly import assemble_program, render_assembly
     fixed = profile(root)
     canonical = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     parsed = {}
@@ -43,7 +43,8 @@ def source_composition(root, hepta):
                     op["attrs"]["function"] = reverse[op["attrs"]["function"]]
         return value
 
-    counts = {}
+    from result_storage_words import verify_storage_words
+    counts, retention_baseline = verify_storage_words(root, hepta, with_retention_baseline=True)
     for name, stem in fixed["owners"].items():
         path = "native/" + stem + ".hepta"
         proof = json.loads(regular(root / ("native/" + stem + "_composition.json")))
@@ -53,8 +54,18 @@ def source_composition(root, hepta):
         actual = functions(path)
         count = 0
         for row in proof["imports"]:
-            require(sha(regular(root / row["source"])) == row["sha256"], "import source differs")
-            old = functions(row["source"])
+            if "source_derivation" in row:
+                # Record IO retains its old imported word helper. Reconstruct its
+                # complete source baseline instead of changing that owner or
+                # shipping a second obsolete retention implementation.
+                require(name == "record_io" and row["source"] == "native/request_retention.hepta"
+                    and row["source_derivation"] == "retention-before-ordered-word-helpers"
+                    and row["sha256"] == sha(render_assembly(retention_baseline).encode()),
+                    "historical import derivation differs")
+                old = {f["name"]: f for f in retention_baseline["functions"]}
+            else:
+                require(sha(regular(root / row["source"])) == row["sha256"], "import source differs")
+                old = functions(row["source"])
             reverse = {new: before for before, new in row["relocation"].items()}
             require(len(reverse) == len(row["relocation"]), "duplicate import target")
             for before, after in row["relocation"].items():
@@ -63,8 +74,10 @@ def source_composition(root, hepta):
                 count += 1
         children = list(proof.get("children", {}).values())
         if name == "safe_dto":
+            require(proof["value_child_source"] == "result_storage_value.hepta",
+                "safe DTO private Value child differs")
             children.extend((dict(source="config_result_owner.hepta", sha256=proof["config_child_sha256"]),
-                dict(source="serde_json.hepta", sha256=proof["value_child_sha256"])))
+                dict(source=proof["value_child_source"], sha256=proof["value_child_sha256"])))
         for row in children:
             require(sha(regular(root / "native" / row["source"])) == row["sha256"], "fixed child source differs")
         counts[name] = count

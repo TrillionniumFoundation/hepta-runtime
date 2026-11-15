@@ -1600,8 +1600,8 @@ def public_registry_control_evidence(output: Path, report: dict) -> dict:
     helper = public_registry_qualification
     name = "public-registry-evidence-controls"
     snapshot = helper.object_at(output / "public-registry-controls-input.json")
-    prior = [row for row in report["checks"] if row.get("name") != name]
-    if snapshot.get("checks") != prior:
+    indices = [i for i, row in enumerate(report["checks"]) if row.get("name") == name]
+    if len(indices) != 1 or snapshot.get("checks") != report["checks"][:indices[0]]:
         raise ValueError("public evidence controls did not observe the complete prior process set")
     for key in ("source_sha256", "modules", "public_registry_evidence", "original_rust_comparisons",
                 "compiler_checkout", "compiler_commit", "compiler_image_sha256"):

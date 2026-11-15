@@ -53,6 +53,98 @@ class QualificationReportingTests(unittest.TestCase):
             (folder / name).write_text(prefix + program)
         return root
 
+    def test_storage_word_derivation_refuses_consistently_rehashed_edits(self):
+        import copy
+        import hashlib
+        import os
+        import result_storage_words as words
+        hepta = Path(os.environ.get('HIA_HEPTA_DIR', str(ROOT.parent / 'compiler'))).resolve(strict=True)
+        sys.path.insert(0, str(hepta))
+        from hepta.hia_agent_assembly import assemble_program, render_assembly
+        names = ('serde_json.hepta', 'result_storage_value.hepta',
+                 'result_storage_value_composition.json', 'request_retention.hepta',
+                 'request_retention_composition.json', 'text_budget.hepta')
+        root = self.output / 'word-derivation'
+        (root / 'native').mkdir(parents=True)
+        original = {name: (ROOT / 'native' / name).read_bytes() for name in names}
+        sha = lambda raw: hashlib.sha256(raw).hexdigest()
+        canonical = lambda obj: json.dumps(obj, sort_keys=True, separators=(',', ':')).encode()
+
+        def reset():
+            for name, raw in original.items():
+                (root / 'native' / name).write_bytes(raw)
+
+        def write_json(name, obj):
+            (root / 'native' / name).write_bytes(canonical(obj) + b'\n')
+
+        def changed_ir(name, function):
+            program = assemble_program(original[name]).as_dict()
+            selected = next(f for f in program['functions'] if f['name'] == function)
+            operation = next(op for block in selected['blocks'] for op in block['ops']
+                             if op['op'] == 'const' and type(op['attrs']['value']) is int)
+            operation['attrs']['value'] += 1
+            raw = render_assembly(program).encode()
+            (root / 'native' / name).write_bytes(raw)
+            return raw, selected
+
+        def value_edit(function):
+            raw, changed = changed_ir('result_storage_value.hepta', function)
+            proof = json.loads(original['result_storage_value_composition.json'])
+            proof['source_sha256'] = sha(raw)
+            if function in proof['unchanged_functions']:
+                proof['unchanged_functions'][function] = sha(canonical(changed))
+            else:
+                next(row for row in proof['functions'] if row['function'] == function)['after_sha256'] = sha(canonical(changed))
+            write_json('result_storage_value_composition.json', proof)
+
+        def retention_edit(function):
+            raw, changed = changed_ir('request_retention.hepta', function)
+            proof = json.loads(original['request_retention_composition.json'])
+            proof['source_sha256'] = sha(raw)
+            local = proof['local_word_helpers']
+            if function in local['unchanged_functions']:
+                local['unchanged_functions'][function] = sha(canonical(changed))
+            else:
+                local['functions'][function]['after_sha256'] = sha(canonical(changed))
+            write_json('request_retention_composition.json', proof)
+
+        def changed_import():
+            raw, changed = changed_ir('text_budget.hepta', 'f14')
+            proof = json.loads(original['request_retention_composition.json'])
+            local = proof['local_word_helpers'];old = local['original_import']
+            old['sha256'] = sha(raw);old['functions']['f14'] = sha(canonical(changed))
+            relocated = copy.deepcopy(changed);relocated['name'] = 'f22'
+            local['functions']['f22']['before_sha256'] = sha(canonical(relocated))
+            write_json('request_retention_composition.json', proof)
+
+        def changed_author():
+            proof = json.loads(original['result_storage_value_composition.json'])
+            proof['authoring_source'] = proof['authoring_source'].replace('at + 1', 'at + 2', 1)
+            proof['authoring_source_sha256'] = sha(proof['authoring_source'].encode())
+            write_json('result_storage_value_composition.json', proof)
+
+        def changed_child():
+            proof = json.loads(original['request_retention_composition.json'])
+            proof['children']['value'] = dict(source='serde_json.hepta', sha256=sha(original['serde_json.hepta']))
+            write_json('request_retention_composition.json', proof)
+
+        reset()
+        baseline = words.verify_storage_words(root, hepta)
+        mutations = (('value-helper', lambda: value_edit('f14')),
+                     ('value-preserved-function', lambda: value_edit('f0')),
+                     ('retention-helper', lambda: retention_edit('f22')),
+                     ('retention-preserved-function', lambda: retention_edit('f0')),
+                     ('historical-import', changed_import), ('authoring', changed_author),
+                     ('child-route', changed_child))
+        for name, mutate in mutations:
+            reset();mutate()
+            with self.subTest(mutation=name), self.assertRaises((ValueError, AssertionError)):
+                words.verify_storage_words(root, hepta)
+        reset()
+        self.assertEqual(words.verify_storage_words(root, hepta), baseline)
+        self.assertEqual(baseline, dict(value_preserved_functions=44,
+            retention_preserved_functions=24, ordered_word_helpers=6))
+
     def test_storage_actual_completion_binds_wait_pid_and_complete_streams(self):
         import qualify_hia_runtime_native as qualifier
         helper = qualifier.storage_pipeline
@@ -75,6 +167,56 @@ class QualificationReportingTests(unittest.TestCase):
         (folder / 'stdout').write_bytes(original)
         helper.completed_process(ROOT, self.output, self.report, name,
             command, qualifier.completed_test_summary)
+
+    def test_public_control_snapshot_is_exact_prefix_before_later_controls(self):
+        """Real small processes; original semantic evidence is an explicit fixture."""
+        import copy
+        import compare_hia_runtime_rust as comparison
+        helper = comparison.public_registry_qualification
+        report = {'phase': 'original_rust_comparison', 'checks': []}
+        for name in ('actual-prior-reporting-fixture', 'result-values-evidence-controls'):
+            record_check(self.output, report, name=name,
+                command=[sys.executable, '-I', '-B', '-c', "print('{}')"], timeout=180)
+        snapshot = self.output / 'public-registry-controls-input.json'
+        snapshot.write_bytes(helper.encoded(report))
+        baseline = {'explicit_process_reporting_fixture_only': True}
+        digest = helper.sha(helper.encoded(baseline))
+        value = dict(schema='hepta.public-registry.evidence-controls.v1', status='PASS',
+            rejections=20, full_baseline_admissions=22, actual_native_calls_added=0,
+            actual_rust_calls_added=0, restored_file_bytes_and_modes=True,
+            report_sha256=comparison.sha(snapshot), baseline_evidence_sha256=digest,
+            final_evidence_sha256=digest, elapsed_seconds=0.001,
+            controls=[dict(label=label, rejected=True, exception='explicit reporting fixture')
+                      for label in comparison.PUBLIC_REGISTRY_CONTROL_LABELS])
+        path = self.output / 'public-registry-evidence-controls.json'
+        path.write_bytes(helper.encoded(value))
+        command = [sys.executable, '-I', '-B', '-c',
+            'from pathlib import Path;import sys;print(Path(sys.argv[1]).read_text(),end="")', str(path)]
+        record_check(self.output, report, name='public-registry-evidence-controls',
+            command=command, timeout=180)
+        with patch.object(comparison, 'public_registry_control_command', return_value=command), \
+             patch.object(helper, 'original_evidence', return_value=baseline):
+            before = comparison.public_registry_control_evidence(self.output, report)
+            record_check(self.output, report, name='result-storage-evidence-controls',
+                command=[sys.executable, '-I', '-B', '-c', "print('{}')"], timeout=180)
+            self.assertEqual(comparison.public_registry_control_evidence(self.output, report), before)
+            # Missing, duplicated, reordered or altered prior process records
+            # must remain invalid when a later independent control is present.
+            checks = report['checks']
+            variants = [checks[:2] + checks[3:], checks[:3] + [checks[2]] + checks[3:],
+                        checks[:2] + checks[3:] + [checks[2]], [checks[1], checks[0]] + checks[2:],
+                        checks[1:]]
+            changed = copy.deepcopy(checks);changed[0]['timeout_seconds'] = 181;variants.append(changed)
+            for index, rows in enumerate(variants):
+                damaged = copy.deepcopy(report);damaged['checks'] = rows
+                with self.subTest(mutation=index), self.assertRaisesRegex(ValueError, 'complete prior process set'):
+                    comparison.public_registry_control_evidence(self.output, damaged)
+            raw = snapshot.read_bytes()
+            changed = json.loads(raw);changed['checks'].append(checks[-1]);snapshot.write_bytes(helper.encoded(changed))
+            with self.assertRaisesRegex(ValueError, 'complete prior process set'):
+                comparison.public_registry_control_evidence(self.output, report)
+            snapshot.write_bytes(raw)
+            self.assertEqual(comparison.public_registry_control_evidence(self.output, report), before)
 
     def test_storage_control_launcher_imports_under_isolation_from_any_cwd(self):
         import subprocess
