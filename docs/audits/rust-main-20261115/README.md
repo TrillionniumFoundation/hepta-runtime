@@ -78,6 +78,8 @@ R33/R34/R35/R36 的原始性能拒绝，以及 R27/router-cache 的未完成验�
 | SEC-03 | Mac/Python 和 PTY 缺少原先物理 cwd 约束，省略 cwd 也可绕过配置根 | 配置执行根时要求 cwd；物理目录检查后持有 cwd 描述符；只改变子进程 cwd，保留监督器自己的私有 job 目录和 receipt 所有权 |
 | SEC-04 | 本地 CREATE 的 exists-then-write 竞态可能覆盖另一调用刚创建的文件或跟随 dangling symlink | 使用 `create_new` 原子占有目标；成功后才更新 delta cache；确定性双调用测试验证恰好一个成功 |
 | CI-01 | 当前主 CI 不识别 `main` | 补齐 push/PR 分支过滤，保持 exact-head 与 prospective-merge、两种 feature 模式和隔离测试 |
+| CI-02 | 少数旧工作流使用可移动 action tag，且一处 checkout 保留凭据 | 15 个工作流的 40 个外部 action 调用全部固定完整提交 SHA；17 个 checkout 全部关闭凭据持久化；保留原事件、测试范围和历史源码固定值 |
+| SUPPLY-01 | vendored ruzstd 来源清单只列最初两个补丁文件，遗漏后来三次已提交修补 | 补全六个已修改文件的 patched hash 和原始提交映射；全部 64 个上游文件记录、归档校验值和原基线不变；未修改 decoder 代码 |
 
 SEC-03 已用实际嵌入的 Python supervisor 做临时目录实验：允许目录退出 0；
 符号链接越界和缺失 cwd 均退出 127 且没有业务效果；terminal/witness 始终位于
@@ -87,6 +89,33 @@ SEC-03 已用实际嵌入的 Python supervisor 做临时目录实验：允许目
 `RENAME_NOREPLACE` 和 Darwin `RENAME_EXCL`、typed minimal audit、完整幂等
 身份绑定、nofollow receipt、fsync 顺序及取消后原始 SSH 子进程的 guard 保管。
 两个旧保护实际遗漏（HTTP 通用认证和物理 cwd）已适配到新实现，而非简单归档。
+
+独立本地资格工具还补回了源字节、路径、Git 配置/钩子/过滤器、环境与子进程
+清理约束。此次新增检查要求 index 与 HEAD 树一致，并拒绝 promisor/partial
+clone 自动取回源对象。51 个辅助工具回归已通过；这次审计使用过的 partial
+clone 仍按设计被资格入口拒绝，未为本次运行降低约束。
+
+## 依赖、工作流与凭据检查
+
+当前 `Cargo.lock` 有 362 个 package 条目，无 `rsa` crate 或指向该 crate 的
+依赖边。registry 包均带 checksum，来源是 crates.io；非 registry 包只有根包
+和仓库内 ruzstd，根 manifest 的唯一 patch 也是该本地目录。此结论针对锁定
+依赖图，不表示所有 RSA 算法或证书功能不存在。tunnel client 补丁的实际字节
+也与来源 manifest 的 digest 一致。
+
+15 个工作流均为 `contents: read`，未发现 `pull_request_target` /
+`workflow_run` 权限桥接、job 级权限提升、显式仓库 secret 引用或下载即执行的
+管道。唯一 ROG 自托管工作流保留仓库、分支及 actor 约束，没有 PR 触发。
+release 仍手动触发，只构建并上传私有候选 artifact，不自动部署或对外发布。
+
+对活跃源码、配置、脚本、工作流和 cloud-compute 测试扫描了 1,069 个 UTF-8
+文件（18,811,114 字节，跳过 4 个二进制 fixture），未发现未解释的明显真实凭据。
+8 处匹配均为文件引用或拒绝/隔离测试中的合成数据。没有输出凭据值；这一检查
+不覆盖每个历史 blob，不能表述成整个 Git 历史绝无秘密。
+
+当前环境没有 `cargo-audit` 和现成 advisory 数据库，因此本轮没有新的
+RustSec/CVE clearance。Python 直接依赖虽固定版本，但未提供完整带 hash 的
+传递依赖环境；包管理器和 runner image 仍是重现性边界。
 
 ## 仍需如实保留的边界
 
@@ -110,9 +139,15 @@ SEC-03 已用实际嵌入的 Python supervisor 做临时目录实验：允许目
 
 ## 验证与清理记录
 
-本目录的 `validation/`、`verification.json` 和最终执行记录保存实际结果。
+本目录的 `validation/` 和 `verification.json` 保存实际结果；远端合并、
+默认分支和引用清理结果由汇总 PR 的最终说明及 GitHub 当前引用状态记录。
 只将 exit 0 的对应命令记为通过；失败、skip、环境不支持和未执行分别记录。
 早期子分支的成功不代替最终组合源码的检查。
+
+`verification.json` 是其 `revision` 字段指定提交的只读复核：149 个原始 Rust
+分支头均为祖先，六个保留引用单独列出，五个重写分支头均未并入；42 份归档
+共验证 5,244 个原始 blob 路径，45 个独立研究文件也保持原字节。
+其含义是历史与源码保管通过，不能解释为生产资格通过。
 
 关键只读复核命令：
 
