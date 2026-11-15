@@ -27,9 +27,11 @@ import qualify_hia_runtime_native as q
 
 PARTITIONS = {
     "batch": ("batch_plan", "batch_apply", "atomic_write"),
-    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
+    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
-             "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir"),
+             "delta", "editable_content", "view_render", "view_render_growth", "view_read", "view_params", "view_call",
+             "runtime_mcp", "view_cache", "history", "session_workdir",
+             "file_locks", "file_lock_service"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
@@ -154,6 +156,11 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     for ordered in q.ORDERED_INDEPENDENT_SUITES:
         if not any(all(name in names for name in ordered) for names in result.values()):
             raise ValueError("an ordered native evidence dependency crosses partitions")
+    ordered_locks = q.file_lock_pipeline.ORDERED_SUITES
+    if not any(all(name in names for name in ordered_locks)
+               and [names.index(name) for name in ordered_locks] == sorted(names.index(name) for name in ordered_locks)
+               for names in result.values()):
+        raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
     return result
 
 
@@ -287,6 +294,11 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         evidence = q.atomic_write_evidence(output, report)
         q.atomic_write_retire_fixtures(output, tuple(evidence["transient_fixture_directories"]),
             output / "atomic-write/retired-fixtures.json", evidence["native_evidence"], create=True)
+    if any(row.get("name") == "test_view_call_sync.py" for row in report.get("checks", ())):
+        # The ordinary-file and public MCP cases intentionally create real
+        # links. Retain their complete file bytes and link metadata after all
+        # native receipts pass, then retire only those private test targets.
+        q.view_fixture_retirement(output, report, create=True)
     files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
     for name in directories:
         if name not in seal.get("directories", ()):

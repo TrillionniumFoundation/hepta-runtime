@@ -644,6 +644,40 @@ class QualificationReportingTests(unittest.TestCase):
             "HIA_BATCH_PLAN_EVIDENCE_RESULT", "HIA_REFERENCE_RUNTIME")}
         self.assertEqual(qualification_env(dict(inherited, PATH="/usr/bin")), {"PATH": "/usr/bin"})
 
+    def test_file_lock_registry_requires_actual_processes_and_both_original_owners(self):
+        import hia_native_file_lock_pipeline as pipeline
+        import hia_native_file_lock_qualification as locks
+        import hia_native_file_lock_service_qualification as service
+        import qualify_hia_runtime_native as q
+        entries = {row["key"]: row for row in MODULES}
+        report = {"modules": {key: {"manifest": "build/" + item["folder"] + "/manifest.json",
+                    "builder": key, "source": item["source"]}
+                  for key, item in pipeline.COMPONENTS.items()}}
+        commands = pipeline.test_commands(ROOT, self.output, report)
+        self.assertEqual(tuple(commands), pipeline.ORDERED_SUITES)
+        self.assertFalse(set(commands) & set(q.PARALLEL_NATIVE_SUITES))
+        for key, item in pipeline.COMPONENTS.items():
+            self.assertEqual((entries[key]["test"], *entries[key]["additional_tests"]), item["tests"])
+            self.assertEqual(entries[key]["builder"], key)
+            self.assertIn(key, RECIPES)
+            self.assertNotIn(key, NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+            reference = pipeline.original_command(ROOT, self.output, report,
+                                                  Path("/selected/1.95/bin/rustc"), key)
+            for name in ("rustc", "cargo", "rustfmt"):
+                self.assertEqual(reference[reference.index("--" + name) + 1], "/selected/1.95/bin/" + name)
+        self.assertEqual(commands["test_file_lock_service.py"][6:8],
+                         ["--state-corpus", str(self.output / "file-locks/state")])
+        for name, option, producer in (("test_file_lock_evidence.py", "--state-stdout", "test_file_lock_state.py"),
+                ("test_file_lock_evidence.py", "--key-stdout", "test_file_lock_key.py"),
+                ("test_file_lock_service_evidence.py", "--native-stdout", "test_file_lock_service.py"),
+                ("test_file_lock_service_evidence.py", "--contract-stdout", "test_file_lock_service_contract.py")):
+            self.assertEqual(commands[name][commands[name].index(option) + 1], str(self.output / (producer + ".stdout")))
+        pinned = sources()
+        self.assertTrue(set(locks.pins(ROOT)) | set(service.pins(ROOT)) <= set(pinned))
+        self.assertIn("scripts/hia_native_file_lock_pipeline.py", pinned)
+        self.assertIn("src/mcp/fs/remote.rs", ORIGINAL_RUNTIME_BLOBS)
+        self.assertIn("src/mcp/fs/text_editing.rs", ORIGINAL_RUNTIME_BLOBS)
+
     def test_batch_complete_progress_is_bound_to_the_actual_process_stream(self):
         progress = [
             {"phase": "maximum_plain", "status": "PASS", "output_bytes": 524298089,

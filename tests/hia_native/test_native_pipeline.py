@@ -18,7 +18,9 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_pipeline as p
+import hia_native_failure as failure
 import qualify_hia_runtime_native as q
+import hia_native_view_fixture_qualification as fixtures
 
 
 class NativePipelineTests(unittest.TestCase):
@@ -55,6 +57,45 @@ class NativePipelineTests(unittest.TestCase):
             with self.subTest(bad=bad), patch.object(q, "MODULES", modules), self.assertRaises(ValueError):
                 p.partition_tests(changed)
 
+    def test_failure_diagnostics_survive_denied_fixtures_without_mutation(self):
+        source = self.root / "failed"; source.mkdir()
+        denied = source / "atomic-write-original/native-kernel/0012-denied-parent/fixture/denied"
+        denied.mkdir(parents=True)
+        (denied / "private.json").write_bytes(b"not diagnostic evidence")
+        denied.chmod(0)
+        self.addCleanup(denied.chmod, 0o700)
+        report = {"status": "FAIL", "failure": "original comparison refused",
+                  "checks": [{"name": "atomic-write-rust-compare", "exit_code": 1, "timed_out": False}]}
+        (source / "result.json").write_text(json.dumps(report))
+        nested = source / "atomic-write-original/result.json"
+        nested.write_text('{"status":"FAIL","failure":"kernel observation mismatch"}')
+        raw = b"actual stderr: \xff\x00\n"
+        (source / "atomic-write-rust-compare.stderr").write_bytes(raw)
+        outside = self.root / "outside.json"; outside.write_bytes(b"outside")
+        (source / "escape.json").symlink_to(outside)
+        (source / "escape-directory").symlink_to(self.root, target_is_directory=True)
+        before = {path: path.read_bytes() for path in
+                  (source / "result.json", nested, source / "atomic-write-rust-compare.stderr", outside)}
+        destination = self.root / "diagnostics"
+        receipt = failure.capture(source, destination)
+        self.assertEqual(receipt["original_status"], "FAIL")
+        self.assertEqual(receipt["failed_checks"][0]["name"], "atomic-write-rust-compare")
+        self.assertFalse(receipt["qualification_admitted"])
+        self.assertTrue(receipt["diagnostic_subset_only"])
+        self.assertEqual((destination / "data/atomic-write-rust-compare.stderr").read_bytes(), raw)
+        self.assertEqual((destination / "data/atomic-write-original/result.json").read_bytes(), before[nested])
+        self.assertFalse((destination / "data/escape.json").exists())
+        self.assertFalse((destination / "data/escape-directory").exists())
+        self.assertFalse((destination / "data/atomic-write-original/native-kernel/0012-denied-parent/fixture").exists())
+        self.assertEqual(denied.stat().st_mode & 0o7777, 0)
+        self.assertEqual(before, {path: path.read_bytes() for path in before})
+        self.assertTrue(any(row["path"].endswith("/fixture") for row in receipt["skipped"]))
+        self.assertTrue(any(row["path"] == "escape.json" for row in receipt["errors"]))
+        with self.assertRaises(FileExistsError):
+            failure.capture(source, destination)
+        with self.assertRaisesRegex(ValueError, "separate"):
+            failure.capture(source, source / "nested-diagnostics")
+
     def test_transport_mode_restore_requires_all_exact_owned_bytes(self):
         folder = self.root / "data"; folder.mkdir()
         for name in ("a.elf", "b.bin"):
@@ -70,6 +111,22 @@ class NativePipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "bytes differ"):
             p.verify_files(folder, files, restore_modes=True)
         self.assertEqual((folder / "a.elf").stat().st_mode & 0o7777, 0o644)
+
+    def test_file_lock_corpus_producer_cannot_move_after_or_away_from_service(self):
+        suites = p.partition_tests()["text"]
+        ordered = q.file_lock_pipeline.ORDERED_SUITES
+        self.assertEqual(tuple(name for name in suites if name in ordered), ordered)
+        for mutation in ("split", "reverse"):
+            changed = copy.deepcopy(p.PARTITIONS)
+            if mutation == "split":
+                changed["text"] = tuple(key for key in changed["text"] if key != "file_lock_service")
+                changed["system"] += ("file_lock_service",)
+            else:
+                changed["text"] = tuple("file_lock_service" if key == "file_locks" else
+                                        "file_locks" if key == "file_lock_service" else key
+                                        for key in changed["text"])
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, "file-lock"):
+                p.partition_tests(changed)
 
     def test_artifact_path_symlink_and_special_mode_refusals(self):
         folder = self.root / "data"; folder.mkdir()
@@ -293,6 +350,67 @@ class NativePipelineTests(unittest.TestCase):
             path = output / (names[0] + ".stderr"); path.write_bytes(b"later corruption")
             with self.assertRaisesRegex(ValueError, "artifact bytes differ"):
                 p.verify_pipeline_receipts(output, report)
+
+
+    def test_view_fixture_retirement_retains_lossless_content_before_removal(self):
+        output = self.root / "output"
+        caller = output / "view-call/caller/files-0"
+        public = output / "runtime-mcp/files"
+        caller.mkdir(parents=True)
+        public.mkdir(parents=True)
+        outside = self.root / "outside.bin"
+        outside.write_bytes(b"untouched outside fixture")
+        content = b"complete native fixture\0\xff"
+        raw = caller / os.fsdecode(b"invalid-\xff")
+        raw.write_bytes(content)
+        (caller / "empty.bin").write_bytes(b"")
+        (caller / "outside-link").symlink_to(outside)
+        (caller / "empty-directory").mkdir()
+        os.link(raw, public / "same-inode.bin")
+        names = ("runtime-mcp/files", "view-call/caller/files-0")
+        evidence = {"kind": "synthetic pipeline reporting control", "native_calls": 0}
+        proof = fixtures.retire_fixtures(output, names, evidence, create=True)
+        self.assertEqual(proof["regular_files"], 3)
+        self.assertEqual(proof["symlinks"], 1)
+        self.assertEqual(proof["content_bytes"], len(content) * 2)
+        self.assertEqual(proof["semantic_invocations_added"], 0)
+        self.assertFalse(caller.exists())
+        self.assertFalse(public.exists())
+        self.assertEqual(outside.read_bytes(), b"untouched outside fixture")
+        self.assertEqual(fixtures.retire_fixtures(output, names, evidence), proof)
+        self.assertEqual(set(p.inventory(output)[0]), {fixtures.RECEIPT, fixtures.ARCHIVE})
+        with self.assertRaisesRegex(ValueError, "complete admitted execution"):
+            fixtures.retire_fixtures(output, names, {"different": "evidence"})
+        receipt = output / fixtures.RECEIPT
+        original = receipt.read_bytes()
+        altered = json.loads(original)
+        row = next(item for item in altered["entries"] if item["kind"] == "file" and item["bytes"])
+        row["sha256"] = "f" * 64
+        receipt.write_bytes(fixtures.encoded(altered))
+        with self.assertRaisesRegex(ValueError, "complete retained fixture file content"):
+            fixtures.retire_fixtures(output, names, evidence)
+        receipt.write_bytes(original)
+        caller.mkdir()
+        with self.assertRaisesRegex(ValueError, "reappeared"):
+            fixtures.retire_fixtures(output, names, evidence)
+
+    def test_view_fixture_retirement_refuses_alias_roots_and_wider_paths(self):
+        output = self.root / "output"
+        target = self.root / "outside"
+        target.mkdir()
+        (target / "keep").write_bytes(b"keep")
+        alias = output / "view-call/caller/files-0"
+        alias.parent.mkdir(parents=True)
+        alias.symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            fixtures.retire_fixtures(output, ("view-call/caller/files-0",), {}, create=True)
+        self.assertEqual((target / "keep").read_bytes(), b"keep")
+        self.assertTrue(alias.is_symlink())
+        self.assertFalse((output / fixtures.ARCHIVE).exists())
+        for name in ("../outside", "view-call", "view-call/caller", "runtime-mcp/sessions"):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "owned test domain"):
+                fixtures.retire_fixtures(output, (name,), {}, create=True)
+
 
 
 if __name__ == "__main__":

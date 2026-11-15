@@ -28,7 +28,7 @@ The exact source SHA-256 and Git blob identities are recorded in
 | `src/utils/truncation.rs` | Exact line renderer and megabyte formatting |
 | `src/mcp/server.rs` | `append_hints` after the result-size gate |
 
-The complete native source has 70 functions. Forty-nine are taken from the
+The complete native source has 72 functions. Forty-nine are taken from the
 existing `runtime_bytes.hepta`, `text_budget.hepta`, and `delta.hepta` owners.
 Composition changes only their function identifiers and call targets. Tests
 reverse this relocation and compare every imported function, block and
@@ -37,8 +37,10 @@ remain unchanged. Native bulk helpers copy complete text spans, normalize CRLF
 by contiguous spans, and measure line prefixes without rendering unused hash
 bytes. Publication still uses the original line hash; signed indexing, range
 errors, Myers order, capacity admission and appended hints remain unchanged.
-The change redirects three local functions and adds nine helpers; the other
-58 previously admitted functions remain identical.
+The growth revision replaces functions `f0` through `f3` and adds two
+helpers. The other 66 previously admitted functions, including all 49 imported
+functions, remain identical. The exact differences and their hashes are bound
+by `growth_revision` in the composition record.
 
 JSON endpoint parsing remains the existing `line_endpoint.hepta` owner. The
 new component begins after that parser has produced typed endpoints. A parsed
@@ -51,14 +53,14 @@ The entry is `f0(readbuf, mutbuf, mutbuf) -> u32`, using the existing six-argume
 Linux x86-64 borrowed-byte ABI. Input, output and workspace must be disjoint
 live buffers. The module has no system-call effects and calls no interpreter.
 
-| Limit | `view-render.v1` profile |
-| --- | --- |
-| Input frame | 16 MiB |
-| Output buffer | 16 MiB |
-| Workspace | 256 MiB |
-| Original actual-file metadata threshold | 5 MiB, unchanged |
-| Original result-body threshold | 8 MiB, unchanged |
-| Original per-entry normalized cache threshold | 1 MiB, unchanged |
+| Resource or rule | Retained `view-render.v1` filter | Actual `view_call` composition |
+| --- | --- | --- |
+| Input frame | 16 MiB transport window | Complete growing caller-owned frame |
+| Output buffer | 16 MiB | 16 MiB, sufficient for the semantic output bound below |
+| Workspace | 256 MiB allocation | Grows from 128 KiB according to actual line tables |
+| Original actual-file metadata threshold | 5 MiB | 5 MiB, unchanged |
+| Original result-body threshold | 8 MiB | 8 MiB, unchanged |
+| Original per-entry normalized cache threshold | 1 MiB | 1 MiB, unchanged |
 
 The larger profile is explicit in the builder and loader. The existing
 `standard` profile remains 8 MiB input, 8 MiB output and 32 MiB workspace.
@@ -76,11 +78,29 @@ Myers snapshots fit the explicit 256 MiB profile. An insufficient workspace
 returns a capacity refusal; it never becomes a semantic Myers `None`.
 
 A metadata check is not a file lock. A file can grow after the check, and the
-two original reads can differ. The input permits independently supplied
-snapshots and accepts a complete frame up to 16 MiB, including a tested growth
-case at exactly that bound. Larger races or insufficient caller buffers are
-explicit native-capacity/transport refusals; the component does not pretend
-they are an original 5 MiB file rejection.
+two original reads can differ. The source admits complete independently
+supplied snapshots without a fixed cumulative input window. The retained
+filter still refuses frames exceeding its transport allocation; the actual
+ordinary-file composition uses the growing reader and caller allocations.
+Actual allocation failure remains a resource failure and is never recast as
+the original 5 MiB metadata rejection.
+
+Resolved start/end, first-read line count and actual-read line count occupy
+independent u64 fields. They are not truncated to 32 bits. Line-table sizes
+are checked against available scratch before multiplication. When previous
+and current line counts differ by more than 500, the exact original Myers
+distance ceiling already implies `None`; the source uses that lower bound
+before attempting its bounded frontier. It does not change the original
+distance, ordering, fallback or cache mutation decisions.
+
+A successful result has at most 8 MiB of base text, two bounded range hints,
+1 MiB of normalized cache payload and a 128-byte header. Error diagnostics
+produced by this renderer are bounded messages with at most u64 decimal
+fields. Thus its 16 MiB output allocation admits every semantic result;
+workspace growth cannot conceal an insufficient renderer output. Larger
+endpoint or path errors belong to the caller and use its separate growing
+result allocation. All extents remain subject to the LP64 address space,
+representable ABI lengths and real memory resources.
 
 Return values are a complete output byte count, `0xffffffff` for malformed
 ABI input, or `0xfffffffe` for insufficient output/workspace. Refusals leave
@@ -241,77 +261,60 @@ has a per-entry 1 MiB cap and no total-entry LRU. A future session-cache owner
 must preserve or explicitly bound that domain; a small fixed replacement
 cannot be presented as complete original cache parity.
 
-## Executed verification
+## Executable qualification
 
-`test_view_render.py` supports `HIA_VIEW_MANIFEST`, `HIA_HEPTA_DIR`,
-`HIA_VIEW_CORPUS_DIR` and explicit portable source/repository/loader arguments.
-The supplied manifest must have been built with
-`buffer_profile="view-render.v1"`. `HIA_BUILD_ROOT` is consumed by the normal
-build/qualification driver, not by a fallback implementation in the test.
-The test exports actual native inputs and outputs as `requests.hex.gz`,
-`native-output.txt.gz`, and `native-corpus.json`. Their recorded hashes and
-sizes describe the decompressed bytes.
+The same 72-function HIA source is compiled in two independently registered
+borrowed-buffer profiles. The 16 MiB `view-render.v1` carrier retains its full
+original test domain; the `history.v1` image-only carrier independently tests
+larger complete snapshots. Neither carrier capacity is a semantic read limit.
+The source and every compiled image are bound to the actual completed process,
+current composition, unchanged original owners and complete captured bytes.
 
-The complete native run passed 3,125 corpus cases: 2,721 render cases and 404
-prepare cases. It also passed 135 malformed-frame refusals, exact/insufficient
-buffer controls, a 32-MiB workspace refusal distinct from Myers `None`, and
-three real static-ELF cases. A separate transport suite passed six HIA VM /
-native / independent-reference samples, explicit profile admission controls,
-exact fixed transport-prefix and embedded-image binding, and actual output-IO
-failure. The current bulk-rendering source completed the unchanged full
-suite in 43.608 seconds (43.668 seconds including process startup and exit),
-under the existing 180-second suite limit. All 3,125 corpus rows, assertions
-and named buffer profiles were unchanged. The borrowed-buffer loader now
-reads each 16-byte guard directly instead of copying the entire workspace;
-ordinary responses copy exactly the validated result length. Its raw
-qualification API still returns both complete mutable buffers. The actual
-11-group transport suite passes 64 deliberate output/workspace guard
-corruptions, including zero-size buffers, and an input-mutation refusal.
-These local observations do not establish a CI speedup or a future timing
-guarantee. The earlier `1ce0868a` CI timeout remains recorded as a failure.
+`test_view_render.py` requires 3,125 captured requests: 2,721 render requests
+and 404 preparation requests. Its separate controls retain 135 malformed-frame
+refusals, exact and insufficient buffers, an explicit workspace refusal and
+actual static ELF requests. `test_view_transport.py` verifies the fixed filter
+prefix and embedded image, six VM/native/reference samples, profile admission
+and actual output-I/O failure. A failed or killed suite cannot qualify this
+profile, even if its ordinary render samples passed elsewhere.
 
-`oracle_view_render.rs` contains the unchanged original function bodies and
-the original Apache-2.0 notices. The test recreates it from the pinned original
-files before accepting a corpus. Its adapters provide typed endpoints,
-independent IO snapshots and an isolated original `ViewCache`; the original
-functions still perform their original call sequence and cache methods.
-The Rust binary takes no arguments, reads hexadecimal requests on stdin and
-writes `OK <hex>` results on stdout.
+`test_view_render_growth.py` executes 2,707 actual HIA calls: 2,703 retained
+ordinary semantic cases, two independent double-snapshot cases exceeding
+33 MiB, and two short-output refusal controls. The semantic corpus therefore
+has 2,705 rows; the overlapping retained cases are not additional original
+behavior. The in-process native execution does not claim an ELF subprocess or
+an original Rust execution. `test_view_render_growth_evidence.py` independently
+admits the complete capture and rejects 30 changed invocation, artifact,
+accounting and physical-stream controls.
 
-The retained corpus was actually compared byte-for-byte against Rust 1.95.0
-compiled with `--edition=2021 -O -C overflow-checks=off`. All 3,125 outputs
-matched, including 139,202,296 uncompressed output bytes. The observed durable
-job finished with exit code 0, complete stdout/stderr and confirmed terminal
-publication. Input source and compressed corpus identities were checked
-before and after. Detailed evidence is retained in
-`view_original_rust_comparison.json` and `view_render_native_proof.json`.
+The separate original recipes each freshly compile the unchanged
+`oracle_view_render.rs` with Rust release overflow behavior and compare every
+complete row. The source is reconstructed from the pinned original functions
+before a corpus is accepted. The adapters supply typed endpoints, independent
+read snapshots and an isolated original `ViewCache`; they do not replace the
+original range, rendering, cache or result-gate decisions. Original replay adds
+no native case. Source changes require new completed native evidence and a
+fresh original comparison in the repository aggregate.
 
-The current native source reran the same full corpus and reproduced both
-complete decompressed hashes exactly. The original Rust process receipt is
-retained unchanged and is bound through those matching bytes; this
-optimization does not claim another Rust compilation or execution.
-
-| Artifact | SHA-256 |
-| --- | --- |
-| HIA source | `d7012a796fd83744bcfb4951d01a95d3bab63f9a7ed185ad035c4665989066a3` |
-| Actual HIA image | `a1e5bc7cf485dd0d91521a3018c6e67e8fda5c85fcdbe1dfbb27fa37dca6e9c6` |
-| Static ELF | `c1135143fe2141b1ef6d20e773217761277fa6b48f74b74fed3d0503157a9f8d` |
-| Rust source | `36efacf6a1d418c10251afed788f52b20127c62fa39a3f2534882461cce8d585` |
-| Decompressed requests | `25ee9795db24913b4d2bb717711f613242b51b629203a1588e79bc7dba71a8db` |
-| Native and Rust output | `3d432e0350eb351df875bcc8fa7d195fbefe2e64460a117a6e3c92c601417c17` |
+| Complete captured domain | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Original-profile requests | 237,318,931 | `25ee9795db24913b4d2bb717711f613242b51b629203a1588e79bc7dba71a8db` |
+| Original-profile responses | 139,202,296 | `3d432e0350eb351df875bcc8fa7d195fbefe2e64460a117a6e3c92c601417c17` |
+| Growth-profile requests | 139,170,251 | `b9185e085ece0a3abc1271ba50979cba00d438051bd6a603413e07b5dbb57ac3` |
+| Growth-profile responses | 1,173,696 | `6770742d493aa09accb8e3ec9e9696cc6d68e8e0ed02240120ec2b49b7d094b8` |
 
 ## Remaining production owners
 
-Actual local file admission and reads must preserve existence/type/metadata/
-UTF-8 error ordering and the two-read behavior. Existing IO operation 2 has a
-64 KiB, single-link full-read contract and cannot be relabelled as the original
-5 MiB `view` reader. The root capability, pathname identity and path-policy
-authority need their own integration.
+The local-file caller now provides separate ordinary metadata/read observations,
+growing snapshots, canonical cache-key derivation, the session cache lease and
+request hints through fixed native children. Its independent read, parameter,
+caller and wide-endpoint suites are required in addition to this renderer.
+Their static fixture is not the complete production `view` handler.
 
-The production caller also needs session cache custody and an output path
-large enough for JSON escaping of an accepted 8 MiB result. The raw-text
-component's 16 MiB output profile does not establish that an existing 8 MiB
-MCP serializer can emit every such result. Directory, content search,
-remote paths, endpoint JSON parsing/routing, cache write invalidation and
-local-file IO are still retained owners. Until they are connected, the
-complete `view` handler remains unmigrated.
+The renderer returns raw text and a cache plan. The public JSON-RPC frontend
+must transfer every accepted result into the growable publisher before it
+retires or reuses the caller. Its profile must also account for JSON escaping
+and complete error text. A bounded transport demonstration does not qualify
+unconstrained production ingress or output. Directory traversal, content search,
+remote paths, background resources and all production dispatch/installation
+joins remain separate required owners.

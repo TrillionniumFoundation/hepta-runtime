@@ -215,33 +215,36 @@ table, descriptors, workspace offsets, image bytes, hashes, and padding.
 OS8 packer; no packer modification or full cold qualification was needed for
 this isolated component.
 
-### View dependency update
+### Current view-plan dependency
 
-The cache plan dependency is the bulk-rendering `view_render.hepta` source
-`d7012a796fd83744bcfb4951d01a95d3bab63f9a7ed185ad035c4665989066a3`,
-with actual image
-`a1e5bc7cf485dd0d91521a3018c6e67e8fda5c85fcdbe1dfbb27fa37dca6e9c6`.
-Its manifest SHA-256 is
-`357356bf90e8a90dc025a8ee815e5d990e08e066a0e81dba9f14cd8f78f71144`.
-The cache HIA source, cache image, transport and test inputs did not change.
+The cache plan dependency is the 72-function `view_render.hepta` source
+`9359967855d0eaff5369970ec0ad5a13028f11dda66663ba3a77a311353238f0`,
+with actual compiled image
+`94241782189b312d4e6f6b2392597572eba217b67e16f67552c0ddd5513af0aa`.
+`view_cache_composition.json` binds that complete source. The qualification
+reader also binds the actual manifest, compiler receipt, image bytes and the
+view module recorded by the executed cache suite. The manifest digest belongs
+to each actual build; a digest from an earlier dependency is not current
+evidence.
 
-After updating that dependency, both test processes actually ran again:
-the eight-group native suite completed in 11.428 seconds, and the four-group
-evidence suite completed in 1.377 seconds, each under its unchanged 180-second
-process budget. All 13,873 direct cache calls, 66 persistent ELF requests,
-13 actual view calls and ten evidence refusals passed. The selected compiler
-and compile receipts were checked against 42 actual artifact identities. The
-cache image was freshly compiled; the current view image had been compiled
-and fully exercised in the same increment. This run reused the verified
-compiler bootstrap and did not invoke the full cold gate.
+The cache HIA source, cache image, transport and test inputs remain unchanged.
+The required native capture contains all eight groups: 13,873 direct cache
+calls, 66 requests through the persistent ELF, 13 view-image calls and the
+declared 13,907 reference rows. The four-group evidence suite must also reject
+all ten mutations of the actual capture. Both native test processes retain
+their 180-second budgets. The compiler bootstrap may be reused only after
+its pinned source and generation identities are checked; this does not
+constitute a new full cold qualification.
 
-All 13,907 exported rows, their complete request/output bytes and ordered domain
-history are byte-identical to the earlier original-Rust comparison. The new
-native capture is bound to that actual earlier replay by those identities.
-This is explicitly not a new Rust invocation. The original replay receipt,
-prior native observation and both earlier failed harness attempts remain
-retained separately. Aggregate qualification must still perform its fresh
-Rust compilation and complete replay.
+For this dependency, accepted original evidence requires a fresh compilation
+of `oracle_view_cache.rs` and a complete byte comparison of the newly captured
+13,907 rows through the existing qualification recipe. Equality with a
+historical output digest alone does not establish that fresh execution.
+Native compile receipts, exact gzip and uncompressed streams, ordered domain
+records and actual test/Rust stdout and stderr must remain available to the
+reader. The comparison covers the original cache operations and declared
+plan-application adapters; it does not establish unbounded cache storage,
+shared concurrency or complete filesystem/MCP ownership.
 
 ### Reproduction interface
 

@@ -6,14 +6,12 @@ on:
     paths:
       - 'native/**'
       - 'scripts/*hia*native*'
+      - 'scripts/*.S'
       - 'scripts/generate_hia_transport.py'
       - 'scripts/build_config_fs_probe.py'
       - 'scripts/build_config_mcp_service.py'
       - 'scripts/build_config_owner_probe.py'
       - 'scripts/build_hia_config_service.py'
-      - 'scripts/config_fs_adapter.S'
-      - 'scripts/config_mcp_adapter.S'
-      - 'scripts/config_owner_adapter.S'
       - 'scripts/config_schema.py'
       - 'scripts/hia_native_config_reference.py'
       - 'src/mcp/hia_contract.rs'
@@ -40,6 +38,9 @@ on:
       - 'src/mcp/fs/file_ops.rs'
       - 'src/mcp/fs/fs_tests.rs'
       - 'src/mcp/fs/text_editing.rs'
+      - 'src/mcp/fs/remote.rs'
+      - 'src/mcp/fs/shell.rs'
+      - 'src/mcp/fs/shell_tests.rs'
       - 'src/mcp/request_ctx.rs'
       - 'src/mcp/runtime/config.rs'
       - 'src/mcp/runtime/execution.rs'
@@ -67,14 +68,12 @@ on:
     paths:
       - 'native/**'
       - 'scripts/*hia*native*'
+      - 'scripts/*.S'
       - 'scripts/generate_hia_transport.py'
       - 'scripts/build_config_fs_probe.py'
       - 'scripts/build_config_mcp_service.py'
       - 'scripts/build_config_owner_probe.py'
       - 'scripts/build_hia_config_service.py'
-      - 'scripts/config_fs_adapter.S'
-      - 'scripts/config_mcp_adapter.S'
-      - 'scripts/config_owner_adapter.S'
       - 'scripts/config_schema.py'
       - 'scripts/hia_native_config_reference.py'
       - 'src/mcp/hia_contract.rs'
@@ -101,6 +100,9 @@ on:
       - 'src/mcp/fs/file_ops.rs'
       - 'src/mcp/fs/fs_tests.rs'
       - 'src/mcp/fs/text_editing.rs'
+      - 'src/mcp/fs/remote.rs'
+      - 'src/mcp/fs/shell.rs'
+      - 'src/mcp/fs/shell_tests.rs'
       - 'src/mcp/request_ctx.rs'
       - 'src/mcp/runtime/config.rs'
       - 'src/mcp/runtime/execution.rs'
@@ -267,6 +269,23 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Capture failure diagnostics outside effect fixtures
+        if: ${{ always() && steps.shard.outcome != 'success' }}
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure.py \
+            --source "$RUNNER_TEMP/hia-runtime-native" \
+            --destination "$RUNNER_TEMP/hia-native-diagnostics"
+
+      - name: Retain readable partition failure diagnostics
+        if: ${{ always() && steps.shard.outcome != 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-${{ matrix.group }}
+          path: ${{ runner.temp }}/hia-native-diagnostics/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Retain original failure bytes and prepared artifacts
         if: ${{ always() && steps.shard.outcome != 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -347,35 +366,20 @@ jobs:
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --rustc "$(rustup which --toolchain 1.95.0 rustc)"
 
-      - name: Stage actual failure reports without changing owned fixtures
+      - name: Capture failed aggregate diagnostics outside effect fixtures
         if: failure()
-        id: failure_reports
         run: |
-          python3 -I -B - "$RUNNER_TEMP/hia-runtime-native" "$RUNNER_TEMP/hia-native-failure-reports" <<'PY'
-          import hashlib, json, pathlib, stat, sys
-          source, destination = map(pathlib.Path, sys.argv[1:])
-          destination.mkdir(mode=0o700)
-          retained = {}
-          if source.is_dir():
-              for path in sorted(source.iterdir()):
-                  selected = (path.name == 'result.json' or path.name.endswith(
-                      ('.stdout', '.stderr', '.execution.json', '-failure.txt')))
-                  if selected and stat.S_ISREG(path.lstat().st_mode):
-                      raw = path.read_bytes()
-                      (destination / path.name).write_bytes(raw)
-                      retained[path.name] = {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
-          (destination / 'retained-reports.json').write_text(json.dumps(
-              {'schema': 'hepta.runtime.failure-reports.v1', 'source': str(source),
-               'files': retained, 'fixture_permissions_changed': False}, sort_keys=True) + '\n')
-          print(json.dumps({'retained_failure_reports': len(retained), 'fixture_permissions_changed': False}))
-          PY
+          python3 -I -B runtime/scripts/hia_native_failure.py \
+            --source "$RUNNER_TEMP/hia-runtime-native" \
+            --destination "$RUNNER_TEMP/hia-native-diagnostics"
 
-      - name: Retain failure report and complete process streams separately
-        if: failure() && steps.failure_reports.outcome == 'success'
+      - name: Retain readable aggregate failure diagnostics
+        if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: hia-native-failure-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-aggregate
-          path: ${{ runner.temp }}/hia-native-failure-reports/
+          name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-aggregate
+          path: ${{ runner.temp }}/hia-native-diagnostics/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
 

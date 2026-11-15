@@ -42,6 +42,9 @@ from hia_native_line_verify_qualification import (CORPUS_FILES as LINE_VERIFY_CO
                                                  line_verify_evidence as checked_line_verify_evidence)
 from hia_native_view_qualification import (CORPUS_FILES as VIEW_CORPUS_FILES,
                                           FOLDER as VIEW_FOLDER, view_evidence as checked_view_evidence)
+from hia_native_view_growth_qualification import (FOLDER as VIEW_GROWTH_FOLDER,
+                                                 native_evidence as checked_view_growth_evidence)
+from hia_native_view_resource_qualification import native_evidence as checked_view_resource_evidence
 from hia_native_view_cache_qualification import (FOLDER as CACHE_FOLDER,
                                                 qualification_evidence as checked_view_cache_evidence)
 from hia_native_scope_os_qualification import (FOLDER as SCOPE_OS_FOLDER, SUITES as SCOPE_OS_SUITES,
@@ -67,6 +70,8 @@ import hia_native_execution_qualification as execution_qualification
 import hia_native_effect_fence_qualification as effect_fence_qualification
 import hia_native_config_qualification as config_qualification
 import hia_native_session_qualification as session_qualification
+import hia_native_file_lock_pipeline as file_lock_pipeline
+import hia_native_shell_qualification as shell_qualification
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -77,6 +82,11 @@ MODULES = (
      "standalone": "stdio", "manifest_env": "HIA_PROTOCOL_MANIFEST", "test": "test_runtime_protocol.py"},
     {"key": "text_budget", "name": "text-budget", "source": "native/text_budget.hepta",
      "standalone": "filter", "manifest_env": "HIA_TEXT_MANIFEST", "test": "test_text_budget.py"},
+    {"key": "terminal_clean", "name": "terminal-clean", "source": "native/terminal_clean.hepta",
+     "standalone": "filter", "manifest_env": "HIA_TERMINAL_MANIFEST", "test": "test_shell_native.py"},
+    {"key": "shell_gate", "name": "shell-gate", "source": "native/shell_gate.hepta",
+     "standalone": "filter", "manifest_env": "HIA_SHELL_GATE_MANIFEST", "test": "test_shell_gate_native.py",
+     "additional_tests": ("test_shell_evidence.py",)},
     {"key": "request_context", "name": "request-context", "source": "native/request_context.hepta",
      "standalone": None, "manifest_env": "HIA_REQUEST_CONTEXT_MANIFEST", "test": "test_request_context.py"},
     {"key": "response_hints", "name": "response-hints", "source": "native/response_hints.hepta",
@@ -116,6 +126,42 @@ MODULES = (
      "companion_sources": ("native/view_filter_packer.hepta",),
      "manifest_env": "HIA_VIEW_MANIFEST", "test": "test_view_render.py",
      "additional_tests": ("test_view_transport.py",)},
+    {"key": "view_render_growth", "name": "view-render-growth", "source": "native/view_render.hepta",
+     "standalone": None, "buffer_profile": "history.v1",
+     "manifest_env": "HIA_VIEW_GROWTH_MANIFEST", "test": "test_view_render_growth.py",
+     "additional_tests": ("test_view_render_growth_evidence.py",)},
+    {"key": "view_read", "name": "view-read", "source": "native/view_read.hepta",
+     "builder": "view_read", "manifest_env": "HIA_VIEW_READ_FIXTURE_MANIFEST",
+     "companion_sources": ("native/view_read_packer.hepta",), "test": "test_view_call_read.py"},
+    {"key": "view_params", "name": "view-params", "source": "native/view_params.hepta",
+     "standalone": None, "buffer_profile": "history.v1",
+     "manifest_env": "HIA_VIEW_PARAMS_MANIFEST", "test": "test_view_call_params.py"},
+    {"key": "view_call", "name": "view-call", "source": "native/view_call.hepta",
+     "builder": "view_call", "manifest_env": "HIA_VIEW_CALL_FIXTURE_MANIFEST",
+     "companion_sources": ("native/view_read.hepta", "native/line_endpoint.hepta",
+                           "native/file_lock_key.hepta", "native/request_scope_lifecycle.hepta",
+                           "native/request_cache_lease.hepta", "native/view_cache.hepta",
+                           "native/view_render.hepta", "native/request_context.hepta",
+                           "native/view_error.hepta", "native/view_call_packer.hepta"),
+     "test": "test_view_call_sync.py",
+     "additional_tests": ("test_view_call_wide.py", "test_view_call_resources.py", "test_view_call_evidence.py")},
+    {"key": "runtime_mcp", "name": "runtime-mcp", "source": "native/runtime_mcp.hepta",
+     "builder": "runtime_mcp", "manifest_env": "HIA_RUNTIME_MCP_MANIFEST",
+     "companion_sources": ("native/config_directory_owner.hepta", "native/config_fs.hepta",
+                           "native/config_json.hepta", "native/config_validation.hepta",
+                           "native/config_identity.hepta", "native/execution_controller.hepta",
+                           "native/execution_json.hepta", "native/execution_shadow.hepta",
+                           "native/serde_json.hepta", "native/result_publication.hepta",
+                           "native/runtime_mcp_catalog.hepta", "native/runtime_mcp_admission.hepta",
+                           "native/view_gateway.hepta", "native/client_context.hepta",
+                           "native/view_params.hepta", "native/session_context.hepta",
+                           "native/session_workdir.hepta", "native/local_path_policy.hepta",
+                           "native/canonical_path.hepta", "native/path_source.hepta",
+                           "native/view_call.hepta", "native/view_read.hepta", "native/line_endpoint.hepta",
+                           "native/file_lock_key.hepta", "native/request_scope_lifecycle.hepta",
+                           "native/request_cache_lease.hepta", "native/view_cache.hepta",
+                           "native/view_render.hepta", "native/request_context.hepta", "native/view_error.hepta"),
+     "test": "test_runtime_mcp.py", "additional_tests": ("test_runtime_mcp_evidence.py",)},
     {"key": "view_cache", "name": "view-cache", "source": "native/view_cache.hepta",
      "standalone": None, "manifest_env": "HIA_CACHE_MANIFEST", "test": "test_view_cache.py",
      "additional_tests": ("test_view_cache_evidence.py",)},
@@ -125,6 +171,16 @@ MODULES = (
     {"key": "session_workdir", "name": "session-workdir", "source": "native/session_workdir.hepta",
      "builder": "session_workdir", "manifest_env": "HIA_SESSION_BUNDLE", "test": "test_session_workdir.py",
      "additional_tests": ("test_session_evidence.py",)},
+    {"key": "file_locks", "name": "file-locks", "source": "native/file_lock_state.hepta",
+     "builder": "file_locks", "manifest_env": "HIA_FILE_LOCK_MANIFEST", "test": "test_file_lock_state.py",
+     "additional_tests": ("test_file_lock_key.py", "test_file_lock_evidence.py"),
+     "companion_sources": ("native/file_lock_key.hepta", "native/file_lock_state_packer.hepta",
+                           "native/file_lock_key_packer.hepta")},
+    {"key": "file_lock_service", "name": "file-lock-service", "source": "native/file_lock_service.hepta",
+     "builder": "file_lock_service", "manifest_env": "HIA_FILE_LOCK_SERVICE_MANIFEST",
+     "test": "test_file_lock_service.py",
+     "additional_tests": ("test_file_lock_service_contract.py", "test_file_lock_service_evidence.py"),
+     "companion_sources": ("native/file_lock_service_packer.hepta",)},
     {"key": "fence_json", "name": "fence-json", "source": "native/fence_json.hepta",
      "standalone": "filter", "manifest_env": "HIA_FENCE_JSON_MANIFEST", "test": "test_fence_json.py"},
     {"key": "serde_json", "name": "serde-json", "source": "native/serde_json.hepta",
@@ -250,6 +306,15 @@ def sources() -> dict:
         "hia_native_entropy_build.py", "hia_native_entropy_qualification.py",
         "hia_native_scope_build.py", "hia_native_scope_qualification.py",
         "hia_native_editable_qualification.py", "hia_native_view_qualification.py",
+        "hia_native_view_growth_qualification.py",
+        "hia_native_view_resource_qualification.py",
+        "hia_native_view_fixture_qualification.py",
+        "hia_native_view_read_build.py", "hia_native_view_call_build.py",
+        "hia_native_view_call_qualification.py", "view_read_adapter.S",
+        "view_call_adapter.S", "view_call_fixture_controls.S", "view_call_engine.S",
+        "view_call_read_bridge.S", "view_call_key_bridge.S", "view_call_scope_bridge.S",
+        "hia_native_runtime_mcp_build.py", "hia_native_runtime_mcp_evidence.py",
+        "hia_native_runtime_mcp_reference.py", "runtime_mcp_extra_engine.S", "runtime_mcp_canonical_bridge.S",
         "hia_native_view_cache_build.py", "hia_native_view_cache_qualification.py",
         "hia_native_history_build.py", "hia_native_history_qualification.py", "hia_native_json_qualification.py",
         "hia_native_request_context_build.py", "hia_native_request_context_qualification.py", "hia_native_request_context_reference.py",
@@ -269,6 +334,11 @@ def sources() -> dict:
         'hia_native_config_qualification.py',
         "hia_native_execution_build.py", "hia_native_execution_qualification.py",
         "hia_native_session_build.py", "hia_native_session_qualification.py",
+        "hia_native_file_lock_build.py", "hia_native_file_lock_qualification.py",
+        "hia_native_file_lock_service_build.py", "hia_native_file_lock_service_qualification.py",
+        "hia_native_file_lock_pipeline.py",
+        "hia_native_shell_qualification.py", "hia_native_shell_reference.py",
+        "qualify_hia_shell_native.py",
         "hia_native_effect_fence_build.py", "hia_native_effect_fence_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
@@ -277,10 +347,11 @@ def sources() -> dict:
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
-        "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py",
+        "check_hia_native_inventory.py", "qualify_hia_runtime_native.py", "hia_native_pipeline.py", "hia_native_failure.py",
         "compare_hia_runtime_rust.py"))
     paths.update((ROOT / "src/mcp/server.rs", ROOT / "src/utils/line_hash.rs", ROOT / "src/utils/truncation.rs",
-                  ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / "rustfmt.toml"))
+                  ROOT / ".github/workflows/hia-runtime-native.yml", ROOT / ".github/workflows/hia-runtime-shell.yml",
+                  ROOT / "rustfmt.toml"))
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted(paths)
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"}
@@ -603,6 +674,10 @@ def request_scope_evidence(output: Path, report: dict) -> dict:
     return checked_request_scope_evidence(ROOT, output, report, completed_test_summary)
 
 
+def shell_evidence(output: Path, report: dict) -> dict:
+    return shell_qualification.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
 def entropy_evidence(output: Path, report: dict) -> dict:
     return checked_entropy_evidence(ROOT, output, report, completed_test_summary)
 
@@ -890,6 +965,34 @@ def view_render_evidence(output: Path, report: dict) -> dict:
     return checked_view_evidence(ROOT, output, report, completed_test_summary)
 
 
+def view_render_growth_evidence(output: Path, report: dict) -> dict:
+    return checked_view_growth_evidence(ROOT, output, report, completed_test_summary, include_evidence=True)
+
+
+def view_call_evidence(output: Path, report: dict) -> dict:
+    from hia_native_view_call_qualification import native_evidence, qualification_evidence
+    native = native_evidence(ROOT, output, report)
+    return qualification_evidence(ROOT, output, report, native)
+
+
+def view_resource_evidence(output: Path, report: dict) -> dict:
+    return checked_view_resource_evidence(ROOT, output, report, completed_test_summary)
+
+
+def runtime_mcp_evidence(output: Path, report: dict) -> dict:
+    from hia_native_runtime_mcp_evidence import qualification_evidence
+    return qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def view_fixture_retirement(output: Path, report: dict, *, create=False,
+                            native: dict | None = None, public: dict | None = None) -> dict:
+    from hia_native_view_fixture_qualification import retire_fixtures
+    native = view_call_evidence(output, report) if native is None else native
+    public = runtime_mcp_evidence(output, report) if public is None else public
+    fixtures = tuple(sorted([*native['transient_fixture_directories'], 'runtime-mcp/files']))
+    return retire_fixtures(output, fixtures, {'view_call': native, 'runtime_mcp': public}, create=create)
+
+
 def json_evidence(output: Path, report: dict) -> dict:
     return checked_json_evidence(ROOT, output, report, completed_test_summary)
 
@@ -900,6 +1003,14 @@ def history_evidence(output: Path, report: dict) -> dict:
 
 def config_evidence(output: Path, report: dict, *, create: bool = False) -> dict:
     return config_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
+
+
+def file_locks_evidence(output: Path, report: dict) -> dict:
+    return file_lock_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary, "file_locks")
+
+
+def file_lock_service_evidence(output: Path, report: dict) -> dict:
+    return file_lock_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary, "file_lock_service")
 
 
 def session_evidence(output: Path, report: dict) -> dict:
@@ -2011,7 +2122,7 @@ def initial_report(hepta: Path) -> dict:
         "checkout_head": None, "source_identity_authority": "source_sha256", "source_sha256": {},
         "compiler_commit": HEPTA_COMMIT, "compiler_tree": HEPTA_TREE,
         "compiler_checkout": str(hepta),
-        "scope": "native kernels, closed seven-image local MCP read profile, serial nine-image caller authority, and Linux x86-64 dependencies",
+        "scope": "native HIA semantic owners, fixed local MCP read and ordinary-file view profiles, serial caller authority, and Linux x86-64 dependencies",
         "whole_runtime_replaced": False, "production_activated": False,
         "old_stack_removal_qualified": False, "matching_source_full_cold_qualified": False,
         "compiler_cold_status": "PENDING", "native_components_status": "RUNNING",
@@ -2025,6 +2136,9 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
         "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
         "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
+        "HIA_TERMINAL_CORPUS_DIR": str(output / "terminal-clean"),
+        "HIA_SHELL_GATE_CORPUS_DIR": str(output / "shell-gate"),
+        "HIA_SHELL_QUALIFICATION_OUTPUT": str(output),
         "HIA_REQUEST_CONTEXT_CORPUS_DIR": str(output / "request-context-rust-oracle"),
         "HIA_RESPONSE_HINTS_CORPUS_DIR": str(output / "response-hints-rust-oracle"),
         "HIA_REQUEST_CONTEXT_TRANSPORT_DIR": str(output / "request-context-transport"),
@@ -2040,6 +2154,16 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_LINE_VERIFY_CORPUS_DIR": str(output / LINE_VERIFY_FOLDER),
         "HIA_BATCH_PLAN_CORPUS_DIR": str(output / BATCH_PLAN_FOLDER),
         "HIA_VIEW_CORPUS_DIR": str(output / VIEW_FOLDER),
+        "HIA_VIEW_GROWTH_CORPUS_DIR": str(output / VIEW_GROWTH_FOLDER),
+        "HIA_VIEW_GROWTH_QUALIFICATION_OUTPUT": str(output),
+        "HIA_VIEW_READ_CAPTURE_DIR": str(output / "view-call/read"),
+        "HIA_VIEW_CALL_CAPTURE_DIR": str(output / "view-call/caller"),
+        "HIA_VIEW_PARAMS_CAPTURE_DIR": str(output / "view-call/params"),
+        "HIA_VIEW_WIDE_CAPTURE_DIR": str(output / "view-call/wide"),
+        "HIA_VIEW_CALL_QUALIFICATION_OUTPUT": str(output),
+        "HIA_VIEW_RESOURCE_CAPTURE_DIR": str(output / "view-call/resources"),
+        "HIA_RUNTIME_MCP_CORPUS_DIR": str(output / "runtime-mcp"),
+        "HIA_RUNTIME_MCP_QUALIFICATION_OUTPUT": str(output),
         "HIA_CACHE_CORPUS_DIR": str(output / CACHE_FOLDER),
         "HIA_CACHE_QUALIFICATION_OUTPUT": str(output),
         "HIA_FENCE_JSON_CORPUS_DIR": str(output / JSON_COMPONENTS["fence_json"]["folder"]),
@@ -2106,6 +2230,9 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         elif item.get("builder") == "result_publication":
             bundle = json.loads(built.read_bytes())
             env["HIA_RESULT_PUBLICATION_MANIFEST"] = str(output / "build" / bundle["owner_manifest"])
+        elif item.get("builder") == "view_read":
+            bundle = json.loads(built.read_bytes())
+            env["HIA_VIEW_READ_MANIFEST"] = str(built.parent.parent / bundle["owner_manifest"])
         elif item.get("builder") == "authority_composition":
             env["HIA_AUTHORITY_MANIFEST"] = str(built.parent / "module_00.json")
             env["HIA_AUTHORITY_LOADER_MANIFEST"] = str(built.parent / "module_08.json")
@@ -2113,6 +2240,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
     env["HIA_NONCE_COMPOSITION_MANIFEST"] = str(output / report["nonce_composition"]["manifest"])
     env["HIA_CACHE_ELF_MANIFEST"] = str(output / report["cache_composition"]["manifest"])
     env["HIA_REQUEST_CONTEXT_ELF_MANIFEST"] = str(output / report["request_context_composition"]["manifest"])
+    env["HIA_VIEW_PARAMS_VALUE_MANIFEST"] = env["HIA_SERDE_JSON_MANIFEST"]
     return env
 
 
@@ -2175,6 +2303,12 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "session_workdir":
             from hia_native_session_build import build_session
             built = build_session(hepta, output / "build", source_root=ROOT, reference_root=ROOT)
+        elif item.get("builder") == "file_locks":
+            from hia_native_file_lock_build import build_file_locks
+            built = build_file_locks(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") == "file_lock_service":
+            from hia_native_file_lock_service_build import build_file_lock_service
+            built = build_file_lock_service(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "runtime_config":
             built = config_qualification.build_config(hepta, output / "build", ROOT)
         elif item.get("builder") == "result_publication":
@@ -2183,6 +2317,21 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         elif item.get("builder") == "request_scope":
             from hia_native_request_scope_build import build_request_scope
             built = build_request_scope(hepta, output / "build", source_root=ROOT)
+        elif item.get("builder") in {"view_read", "view_call", "runtime_mcp"}:
+            # These compositions deliberately compile shared owners in different
+            # borrowed-buffer profiles. Keep their module namespaces separate,
+            # while each builder rechecks the same admitted compiler bytes.
+            nested = output / "build" / (item["key"] + "-bundle")
+            shutil.copytree(output / "build/bootstrap", nested / "bootstrap")
+            if item["builder"] == "view_read":
+                from hia_native_view_read_build import build_view_read
+                built = build_view_read(hepta, nested, source_root=ROOT)
+            elif item["builder"] == "view_call":
+                from hia_native_view_call_build import build_view_call
+                built = build_view_call(hepta, nested, source_root=ROOT)
+            else:
+                from hia_native_runtime_mcp_build import build_runtime_mcp
+                built = build_runtime_mcp(hepta, nested, source_root=ROOT)
         elif item.get("builder") == "execution_shadow":
             from hia_native_execution_build import build_execution
             built = build_execution(hepta, output / "build", source_root=ROOT)
@@ -2209,6 +2358,13 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
         if item.get("builder") == "authority_composition":
             report["modules"][item["key"]].update(
                 probe_manifest=str(probe.relative_to(output)), probe_sha256=sha(probe))
+    report["view_call"] = {
+        "manifest": report["modules"]["view_call"]["manifest"],
+        "read_fixture_manifest": report["modules"]["view_read"]["manifest"],
+        "params_manifest": report["modules"]["view_params"]["manifest"],
+        "value_manifest": report["modules"]["serde_json"]["manifest"],
+        "corpora": {name: "view-call/" + name for name in ("read", "params", "caller", "wide")},
+    }
     from hia_native_composition_build import ModuleSpec, build_composition
     nonce_fixture = build_composition(hepta, output / "build", [
         ModuleSpec("nonce-hex-fixture", ROOT / "tests/hia_native/nonce_hex_transport.hepta",
@@ -2229,6 +2385,8 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / "batch-apply").mkdir()
     (output / "atomic-write").mkdir()
     (output / "config-native").mkdir()
+    (output / "file-locks").mkdir()
+    (output / "file-lock-service").mkdir()
     return builder
 
 
@@ -2244,6 +2402,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(execution_test_commands(output, report))
     commands.update(config_qualification.test_commands(ROOT, output, report))
     commands.update(session_qualification.test_commands(ROOT, output, report))
+    commands.update(file_lock_pipeline.test_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
@@ -2253,6 +2412,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["request_context_evidence"] = request_context_evidence(output, report)
     report["result_publication_evidence"] = result_publication_evidence(output, report)
     report["request_scope_evidence"] = request_scope_evidence(output, report)
+    report["shell_evidence"] = shell_evidence(output, report)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
     report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -2275,9 +2435,17 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     atomic["corpus_sha256"][retirement.relative_to(output).as_posix()] = sha(retirement)
     report["atomic_write_evidence"] = atomic
     report["view_render_evidence"] = view_render_evidence(output, report)
+    report["view_render_growth_evidence"] = view_render_growth_evidence(output, report)
+    report["view_call_evidence"] = view_call_evidence(output, report)
+    report["view_resource_evidence"] = view_resource_evidence(output, report)
+    report["runtime_mcp_evidence"] = runtime_mcp_evidence(output, report)
+    report["view_fixture_retirement"] = view_fixture_retirement(output, report, create=True,
+        native=report["view_call_evidence"], public=report["runtime_mcp_evidence"])
     report["view_cache_evidence"] = view_cache_evidence(output, report)
     report["history_evidence"] = history_evidence(output, report)
     report["session_evidence"] = session_evidence(output, report)
+    report["file_locks_evidence"] = file_locks_evidence(output, report)
+    report["file_lock_service_evidence"] = file_lock_service_evidence(output, report)
     report["json_evidence"] = json_evidence(output, report)
     report["execution_evidence"] = execution_evidence(output, report)
     report["effect_fence_evidence"] = effect_fence_evidence(output, report)
@@ -2302,6 +2470,12 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["request_context_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["result_publication_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["view_render_growth_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["view_call_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["view_resource_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["runtime_mcp_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["view_fixture_retirement"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["shell_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update({
         ENTROPY_FOLDER + "/" + name: sha(output / ENTROPY_FOLDER / name) for name in ENTROPY_CORPUS_FILES})
     report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])

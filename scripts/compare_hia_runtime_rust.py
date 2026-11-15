@@ -25,11 +25,14 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
                                        PARALLEL_NATIVE_SUITES,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
+                                       view_render_growth_evidence, view_call_evidence,
+                                       view_resource_evidence, runtime_mcp_evidence, view_fixture_retirement,
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
                                        history_evidence, json_evidence, request_context_evidence, result_publication_evidence,
-                                       request_scope_evidence,
+                                       request_scope_evidence, shell_evidence,
                                        execution_evidence, effect_fence_evidence, config_evidence,
                                        session_evidence,
+                                       file_locks_evidence, file_lock_service_evidence,
                                        atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
@@ -48,6 +51,8 @@ from hia_native_entropy_qualification import (FOLDER as ENTROPY_FOLDER, KERNEL_R
 from hia_native_scope_qualification import FOLDER as SCOPE_FOLDER, ORACLE_COUNTS as SCOPE_ORACLE_COUNTS
 from hia_native_editable_qualification import FOLDER as EDITABLE_FOLDER, CASES as EDITABLE_CASES
 from hia_native_view_qualification import FOLDER as VIEW_FOLDER, CASES as VIEW_CASES, stream_identity as view_stream_identity
+from hia_native_view_growth_qualification import (FOLDER as VIEW_GROWTH_FOLDER, CASES as VIEW_GROWTH_CASES,
+                                                 stream_identity as view_growth_stream_identity)
 from hia_native_view_cache_qualification import compare_original as compare_cache_original
 from hia_native_authority_qualification import compare_original as compare_authority_original
 from hia_native_history_qualification import compare_original as compare_history_original
@@ -59,6 +64,7 @@ from hia_native_result_publication_reference import (compare_original as compare
                                                      check_original_receipts as check_publication_original_receipts)
 from hia_native_request_scope_reference import (compare_original as compare_request_scope_original,
                                                 check_original_receipts as check_request_scope_original_receipts)
+import hia_native_shell_qualification as shell_qualification
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
                                                 REFERENCE_ROWS as BATCH_PLAN_ROWS)
@@ -152,6 +158,29 @@ def check_input_pins(output: Path, report: dict) -> None:
             raise ValueError("required actual atomic original invocation or retained corpus differs")
     if report.get("view_render_evidence") != view_render_evidence(output, report):
         raise ValueError("required complete view byte-domain/cache-plan/transport evidence differs")
+    if report.get("view_render_growth_evidence") != view_render_growth_evidence(output, report):
+        raise ValueError("required growing view snapshots and physical evidence differ")
+    local_view = view_call_evidence(output, report)
+    if report.get("view_call_evidence") != local_view:
+        raise ValueError("required local view reader, typed parameters and complete caller evidence differ")
+    if report.get("view_resource_evidence") != view_resource_evidence(output, report):
+        raise ValueError("required view engine allocation/cleanup process evidence differs")
+    public_mcp = runtime_mcp_evidence(output, report)
+    if report.get("runtime_mcp_evidence") != public_mcp:
+        raise ValueError("required complete public MCP execution and evidence controls differ")
+    if report.get("view_fixture_retirement") != view_fixture_retirement(
+            output, report, native=local_view, public=public_mcp):
+        raise ValueError("complete owned view test fixture retention differs")
+    local_comparisons = report.get("original_rust_comparisons", {})
+    if "runtime_mcp" in local_comparisons:
+        if local_comparisons["runtime_mcp"] != compare_runtime_mcp(output, report, None):
+            raise ValueError("required public MCP original comparison differs")
+    if any(key in local_comparisons for key in ("view_read", "view_params", "view_call")):
+        from hia_native_view_call_qualification import compare_original as checked_view_original
+        original = checked_view_original(ROOT, output, report, local_view)
+        for key in ("view_read", "view_params", "view_call"):
+            if key in local_comparisons and local_comparisons[key] != original:
+                raise ValueError("shared original view execution or retained complete bytes differ")
     if report.get("json_evidence") != json_evidence(output, report):
         raise ValueError("required JSON actual native/ELF/corpus evidence differs")
     if report.get("request_context_evidence") != request_context_evidence(output, report):
@@ -163,6 +192,15 @@ def check_input_pins(output: Path, report: dict) -> None:
     if report.get("request_scope_evidence") != request_scope_evidence(output, report):
         raise ValueError("required request continuation/cache lease/native refusal evidence differs")
     check_request_scope_original_receipts(ROOT, output, report, completed_test_summary)
+    if report.get("shell_evidence") != shell_evidence(output, report):
+        raise ValueError("required complete native shell evidence changed")
+    for key in shell_qualification.COMPONENTS:
+        if key in report.get("original_rust_comparisons", {}):
+            rustc = Path(report["rust_compiler"]["invocation_path"])
+            expected = shell_qualification.original_evidence(ROOT, output, report, key, rustc,
+                executable(str(rustc.with_name("cargo"))), completed_test_summary)
+            if report["original_rust_comparisons"][key] != expected:
+                raise ValueError("required fresh shell original evidence changed")
     if report.get("execution_evidence") != execution_evidence(output, report):
         raise ValueError("required execution typed/core/controller evidence differs")
     if report.get("effect_fence_evidence") != effect_fence_evidence(output, report):
@@ -178,6 +216,15 @@ def check_input_pins(output: Path, report: dict) -> None:
     check_json_original_receipts(ROOT, output, report, completed_test_summary)
     if report.get("history_evidence") != history_evidence(output, report):
         raise ValueError("required history state/original-domain/static-image evidence differs")
+    import hia_native_file_lock_pipeline as file_lock_pipeline
+    for key, evidence in (("file_locks", file_locks_evidence), ("file_lock_service", file_lock_service_evidence)):
+        if report.get(key + "_evidence") != evidence(output, report):
+            raise ValueError("required complete file-lock native process evidence differs: " + key)
+        if key in report.get("original_rust_comparisons", {}):
+            rustc = Path(report["rust_compiler"]["invocation_path"])
+            actual = file_lock_pipeline.retained_original(ROOT, output, report, rustc, completed_test_summary, key)
+            if report["original_rust_comparisons"][key] != actual:
+                raise ValueError("required actual file-lock original invocation changed: " + key)
     if report.get("session_evidence") != session_evidence(output, report):
         raise ValueError("required session state, latch, full corpus and executable evidence differs")
     if "session_workdir" in report.get("original_rust_comparisons", {}):
@@ -235,10 +282,15 @@ def check_input_pins(output: Path, report: dict) -> None:
         if sha(manifest) != item["sha256"]:
             raise ValueError("compiled module manifest changed")
         module = json.loads(manifest.read_bytes())
+        if item.get("builder") == "view_call":
+            # Its strict bundle reader above checked every child and packer
+            # compiler identity, complete input/output and composed ELF.
+            continue
+        compiler_field = "compiler_image_sha256" if item.get("builder") == "runtime_mcp" else "compiler_sha256"
         if (module.get("compiler_commit") != HEPTA_COMMIT
-                or module.get("compiler_sha256") != report["compiler_image_sha256"]):
+                or module.get(compiler_field) != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "result_publication", "session_workdir", "request_scope", "file_locks", "file_lock_service", "view_read", "runtime_mcp"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1192,17 +1244,53 @@ def compare_editable_content(output: Path, report: dict, rustc: Path) -> dict:
 
 
 def compare_view_render(output: Path, report: dict, rustc: Path) -> dict:
-    evidence = view_render_evidence(output, report)
-    if evidence != report.get("view_render_evidence"):
+    return compare_render_corpus(output, report, rustc, growth=False)
+
+
+def compare_view_render_growth(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_render_corpus(output, report, rustc, growth=True)
+
+
+def compare_view_call_group(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_view_call_qualification import compare_original
+    native = view_call_evidence(output, report)
+    if native != report.get("view_call_evidence"):
+        raise ValueError("local view native inputs changed before original replay")
+    # All three component entries share this one fresh locked build and its
+    # nine recorded processes. Later entries strictly re-read the same result.
+    return compare_original(ROOT, output, report, native, record_check=record_check,
+                            cargo=executable(str(rustc.with_name("cargo"))), rustc=rustc)
+
+
+def compare_runtime_mcp(output: Path, report: dict, rustc: Path | None) -> dict:
+    from hia_native_view_call_qualification import compare_original
+    from hia_native_runtime_mcp_reference import compare_reference
+    native = view_call_evidence(output, report)
+    if native != report.get("view_call_evidence"):
+        raise ValueError("local view native inputs changed before public MCP comparison")
+    if runtime_mcp_evidence(output, report) != report.get("runtime_mcp_evidence"):
+        raise ValueError("public MCP native inputs changed before original comparison")
+    original = compare_original(ROOT, output, report, native)
+    return compare_reference(ROOT, output / "runtime-mcp", output / original["original_output"])
+
+
+def compare_render_corpus(output: Path, report: dict, rustc: Path, *, growth: bool) -> dict:
+    evidence_reader = view_render_growth_evidence if growth else view_render_evidence
+    evidence_key = "view_render_growth_evidence" if growth else "view_render_evidence"
+    cases = VIEW_GROWTH_CASES if growth else VIEW_CASES
+    stream_identity = view_growth_stream_identity if growth else view_stream_identity
+    stem = "view-render-growth" if growth else "view-render"
+    evidence = evidence_reader(output, report)
+    if evidence != report.get(evidence_key):
         raise ValueError("view native read snapshots or rendered bytes changed before original Rust replay")
-    folder = output / VIEW_FOLDER
+    folder = output / (VIEW_GROWTH_FOLDER if growth else VIEW_FOLDER)
     source = ROOT / "tests/hia_native/oracle_view_render.rs"
     binary = folder / "original-view.elf"
-    rust_compile(output, report, rustc, key="view-render-rust", source=source, binary=binary,
+    rust_compile(output, report, rustc, key=stem + "-rust", source=source, binary=binary,
                  extra=("-C", "overflow-checks=off"))
     binary_hash = sha(binary)
     replay = folder / "original-replay"
-    row = record_check(output, report, name="view-render-rust-compare",
+    row = record_check(output, report, name=stem + "-rust-compare",
         command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_view_original.py"),
                  "--source", str(source), "--binary", str(binary),
                  "--requests", str(folder / "requests.hex.gz"),
@@ -1211,19 +1299,19 @@ def compare_view_render(output: Path, report: dict, rustc: Path) -> dict:
         env=qualification_env(), timeout=60)
     observed = json.loads(row.stdout)
     if (row.stderr or observed.get("status") != "PASS" or type(observed.get("cases")) is not int
-            or observed["cases"] != VIEW_CASES or observed.get("run_exit_code") != 0
+            or observed["cases"] != cases or observed.get("run_exit_code") != 0
             or observed.get("compiled_by_qualification_recipe") is not True
             or observed.get("native_and_rust_output_sha256") != evidence["native_output_sha256"]
             or observed.get("raw_output_bytes") != evidence["native_output_bytes"]
             or observed.get("executable", {}).get("sha256") != binary_hash
             or observed.get("inputs_before") != observed.get("inputs_after")
             or json.loads((replay / "result.json").read_bytes()) != observed
-            or view_stream_identity(replay / "rust-output.txt.gz", evidence["native_output_bytes"]) != (
+            or stream_identity(replay / "rust-output.txt.gz", evidence["native_output_bytes"]) != (
                 evidence["native_output_bytes"], evidence["native_output_sha256"])
-            or sha(binary) != binary_hash or view_render_evidence(output, report) != evidence):
+            or sha(binary) != binary_hash or evidence_reader(output, report) != evidence):
         raise ValueError("original view complete ordered responses or source custody differ")
-    result = {"schema": "hepta.runtime.view-render-rust-comparison.v1", "status": "PASS",
-              "cases": VIEW_CASES, "native_cases_added_by_replay": 0,
+    result = {"schema": "hepta.runtime." + stem + "-rust-comparison.v1", "status": "PASS",
+              "cases": cases, "native_cases_added_by_replay": 0,
               "reference_kind": "unchanged original range, file render, cache, delta and result gate methods with independent read fixtures",
               "input_sha256": evidence["input_sha256"], "native_output_sha256": evidence["native_output_sha256"],
               "original_output_sha256": observed["native_and_rust_output_sha256"],
@@ -1285,6 +1373,16 @@ def compare_result_publication(output: Path, report: dict, rustc: Path) -> dict:
 def compare_request_scope(output: Path, report: dict, rustc: Path) -> dict:
     return compare_request_scope_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
         completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
+def compare_terminal_clean(output: Path, report: dict, rustc: Path) -> dict:
+    return shell_qualification.compare_original(ROOT, output, report, "terminal_clean", rustc,
+        executable(str(rustc.with_name("cargo"))), completed_test_summary, record_check, qualification_env)
+
+
+def compare_shell_gate(output: Path, report: dict, rustc: Path) -> dict:
+    return shell_qualification.compare_original(ROOT, output, report, "shell_gate", rustc,
+        executable(str(rustc.with_name("cargo"))), completed_test_summary, record_check, qualification_env)
 
 
 def retained_execution_original(output: Path, report: dict) -> dict:
@@ -1351,6 +1449,18 @@ def compare_effect_fence(output: Path, report: dict, rustc: Path) -> dict:
                               q.completed_process, record_check, qualification_env())
 
 
+def compare_file_locks(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_file_lock_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                              record_check, qualification_env(), "file_locks")
+
+
+def compare_file_lock_service(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_file_lock_pipeline as q
+    return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
+                              record_check, qualification_env(), "file_lock_service")
+
+
 def compare_session_workdir(output: Path, report: dict, rustc: Path) -> dict:
     import hia_native_session_qualification as q
     return q.compare_original(ROOT, output, report, rustc, completed_test_summary,
@@ -1358,13 +1468,18 @@ def compare_session_workdir(output: Path, report: dict, rustc: Path) -> dict:
 
 
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
+           "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
            "request_context": compare_request_context, "response_hints": compare_response_hints,
            "result_publication": compare_result_publication,
            "request_scope_lifecycle": compare_request_scope,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
+           "view_render_growth": compare_view_render_growth,
+           "view_read": compare_view_call_group, "view_params": compare_view_call_group,
+           "view_call": compare_view_call_group, "runtime_mcp": compare_runtime_mcp,
            "view_cache": compare_view_cache, "history": compare_history, "session_workdir": compare_session_workdir,
+           "file_locks": compare_file_locks, "file_lock_service": compare_file_lock_service,
            "fence_json": compare_fence_json, "serde_json": compare_serde_json, "execution_shadow": compare_execution,
            "effect_fence": compare_effect_fence, "runtime_config": compare_config,
            "operation_scope_os": compare_operation_scope_os,
