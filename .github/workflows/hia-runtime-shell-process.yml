@@ -1,0 +1,143 @@
+name: HIA Shell Process, Output and Background Owners
+
+on:
+  push:
+    branches: ['codex/**']
+    paths:
+      - 'native/shell_process*'
+      - 'native/shell_background*'
+      - 'native/shell_outcome*'
+      - 'native/shell_output*'
+      - 'native/shell_foreground*'
+      - 'native/shell_capture*'
+      - 'scripts/*hia*shell*'
+      - 'scripts/shell_process_adapter.S'
+      - 'scripts/shell_output_adapter.S'
+      - 'scripts/shell_foreground_adapter.S'
+      - 'scripts/shell_capture_mkdir_adapter.S'
+      - 'scripts/shell_capture_file_adapter.S'
+      - 'scripts/shell_capture_prepare_adapter.S'
+      - 'scripts/qualify_hia_shell_capture_prepare_original.py'
+      - 'tests/oracles/shell_capture_prepare/**'
+      - 'scripts/hia_native_failure_evidence.py'
+      - 'tests/hia_native/*shell*'
+      - 'tests/hia_native/shell_process_oracle/**'
+      - 'tests/hia_native/shell_capture_path_oracle/**'
+      - 'tests/hia_native/shell_capture_mkdir_oracle/**'
+      - 'tests/hia_native/shell_capture_file_oracle/**'
+      - 'src/mcp/fs/shell.rs'
+      - 'src/mcp/fs/shell_tests.rs'
+      - 'src/mcp/fs/background.rs'
+      - 'src/mcp/fs/background_tests.rs'
+      - 'src/mcp/request_ctx.rs'
+      - 'src/mcp/mod.rs'
+      - 'src/mcp/fs/remote.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'vendor/ruzstd/**'
+      - '.github/workflows/hia-runtime-shell-process.yml'
+  pull_request:
+    paths:
+      - 'native/shell_process*'
+      - 'native/shell_background*'
+      - 'native/shell_outcome*'
+      - 'native/shell_output*'
+      - 'native/shell_foreground*'
+      - 'native/shell_capture*'
+      - 'scripts/*hia*shell*'
+      - 'scripts/shell_process_adapter.S'
+      - 'scripts/shell_output_adapter.S'
+      - 'scripts/shell_foreground_adapter.S'
+      - 'scripts/shell_capture_mkdir_adapter.S'
+      - 'scripts/shell_capture_file_adapter.S'
+      - 'scripts/shell_capture_prepare_adapter.S'
+      - 'scripts/qualify_hia_shell_capture_prepare_original.py'
+      - 'tests/oracles/shell_capture_prepare/**'
+      - 'scripts/hia_native_failure_evidence.py'
+      - 'tests/hia_native/*shell*'
+      - 'tests/hia_native/shell_process_oracle/**'
+      - 'tests/hia_native/shell_capture_path_oracle/**'
+      - 'tests/hia_native/shell_capture_mkdir_oracle/**'
+      - 'tests/hia_native/shell_capture_file_oracle/**'
+      - 'src/mcp/fs/shell.rs'
+      - 'src/mcp/fs/shell_tests.rs'
+      - 'src/mcp/fs/background.rs'
+      - 'src/mcp/fs/background_tests.rs'
+      - 'src/mcp/request_ctx.rs'
+      - 'src/mcp/mod.rs'
+      - 'src/mcp/fs/remote.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'vendor/ruzstd/**'
+      - '.github/workflows/hia-runtime-shell-process.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-shell-process-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shell-process:
+    name: Native process and output owners against unchanged original Rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Checkout fixed HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify source and install the original toolchain
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+          rustup toolchain install 1.95.0 --profile minimal
+          if ! command -v strace; then
+            sudo apt-get update
+            sudo apt-get install --yes strace
+          fi
+      - name: Execute complete focused qualification
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          python3 -I -B runtime/scripts/qualify_hia_shell_process.py \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-shell-process" \
+            --rustc "$(rustup which --toolchain 1.95.0 rustc)" \
+            --cargo "$(rustup which --toolchain 1.95.0 cargo)"
+      - name: Stage failed process reports and untouched fixtures
+        if: failure()
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
+            --source "$RUNNER_TEMP/hia-shell-process" \
+            --output "$RUNNER_TEMP/hia-shell-failure-evidence"
+      - name: Retain failure diagnostics and archive, including incomplete archives
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-shell-process-failure-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-shell-failure-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain complete actual inputs and outputs
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-shell-process-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-shell-process/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

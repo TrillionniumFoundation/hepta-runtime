@@ -1,0 +1,60 @@
+// The source manifest records every primitive-observation substitution.
+// This fixture does not run prepare, allocate a production id or touch files.
+use std::cell::{Cell, RefCell};
+use std::ffi::{OsStr, OsString};
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static JOB_SEQ: AtomicU64 = AtomicU64::new(1);
+thread_local! {
+    static OBSERVED_TMPDIR: RefCell<Option<OsString>> = const { RefCell::new(None) };
+    static OBSERVED_PID: Cell<u32> = const { Cell::new(0) };
+}
+
+fn observed_tmpdir() -> Option<OsString> {
+    OBSERVED_TMPDIR.with(|value| value.borrow().clone())
+}
+fn observed_pid() -> u32 {
+    OBSERVED_PID.with(Cell::get)
+}
+
+/* ORIGINAL_LINUX_TEMP_DIR */
+/* ORIGINAL_JOBS_DIR */
+/* ORIGINAL_NEXT_ID */
+
+pub fn project(op: u64, first: &[u8], second: &[u8], present: bool, pid: u32,
+               seq: u64) -> (u64, u64, [Vec<u8>; 4]) {
+    let mut fields: [Vec<u8>; 4] = std::array::from_fn(|_| Vec::new());
+    match op {
+        1 => {
+            let equal = Path::new(OsStr::from_bytes(first)) == Path::new(OsStr::from_bytes(second));
+            (u64::from(equal), 0, fields)
+        }
+        2 => match Path::new(OsStr::from_bytes(first)).parent() {
+            None => (0, 0, fields),
+            Some(parent) => {
+                fields[0] = parent.as_os_str().as_bytes().to_vec();
+                (1, 0, fields)
+            }
+        },
+        3 => {
+            OBSERVED_TMPDIR.with(|value| {
+                *value.borrow_mut() = present.then(|| OsString::from_vec(first.to_vec()));
+            });
+            OBSERVED_PID.with(|value| value.set(pid));
+            JOB_SEQ.store(seq, Ordering::Relaxed);
+            let dir = jobs_dir();
+            let id = next_id();
+/* ORIGINAL_STDOUT_JOIN */
+/* ORIGINAL_STDERR_JOIN */
+            let next_seq = JOB_SEQ.load(Ordering::Relaxed);
+            fields[0] = dir.into_os_string().into_vec();
+            fields[1] = id.into_bytes();
+            fields[2] = stdout_path.into_os_string().into_vec();
+            fields[3] = stderr_path.into_os_string().into_vec();
+            (0, next_seq, fields)
+        }
+        _ => unreachable!(),
+    }
+}

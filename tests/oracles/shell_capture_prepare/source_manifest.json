@@ -1,0 +1,167 @@
+{
+  "capture_body_edits": [
+    {
+      "after": "std::fs::create_dir_all(&dir)",
+      "before": "tokio::fs::create_dir_all(&dir)\n\t\t.await",
+      "end": 4484,
+      "start": 4444
+    },
+    {
+      "after": "std::fs::File::create(&stdout_path)",
+      "before": "tokio::fs::File::create(&stdout_path)\n\t\t.await",
+      "end": 4757,
+      "start": 4711
+    },
+    {
+      "after": "",
+      "before": "\n\t\t.into_std()\n\t\t.await",
+      "end": 4849,
+      "start": 4826
+    },
+    {
+      "after": "std::fs::File::create(&stderr_path)",
+      "before": "tokio::fs::File::create(&stderr_path).await",
+      "end": 4919,
+      "start": 4876
+    },
+    {
+      "after": "Ok(file) => file,",
+      "before": "Ok(file) => file.into_std().await,",
+      "end": 4958,
+      "start": 4924
+    },
+    {
+      "after": "std::fs::remove_file(&stdout_path)",
+      "before": "tokio::fs::remove_file(&stdout_path).await",
+      "end": 5052,
+      "start": 5010
+    }
+  ],
+  "files": {
+    "Cargo.lock": {
+      "bytes": 90148,
+      "git_blob_sha1": "dec7d4e88dbae3e9e2415e98a55400bc1f81f939",
+      "sha256": "7f39704b92d5fc762a98a5313949034db464ca9485827b19b5dde7aa69902d43"
+    },
+    "Cargo.toml": {
+      "bytes": 4157,
+      "git_blob_sha1": "246f38e394de474fa0d55297b6b93cea40b77393",
+      "sha256": "377e7dca547f0ff0d832fb28cf01862a6d84b4b6ed42c8b36dae9075cbbbb78f"
+    },
+    "src/mcp/fs/background.rs": {
+      "bytes": 9434,
+      "git_blob_sha1": "32d887d98269d9db2b3adf979567c417a2e38db6",
+      "sha256": "826394f843a0891dfbe8b0b6986dad40d85b53e20a497cb4ddb04838a185f065"
+    }
+  },
+  "metadata_observation": "After an error, only original pure jobs_dir/id/path formatting statements run again; no fs call or fetch_add is repeated.",
+  "original_test_count": 0,
+  "projected_capture_body": {
+    "bytes": 635,
+    "sha256": "1e763f94c1ce1fc728462475c900f3d8c37e0e3e77cf0f5b3aa67a24e3eaf782"
+  },
+  "projection_excludes": [
+    "registry duplicate admission",
+    "Tokio runtime and blocking task failure",
+    "await cancellation and into_std inflight state",
+    "global JOB_SEQ concurrency",
+    "Job/Arc/Mutex construction and timestamp",
+    "native error Display",
+    "production activation and whole runtime replacement"
+  ],
+  "required_rust_version": "1.95.0",
+  "required_target": "x86_64-unknown-linux-gnu",
+  "reviewed_owned_fd": {
+    "bytes": 18517,
+    "git_blob_sha1": "8a39fe073bf95f9f7c216d354eecc818e325811c",
+    "sha256": "7dfc471fedb90c0ac426845f2fe584216b5d1af27bc846d05fc5631d93f8319d",
+    "source": "tests/hia_native/shell_capture_file_oracle/review/rust_owned_fd.rs",
+    "url": "https://github.com/rust-lang/rust/blob/1.95.0/library/std/src/os/fd/owned.rs"
+  },
+  "reviewed_tokio_bridges": {
+    "asyncify": {
+      "bytes": 9375,
+      "git_blob_sha1": "8701d3a108367a5aa95d7d07c5460af36cde0534",
+      "sha256": "3b2060c5ecf43e1c28bd1c712fbd93c09eead6f0e91a2b78e6a93dd7b92243f9",
+      "source": "review/tokio_fs_mod.rs",
+      "transport": true,
+      "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/fs/mod.rs"
+    },
+    "create_dir_all": {
+      "bytes": 1872,
+      "sha256": "f8725f3c97faa50e7d719130ba577da612e54bedc9fcfb16738d583bf4a69a41",
+      "source": "tests/hia_native/shell_capture_mkdir_oracle/review/tokio_create_dir_all.rs",
+      "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/fs/create_dir_all.rs"
+    },
+    "file": {
+      "bytes": 36700,
+      "git_blob_sha1": "3829b609d4d5edf5f14780ad921ca06a3cf00375",
+      "sha256": "8a50f8dbe3563dec59fd6362f6ceabe75963e0e4006174805c745ed5f2aad02b",
+      "source": "tests/hia_native/shell_capture_file_oracle/review/tokio_file.rs",
+      "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/fs/file.rs"
+    },
+    "open_options": {
+      "bytes": 28872,
+      "git_blob_sha1": "99073a9d185cd97a12722b3aa6974d2b36491fcb",
+      "sha256": "8b0a91d002c691bb5ff3e162cc6a4ee3ca5cc658f18f53d3e378ecbade732d39",
+      "source": "tests/hia_native/shell_capture_file_oracle/review/tokio_open_options.rs",
+      "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/fs/open_options.rs"
+    },
+    "remove_file": {
+      "bytes": 504,
+      "git_blob_sha1": "4018802547eeadb41c130f1fdb1920cb8a28bd8a",
+      "sha256": "283d7ef67b53668810daed6aad23cc90466d359423f97ab01c1ae58c111feb12",
+      "source": "tests/hia_native/shell_capture_file_oracle/review/tokio_remove_file.rs",
+      "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/fs/remove_file.rs"
+    }
+  },
+  "schema": "hepta.runtime.shell-capture-prepare-original-source.v1",
+  "source_commit": "93f320a8e02b522e4bafd4a2cf346d68069ec74b",
+  "source_repository": "https://github.com/TrillionniumFoundation/hepta-runtime",
+  "spans": {
+    "capture_body": {
+      "bytes": 713,
+      "end": 5133,
+      "sha256": "49c0a431c60bcec881ae1192e8beaf10ca843411efcb8f95d6832051392b830f",
+      "source": "src/mcp/fs/background.rs",
+      "start": 4420
+    },
+    "jobs_dir": {
+      "bytes": 103,
+      "end": 2633,
+      "sha256": "9474e8a695e5b8e9a7d765d2e2aad907cdca76d9718c35d890115affa20fd519",
+      "source": "src/mcp/fs/background.rs",
+      "start": 2530
+    },
+    "next_id": {
+      "bytes": 118,
+      "end": 2960,
+      "sha256": "755107d3e6618c29a43f662cfc7f3212c0cd30265fce5e00d8b693c3e21259b4",
+      "source": "src/mcp/fs/background.rs",
+      "start": 2842
+    },
+    "sequence_declaration": {
+      "bytes": 47,
+      "end": 2425,
+      "sha256": "7ed8f3a64fdf25c7e578d46d8c2ad488122018f61701f44310eba129bba283f1",
+      "source": "src/mcp/fs/background.rs",
+      "start": 2378
+    }
+  },
+  "tokio_package": {
+    "checksum": "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed",
+    "dependencies": [
+      "bytes",
+      "libc",
+      "mio",
+      "pin-project-lite",
+      "signal-hook-registry",
+      "socket2",
+      "tokio-macros",
+      "windows-sys 0.61.2"
+    ],
+    "name": "tokio",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "version": "1.53.1"
+  }
+}

@@ -2,8 +2,11 @@
 
 This directory contains the current HIA implementation of deterministic runtime
 components, local read/write descriptor owners and persistent native MCP stdio services. All implementation sources
-in this directory use `.hepta` and are compiled by HIA to machine code. The Linux
-executables have no Python, Rust, libc or dynamic-loader runtime dependency.
+in this directory use `.hepta` and are compiled by HIA to machine code. Static
+byte/syscall fixtures have no Python, Rust, libc or dynamic-loader runtime
+dependency. The owned-buffer shell outcome fixture retains its declared
+`calloc`/`free` storage imports; its foreground composition binds that exact
+loader boundary. Dependency removal is qualified per fixture.
 
 The complete existing runtime has **not** been replaced. Its 125 registered MCP
 tool handlers and the durable/remote service owners remain in their original
@@ -13,6 +16,83 @@ provides `host_list`, `binary_read`, `read_multiple_files` and `file_info` throu
 partial original-tool coverage; configured remote hosts and complete original
 authorization behavior remain outside that profile. Production activation and
 deletion of the original runtime remain incomplete.
+
+## Capture path, directory, file and preparation owners
+
+The standard gate registers four capture owners and three static ELF packers.
+Their HIA policies are separate from the qualification scripts and fixed Linux
+syscall adapters. The focused shell gate builds and runs the same complete
+corpora, and the text partition transports their retained bytes for independent
+collection before original comparisons.
+
+| Owner | Complete native corpus | Original comparison |
+| --- | --- | --- |
+| `shell_capture_path` | 49,075 semantic cases and 90 native ABI/control cases | All 49,075 semantic cases against a fresh, source-bound Rust statement projection |
+| `shell_capture_mkdir` | 5,591 state scenarios, 175 native controls and 33 real filesystem cases | 30 fresh-cache filesystem cases against linked `create_dir_all`; three seeded native cache cases stay separate |
+| `shell_capture_file` | 12,920 state scenarios, 17,332 semantic operations, 214 native controls and 34 real filesystem cases | 32 original file-operation cases; two fresh invalid native cases are not represented as Rust calls |
+| `shell_capture_prepare` | 1,690 semantic scenarios, 331 native controls and 15 real filesystem cases | 14 natural cases against the exact original preparation statements through a blocking filesystem projection; one controlled native cleanup race stays separate |
+
+The path owner preserves Linux byte-path joining, equality and parent behavior,
+the jobs directory, decimal PID/sequence formatting and both output names.
+The original projection records typed environment, PID and sequence observations.
+It does not qualify live environment acquisition or a concurrent global counter.
+
+The mkdir owner controls parent discovery, recursive creation order, syscall
+errors and the statx-cache fallback. The file owner controls create/truncate,
+EINTR retry, unlink, owned close and explicit transfer. Its real descriptor
+checks bind exact open flags, close-on-exec and inode custody. Different native
+and Rust process descriptor numbers are related by their own open/close/transfer
+histories; numeric equality between the processes is not assumed.
+
+Every standard native OS run includes the registered physical evidence controls:
+14 mkdir refusals and 15 file refusals, followed by successful readback of the
+restored original corpus. The separate development controls for state readers
+are retained external evidence, not an additional mode of each standard CLI.
+The aggregate reader binds every progress record and final result to the strong
+corpus reader. Missing cases, repeated records, duplicate JSON keys, changed
+invocations and fabricated summaries are rejected.
+
+The original OS comparison retains complete caller input separately from the
+actual tracer display. The registered 4,100-byte ENAMETOOLONG path has a shortened
+tracer display; the undisplayed suffix is not claimed as directly observed.
+Transferred file ownership is likewise explicit: the isolated original TAKE
+fixture ends through kernel process cleanup, not an invented semantic DROP.
+
+For individual state checks, use `tests/hia_native/shell_capture_path.py`,
+`shell_capture_mkdir_state.py` or `shell_capture_file_state.py` with
+`--native-manifest TOP --output NEW_DIRECTORY`. Their pure readers use
+`--verify RETAINED_DIRECTORY --native-manifest TOP --audit-read-only`.
+The normal full and focused gates require fresh original builds and comparisons;
+replaying original cases cannot add native cases to the report.
+
+The preparation continuation combines four independent HIA images. It owns the
+order from jobs-directory creation through sequence observation, stdout and
+stderr creation, and explicit transfer into receiver custody. If stderr creation
+fails, HIA preserves that error, closes the received stdout descriptor once and
+then attempts unlink without replacing the saved error. The fixed adapter only
+forwards primitive effects and ownership transfers. The standard gate binds
+each child manifest and image to the same gate's registered leaf build.
+
+Its OS reader reconstructs the complete persistent parent and mkdir workspaces,
+including initialized storage, stack/path state and otherwise-unused bytes,
+around every effect. It binds actual kernel calls, descriptor/inode observations,
+complete input/output arrays and all progress records. Each standard run includes
+17 physical evidence refusals and a successful read of the restored corpus.
+The private controlled race replaces the stdout path with a directory after a
+real stderr denial: cleanup failure must not replace that original error. It is
+not replayed as a natural original Rust call.
+
+The original comparison preserves the preparation statements and applies only
+the declared Tokio-to-blocking filesystem substitutions. It retains real atomic
+sequence operations and keeps successfully transferred files open until process
+exit. This projection does not qualify the complete asynchronous body, global
+sequence concurrency, error Display text or the production Job lifetime.
+
+These are private owners. Complete asynchronous preparation, duplicate admission,
+ambient observations, process-global concurrency, registry publication,
+asynchronous cancel behavior and public resource/Shell dispatch remain separate owners.
+Production activation, whole-runtime replacement and old-stack removal remain
+false, and every production handler remains `not_ported`.
 
 ## Fixed source baseline
 
@@ -63,6 +143,89 @@ original-reference phase. Both sources are part of the ordinary complete
 runtime aggregate. The separate focused shell workflow provides earlier
 feedback and explicitly does not qualify the compiler cold gate, production
 process lifetime, public routing or old-stack removal.
+
+## Prepared shell processes and background resources
+
+The [process owner](shell_process_abi.md) owns environment/PATH selection,
+the fork/exec handshake, foreground waiting, promotion of the same child,
+caller cancellation, process-group shutdown and reap custody. The
+[prepared fixture](shell_process_fixture.md) supplies already-owned capture
+files through opaque tokens. The HIA [packer](shell_process_packer.hepta)
+emits the static executable with its fixed Linux syscall boundary. No public
+request can borrow an arbitrary PID or file descriptor.
+
+The [background text owner](shell_background_text_abi.md) preserves the separate
+raw-log resource contract. Its stable-snapshot operation first takes each raw
+stream's last 30,000 bytes. Its observed-tail operation accepts the exact bytes
+and flags already returned by the original read boundary, including partial or
+oversized results. Both preserve separate lossy decoding, exact stderr labels,
+the combined 30,000-byte tail and the second lossy decoding. A split multibyte
+character can make the final UTF-8 result longer than 30,000 bytes. Foreground
+terminal cleanup is never applied to this projection.
+
+Five additional mandatory native suites cover 23 process state cases and
+14 independent refusals in 304 actual entries; the complete real-OS lifecycle
+corpus; transport/custody and evidence-admission controls; and 3,456 background
+semantic cases with 51 separate typed/capacity controls in 3,507 entries.
+Native-only OS evidence remains explicitly native-only. Two additional
+original-reference recipes require a fresh locked build of the unchanged
+shell/background owners, all 21 original tests, 38 actual process comparisons,
+and the full 3,456-case background corpus. They retain exact original source
+spans and full request/response bytes. The background observed-tail projection
+does not claim to have executed file reads.
+
+The [outcome owner](shell_outcome_abi.md) consumes typed wait and read results.
+It owns original error priority, raw-byte UTF-8 lossiness, independent terminal
+cleanup, stream joining, the post-clean 8 MiB result check, exit-status text and
+promotion text/URI. The original leaf bodies are retained with only function-ID
+relocation; the u64 cleaner composition preserves their operation order. Raw
+and cleaned lengths remain u64. Successful calls return the fixed 40-byte
+header extent, with the complete response extent carried separately as u64.
+The full 78,083-case native corpus includes all low 16-bit wait-status patterns,
+signed errno boundaries, complete error priority, malformed UTF-8 and result
+size boundaries. The unchanged Rust statement projections consume those exact
+inputs after the native phase; their complete result bytes must match.
+
+The [output I/O owner](shell_output_io_abi.md) reads the prepared capture paths
+and passes its complete typed loan to the actual outcome entry during the native
+phase. Its required OS corpus records real file effects, descriptor and inode
+custody, cancellation and buffer guards. Six shared scenarios also execute the
+unchanged original owner under complete syscall tracing: ordinary files,
+missing paths, a directory in place of a capture file, a nonzero exit with a read
+error, and pathname replacement while the old descriptors remain open. The
+comparison admits only already-recorded native bytes. The native fixture still
+supplies the wait result; this does not qualify production process-to-I/O wiring.
+
+The [foreground controller](shell_foreground_controller_abi.md) has a separate
+composed fixture. HIA consumes the actual process foreground event and starts
+the output owner immediately, while any quiet orphan continues its own wait
+lifetime. Fixed asynchronous capabilities preserve progress during blocking
+I/O; HIA selects the operations and owns the cache handoff and outcome call.
+The native corpus retains the complete 96-byte foreground event, command,
+typed read loan and actual outcome. Its reader must establish wait/reap,
+tracker removal, foreground publication and the HIA call to output processing
+in their causal order. The separate original comparison reuses the same gate's
+six fully verified original IO probes and fresh Rust build. It compares full
+command, loan and outcome bytes without adding native cases or original
+processes. Original raw wait bits remain unobservable; original hints are
+retained without claiming native hint execution.
+
+The ordinary aggregate retains every existing native suite and original recipe
+and requires separate process, background, outcome, output-I/O and foreground
+composition evidence.
+The focused shell-process workflow is an earlier qualification entry; it does
+not replace the fresh full compiler cold gate or the ordinary aggregate.
+Before artifact transport, transient
+work/tmp targets are snapshotted and retired under the process evidence
+owner; captured logs, traces and receipts remain. Collection restores only
+byte-verified file modes and rechecks exact recorded paths and retirement
+evidence instead of substituting a weaker portable verdict.
+
+Ambient capture inputs and duplicate-job admission, the complete background
+registry, concurrent log reads, resource subscriptions and production shell
+dispatch remain original owners. All 125 public handlers stay `not_ported`;
+production activation, whole-runtime replacement and old-stack removal remain
+false.
 
 ## Shadow execution composition
 
@@ -150,9 +313,10 @@ changed recipe bytes or the fresh repository aggregate.
 
 ## Native components
 
-Qualification covers 66 native HIA sources through 40 executable component
-entries, including 16 HIA packers; the two scope profiles share their HIA scope
-owner. The complete source closure binds 597 files. The shadow entry
+Qualification covers 69 native HIA sources through 42 executable component
+entries, including 17 HIA packers; the two scope profiles share their HIA scope
+owner. Each qualification report enumerates and hashes its complete source closure.
+The shadow entry
 qualifies its typed JSON, canonical core and ordered composition controller.
 The source registry explicitly identifies the immutable one-worker fence packer
 as qualification-only. The 17 other test HIA fixtures are recorded separately.

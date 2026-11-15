@@ -1,6 +1,6 @@
 """Run the complete native gate across source-bound, independently retained jobs.
 
-One fresh cold/build artifact is admitted by its workflow-produced SHA256. Four
+One fresh cold/build artifact is admitted by its workflow-produced SHA256. Five
 explicit partitions execute every registered suite once. Collection rechecks all
 raw process bytes, immutable build inputs and complete shard inventories before
 the unchanged evidence owners can advance to the original Rust comparisons.
@@ -27,9 +27,13 @@ import qualify_hia_runtime_native as q
 
 PARTITIONS = {
     "batch": ("batch_plan", "batch_apply", "atomic_write"),
-    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "terminal_clean", "shell_gate", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
+    "text": ("runtime_bytes", "runtime_protocol", "text_budget", "request_context", "response_hints",
+             "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
              "delta", "editable_content", "view_render", "view_cache", "history", "session_workdir"),
+    "shell": ("terminal_clean", "shell_gate", "shell_process", "shell_background_text", "shell_outcome",
+              "shell_output_io", "shell_foreground", "shell_capture_path", "shell_capture_mkdir",
+              "shell_capture_file", "shell_capture_prepare"),
     "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence", "runtime_config"),
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
@@ -142,7 +146,9 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "json", "system"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if (set(partitions) != {"batch", "text", "shell", "json", "system"}
+            or any(not keys for keys in partitions.values())
+            or len(flat) != len(set(flat)) or set(flat) != set(modules)):
         raise ValueError("every native module must belong to exactly one explicit partition")
     result = {group: tuple(name for key in keys for name in
                          (modules[key]["test"], *modules[key].get("additional_tests", ())))
@@ -151,9 +157,15 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     tests = [name for names in result.values() for name in names]
     if len(tests) != len(set(tests)) or set(tests) != set(q.native_tests()):
         raise ValueError("every native executable suite must execute exactly once")
-    for ordered in q.ORDERED_INDEPENDENT_SUITES:
-        if not any(all(name in names for name in ordered) for names in result.values()):
+    # Shell consumers retain their producers' evidence in the same artifact;
+    # these source-owned suites are separate from the generic parallel groups.
+    for ordered in (*q.ORDERED_INDEPENDENT_SUITES, q.SHELL_PROCESS_TESTS,
+                    q.SHELL_FOREGROUND_TESTS, q.capture_gate.TESTS):
+        containing = [names for names in result.values() if all(name in names for name in ordered)]
+        if not containing:
             raise ValueError("an ordered native evidence dependency crosses partitions")
+        if tuple(name for name in containing[0] if name in ordered) != ordered:
+            raise ValueError("an ordered native evidence dependency is reordered")
     return result
 
 
@@ -287,6 +299,19 @@ def export_shard(output: Path, destination: Path, seal: dict, report: dict) -> N
         evidence = q.atomic_write_evidence(output, report)
         q.atomic_write_retire_fixtures(output, tuple(evidence["transient_fixture_directories"]),
             output / "atomic-write/retired-fixtures.json", evidence["native_evidence"], create=True)
+    if any(row.get("name") == "hia_native_shell_process_qualification.py" for row in report.get("checks", ())):
+        # The evidence suite already retired all exact transient targets; this
+        # read validates the stable snapshot before any artifact is sealed.
+        q.shell_process_evidence(output, report)
+    if any(row.get("name") == q.SHELL_OUTCOME_TEST for row in report.get("checks", ())):
+        q.shell_outcome_evidence(output, report)
+    if any(row.get("name") == q.SHELL_OUTPUT_TEST for row in report.get("checks", ())):
+        q.shell_output_evidence(output, report)
+    if any(row.get("name") in q.SHELL_FOREGROUND_TESTS for row in report.get("checks", ())):
+        q.shell_foreground_evidence(output, report)
+    for item in q.capture_gate.MODULES:
+        if any(row.get("name") == item["test"] for row in report.get("checks", ())):
+            q.capture_gate.native_evidence(output, report, item["key"])
     files, directories = inventory(output, {BUILD_SEAL, "result.json", *seal["files"]})
     for name in directories:
         if name not in seal.get("directories", ()):
@@ -412,7 +437,7 @@ def collect(output: Path, hepta: Path, expected: str, invocation: str, shards: P
     try:
         folders = sorted(shards.iterdir())
         if len(folders) != len(PARTITIONS) or any(p.is_symlink() or not p.is_dir() for p in folders):
-            raise ValueError("collector requires exactly four complete shard artifacts")
+            raise ValueError("collector requires exactly one complete artifact for every native partition")
         parts, copies, all_files, all_directories = {}, {}, {}, set()
         for folder in folders:
             receipt_path, report_path = owned(folder, "shard.json"), owned(folder, "shard-report.json")
