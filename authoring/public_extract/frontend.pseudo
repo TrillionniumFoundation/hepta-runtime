@@ -1,0 +1,12 @@
+def tool_kind(w: mutbuf, at: u64, size: u64) -> u64:
+    if size == 13 and get(w, at) == 6878231801084803173 and byte(w, at + 8) == 108 and byte(w, at + 9) == 105 and byte(w, at + 10) == 110 and byte(w, at + 11) == 101 and byte(w, at + 12) == 115:
+        return 12
+    return retained_extract_tool_kind(w, at, size)
+
+def prepare(s: readbuf, o: mutbuf, w: mutbuf, phase: u64) -> u32:
+    if phase == 6 and get(w, 112) == 12:
+        put(w, 8, 106)
+        if reserve(w, 1, 192) == 0:
+            return pending_grow(o, w)
+        return prepare_extract(s, o, w)
+    return retained_extract_prepare(s, o, w, phase)
