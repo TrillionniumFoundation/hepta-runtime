@@ -105,3 +105,38 @@ its whole archive and observed CAPACITY at 0/31 and GROW(resource 1, 16582) at 6
 That read also compared all 842 native and original outputs byte for byte under
 twelve guards. The old control gate remains failed; this revision still requires
 a new complete gate, including every refusal, recovery, and reader control.
+
+## Complete-request output reservation
+
+Semantic sessions reserve `max(65600, 64 + len(complete_request))` output
+bytes before their first HIA call. This policy uses only the complete incoming
+byte span. It does not parse JSON, predict a result, reuse a semantic result, or
+increase the workspace. The session ledger records the exact input length,
+SHA-256 and allocation. The physical reader reopens the first actual input;
+the semantic reader separately binds the same declaration to the frozen input
+frame. Explicit small-capacity controls retain their original allocations.
+All complete buffers, actual addresses, growth and child handoffs remain read
+and checked. The prior 31 reader controls remain; two additional mutations
+reject forged owner capacity and input identity.
+
+The retained wide-array call sequence shows why this matters. After the
+required Value, constructor, and second Value calls, the old 65,600-byte output
+needed to grow to 155,725 bytes. The owner's documented restart then repeated
+both Value calls and the constructor. Reserving 155,773 bytes from the complete
+155,709-byte input avoids this replay. The required two Value calls remain
+actual executions. The full independent archive read and exact old call
+sequence are pinned in `provenance/owner-allocation-observation.json`.
+
+This revision also reuses the exact HIA constructor qualified in the joint
+102-image Authority/Batch graph. Fifteen existing functions, including the
+entry, UTF-8 validator and growth behavior, remain byte identical. Only the
+quoting loop gains a bounded eight-byte ordinary-ASCII path; all other bytes
+retain the scalar path. The authoring source, proof and prior qualification
+index are retained as provenance. That earlier scope does not replace the
+fresh 842-case original comparison and complete private controls here.
+
+The preceding boundary-corrected revision timed out after 665 complete cases
+and 5,911 complete native calls. Its complete failed archive remains retained.
+Neither this source revision nor a successful read of earlier evidence is a
+qualification pass. The 180-second process and fifteen-minute CI limits remain
+unchanged.

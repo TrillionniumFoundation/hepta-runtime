@@ -254,6 +254,25 @@ def physical(folder, report):
         admission = session["admission"]
         if admission is None:
             continue
+        if session["owner"] == "scope_annotation_span":
+            require(type(admission) is dict
+                    and set(admission) == {"policy","input_bytes","input_sha256","capacity"}
+                    and admission["policy"] == "complete-request-span-plus-header"
+                    and session["session"] in first_calls,
+                    "owner initial output lacks its complete request admission")
+            first = first_calls[session["session"]]
+            request = read(folder/first["folder"]/"input.bin")
+            require(first["case"] == session["case"]
+                    and type(admission["input_bytes"]) is int
+                    and admission["input_bytes"] == len(request)
+                    and admission["input_sha256"] == SHA(request)
+                    and type(admission["capacity"]) is int
+                    and admission["capacity"] == max(65600,64+len(request))
+                    and type(session["output_capacity"]) is int
+                    and session["output_capacity"] == admission["capacity"] <= 1073741824
+                    and type(session["workspace_capacity"]) is int and session["workspace_capacity"] == 0,
+                    "owner initial output differs from the complete actual request")
+            continue
         require(session["owner"] == "serde_json_span" and type(admission) is dict
                 and set(admission) == {"policy","issued_call","capacity"}
                 and admission["policy"] == "actual-owner-reply-capacity"

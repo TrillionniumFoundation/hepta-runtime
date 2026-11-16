@@ -113,8 +113,10 @@ def native_evidence(folder, build, source_sha):
             require(all(c["session"] in {s["session"] for s in owned} for c in selected),
                     "actual case borrowed another case's session")
             require(all(s["workspace_capacity"] == 0 for s in owned)
-                    and by_owner["scope_annotation_span"]["output_capacity"] == 65600
-                    and by_owner["scope_annotation_span"]["admission"] is None
+                    and by_owner["scope_annotation_span"]["output_capacity"] == max(65600,64+len(request))
+                    and by_owner["scope_annotation_span"]["admission"] ==
+                        dict(policy="complete-request-span-plus-header", input_bytes=len(request),
+                             input_sha256=SHA(request), capacity=max(65600,64+len(request)))
                     and all(by_owner[name]["output_capacity"] == 64 and by_owner[name]["admission"] is None
                             for name in ("serde_error_span","text_result_constructor")),
                     "initial semantic session capacities differ")

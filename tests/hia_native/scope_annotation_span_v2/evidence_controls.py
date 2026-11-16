@@ -24,7 +24,8 @@ NAMES=("native-status", "native-case-omitted", "native-call-count", "native-refe
     "control-original-inflation", "control-input-changed", "control-complete-workspace-changed",
     "process-timed-out", "process-not-complete", "process-source-command", "process-deadline", "foreign-copy-symlink",
     "buffer-chunk-rehashed", "module-image-rehashed", "child-handoff-rehashed", "observation-rehashed",
-    "value-growth-minimum", "value-initial-output-admission")
+    "value-growth-minimum", "value-initial-output-admission",
+    "owner-initial-output-admission", "owner-initial-input-admission")
 
 
 def encoded(value):return (json.dumps(value,sort_keys=True,indent=2,allow_nan=False)+"\n").encode()
@@ -172,6 +173,14 @@ def main():
             row=next(r for r in rows if r["owner"]=="serde_json_span" and r["admission"] is not None)
             row["admission"]["capacity"]+=8
         refuse("value-initial-output-admission",native,{"native/sessions.jsonl":lambda b:editlines(b,initial_admission)})
+        def owner_capacity(rows):
+            row=next(r for r in rows if r["owner"]=="scope_annotation_span" and r["admission"] is not None)
+            row["admission"]["capacity"]+=8
+        refuse("owner-initial-output-admission",native,{"native/sessions.jsonl":lambda b:editlines(b,owner_capacity)})
+        def owner_input(rows):
+            row=next(r for r in rows if r["owner"]=="scope_annotation_span" and r["admission"] is not None)
+            row["admission"]["input_sha256"]="0"*64
+        refuse("owner-initial-input-admission",native,{"native/sessions.jsonl":lambda b:editlines(b,owner_input)})
         require(tuple(row["name"] for row in report["controls"])==NAMES,"complete reader refusal domain changed")
         require(all(file_pin(one/n)==identities[n] and file_pin(two/n)==identities[n] for n in files),"mutated physical copies were not exactly restored")
         require(checked(one,complete)["evidence"]==baseline,"post-refusal complete read differs")
