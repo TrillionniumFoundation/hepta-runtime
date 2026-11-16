@@ -105,6 +105,15 @@ jobs:
         if: inputs.phase == 'original'
         run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt
 
+      - name: Fetch the exact locked Workdir reference dependencies
+        if: inputs.phase == 'original' && inputs.group == 'workdir'
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          timeout --signal=TERM --kill-after=5s 180s \
+            "$(rustup which --toolchain 1.95.0 cargo)" fetch --locked \
+            --manifest-path runtime/tests/hia_native/workdir_service_oracle/Cargo.toml
+
       - name: Run the unchanged complete group with its original process deadlines
         id: execute
         env:

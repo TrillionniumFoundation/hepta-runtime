@@ -22,6 +22,7 @@ jobs:
     outputs:
       prepared-sha256: ${{ steps.prepare.outputs.prepared_sha256 }}
     env:
+      RUSTUP_TOOLCHAIN: 1.95.0
       RUNTIME_SHA: ${{ github.sha }}
       CANONICAL_INVOCATION: ${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -46,6 +47,9 @@ jobs:
           path: compiler
           ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
           persist-credentials: false
+
+      - name: Install the fixed cold bootstrap compiler
+        run: rustup toolchain install 1.95.0 --profile minimal
 
       - name: Install pinned independent Python references
         run: |

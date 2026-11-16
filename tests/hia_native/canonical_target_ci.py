@@ -27,6 +27,7 @@ import hia_native_pipeline as p
 import hia_native_rust_pipeline as rp
 import compare_hia_runtime_rust as r
 import hia_native_canonical_target as canonical
+import hia_native_runtime_mcp_evidence as runtime_mcp_evidence
 
 FOCUS = "canonical-target-v1"
 PROFILE = "tests/hia_native/canonical_target_ci_sources.json"
@@ -121,6 +122,7 @@ def source_identity(head=None):
         raw = canonical.regular(ROOT, name)
         same(canonical.pin(raw), pin, "frozen canonical source differs: " + name)
     policy = canonical.source_evidence(ROOT)
+    runtime_mcp_evidence.source_identity(ROOT)
     current = q.git_head()
     need(type(current) is str and len(current) == 40, "a real exact Git checkout is required")
     if head is not None:
