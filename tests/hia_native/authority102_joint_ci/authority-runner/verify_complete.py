@@ -50,6 +50,8 @@ def selected(modules):
 @lru_cache(maxsize=None)
 def preload(source):
     drivers=source/'drivers';sys.path.insert(0,str(drivers))
+    # Import before the exact-file guard; importlib probes a non-admitted pyc path.
+    load('_authority102_composition_summary',source/'composition/check_union.py')
     load('_authority_private_reader',drivers/'verify_private_binding.py')
     load('_authority_public_reader',drivers/'verify_public.py')
     load('_authority_transport_reader',drivers/'verify_transport_reference.py')
