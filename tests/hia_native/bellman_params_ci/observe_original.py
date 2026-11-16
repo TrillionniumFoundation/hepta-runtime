@@ -10,6 +10,7 @@ import struct
 import subprocess
 import sys
 import time
+import tomllib
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parent
 sys.path.insert(0,str(ROOT))
@@ -38,7 +39,31 @@ def main():
     check();output=args.output.resolve();output.mkdir();shutil.copytree(ROOT,output/'recipe-source')
     version=capture(['rustc','--version'],ROOT,output,'rust-version',15)
     assert version.startswith(b'rustc 1.95.0 ')
-    reference=ROOT/'reference';target=output/'original-build'
+    reference=output/'reference-build';shutil.copytree(ROOT/'reference',reference)
+    # Cargo prunes target-wide optional dependency edges for this smaller binary.
+    # Resolve only the copied reference, then admit every resulting registry pin
+    # against the unchanged target before any compilation. No version drift is
+    # accepted, and the fully resolved lock is retained with the observations.
+    capture(['cargo','metadata','--format-version','1','--manifest-path',str(reference/'Cargo.toml')],
+            ROOT,output,'resolve',60)
+    target_lock=tomllib.loads((ROOT/'reference/target-Cargo.lock').read_text())
+    target_pins={(p['name'],p['version']):p for p in target_lock['package'] if p.get('source')}
+    resolved=tomllib.loads((reference/'Cargo.lock').read_text())
+    for package in resolved['package']:
+        if not package.get('source'):continue
+        original=target_pins[(package['name'],package['version'])]
+        for key in ('source','checksum'):assert package[key]==original[key],(package['name'],key)
+        def identities(dependencies):
+            result=set()
+            for dependency in dependencies:
+                fields=dependency.split();options=[key for key in target_pins if key[0]==fields[0] and (len(fields)==1 or key[1]==fields[1])]
+                assert len(options)==1,(dependency,options)
+                result.add(options[0])
+            return result
+        assert identities(package.get('dependencies',[]))<=identities(original.get('dependencies',[])),package['name']
+    write(output/'resolved-pins.json',{'status':'PASS','target_registry_pins_exact':True,
+          'resolved_lock':pin((reference/'Cargo.lock').read_bytes()),'packages':resolved['package']})
+    target=output/'original-build'
     capture(['cargo','build','--locked','--release','--manifest-path',str(reference/'Cargo.toml'),
              '--target-dir',str(target)],ROOT,output,'build',180)
     cases=list(all_cases(ROOT/'qualify_bellman.py'))
