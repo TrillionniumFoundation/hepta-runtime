@@ -1,0 +1,107 @@
+{
+  "all_members_reread": true,
+  "archive": {
+    "bytes": 90994723,
+    "sha256": "51b283457a9c1901dbb04d2f671333aa7a420cd8fc9c14b49157f91ad9cfc4d4"
+  },
+  "artifact": 14274914569,
+  "elapsed_seconds": 11.385930561998975,
+  "evidence": {
+    "capabilities": {
+      "actual_wait_returns": 7,
+      "cases": 26,
+      "explicit_owner_calls": 15,
+      "export_calls": 51,
+      "full_body_async_qualified": false,
+      "physical_bytes": 877173,
+      "status": "PASS"
+    },
+    "full_body_async_qualified": false,
+    "native": {
+      "actual_packer_calls": 1,
+      "compiled_modules": 15,
+      "compiler_files": 1080,
+      "executable": {
+        "bytes": 2351545,
+        "sha256": "a7472dcb30aa50629d4a2fd523fb1792a5da06a6d18f5813713cf7715fa08325"
+      },
+      "export_code": {
+        "bytes": 12405,
+        "sha256": "1e1a3e60fc1f40b7145255dd33697d8506cfcac429c489a90a0a3e850d9dcdc2"
+      },
+      "status": "PASS"
+    },
+    "native_or_rust_executions": 0,
+    "original": {
+      "exact_original_items": 88,
+      "executable": {
+        "bytes": 18059440,
+        "sha256": "e0917f099d2d836653e63b75335ab9776021d9bac34cbd09f1e94385177e8d16"
+      },
+      "registry_packages": 15,
+      "status": "PASS"
+    },
+    "paired": {
+      "actual_processes": 306,
+      "complete_input_bytes": 101435,
+      "complete_native_arena_observer_bytes": 4388688,
+      "complete_original_observer_bytes": 159582,
+      "complete_response_bytes": 1099853,
+      "operations_per_side": 175,
+      "root_pairs": 153,
+      "status": "PASS"
+    },
+    "public_handler_qualified": false,
+    "reader_writes": 0,
+    "remote_qualified": false,
+    "schema": "hepta.extract-lines.readonly.v1",
+    "source_manifest_sha256": "ab117630de23d39dec8f909afba5460690c04fd2ed0e7f351ba65903fbf198b0",
+    "status": "COMPLETE_LOCAL_EXTRACT_BODY_READONLY_PASS",
+    "whole_runtime_replaced": false
+  },
+  "files": 4810,
+  "guard_entries": 5602,
+  "guard_probes": 12,
+  "logical_bytes": 322127020,
+  "native_or_rust_reexecutions": 0,
+  "original_failed_ci_preserved": true,
+  "process": {
+    "argv": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "-I",
+      "-B",
+      "-c",
+      "import sys,json,gzip,time\nfrom pathlib import Path\nsource=Path(sys.argv[1]);capture=Path(sys.argv[2]);sys.path.insert(0,str(source));sys.dont_write_bytecode=True\nimport read_capture\nfrom read_only_guard import guarded\nproof=guarded(lambda:read_capture.semantic(capture),roots=[source,capture],foreign_path=Path('/dev/null'))\nassert proof['before']==proof['after'] and len(proof['probes'])==12\nassert proof['native_or_rust_executions']==proof['reader_writes']==0\nprint(json.dumps(proof,sort_keys=True,allow_nan=False))\n",
+      "/dev/shm/hepta-extract-lines-6780-ci-v1-failure-readback-local-v1/expanded/source",
+      "/dev/shm/hepta-extract-lines-6780-ci-v1-failure-readback-local-v1/expanded/run/semantic"
+    ],
+    "deadline_seconds": 180,
+    "elapsed_seconds": 2.6814317210082663,
+    "exit_code": 0,
+    "pgid": 6,
+    "pid": 6,
+    "process_reaped": true,
+    "stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stdout": {
+      "bytes": 2902697,
+      "sha256": "b589f6bb495eae40b1e305a978a7899a247516f2ed96a4855ef4d6a282c5475d"
+    },
+    "timed_out": false
+  },
+  "proof": {
+    "bytes": 2902697,
+    "sha256": "b589f6bb495eae40b1e305a978a7899a247516f2ed96a4855ef4d6a282c5475d"
+  },
+  "schema": "hepta.extract-lines.failure-readback.v1",
+  "source_head": "a1ad1d8b2fb8d0944c8348f6760b1ef5e1f1b43b",
+  "status": "FULL_ARCHIVE_AND_INERT_DIAGNOSTIC_PASS",
+  "stdlib_gzip_preloaded_before_guard": true,
+  "tar": {
+    "bytes": 91663536,
+    "sha256": "7e5c31baa0a05026f461891dd1c0ef7ffcd7af4b13b0086c877a03f84a7f7bb5"
+  },
+  "whole_runtime_replaced": false
+}

@@ -1,0 +1,80 @@
+name: Complete retained HIA extract_lines readers
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-extract-lines-local-6780-20261116]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  retained-readers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      EXTRACT_RECOVERY: ${{ github.workspace }}/qualification/extract_lines/recovery_v1
+      EXTRACT_RECOVERY_SHA: 0c9773a98101c3bfc870986c4aa5c2ea29fd54de8983a19986cea3af28bc65a3
+    steps:
+      - name: Checkout frozen inert recovery source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/extract_lines/recovery_v1
+          persist-credentials: false
+      - name: Verify complete frozen recovery source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -B - <<'PY'
+          import os,sys
+          from pathlib import Path
+          root=Path(os.environ['EXTRACT_RECOVERY'])
+          sys.path.insert(0,str(root))
+          from recover import source
+          source(os.environ['EXTRACT_RECOVERY_SHA'])
+          for path in root.glob('*.py'):
+              compile(path.read_bytes(),str(path),'exec')
+          PY
+      - name: Download exact original retained artifact without replay
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --location --retry 0 --max-time 180 --header "Authorization: Bearer $GH_TOKEN" --header "Accept: application/vnd.github+json" https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14274914569/zip --output "$RUNNER_TEMP/original-extract-lines.zip"
+      - name: Complete the four frozen inert reader processes
+        run: |
+          python3 -I -B "$EXTRACT_RECOVERY/recover.py" --archive "$RUNNER_TEMP/original-extract-lines.zip" --output "$RUNNER_TEMP/extract-lines-retained-output" --source-manifest-sha256 "$EXTRACT_RECOVERY_SHA"
+      - name: Retain exact failure location without replay
+        if: failure()
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'extract-lines-retained-output'
+          for path in [root/'RECOVERY.json',*sorted((root/'recovery-processes').glob('*.stderr'))]:
+              if path.is_file():
+                  raw=path.read_bytes()
+                  if raw:
+                      print(json.dumps({'file':str(path.relative_to(root)),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'tail_utf8':raw[-16384:].decode('utf-8',errors='replace'),'complete_bytes_retained':True},sort_keys=True))
+          PY
+      - name: Pack every physical success or failure byte and mode
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/extract-lines-retained-output"
+          python3 -I -B "$EXTRACT_RECOVERY/pack.py" --capture "$RUNNER_TEMP/extract-lines-retained-output" --archive "$RUNNER_TEMP/extract-lines-retained.tar.gz" --source-manifest-sha256 "$EXTRACT_RECOVERY_SHA" > "$RUNNER_TEMP/extract-lines-retained-pack.stdout" 2> "$RUNNER_TEMP/extract-lines-retained-pack.stderr"
+      - name: Independently read every archived byte and physical proof
+        run: |
+          python3 -I -B "$EXTRACT_RECOVERY/read_archive.py" --archive "$RUNNER_TEMP/extract-lines-retained.tar.gz" --source-manifest-sha256 "$EXTRACT_RECOVERY_SHA" > "$RUNNER_TEMP/extract-lines-retained-readonly.json" 2> "$RUNNER_TEMP/extract-lines-retained-readonly.stderr"
+      - name: Upload complete retained source and physical proofs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-lines-retained-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/extract-lines-retained.tar.gz
+            ${{ runner.temp }}/extract-lines-retained.tar.gz.json
+            ${{ runner.temp }}/extract-lines-retained-pack.stdout
+            ${{ runner.temp }}/extract-lines-retained-pack.stderr
+            ${{ runner.temp }}/extract-lines-retained-readonly.json
+            ${{ runner.temp }}/extract-lines-retained-readonly.stderr
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
