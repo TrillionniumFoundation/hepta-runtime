@@ -11,6 +11,7 @@ import argparse
 import copy
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -289,6 +290,15 @@ def prepare(output: Path, hepta: Path, invocation: str) -> dict:
     report, started = q.initial_report(hepta), time.monotonic()
     q.save_report(output / "result.json", report)
     try:
+        profile = q.ROOT / "HISTORICAL_PUBLIC_SOURCE.json"
+        if profile.is_file():
+            helper = q.ROOT / "tests/hia_native/historical_public58/materialize.py"
+            spec = importlib.util.spec_from_file_location("_historical_public_source", helper)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            module.verify_materialized(q.ROOT)
+            # Include the full source projection in the same immutable build seal.
+            (output / "historical-public-source.json").write_bytes(profile.read_bytes())
         from hia_native_filesystem_public_pipeline import producer_sources
         producer_sources(q.ROOT)
         partitions = partition_tests()

@@ -48,10 +48,16 @@ jobs:
           sparse-checkout: |
             native
             scripts
+            authoring
             src
             tests/hia_native
             tests/oracles
             .github
+
+      - name: Materialize explicit historical public58 qualification source
+        run: |
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --output "$RUNNER_TEMP/hia-historical-public58" > "$RUNNER_TEMP/hia-historical-public58-profile.json"
+          printf 'HIA_QUALIFICATION_SOURCE=%s\n' "$RUNNER_TEMP/hia-historical-public58" >> "$GITHUB_ENV"
 
       - name: Checkout pinned HIA compiler
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -65,7 +71,7 @@ jobs:
         run: |
           python3 -m venv "$RUNNER_TEMP/hia-native-python"
           "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
-            -r runtime/tests/hia_native/python-reference-requirements.txt
+            -r "$HIA_QUALIFICATION_SOURCE"/tests/hia_native/python-reference-requirements.txt
           echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
 
       - name: Verify exact source head
@@ -86,7 +92,7 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.95.0
         run: |
           rustup toolchain install 1.95.0 --profile minimal --component rustfmt
-          python3 -I -B runtime/scripts/hia_native_rust_pipeline.py shard \
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/hia_native_rust_pipeline.py shard \
             --hepta "$GITHUB_WORKSPACE/compiler" \
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --invocation "${{ inputs.invocation }}" \
@@ -109,7 +115,7 @@ jobs:
       - name: Capture original failure bytes without live Cargo caches
         if: ${{ always() && steps.shard.outcome != 'success' }}
         run: |
-          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/hia_native_failure_evidence.py \
             --source "$RUNNER_TEMP/hia-runtime-native" \
             --output "$RUNNER_TEMP/hia-original-diagnostics"
 

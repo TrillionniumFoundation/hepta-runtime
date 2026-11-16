@@ -1,6 +1,6 @@
 /* Private storage/continuation boundary. HIA owns all application decisions.
  * Fixed extra descriptors: entry, work_ptr, work_cap, sequence,
- * out_ptr, out_cap, return_u32, full_extent. 33 rows at engine+4096.
+ * out_ptr, out_cap, return_u32, full_extent. 56 rows at engine+4096; slots47-52 are reserved for Batch.
  * Mechanical records at +512: busy,pending,sequence,child,input_offset,
  * input_len,actual_return,actual_extent. Completed children are not replayed.
  * The separate view engine retains its existing descriptor ABI. */
@@ -10,7 +10,7 @@
 .global runtime_grow_destroy
 .global runtime_grow_owned
 .global runtime_grow_target
-.equ RG_SLOTS, 33
+.equ RG_SLOTS, 56
 .equ RG_ENGINE, 8192
 .equ RG_INVALID, 0xffffffff
 .equ RG_RESOURCE, 0xfffffffc
@@ -214,6 +214,10 @@ runtime_grow_owned:
     jne runtime_grow_bad_early
     cmp qword ptr [r12 + 8], 0
     jne runtime_grow_bad_early
+    cmp ebp, 40
+    je runtime_grow_text_body_dispatch
+    cmp ebp, 36
+    je runtime_grow_text_create_dispatch
     cmp ebp, 12
     je runtime_grow_view_dispatch
     cmp ebp, 15
@@ -234,6 +238,15 @@ runtime_grow_regular_dispatch:
     mov qword ptr [rbx + 56], 0
     cmp qword ptr [rbx + 8], 0
     jne runtime_grow_allocate_output
+    mov edi, 67108864
+    cmp ebp, 55
+    je runtime_grow_allocate_work
+    mov edi, 100663296
+    cmp ebp, 42
+    jb runtime_grow_allocate_ordinary_work
+    cmp ebp, 44
+    jbe runtime_grow_allocate_work
+runtime_grow_allocate_ordinary_work:
     mov edi, 4096
     cmp ebp, 4
     jne runtime_grow_allocate_work
@@ -250,12 +263,23 @@ runtime_grow_allocate_work:
 runtime_grow_allocate_output:
     cmp qword ptr [rbx + 32], 0
     jne runtime_grow_resume
+    mov edi, 33554432
+    cmp ebp, 55
+    je runtime_grow_allocate_output_ready
     mov edi, 4096
+    cmp ebp, 42
+    jb runtime_grow_allocate_output_ready
+    cmp ebp, 44
+    ja runtime_grow_allocate_output_ready
+    mov edi, 67108864
+runtime_grow_allocate_output_ready:
+    mov [rsp + 24], rdi
     call view_allocate
     cmp rax, -4095
     jae runtime_grow_resource
     mov [rbx + 32], rax
-    mov qword ptr [rbx + 40], 4096
+    mov rcx, [rsp + 24]
+    mov [rbx + 40], rcx
     bts qword ptr [r15 + 72], rbp
 runtime_grow_resume:
     cmp ebp, 27
@@ -275,6 +299,14 @@ runtime_grow_resume_filesystem_caller:
     test eax, eax
     jnz runtime_grow_error
 runtime_grow_resume_installed:
+    cmp ebp, 35
+    jne runtime_grow_text_installed
+    cmp qword ptr [r15 + 240], 0
+    jne runtime_grow_text_installed
+    call runtime_text_install_caller
+    test eax, eax
+    jnz runtime_grow_error
+runtime_grow_text_installed:
     cmp ebp, 11
     jne runtime_grow_enter_native
     cmp qword ptr [r15 + 24], 0
@@ -379,6 +411,23 @@ runtime_grow_config_output:
     mov esi, 2
     jmp runtime_grow_resize_requested
 runtime_grow_classify_result:
+    cmp ebp, 39
+    je runtime_grow_text_gateway_result
+    cmp ebp, 37
+    je runtime_grow_text_gateway_result
+    cmp ebp, 35
+    jne runtime_grow_text_classified
+runtime_grow_text_gateway_result:
+    cmp eax, RG_CALL
+    je runtime_grow_action
+    cmp eax, RG_GROW
+    je runtime_grow_controller_growth
+    cmp eax, 0xffff0000
+    jae runtime_grow_error
+    mov [rbx + 48], rax
+    mov r13, [rbx + 32]
+    jmp runtime_grow_gateway_result
+runtime_grow_text_classified:
     cmp eax, RG_CALL
     je runtime_grow_action
     cmp eax, RG_GROW
@@ -390,12 +439,24 @@ runtime_grow_classify_result:
     je runtime_grow_catalog_result
     cmp ebp, 18
     je runtime_grow_frontend_result
+    cmp ebp, 46
+    je runtime_grow_text_constructor_result
+    cmp ebp, 54
+    je runtime_grow_get_info_result
+    cmp ebp, 55
+    je runtime_grow_connection_result
     cmp ebp, 19
+    je runtime_grow_protocol_result
+    cmp ebp, 44
+    je runtime_grow_protocol_result
+    cmp ebp, 45
     je runtime_grow_protocol_result
     cmp ebp, 1
     je runtime_grow_admission_result
     cmp ebp, 10
     je runtime_grow_value_result
+    cmp ebp, 38
+    je runtime_grow_text_params_result
     cmp ebp, 4
     je runtime_grow_params_result
     cmp ebp, 6
@@ -522,14 +583,61 @@ runtime_grow_catalog_result:
     add rax, 32
     jc runtime_grow_bad
     jmp runtime_grow_extent_ready
+runtime_grow_text_constructor_result:
+    cmp eax, 64
+    jne runtime_grow_bad
+    mov rdx, 0x3130535243545248 /* HRTCRS01 */
+    cmp [r13], rdx
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 8], 0
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 16], 1
+    ja runtime_grow_bad
+    cmp qword ptr [r13 + 24], 2
+    ja runtime_grow_bad
+    cmp qword ptr [r13 + 32], 64
+    jne runtime_grow_bad
+    mov rax, [r13 + 48]
+    or rax, [r13 + 56]
+    jnz runtime_grow_bad
+    mov rax, [r13 + 40]
+    add rax, 64
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_get_info_result:
+    cmp eax, 64
+    jne runtime_grow_bad
+    mov rdx, 0x3130534947545248 /* HRTGIS01 */
+    cmp [r13], rdx
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 8], 0
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 16], 1
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 24], 0
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 32], 64
+    jne runtime_grow_bad
+    mov rax, [r13 + 48]
+    or rax, [r13 + 56]
+    jnz runtime_grow_bad
+    mov rax, [r13 + 40]
+    add rax, 64
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
 runtime_grow_frontend_result:
     cmp eax, 64
     jne runtime_grow_bad
     mov rdx, 0x323052464d435248 /* HRCMFR02 */
     cmp [r13], rdx
     jne runtime_grow_bad
-    cmp qword ptr [r13 + 8], 2
+    cmp qword ptr [r13 + 8], 3
     ja runtime_grow_bad
+    cmp qword ptr [r13 + 8], 3
+    jne runtime_grow_frontend_common
+    cmp qword ptr [r13 + 32], 0
+    jne runtime_grow_bad
+runtime_grow_frontend_common:
     cmp qword ptr [r13 + 16], 1
     ja runtime_grow_bad
     cmp qword ptr [r13 + 40], 1
@@ -542,6 +650,21 @@ runtime_grow_frontend_result:
     add rax, 64
     jc runtime_grow_bad
     jmp runtime_grow_extent_ready
+runtime_grow_connection_result:
+    cmp eax, 256
+    jb runtime_grow_bad
+    mov rdx, 0x313030534e435248 /* HRCNS001: the u32 is the complete extent. */
+    cmp [r13], rdx
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 8], 6
+    ja runtime_grow_bad
+    cmp qword ptr [r13 + 16], 1
+    ja runtime_grow_bad
+    cmp qword ptr [r13 + 24], 1
+    ja runtime_grow_bad
+    cmp qword ptr [r13 + 48], 1
+    ja runtime_grow_bad
+    jmp runtime_grow_extent_ready
 runtime_grow_protocol_result:
     cmp eax, 192
     jne runtime_grow_bad
@@ -550,8 +673,15 @@ runtime_grow_protocol_result:
     jne runtime_grow_bad
     cmp qword ptr [r13 + 8], 4
     ja runtime_grow_bad
+    cmp ebp, 19
+    jne runtime_grow_historical_protocol_kind
+    cmp qword ptr [r13 + 16], 6
+    ja runtime_grow_bad
+    jmp runtime_grow_protocol_kind_ready
+runtime_grow_historical_protocol_kind:
     cmp qword ptr [r13 + 16], 5
     ja runtime_grow_bad
+runtime_grow_protocol_kind_ready:
     cmp qword ptr [r13 + 24], 8
     ja runtime_grow_bad
     cmp qword ptr [r13 + 32], 2
@@ -644,6 +774,48 @@ runtime_grow_status32_growth:
     cmp qword ptr [r13 + 16], 0
     jne runtime_grow_bad
     mov rdx, [r13 + 24]
+    lea rsi, [rax - 1]
+    jmp runtime_grow_resize_requested
+
+runtime_grow_text_params_result:
+    cmp eax, 128
+    jne runtime_grow_bad
+    mov rdx, 0x3230525250455448 /* HTEPRR02 */
+    cmp [r13], rdx
+    jne runtime_grow_bad
+    mov rdx, [r13 + 88]
+    or rdx, [r13 + 96]
+    or rdx, [r13 + 104]
+    or rdx, [r13 + 112]
+    or rdx, [r13 + 120]
+    jnz runtime_grow_bad
+    mov rax, [r13 + 8]
+    cmp rax, 4
+    ja runtime_grow_bad
+    je runtime_grow_resource
+    cmp rax, 2
+    jae runtime_grow_text_params_growth
+    cmp qword ptr [r13 + 80], 0
+    jne runtime_grow_bad
+    test rax, rax
+    jnz runtime_grow_text_params_error
+    mov rax, [r13 + 24]
+    add rax, [r13 + 40]
+    jc runtime_grow_bad
+    add rax, [r13 + 48]
+    jc runtime_grow_bad
+    add rax, [r13 + 56]
+    jc runtime_grow_bad
+    add rax, 128
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_text_params_error:
+    mov rax, [r13 + 72]
+    add rax, 128
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_text_params_growth:
+    mov rdx, [r13 + 80]
     lea rsi, [rax - 1]
     jmp runtime_grow_resize_requested
 
@@ -992,6 +1164,12 @@ runtime_grow_complete_action:
     call runtime_grow_trace
     jmp runtime_grow_resume
 
+runtime_grow_text_body_dispatch:
+    call runtime_text_body_owned
+    jmp runtime_grow_done
+runtime_grow_text_create_dispatch:
+    call runtime_text_create_owned
+    jmp runtime_grow_done
 runtime_grow_view_dispatch:
     call runtime_grow_view_owned
     jmp runtime_grow_done
@@ -1176,6 +1354,14 @@ runtime_grow_trace_restore:
 
 /* Exact private graph: rdi parent slot, rsi local selector. */
 runtime_grow_target:
+    cmp edi, 19
+    je runtime_grow_target_sdk_protocol
+    cmp edi, 39
+    je runtime_grow_target_local_body
+    cmp edi, 37
+    je runtime_grow_target_text_gateway
+    cmp edi, 35
+    je runtime_grow_target_text_create
     cmp edi, 18
     je runtime_grow_target_frontend
     cmp edi, 3
@@ -1199,6 +1385,21 @@ runtime_grow_target:
     cmp edi, 27
     je runtime_grow_target_fence
     jmp runtime_grow_target_invalid
+runtime_grow_target_local_body:
+    test rsi, rsi
+    jnz runtime_grow_target_invalid
+    mov eax, 40
+    ret
+runtime_grow_target_text_gateway:
+    cmp rsi, 8
+    ja runtime_grow_target_invalid
+    lea rdx, [rip + runtime_grow_text_gateway_targets]
+    jmp runtime_grow_target_byte
+runtime_grow_target_text_create:
+    cmp rsi, 5
+    ja runtime_grow_target_invalid
+    lea rdx, [rip + runtime_grow_text_create_targets]
+    jmp runtime_grow_target_byte
 runtime_grow_target_filesystem_gateway:
     cmp rsi, 7
     ja runtime_grow_target_invalid
@@ -1214,8 +1415,13 @@ runtime_grow_target_fence:
     ja runtime_grow_target_invalid
     lea rdx, [rip + runtime_grow_fence_targets]
     jmp runtime_grow_target_byte
+runtime_grow_target_sdk_protocol:
+    cmp rsi, 4
+    ja runtime_grow_target_invalid
+    lea rdx, [rip + runtime_grow_sdk_protocol_targets]
+    jmp runtime_grow_target_byte
 runtime_grow_target_frontend:
-    cmp rsi, 8
+    cmp rsi, 11
     ja runtime_grow_target_invalid
     lea rdx, [rip + runtime_grow_frontend_targets]
     jmp runtime_grow_target_byte
@@ -1273,7 +1479,8 @@ runtime_grow_action_magics:
     .ascii "HWDGWA02"
     .quad 0, 0, 0, 0
     .ascii "HRMCFA02"
-    .quad 0, 0
+    .ascii "HRQPCA01"
+    .quad 0
     .ascii "HFSWGA02"
     .quad 0
     .ascii "HFSCCA02"
@@ -1281,6 +1488,20 @@ runtime_grow_action_magics:
     .ascii "HFDMGA02"
     .ascii "HFSFEA02"
     .quad 0, 0, 0, 0, 0
+    .quad 0, 0
+    .ascii "HTECCA02"
+    .quad 0
+    .ascii "HTEWGA02"
+    .quad 0
+    .ascii "HTLBCA01"
+    .quad 0
+    .zero 120 /* 41 empty; SDK42-45, constructor46, Batch47-52, shutdown53, get_info54, connection55. */
+runtime_grow_sdk_protocol_targets:
+    .byte 42, 43, 44, 45, 55
+runtime_grow_text_gateway_targets:
+    .byte 38, 27, 5, 6, 11, 9, 7, 35, 3
+runtime_grow_text_create_targets:
+    .byte 29, 9, 36, 39, 39, 39
 runtime_grow_filesystem_gateway_targets:
     .byte 22, 27, 5, 6, 11, 9, 7, 23
 runtime_grow_filesystem_caller_targets:
@@ -1288,7 +1509,7 @@ runtime_grow_filesystem_caller_targets:
 runtime_grow_fence_targets:
     .byte 11, 28, 17
 runtime_grow_frontend_targets:
-    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21
+    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54
 runtime_grow_context_targets:
     .byte 6, 10, 7, 8
 runtime_grow_workdir_targets:

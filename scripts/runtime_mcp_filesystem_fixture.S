@@ -20,6 +20,10 @@ public_span_start:
     cmp rax, -4095
     jae fs_fixture_failure
     mov [r12 + 16], rax
+    call runtime_text_body_hub_create
+    cmp rax, -4095
+    jae fs_fixture_failure
+    mov [r12 + 56], rax
     mov edi, 4096
     call view_allocate
     cmp rax, -4095
@@ -57,6 +61,8 @@ fs_fixture_create_session:
     jae fs_fixture_failure
     mov [r12 + r13 * 8], rax
     mov r15, rax
+    mov rax, [r12 + 56]
+    mov [r15 + 400], rax
     mov qword ptr [r15 + 80], 3 /* private stderr trace, fd+1 */
     mov rdi, [r12 + 16]
     call runtime_filesystem_hub_bind
@@ -106,7 +112,7 @@ fs_fixture_next:
     jne fs_fixture_failure
     cmp qword ptr [r12 + 72], 1
     ja fs_fixture_failure
-    cmp qword ptr [r12 + 80], 34
+    cmp qword ptr [r12 + 80], 41
     ja fs_fixture_failure
     mov rdx, [r12 + 88]
     cmp rdx, [r12 + 32]
@@ -124,6 +130,8 @@ fs_fixture_input_ready:
     jne fs_fixture_failure
     mov rax, [r12 + 72]
     mov r15, [r12 + rax * 8]
+    cmp qword ptr [r12 + 80], 41
+    je fs_fixture_text_snapshot
     cmp qword ptr [r12 + 80], 33
     je fs_fixture_snapshot
     cmp qword ptr [r12 + 80], 34
@@ -182,6 +190,12 @@ fs_fixture_finish:
     xor r13d, r13d
 fs_fixture_finish_session:
     mov r15, [r12 + r13 * 8]
+    call runtime_text_body_release
+    test rax, rax
+    jnz fs_fixture_failure
+    call runtime_text_create_release
+    test rax, rax
+    jnz fs_fixture_failure
     call runtime_grow_fence_release
     test rax, rax
     jnz fs_fixture_failure
@@ -195,6 +209,10 @@ fs_fixture_finish_session:
     inc r13d
     cmp r13d, 2
     jb fs_fixture_finish_session
+    mov rdi, [r12 + 56]
+    call runtime_text_body_hub_destroy
+    test rax, rax
+    jnz fs_fixture_failure
     mov rdi, [r12 + 16]
     call runtime_filesystem_hub_destroy
     test rax, rax
@@ -226,4 +244,4 @@ fs_fixture_failure:
     jmp fatal
 .balign 8
 grow_fixture_images:
-    .zero 264
+    .zero 440

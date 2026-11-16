@@ -11,12 +11,29 @@ stdio protocol owner, and Linux ELF transport packers. The produced executables 
 libc, or a dynamic loader. A pinned Hepta compiler and explicit Python build
 and test drivers produce and verify those executables.
 
-The explicitly selected native stdio service now advertises eight tools:
-`host_list`, `effective_config`, `execution_shadow_admit`, `view`, `workdir`,
-`directory_create`, `file_move` and `directory_move`. Its local filesystem
-methods use the same installed configuration and Session state as the other
-native calls. The separate two-session observer and complete original-reference
-checks are described in the [public filesystem contract](native/filesystem_public_abi.md).
+The default native build command produces the **83-image, nine-tool** stdio
+service: `host_list`, `effective_config`, `execution_shadow_admit`, `view`,
+`workdir`, `directory_create`, `file_move`, `directory_move` and `text_editor`.
+TextEditor reaches the actual shared Local Create/Replace/Delete/Undo graph.
+The current SDK connection owner handles initialization, normalized request IDs
+and per-request metadata before public dispatch. The fixed get_info owner,
+text-result constructor and serial transport/shutdown owners are integrated.
+
+Build and launch the same entry exercised by the current qualification:
+
+```sh
+python3 -I -B scripts/hia_native_runtime_mcp_build.py \
+  --hepta /absolute/path/to/pinned/Hepta \
+  --bootstrap /absolute/path/to/verified/bootstrap \
+  --output /absolute/path/to/new-public-build
+/absolute/path/to/new-public-build/build/public-connection/runtime-mcp.elf
+```
+
+[Current public qualification](native/runtime_mcp_current_qualification.md)
+records the exact fresh CI and the 54-session/324-response, public90 and serial
+framing24 domains. The historical 58-image eight-tool fixture has a dedicated
+[test source profile](tests/hia_native/historical_public58/README.md); its old
+wide-input and original-reference results retain that identity.
 
 The production target has 136 registered tool handlers, including 11 added
 since the 125-handler historical comparison baseline. The existing production
@@ -26,10 +43,12 @@ and its [exact target snapshot](native/migration_target.json) record these
 remaining owners. The native profile's passing component tests do not qualify
 removal of those owners or production activation.
 
-The executable registry declares 195 HIA sources, 87 component builds, 225
-native suites and 81 original Rust comparison recipes. CI preserves their
-complete domains across nine native partitions and eight original comparison
-partitions. These registry counts do not change the production qualification
+The retained component registry declares 195 HIA sources, 87 component builds,
+225 native suites and 81 original Rust comparison recipes. Its explicit source
+profile preserves the historical public graph while keeping unrelated current
+component inputs. CI preserves all ten native partitions and eight original
+comparison partitions. The current 83-image public graph has its own complete
+source binding and qualification job. These registry counts do not change the production qualification
 status recorded in the migration inventory.
 
 ## Concurrent execution

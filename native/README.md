@@ -80,9 +80,25 @@ separate fresh locked reference uses the unchanged target types and exact
 serde 1.0.229 / serde_json 1.0.151 dependency profile. Typed projection does
 not activate a filesystem handler or replace a public route.
 
-## Public local filesystem composition
+## Current public stdio entry
 
-The explicitly selected [58-image public stdio profile](filesystem_public_abi.md)
+The default `scripts/hia_native_runtime_mcp_build.py` API/CLI builds the current
+83-image graph and its actual nine-tool routes. TextEditor owns the Local four
+commands through the real caller/body/cache graph. The entry integrates current
+G1 projection, G2 connection admission, fixed current get_info, shared text
+result construction and serial transport/shutdown. Its full source closure is
+`runtime_mcp_sources.json`; exact source and qualification limits are in
+[runtime_mcp_current_qualification.md](runtime_mcp_current_qualification.md).
+
+The ordinary current qualification freshly compiles 62 comparison members and
+83 candidate members, freshly builds both current Rust 1.95.0 references, and
+compares all 324 handshake responses, public90 and framing24. Codec EOF's four
+observations remain a separate original-only domain. The actual default build
+and launch commands are in the repository README.
+
+## Historical public local filesystem composition
+
+The retained [58-image public stdio test profile](filesystem_public_abi.md)
 advertises eight tools: `host_list`, `effective_config`,
 `execution_shadow_admit`, `view`, `workdir`, `directory_create`, `file_move` and
 `directory_move`. The three local filesystem methods call the actual typed,
@@ -120,9 +136,15 @@ activation remain unfinished. The original implementations stay in place.
 
 ## Inventory and target checks
 
-Run from this checkout:
+The component registry and its original public tests run from an explicit
+historical public source view. It restores the exact 58-image graph and leaves
+all unrelated current qualification bytes unchanged; it never changes this
+checkout's default 83-image entry.
 
 ```sh
+python3 -I -B tests/hia_native/historical_public58/materialize.py \
+  --source "$PWD" --output /absolute/path/to/new-historical-public-profile
+cd /absolute/path/to/new-historical-public-profile
 python3 -B scripts/check_hia_native_inventory.py
 python3 -B scripts/check_hia_native_target.py
 python3 -B scripts/check_hia_native_target.py \
@@ -137,7 +159,7 @@ Valid source checks return 0. Without `--target-root`, the snapshot check report
 return **2 / INCOMPLETE**. Completion flags cannot substitute for implementation
 and behavioral proof.
 
-## Full qualification
+## Retained component and historical public qualification
 
 The builder checks the pinned Hepta commit/tree, source bytes, compiler fixed
 point and module provenance. Run qualification on the configured development
@@ -162,10 +184,12 @@ python3 -m venv /absolute/path/to/hia-reference-environment
   --rustc /absolute/path/to/rustc
 ```
 
-Both phases are required. CI uses one fresh cold/build job, nine native
-partitions, a native collector, eight original comparison partitions and the
-final collector. The registry contains 86 component builds, 220 native suites,
-80 original Rust recipes and 193 HIA sources. The ten independent rendering,
+Both phases are required and run inside the source view created above. CI uses
+one fresh cold/build job, ten native partitions, a native collector, eight
+original comparison partitions and the final collector. The retained registry
+contains 87 component builds, 225 native suites, 81 original Rust recipes and
+195 HIA sources. Current83 qualification is a separate mandatory job; these
+historical public results do not qualify its current framing or SDK behavior. The ten independent rendering,
 cache, history and session suites occupy `view_components`; the twenty
 read, parameter, caller, public MCP and filesystem suites retain their producer order and
 fixture retirement together in `view`. Each suite and original recipe still

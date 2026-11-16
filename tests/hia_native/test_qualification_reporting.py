@@ -1442,10 +1442,10 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertNotIn(install, qualify_job)
         for source_job in (before_native, native_job, native_collect_job, qualify_job, original_workflow):
             self.assertIn("            tests/oracles\n", source_job)
-        filesystem_controls = "runtime/tests/hia_native/filesystem_parity/qualify_pipeline.py"
+        filesystem_controls = '"$HIA_QUALIFICATION_SOURCE"/tests/hia_native/filesystem_parity/qualify_pipeline.py'
         self.assertNotIn(filesystem_controls, before_native + native_and_original + original_workflow)
         self.assertEqual(qualify_job.count(filesystem_controls), 1)
-        self.assertLess(qualify_job.index("runtime/scripts/hia_native_rust_pipeline.py collect"),
+        self.assertLess(qualify_job.index('"$HIA_QUALIFICATION_SOURCE"/scripts/hia_native_rust_pipeline.py collect'),
                         qualify_job.index(filesystem_controls))
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)

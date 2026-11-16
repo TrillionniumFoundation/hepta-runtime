@@ -19,6 +19,10 @@ public_span_start:
     cmp rax, -4095
     jae public_span_fail
     mov [r12 + 232], rax
+    call runtime_text_body_hub_create
+    cmp rax, -4095
+    jae public_span_fail
+    mov [r12 + 224], rax
     xor ebx, ebx
     xor ebp, ebp
     lea rdi, [rip + grow_fixture_images]
@@ -28,6 +32,8 @@ public_span_start:
     jae public_span_fail
     mov r15, rax
     mov [r12 + 240], rax
+    mov rax, [r12 + 224]
+    mov [r15 + 400], rax
     mov rdi, [r12 + 232]
     call runtime_filesystem_hub_bind
     test rax, rax
@@ -122,11 +128,30 @@ public_span_line:
     mov rsi, rcx
     inc rcx
     mov [r12 + 16], rcx
+    cmp qword ptr [r12 + 48], 0
+    jne public_span_discard_end
+    cmp rcx, 16777216 /* The target limit includes the terminating LF. */
+    ja public_span_discard_end
+    test rsi, rsi
+    jz public_span_next
+    cmp byte ptr [rbx + rsi - 1], 13
+    jne public_span_line_ready
+    dec rsi
+public_span_line_ready:
+    test rsi, rsi
+    jz public_span_next
     jmp public_span_request
+public_span_discard_end:
+    mov qword ptr [r12 + 48], 0
+    jmp public_span_next
 public_span_need_input:
     mov [r12 + 8], rcx
     cmp qword ptr [r12 + 24], 0
     jne public_span_final_line
+    cmp qword ptr [r12 + 48], 0
+    jne public_span_discard_buffer
+    cmp rdx, 16777216
+    jae public_span_begin_discard
     cmp rdx, rbp
     jne public_span_read
     call public_span_grow_input
@@ -168,16 +193,38 @@ public_span_wait_input:
     cmp rax, 1
     jne public_span_fail
     jmp public_span_scan
+public_span_begin_discard:
+    mov qword ptr [r12 + 48], 1
+public_span_discard_buffer:
+    /* A rejected frame is consumed through its LF without retaining its tail. */
+    mov qword ptr [r12], 0
+    mov qword ptr [r12 + 8], 0
+    mov qword ptr [r12 + 16], 0
+    xor edx, edx
+    jmp public_span_read
 public_span_input_eof:
     mov qword ptr [r12 + 24], 1
     jmp public_span_scan
 public_span_final_line:
-    test rdx, rdx
-    jz public_span_finish
-    mov [r12 + 16], rdx
-    mov rsi, rdx
+    /* AsyncRwTransport discards an unterminated trailing message.
+     * JsonRpcMessageCodec.decode_eof is a separate contract. */
+    jmp public_span_finish
 public_span_request:
     mov rdi, rbx
+    /* Target compatibility removes one leading UTF-8 BOM from a complete
+     * frame. The limit above already counted these bytes and the final LF. */
+    cmp rsi, 3
+    jb public_span_request_ready
+    cmp byte ptr [rdi], 239
+    jne public_span_request_ready
+    cmp byte ptr [rdi + 1], 187
+    jne public_span_request_ready
+    cmp byte ptr [rdi + 2], 191
+    jne public_span_request_ready
+    add rdi, 3
+    sub rsi, 3
+    jz public_span_next
+public_span_request_ready:
     mov r8d, 18
     call runtime_grow_owned
     cmp eax, 64
@@ -191,6 +238,8 @@ public_span_request:
     je public_span_silent
     cmp qword ptr [r13 + 8], 2
     je public_span_publish
+    cmp qword ptr [r13 + 8], 3
+    je public_span_publish_raw
     cmp qword ptr [r13 + 8], 1
     jne public_span_fail
     cmp qword ptr [r13 + 32], 0
@@ -199,6 +248,15 @@ public_span_request:
     lea rsi, [r13 + 64]
     mov rdx, [r13 + 24]
     call public_span_write
+    test eax, eax
+    jnz public_span_fail
+    jmp public_span_newline
+public_span_publish_raw:
+    cmp qword ptr [r13 + 32], 0
+    jne public_span_fail
+    lea rdi, [r13 + 64]
+    mov rsi, [r13 + 24]
+    call runtime_publication_raw_span
     test eax, eax
     jnz public_span_fail
     jmp public_span_newline
@@ -226,6 +284,43 @@ public_span_silent:
     jnz public_span_fail
     jmp public_span_next
 public_span_finish:
+    /* Every public response has completed its actual write/ACK/DROP above.
+     * This serial graph has no pending handler registry. The shared HIA
+     * shutdown owner receives the observed empty send/child counts. */
+    mov eax, 1
+    mov ecx, 1
+    call public_span_shutdown_step
+    test eax, eax
+    jnz public_span_fail
+    mov eax, 2
+    mov ecx, 2
+    call public_span_shutdown_step
+    test eax, eax
+    jnz public_span_fail
+    mov eax, 4
+    mov ecx, 3
+    call public_span_shutdown_step
+    test eax, eax
+    jnz public_span_fail
+    mov edi, 1
+    mov eax, 3
+    syscall
+    cmp rax, -4 /* Linux has already released this descriptor on EINTR. */
+    je public_span_writer_closed
+    test rax, rax
+    jnz public_span_fail
+public_span_writer_closed:
+    mov eax, 5
+    mov ecx, 4
+    call public_span_shutdown_step
+    test eax, eax
+    jnz public_span_fail
+    call runtime_text_body_release
+    test rax, rax
+    jnz public_span_fail
+    call runtime_text_create_release
+    test rax, rax
+    jnz public_span_fail
     call runtime_grow_fence_release
     test rax, rax
     jnz public_span_fail
@@ -236,6 +331,11 @@ public_span_finish:
     test rax, rax
     jnz public_span_fail
     mov qword ptr [r12 + 240], 0
+    mov rdi, [r12 + 224]
+    call runtime_text_body_hub_destroy
+    test rax, rax
+    jnz public_span_fail
+    mov qword ptr [r12 + 224], 0
     mov rdi, [r12 + 232]
     call runtime_filesystem_hub_destroy
     test rax, rax
@@ -252,7 +352,67 @@ public_span_finish:
 public_span_fail:
     mov r15, [r12 + 248]
     jmp fatal /* Never convert resource/invariant failure to business text. */
-/* Physical capacity grows by checked pages, without an application quota. */
+/* HIA decides the shutdown action. The native boundary verifies the complete
+ * descriptor and reports only actual synchronous completion to that owner. */
+public_span_shutdown_step:
+    mov [r12 + 56], rcx
+    mov rdx, 0x3130303051535248 /* HRSQ0001 */
+    mov [r12 + 64], rdx
+    mov [r12 + 72], rax
+    xor eax, eax
+    mov [r12 + 80], rax
+    mov [r12 + 88], rax
+    mov [r12 + 96], rax
+    mov [r12 + 104], rax
+    mov [r12 + 112], rax
+    mov [r12 + 120], rax
+    lea rdi, [r12 + 64]
+    mov esi, 64
+    mov r8d, 53
+    sub rsp, 8 /* Preserve the nested native SysV call alignment. */
+    call runtime_grow_owned
+    add rsp, 8
+    cmp eax, 96
+    jne public_span_shutdown_invalid
+    mov rdx, [r15 + 8]
+    add rdx, 53 * 64
+    cmp qword ptr [rdx + 56], 96
+    jne public_span_shutdown_invalid
+    mov rdx, [rdx + 32]
+    mov rax, 0x3130303053535248 /* HRSS0001 */
+    cmp [rdx], rax
+    jne public_span_shutdown_invalid
+    mov rcx, [r12 + 56]
+    cmp [rdx + 8], rcx
+    jne public_span_shutdown_invalid
+    cmp [rdx + 16], rcx
+    jne public_span_shutdown_invalid
+    xor eax, eax
+    cmp ecx, 3
+    setae al
+    cmp [rdx + 24], rax
+    jne public_span_shutdown_invalid
+    xor eax, eax
+    cmp ecx, 4
+    sete al
+    cmp [rdx + 40], rax
+    jne public_span_shutdown_invalid
+    cmp qword ptr [rdx + 48], 5000
+    jne public_span_shutdown_invalid
+    mov rax, [rdx + 32]
+    or rax, [rdx + 56]
+    or rax, [rdx + 64]
+    or rax, [rdx + 72]
+    or rax, [rdx + 80]
+    or rax, [rdx + 88]
+    jnz public_span_shutdown_invalid
+    xor eax, eax
+    ret
+public_span_shutdown_invalid:
+    mov eax, 0xffffffff
+    ret
+/* Physical pages grow only as needed. Input framing has its separate
+ * 16 MiB SDK line limit; no new result-output limit is introduced. */
 public_span_grow_input:
     mov rdx, rbp
     add rdx, rdx
@@ -316,4 +476,4 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 264
+    .zero 448 /* 56 fixed public-engine image slots; connection55 is an owned leaf. */

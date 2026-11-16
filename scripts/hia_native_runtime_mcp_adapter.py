@@ -26,7 +26,7 @@ def combine(adapter,transport):
     adapter=replace(adapter,'    cmp qword ptr [r15 + 784], 0\n    jne cfg_resource /* Legacy MCP5 still owns its distinct output borrow. */\n',
         '    cmp qword ptr [r15 + 784], 3\n    je runtime_config_query_growth_return\n    cmp qword ptr [r15 + 784], 0\n    jne cfg_resource /* Legacy MCP5 still owns its distinct output borrow. */\n')
     adapter=replace(adapter,'    mov rbx, rsp\n    mov rax, 0x3130425550505248\n',
-        '    mov rbx, rsp\n    mov qword ptr [rbx + 48], 0\n    mov rax, 0x3130425550505248\n')
+        '    mov rbx, rsp\n    mov qword ptr [rbx + 48], 0\n    mov qword ptr [rbx + 56], 3\n    mov rax, 0x3130425550505248\n')
     adapter=replace(adapter,'    mov [rbx + 32], rax\n    xor r12d, r12d\n',
         '    mov [rbx + 32], rax\npub_begin:\n    xor r12d, r12d\n')
     adapter=replace(adapter,'    mov eax, [rbx + 40]\n    add rsp, 64\n',
@@ -35,11 +35,14 @@ def combine(adapter,transport):
         '    pop r15\n    test edx, edx\n    jnz runtime_publication_span_return\n    test eax, eax\n    jnz pub_return_failure\n')
     adapter=replace(adapter,'    mov qword ptr [r15 + 872], 0\nmcp_value_completed:\n',
         '    mov qword ptr [r15 + 872], 0\n    cmp qword ptr [r15 + 912], 1\n    je runtime_execution_completed\nmcp_value_completed:\n')
+    adapter=replace(adapter,"    mov qword ptr [r12 + PUB_SRC + 32], 3\n","    mov rax, [rbx + 56]\n    mov [r12 + PUB_SRC + 32], rax\n")
+    adapter=replace(adapter,"    mov rsi, [rbx]\n    mov rcx, [rbx + 8]\n    mov edi, 13\n    call pub_import\n","    cmp qword ptr [rbx + 56], 3\n    jne pub_skip_trusted_prefix\n    mov rsi, [rbx]\n    mov rcx, [rbx + 8]\n    mov edi, 13\n    call pub_import\npub_skip_trusted_prefix:\n")
     return adapter+'\n'+CALLABLE+'\n'+transport+'\n'+HELPERS
 
 CALLABLE=r'''
 .global runtime_config_query
 .global runtime_publication_span
+.global runtime_publication_raw_span
 /* HIA entry ABI, r15=extra engine. The installed owner keeps its own state;
  * the existing dispatcher executes its actual child calls and effects. */
 runtime_config_query:
@@ -98,7 +101,17 @@ runtime_config_query_restore:
 /* Trusted spans are inside the admitted frontend output descriptor.
  * Both are fully imported before HIA START. No frontend pointer is used by
  * PULL/write/ACK. Return 0/2/74/75; the caller appends framing LF. */
+runtime_publication_raw_span:
+    mov rdx, rdi
+    mov rcx, rsi
+    xor edi, edi
+    xor esi, esi
+    xor r8d, r8d
+    xor r9d, r9d
+    jmp runtime_publication_common
 runtime_publication_span:
+    mov r9d, 3
+runtime_publication_common:
     cmp r8, 1
     ja runtime_publication_span_invalid
     mov rax, rdi
@@ -121,6 +134,7 @@ runtime_publication_span:
     mov [rbx + 24], rcx
     mov [rbx + 32], r8
     mov qword ptr [rbx + 48], 1
+    mov [rbx + 56], r9
     jmp pub_begin
 runtime_publication_span_invalid:
     mov eax, 2

@@ -716,7 +716,7 @@ def original_projection(prepared: dict, native: dict, events: list, receipt: dic
     capture_comparison = {"observed": raw["observed"], "normalization": None, "streams": {}}
     original_captures = {}
     if raw["observed"]:
-        require(not spawn_failure and raw.get("complete_read_from_original_file_descriptors") is True
+        require(raw.get("complete_read_from_original_file_descriptors") is True
                 and raw.get("original_paths_mutated_by_observer") is False,
                 "original observer changed or incompletely read its log files")
         retained = bool(promoted or case.get("control") == "cancel_after_ready")
@@ -733,6 +733,11 @@ def original_projection(prepared: dict, native: dict, events: list, receipt: dic
                     "original retained stream path is not the exact owned file")
             data = raw_file(actual / filename)
             original_captures[stream] = data
+            if spawn_failure:
+                # The observer can hold both original descriptors before a
+                # failed spawn unlinks their paths. It has no child to read.
+                require(data == b"" and captures[stream] == b"",
+                        "failed spawn retained nonempty command output")
             require(type(raw.get(stream + "_bytes")) is int and raw[stream + "_bytes"] == len(data),
                     "original complete stream size differs")
             if stream == "stdout" and case.get("observe_session"):
