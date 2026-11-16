@@ -222,3 +222,7 @@ before final receipt writes, including on failure. The single existing
 180-second parent deadline includes preparation, copies, both workers, joining
 and cleanup. No native or Rust implementation executes in these readers.
 A fresh complete gate is still required; this scheduling change is not a pass.
+
+## Revision 9: isolated entry-point import order
+
+Revision 8 run `43925950485` completed all 842 native/original cases and all 69 private control/recovery cases, then failed before starting the native reader controls: `python -I` does not add the script directory to its import path. The sibling import preceded the existing explicit source-root admission. Revision 9 moves that single import after `sys.path.insert(0, str(ROOT))`. All function bodies, the complete parallel reader and qualifier, every HIA/original source and domain, and the original deadlines remain unchanged. The failed run and complete archive are retained. A fresh complete gate is required; the import repair is not a passing qualification.

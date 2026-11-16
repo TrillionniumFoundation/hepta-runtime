@@ -9,11 +9,11 @@ import shutil
 import struct
 import sys
 import time
-from parallel_reader import launch_workers, read_workers
 
 ROOT=Path(__file__).resolve().parent
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(ROOT))
+from parallel_reader import launch_workers, read_workers
 import qualify as q
 from read_capture import SHA,PACK,parse,read,pin,file_pin,jsonlines,require
 from read_only_guard import guarded
