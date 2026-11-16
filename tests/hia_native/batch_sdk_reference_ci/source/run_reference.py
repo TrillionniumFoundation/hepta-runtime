@@ -42,7 +42,16 @@ def run(target, rust_bin, output):
             "--target", target, "--core", source / "core", "--output", output / "original"])
         step("original-smoke", [sys.executable, "-B", source / "smoke_original.py",
             "--binary", output / "original/bin/hepta-batch-sdk-current-original-oracle", "--output", output / "smoke"])
-        report.update(status="PASS", fresh_original_build=True, original_smoke=read_json(output / "smoke/result.json"))
+        captures = {}
+        for domain in ("typed-legacy", "typed-modern", "filesystem", "session"):
+            step("original-public-" + domain, [sys.executable, "-B", source / "public-capture/qualify_public.py",
+                "--role", "original", "--binary", output / "original/bin/hepta-batch-sdk-current-original-oracle",
+                "--fixture", output / "workspaces" / domain, "--output", output / "public" / domain,
+                "--domain", domain])
+            captures[domain] = read_json(output / "public" / domain / "result.json")
+        report.update(status="PASS", fresh_original_build=True, original_smoke=read_json(output / "smoke/result.json"),
+            complete_original_public_captures={name: {key: value[key] for key in
+                ("status", "case_count", "completed_cases", "elapsed_seconds")} for name, value in captures.items()})
     except BaseException as error:
         report.update(status="FAIL", failure=repr(error))
         raise
