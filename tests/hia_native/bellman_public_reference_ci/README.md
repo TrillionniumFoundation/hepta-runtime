@@ -76,3 +76,7 @@ prove that the same connection consumes the recovery request; no input was
 removed or rewritten after observing these boundaries. A relocated stronger
 reader separately binds its own complete source package and the unchanged
 producer package, keeping both inside the existing read-only guard.
+
+### Source-only corpus loading
+
+The v3 reader completed the full SDK data comparison but its strict guard rejected three importlib probes for a nonexistent `reference/__pycache__/qualify_bellman.cpython-312.pyc`. The caught probes remained recorded as refusals; the v3 run is a failure. Version 4 loads the exact frozen Python corpus source directly, avoiding bytecode-cache probing. It keeps the guard unchanged, preserves every corpus input and wire byte, and changes no Rust, HIA, SDK, protocol expectation, deadline, or original evidence.

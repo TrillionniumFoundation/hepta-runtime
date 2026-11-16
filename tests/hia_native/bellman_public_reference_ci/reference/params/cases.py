@@ -40,7 +40,9 @@ def corpus(core_source:Path, group='ordinary'):
         return
     assert group=='ordinary'
     spec=importlib.util.spec_from_file_location('bellman_param_core_cases',core_source)
-    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    module=importlib.util.module_from_spec(spec)
+    # Read only the frozen source; importlib bytecode probing is outside the admitted file set.
+    exec(compile(core_source.read_bytes(), str(core_source), "exec"), module.__dict__)
     for name,graph,error in module.corpus():
         if error is None:yield 'core-'+name,encode(convert(graph))
     for name,value in [('empty-states',{'states':[]}),('all-null-actions',{'states':[{'actions':[None]*6}]}),
