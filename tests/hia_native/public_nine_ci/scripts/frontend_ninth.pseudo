@@ -1,0 +1,50 @@
+def tool_kind(w:mutbuf, at:u64, size:u64) -> u64:
+    if size != 11:
+        return retained_tool_kind(w, at, size)
+    if get(w, at) != 7594306332303844724:
+        return retained_tool_kind(w, at, size)
+    if byte(w, at + 8) != 116:
+        return retained_tool_kind(w, at, size)
+    if byte(w, at + 9) != 111:
+        return retained_tool_kind(w, at, size)
+    if byte(w, at + 10) != 114:
+        return retained_tool_kind(w, at, size)
+    return 9
+
+def prepare(s:readbuf, o:mutbuf, w:mutbuf, which:u64) -> u32:
+    if which != 6:
+        return retained_prepare(s, o, w, which)
+    if get(w, 112) != 9:
+        return retained_prepare(s, o, w, which)
+    put(w, 8, 106)
+    if reserve(w, 1, 192) == 0:
+        return pending_grow(o, w)
+    return prepare_text_editor(s, o, w)
+
+def prepare_text_editor(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    arguments = get(w, 656)
+    experimental = get(w, 104)
+    present = get(w, 96)
+    if present > 1:
+        return 4294967295
+    if present == 0:
+        if experimental != 0:
+            return 4294967295
+    if arguments > 18446744073709551567:
+        return request_grow(o, w, 3, 0)
+    if experimental > 18446744073709551567 - arguments:
+        return request_grow(o, w, 3, 0)
+    size = 48 + arguments + experimental
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    put(w, at, 3616479867627197512)
+    put(w, at + 8, 1)
+    put(w, at + 16, arguments)
+    put(w, at + 24, present)
+    put(w, at + 32, experimental)
+    put(w, at + 40, 0)
+    copy_range(w, w, at + 48, region(w, 4), arguments)
+    if experimental != 0:
+        copy_range(w, w, at + 48 + arguments, region(w, 3), experimental)
+    return child(w, 9, size, 6)
