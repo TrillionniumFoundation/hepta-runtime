@@ -1,0 +1,34 @@
+name: HIA configured catalog102 external readonly readback
+on:
+  push:
+    branches: [hia-configured-catalog102-readback-6780-20261116]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            tests/hia_native/configured_catalog102_readback_ci
+          sparse-checkout-cone-mode: false
+      - name: Read complete archives and unchanged relocated verifier
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -B tests/hia_native/configured_catalog102_readback_ci/readback.py --output /tmp/configured-catalog-readback
+      - name: Preserve complete read-only proof and failure streams
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: configured-catalog102-readback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/configured-catalog-readback/reports
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
