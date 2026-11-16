@@ -344,4 +344,4 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 376
+    .zero 440 /* 55 fixed public-engine image slots. */
