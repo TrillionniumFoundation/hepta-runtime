@@ -49,18 +49,19 @@ def main():
     target_lock=tomllib.loads((ROOT/'reference/target-Cargo.lock').read_text())
     target_pins={(p['name'],p['version']):p for p in target_lock['package'] if p.get('source')}
     resolved=tomllib.loads((reference/'Cargo.lock').read_text())
+    resolved_pins={(p['name'],p['version']):p for p in resolved['package'] if p.get('source')}
     for package in resolved['package']:
         if not package.get('source'):continue
         original=target_pins[(package['name'],package['version'])]
         for key in ('source','checksum'):assert package[key]==original[key],(package['name'],key)
-        def identities(dependencies):
+        def identities(dependencies,pins):
             result=set()
             for dependency in dependencies:
-                fields=dependency.split();options=[key for key in target_pins if key[0]==fields[0] and (len(fields)==1 or key[1]==fields[1])]
+                fields=dependency.split();options=[key for key in pins if key[0]==fields[0] and (len(fields)==1 or key[1]==fields[1])]
                 assert len(options)==1,(dependency,options)
                 result.add(options[0])
             return result
-        assert identities(package.get('dependencies',[]))<=identities(original.get('dependencies',[])),package['name']
+        assert identities(package.get('dependencies',[]),resolved_pins)<=identities(original.get('dependencies',[]),target_pins),package['name']
     write(output/'resolved-pins.json',{'status':'PASS','target_registry_pins_exact':True,
           'resolved_lock':pin((reference/'Cargo.lock').read_bytes()),'packages':resolved['package']})
     target=output/'original-build'
