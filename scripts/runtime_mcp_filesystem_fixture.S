@@ -206,6 +206,9 @@ fs_fixture_finish:
     xor r13d, r13d
 fs_fixture_finish_session:
     mov r15, [r12 + r13 * 8]
+    call runtime_extract_body_release
+    test rax, rax
+    jnz fs_fixture_failure
     call runtime_batch_body_release
     test rax, rax
     jnz fs_fixture_failure
@@ -263,7 +266,7 @@ fs_fixture_failure:
     jmp fatal
 .balign 8
 grow_fixture_images:
-    .zero 456 /* 57 fixed public-engine slots. */
+    .zero 512 /* 64 fixed engine slots; extract59..63. */
 
 /* Private qualification observation. These actions never enter stdio JSON. */
 fs_fixture_authority_release:
