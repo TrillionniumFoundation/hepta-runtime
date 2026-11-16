@@ -28,11 +28,15 @@ def main():
     binary = a.original.resolve() / 'original-public'
     env = dict(os.environ)
     env.update(RUSTUP_TOOLCHAIN='1.95.0', PYTHONDONTWRITEBYTECODE='1', PYTHONHASHSEED='0')
+    model_binary = a.original.resolve() / 'original-public-model'
+    model_process = run(output, 'public-model', [str(model_binary)], env, limit=60, stdin=request)
     process = run(output, 'public-original', [str(binary)], env,
                   limit=frozen['public_process_deadline_seconds'], stdin=request)
     put(output / 'report.json', dict(status='PUBLIC_SDK_BYTES_OBSERVED_READER_REQUIRED',
         source_manifest=pin((ROOT / 'package-manifest.json').read_bytes()),
         domain=pin((ROOT / 'wire-domain.json').read_bytes()), binary=pin(binary.read_bytes()),
+        model_binary=pin(model_binary.read_bytes()),
+        model_output={k: model_process['stdout'][k] for k in ['bytes', 'sha256']},
         input=pin(request), output={k: process['stdout'][k] for k in ['bytes', 'sha256']},
         records=frozen['records'], public_cases=1366, full_server_router_qualified=False,
         audit_qualified=False, async_pending_registry_qualified=False, native_executed=False,

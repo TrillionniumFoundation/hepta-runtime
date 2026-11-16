@@ -73,6 +73,19 @@ def stream_records(raw):
         at += 96 + size
     assert at == len(raw)
 
+def file_pin(path):
+    with path.open('rb') as stream:
+        return dict(bytes=path.stat().st_size, sha256=hashlib.file_digest(stream, 'sha256').hexdigest())
+
+def stream_file(path, *, model=False):
+    with path.open('rb') as stream:
+        while raw := stream.read(96):
+            assert len(raw) == 96 and raw[:8] == (b'HBPMOR01' if model else b'HBPORES1')
+            header = struct.unpack_from('<11Q', raw, 8)
+            length = header[5] + header[6] if model else header[4]
+            payload = stream.read(length); assert len(payload) == length
+            yield header, payload
+
 def error(message, identifier, code, text):
     assert message == {'jsonrpc': '2.0', 'id': identifier, 'error': {'code': code, 'message': text}}
 
@@ -83,35 +96,55 @@ def verify_public(package, original, output):
     assert report['status'] == 'PUBLIC_SDK_BYTES_OBSERVED_READER_REQUIRED'
     assert report['source_manifest'] == source(package) and report['domain'] == pin((package / 'wire-domain.json').read_bytes())
     assert report['binary'] == pin((original / 'original-public').read_bytes())
+    assert report['model_binary'] == pin((original / 'original-public-model').read_bytes())
     for name in ['full_server_router_qualified', 'audit_qualified', 'async_pending_registry_qualified',
                  'native_executed', 'whole_runtime_replaced', 'old_stack_removal_qualified']:
         assert report[name] is False
     observed_process = process(output, 'public-original', 180)
-    inputs = (output / 'public.stdin').read_bytes()
-    assert pin(inputs) == report['input'] and observed_process['stdin_sha256'] == pin(inputs)['sha256']
-    expected_inputs = b''.join(frame(row, wire) for row, wire in rows())
-    assert inputs == expected_inputs
-    del inputs, expected_inputs
-    actual = (output / 'processes/public-original.stdout').read_bytes()
-    assert pin(actual) == report['output']
+    model_process = process(output, 'public-model', 60)
+    input_pin = file_pin(output / 'public.stdin')
+    assert input_pin == report['input'] and observed_process['stdin_sha256'] == model_process['stdin_sha256'] == input_pin['sha256']
+    with (output / 'public.stdin').open('rb') as stream:
+        for row, wire in rows():
+            expected = frame(row, wire); assert stream.read(len(expected)) == expected
+        assert stream.read(1) == b''
+    actual_pin = file_pin(output / 'processes/public-original.stdout')
+    assert actual_pin == report['output']
+    assert file_pin(output / 'processes/public-model.stdout') == report['model_output']
     originals = packets((original / 'processes/original.stdout').read_bytes())
-    raw_parameters = packets((original / 'original.stdin').read_bytes())
-    private_domain = read(package / 'domain.json')['cases']
-    empty_index = next(i for i, row in enumerate(private_domain) if row['name'] == 'root-type-7')
     counts = [[0, 0, 0], [0, 0, 0]]
     closed = [False, False]; seen = [0, 0]; results = {str(s): {'success': 0, 'business': 0, 'typed': 0, 'model': 0} for s in range(2)}
-    response_count = 0; last_after = 0; full_wire_bytes = 0; evidence = []
-    all_rows = list(rows()); records = list(stream_records(actual))
-    assert len(records) == len(all_rows) == report['records'] == frozen['records']
-    for (declared, wire), (header, body) in zip(all_rows, records):
+    response_count = 0; last_after = 0; model_last_after = 0; full_wire_bytes = 0; evidence = []
+    parameter_model_differences = []; model_equal_private = 0
+    for (declared, wire), (header, body), (model_header, model_payload) in zip(rows(),
+            stream_file(output / 'processes/public-original.stdout'),
+            stream_file(output / 'processes/public-model.stdout', model=True), strict=True):
         sequence, opcode, session, input_length, output_length, before, after, dispatch, started, completed, reserved = header
         assert (sequence, opcode, session, input_length) == (declared['sequence'], declared['opcode'], declared['session'], len(wire))
         assert reserved == 0 and output_length == len(body) and not closed[session]
         assert last_after <= before <= after and after - before <= 61_000_000_000
         last_after = after
+        model_seq, model_op, model_session, model_kind, model_status, canonical_length, text_length, model_before, model_after, zero0, zero1 = model_header
+        assert (model_seq, model_op, model_session, zero0, zero1) == (sequence, opcode, session, 0, 0)
+        assert model_last_after <= model_before <= model_after and model_after - model_before <= 61_000_000_000
+        model_last_after = model_after
+        canonical = model_payload[:canonical_length]; model_text = model_payload[canonical_length:]
+        assert len(model_text) == text_length
+        if model_kind == 1:
+            assert model_status in [0, 1, 2] and isinstance(json.loads(canonical), dict)
+            model_text.decode('utf-8')
+            if model_status == 0:
+                normalized(model_text)
+                assert json.loads(model_text)['native_operation_wall_seconds'] <= (model_after - model_before) / 1e9
+        elif model_kind == 2:
+            assert model_status == 3 and canonical == b'' and model_text == b'tools/call'
+        else:
+            assert model_kind == 0 and model_status == 3 and canonical == model_text == b''
+        assert int(model_kind == 1) == declared['expected_dispatch']
+        actual_started = int(model_kind == 1 and model_status in [0, 2])
         counts[session][0] += declared['expected_dispatch']
-        counts[session][1] += declared['expected_start']
-        counts[session][2] += declared['expected_start']
+        counts[session][1] += actual_started
+        counts[session][2] += actual_started
         assert [dispatch, started, completed] == counts[session], (declared['name'], [dispatch, started, completed], counts[session])
         if declared['frames']:
             assert body.endswith(b'\n')
@@ -127,14 +160,23 @@ def verify_public(package, original, output):
         name = declared['name']; result_kind = declared['kind']
         if declared['kind'] == 'case':
             index = declared['case_index']; seen[session] += 1
-            raw = raw_parameters[index]; params = json.loads(raw)
-            reference_index = empty_index if params is None else index
-            reference = originals[reference_index]
-            status, canonical_length, text_length = struct.unpack_from('<3Q', reference, 8)
-            text = reference[64 + canonical_length:]
-            assert len(text) == text_length
+            reference = originals[index]
+            private_status, private_canonical_length, private_text_length = struct.unpack_from('<3Q', reference, 8)
+            private_canonical = reference[64:64 + private_canonical_length]
+            private_text = reference[64 + private_canonical_length:]
+            assert len(private_text) == private_text_length
+            assert model_kind in [1, 2]
+            if model_kind == 1 and canonical == private_canonical:
+                assert model_status == private_status
+                assert (normalized(model_text) == normalized(private_text)) if model_status == 0 else (model_text == private_text)
+                model_equal_private += 1
+            else:
+                parameter_model_differences.append(dict(sequence=sequence, name=declared['name'],
+                    private_canonical=pin(private_canonical), public_canonical=pin(canonical),
+                    private_status=private_status, public_model_kind=model_kind, public_status=model_status))
+            status = model_status; text = model_text
             message = messages[0]; identifier = declared['response_ids'][0]
-            if params is not None and not isinstance(params, dict):
+            if model_kind == 2:
                 error(message, identifier, -32601, 'tools/call'); result_kind = 'model'
             elif status == 1:
                 error(message, identifier, -32602, text.decode()); result_kind = 'typed'
@@ -177,13 +219,17 @@ def verify_public(package, original, output):
             assert declared['kind'] == 'notification' and not messages
         evidence.append(dict(sequence=sequence, name=name, session=session, result_kind=result_kind,
             input=pin(wire), output=pin(body), dispatch=dispatch, started=started, completed=completed,
-            before_ns=before, after_ns=after))
+            before_ns=before, after_ns=after, model_kind=model_kind, model_status=model_status,
+            model_canonical=pin(canonical), model_text=pin(model_text), model_before_ns=model_before, model_after_ns=model_after))
+    assert len(evidence) == report['records'] == frozen['records']
     assert closed == [True, True] and seen == [683, 683] and results['0'] == results['1']
     assert sum(results['0'].values()) == 683 and counts[0] == counts[1]
     return dict(status='COMPLETE_PUBLIC_SDK_REFERENCE_PASS', records=len(evidence), public_cases=sum(seen),
         response_count=response_count, protocols=results, per_session_counts=counts,
         normal_closes=2, remaining_close_output_bytes=0, all_public_wire_bytes=full_wire_bytes,
-        complete_output=pin(actual), whole_runtime_replaced=False, full_server_router_qualified=False,
+        complete_output=actual_pin, model_output=report['model_output'],
+        private_and_sdk_model_equal_cases=model_equal_private, parameter_model_differences=parameter_model_differences,
+        whole_runtime_replaced=False, full_server_router_qualified=False,
         audit_qualified=False, async_pending_registry_qualified=False, native_executed=False,
         only_normalized_field='native_operation_wall_seconds', cases=evidence)
 

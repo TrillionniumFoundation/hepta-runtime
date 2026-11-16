@@ -39,3 +39,30 @@ before and after eleven refusal probes.
 This reference does not implement or qualify the complete target audit/router,
 tool discovery annotations, concurrent request cancellation, HTTP, the HIA
 pending host registry or the complete runtime. Those flags remain false.
+
+## Exact SDK argument model
+
+The first frozen public run completed all 1,394 records, then its reader
+rejected the assumption that a root `serde_json::Value` and the SDK's root
+`JsonObject` admit identical inputs. In particular, the raw-value marker key
+at the arguments root is a literal unknown field in the SDK. A nested `Value`
+retains the target's separate raw-value behavior. The complete failed artifact
+and its original failure conclusion are retained.
+
+The input domain and all public Rust fixture bytes remain unchanged in this
+follow-up. A separate locked original binary now parses every complete input
+with the actual `ClientJsonRpcMessage`, applies the actual SDK
+`parse_json_object` to its actual arguments map, and invokes the unchanged
+original plan for every accepted parameter. Both actual original model text
+and actual service-loop text are compared in full. The existing
+`expected_start` field in the unchanged domain remains the historical private
+typed admission observation; public start/completion counters are instead
+checked against the newly observed actual SDK model, with no case exemptions.
+
+Model records use `HBPMOR01` and eleven U64 words: sequence, opcode, session,
+model kind (0 non-tool, 1 Bellman arguments map, 2 tools/call custom request),
+status (0 success, 1 typed error, 2 business error, 3 non-tool/custom), canonical
+argument bytes, text bytes, actual monotonic start/end, zero, zero. The complete
+canonical argument map and text follow. The model process has a 60-second
+limit inside the unchanged 180-second public stage. Pure readers stream the
+large inputs and responses without executing any original or native code.

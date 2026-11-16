@@ -55,6 +55,7 @@ def main():
     put(output/'registry.json',registry)
     binary=work/'target/debug/hia-bellman-call-reference';target=output/'original-plan';put(target,binary.read_bytes());target.chmod(0o500)
     public_binary=work/'target/debug/hia-bellman-public-reference';public_target=output/'original-public';put(public_target,public_binary.read_bytes());public_target.chmod(0o500)
+    model_binary=work/'target/debug/hia-bellman-public-model-reference';model_target=output/'original-public-model';put(model_target,model_binary.read_bytes());model_target.chmod(0o500)
     cases=list(all_cases(ROOT/'reference/qualify_bellman.py'));assert len(cases)==683
     request=b''.join(struct.pack('<Q',len(raw))+raw for _,_,raw in cases);put(output/'original.stdin',request)
     # The second binary imports the same unchanged target types directly.
