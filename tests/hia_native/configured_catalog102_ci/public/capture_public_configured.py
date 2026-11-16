@@ -59,6 +59,14 @@ def run(component,graph,manifest,output):
             identity={'pid':active.process.pid,'parent_pid':os.getpid(),'pgid':os.getpgid(active.process.pid),
                 'binary':pin(binary.read_bytes()),'profile_index':profile_index,'flags':flags}
             put(folder/'process-identity.json',identity)
+            initialize,initialized=d.initialization(profile_index)
+            reply=active.exchange(initialize)[0]
+            put(folder/'initialize.input.bin',initialize);put(folder/'initialize.output.bin',reply)
+            init=json.loads(reply)
+            assert set(init)=={'jsonrpc','id','result'} and init['jsonrpc']=='2.0' and init['id']=='catalog-init-'+str(profile_index)
+            assert init['result']['protocolVersion']=='2024-11-05' and isinstance(init['result']['capabilities'],dict) and isinstance(init['result']['serverInfo'],dict)
+            assert active.exchange(initialized,expected=0)==[]
+            put(folder/'initialized.input.bin',initialized)
             for case in [r for r in d.rows() if r['profile_index']==profile_index]:
                 raw=active.exchange(case['wire'])[0]
                 expected=b'{"jsonrpc":"2.0","id":'+str(case['sequence']).encode()+c.projected_asset(component,case['modern'],flags,1)

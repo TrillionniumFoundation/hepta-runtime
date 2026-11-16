@@ -108,7 +108,7 @@ def verify(source,component,graph,manifest,output,expected_binary=None):
         assert receipt['timed_out'] is False and receipt['failure_cleanup_requested'] is False
         assert type(receipt['timeout_seconds'])is int and receipt['timeout_seconds']==60
         number(receipt['elapsed_seconds'],180)
-        assert receipt['unconsumed_stdout_bytes']==0 and receipt['exchanges']==24
+        assert receipt['unconsumed_stdout_bytes']==0 and receipt['exchanges']==26
         assert receipt['environment']=={'PATH':'','LC_ALL':'C'}
         command=receipt['command'];assert type(command)is list and command
         # Saved execution paths remain provenance after relocation; only the current graph is opened.
@@ -127,9 +127,23 @@ def verify(source,component,graph,manifest,output,expected_binary=None):
         streams={name:gzip.decompress(r.raw(folder+'/'+name+'.bin.gz')) for name in ('stdin','stdout','stderr')}
         for name,raw in streams.items():assert pin(raw)==receipt[name]
         assert streams['stderr']==b''
-        exchanges=r.document(folder+'/exchanges.json');assert len(exchanges)==24
-        inputs=[];outputs=[]
-        for ordinal,(case,exchange) in enumerate(zip(items,exchanges,strict=True)):
+        exchanges=r.document(folder+'/exchanges.json');assert len(exchanges)==26
+        initialize,initialized=d.initialization(index)
+        init_in=r.raw(prefix+'/initialize.input.bin');init_out=r.raw(prefix+'/initialize.output.bin')
+        initialized_in=r.raw(prefix+'/initialized.input.bin')
+        assert init_in==initialize and initialized_in==initialized
+        init=json.loads(init_out)
+        assert set(init)=={'jsonrpc','id','result'} and init['jsonrpc']=='2.0' and init['id']=='catalog-init-'+str(index)
+        assert init['result']['protocolVersion']=='2024-11-05' and isinstance(init['result']['capabilities'],dict) and isinstance(init['result']['serverInfo'],dict)
+        for ordinal,wire,replies in ((0,initialize,[pin(init_out)]),(1,initialized,[])):
+            exchange=exchanges[ordinal]
+            assert exchange['number']==ordinal and type(exchange['number'])is int
+            assert exchange['timeout_seconds']==60 and type(exchange['timeout_seconds'])is int
+            number(exchange['elapsed_seconds'],60)
+            assert exchange['requested_bytes']==exchange['written_bytes']==len(wire)
+            assert exchange['request_sha256']==pin(wire)['sha256'] and exchange['responses']==replies and exchange['error'] is None
+        inputs=[initialize,initialized];outputs=[init_out+b'\n']
+        for ordinal,(case,exchange) in enumerate(zip(items,exchanges[2:],strict=True),start=2):
             wire=r.raw(prefix+f'/request-{case["sequence"]:03d}.bin');raw=r.raw(prefix+f'/response-{case["sequence"]:03d}.bin')
             assert wire==case['wire']
             expected=b'{"jsonrpc":"2.0","id":'+str(case['sequence']).encode()+c.projected_asset(component,case['modern'],flags,1)
@@ -148,7 +162,8 @@ def verify(source,component,graph,manifest,output,expected_binary=None):
     assert observed==report['observed']
     actual={p.relative_to(output).as_posix() for p in output.rglob('*') if p.is_file()}
     assert actual==set(r.files),('unread public capture files',sorted(actual-set(r.files)))
-    return {'status':'COMPLETE_CONFIGURED_PUBLIC_CATALOG_READONLY_PASS','processes':9,'exchanges':216,
+    return {'status':'COMPLETE_CONFIGURED_PUBLIC_CATALOG_READONLY_PASS','processes':9,'catalog_exchanges':216,
+        'all_exchanges':234,'initialize_calls':9,'initialized_notifications':9,'complete_response_frames':225,
         'binary':binary_pin,'source_profile':report['source_profile'],'files':r.files,'source_binding':shared.GRAPH_PROFILE,
         'no_hia_execution':True,'no_rust_execution':True,'process_launches':0,'tool_body_executions':0,
         'fresh_original_comparison':False,'public_all_configuration_qualified':False,'whole_runtime_replaced':False}
