@@ -1,6 +1,6 @@
 /* Private storage/continuation boundary. HIA owns all application decisions.
  * Fixed extra descriptors: entry, work_ptr, work_cap, sequence,
- * out_ptr, out_cap, return_u32, full_extent. 47 rows at engine+4096; slot41 has no public owner.
+ * out_ptr, out_cap, return_u32, full_extent. 55 rows at engine+4096; slots47-53 are reserved.
  * Mechanical records at +512: busy,pending,sequence,child,input_offset,
  * input_len,actual_return,actual_extent. Completed children are not replayed.
  * The separate view engine retains its existing descriptor ABI. */
@@ -10,7 +10,7 @@
 .global runtime_grow_destroy
 .global runtime_grow_owned
 .global runtime_grow_target
-.equ RG_SLOTS, 47
+.equ RG_SLOTS, 55
 .equ RG_ENGINE, 8192
 .equ RG_INVALID, 0xffffffff
 .equ RG_RESOURCE, 0xfffffffc
@@ -435,6 +435,8 @@ runtime_grow_text_classified:
     je runtime_grow_frontend_result
     cmp ebp, 46
     je runtime_grow_text_constructor_result
+    cmp ebp, 54
+    je runtime_grow_get_info_result
     cmp ebp, 19
     je runtime_grow_protocol_result
     cmp ebp, 44
@@ -585,6 +587,27 @@ runtime_grow_text_constructor_result:
     ja runtime_grow_bad
     cmp qword ptr [r13 + 24], 2
     ja runtime_grow_bad
+    cmp qword ptr [r13 + 32], 64
+    jne runtime_grow_bad
+    mov rax, [r13 + 48]
+    or rax, [r13 + 56]
+    jnz runtime_grow_bad
+    mov rax, [r13 + 40]
+    add rax, 64
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_get_info_result:
+    cmp eax, 64
+    jne runtime_grow_bad
+    mov rdx, 0x3130534947545248 /* HRTGIS01 */
+    cmp [r13], rdx
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 8], 0
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 16], 1
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 24], 0
+    jne runtime_grow_bad
     cmp qword ptr [r13 + 32], 64
     jne runtime_grow_bad
     mov rax, [r13 + 48]
@@ -1368,7 +1391,7 @@ runtime_grow_target_sdk_protocol:
     lea rdx, [rip + runtime_grow_sdk_protocol_targets]
     jmp runtime_grow_target_byte
 runtime_grow_target_frontend:
-    cmp rsi, 10
+    cmp rsi, 11
     ja runtime_grow_target_invalid
     lea rdx, [rip + runtime_grow_frontend_targets]
     jmp runtime_grow_target_byte
@@ -1442,7 +1465,7 @@ runtime_grow_action_magics:
     .quad 0
     .ascii "HTLBCA01"
     .quad 0
-    .zero 48 /* Slot41 empty; SDK leaves42-45 and text constructor46. */
+    .zero 112 /* 41 empty; SDK42-45, constructor46, reserved47-53, get_info54. */
 runtime_grow_sdk_protocol_targets:
     .byte 42, 43, 44, 45
 runtime_grow_text_gateway_targets:
@@ -1456,7 +1479,7 @@ runtime_grow_filesystem_caller_targets:
 runtime_grow_fence_targets:
     .byte 11, 28, 17
 runtime_grow_frontend_targets:
-    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46
+    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54
 runtime_grow_context_targets:
     .byte 6, 10, 7, 8
 runtime_grow_workdir_targets:

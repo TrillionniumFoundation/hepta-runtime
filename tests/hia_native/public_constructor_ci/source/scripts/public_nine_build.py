@@ -133,6 +133,7 @@ MEMBERS = [
     ('target_bridge', 'sdk_frontend_bridge_target', 'sdk-message-target.v1'),
     ('historical_protocol', 'runtime_mcp_protocol', 'history.v1'),
     ('text_constructor', 'text_result_constructor', 'history.v1'),
+    ('current_get_info', 'current_get_info', 'standard'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -148,7 +149,7 @@ CONFIG_SYMBOLS = ['owner', 'fs', 'json', 'validation', 'identity', 'mcp',
                   'execution', 'execution_json', 'execution_core', 'value',
                   'publication', 'regex_syntax', 'regex_unicode_data',
                   'regex_hir', 'regex_nfa', 'regex_match', 'regex_controller']
-EXTRA = ['catalog', 'admission', 'gateway', 'client', 'params', 'session_context', 'session_state', 'policy', 'canonical', 'path_source', 'wide_value', 'owner', None, 'workdir_gateway', 'workdir_params', 'workdir_io', 'workdir_render', 'view_error', 'mcp', 'protocol', 'execution', 'fs_gateway', 'fs_params', 'fs_caller', 'fs_io', 'fs_render', 'fs_guard', 'fs_fence', None, None, None, None, None, None, None, 'text_call', None, 'text_gateway', 'text_params', 'tb_adapter', None, None, 'target_message', 'target_request', 'target_bridge', 'historical_protocol', 'text_constructor']
+EXTRA = ['catalog', 'admission', 'gateway', 'client', 'params', 'session_context', 'session_state', 'policy', 'canonical', 'path_source', 'wide_value', 'owner', None, 'workdir_gateway', 'workdir_params', 'workdir_io', 'workdir_render', 'view_error', 'mcp', 'protocol', 'execution', 'fs_gateway', 'fs_params', 'fs_caller', 'fs_io', 'fs_render', 'fs_guard', 'fs_fence', None, None, None, None, None, None, None, 'text_call', None, 'text_gateway', 'text_params', 'tb_adapter', None, None, 'target_message', 'target_request', 'target_bridge', 'historical_protocol', 'text_constructor', None, None, None, None, None, None, None, 'current_get_info']
 VIEW = ['view', 'read', 'read', 'read', 'endpoint', 'key', 'scope', 'lease',
         'cache', 'render', 'request_context', 'view_error', 'view_regex',
         'regex_syntax', 'regex_hir', 'regex_nfa', 'regex_match',
@@ -279,7 +280,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 80
+    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 81
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -338,6 +339,10 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'target_text_constructor_integrated': True,
               'target_text_constructor_slot': 46,
               'target_text_constructor_source_sha256': '3a4c9b40136e0c3dbf3b580e475447e94fb79913f93416a0ec906da6d294996d',
+              'target_get_info_integrated': True,
+              'target_get_info_slot': 54,
+              'target_get_info_source_sha256': 'e2c4829a305593938202a5bf00e6411c5f4ba095167ff6a0603882e32fc5c89c',
+              'target_get_info_public_handshake_qualified': False,
               'target_constructor_public_semantics_qualified': False,
               'typed_result_publication_uses_raw_owned_mode': True,
               'target_async_transport_integrated': False,
