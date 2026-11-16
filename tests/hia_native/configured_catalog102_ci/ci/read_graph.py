@@ -108,7 +108,7 @@ def verify(package,folder,*,expected_origin,expected_source,expected_manifest):
         c.need(r.raw("build/public-authority-batch/linked-prefix.elf")==prefix,"complete HIA ELF-linker result")
         c.need(r.raw("build/public-authority-batch/link.input.bin")==b"HIALNK01"+struct.pack("<3Q",1,6,0)
             +b"_start"+struct.pack("<Q",len(obj))+obj,"complete HIA linker input")
-        for stage,expected_source in (("link",c.regular(package/"ci/elf_static_linker.hepta")),
+        for stage,compiler_source in (("link",c.regular(package/"ci/elf_static_linker.hepta")),
                 ("pack",c.regular(source/"native/runtime_mcp_image_packer.hepta"))):
             row=m[stage]
             c.need(r.document("build/public-authority-batch/"+stage+".receipt.json")==row
@@ -117,7 +117,7 @@ def verify(package,folder,*,expected_origin,expected_source,expected_manifest):
                 "actual HIA link/pack process budget")
             path=admitted(row["manifest"]);module_paths.add(path.parent)
             c.need(c.sha(tracked(path))==row["manifest_sha256"],"actual native linker/packer manifest")
-            support.compiler(path.parent,expected_source)
+            support.compiler(path.parent,compiler_source)
             c.need(r.document(path.parent.relative_to(folder).as_posix()+"/build.json")["compiler_dependency"]==dependency,
                 "link/pack compiler full source closure")
             for stream in ("input","output"):

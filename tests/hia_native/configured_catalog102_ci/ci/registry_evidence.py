@@ -68,12 +68,16 @@ def verify(original,output):
                 c.need(body==actual and c.pin(body)==registry[key]["files"][relative],"complete locked dependency source")
                 members[relative]=c.sha(body);count+=1;total+=len(body)
         source_root=original/"registry-source"/key
-        checksum=c.read_json(source_root/".cargo-checksum.json")
-        c.need(set(checksum)=={"files","package"} and checksum["package"]==c.sha(raw)
-            and checksum["files"] in ({},members),"Cargo generated source checksum table")
-        generated={".cargo-checksum.json"}
-        if ".cargo-ok" in registry[key]["files"]:generated.add(".cargo-ok")
-        c.need(set(registry[key]["files"])==set(members)|generated,"no additional unbound crate implementation")
+        generated=set(registry[key]["files"])-set(members)
+        c.need(generated<={".cargo-checksum.json",".cargo-ok"},"no additional unbound crate implementation")
+        for name in generated:
+            body=c.regular(source_root/name)
+            c.need(c.pin(body)==registry[key]["files"][name],"complete Cargo-generated metadata bytes")
+        if ".cargo-checksum.json" in generated:
+            checksum=c.read_json(source_root/".cargo-checksum.json")
+            c.need(set(checksum)=={"files","package"} and checksum["package"]==c.sha(raw)
+                and checksum["files"] in ({},members),"Cargo generated source checksum table")
+        c.need(set(registry[key]["files"])==set(members)|generated,"complete crate implementation domain")
     return {"status":"COMPLETE_LOCKED_REGISTRY_ARCHIVES_READONLY_PASS","packages":len(registry),
         "source_members":count,"complete_decompressed_bytes":total,"files":r.files,
         "producer_cache_reads":0,"process_launches":0}

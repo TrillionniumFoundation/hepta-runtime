@@ -1,0 +1,121 @@
+{
+  "schema": "hepta.runtime.configured-catalog-reader-revision.v3",
+  "parent_commit": "a35108a83bd18815f4dc42e15e7fe0b600808c8b",
+  "target_commit": "d3d75c30719db966b004756f610007a7c723729e",
+  "failed_fresh_ci": {
+    "run_id": 43939700645,
+    "job_id": 133553621626,
+    "status": "FAILURE",
+    "semantic_processes_completed": 7,
+    "failed_in": "read_all.verify_semantics -> read_graph.verify",
+    "error": "configured catalog: actual boundary process command/deadline",
+    "qualified": false
+  },
+  "changes": [
+    {
+      "path": "ci/read_graph.py",
+      "old_git_blob": "c64e392ad99366bf3cde8982866e2e67e81bb37d",
+      "git_blob": "e1d95d2c33a61322aa044414183cced95aedecd8",
+      "bytes": 15012,
+      "sha256": "d86468a16926a6d1315d4385aea03056b1af2bcedf4e377ce66ff8eb8b28a324",
+      "reason": "Avoid shadowing expected_source with compiler input bytes while preserving every existing command, source, deadline and complete build check."
+    },
+    {
+      "path": "ci/registry_evidence.py",
+      "old_git_blob": "6e50b9cb43a4a886f106d610f320fa175c8acf02",
+      "git_blob": "4885cd764d0e591e46fe3a7da2c4171c95b01f5f",
+      "bytes": 5290,
+      "sha256": "865900d0d0c3ada3bf114dfe2af26519793c144f17b772a0f23ff378d4cc512d",
+      "reason": "Cargo-generated checksum metadata is validated when present; every immutable lock checksum, complete crate archive, implementation file and recorded registry file remains checked."
+    }
+  ],
+  "retained_failure_archive": {
+    "manifest_artifact": {
+      "id": 14262648897,
+      "bytes": 895481,
+      "sha256": "4b45c0b863c8e43aa2c3d91ac1d8a0961b44948bc9602848e50169f728a421dc"
+    },
+    "parts": [
+      {
+        "id": 14262938245,
+        "zip_bytes": 400771542,
+        "zip_sha256": "0eaf9bf60563ff76482c01b99443948876ff82d1f1aff55552672f4b0303c9ed"
+      },
+      {
+        "id": 14263280022,
+        "zip_bytes": 130374189,
+        "zip_sha256": "2a50f17905b4c29625485fb5232dc8a38606c8dd58cba7cf626c1d6298fd530b"
+      }
+    ],
+    "tar_bytes": 2643415040,
+    "tar_sha256": "c3bdadf4d0193766c4c9f22d46f1c0a6be87e0fd823312d535c17a0051d512db",
+    "files": 19637,
+    "directories": 3972,
+    "logical_file_bytes": 2601741641,
+    "complete_readback_job": "1a1e5dd9f62-392-3a00",
+    "complete_readback_status": "PASS"
+  },
+  "development_readback": {
+    "job": "1a1e5e13655-392-3a05",
+    "status": "PASS",
+    "elapsed_ns": 16967966467,
+    "complete_entries": 23609,
+    "readonly_probes": 12,
+    "native_executions": 0,
+    "rust_executions": 0,
+    "scope": "Both explicit reader revisions applied to the intact failed CI capture. This does not qualify a fresh same-source successor."
+  },
+  "development_controls": {
+    "job": "1a1e612b3b5-392-3a66",
+    "status": "PASS",
+    "elapsed_ns": 26584277903,
+    "deadline_seconds": 180,
+    "physical_refusals": 12,
+    "native_executions": 0,
+    "rust_executions": 0,
+    "report": {
+      "bytes": 10630441,
+      "sha256": "e388661780c85307c413193b34ed7a6a41e8704b6c5112786b2385ed83c945cc"
+    },
+    "harness_git_blob": "6bbd0500534068f19b1dde7bb93d64a601884732",
+    "fresh_ci_parent_custody_claimed": false
+  },
+  "retained_development_failures": [
+    {
+      "job": "1a1e5df4689-392-3a01",
+      "status": "FAILURE",
+      "reason": "The original reader required .cargo-checksum.json even when the actual fixed Cargo build did not emit it.",
+      "native_executions": 0,
+      "rust_executions": 0
+    },
+    {
+      "job": "1a1e5e3211a-392-3a0b",
+      "status": "FAILURE",
+      "reason": "The isolated diagnostic wrapper imported a retained same-name evidence_controls module with a different function signature. The fixed CI controls source was not changed; the revised diagnostic loads its exact bytes under a unique module name.",
+      "native_executions": 0,
+      "rust_executions": 0
+    }
+  ],
+  "unchanged": {
+    "hia_sources_and_images": true,
+    "original_rust_sources": true,
+    "sdk_projection_sources": true,
+    "private_cases": 391,
+    "private_calls": 478,
+    "retained_non_list_operations": 18,
+    "direct_original_contexts": 216,
+    "typed_sdk_projection_records": 1728,
+    "public_requests_per_provider": 216,
+    "public_list_results_per_provider": 162,
+    "public_sdk_rejections_per_provider": 54,
+    "physical_refusals": 12,
+    "readonly_probes": 12,
+    "all_existing_deadlines": true,
+    "installed_public_mask": 1,
+    "bellman_advertised_in_actual102": false
+  },
+  "fresh_same_source_ci_required": true,
+  "whole_runtime_replaced": false,
+  "production_activated": false,
+  "all_136_tools_qualified": false
+}
