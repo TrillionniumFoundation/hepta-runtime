@@ -4,6 +4,7 @@ import argparse,json,sys
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import qualified_shape_author as old
+import accessor_source_check
 from qualified_shape_author import require,sha,pin,blob,BASELINES,OWNER,PSEUDO,PROOF,COMPOSITION,ABI
 PROOF_SHA="4a3cf68f16aad5cbc25c476d3435861f9fbe9da335b2bc6c13b6f895c0f257fe"
 def verify(package,hepta=None):
@@ -22,8 +23,9 @@ def verify(package,hepta=None):
     require(sha(after[PROOF])==PROOF_SHA and proof["author_sha256"]==sha(Path(old.__file__).read_bytes())
         and proof["baseline"]==pin(before[OWNER]) and proof["output"]==pin(after[OWNER])
         and proof["baseline_admission_proof"]==pin(before[PROOF]),"qualified proof identity")
-    require(sha((package/"graph/source/native/sdk_message_target.hepta").read_bytes())==old.MESSAGE_SHA,
-            "qualified actual G1 source")
+    accessor=accessor_source_check.verify(package,hepta)
+    require(accessor["sources"]["native/sdk_message_target.hepta"]["before_sha256"]==old.MESSAGE_SHA,
+            "retained qualified G1 dependency differs")
     if hepta is not None:
         require(old.ast_proof(before[OWNER],after[OWNER],hepta)==proof["ast"],"complete actual AST inverse")
     composition=json.loads(before[COMPOSITION])
@@ -35,10 +37,14 @@ def verify(package,hepta=None):
         source_sha256=sha(after[OWNER]),pseudo_sha256=sha(after[PSEUDO]),
         public_admission_proof_sha256=sha(after[PROOF]),accepts_g1_top_level_shape_class_5=True,
         unsupported_class_6_rejected=True)
-    require(after[COMPOSITION]==old.encoded(composition),"qualified source composition")
+    prior_composition=old.encoded(composition)
+    require(prior_composition==(package/"ci/accessor-baseline/native/sdk_request_task_composition.json").read_bytes(),
+            "complete retained qualified registry composition")
+    require(after[COMPOSITION]==accessor_source_check.current_composition(prior_composition),
+            "qualified registry source with exact accessor dependency rebind")
     return {"status":"ONE_CONSTANT_SHAPE_ADMISSION_SOURCE_PASS",
         "changed_files":{n:{**pin(raw),"git_blob":blob(raw)} for n,raw in after.items()},
-        "proof":proof,"native_executed":False,"rust_executed":False}
+        "proof":proof,"current_message_dependency":accessor,"native_executed":False,"rust_executed":False}
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--package",type=Path,required=True);p.add_argument("--hepta",type=Path,required=True)

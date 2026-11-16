@@ -2,8 +2,8 @@
 
 This candidate installs the combined graph at the repository's default
 scripts/hia_native_runtime_mcp_build.py entry. The package graph/source snapshot
-contains the exact 388 source files of commit 08406d5bf4e79795425012230a760f0f52e2adce.
-Every job verifies all 388 actual checkout files before execution. The package
+contains the exact 390 source files of commit 05044de882e3c72f1f9bd243c85d15f203d62125.
+Every job verifies all 390 actual checkout files before execution. The package
 does not substitute a qualification-only builder for the installed entry.
 
 ## Complete fixed domains
@@ -73,6 +73,36 @@ an empty directory. It retains the old failed archive and the new complete
 archive/readback, with source bytes, inodes, modes, mtimes and ctimes unchanged.
 This archive test executes no captured HIA or Rust.
 
-This revision changes no production source or case definition. Final integration
+The prior exporter-only revision changed no production source or case definition. Final integration
 must retain both the 7afd Cargo reader repair and the 08ce shell-outcome JSON
 representation repair. Neither historic failure is relabeled.
+
+## Fixed accessor successor
+
+The current default graph is the exact 390-file source at
+05044de882e3c72f1f9bd243c85d15f203d62125. Only G1 and Value HIA access
+wrappers change. Six byte helpers retain every checked byte access in order,
+including wrapping addresses and partial writes; 658 wrapper call sites are
+contracted with an exact full-source inverse. The entire parser and numeric
+algorithms are retained.
+
+The complete source proof was executed with pinned Hepta and the two owners
+were freshly compiled at 9ddb9795b0b787fab19d2558b8c634238a26d80d.
+Twenty-four complete old/new output/workspace pairs and three ordinary complete
+public wires passed. Independent readback at bb0ad75fc910aef7ba237e0e4062168895fa041a
+read all 1130 files / 412,839,210 bytes and repeated the paired/wire readers
+under the unchanged 11-probe guard. This engineering result is not a whole1394
+qualification.
+
+The exact old G1, Value and registry composition remain in ci/accessor-baseline.
+The old one-byte registry admission proof remains byte-identical and retains its
+original G1 requirement. The active registry composition binds the new G1 through
+the independently pinned accessor proof. No registry HIA or admission case
+changes. The shape source verifier checks both the complete prior composition
+and the explicit dependency rebind, then repeats the source inverse/AST proof
+with Hepta during the build gate.
+
+All nine roles and their complete domains remain. This successor does not raise
+180/60-second native limits or the 15-minute job limits and does not install a
+configuration catalog or extract_lines route. The root integration must still
+carry both 7afd and 08ce reader repairs.
