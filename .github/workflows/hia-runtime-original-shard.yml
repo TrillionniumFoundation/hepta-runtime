@@ -27,7 +27,9 @@ jobs:
   original:
     name: Complete original ${{ inputs.group }} group
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Complete immutable native admission and complete post-original evidence
+    # re-reads are additional work outside each recipe's unchanged deadline.
+    timeout-minutes: 45
     outputs:
       sha256: ${{ steps.shard.outputs.sha256 }}
     steps:

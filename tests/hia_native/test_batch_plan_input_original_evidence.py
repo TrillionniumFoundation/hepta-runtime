@@ -26,7 +26,9 @@ def clone(source,output,target,proof,links=False):
     for base,dest,pins in [(source,new_source,proof['source_sha256']),(output,new_output,proof['artifact_sha256'])]:
         for name,digest in pins.items():
             original=base/name;copied=dest/name;copied.parent.mkdir(parents=True,exist_ok=True)
-            if links:os.link(original,copied)
+            # Retained mutation fixtures must not add aliases to the source
+            # checkout: other owner readers require ordinary single-link files.
+            if links and base==output:os.link(original,copied)
             else:shutil.copyfile(original,copied)
     return new_source,new_output
 def repin_native(output):

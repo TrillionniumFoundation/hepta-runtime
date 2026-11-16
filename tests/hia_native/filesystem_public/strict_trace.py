@@ -383,7 +383,7 @@ class Effects:
             seq, phase, kind, poff, plen, rawret, error, returned, initialoff, currentoff, roff, rcap, wc, observed_mode, repeated = w
             q.need(seq == self.canonical_seq.get(session, 0)+1 and repeated == seq, 'canonical exact effect sequence/ACK')
             self.canonical_seq[session] = seq
-            q.need(kind in range(1, 8) and phase == ({4:20, 5:21}.get(kind, kind)) and wc >= 4096, 'canonical effect phase/kind/capacity')
+            q.need(kind in range(1, 9) and phase == ({4:20, 5:21}.get(kind, kind)) and wc >= 4096, 'canonical effect phase/kind/capacity')
             before = self.last_f0.get((session, 8)); q.need(before is not None and before['words'][3] == CALL, 'canonical effect lacks actual HIA request')
             action_words = struct.unpack_from('<14Q', before['raw'], 80)
             q.need(before['raw'][80:88] == b'HRCANA02' and action_words[1:3] == (seq, kind) and action_words[4:6] == (poff, plen), 'canonical full request/receipt match')
@@ -397,8 +397,12 @@ class Effects:
             if kind == 4:
                 q.need(4096 <= roff < wc and 0 < rcap <= wc-roff and int(args[3]) == rcap and returned == max(ret, 0), 'canonical readlink actual output bound/return')
             else:
-                q.need(returned == 0 and args[-1] != 'AT_SYMLINK_NOFOLLOW', 'canonical stat result/follow semantics')
-                if kind in (3, 5, 6) and ret == 0: q.same(observed_mode & 0xffffffff, mode(q, args[2]), 'canonical ACK stat mode')
+                q.need(returned == 0, 'canonical stat result')
+                if kind == 8:
+                    q.need(len(args) == 4 and args[3] == 'AT_SYMLINK_NOFOLLOW', 'canonical exact no-follow metadata flags')
+                else:
+                    q.need(args[-1] != 'AT_SYMLINK_NOFOLLOW', 'canonical stat follow semantics')
+                if kind in (3, 5, 6, 8) and ret == 0: q.same(observed_mode & 0xffffffff, mode(q, args[2]), 'canonical ACK stat mode')
             return
         if magic == 'HFLKEYFX':
             seq, kind, a, b, c, d, value, error, stmode, size, extra, done, z0, z1, z2 = w

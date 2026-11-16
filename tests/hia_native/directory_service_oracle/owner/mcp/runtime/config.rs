@@ -663,17 +663,33 @@ fn normalize_absolute(path: &Path) -> Result<PathBuf> {
 }
 
 fn canonical_policy_path(path: &Path) -> Result<PathBuf> {
-	let normalized = normalize_absolute(path)?;
-	let mut probe = normalized.as_path();
+	if !path.is_absolute() {
+		bail!("path `{}` must be absolute", path.display());
+	}
+	// Resolve the spelling that the subsequent filesystem operation will use.
+	// Lexically collapsing `link/..` before resolving `link` can authorize an
+	// in-root name while the kernel opens a different, out-of-root inode.
+	let mut probe = path;
 	let mut suffix: Vec<OsString> = Vec::new();
-	while !probe.exists() {
+	loop {
+		match std::fs::symlink_metadata(probe) {
+			Ok(_) => break,
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+			Err(error) => {
+				return Err(error)
+					.with_context(|| format!("failed to inspect `{}`", probe.display()));
+			}
+		}
+		// Only absent normal components can be appended to an existing physical
+		// ancestor. A dangling symlink is an existing entry and must reach the
+		// canonicalize call below, which rejects its unresolved target.
 		let name = probe
 			.file_name()
-			.ok_or_else(|| anyhow!("no existing ancestor for `{}`", normalized.display()))?;
+			.ok_or_else(|| anyhow!("no existing ancestor for `{}`", path.display()))?;
 		suffix.push(name.to_os_string());
 		probe = probe
 			.parent()
-			.ok_or_else(|| anyhow!("no existing ancestor for `{}`", normalized.display()))?;
+			.ok_or_else(|| anyhow!("no existing ancestor for `{}`", path.display()))?;
 	}
 	let mut canonical = std::fs::canonicalize(probe)
 		.with_context(|| format!("failed to canonicalize `{}`", probe.display()))?;

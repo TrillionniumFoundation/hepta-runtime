@@ -627,7 +627,10 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
             if target.exists() or target.is_symlink():
                 raise ValueError("original collector would overwrite an existing artifact")
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
+            # Downloaded shard data is a staging area. Move its verified files
+            # into the final capture to avoid a second multi-gigabyte copy;
+            # the separately retained CI artifact and every byte pin remain.
+            shutil.move(source, target)
             target.chmod(files[name]["mode"])
         compilers = []
         for group in groups():

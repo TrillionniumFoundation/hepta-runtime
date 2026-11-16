@@ -362,7 +362,19 @@ class OriginalPipelineTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "exact six ordered original processes"):
                     self.collect()
 
-    def test_workflow_keeps_independent_hash_outputs_and_original_job_deadlines(self):
+    def test_collection_consumes_staging_and_preserves_every_complete_artifact(self):
+        expected = {}
+        for group in p.groups():
+            seal = native.read_json(self.shards / group / p.SHARD_SEAL)
+            for name, pin in seal["files"].items():
+                expected[name] = (self.shards / group / "data" / name, pin)
+        self.assertEqual(self.collect()["status"], "PASS")
+        for name, (staged, pin) in expected.items():
+            self.assertFalse(staged.exists(), name)
+            self.assertEqual(native.file_identity(self.output / name), pin, name)
+            self.assertEqual((self.output / name).stat().st_nlink, 1, name)
+
+    def test_workflow_keeps_independent_hash_outputs_and_distinct_wall_budgets(self):
         workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
         reusable = (ROOT / ".github/workflows/hia-runtime-original-shard.yml").read_text()
         for group in p.GROUPS:
@@ -372,7 +384,13 @@ class OriginalPipelineTests(unittest.TestCase):
             self.assertIn("needs: native_collect", section)
             self.assertIn("group: " + group, section)
             self.assertIn('--shard-sha256 "' + group + '=${{ needs.original_' + group + '.outputs.sha256 }}"', workflow)
-        self.assertEqual(set(re.findall(r"timeout-minutes: (\d+)", workflow + reusable)), {"15"})
+        # Native jobs retain their original wall budget. Whole-artifact reads
+        # and the final eight-group join have a separate infrastructure budget;
+        # every actual oracle/compare deadline is still checked independently.
+        native_jobs, collector = workflow.split("\n  qualify:\n", 1)
+        self.assertEqual(set(re.findall(r"timeout-minutes: (\d+)", native_jobs)), {"15"})
+        self.assertEqual(re.findall(r"timeout-minutes: (\d+)", reusable), ["45"])
+        self.assertEqual(re.findall(r"timeout-minutes: (\d+)", collector), ["60"])
         self.assertIn("value: ${{ jobs.original.outputs.sha256 }}", reusable)
         self.assertIn("sha256: ${{ steps.shard.outputs.sha256 }}", reusable)
         self.assertIn('timeout --signal=KILL 180 python3', workflow)

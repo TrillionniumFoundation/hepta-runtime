@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 context = ROOT / "scripts/session_request_adapter.S"
 canonical = ROOT / "scripts/local_canonical_adapter.S"
-assert SHA(context.read_bytes()) == "c0760da9b6c4ae39cd24c82b322d14b7fc8b889834a788b9a36ffeb8789fd360"
+assert SHA(context.read_bytes()) == "89d6189bfdeeb98776686b3e33c3a3bb351e90ff9701783e869932926094787a"
 assert SHA(canonical.read_bytes()) == "fbedfb21bdd324381f57048c295e206bec5a0360a880baaf460bb01222a73dbf"
 source = context.read_text()
 edits = []

@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import stat
+import hia_native_canonical_target as canonical_target
 
 ORACLE = "tests/hia_native/filesystem_sdk_oracle"
 FOLDER = "filesystem-public/reference-source"
@@ -19,6 +20,7 @@ ORIGINALS = {
     "Cargo.lock": "Cargo.lock",
     "Cargo.toml": "Cargo.toml",
     "config.rs": "src/mcp/runtime/config.rs",
+    "current_canonical_policy.rs": "tests/hia_native/canonical_path_target/config.rs",
     "delta.rs": "src/mcp/fs/delta.rs",
     "effect_owner_fence.rs": "src/mcp/runtime/effect_owner_fence.rs",
     "mcp_mod.rs": "src/mcp/mod.rs",
@@ -88,8 +90,12 @@ def source_evidence(root):
     expected = {name: ORACLE + "/" + name for name in HARNESS}
     expected.update({"oracle/original/" + name: path for name, path in ORIGINALS.items()})
     need(type(document.get("files")) is dict and set(document["files"]) == set(expected),
-         "exact 17-file original input closure")
-    materialized, sources = {}, {MANIFEST: pin(raw)}
+         "exact 18-file original input closure")
+    need(document.get("canonical_policy_target") == canonical_target.source_evidence(root)
+         and document.get("selected_policy_is_current_target") is True
+         and document.get("other_historical_sdk_and_config_sources_unchanged") is True,
+         "current-target canonical policy projection")
+    materialized, sources = {}, {MANIFEST: pin(raw), **canonical_target.source_pins(root)}
     for name, source in sorted(expected.items()):
         row = document["files"][name]
         need(type(row) is dict and set(row) == {"source", "bytes", "sha256"}

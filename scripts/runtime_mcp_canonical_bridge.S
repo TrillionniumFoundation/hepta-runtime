@@ -43,7 +43,7 @@ runtime_grow_canonical_effect:
     mov r14, [r13 + 16]
     cmp r14, 1
     jb rgcan_invalid
-    cmp r14, 7
+    cmp r14, 8
     ja rgcan_invalid
     cmp r14, 4
     je rgcan_readlink
@@ -65,6 +65,8 @@ runtime_grow_canonical_effect:
     call rgcan_exact_path
     test eax, eax
     jnz rgcan_invalid
+    cmp r14, 8
+    je rgcan_lstat
     cmp r14, 1
     je rgcan_statx
     jmp rgcan_stat
@@ -115,6 +117,13 @@ rgcan_stat:
     mov edi, -100
     lea rdx, [r12 + 512]
     xor r10d, r10d
+    mov eax, 262
+    syscall
+    jmp rgcan_zero_result
+rgcan_lstat:
+    mov edi, -100
+    lea rdx, [r12 + 512]
+    mov r10d, 0x100
     mov eax, 262
     syscall
     jmp rgcan_zero_result

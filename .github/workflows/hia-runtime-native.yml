@@ -219,7 +219,7 @@ concurrency:
 # Independent View render/state suites run apart from the complete public View chain.
 # Execution admission, effect ownership and diagnostic capture have one complete shard.
 # The batch partition includes all four atomic-write suites and its full 505 MiB case.
-# Seven original groups retain all recipes and fixed Rust 1.95.0; the final job admits every group.
+# Eight original groups retain all recipes and fixed Rust 1.95.0; the final job admits every group.
 jobs:
   prepare:
     name: Fresh full compiler cold gate and all native images
@@ -571,7 +571,9 @@ jobs:
     name: All native evidence and complete original Rust comparisons
     needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # The final join reads all eight complete artifacts and repeats the full
+    # semantic evidence gates before and after the unchanged mutation controls.
+    timeout-minutes: 60
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

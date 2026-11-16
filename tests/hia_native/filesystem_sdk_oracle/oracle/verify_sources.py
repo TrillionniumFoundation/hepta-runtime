@@ -9,6 +9,7 @@ PINS = {
  'Cargo.lock': '7f39704b92d5fc762a98a5313949034db464ca9485827b19b5dde7aa69902d43',
  'Cargo.toml': '377e7dca547f0ff0d832fb28cf01862a6d84b4b6ed42c8b36dae9075cbbbb78f',
  'config.rs': '228f83aa263920ef16e6fca93ce52292cae3cecae5be4b47788a7070fee97f35',
+ 'current_canonical_policy.rs': '75a95e0376eb2ebf92f4dbbc0f8d93cbe4aa53ae35c78aa144589d226bf9c7c6',
  'delta.rs': 'a21e86bc959ce79f35cb7695e908fa37d5fd5fb56e00673ecf4a8cd291c080e1',
  'effect_owner_fence.rs': '1e2f2cd32289cd93915076981436b79c04a2756dfc184fa219f043a88f907207',
  'mcp_mod.rs': '9e9b7933372418ef361f85d64a1d36567618b13ae77c45d16df16799231b690c',
@@ -79,7 +80,10 @@ def assemble(root):
     for name in ('default_state_dir', 'runtime_config', 'maybe_runtime_config', 'host_by_alias', 'normalize_absolute',
                  'canonical_policy_path', 'path_under', 'check_local_path', 'remote_path_allowed', 'check_remote_path',
                  'check_directory_move_against_roots', 'check_directory_move_source'):
-        keep(name, 'config.rs', function(config, name))
+        if name == 'canonical_policy_path':
+            keep(name, 'current_canonical_policy.rs', function(originals['current_canonical_policy.rs'], name))
+        else:
+            keep(name, 'config.rs', function(config, name))
     keep('view_cache', 'delta.rs', block(delta, delta.index('#[derive(Debug, Default)]\npub struct ViewCache')))
     keep('view_cache_impl', 'delta.rs', block(delta, delta.index('impl ViewCache {')))
     keep('max_cached_bytes', 'delta.rs', next(line for line in delta.splitlines() if line.startswith('const MAX_CACHED_BYTES:')))
@@ -94,6 +98,9 @@ def assemble(root):
         main = main.replace(token, value)
     assert '@@' not in main
     for name, value in parts.items(): assert main.count(value) == 1, name
+    selected = original_raw['current_canonical_policy.rs']
+    assert hashlib.sha1(b'blob ' + str(len(selected)).encode() + b'\0' + selected).hexdigest() == '52edc1b2301eaaf12f4aea6e160346be2eed1054'
+    assert origins['canonical_policy_path']['sha256'] == '9c8595c09bde097c0ed2ffd1654cd43aad89205e5a99aa26ded05cb47dcb55ab'
     lock, dependencies = subset_lock(root, originals)
     materialized = {'src/main.rs': main.encode(), 'Cargo.toml': (root/'Cargo.toml').read_bytes(), 'Cargo.lock': lock,
         'src/mcp/request_ctx.rs': original_raw['request_ctx.rs'],
@@ -101,6 +108,9 @@ def assemble(root):
         'src/mcp/runtime/original_effect_owner_fence.rs': original_raw['effect_owner_fence.rs']}
     return materialized, {'schema': 'hepta.runtime.filesystem-sdk-original-source.v1',
         'original_files': {name: pin(raw) for name, raw in original_raw.items()}, 'unchanged_spans': origins,
+        'canonical_policy_target_commit': 'd3d75c30719db966b004756f610007a7c723729e',
+        'canonical_policy_target_git_blob': '52edc1b2301eaaf12f4aea6e160346be2eed1054',
+        'other_historical_sdk_and_config_functions_unchanged': True,
         'unchanged_whole_modules': ['request_ctx.rs', 'parity_ops.rs', 'effect_owner_fence.rs'],
         'materialized': {name: pin(raw) for name, raw in materialized.items()}, 'registry_dependencies': dependencies,
         'actual_sdk_parameters_extractor': True, 'actual_sdk_method_adapter': True, 'original_full_router_executed': False,

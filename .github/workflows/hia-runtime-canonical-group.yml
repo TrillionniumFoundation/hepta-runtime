@@ -1,0 +1,186 @@
+name: HIA Canonical Target Group
+
+on:
+  workflow_call:
+    inputs:
+      phase:
+        required: true
+        type: string
+      group:
+        required: true
+        type: string
+      runtime-sha:
+        required: true
+        type: string
+      invocation:
+        required: true
+        type: string
+      prepared-sha256:
+        required: true
+        type: string
+      native-sha256:
+        required: false
+        default: ''
+        type: string
+    outputs:
+      sha256:
+        description: Exact complete group export seal
+        value: ${{ jobs.group.outputs.sha256 }}
+      admission-sha256:
+        description: Exact independent complete original admission
+        value: ${{ jobs.group.outputs.admission-sha256 }}
+
+permissions:
+  contents: read
+
+jobs:
+  group:
+    name: Canonical ${{ inputs.group }} ${{ inputs.phase }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      sha256: ${{ steps.execute.outputs.sha256 }}
+      admission-sha256: ${{ steps.verify.outputs.admission_sha256 }}
+    env:
+      CANONICAL_PHASE: ${{ inputs.phase }}
+      CANONICAL_GROUP: ${{ inputs.group }}
+      RUNTIME_SHA: ${{ inputs.runtime-sha }}
+      CANONICAL_INVOCATION: ${{ inputs.invocation }}
+      PREPARED_SHA: ${{ inputs.prepared-sha256 }}
+      NATIVE_SHA: ${{ inputs.native-sha256 }}
+    steps:
+      - name: Checkout the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ inputs.runtime-sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            tests/oracles
+            .github
+
+      - name: Checkout the fixed HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Install complete filesystem observation support
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y strace
+
+      - name: Install the pinned independent Python reference libraries
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
+      - name: Verify the exact source and complete selected domains
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$RUNTIME_SHA"
+          python3 -I -B runtime/tests/hia_native/canonical_target_ci.py source-check --head "$RUNTIME_SHA"
+
+      - name: Download the same fresh cold and complete build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: canonical-build-${{ inputs.runtime-sha }}-${{ inputs.invocation }}
+          path: ${{ runner.temp }}/hia-canonical-native/
+
+      - name: Download this group's complete native predecessor
+        if: inputs.phase == 'original'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: canonical-native-${{ inputs.runtime-sha }}-${{ inputs.invocation }}-${{ inputs.group }}
+          path: ${{ runner.temp }}/canonical-native-export/
+
+      - name: Install the fixed fresh-reference compiler
+        if: inputs.phase == 'original'
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+
+      - name: Fetch the exact locked Workdir reference dependencies
+        if: inputs.phase == 'original' && inputs.group == 'workdir'
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          timeout --signal=TERM --kill-after=5s 180s \
+            "$(rustup which --toolchain 1.95.0 cargo)" fetch --locked \
+            --manifest-path runtime/tests/hia_native/workdir_service_oracle/Cargo.toml
+
+      - name: Run the unchanged complete group with its original process deadlines
+        id: execute
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          common=(--head "$RUNTIME_SHA" --hepta "$GITHUB_WORKSPACE/compiler"
+                  --output "$RUNNER_TEMP/hia-canonical-native" --invocation "$CANONICAL_INVOCATION"
+                  --prepared-sha256 "$PREPARED_SHA" --group "$CANONICAL_GROUP")
+          if [[ "$CANONICAL_PHASE" == native ]]; then
+            python3 -I -B runtime/tests/hia_native/canonical_target_ci.py native "${common[@]}" \
+              --destination "$RUNNER_TEMP/canonical-native-export"
+          elif [[ "$CANONICAL_PHASE" == original ]]; then
+            python3 -I -B runtime/tests/hia_native/canonical_target_ci.py original "${common[@]}" \
+              --native-artifact "$RUNNER_TEMP/canonical-native-export" --native-sha256 "$NATIVE_SHA" \
+              --rustc "$(rustup which --toolchain 1.95.0 rustc)" \
+              --destination "$RUNNER_TEMP/canonical-original-export"
+          else
+            exit 2
+          fi
+
+      - name: Independently re-read every complete native and original owner receipt
+        if: inputs.phase == 'original'
+        id: verify
+        env:
+          ORIGINAL_SHA: ${{ steps.execute.outputs.sha256 }}
+        run: |
+          python3 -I -B runtime/tests/hia_native/canonical_target_ci.py verify-original \
+            --head "$RUNTIME_SHA" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-canonical-native" --invocation "$CANONICAL_INVOCATION" \
+            --prepared-sha256 "$PREPARED_SHA" --group "$CANONICAL_GROUP" \
+            --native-sha256 "$NATIVE_SHA" --original-sha256 "$ORIGINAL_SHA" \
+            --destination "$RUNNER_TEMP/canonical-original-export" \
+            --result "$RUNNER_TEMP/canonical-admission/$CANONICAL_GROUP.json"
+
+      - name: Retain all successful group source, process, and complete corpus bytes
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-${{ inputs.phase }}-${{ inputs.runtime-sha }}-${{ inputs.invocation }}-${{ inputs.group }}
+          path: ${{ runner.temp }}/canonical-${{ inputs.phase }}-export/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain the independently produced original admission
+        if: inputs.phase == 'original' && success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-admission-${{ inputs.runtime-sha }}-${{ inputs.invocation }}-${{ inputs.group }}
+          path: ${{ runner.temp }}/canonical-admission/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Capture actual failure bytes
+        if: ${{ always() && (steps.execute.outcome != 'success' || (inputs.phase == 'original' && steps.verify.outcome != 'success')) }}
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
+            --source "$RUNNER_TEMP/hia-canonical-native" \
+            --output "$RUNNER_TEMP/canonical-diagnostics"
+
+      - name: Retain failure diagnostics without relabeling incomplete execution
+        if: ${{ always() && (steps.execute.outcome != 'success' || (inputs.phase == 'original' && steps.verify.outcome != 'success')) }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-failure-${{ inputs.runtime-sha }}-${{ inputs.invocation }}-${{ inputs.group }}-${{ inputs.phase }}
+          path: ${{ runner.temp }}/canonical-diagnostics/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

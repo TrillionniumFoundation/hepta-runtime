@@ -470,6 +470,7 @@ def reference_evidence(root, output, *, oracle_root=None):
     pins = strict_json(inside(output, "source-pins.json").read_bytes())
     same(pins["harness"], {name: identity(oracle / name) for name in source.HARNESS_FILES}, "complete harness inputs")
     same(pins["original"], {name: identity(root / name) for name in source.SOURCE_FILES}, "complete original inputs")
+    same(pins["canonical_policy_target"], source.target_source_pins(), "complete current-target policy inputs")
     assembled, manifest = source.check_sources(root)
     same(result["source_commit"], manifest["commit"], "original commit identity")
     for name, raw in (("Cargo.toml", (oracle / "Cargo.toml").read_bytes()), ("Cargo.lock", (oracle / "Cargo.lock").read_bytes()), ("src/main.rs", assembled)):
@@ -479,6 +480,7 @@ def reference_evidence(root, output, *, oracle_root=None):
         artifact_sha256["crate/" + name] = pin(raw)["sha256"]
     same(result["materialized"]["source"], pin(assembled), "assembled original source")
     same(result["materialized"], {"source_commit": manifest["commit"], "source": pin(assembled),
+        "canonical_policy_target": manifest["canonical_policy_target"],
         "original_file_count": len(source.SOURCE_FILES), "original_body_count": len(manifest["extractions"]),
         "registry_dependencies": source.dependency_subset(root), "original_bodies_unchanged": True,
         "actual_sdk_parameters_extractor": True, "actual_sdk_method_adapter": True,
