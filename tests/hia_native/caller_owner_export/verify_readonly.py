@@ -15,7 +15,7 @@ import sys
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import BASE, encoded, read, require, sha
+from common import BASE, encoded, read, require, sha, source_evidence
 from reader import read_capture
 
 
@@ -125,6 +125,11 @@ if __name__ == "__main__":
     parser.add_argument("--source-pins-sha256", required=True)
     parser.add_argument("--foreign-path", type=Path, required=True)
     args = parser.parse_args()
+    # Admit and preload the pinned data-only extraction helper before the guard.
+    # Python probes a nonexistent bytecode-cache path on first import even with
+    # bytecode writes disabled. No such foreign read is permitted inside the
+    # guarded reader; the complete source is checked again there.
+    source_evidence(args.source_root, args.source_pins_sha256)
     result = guarded(lambda: read_capture(args.capture, args.source_root, args.source_pins_sha256),
                      roots=[args.capture], foreign_path=args.foreign_path)
     # The observer emits its receipt to the caller-owned stdout only after the
