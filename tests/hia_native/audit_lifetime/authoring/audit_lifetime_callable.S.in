@@ -1,0 +1,572 @@
+/* Copyright 2026 TrillionniumFoundation
+ * SPDX-License-Identifier: Apache-2.0
+ * Mechanical execution of HIA lifetime decisions.
+ * Context128: magic, generation, kernel pointer/cap64, active ptr/cap/extent,
+ * pin ptr/cap/extent, optional observer/user, four zero words.
+ * Maps are borrowed only under actual custody of their kernel mutex.
+ */
+.text
+.globl audit_lifetime_entry
+.type audit_lifetime_entry,@function
+audit_lifetime_entry:
+    push %rbp
+    push %rbx
+    push %r12
+    push %r13
+    push %r14
+    push %r15
+    sub $584,%rsp
+    mov %rsp,%r15
+    mov %r8,%r12
+    mov %rdx,%r13
+    mov %rdi,%rbx
+    mov %rsi,%rbp
+    xor %r14d,%r14d
+    cmp $192,%rsi
+    jb .LLinvalid
+    cmp $512,%rcx
+    jb .LLcapacity
+    cmp $128,%r9
+    jb .LLcapacity
+    test $7,%r12
+    jnz .LLinvalid
+    movabs $@REQUEST@,%rax
+    cmp %rax,(%rbx)
+    jne .LLinvalid
+    mov 8(%rbx),%rax
+    cmp $8,%rax
+    ja .LLinvalid
+    mov %rax,536(%r15)
+    mov %rbp,%rdx
+    sub $192,%rdx
+    cmp %rdx,32(%rbx)
+    jne .LLinvalid
+    cmpq $0,16(%rbx)
+    je .LLinvalid
+    cmpq $1,40(%rbx)
+    ja .LLinvalid
+    mov 48(%rbx),%rax
+    or 56(%rbx),%rax
+    jnz .LLinvalid
+    mov %rbx,%rax
+    add %rbp,%rax
+    jc .LLinvalid
+    lea 512(%r13),%rdx
+    cmp %r13,%rdx
+    jb .LLinvalid
+    lea 128(%r12),%rcx
+    cmp %r12,%rcx
+    jb .LLinvalid
+    cmp %rdx,%rbx
+    jae .LLinput_context
+    cmp %rax,%r13
+    jb .LLinvalid
+.LLinput_context:
+    cmp %rcx,%rbx
+    jae .LLoutput_context
+    cmp %rax,%r12
+    jb .LLinvalid
+.LLoutput_context:
+    cmp %rcx,%r13
+    jae .LLinput_tail_start
+    cmp %rdx,%r12
+    jb .LLinvalid
+.LLinput_tail_start:
+    lea -128(%rbx,%rbp),%rdi
+    mov $16,%ecx
+.LLinput_tail:
+    cmpq $0,(%rdi)
+    jne .LLinvalid
+    add $8,%rdi
+    loop .LLinput_tail
+.LLcontext_shape:
+    cmpq $64,24(%r12)
+    jne .LLinvalid
+    mov 16(%r12),%rax
+    test %rax,%rax
+    jz .LLinvalid
+    test $7,%rax
+    jnz .LLinvalid
+    mov 96(%r12),%rdx
+    or 104(%r12),%rdx
+    or 112(%r12),%rdx
+    or 120(%r12),%rdx
+    jnz .LLinvalid
+    mov %rbp,512(%r15)
+    movq $0,552(%r15)
+    movq $0,560(%r15)
+    lea 384(%r15),%rdi
+    xor %eax,%eax
+    mov $16,%ecx
+    rep stosq
+    mov $186,%eax
+    syscall
+    test %rax,%rax
+    jle .LLfatal
+    mov %rax,544(%r15)
+    cmpq $0,536(%r15)
+    je .LLinitialize
+    movabs $@CONTEXT@,%rax
+    cmp %rax,(%r12)
+    jne .LLstate
+    mov 8(%r12),%rax
+    cmp %rax,16(%rbx)
+    jne .LLstate
+    cmpq $7,536(%r15)
+    jb .LLcopy_request
+    mov 16(%r12),%rax
+    mov 544(%r15),%rdx
+    cmp %rdx,32(%rax)
+    jne .LLstate
+    cmpl $0,8(%rax)
+    je .LLstate
+    movq $1,552(%r15)
+.LLcopy_request:
+    mov %rbp,%rsi
+    add $4111,%rsi
+    jc .LLinvalid
+    and $-4096,%rsi
+    mov %rsi,520(%r15)
+    mov $9,%eax
+    xor %edi,%edi
+    mov $3,%edx
+    mov $0x22,%r10d
+    mov $-1,%r8
+    xor %r9d,%r9d
+    syscall
+    cmp $-4095,%rax
+    jae .LLfatal
+    mov %rax,%r14
+    mov %rax,528(%r15)
+    mov %rax,%rdi
+    mov %rbx,%rsi
+    mov %rbp,%rcx
+    rep movsb
+    movabs $0xa5a5a5a5a5a5a5a5,%rax
+    mov $2,%ecx
+    rep stosq
+    jmp .LLcontroller
+.LLinitialize:
+    cmp $192,%rbp
+    jne .LLinvalid
+    mov 24(%rbx),%rax
+    or 40(%rbx),%rax
+    jnz .LLinvalid
+    mov (%r12),%rax
+    or 8(%r12),%rax
+    or 32(%r12),%rax
+    or 40(%r12),%rax
+    or 48(%r12),%rax
+    or 56(%r12),%rax
+    or 64(%r12),%rax
+    or 72(%r12),%rax
+    jnz .LLstate
+    mov %r13,%rdi
+    mov $64,%ecx
+.LLactor_zero:
+    cmpq $0,(%rdi)
+    jne .LLstate
+    add $8,%rdi
+    loop .LLactor_zero
+    mov 16(%r12),%rdi
+    mov $8,%ecx
+.LLkernel_zero:
+    cmpq $0,(%rdi)
+    jne .LLstate
+    add $8,%rdi
+    loop .LLkernel_zero
+    mov 16(%rbx),%rax
+    mov %rax,8(%r12)
+    xor %ebp,%ebp
+    call .LLnew_table
+    mov $1,%ebp
+    call .LLnew_table
+    mov %r15,%rdi
+    xor %eax,%eax
+    mov $16,%ecx
+    rep stosq
+    movabs $@SYNC_REQUEST@,%rax
+    mov %rax,(%r15)
+    mov 8(%r12),%rax
+    mov %rax,24(%r15)
+    mov %r15,%rbx
+    call .LLsync
+    mov %r13,%rdi
+    xor %eax,%eax
+    mov $64,%ecx
+    rep stosq
+    movabs $@ACTOR@,%rax
+    mov %rax,(%r13)
+    movq $91,32(%r13)
+    mov 8(%r12),%rax
+    mov %rax,104(%r13)
+    movabs $@CONTEXT@,%rax
+    mov %rax,(%r12)
+    mov $512,%eax
+    jmp .LLreturn
+.LLnew_table:
+    sub $8,%rsp
+    imul $24,%rbp,%rax
+    lea 32(%r12,%rax),%rbx
+    mov $9,%eax
+    xor %edi,%edi
+    mov $4096,%esi
+    mov $3,%edx
+    mov $0x22,%r10d
+    mov $-1,%r8
+    xor %r9d,%r9d
+    syscall
+    cmp $-4095,%rax
+    jae .LLfatal
+    mov %rax,(%rbx)
+    movq $64,8(%rbx)
+    movq $4096,16(%rbx)
+    movabs $@MAP@,%rdx
+    mov %rdx,(%rax)
+    mov 8(%r12),%rdx
+    mov %rdx,8(%rax)
+    mov %rbp,16(%rax)
+    movq $64,40(%rax)
+    movabs $0xa5a5a5a5a5a5a5a5,%rdx
+    mov %rdx,64(%rax)
+    mov %rdx,72(%rax)
+    add $8,%rsp
+    ret
+.LLcontroller:
+    lea 256(%r15),%rdi
+    xor %eax,%eax
+    mov $16,%ecx
+    rep stosq
+    movq $1,256(%r15)
+    mov %r14,280(%r15)
+    mov 512(%r15),%rax
+    mov %rax,288(%r15)
+    mov %r13,296(%r15)
+    lea 384(%r15),%rax
+    mov %rax,304(%r15)
+    mov %r12,360(%r15)
+    mov 536(%r15),%rax
+    mov %rax,368(%r15)
+    mov 552(%r15),%rax
+    test %rax,%rax
+    jz .LLcontroller_observe
+    cmp $2,%rax
+    ja .LLfatal
+    dec %rax
+    cmp %rax,48(%r13)
+    jne .LLfatal
+    mov %rax,328(%r15)
+    imul $24,%rax,%rax
+    mov 32(%r12,%rax),%rdx
+    mov %rdx,304(%r15)
+    mov 40(%r12,%rax),%rdx
+    mov %rdx,312(%r15)
+    movq $1,320(%r15)
+.LLcontroller_observe:
+    call .LLobserve
+    mov %r14,%rdi
+    mov 512(%r15),%rsi
+    mov %r13,%rdx
+    mov $512,%ecx
+    mov 304(%r15),%r8
+    mov 312(%r15),%r9
+    call .LLlife_image
+    mov %eax,568(%r15)
+    mov %rax,272(%r15)
+    movq $1,264(%r15)
+    call .LLobserve
+    cmpl $512,568(%r15)
+    je .LLcontroller_result
+    cmpq $0,560(%r15)
+    jne .LLfatal
+    mov 568(%r15),%eax
+    jmp .LLreturn
+.LLcontroller_result:
+    mov 8(%r13),%rax
+    test %rax,%rax
+    jz .LLcomplete
+    cmp $1,%rax
+    je .LLsync_effect
+    cmp $2,%rax
+    je .LLreference_effect
+    cmp $3,%rax
+    je .LLgrowth
+    jmp .LLfatal
+.LLsync_effect:
+    lea 256(%r13),%rbx
+    call .LLsync
+    movq $128,56(%r14)
+    jmp .LLresume
+.LLreference_effect:
+    lea 256(%r13),%rbx
+    lea 128(%r15),%rdi
+    xor %eax,%eax
+    mov $16,%ecx
+    rep stosq
+    lea 256(%r15),%rdi
+    mov $16,%ecx
+    rep stosq
+    movq $3,256(%r15)
+    mov %rbx,280(%r15)
+    movq $64,288(%r15)
+    lea 128(%r15),%rax
+    mov %rax,296(%r15)
+    mov 24(%r13),%rax
+    mov %rax,352(%r15)
+    mov %r12,360(%r15)
+    call .LLobserve
+    mov %rbx,%rdi
+    mov $64,%esi
+    lea 128(%r15),%rdx
+    mov $64,%ecx
+    lea 384(%r15),%r8
+    xor %r9d,%r9d
+    call .LLrefs_image
+    mov %eax,568(%r15)
+    mov %rax,272(%r15)
+    movq $1,264(%r15)
+    call .LLobserve
+    cmpl $64,568(%r15)
+    jne .LLfatal
+    incq 560(%r15)
+    movq $64,56(%r14)
+.LLresume:
+    mov 24(%r13),%rax
+    mov %rax,48(%r14)
+    mov 512(%r15),%rax
+    lea -128(%r14,%rax),%rdi
+    lea 128(%r15),%rsi
+    mov $16,%ecx
+    rep movsq
+    jmp .LLcontroller
+.LLgrowth:
+    mov 48(%r13),%rax
+    cmp $1,%rax
+    ja .LLfatal
+    lea 1(%rax),%rdx
+    cmp %rdx,552(%r15)
+    jne .LLfatal
+    cmpq $1,88(%r13)
+    jne .LLfatal
+    imul $24,%rax,%rax
+    lea 32(%r12,%rax),%rbx
+    mov 128(%r13),%rbp
+    cmp 8(%rbx),%rbp
+    jbe .LLfatal
+    test $7,%rbp
+    jnz .LLfatal
+    lea 256(%r15),%rdi
+    xor %eax,%eax
+    mov $16,%ecx
+    rep stosq
+    movq $4,256(%r15)
+    mov %r13,296(%r15)
+    mov (%rbx),%rax
+    mov %rax,304(%r15)
+    mov 8(%rbx),%rax
+    mov %rax,312(%r15)
+    mov %rax,336(%r15)
+    mov %rbp,344(%r15)
+    movq $1,320(%r15)
+    mov 48(%r13),%rax
+    mov %rax,328(%r15)
+    mov %r12,360(%r15)
+    call .LLobserve
+    mov %rbp,%rdx
+    add $4111,%rdx
+    jc .LLfatal
+    and $-4096,%rdx
+    mov $25,%eax
+    mov (%rbx),%rdi
+    mov 16(%rbx),%rsi
+    mov $1,%r10d
+    xor %r8d,%r8d
+    xor %r9d,%r9d
+    syscall
+    cmp $-4095,%rax
+    jae .LLfatal
+    mov %rax,(%rbx)
+    mov %rbp,8(%rbx)
+    mov %rdx,16(%rbx)
+    mov 336(%r15),%rdx
+    lea (%rax,%rdx),%rdi
+    mov %rbp,%rcx
+    sub %rdx,%rcx
+    xor %eax,%eax
+    rep stosb
+    movabs $0xa5a5a5a5a5a5a5a5,%rax
+    mov $2,%ecx
+    rep stosq
+    mov (%rbx),%rax
+    mov %rax,304(%r15)
+    mov %rbp,312(%r15)
+    movq $1,264(%r15)
+    call .LLobserve
+    lea 128(%r15),%rdi
+    xor %eax,%eax
+    mov $16,%ecx
+    rep stosq
+    movq $0,56(%r14)
+    incq 560(%r15)
+    jmp .LLresume
+.LLsync:
+    sub $8,%rsp
+    lea 128(%r15),%rdi
+    xor %eax,%eax
+    mov $16,%ecx
+    rep stosq
+    lea 256(%r15),%rdi
+    mov $16,%ecx
+    rep stosq
+    movq $2,256(%r15)
+    mov %rbx,280(%r15)
+    movq $128,288(%r15)
+    lea 128(%r15),%rax
+    mov %rax,296(%r15)
+    mov 24(%r13),%rax
+    mov %rax,352(%r15)
+    mov %r12,360(%r15)
+    call .LLobserve
+    mov %rbx,%rdi
+    mov $128,%esi
+    lea 128(%r15),%rdx
+    mov $128,%ecx
+    mov 16(%r12),%r8
+    mov $64,%r9d
+    call .LLsync_image
+    mov %eax,568(%r15)
+    mov %rax,272(%r15)
+    movq $1,264(%r15)
+    call .LLobserve
+    cmpl $128,568(%r15)
+    jne .LLfatal
+    cmpq $1,144(%r15)
+    ja .LLfatal
+    mov 544(%r15),%rax
+    cmp %rax,152(%r15)
+    jne .LLfatal
+    mov 16(%rbx),%rdx
+    cmp $1,%rdx
+    ja .LLfatal
+    movq $0,552(%r15)
+    cmp %rax,216(%r15,%rdx,8)
+    jne .LLsync_done
+    cmpq $1,232(%r15,%rdx,8)
+    jne .LLsync_done
+    inc %rdx
+    mov %rdx,552(%r15)
+.LLsync_done:
+    incq 560(%r15)
+    add $8,%rsp
+    ret
+.LLobserve:
+    mov 80(%r12),%rax
+    test %rax,%rax
+    jz .LLobserve_done
+    sub $8,%rsp
+    lea 256(%r15),%rdi
+    mov 88(%r12),%rsi
+    call *%rax
+    add $8,%rsp
+.LLobserve_done:
+    ret
+.LLcomplete:
+    cmpq $0,552(%r15)
+    je .LLcomplete_unheld
+    cmpq $1,552(%r15)
+    jne .LLfatal
+    cmpq $1,88(%r13)
+    jne .LLfatal
+    cmpq $90,32(%r13)
+    jne .LLfatal
+    cmpq $2,16(%r13)
+    jne .LLfatal
+    mov 536(%r15),%rax
+    cmp $6,%rax
+    je .LLcomplete_return
+    cmp $7,%rax
+    jne .LLfatal
+    jmp .LLcomplete_return
+.LLcomplete_unheld:
+    cmpq $0,88(%r13)
+    jne .LLfatal
+    cmpq $5,536(%r15)
+    jne .LLcomplete_return
+    cmpq $0,16(%r13)
+    jne .LLcomplete_return
+    xor %ebp,%ebp
+    call .LLunmap_table
+    mov $1,%ebp
+    call .LLunmap_table
+    movq $0,(%r12)
+    movq $0,8(%r12)
+.LLcomplete_return:
+    mov $512,%eax
+    jmp .LLreturn
+.LLunmap_table:
+    sub $8,%rsp
+    imul $24,%rbp,%rax
+    lea 32(%r12,%rax),%rbx
+    mov $11,%eax
+    mov (%rbx),%rdi
+    mov 16(%rbx),%rsi
+    syscall
+    test %rax,%rax
+    jne .LLfatal
+    movq $0,(%rbx)
+    movq $0,8(%rbx)
+    movq $0,16(%rbx)
+    add $8,%rsp
+    ret
+.LLinvalid:
+    mov $0xffffffff,%eax
+    jmp .LLreturn
+.LLcapacity:
+    mov $0xfffffffe,%eax
+    jmp .LLreturn
+.LLstate:
+    mov $0xfffffff9,%eax
+    jmp .LLreturn
+.LLfatal:
+    mov $231,%eax
+    mov $134,%edi
+    syscall
+    ud2
+.LLreturn:
+    mov %eax,568(%r15)
+    test %r14,%r14
+    jz .LLreturn_value
+    mov $11,%eax
+    mov %r14,%rdi
+    mov 520(%r15),%rsi
+    syscall
+    test %rax,%rax
+    jne .LLfatal
+.LLreturn_value:
+    mov 568(%r15),%eax
+    add $584,%rsp
+    pop %r15
+    pop %r14
+    pop %r13
+    pop %r12
+    pop %rbx
+    pop %rbp
+    ret
+.size audit_lifetime_entry,.-audit_lifetime_entry
+.balign 16,0x90
+.globl audit_lifetime_refs
+audit_lifetime_refs:
+.LLrefs_image:
+    .zero @REF_BYTES@
+.balign 16,0x90
+.globl audit_lifetime_sync
+audit_lifetime_sync:
+.LLsync_image:
+    .zero 1635
+.balign 16,0x90
+.globl audit_lifetime_controller
+audit_lifetime_controller:
+.LLlife_image:
+.globl audit_lifetime_adapter_end
+audit_lifetime_adapter_end:
+.section .note.GNU-stack,"",@progbits
