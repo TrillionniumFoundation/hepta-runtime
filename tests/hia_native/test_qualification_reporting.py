@@ -2775,5 +2775,161 @@ class ShellProcessRetainedRegistryTests(unittest.TestCase):
 
 
 
+
+import ast
+import copy
+import importlib.util
+import json
+from pathlib import Path
+import sys
+import types
+import unittest
+from unittest.mock import Mock, patch
+
+SHELL_OUTCOME_SOURCE = ROOT / "scripts/compare_hia_runtime_rust.py"
+
+
+def load_shell_outcome_functions():
+    tree = ast.parse(SHELL_OUTCOME_SOURCE.read_text())
+    names = ("shell_outcome_original_evidence", "shell_output_original_evidence",
+             "shell_foreground_original_evidence")
+    nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
+    if {node.name for node in nodes} != set(names):
+        raise AssertionError("complete aggregate reader functions not found")
+    module = ast.Module(body=[ast.ImportFrom(module="__future__",
+        names=[ast.alias(name="annotations")], level=0), *nodes], type_ignores=[])
+    ast.fix_missing_locations(module)
+    scope = {"json": json, "Path": Path, "ROOT": Path("/frozen/runtime")}
+    exec(compile(module, str(SHELL_OUTCOME_SOURCE), "exec"), scope)
+    return scope
+
+
+class ShellOutcomeJsonReceiptTests(unittest.TestCase):
+    def setUp(self):
+        self.ns = load_shell_outcome_functions()
+        self.output = Path("/frozen/capture")
+        self.rustc = Path("/frozen/toolchain/bin/rustc")
+        self.digest = "a" * 64
+        self.original = {"reference_build": {"report_sha256": self.digest}}
+        self.report = {"modules": {key: {"manifest": key + "/manifest.json"}
+            for key in ("shell_outcome", "shell_output_io", "shell_foreground")},
+            "original_rust_comparisons": {"shell_process": copy.deepcopy(self.original)}}
+        path = ROOT / "tests/hia_native/shell_outcome_cases.py"
+        spec = importlib.util.spec_from_file_location("frozen_outcome_cases", path)
+        cases = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cases)
+        self.counts = cases.counts()
+        self.outcome = {"comparison": {"counts": self.counts,
+            "requests": {"bytes": 123, "sha256": "b" * 64}},
+            "original_rust_compared": True,
+            "fresh_original_rust_build_qualified": True,
+            "reference_report_sha256": self.digest}
+        self.output_io = {"paired_real_io_cases": 6,
+            "original_rust_compared": True, "fresh_original_rust_build_qualified": True,
+            "native_phase_cases_added_by_reference": 0, "actual_native_process_wait": False,
+            "reference_report_sha256": self.digest,
+            "original_io": {"report": {"sha256": "c" * 64}}}
+        self.foreground = {"paired_real_foreground_cases": 6,
+            "original_rust_compared": True, "fresh_original_rust_build_qualified": True,
+            "actual_native_process_wait": True, "native_phase_cases_added_by_reference": 0,
+            "original_processes_added_by_comparison": 0,
+            "reference_report_sha256": self.digest, "original_io_report_sha256": "c" * 64}
+        self.readers = {name: Mock(return_value=value) for name, value in
+            (("outcome", self.outcome), ("output", self.output_io), ("foreground", self.foreground))}
+        self.modules = {"hia_native_shell_" + name + "_qualification":
+            types.SimpleNamespace(read_evidence=reader) for name, reader in self.readers.items()}
+        self.ns.update({
+            "shell_process_original_evidence": Mock(return_value=self.original),
+            "shell_completed_process": Mock(return_value={
+                "command": ["frozen-reference"], "exit_code": 0, "timeout_seconds": 300,
+                "stdout_sha256": "d" * 64, "stderr_sha256": "e" * 64}),
+            "shell_retained_files": Mock(return_value={"retained.bin": "f" * 64}),
+            "executable": lambda path: Path(path),
+        })
+        for kind in ("outcome", "output", "foreground"):
+            self.ns["shell_" + kind + "_original_command"] = Mock(return_value=["frozen-reference"])
+        self.module_patch = patch.dict(sys.modules, self.modules)
+        self.module_patch.start()
+        self.addCleanup(self.module_patch.stop)
+
+    def call(self, kind="outcome"):
+        return self.ns["shell_" + kind + "_original_evidence"](
+            self.output, self.report, self.rustc)
+
+    def checkpoint(self, value):
+        return json.loads(json.dumps(value, sort_keys=True, allow_nan=False))
+
+    def test_complete_real_domain_survives_json_checkpoint(self):
+        self.assertEqual(self.counts["semantic_cases"], 78083)
+        self.assertEqual(set(self.counts["operations"]), {1, 2, 3})
+        self.assertNotEqual(self.counts, self.checkpoint(self.counts))
+        actual = self.call()
+        self.assertEqual(actual, self.checkpoint(actual))
+        self.assertEqual(actual["comparison"], self.checkpoint(self.outcome))
+        self.assertEqual(actual["comparison"]["comparison"]["counts"]["operations"],
+                         {"1": 73865, "2": 504, "3": 3714})
+        self.assertFalse(actual["whole_runtime_replaced"])
+        self.assertFalse(actual["production_activated"])
+        self.assertEqual(self.readers["outcome"].call_count, 1)
+
+    def test_reloaded_outcome_is_accepted_by_both_dependent_readers(self):
+        self.report["original_rust_comparisons"]["shell_outcome"] = self.checkpoint(self.call())
+        output = self.call("output")
+        self.report["original_rust_comparisons"]["shell_output_io"] = self.checkpoint(output)
+        foreground = self.call("foreground")
+        self.assertTrue(foreground["original_rust_compared"])
+        self.assertEqual(self.readers["output"].call_count, 2)
+        self.assertEqual(self.readers["foreground"].call_count, 1)
+
+    def test_changed_checkpoint_fields_remain_refused(self):
+        original = self.checkpoint(self.call())
+        changes = (
+            lambda value: value["comparison"]["comparison"]["counts"]["operations"].update({"1": 73864}),
+            lambda value: value["comparison"]["comparison"]["counts"].update({"semantic_cases": 78082}),
+            lambda value: value["comparison"]["comparison"]["requests"].update({"sha256": "0" * 64}),
+            lambda value: value["retained_files_sha256"].update({"retained.bin": "0" * 64}),
+            lambda value: value["completed_process"].update({"stdout_sha256": "0" * 64}),
+            lambda value: value["completed_process"].update({"command": ["another-reference"]}),
+            lambda value: value.update({"production_activated": True}),
+            lambda value: value.pop("retained_files_sha256"),
+        )
+        for change in changes:
+            with self.subTest(change=change):
+                changed = copy.deepcopy(original)
+                change(changed)
+                self.report["original_rust_comparisons"]["shell_outcome"] = changed
+                with self.assertRaisesRegex(ValueError, "fresh process and complete outcome evidence"):
+                    self.call("output")
+        self.readers["output"].assert_not_called()
+        self.report["original_rust_comparisons"]["shell_outcome"] = original
+        self.assertTrue(self.call("output")["original_rust_compared"])
+
+    def test_strong_reader_rejection_is_preserved(self):
+        self.readers["outcome"].side_effect = ValueError("complete physical byte mismatch")
+        with self.assertRaisesRegex(ValueError, "complete physical byte mismatch"):
+            self.call()
+        self.ns["shell_retained_files"].assert_not_called()
+
+    def test_incomplete_domain_or_wrong_reference_is_refused(self):
+        for key, value in (("semantic_cases", 78082), ("reference", "0" * 64)):
+            with self.subTest(key=key):
+                changed = copy.deepcopy(self.outcome)
+                if key == "semantic_cases":
+                    changed["comparison"]["counts"]["semantic_cases"] = value
+                else:
+                    changed["reference_report_sha256"] = value
+                self.readers["outcome"].return_value = changed
+                with self.assertRaisesRegex(ValueError, "complete original outcome byte projection"):
+                    self.call()
+        self.ns["shell_retained_files"].assert_not_called()
+
+    def test_reference_binding_is_checked_before_outcome_reader(self):
+        self.report["original_rust_comparisons"]["shell_process"]["reference_build"]["report_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "complete fresh shell reference"):
+            self.call()
+        self.readers["outcome"].assert_not_called()
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -2178,6 +2178,9 @@ def shell_outcome_original_evidence(output: Path, report: dict, rustc: Path) -> 
     manifest = output / report["modules"]["shell_outcome"]["manifest"]
     result = outcome.read_evidence(ROOT, base / "build", output / "shell-outcome/native",
         manifest, base / "outcome", rustc, executable(str(rustc.with_name("cargo"))))
+    # Checkpoints reload JSON object keys as strings, including operation numbers.
+    # Preserve every strongly checked field in the same representation on both paths.
+    result = json.loads(json.dumps(result, sort_keys=True, allow_nan=False))
     if (result.get("comparison", {}).get("counts", {}).get("semantic_cases") != 78083
             or result.get("original_rust_compared") is not True
             or result.get("fresh_original_rust_build_qualified") is not True
