@@ -9,6 +9,7 @@ from controls import plan, INITIAL, STATE, PENDING, CONSTRUCTOR, SECOND
 from read_capture import (SHA, PACK, WORD, CALL, GROW, PacketStream, file_pin, jsonlines,
                          lifecycle, observation, parse, physical, pin, read, require, retained_observation)
 from original_reader import original_evidence, process_evidence
+from parallel_reader import read_workers
 
 ROOT = Path(__file__).resolve().parent
 COMPILER = "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
@@ -269,7 +270,7 @@ def process_custody(output, source_sha):
     return dict(status="PASS",native_processes=3,native_domain_timeout_seconds=180,native_controls_timeout_seconds=180)
 
 
-def reader_controls_evidence(output, *, original=False):
+def reader_controls_evidence(output, *, original=False, baseline=None, semantic=None):
     if original:
         from original_evidence_controls import NAMES
         folder,name="original-reader-controls","original-evidence-controls"
@@ -322,6 +323,27 @@ def reader_controls_evidence(output, *, original=False):
     actual=parse(read(output/"gate-processes"/row["stdout"]["file"]))
     require(actual["status"]==status and actual["controls"]==len(NAMES) and actual["relocations"]==2
             and actual["native_processes_executed"]==0,"actual reader control summary differs")
+    if not original:
+        require(baseline is not None and semantic is not None,"parallel reader requires the full current baseline")
+        require(report["python_reader_workers"]==actual["python_reader_workers"]==2
+                and report["execution"]["pgid"]==row["pgid"]
+                and 0<=report["elapsed_seconds"]<=row["elapsed_seconds"]<180
+                and report["execution"]["finished_monotonic_ns"]-report["execution"]["started_monotonic_ns"]
+                ==round(report["elapsed_seconds"]*1e9),
+                "parallel readers escaped their actual enclosing parent")
+        require(file_pin(output/folder/"inputs/BASELINE.json")==report["baseline"]
+                and file_pin(output/folder/"worker-processes.json")==report["worker_processes"],
+                "parallel reader complete baseline or process receipt changed")
+        workers=read_workers(output/folder,report["source_manifest_sha256"],baseline,NAMES,
+                             expected_parent=report["execution"],semantic=semantic,
+                             expected_files=report["admitted_files"],
+                             expected_roots=dict(source_root=str(old_source),capture_root=str(destination),
+                                                 output_root=str(destination/folder)))
+        joined={control["name"]:control for worker in workers for control in worker["controls"]}
+        require(report["controls"]==[joined[name] for name in NAMES]
+                and report["relocations"]==[worker["relocations"][0] for worker in workers]
+                and report["post_refusal"]==[worker["post_refusal"][0] for worker in workers],
+                "parent reader report differs from complete actual worker reports")
     return dict(status="PASS",refusals=len(NAMES),relocations=2,admitted_files=len(report["admitted_files"]),
                 native_or_rust_executions=0)
 
@@ -340,7 +362,8 @@ def verify(output, *, full, require_controls=False):
         result["original"] = original_evidence(output/"original",output/"native",source_root=ROOT)
         result.update(status="COMPLETE_ORIGINAL_COMPARISON_SPAN_ANNOTATION_PASS",original_qualified=True)
     if require_controls:
-        result["native_reader_controls"]=reader_controls_evidence(output)
+        result["native_reader_controls"]=reader_controls_evidence(
+            output,baseline=dict(native=native,controls=controls,build=build),semantic=semantic)
         if full:
             result["original_reader_controls"]=reader_controls_evidence(output,original=True)
     return result

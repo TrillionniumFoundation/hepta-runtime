@@ -195,3 +195,30 @@ or Rust execution; it is not a qualification pass. The current source still
 requires a fresh 842-case gate, all thirty-three native and twelve original
 reader controls, both relocations, and the unchanged 180-second process and
 fifteen-minute CI limits.
+
+## Parallel custody of the complete reader controls
+
+Revision 7 completed all 842 native cases, all private controls, the full
+original comparison and both physical relocations. Thirty of the thirty-three
+native evidence refusals completed before the same 180-second parent limit.
+The remaining controls and the later original controls were not qualified.
+The complete failed ZIP and every member's byte and mode identity are retained.
+
+Revision 8 keeps both complete physical copies and assigns each to one owned
+Python reader process. The frozen control names are partitioned by alternating
+indices; their exact disjoint union remains all thirty-three names. Every
+selected mutation runs the same complete source/copy before-and-after guard
+and twelve refusal probes. No physical byte or metadata field is excluded.
+Both copies receive a complete guarded admission before mutations and another
+after exact restoration. The original mutation helpers and complete native,
+private-control, build and process-custody readers are unchanged.
+
+The parent owns both actual Popen handles in its existing process group and
+retains complete commands, PID/parent/group identities, monotonic lifetimes,
+stdout/stderr and exit/reap observations. Both complete worker reports and
+all four full guarded proofs are independently read and joined to the current
+native baseline and recovery bytes. Cleanup attempts every kill and every wait
+before final receipt writes, including on failure. The single existing
+180-second parent deadline includes preparation, copies, both workers, joining
+and cleanup. No native or Rust implementation executes in these readers.
+A fresh complete gate is still required; this scheduling change is not a pass.
