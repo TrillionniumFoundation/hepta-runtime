@@ -85,6 +85,18 @@ def native_evidence(folder, build, source_sha):
             and report["source_manifest_sha256"] == source_sha and report["build_sha256"] == SHA(read(build/"BUILD.json"))
             and report["domain_sha256"] == SHA(read(ROOT/"DOMAIN.json")), "native source/domain/build differs")
     require(report["cases"] == len(frozen["cases"]) and report["sessions"] == 4*report["cases"], "complete semantic case domain changed")
+    # Check complete stream identities before the expensive physical proof.
+    # Accepted evidence still reaches every original per-case and buffer check.
+    for name,expected_bytes,expected_sha in (
+            ("inputs.bin.gz",frozen["input_bytes"],frozen["input_sha256"]),
+            ("observed.bin.gz",report["observed_bytes"],report["observed_sha256"])):
+        file_pin(folder/name)
+        digest,count = hashlib.sha256(),0
+        with gzip.open(folder/name,"rb") as stream:
+            while block := stream.read(1<<20):
+                digest.update(block);count += len(block)
+        require(count == expected_bytes and digest.hexdigest() == expected_sha,
+                "complete native stream identity differs: "+name)
     buffers,calls,sessions,growth,handoffs = physical(folder,report)
     lifecycle(folder,buffers,calls,sessions,growth,handoffs)
     require(buffers.physical_bytes == report["physical_buffer_bytes"] and len(buffers.rows) == report["unique_buffer_chunks"], "complete physical capture size differs")

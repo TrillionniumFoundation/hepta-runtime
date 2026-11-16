@@ -31,8 +31,10 @@ remain refusals. Constructor workspace and output growth are actual child
 events. Acknowledging growth or capacity as a completed constructor result is
 rejected.
 
-The native reader preserves all 25 prior admission controls, the four physical
-rehash controls, and adds two allocation-admission refusals. The original reader preserves all 12 prior controls.
+The native reader preserves the 31 pre-allocation controls, including all four physical
+rehash controls, and the two added
+allocation-admission refusals, for 33 controls. The original reader preserves
+all 12 prior controls.
 Each runs two complete physical relocations. Native relocation readers also
 exercise twelve write, metadata, process, mapping, foreign-path and descriptor
 refusals. Readers are preloaded before activating their guard.
@@ -140,3 +142,30 @@ and 5,911 complete native calls. Its complete failed archive remains retained.
 Neither this source revision nor a successful read of earlier evidence is a
 qualification pass. The 180-second process and fifteen-minute CI limits remain
 unchanged.
+
+
+## Complete evidence reader scheduling
+
+Revision 5 completed all 842 native cases in 135.12 seconds, all private
+refusals and recoveries, and the complete guarded original comparison. The
+33-control native evidence process then reached its unchanged 180-second limit
+after both full relocations and seven refusals. Its full failed archive is
+retained and independently byte-checked; the overall gate remains failed.
+
+This revision consumes and hashes each complete decompressed input and
+observation stream through EOF before expensive physical reconstruction. It
+checks structural call, session, allocation and growth declarations earlier,
+then still reads every actual input and verifies all four complete buffer
+descriptors for every call. Each physical buffer store freshly reads and
+validates its entire retained chunk domain before any content identity is used.
+The original per-case semantic, handoff and lifecycle checks remain mandatory.
+
+Only two pure content proofs may be reused: a constant-byte digest keyed by the
+exact byte and size, and an already established prefix-plus-zero equation keyed
+by both complete descriptors, including their lengths, digests and ordered
+chunk identities. Both growth descriptors must first pass full verification;
+failed equations never enter the cache. Growth minima, policies, actual actions,
+addresses, sessions and following calls are still checked for every event.
+No physical observation, semantic result, refusal, recovery or deadline is
+removed. All HIA and original source bytes remain identical to revision 5.
+The new source and readers still require the complete fresh qualification gate.
