@@ -1,0 +1,180 @@
+name: Bellman fixed-byte successor complete qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-bellman-byte-access-qualification-6780-20261116]
+    paths:
+      - tests/hia_native/bellman_byte_access_ci/**
+      - .github/workflows/hia-bellman-byte-access-qualification.yml
+permissions:
+  contents: read
+jobs:
+  complete_worker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: '1.95.0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONHASHSEED: '0'
+      SOURCE_PINS: 6b5983d351b380b53f5838dc7ca8adac523d6c95ac12df51c3f975faf60d53c2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: worker-compiler
+          persist-credentials: false
+      - name: Install exact original toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --no-self-update
+      - name: Exact package and symbolic checked-access proof
+        run: |
+          python -I -S -B - <<'PY'
+          import pathlib,sys
+          package=pathlib.Path('tests/hia_native/bellman_byte_access_ci/package').resolve()
+          sys.path.insert(0,str(package/'recipe'))
+          from qualify_port import source_evidence
+          print(source_evidence(package,'2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1'))
+          PY
+          python -I -S -B tests/hia_native/bellman_byte_access_ci/package/byte-access/verify_source_delta.py --package "$GITHUB_WORKSPACE/tests/hia_native/bellman_byte_access_ci/package" --hepta "$GITHUB_WORKSPACE/worker-compiler"
+      - name: Fresh HIA and unchanged original complete worker domains
+        run: |
+          umask 077
+          mkdir "$RUNNER_TEMP/bellman-byte-worker"
+          python -I -S -B tests/hia_native/bellman_byte_access_ci/package/worker-source/tests/hia_native/blocking_worker/worker_recipe.py \
+            --phase all --source-root "$GITHUB_WORKSPACE/tests/hia_native/bellman_byte_access_ci/package/worker-source" \
+            --capture "$RUNNER_TEMP/bellman-byte-worker/capture" --hepta "$GITHUB_WORKSPACE/worker-compiler" \
+            --source-pins-sha256 "$SOURCE_PINS"
+      - name: Physical rehashed reader refusal controls
+        run: |
+          python -I -S -B tests/hia_native/bellman_byte_access_ci/package/worker-source/tests/hia_native/blocking_worker/worker_reader_controls.py \
+            --source-root "$GITHUB_WORKSPACE/tests/hia_native/bellman_byte_access_ci/package/worker-source" \
+            --capture "$RUNNER_TEMP/bellman-byte-worker/capture" --source-pins-sha256 "$SOURCE_PINS" \
+            --output "$RUNNER_TEMP/bellman-byte-worker/controls"
+      - name: Relocate complete admitted capture and source
+        run: |
+          python -I -S -B - "$GITHUB_WORKSPACE" "$RUNNER_TEMP/bellman-byte-worker" <<'PY'
+          import sys
+          from pathlib import Path
+          repository=Path(sys.argv[1]);base=Path(sys.argv[2]);source=repository/'tests/hia_native/bellman_byte_access_ci/package/worker-source'
+          sys.path.insert(0,str(source/'tests/hia_native/blocking_worker'))
+          from worker_reader_controls import copy_files
+          copy_files(base/'capture',base/'relocated/capture')
+          copy_files(source,base/'relocated/source')
+          copy_files(base/'controls',base/'relocated/controls')
+          PY
+      - name: Readonly relocated full reader under execution and write rejection
+        run: |
+          python -I -S -B "$RUNNER_TEMP/bellman-byte-worker/relocated/source/tests/hia_native/blocking_worker/worker_readonly_guard.py" \
+            --source-root "$RUNNER_TEMP/bellman-byte-worker/relocated/source" \
+            --capture "$RUNNER_TEMP/bellman-byte-worker/relocated/capture" --source-pins-sha256 "$SOURCE_PINS" \
+            --controls "$RUNNER_TEMP/bellman-byte-worker/relocated/controls" \
+            --output "$RUNNER_TEMP/bellman-byte-worker/READONLY.json"
+      - name: Retain every success or failure byte
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/bellman-byte-worker" ]; then
+            tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/bellman-byte-worker.tar.gz" bellman-byte-worker
+            sha256sum "$RUNNER_TEMP/bellman-byte-worker.tar.gz" > "$RUNNER_TEMP/bellman-byte-worker.tar.gz.sha256"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bellman-byte-worker-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/bellman-byte-worker.tar.gz
+            ${{ runner.temp }}/bellman-byte-worker.tar.gz.sha256
+          compression-level: 0
+          if-no-files-found: error
+
+  complete_port:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PORT_SOURCE_SHA256: 2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: hepta
+      - name: Verify and copy the exact source package
+        shell: bash
+        run: |
+          python -B - <<'PY'
+          import os,pathlib,sys
+          package=pathlib.Path('tests/hia_native/bellman_byte_access_ci/package').resolve()
+          sys.path.insert(0,str(package/'recipe'))
+          from qualify_port import source_evidence,files
+          from port_reader_controls import copy_exact
+          source_evidence(package,os.environ['PORT_SOURCE_SHA256'])
+          work=pathlib.Path(os.environ['RUNNER_TEMP'])/'bellman-byte-port';work.mkdir()
+          copy_exact(package,work/'source',files(package))
+          PY
+      - name: Fresh HIA worker build
+        shell: bash
+        run: |
+          work="$RUNNER_TEMP/bellman-byte-port"
+          python -I -S -B "$work/source/worker-source/tests/hia_native/blocking_worker/worker_build.py" \
+            --source-root "$work/source/worker-source" --hepta "$GITHUB_WORKSPACE/hepta" \
+            --capture "$work/worker-build" \
+            --source-pins-sha256 6b5983d351b380b53f5838dc7ca8adac523d6c95ac12df51c3f975faf60d53c2
+      - name: Complete private native port domains and readers
+        shell: bash
+        run: |
+          work="$RUNNER_TEMP/bellman-byte-port"
+          python -I -S -B "$work/source/recipe/qualify_port.py" --phase all \
+            --package "$work/source" --package-sha256 "$PORT_SOURCE_SHA256" \
+            --hepta "$GITHUB_WORKSPACE/hepta" --worker-build "$work/worker-build" --capture "$work/capture"
+          python -I -S -B "$work/source/recipe/verify_readonly.py" \
+            --package "$work/source" --package-sha256 "$PORT_SOURCE_SHA256" \
+            --worker-build "$work/worker-build" --capture "$work/capture" --output "$work/readonly.json"
+      - name: Independent relocation and guarded read
+        shell: bash
+        run: |
+          python -B - <<'PY'
+          import os,pathlib,sys
+          work=pathlib.Path(os.environ['RUNNER_TEMP'])/'bellman-byte-port'
+          sys.path.insert(0,str(work/'source/recipe'))
+          from qualify_port import files
+          from port_reader_controls import copy_exact
+          target=work/'relocated';target.mkdir()
+          for name in ('source','worker-build','capture'):copy_exact(work/name,target/name,files(work/name))
+          PY
+          work="$RUNNER_TEMP/bellman-byte-port"
+          python -I -S -B "$work/relocated/source/recipe/verify_readonly.py" \
+            --package "$work/relocated/source" --package-sha256 "$PORT_SOURCE_SHA256" \
+            --worker-build "$work/relocated/worker-build" --capture "$work/relocated/capture" \
+            --output "$work/relocated-readonly.json"
+      - name: Retain complete evidence and failures
+        if: always()
+        shell: bash
+        run: |
+          python -B - <<'PY'
+          import hashlib,json,os,pathlib,stat,tarfile
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'bellman-byte-port';files={}
+          if root.exists():
+            for path in sorted(root.rglob('*')):
+              s=path.lstat();assert stat.S_ISREG(s.st_mode) or stat.S_ISDIR(s.st_mode)
+              if stat.S_ISREG(s.st_mode):
+                with path.open('rb') as stream:digest=hashlib.file_digest(stream,'sha256').hexdigest()
+                files[path.relative_to(root).as_posix()]={'bytes':s.st_size,'mode':stat.S_IMODE(s.st_mode),'sha256':digest}
+          archive=pathlib.Path('bellman-byte-port-evidence.tar.gz')
+          with tarfile.open(archive,'w:gz',compresslevel=3) as tar:
+            if root.exists():tar.add(root,arcname='bellman-byte-port')
+          with archive.open('rb') as stream:digest=hashlib.file_digest(stream,'sha256').hexdigest()
+          pathlib.Path('bellman-byte-port-archive.json').write_text(json.dumps({'archive':archive.name,'bytes':archive.stat().st_size,'sha256':digest,'files':files},sort_keys=True,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bellman-byte-shared-port-evidence
+          compression-level: 0
+          retention-days: 7
+          path: |
+            bellman-byte-port-evidence.tar.gz
+            bellman-byte-port-archive.json
