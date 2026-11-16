@@ -1,0 +1,471 @@
+﻿2026-11-16T22:51:11.1244071Z Current runner version: '2.338.2'
+2026-11-16T22:51:11.1270374Z ##[group]Runner Image Provisioner
+2026-11-16T22:51:11.1271265Z Hosted Compute Agent
+2026-11-16T22:51:11.1271790Z Version: 20261103.629
+2026-11-16T22:51:11.1272387Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-16T22:51:11.1273062Z Build Date: 2026-11-03T17:26:59Z
+2026-11-16T22:51:11.1273680Z Worker ID: {39cd5226-1e3d-4991-9c3d-d60936ab1970}
+2026-11-16T22:51:11.1274356Z Region: eastus2
+2026-11-16T22:51:11.1275210Z Cloud: Azure
+2026-11-16T22:51:11.1276043Z ##[endgroup]
+2026-11-16T22:51:11.1278047Z ##[group]Operating System
+2026-11-16T22:51:11.1278662Z Ubuntu
+2026-11-16T22:51:11.1279179Z 24.04.5
+2026-11-16T22:51:11.1279640Z LTS
+2026-11-16T22:51:11.1280080Z ##[endgroup]
+2026-11-16T22:51:11.1280605Z ##[group]Runner Image
+2026-11-16T22:51:11.1281166Z Image: ubuntu-24.04
+2026-11-16T22:51:11.1281713Z Version: 20261111.370.1
+2026-11-16T22:51:11.1282940Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-16T22:51:11.1284722Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+2026-11-16T22:51:11.1285661Z ##[endgroup]
+2026-11-16T22:51:11.1286799Z ##[group]GITHUB_TOKEN Permissions
+2026-11-16T22:51:11.1289037Z Actions: read
+2026-11-16T22:51:11.1289617Z Contents: read
+2026-11-16T22:51:11.1290132Z Metadata: read
+2026-11-16T22:51:11.1290655Z ##[endgroup]
+2026-11-16T22:51:11.1292844Z Secret source: Actions
+2026-11-16T22:51:11.1293654Z Cache mode: write
+2026-11-16T22:51:11.1294805Z Prepare workflow directory
+2026-11-16T22:51:11.1607700Z Prepare all required actions
+2026-11-16T22:51:11.1656581Z Getting action download info
+2026-11-16T22:51:11.4166772Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-16T22:51:11.5296878Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-16T22:51:11.7040779Z Complete job name: complete-artifact-read
+2026-11-16T22:51:11.7869726Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-16T22:51:11.7870762Z with:
+2026-11-16T22:51:11.7871390Z   ref: 2262b208b597a853dd1dd61379929c87af0e01b8
+2026-11-16T22:51:11.7872365Z   sparse-checkout: qualification/audit_store_callable
+tests/hia_native/audit_store_controller/process.py
+
+2026-11-16T22:51:11.7873375Z   sparse-checkout-cone-mode: false
+2026-11-16T22:51:11.7873955Z   persist-credentials: false
+2026-11-16T22:51:11.7874841Z   repository: TrillionniumFoundation/hepta-runtime
+2026-11-16T22:51:11.7878658Z   token: ***
+2026-11-16T22:51:11.7879113Z   ssh-strict: true
+2026-11-16T22:51:11.7879615Z   ssh-user: git
+2026-11-16T22:51:11.7880086Z   clean: true
+2026-11-16T22:51:11.7880541Z   fetch-depth: 1
+2026-11-16T22:51:11.7881026Z   fetch-tags: false
+2026-11-16T22:51:11.7881500Z   show-progress: true
+2026-11-16T22:51:11.7881981Z   lfs: false
+2026-11-16T22:51:11.7882452Z   submodules: false
+2026-11-16T22:51:11.7882950Z   set-safe-directory: true
+2026-11-16T22:51:11.7883599Z   allow-unsafe-pr-checkout: false
+2026-11-16T22:51:11.7884817Z ##[endgroup]
+2026-11-16T22:51:12.0522626Z Syncing repository: TrillionniumFoundation/hepta-runtime
+2026-11-16T22:51:12.0525636Z ##[group]Getting Git version info
+2026-11-16T22:51:12.0526582Z Working directory is '/home/runner/work/hepta-runtime/hepta-runtime'
+2026-11-16T22:51:12.0528891Z [command]/usr/bin/git version
+2026-11-16T22:51:12.0602435Z git version 2.56.1
+2026-11-16T22:51:12.0623687Z ##[endgroup]
+2026-11-16T22:51:12.0634138Z Temporarily overriding HOME='/home/runner/work/_temp/89fc6eb3-9b53-4a9d-8511-a94d1a7a97c7' before making global git config changes
+2026-11-16T22:51:12.0637512Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-16T22:51:12.0640789Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+2026-11-16T22:51:12.0680340Z Deleting the contents of '/home/runner/work/hepta-runtime/hepta-runtime'
+2026-11-16T22:51:12.0686035Z ##[group]Determining repository object format
+2026-11-16T22:51:12.0688089Z ##[endgroup]
+2026-11-16T22:51:12.0689119Z ##[group]Initializing the repository
+2026-11-16T22:51:12.0693655Z [command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime
+2026-11-16T22:51:12.0797726Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-16T22:51:12.0799067Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-16T22:51:12.0800083Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-16T22:51:12.0800909Z hint: call:
+2026-11-16T22:51:12.0801362Z hint:
+2026-11-16T22:51:12.0801936Z hint: 	git config --global init.defaultBranch <name>
+2026-11-16T22:51:12.0802599Z hint:
+2026-11-16T22:51:12.0803257Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-16T22:51:12.0804248Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-16T22:51:12.0805304Z hint:
+2026-11-16T22:51:12.0805778Z hint: 	git branch -m <name>
+2026-11-16T22:51:12.0806305Z hint:
+2026-11-16T22:51:12.0807000Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-16T22:51:12.0813823Z Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/.git/
+2026-11-16T22:51:12.0825903Z [command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/hepta-runtime
+2026-11-16T22:51:12.0873826Z ##[endgroup]
+2026-11-16T22:51:12.0875293Z ##[group]Disabling automatic garbage collection
+2026-11-16T22:51:12.0878024Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-16T22:51:12.0918203Z ##[endgroup]
+2026-11-16T22:51:12.0936187Z ##[group]Setting up auth
+2026-11-16T22:51:12.0936906Z Removing SSH command configuration
+2026-11-16T22:51:12.0946024Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-16T22:51:12.0991524Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-16T22:51:12.1348069Z Removing HTTP extra header
+2026-11-16T22:51:12.1355031Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-16T22:51:12.1409359Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-16T22:51:12.1671503Z Removing includeIf entries pointing to credentials config files
+2026-11-16T22:51:12.1675839Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-16T22:51:12.1712801Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-16T22:51:12.1927169Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-16T22:51:12.1966598Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path /home/runner/work/_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config
+2026-11-16T22:51:12.2001114Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config
+2026-11-16T22:51:12.2032203Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config
+2026-11-16T22:51:12.2062865Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config
+2026-11-16T22:51:12.2088489Z ##[endgroup]
+2026-11-16T22:51:12.2094792Z ##[group]Fetching the repository
+2026-11-16T22:51:12.2096179Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin 2262b208b597a853dd1dd61379929c87af0e01b8
+2026-11-16T22:51:12.5244251Z From https://github.com/TrillionniumFoundation/hepta-runtime
+2026-11-16T22:51:12.5246535Z  * branch            2262b208b597a853dd1dd61379929c87af0e01b8 -> FETCH_HEAD
+2026-11-16T22:51:12.5253246Z [command]/usr/bin/git rev-parse --verify --quiet 2262b208b597a853dd1dd61379929c87af0e01b8^{object}
+2026-11-16T22:51:12.5281293Z 2262b208b597a853dd1dd61379929c87af0e01b8
+2026-11-16T22:51:12.5290712Z ##[endgroup]
+2026-11-16T22:51:12.5291602Z ##[group]Determining the checkout info
+2026-11-16T22:51:12.5292541Z ##[endgroup]
+2026-11-16T22:51:12.5293367Z ##[group]Setting up sparse checkout
+2026-11-16T22:51:12.5296432Z [command]/usr/bin/git config core.sparseCheckout true
+2026-11-16T22:51:12.5329552Z [command]/usr/bin/git rev-parse --git-path info/sparse-checkout
+2026-11-16T22:51:12.5352708Z .git/info/sparse-checkout
+2026-11-16T22:51:12.5359770Z ##[endgroup]
+2026-11-16T22:51:12.5361393Z ##[group]Checking out the ref
+2026-11-16T22:51:12.5364903Z [command]/usr/bin/git checkout --progress --force 2262b208b597a853dd1dd61379929c87af0e01b8
+2026-11-16T22:51:12.8263808Z Note: switching to '2262b208b597a853dd1dd61379929c87af0e01b8'.
+2026-11-16T22:51:12.8265505Z 
+2026-11-16T22:51:12.8266937Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-16T22:51:12.8269416Z changes and commit them, and you can discard any commits you make in this
+2026-11-16T22:51:12.8271662Z state without impacting any branches by switching back to a branch.
+2026-11-16T22:51:12.8273276Z 
+2026-11-16T22:51:12.8274305Z If you want to create a new branch to retain commits you create, you may
+2026-11-16T22:51:12.8277021Z do so (now or later) by using -c with the switch command. Example:
+2026-11-16T22:51:12.8278572Z 
+2026-11-16T22:51:12.8279285Z   git switch -c <new-branch-name>
+2026-11-16T22:51:12.8280655Z 
+2026-11-16T22:51:12.8281296Z Or undo this operation with:
+2026-11-16T22:51:12.8282183Z 
+2026-11-16T22:51:12.8283011Z   git switch -
+2026-11-16T22:51:12.8283740Z 
+2026-11-16T22:51:12.8285133Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-16T22:51:12.8286887Z 
+2026-11-16T22:51:12.8289058Z HEAD is now at 2262b20 Preserve unavailable local reader and independently read the original callable artifact in CI
+2026-11-16T22:51:12.8296088Z ##[endgroup]
+2026-11-16T22:51:12.8330490Z [command]/usr/bin/git log -1 --format=%H
+2026-11-16T22:51:12.8358956Z 2262b208b597a853dd1dd61379929c87af0e01b8
+2026-11-16T22:51:12.8370428Z ##[group]Removing auth
+2026-11-16T22:51:12.8371947Z Removing SSH command configuration
+2026-11-16T22:51:12.8374453Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-16T22:51:12.8406045Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-16T22:51:12.8610822Z Removing HTTP extra header
+2026-11-16T22:51:12.8614201Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-16T22:51:12.8650494Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-16T22:51:12.8856692Z Removing includeIf entries pointing to credentials config files
+2026-11-16T22:51:12.8860290Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-16T22:51:12.8887393Z includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+2026-11-16T22:51:12.8891380Z includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+2026-11-16T22:51:12.8894941Z includeif.gitdir:/github/workspace/.git.path
+2026-11-16T22:51:12.8897466Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-16T22:51:12.8903027Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+2026-11-16T22:51:12.8919827Z /home/runner/work/_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config
+2026-11-16T22:51:12.8930543Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-330bccd4\-aa82\-4f1b\-af36\-5bf7d016e8fa\.config
+2026-11-16T22:51:12.8961598Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+2026-11-16T22:51:12.8987686Z /home/runner/work/_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config
+2026-11-16T22:51:12.8999657Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-330bccd4\-aa82\-4f1b\-af36\-5bf7d016e8fa\.config
+2026-11-16T22:51:12.9030880Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-16T22:51:12.9057420Z /github/runner_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config
+2026-11-16T22:51:12.9071084Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-330bccd4\-aa82\-4f1b\-af36\-5bf7d016e8fa\.config
+2026-11-16T22:51:12.9103121Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-16T22:51:12.9125183Z /github/runner_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config
+2026-11-16T22:51:12.9133468Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-330bccd4\-aa82\-4f1b\-af36\-5bf7d016e8fa\.config
+2026-11-16T22:51:12.9164108Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-16T22:51:12.9363094Z Removing credentials config '/home/runner/work/_temp/git-credentials-330bccd4-aa82-4f1b-af36-5bf7d016e8fa.config'
+2026-11-16T22:51:12.9371349Z ##[endgroup]
+2026-11-16T22:51:12.9606989Z ##[group]Run mkdir /tmp/hia-audit-callable-6780-ci-readback-v1
+2026-11-16T22:51:12.9608981Z [36;1mmkdir /tmp/hia-audit-callable-6780-ci-readback-v1[0m
+2026-11-16T22:51:12.9612066Z [36;1mtimeout 180 gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14278752888/zip > /tmp/hia-audit-callable-6780-ci-readback-v1/complete.zip[0m
+2026-11-16T22:51:12.9616830Z [36;1mecho '61357f2850adc9744af7b71650d3a779b16d03b134ac816ba2f289dcd279c566  /tmp/hia-audit-callable-6780-ci-readback-v1/complete.zip' | sha256sum --check --strict[0m
+2026-11-16T22:51:12.9637393Z shell: /usr/bin/bash -e {0}
+2026-11-16T22:51:12.9638460Z env:
+2026-11-16T22:51:12.9648178Z   GH_TOKEN: ***
+2026-11-16T22:51:12.9649056Z ##[endgroup]
+2026-11-16T22:51:18.1852996Z /tmp/hia-audit-callable-6780-ci-readback-v1/complete.zip: OK
+2026-11-16T22:51:18.1905642Z ##[group]Run python3 -I -B - <<'PY'
+2026-11-16T22:51:18.1906110Z [36;1mpython3 -I -B - <<'PY'[0m
+2026-11-16T22:51:18.1906470Z [36;1mfrom pathlib import Path[0m
+2026-11-16T22:51:18.1906825Z [36;1mimport json,sys[0m
+2026-11-16T22:51:18.1907157Z [36;1mroot=Path.cwd()[0m
+2026-11-16T22:51:18.1907559Z [36;1msource=root/'tests/hia_native/audit_store_controller'[0m
+2026-11-16T22:51:18.1908038Z [36;1msys.path.insert(0,str(source))[0m
+2026-11-16T22:51:18.1908430Z [36;1mfrom process import Recorder[0m
+2026-11-16T22:51:18.1908926Z [36;1mdriver=root/'qualification/audit_store_callable/relocate_ci_v1.py'[0m
+2026-11-16T22:51:18.1909632Z [36;1mrecorder=Recorder(root,Path('/tmp/hia-audit-callable-6780-ci-readback-v1-outer'))[0m
+2026-11-16T22:51:18.1910611Z [36;1mraw,row=recorder.run('complete-archive-read',[sys.executable,'-I','-B',str(driver),'4aee8c0792f70f441d9dc1bceae6a2b9c8ccaf66'],timeout=900)[0m
+2026-11-16T22:51:18.1911629Z [36;1mprint(raw.decode(),end='')[0m
+2026-11-16T22:51:18.1912221Z [36;1mprint(json.dumps({'outer_process':row,'native_or_rust_executions':0},sort_keys=True))[0m
+2026-11-16T22:51:18.1913013Z [36;1mresult=Path('/tmp/hia-audit-callable-6780-ci-readback-v1/READBACK.json').read_bytes()[0m
+2026-11-16T22:51:18.1913642Z [36;1mprint('COMPLETE_READBACK_JSON_BEGIN')[0m
+2026-11-16T22:51:18.1914057Z [36;1mprint(result.decode(),end='')[0m
+2026-11-16T22:51:18.1914454Z [36;1mprint('COMPLETE_READBACK_JSON_END')[0m
+2026-11-16T22:51:18.1915090Z [36;1mPY[0m
+2026-11-16T22:51:18.1931385Z shell: /usr/bin/bash -e {0}
+2026-11-16T22:51:18.1931761Z ##[endgroup]
+2026-11-16T22:52:21.6302921Z {"stage": "full-archive-relocation", "zip_bytes": 391794492}
+2026-11-16T22:52:21.6303751Z {"stage": "guarded-readonly", "archive_files": 24151}
+2026-11-16T22:52:21.6313496Z {"elapsed_seconds": 63.33086854, "proof": {"bytes": 14974874, "file": "independent-reader.stdout", "sha256": "bdcae505ad69f8770801aaa7b3184a651dea17f914a775f132b8ece9bedf7e44"}, "readback": {"bytes": 6586, "sha256": "3a34b9ca08ff0c5448a6226ad7ec0a27a8de200255610baaed30562b8ed78cfa"}, "reader": {"actors": 399, "callable_emission": {"calls": 9, "image": {"bytes": 163907, "sha256": "e96e57c5d7ddf6b5b911e6b15139a89212b807ee7458638af4ac8a67fca63f43"}, "physical_bytes": 4250764, "refusals": 8}, "complete_before_after_equal": true, "completed_operations": 774, "contexts": 13, "entries": 24994, "guard_refusals": 12, "journal": {"actors": 399, "actual_original_native_observations": 4, "api_starts": {"0": 13, "1": 273, "2": 113, "4": 105, "5": 270}, "clock_mappings": 128, "completed_operations": 774, "contexts": 13, "journal": {"bytes": 67241920, "sha256": "0de0d6a4200e617b95c3f09f51698956d4a6dd9b2b49eee479fc9a29c5727c0b"}, "original_observations": {"bytes": 627, "sha256": "09a8fe46bf75637e065f4109520c9f8d419aa01e1ad004ac0643238e0a229a36"}, "outcomes": {"0": 384, "3": 375, "5": 3, "6": 12}, "physical_bytes": 29907808, "record_kinds": {"boundary": 12636, "clock-mapping": 128, "controller": 13259, "deadline": 120, "exclusive-unwind": 1, "exclusive-workers": 1, "existing-unwind": 1, "growth": 33, "queue-probe": 73, "quiescent": 13, "shared-workers": 1}, "records": 26266}, "native_or_rust_executions": 0, "native_tests": 10, "observer_free": {"calls": 15, "complete_native_queue_disposal": true, "foreign_effect_calls": 0, "observer_pointer": 0, "ordinary_calls": 6, "physical_bytes": 32288, "refusals": 9}, "original_tests": 9, "public_handler_qualified": false, "reader_writes": 0, "status": "COMPLETE_HIA_NATIVE_AUDIT_CALLABLE_PASS", "whole_runtime_replaced": false}, "root": "/tmp/hia-audit-callable-6780-ci-readback-v1", "source_head": "bde43ad26e20171658753cd1d270f2a5ffec3660", "status": "PASS"}
+2026-11-16T22:52:21.6328995Z {"native_or_rust_executions": 0, "outer_process": {"argv": ["/usr/bin/python3", "-I", "-B", "/home/runner/work/hepta-runtime/hepta-runtime/qualification/audit_store_callable/relocate_ci_v1.py", "4aee8c0792f70f441d9dc1bceae6a2b9c8ccaf66"], "completed": true, "cwd": "/home/runner/work/hepta-runtime/hepta-runtime", "elapsed_seconds": 63.403256434000006, "exit_code": 0, "name": "complete-archive-read", "parent_pid": 2446, "pgid": 2447, "pid": 2447, "stderr": {"bytes": 0, "file": "complete-archive-read.stderr", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}, "stdin": null, "stdout": {"bytes": 2027, "file": "complete-archive-read.stdout", "sha256": "ab0655fc63ab38f149bdfb703c0d31ab9c14c1e96a7866c8e0255e247d6d7b82"}, "timed_out": false, "timeout_seconds": 900}}
+2026-11-16T22:52:21.6333707Z COMPLETE_READBACK_JSON_BEGIN
+2026-11-16T22:52:21.6334147Z {
+2026-11-16T22:52:21.6334445Z   "archive": {
+2026-11-16T22:52:21.6335108Z     "complete_member_bytes_and_modes_equal": true,
+2026-11-16T22:52:21.6335643Z     "files": 24151,
+2026-11-16T22:52:21.6336107Z     "head": "bde43ad26e20171658753cd1d270f2a5ffec3660",
+2026-11-16T22:52:21.6336864Z     "logical_bytes": 2441549896,
+2026-11-16T22:52:21.6337302Z     "native_or_rust_executions": 0,
+2026-11-16T22:52:21.6337787Z     "retained_ci_independent_reader": {
+2026-11-16T22:52:21.6338277Z       "actors": 399,
+2026-11-16T22:52:21.6338667Z       "callable_emission": {
+2026-11-16T22:52:21.6339074Z         "calls": 9,
+2026-11-16T22:52:21.6339416Z         "image": {
+2026-11-16T22:52:21.6339752Z           "bytes": 163907,
+2026-11-16T22:52:21.6340375Z           "sha256": "e96e57c5d7ddf6b5b911e6b15139a89212b807ee7458638af4ac8a67fca63f43"
+2026-11-16T22:52:21.6341024Z         },
+2026-11-16T22:52:21.6341362Z         "physical_bytes": 4250764,
+2026-11-16T22:52:21.6341780Z         "refusals": 8
+2026-11-16T22:52:21.6342120Z       },
+2026-11-16T22:52:21.6342459Z       "complete_before_after_equal": true,
+2026-11-16T22:52:21.6342941Z       "completed_operations": 774,
+2026-11-16T22:52:21.6343367Z       "contexts": 13,
+2026-11-16T22:52:21.6343730Z       "entries": 24994,
+2026-11-16T22:52:21.6344126Z       "guard_refusals": 12,
+2026-11-16T22:52:21.6344747Z       "journal": {
+2026-11-16T22:52:21.6345079Z         "actors": 399,
+2026-11-16T22:52:21.6345490Z         "actual_original_native_observations": 4,
+2026-11-16T22:52:21.6346043Z         "api_starts": {
+2026-11-16T22:52:21.6346382Z           "0": 13,
+2026-11-16T22:52:21.6346870Z           "1": 273,
+2026-11-16T22:52:21.6347172Z           "2": 113,
+2026-11-16T22:52:21.6347498Z           "4": 105,
+2026-11-16T22:52:21.6347812Z           "5": 270
+2026-11-16T22:52:21.6348129Z         },
+2026-11-16T22:52:21.6348470Z         "clock_mappings": 128,
+2026-11-16T22:52:21.6348913Z         "completed_operations": 774,
+2026-11-16T22:52:21.6349349Z         "contexts": 13,
+2026-11-16T22:52:21.6349712Z         "journal": {
+2026-11-16T22:52:21.6350060Z           "bytes": 67241920,
+2026-11-16T22:52:21.6350671Z           "sha256": "0de0d6a4200e617b95c3f09f51698956d4a6dd9b2b49eee479fc9a29c5727c0b"
+2026-11-16T22:52:21.6351338Z         },
+2026-11-16T22:52:21.6351673Z         "original_observations": {
+2026-11-16T22:52:21.6352106Z           "bytes": 627,
+2026-11-16T22:52:21.6352707Z           "sha256": "09a8fe46bf75637e065f4109520c9f8d419aa01e1ad004ac0643238e0a229a36"
+2026-11-16T22:52:21.6353388Z         },
+2026-11-16T22:52:21.6353688Z         "outcomes": {
+2026-11-16T22:52:21.6354023Z           "0": 384,
+2026-11-16T22:52:21.6354360Z           "3": 375,
+2026-11-16T22:52:21.6354833Z           "5": 3,
+2026-11-16T22:52:21.6355111Z           "6": 12
+2026-11-16T22:52:21.6355450Z         },
+2026-11-16T22:52:21.6355747Z         "physical_bytes": 29907808,
+2026-11-16T22:52:21.6356143Z         "record_kinds": {
+2026-11-16T22:52:21.6356520Z           "boundary": 12636,
+2026-11-16T22:52:21.6356904Z           "clock-mapping": 128,
+2026-11-16T22:52:21.6357305Z           "controller": 13259,
+2026-11-16T22:52:21.6357693Z           "deadline": 120,
+2026-11-16T22:52:21.6358079Z           "exclusive-unwind": 1,
+2026-11-16T22:52:21.6358473Z           "exclusive-workers": 1,
+2026-11-16T22:52:21.6358881Z           "existing-unwind": 1,
+2026-11-16T22:52:21.6359283Z           "growth": 33,
+2026-11-16T22:52:21.6360068Z           "queue-probe": 73,
+2026-11-16T22:52:21.6361088Z           "quiescent": 13,
+2026-11-16T22:52:21.6361817Z           "shared-workers": 1
+2026-11-16T22:52:21.6362214Z         },
+2026-11-16T22:52:21.6362527Z         "records": 26266
+2026-11-16T22:52:21.6362878Z       },
+2026-11-16T22:52:21.6363213Z       "native_or_rust_executions": 0,
+2026-11-16T22:52:21.6363672Z       "native_tests": 10,
+2026-11-16T22:52:21.6364070Z       "observer_free": {
+2026-11-16T22:52:21.6364455Z         "calls": 15,
+2026-11-16T22:52:21.6365056Z         "complete_native_queue_disposal": true,
+2026-11-16T22:52:21.6365561Z         "foreign_effect_calls": 0,
+2026-11-16T22:52:21.6366108Z         "observer_pointer": 0,
+2026-11-16T22:52:21.6366568Z         "ordinary_calls": 6,
+2026-11-16T22:52:21.6366985Z         "physical_bytes": 32288,
+2026-11-16T22:52:21.6367422Z         "refusals": 9
+2026-11-16T22:52:21.6367763Z       },
+2026-11-16T22:52:21.6368344Z       "original_tests": 9,
+2026-11-16T22:52:21.6368757Z       "public_handler_qualified": false,
+2026-11-16T22:52:21.6369211Z       "reader_writes": 0,
+2026-11-16T22:52:21.6369703Z       "status": "COMPLETE_HIA_NATIVE_AUDIT_CALLABLE_PASS",
+2026-11-16T22:52:21.6370278Z       "whole_runtime_replaced": false
+2026-11-16T22:52:21.6370705Z     },
+2026-11-16T22:52:21.6371263Z     "schema": "hepta.audit-store-controller.independent-archive-read.v1",
+2026-11-16T22:52:21.6371947Z     "source_git_blobs_verified": 36,
+2026-11-16T22:52:21.6372686Z     "source_manifest_sha256": "a4fb641634384362c888493d927fb310e5de76b5093c8325d01a06dedb7a298b",
+2026-11-16T22:52:21.6373453Z     "tar": {
+2026-11-16T22:52:21.6373779Z       "bytes": 397371185,
+2026-11-16T22:52:21.6374356Z       "sha256": "8305766328e9bbf20cb22397a23cf393451515c49c7f5168e51e308e526c44dc"
+2026-11-16T22:52:21.6375159Z     },
+2026-11-16T22:52:21.6375477Z     "whole_runtime_replaced": false,
+2026-11-16T22:52:21.6375869Z     "zip": {
+2026-11-16T22:52:21.6376197Z       "bytes": 391794492,
+2026-11-16T22:52:21.6376787Z       "sha256": "61357f2850adc9744af7b71650d3a779b16d03b134ac816ba2f289dcd279c566"
+2026-11-16T22:52:21.6377445Z     }
+2026-11-16T22:52:21.6377740Z   },
+2026-11-16T22:52:21.6378035Z   "driver": {
+2026-11-16T22:52:21.6378376Z     "bytes": 16883,
+2026-11-16T22:52:21.6378947Z     "sha256": "b78d333ccc97c8d5afffb0f15b3df4a9674958f01ed69aa771cae21ae98488e1"
+2026-11-16T22:52:21.6379618Z   },
+2026-11-16T22:52:21.6380056Z   "driver_git_blob": "4aee8c0792f70f441d9dc1bceae6a2b9c8ccaf66",
+2026-11-16T22:52:21.6380653Z   "elapsed_seconds": 63.330482444,
+2026-11-16T22:52:21.6381234Z   "full_proof_file": "reader-processes/independent-reader.stdout",
+2026-11-16T22:52:21.6381920Z   "host": "github-actions-independent-readonly",
+2026-11-16T22:52:21.6382459Z   "native_or_rust_executions": 0,
+2026-11-16T22:52:21.6382853Z   "process": {
+2026-11-16T22:52:21.6383338Z     "argv": [
+2026-11-16T22:52:21.6383664Z       "/usr/bin/python3",
+2026-11-16T22:52:21.6384030Z       "-I",
+2026-11-16T22:52:21.6384327Z       "-B",
+2026-11-16T22:52:21.6385205Z       "/tmp/hia-audit-callable-6780-ci-readback-v1/expanded/source/verify_readonly.py",
+2026-11-16T22:52:21.6385959Z       "--output",
+2026-11-16T22:52:21.6386447Z       "/tmp/hia-audit-callable-6780-ci-readback-v1/expanded/run",
+2026-11-16T22:52:21.6387048Z       "--source-manifest-sha256",
+2026-11-16T22:52:21.6387659Z       "a4fb641634384362c888493d927fb310e5de76b5093c8325d01a06dedb7a298b",
+2026-11-16T22:52:21.6388248Z       "--require-controls"
+2026-11-16T22:52:21.6388599Z     ],
+2026-11-16T22:52:21.6388893Z     "completed": true,
+2026-11-16T22:52:21.6389427Z     "cwd": "/tmp/hia-audit-callable-6780-ci-readback-v1/expanded/source",
+2026-11-16T22:52:21.6390073Z     "elapsed_seconds": 43.506605436,
+2026-11-16T22:52:21.6390503Z     "exit_code": 0,
+2026-11-16T22:52:21.6390883Z     "name": "independent-reader",
+2026-11-16T22:52:21.6391304Z     "parent_pid": 2447,
+2026-11-16T22:52:21.6391677Z     "pgid": 2455,
+2026-11-16T22:52:21.6392020Z     "pid": 2455,
+2026-11-16T22:52:21.6392363Z     "stderr": {
+2026-11-16T22:52:21.6392706Z       "bytes": 0,
+2026-11-16T22:52:21.6393338Z       "file": "independent-reader.stderr",
+2026-11-16T22:52:21.6394050Z       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+2026-11-16T22:52:21.6394837Z     },
+2026-11-16T22:52:21.6395154Z     "stdin": null,
+2026-11-16T22:52:21.6395498Z     "stdout": {
+2026-11-16T22:52:21.6395831Z       "bytes": 14974874,
+2026-11-16T22:52:21.6396259Z       "file": "independent-reader.stdout",
+2026-11-16T22:52:21.6396958Z       "sha256": "bdcae505ad69f8770801aaa7b3184a651dea17f914a775f132b8ece9bedf7e44"
+2026-11-16T22:52:21.6397606Z     },
+2026-11-16T22:52:21.6397935Z     "timed_out": false,
+2026-11-16T22:52:21.6398337Z     "timeout_seconds": 180
+2026-11-16T22:52:21.6398695Z   },
+2026-11-16T22:52:21.6399000Z   "reader": {
+2026-11-16T22:52:21.6399336Z     "actors": 399,
+2026-11-16T22:52:21.6399721Z     "callable_emission": {
+2026-11-16T22:52:21.6400365Z       "calls": 9,
+2026-11-16T22:52:21.6400711Z       "image": {
+2026-11-16T22:52:21.6401052Z         "bytes": 163907,
+2026-11-16T22:52:21.6401657Z         "sha256": "e96e57c5d7ddf6b5b911e6b15139a89212b807ee7458638af4ac8a67fca63f43"
+2026-11-16T22:52:21.6402335Z       },
+2026-11-16T22:52:21.6402676Z       "physical_bytes": 4250764,
+2026-11-16T22:52:21.6403106Z       "refusals": 8
+2026-11-16T22:52:21.6403434Z     },
+2026-11-16T22:52:21.6403776Z     "complete_before_after_equal": true,
+2026-11-16T22:52:21.6404259Z     "completed_operations": 774,
+2026-11-16T22:52:21.6404881Z     "contexts": 13,
+2026-11-16T22:52:21.6405243Z     "entries": 24994,
+2026-11-16T22:52:21.6405636Z     "guard_refusals": 12,
+2026-11-16T22:52:21.6406015Z     "journal": {
+2026-11-16T22:52:21.6406347Z       "actors": 399,
+2026-11-16T22:52:21.6406748Z       "actual_original_native_observations": 4,
+2026-11-16T22:52:21.6407244Z       "api_starts": {
+2026-11-16T22:52:21.6407605Z         "0": 13,
+2026-11-16T22:52:21.6407929Z         "1": 273,
+2026-11-16T22:52:21.6408230Z         "2": 113,
+2026-11-16T22:52:21.6408519Z         "4": 105,
+2026-11-16T22:52:21.6408814Z         "5": 270
+2026-11-16T22:52:21.6409118Z       },
+2026-11-16T22:52:21.6409442Z       "clock_mappings": 128,
+2026-11-16T22:52:21.6409839Z       "completed_operations": 774,
+2026-11-16T22:52:21.6410244Z       "contexts": 13,
+2026-11-16T22:52:21.6410576Z       "journal": {
+2026-11-16T22:52:21.6410905Z         "bytes": 67241920,
+2026-11-16T22:52:21.6411520Z         "sha256": "0de0d6a4200e617b95c3f09f51698956d4a6dd9b2b49eee479fc9a29c5727c0b"
+2026-11-16T22:52:21.6412210Z       },
+2026-11-16T22:52:21.6412542Z       "original_observations": {
+2026-11-16T22:52:21.6412951Z         "bytes": 627,
+2026-11-16T22:52:21.6413528Z         "sha256": "09a8fe46bf75637e065f4109520c9f8d419aa01e1ad004ac0643238e0a229a36"
+2026-11-16T22:52:21.6414205Z       },
+2026-11-16T22:52:21.6414702Z       "outcomes": {
+2026-11-16T22:52:21.6415051Z         "0": 384,
+2026-11-16T22:52:21.6415378Z         "3": 375,
+2026-11-16T22:52:21.6415721Z         "5": 3,
+2026-11-16T22:52:21.6416044Z         "6": 12
+2026-11-16T22:52:21.6416361Z       },
+2026-11-16T22:52:21.6416718Z       "physical_bytes": 29907808,
+2026-11-16T22:52:21.6417145Z       "record_kinds": {
+2026-11-16T22:52:21.6417541Z         "boundary": 12636,
+2026-11-16T22:52:21.6417946Z         "clock-mapping": 128,
+2026-11-16T22:52:21.6418384Z         "controller": 13259,
+2026-11-16T22:52:21.6418777Z         "deadline": 120,
+2026-11-16T22:52:21.6419207Z         "exclusive-unwind": 1,
+2026-11-16T22:52:21.6419637Z         "exclusive-workers": 1,
+2026-11-16T22:52:21.6420027Z         "existing-unwind": 1,
+2026-11-16T22:52:21.6420393Z         "growth": 33,
+2026-11-16T22:52:21.6420730Z         "queue-probe": 73,
+2026-11-16T22:52:21.6421095Z         "quiescent": 13,
+2026-11-16T22:52:21.6421447Z         "shared-workers": 1
+2026-11-16T22:52:21.6421811Z       },
+2026-11-16T22:52:21.6422122Z       "records": 26266
+2026-11-16T22:52:21.6422471Z     },
+2026-11-16T22:52:21.6422793Z     "native_or_rust_executions": 0,
+2026-11-16T22:52:21.6423248Z     "native_tests": 10,
+2026-11-16T22:52:21.6423604Z     "observer_free": {
+2026-11-16T22:52:21.6424209Z       "calls": 15,
+2026-11-16T22:52:21.6424797Z       "complete_native_queue_disposal": true,
+2026-11-16T22:52:21.6425296Z       "foreign_effect_calls": 0,
+2026-11-16T22:52:21.6425724Z       "observer_pointer": 0,
+2026-11-16T22:52:21.6426113Z       "ordinary_calls": 6,
+2026-11-16T22:52:21.6426513Z       "physical_bytes": 32288,
+2026-11-16T22:52:21.6426907Z       "refusals": 9
+2026-11-16T22:52:21.6427221Z     },
+2026-11-16T22:52:21.6427529Z     "original_tests": 9,
+2026-11-16T22:52:21.6427939Z     "public_handler_qualified": false,
+2026-11-16T22:52:21.6428371Z     "reader_writes": 0,
+2026-11-16T22:52:21.6428799Z     "status": "COMPLETE_HIA_NATIVE_AUDIT_CALLABLE_PASS",
+2026-11-16T22:52:21.6429348Z     "whole_runtime_replaced": false
+2026-11-16T22:52:21.6429760Z   },
+2026-11-16T22:52:21.6430194Z   "root": "/tmp/hia-audit-callable-6780-ci-readback-v1",
+2026-11-16T22:52:21.6431174Z   "schema": "hepta.audit-store-controller.ci-readback.v1",
+2026-11-16T22:52:21.6431874Z   "source_head": "bde43ad26e20171658753cd1d270f2a5ffec3660",
+2026-11-16T22:52:21.6432731Z   "source_manifest_sha256": "a4fb641634384362c888493d927fb310e5de76b5093c8325d01a06dedb7a298b",
+2026-11-16T22:52:21.6433524Z   "whole_runtime_replaced": false
+2026-11-16T22:52:21.6433949Z }
+2026-11-16T22:52:21.6434261Z COMPLETE_READBACK_JSON_END
+2026-11-16T22:52:21.6516199Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-11-16T22:52:21.6516616Z with:
+2026-11-16T22:52:21.6516986Z   name: audit-callable-independent-proof-2262b208b597a853dd1dd61379929c87af0e01b8
+2026-11-16T22:52:21.6517872Z   path: /tmp/hia-audit-callable-6780-ci-readback-v1/*.json
+/tmp/hia-audit-callable-6780-ci-readback-v1/reader-processes
+/tmp/hia-audit-callable-6780-ci-readback-v1-outer
+
+2026-11-16T22:52:21.6518585Z   if-no-files-found: error
+2026-11-16T22:52:21.6518815Z   retention-days: 14
+2026-11-16T22:52:21.6519052Z   compression-level: 6
+2026-11-16T22:52:21.6519266Z   overwrite: false
+2026-11-16T22:52:21.6519480Z   include-hidden-files: false
+2026-11-16T22:52:21.6519721Z ##[endgroup]
+2026-11-16T22:52:21.8161623Z (node:2464) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T22:52:21.8162337Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T22:52:21.8280215Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-11-16T22:52:21.8316435Z The least common ancestor is /tmp. This will be the root directory of the artifact
+2026-11-16T22:52:21.8317632Z With the provided path, there will be 11 files uploaded
+2026-11-16T22:52:21.8318971Z Artifact name is valid!
+2026-11-16T22:52:21.8319566Z Root directory input is valid!
+2026-11-16T22:52:22.0709963Z Beginning upload of artifact content to blob storage
+2026-11-16T22:52:22.4439759Z (node:2464) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T22:52:22.6415580Z Uploaded bytes 4041565
+2026-11-16T22:52:22.6617148Z Finished uploading artifact content to blob storage!
+2026-11-16T22:52:22.6617880Z SHA256 digest of uploaded artifact zip is 5026628725eb5b90ab49676e97cfa305d3076749076675d730fba48edd99712d
+2026-11-16T22:52:22.6627709Z Finalizing artifact upload
+2026-11-16T22:52:23.0319944Z Artifact audit-callable-independent-proof-2262b208b597a853dd1dd61379929c87af0e01b8.zip successfully finalized. Artifact ID 14280780485
+2026-11-16T22:52:23.0321410Z Artifact audit-callable-independent-proof-2262b208b597a853dd1dd61379929c87af0e01b8 has been successfully uploaded! Final size is 4041565 bytes. Artifact ID is 14280780485
+2026-11-16T22:52:23.0327244Z Artifact download URL: https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43973944488/artifacts/14280780485
+2026-11-16T22:52:23.0550335Z Post job cleanup.
+2026-11-16T22:52:23.1372868Z [command]/usr/bin/git version
+2026-11-16T22:52:23.1412734Z git version 2.56.1
+2026-11-16T22:52:23.1447002Z Temporarily overriding HOME='/home/runner/work/_temp/060a4e05-5496-462b-a235-9818688978c3' before making global git config changes
+2026-11-16T22:52:23.1448430Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-16T22:52:23.1455699Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+2026-11-16T22:52:23.1485309Z Removing SSH command configuration
+2026-11-16T22:52:23.1493321Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-16T22:52:23.1527928Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-16T22:52:23.1785155Z Removing HTTP extra header
+2026-11-16T22:52:23.1790678Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-16T22:52:23.1836794Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-16T22:52:23.2080367Z Removing includeIf entries pointing to credentials config files
+2026-11-16T22:52:23.2086343Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-16T22:52:23.2122573Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-16T22:52:23.2566178Z Cleaning up orphan processes
+2026-11-16T22:52:23.2890617Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
