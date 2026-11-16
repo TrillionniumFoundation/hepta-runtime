@@ -400,6 +400,46 @@ class OriginalPipelineTests(unittest.TestCase):
             self.assertEqual(native.file_identity(self.output / name), pin, name)
             self.assertEqual((self.output / name).stat().st_nlink, 1, name)
 
+    def add_sealed_file(self, group, name, raw):
+        folder = self.shards / group
+        path = folder / "data" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+        seal = native.read_json(folder / p.SHARD_SEAL)
+        seal["files"], seal["directories"] = native.inventory(folder / "data")
+        q.save_report(folder / p.SHARD_SEAL, seal)
+        self.expected[group] = native.digest(folder / p.SHARD_SEAL)
+        return path
+
+    def test_cross_group_equal_artifact_is_refused_before_any_staging_move(self):
+        name = "workdir-original/build.stdout"
+        paths = [self.add_sealed_file(group, name, b"complete stream\n")
+                 for group in ("bytes", "services")]
+        with self.assertRaisesRegex(ValueError, "duplicate an artifact: " + name):
+            self.collect()
+        self.assertTrue(all(path.read_bytes() == b"complete stream\n" for path in paths))
+        self.assertFalse((self.output / name).exists())
+
+    def test_cross_group_different_artifact_is_refused_without_overwrite(self):
+        name = "workdir-original/result.json"
+        expected = (b'{"owner":"public-mcp"}\n', b'{"owner":"service"}\n')
+        paths = [self.add_sealed_file(group, name, raw)
+                 for group, raw in zip(("bytes", "services"), expected, strict=True)]
+        with self.assertRaisesRegex(ValueError, "duplicate an artifact: " + name):
+            self.collect()
+        self.assertEqual(tuple(path.read_bytes() for path in paths), expected)
+        self.assertFalse((self.output / name).exists())
+
+    def test_separate_workdir_originals_keep_both_complete_streams_after_collection(self):
+        expected = {"workdir-original/result.json": b'{"owner":"public-mcp"}\n',
+                    r.service_pipeline.WORKDIR_ORIGINAL + "/result.json": b'{"owner":"service"}\n'}
+        paths = [self.add_sealed_file(group, name, expected[name])
+                 for group, name in zip(("bytes", "services"), expected, strict=True)]
+        self.assertEqual(self.collect()["status"], "PASS")
+        self.assertTrue(all(not path.exists() for path in paths))
+        self.assertEqual({name: (self.output / name).read_bytes() for name in expected}, expected)
+        p.verify_collected_receipts(self.output, native.read_json(self.output / "result.json"))
+
     def test_shared_view_original_archive_survives_actual_shard_transport(self):
         part = native.read_json(self.shards / "bytes" / p.SHARD_REPORT)
         expected = part["view_original_fixture_retirement"]

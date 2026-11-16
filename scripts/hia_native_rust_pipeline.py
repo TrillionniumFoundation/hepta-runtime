@@ -702,7 +702,7 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
             for name, identity in part_seal["files"].items():
                 if (name in seal["files"] or name in {NATIVE_SEAL, "result.json"}
                         or name.startswith("original-qualification-shards/") or name in files):
-                    raise ValueError("original shards replace native evidence or duplicate an artifact")
+                    raise ValueError("original shards replace native evidence or duplicate an artifact: " + name)
                 files[name], copies[name] = identity, folder / "data" / name
         if set(parts) != set(groups()):
             raise ValueError("missing original recipe group")

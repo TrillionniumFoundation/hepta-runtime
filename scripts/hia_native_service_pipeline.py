@@ -35,8 +35,12 @@ WORKDIR_TESTS = {
     "test_workdir_caller_controls.py": "caller",
     "test_workdir_service_regex.py": "regex",
 }
-WORKDIR_ORIGINAL_FIXTURES = ("workdir-original/probe-v1/fixture",
-                            "workdir-original/public/fixture", "workdir-original/regex/fixture")
+# The public-MCP shard owns its independent Workdir oracle at workdir-original.
+# Keep the service oracle's complete build, streams and fixture custody in its
+# own namespace; the aggregate must retain both without deduplication.
+WORKDIR_ORIGINAL = "workdir-service-original"
+WORKDIR_ORIGINAL_FIXTURES = tuple(WORKDIR_ORIGINAL + "/" + name for name in
+                                  ("probe-v1/fixture", "public/fixture", "regex/fixture"))
 KEYS = ("directory_service", "workdir_service", "sdk_connection", "write_chain")
 SOURCES = {"directory_service": "native/directory_caller.hepta",
            "workdir_service": "native/workdir_caller.hepta"}
@@ -251,7 +255,7 @@ def original_command(root, output, report, rustc, key):
             "--rust-bin", str(rustc.parent), "--native-results", str(output / "directory-native")]
     require(key == "workdir_service", "unknown original service recipe")
     return [sys.executable, "-I", "-B", str(root / "tests/hia_native/compare_workdir_service_original.py"),
-        "--repo", str(root), "--native-manifest", str(manifest), "--output", str(output / "workdir-original"),
+        "--repo", str(root), "--native-manifest", str(manifest), "--output", str(output / WORKDIR_ORIGINAL),
         "--cargo", str(rustc.with_name("cargo")), "--rustc", str(rustc), "--rustfmt", str(rustc.with_name("rustfmt"))]
 
 
@@ -272,7 +276,7 @@ def retained_original(root, output, report, rustc, completed, key):
         return value
     manifest, selected = inspect_bundle(root, output, report, key)
     if key == "workdir_service":
-        folder = output / "workdir-original"
+        folder = output / WORKDIR_ORIGINAL
         result = workdir.inspect_original(folder, root, selected, sha(manifest.read_bytes()))
         require(summary == {k: v for k, v in result.items() if k not in
                 {"checks", "sdk_files", "original_project_files"}}, "workdir original stdout differs")
@@ -348,7 +352,7 @@ def retained_original(root, output, report, rustc, completed, key):
         fixtures = ()
         counts = dict(original_processes=40, native_processes=40, functional_requests_per_side=67,
             regex_requests_per_side=18, paired_kernel_cases=6, evidence_refusals=31)
-    omitted = fixtures + (("workdir-original/target",) if key == "workdir_service" else ())
+    omitted = fixtures + ((WORKDIR_ORIGINAL + "/target",) if key == "workdir_service" else ())
     corpus = retained_files(output, folder, omitted)
     if key == "workdir_service":
         path = folder / "target/release/hia-workdir-reference"
@@ -437,7 +441,7 @@ def original_fixture_transport(root, output, report, rustc, completed, *, create
     """Retire only closed, fully observed fixtures after original admission."""
     output = Path(output)
     receipts = {}
-    for key, folder in (("workdir_service", "workdir-original"), ("write_chain", "write-chain-original")):
+    for key, folder in (("workdir_service", WORKDIR_ORIGINAL), ("write_chain", "write-chain-original")):
         evidence = (write_chain.retained_original(root, output, report, rustc, completed)
                     if key == "write_chain" else retained_original(root, output, report, rustc, completed, key))
         require(evidence == report["original_rust_comparisons"][key],

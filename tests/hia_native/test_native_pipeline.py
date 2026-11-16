@@ -173,7 +173,7 @@ class NativePipelineTests(unittest.TestCase):
         output = self.root / "actual"; output.mkdir()
         outside = self.root / "outside"; outside.mkdir()
         sentinel = outside / "keep"; sentinel.write_bytes(b"external fixture target")
-        folder = output / "workdir-original"; folder.mkdir()
+        folder = output / service.WORKDIR_ORIGINAL; folder.mkdir()
         streams = {}
         for domain in ("probe-v1", "public", "regex"):
             fixture = folder / domain / "fixture"; fixture.mkdir(parents=True)
@@ -184,13 +184,14 @@ class NativePipelineTests(unittest.TestCase):
             streams[retained.relative_to(output).as_posix()] = service.sha(domain.encode())
         target = folder / "target"; target.mkdir()
         (target / "generated-link").symlink_to(outside, target_is_directory=True)
-        result = service.retained_files(output, folder, service.WORKDIR_ORIGINAL_FIXTURES + ("workdir-original/target",))
+        result = service.retained_files(output, folder,
+            service.WORKDIR_ORIGINAL_FIXTURES + (service.WORKDIR_ORIGINAL + "/target",))
         self.assertEqual(result, streams)
         self.assertEqual(sentinel.read_bytes(), b"external fixture target")
 
     def test_service_original_inventory_refuses_unknown_or_replaced_fixture_links(self):
         output = self.root / "actual"; output.mkdir()
-        folder = output / "workdir-original"; folder.mkdir()
+        folder = output / service.WORKDIR_ORIGINAL; folder.mkdir()
         outside = self.root / "outside"; outside.mkdir()
         unknown = folder / "undeclared-link"
         unknown.symlink_to(outside, target_is_directory=True)
@@ -202,6 +203,24 @@ class NativePipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "directory is not owned"):
             service.retained_files(output, folder, service.WORKDIR_ORIGINAL_FIXTURES)
         self.assertTrue(declared.is_symlink())
+
+    def test_service_original_command_and_fixtures_have_separate_public_mcp_custody(self):
+        output = self.root / "actual"; output.mkdir()
+        manifest = output / "service-manifest.json"; manifest.write_bytes(b"{}\n")
+        report = {"modules": {"workdir_service": {
+            "builder": "workdir_service", "source": "native/workdir_caller.hepta",
+            "manifest": manifest.name, "sha256": p.digest(manifest)}}}
+        rustc = self.root / "toolchain/rustc"
+        argv = service.original_command(ROOT, output, report, rustc, "workdir_service")
+        owner = Path(argv[argv.index("--output") + 1])
+        self.assertEqual(owner.parent, output)
+        self.assertEqual(owner.name, service.WORKDIR_ORIGINAL)
+        public_roots = {Path(name).parts[0] for name in public_fixtures.ORIGINAL}
+        self.assertNotIn(owner.name, public_roots)
+        self.assertEqual({Path(name).parts[0] for name in service.WORKDIR_ORIGINAL_FIXTURES}, {owner.name})
+        self.assertEqual(argv[argv.index("--cargo") + 1], str(rustc.with_name("cargo")))
+        self.assertEqual(argv[argv.index("--rustc") + 1], str(rustc))
+        self.assertEqual(argv[argv.index("--rustfmt") + 1], str(rustc.with_name("rustfmt")))
 
     def test_service_fixture_retirement_preserves_external_targets_and_exact_receipt(self):
         output = self.root / "actual"; output.mkdir()
