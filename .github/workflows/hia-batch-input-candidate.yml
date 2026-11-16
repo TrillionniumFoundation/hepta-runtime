@@ -18,8 +18,10 @@ jobs:
         with:
           path: runtime
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          fetch-depth: 1
           persist-credentials: false
+      - name: Fetch immutable source-preservation baseline
+        run: git -C runtime fetch --no-tags --depth=1 origin db7593e6228e2c554369c634aaeb307eaafc923a
       - name: Checkout pinned HIA compiler
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
