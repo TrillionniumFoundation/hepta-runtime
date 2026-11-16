@@ -1,0 +1,130 @@
+name: Current serial transport and public 81-image graph from source
+
+on:
+  push:
+    branches:
+      - 'hia-public-transport-qualification-6780-*'
+  workflow_dispatch:
+    inputs:
+      source_path:
+        description: Repository path of the frozen public-transport source package
+        required: true
+        default: tests/hia_native/public_transport_ci
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  transport-public:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      TRANSPORT_SOURCE: ${{ github.workspace }}/runtime/${{ inputs.source_path || 'tests/hia_native/public_transport_ci' }}
+      EIGHT_SOURCE: ${{ github.workspace }}/retained-sdk/tests/hia_native/sdk_target_ci
+      PUBLIC80_SOURCE: ${{ github.workspace }}/retained-public80/tests/hia_native/public_constructor_ci
+    steps:
+      - name: Set runtime paths from the runner environment
+        run: |
+          printf '%s\n' \
+            "TRANSPORT_OUTPUT=$RUNNER_TEMP/public-transport-output" \
+            "TRANSPORT_ARCHIVE=$RUNNER_TEMP/public-transport-evidence" \
+            >> "$GITHUB_ENV"
+
+      - name: Checkout the exact candidate revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout the immutable qualified public80 source package
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: retained-public80
+          ref: bcfe93e2d5dc22dd6a07e3889385a2ade38eb936
+          sparse-checkout: tests/hia_native/public_constructor_ci
+          persist-credentials: false
+
+      - name: Checkout the immutable retained SDK source package
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: retained-sdk
+          ref: b4054165e9b7be63e9309c8223d04131ec4fe31e
+          sparse-checkout: tests/hia_native/sdk_target_ci
+          persist-credentials: false
+
+      - name: Checkout the exact Hepta compiler source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Checkout the exact target dependency declarations
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /Cargo.lock
+          persist-credentials: false
+
+      - name: Verify source closure and immutable input identities
+        run: |
+          python3 -I -B "$TRANSPORT_SOURCE/drivers/run_ci.py" --source "$TRANSPORT_SOURCE" --check-only
+          test "$(git -C "$GITHUB_WORKSPACE/retained-public80" rev-parse HEAD)" = bcfe93e2d5dc22dd6a07e3889385a2ade38eb936
+          test "$(git -C "$GITHUB_WORKSPACE/retained-sdk" rev-parse HEAD)" = b4054165e9b7be63e9309c8223d04131ec4fe31e
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
+          test "$(git -C "$GITHUB_WORKSPACE/original-target" hash-object Cargo.toml)" = af0960b6ad360f26589de66e26cdcabe2fb3266f
+          test "$(git -C "$GITHUB_WORKSPACE/original-target" hash-object Cargo.lock)" = 23768e4ae7b4ba44d568134e91476b1c82069887
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.toml" "$TRANSPORT_SOURCE/reference/target/Cargo.toml"
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.lock" "$TRANSPORT_SOURCE/reference/target/Cargo.lock"
+
+      - name: Install native tools and the exact Rust toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+          printf 'TRANSPORT_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+
+      - name: Fresh HIA graphs, actual SDK transport comparison, and public loops
+        run: |
+          python3 -I -B "$TRANSPORT_SOURCE/drivers/run_ci.py" \
+            --source "$TRANSPORT_SOURCE" --base-source "$PUBLIC80_SOURCE" --sdk-source "$EIGHT_SOURCE" \
+            --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$TRANSPORT_RUST_BIN" \
+            --output "$TRANSPORT_OUTPUT"
+
+      - name: Require the actual limited qualification domains
+        run: |
+          python3 -I -B "$TRANSPORT_SOURCE/drivers/verify_complete.py" \
+            --source "$TRANSPORT_SOURCE" --run "$TRANSPORT_OUTPUT" --require-recipe-pass
+
+      - name: Preserve complete successful or failed execution evidence
+        if: always()
+        run: |
+          python3 -I -B "$TRANSPORT_SOURCE/drivers/export_artifact.py" \
+            --source "$TRANSPORT_SOURCE" --run "$TRANSPORT_OUTPUT" \
+            --output "$TRANSPORT_ARCHIVE"
+
+      - name: Upload complete evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-transport-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/public-transport-evidence.tar.gz
+            ${{ runner.temp }}/public-transport-evidence.archive.json
+          if-no-files-found: error
+          retention-days: 14
+
