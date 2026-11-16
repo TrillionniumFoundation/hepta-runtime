@@ -1,0 +1,224 @@
+{
+  "archive": {
+    "archive": "get-info-evidence.tar.gz",
+    "bytes": 95017218,
+    "complete_archive_reread": true,
+    "files": 38,
+    "sha256": "1ca28bf0c59ffa8f5349d672ffd2c71795023a22440341af7ee0d4886719a13c",
+    "status": "NOT_QUALIFIED"
+  },
+  "cause": "First standard-library ctypes import initializes PyDLL(None); the installed author audit rejected that import before any HIA build or native capture.",
+  "exact_stderr": "Traceback (most recent call last):\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/get_info_target_ci/scripts/generate_guarded.py\", line 58, in <module>\n    if __name__ == \"__main__\": main()\n                               ^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/get_info_target_ci/scripts/generate_guarded.py\", line 49, in main\n    result = generate(source, primary, hepta, output)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/get_info_target_ci/scripts/author_get_info.py\", line 97, in generate\n    from tools.generate_hia_selfhost import Builder, compact_authoring_cfg, total_scalar_functions\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/compiler/tools/generate_hia_selfhost.py\", line 15, in <module>\n    from hepta.hia_agent_assembly import render_assembly\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_agent_assembly.py\", line 15, in <module>\n    from .hia_program import HIAProgramRejected, VerifiedProgram, verify_program\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py\", line 27, in <module>\n    from .hia_json_canonical_native import selected_canonical_wire\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_json_canonical_native.py\", line 9, in <module>\n    import ctypes\n  File \"/usr/lib/python3.12/ctypes/__init__.py\", line 472, in <module>\n    pythonapi = PyDLL(None)\n                ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/ctypes/__init__.py\", line 379, in __init__\n    self._handle = _dlopen(self._name, mode)\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/get_info_target_ci/scripts/generate_guarded.py\", line 45, in audit\n    raise PermissionError(\"authoring process may not launch or execute native code\")\nPermissionError: authoring process may not launch or execute native code\n",
+  "failed_artifact": 14197917744,
+  "failed_job": 133094967984,
+  "failed_run": 43805422440,
+  "failure_stage": "generate-fixed-owner",
+  "files_read": 38,
+  "manifest_members_matched": 37,
+  "repair": "Pre-initialize only the standard-library ctypes module before installing the unchanged author-operation guard. Require that fact in the readonly verifier. All author ctypes, mmap, child-execution and expected-output-read prohibitions remain.",
+  "repaired_native_build_executed": false,
+  "repaired_recipe_executed": false,
+  "repaired_target_comparison_executed": false,
+  "reviewer_initial_read_attempt": {
+    "reason": "first reader rejected normal tar directory; corrected to admit directories and still reject links",
+    "status": "STOPPED_BEFORE_MEMBER_READ"
+  },
+  "rows": [
+    {
+      "bytes": 255,
+      "path": "ARTIFACT.json",
+      "sha256": "6814f755398a34eb5b2badfe101f67169f87bcd83825583431e10feb7eb3d39e"
+    },
+    {
+      "bytes": 5855,
+      "path": "artifact-manifest.json",
+      "sha256": "30e7e21f8fe723ffce24e8cba70415fb3160b41192cc95e42309cade3161c31d"
+    },
+    {
+      "bytes": 2601,
+      "path": "recipe-source/BORROWED_ABI.md",
+      "sha256": "993d689d126866ee6dd516924b8c2601ac95de6f60050037cb462fbd060d3b8b"
+    },
+    {
+      "bytes": 3800,
+      "path": "recipe-source/README.md",
+      "sha256": "ac1ad3aaf2f292669cbe5211f28b4b8aefbbd0f4650d2571f0123bceb5ddf14c"
+    },
+    {
+      "bytes": 1886,
+      "path": "recipe-source/SOURCE_INPUTS.json",
+      "sha256": "2a8d73290e9a5a58b547e236be88406f72fa78918c0d45a4cc9341eddaf9b37b"
+    },
+    {
+      "bytes": 3786,
+      "path": "recipe-source/ci/workflow.get-info.yml",
+      "sha256": "9724f121ff5ef99c35d87ba05bee44bc9685c1186adc0033fe1b69e7bbe912a9"
+    },
+    {
+      "bytes": 9368,
+      "path": "recipe-source/scripts/author_get_info.py",
+      "sha256": "59efbe174b6d15f001822f4182ec862be6ac2392f35aecfd4366ea416896ba19"
+    },
+    {
+      "bytes": 2314,
+      "path": "recipe-source/scripts/build_owner.py",
+      "sha256": "a9b92182a3cdae6d53a69a53581d90bfc6737a3ed277ff04146fd1603f8a810a"
+    },
+    {
+      "bytes": 6905,
+      "path": "recipe-source/scripts/capture_native.py",
+      "sha256": "bdac9891b34d0faf5e9cd08d28e66d7e12eb6bffa4f987d5483758a49aeb6512"
+    },
+    {
+      "bytes": 1229,
+      "path": "recipe-source/scripts/check_source.py",
+      "sha256": "4a44b9088909d2cd97dd876d3b18cfedbea953214bcba8f3105e64b5d139e884"
+    },
+    {
+      "bytes": 716,
+      "path": "recipe-source/scripts/current_get_info.pseudo",
+      "sha256": "bc04c9cd077b0521bda6e48b2b24047c81fffdf2c605448cb696811d48332429"
+    },
+    {
+      "bytes": 7322,
+      "path": "recipe-source/scripts/derive_contract.py",
+      "sha256": "29f7fe8ae0903725ffb5139a4d2e659599b93b56eabf3270f53b8a510fc6916a"
+    },
+    {
+      "bytes": 2352,
+      "path": "recipe-source/scripts/download_reference.py",
+      "sha256": "513d3f6a2e6819a71b865539ae09bd7fa7beed480d7c193a0afb67cac9ddb87a"
+    },
+    {
+      "bytes": 3929,
+      "path": "recipe-source/scripts/export_artifact.py",
+      "sha256": "08f542bc04be6acae8ddf8fff99db0558902f1579d03a1f3eb8f553843071570"
+    },
+    {
+      "bytes": 3437,
+      "path": "recipe-source/scripts/generate_guarded.py",
+      "sha256": "81d3d59b1bc90498edd98d037c9f34a754e14283c79ce8d53590914d74991ec9"
+    },
+    {
+      "bytes": 1097,
+      "path": "recipe-source/scripts/prepare_reference.py",
+      "sha256": "77173ec305f73ade3c131c3c845b87c6ebe9ef69cd16d2a251f1a84d4bf95bde"
+    },
+    {
+      "bytes": 12022,
+      "path": "recipe-source/scripts/reference_custody.py",
+      "sha256": "a905c1146e15075abb1cb19edd0a039e8acb69cff91a592d181ba805fc01d235"
+    },
+    {
+      "bytes": 4100,
+      "path": "recipe-source/scripts/run_ci.py",
+      "sha256": "25bc7efd312d07e789dcd5239ccdfac5d564d0a08baf3ec62c4995e54d90f793"
+    },
+    {
+      "bytes": 13163,
+      "path": "recipe-source/scripts/verify.py",
+      "sha256": "096456e4f7e7da8c682aadc2680d45f9a6c4b969468369559f376e9c183552b2"
+    },
+    {
+      "bytes": 3837,
+      "path": "recipe-source/source_manifest.json",
+      "sha256": "0362919d811a4653a97fa5a7919116e3f3fcdf0b2d6017e7bdb1fdfe99724f04"
+    },
+    {
+      "bytes": 16538,
+      "path": "recipe-source/support/hia_native_build.py",
+      "sha256": "839a1eb7aed16df369a4ae80291680b2754c6794dac3c3029027a5df4f4e8f3f"
+    },
+    {
+      "bytes": 12849,
+      "path": "recipe-source/support/hia_native_loader.py",
+      "sha256": "367d600d808eaf95fe4e76d8d999b29ba46f1a3969e79fe20b70e23f79a48e96"
+    },
+    {
+      "bytes": 27329,
+      "path": "recipe-source/support/text_result_constructor.hepta",
+      "sha256": "3a4c9b40136e0c3dbf3b580e475447e94fb79913f93416a0ec906da6d294996d"
+    },
+    {
+      "bytes": 95269620,
+      "path": "reference.zip",
+      "sha256": "32e325c73e8a47ee14683ff96dec87bf505c1e7ce2fff56af509aacc1b51e6a5"
+    },
+    {
+      "bytes": 2463,
+      "path": "run/RECIPE.json",
+      "sha256": "fb475955e1b548448591d0f492a0a18bf7b132c205abf8e5a94c99f191a44008"
+    },
+    {
+      "bytes": 7446,
+      "path": "run/generated/authored.pseudo",
+      "sha256": "21e3fe5b91d37275583638bf143f2e038a5360d95b756a663c8be4598c7acb5a"
+    },
+    {
+      "bytes": 2247,
+      "path": "run/generated/derived-contract.json",
+      "sha256": "f94bbdf67fddd13045db79c6e2195b84691754c52700372364afd0a769e7fbb0"
+    },
+    {
+      "bytes": 5034,
+      "path": "run/generated/literal-plan.json",
+      "sha256": "88651af5bee2ce87e71080838c3cff4a788a15b8e5e5db2c619ca4edeaf5027a"
+    },
+    {
+      "bytes": 90188,
+      "path": "run/primary/Cargo.lock",
+      "sha256": "1509860cac0e7f26e6a845edfec1c87ae3bd92380ecaa357457e5263e861d631"
+    },
+    {
+      "bytes": 1977,
+      "path": "run/primary/PRIMARY_CUSTODY.json",
+      "sha256": "e10db0a912b45a9e9722919c7c5fd4b82a5463159764183693810e9fae22dbe8"
+    },
+    {
+      "bytes": 20128,
+      "path": "run/primary/rmcp-Cargo.toml",
+      "sha256": "93b3a36d62507f952882210d62a31108fe2a42dae4fada7a8616afad295b8495"
+    },
+    {
+      "bytes": 29294,
+      "path": "run/primary/rmcp-capabilities.rs",
+      "sha256": "34e941d97f50d41be5e3878ead4150f850a1f285a348ac8d119ebe1f55ea9aba"
+    },
+    {
+      "bytes": 225570,
+      "path": "run/primary/rmcp-model.rs",
+      "sha256": "ac438543401b6b9d60021fc044dcf27b446df9539e837c6fecdf16a670091b9a"
+    },
+    {
+      "bytes": 193936,
+      "path": "run/primary/server.rs",
+      "sha256": "0957f7d7d56ad76540a42ba82b33fc29a625bb186cece2a207a764ea8c5beb6f"
+    },
+    {
+      "bytes": 2033,
+      "path": "run/processes/generate-fixed-owner.stderr",
+      "sha256": "3fb42d924e239d54c83f2e4745c8511c4e51e50e322ae4ab4c16c8c33bffd495"
+    },
+    {
+      "bytes": 0,
+      "path": "run/processes/generate-fixed-owner.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "run/processes/primary-sources.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 89,
+      "path": "run/processes/primary-sources.stdout",
+      "sha256": "f6158e5d81ba974c1c3d7194fb50319df5d838c39f4fefbaf511813c2b0f9f08"
+    }
+  ],
+  "schema": "hepta.current-get-info.v1-failure-readback.v1",
+  "status": "FAILURE_ARCHIVE_FULL_READBACK_PASS",
+  "zip": {
+    "bytes": 95046198,
+    "sha256": "2fa7759a98806edabc22a5beb6716a3da0673db95cf47decfd22aaafa449d12a"
+  }
+}
