@@ -212,8 +212,7 @@ class RecordedFixtureProcess(common.RecordedPublicProcess):
                 'response': None if not response else {'offset': stdout_at, 'bytes': len(response), 'sha256': common.sha(response)},
                 'body': None if head is None else {'offset': stdout_at + head['header_bytes'], 'bytes': len(body), 'sha256': common.sha(body)},
                 'header': head, 'stdout_eof': self.eof['stdout'], 'stderr_eof': self.eof['stderr']}
-            self.exchanges.append(record)
-            (self.output / 'exchanges.json').write_bytes(common.canonical(self.exchanges))
+            self._record_exchange(record)
         return record, body
 
     def public(self, session, full_wire):

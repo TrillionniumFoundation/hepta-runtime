@@ -80,6 +80,10 @@ class RecordedPublicProcess:
         self.streams = {name: Stream(self.output/(name+'.bin.gz')) for name in ('attempted-stdin', 'stdin', 'stdout', 'stderr')}
         self.pending = bytearray(); self.scan_from = 0; self.exchanges = []; self.eof = {'stdout': False, 'stderr': False}
         self.started_error = None; self.closed = False; self.process = None
+        self.exchange_journal = self.output/'exchanges.jsonl'
+        with self.exchange_journal.open('xb'):
+            pass
+        self.journal_records = 0; self.journal_error = None
         inherited = () if observer_fd is None else (observer_fd,)
         try:
             self.process = subprocess.Popen(self.command, cwd=self.cwd, env=self.environment, stdin=subprocess.PIPE,
@@ -109,6 +113,29 @@ class RecordedPublicProcess:
             self.eof[key.data] = True; ready.unregister(key.fileobj); return
         self.streams[key.data].write(raw)
         if key.data == 'stdout': self.pending.extend(raw); responses.extend(self._lines())
+
+    def _record_exchange(self, record):
+        """Persist each full record once; retain the array for final sealing."""
+        need(record['index'] == len(self.exchanges), 'noncontiguous exchange journal')
+        self.exchanges.append(record)
+        try:
+            raw = canonical(record)
+            # Closing each append flushes this completed record before the next
+            # exchange. A failed lane therefore retains its completed prefix.
+            with self.exchange_journal.open('ab') as stream:
+                need(stream.write(raw) == len(raw), 'incomplete exchange journal append')
+            self.journal_records += 1
+        except BaseException as error:
+            self.journal_error = repr(error)
+            raise
+
+    def _seal_exchanges(self):
+        # The final array is byte-identical to the former whole-prefix rewrite.
+        # This runs after the owned child has been reaped, including on failure.
+        dump(self.output/'exchanges.json', self.exchanges)
+        return {'path': str(self.exchange_journal), **file_pin(self.exchange_journal),
+            'format': 'canonical-json-lines.v1', 'records': self.journal_records,
+            'recording_error': self.journal_error}
 
     def exchange(self, request, *, response_count=1):
         need(not self.closed and type(request) is bytes and request.endswith(b'\n'), 'actual complete request')
@@ -157,8 +184,7 @@ class RecordedPublicProcess:
                 'stderr_range': {'offset': stderr_at, 'bytes': self.streams['stderr'].size-stderr_at},
                 'responses': [{'bytes': len(value), 'sha256': sha(value)} for value in replies],
                 'stdout_eof': self.eof['stdout'], 'stderr_eof': self.eof['stderr']}
-            self.exchanges.append(record)
-            (self.output/'exchanges.json').write_bytes(canonical(self.exchanges))
+            self._record_exchange(record)
         return record, replies
 
     def close(self, *, failed=False):
@@ -205,13 +231,15 @@ class RecordedPublicProcess:
         finally:
             self.process.stdout.close(); self.process.stderr.close()
             streams = {name: value.close() for name, value in self.streams.items()}
+        journal = self._seal_exchanges()
         receipt = {'command': self.command, 'native_argv': self.argv, 'cwd': self.cwd, 'environment': self.environment,
             'pid': self.process.pid, 'exit_code': code, 'timed_out': timed, 'drain_deadline_seconds': 60,
             'drain_elapsed_seconds': time.monotonic()-begin, 'elapsed_seconds': time.monotonic()-self.started,
             'failure_cleanup_requested': failed, 'start_error': None, 'exchanges': len(self.exchanges), 'streams': streams,
             'wait_deadline_seconds': 5, 'wait_timed_out': wait_timed_out, 'cleanup_error': cleanup_error,
             'kill_cleanup_deadline_seconds': 5, 'kill_requested': killed_at is not None, 'pipe_eof': dict(self.eof),
-            'unconsumed_stdout': {'bytes': len(self.pending), 'sha256': sha(self.pending)}, 'binary': file_pin(self.binary)}
+            'unconsumed_stdout': {'bytes': len(self.pending), 'sha256': sha(self.pending)}, 'binary': file_pin(self.binary),
+            'exchange_journal': journal}
         if self.trace is not None and self.trace.exists(): receipt['trace'] = {'path': str(self.trace), **file_pin(self.trace)}
         dump(self.output/'process.json', receipt)
         need(not timed and not wait_timed_out and cleanup_error is None, 'actual process termination deadline/failure')

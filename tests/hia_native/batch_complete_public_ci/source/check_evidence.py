@@ -24,13 +24,16 @@ from receipt_support import ROOT, PIN, SHA, regular, read_json, put, require
 LABELS = ("source-comment", "rehashed-source", "compiler-stdout", "compiler-stdout-fields", "compiler-stdout-types", "compiler-receipt",
     "rehashed-compiler-tail", "rehashed-pack-workspace", "private-case-count", "rehashed-event-input",
     "rehashed-accepted-input", "private-exchange-deadline", "lane-deadline", "retired-object-omission",
-    "rehashed-original-binary", "stdio-case-name")
+    "rehashed-original-binary", "stdio-case-name", "standard-profile-capacity", "wide-profile-omission",
+    "rehashed-exchange-journal")
 READERS = {"source-comment": "source", "rehashed-source": "core", "compiler-stdout": "compiler",
     "compiler-stdout-fields": "compiler", "compiler-stdout-types": "compiler",
     "compiler-receipt": "compiler", "rehashed-compiler-tail": "compiler", "rehashed-pack-workspace": "native",
     "private-case-count": "private", "rehashed-event-input": "private", "rehashed-accepted-input": "private",
     "private-exchange-deadline": "private", "lane-deadline": "lane", "retired-object-omission": "retirement",
-    "rehashed-original-binary": "original", "stdio-case-name": "stdio"}
+    "rehashed-original-binary": "original", "stdio-case-name": "stdio",
+    "standard-profile-capacity": "standard-compiler", "wide-profile-omission": "compiler",
+    "rehashed-exchange-journal": "private"}
 ACTIVE = False
 
 
@@ -57,10 +60,10 @@ def encoded(value):
     return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
 
 
-def module_location(original):
+def module_location(original, selected="protocol"):
     recipe = json.loads(original("result.json"))
     manifest = json.loads(original("native/public-build/public94/manifest.json"))
-    member = next(row for row in manifest["members"] if row["name"] == "protocol")
+    member = next(row for row in manifest["members"] if row["name"] == selected)
     producer = Path(recipe["producer_root"])
     path = Path(member["manifest"])
     require(path.is_relative_to(producer), "control module outside declared producer")
@@ -101,6 +104,11 @@ def expected_changes(label, original):
         for receipt in ("module.receipt.json", "module.stdout.log"):
             edit(module + receipt, lambda r: r.update(output_sha256=SHA(changes[name])))
         edit(module + "build.json", lambda r: r.update(compile_receipt=document(module + "module.receipt.json")))
+    elif label == "standard-profile-capacity":
+        standard, _ = module_location(original, "target_shutdown")
+        edit(standard + "manifest.json", lambda r: r.update(input_capacity=r["input_capacity"] + 1))
+    elif label == "wide-profile-omission":
+        edit(module + "manifest.json", lambda r: r.pop("buffer_profile"))
     elif label == "rehashed-pack-workspace":
         name = "native/public-build/public94/pack.workspace.bin"
         changed = bytearray(raw(name)); changed[-1] ^= 1
@@ -128,6 +136,20 @@ def expected_changes(label, original):
         edit(private + "result.json", lambda r: r.update(process=document(private + "process/process.json")))
     elif label == "private-exchange-deadline":
         edit(private + "process/exchanges.json", lambda r: r[0].update(deadline_seconds=61))
+        changes[private + "process/exchanges.json"] = read_public.common.canonical(
+            document(private + "process/exchanges.json"))
+        name = private + "process/exchanges.jsonl"
+        changes[name] = b"".join(read_public.common.canonical(row)
+            for row in document(private + "process/exchanges.json"))
+        edit(private + "process/process.json", lambda r: r["exchange_journal"].update(PIN(changes[name])))
+        edit(private + "result.json", lambda r: r.update(process=document(private + "process/process.json")))
+    elif label == "rehashed-exchange-journal":
+        name = private + "process/exchanges.jsonl"
+        rows = [json.loads(line) for line in raw(name).splitlines()]
+        rows[0]["elapsed_seconds"] += 1
+        changes[name] = b"".join(read_public.common.canonical(row) for row in rows)
+        edit(private + "process/process.json", lambda r: r["exchange_journal"].update(PIN(changes[name])))
+        edit(private + "result.json", lambda r: r.update(process=document(private + "process/process.json")))
     elif label == "lane-deadline":
         edit("public/session/native.lane.json", lambda r: r.update(outer_lane_deadline_seconds=181))
     elif label == "retired-object-omission":
@@ -150,8 +172,9 @@ def dispatch(kind, output):
         return source_check.check(source)
     if kind == "core":
         return run_recipe.core(output, require_final=False)
-    if kind == "compiler":
-        relative, name = module_location(lambda p: regular(output / p))
+    if kind in ("compiler", "standard-compiler"):
+        relative, name = module_location(lambda p: regular(output / p),
+            "target_shutdown" if kind == "standard-compiler" else "protocol")
         return read_builds.compiler(output / relative, regular(source / "native-source" / name))
     if kind == "native":
         return read_builds.native(output / "native", source)

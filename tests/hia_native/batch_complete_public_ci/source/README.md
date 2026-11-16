@@ -41,8 +41,21 @@ filesystem snapshot, permission, hardlink relationship and observable native or
 original state. Comparisons use identical absolute fixture paths. After process
 exit and full independent reread, only each exact fixture is retired, with its
 complete final snapshot and all removed object identities retained. Strict
-readers remain valid after relocation and launch no process. Sixteen data-only
+readers remain valid after relocation and launch no process. Nineteen data-only
 refusals use independent real copies and retain the complete changed bytes.
+
+Every exchange is appended as one complete canonical JSON line before the next
+exchange starts. After the owned process has been reaped, the recorder seals the
+same complete JSON array once. The reader compares the entire append journal
+with that final array, including all fields, ordering and timing observations.
+Failure paths retain the completed prefix and the final failed exchange. This
+removes repeated serialization of all earlier records without changing an
+implementation input, output, observation, session, case or deadline.
+
+The native build reader follows the frozen builder's exact profile encoding:
+only the standard 8/8/32 MiB profile omits `buffer_profile`; every other profile
+must name its fixed capacities. Separate refusal controls cover wrong standard
+capacity and an omitted wide profile, in addition to all earlier controls.
 
 ## Invocation
 
@@ -81,3 +94,14 @@ Earlier development failures remain separate: internal projection limits,
 disjoint-span rejection, and the v9 typed-legacy capture that completed 415/417
 rows before SIGKILL. Its cause is not inferred from the signal. This recipe must
 finish every declared row on the newly frozen source before it can pass.
+
+The preceding complete CI run `43858641539` retained both 417-row typed pairs,
+including all wide frames, and failed its native filesystem lane after 745 of
+926 rows at the original 180 second total deadline. Its full failure artifact
+is `14223046601`, ZIP SHA256
+`bdd5dafd3f23f3c232457e7d2b791855a62b9958bc3afbbe62331c502797579f`.
+The failed lane's 5,223 exchanges took 33.802 seconds in total; the remaining
+146.121 seconds were outside exchanges. The old recorder serialized 12.53 GB
+of cumulative prefixes for a 4.81 MB final exchange array. This version keeps
+that failure separate and uses append plus final sealing. No HIA source or
+native image changes as part of this recording repair.

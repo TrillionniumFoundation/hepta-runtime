@@ -222,6 +222,20 @@ def open_process(owner, expected_binary):
         and stdin_path.parent.name == "process" and ".." not in stdin_path.parts,
         "complete process producer path")
     owner.producer_folder = stdin_path.parent.parent
+    if not getattr(owner, "legacy", False):
+        journal = p["exchange_journal"]
+        require(set(journal) == {"path", "bytes", "sha256", "format", "records", "recording_error"}
+            and journal["path"] == str(owner.producer_folder / "process/exchanges.jsonl")
+            and journal["format"] == "canonical-json-lines.v1" and journal["recording_error"] is None
+            and type(journal["records"]) is int and journal["records"] == p["exchanges"],
+            "complete append journal identity")
+        raw = owner.file("process/exchanges.jsonl")
+        require(PIN(raw) == {key: journal[key] for key in ("bytes", "sha256")},
+            "complete append journal bytes")
+        lines = raw.splitlines(keepends=True)
+        require(len(lines) == journal["records"] and all(line.endswith(b"\n") for line in lines)
+            and owner.file("process/exchanges.json") == b"[" + b",".join(line[:-1] for line in lines) + b"]\n",
+            "append journal differs from final complete exchange array")
     owner.streams = {name: Stream(owner, "process/" + name + ".bin.gz", p["streams"][name]) for name in STREAM_NAMES}
     return owner.streams
 

@@ -42,8 +42,11 @@ def compiler(folder, source, expected=None):
         and manifest["target"] == "linux-x86_64" and manifest["compiler_commit"] == COMMIT
         and manifest["compiler_sha256"] == GENERATION and manifest["qualification"] == "development_fixed_point",
         "actual HIA module admission")
-    require(manifest["buffer_profile"] in PROFILES and tuple(manifest[k] for k in
-        ("input_capacity", "output_capacity", "workspace_capacity")) == PROFILES[manifest["buffer_profile"]],
+    profile = manifest.get("buffer_profile", "standard")
+    require(type(profile) is str and profile in PROFILES
+        and ("buffer_profile" in manifest) is (profile != "standard")
+        and tuple(manifest[k] for k in
+        ("input_capacity", "output_capacity", "workspace_capacity")) == PROFILES[profile],
         "HIA borrowed-buffer profile")
     for key in ("image", "source"):
         require(Path(manifest[key]).name == manifest[key], "module member escaped build folder")
@@ -213,7 +216,7 @@ def native(folder, source):
                 seen_modules[key] = (image, manifest)
             image, manifest = seen_modules[key]
             require(manifest["source_sha256"] == row["source_sha256"] == SHA(compiled_source)
-                and manifest["buffer_profile"] == profile and PIN(image) == {
+                and manifest.get("buffer_profile", "standard") == profile and PIN(image) == {
                     "bytes": row["image_bytes"], "sha256": row["image_sha256"]}, "complete member identity")
             by_name[name], images[name] = row, image
         member_sets[label] = {name: row["manifest_sha256"] for name, row in by_name.items()}
