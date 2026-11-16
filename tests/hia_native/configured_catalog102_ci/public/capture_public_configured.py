@@ -69,12 +69,12 @@ def run(component,graph,manifest,output):
             put(folder/'initialized.input.bin',initialized)
             for case in [r for r in d.rows() if r['profile_index']==profile_index]:
                 raw=active.exchange(case['wire'])[0]
-                expected=b'{"jsonrpc":"2.0","id":'+str(case['sequence']).encode()+c.projected_asset(component,case['modern'],flags,1)
+                expected=(b'{"jsonrpc":"2.0","id":'+str(case['sequence']).encode()+c.projected_asset(component,case['modern'],flags,1)) if case['connection_accepts'] else d.unsupported_wire(case)
                 put(folder/f'request-{case["sequence"]:03d}.bin',case['wire'])
                 put(folder/f'response-{case["sequence"]:03d}.bin',raw)
-                assert raw==expected,(case['sequence'],case['protocol_version'],'complete list result differs')
-                body=json.loads(raw)['result'];names=[x['name'] for x in body['tools']]
-                assert len(names)==(10 if flags else 7) and 'weight_bellman_plan' not in names and 'batch_edit' in names
+                assert raw==expected,(case['sequence'],case['protocol_version'],'complete catalog or admission result differs')
+                names=[x['name'] for x in json.loads(raw)['result']['tools']] if case['connection_accepts'] else []
+                if case['connection_accepts']:assert len(names)==(10 if flags else 7) and 'weight_bellman_plan' not in names and 'batch_edit' in names
                 observed.append({k:v for k,v in case.items() if k!='wire'}|{'input':pin(case['wire']),'output':pin(raw),'tools':names})
             receipt=active.close();active=None
             assert receipt['elapsed_seconds']<=180

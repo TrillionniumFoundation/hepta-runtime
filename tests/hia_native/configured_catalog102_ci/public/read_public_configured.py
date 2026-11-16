@@ -146,7 +146,7 @@ def verify(source,component,graph,manifest,output,expected_binary=None):
         for ordinal,(case,exchange) in enumerate(zip(items,exchanges[2:],strict=True),start=2):
             wire=r.raw(prefix+f'/request-{case["sequence"]:03d}.bin');raw=r.raw(prefix+f'/response-{case["sequence"]:03d}.bin')
             assert wire==case['wire']
-            expected=b'{"jsonrpc":"2.0","id":'+str(case['sequence']).encode()+c.projected_asset(component,case['modern'],flags,1)
+            expected=(b'{"jsonrpc":"2.0","id":'+str(case['sequence']).encode()+c.projected_asset(component,case['modern'],flags,1)) if case['connection_accepts'] else d.unsupported_wire(case)
             assert raw==expected
             assert exchange['number']==ordinal and type(exchange['number'])is int
             assert exchange['timeout_seconds']==60 and type(exchange['timeout_seconds'])is int
@@ -155,14 +155,15 @@ def verify(source,component,graph,manifest,output,expected_binary=None):
             assert exchange['request_sha256']==pin(wire)['sha256'] and exchange['responses']==[pin(raw)]
             assert exchange['error'] is None
             inputs.append(wire);outputs.append(raw+b'\n')
-            names=[tool['name'] for tool in json.loads(raw)['result']['tools']]
-            assert len(names)==(10 if flags else 7) and 'batch_edit' in names and 'weight_bellman_plan' not in names
+            names=[tool['name'] for tool in json.loads(raw)['result']['tools']] if case['connection_accepts'] else []
+            if case['connection_accepts']:assert len(names)==(10 if flags else 7) and 'batch_edit' in names and 'weight_bellman_plan' not in names
             observed.append({k:v for k,v in case.items() if k!='wire'}|{'input':pin(wire),'output':pin(raw),'tools':names})
         assert streams['stdin']==b''.join(inputs) and streams['stdout']==b''.join(outputs)
     assert observed==report['observed']
     actual={p.relative_to(output).as_posix() for p in output.rglob('*') if p.is_file()}
     assert actual==set(r.files),('unread public capture files',sorted(actual-set(r.files)))
     return {'status':'COMPLETE_CONFIGURED_PUBLIC_CATALOG_READONLY_PASS','processes':9,'catalog_exchanges':216,
+        'actual_list_results':162,'unsupported_version_errors':54,
         'all_exchanges':234,'initialize_calls':9,'initialized_notifications':9,'complete_response_frames':225,
         'binary':binary_pin,'source_profile':report['source_profile'],'files':r.files,'source_binding':shared.GRAPH_PROFILE,
         'no_hia_execution':True,'no_rust_execution':True,'process_launches':0,'tool_body_executions':0,
