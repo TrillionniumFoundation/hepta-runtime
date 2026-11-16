@@ -3,9 +3,13 @@
   "compiler_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
   "concurrent_native_lock_qualified": false,
   "files": {
+    "DOMAIN.json": {
+      "bytes": 4448,
+      "sha256": "d4f0cf720cfd7466bf4ffbd64d680fe3c125b83654ab4c388182b3e33e87a949"
+    },
     "README.md": {
-      "bytes": 5003,
-      "sha256": "5e785cffa48d6728d528ad7285f4123b0ecce80b3320decf6747a31154600927"
+      "bytes": 6565,
+      "sha256": "9221b841525e657b07d56e9d599ff4f1bb42bf1dc6a0d8e55e76b195ac40c788"
     },
     "authoring/audit_store_controller.pseudo": {
       "bytes": 16877,
@@ -16,8 +20,16 @@
       "sha256": "19159d4b4045427d3a436c39b23150a9a28ddc5d08889b03d70d8c67b51da130"
     },
     "build.py": {
-      "bytes": 2860,
-      "sha256": "d7b023d1a70a4ce89a6922b03444b5abe0650e980339dbd1b0cec79eec0804cd"
+      "bytes": 3946,
+      "sha256": "16fd8ca2c9034cf1b226f059429230bf96cf0185d5bc4a2cc7556948d42bcfaf"
+    },
+    "common.py": {
+      "bytes": 3125,
+      "sha256": "6e2772a9d22a54cf051d2edbb095b34a2cb2fd2cc6914ed354701ae55c897d2c"
+    },
+    "export.py": {
+      "bytes": 3549,
+      "sha256": "477bf020731b9f03dea1504a8e1242d2c200261ba2cec9caa57a6fd0f0255740"
     },
     "native/audit_store_controller.composition.json": {
       "bytes": 3676,
@@ -27,13 +39,61 @@
       "bytes": 107596,
       "sha256": "349410fca804c082da9d7297f771c4a24c8fcef2d1b3be47ad2524e77d64f3e9"
     },
+    "process.py": {
+      "bytes": 5373,
+      "sha256": "304cf26bada371b6dd8932efab09dd202445599299f2a3bb895a6629865b56df"
+    },
+    "read_capture.py": {
+      "bytes": 38540,
+      "sha256": "e5394d91c78427676b8164998cf002bdb98f8f68274e9eb09f2e4fcebe9d54e4"
+    },
+    "read_only_guard.py": {
+      "bytes": 8848,
+      "sha256": "621b8caa09f62f401c5816e3fbc07690f077feed7153552a720ced66150ce647"
+    },
+    "reader_controls.py": {
+      "bytes": 11190,
+      "sha256": "847f4d38e4c034b679755af1f5b6a29c3a64da20546a32b365b87856a3e91ad5"
+    },
+    "recipes.py": {
+      "bytes": 1969,
+      "sha256": "2f1067fc03cba9f71e471dced5b2d8f2f02ee255c98a701fc0b8e3d24a731f17"
+    },
     "reference/audit_store_lock.rs.txt": {
       "bytes": 7395,
       "sha256": "6b80246ce3c2ff97edb71f6f70d21b692b801648c355427672780d01b5f14b25"
     },
+    "reference/audit_store_tests.rs.txt": {
+      "bytes": 8045,
+      "sha256": "88aa6e9b82591cab9d3198a820e54d0cc871191d65e99322ca0f660700524d2a"
+    },
+    "reference/controller_extra_tests.rs.txt": {
+      "bytes": 5079,
+      "sha256": "9b7e7ff59dcd47ccedab09e118a246263c207abe0f75c5d01c794ac6595310a4"
+    },
+    "reference/controller_host.rs": {
+      "bytes": 16418,
+      "sha256": "ff2b9c42485cdaf167d869cf9bb5e139417aebb039a585ae6a2958e24dc769bf"
+    },
+    "reference/native_tests.rs": {
+      "bytes": 676,
+      "sha256": "3cdd37a168a53ca86dc46d2031fcb7a592bd151e6c0f2fdcf2de2c34f26e8118"
+    },
+    "reference/original_tests.rs": {
+      "bytes": 1050,
+      "sha256": "bdff79a5cb610490199ed2b03f9e20adc3659b96c7d0545d1438392e21f3d32f"
+    },
     "reference/target/src/mcp/runtime/request_audit.rs": {
       "bytes": 68414,
       "sha256": "b5189f2923153ffa83d0b45a7cdf89873b0f17ebbe6ec1b174c05bab291d73da"
+    },
+    "reference/target/src/mcp/runtime/request_audit_tests.rs": {
+      "bytes": 47327,
+      "sha256": "a066822705a713929dd2791f1e889f9cf6b7c16567d0d6e71a4c4946b20e14a7"
+    },
+    "run_gate.py": {
+      "bytes": 5039,
+      "sha256": "1c0c101b165cdb56267ba60669660cc067022da8c4d92af22d0e8a52b6930f2e"
     },
     "scripts/hia_native_build.py": {
       "bytes": 16538,
@@ -42,13 +102,18 @@
     "scripts/hia_native_loader.py": {
       "bytes": 12849,
       "sha256": "367d600d808eaf95fe4e76d8d999b29ba46f1a3969e79fe20b70e23f79a48e96"
+    },
+    "verify_readonly.py": {
+      "bytes": 1233,
+      "sha256": "36d67ab4039f8952378780a08aa03ddc09b3540f421a759d559af7b9b176468a"
     }
   },
   "native_sync_evidence": "5ba9edacf578639614abee22b377b27250e92933",
   "native_sync_source": "0aad43e82c040ce24dfeb1e214ecdf9ac7620356",
   "public_handler_qualified": false,
+  "qualification_domain": "9 original and 10 native actual-thread cases; source frozen before execution",
   "schema": "hepta.audit-store-controller.source.v1",
   "semantic_execution": false,
-  "source_revision": 1,
+  "source_revision": 2,
   "whole_runtime_replaced": false
 }

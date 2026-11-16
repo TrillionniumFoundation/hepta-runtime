@@ -4,7 +4,7 @@ This source translates the pinned `AuditStoreLock` acquisition and guard lifecyc
 into HIA. It yields the exact mutex, condition-wait and monotonic-clock frames of
 the separately qualified `audit_native_sync` boundary. Queue admission, deadlines,
 FIFO cancellation, reader accounting, shared poison and release order are decided
-by HIA. This checkpoint has not yet qualified the composed concurrent controller.
+by HIA. The complete composed gate below must pass before this package can claim qualification.
 
 The original owner is the complete, byte-exact excerpt from target commit
 `d3d75c30719db966b004756f610007a7c723729e`, path
@@ -39,7 +39,7 @@ deadline-present, deadline low/high, current panic flag, then seven zero words.
 Its second half is either zero or the complete actual native boundary response.
 Commands are 0 initialize queue before publication, 1 acquire exclusive,
 2 acquire shared, 3 resume an emitted effect, 4 finish shared, and 5 drop guard.
-Initial commands carry a nonzero synchronization generation. Shared acquisition
+The three borrowed regions must be disjoint. Initial commands carry a nonzero synchronization generation. Shared acquisition
 requires a deadline. Resume accepts the exact serial and the actual 128-byte
 boundary return, or zero for an explicitly completed queue growth.
 
@@ -70,10 +70,32 @@ actor. The caller must not clone or concurrently access an actor. A mechanical t
 pump can pass a zero-length queue buffer whenever it lacks actual queue custody;
 the HIA code must complete every unlocked phase without touching shared bytes.
 
-## Current qualification scope
+## Frozen composed qualification domain
 
-The source author, HIA text, exact original owner and compiler identities are
-checkpointed before native compilation or composed execution. The independently
-qualified native boundary remains a separate dependency. Original Rust comparison,
-actual concurrent-controller qualification, public audit handlers and whole-runtime
-replacement remain pending.
+The complete source, test domain, recipes and inert readers are frozen before the
+fresh composed run. `build.py` compiles the controller and the already qualified
+boundary emitter from a fresh pinned B1=B2=B3. The emitted OS instructions run in
+the same actual Rust-hosted process as the controller. The host maps immutable code,
+executes the exact emitted effect, grows a buffer under retained custody, and
+records bytes; it implements no queue admission or deadline policy.
+
+Both the unchanged original owner and the native adapter compile the same five
+original tests plus four actual-thread cases: 16 exclusive workers each performing
+16 protected increments, 65 simultaneously held shared guards, an exclusive owner
+unwinding, and acquisition during an already active unwind. The native adapter also
+brackets 128 exact Instant mappings with independent actual kernel clocks. The
+source-owned domain requires 13 contexts, 399 actors and 774 completed API commands.
+Native scheduling, repeated observations and wakeups are retained in full; their
+counts are not replaced with a precomputed transcript.
+
+`read_capture.py` reads every source, compiler input/output/tail, journal record,
+actual effect, actor state, shared queue transition, quiescent kernel state and
+process stream. It performs no HIA or Rust execution. Ten physical mutations must
+be rejected for their intended semantic reasons after full envelope rebinding.
+Two complete relocations and two post-refusal admissions each retain a fresh
+12-probe no-execution/no-write guard proof. Original 60/180/900-second process
+budgets and a 15-minute CI job limit remain fixed.
+
+A successful gate qualifies this frozen actual controller domain. Public audit
+handlers, resource exhaustion recovery and whole-runtime replacement require
+separate closure and are not implied by this package.

@@ -1,0 +1,183 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+// Actual-thread cases compiled unchanged against the original and HIA adapters.
+
+struct ProtectedCounter(std::cell::UnsafeCell<u64>);
+// Every access is protected by the implementation's actual exclusive guard.
+unsafe impl Sync for ProtectedCounter {}
+
+#[test]
+fn exclusive_threads_serialize_256_actual_critical_sections() {
+	use std::sync::atomic::{AtomicU64, Ordering};
+	let lock = Arc::new(AuditStoreLock::default());
+	let counter = Arc::new(ProtectedCounter(std::cell::UnsafeCell::new(0)));
+	let inside = Arc::new(AtomicU64::new(0));
+	let barrier = Arc::new(std::sync::Barrier::new(17));
+	let mut workers = Vec::new();
+	for _ in 0..16 {
+		let (lock, counter, inside, barrier) = (
+			lock.clone(),
+			counter.clone(),
+			inside.clone(),
+			barrier.clone(),
+		);
+		workers.push(std::thread::spawn(move || {
+			barrier.wait();
+			for _ in 0..16 {
+				let guard = lock.acquire(None).unwrap();
+				assert_eq!(inside.fetch_add(1, Ordering::SeqCst), 0);
+				unsafe {
+					*counter.0.get() += 1;
+				}
+				std::thread::yield_now();
+				assert_eq!(inside.fetch_sub(1, Ordering::SeqCst), 1);
+				drop(guard);
+			}
+			std::thread::current().id()
+		}));
+	}
+	barrier.wait();
+	let threads: std::collections::HashSet<_> = workers
+		.into_iter()
+		.map(|worker| worker.join().unwrap())
+		.collect();
+	assert_eq!(threads.len(), 16);
+	assert_eq!(inside.load(Ordering::SeqCst), 0);
+	assert_eq!(unsafe { *counter.0.get() }, 256);
+	assert_shared_gate_idle(&lock);
+	extra_observation(
+		"exclusive-workers",
+		"\"threads\":16,\"critical_sections\":256,\"counter\":256",
+	);
+}
+
+#[test]
+fn sixty_five_actual_shared_owners_keep_custody_until_finish() {
+	use std::sync::atomic::{AtomicU64, Ordering};
+	use std::time::Duration;
+	let lock = Arc::new(AuditStoreLock::default());
+	let acquired = Arc::new(std::sync::Barrier::new(66));
+	let release = Arc::new(std::sync::Barrier::new(66));
+	let count = Arc::new(AtomicU64::new(0));
+	let mut workers = Vec::new();
+	for _ in 0..65 {
+		let (lock, acquired, release, count) = (
+			lock.clone(),
+			acquired.clone(),
+			release.clone(),
+			count.clone(),
+		);
+		workers.push(std::thread::spawn(move || {
+			let guard = lock
+				.acquire_shared(Instant::now() + Duration::from_secs(5))
+				.unwrap();
+			count.fetch_add(1, Ordering::SeqCst);
+			acquired.wait();
+			release.wait();
+			guard.finish().unwrap();
+			std::thread::current().id()
+		}));
+	}
+	acquired.wait();
+	assert_eq!(count.load(Ordering::SeqCst), 65);
+	assert_eq!(lock.queue.lock().unwrap().readers, 65);
+	release.wait();
+	let threads: std::collections::HashSet<_> = workers
+		.into_iter()
+		.map(|worker| worker.join().unwrap())
+		.collect();
+	assert_eq!(threads.len(), 65);
+	assert_shared_gate_idle(&lock);
+	extra_observation(
+		"shared-workers",
+		"\"threads\":65,\"concurrent_guards\":65,\"finished\":65",
+	);
+}
+
+#[test]
+fn exclusive_owner_panic_preserves_inner_poison_and_releases_fifo() {
+	use std::time::Duration;
+	let lock = Arc::new(AuditStoreLock::default());
+	let other = lock.clone();
+	assert!(std::thread::spawn(move || {
+		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			let _guard = other.acquire(None).unwrap();
+			panic!("actual exclusive owner unwind");
+		}))
+		.is_err()
+	})
+	.join()
+	.unwrap());
+	assert!(lock.inner.is_poisoned());
+	assert!(!lock.queue.is_poisoned());
+	assert!(matches!(
+		lock.acquire(None),
+		Err(StoreLockFailure::Unavailable)
+	));
+	assert!(matches!(
+		lock.acquire_shared(Instant::now() + Duration::from_secs(5)),
+		Err(StoreLockFailure::Unavailable)
+	));
+	assert_shared_gate_idle(&lock);
+	extra_observation(
+		"exclusive-unwind",
+		"\"inner_poisoned\":true,\"queue_poisoned\":false,\"fifo_released\":true",
+	);
+}
+
+struct AcquireWhileUnwinding {
+	lock: Arc<AuditStoreLock>,
+	shared: bool,
+}
+
+impl Drop for AcquireWhileUnwinding {
+	fn drop(&mut self) {
+		assert!(std::thread::panicking());
+		if self.shared {
+			drop(
+				self.lock
+					.acquire_shared(Instant::now() + std::time::Duration::from_secs(5))
+					.unwrap(),
+			);
+		} else {
+			drop(self.lock.acquire(None).unwrap());
+		}
+	}
+}
+
+#[test]
+fn existing_unwind_preserves_distinct_reader_and_mutex_poison_rules() {
+	for shared in [false, true] {
+		let lock = Arc::new(AuditStoreLock::default());
+		let other = lock.clone();
+		assert!(std::thread::spawn(move || {
+			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+				let _owner = AcquireWhileUnwinding {
+					lock: other,
+					shared,
+				};
+				panic!("begin actual unwind before acquisition");
+			}))
+			.is_err()
+		})
+		.join()
+		.unwrap());
+		assert!(!lock.inner.is_poisoned());
+		assert!(!lock.queue.is_poisoned());
+		assert_eq!(lock.queue.lock().unwrap().reader_poisoned, shared);
+		if shared {
+			assert!(matches!(
+				lock.acquire(None),
+				Err(StoreLockFailure::Unavailable)
+			));
+		} else {
+			drop(lock.acquire(None).unwrap());
+		}
+		assert_shared_gate_idle(&lock);
+	}
+	extra_observation(
+		"existing-unwind",
+		"\"contexts\":2,\"mutex_poisoned\":false,\"shared_drop_reader_poisoned\":true",
+	);
+}
