@@ -95,6 +95,7 @@ jobs:
 
       - name: Fresh HIA, five original SDK fixtures, retained contracts, and eight real tools
         run: |
+          umask 077
           sdk_rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
           python3 -I -B "$SDK_SOURCE_DIR/scripts/run_full_public_recipe.py" \
             --source "$SDK_SOURCE_DIR" \
