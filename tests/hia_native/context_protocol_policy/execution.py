@@ -13,7 +13,7 @@ import tarfile
 import time
 import tomllib
 
-from common import BASE, SDK_MODEL_SHA, document, encoded, put, read, require, sha
+from common import BASE, SDK_MODEL_SHA, document, encoded, put, read, require, sha, tree_files
 
 LIMITS = {"native-build": 300, "native-replay": 60, "rustc-version": 30,
           "cargo-version": 30, "cargo-build": 300, "cargo-metadata": 120, "original-replay": 60,
@@ -110,9 +110,6 @@ def registry_snapshot(capture, metadata, lock_raw, cargo_home):
         archive = read(crate_candidates[0])
         require(sha(archive) == locked[key]["checksum"], "registry archive checksum: " + name)
         source = Path(package["manifest_path"]).parent
-        checksums_raw = read(source / ".cargo-checksum.json")
-        checksums = json.loads(checksums_raw)
-        require(checksums["package"] == locked[key]["checksum"], "registry source package binding")
         originals = {}
         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
             for member in tar:
@@ -126,12 +123,28 @@ def registry_snapshot(capture, metadata, lock_raw, cargo_home):
                 require(read(source / relative) == raw, "actual registry source differs from its locked crate: " + name + "/" + relative)
                 if name == "rmcp-3.9.0" and relative == "src/model.rs":
                     require(sha(raw) == SDK_MODEL_SHA, "current ProtocolVersion owner source differs")
-        require(originals == checksums["files"], "registry complete file set differs: " + name)
+        observed = tree_files(source)
+        metadata_names = set(observed) - set(originals)
+        require(set(originals) <= set(observed) and metadata_names <= {".cargo-ok", ".cargo-checksum.json"},
+                "unexpected actual registry source files: " + name)
+        metadata_hex = {relative: read(source / relative).hex() for relative in sorted(metadata_names)}
+        # Cargo 1.95's fetched registry cache need not have a checksum sidecar.
+        # The locked archive and every actual source file above are authoritative;
+        # keep cache bookkeeping exactly as observed, without fabricating it.
+        if ".cargo-checksum.json" in metadata_hex:
+            checksums = json.loads(bytes.fromhex(metadata_hex[".cargo-checksum.json"]))
+            require(checksums["package"] == locked[key]["checksum"] and
+                    checksums["files"] in ({}, originals), "Cargo checksum sidecar differs")
+        source_proof = {"schema": "hepta.runtime.context-protocol-registry-source.v1",
+            "package_sha256": locked[key]["checksum"], "actual_source_files": originals,
+            "actual_file_set": sorted(observed), "cache_metadata_hex": metadata_hex,
+            "actual_manifest_sha256": sha(read(source / "Cargo.toml"))}
         put(capture / "registry" / (name + ".crate"), archive)
-        put(capture / "registry" / (name + ".checksums.json"), checksums_raw)
+        put(capture / "registry" / (name + ".source-proof.json"), source_proof)
         rows[name] = {"name": key[0], "version": key[1], "source": package["source"],
             "checksum": locked[key]["checksum"], "archive_bytes": len(archive),
-            "actual_source_files": originals, "metadata_id": package["id"]}
+            "actual_source_files": originals, "source_proof_sha256": sha(encoded(source_proof)),
+            "metadata_id": package["id"]}
     require("rmcp-3.9.0" in rows and "tokio-1.53.3" in rows, "missing actual current SDK registry")
     put(capture / "registry.json", {"schema": "hepta.runtime.context-protocol-registry.v1", "packages": rows})
 

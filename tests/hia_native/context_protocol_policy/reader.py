@@ -252,8 +252,11 @@ def registry_evidence(capture):
         require(row["metadata_id"] == actual_packages[name]["id"] and row["source"] == actual_packages[name]["source"], "actual metadata registry association")
         archive = read(capture / "registry" / (name + ".crate"))
         require(len(archive) == row["archive_bytes"] and sha(archive) == row["checksum"], "complete original registry archive changed")
-        checksums = document(capture / "registry" / (name + ".checksums.json"))
-        require(checksums["package"] == row["checksum"], "actual registry package checksum")
+        proof_raw = read(capture / "registry" / (name + ".source-proof.json"))
+        proof = json.loads(proof_raw)
+        require(sha(proof_raw) == row["source_proof_sha256"] and
+                proof["schema"] == "hepta.runtime.context-protocol-registry-source.v1" and
+                proof["package_sha256"] == row["checksum"], "actual registry source custody")
         originals = {}
         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
             for member in tar:
@@ -267,8 +270,16 @@ def registry_evidence(capture):
                 byte_count += len(raw)
                 if name == "rmcp-3.9.0" and relative == "src/model.rs":
                     require(raw == read(capture / "source" / BASE / "reference/sdk-model.rs") and sha(raw) == SDK_MODEL_SHA, "current SDK owner differs from the retained source")
-        require(originals == row["actual_source_files"] == checksums["files"], "actual complete original registry source differs")
-        files.update((name + ".crate", name + ".checksums.json"))
+        require(originals == row["actual_source_files"] == proof["actual_source_files"], "actual complete original registry source differs")
+        metadata_hex = proof["cache_metadata_hex"]
+        require(set(metadata_hex) <= {".cargo-ok", ".cargo-checksum.json"} and
+                proof["actual_file_set"] == sorted(set(originals) | set(metadata_hex)), "actual registry file-set coverage")
+        require(all(type(value) is str and bytes.fromhex(value).hex() == value for value in metadata_hex.values()), "complete registry bookkeeping bytes")
+        if ".cargo-checksum.json" in metadata_hex:
+            checksums = json.loads(bytes.fromhex(metadata_hex[".cargo-checksum.json"]))
+            require(checksums["package"] == row["checksum"] and checksums["files"] in ({}, originals), "retained Cargo checksum metadata differs")
+        require(proof["actual_manifest_sha256"] == originals["Cargo.toml"], "actual registry manifest identity")
+        files.update((name + ".crate", name + ".source-proof.json"))
     require(set(tree_files(capture / "registry")) == files, "unclaimed registry source archive")
     require("rmcp-3.9.0" in registry["packages"] and "tokio-1.53.3" in registry["packages"], "current registry missing")
     return {"packages": len(registry["packages"]), "complete_source_bytes": byte_count}

@@ -117,9 +117,6 @@ def all_phases(root, hepta, output):
     execute(capture, "rustc-version", [rustc, "+1.95.0", "--version", "--verbose"], cwd=oracle, env=env)
     execute(capture, "cargo-version", [cargo, "+1.95.0", "--version"], cwd=oracle, env=env)
     execute(capture, "cargo-build", [cargo, "+1.95.0", "build", "--locked", "--bin", "g5-target-context-oracle"], cwd=oracle, env=env)
-    execute(capture, "cargo-metadata", [cargo, "+1.95.0", "metadata", "--locked", "--format-version", "1"], cwd=oracle, env=env)
-    metadata = document(capture / "processes/cargo-metadata.stdout")
-    registry_snapshot(capture, metadata, read(oracle / "Cargo.lock"), Path(env["CARGO_HOME"]))
     binary_path = work / "cargo-target/debug/g5-target-context-oracle"
     binary = read(binary_path)
     put(capture / "original/oracle.bin", binary)
@@ -127,6 +124,9 @@ def all_phases(root, hepta, output):
         raw = read(oracle / name)
         require(raw == read(root / BASE / "oracle" / name), "fresh original workspace source changed")
         put(capture / "original/workspace" / name, raw)
+    execute(capture, "cargo-metadata", [cargo, "+1.95.0", "metadata", "--locked", "--format-version", "1"], cwd=oracle, env=env)
+    metadata = document(capture / "processes/cargo-metadata.stdout")
+    registry_snapshot(capture, metadata, read(oracle / "Cargo.lock"), Path(env["CARGO_HOME"]))
     execute(capture, "original-replay", [binary_path], cwd=oracle, env=env, stdin=capture / "semantic-input.bin")
     require(read(binary_path) == binary, "actual original executable changed during replay")
     put(capture / "original-build.json", {"schema": "hepta.runtime.context-protocol-original-build.v1",
