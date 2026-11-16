@@ -396,6 +396,27 @@ def original_command(root,output,report):
     return command
 
 
+def verify_original_native_context(binding,report):
+    shard='original_shard' in report
+    pipeline='original_qualification_pipeline' in report
+    require(not (shard and pipeline),'original native context has conflicting workflow owners')
+    if shard or pipeline:
+        owner=report['original_shard'] if shard else report['original_qualification_pipeline']
+        if pipeline:
+            require(owner['schema']=='hepta.runtime.original-pipeline.v1',
+                'original aggregate workflow schema changed')
+        require(binding['context']['mode']=='ci-original-pipeline'
+            and binding['invocation']==owner['invocation']
+            and binding['context']['invocation']==owner['invocation']
+            and binding['context']['native_seal_sha256']==owner['native_sha256'],
+            'original consumer used another workflow native phase')
+    else:
+        require(binding['context']['mode']=='owned-component-validation'
+            and binding['invocation']=='aggregate:'+report['started_at']
+            and binding['context']['invocation']==binding['invocation'],
+            'original consumer used another owned native phase')
+
+
 def original_evidence(root,output,report,completed_test_summary):
     from public_lifecycle_retained import ADMISSION, PHASE
     root,output=Path(root).resolve(strict=True),Path(output).resolve(strict=True)
@@ -406,15 +427,7 @@ def original_evidence(root,output,report,completed_test_summary):
     out,err=completed(output,'public-lifecycle-rust-compare',row,original_command(root,output,report),root,180,aggregate=True)
     original=object_at(folder/'result.json')
     binding=object_at(output/ADMISSION)
-    if 'original_shard' in report:
-        require(binding['context']['mode']=='ci-original-pipeline'
-            and binding['invocation']==report['original_shard']['invocation']
-            and binding['context']['native_seal_sha256']==report['original_shard']['native_sha256'],
-            'original consumer used another workflow native phase')
-    else:
-        require(binding['context']['mode']=='owned-component-validation'
-            and binding['invocation']=='aggregate:'+report['started_at'],
-            'original consumer used another owned native phase')
+    verify_original_native_context(binding,report)
     expected={k:original[k]for k in ('status','fresh_actual_cargo_build','native_processes',
         'retained_native_processes','original_processes','requests_per_implementation','original_blocks','locked_registry_dependencies')}
     require(not err and json.loads(out)==summary==expected,'actual original wrapper completion differs')
