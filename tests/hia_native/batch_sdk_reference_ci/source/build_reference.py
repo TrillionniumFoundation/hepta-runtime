@@ -51,6 +51,8 @@ def build(rust_bin, output, target_checkout, core_source):
     report["source_inputs"]["files"].update({name: PIN(regular(ROOT / name)) for name in
         ("build_reference.py", "receipt_support.py", "verify_source.py",
          "authoring/author_public_reference.py", "authoring/public_reference_main.rs")})
+    report["source_inputs"]["files"].update({name: PIN(regular(ROOT / name)) for name in
+        ("authoring/resolved-lock.toml", "authoring/lock-origin.json")})
     report["independent_target_checkout"] = str(Path(target_checkout).resolve(strict=True))
     report["target_files"] = proof["target_files"]
     put(output / "BUILD.json", report)

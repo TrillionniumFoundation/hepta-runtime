@@ -8,6 +8,7 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
+import tomllib
 
 TARGET = "d3d75c30719db966b004756f610007a7c723729e"
 
@@ -86,6 +87,14 @@ def compose(baseline, core):
         raw = (baseline / name).read_bytes()
         assert raw.count(old_name) == 1
         output[name] = raw.replace(old_name, new_name)
+    resolved_lock = (Path(__file__).parent / "resolved-lock.toml").read_bytes()
+    lock_origin = json.loads((Path(__file__).parent / "lock-origin.json").read_bytes())
+    package_key = lambda package: (package["name"], package["version"], package.get("source", ""))
+    assert sorted(tomllib.loads(output["Cargo.lock"].decode())["package"], key=package_key) == sorted(
+        tomllib.loads(resolved_lock.decode())["package"], key=package_key)
+    assert pin(output["Cargo.lock"])["sha256"] == lock_origin["old_sha256"]
+    assert pin(resolved_lock)["sha256"] == lock_origin["new_sha256"]
+    output["Cargo.lock"] = resolved_lock
     exact_items = []
     compiled = {name: raw for name, raw in output.items() if name.endswith(".rs")}
     for old in manifest["exact_original_items"]:
@@ -114,6 +123,7 @@ def compose(baseline, core):
         "preserved_original_items": exact_items, "preserved_body_fragments": body_proof["body_fragments"],
         "preserved_parameter_fragments": body_proof["parameter_fragments"], "additional_exact_spans": added,
         "original_get_info_name_and_body_unchanged": True,
+        "fixture_lock_origin": lock_origin,
         "new_wrapper": pin(output["src/main.rs"]), "files": {name: pin(raw) for name, raw in output.items()},
         "real_sdk_serve_transport": True, "real_parameters_extractor_and_method_adapter": True,
         "target_gateway_and_full_local_functions": True, "complete_target_call_tool_router": False,
