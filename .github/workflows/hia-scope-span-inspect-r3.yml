@@ -1,4 +1,4 @@
-name: Read retained annotation workload timing without replay
+name: Inspect retained wide-array owner allocation without replay
 on:
   push:
     branches: [hia-scope-span-inspect-r3-6780-20261116]
@@ -21,13 +21,6 @@ jobs:
             bytes: 215829313
             sha256: 7fc55f93b36369f3396f82759384e372970ca3880b4e0d35d1b2e4da264e5c7d
             manifest: 3bea8745891f100a5e13422f422cf9b4a1749c9b5d9b27814e227dc44af33764
-          - revision: r4
-            artifact: 14243826825
-            run: 43902785659
-            head: 8441262d8076c1d4864665ea234d488ef24b9ebb
-            bytes: 212141035
-            sha256: 1a5750418c60cf67d7259527b38ed0a7ada1006e14eadb8b9ab889432f94d861
-            manifest: e61552f0d8f05dc2a9c5608d5ff9a76e44038a239df306a5159bd7d6edee0ed7
     env:
       SOURCE_ARTIFACT_ID: ${{ matrix.artifact }}
       SOURCE_RUN_ID: ${{ matrix.run }}
@@ -132,12 +125,34 @@ jobs:
           put("PERFORMANCE.json",summary)
           summary["last_complete_calls"]=[{k:row[k] for k in ("call","owner","case","elapsed_seconds","return_code","output_capacity","workspace_capacity")} for row in calls[-2:]]
           print(json.dumps(summary,sort_keys=True))
+          def prefix(descriptor,size):
+              raw=b"".join(gzip.decompress((data/"buffers"/(key+".gz")).read_bytes())
+                           for key in descriptor["chunks"][:(size+(128<<10)-1)//(128<<10)])
+              return raw[:size]
+          focus=[]
+          for row in calls:
+              if row["case"]!="effect-baseline-wide-number-array":
+                  continue
+              item={k:row[k] for k in ("call","owner","case","elapsed_seconds","return_code","output_capacity","workspace_capacity")}
+              head=prefix(row["output_after"],64)
+              item["output_head_hex"]=head.hex()
+              if row["owner"]=="scope_annotation_span" and row["workspace_capacity"]>=352:
+                  state=prefix(row["workspace_after"],352)
+                  item["owner_state_words"]=list(struct.unpack_from("<28Q",state,0))
+                  item["owner_action_words"]=list(struct.unpack_from("<12Q",state,256))
+              focus.append(item)
+          focus_summary=dict(original_run=int(os.environ["SOURCE_RUN_ID"]),case="effect-baseline-wide-number-array",
+              calls=focus,growth=[row for row in ledger("growth.jsonl")[0] if row["case"]=="effect-baseline-wide-number-array"],
+              handoffs=[row for row in ledger("handoffs.jsonl")[0] if row["case"]=="effect-baseline-wide-number-array"],
+              native_executions=0,rust_executions=0)
+          put("WIDE_ARRAY_SEQUENCE.json",focus_summary)
+          print("WIDE_ARRAY_SEQUENCE="+json.dumps(focus_summary,sort_keys=True))
           PY
       - name: Preserve complete readback and diagnostic reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: scope-timing-${{ matrix.revision }}-${{ github.sha }}
+          name: scope-owner-allocation-${{ matrix.revision }}-${{ github.sha }}
           path: ${{ runner.temp }}/scope-inspection/reports/
           retention-days: 14
           if-no-files-found: error
