@@ -250,7 +250,7 @@ def main():
             'all_owners_rebuilt_from_source':True,'target_slots':{'message':42,'request':43,'bridge':44,'historical_protocol':45},
             'reserved_slots':list(range(33,42)),'target_connection_identity_integrated':False,
             'target_response_owner_integrated':False,'target_async_transport_integrated':False})
-        steps.run('actual-public-eight-loop',[sys.executable,output/'scripts/qualify_public_loop.py',
+        steps.run('actual-public-eight-loop',[sys.executable,output/'scripts/qualify_public_loop_ordered.py',
             '--run-name','source-public-loop','--g5-reference',g5],timeout=600)
         loop=json.loads((output/'evidence/source-public-loop/summary.json').read_bytes())
         normal=json.loads((g5/'evidence/normal-v2/summary.json').read_bytes())
