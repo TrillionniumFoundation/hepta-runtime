@@ -1,0 +1,157 @@
+name: Inspect frozen annotation revision 3 failure without semantic replay
+on:
+  push:
+    branches: [hia-scope-span-inspect-r3-6780-20261116]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download exact retained failure bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14239997887 > "$RUNNER_TEMP/input-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14239997887/zip > "$RUNNER_TEMP/input-artifact.zip"
+      - name: Verify every archive byte and inspect actual constructor frames
+        run: |
+          python3 -I -B - <<'PY'
+          """Inspect complete existing failure bytes; never execute native code or Rust."""
+          from pathlib import Path
+          import gzip, hashlib, json, os, shutil, struct, tarfile, zipfile
+          root=Path(os.environ["RUNNER_TEMP"])
+          package=root/"scope-inspection";package.mkdir()
+          recovered=package/"recovered";recovered.mkdir()
+          reports=package/"reports";reports.mkdir()
+          sha=lambda raw:hashlib.sha256(raw).hexdigest()
+          def pin(path):
+              with path.open("rb") as stream:return dict(bytes=path.stat().st_size,sha256=hashlib.file_digest(stream,"sha256").hexdigest())
+          def put(name,value):
+              (reports/name).write_text(json.dumps(value,sort_keys=True,indent=2)+"\n")
+          metadata=json.loads((root/"input-artifact.json").read_bytes())
+          digest="7fc55f93b36369f3396f82759384e372970ca3880b4e0d35d1b2e4da264e5c7d"
+          assert metadata["id"]==14239997887 and metadata["workflow_run"]["id"]==43898646439
+          assert metadata["workflow_run"]["head_sha"]=="ffc4f26b8e7531d5dba3f7df9291c2897b92f6cc"
+          assert metadata["expired"] is False and metadata["digest"]=="sha256:"+digest
+          assert metadata["size_in_bytes"]==215829313 and pin(root/"input-artifact.zip")==dict(bytes=215829313,sha256=digest)
+          zip_rows={}
+          with zipfile.ZipFile(root/"input-artifact.zip") as archive:
+              assert len(archive.infolist())==4 and set(archive.namelist())=={"annotation-span-v2.tar.gz","annotation-span-v2.tar.gz.json","annotation-export.stdout","annotation-export.stderr"}
+              for item in archive.infolist():
+                  target=package/item.filename
+                  with archive.open(item) as source,target.open("xb") as destination:shutil.copyfileobj(source,destination,1<<20)
+                  zip_rows[item.filename]=pin(target)
+                  assert zip_rows[item.filename]["bytes"]==item.file_size
+          archive_path=package/"annotation-span-v2.tar.gz"
+          receipt=json.loads((package/"annotation-span-v2.tar.gz.json").read_bytes())
+          assert pin(archive_path)=={k:receipt[k] for k in ("bytes","sha256")}
+          assert receipt["all_members_reread"] is True and receipt["gate_status"]=="FAIL"
+          assert receipt["source_manifest_sha256"]=="3bea8745891f100a5e13422f422cf9b4a1749c9b5d9b27814e227dc44af33764"
+          members={}
+          with tarfile.open(archive_path,"r|gz") as archive:
+              while item:=archive.next():
+                  name=item.name;relative=Path(name)
+                  assert item.isfile() and name not in members and not relative.is_absolute() and ".." not in relative.parts
+                  target=recovered/relative;target.parent.mkdir(parents=True,exist_ok=True)
+                  with archive.extractfile(item) as source,target.open("xb") as destination:shutil.copyfileobj(source,destination,1<<20)
+                  target.chmod(item.mode)
+                  members[name]=dict(**pin(target),mode=item.mode)
+                  assert members[name]["bytes"]==item.size
+                  archive.members.clear()
+          raw=(recovered/"artifact-manifest.json").read_bytes();manifest=json.loads(raw)
+          expected=dict(manifest["files"]);expected["artifact-manifest.json"]=dict(bytes=len(raw),sha256=sha(raw),mode=0o644)
+          assert members==expected and len(members)==receipt["files"]
+          assert sum(row["bytes"] for row in members.values())==receipt["logical_bytes"]
+          assert manifest["git_head"]==metadata["workflow_run"]["head_sha"] and int(manifest["run_id"])==43898646439
+          assert manifest["semantic_reexecutions_by_exporter"]==0 and manifest["gate_status"]=="FAIL"
+          put("ZIP_FILES.json",zip_rows);put("TAR_FILES.json",members);put("original-archive-receipt.json",receipt)
+          data=recovered/"run/controls"
+          calls=[json.loads(line) for line in (data/"calls.jsonl").read_bytes().splitlines()]
+          rows={row["sha256"]:row for row in (json.loads(line) for line in (data/"buffers.jsonl").read_bytes().splitlines())}
+          def actual(descriptor):
+              output=bytearray()
+              for key in descriptor["chunks"]:
+                  row=rows[key];compressed=(data/row["file"]).read_bytes()
+                  assert dict(bytes=len(compressed),sha256=sha(compressed))==dict(bytes=row["compressed_bytes"],sha256=row["compressed_sha256"])
+                  raw=gzip.decompress(compressed);assert len(raw)==row["bytes"] and sha(raw)==key
+                  output.extend(raw)
+              assert len(output)==descriptor["bytes"] and sha(output)==descriptor["sha256"]
+              return bytes(output)
+          observations=[]
+          for row in calls:
+              if row["case"].startswith("constructor-small-output-"):
+                  request=(data/row["folder"]/"input.bin").read_bytes()
+                  before,after=actual(row["output_before"]),actual(row["output_after"])
+                  wb,wa=actual(row["workspace_before"]),actual(row["workspace_after"])
+                  observations.append(dict(call=row["call"],case=row["case"],return_code=row["return_code"],
+                      output_capacity=row["output_capacity"],workspace_capacity=row["workspace_capacity"],
+                      input_hex=request.hex(),input_sha256=sha(request),output_before_hex=before.hex(),output_after_hex=after.hex(),
+                      workspace_unchanged=wb==wa,workspace_bytes=len(wb),
+                      growth_words=list(struct.unpack("<3Q",after[8:32])) if after[:8]==b"HGRWS002" else None))
+          summary=dict(status="COMPLETE_EXISTING_ARCHIVE_BYTES_READ",original_run=43898646439,original_job=133408956494,
+              artifact_id=14239997887,original_zip=dict(bytes=215829313,sha256=digest),
+              files=len(members),logical_bytes=receipt["logical_bytes"],all_archive_files_bytes_modes_verified=True,
+              source_manifest_sha256=receipt["source_manifest_sha256"],constructor_observations=observations,
+              native_summary=json.loads((recovered/"run/native/CAPTURE.json").read_bytes()),
+              original_replay=json.loads((recovered/"run/original/REPLAY.json").read_bytes()),
+              native_executions=0,rust_executions=0,original_failure_reclassified_as_pass=False,complete_gate_pass=False)
+          put("READBACK.json",summary);print(json.dumps(summary,sort_keys=True))
+          PY
+      - name: Independently read completed components without replay
+        run: |
+          cat > "$RUNNER_TEMP/read-scope-completed.py" <<'PY'
+          """Read completed components of a failed gate; the failed control gate stays failed."""
+          from pathlib import Path
+          import gzip, hashlib, json, os, sys, tarfile, tomllib
+          root=Path(os.environ["RUNNER_TEMP"])/"scope-inspection"
+          source,run=root/"recovered/source",root/"recovered/run"
+          sys.dont_write_bytecode=True
+          sys.path.insert(0,str(source))
+          import qualify as q
+          import read_capture, original_reader, extract_reference, controls, cases, evidence_controls, original_evidence_controls
+          from read_only_guard import guarded
+          source_sha=q.verify_source()
+          assert source_sha=="3bea8745891f100a5e13422f422cf9b4a1749c9b5d9b27814e227dc44af33764"
+          def read_completed():
+              build=q.build_evidence(run/"build",source_sha)
+              native,_=q.native_evidence(run/"native",run/"build",source_sha)
+              original=original_reader.original_evidence(run/"original",run/"native",source_root=source)
+              return dict(status="COMPLETED_NATIVE_AND_ORIGINAL_COMPONENTS_READ",build=build,native=native,original=original,
+                          controls_qualified=False,complete_gate_pass=False,original_failure_reclassified_as_pass=False)
+          result=guarded(read_completed,roots=[source,run],foreign_path=Path("/dev/null"))
+          assert len(result["probes"])==12 and result["before"]==result["after"]
+          assert result["native_or_rust_executions"]==result["reader_writes"]==0
+          raw=(json.dumps(result,sort_keys=True,indent=2)+"\n").encode()
+          (root/"reports/completed-components-reader.json").write_bytes(raw)
+          print(json.dumps(dict(evidence=result["evidence"],guard_probes=len(result["probes"]),unchanged_entries=len(result["before"]),
+              proof_bytes=len(raw),proof_sha256=hashlib.sha256(raw).hexdigest(),native_executions=0,rust_executions=0),sort_keys=True))
+          PY
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import os,sys
+          root=Path(os.environ["RUNNER_TEMP"])/"scope-inspection"
+          source=root/"recovered/source"
+          sys.path.insert(0,str(source))
+          from rust_reference import Recorder,environment
+          env,_=environment(os.environ)
+          rec=Recorder(source,root/"reports/reader-processes",env)
+          try:
+              stdout,process=rec.run("read-completed-components",[sys.executable,"-I","-B",Path(os.environ["RUNNER_TEMP"])/"read-scope-completed.py"],timeout=180)
+              print(stdout.decode())
+          except BaseException:
+              for path in sorted((root/"reports/reader-processes").glob("*.stderr")):
+                  print(path.read_text(),file=sys.stderr)
+              raise
+          PY
+      - name: Preserve complete inspection reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: scope-r3-existing-artifact-inspection-${{ github.sha }}
+          path: ${{ runner.temp }}/scope-inspection/reports/
+          retention-days: 14
+          if-no-files-found: error
