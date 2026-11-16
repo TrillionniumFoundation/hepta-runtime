@@ -8,7 +8,7 @@ from pathlib import Path
 import argparse,ast,hashlib,importlib.util,json,shutil,stat,sys
 sys.dont_write_bytecode=True
 PREFIX=Path("tests/hia_native/historical_public58")
-DIRECTORIES=("native","scripts","src","tests",".github","authoring")
+DIRECTORIES=("native","scripts","src","tests",".github","authoring","vendor")
 ROOT_FILES=("Cargo.toml","Cargo.lock","rustfmt.toml","README.md","AGENTS.md")
 SHA=lambda raw:hashlib.sha256(raw).hexdigest()
 def pin(raw):
