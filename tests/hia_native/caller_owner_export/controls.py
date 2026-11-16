@@ -32,6 +32,18 @@ def copy_capture(capture,destination):
     (destination/'CAPTURE.json').chmod((capture/'CAPTURE.json').stat().st_mode&0o777)
 
 
+def replace_owned(path,raw,mode):
+    # These are our independent mutation copies, never producer files. A fixed
+    # ELF is intentionally 0555; permit the fixture write only temporarily, and
+    # restore its exact admitted mode before the read-only verifier sees it.
+    require(path.is_file() and not path.is_symlink() and path.resolve()==path.absolute(),'owned mutation file kind')
+    path.chmod(mode|0o200)
+    try:
+        with path.open('wb') as stream:stream.write(raw)
+    finally:
+        path.chmod(mode)
+
+
 def compact_lines(rows):
     return b''.join((json.dumps(row,sort_keys=True,separators=(',',':'))+'\n').encode() for row in rows)
 
@@ -82,7 +94,8 @@ def run(capture,output,pins_sha):
     for name,relative,changed in mutation_data(capture):
         original=read(clone/relative)
         put(output/'mutations'/name/'bytes.bin',changed)
-        (clone/relative).write_bytes(changed)
+        mode=document(clone/'CAPTURE.json')['files'][relative]['mode']
+        replace_owned(clone/relative,changed,mode)
         index=json.loads(sealed);index['files'][relative].update(bytes=len(changed),sha256=sha(changed))
         # Rebind only the container hash. Inner native/source/build/original
         # custody must independently reject the retained changed bytes.
@@ -96,7 +109,7 @@ def run(capture,output,pins_sha):
                 'refusal_type':type(exc).__name__,'refusal':str(exc)})
         else:raise ValueError('strict reader admitted mutation '+name)
         finally:
-            (clone/relative).write_bytes(original)
+            replace_owned(clone/relative,original,mode)
             (clone/'CAPTURE.json').write_bytes(sealed)
     require(tuple(row['name'] for row in rows)==NAMES,'fixed reader refusal inventory')
     require(read_capture(clone,clone/'source',pins_sha)==baseline,'restored physical reader copy differs')
