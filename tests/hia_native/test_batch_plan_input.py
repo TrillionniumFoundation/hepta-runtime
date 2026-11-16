@@ -216,9 +216,12 @@ class Recorder:
     def invoke(self,*args,**kwargs):return self.transports[0].invoke(*args,**kwargs)
     def complete(self,*args,**kwargs):return self.transports[0].complete(*args,**kwargs)
     def semantic(self,run_cases,rows):
-        # Whole cases, including both modes and every continuation, stay with
-        # one transport. Byte weights place the dense tail on both workers.
-        weights=[4096+len(row['raw_json'].encode())+len(row['original_raw'].encode()) for row in rows]
+        # Keep every case's modes and continuations on one transport. Estimate
+        # JSON parsing, serialization and typed projection as three raw spans;
+        # include the mandatory before/after Value and Params workspaces even
+        # for small inputs. These weights schedule whole cases only.
+        workspace_bytes=2*(16512+32768)
+        weights=[workspace_bytes+3*len(row['raw_json'].encode())+len(row['original_raw'].encode()) for row in rows]
         if len(weights)<2:raise ValueError('two nonempty case ranges are required')
         total=sum(weights);prefix=0;choices=[]
         for cut,weight in enumerate(weights[:-1],1):
