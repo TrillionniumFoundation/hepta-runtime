@@ -1,0 +1,89 @@
+def after_connection(o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    if size < 256 or size > BRIDGE_CAP or code != size:
+        return INVALID
+    if get(w, BRIDGE) != CONNECTION_OUTPUT:
+        return INVALID
+    kind = get(w, BRIDGE + 8)
+    closed = get(w, BRIDGE + 16)
+    if kind > 6 or closed > 1 or get(w, BRIDGE + 24) > 1:
+        return INVALID
+    put(w, 64, size)
+    put(w, 72, closed)
+    put(w, 96, kind)
+    put(w, 104, get(w, BRIDGE + 24))
+    put(w, 112, get(w, BRIDGE + 48))
+    variant = get(w, MESSAGE + 16)
+    if kind == 1:
+        if get(w, MESSAGE + 8) == 1 and variant == 2:
+            return initialize_frame(o, w)
+        if get(w, MESSAGE + 8) == 1 and variant == 3:
+            return child(w, 4, 3, ORIGINAL, get(w, 24), TEMP, TEMP_CAP)
+        if connection_pair(w, BRIDGE, size, 64) == False:
+            return INVALID
+        start = get(w, BRIDGE + 64)
+        count = get(w, BRIDGE + 72)
+        if start == 0:
+            return INVALID
+        return direct_frame(o, w, BRIDGE + start, count, closed)
+    if kind == 2:
+        if get(w, MESSAGE + 8) != 1:
+            return INVALID
+        if variant == 14:
+            return child(w, 2, 1, MESSAGE, get(w, 48), REQUEST, REQUEST_CAP)
+        if variant == 1:
+            return empty_result(o, w)
+        if variant == 15:
+            return list_projection(o, w)
+        return child(w, 4, 3, ORIGINAL, get(w, 24), TEMP, TEMP_CAP)
+    return direct_frame(o, w, 0, 0, closed)
+
+
+def list_projection(o:mutbuf, w:mutbuf) -> u32:
+    extent = get(w, 48)
+    if connection_pair(w, MESSAGE, extent, 80) == False:
+        return INVALID
+    if connection_pair(w, MESSAGE, extent, 96) == False:
+        return INVALID
+    id_at = get(w, MESSAGE + 80)
+    id_size = get(w, MESSAGE + 88)
+    meta_present = get(w, MESSAGE + 32)
+    meta_at = get(w, MESSAGE + 96)
+    meta_size = get(w, MESSAGE + 104)
+    if id_at == 0 or id_size == 0 or meta_present > 1:
+        return INVALID
+    if meta_present == 1:
+        if meta_at == 0 or meta_size < 2:
+            return INVALID
+    else:
+        meta_size = 0
+    if id_size > ORIGINAL_CAP - 128:
+        return RESOURCE
+    if meta_size > ORIGINAL_CAP - 128 - id_size:
+        return RESOURCE
+    at = response_prefix(w, ORIGINAL + 32)
+    copy_within(w, at, MESSAGE + id_at, id_size)
+    at = list_request_suffix(w, at + id_size)
+    if meta_present == 1:
+        at = metadata_key(w, at)
+        copy_within(w, at, MESSAGE + meta_at, meta_size)
+        at = at + meta_size
+    store(w, at, 125)
+    store(w, at + 1, 125)
+    size = at + 2 - ORIGINAL - 32
+    put(w, ORIGINAL, PROTOCOL_INPUT)
+    put(w, ORIGINAL + 8, get(w, 32))
+    put(w, ORIGINAL + 16, size)
+    put(w, ORIGINAL + 24, 0)
+    return child(w, 4, 3, ORIGINAL, size + 32, TEMP, TEMP_CAP)
+
+def list_request_suffix(w:mutbuf, at:u64) -> u64:
+    put(w,at+0,7237117975334822444)
+    put(w,at+8,8317145136326916642)
+    put(w,at+16,2462380979812658223)
+    put(w,at+24,4189037517031498096)
+    store(w,at+32,123)
+    return at+33
+
+def metadata_key(w:mutbuf, at:u64) -> u64:
+    put(w,at+0,4189017755953749794)
+    return at+8
