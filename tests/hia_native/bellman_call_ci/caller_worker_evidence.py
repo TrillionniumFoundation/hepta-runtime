@@ -2,7 +2,6 @@
 from __future__ import annotations
 import hashlib,json,struct
 from pathlib import Path
-from worker_transport import decode_journal
 
 INVALID=0xffffffff
 GROW=0xffffffd0
@@ -128,14 +127,33 @@ def decode_body(body):
         value=None
     return h,parts,value
 
+def journal_records(path):
+    """Read every exact physical journal record once without retaining copies."""
+    size=path.stat().st_size;at=0
+    with path.open('rb') as stream:
+        while at<size:
+            prefix=stream.read(16);assert len(prefix)==16,('partial journal header',at)
+            magic=prefix[:8];extent=struct.unpack_from('<Q',prefix,8)[0]
+            assert magic in {b'HBWPL001',b'HBCLOCK1',b'HBPWHLD1',b'HBWPEND1',b'HBWPROC1'}
+            assert 16<=extent<=size-at,('partial journal body',at,extent)
+            if magic==b'HBWPL001':assert extent==256
+            if magic==b'HBCLOCK1':assert extent==192
+            if magic in {b'HBPWHLD1',b'HBWPROC1'}:assert extent==64
+            tail=stream.read(extent-16);assert len(tail)==extent-16
+            yield magic,prefix+tail;at+=extent
+        assert at==size and stream.read(1)==b''
+
 def verify_process(path,component,*,timeout_seconds):
     receipt=json.loads((path/'process.json').read_bytes())
     assert receipt['started'] and receipt['returncode']==0 and not receipt['timed_out']
     assert receipt['timeout_seconds']==timeout_seconds and receipt['elapsed_seconds']<=timeout_seconds
     assert receipt['pid']==receipt['pgid'] and receipt['pid']>0 and receipt['parent_pid']>0
     assert receipt['executable_sha256']==component['executable_sha256']
-    raw={name:(path/(name+'.bin')).read_bytes() for name in ['stdin','stdout','stderr']}
+    raw={name:(path/(name+'.bin')).read_bytes() for name in ['stdin','stdout']}
     for name,b in raw.items():assert receipt[name]=={'bytes':len(b),'sha256':sha(b)}
+    journal=path/'stderr.bin'
+    with journal.open('rb') as stream:journal_sha=hashlib.file_digest(stream,'sha256').hexdigest()
+    assert receipt['stderr']=={'bytes':journal.stat().st_size,'sha256':journal_sha}
     requests=[];replies={};ready={};bodies={};all_output=[]
     for b in packets(raw['stdin']):
         assert len(b)>=64 and b[:8]==b'HBWKRQ01'
@@ -166,7 +184,7 @@ def verify_process(path,component,*,timeout_seconds):
     assert receipt['outputs']==all_output
     assert set(ready)==set(jobs)
     pool=Pool();sequence=0;clones={};reaped={};starts={};finishes={};clock_counts={};core_clocks={};writer_clocks={};holds={};final=None;growth=0
-    for magic,b in decode_journal(raw['stderr']):
+    for magic,b in journal_records(journal):
         h=words(b[:64])
         if magic==b'HBWPL001':
             actor,command=struct.unpack_from('<2Q',b,16);code,seq=struct.unpack_from('<2Q',b,96)
@@ -202,7 +220,14 @@ def verify_process(path,component,*,timeout_seconds):
             elif owner==2:
                 assert b[64:72]==b'HBTCEF01' and d[13:]==[0,0,0]
                 assert 1<=d[9]<=32 and d[8]<=8<<20
-                writer_clocks.setdefault(job,[]).append((d,now))
+                previous=writer_clocks.get(job)
+                if previous is None:
+                    assert d[1]==1 and d[8]==0
+                    writer_clocks[job]=(1,d,now,now<starts[job]+30000000000)
+                else:
+                    count,last,last_now,all_before=previous
+                    assert d[1]==count+1 and d[8]==last[8]+last[9]
+                    writer_clocks[job]=(count+1,d,now,all_before and now<starts[job]+30000000000)
             else:raise AssertionError(owner)
         elif magic==b'HBPWHLD1':
             assert h[2] in jobs and h[3]==clones[h[2]] and h[4]==jobs[h[2]]['hold'] and h[6:]==[0,0]
@@ -217,22 +242,32 @@ def verify_process(path,component,*,timeout_seconds):
         if info['hold']:assert job in holds
         rr=words(ready[job][64:192]);assert rr[3]==5 and rr[4]==job and rr[5]==4 and rr[7]==0
         assert rr[8]==starts[job] and rr[9]==starts[job]+30000000000 and rr[10]==finishes[job][1]
-        cs=core_clocks.get(job,[]);ws=writer_clocks.get(job,[])
-        assert [d[1] for d,n in ws]==list(range(1,len(ws)+1))
-        for previous,current in zip(ws,ws[1:]):assert current[0][8]==previous[0][8]+previous[0][9]
+        cs=core_clocks.get(job,[]);writer=writer_clocks.get(job)
+        final_code=finishes[job][1]
+        if job in clock_counts:assert clock_counts[job][1]<=finishes[job][0]
+        # COMPLETE is an actual worker observation even after caller cancellation.
+        # Required CLOCK records cannot disappear merely because no TAKE follows.
+        if final_code==0:
+            count=struct.unpack_from('<Q',info['payload'],8)[0]
+            expected=[(1,i) for i in range(count)]+[(3,i) for i in range(count)]+[(4,i) for i in range(count)]+[(5,0)]
+            assert [(d[4],d[5]) for d,n in cs]==expected,('complete core CLOCK sequence',job)
+            assert [d[1] for d,n in cs]==list(range(1,count+1))+list(range(count+2,3*count+3)),('complete core CLOCK acknowledgements',job)
+            assert writer is not None and writer[0]>0 and writer[3]
+            last=writer[1]
+            assert last[4:6]==[14,count] and last[9:13]==[1,0,0,2],('complete commitment CLOCK closure',job)
+            assert all(now<starts[job]+30000000000 for d,now in cs)
+        elif final_code==0xfffffdf0:
+            assert cs and cs[-1][1]>=starts[job]+30000000000
+        elif final_code==0xfffffde1:
+            assert writer is not None and writer[2]>=starts[job]+30000000000
         if job in bodies:
-            bh,parts,value=bodies[job];assert bh[5]==starts[job] and bh[6:7]==[finishes[job][0]] and bh[8]==clock_counts.get(job,(0,0))[0]
-            if bh[9]==0:
-                count=struct.unpack_from('<Q',info['payload'],8)[0]
-                expected=[(1,i) for i in range(count)]+[(3,i) for i in range(count)]+[(4,i) for i in range(count)]+[(5,0)]
-                assert [(d[4],d[5]) for d,n in cs]==expected
-                assert len(ws)>0 and all(now<starts[job]+30000000000 for d,now in cs+ws)
-                assert [d[1] for d,n in cs]==list(range(1,count+1))+list(range(count+2,3*count+3))
-            elif bh[9]==0xfffffdf0:
-                assert cs and cs[-1][1]>=starts[job]+30000000000
-            elif bh[9]==0xfffffde1:
-                assert ws and ws[-1][1]>=starts[job]+30000000000
+            bh,parts,value=bodies[job]
+            assert bh[9]==final_code and bh[5]==starts[job] and bh[6:7]==[finishes[job][0]] and bh[8]==clock_counts.get(job,(0,0))[0]
+            if final_code==0:
+                assert bh[11]>=clock_counts[job][1] and writer[1][8]+writer[1][9]==len(parts[1])-128
     return {'status':'READ_ONLY_PROCESS_PASS','jobs':len(jobs),'pool_calls':sequence,'clock_calls':sum(v[0] for v in clock_counts.values()),
             'physical_clones':len(clones),'physical_reaps':len(reaped),'held_jobs':len(holds),'growth_calls':growth,
-            'complete_stream_bytes':sum(len(v) for v in raw.values()),'streams':receipt['stdin']|{'output_sha256':receipt['stdout']['sha256'],'journal_sha256':receipt['stderr']['sha256']},
+            'complete_stream_bytes':sum(receipt[name]['bytes'] for name in ['stdin','stdout','stderr']),'streams':receipt['stdin']|{'output_sha256':receipt['stdout']['sha256'],'journal_sha256':receipt['stderr']['sha256']},
+            'successful_complete_without_take':sum(finishes[job][1]==0 and job not in bodies for job in jobs),
+            'all_completed_job_clock_sequences_checked':True,'journal_streamed_without_truncation':True,
             'actual_rust_executed':False,'public_handler_qualified':False}
