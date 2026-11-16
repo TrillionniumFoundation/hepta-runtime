@@ -182,10 +182,18 @@ def controls_evidence(folder, build, source_sha, semantic):
         request=buffers.span(state,WORD(head,136),WORD(head,296))
         require(call["owner"]=="text_result_constructor" and call["case"]==row["name"]
                 and row["output_capacity"]==call["output_capacity"]==capacity and call["workspace_capacity"]==0
-                and row["expected_code"]==call["return_code"]==0xfffffffe
+                and row["expected_code"]==call["return_code"]==frozen["child_expected_codes"][row["name"]]
+                == (0xfffffffe if capacity < 32 else GROW)
                 and read(folder/call["folder"]/"input.bin")==request and SHA(request)==row["request_sha256"]
-                and call["workspace_before"]==call["workspace_after"] and call["output_before"]==call["output_after"],
-                "actual constructor capacity refusal differs")
+                and call["workspace_before"]==call["workspace_after"],
+                "actual constructor short-output boundary differs")
+        if capacity < 32:
+            require(call["output_before"]==call["output_after"],"capacity refusal changed complete output")
+        else:
+            before=buffers.span(call["output_before"])
+            after=buffers.span(call["output_after"])
+            require(after==b"HGRWS002"+PACK(1,16384+len(request)-64,0)+before[32:],
+                    "constructor growth frame or untouched output tail differs")
     for kind in (1,2):
         require(any(calls[r["after_call"]-1]["owner"]=="text_result_constructor" and r["kind"]==kind for r in growth),
                 "original constructor workspace/output growth domain omitted")

@@ -22,7 +22,9 @@ bytes; original Rust supplies the complete semantic comparison. There is no
 Python implementation of annotation, serialization, or fallback output.
 
 `CONTROL_DOMAIN.json` declares 60 atomic owner refusals, three actual child
-capacity refusals, and six complete recoveries. The mapping of all 39 old
+short-output boundaries, and six complete recoveries. Capacities 0 and 31 refuse
+without writes; capacity 63 retains the actual 32-byte workspace-growth frame
+and unchanged output tail. These are the constructor's existing HIA semantics. The mapping of all 39 old
 controls is in `BASELINE_CONTROL_COVERAGE.json`. Fixed-capacity rejections are
 replaced by actual growth/recovery; malformed input and continuation custody
 remain refusals. Constructor workspace and output growth are actual child
@@ -96,3 +98,10 @@ CI failed before Rust compilation because a target-filtered dependency fetch
 omitted an Android package needed by offline metadata. Fetch now covers every
 platform in the unchanged target lock. The native development attempt timed out
 during repeated minimum-sized Value workspace growth. Neither failure is a pass.
+
+The short-output boundary correction retains all three inputs and the complete
+captured buffers. An independent byte-only CI read of the prior failure verified
+its whole archive and observed CAPACITY at 0/31 and GROW(resource 1, 16582) at 63.
+That read also compared all 842 native and original outputs byte for byte under
+twelve guards. The old control gate remains failed; this revision still requires
+a new complete gate, including every refusal, recovery, and reader control.

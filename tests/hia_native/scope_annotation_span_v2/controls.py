@@ -39,7 +39,10 @@ CHILD_NAMES = ("constructor-small-output-0", "constructor-small-output-31", "con
 
 def plan():
     return dict(schema="hepta.scope-annotation-span.control-domain.v2", refusals=list(CONTROL_NAMES),
-                recoveries=list(RECOVERY_NAMES), child_refusals=list(CHILD_NAMES), old_fixed_8mib_rejection_removed=True,
+                recoveries=list(RECOVERY_NAMES), child_refusals=list(CHILD_NAMES),
+                child_expected_codes={name:(CAPACITY if capacity < 32 else GROW)
+                                      for name,capacity in zip(CHILD_NAMES,(0,31,63),strict=True)},
+                old_fixed_8mib_rejection_removed=True,
                 replacement="four complete original-compared span-wide semantic cases")
 
 
@@ -162,10 +165,15 @@ def main():
             for capacity,name in zip((0,31,63),CHILD_NAMES,strict=True):
                 with capture.session("text_result_constructor",name,capacity) as child:
                     code=capture.invoke(child,"text_result_constructor",child_request,name)
-                    assert code==CAPACITY and capture.last["workspace_before"]==capture.last["workspace_after"]
-                    assert capture.last["output_before"]==capture.last["output_after"]
+                    expected_code = CAPACITY if capacity < 32 else GROW
+                    assert code==expected_code and capture.last["workspace_before"]==capture.last["workspace_after"]
+                    if capacity < 32:
+                        assert capture.last["output_before"]==capture.last["output_after"]
+                    else:
+                        actual=ctypes.string_at(child._output,capacity)
+                        assert actual==b"HGRWS002"+PACK(1,16384+len(child_request)-64,0)+b"\xa5"*(capacity-32)
                     child_refusals.append(dict(name=name,call=capture.calls,output_capacity=capacity,
-                        expected_code=CAPACITY,request_sha256=SHA(child_request),owner_baseline="constructor-completed"))
+                        expected_code=expected_code,request_sha256=SHA(child_request),owner_baseline="constructor-completed"))
             recovery(owner,children,request,"valid-after-refusals",empty_label)
         for capacity in (0,31,63):
             name = "short-output-" + str(capacity)
