@@ -13,6 +13,11 @@ def pin(p):
 def read(capture,manifest,source,inputs,row):
     receipt=json.loads((capture/"PROCESS.json").read_bytes())
     assert receipt["exit_code"]==0 and receipt["timed_out"] is False and receipt["timeout_seconds"]==60
+    assert receipt["eof_after_complete_exchanges"] is True and receipt["accepted_input_equals_declared"] is True
+    process=receipt["observed_process"]
+    assert process==json.loads((capture/"process/process.json").read_bytes())
+    assert process["failure"] is None and process["cleanup_errors"]==[] and all(process["pipe_eof"].values())
+    assert process["private_owned_trace_fd"]==4 and process["private_owned_journal_fd"]==3 and process["exchanges"]["records"]==3
     for name,expected in receipt["artifacts"].items():assert pin(capture/name)==expected
     assert (capture/"stderr.bin").read_bytes()==b""
     assert pin(capture/"stdin.bin")==row["input"]
@@ -28,7 +33,7 @@ def read(capture,manifest,source,inputs,row):
         before,old_wall=scope["checked_clock_wire"](expected[1]);after,new_wall=scope["checked_clock_wire"](actual[1])
         assert before==after
     else:assert actual[1]==expected[1]
-    data=(capture/"trace.bin").read_bytes();at=sequence=0;stack=[];polls={}
+    data=(capture/"process/host-trace.bin").read_bytes();at=sequence=0;stack=[];polls={}
     totals=collections.defaultdict(collections.Counter);slot_rows=[];poll_rows=[];host=[]
     while at<len(data):
         assert len(data)-at>=16
@@ -64,7 +69,7 @@ def read(capture,manifest,source,inputs,row):
         "sequence":row["sequence"],"actual_response_count":len(actual),"whole_wire_equal_except_original_solver_clock":True,
         "timing_is_monotonic_wall_not_cpu":True,"process_seconds":(receipt["finished_ns"]-receipt["started_ns"])/1e9,
         "solver_wire_wall_seconds":new_wall,"retained_solver_wire_wall_seconds":old_wall,
-        "elf":receipt["elf"],"manifest":pin(manifest),"process":pin(capture/"PROCESS.json"),"trace":pin(capture/"trace.bin"),
+        "elf":receipt["elf"],"manifest":pin(manifest),"process":pin(capture/"PROCESS.json"),"trace":pin(capture/"process/host-trace.bin"),
         "engine_events":sequence,"host_events":len(host),"slots":[{"slot":s,**dict(v)} for s,v in sorted(totals.items(),key=lambda x:-x[1]["self_ns"])],
         "slot_turns":slot_rows,"direct_polls":poll_rows,"host_turns":host,"full_public_domain_qualified":False,"async_qualified":False,
         "reader_native_executions":0,"reader_rust_executions":0}

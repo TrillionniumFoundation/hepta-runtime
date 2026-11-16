@@ -19,6 +19,12 @@ def main():
         b=q.read_bytes();seen[name]={"bytes":len(b),"sha256":hashlib.sha256(b).hexdigest()}
         if name.endswith(".py"):compile(b,name,"exec");count+=1
     assert seen==expected
+    import sys
+    sys.path.insert(0,str(source))
+    from author_observer import generate
+    generated,proof=generate((source/'retained/capture_stdio.py').read_text())
+    assert generated==(source/'capture_stdio_trace.py').read_text()
+    assert proof==json.loads((source/'OBSERVER_PROOF.json').read_bytes())
     print(json.dumps({"status":"COMPLETE_SOURCE_AND_SYNTAX_PASS","files":len(seen)+1,"python":count,"source_manifest_sha256":a.sha256,"hia_or_rust_executions":0},sort_keys=True))
 
 if __name__=="__main__":main()

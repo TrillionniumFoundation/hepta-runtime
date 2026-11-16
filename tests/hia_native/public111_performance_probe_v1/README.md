@@ -25,3 +25,14 @@ router, or production rollout. The failed 180-second run is retained unchanged.
 The workflow performs compilation/packing only in CI, downloads an exact
 existing build ZIP, verifies every archive member and the complete old build,
 and preserves complete input, output, FD3 journal, FD4 trace, and process records.
+
+## Observer revision
+
+The first CI diagnostic preserved an actual reader failure: communicate() closed
+stdin immediately, so the wide request entered EOF draining before its reply.
+That source and full failure artifact remain immutable. This revision borrows
+the original complete stdio exchange/read/reap implementation, adds only fixed
+FD4 custody, and narrows its diagnostic process cap to 60 seconds. Its inverse
+recovers the exact original source; all eight other NativeStdio method ASTs are
+unchanged. EOF is sent after the three complete exchanges. Production sources,
+all HIA images, the full 1394 domain and its 180/60 limits remain unchanged.
