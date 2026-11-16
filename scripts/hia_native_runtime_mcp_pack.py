@@ -4,7 +4,7 @@ import hashlib,json,struct,time
 SHA=lambda raw:hashlib.sha256(raw).hexdigest()
 def write(path,value):path.write_text(json.dumps(value,indent=2,sort_keys=True)+'\n')
 
-def pack(out,native,physical,configuration,images,view_images,view_slots,execute,source_root):
+def pack(out,native,physical,configuration,images,view_images,view_slots,execute,source_root,*,batch_images=None,batch_slots=()):
     from hia_native_loader import NativeModule
     processes=[execute(out,'relocations',['readelf','-r',str(out/'bridge.o')],30)]
     if b'There are no relocations' not in (out/'relocations.stdout').read_bytes():
@@ -40,6 +40,8 @@ def pack(out,native,physical,configuration,images,view_images,view_slots,execute
     for name,image in configuration.items():patches.append((2,256+symbols[name+'_call_displacement'],indices[image]))
     for slot,image in images.items():patches.append((1,256+symbols['grow_fixture_images']+slot*8,indices[image]))
     for slot,key in enumerate(view_slots):patches.append((1,256+symbols['runtime_grow_view_images']+slot*8,indices[view_images[key]]))
+    if batch_images is not None:
+        for slot,key in enumerate(batch_slots):patches.append((1,256+symbols['runtime_batch_images']+slot*8,indices[batch_images[key]]))
     raw_images=[image.read_bytes() for image in ordered]
     packed_input=(b'HIAIMG02'+struct.pack('<4Q',len(prefix),len(ordered),len(patches),0)+prefix
         +b''.join(struct.pack('<Q',len(image)) for image in raw_images)

@@ -106,7 +106,7 @@ fs_fixture_next:
     jne fs_fixture_failure
     cmp qword ptr [r12 + 72], 1
     ja fs_fixture_failure
-    cmp qword ptr [r12 + 80], 34
+    cmp qword ptr [r12 + 80], 36
     ja fs_fixture_failure
     mov rdx, [r12 + 88]
     cmp rdx, [r12 + 32]
@@ -128,6 +128,10 @@ fs_fixture_input_ready:
     je fs_fixture_snapshot
     cmp qword ptr [r12 + 80], 34
     je fs_fixture_public_request
+    cmp qword ptr [r12 + 80], 35
+    je fs_fixture_batch_observe
+    cmp qword ptr [r12 + 80], 36
+    je fs_fixture_new_session
     lea rsi, [r15 + 128]
     lea rdi, [r12 + 128]
     mov ecx, 6
@@ -182,6 +186,9 @@ fs_fixture_finish:
     xor r13d, r13d
 fs_fixture_finish_session:
     mov r15, [r12 + r13 * 8]
+    call runtime_grow_batch_release
+    test rax, rax
+    jnz fs_fixture_failure
     call runtime_grow_fence_release
     test rax, rax
     jnz fs_fixture_failure
@@ -196,6 +203,9 @@ fs_fixture_finish_session:
     cmp r13d, 2
     jb fs_fixture_finish_session
     mov rdi, [r12 + 16]
+    call runtime_batch_global_release
+    test rax, rax
+    jnz fs_fixture_failure
     call runtime_filesystem_hub_destroy
     test rax, rax
     jnz fs_fixture_failure
@@ -226,4 +236,4 @@ fs_fixture_failure:
     jmp fatal
 .balign 8
 grow_fixture_images:
-    .zero 264
+    .zero 296

@@ -29,7 +29,7 @@ class Capture:
         self.wire_meta=json.loads(manifest.read_bytes());self.elf=manifest.parent/self.wire_meta['elf']
         for p in [Path(__file__),Path(__file__).with_name('batch_call_capture.py'),Path(inputs.__file__),Path(control_inputs.__file__),ROOT/'scripts/hia_native_loader.py']:
             self.sources[str(p)]=receipt(p)
-        (output/'files').mkdir();(output/'sessions').mkdir()
+        (output/'files').mkdir(mode=0o700);(output/'sessions').mkdir()
         with (output/'input.bin').open('wb') as stream:self.input_count=inputs.write_input(stream)
         self.rows_file=(output/'native-cases.jsonl').open('wb',buffering=0)
     def session(self,mode):

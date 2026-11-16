@@ -1,6 +1,6 @@
 # Public filesystem gateway and private observation fixture
 
-The current candidate joins the same 58 HIA images in two executables. The
+The current candidate joins the same 71 HIA images in two executables. The
 ordinary executable accepts newline-delimited JSON-RPC on standard input.
 The second executable is a private qualification fixture. It installs two
 independent session states and two view/cache engines in one process, with one

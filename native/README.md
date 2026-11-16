@@ -166,16 +166,16 @@ old-stack-removal declarations remain false.
 
 ## Public local filesystem composition
 
-The explicitly selected [58-image public stdio profile](filesystem_public_abi.md)
-advertises eight tools: `host_list`, `effective_config`,
+The explicitly selected [71-image public stdio profile](filesystem_public_abi.md)
+advertises nine tools: `host_list`, `effective_config`,
 `execution_shadow_admit`, `view`, `workdir`, `directory_create`, `file_move` and
-`directory_move`. The three local filesystem methods call the actual typed,
+`directory_move` and `batch_edit`. The three local filesystem methods call the actual typed,
 fence, shared Session, installed configuration, path-policy, request-scope,
 canonical-key, descriptor-effect, cache and publication owners. JSON fields do
 not select private state or internal child instances. The real fence permit is
 held across each admitted method and released after its terminal completion.
 
-A separately linked observer executable shares exactly the same 58 freshly
+A separately linked observer executable shares exactly the same 71 freshly
 compiled images. It has two real Session/cache instances and one shared installed
 configuration/fence owner. This private observer is never selected by public
 stdin. The mandatory native producer runs 28 observed processes for all 323
@@ -185,7 +185,7 @@ including real EOF and BrokenPipe. These two domains overlap and their totals
 must not be added as independent semantic cases.
 
 Native admission reads complete source, compiler, linker/packer, both ELF images,
-all 68 fixed patches, actual streams, state snapshots and syscall/continuation
+all 93 fixed patches, actual streams, state snapshots and syscall/continuation
 records before the unchanged Rust reference runs. Only then are the owned test
 files archived with their full bytes, raw Unix names, modes, attributes, hardlink
 relationships, symbolic-link targets and FIFOs. The original stage reconstructs
@@ -202,10 +202,32 @@ the 323-attempt SDK domain. Remote filesystem execution, general concurrent HTTP
 routing, unconstrained regex resources, the full 125-tool catalog and production
 activation remain unfinished. The original implementations stay in place.
 
+## Public local Batch composition
+
+The [public Batch gateway](batch_public_abi.md) uses the same two registered
+executables and installed Session/configuration as the other public methods.
+Its 13 graph members reuse the original inner Batch, planning, application,
+History, lock and atomic-publication owners. The two additional HIA source files
+provide the gateway and exact catalog/schema; no duplicate executable component
+or interpreter is introduced.
+
+The view partition requires 15 actual observed processes, 133 steps comprising
+123 public attempts and ten explicit fixture controls, and eight physical
+evidence refusals. Native evidence binds the complete shared graph and archived
+effect trees before any original replay. The separate original recipe executes
+one fresh locked Rust 1.95 build and 15 actual unchanged SDK sessions, then
+requires all 36 evidence refusals and two complete retained reads with the
+actual source/output roots absent. The second read also excludes the first
+read root. These readers verify full bytes and execute no HIA or Rust.
+
+Public cancellation and ordinary asynchronous stdio transport remain separate
+work. This qualified domain does not activate a production handler or qualify
+removing the production Rust stack.
+
 ## Native components
 
-Qualification covers 126 native HIA sources through 54 executable component
-entries, including 28 HIA packers. Shared owners are compiled in the explicitly
+The registry declares 131 native HIA sources through 56 executable component
+entries. Shared owners are compiled in the explicitly
 declared component profiles; they are not counted as additional source files.
 The complete source inventory binds implementation, contracts, builders, tests
 and the retained original references. The shadow entry
@@ -222,6 +244,7 @@ These counts do not count migrated production MCP handlers.
 | [shell_gate.hepta](shell_gate.hepta) | Original shell misuse decisions, SSH recursion, raw Unix workdir rules, exact hints/errors and git-stash recognition |
 | [terminal_clean.hepta](terminal_clean.hepta) | Original ANSI/OSC, Unicode control/backspace, CR redraw, whitespace and repeated-line cleanup |
 | [request_context.hepta](request_context.hepta) | Private nested hint queues, insertion-order deduplication, drain/exit/destruction and a dispatcher-owned view-cache association |
+| [request_registry.hepta](request_registry.hepta) | Typed request-ID registration, original duplicate-ID completion behavior, cancellation state and monotonic request identities |
 | [request_scope_lifecycle.hepta](request_scope_lifecycle.hepta) | Private request entry, checked continuation suspension/resumption, cancellation, hint retirement and cache-reference ownership |
 | [request_cache_lease.hepta](request_cache_lease.hepta) | Shared cache ownership across session, request and publisher lifetimes, checked clones/releases and destruction on last release |
 | [response_hints.hepta](response_hints.hepta) | Exact original response text composition from a complete drained hint list, including empty hints and every valid Unicode scalar |
@@ -1684,3 +1707,22 @@ runtime and historical regression inputs remain: active workflows and tests
 still read files under `docs/qualification` and `tools/x230`. Their cleanup must
 follow replacement of those dependencies; their historical Git identities and
 original failure results must remain traceable.
+
+
+## Private request registry
+
+`request_registry.hepta` owns typed JSON-RPC ID mappings and monotonic request
+identities, including the original duplicate-ID completion behaviour and
+retained cancellation state. Its image uses generic NativeBuild and the
+`history.v1` carrier. It has no standalone transport or public handler route.
+The qualification contract requires the entire private ABI corpus, all SDK
+schedules and every declared before/after buffer before a fresh fixed Rust
+1.95 / unchanged rmcp 3.4.1 comparison. Native and original refusal controls
+retain physical mutations and complete subprocess streams. Collection reads
+only retained source and output artifacts, with recorded origins bound to the
+actual main invocations; no live filesystem fixtures need reconstruction.
+
+EOF/parent drain decisions do not imply handler abortion. Public stdio
+scheduling, expiry behaviour and destruction of the caller runtime remain
+separate qualification domains. The 125 legacy handler and global completion
+flags remain unchanged.

@@ -120,6 +120,8 @@ runtime_grow_view_release:
     push r12
     push r15
     mov r12, r15
+    cmp qword ptr [r15 + 3072], 0
+    jne runtime_grow_view_release_invalid
     mov rax, [r15 + 16]
     test rax, rax
     jz runtime_grow_view_release_empty

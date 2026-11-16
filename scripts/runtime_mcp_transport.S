@@ -226,6 +226,9 @@ public_span_silent:
     jnz public_span_fail
     jmp public_span_next
 public_span_finish:
+    call runtime_grow_batch_release
+    test rax, rax
+    jnz public_span_fail
     call runtime_grow_fence_release
     test rax, rax
     jnz public_span_fail
@@ -237,6 +240,9 @@ public_span_finish:
     jnz public_span_fail
     mov qword ptr [r12 + 240], 0
     mov rdi, [r12 + 232]
+    call runtime_batch_global_release
+    test rax, rax
+    jnz public_span_fail
     call runtime_filesystem_hub_destroy
     test rax, rax
     jnz public_span_fail
@@ -316,4 +322,4 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 264
+    .zero 296

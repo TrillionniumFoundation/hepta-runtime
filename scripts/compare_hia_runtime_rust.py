@@ -38,7 +38,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        session_evidence,
                                        file_locks_evidence, file_lock_service_evidence,
                                        filesystem_parity_evidence, filesystem_parity_retirement,
-                                       text_publication_evidence, text_publication_retirement,
+                                       text_publication_evidence, text_publication_retirement, request_registry_evidence,
                                        filesystem_public_evidence, filesystem_public_retirement,
                                        atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
@@ -195,6 +195,12 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required complete native filesystem state, build and kernel evidence differs")
     if report.get("filesystem_parity_fixture_retirement") != filesystem_parity_retirement(output, report):
         raise ValueError("required private filesystem fixture retirement evidence differs")
+    if report.get("request_registry_evidence") != request_registry_evidence(output, report):
+        raise ValueError("complete request registry native evidence changed")
+    if "request_registry" in report.get("original_rust_comparisons", {}):
+        from hia_native_request_registry_reference import retained_original
+        if retained_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["request_registry"]:
+            raise ValueError("complete original request registry evidence changed")
     if report.get("text_publication_evidence") != text_publication_evidence(output, report):
         raise ValueError("required complete Text native publication evidence differs")
     if report.get("text_publication_fixture_retirement") != text_publication_retirement(output, report):
@@ -240,6 +246,13 @@ def check_input_pins(output: Path, report: dict) -> None:
         from hia_native_filesystem_public_pipeline import retained_original as filesystem_public_original
         if filesystem_public_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["filesystem_public"]:
             raise ValueError("required fresh public filesystem original or physical refusal evidence differs")
+    from hia_native_batch_public_pipeline import native_evidence as batch_public_native
+    from hia_native_batch_public_pipeline import retained_original as batch_public_original
+    if batch_public_native(ROOT, output, report, completed_test_summary) != report.get("batch_public_evidence"):
+        raise ValueError("required complete native public Batch evidence differs")
+    if "batch_public" in report.get("original_rust_comparisons", {}):
+        if batch_public_original(ROOT, output, report, completed_test_summary) != report["original_rust_comparisons"]["batch_public"]:
+            raise ValueError("required complete original public Batch evidence differs")
     public_search = view_search_public_evidence(output, report)
     if report.get("view_search_public_evidence") != public_search:
         raise ValueError("required complete public literal search producer evidence differs")
@@ -1899,6 +1912,12 @@ def compare_batch_call(output: Path, report: dict, rustc: Path) -> dict:
                             completed=completed_test_summary, qualification_env=qualification_env)
 
 
+def compare_request_registry(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_request_registry_reference import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check=record_check,
+                            completed=completed_test_summary, qualification_env=qualification_env)
+
+
 def compare_text_publication(output: Path, report: dict, rustc: Path) -> dict:
     from hia_native_text_publication_reference import execute_original
     return execute_original(ROOT, output, report, rustc, record_check=record_check,
@@ -1916,8 +1935,14 @@ def compare_filesystem_public(output: Path, report: dict, rustc: Path) -> dict:
     return execute_original(ROOT, output, report, rustc, record_check, completed_test_summary)
 
 
+def compare_batch_public(output: Path, report: dict, rustc: Path) -> dict:
+    from hia_native_batch_public_pipeline import execute_original
+    return execute_original(ROOT, output, report, rustc, record_check=record_check,
+                            completed=completed_test_summary, qualification_env=qualification_env)
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
-           "text_publication": compare_text_publication,
+           "text_publication": compare_text_publication, "request_registry": compare_request_registry,
            "terminal_clean": compare_terminal_clean, "shell_gate": compare_shell_gate,
            "request_context": compare_request_context, "response_hints": compare_response_hints,
            "result_publication": compare_result_publication,
@@ -1945,7 +1970,11 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
            "system_entropy": compare_system_entropy, "operation_scope": compare_operation_scope,
            "caller_authority": compare_caller_authority,
            "filesystem_parity": compare_filesystem_parity,
-           "filesystem_public": compare_filesystem_public}
+           "filesystem_public": compare_filesystem_public,
+           "batch_public": compare_batch_public}
+# This domain consumes the two registered shared executables. It creates no
+# duplicate module or builder. Its absent-root reads run after worker draining.
+SHARED_GRAPH_RUST_RECIPES = {"batch_public": frozenset(("runtime_mcp", "filesystem_public"))}
 # Protocol is a new, explicitly limited service. Its original line-hash owner
 # is covered by the bytes oracle; parser/lifecycle behavior has direct tests.
 NEW_COMPONENTS = {"runtime_protocol"}
@@ -2014,12 +2043,20 @@ def run_rust_recipes(output: Path, report: dict, rustc: Path) -> None:
             # before its shared original producer. The recipe registry declares
             # dependencies in execution order (local view before public MCP).
             for key in RECIPES:
-                if key not in report["modules"]:
+                shared = SHARED_GRAPH_RUST_RECIPES.get(key)
+                if key not in report["modules"] and not (shared and shared <= report["modules"].keys()):
                     continue
+                if shared:
+                    for worker in futures:
+                        if worker not in collected:
+                            failure = collect(worker)
+                            if failure is not None:
+                                raise failure
                 if key in futures:
-                    failure = collect(key)
-                    if failure is not None:
-                        raise failure
+                    if key not in collected:
+                        failure = collect(key)
+                        if failure is not None:
+                            raise failure
                 else:
                     report["original_rust_comparisons"][key] = RECIPES[key](output, report, rustc)
                     save_report(output / "result.json", report)

@@ -208,13 +208,17 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(partitions["system"][:3],
                          ("test_filesystem_parity_state.py", "test_filesystem_parity_build.py",
                           "test_filesystem_parity_kernel.py"))
-        self.assertEqual(len(flat), 142)
+        self.assertEqual(len(flat), 147)
         self.assertEqual({name: len(tests) for name, tests in partitions.items()},
-                         {'batch': 20, 'text': 32, 'view': 20, 'json': 16, 'config': 17, 'system': 37})
+                         {'batch': 20, 'text': 35, 'view': 22, 'json': 16, 'config': 17, 'system': 37})
         text_suites = ('test_text_publication_native.py', 'test_text_publication_corpus.py',
                        'test_text_publication_pipeline_evidence.py')
         positions = [partitions['text'].index(name) for name in text_suites]
         self.assertEqual(positions, list(range(positions[0], positions[0] + 3)))
+        registry_suites = ('test_request_registry.py', 'test_request_registry_sdk.py', 'test_request_registry_evidence.py')
+        positions = [partitions['text'].index(name) for name in registry_suites]
+        self.assertEqual(positions, list(range(positions[0], positions[0] + 3)))
+        self.assertNotIn('test_request_registry_original_evidence.py', flat)
         self.assertEqual(partitions['system'][-2:],('test_session_workdir.py','test_session_evidence.py'))
         self.assertLess(partitions['view'].index('test_runtime_mcp.py'),
                         partitions['view'].index('test_filesystem_public.py'))

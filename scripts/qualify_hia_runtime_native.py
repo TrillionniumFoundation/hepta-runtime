@@ -60,6 +60,7 @@ import hia_native_batch_apply_qualification as batch_apply_qualification
 import hia_native_atomic_write_qualification as atomic_write_qualification
 import hia_native_filesystem_parity_qualification as filesystem_parity_qualification
 import hia_native_text_publication_pipeline as text_publication_pipeline
+import hia_native_request_registry_pipeline as request_registry_pipeline
 from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
                                               qualification_evidence as checked_history_evidence)
 
@@ -94,6 +95,9 @@ MODULES = (
     {"key": "shell_gate", "name": "shell-gate", "source": "native/shell_gate.hepta",
      "standalone": "filter", "manifest_env": "HIA_SHELL_GATE_MANIFEST", "test": "test_shell_gate_native.py",
      "additional_tests": ("test_shell_evidence.py",)},
+    {"key": "request_registry", "name": "request-registry", "source": "native/request_registry.hepta",
+     "standalone": None, "buffer_profile": "history.v1", "manifest_env": "HIA_REQUEST_REGISTRY_MANIFEST",
+     "test": "test_request_registry.py", "additional_tests": ("test_request_registry_sdk.py", "test_request_registry_evidence.py")},
     {"key": "request_context", "name": "request-context", "source": "native/request_context.hepta",
      "standalone": None, "manifest_env": "HIA_REQUEST_CONTEXT_MANIFEST", "test": "test_request_context.py"},
     {"key": "response_hints", "name": "response-hints", "source": "native/response_hints.hepta",
@@ -233,6 +237,19 @@ MODULES = (
          'native/filesystem_parity.hepta',
          'native/filesystem_render.hepta',
          'native/directory_move_guard.hepta',
+         'native/batch_gateway.hepta',
+         'native/runtime_mcp_batch_catalog.hepta',
+         'native/batch_call.hepta',
+         'native/batch_line_verify.hepta',
+         'native/batch_plan_input.hepta',
+         'native/batch_plan.hepta',
+         'native/batch_apply.hepta',
+         'native/editable_content.hepta',
+         'native/batch_diff.hepta',
+         'native/history.hepta',
+         'native/file_lock_state.hepta',
+         'native/atomic_write.hepta',
+         'native/batch_edit_params.hepta',
          'native/filesystem_fence.hepta',
          'native/effect_owner_fence.hepta',
          'native/effect_fence_fs.hepta',
@@ -248,6 +265,7 @@ MODULES = (
     {"key": "filesystem_public", "name": "filesystem-public", "source": "native/filesystem_gateway.hepta",
      "builder": "filesystem_public", "manifest_env": "HIA_FILESYSTEM_PUBLIC_MANIFEST",
      "test": "test_filesystem_public.py",
+     "additional_tests": ("test_batch_public.py", "test_batch_public_evidence.py"),
      "companion_sources": ("native/filesystem_params.hepta", "native/filesystem_call.hepta",
                            "native/filesystem_parity.hepta", "native/filesystem_render.hepta",
                            "native/filesystem_fence.hepta", "native/directory_move_guard.hepta",
@@ -438,6 +456,9 @@ def sources() -> dict:
         "hia_native_runtime_mcp_reference.py", "hia_native_runtime_mcp_original.py",
         "hia_native_runtime_mcp_adapter.py", "hia_native_runtime_mcp_pack.py",
         "hia_native_runtime_mcp_pipeline.py", "hia_native_runtime_mcp_fixtures.py",
+        "hia_native_batch_public_pipeline.py", "hia_native_batch_public_fixtures.py",
+        "runtime_mcp_batch_bridge.S", "runtime_mcp_batch_fixture.S",
+        "runtime_mcp_batch_observer.S", "runtime_mcp_batch_view_binding.S",
         "hia_native_public_exchange_qualification.py",
         "hia_native_filesystem_public_build.py", "hia_native_filesystem_public_pipeline.py",
         "hia_native_filesystem_public_fixtures.py", "hia_native_filesystem_public_reference_source.py",
@@ -453,6 +474,8 @@ def sources() -> dict:
         "hia_native_request_context_build.py", "hia_native_request_context_qualification.py", "hia_native_request_context_reference.py",
         "hia_native_result_publication_build.py", "hia_native_result_publication_qualification.py",
         "hia_native_result_publication_reference.py", "result_publication_adapter.S",
+        "hia_native_request_registry_pipeline.py", "hia_native_request_registry_qualification.py",
+        "hia_native_request_registry_reference.py",
         "hia_native_text_publication_build.py", "hia_native_text_publication_evidence.py",
         "hia_native_text_publication_fixtures.py", "hia_native_text_publication_qualification.py",
         "hia_native_text_publication_pipeline.py", "hia_native_text_publication_pipeline_evidence.py",
@@ -706,7 +729,10 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                                  record_identity=name in {"test_batch_plan_input.py", "test_batch_call_native.py",
                                                           "test_batch_call_packing.py", "test_batch_call_async.py",
                                                           "test_text_publication_native.py", "test_text_publication_corpus.py",
-                                                          "test_text_publication_pipeline_evidence.py"})
+                                                          "test_text_publication_pipeline_evidence.py",
+                                                          "test_batch_public.py", "test_batch_public_evidence.py",
+                                                          "test_request_registry.py", "test_request_registry_sdk.py",
+                                                          "test_request_registry_evidence.py"})
         finally:
             for name in futures:
                 if name not in collected:
@@ -881,6 +907,10 @@ def filesystem_parity_retirement(output: Path, report: dict, *, create: bool = F
     return filesystem_parity_qualification.decode(filesystem_parity_qualification.canonical(value))
 
 
+def request_registry_evidence(output: Path, report: dict) -> dict:
+    return request_registry_pipeline.native_evidence(ROOT, output, report, completed_test_summary)
+
+
 def text_publication_evidence(output: Path, report: dict) -> dict:
     return text_publication_pipeline.native_evidence(ROOT, output, report, completed_test_summary)
 
@@ -892,6 +922,11 @@ def text_publication_retirement(output: Path, report: dict, *, create: bool = Fa
 
 def filesystem_public_evidence(output: Path, report: dict) -> dict:
     from hia_native_filesystem_public_pipeline import native_evidence
+    return native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def batch_public_evidence(output: Path, report: dict) -> dict:
+    from hia_native_batch_public_pipeline import native_evidence
     return native_evidence(ROOT, output, report, completed_test_summary)
 
 
@@ -2525,6 +2560,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_CONFIG_SEMANTICS_CORPUS_DIR": str(output / "config-native/semantics-corpus"),
         "HIA_REGEX_OUTPUT_DIR": str(output / "regex-native"),
     })
+    env.update(request_registry_pipeline.environment(ROOT, output, report))
     env.update({variable: str(output / SCOPE_OS_FOLDER / receipt)
                 for _, variable, receipt, _, _ in SCOPE_OS_SUITES})
     for item in MODULES:
@@ -2792,9 +2828,13 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(file_lock_pipeline.test_commands(ROOT, output, report))
     commands.update(filesystem_parity_qualification.test_commands(ROOT, output, report))
     commands.update(text_publication_pipeline.test_commands(ROOT, output, report))
+    commands.update(request_registry_pipeline.test_commands(ROOT, output, report))
     from hia_native_filesystem_public_pipeline import test_commands as filesystem_public_commands
     if "test_filesystem_public.py" in tests:
         commands.update(filesystem_public_commands(ROOT, output, report))
+    if "test_batch_public.py" in tests:
+        from hia_native_batch_public_pipeline import test_commands as batch_public_commands
+        commands.update(batch_public_commands(ROOT, output, report))
     commands.update(atomic_write_test_commands(output, output / report["modules"]["atomic_write"]["manifest"],
                                                Path(report["compiler_checkout"])))
     return {name: command for name, command in commands.items() if name in tests}
@@ -2806,6 +2846,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["request_scope_evidence"] = request_scope_evidence(output, report)
     report["filesystem_parity_evidence"] = filesystem_parity_evidence(output, report)
     report["filesystem_parity_fixture_retirement"] = filesystem_parity_retirement(output, report, create=True)
+    report["request_registry_evidence"] = request_registry_evidence(output, report)
     report["text_publication_evidence"] = text_publication_evidence(output, report)
     report["text_publication_fixture_retirement"] = text_publication_retirement(output, report, create=True)
     report["shell_evidence"] = shell_evidence(output, report)
@@ -2846,6 +2887,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["filesystem_public_evidence"] = filesystem_public_evidence(output, report)
     report["filesystem_public_fixture_retirement"] = filesystem_public_retirement(
         output, report, create=True, native=report["filesystem_public_evidence"])
+    report["batch_public_evidence"] = batch_public_evidence(output, report)
     report["view_search_public_evidence"] = view_search_public_evidence(output, report)
     report["view_regex_search_public_evidence"] = view_regex_search_public_evidence(output, report)
     report["view_fixture_retirement"] = view_fixture_retirement(output, report, create=True,
@@ -2890,6 +2932,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["request_scope_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["filesystem_parity_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["filesystem_parity_fixture_retirement"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["request_registry_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["text_publication_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["text_publication_fixture_retirement"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_render_growth_evidence"]["artifact_sha256"])
@@ -2900,6 +2943,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["runtime_mcp_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["filesystem_public_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["filesystem_public_fixture_retirement"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["batch_public_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_search_public_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_regex_search_public_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["view_fixture_retirement"]["artifact_sha256"])

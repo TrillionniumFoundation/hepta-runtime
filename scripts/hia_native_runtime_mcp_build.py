@@ -38,10 +38,26 @@ BOUNDARIES = [
     'scripts/runtime_mcp_filesystem_view_bridge.S',
     'scripts/runtime_mcp_filesystem_fence_native.S',
     'scripts/runtime_mcp_filesystem_fence_bridge.S',
+    'scripts/runtime_mcp_batch_view_binding.S',
+    'scripts/runtime_mcp_batch_bridge.S',
+    'scripts/batch_call_native_support.S',
+    'scripts/batch_call_engine.S',
+    'scripts/batch_call_tree_bridge.S',
+    'scripts/batch_call_atomic_bridge.S',
+    'scripts/batch_call_atomic_effects.S',
+    'scripts/batch_call_atomic_observer.S',
+    'scripts/batch_call_driver.S',
+    'scripts/batch_call_retire.S',
+    'scripts/batch_call_async.S',
+    'scripts/batch_call_shared.S',
 ]
+BATCH_BOUNDARIES = [name for name in BOUNDARIES if name.startswith('scripts/batch_call_')] + [
+    'scripts/view_call_read_bridge.S', 'scripts/view_call_key_bridge.S', 'scripts/view_call_scope_bridge.S']
 FIXTURE_BOUNDARIES = ['scripts/runtime_mcp_filesystem_fixture.S',
                       'scripts/runtime_mcp_filesystem_observer.S',
-                      'scripts/runtime_mcp_filesystem_front_fixture.S']
+                      'scripts/runtime_mcp_filesystem_front_fixture.S',
+                      'scripts/runtime_mcp_batch_observer.S',
+                      'scripts/runtime_mcp_batch_fixture.S']
 TRANSPORT = 'scripts/runtime_mcp_transport.S'
 HELPERS = ['scripts/hia_native_runtime_mcp_build.py',
            'scripts/hia_native_runtime_mcp_adapter.py',
@@ -103,6 +119,19 @@ MEMBERS = [
     ('fs_render', 'filesystem_render', 'history.v1'),
     ('fs_guard', 'directory_move_guard', 'history.v1'),
     ('fs_fence', 'filesystem_fence', 'history.v1'),
+    ('batch_gateway', 'batch_gateway', 'history.v1'),
+    ('batch_catalog', 'runtime_mcp_batch_catalog', 'history.v1'),
+    ('batch_call', 'batch_call', 'history.v1'),
+    ('batch_line_verify', 'batch_line_verify', 'history.v1'),
+    ('batch_plan_input', 'batch_plan_input', 'history.v1'),
+    ('batch_plan', 'batch_plan', 'history.v1'),
+    ('batch_apply', 'batch_apply', 'history.v1'),
+    ('batch_editable', 'editable_content', 'history.v1'),
+    ('batch_diff', 'batch_diff', 'history.v1'),
+    ('batch_history', 'history', 'history.v1'),
+    ('batch_locks', 'file_lock_state', 'history.v1'),
+    ('batch_atomic', 'atomic_write', 'history.v1'),
+    ('batch_params', 'batch_edit_params', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -123,11 +152,17 @@ EXTRA = ['catalog', 'admission', 'gateway', 'client', 'params', 'session_context
          'owner', None, 'workdir_gateway', 'workdir_params', 'workdir_io',
          'workdir_render', 'view_error', 'mcp', 'protocol', 'execution',
          'fs_gateway', 'fs_params', 'fs_caller', 'fs_io', 'fs_render',
-         'fs_guard', 'fs_fence', None, None, None, None, None]
+         'fs_guard', 'fs_fence', None, None, None, None, None,
+         'batch_gateway', 'batch_params', None, 'batch_catalog']
 VIEW = ['view', 'read', 'read', 'read', 'endpoint', 'key', 'scope', 'lease',
         'cache', 'render', 'request_context', 'view_error', 'view_regex',
         'regex_syntax', 'regex_hir', 'regex_nfa', 'regex_match',
         'regex_unicode_data', 'view_regex_diagnostic']
+BATCH = ['batch_call', 'read', 'read', 'read', 'endpoint', 'key', 'scope', 'lease',
+         'cache', 'batch_line_verify', 'request_context', 'view_error',
+         'batch_plan_input', 'batch_plan', 'batch_apply', 'batch_editable',
+         'batch_diff', 'batch_history', 'batch_locks', 'batch_atomic',
+         'batch_params', 'wide_value']
 FALSE_FLAGS = ['complete_sdk_frontend', 'whole_view_replaced', 'whole_runtime_replaced',
                'unconstrained_regex_resources_closed', 'full_http_dispatcher_replaced',
                'complete_original_tool_catalog', 'config_execution_capacity_closed',
@@ -167,7 +202,13 @@ def adapter_source(root: Path, images=None, *, private_fixture=False) -> str:
     # no image bytes. All fixed addresses are filled by the executed HIA packer.
     transport = '\n'.join((root / name).read_text() for name in FIXTURE_BOUNDARIES) if private_fixture else (root / TRANSPORT).read_text()
     fixed = combine((root / BASE).read_text(), transport)
-    source = '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed
+    batch_only = {name for name in BATCH_BOUNDARIES if name.startswith('scripts/batch_call_')}
+    batch_source = '\n'.join((root / name).read_text() for name in BATCH_BOUNDARIES)
+    # Every complete native symbol token in this independently qualified table
+    # gets a private namespace. Do not mix the two engines' invoke functions.
+    batch_source = re.sub(r'\bview_[A-Za-z_0-9]+\b', lambda match: 'batch_private_' + match[0], batch_source)
+    batch_source = re.sub(r'(?<![A-Za-z_0-9.])\.L[A-Za-z_0-9]+\b', lambda match: '.Lbatch_private_' + match[0][2:], batch_source)
+    source = '\n'.join((root / name).read_text() for name in BOUNDARIES if name not in batch_only) + '\n' + batch_source + '\n' + fixed
     for name in re.findall(r'^\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):
         if name == '_start':
             continue
@@ -247,16 +288,18 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
     configuration.update({name: images[name] for name in FENCE})
     extra = {slot: images[member] for slot, member in enumerate(EXTRA) if member is not None}
     view_images = {member: images[member] for member in VIEW}
+    batch_images = {member: images[member] for member in BATCH}
     physical = {}
     for slot, image in extra.items():
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 58
+    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 71
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
-                                    view_images, VIEW, execute, root)
+                                    view_images, VIEW, execute, root,
+                                    batch_images=batch_images, batch_slots=BATCH)
     processes.extend(steps)
     binary = folder / ('filesystem-fixture.elf' if private_fixture else 'runtime-mcp.elf')
     write_new(binary, elf, 0o500)
@@ -281,9 +324,12 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'source_binding': binding, 'boundary_sources': {path: binding['files'][path]['sha256'] for path in [BASE, *(FIXTURE_BOUNDARIES if private_fixture else [TRANSPORT]), *BOUNDARIES]},
               'assembled_source_sha256': sha(assembly.encode()), 'object_sha256': sha((folder / 'bridge.o').read_bytes()),
               'link': link, 'pack': packed, 'boundary_processes': processes,
-              'config_table': CONFIG, 'extra_table': EXTRA, 'view_table': VIEW, 'fence_table': FENCE,
+              'config_table': CONFIG, 'extra_table': EXTRA, 'view_table': VIEW, 'batch_table': BATCH, 'fence_table': FENCE,
               'private_instance_fixture': private_fixture, 'fixture_sessions': 2 if private_fixture else None,
-              'fixture_pseudo_selectors': [33, 34] if private_fixture else [],
+              'fixture_pseudo_selectors': [33, 34, 35, 36] if private_fixture else [],
+              'batch_gateway_slot': 33, 'batch_params_slot': 34, 'batch_engine_slot': 35,
+              'batch_catalog_slot': 36, 'batch_shared_view_cache': True,
+              'batch_public_async_cancellation_qualified': False,
               'filesystem_gateway_slot': 21, 'filesystem_caller_slot': 23, 'filesystem_io_slot': 24,
               'filesystem_fence_slot': 27, 'native_fence_slot': 28,
               'view_scope_cache_alias_slots': {'29': 6, '30': 5, '31': 7, '32': 8},
@@ -297,7 +343,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'public_configuration_from_stdin': False, 'public_private_instance_selectors': False,
               'actual_fixture_private_selectors': private_fixture,
               'implemented_tools': ['host_list', 'effective_config', 'execution_shadow_admit', 'view', 'workdir',
-                                    'directory_create', 'file_move', 'directory_move'],
+                                    'directory_create', 'file_move', 'directory_move', 'batch_edit'],
               'filesystem_sdk_semantic_qualification': 'NOT_RUN',
               'runtime_host_semantics': False, 'semantic_qualification': 'NOT_RUN',
               'elapsed_seconds': time.monotonic() - started,

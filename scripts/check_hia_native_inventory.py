@@ -74,6 +74,20 @@ ORIGINAL_RUNTIME_BLOBS = {
 }
 
 ORIGINAL_RUNTIME_COPIES = {
+    'tests/hia_native/batch_public_oracle/original/oracle/original/Cargo.lock': 'Cargo.lock',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/Cargo.toml': 'Cargo.toml',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/config.rs': 'src/mcp/runtime/config.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/core.rs': 'src/mcp/fs/core.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/delta.rs': 'src/mcp/fs/delta.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/effect_owner_fence.rs': 'src/mcp/runtime/effect_owner_fence.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/line_hash.rs': 'src/utils/line_hash.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/mcp_mod.rs': 'src/mcp/mod.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/remote.rs': 'src/mcp/fs/remote.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/request_ctx.rs': 'src/mcp/request_ctx.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/server.rs': 'src/mcp/server.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/text_editing.rs': 'src/mcp/fs/text_editing.rs',
+    'tests/hia_native/batch_public_oracle/original/oracle/original/truncation.rs': 'src/utils/truncation.rs',
+    "tests/hia_native/request_registry_sdk/original/runtime-Cargo.lock": "Cargo.lock",
     "tests/hia_native/text_publication_oracle/ordinary/original/text_file_write.rs": "src/mcp/fs/text_file_write.rs",
     "tests/hia_native/text_publication_oracle/ordinary/original/Cargo.lock": "Cargo.lock",
     "tests/hia_native/filesystem_parity/oracle/original_parity_ops.rs": "src/mcp/fs/parity_ops.rs",

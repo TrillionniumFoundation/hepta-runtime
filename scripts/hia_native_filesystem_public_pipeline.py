@@ -341,7 +341,7 @@ def native_evidence(root, output, report, completed):
                 ordinary_native_processes=26, private_two_session_native_processes=28,
                 actual_tracer_version_processes=1,
                 public_attempts=323, private_fixture_controls=9,
-                fresh_shared_member_compiles=58, additional_observer_member_compiles=0,
+                fresh_shared_member_compiles=71, additional_observer_member_compiles=0,
                 original_comparison_complete=False, new_rust_processes=0,
                 live_fixture_required=False, whole_runtime_replaced=False,
                 old_stack_removal_qualified=False, production_activated=False)

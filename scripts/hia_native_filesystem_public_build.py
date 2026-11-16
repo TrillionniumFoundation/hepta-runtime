@@ -1,6 +1,6 @@
-"""Pure admission of the source-bound 58-image public/private pair.
+"""Pure admission of the source-bound 71-image public/private pair.
 
-The shared 58 actual members must be freshly compiled once by the public
+The shared 71 actual members must be freshly compiled once by the public
 build and reused identically by the private fixture. No cold-bootstrap claim
 is granted. Recorded absolute artifact names stay unchanged. An optional strict read_bytes(Path)->bytes maps
 those names to a byte-identical artifact relocation without rewriting receipts.
@@ -81,14 +81,15 @@ def dual_build_evidence(root,public_manifest,private_manifest,*,read_bytes=None,
         require(type(bundle['elapsed_seconds']) in (float,int) and math.isfinite(bundle['elapsed_seconds']) and 0<bundle['elapsed_seconds']<180,'actual bundle time differs')
         q.exact(bundle['private_instance_fixture'],private,'public/private entry differs')
         q.exact(bundle['fixture_sessions'],2 if private else None,'fixture session count differs')
-        q.exact(bundle['fixture_pseudo_selectors'],[33,34] if private else [],'fixture selector scope differs')
+        q.exact(bundle['fixture_pseudo_selectors'],[33,34,35,36] if private else [],'fixture selector scope differs')
         q.exact(bundle['actual_fixture_private_selectors'],private,'private selector claim differs')
         q.exact([bundle.get(k) for k in ('compiler_commit','compiler_image_sha256')],
                 [q.HEPTA_COMMIT,q.COMPILER_SHA256],'bundle compiler identity differs')
         q.exact(bundle.get('config_table'),q.CONFIG,'installed config table differs')
         q.exact(bundle.get('extra_table'),q.EXTRA,'public-engine table differs')
         q.exact(bundle.get('view_table'),q.VIEW,'View-engine table differs')
-        q.exact(bundle.get('physical_images'),58,'physical member count differs')
+        q.exact(bundle.get('batch_table'),q.BATCH,'Batch-engine table differs')
+        q.exact(bundle.get('physical_images'),71,'physical member count differs')
         q.exact({k:bundle.get(k) for k in ('shared_session_slot','shared_installed_config_owner_slot',
             'filesystem_gateway_slot','filesystem_caller_slot','filesystem_io_slot','filesystem_fence_slot',
             'native_fence_slot','view_scope_cache_alias_slots','config_span_owner_control_offsets',
@@ -99,6 +100,10 @@ def dual_build_evidence(root,public_manifest,private_manifest,*,read_bytes=None,
                  config_span_owner_control_offsets=[1024,1032],config_span_footer_from_capacity=256,
                  public_configuration_from_stdin=False,public_private_instance_selectors=False),
             'private ownership or shared-instance layout differs')
+        q.exact({k:bundle.get(k) for k in ('batch_gateway_slot','batch_params_slot','batch_engine_slot','batch_catalog_slot',
+            'batch_shared_view_cache','batch_public_async_cancellation_qualified')},
+            dict(batch_gateway_slot=33,batch_params_slot=34,batch_engine_slot=35,batch_catalog_slot=36,
+                 batch_shared_view_cache=True,batch_public_async_cancellation_qualified=False),'Batch instance ownership differs')
         for flag in q.FALSE_FLAGS:q.exact(bundle.get(flag),False,'unqualified build claim: '+flag)
         boundaries=[q.BASE,*(FIXTURE_BOUNDARIES if private else [q.TRANSPORT]),*q.BOUNDARIES]
         q.exact(bundle.get('boundary_sources'),{name:sha(read(root/name)) for name in boundaries},
@@ -138,7 +143,7 @@ def dual_build_evidence(root,public_manifest,private_manifest,*,read_bytes=None,
         q.exact(read(folder/'pack.output.bin'),b'HIAIMR02'+struct.pack('<3Q',0,len(elf),0)+elf,'complete actual packer output differs')
         q.exact(bundle['physical_image_members'],plan['order'],'fixed image order differs')
         q.exact(bundle['fence_table'],q.FENCE,'native fence range differs')
-        workcap=(64+58*8+4095)&~4095;workspace=bytearray(workcap)
+        workcap=(64+71*8+4095)&~4095;workspace=bytearray(workcap)
         struct.pack_into('<QQ',workspace,8,plan['text_end'],len(elf))
         for i,offset in enumerate(plan['positions']):struct.pack_into('<Q',workspace,64+i*8,offset)
         q.exact(read(folder/'pack.workspace.bin'),bytes(workspace),'complete HIA packer workspace differs')
@@ -172,7 +177,7 @@ def dual_build_evidence(root,public_manifest,private_manifest,*,read_bytes=None,
                 if key=='stderr' or name=='assemble':q.exact(data,b'','boundary emitted diagnostics')
         q.exact([p['name'] for p in bundle['boundary_processes']],['assemble','relocations','readelf'],'boundary process inventory differs')
         rows.append({'private_fixture':private,'manifest':str(manifest_path),'manifest_sha256':sha(raw),
-                     'elf_bytes':len(elf),'elf_sha256':sha(elf),'members':58,'patches':68,
+                     'elf_bytes':len(elf),'elf_sha256':sha(elf),'members':71,'patches':93,
                      'fresh_member_compiles':sum(r['fresh_compile'] for r in bundle['members']),
                      'actual_fresh_link_pack_compiles':2,'elf_structure':structure})
     return {'status':'PASS','shared_fresh_member_qualification':True,'fresh_cold_qualified':False,'new_native_processes':0,'new_rust_processes':0,

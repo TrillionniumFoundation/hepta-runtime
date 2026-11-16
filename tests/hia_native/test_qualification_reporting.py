@@ -210,7 +210,7 @@ class QualificationReportingTests(unittest.TestCase):
                         ordered_groups=(), commands={name: argv}, timeout=5)
         self.assertEqual(len(self.report["checks"]), 1)
 
-    def original_worker_fixture(self, *, serial_code=0, worker_code=0, blocked=False):
+    def original_worker_fixture(self, *, serial_code=0, worker_code=0, blocked=False, shared=False):
         import compare_hia_runtime_rust as comparison
         root = self.wait_fixture({
             "wait.py": "(root/'ready').write_text('ready')\n"
@@ -234,8 +234,30 @@ class QualificationReportingTests(unittest.TestCase):
                 command=[sys.executable, "-I", str(root / "tests/hia_native/serial.py")], timeout=5)
             return {"serial_complete": True}
         self.report.update(modules={"serial": {}, "operation_scope_os": {}}, original_rust_comparisons={})
-        with patch.object(comparison, "RECIPES", {"serial": serial, "operation_scope_os": worker}):
+        recipes = {"serial": serial, "operation_scope_os": worker}
+        if shared:
+            self.report['modules'].update(runtime_mcp={}, filesystem_public={})
+
+            def shared_domain(output, report, rustc):
+                self.assertEqual(report['original_rust_comparisons']['operation_scope_os'], {'worker_complete': True})
+                self.assertEqual(len(report['rust_parallel_receipts']), 1)
+                record_check(output, report, name='shared-public-domain',
+                    command=[sys.executable, '-I', '-c', "print('{}')"], timeout=5)
+                return {'shared_graph_fixture_only': True}
+
+            # Place the shared reader before the worker's registry position to
+            # prove that real worker collection is a prerequisite to root moves.
+            recipes = {'serial': serial, 'batch_public': shared_domain, 'operation_scope_os': worker}
+        with patch.object(comparison, "RECIPES", recipes):
             comparison.run_rust_recipes(self.output, self.report, Path(sys.executable))
+
+    def test_shared_graph_reference_drains_actual_workers_without_an_alias_module(self):
+        self.original_worker_fixture(shared=True)
+        self.assertNotIn('batch_public', self.report['modules'])
+        self.assertEqual(self.report['original_rust_comparisons']['batch_public'], {'shared_graph_fixture_only': True})
+        self.assertEqual([row['name'] for row in self.report['checks']],
+                         ['serial-reference', 'operation-scope-os-rust-compile',
+                          'operation-scope-os-rust-compare', 'shared-public-domain'])
 
     def test_original_os_worker_overlaps_main_and_retains_private_records(self):
         self.original_worker_fixture()
@@ -808,7 +830,10 @@ class QualificationReportingTests(unittest.TestCase):
 
     def test_every_component_has_one_explicit_reference_domain(self):
         declared = {item['key'] for item in MODULES}
-        domains = (set(RECIPES), NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS)
+        from compare_hia_runtime_rust import SHARED_GRAPH_RUST_RECIPES
+        domains = (set(RECIPES) - SHARED_GRAPH_RUST_RECIPES.keys(), NEW_COMPONENTS, PYTHON_REFERENCE_COMPONENTS)
+        self.assertTrue(all(owners <= declared for owners in SHARED_GRAPH_RUST_RECIPES.values()))
+        self.assertFalse(set(SHARED_GRAPH_RUST_RECIPES) & declared)
         self.assertEqual(declared, set.union(*domains))
         for left in range(len(domains)):
             for right in range(left + 1, len(domains)):
@@ -886,15 +911,54 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertIn("timeout --signal=KILL 180 python3 -I -B " + filesystem_controls, qualify_job)
         self.assertIn('--controls "$RUNNER_TEMP/hia-runtime-native/filesystem-parity/pipeline-controls"', qualify_job)
         migration = json.loads((ROOT / "native/migration.json").read_bytes())
-        self.assertEqual(len(MODULES), 55)
-        self.assertEqual(len(migration["native_components"]), 128)
-        self.assertEqual(len(q.native_tests()), 142)
-        self.assertEqual(len(RECIPES), 50)
+        self.assertEqual(len(MODULES), 56)
+        self.assertEqual(len(migration["native_components"]), 131)
+        self.assertEqual(len(q.native_tests()), 147)
+        self.assertEqual(len(RECIPES), 52)
         self.assertEqual(len(migration["legacy_tool_handlers"]), 125)
         self.assertTrue(all(row["status"] == "not_ported" and row["native_owner"] is None
                             for row in migration["legacy_tool_handlers"]))
         for key in ("whole_runtime_replaced", "production_activated", "old_stack_removal_qualified"):
             self.assertIs(migration[key], False)
+
+    def test_request_registry_uses_generic_image_and_complete_native_first_recipe(self):
+        import qualify_hia_runtime_native as q
+        import hia_native_request_registry_pipeline as registry
+        import hia_native_request_registry_reference as reference
+        entry = next(row for row in MODULES if row['key'] == registry.KEY)
+        self.assertNotIn('builder', entry)
+        self.assertIsNone(entry['standalone'])
+        self.assertEqual(entry['buffer_profile'], 'history.v1')
+        self.assertEqual((entry['test'], *entry['additional_tests']), registry.TESTS)
+        self.assertEqual(entry['manifest_env'], 'HIA_REQUEST_REGISTRY_MANIFEST')
+        self.assertNotIn(registry.KEY, NEW_COMPONENTS | PYTHON_REFERENCE_COMPONENTS)
+        self.assertIn(registry.KEY, RECIPES)
+        commands = registry.test_commands(ROOT, self.output, self.report)
+        self.assertEqual(tuple(commands), registry.TESTS)
+        for name in registry.TESTS:
+            self.assertEqual(commands[name], [sys.executable, '-I', '-B', str(ROOT / 'tests/hia_native' / name)])
+            self.assertNotIn(name, q.PARALLEL_NATIVE_SUITES)
+        self.assertFalse((self.output / registry.FOLDER).exists())
+        pinned = sources()
+        for name, identity in registry.source_table(ROOT).items():
+            self.assertEqual(pinned[name], identity['sha256'])
+        self.assertEqual(ORIGINAL_RUNTIME_COPIES['tests/hia_native/request_registry_sdk/original/runtime-Cargo.lock'], 'Cargo.lock')
+        fixture = {'reporting_fixture_only': True}
+        with patch.object(registry, 'native_evidence', return_value=fixture) as called:
+            self.assertEqual(q.request_registry_evidence(self.output, self.report), fixture)
+        called.assert_called_once_with(ROOT, self.output, self.report, q.completed_test_summary)
+        rustc = Path('/selected/1.95/bin/rustc')
+        import compare_hia_runtime_rust as comparison
+        with patch.object(reference, 'execute_original', return_value=fixture) as called:
+            self.assertEqual(RECIPES[registry.KEY](self.output, self.report, rustc), fixture)
+        called.assert_called_once_with(ROOT, self.output, self.report, rustc,
+            record_check=comparison.record_check, completed=comparison.completed_test_summary,
+            qualification_env=comparison.qualification_env)
+        # A generic image keeps the ordinary compiler/manifest admission. Only
+        # real bundles already checked by their reader may bypass that branch.
+        source = (ROOT / 'scripts/compare_hia_runtime_rust.py').read_text()
+        line = next(line for line in source.splitlines() if '"view_call", "batch_diff", "batch_call", "text_publication"' in line)
+        self.assertNotIn('request_registry', line)
 
     def test_text_publication_registration_binds_real_native_and_original_stages(self):
         import qualify_hia_runtime_native as q
@@ -1231,7 +1295,9 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertNotIn(fs.CONTROLS_TEST, q.native_tests())
         self.assertNotIn('test_filesystem_public_original.py', q.native_tests())
         members = {'native/' + name + '.hepta' for _, name, _ in MEMBERS}
-        self.assertEqual(len(members), 58)
+        self.assertEqual(len(members), 71)
+        import hia_native_runtime_mcp_evidence as public_reader
+        self.assertEqual(public_reader.SOURCE_MANIFEST_SHA256, q.sha(ROOT / 'native/runtime_mcp_sources.json'))
         self.assertEqual(set(entries['runtime_mcp']['companion_sources']) | {entries['runtime_mcp']['source']},
                          members | {'native/runtime_mcp_image_packer.hepta'})
         self.assertTrue({'native/config_directory_owner_span.hepta', 'native/config_fs_span.hepta',
@@ -2016,6 +2082,256 @@ class QualificationReportingTests(unittest.TestCase):
         for invalid in mutations:
             with self.subTest(value=invalid), self.assertRaises(ValueError):
                 validate_file_info_guard_times(invalid)
+
+    def test_batch_public_fd_inheritance_tracks_clone_and_owned_lifetimes(self):
+        """Synthetic trace-order controls; no HIA, Rust or business invocation."""
+        from hia_native_batch_public_pipeline import reader
+
+        def q(raw):
+            return '"' + "".join("\\x%02x" % b for b in raw) + '"'
+
+
+        def controls():
+            op = 'openat(AT_FDCWD, %s, O_RDONLY) = 3</fixture/file> <0.000001>' % q(b"/fixture/file")
+            close = 'close(3</fixture/file>) = 0 <0.000001>'
+            clone = 'clone(child_stack=NULL, flags=CLONE_VM|SIGCHLD) = 101 <0.000002>'
+            begin = 'clone(child_stack=NULL, flags=CLONE_VM|SIGCHLD <unfinished ...>'
+            resumed = '<... clone resumed>) = 101 <0.000010>'
+            shared = 'clone(child_stack=NULL, flags=CLONE_VM|CLONE_FILES|SIGCHLD) = 101 <0.000002>'
+            start = [(100, 'execve(%s, [], []) = 0 <0.000001>' % q(b"/fixture/carrier")), (100, op)]
+            end = (100, 'exit(0) = ?')
+            def wait(child):
+                return (100, 'wait4(%d, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = %d <0.000002>' % (child, child))
+            cases = [
+                ('private-explicit-both-close', start + [(100, clone), (100, close), (101, close), (101, 'exit(0) = ?'), end], True, 1),
+                ('private-inherited-exit-without-join', start + [(100, clone), (100, close), (101, 'exit(0) = ?'), end], False, None),
+                ('resumed-child-close-visible-first', start + [(100, begin), (101, close), (100, resumed), (100, close), (101, 'exit(0) = ?'), end], True, 1),
+                ('resumed-child-exit-visible-first-without-join', start + [(100, begin), (101, 'exit(0) = ?'), (100, resumed), (100, close), end], False, None),
+                ('shared-child-closes-one-table', start + [(100, shared), (101, close), (101, 'exit(0) = ?'), end], True, 0),
+                ('shared-parent-closes-one-table', start + [(100, shared), (100, close), (101, 'exit(0) = ?'), end], True, 0),
+                ('shared-resumed-child-close-visible-first', start + [(100, begin.replace('CLONE_VM|SIGCHLD', 'CLONE_VM|CLONE_FILES|SIGCHLD')),
+                    (101, close), (101, 'exit(0) = ?'), (100, resumed), end], True, 0),
+                ('private-parent-reuses-own-fd', start + [(100, clone), (100, close),
+                    (100, op.replace(q(b'/fixture/file'), q(b'/fixture/other')).replace('</fixture/file>', '</fixture/other>')),
+                    (101, close), (100, close.replace('/fixture/file', '/fixture/other')), (101, 'exit(0) = ?'), end], True, 1),
+                ('private-two-child-copies', start + [(100, clone), (100, clone.replace('= 101 ', '= 102 ')),
+                    (100, close), (101, close), (102, close), (101, 'exit(0) = ?'), (102, 'exit(0) = ?'), end], True, 2),
+                ('failed-clone-no-child-table', start + [(100, 'clone(child_stack=NULL, flags=CLONE_VM|SIGCHLD) = -1 EAGAIN (Resource temporarily unavailable) <0.000002>'),
+                    (100, close), end], True, 0),
+                ('fork-copies-current-table', start + [(100, 'fork() = 101 <0.000002>'), (100, close), (101, close), (101, 'exit(0) = ?'), end], True, 1),
+                ('vfork-copies-current-table', start + [(100, 'vfork() = 101 <0.000002>'), (101, close), (101, 'exit(0) = ?'), (100, close), end], True, 1),
+                ('shared-parent-change-during-private-clone-ambiguous', start + [(100, shared),
+                    (100, begin), (101, close), (100, resumed.replace('= 101 ', '= 102 ')),
+                    (102, 'exit(0) = ?'), (101, 'exit(0) = ?'), wait(102), end], False, None),
+            ]
+            joined = {'private-explicit-both-close', 'resumed-child-close-visible-first',
+                      'private-parent-reuses-own-fd', 'private-two-child-copies',
+                      'fork-copies-current-table', 'vfork-copies-current-table'}
+            cases = [(name, rows[:-1] + [wait(101)] + ([wait(102)] if name == 'private-two-child-copies' else []) + rows[-1:]
+                      if name in joined else rows, accepted, copies) for name, rows, accepted, copies in cases]
+            child_open = (101, 'openat(AT_FDCWD, %s, O_RDONLY) = 4</fixture/child> <0.000001>' % q(b'/fixture/child'))
+            cases += [
+                ('inherited-reference-exit-join-owner-close', start + [(100, clone), (101, 'exit(0) = ?'), wait(101), (100, close), end], True, 1),
+                ('child-owned-open-without-explicit-close', start + [(100, clone), child_open, (101, 'exit(0) = ?'), wait(101), (100, close), end], False, None),
+                ('child-owned-dup-without-explicit-close', start + [(100, clone), (101, 'dup(3</fixture/file>) = 4</fixture/file> <0.000001>'),
+                     (101, 'exit(0) = ?'), wait(101), (100, close), end], False, None),
+                ('inherited-reference-without-owner-close', start + [(100, clone), (101, 'exit(0) = ?'), wait(101), end], False, None),
+                ('inherited-reference-wrong-wait-target', start + [(100, clone), (101, 'exit(0) = ?'),
+                     (100, wait(101)[1].replace('wait4(101,', 'wait4(102,')), (100, close), end], False, None),
+                ('inherited-reference-missing-child-exit', start + [(100, clone), wait(101), (100, close), end], False, None),
+            ]
+            for name, rows, accepted, copies in cases:
+                raw = b''.join(('%d 1800000000.%06d %s\n' % (pid, i, body)).encode()
+                               for i, (pid, body) in enumerate(rows, 1))
+                yield name, raw, accepted, copies
+
+        cases = list(controls())
+        self.assertEqual(len(cases), 19)
+        with reader(ROOT) as qualified:
+            trace = qualified.trace
+            for name, raw, accepted, copies in cases:
+                with self.subTest(control=name):
+                    parsed = trace.parse_trace(raw, markers=False)
+                    if not accepted:
+                        with self.assertRaises(ValueError):
+                            trace.descriptor_lifetimes(parsed, b'/fixture')
+                        continue
+                    value = trace.descriptor_lifetimes(parsed, b'/fixture')
+                    self.assertEqual(value['inherited_file_copies'], copies)
+                    self.assertEqual(value['unretired_fixture_descriptors'], 0)
+                    self.assertEqual(value['implicit_nonfixture_retirements'], [])
+                    self.assertEqual(len(value['nonshared_child_reaps']), copies)
+                    implicit = value['implicit_inherited_retirements']
+                    if name == 'inherited-reference-exit-join-owner-close':
+                        self.assertEqual(len(implicit), 1)
+                        owned = implicit[0]
+                        self.assertEqual((owned['owner_tid'], owned['owner_fd'],
+                                          owned['copy_parent_tid'], owned['copy_child_tid'],
+                                          owned['exit_tid'], owned['owner_close_tid']),
+                                         (100, 3, 100, 101, 101, 100))
+                        self.assertEqual(owned['path_hex'], b'/fixture/file'.hex())
+                        self.assertLess(owned['owner_open_line'], owned['clone_start_line'])
+                        self.assertLessEqual(owned['clone_start_line'], owned['clone_end_line'])
+                        self.assertLess(owned['clone_end_line'], owned['exit_line'])
+                        self.assertLess(owned['exit_line'], owned['wait_end_line'])
+                        self.assertLess(owned['wait_end_line'], owned['owner_close_line'])
+                    else:
+                        self.assertEqual(implicit, [])
+                    for reap in value['nonshared_child_reaps']:
+                        self.assertEqual(reap['parent_tid'], 100)
+                        self.assertIn(reap['child_tid'], (101, 102))
+                        self.assertLess(reap['exit_line'], reap['wait_end_line'])
+
+    def test_batch_public_fixture_absence_handles_missing_ancestors_safely(self):
+        import errno
+        import os
+        import hia_native_batch_public_fixtures as fixtures
+
+        controls = []
+        with tempfile.TemporaryDirectory(prefix="batch-absence-", dir=self.output) as temporary:
+            owned = Path(temporary)
+            output = owned / "output"
+            output.mkdir()
+            (output / "one" / "two").mkdir(parents=True)
+            (output / "batch-public" / "native").mkdir(parents=True)
+            outside = owned / "outside"
+            outside.mkdir()
+            sentinel = outside / "sentinel"
+            sentinel.write_bytes(b"outside bytes must not be traversed or changed")
+            sentinel_before = (sentinel.stat().st_dev, sentinel.stat().st_ino,
+                               sentinel.stat().st_mode, sentinel.read_bytes())
+
+            def entries():
+                result = []
+                for parent, dirs, files in os.walk(output, followlinks=False):
+                    result.extend(str((Path(parent) / name).relative_to(output))
+                                  for name in dirs + files)
+                return sorted(result)
+
+            def check(name, root, paths, errors=None, expected_errno=None):
+                descriptors = sorted(os.listdir("/proc/self/fd"))
+                names = entries()
+                if errors is None:
+                    fixtures.absent(root, paths)
+                    result = "accepted"
+                else:
+                    with self.assertRaises(errors) as caught:
+                        fixtures.absent(root, paths)
+                    if expected_errno is not None:
+                        self.assertIn(caught.exception.errno, expected_errno)
+                    result = type(caught.exception).__name__
+                self.assertEqual(sorted(os.listdir("/proc/self/fd")), descriptors)
+                self.assertEqual(entries(), names)
+                self.assertEqual((sentinel.stat().st_dev, sentinel.stat().st_ino,
+                                  sentinel.stat().st_mode, sentinel.read_bytes()), sentinel_before)
+                controls.append({"name": name, "result": result,
+                                 "fd_set_unchanged": True, "directory_entries_unchanged": True})
+
+            # This is the actual failed call shape: native's parent exists,
+            # while the original producer has not created its own parent yet.
+            with self.assertRaises(FileNotFoundError):
+                fixtures.archive.absent(output, (fixtures.NATIVE, fixtures.HELD, fixtures.ORIGINAL))
+            controls.append({"name": "legacy_missing_original_parent",
+                             "result": "FileNotFoundError"})
+            check("missing_first_ancestor", output, ("missing/parent/leaf",))
+            check("missing_middle_ancestor", output, ("one/missing/leaf",))
+            check("missing_leaf", output, ("one/two/missing",))
+            check("native_held_original_initial_absence", output,
+                  (fixtures.NATIVE, fixtures.HELD, fixtures.ORIGINAL))
+            self.assertFalse((output / "batch-public/original").exists())
+
+            (output / "one/two/directory").mkdir()
+            (output / "one/two/file").write_bytes(b"owned existing file")
+            (output / "one/two/symlink").symlink_to(outside, target_is_directory=True)
+            (output / "one/two/dangling").symlink_to(owned / "not-present")
+            for leaf in ("directory", "file", "symlink", "dangling"):
+                check("existing_target_" + leaf, output, ("one/two/" + leaf,), ValueError)
+
+            (output / "one/ancestor-file").write_bytes(b"not a directory")
+            (output / "one/ancestor-link").symlink_to(outside, target_is_directory=True)
+            (output / "one/ancestor-dangling").symlink_to(owned / "not-present")
+            (output / "first-file").write_bytes(b"not a directory")
+            (output / "first-link").symlink_to(outside, target_is_directory=True)
+            for ancestor in ("one/ancestor-file", "one/ancestor-link",
+                             "one/ancestor-dangling", "first-file", "first-link"):
+                check("non_directory_ancestor_" + ancestor, output, (ancestor + "/missing",),
+                      OSError, (errno.ENOTDIR, errno.ELOOP))
+
+            for index, name in enumerate(("", "/absolute/leaf", "../leaf", "one//leaf",
+                                          "one/./leaf", "one/../leaf", "one/\0/leaf", "one/")):
+                check("unsafe_relative_path_%d" % index, output, (name,), ValueError)
+
+            check("missing_output_root", owned / "absent-output", ("missing/leaf",),
+                  FileNotFoundError)
+            root_link = owned / "linked-output"
+            root_link.symlink_to(output, target_is_directory=True)
+            check("symlink_output_root", root_link, ("missing/leaf",), ValueError)
+            root_file = owned / "file-output"
+            root_file.write_bytes(b"not a directory")
+            check("file_output_root", root_file, ("missing/leaf",), ValueError)
+            aliased_parent = owned / "linked-parent"
+            aliased_parent.symlink_to(owned, target_is_directory=True)
+            check("symlink_above_output_root", aliased_parent / "output",
+                  ("missing/leaf",), ValueError)
+        self._batch_absence_controls = controls
+
+    def test_batch_call_fixture_root_permissions_do_not_depend_on_ambient_umask(self):
+        import ast
+        import os
+        import stat
+
+        source = ROOT / "tests/hia_native/test_batch_call.py"
+        tree = ast.parse(source.read_bytes(), filename=str(source))
+        capture = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == "Capture")
+        constructor = next(node for node in capture.body
+                           if isinstance(node, ast.FunctionDef) and node.name == "__init__")
+        nodes = []
+        for node in constructor.body:
+            if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+                continue
+            call = node.value
+            if not isinstance(call.func, ast.Attribute) or call.func.attr != "mkdir":
+                continue
+            target = call.func.value
+            if (isinstance(target, ast.BinOp) and isinstance(target.op, ast.Div)
+                    and isinstance(target.left, ast.Name) and target.left.id == "output"
+                    and isinstance(target.right, ast.Constant) and target.right.value == "files"):
+                nodes.append(node)
+        self.assertEqual(len(nodes), 1)
+        create = compile(ast.Module(body=nodes, type_ignores=[]), str(source), "exec")
+        saved = os.umask(0o022)
+        try:
+            for mask in (0o022, 0o077):
+                with self.subTest(umask=oct(mask)):
+                    os.umask(mask)
+                    output = self.output / ("fixture-mask-" + format(mask, "03o"))
+                    output.mkdir()
+                    descriptors = sorted(os.listdir("/proc/self/fd"))
+                    exec(create, {"output": output})
+                    root = output / "files"
+                    self.assertEqual(root.lstat().st_mode, stat.S_IFDIR | 0o700)
+                    actual = int(next(line.split()[1] for line in
+                        Path("/proc/self/status").read_bytes().splitlines()
+                        if line.startswith(b"Umask:")), 8)
+                    self.assertEqual(actual, mask)
+                    ordinary = root / "ordinary"
+                    ordinary.mkdir()
+                    self.assertEqual(stat.S_IMODE(ordinary.stat().st_mode), 0o777 & ~mask)
+                    before = root.lstat()
+                    with self.assertRaises(FileExistsError):
+                        exec(create, {"output": output})
+                    after = root.lstat()
+                    self.assertEqual((before.st_dev, before.st_ino, before.st_mode,
+                                      before.st_uid, before.st_gid),
+                                     (after.st_dev, after.st_ino, after.st_mode,
+                                      after.st_uid, after.st_gid))
+                    self.assertEqual(sorted(os.listdir("/proc/self/fd")), descriptors)
+        finally:
+            os.umask(saved)
+
+
+
 
 
 if __name__ == "__main__":
