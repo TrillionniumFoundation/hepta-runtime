@@ -1,0 +1,88 @@
+name: Exact default111 engineering stage timing
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-public111-performance-probe-6780-20261116']
+    paths: ['tests/hia_native/public111_performance_probe_v1/**', '.github/workflows/hia-public111-performance-probe.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  PROBE_SHA256: '1319b69bc19873e1fbe358216112fc0740b94c6c130d80beab71ed4ca75686ec'
+  BASE_PACKAGE_SHA256: c946152ed088af82c14ad0a2c4ffa3c3f1efc8e2090f6d195646a51e6ce6442d
+jobs:
+  diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PROBE=$GITHUB_WORKSPACE/observer/tests/hia_native/public111_performance_probe_v1" "BASE_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public111_task_batch_ci" "PROBE_BUILD=$RUNNER_TEMP/public111-profile-input" "PROBE_FAILURE=$RUNNER_TEMP/public111-profile-failure-input" "PROBE_RUN=$RUNNER_TEMP/public111-profile-run" "PROBE_EXPORT=$RUNNER_TEMP/public111-profile-export" "PROBE_DRIVER=$RUNNER_TEMP/public111-profile-driver" >> "$GITHUB_ENV"
+      - name: Checkout frozen diagnostic source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: observer
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public111_performance_probe_v1
+      - name: Checkout exact original production and CI sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: 635838e7a29ac2cf5b50d772dfc2a47bc1d107b9
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            runtime_support
+            tests/hia_native
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify complete source pins before any native operation
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/observer" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = 635838e7a29ac2cf5b50d772dfc2a47bc1d107b9
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -S -B "$PROBE/check_source.py" --source "$PROBE" --sha256 "$PROBE_SHA256"
+          python3 -I -S -B "$BASE_PACKAGE/ci/source_check.py" --package "$BASE_PACKAGE" --manifest-sha256 "$BASE_PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
+      - name: Retrieve the complete immutable previous build ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$PROBE/download.py" --role build --output "$PROBE_BUILD"
+          python3 -I -S -B "$PROBE/download.py" --role failure --output "$PROBE_FAILURE"
+      - name: Read every original build archive member
+        run: |
+          python3 -I -S -B "$BASE_PACKAGE/ci/archive.py" extract --archive "$PROBE_BUILD/capture.tar.gz" --receipt "$PROBE_BUILD/archive.json" --output "$PROBE_BUILD/capture"
+          python3 -I -S -B "$BASE_PACKAGE/ci/archive.py" extract --archive "$PROBE_FAILURE/capture.tar.gz" --receipt "$PROBE_FAILURE/archive.json" --output "$PROBE_FAILURE/capture"
+      - name: Install mechanical packing dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+      - name: Profile three exact ordinary requests at the retained 60 second limit
+        run: python3 -I -S -B "$PROBE/run.py" --source "$PROBE" --package "$BASE_PACKAGE" --build "$PROBE_BUILD/capture" --failure "$PROBE_FAILURE/capture" --hepta "$GITHUB_WORKSPACE/compiler" --output "$PROBE_RUN" > "$PROBE_DRIVER.stdout" 2> "$PROBE_DRIVER.stderr"
+      - name: Preserve complete diagnostic source and raw observations on success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PROBE/preserve_download.py" --input "$PROBE_BUILD" --label build --capture "$PROBE_RUN"
+          python3 -I -S -B "$PROBE/preserve_download.py" --input "$PROBE_FAILURE" --label failure --capture "$PROBE_RUN"
+          python3 -I -S -B "$BASE_PACKAGE/ci/archive.py" pack --capture "$PROBE_RUN" --output "$PROBE_EXPORT" --package "$PROBE" --manifest-sha256 "$PROBE_SHA256" --label profile-diagnostic --driver-prefix "$PROBE_DRIVER"
+      - name: Upload complete engineering evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public111-profile-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PROBE_EXPORT }}
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
