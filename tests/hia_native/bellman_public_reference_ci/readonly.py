@@ -14,8 +14,13 @@ def main():
     args = verify.arguments()
     package = args.package.resolve(strict=True); run = args.run.resolve(strict=True)
     started = time.monotonic()
-    result = read_only_guard.guarded(lambda: verify.verify(package, run), roots=[package, run],
-                                     foreign_path=Path('/dev/null'))
+    def complete():
+        reader_source_manifest = verify.source(ROOT)
+        evidence = verify.verify(package, run)
+        evidence['reader_source_manifest'] = reader_source_manifest
+        return evidence
+    roots = list(dict.fromkeys([ROOT, package, run]))
+    result = read_only_guard.guarded(complete, roots=roots, foreign_path=Path('/dev/null'))
     assert result['before'] == result['after'] and len(result['probes']) == 11
     print(json.dumps(dict(status='READ_ONLY_BELLMAN_PUBLIC_ORIGINAL_REFERENCE_PASS',
         evidence=result['evidence'], unchanged_entries=len(result['before']), guard_refusals=len(result['probes']),

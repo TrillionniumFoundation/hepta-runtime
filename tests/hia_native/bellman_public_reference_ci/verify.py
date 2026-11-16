@@ -87,7 +87,10 @@ def stream_file(path, *, model=False):
             yield header, payload
 
 def error(message, identifier, code, text):
-    assert message == {'jsonrpc': '2.0', 'id': identifier, 'error': {'code': code, 'message': text}}
+    expected = {'jsonrpc': '2.0', 'error': {'code': code, 'message': text}}
+    if identifier is not None:
+        expected['id'] = identifier
+    assert message == expected
 
 def verify_public(package, original, output):
     report = read(output / 'report.json')
@@ -153,9 +156,14 @@ def verify_public(package, original, output):
             assert body == b''; lines = []
         assert len(lines) == declared['frames']
         messages = [json.loads(line) for line in lines]
-        assert [m['id'] for m in messages] == declared['response_ids'], declared['name']
-        for message in messages:
-            assert message['jsonrpc'] == '2.0' and set(message) in ({'jsonrpc', 'id', 'result'}, {'jsonrpc', 'id', 'error'})
+        assert len(messages) == len(declared['response_ids'])
+        for message, identifier in zip(messages, declared['response_ids'], strict=True):
+            if identifier is None:
+                assert 'id' not in message and set(message) == {'jsonrpc', 'error'}
+            else:
+                assert type(message['id']) is type(identifier) and message['id'] == identifier
+                assert set(message) in ({'jsonrpc', 'id', 'result'}, {'jsonrpc', 'id', 'error'})
+            assert message['jsonrpc'] == '2.0'
         response_count += len(messages); full_wire_bytes += len(body)
         name = declared['name']; result_kind = declared['kind']
         if declared['kind'] == 'case':
@@ -213,6 +221,10 @@ def verify_public(package, original, output):
                     identifier = declared['response_ids'][position]
                     if identifier is None:
                         error(message, None, -32600, 'Invalid request')
+                    elif session:
+                        error(message, identifier, -32602,
+                            'request _meta is missing or has malformed required fields: '
+                            'io.modelcontextprotocol/protocolVersion, io.modelcontextprotocol/clientCapabilities')
                     else:
                         assert message == {'jsonrpc': '2.0', 'id': identifier, 'result': {}}
         else:

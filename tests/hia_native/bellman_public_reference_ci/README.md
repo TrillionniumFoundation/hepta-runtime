@@ -66,3 +66,13 @@ argument bytes, text bytes, actual monotonic start/end, zero, zero. The complete
 canonical argument map and text follow. The model process has a 60-second
 limit inside the unchanged 180-second public stage. Pure readers stream the
 large inputs and responses without executing any original or native code.
+
+The SDK's uncorrelated protocol errors omit the `id` member entirely. The
+domain's `null` response-ID marker denotes this absence; an explicit `id:null`
+does not pass the reader. Inline-session recovery pings intentionally retain
+their original missing metadata, and therefore return the SDK's complete
+required-metadata error. The legacy pings return empty results. Both outcomes
+prove that the same connection consumes the recovery request; no input was
+removed or rewritten after observing these boundaries. A relocated stronger
+reader separately binds its own complete source package and the unchanged
+producer package, keeping both inside the existing read-only guard.
