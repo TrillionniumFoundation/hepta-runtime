@@ -1,0 +1,36 @@
+name: Read preserved audit lifetime authoring failure
+on:
+  push:
+    branches: [hia-audit-lifetime-readback-6780-20261116]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read-authoring:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Read every original artifact member without rerunning authoring
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          timeout 60 gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14282245264/zip > "$RUNNER_TEMP/original.zip"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os,zipfile
+          from pathlib import Path
+          path=Path(os.environ['RUNNER_TEMP'])/'original.zip'
+          raw=path.read_bytes()
+          assert len(raw)==50376 and hashlib.sha256(raw).hexdigest()=='8dee27b311c0ab1cb43b754383b5a08d34e48e3a70e792ee08f88b8a370be6f6'
+          rows=[]
+          with zipfile.ZipFile(path) as archive:
+              assert archive.testzip() is None
+              for entry in archive.infolist():
+                  data=archive.read(entry)
+                  rows.append(dict(path=entry.filename,bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),mode=entry.external_attr>>16))
+                  if entry.filename.endswith(('.stderr','processes.json')):
+                      print('RETAINED_FILE_BEGIN '+entry.filename)
+                      print(data.decode(),end='')
+                      print('RETAINED_FILE_END '+entry.filename)
+          print('COMPLETE_ZIP_READ '+json.dumps(dict(files=rows,native_or_hia_execution=0,authoring_reexecution=0),sort_keys=True))
+          PY
