@@ -1,0 +1,150 @@
+name: Recover retained 08ce aggregate and skipped evidence controls
+on:
+  push:
+    branches: [hia-history-aggregate-recovery-6780-20261116]
+    paths: ['.github/workflows/hia-history-aggregate-recovery.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    # The original aggregate already has a 60-minute ceiling.
+    # Each skipped evidence-control process keeps its original 180 seconds.
+    timeout-minutes: 60
+    env:
+      RUSTUP_TOOLCHAIN: 1.95.0
+    steps:
+      - name: Create independent recovery proof directory
+        run: mkdir -p "$RUNNER_TEMP/history-recovery-proof/logs"
+      - name: Checkout frozen independent reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: observer
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/history_aggregate_recovery/readback-v1
+      - name: Checkout exact unchanged historical runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: 08ce7b6fdfda64aa382e3238a1547c5e379f156a
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            src
+            vendor
+            tests/hia_native
+            tests/oracles
+            .github
+      - name: Materialize original historical58 source without changing pins
+        run: |
+          test "$GITHUB_WORKSPACE" = /home/runner/work/hepta-runtime/hepta-runtime
+          test "$RUNNER_TEMP" = /home/runner/work/_temp
+          test "$(git -C runtime rev-parse HEAD)" = 08ce7b6fdfda64aa382e3238a1547c5e379f156a
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py \
+            --source "$GITHUB_WORKSPACE/runtime" \
+            --output "$RUNNER_TEMP/hia-historical-public58" \
+            > "$RUNNER_TEMP/history-recovery-proof/MATERIALIZATION.json"
+      - name: Checkout exact original compiler source for byte verification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Prepare exact original Python and Rust dependency bytes
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r "$RUNNER_TEMP/hia-historical-public58/tests/hia_native/python-reference-requirements.txt"
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y strace
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+      - name: Verify source closure and pure Python mechanical controls
+        run: |
+          echo "e70d8285dfbde4453fa0d50cbf21f312fb8caec06788ff4f28dd2d9e1805d107  observer/qualification/history_aggregate_recovery/readback-v1/SOURCE_MANIFEST.json" | sha256sum --check --strict
+          timeout --signal=KILL 60 "$RUNNER_TEMP/hia-native-python/bin/python3" -I -B \
+            observer/qualification/history_aggregate_recovery/readback-v1/preflight.py \
+            --output "$RUNNER_TEMP/history-recovery-proof/PREFLIGHT.json" \
+            > "$RUNNER_TEMP/history-recovery-proof/logs/preflight.stdout" \
+            2> "$RUNNER_TEMP/history-recovery-proof/logs/preflight.stderr"
+      - name: Reserve space for the complete original 27 GB capture
+        run: |
+          df -B1 "$RUNNER_TEMP" > "$RUNNER_TEMP/history-recovery-proof/space-before.txt"
+          available=$(df --output=avail -B1 "$RUNNER_TEMP" | tail -n 1)
+          if [ "$available" -lt 48000000000 ]; then
+            # Only unused preinstalled SDK caches in this disposable CI runner.
+            # No runtime, compiler, capture, report or retained ZIP is removed.
+            for unused in /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL; do
+              test ! -L "$unused"
+            done
+            sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          fi
+          df -B1 "$RUNNER_TEMP" > "$RUNNER_TEMP/history-recovery-proof/space-after.txt"
+      - name: Download only the two exact retained artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14274528318 \
+            > "$RUNNER_TEMP/history-recovery-proof/original-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14274528318/zip \
+            > "$RUNNER_TEMP/history-original-artifact.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14276342887 \
+            > "$RUNNER_TEMP/history-recovery-proof/index-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14276342887/zip \
+            > "$RUNNER_TEMP/history-index-artifact.zip"
+      - name: Restore every original byte and mode against the complete frozen index
+        run: |
+          timeout --signal=KILL 900 python3 -I -S -B \
+            observer/qualification/history_aggregate_recovery/readback-v1/restore_archive.py \
+            --zip "$RUNNER_TEMP/history-original-artifact.zip" \
+            --metadata "$RUNNER_TEMP/history-recovery-proof/original-artifact.json" \
+            --index-zip "$RUNNER_TEMP/history-index-artifact.zip" \
+            --index-metadata "$RUNNER_TEMP/history-recovery-proof/index-artifact.json" \
+            --proof "$RUNNER_TEMP/history-recovery-proof/RESTORATION.json" \
+            > "$RUNNER_TEMP/history-recovery-proof/logs/restoration.stdout" \
+            2> "$RUNNER_TEMP/history-recovery-proof/logs/restoration.stderr"
+      - name: Fully read unchanged eight-shard evidence with the exact prefix correction
+        run: |
+          "$RUNNER_TEMP/hia-native-python/bin/python3" -I -B \
+            observer/qualification/history_aggregate_recovery/readback-v1/read_recovered.py \
+            --fix "$GITHUB_WORKSPACE/observer/qualification/history_aggregate_recovery/readback-v1/reference/fixed_comparator.py" \
+            --output "$RUNNER_TEMP/history-recovery-proof/reader" \
+            > "$RUNNER_TEMP/history-recovery-proof/logs/reader.stdout" \
+            2> "$RUNNER_TEMP/history-recovery-proof/logs/reader.stderr"
+      - name: Complete the two original skipped evidence controls with unchanged deadlines
+        run: |
+          "$RUNNER_TEMP/hia-native-python/bin/python3" -I -B \
+            observer/qualification/history_aggregate_recovery/readback-v1/run_skipped.py \
+            --output "$RUNNER_TEMP/history-recovery-proof/skipped" \
+            > "$RUNNER_TEMP/history-recovery-proof/logs/skipped.stdout" \
+            2> "$RUNNER_TEMP/history-recovery-proof/logs/skipped.stderr"
+      - name: Verify every original byte and mode remains and bind all new proofs
+        run: |
+          "$RUNNER_TEMP/hia-native-python/bin/python3" -I -B \
+            observer/qualification/history_aggregate_recovery/readback-v1/finish_recovery.py \
+            --output "$RUNNER_TEMP/history-recovery-proof" \
+            --index-zip "$RUNNER_TEMP/history-index-artifact.zip"
+      - name: Archive complete new proofs and any failed working-copy differences
+        if: always()
+        run: |
+          python3 -I -B observer/qualification/history_aggregate_recovery/readback-v1/export_proof.py \
+            --proof "$RUNNER_TEMP/history-recovery-proof" \
+            --output "$RUNNER_TEMP/history-recovery-export" \
+            --index-zip "$RUNNER_TEMP/history-index-artifact.zip"
+      - name: Preserve complete recovery proof including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history-08ce-recovery-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/history-recovery-export/
+          include-hidden-files: true
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
