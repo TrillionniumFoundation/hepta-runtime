@@ -1,0 +1,180 @@
+name: Export complete frozen v26 aggregate failure bytes
+on:
+  push:
+    branches: [hia-native-aggregate-export-v26-6780-20261116]
+    paths: ['.github/workflows/hia-native-aggregate-evidence-export.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Recover the exact existing original artifact ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14230946811 > "$RUNNER_TEMP/original-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14230946811/zip > "$RUNNER_TEMP/original-artifact.zip"
+      - name: Verify and split all original bytes without semantic execution
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os,shutil
+          root=Path(os.environ['RUNNER_TEMP']);archive=root/'original-artifact.zip'
+          metadata=json.loads((root/'original-artifact.json').read_bytes())
+          digest='44af830123b4e14adba5600c02378f10cd72d1d99b6f3d03325a4a5c1efacd4e'
+          assert metadata['id']==14230946811 and metadata['workflow_run']['id']==43867587958
+          assert metadata['workflow_run']['head_sha']=='2f3909ad0bca5689fb4ae8a055212c7157bd4257'
+          assert metadata['size_in_bytes']==archive.stat().st_size==743863475
+          assert metadata['digest']=='sha256:'+digest and metadata['expired'] is False
+          with archive.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==digest
+          destination=root/'complete-parts';destination.mkdir();parts=[];offset=0
+          with archive.open('rb') as source:
+              for index in range(3):
+                  raw=source.read(256<<20);assert raw
+                  folder=destination/str(index);folder.mkdir();(folder/'part.bin').write_bytes(raw)
+                  parts.append(dict(index=index,offset=offset,bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()));offset+=len(raw)
+              assert source.read(1)==b'' and offset==743863475
+          record=dict(schema='hepta.complete-original-artifact-zip-parts.v1',original_run=43867587958,
+              original_job=133333414454,original_artifact=14230946811,
+              original_head='2f3909ad0bca5689fb4ae8a055212c7157bd4257',
+              original_zip=dict(bytes=743863475,sha256=digest),parts=parts,
+              semantic_executions=0,original_failure_reclassified_as_pass=False,source_or_evidence_modified=False)
+          for row in parts:
+              folder=destination/str(row['index'])
+              (folder/'parts.json').write_text(json.dumps(record,sort_keys=True,indent=2)+'\n')
+              shutil.copyfile(root/'original-artifact.json',folder/'original-artifact.json')
+          print(json.dumps(record,sort_keys=True))
+          PY
+      - name: Retain first complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v26-aggregate-complete-part-0
+          path: ${{ runner.temp }}/complete-parts/0/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain second complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v26-aggregate-complete-part-1
+          path: ${{ runner.temp }}/complete-parts/1/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain final complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v26-aggregate-complete-part-2
+          path: ${{ runner.temp }}/complete-parts/2/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+
+  report-inputs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: native
+            artifact: 14228562219
+            bytes: 746403090
+            digest: 6d12380b3120626a5e3e21fc65c3d89cad62ae43427c632a168c8837c9cd43f3
+          - role: batch
+            artifact: 14229349293
+            bytes: 1343759815
+            digest: 7d031134bcf8cbdaa7a691841b880e6ed6798adcdbf0b05a0aec783f971bba50
+          - role: storage
+            artifact: 14230990038
+            bytes: 85858797
+            digest: c7c3967b9b515e8502ad4ec172843cb66c6907c67bb3c41310ab924e2006fb15
+          - role: bytes
+            artifact: 14230965823
+            bytes: 626087987
+            digest: 60e0c561e6b56607267723c4bd81a146c30d40557cbfabaec1410b82e93147ad
+          - role: system
+            artifact: 14230635367
+            bytes: 379108650
+            digest: 98959b2b9e2766c0888e8c9ec8c5e53ee6e2c8535d539598dc5ad47c5ca4b3eb
+          - role: state
+            artifact: 14230123176
+            bytes: 233846734
+            digest: faaf52933d2bd7773dfe4f9b6dc45c046ac7d53046a6e20c1cd2048fffd958a8
+          - role: services
+            artifact: 14229383538
+            bytes: 303124706
+            digest: 879dfa8e5c783f1ba11858a42a3c0ed1c4e8ecaa22c80c7649ca5ac39413c91a
+          - role: json
+            artifact: 14229143394
+            bytes: 400365763
+            digest: 0f33c6f5047685675852dc8f450592e93e16a0d2bcb8e047c667fcc42f2a6ee1
+          - role: config
+            artifact: 14228759069
+            bytes: 134198530
+            digest: efde76300c932594688ab639b085001264746d5cff83a35e4a297aa8ea95b5ea
+    steps:
+      - name: Download the exact existing report artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ matrix.artifact }}
+        run: |
+          gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$ARTIFACT_ID" > "$RUNNER_TEMP/input-artifact.json"
+          gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/input-artifact.zip"
+      - name: Read every ZIP member and export exact reports without execution
+        env:
+          ROLE: ${{ matrix.role }}
+          ARTIFACT_ID: ${{ matrix.artifact }}
+          ZIP_BYTES: ${{ matrix.bytes }}
+          ZIP_SHA256: ${{ matrix.digest }}
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os,shutil,zipfile
+          root=Path(os.environ['RUNNER_TEMP']);archive=root/'input-artifact.zip'
+          metadata=json.loads((root/'input-artifact.json').read_bytes());digest=os.environ['ZIP_SHA256']
+          assert metadata['id']==int(os.environ['ARTIFACT_ID']) and metadata['workflow_run']['id']==43867587958
+          assert metadata['workflow_run']['head_sha']=='2f3909ad0bca5689fb4ae8a055212c7157bd4257'
+          assert metadata['size_in_bytes']==archive.stat().st_size==int(os.environ['ZIP_BYTES'])
+          assert metadata['digest']=='sha256:'+digest and metadata['expired'] is False
+          with archive.open('rb') as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()==digest
+          out=root/'report-inputs';out.mkdir();selected={};files={};total=0
+          names={'original-native.json','original-native-report.json','original-shard.json','original-shard-report.json'}
+          with zipfile.ZipFile(archive) as zipped:
+              for item in zipped.infolist():
+                  assert item.filename not in files
+                  h=hashlib.sha256();size=0;parts=[];wanted=Path(item.filename).name in names
+                  with zipped.open(item) as stream:
+                      while raw:=stream.read(1<<20):
+                          h.update(raw);size+=len(raw)
+                          if wanted:parts.append(raw)
+                  assert size==item.file_size;total+=size
+                  identity=dict(bytes=size,sha256=h.hexdigest());files[item.filename]=identity
+                  if wanted:
+                      name=Path(item.filename).name;assert name not in selected
+                      (out/name).write_bytes(b''.join(parts));selected[name]=dict(zip_member=item.filename,**identity)
+          required='original-native-report.json' if os.environ['ROLE']=='native' else 'original-shard-report.json'
+          assert required in selected
+          (out/'ZIP_FILES.json').write_text(json.dumps(files,sort_keys=True,indent=2)+'\n')
+          shutil.copyfile(root/'input-artifact.json',out/'original-artifact.json')
+          proof=dict(status='COMPLETE_ZIP_READBACK_AND_EXACT_REPORT_EXPORT',role=os.environ['ROLE'],
+              original_run=43867587958,original_head='2f3909ad0bca5689fb4ae8a055212c7157bd4257',
+              original_artifact=int(os.environ['ARTIFACT_ID']),zip=dict(bytes=archive.stat().st_size,sha256=digest),
+              files=len(files),logical_bytes=total,selected=selected,native_executions=0,rust_executions=0,
+              source_or_evidence_modified=False,original_aggregate_failure_reclassified_as_pass=False)
+          (out/'REPORT-EXPORT.json').write_text(json.dumps(proof,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(proof,sort_keys=True))
+          PY
+      - name: Retain byte inventories and complete original reports
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: v26-aggregate-report-input-${{ matrix.role }}
+          path: ${{ runner.temp }}/report-inputs/
+          compression-level: 6
+          retention-days: 14
+          if-no-files-found: error
