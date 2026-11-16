@@ -16,7 +16,8 @@ def from_bits(bits):
     return struct.unpack('<d',struct.pack('<Q',bits))[0]
 
 ELAPSED=(0,1,0x3e112e0be826d695,0x3ff0000000000000,0x3ff0000000000001,
-         0x403dffffffffffff,0x403e0000000000000,0x0010000000000000,0x7fefffffffffffff)
+         0x403dffffffffffff,0x403e000000000000,0x0010000000000000,0x7fefffffffffffff)
+assert all(0<=value<(1<<63) and ((value>>52)&2047)!=2047 for value in ELAPSED)
 
 def corpus(source: Path):
     core=load_core(source)
