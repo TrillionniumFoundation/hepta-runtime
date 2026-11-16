@@ -75,6 +75,7 @@ def main():
               'source_manifest_sha256': sha((source / 'source-manifest.json').read_bytes()),
               'current_original_target_commit': 'd3d75c30719db966b004756f610007a7c723729e',
               'actual_macro_metadata': False, 'ninth_schema_generated': False,
+              'actual_list_constructor_executed': False,
               'original_tool_handler_executed': False, 'native_catalog_compiled': False,
               'native_catalog_metadata_boundary_qualified': False,
               'public_route_registered': False, 'public_text_editor_body_qualified': False,
@@ -126,12 +127,20 @@ def main():
         cases = [{'mode': 'catalog', 'type': 'tools', 'policy': policy,
                   'label': 'public-nine-tools-policy' + str(policy), 'wire': raw_catalog.decode()}
                  for policy in range(3)]
+        # Keep the original typed-deserialization cohort. The public literal
+        # comes from a separate actual with_all_items constructor cohort.
+        # This input states the constructor's COMPLETE field independently;
+        # serialized original output is never supplied as native input.
+        constructor_catalog = encode({'resultType': 'complete', 'tools': tools})
+        cases += [{'mode': 'constructor', 'type': 'tools', 'policy': policy,
+                   'label': 'public-nine-tools-constructor-policy' + str(policy),
+                   'wire': constructor_catalog.decode()} for policy in range(3)]
         cases_raw = b''.join(encode(case) + b'\n' for case in cases)
         (output / 'evidence/catalog-cases.jsonl').write_bytes(cases_raw)
         observed_raw = records.run('original-nine-tool-catalog', [binary], stdin=cases_raw, timeout=60)
         (output / 'evidence/oracle-nine-tool-catalog.jsonl').write_bytes(observed_raw)
         observations = [json.loads(line) for line in observed_raw.splitlines()]
-        assert len(observations) == 3
+        assert len(observations) == 6
         receipt['catalog_cases_sha256'] = sha(cases_raw)
         receipt['catalog_observations_sha256'] = sha(observed_raw)
         put(output / 'evidence/oracle-build.json', receipt)
@@ -168,6 +177,8 @@ def main():
             for case, ref in zip(cases, observations, strict=True):
                 assert case['label'] == ref['label'] and case['policy'] == ref['policy']
                 assert ref['original_text_editor_metadata_used'] is True and ref['handler_executed'] is False
+                assert case['mode'] == ref['mode']
+                assert ref['actual_list_constructor_executed'] is (case['mode'] == 'constructor')
                 incoming = frame(b'HSJVAL01', 1, case['wire'].encode())
                 canonical = serde(incoming)
                 event('serde', case['label'], incoming, canonical)
@@ -178,12 +189,14 @@ def main():
                 assert raw[:8] == b'HRRPO001' and len(raw) >= 64
                 assert struct.unpack('<7Q', raw[8:64]) == (4, 0, 64, len(raw) - 64, case['policy'], 0, 0)
                 assert raw[64:] == ref['wire'].encode(), case['label']
-                native_wires[case['policy']] = raw[64:]
-                if case['policy'] in (1, 2):
+                native_wires[(case['mode'], case['policy'])] = raw[64:]
+                if case['mode'] == 'constructor' and case['policy'] in (1, 2):
                     suffix = b',"result":' + raw[64:] + b'}'
                     (output / ('evidence/public-nine-tools-policy' + str(case['policy']) + '.suffix.bin')).write_bytes(suffix)
             put(output / 'evidence/catalog-comparison.json', {
-                'status': 'PASS', 'ordinary_policy_cases': 3, 'actual_macro_metadata': True,
+                'status': 'PASS', 'ordinary_policy_cases': 6, 'actual_macro_metadata': True,
+                'typed_deserialization_policy_cases': 3, 'actual_constructor_policy_cases': 3,
+                'actual_list_constructor_executed': True,
                 'actual_original_sdk_executed': True, 'native_catalog_executed': True,
                 'cases_sha256': sha(cases_raw), 'oracle_observations_sha256': sha(observed_raw),
                 'original_handler_executed': False, 'public_route_registered': False})
@@ -211,7 +224,7 @@ def main():
                 wire = public_frame(1, mode)
                 old = invoke_public('baseline_catalog', modules['baseline_catalog'], 'list-' + str(mode), wire)
                 new = invoke_public('ninth_catalog', ninth, 'list-' + str(mode), wire)
-                expected_suffix = b',"result":' + native_wires[mode + 1] + b'}'
+                expected_suffix = b',"result":' + native_wires[('constructor', mode + 1)] + b'}'
                 assert new[32:] == expected_suffix
                 old_result = json.loads(b'{"id":0' + old[32:])['result']
                 new_result = json.loads(b'{"id":0' + new[32:])['result']
@@ -225,7 +238,7 @@ def main():
                 old = invoke_public('baseline_catalog', modules['baseline_catalog'], label, wire)
                 new = invoke_public('ninth_catalog', ninth, label, wire)
                 assert new == old, label
-        assert len(events) == 46
+        assert len(events) == 52
         composition['native_execution_qualified'] = True
         composition['ordinary_native_domain'] = {'list_modes': 2, 'retained_non_list_operations': 18}
         composition['native_module_manifest'] = module_rows['ninth_catalog']['manifest']
@@ -233,7 +246,8 @@ def main():
         composition['public_route_registered'] = False
         put(output / 'generated/native/runtime_mcp_catalog_ninth_composition.json', composition)
         report.update(status='PASS', native_catalog_metadata_boundary_qualified=True,
-            ordinary_typed_policy_cases=3, catalog_list_modes=2,
+            ordinary_typed_policy_cases=3, ordinary_constructor_policy_cases=3,
+            actual_list_constructor_executed=True, catalog_list_modes=2,
             retained_non_list_operations=18, native_invocations=len(events),
             native_modules=module_rows, native_events_sha256=sha((output / 'evidence/native-events.jsonl').read_bytes()),
             generated_catalog_source_sha256=composition['source_sha256'],

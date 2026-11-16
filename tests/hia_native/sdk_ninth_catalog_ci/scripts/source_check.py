@@ -58,6 +58,8 @@ def verify(root):
     assert 'schema_for_input::<TextEditorParams>()?' in main
     assert 'strip_result_type_for_legacy_peer()' in main
     assert 'fill_missing_cache_hints()' in main
+    assert 'ListToolsResult::with_all_items(typed.tools)' in main
+    assert '"catalog" | "constructor" => {' in main
     project = tomllib.loads((root / 'oracle/Cargo.toml').read_text())
     assert project['package']['name'] == 'g5-target-text-editor-catalog-oracle'
     assert project['dependencies']['rmcp']['version'] == '=3.9.0'

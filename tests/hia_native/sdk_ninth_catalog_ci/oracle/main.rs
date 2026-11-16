@@ -24,20 +24,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "metadata" => json!({"mode":"metadata","label":case["label"],
                 "tool":serde_json::to_value(&tool)?,"tool_wire":serde_json::to_string(&tool)?,
                 "schema":&*schema,"actual_macro_metadata":true,"handler_executed":false}),
-            "catalog" => {
+            "catalog" | "constructor" => {
                 let raw=case["wire"].as_str().ok_or("wire")?;
                 let input:Value=serde_json::from_str(raw)?;
                 let typed:ListToolsResult=serde_json::from_str(raw)?;
                 assert_eq!(typed.tools.len(),9);
                 assert_eq!(typed.tools.last(),Some(&tool));
+                let constructor = case["mode"] == "constructor";
+                let typed = if constructor {
+                    ListToolsResult::with_all_items(typed.tools)
+                } else {
+                    typed
+                };
                 let mut result=ServerResult::ListToolsResult(typed);
                 let before=serde_json::to_string(&result)?;
                 let policy=case["policy"].as_u64().ok_or("policy")?;
                 match policy {0=>{},1=>result.strip_result_type_for_legacy_peer(),2=>result.fill_missing_cache_hints(),_=>return Err("policy".into())}
-                json!({"mode":"catalog","type":"tools","label":case["label"],"kind":4,
+                json!({"mode":case["mode"],"type":"tools","label":case["label"],"kind":4,
                     "policy":policy,"canonical_input":serde_json::to_string(&input)?,
                     "typed_wire_before_policy":before,"wire":serde_json::to_string(&result)?,
-                    "original_text_editor_metadata_used":true,"handler_executed":false})
+                    "original_text_editor_metadata_used":true,"actual_list_constructor_executed":constructor,
+                    "handler_executed":false})
             },
             _ => return Err("mode".into()),
         };
