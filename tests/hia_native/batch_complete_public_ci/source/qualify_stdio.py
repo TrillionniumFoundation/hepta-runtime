@@ -43,8 +43,9 @@ def execute(role, binary, fixture, output, era):
     actions = owned.actions([{"kind": "write", "path_hex": os.fsencode(fixture / "target").hex(),
         "data_hex": b"alpha\nbeta\n".hex()}])
     rows = requests(era == "modern")
-    report = {"schema": "hepta.runtime.batch-public-stdio-capture.v1", "status": "RUNNING", "role": role,
+    report = {"schema": "hepta.runtime.batch-public-stdio-capture.v2", "status": "RUNNING", "role": role,
         "era": era, "fixture": str(fixture), "effective_uid": os.geteuid(), "binary": tool,
+        "original_fixture_sessions": 1 if role == "original" else None,
         "case_count": len(rows), "completed_cases": 0, "events": [], "actions": actions,
         "driver_sources": {name: common.file_pin(Path(__file__).parent / name) for name in
             ("qualify_stdio.py", "qualify_public.py", "public_cases.py", "public_observations.py",
@@ -55,7 +56,7 @@ def execute(role, binary, fixture, output, era):
     started, provider, failed = time.monotonic(), None, True
     try:
         provider = common.RecordedPublicProcess(output / "process", binary, fixture, strace="/usr/bin/strace", trace=False) \
-            if role == "native" else public.Original(output / "process", binary, fixture)
+            if role == "native" else public.Original(output / "process", binary, fixture, session_count=1)
         for name, wire, response in rows:
             common.need(time.monotonic() - started < 180, "complete stdio lane exceeded 180 seconds")
             before = public.whole_snapshot(owned)

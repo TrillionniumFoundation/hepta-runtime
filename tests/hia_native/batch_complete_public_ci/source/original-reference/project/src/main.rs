@@ -1,7 +1,7 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Test-owned transport around exact target methods and real SDK dispatch.
-//! Only the declared Batch/Text domain is routed by this fixture. It does not
+//! Only Batch/Text and the declared View parameter refusal are routed. It does not
 //! substitute the target's complete audit, retained-result or caller router.
 #![allow(deprecated)]
 
@@ -113,6 +113,12 @@ impl OctofsServer {
         -> std::pin::Pin<Box<dyn std::future::Future<Output=Result<String, String>> + Send + '_>> {
         Box::pin(self.text_editor(context, params))
     }
+    fn sdk_view_params(&self, _context: RequestContext<RoleServer>, _params: Parameters<ViewParams>)
+        -> std::pin::Pin<Box<dyn std::future::Future<Output=Result<String, String>> + Send + '_>> {
+        // The frozen stdio row lacks the required path. The actual SDK must
+        // reject it before this guard; a successful View body is not supplied.
+        Box::pin(async { Err("fixture guard: valid View parameters are outside the refusal-only domain".to_owned()) })
+    }
 }
 impl ServerHandler for OctofsServer {
     fn get_info(&self) -> ServerConfig { OriginalInfo::get_info(self) }
@@ -123,6 +129,8 @@ impl ServerHandler for OctofsServer {
                 .invoke::<_, AsyncMethodAdapter<(RequestContext<RoleServer>, Parameters<BatchEditParams>), Result<String, String>>>(Self::sdk_batch).await,
             "text_editor" => ToolCallContext::new(self, request, context)
                 .invoke::<_, AsyncMethodAdapter<(RequestContext<RoleServer>, Parameters<TextEditorParams>), Result<String, String>>>(Self::sdk_text).await,
+            "view" => ToolCallContext::new(self, request, context)
+                .invoke::<_, AsyncMethodAdapter<(RequestContext<RoleServer>, Parameters<ViewParams>), Result<String, String>>>(Self::sdk_view_params).await,
             _ => Err(ErrorData::invalid_params("tool outside the declared reference domain", None)),
         }
     }
@@ -172,7 +180,9 @@ impl WireSession {
 
 fn main() -> Result<()> {
     let executor = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-    if let Some(path) = std::env::args().nth(1) {
+    let first_argument = std::env::args().nth(1);
+    let fixture_sessions = if first_argument.as_deref() == Some("--fixture-single-session") { 1 } else { 2 };
+    if let Some(path) = first_argument.filter(|_| fixture_sessions == 2) {
         let config: runtime::config::RuntimeConfig = serde_json::from_slice(&std::fs::read(path)?)?;
         runtime::config::install_for_reference(config);
     }
@@ -183,13 +193,15 @@ fn main() -> Result<()> {
         session_applied: Arc::new(AtomicBool::new(false)),
     });
     let mut sessions = executor.block_on(async {
-        servers.iter().cloned().map(|server| Some(WireSession::start(server))).collect::<Vec<_>>()
+        servers.iter().cloned().enumerate().map(|(index, server)| {
+            if index < fixture_sessions { Some(WireSession::start(server)) } else { None }
+        }).collect::<Vec<_>>()
     });
     let mut output = io::BufWriter::new(io::stdout().lock());
     for (sequence, line) in io::stdin().lock().lines().enumerate() {
         let row: Value = serde_json::from_str(&line?)?;
         let sid = row["session"].as_u64().ok_or_else(|| anyhow::anyhow!("session missing"))? as usize;
-        if sid > 1 { bail!("session outside fixture domain"); }
+        if sid >= fixture_sessions { bail!("session outside fixture domain"); }
         let kind = row["kind"].as_str().ok_or_else(|| anyhow::anyhow!("fixture kind missing"))?;
         let raw = match kind {
             "wire" => {

@@ -43,3 +43,50 @@ pub struct TextEditorParams {
 	pub replace_all: Option<bool>,
 }
 
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct ViewParams {
+	/// File or directory. `a|b` searches several roots with `content` (max 32); several
+	/// files take parallel view calls. Remote: ssh://[user@]host[:port]/path (host may be an
+	/// ~/.ssh/config alias; `ssh://host` or `ssh://host/~/dir` is the login home).
+	pub path: String,
+	/// First line (inclusive): line id or integer (negative counts from the end, -1 = last).
+	/// Default: line 1.
+	#[serde(default)]
+	#[schemars(schema_with = "line_endpoint_schema")]
+	pub start: Option<serde_json::Value>,
+	/// Last line (inclusive): line id or integer (negative counts from the end). Default: end
+	/// of file; omit both `start` and `end` for the whole file.
+	#[serde(default)]
+	#[schemars(schema_with = "line_endpoint_schema")]
+	pub end: Option<serde_json::Value>,
+	/// Ripgrep -g globs bounding listings and searches: without `/` a name at any depth,
+	/// with `/` the relative path; `*`, `**`, `?`, `[abc]`, `{rs,toml}`, leading `!`; `|`
+	/// joins ordered globs (later wins), e.g. `**/*.rs|!target/**`. Applied after
+	/// gitignore/hidden filtering; one line, max 4096 bytes, 64 globs.
+	#[serde(default)]
+	pub pattern: Option<String>,
+	/// Locate code: searches the whole file/tree (`start`/`end` ignored) for a literal
+	/// substring, or a Rust regex with `regex: true` (`(?i)` case-insensitive; alternation for
+	/// related terms).
+	#[serde(default)]
+	pub content: Option<String>,
+	/// Treat `content` as a regex. Default: false.
+	#[serde(default)]
+	pub regex: Option<bool>,
+	/// Directory depth bound. Default: unlimited, except a bare remote listing (no
+	/// `pattern`/`content`) stops at the root entries. Searches walk the whole tree.
+	#[serde(default)]
+	pub max_depth: Option<usize>,
+	/// Include dotfiles and dot-directories.
+	#[serde(default)]
+	pub include_hidden: Option<bool>,
+	/// Lines around each `content` match. Default: 0.
+	#[serde(default)]
+	pub context: Option<usize>,
+	/// Force the complete file when re-viewing a whole file (normally only changed hunks),
+	/// e.g. after losing earlier context. No effect on ranges or searches; output limits
+	/// unchanged.
+	#[serde(default)]
+	pub full: Option<bool>,
+}

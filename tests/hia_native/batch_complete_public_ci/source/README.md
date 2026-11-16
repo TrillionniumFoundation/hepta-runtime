@@ -41,7 +41,7 @@ filesystem snapshot, permission, hardlink relationship and observable native or
 original state. Comparisons use identical absolute fixture paths. After process
 exit and full independent reread, only each exact fixture is retired, with its
 complete final snapshot and all removed object identities retained. Strict
-readers remain valid after relocation and launch no process. Nineteen data-only
+readers remain valid after relocation and launch no process. Twenty-one data-only
 refusals use independent real copies and retain the complete changed bytes.
 
 Every exchange is appended as one complete canonical JSON line before the next
@@ -56,6 +56,23 @@ The native build reader follows the frozen builder's exact profile encoding:
 only the standard 8/8/32 MiB profile omits `buffer_profile`; every other profile
 must name its fixed capacities. Separate refusal controls cover wrong standard
 capacity and an omitted wide profile, in addition to all earlier controls.
+
+The stdio comparison starts the original carrier with the explicit
+`--fixture-single-session` option. It creates only the session whose JSON-lines
+entry is exercised; the four private cohorts retain their original two-session
+default. Both modes retain all server-state observation slots, and the strict
+reader binds the actual command line and whether the second SDK session exists.
+The active session still runs the unchanged SDK EOF, join and error path. No SDK
+initialization failure, exit status or stderr is swallowed. Separate controls
+reject a missing stdio option and an injected option in a private two-session
+capture. Public stdio still contains the same 15 legacy and 13 modern requests.
+The frozen row named `view-after-batch` supplies `file_path` instead of the
+required `path`. Its reference now uses the byte-exact target `ViewParams` and
+the real SDK extractor, which must reject this input before the fixture guard.
+The guard provides no View implementation and cannot pass as a successful
+View result. This row qualifies the parameter refusal only, not a whole-file
+View or cache-hit operation; complete cache states are compared separately in
+the unchanged private cohorts.
 
 ## Invocation
 
@@ -105,3 +122,18 @@ The failed lane's 5,223 exchanges took 33.802 seconds in total; the remaining
 of cumulative prefixes for a 4.81 MB final exchange array. This version keeps
 that failure separate and uses append plus final sealing. No HIA source or
 native image changes as part of this recording repair.
+
+Run `43864587566` then completed all four private cohorts on both sides:
+417 legacy, 417 modern, 926 filesystem and 17 session rows. Its native legacy
+stdio process completed all 15 requests and exited successfully. The original
+carrier also returned all 15 responses, but exited 1 while closing its unused,
+uninitialized second SDK session (`connection closed: initialize request`). The
+full failure is retained as artifact `14226165675`, ZIP SHA256
+`79bd6ba4223cd7d89b1847372023364867562217e1e924da8de572b5d4698b5c`.
+This new fixture mode corrects that explicit lifecycle mismatch; the target
+functions, HIA sources, native images, inputs and deadlines remain unchanged.
+Independent full readback of that failed run also found the omitted View
+parameter route: the native returned the target's missing-`path` diagnostic,
+whereas the reference's out-of-domain branch returned a different error.
+The existing row is retained and the exact target declaration is added; its
+name and input are not rewritten to hide the failed comparison.

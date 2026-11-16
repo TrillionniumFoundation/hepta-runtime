@@ -18,8 +18,9 @@ class Capture:
         self.report = self.json("result.json")
         r = self.report
         self.role = r["role"]
-        require(r["schema"] == "hepta.runtime.batch-public-stdio-capture.v1" and r["status"] == "PASS"
+        require(r["schema"] == "hepta.runtime.batch-public-stdio-capture.v2" and r["status"] == "PASS"
             and self.role in ("native", "original") and r["era"] in ("legacy", "modern")
+            and r["original_fixture_sessions"] == (1 if self.role == "original" else None)
             and r["private_selectors_used"] is False and r["public_batch_qualified"] is False
             and r["whole_runtime_replaced"] is False and r["per_exchange_deadline_seconds"] == 60
             and r["outer_lane_deadline_seconds"] == 180 and full.number(r["elapsed_seconds"], 180),
@@ -28,7 +29,7 @@ class Capture:
         for name, identity in r["driver_sources"].items():
             require(PIN(regular(self.source / name)) == identity and
                 regular(self.source / name) == regular(Path(__file__).parent / name), "stdio source identity")
-        full.open_process(self, binary)
+        full.open_process(self, binary, single_reference_session=self.role == "original")
         self.rows = capture.requests(r["era"] == "modern")
         self.exchanges = self.json("process/exchanges.json")
         require(len(self.exchanges) == len(self.rows) == len(r["events"]) == r["case_count"] == r["completed_cases"]
@@ -72,7 +73,7 @@ class Capture:
                 require(output.endswith(b"\n") and b"\n" not in output[:-1], "one exact public JSON line")
                 parsed = full.decode(output)
             if self.role == "original":
-                full.observations.original_state(parsed, command)
+                full.observations.original_state(parsed, command, session_count=1)
                 output = full.hex_bytes(parsed["output_hex"])
             require(bool(output) == response and full.hex_bytes(event["response_hex"]) == output, "actual SDK/public wire")
             trees = []

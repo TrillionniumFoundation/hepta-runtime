@@ -64,6 +64,9 @@ def compose(baseline, core):
         output[name] = (baseline / name).read_bytes()
     output["src/batch_types.rs"] = (core / "reference/project/src/original.rs").read_bytes()
     server = targets["src/mcp/server.rs"]
+    view_params, view_start, view_end = original_function(server,
+        b"#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]\npub struct ViewParams {", b"\n}\n")
+    output["src/types.rs"] += b"\n" + view_params
     batch, batch_start, batch_end = original_function(server, b"\tasync fn batch_edit(", b"\n\t}\n")
     dispatch, dispatch_start, dispatch_end = original_function(targets["src/mcp/fs/core.rs"],
         b"pub async fn execute_batch_edit(", b"\n}\n")
@@ -115,6 +118,7 @@ def compose(baseline, core):
         ("get_info", info_start, info_end, "src/mcp/server.rs", info),
         ("io_create_dir_all", mkdir_start, mkdir_end, "src/mcp/fs/remote.rs", mkdir),
         ("note_create", note_start, note_end, "src/mcp/fs/delta.rs", note),
+        ("ViewParams", view_start, view_end, "src/mcp/server.rs", view_params),
     ):
         assert targets[target][start:end] == raw
         added.append({"declaration": name, "target": target, "start": start, "end": end, **pin(raw)})
@@ -126,6 +130,7 @@ def compose(baseline, core):
         "fixture_lock_origin": lock_origin,
         "new_wrapper": pin(output["src/main.rs"]), "files": {name: pin(raw) for name, raw in output.items()},
         "real_sdk_serve_transport": True, "real_parameters_extractor_and_method_adapter": True,
+        "view_parameter_refusal_only": True, "successful_view_handler_qualified": False,
         "target_gateway_and_full_local_functions": True, "complete_target_call_tool_router": False,
         "fresh_rust_build": False, "native_original_comparison": False,
         "full_async_cancellation_qualified": False, "remote_sftp_qualified": False,

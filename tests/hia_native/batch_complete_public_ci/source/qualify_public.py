@@ -77,9 +77,12 @@ class Native:
 
 
 class Original:
-    def __init__(self, output, binary, cwd):
+    def __init__(self, output, binary, cwd, *, session_count=2):
         common.need(os.environ.get("GITHUB_ACTIONS") == "true", "original reference execution is CI-only")
-        self.io = common.RecordedPublicProcess(output, binary, cwd, strace="/usr/bin/strace", trace=False)
+        common.need(type(session_count) is int and session_count in (1, 2), "explicit original fixture session count")
+        self.session_count = session_count
+        extra = () if session_count == 2 else ("--fixture-single-session",)
+        self.io = common.RecordedPublicProcess(output, binary, cwd, strace="/usr/bin/strace", trace=False, extra_argv=extra)
         self.sequence = 0
 
     def command(self, kind, session, raw=b"", response=False):
@@ -90,7 +93,7 @@ class Original:
         receipt, lines = self.io.exchange(cases.encode(command) + b"\n")
         common.need(receipt["transport"] == "response" and len(lines) == 1, "complete actual original fixture response")
         parsed = json.loads(lines[0])
-        state = observations.original_state(parsed, command)
+        state = observations.original_state(parsed, command, session_count=self.session_count)
         body = bytes.fromhex(parsed["output_hex"])
         return {"exchange": receipt["index"], "wire": body, "state": state}
 

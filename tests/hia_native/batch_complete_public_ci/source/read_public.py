@@ -191,8 +191,11 @@ def filesystem(trees, root, uid):
     return trees
 
 
-def open_process(owner, expected_binary):
+def open_process(owner, expected_binary, *, single_reference_session=False):
     r = owner.report
+    require(type(single_reference_session) is bool and (not single_reference_session or
+        owner.role == "original" and r["schema"] == "hepta.runtime.batch-public-stdio-capture.v2"
+        and r["original_fixture_sessions"] == 1), "explicit single-session original stdio mode")
     tool = r["binary"]
     owner.binary = {k: tool[k] for k in ("bytes", "sha256")}
     require(tool["captured_file"] == "tool-" + owner.role + ".bin" and tool["path"] == tool["resolved_path"],
@@ -206,7 +209,8 @@ def open_process(owner, expected_binary):
     require(set(started) == {"binary", "command", "native_argv", "cwd", "environment", "observer_fd", "pid"}
         and started["observer_fd"] is None and all(started[k] == p[k] for k in started if k != "observer_fd"),
         "actual start/completion identity")
-    require(p["command"] == p["native_argv"] == [tool["path"]] and p["binary"] == owner.binary
+    argv = [tool["path"], *(["--fixture-single-session"] if single_reference_session else [])]
+    require(p["command"] == p["native_argv"] == argv and p["binary"] == owner.binary
         and p["cwd"] == r["fixture"] and p["environment"] == {"PATH": "", "LC_ALL": "C"}
         and type(p["pid"]) is int and p["pid"] > 0, "actual process/cwd/environment custody")
     require(p["exit_code"] == 0 and p["timed_out"] is False and p["start_error"] is None

@@ -64,14 +64,16 @@ def native_state(session_bodies, shared):
         "locks": state(locks), "scope_unbound_after_exchange": True}
 
 
-def original_state(row, command):
+def original_state(row, command, *, session_count=2):
+    need(type(session_count) is int and session_count in (1, 2), "explicit original session domain")
     need(set(row) == {"id", "session", "kind", "output_hex", "cache_snapshots_hex", "sessions",
         "scope_unbound_after_exchange", "closed_sessions", "history_snapshot_hex", "lock_snapshot_hex"},
         "complete original observer fields")
     need((row["id"], row["session"], row["kind"]) == (command["id"], command["session"], command["kind"])
-        and row["scope_unbound_after_exchange"] is True and row["closed_sessions"] == [False, False],
+        and type(command["session"]) is int and 0 <= command["session"] < session_count
+        and row["scope_unbound_after_exchange"] is True and row["closed_sessions"] == [False, session_count == 1],
         "original command identity or current scope/session lifetime")
-    need(len(row["sessions"]) == len(row["cache_snapshots_hex"]) == 2, "both original sessions")
+    need(len(row["sessions"]) == len(row["cache_snapshots_hex"]) == 2, "both original server-state slots")
     sessions, caches = [], []
     for session, encoded in zip(row["sessions"], row["cache_snapshots_hex"], strict=True):
         need(set(session) == {"root", "current", "effective", "poisoned", "session_applied"}

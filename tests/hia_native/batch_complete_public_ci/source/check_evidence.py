@@ -25,7 +25,7 @@ LABELS = ("source-comment", "rehashed-source", "compiler-stdout", "compiler-stdo
     "rehashed-compiler-tail", "rehashed-pack-workspace", "private-case-count", "rehashed-event-input",
     "rehashed-accepted-input", "private-exchange-deadline", "lane-deadline", "retired-object-omission",
     "rehashed-original-binary", "stdio-case-name", "standard-profile-capacity", "wide-profile-omission",
-    "rehashed-exchange-journal")
+    "rehashed-exchange-journal", "stdio-original-session-mode", "private-original-session-mode")
 READERS = {"source-comment": "source", "rehashed-source": "core", "compiler-stdout": "compiler",
     "compiler-stdout-fields": "compiler", "compiler-stdout-types": "compiler",
     "compiler-receipt": "compiler", "rehashed-compiler-tail": "compiler", "rehashed-pack-workspace": "native",
@@ -33,7 +33,8 @@ READERS = {"source-comment": "source", "rehashed-source": "core", "compiler-stdo
     "private-exchange-deadline": "private", "lane-deadline": "lane", "retired-object-omission": "retirement",
     "rehashed-original-binary": "original", "stdio-case-name": "stdio",
     "standard-profile-capacity": "standard-compiler", "wide-profile-omission": "compiler",
-    "rehashed-exchange-journal": "private"}
+    "rehashed-exchange-journal": "private", "stdio-original-session-mode": "stdio-original",
+    "private-original-session-mode": "private-original"}
 ACTIVE = False
 
 
@@ -159,6 +160,14 @@ def expected_changes(label, original):
         data = bytearray(raw("original/bin/" + name)); data[-1] ^= 1; data = bytes(data)
         changes["original/bin/" + name] = changes["original/target/release/" + name] = data
         edit("original/BUILD.json", lambda r: r["binaries"].update({name: {"path": "bin/" + name, **PIN(data)}}))
+    elif label in ("stdio-original-session-mode", "private-original-session-mode"):
+        prefix = "stdio/legacy/original/" if label == "stdio-original-session-mode" else "public/session/original/"
+        arguments = [] if label == "stdio-original-session-mode" else ["--fixture-single-session"]
+        def change_arguments(row):
+            row["command"] = row["native_argv"] = [row["native_argv"][0], *arguments]
+        for name in ("process/started.json", "process/process.json"):
+            edit(prefix + name, change_arguments)
+        edit(prefix + "result.json", lambda r: r.update(process=document(prefix + "process/process.json")))
     else:
         require(label == "stdio-case-name", "unknown fixed evidence refusal")
         edit("stdio/legacy/native/result.json", lambda r: r["events"][2].update(name="another-case"))
@@ -188,6 +197,12 @@ def dispatch(kind, output):
         return retire_fixture.verify(folder, read_json(folder / "result.json"))
     if kind == "stdio":
         return read_stdio.inspect(output / "stdio/legacy/native", source, graphs["public"]["elf_pin"])
+    if kind in ("stdio-original", "private-original"):
+        binary = read_json(output / "original/BUILD.json")["binaries"]["hepta-batch-sdk-current-original-oracle"]
+        identity = {key: binary[key] for key in ("bytes", "sha256")}
+        if kind == "stdio-original":
+            return read_stdio.inspect(output / "stdio/legacy/original", source, identity)
+        return read_public.inspect(output / "public/session/original", source, expected_binary=identity)
     require(kind == "lane", "unknown strict reader selection")
     producer = Path(read_json(output / "result.json")["producer_root"])
     return run_recipe.check_lane(folder, "private", "native", "session",
