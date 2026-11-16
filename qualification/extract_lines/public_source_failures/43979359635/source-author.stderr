@@ -1,0 +1,29 @@
+Traceback (most recent call last):
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/authoring/public_extract/author.py", line 140, in <module>
+    main()
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/authoring/public_extract/author.py", line 75, in main
+    generated,owners=controllers(api,source,author)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/authoring/public_extract/author_modules.py", line 90, in controllers
+    raw, names, proof = compile_delta(api, render(doc).encode(), CALLER,
+                                           ^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_agent_assembly.py", line 293, in render_assembly
+    checked = verify_program(document)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py", line 956, in verify_program
+    functions, block_maps = _primitive_structure(data)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py", line 840, in _primitive_structure
+    return _reference_primitive_structure(data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py", line 860, in _reference_primitive_structure
+    blocks = _function_shape(fn, recursive_chain=supports_feature(data["schema"], "recursive_chain"),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py", line 519, in _function_shape
+    return _reference_function_shape(fn,recursive_chain=recursive_chain,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py", line 603, in _reference_function_shape
+    _reject("unreachable blocks are not admitted", "E_HIA_CFG")
+  File "/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py", line 61, in _reject
+    raise HIAProgramRejected(message, code)
+hepta.hia_program.HIAProgramRejected: E_HIA_CFG: unreachable blocks are not admitted

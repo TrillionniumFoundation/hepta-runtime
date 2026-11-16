@@ -83,7 +83,25 @@ def controllers(api, source, author):
             {"op":"call","args":["v280","v"+str(first),"v"+str(first+1)],"attrs":{"function":CALLER["put"]},
              "out":[{"name":"v"+str(first+2),"type":"u64"}]}]
     block["term"] = {"op": "jump", "target": "b39", "args": ["v278", "v279", "v280"]}
-    scope_patch = {"function": CALLER["after_scope"], "block":"b28",
+    by_block = {b["id"]: b for b in scope["blocks"]}
+    reachable, queue = set(), [scope["entry"]]
+    while queue:
+        name = queue.pop()
+        if name in reachable:
+            continue
+        reachable.add(name)
+        term = by_block[name]["term"]
+        if term["op"] == "jump":
+            queue.append(term["target"])
+        elif term["op"] == "branch":
+            queue.extend([term["then"]["target"],term["else"]["target"]])
+        else:
+            require(term["op"] in ("ret","trap"), "unexpected Scope terminator")
+    removed = {b["id"]: SHA(CANON(b)) for b in scope["blocks"] if b["id"] not in reachable}
+    require(set(removed) == {"b29","b30","b31","b32","b33","b35","b36","b37"},
+        "Scope text-command-only block inventory differs")
+    scope["blocks"] = [b for b in scope["blocks"] if b["id"] in reachable]
+    scope_patch = {"function": CALLER["after_scope"], "block":"b28", "removed_text_only_blocks":removed,
         "before": SHA(CANON(original_block)), "after": SHA(CANON(block)),
         "purpose": "after exact Scope open admission, reset two-path state and resolve the source",
         "unchanged_admission_prefix_ops": keep[0] + 1}
