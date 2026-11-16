@@ -5,14 +5,17 @@ import hashlib, json, struct
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 ENCODE = lambda value: (json.dumps(value, sort_keys=True, indent=2) + '\n').encode()
 NAMES = ('registry-output', 'registry-workspace', 'growth-preservation', 'missing-call',
-         'projection-extent', 'original-token', 'original-send', 'original-context-id')
+         'projection-extent', 'original-token', 'original-send', 'original-context-id',
+         'queued-order', 'drain-send-origin')
+BASE_INDEX = {name: (110 if name == 'queued-order' else 111 if name == 'drain-send-origin' else 3)
+              for name in NAMES}
 
 
 def mutation(name, native, original_raw):
     capture = json.loads((native / 'CAPTURE.json').read_bytes())
     changes = {}
     def selected(operation):
-        return next(row for row in capture['calls'] if row['return_code'] == 160 and
+        return next(row for row in capture['calls'] if row['return_code'] == 192 and
             struct.unpack_from('<Q', (native / row['input']['path']).read_bytes(), 8)[0] == operation)
     def replace(pin, offset):
         raw = bytearray((native / pin['path']).read_bytes()); raw[offset] ^= 1; raw = bytes(raw)
@@ -29,6 +32,18 @@ def mutation(name, native, original_raw):
         capture['calls'].remove(selected(11))
     elif name == 'projection-extent':
         capture['projections'][0]['return_code'] -= 1
+    elif name in ('queued-order', 'drain-send-origin'):
+        row = selected(13 if name == 'queued-order' else 14)
+        if name == 'drain-send-origin':
+            row = next(r for r in capture['calls'] if r['return_code'] == 192 and
+                struct.unpack_from('<Q', (native / r['input']['path']).read_bytes(), 8)[0] == 14 and
+                struct.unpack_from('<Q', (native / r['output']['path']).read_bytes(), 8)[0] == 4)
+        generation = struct.unpack_from('<Q', (native / row['output']['path']).read_bytes(), 24)[0]
+        raw = (native / row['workspace']['path']).read_bytes()
+        at = 256
+        while struct.unpack_from('<Q', raw, at + 8)[0] != generation:
+            at += struct.unpack_from('<Q', raw, at)[0]
+        replace(row['workspace'], at + (96 if name == 'queued-order' else 104))
     else:
         original = json.loads(original_raw)
         if name == 'original-token':
@@ -56,17 +71,16 @@ def refusal(case, folder):
 
 
 def verify_controls(source, run):
-    from cases import cases
-    index = 3; case = cases()[index]
-    assert case['label'] == 'integer-cancel'
-    native = run / 'native/case-003'
-    original_raw = (run / 'reference/case-003/stdout.jsonl').read_bytes()
-    base = {'native/' + p.name:p.read_bytes() for p in native.iterdir()}
-    base['original.json'] = original_raw
+    from queue_cases import cases
     report = json.loads((run / 'CONTROLS.json').read_bytes())
     assert report['names'] == list(NAMES) and report['base_before'] == report['base_after']
     result = []
     for name in NAMES:
+        index = BASE_INDEX[name]; case = cases()[index]
+        native = run / 'native' / f'case-{index:03}'
+        original_raw = (run / 'reference' / f'case-{index:03}' / 'stdout.jsonl').read_bytes()
+        base = {'native/' + p.name:p.read_bytes() for p in native.iterdir()}
+        base['original.json'] = original_raw
         folder = run / 'controls' / name
         expected = dict(base); changed = mutation(name, native, original_raw); expected.update(changed)
         actual = {p.relative_to(folder).as_posix():p.read_bytes() for p in folder.rglob('*') if p.is_file()}

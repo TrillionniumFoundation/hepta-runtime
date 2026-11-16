@@ -78,11 +78,11 @@ def main():
             '--source', source, '--run', output])
         raw = stage('complete-readonly', [sys.executable, '-I', '-B', source / 'scripts/verify_complete.py',
             '--source', source, '--run', output])
-        report = json.loads(raw); assert report['status'] == 'READONLY_CURRENT_SDK_TASKS110_PASS'
+        report = json.loads(raw); assert report['status'] == 'READONLY_CURRENT_SDK_TASKS118_PASS'
         recipe.update(status='PASS', verification=report['evidence']); checkpoint()
     except BaseException as error:
         recipe.update(status='FAIL', error=repr(error)); checkpoint(); raise
-    print(json.dumps(dict(status='FRESH_CURRENT_SDK_TASKS110_PASS', cases=110,
+    print(json.dumps(dict(status='FRESH_CURRENT_SDK_TASKS118_PASS', cases=118,
         native_calls=recipe['verification']['native_calls'], g1_projections=recipe['verification']['g1_projections'],
         source=source_pin, full_async_runtime_qualified=False, public_registry_integrated=False), sort_keys=True))
 

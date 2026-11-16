@@ -8,17 +8,20 @@ def same_id(first, second):
 
 def checked(registry, operation, generation=0, arg0=0, arg1=0, payload=b''):
     reply = registry.invoke(operation, generation, arg0, arg1, payload)
-    assert len(reply) == 20 and reply[18:] == (0, 0)
+    assert len(reply) == 24 and reply[18:20] == (0, 0) and reply[23] == 0
     raw = registry.last_workspace
-    header = struct.unpack_from('<19Q', raw)
-    assert raw[:8] == b'HRTKST01' and header[1] == registry.epoch
-    assert not any(raw[112:128]) and not any(raw[152:256])
+    header = struct.unpack_from('<20Q', raw)
+    assert raw[:8] == b'HRTKST02' and header[1] == registry.epoch
+    assert not any(raw[160:256])
+    assert reply[20:23] == (header[14], header[15], header[19])
     rows = registry.rows()
     assert len({row['generation'] for row in rows}) == len(rows)
     assert header[5] == sum(row['live'] for row in rows)
     assert header[6] == sum(not row['done'] for row in rows)
     assert header[7] == sum(row['send_pending'] for row in rows)
     assert header[8] == len(rows) and not any(raw[header[9]:])
+    assert header[14] == sum(row['queued'] != 0 for row in rows)
+    assert all(row['send_phase'] in (0, 1) for row in rows)
     assert reply[2] == registry.epoch and reply[7:17] == (
         header[3], header[5], header[6], header[7], header[8], header[9],
         header[13], header[12], header[4], header[10])
@@ -91,6 +94,25 @@ def qualify(case, original, registry):
             assert reply[4:6] == (1000 + reply[3], 10000 + reply[3])
             assert checked(registry, 11, reply[3])[1] == 0
 
+    def synchronize_queued(snapshot):
+        while any(row['queued'] for row in registry.rows()):
+            reply = checked(registry, 14)
+            if reply[1] == 14:
+                assert reply[7] == 1 and (reply[10] or reply[22])
+                return
+            assert reply[1] in (4, 5)
+            gen = reply[3]
+            label = next(name for name, value in generations.items() if value == gen)
+            task = next(t for t in snapshot['tasks'] if t['label'] == label)
+            available = [send for send in snapshot['sends']
+                         if send['index'] not in send_indices.values() and same_id(send['id'], task['id'])]
+            assert len(available) == (1 if reply[1] == 4 else 0), (case['label'], label, reply)
+            if available:
+                send_indices[gen] = available[0]['index']
+            decisions.append(dict(label=label, generation=gen, disposition=reply[1], queued=True,
+                actual_send_indices=[s['index'] for s in available]))
+            acknowledge_sends(snapshot)
+
     def compare_snapshot(snapshot):
         rows = {row['generation']: row for row in registry.rows()}
         assert len(rows) == len(snapshot['tasks']) == len(generations)
@@ -139,6 +161,10 @@ def qualify(case, original, registry):
                 label = json.loads(wire)['id']
                 admit(label, wire)
                 complete(label, before, after)
+        elif op == 'finish_queued':
+            gen = generations[action['label']]
+            reply = checked(registry, 13, gen)
+            assert reply[1] == 12 and reply[3] == gen
         elif op == 'release_send':
             pass  # Only the actual transport completion below permits SEND_ACK.
         elif op == 'begin_drain':
@@ -157,10 +183,13 @@ def qualify(case, original, registry):
                 assert reply[1] == 7
                 phase = 2
         acknowledge_sends(after)
+        synchronize_queued(after)
         if phase == 1:
             reply = checked(registry, 7, arg0=after['time_ns'])
             assert reply[1] == (7 if after['closed'] else 6)
             phase = 2 if reply[1] == 7 else 1
+        if phase == 2:
+            synchronize_queued(after)
         acknowledge_cancellation(after)
         compare_snapshot(after)
     assert original['final'] == original['events'][-1]['after'] or (

@@ -6,12 +6,12 @@ def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
     if read64(s, 16) == 0 or read64(s, 48) != length(s) - 64:
         return INVALID
     op = read64(s, 8)
-    if op < 1 or op > 12:
+    if op < 1 or op > 14:
         return INVALID
     if op > 2 and read64(s, 48) != 0:
         return INVALID
-    if length(o) < 160:
-        return grow(o, 2, 160)
+    if length(o) < 192:
+        return grow(o, 2, 192)
     if length(w) < 256:
         return grow(o, 1, 256)
     if get(w, 0) == 0:
@@ -20,6 +20,7 @@ def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
         put(w, 8, read64(s, 16))
         put(w, 16, 1)
         put(w, 72, 256)
+        put(w, 120, 1)
     if get(w, 0) != STATE_MAGIC or get(w, 8) != read64(s, 16):
         return INVALID
     if get(w, 72) < 256 or get(w, 72) > length(w):
@@ -46,6 +47,12 @@ def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
         return next_cancel(s, o, w)
     if op == 11:
         return cancel_ack(s, o, w)
+    if op == 13:
+        return queue_response(s, o, w)
+    if op == 14:
+        if controls_zero(s) == False:
+            return INVALID
+        return claim_response(o, w)
     if read64(s, 32) != 0 or read64(s, 40) != 0:
         return INVALID
     return reply(o, w, 0, read64(s, 24))
@@ -67,7 +74,7 @@ def admit(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
     if canonical_id(s, start, size, kind) == False:
         return INVALID
     used = get(w, 72)
-    record = (96 + size + 7) & 18446744073709551608
+    record = (112 + size + 7) & 18446744073709551608
     if used > 268435456 - record:
         return grow(o, 3, used + record)
     if length(w) < used + record:
@@ -85,7 +92,7 @@ def admit(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
     put(w, used + 16, 1)
     put(w, used + 64, kind)
     put(w, used + 72, size)
-    copy_range(w, s, used + 96, start, size)
+    copy_range(w, s, used + 112, start, size)
     put(w, 16, generation + 1)
     put(w, 40, get(w, 40) + 1)
     put(w, 48, get(w, 48) + 1)
@@ -120,24 +127,15 @@ def notification(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
 def handler_response(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
     if no_arguments(s) == False:
         return INVALID
-    row = find_generation(w, read64(s, 24))
-    if row == 0 or get(w, row + 32) != 0:
+    if get(w, 112) != 0:
         return BUSY
-    put(w, row + 32, 1)
-    put(w, row + 40, 1)
-    put(w, row + 56, 0)
-    put(w, 48, get(w, 48) - 1)
-    selected = find_row_id(w, row)
-    if selected == 0 or get(w, 24) == 2:
-        advance(w)
-        return reply(o, w, 5, read64(s, 24))
-    put(w, selected + 16, 0)
-    cancel_context(w, selected)
-    put(w, 40, get(w, 40) - 1)
-    put(w, row + 48, 1)
-    put(w, 56, get(w, 56) + 1)
-    advance(w)
-    return reply(o, w, 4, read64(s, 24))
+    if get(w, 24) == 1:
+        if get(w, 56) != 0 or get(w, 152) != 0:
+            return BUSY
+    code = queue_response(s, o, w)
+    if code != 192:
+        return code
+    return claim_response(o, w)
 
 def send_ack(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
     if read64(s, 40) != 0 or read64(s, 32) > 1:
@@ -145,6 +143,10 @@ def send_ack(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
     row = find_generation(w, read64(s, 24))
     if row == 0 or get(w, row + 48) != 1:
         return BUSY
+    if get(w, row + 104) == 1 and get(w, 24) == 1:
+        if read64(s, 32) == 0:
+            put(w, 152, 1)
+    put(w, row + 104, 0)
     put(w, row + 48, 0)
     put(w, 56, get(w, 56) - 1)
     advance(w)
@@ -192,9 +194,10 @@ def drain_progress(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
         return INVALID
     if get(w, 24) != 1:
         return BUSY
-    if get(w, 48) != 0 or get(w, 56) != 0:
-        if read64(s, 32) < get(w, 96):
-            return reply(o, w, 6, 0)
+    if get(w, 152) == 0:
+        if get(w, 48) != 0 or get(w, 56) != 0 or get(w, 112) != 0:
+            if read64(s, 32) < get(w, 96):
+                return reply(o, w, 6, 0)
     cancel_all(w)
     row = 256
     while row < get(w, 72):
@@ -214,6 +217,8 @@ def retire(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
     if get(w, row + 16) != 0 or get(w, row + 32) != 1:
         return BUSY
     if get(w, row + 48) != 0 or get(w, row + 56) != 0:
+        return BUSY
+    if get(w, row + 96) != 0:
         return BUSY
     size = get(w, row)
     end = get(w, 72)
@@ -437,7 +442,7 @@ def find_input_id(s:readbuf, w:mutbuf, start:u64, size:u64, kind:u64) -> u64:
     while row < get(w, 72):
         if get(w, row + 16) == 1:
             if get(w, row + 64) == kind and get(w, row + 72) == size:
-                if equal_input(s, w, start, row + 96, size) == True:
+                if equal_input(s, w, start, row + 112, size) == True:
                     return row
         row = row + get(w, row)
     return 0
@@ -464,13 +469,13 @@ def find_row_id(w:mutbuf, selected:u64) -> u64:
 def equal_rows(w:mutbuf, first:u64, second:u64) -> bool:
     i = 0
     while i < get(w, first + 72):
-        if byte(w, first + 96 + i) != byte(w, second + 96 + i):
+        if byte(w, first + 112 + i) != byte(w, second + 112 + i):
             return False
         i = i + 1
     return True
 
 def reply(o:mutbuf, w:mutbuf, disposition:u64, generation:u64) -> u32:
-    fill_range(o, 0, 160, 0)
+    fill_range(o, 0, 192, 0)
     put(o, 0, OUTPUT_MAGIC)
     put(o, 8, disposition)
     put(o, 16, get(w, 8))
@@ -494,7 +499,10 @@ def reply(o:mutbuf, w:mutbuf, disposition:u64, generation:u64) -> u32:
     put(o, 120, get(w, 32))
     put(o, 128, get(w, 80))
     put(o, 136, get(w, 88))
-    return 160
+    put(o, 160, get(w, 112))
+    put(o, 168, get(w, 120))
+    put(o, 176, get(w, 152))
+    return 192
 
 def grow(o:mutbuf, kind:u64, capacity:u64) -> u32:
     if length(o) < 32:
@@ -537,3 +545,56 @@ def put(w:mutbuf, at:u64, value:u64) -> u64:
     store(w, at + 6, (value >> 48) & 255)
     store(w, at + 7, (value >> 56) & 255)
     return 0
+
+def queue_response(s:readbuf, o:mutbuf, w:mutbuf) -> u64:
+    if no_arguments(s) == False:
+        return INVALID
+    row = find_generation(w, read64(s, 24))
+    if row == 0 or get(w, row + 32) != 0:
+        return BUSY
+    ordinal = get(w, 120)
+    if ordinal == 18446744073709551615:
+        return RESOURCE
+    put(w, row + 32, 1)
+    put(w, row + 40, 1)
+    put(w, row + 56, 0)
+    put(w, row + 96, ordinal)
+    put(w, 120, ordinal + 1)
+    put(w, 48, get(w, 48) - 1)
+    put(w, 112, get(w, 112) + 1)
+    advance(w)
+    return reply(o, w, 12, read64(s, 24))
+
+def claim_response(o:mutbuf, w:mutbuf) -> u32:
+    if get(w, 24) == 1:
+        if get(w, 56) != 0 or get(w, 152) != 0:
+            return reply(o, w, 14, 0)
+    row = first_queued(w)
+    if row == 0:
+        return reply(o, w, 13, 0)
+    put(w, row + 96, 0)
+    put(w, 112, get(w, 112) - 1)
+    selected = find_row_id(w, row)
+    if selected == 0 or get(w, 24) == 2:
+        advance(w)
+        return reply(o, w, 5, get(w, row + 8))
+    put(w, selected + 16, 0)
+    cancel_context(w, selected)
+    put(w, 40, get(w, 40) - 1)
+    put(w, row + 48, 1)
+    put(w, row + 104, get(w, 24))
+    put(w, 56, get(w, 56) + 1)
+    advance(w)
+    return reply(o, w, 4, get(w, row + 8))
+
+def first_queued(w:mutbuf) -> u64:
+    row = 256
+    chosen = 0
+    ordinal = 18446744073709551615
+    while row < get(w, 72):
+        current = get(w, row + 96)
+        if current != 0 and current < ordinal:
+            ordinal = current
+            chosen = row
+        row = row + get(w, row)
+    return chosen

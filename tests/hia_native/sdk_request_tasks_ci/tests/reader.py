@@ -3,7 +3,7 @@ from pathlib import Path
 import gzip, hashlib, io, json, tarfile, tomllib
 from compare import qualify, same_id
 from replay import Replay
-from cases import cases
+from queue_cases import cases
 
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 COMPILER = 'd3e2c90173cf733e42b299d0c4274df4b593a12f'
@@ -59,7 +59,7 @@ def verify_native(source, build):
 
 def verify_reference_build(source, original):
     summary = doc(original / 'SUMMARY.json'); build = doc(original / 'BUILD.json')
-    assert summary['status'] == 'CAPTURED' and summary['cases_completed'] == summary['cases_expected'] == 110
+    assert summary['status'] == 'CAPTURED' and summary['cases_completed'] == summary['cases_expected'] == 118
     assert build['fresh_target_dir'] and build['actual_target_sdk_built'] and build['actual_target_sdk_executed']
     assert build['offline_resolution'] and build['all_retained_exactly_match_target']
     assert build['rust_version'].splitlines()[0].startswith('rustc 1.95.0 ')
@@ -172,7 +172,7 @@ def verify(source, run, *, require_recipe=False):
     original_build = verify_reference_build(source, run / 'reference')
     processes = doc(run / 'reference/processes.json')
     native_processes = doc(run / 'native-processes.json')
-    assert len(processes) == len(native_processes) == len(corpus) == 110
+    assert len(processes) == len(native_processes) == len(corpus) == 118
     results, original_results = [], []
     for index, (case, process, native_process) in enumerate(zip(corpus, processes, native_processes, strict=True)):
         assert process['index'] == native_process['index'] == index
@@ -202,7 +202,7 @@ def verify(source, run, *, require_recipe=False):
     controls = verify_controls(source, run)
     expected_handlers = sum(e['op'] in ('request', 'finish') for case in corpus for e in case['events'])
     assert sum(r['actual_handlers'] for r in original_results) == expected_handlers
-    result = dict(schema='hepta.sdk-request-tasks.complete-readonly.v1', status='READONLY_CURRENT_SDK_TASKS110_PASS',
+    result = dict(schema='hepta.sdk-request-tasks.complete-readonly.v1', status='READONLY_CURRENT_SDK_TASKS118_PASS',
         cases=len(results), actions=sum(r['actions'] for r in results),
         native_calls=sum(r['native_calls'] for r in results), g1_projections=sum(r['g1_projections'] for r in results),
         actual_handlers=sum(r['actual_handlers'] for r in original_results),
@@ -218,7 +218,7 @@ def verify(source, run, *, require_recipe=False):
     if require_recipe:
         recipe = doc(run / 'RECIPE.json')
         assert recipe['status'] == 'PASS' and recipe['verification'] == result
-        assert recipe['native_cases_completed'] == 110
+        assert recipe['native_cases_completed'] == 118
         assert [r['label'] for r in recipe['stages']] == ['reproduce-author', 'fresh-native-build',
             'fresh-current-reference', 'physical-reader-controls', 'complete-readonly']
         for stage in recipe['stages']:

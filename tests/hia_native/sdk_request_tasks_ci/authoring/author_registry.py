@@ -4,7 +4,7 @@ import argparse, ast, hashlib, json, re, sys
 sys.dont_write_bytecode = True
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 CONSTANTS = {name:int.from_bytes(value,'little') for name,value in {
-    'INPUT_MAGIC':b'HRTKRQ01','OUTPUT_MAGIC':b'HRTKRS01','STATE_MAGIC':b'HRTKST01',
+    'INPUT_MAGIC':b'HRTKRQ02','OUTPUT_MAGIC':b'HRTKRS02','STATE_MAGIC':b'HRTKST02',
     'MESSAGE_MAGIC':b'HRCJR001','GROW_MAGIC':b'HGRWS002','REQUEST_ID_WORD':b'requestI'}.items()}
 CONSTANTS.update(INVALID=0xffffffff,BUSY=0xfffffff8,RESOURCE=0xfffffffc,GROW=0xffffffd0)
 def main():

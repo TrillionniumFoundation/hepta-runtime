@@ -281,6 +281,15 @@ async fn observe(case: Value) -> anyhow::Result<Value> {
                 })?;
                 tx.send(()).map_err(|_| anyhow::anyhow!("send receiver"))?;
                 shared.wait(3, |s| matches!(s.sends[index].status,"done"|"failed")).await?;
+                if let Some(label) = action["await_send_label"].as_str() {
+                    let wanted = shared.state.lock().expect("fixture state").tasks.iter()
+                        .find(|t| t.label == label).context("queued task label")?.id.clone();
+                    shared.wait(3, |s| s.sends.iter().any(|v| v.id == wanted)).await?;
+                }
+                if action["await_closed"].as_bool().unwrap_or(false) {
+                    shared.wait(7, |s| s.closed).await?;
+                    shared.wait(3, |s| s.sends.iter().all(|v| v.status != "started")).await?;
+                }
             }
             "begin_drain" => {
                 ensure!(!draining,"one drain");
@@ -297,6 +306,14 @@ async fn observe(case: Value) -> anyhow::Result<Value> {
                 let label = action["label"].as_str().context("task label")?;
                 release(&shared,label,action["outcome"].as_str().unwrap_or("success"),false,false)?;
                 shared.wait(7, |s| s.closed).await?;
+            }
+            "finish_queued" => {
+                ensure!(draining,"handler completes while actual drain waits for an older send");
+                let label = action["label"].as_str().context("task label")?;
+                release(&shared,label,action["outcome"].as_str().unwrap_or("success"),
+                    action["hold_send"].as_bool().unwrap_or(false),
+                    action["fail_send"].as_bool().unwrap_or(false))?;
+                shared.wait(3, |s| s.tasks.iter().any(|t| t.label == label && t.done)).await?;
             }
             "await_close" => {
                 ensure!(draining,"await an actual drain");

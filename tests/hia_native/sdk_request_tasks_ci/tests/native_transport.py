@@ -20,7 +20,7 @@ class Registry:
             self.modules[name] = NativeModule(self.build / item['manifest'],
                 manifest_sha256=item['manifest_sha256'])
         self.session = self.modules['request-tasks'].session(
-            output_capacity=160, workspace_capacity=256)
+            output_capacity=192, workspace_capacity=256)
         self.epoch = epoch
         self.calls = []
         self.projections = []
@@ -45,7 +45,7 @@ class Registry:
         return output[:result]
 
     def invoke(self, operation, generation=0, arg0=0, arg1=0, payload=b''):
-        frame = b'HRTKRQ01' + struct.pack('<7Q', operation, self.epoch,
+        frame = b'HRTKRQ02' + struct.pack('<7Q', operation, self.epoch,
             generation, arg0, arg1, len(payload), 0) + payload
         for _ in range(4):
             before_output = self.session._output.raw[:self.session.output_capacity]
@@ -64,8 +64,8 @@ class Registry:
             self.calls.append(row)
             self.last_workspace, self.last_output = workspace, output
             if result != 0xffffffd0:
-                assert result == 160 and output[:8] == b'HRTKRS01', row
-                return struct.unpack('<20Q', output[:160])
+                assert result == 192 and output[:8] == b'HRTKRS02', row
+                return struct.unpack('<24Q', output[:192])
             assert output[:8] == b'HGRWS002'
             kind, capacity, reserved = struct.unpack_from('<3Q', output, 8)
             assert reserved == 0 and kind in (1, 2)
@@ -87,14 +87,14 @@ class Registry:
         used = struct.unpack_from('<Q', raw, 72)[0]
         pos, result = 256, []
         while pos < used:
-            fields = struct.unpack_from('<12Q', raw, pos)
-            size, generation, live, cancelled, done, response, send, cancel, kind, length, tag, job = fields
-            assert size >= 96 + length and pos + size <= used
-            assert not any(raw[pos + 96 + length:pos + size])
+            fields = struct.unpack_from('<14Q', raw, pos)
+            size, generation, live, cancelled, done, response, send, cancel, kind, length, tag, job, queued, send_phase = fields
+            assert size >= 112 + length and pos + size <= used
+            assert not any(raw[pos + 112 + length:pos + size])
             result.append(dict(generation=generation, live=bool(live), cancelled=bool(cancelled),
                 done=bool(done), response_seen=bool(response), send_pending=bool(send),
                 cancel_delivery_pending=bool(cancel), id_kind=kind,
-                id=json.loads(raw[pos + 96:pos + 96 + length]), tag=tag, job=job))
+                id=json.loads(raw[pos + 112:pos + 112 + length]), tag=tag, job=job, queued=queued, send_phase=send_phase))
             pos += size
         assert pos == used
         return result

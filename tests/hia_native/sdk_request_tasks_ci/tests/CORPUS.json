@@ -2741,5 +2741,407 @@
       }
     ],
     "label": "service_cancel-send-deadline"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_send_label": "beta",
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "await_closed": true,
+        "label": "beta",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-eof-fifo"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "fail_send": true,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-eof-queued-send-failure"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": true,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "fail_send": false,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-eof-old-send-failure"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":2}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "fail_send": false,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-eof-cancelled-queued"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_send_label": "beta",
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "await_closed": true,
+        "label": "beta",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-service_cancel-fifo"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "fail_send": true,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-service_cancel-queued-send-failure"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": true,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "fail_send": false,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-service_cancel-old-send-failure"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":2}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "fail_send": false,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-service_cancel-cancelled-queued"
   }
 ]

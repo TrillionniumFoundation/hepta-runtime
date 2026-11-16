@@ -41,7 +41,7 @@ class Replay:
         return output[:result]
 
     def invoke(self, operation, generation=0, arg0=0, arg1=0, payload=b''):
-        frame = b'HRTKRQ01' + struct.pack('<7Q', operation, self.epoch,
+        frame = b'HRTKRQ02' + struct.pack('<7Q', operation, self.epoch,
             generation, arg0, arg1, len(payload), 0) + payload
         for _ in range(4):
             row = self.calls[self.call_index]
@@ -76,8 +76,8 @@ class Replay:
             if result == 0xffffffd0:
                 assert output[:8] == b'HGRWS002'
                 continue
-            assert result == 160 and output[:8] == b'HRTKRS01'
-            return struct.unpack('<20Q', output[:160])
+            assert result == 192 and output[:8] == b'HRTKRS02'
+            return struct.unpack('<24Q', output[:192])
         raise AssertionError('retained growth did not converge')
 
     def rows(self):
@@ -87,14 +87,14 @@ class Replay:
         used = struct.unpack_from('<Q', raw, 72)[0]
         pos, result = 256, []
         while pos < used:
-            fields = struct.unpack_from('<12Q', raw, pos)
-            size, gen, live, cancel, done, response, send, delivery, kind, length, tag, job = fields
+            fields = struct.unpack_from('<14Q', raw, pos)
+            size, gen, live, cancel, done, response, send, delivery, kind, length, tag, job, queued, send_phase = fields
             assert all(v in (0, 1) for v in (live, cancel, done, response, send, delivery))
-            assert size == (96 + length + 7) & ~7 and pos + size <= used
-            assert not any(raw[pos + 96 + length:pos + size])
+            assert size == (112 + length + 7) & ~7 and pos + size <= used
+            assert not any(raw[pos + 112 + length:pos + size])
             result.append(dict(generation=gen, live=bool(live), cancelled=bool(cancel), done=bool(done),
                 response_seen=bool(response), send_pending=bool(send), cancel_delivery_pending=bool(delivery),
-                id_kind=kind, id=json.loads(raw[pos + 96:pos + 96 + length]), tag=tag, job=job))
+                id_kind=kind, id=json.loads(raw[pos + 112:pos + 112 + length]), tag=tag, job=job, queued=queued, send_phase=send_phase))
             pos += size
         assert pos == used
         return result

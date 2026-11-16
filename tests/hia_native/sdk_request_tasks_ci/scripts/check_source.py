@@ -33,7 +33,15 @@ def check(source):
             ('author_sha256', 'authoring/author_registry.py'), ('pseudo_sha256', 'authoring/request_tasks.txt'),
             ('lower_support_sha256', 'authoring/lower_support.py')]:
         assert composition[key] == manifest['files'][name]['sha256']
-    assert composition['function_count'] == 34
+    assert composition['function_count'] == 37
+    assert SHA((source / 'tests/cases.py').read_bytes()) == 'bb8864a410587b75ce6b7902091d70389e34942d4ef001e59863823cda613124'
+    assert SHA((source / 'authoring/request_tasks_v1.txt').read_bytes()) == '0fededa03fbc786bce760ee71fbc675543a25cfaf0d2acc6a2dbaac2bb071cbf'
+    old_nodes = {n.name:ast.dump(n, include_attributes=False) for n in ast.parse((source / 'authoring/request_tasks_v1.txt').read_bytes()).body}
+    new_nodes = {n.name:ast.dump(n, include_attributes=False) for n in ast.parse((source / 'authoring/request_tasks.txt').read_bytes()).body}
+    delta = json.loads((source / 'authoring/QUEUE_DELTA.json').read_bytes())
+    assert delta['retained_exact_ast'] == sorted(n for n in old_nodes if old_nodes[n] == new_nodes[n])
+    assert delta['changed_functions'] == sorted(n for n in old_nodes if old_nodes[n] != new_nodes[n])
+    assert set(delta['added_functions']) == set(new_nodes) - set(old_nodes)
     for name in ('full_async_runtime_qualified', 'full_sdk_qualified', 'production_activated',
                  'old_path_removed', 'public_registry_integrated'):
         assert manifest[name] is False and composition[name] is False
