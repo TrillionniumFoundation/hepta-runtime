@@ -1,4 +1,4 @@
-"""Retain all 25 old admission controls and add physical rehash refusals."""
+"""Retain every old admission control, plus physical rehash and allocation refusals."""
 from pathlib import Path
 import argparse
 import gzip
@@ -23,7 +23,8 @@ NAMES=("native-status", "native-case-omitted", "native-call-count", "native-refe
     "constructor-refusal-lifecycle", "control-omitted", "control-budget-changed", "control-patch-changed",
     "control-original-inflation", "control-input-changed", "control-complete-workspace-changed",
     "process-timed-out", "process-not-complete", "process-source-command", "process-deadline", "foreign-copy-symlink",
-    "buffer-chunk-rehashed", "module-image-rehashed", "child-handoff-rehashed", "observation-rehashed")
+    "buffer-chunk-rehashed", "module-image-rehashed", "child-handoff-rehashed", "observation-rehashed",
+    "value-growth-minimum", "value-initial-output-admission")
 
 
 def encoded(value):return (json.dumps(value,sort_keys=True,indent=2,allow_nan=False)+"\n").encode()
@@ -162,6 +163,15 @@ def main():
             else:raise RuntimeError("foreign copy alias was admitted")
         finally:linked.unlink();linked.write_bytes(saved)
         rehashed_controls(one,refuse,native,build)
+        def growth_minimum(rows):
+            actual=jsonlines(one/"native/calls.jsonl")
+            row=next(r for r in rows if r["kind"]==1 and actual[r["after_call"]-1]["owner"]=="serde_json_span")
+            row["minimum"]+=1
+        refuse("value-growth-minimum",native,{"native/growth.jsonl":lambda b:editlines(b,growth_minimum)})
+        def initial_admission(rows):
+            row=next(r for r in rows if r["owner"]=="serde_json_span" and r["admission"] is not None)
+            row["admission"]["capacity"]+=8
+        refuse("value-initial-output-admission",native,{"native/sessions.jsonl":lambda b:editlines(b,initial_admission)})
         require(tuple(row["name"] for row in report["controls"])==NAMES,"complete reader refusal domain changed")
         require(all(file_pin(one/n)==identities[n] and file_pin(two/n)==identities[n] for n in files),"mutated physical copies were not exactly restored")
         require(checked(one,complete)["evidence"]==baseline,"post-refusal complete read differs")

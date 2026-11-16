@@ -228,7 +228,9 @@ def physical(folder, report):
     calls = jsonlines(folder/"calls.jsonl")
     require(len(calls) == report["native_calls"] and len(sessions) == report["sessions"], "native call/session count differs")
     require({p.name for p in folder.iterdir() if p.is_dir()} == {"buffers"} | {f"{n:06d}" for n in range(1,len(calls)+1)}, "physical call folder domain differs")
+    first_calls = {}
     for number,row in enumerate(calls,1):
+        first_calls.setdefault(row["session"],row)
         require(row["call"] == number and row["folder"] == f"{number:06d}" and row["session"] in sessions, "call identity differs")
         require(row["owner"] == sessions[row["session"]]["owner"], "call owner changed within session")
         require(row["error"] is None and type(row["return_code"]) is int and 0 <= row["return_code"] <= 0xffffffff, "native call did not return")
@@ -246,28 +248,61 @@ def physical(folder, report):
         for at in range(0,row["output_capacity"],CHUNK):
             digest.update(b"\xa5"*min(CHUNK,row["output_capacity"]-at))
         require(digest.hexdigest() == row["output_before"]["sha256"], "caller output sentinel differs")
+    for session in session_rows:
+        require(set(session) == {"session","owner","case","output_capacity","workspace_capacity","admission"},
+                "session allocation declaration differs")
+        admission = session["admission"]
+        if admission is None:
+            continue
+        require(session["owner"] == "serde_json_span" and type(admission) is dict
+                and set(admission) == {"policy","issued_call","capacity"}
+                and admission["policy"] == "actual-owner-reply-capacity"
+                and type(admission["issued_call"]) is int and 1 <= admission["issued_call"] <= len(calls),
+                "Value initial capacity lacks a bound owner instruction")
+        require(session["session"] in first_calls
+                and first_calls[session["session"]]["call"] == admission["issued_call"] + 1,
+                "Value initial allocation is not immediately before its first actual call")
+        issued = calls[admission["issued_call"]-1]
+        require(issued["owner"] == "scope_annotation_span" and issued["return_code"] == CALL
+                and issued["case"] == session["case"], "Value initial allocation belongs to another owner call")
+        action = buffers.span(issued["workspace_after"],256,96)
+        require(action[:8] == b"HSCAA002" and WORD(action,16) == 1
+                and type(admission["capacity"]) is int
+                and 64 <= admission["capacity"] == WORD(action,56) == session["output_capacity"] <= 1073741824
+                and session["workspace_capacity"] == 0,
+                "Value initial allocation differs from the actual owner reply capacity")
     growth = jsonlines(folder/"growth.jsonl")
     for row in growth:
         require(row["session"] in sessions and row["kind"] in (1,2) and row["previous_address"] != row["next_address"], "growth did not relocate owned buffer")
         buffers.verify(row["before"]);buffers.verify(row["after"])
         old,new = row["before"]["bytes"],row["after"]["bytes"]
-        require(0 <= old < new, "growth did not increase actual span")
+        minimum = row["minimum"]
+        require(type(minimum) is int and 0 <= old < minimum <= new, "growth did not satisfy actual minimum")
+        expected_policy = "exact-minimum"
+        expected_size = minimum
+        if sessions[row["session"]]["owner"] == "serde_json_span" and row["kind"] == 1:
+            require(minimum <= 1207959552, "Value workspace exceeds the bound module profile")
+            expected_policy = "value-workspace-double-minimum-bounded"
+            expected_size = min(1207959552, 2 * minimum)
+        require(row["allocation_policy"] == expected_policy and new == expected_size,
+                "physical allocation differs from the declared mechanical growth policy")
         digest = hashlib.sha256()
         for identity in row["before"]["chunks"]:
             digest.update(buffers.chunk(identity))
         for at in range(old,new,CHUNK):
             digest.update(bytes(min(CHUNK,new-at)))
         require(digest.hexdigest() == row["after"]["sha256"], "growth changed old prefix or invented uninitialized bytes")
+        require(type(row["after_call"]) is int and 1 <= row["after_call"] <= len(calls), "unbound growth call")
         previous = calls[row["after_call"]-1]
         require(previous["session"] == row["session"], "growth process custody differs")
         kind = "workspace" if row["kind"] == 1 else "output"
         require(previous[kind+"_after"] == row["before"] and previous[kind+"_address"] == row["previous_address"], "growth origin differs from complete call")
         head = buffers.span(previous["output_after"],0,32)
         if previous["return_code"] == GROW:
-            require(head == b"HGRWS002" + PACK(row["kind"],new,0), "growth differs from actual owner instruction")
+            require(head == b"HGRWS002" + PACK(row["kind"],minimum,0), "growth differs from actual owner instruction")
         else:
             require(previous["owner"] == "serde_json_span" and previous["return_code"] == 32
-                    and head == b"HJSVR002" + PACK(2 if row["kind"] == 1 else 3,0,new), "growth differs from actual Value instruction")
+                    and head == b"HJSVR002" + PACK(2 if row["kind"] == 1 else 3,0,minimum), "growth differs from actual Value instruction")
     handoffs = jsonlines(folder/"handoffs.jsonl")
     for row in handoffs:
         issued = calls[row["issued_call"]-1]

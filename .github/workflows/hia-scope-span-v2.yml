@@ -1,4 +1,4 @@
-name: Complete original annotation and search-effect span comparison v2
+name: Complete original annotation and search-effect span comparison, allocation revision 3
 on:
   workflow_dispatch:
   push:
@@ -12,7 +12,7 @@ jobs:
     env:
       LC_ALL: C.UTF-8
       SPAN_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/scope_annotation_span_v2
-      SPAN_SOURCE_SHA: 7b2c5c16498c327e28d27e755d851b7e0f73fbeb82bc893f644808ad9bf6d044
+      SPAN_SOURCE_SHA: 3bea8745891f100a5e13422f422cf9b4a1749c9b5d9b27814e227dc44af33764
     steps:
       - name: Checkout frozen candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -52,6 +52,9 @@ jobs:
           sys.path.insert(0,os.environ['SPAN_SOURCE'])
           from build import verify_source
           assert verify_source()==os.environ['SPAN_SOURCE_SHA']
+          from pathlib import Path
+          for source in Path(os.environ['SPAN_SOURCE']).rglob('*.py'):
+              compile(source.read_bytes(),str(source),'exec')
           PY
           cmp original-target/Cargo.lock "$SPAN_SOURCE/reference/target/Cargo.lock"
           cmp original-target/Cargo.toml "$SPAN_SOURCE/reference/target/Cargo.toml"
@@ -68,6 +71,28 @@ jobs:
       - name: Independently read all complete qualification evidence
         run: |
           python3 -I -B "$SPAN_SOURCE/verify_readonly.py" --output "$RUNNER_TEMP/annotation-output" --source-manifest-sha256 "$SPAN_SOURCE_SHA" --require-evidence-controls > "$RUNNER_TEMP/annotation-independent-reader.json"
+      - name: Report failure location without replay
+        if: failure()
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "annotation-output"
+          for name in ("GATE.json", "native/CAPTURE.json", "controls/CAPTURE.json", "reader-controls/result.json", "original-reader-controls/result.json"):
+              path = root / name
+              if not path.is_file():
+                  continue
+              raw = path.read_bytes()
+              value = json.loads(raw)
+              keys = ("status", "error", "cases", "native_calls", "elapsed_seconds", "source_unchanged", "source_manifest_sha256", "physical_buffer_bytes")
+              print(json.dumps({"file": name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "summary": {k: value[k] for k in keys if k in value}}, sort_keys=True))
+          for path in sorted(root.rglob("*.stderr")):
+              if not path.is_file():
+                  continue
+              raw = path.read_bytes()
+              if raw:
+                  print(json.dumps({"file": path.relative_to(root).as_posix(), "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "tail_bytes": min(16384, len(raw)), "tail_utf8": raw[-16384:].decode("utf-8", errors="replace"), "complete_bytes_retained_in_archive": True}, sort_keys=True))
+          PY
       - name: Preserve complete success or failure without replay
         if: always()
         run: |

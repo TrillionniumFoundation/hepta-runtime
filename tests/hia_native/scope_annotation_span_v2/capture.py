@@ -95,12 +95,12 @@ class Capture:
     def close(self):
         self.stack.close()
 
-    def session(self, name, case, output=64, workspace=0):
+    def session(self, name, case, output=64, workspace=0, *, admission=None):
         session = self.modules[name].session(output_capacity=output, workspace_capacity=workspace)
         self.sessions += 1
         self.session_ids[session] = self.sessions
         line(self.session_ledger, dict(session=self.sessions, owner=name, case=case,
-             output_capacity=output, workspace_capacity=workspace))
+             output_capacity=output, workspace_capacity=workspace, admission=admission))
         return session
 
     def resize(self, session, kind, count, case):
@@ -109,13 +109,18 @@ class Capture:
         cap = "workspace_capacity" if kind == 1 else "output_capacity"
         old_count = getattr(session, cap)
         assert type(count) is int and old_count < count <= session.module.metadata[cap]
+        minimum, policy = count, "exact-minimum"
+        if kind == 1 and session.module is self.modules["serde_json_span"]:
+            count = min(session.module.metadata[cap], 2 * minimum)
+            policy = "value-workspace-double-minimum-bounded"
         previous = getattr(session, attr)
         before = self.buffers.snapshot(previous, old_count)
         fresh = ctypes.create_string_buffer(count + 16)
         ctypes.memmove(fresh, previous, old_count)
         after = self.buffers.snapshot(fresh, count)
         line(self.growth_ledger, dict(session=self.session_ids[session], case=case,
-             after_call=self.calls, kind=kind, before=before, after=after,
+             after_call=self.calls, kind=kind, minimum=minimum, allocation_policy=policy,
+             before=before, after=after,
              previous_address=ctypes.addressof(previous), next_address=ctypes.addressof(fresh)))
         assert ctypes.addressof(previous) != ctypes.addressof(fresh)
         setattr(session, attr, fresh)
@@ -209,8 +214,7 @@ class Capture:
         start = self.calls + 1
         with ExitStack() as sessions:
             owner = sessions.enter_context(self.session("scope_annotation_span", case, output_capacity))
-            children = {name: sessions.enter_context(self.session(name, case, 64))
-                        for name in ("serde_json_span", "serde_error_span", "text_result_constructor")}
+            children = None
             for _ in range(32):
                 code = self.invoke(owner, "scope_annotation_span", request, case)
                 head = ctypes.string_at(owner._output, min(64, owner.output_capacity))
@@ -219,6 +223,18 @@ class Capture:
                     self.resize(owner, WORD(head, 8), WORD(head, 16), case)
                     continue
                 if code == CALL:
+                    if children is None:
+                        action = ctypes.string_at(ctypes.addressof(owner._workspace) + 256, 96)
+                        assert action[:8] == b"HSCAA002" and WORD(action, 16) == 1
+                        capacity = WORD(action, 56)
+                        assert 64 <= capacity <= self.modules["serde_json_span"].metadata["output_capacity"]
+                        admission = dict(policy="actual-owner-reply-capacity",
+                                         issued_call=self.calls, capacity=capacity)
+                        children = {}
+                        for name in ("serde_json_span", "serde_error_span", "text_result_constructor"):
+                            children[name] = sessions.enter_context(self.session(name, case,
+                                capacity if name == "serde_json_span" else 64,
+                                admission=admission if name == "serde_json_span" else None))
                     self.complete_child(owner, children, case)
                     continue
                 assert code == 64 and head[:8] == b"HSCAR002", (case, code, head.hex())

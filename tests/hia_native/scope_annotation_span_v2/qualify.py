@@ -90,6 +90,10 @@ def native_evidence(folder, build, source_sha):
     require(buffers.physical_bytes == report["physical_buffer_bytes"] and len(buffers.rows) == report["unique_buffer_chunks"], "complete physical capture size differs")
     indices = jsonlines(folder/"cases.jsonl")
     require(len(indices) == report["cases"], "case ledger domain differs")
+    case_sessions = {}
+    for session in sessions.values():
+        case_sessions.setdefault(session["case"],[]).append(session)
+    require(set(case_sessions) == {row["label"] for row in indices}, "session case domain differs")
     actual_rows, recovery_bytes, next_call = {}, {}, 1
     with PacketStream(folder/"inputs.bin.gz") as inputs, PacketStream(folder/"observed.bin.gz") as outputs:
         for expected,row in zip(cases(),indices,strict=True):
@@ -101,6 +105,23 @@ def native_evidence(folder, build, source_sha):
             require(row["first_call"] == next_call and row["last_call"] >= next_call, "actual case calls overlap or skip")
             selected = calls[row["first_call"]-1:row["last_call"]]
             require(selected and all(c["case"] == row["label"] for c in selected), "actual calls cross case boundary")
+            owned = case_sessions[row["label"]]
+            require(len(owned) == 4 and {s["owner"] for s in owned} ==
+                    {"scope_annotation_span","serde_json_span","serde_error_span","text_result_constructor"},
+                    "case does not own exactly the four declared HIA sessions")
+            by_owner = {s["owner"]:s for s in owned}
+            require(all(c["session"] in {s["session"] for s in owned} for c in selected),
+                    "actual case borrowed another case's session")
+            require(all(s["workspace_capacity"] == 0 for s in owned)
+                    and by_owner["scope_annotation_span"]["output_capacity"] == 65600
+                    and by_owner["scope_annotation_span"]["admission"] is None
+                    and all(by_owner[name]["output_capacity"] == 64 and by_owner[name]["admission"] is None
+                            for name in ("serde_error_span","text_result_constructor")),
+                    "initial semantic session capacities differ")
+            admission = by_owner["serde_json_span"]["admission"]
+            require(type(admission) is dict and row["first_call"] <= admission["issued_call"] <= row["last_call"]
+                    and calls[admission["issued_call"]-1]["session"] == by_owner["scope_annotation_span"]["session"],
+                    "Value initial output is not bound to this actual owner")
             require(selected[0]["owner"] == selected[-1]["owner"] == "scope_annotation_span", "case starts or ends outside actual owner")
             require(all(read(folder/c["folder"]/"input.bin") == request for c in selected if c["owner"] == "scope_annotation_span"), "continued owner input changed")
             require(retained_observation(buffers,selected[-1]) == raw, "observation not copied from actual complete HIA buffers")

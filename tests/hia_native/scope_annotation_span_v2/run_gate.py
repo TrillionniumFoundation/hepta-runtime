@@ -29,7 +29,7 @@ def original(target,output,rust_bin):
     (fetch/"Cargo.lock").write_bytes(lock)
     env,binding=environment(os.environ,rust_bin,output/"fetch-target-unused")
     rec=Recorder(ROOT,output/"fetch-processes",env)
-    rec.run("fetch-exact-original-dependencies",[rust_bin/"cargo","fetch","--target","x86_64-unknown-linux-gnu"],cwd=fetch,timeout=180)
+    rec.run("fetch-exact-original-dependencies",[rust_bin/"cargo","fetch"],cwd=fetch,timeout=180)
     known={(p["name"],p["version"],p.get("source")):p.get("checksum") for p in tomllib.loads(lock.decode())["package"] if p.get("source")}
     for row in tomllib.loads((fetch/"Cargo.lock").read_text())["package"]:
         if row.get("source"):

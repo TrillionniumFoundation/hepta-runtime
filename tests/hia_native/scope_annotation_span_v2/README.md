@@ -29,8 +29,8 @@ remain refusals. Constructor workspace and output growth are actual child
 events. Acknowledging growth or capacity as a completed constructor result is
 rejected.
 
-The native reader preserves all 25 prior admission controls and adds four
-physical rehash controls. The original reader preserves all 12 prior controls.
+The native reader preserves all 25 prior admission controls, the four physical
+rehash controls, and adds two allocation-admission refusals. The original reader preserves all 12 prior controls.
 Each runs two complete physical relocations. Native relocation readers also
 exercise twelve write, metadata, process, mapping, foreign-path and descriptor
 refusals. Readers are preloaded before activating their guard.
@@ -73,3 +73,26 @@ integration, all configured catalogs, full SDK concurrency, and removal of the
 legacy runtime are separate gates. Neither a source package nor a development
 capture establishes those gates. `export.py` archives complete successful or
 failed evidence and reads every archive member back without semantic replay.
+
+## Allocation revision
+
+The Value child's workspace allocation doubles the actual HIA-requested minimum,
+bounded by the existing module profile. Every growth still records that minimum,
+the complete old and new buffers, and the actual addresses. The reader checks
+the exact policy, preserved prefix, and zero extension. Other owners and output
+growth continue to allocate the exact requested minimum.
+
+For semantic cases, the first actual owner action supplies the Value child's
+initial output capacity. The reader binds it to that case's HIA action and four
+owned sessions. Private controls retain their small outputs and actual growth.
+The reused Value source changes only three byte-access helpers; the remaining
+77 functions are byte identical. Provenance indices retain the earlier symbolic
+and paired evidence. They do not qualify this component in place of its full
+domain. The original copied-input inventory remains historical provenance;
+SOURCE_MANIFEST.json binds the current source bytes.
+
+REVISION.json records the two prior failures and unchanged budgets. The first
+CI failed before Rust compilation because a target-filtered dependency fetch
+omitted an Android package needed by offline metadata. Fetch now covers every
+platform in the unchanged target lock. The native development attempt timed out
+during repeated minimum-sized Value workspace growth. Neither failure is a pass.
