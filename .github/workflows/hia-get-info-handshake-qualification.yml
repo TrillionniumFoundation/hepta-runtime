@@ -1,0 +1,137 @@
+name: Current get_info actual SDK handshake reference
+
+on:
+  push:
+    branches:
+      - 'hia-get-info-handshake-qualification-6780-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  original-handshake:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      HANDSHAKE_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/get_info_handshake_reference
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' \
+            "HANDSHAKE_OUTPUT=$RUNNER_TEMP/get-info-handshake-output" \
+            "HANDSHAKE_ARCHIVE=$RUNNER_TEMP/get-info-handshake-evidence" \
+            >> "$GITHUB_ENV"
+
+      - name: Checkout the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout the unchanged exact target source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /Cargo.lock
+            /src/mcp/server.rs
+          persist-credentials: false
+
+      - name: Verify source closure and target identity
+        run: |
+          test "$(git -C original-target rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          test "$(git -C original-target rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
+          cmp original-target/Cargo.lock "$HANDSHAKE_SOURCE/target/Cargo.lock"
+          cmp original-target/Cargo.toml "$HANDSHAKE_SOURCE/target/Cargo.toml"
+          cmp original-target/src/mcp/server.rs "$HANDSHAKE_SOURCE/original/target-server.rs"
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import json,os,sys
+          source=Path(os.environ['HANDSHAKE_SOURCE'])
+          sys.path.insert(0,str(source/'scripts'))
+          from verify_reference import check_source
+          print(json.dumps(check_source(source),sort_keys=True))
+          PY
+
+      - name: Install the exact Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          printf 'HANDSHAKE_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+
+      - name: Build the current reference and capture all 54 sessions
+        run: |
+          python3 -I -B "$HANDSHAKE_SOURCE/scripts/run_reference.py" \
+            --source "$HANDSHAKE_SOURCE" --rust-bin "$HANDSHAKE_RUST_BIN" --output "$HANDSHAKE_OUTPUT"
+
+      - name: Independently read all original responses and peer state
+        run: |
+          python3 -I -B "$HANDSHAKE_SOURCE/scripts/verify_reference.py" \
+            --source "$HANDSHAKE_SOURCE" --run "$HANDSHAKE_OUTPUT" --require-pass
+
+      - name: Preserve complete source and successful or failed evidence
+        if: always()
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,io,json,os,tarfile
+          source=Path(os.environ['HANDSHAKE_SOURCE'])
+          run=Path(os.environ['HANDSHAKE_OUTPUT'])
+          prefix=Path(os.environ['HANDSHAKE_ARCHIVE'])
+          archive=Path(str(prefix)+'.tar.gz')
+          files={};inputs=[]
+          def pin(raw):return dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+          for base,name in [(source,'recipe-source'),(run,'run')]:
+              if not base.exists():continue
+              for path in sorted(base.rglob('*')):
+                  if base==run and path.is_relative_to(run/'rust-build'):continue
+                  assert not path.is_symlink()
+                  if not path.is_file():continue
+                  member=name+'/'+path.relative_to(base).as_posix()
+                  files[member]=pin(path.read_bytes());inputs.append((member,path))
+          workflow=Path(os.environ['GITHUB_WORKSPACE'])/'runtime/.github/workflows/hia-get-info-handshake-qualification.yml'
+          if workflow.exists():
+              files['qualification-workflow.yml']=pin(workflow.read_bytes())
+              inputs.append(('qualification-workflow.yml',workflow))
+          summary=json.loads((run/'SUMMARY.json').read_bytes()) if (run/'SUMMARY.json').exists() else {}
+          status='REFERENCE_CAPTURE_PASS' if summary.get('status')=='PASS' else 'NOT_QUALIFIED'
+          manifest=dict(schema='hepta.current-get-info.handshake-artifact.v1',files=files,
+              status=status,complete_source_and_captures=True,
+              excluded_rebuildable_only=['run/rust-build'],native_graph_executed=False,
+              full_sdk_qualified=False,full_public_protocol_qualified=False,
+              production_activated=False,old_path_removed=False)
+          manifest_raw=(json.dumps(manifest,sort_keys=True,indent=2)+'\n').encode()
+          with tarfile.open(archive,'w:gz') as tar:
+              for member,path in inputs:tar.add(path,arcname=member,recursive=False)
+              info=tarfile.TarInfo('artifact-manifest.json');info.size=len(manifest_raw);info.mode=0o444
+              tar.addfile(info,io.BytesIO(manifest_raw))
+          expected=dict(files);expected['artifact-manifest.json']=pin(manifest_raw)
+          seen={}
+          with tarfile.open(archive,'r:gz') as tar:
+              for member in tar:
+                  assert member.isfile() and member.name not in seen
+                  seen[member.name]=pin(tar.extractfile(member).read())
+          assert seen==expected
+          record=dict(schema='hepta.current-get-info.handshake-archive.v1',archive=archive.name,
+              **pin(archive.read_bytes()),files=len(seen),uncompressed_bytes=sum(x['bytes'] for x in seen.values()),
+              complete_archive_reread=True,status=status)
+          Path(str(prefix)+'.archive.json').write_text(json.dumps(record,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(record,sort_keys=True))
+          PY
+
+      - name: Upload original reference evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: get-info-handshake-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/get-info-handshake-evidence.tar.gz
+            ${{ runner.temp }}/get-info-handshake-evidence.archive.json
+          if-no-files-found: error
+          retention-days: 14
