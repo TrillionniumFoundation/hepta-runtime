@@ -1,0 +1,26 @@
+{
+  "schema": "hepta.runtime-darwin-source-ledger-ci-failure.v1",
+  "repository": "TrillionniumFoundation/hepta-runtime",
+  "source_commit": "5f7f03a1f22905789371ce0e181a1a0f013beca9",
+  "workflow_run": 43795217971,
+  "job": 133062385558,
+  "workflow_url": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43795217971",
+  "job_result": "failure",
+  "preceding_results": {
+    "rust_tests_passed": 2633,
+    "rust_tests_skipped": 44,
+    "file_capability_tests_passed": 9,
+    "ledger_tests_passed": 29
+  },
+  "failing_command": "/usr/bin/python3 -B scripts/rea_compatibility_ledger.py check-mapping",
+  "exit_code": 2,
+  "observed_error": "stored ledger differs from current repository mapping/source projection",
+  "diagnosis": "The Darwin portability repair changes rea_evidence_file.rs by removing one Linux-only cfg line, so the checked-in derived source projection must be regenerated. The original gate correctly detected this drift.",
+  "fix_policy": "Regenerate the derived ledger with the existing projection logic; inspect the exact delta and preserve qualification states. Do not disable the check, handwrite a PASS, mutate the frozen actual candidate, or transfer qualification from another source.",
+  "raw_log": {
+    "path": "CI_RUN_43795217971_EXACT_HEAD.log",
+    "git_blob_sha": "110303315ae886ba3411877de9da77a563458c54"
+  },
+  "actual_runtime_candidate_unchanged": "2a8e8759c7e1941f184fde2463a13a9d39dfa9edcf00c8a5ae475ad81dd3b469",
+  "actual_candidate_runtime_commit_remains": "5f7f03a1f22905789371ce0e181a1a0f013beca9"
+}
