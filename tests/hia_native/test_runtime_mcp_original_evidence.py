@@ -42,6 +42,8 @@ class OriginalEvidence(unittest.TestCase):
   for oracle in ('view_call_oracle','workdir_oracle'):
    source=module(oracle+'_source',ROOT/'tests/hia_native'/oracle/'verify_sources.py')
    source_names.update(source.SOURCE_FILES)
+   if oracle=='workdir_oracle':
+    source_names.update(source.target_source_pins())
    for path in (ROOT/'tests/hia_native'/oracle).rglob('*'):
     if path.is_file() and '__pycache__' not in path.parts:source_names.add(str(path.relative_to(ROOT)))
   for name in source_names:

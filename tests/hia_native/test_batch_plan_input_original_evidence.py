@@ -31,6 +31,17 @@ def clone(source,output,target,proof,links=False):
             if links and base==output:os.link(original,copied)
             else:shutil.copyfile(original,copied)
     return new_source,new_output
+def portable_venv(environment):
+    # Retain the actual independent interpreter as ordinary evidence files.
+    # venv creates lib64 as an alias even when executable copies are requested.
+    venv.EnvBuilder(with_pip=False,symlinks=False).create(environment)
+    alias=environment/'lib64'
+    if alias.is_symlink():
+        q.same(os.readlink(alias),'lib','standard independent interpreter library alias')
+        alias.unlink();shutil.copytree(environment/'lib',alias)
+    for path in environment.rglob('*'):
+        q.need(not path.is_symlink() and (path.is_file() or path.is_dir()),
+               'independent interpreter evidence must contain ordinary files and directories')
 def repin_native(output):
     original=q.json_value((output/'original/result.json').read_bytes())
     original['native_artifacts_before_and_after']={name:q.pin(output/'native'/name) for name in original['native_artifacts_before_and_after']}
@@ -121,7 +132,7 @@ def main():
             save(CAPTURE/'refusals.json',events)
         else:raise AssertionError('altered full evidence admitted: '+name)
     moved=[clone(ROOT,OUTPUT,CAPTURE/name,baseline)for name in ('relocated-one','relocated-two')]
-    environment=CAPTURE/'independent-python';venv.EnvBuilder(with_pip=False,symlinks=True).create(environment)
+    environment=CAPTURE/'independent-python';portable_venv(environment)
     interpreters=[Path(sys.executable),environment/'bin/python']
     native=q.json_value((OUTPUT/'native/result.json').read_bytes())
     blocked=list(dict.fromkeys([str(ROOT),str(OUTPUT),native['execution_source_root'],native['execution_output_root']]))
