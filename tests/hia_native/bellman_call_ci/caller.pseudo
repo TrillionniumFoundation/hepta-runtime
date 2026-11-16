@@ -1,0 +1,462 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if valid_input(s) == False:
+        return INVALID
+    if length(o) < 32:
+        return CAPACITY
+    if length(w) < 4096:
+        return request_grow(o, w, 1, 4096)
+    if get(w, 0) != 0 and get(w, 0) != STATE_MAGIC:
+        return INVALID
+    if get(w, 0) == 0:
+        if load(s, 8) != 1:
+            return INVALID
+        if length(o) < 64:
+            return request_grow(o, w, 2, 64)
+        fill_range(w, 0, 1024, 0)
+        put(w, 0, STATE_MAGIC)
+        put(w, 384, 4096)
+    phase = get(w, PHASE)
+    if phase == 0:
+        if load(s, 8) != 1 or load(s, 16) <= get(w, 88):
+            return INVALID
+        if length(o) < 64:
+            return request_grow(o, w, 2, 64)
+        put(w, 24, load(s, 16))
+        put(w, 32, 0)
+        put(w, 40, 1)
+        put(w, 88, load(s, 16))
+        put(w, 96, 0)
+        put(w, 104, 0)
+        put(w, 128, 0)
+        put(w, 144, length(s))
+        put(w, INPUT_LENGTH, length(s))
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, WORK_LENGTH, length(w))
+        put(w, PHASE, 100)
+        return prepare_start(s, o, w)
+    if phase == 10:
+        if load(s, 8) == 1 or load(s, 16) != get(w, 24):
+            return INVALID
+        if length(w) < get(w, 384):
+            return INVALID
+        if length(o) < 64:
+            return request_grow(o, w, 2, 64)
+        put(w, 40, load(s, 8))
+        put(w, INPUT_LENGTH, length(s))
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, WORK_LENGTH, length(w))
+        put(w, PHASE, 103)
+        if load(s, 8) == 3:
+            put(w, PHASE, 105)
+        return prepare_control(o, w)
+    if load(s, 8) != get(w, 40) or load(s, 16) != get(w, 24) or length(s) != get(w, INPUT_LENGTH):
+        return INVALID
+    if load(s, 8) == 1 and get(w, 128) == 1:
+        if same_input(s, w) == False:
+            return INVALID
+    if admit_growth(o, w) == False:
+        return INVALID
+    if phase == 100:
+        return prepare_start(s, o, w)
+    if phase == 101:
+        return prepare_diagnostic(o, w)
+    if phase == 102:
+        return prepare_submit(o, w)
+    if phase == 103 or phase == 104 or phase == 105:
+        return prepare_control(o, w)
+    if phase == 110:
+        return finish(o, w)
+    if phase < 1 or phase > 6:
+        return INVALID
+    if complete_child(w) == False:
+        return INVALID
+    code = get(w, ACTION + 72)
+    if code == DELIVERY:
+        return delivery_again(o, w)
+    if code >= FIRST_ERROR:
+        return code
+    size = get(w, ACTION + 96)
+    if code != size or size > region_capacity(w, 1):
+        return INVALID
+    if phase == 1:
+        return after_params(o, w, size)
+    if phase == 2:
+        return after_diagnostic(o, w, size)
+    return after_worker(o, w, size, phase)
+
+def valid_input(s:readbuf) -> bool:
+    if length(s) < 64 or load(s, 0) != REQUEST_MAGIC:
+        return False
+    if load(s, 8) < 1 or load(s, 8) > 3 or load(s, 16) == 0:
+        return False
+    if load(s, 24) != length(s) - 64:
+        return False
+    if load(s, 32) != 0 or load(s, 40) != 0 or load(s, 48) != 0 or load(s, 56) != 0:
+        return False
+    if load(s, 8) == 1:
+        return load(s, 24) != 0
+    return length(s) == 64
+
+def same_input(s:readbuf, w:mutbuf) -> bool:
+    start = region(w, 2)
+    size = get(w, 144)
+    if size != length(s):
+        return False
+    at = 0
+    while size - at >= 8:
+        if load(s, at) != get(w, start + at):
+            return False
+        at = at + 8
+    while at < size:
+        if byte(s, at) != byte(w, start + at):
+            return False
+        at = at + 1
+    return True
+
+def prepare_start(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    size = length(s)
+    if get(w, 128) == 0:
+        if reserve(w, 2, size) == 0:
+            return pending_grow(o, w)
+        copy_range(w, s, region(w, 2), 0, size)
+        put(w, 128, 1)
+    if reserve(w, 0, size) == 0 or reserve(w, 1, 128) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    params_header(w, at, size - 64)
+    copy_within(w, at + 64, region(w, 2) + 64, size - 64)
+    return child(w, 0, size, 1)
+
+def params_header(w:mutbuf, at:u64, size:u64) -> u64:
+    fill_range(w, at, 64, 0)
+    put(w, at, PARAMS_REQUEST)
+    put(w, at + 8, 1)
+    put(w, at + 16, size)
+    return 0
+
+def after_params(o:mutbuf, w:mutbuf, size:u64) -> u32:
+    at = region(w, 1)
+    if size < 128 or get(w, at) != PARAMS_RESULT or get(w, at + 8) > 1:
+        return INVALID
+    if get(w, at + 24) != 0 or get(w, at + 104) != 0 or get(w, at + 112) != 0 or get(w, at + 120) != 0:
+        return INVALID
+    if get(w, at + 8) == 1:
+        if size != 128 or get(w, at + 16) != 0 or get(w, at + 32) != 0:
+            return INVALID
+        if reserve(w, 3, 128) == 0:
+            return pending_grow(o, w)
+        copy_within(w, region(w, 3), at, 128)
+        put(w, PHASE, 101)
+        return prepare_diagnostic(o, w)
+    if get(w, at + 16) != size - 128 or size < 144:
+        return INVALID
+    if get(w, at + 128) != GRAPH_MAGIC or get(w, at + 136) != get(w, at + 32):
+        return INVALID
+    count = get(w, at + 32)
+    if count == 0 or count > 4096:
+        if size != 144:
+            return INVALID
+    elif size != 144 + count * 720:
+        return INVALID
+    pos = 40
+    while pos < 104:
+        if get(w, at + pos) != 0:
+            return INVALID
+        pos = pos + 8
+    if reserve(w, 3, size - 128) == 0:
+        return pending_grow(o, w)
+    copy_within(w, region(w, 3), at + 128, size - 128)
+    put(w, 152, size - 128)
+    put(w, PHASE, 102)
+    return prepare_submit(o, w)
+
+def prepare_diagnostic(o:mutbuf, w:mutbuf) -> u32:
+    size = get(w, 144)
+    if size > MAXIMUM - 128:
+        return RESOURCE
+    if reserve(w, 0, size + 128) == 0 or reserve(w, 1, 64) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    copy_within(w, at, region(w, 3), 128)
+    params_header(w, at + 128, size - 64)
+    copy_within(w, at + 192, region(w, 2) + 64, size - 64)
+    return child(w, 1, size + 128, 2)
+
+def after_diagnostic(o:mutbuf, w:mutbuf, size:u64) -> u32:
+    at = region(w, 1)
+    if size < 64 or get(w, at) != DIAGNOSTIC_RESULT or get(w, at + 8) != 0:
+        return INVALID
+    if get(w, at + 16) != size - 64 or get(w, at + 24) != 0:
+        return INVALID
+    if get(w, at + 32) != 0 or get(w, at + 40) != 0 or get(w, at + 48) != 0 or get(w, at + 56) != 0:
+        return INVALID
+    prefix = literal_size(1)
+    if size - 64 > MAXIMUM - prefix:
+        return RESOURCE
+    if reserve(w, 4, prefix + size - 64) == 0:
+        return pending_grow(o, w)
+    literal(w, region(w, 4), 1)
+    copy_within(w, region(w, 4) + prefix, at + 64, size - 64)
+    put(w, 96, 1)
+    put(w, 104, prefix + size - 64)
+    put(w, PHASE, 110)
+    return finish(o, w)
+
+def prepare_submit(o:mutbuf, w:mutbuf) -> u32:
+    size = get(w, 152)
+    if size > MAXIMUM - 64:
+        return RESOURCE
+    if reserve(w, 0, size + 64) == 0 or reserve(w, 1, 192) == 0:
+        return pending_grow(o, w)
+    worker_header(w, region(w, 0), 1, 0, size)
+    copy_within(w, region(w, 0) + 64, region(w, 3), size)
+    return child(w, 2, size + 64, 3)
+
+def prepare_control(o:mutbuf, w:mutbuf) -> u32:
+    if reserve(w, 0, 64) == 0 or reserve(w, 1, 192) == 0:
+        return pending_grow(o, w)
+    command = 2
+    phase = 4
+    if get(w, PHASE) == 104:
+        command = 4
+        phase = 5
+    elif get(w, PHASE) == 105:
+        command = 3
+        phase = 6
+    elif get(w, PHASE) != 103:
+        return INVALID
+    worker_header(w, region(w, 0), command, get(w, 32), 0)
+    return child(w, 2, 64, phase)
+
+def worker_header(w:mutbuf, at:u64, command:u64, job:u64, size:u64) -> u64:
+    fill_range(w, at, 64, 0)
+    put(w, at, WORKER_REQUEST)
+    put(w, at + 8, command)
+    put(w, at + 16, get(w, 24))
+    put(w, at + 24, job)
+    put(w, at + 40, size)
+    return 0
+
+def after_worker(o:mutbuf, w:mutbuf, size:u64, phase:u64) -> u32:
+    at = region(w, 1)
+    if size < 192 or get(w, at) != WORKER_RESULT or get(w, at + 8) != size:
+        return INVALID
+    if get(w, at + 16) != 1 or get(w, at + 24) != get(w, 24) or get(w, at + 56) != 0:
+        return INVALID
+    if get(w, at + 48) != size - 192 or get(w, at + 40) > 4294967295:
+        return INVALID
+    if pool_header(w, at + 64) == False:
+        return INVALID
+    if phase == 3:
+        if size != 192 or get(w, at + 40) != 128:
+            return INVALID
+        return after_submit(o, w, at)
+    if get(w, at + 32) != get(w, 32) or get(w, at + 96) != get(w, 32):
+        return INVALID
+    if phase == 5:
+        return after_take(o, w, at, size)
+    if size != 192 or get(w, at + 40) != 128:
+        return INVALID
+    if phase == 4:
+        return after_poll(o, w, at)
+    if phase == 6:
+        return after_cancel(o, w, at)
+    return INVALID
+
+def pool_header(w:mutbuf, at:u64) -> bool:
+    if get(w, at) != POOL_RESULT or get(w, at + 8) != 128:
+        return False
+    if get(w, at + 16) > 5 or get(w, at + 16) == 4:
+        return False
+    if get(w, at + 40) > 4 or get(w, at + 48) > 2 or get(w, at + 56) > 1:
+        return False
+    if get(w, at + 80) > 4294967295 or get(w, at + 96) > 2:
+        return False
+    flags = get(w, at + 88)
+    if flags != 0 and flags != 1 and flags != 256 and flags != 257 and flags != 512 and flags != 513:
+        return False
+    return True
+
+def after_submit(o:mutbuf, w:mutbuf, at:u64) -> u32:
+    pool = at + 64
+    status = get(w, pool + 16)
+    if status == 1:
+        if get(w, at + 32) != 0 or get(w, pool + 24) != 1 or get(w, pool + 32) != 0:
+            return INVALID
+        if get(w, pool + 40) != 0 or get(w, pool + 48) != 0 or get(w, pool + 56) != 0 or get(w, pool + 96) != 2:
+            return INVALID
+        return final_literal(o, w, 2)
+    if status == 5:
+        put(w, PHASE, 0)
+        return RESOURCE
+    if status != 0 or get(w, at + 32) == 0 or get(w, at + 32) != get(w, pool + 32):
+        return INVALID
+    if get(w, pool + 24) != 2 or get(w, pool + 40) != 2 or get(w, pool + 48) != 0 or get(w, pool + 56) != 1:
+        return INVALID
+    if get(w, pool + 64) != 0 or get(w, pool + 72) != 0 or get(w, pool + 80) != 0 or get(w, pool + 88) != 0:
+        return INVALID
+    put(w, 32, get(w, at + 32))
+    put(w, PHASE, 10)
+    return publish(o, w, 3, 0)
+
+def after_poll(o:mutbuf, w:mutbuf, at:u64) -> u32:
+    pool = at + 64
+    if get(w, pool + 24) != 4 or get(w, pool + 48) != 0:
+        return INVALID
+    status = get(w, pool + 16)
+    if status == 3:
+        if get(w, pool + 40) < 2 or get(w, pool + 40) > 3 or get(w, pool + 56) != 1:
+            return INVALID
+        put(w, PHASE, 10)
+        return publish(o, w, 3, 0)
+    if status == 5:
+        return RESOURCE
+    if status != 0 or get(w, pool + 40) != 4 or get(w, pool + 56) != 0 or get(w, pool + 88) > 1:
+        return INVALID
+    put(w, 160, get(w, pool + 80))
+    put(w, PHASE, 104)
+    return prepare_control(o, w)
+
+def after_cancel(o:mutbuf, w:mutbuf, at:u64) -> u32:
+    pool = at + 64
+    if get(w, pool + 16) != 0 or get(w, pool + 24) != 6 or get(w, pool + 48) != 1:
+        return INVALID
+    phase = get(w, pool + 40)
+    if phase < 2 or phase > 4:
+        return INVALID
+    if phase == 4:
+        if get(w, pool + 56) != 0:
+            return INVALID
+    elif get(w, pool + 56) != 1:
+        return INVALID
+    put(w, 96, 4)
+    put(w, 104, 0)
+    put(w, PHASE, 110)
+    return finish(o, w)
+
+def after_take(o:mutbuf, w:mutbuf, at:u64, size:u64) -> u32:
+    pool = at + 64
+    if get(w, pool + 16) != 0 or get(w, pool + 24) != 7 or get(w, pool + 40) != 4:
+        return INVALID
+    if get(w, pool + 48) != 2 or get(w, pool + 56) != 0 or get(w, pool + 88) > 1:
+        return INVALID
+    code = get(w, at + 40)
+    if code != get(w, 160) or code != get(w, pool + 80):
+        return INVALID
+    if body_valid(w, at + 192, size - 192, code) == False:
+        return INVALID
+    if code != 0:
+        index = error_literal(code)
+        if index == 0:
+            return RESOURCE
+        return final_literal(o, w, index)
+    body = at + 192
+    render = body + 96 + get(w, body + 16) + get(w, body + 24)
+    amount = get(w, body + 32)
+    if amount < 64 or get(w, render) != RENDER_RESULT or get(w, render + 8) != 0:
+        return INVALID
+    if get(w, render + 16) != amount - 64 or get(w, render + 24) != 0:
+        return INVALID
+    if get(w, render + 32) != 0 or get(w, render + 40) != 0 or get(w, render + 48) != 0 or get(w, render + 56) != 0:
+        return INVALID
+    if reserve(w, 4, amount - 64) == 0:
+        return pending_grow(o, w)
+    copy_within(w, region(w, 4), render + 64, amount - 64)
+    put(w, 96, 0)
+    put(w, 104, amount - 64)
+    put(w, PHASE, 110)
+    return finish(o, w)
+
+def body_valid(w:mutbuf, at:u64, size:u64, code:u64) -> bool:
+    if size < 96 or get(w, at) != BODY_RESULT or get(w, at + 8) != size:
+        return False
+    core = get(w, at + 16)
+    commit = get(w, at + 24)
+    render = get(w, at + 32)
+    if core > size - 96 or commit > size - 96 - core or render != size - 96 - core - commit:
+        return False
+    if get(w, at + 72) != code or get(w, at + 80) != 0:
+        return False
+    if get(w, at + 48) < get(w, at + 40):
+        return False
+    sample = get(w, at + 88)
+    if sample != 0:
+        if sample < get(w, at + 40) or sample > get(w, at + 48):
+            return False
+    elif code == 0 or get(w, at + 56) != 0:
+        return False
+    if code == 0:
+        if core < 128 or commit < 128 or render < 64:
+            return False
+        if get(w, at + 96) != CORE_RESULT or get(w, at + 96 + core) != COMMIT_RESULT:
+            return False
+    elif render != 0:
+        return False
+    return True
+
+def final_literal(o:mutbuf, w:mutbuf, index:u64) -> u32:
+    size = literal_size(index)
+    if size == 0:
+        return INVALID
+    if reserve(w, 4, size) == 0:
+        return pending_grow(o, w)
+    literal(w, region(w, 4), index)
+    put(w, 96, 2)
+    put(w, 104, size)
+    put(w, PHASE, 110)
+    return finish(o, w)
+
+def finish(o:mutbuf, w:mutbuf) -> u32:
+    size = get(w, 104)
+    if size > MAXIMUM - 64:
+        return RESOURCE
+    if length(o) < size + 64:
+        return request_grow(o, w, 2, size + 64)
+    status = get(w, 96)
+    if status > 2 and status != 4:
+        return INVALID
+    if size != 0:
+        copy_range(o, w, 64, region(w, 4), size)
+    put(w, PHASE, 0)
+    return publish(o, w, status, size)
+
+def publish(o:mutbuf, w:mutbuf, status:u64, size:u64) -> u32:
+    fill_range(o, 0, 64, 0)
+    put(o, 0, RESULT_MAGIC)
+    put(o, 8, status)
+    put(o, 16, get(w, 24))
+    put(o, 24, get(w, 32))
+    put(o, 32, size)
+    return 64
+
+def child(w:mutbuf, target:u64, size:u64, phase:u64) -> u32:
+    seq = get(w, SEQUENCE)
+    if seq == MAXIMUM:
+        return RESOURCE
+    seq = seq + 1
+    put(w, SEQUENCE, seq)
+    put(w, PHASE, phase)
+    put(w, 48, target)
+    put(w, 56, size)
+    fill_range(w, ACTION, 112, 0)
+    put(w, ACTION, ACTION_MAGIC)
+    put(w, ACTION + 8, seq)
+    put(w, ACTION + 16, target)
+    put(w, ACTION + 32, region(w, 0))
+    put(w, ACTION + 40, size)
+    put(w, ACTION + 48, region(w, 1))
+    put(w, ACTION + 56, region_capacity(w, 1))
+    return CALL
+
+def complete_child(w:mutbuf) -> bool:
+    if get(w, ACTION) != ACTION_MAGIC or get(w, ACTION + 8) != get(w, SEQUENCE) or get(w, ACTION + 64) != get(w, SEQUENCE):
+        return False
+    if get(w, ACTION + 16) != get(w, 48) or get(w, ACTION + 24) > 1:
+        return False
+    if get(w, ACTION + 32) != region(w, 0) or get(w, ACTION + 40) != get(w, 56):
+        return False
+    if get(w, ACTION + 48) != region(w, 1) or get(w, ACTION + 56) != region_capacity(w, 1):
+        return False
+    if get(w, ACTION + 80) != 0 or get(w, ACTION + 88) != 0 or get(w, ACTION + 104) != 0:
+        return False
+    return True

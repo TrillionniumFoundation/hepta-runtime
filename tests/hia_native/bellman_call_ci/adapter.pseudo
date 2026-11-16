@@ -1,0 +1,27 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    code = wide(qualified(s, o, w))
+    if code == CAPACITY and length(o) >= 32 and length(o) < MINIMUM:
+        return grow(o, 2, MINIMUM)
+    if code != MINIMUM:
+        return code
+    if get(o, 0) != RESPONSE:
+        return INVALID
+    status = get(o, 8)
+    if status == 2:
+        required = get(o, 24)
+        if required <= length(w):
+            return INVALID
+        return grow(o, 1, required)
+    if status == 3:
+        required = get(o, 24)
+        if required <= length(o):
+            return INVALID
+        return grow(o, 2, required)
+    return code
+
+def grow(o:mutbuf, kind:u64, required:u64) -> u32:
+    put(o, 0, GROW_MAGIC)
+    put(o, 8, kind)
+    put(o, 16, required)
+    put(o, 24, 0)
+    return GROW
