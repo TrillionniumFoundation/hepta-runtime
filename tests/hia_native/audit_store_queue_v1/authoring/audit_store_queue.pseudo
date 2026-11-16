@@ -1,0 +1,369 @@
+def audit_store_queue(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if valid_frame(s)==0:
+        return INVALID
+    if length(o)<128:
+        return CAPACITY
+    operation=read64(s,8)
+    if operation==0:
+        return initialize(o,w)
+    if valid_state(w)==0:
+        return STATE_ERROR
+    if operation==1:
+        return enqueue(s,o,w)
+    if operation==7:
+        return publish_poison(s,o,w)
+    if operation==8:
+        return response(o,w,8,0,0,0,0,0)
+    if operation==9:
+        return shutdown(o,w)
+    at=find_ticket(w,read64(s,16))
+    if at==0 or get(w,at+48)!=read64(s,96):
+        return STATE_ERROR
+    phase=get(w,at+16)
+    access=get(w,at+8)
+    if operation==2:
+        if phase!=1:
+            return STATE_ERROR
+        return poll(s,o,w,at)
+    if operation==3:
+        if phase!=2:
+            return STATE_ERROR
+        return post_admission(s,o,w,at)
+    if operation==4:
+        if access!=0 or phase!=3:
+            return STATE_ERROR
+        return inner_result(s,o,w,at)
+    if operation==5:
+        if access!=1 or phase!=4:
+            return STATE_ERROR
+        return finish_shared(s,o,w,at)
+    if phase<2:
+        return STATE_ERROR
+    ticket=get(w,at)
+    effect=drop_guard(w,at,read64(s,88))
+    return response(o,w,6,0,ticket,0,1,effect)
+
+def valid_frame(s:readbuf) -> u64:
+    if length(s)!=128 or read64(s,0)!=REQUEST:
+        return 0
+    operation=read64(s,8)
+    if operation>9 or read64(s,104)!=0 or read64(s,112)!=0 or read64(s,120)!=0:
+        return 0
+    if operation==0 or operation==8 or operation==9:
+        return zero_input(s,16,104)
+    if operation==7:
+        if read64(s,88)<1 or read64(s,88)>2:
+            return 0
+        return choose(zero_input(s,16,88)!=0 and read64(s,96)==0,1,0)
+    if read64(s,96)==0:
+        return 0
+    if operation==1:
+        if read64(s,16)!=0 or read64(s,24)>1 or read64(s,32)>1 or read64(s,88)!=0:
+            return 0
+        if read64(s,24)==1 and read64(s,32)!=1:
+            return 0
+        if read64(s,32)==0 and (read64(s,40)!=0 or read64(s,48)!=0):
+            return 0
+        return time_at_least(read64(s,72),read64(s,80),read64(s,56),read64(s,64))
+    if zero_input(s,24,56)==0 or read64(s,72)!=0 or read64(s,80)!=0:
+        return 0
+    observation=read64(s,88)
+    if operation==2:
+        return choose(observation<=1,1,0)
+    if operation==4:
+        if observation>2:
+            return 0
+        if observation!=0 and (read64(s,56)!=0 or read64(s,64)!=0):
+            return 0
+        return 1
+    if operation==6:
+        return choose(observation<=1 and read64(s,56)==0 and read64(s,64)==0,1,0)
+    return choose(observation==0,1,0)
+
+def initialize(o:mutbuf,w:mutbuf) -> u32:
+    if length(w)<128:
+        return grow(o,128)
+    at=0
+    while at<128:
+        if byte(w,at)!=0:
+            return STATE_ERROR
+        at=at+1
+    put(w,0,STATE)
+    put(w,64,128)
+    put(w,72,MAXIMUM)
+    return response(o,w,0,0,0,0,0,0)
+
+def valid_state(w:mutbuf) -> u64:
+    if length(w)<128 or get(w,0)!=STATE:
+        return 0
+    if get(w,16)>1 or get(w,32)>1 or get(w,40)>1 or get(w,48)>1:
+        return 0
+    count=get(w,56)
+    if count>MAX_ENTRIES or get(w,64)!=128+count*80 or get(w,64)>length(w):
+        return 0
+    at=80
+    while at<128:
+        if get(w,at)!=0:
+            return 0
+        at=at+8
+    previous=0
+    writers=0
+    readers=0
+    at=128
+    while at<get(w,64):
+        ticket=get(w,at)
+        access=get(w,at+8)
+        phase=get(w,at+16)
+        present=get(w,at+24)
+        if ticket>=get(w,8) or (at!=128 and ticket<=previous):
+            return 0
+        if access>1 or phase<1 or phase>4 or present>1 or get(w,at+48)==0:
+            return 0
+        if access==1 and (present!=1 or phase==3):
+            return 0
+        if present==0 and (get(w,at+32)!=0 or get(w,at+40)!=0):
+            return 0
+        if get(w,at+56)!=0 or get(w,at+64)!=0 or get(w,at+72)!=0:
+            return 0
+        if phase>=2:
+            if access==0:
+                writers=writers+1
+                if get(w,72)!=ticket:
+                    return 0
+            else:
+                readers=readers+1
+        previous=ticket
+        at=at+80
+    if writers!=get(w,16) or readers!=get(w,24) or (writers!=0 and readers!=0):
+        return 0
+    if writers==0 and get(w,72)!=MAXIMUM:
+        return 0
+    return 1
+
+def enqueue(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    access=read64(s,24)
+    present=read64(s,32)
+    if present!=0 and time_at_least(read64(s,56),read64(s,64),read64(s,40),read64(s,48))!=0:
+        return response(o,w,1,5,0,0,0,0)
+    if get(w,40)!=0:
+        return response(o,w,1,6,0,0,0,0)
+    if present!=0 and time_at_least(read64(s,72),read64(s,80),read64(s,40),read64(s,48))!=0:
+        return response(o,w,1,5,0,0,0,0)
+    if get(w,32)!=0 or (access==1 and get(w,48)!=0):
+        return response(o,w,1,6,0,0,0,0)
+    ticket=get(w,8)
+    if ticket==MAXIMUM:
+        return response(o,w,1,6,0,0,0,0)
+    used=get(w,64)
+    if used>MAXIMUM-80:
+        return RESOURCE
+    if length(w)-used<80:
+        return grow(o,used+80)
+    put(w,used,ticket)
+    put(w,used+8,access)
+    put(w,used+16,1)
+    put(w,used+24,present)
+    put(w,used+32,read64(s,40))
+    put(w,used+40,read64(s,48))
+    put(w,used+48,read64(s,96))
+    put(w,used+56,0)
+    put(w,used+64,0)
+    put(w,used+72,0)
+    put(w,8,ticket+1)
+    put(w,56,get(w,56)+1)
+    put(w,64,used+80)
+    return response(o,w,1,1,ticket,1,0,0)
+
+def poll(s:readbuf,o:mutbuf,w:mutbuf,at:u64) -> u32:
+    ticket=get(w,at)
+    access=get(w,at+8)
+    if read64(s,88)!=0 or get(w,40)!=0:
+        put(w,40,1)
+        retire(w,at)
+        return response(o,w,2,6,ticket,0,1,0)
+    if expired(s,w,at)!=0:
+        retire(w,at)
+        return response(o,w,2,5,ticket,0,1,0)
+    if get(w,32)!=0 or (access==1 and get(w,48)!=0):
+        retire(w,at)
+        return response(o,w,2,6,ticket,0,1,0)
+    if get(w,16)!=0 or first_waiter(w)!=at or (access==0 and get(w,24)!=0):
+        return response(o,w,2,1,ticket,1,0,0)
+    put(w,at+16,2)
+    if access==0:
+        put(w,16,1)
+        put(w,72,ticket)
+        return response(o,w,2,2,ticket,2,0,0)
+    put(w,24,get(w,24)+1)
+    return response(o,w,2,2,ticket,2,1,0)
+
+def post_admission(s:readbuf,o:mutbuf,w:mutbuf,at:u64) -> u32:
+    ticket=get(w,at)
+    if expired(s,w,at)!=0:
+        drop_guard(w,at,0)
+        return response(o,w,3,5,ticket,0,1,0)
+    if get(w,at+8)==1:
+        put(w,at+16,4)
+        return response(o,w,3,3,ticket,4,0,0)
+    put(w,at+16,3)
+    return response(o,w,3,4,ticket,3,0,0)
+
+def inner_result(s:readbuf,o:mutbuf,w:mutbuf,at:u64) -> u32:
+    ticket=get(w,at)
+    observed=read64(s,88)
+    if observed!=0:
+        if observed==1:
+            put(w,48,1)
+        drop_guard(w,at,0)
+        return response(o,w,4,6,ticket,0,1,choose(observed==1,1,0))
+    if get(w,48)!=0:
+        return STATE_ERROR
+    put(w,at+16,4)
+    if expired(s,w,at)!=0:
+        drop_guard(w,at,0)
+        return response(o,w,4,5,ticket,0,1,1)
+    return response(o,w,4,3,ticket,4,0,0)
+
+def finish_shared(s:readbuf,o:mutbuf,w:mutbuf,at:u64) -> u32:
+    ticket=get(w,at)
+    result=0
+    if get(w,40)!=0 or get(w,32)!=0 or get(w,48)!=0:
+        result=6
+    elif expired(s,w,at)!=0:
+        result=5
+    if get(w,24)==0:
+        put(w,32,1)
+        result=6
+    else:
+        put(w,24,get(w,24)-1)
+    retire(w,at)
+    return response(o,w,5,result,ticket,0,1,0)
+
+def drop_guard(w:mutbuf,at:u64,panicking:u64) -> u64:
+    effect=0
+    if get(w,at+8)==1:
+        if panicking!=0:
+            put(w,32,1)
+        if get(w,24)==0:
+            put(w,32,1)
+        else:
+            put(w,24,get(w,24)-1)
+    else:
+        if get(w,at+16)==4:
+            effect=1
+            if panicking!=0:
+                put(w,48,1)
+        put(w,16,0)
+        put(w,72,MAXIMUM)
+    retire(w,at)
+    return effect
+
+def retire(w:mutbuf,at:u64) -> u64:
+    end=get(w,64)-80
+    cursor=at
+    while cursor<end:
+        store(w,cursor,byte(w,cursor+80))
+        cursor=cursor+1
+    while cursor<end+80:
+        store(w,cursor,0)
+        cursor=cursor+1
+    put(w,56,get(w,56)-1)
+    put(w,64,end)
+    return 0
+
+def publish_poison(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if read64(s,88)==1:
+        put(w,40,1)
+    else:
+        put(w,48,1)
+    return response(o,w,7,0,0,0,0,0)
+
+def shutdown(o:mutbuf,w:mutbuf) -> u32:
+    if get(w,56)!=0:
+        return STATE_ERROR
+    response(o,w,9,0,0,0,0,0)
+    at=0
+    while at<128:
+        store(w,at,0)
+        at=at+1
+    return 128
+
+def first_waiter(w:mutbuf) -> u64:
+    at=128
+    while at<get(w,64):
+        if get(w,at+16)==1:
+            return at
+        at=at+80
+    return 0
+
+def find_ticket(w:mutbuf,ticket:u64) -> u64:
+    at=128
+    while at<get(w,64):
+        if get(w,at)==ticket:
+            return at
+        at=at+80
+    return 0
+
+def expired(s:readbuf,w:mutbuf,at:u64) -> u64:
+    if get(w,at+24)==0:
+        return 0
+    return time_at_least(read64(s,56),read64(s,64),get(w,at+32),get(w,at+40))
+
+def time_at_least(low:u64,high:u64,limit_low:u64,limit_high:u64) -> u64:
+    return choose(high>limit_high or (high==limit_high and low>=limit_low),1,0)
+
+def response(o:mutbuf,w:mutbuf,operation:u64,result:u64,ticket:u64,phase:u64,notify:u64,effect:u64) -> u32:
+    waiting=0
+    at=128
+    while at<get(w,64):
+        if get(w,at+16)==1:
+            waiting=waiting+1
+        at=at+80
+    put(o,0,RESPONSE)
+    put(o,8,operation)
+    put(o,16,result)
+    put(o,24,ticket)
+    put(o,32,phase)
+    put(o,40,notify)
+    put(o,48,get(w,8))
+    put(o,56,get(w,16))
+    put(o,64,get(w,24))
+    put(o,72,get(w,32))
+    put(o,80,get(w,40))
+    put(o,88,get(w,48))
+    put(o,96,waiting)
+    put(o,104,get(w,56))
+    put(o,112,get(w,64))
+    put(o,120,effect)
+    return 128
+
+def grow(o:mutbuf,needed:u64) -> u32:
+    put(o,0,GROW_RESPONSE)
+    put(o,8,1)
+    put(o,16,needed)
+    put(o,24,0)
+    return GROW
+
+def zero_input(s:readbuf,begin:u64,end:u64) -> u64:
+    while begin<end:
+        if read64(s,begin)!=0:
+            return 0
+        begin=begin+8
+    return 1
+
+def read64(s:readbuf,at:u64) -> u64:
+    return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)|(byte(s,at+4)<<32)|(byte(s,at+5)<<40)|(byte(s,at+6)<<48)|(byte(s,at+7)<<56)
+
+def get(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)|(byte(w,at+4)<<32)|(byte(w,at+5)<<40)|(byte(w,at+6)<<48)|(byte(w,at+7)<<56)
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    store(w,at,value&255)
+    store(w,at+1,(value>>8)&255)
+    store(w,at+2,(value>>16)&255)
+    store(w,at+3,(value>>24)&255)
+    store(w,at+4,(value>>32)&255)
+    store(w,at+5,(value>>40)&255)
+    store(w,at+6,(value>>48)&255)
+    store(w,at+7,(value>>56)&255)
+    return 0
