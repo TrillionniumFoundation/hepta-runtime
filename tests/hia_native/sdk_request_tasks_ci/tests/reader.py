@@ -166,8 +166,8 @@ def verify_case(case, original, native):
 
 
 def verify(source, run, *, require_recipe=False):
-    corpus = cases()
-    assert doc(source / 'tests/CORPUS.json') == corpus == doc(run / 'reference/CORPUS.json')
+    corpus = doc(source / 'tests/CORPUS.json')
+    assert corpus == cases() == doc(run / 'reference/CORPUS.json')
     native_build = verify_native(source, run / 'native-build')
     original_build = verify_reference_build(source, run / 'reference')
     processes = doc(run / 'reference/processes.json')
