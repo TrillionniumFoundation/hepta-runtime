@@ -42,7 +42,13 @@ jobs:
           sys.path.insert(0,str(source))
           from process import Recorder
           records=Recorder(source,Path(os.environ['RUNNER_TEMP'])/'audit-lifetime-author-outer')
-          raw,row=records.run('author-source',[sys.executable,'-I','-B',source/'authoring/author_lifetime.py','--root',source,'--hepta',root/'compiler','--output',Path(os.environ['RUNNER_TEMP'])/'audit-lifetime-author-output'],timeout=60)
+          try:
+              raw,row=records.run('author-source',[sys.executable,'-I','-B',source/'authoring/author_lifetime.py','--root',source,'--hepta',root/'compiler','--output',Path(os.environ['RUNNER_TEMP'])/'audit-lifetime-author-output'],timeout=60)
+          finally:
+              for path in sorted(records.directory.glob('*.stderr')):
+                  print('AUTHOR_STDERR '+path.name)
+                  print(path.read_text(),end='')
+              print((records.directory/'processes.json').read_text(),end='')
           print(raw.decode(),end='')
           print(json.dumps({'outer_process':row,'native_or_hia_execution':0},sort_keys=True))
           PY

@@ -265,7 +265,8 @@ def prune(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
     if at==MAXIMUM:
         return STATE_ERROR
     if get(o,48)==1:
-        put(o,16,choose(get(o,112)!=0 or at!=0,1,0))
+        present=choose(get(o,112)!=0 or at!=0,1,0)
+        put(o,16,present)
         return issue_sync(o,QUERY_UNLOCK,3)
     if at==0:
         put(o,16,0)
