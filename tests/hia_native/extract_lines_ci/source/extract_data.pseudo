@@ -1,0 +1,376 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) < 32:
+        return CAPACITY
+    if valid(s) == False:
+        return INVALID
+    if admitted(s) == False:
+        return INVALID
+    if length(w) < 256:
+        return growth(o, 1, 256)
+    put(w, 0, 0)
+    put(w, 8, 0)
+    put(w, 16, 0)
+    emit(s, o, w)
+    need = get(w, 0)
+    if get(w, 16) != 0 or need >= FIRST_ERROR:
+        return RESOURCE
+    if need > length(o):
+        return growth(o, 2, need)
+    put(w, 0, 0)
+    put(w, 8, 1)
+    emit(s, o, w)
+    if get(w, 16) != 0 or get(w, 0) != need:
+        return INVALID
+    return need
+
+def valid(s: readbuf) -> bool:
+    if length(s) < 96 or load(s, 0) != REQUEST:
+        return False
+    if load(s, 8) < 1 or load(s, 8) > 5:
+        return False
+    if load(s, 80) != 0 or load(s, 88) != 0:
+        return False
+    at = 96
+    index = 0
+    while index < 4:
+        size = load(s, 48 + index * 8)
+        if size > length(s) - at:
+            return False
+        if utf8(s, at, size) == 0:
+            return False
+        at = at + size
+        index = index + 1
+    return at == length(s)
+
+def admitted(s: readbuf) -> bool:
+    op = load(s, 8)
+    a = load(s, 16)
+    b = load(s, 24)
+    c = load(s, 32)
+    if load(s, 40) != 0:
+        return False
+    if op == 4:
+        if a == 0 or b < a:
+            return False
+        if c != MAXIMUM and c > lines(s, payload(s, 3), load(s, 72)):
+            return False
+        return True
+    if c != 0 and op != 1:
+        return False
+    if load(s, 64) != 0 or load(s, 72) != 0:
+        return False
+    if op == 3:
+        if a > lines(s, 96, load(s, 48)) or b > 1:
+            return False
+        size = load(s, 56)
+        if size == 0:
+            return False
+        return byte(s, payload(s, 1) + size - 1) == 10
+    if load(s, 56) != 0:
+        return False
+    if op == 1:
+        if a == 1:
+            return c == 0
+        if a != 2 or b == 0 or c > 65535:
+            return False
+        return hex_ok(c & 255) and hex_ok((c >> 8) & 255)
+    if op == 2:
+        return a != 0 and b >= a and b <= lines(s, 96, load(s, 48))
+    return a == 0 and b == 0
+
+def emit(s: readbuf, o: mutbuf, w: mutbuf) -> u64:
+    op = load(s, 8)
+    if op == 1:
+        return verify_frame(s, o, w)
+    if op == 2:
+        return selected(s, o, w)
+    if op == 3:
+        return edit_frame(s, o, w)
+    if op == 4:
+        return success(s, o, w)
+    word(o, w, lines(s, 96, load(s, 48)))
+    word(o, w, ends_lf(s, 96, load(s, 48)))
+    return 1
+
+def growth(o: mutbuf, kind: u64, need: u64) -> u32:
+    put(o, 0, GROW_MAGIC)
+    put(o, 8, kind)
+    put(o, 16, need)
+    put(o, 24, 0)
+    return GROW
+
+def payload(s: readbuf, index: u64) -> u64:
+    at = 96
+    i = 0
+    while i < index:
+        at = at + load(s, 48 + i * 8)
+        i = i + 1
+    return at
+
+def lines(s: readbuf, at: u64, size: u64) -> u64:
+    end = at + size
+    count = 0
+    cursor = at
+    while cursor < end:
+        if byte(s, cursor) == 10:
+            count = count + 1
+        cursor = cursor + 1
+    if size != 0 and byte(s, end - 1) != 10:
+        count = count + 1
+    return count
+
+def ends_lf(s: readbuf, at: u64, size: u64) -> u64:
+    if size == 0:
+        return 0
+    if byte(s, at + size - 1) == 10:
+        return 1
+    return 0
+
+def line_end(s: readbuf, at: u64, end: u64) -> u64:
+    while at < end:
+        if byte(s, at) == 10:
+            return at
+        at = at + 1
+    return end
+
+def content_end(s: readbuf, at: u64, stop: u64, end: u64) -> u64:
+    if stop < end and stop > at and byte(s, stop - 1) == 13:
+        return stop - 1
+    return stop
+
+def trim_cr(s: readbuf, at: u64, stop: u64) -> u64:
+    while stop > at:
+        if byte(s, stop - 1) != 13:
+            return stop
+        stop = stop - 1
+    return stop
+
+def advance(w: mutbuf, amount: u64) -> u64:
+    at = get(w, 0)
+    if amount > MAXIMUM - at:
+        put(w, 16, 1)
+        return 0
+    put(w, 0, at + amount)
+    return 1
+
+def one(o: mutbuf, w: mutbuf, value: u64) -> u64:
+    at = get(w, 0)
+    advance(w, 1)
+    if get(w, 8) != 0:
+        store(o, at, value)
+    return 1
+
+def word(o: mutbuf, w: mutbuf, value: u64) -> u64:
+    at = get(w, 0)
+    advance(w, 8)
+    if get(w, 8) != 0:
+        put(o, at, value)
+    return 1
+
+def span(s: readbuf, o: mutbuf, w: mutbuf, start: u64, size: u64) -> u64:
+    at = get(w, 0)
+    advance(w, size)
+    if get(w, 8) != 0:
+        copy_range(o, s, at, start, size)
+    return 1
+
+def number(o: mutbuf, w: mutbuf, value: u64) -> u64:
+    count = 0
+    while value > 9:
+        store(w, 64 + count, 48 + value % 10)
+        value = value // 10
+        count = count + 1
+    one(o, w, 48 + value)
+    while count != 0:
+        count = count - 1
+        one(o, w, byte(w, 64 + count))
+    return 1
+
+def leb(o: mutbuf, w: mutbuf, value: u64) -> u64:
+    while value > 127:
+        one(o, w, (value & 127) | 128)
+        value = value >> 7
+    one(o, w, value)
+    return 1
+
+def hex_ok(value: u64) -> bool:
+    return (value >= 48 and value <= 57) or (value >= 97 and value <= 102)
+
+def hex_digit(value: u64) -> u64:
+    if value < 10:
+        return 48 + value
+    return 87 + value
+
+def identity(s: readbuf, o: mutbuf, w: mutbuf, line: u64, at: u64, size: u64) -> u64:
+    number(o, w, line)
+    one(o, w, 58)
+    value = line_hash(s, at, size)
+    one(o, w, hex_digit((value >> 4) & 15))
+    one(o, w, hex_digit(value & 15))
+    return 1
+
+def verify_frame(s: readbuf, o: mutbuf, w: mutbuf) -> u64:
+    is_id = load(s, 16) == 2
+    total = lines(s, 96, load(s, 48))
+    word(o, w, VERIFY_MAGIC)
+    if is_id:
+        word(o, w, 1)
+    else:
+        word(o, w, 2)
+    word(o, w, load(s, 24))
+    word(o, w, total)
+    if is_id:
+        word(o, w, 2)
+    else:
+        word(o, w, 0)
+    word(o, w, 0)
+    word(o, w, 0)
+    word(o, w, 0)
+    if is_id:
+        one(o, w, load(s, 32) & 255)
+        one(o, w, (load(s, 32) >> 8) & 255)
+        at = 96
+        end = 96 + load(s, 48)
+        while at < end:
+            stop = line_end(s, at, end)
+            content = content_end(s, at, stop, end)
+            leb(o, w, content - at)
+            span(s, o, w, at, content - at)
+            if stop == end:
+                at = end
+            else:
+                at = stop + 1
+    if get(w, 8) != 0:
+        put(o, 40, get(w, 0) - 64)
+    return 1
+
+def selected(s: readbuf, o: mutbuf, w: mutbuf) -> u64:
+    first = load(s, 16)
+    last = load(s, 24)
+    count = last - first + 1
+    total = lines(s, 96, load(s, 48))
+    at = 96
+    end = 96 + load(s, 48)
+    line = 1
+    last_empty = 0
+    advance(w, 64)
+    while at < end and line <= last:
+        stop = line_end(s, at, end)
+        if line >= first:
+            content = trim_cr(s, at, stop)
+            span(s, o, w, at, content - at)
+            one(o, w, 10)
+            if line == last and content == at:
+                last_empty = 1
+        if stop == end:
+            at = end
+        else:
+            at = stop + 1
+        line = line + 1
+    inserted = get(w, 0) - 64
+    has_lf = 0
+    if last == total and ends_lf(s, 96, load(s, 48)) != 0:
+        has_lf = 1
+    elif count > 1 and last_empty != 0:
+        has_lf = 1
+    at = 96
+    line = 1
+    join = 0
+    while at < end and line <= last:
+        stop = line_end(s, at, end)
+        if line >= first:
+            relative = line - first
+            if count <= 30 or relative < 20 or relative >= count - 9:
+                if join != 0:
+                    one(o, w, 10)
+                content = trim_cr(s, at, stop)
+                identity(s, o, w, line, at, content - at)
+                one(o, w, 124)
+                span(s, o, w, at, content - at)
+                join = 1
+            elif relative == 20:
+                one(o, w, 10)
+                literal(o, w, 11)
+                number(o, w, count - 29)
+                literal(o, w, 12)
+                join = 1
+        if stop == end:
+            at = end
+        else:
+            at = stop + 1
+        line = line + 1
+    if get(w, 8) != 0:
+        put(o, 0, SELECT_MAGIC)
+        put(o, 8, count)
+        put(o, 16, total)
+        put(o, 24, has_lf)
+        put(o, 32, inserted)
+        put(o, 40, get(w, 0) - 64 - inserted)
+        put(o, 48, 0)
+        put(o, 56, 0)
+    return 1
+
+def edit_frame(s: readbuf, o: mutbuf, w: mutbuf) -> u64:
+    raw = load(s, 48)
+    incoming = load(s, 56)
+    word(o, w, EDIT_MAGIC)
+    word(o, w, 0)
+    word(o, w, raw)
+    word(o, w, 1)
+    word(o, w, 0)
+    word(o, w, 0)
+    span(s, o, w, 96, raw)
+    word(o, w, 1)
+    word(o, w, load(s, 16))
+    word(o, w, load(s, 24))
+    word(o, w, incoming)
+    span(s, o, w, 96 + raw, incoming)
+    return 1
+
+def success(s: readbuf, o: mutbuf, w: mutbuf) -> u64:
+    first = load(s, 16)
+    last = load(s, 24)
+    append = load(s, 32)
+    count = last - first + 1
+    literal(o, w, 0)
+    number(o, w, count)
+    literal(o, w, 1)
+    number(o, w, first)
+    one(o, w, 45)
+    number(o, w, last)
+    literal(o, w, 2)
+    span(s, o, w, 96, load(s, 48))
+    literal(o, w, 3)
+    span(s, o, w, payload(s, 1), load(s, 56))
+    literal(o, w, 4)
+    if append == 0:
+        literal(o, w, 5)
+    elif append == MAXIMUM:
+        literal(o, w, 6)
+    else:
+        literal(o, w, 7)
+        number(o, w, append)
+    literal(o, w, 8)
+    span(s, o, w, payload(s, 2), load(s, 64))
+    start = payload(s, 3)
+    end = start + load(s, 72)
+    total = lines(s, start, load(s, 72))
+    anchor = append
+    if append == MAXIMUM:
+        anchor = total
+    if anchor < total:
+        literal(o, w, 9)
+        if anchor == 0:
+            one(o, w, 48)
+        else:
+            at = start
+            line = 1
+            while line < anchor:
+                at = line_end(s, at, end) + 1
+                line = line + 1
+            stop = line_end(s, at, end)
+            content = content_end(s, at, stop, end)
+            identity(s, o, w, anchor, at, content - at)
+        literal(o, w, 10)
+        number(o, w, count)
+    return 1
