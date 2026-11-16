@@ -1,0 +1,75 @@
+name: Public111 existing artifacts and independent pure readers
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-public111-fresh-readback-6780-20261116']
+    paths: ['tests/hia_native/public111_fresh_readback_v1/**', '.github/workflows/hia-public111-fresh-readback.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  SOURCE_SHA256: 'f30b6b2eba38dc1ca3350e16da76ac2cd7872cb43c2045fc84a3141588ca99e0'
+jobs:
+  complete-existing-role:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [build, original, owner, profiles, authority, connection]
+    steps:
+      - name: Set paths from the actual runner environment
+        run: |
+          printf '%s\n' "P111_READER=$GITHUB_WORKSPACE/runtime/tests/hia_native/public111_fresh_readback_v1" "P111_READBACK=$RUNNER_TEMP/public111-${{ matrix.role }}-readback" "P111_LOG=$RUNNER_TEMP/public111-${{ matrix.role }}-reader" >> "$GITHUB_ENV"
+      - name: Checkout only this frozen reader source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/public111_fresh_readback_v1
+      - name: Verify all reader source bytes and compile Python syntax only
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os
+          root=Path(os.environ["P111_READER"])
+          raw=(root/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()==os.environ["SOURCE_SHA256"]
+          rows=json.loads(raw)["files"]
+          assert {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}==set(rows)|{"SOURCE.json"}
+          for name,pin in rows.items():
+              data=(root/name).read_bytes()
+              assert {"bytes":len(data),"sha256":hashlib.sha256(data).hexdigest()}==pin
+              if name.endswith(".py"):compile(data,str(root/name),"exec",dont_inherit=True)
+          print("COMPLETE_READER_SOURCE_AND_PYTHON_SYNTAX_PASS",len(rows)+1)
+          PY
+      - name: Read the complete frozen archives and original guarded readers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$P111_READER/read_existing.py" --role "${{ matrix.role }}" --output "$P111_READBACK" > "$P111_LOG.stdout" 2> "$P111_LOG.stderr"
+          cat "$P111_LOG.stdout"
+      - name: Preserve complete proof or failure without semantic execution
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public111-independent-${{ matrix.role }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.P111_LOG }}.stdout
+            ${{ env.P111_LOG }}.stderr
+            ${{ env.P111_READBACK }}/READBACK.json
+            ${{ env.P111_READBACK }}/READONLY.json
+            ${{ env.P111_READBACK }}/*/EXTRACTION.json
+            ${{ env.P111_READBACK }}/*/archive.json
+            ${{ env.P111_READBACK }}/*/API.json
+            ${{ env.P111_READBACK }}/*/capture/artifact-manifest.json
+            ${{ env.P111_READER }}
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30

@@ -1,0 +1,121 @@
+{
+  "artifacts": {
+    "authority": {
+      "attempt": "1",
+      "bytes": 90824524,
+      "head": "d397daea2c098746b47e88efa0cb566c6ef71103",
+      "id": 14282472748,
+      "label": "authority",
+      "name": "public111-authority-d397daea2c098746b47e88efa0cb566c6ef71103-1",
+      "run_id": 43979626193,
+      "sha256": "980bfdb435079d581762f9b1577ebb5187774f5695909c4aef380d1f8b9b67cd",
+      "source_manifest_sha256": "b33a9e1d8c206b9fd0b98f2a04d42b55e8b466ebe3f39675f22514573c596fcf"
+    },
+    "build": {
+      "attempt": "1",
+      "bytes": 741930469,
+      "head": "d397daea2c098746b47e88efa0cb566c6ef71103",
+      "id": 14282953118,
+      "label": "build",
+      "name": "public111-build-d397daea2c098746b47e88efa0cb566c6ef71103-1",
+      "run_id": 43979626193,
+      "sha256": "deecbd7eba816a7c59f2bb749664b132de4db14176e1814c65ef3d62c26d6b15",
+      "source_manifest_sha256": "b33a9e1d8c206b9fd0b98f2a04d42b55e8b466ebe3f39675f22514573c596fcf"
+    },
+    "connection": {
+      "attempt": "1",
+      "bytes": 519425710,
+      "head": "d397daea2c098746b47e88efa0cb566c6ef71103",
+      "id": 14282374792,
+      "label": "connection",
+      "name": "public111-connection-d397daea2c098746b47e88efa0cb566c6ef71103-1",
+      "run_id": 43979626193,
+      "sha256": "f259113c301997cc1098ee7d334ca40e4b4bed96a7bba1d19ac16c2c7a4b35a7",
+      "source_manifest_sha256": "b33a9e1d8c206b9fd0b98f2a04d42b55e8b466ebe3f39675f22514573c596fcf"
+    },
+    "original": {
+      "attempt": "1",
+      "bytes": 227383675,
+      "head": "d397daea2c098746b47e88efa0cb566c6ef71103",
+      "id": 14282362614,
+      "label": "original",
+      "name": "public111-original-d397daea2c098746b47e88efa0cb566c6ef71103-1",
+      "run_id": 43979626193,
+      "sha256": "30082a846ca9aceb19ff6919d9add180f04e8d8dafcce47a9e70a8633b4f4969",
+      "source_manifest_sha256": "b33a9e1d8c206b9fd0b98f2a04d42b55e8b466ebe3f39675f22514573c596fcf"
+    },
+    "owner": {
+      "attempt": "1",
+      "bytes": 513874725,
+      "head": "d397daea2c098746b47e88efa0cb566c6ef71103",
+      "id": 14282873438,
+      "label": "owner",
+      "name": "public111-owner-d397daea2c098746b47e88efa0cb566c6ef71103-1",
+      "run_id": 43979626193,
+      "sha256": "2232653cd8996b80e7001de5da4a0fabcac9f01d9ea92965efe7c82ed3bbd243",
+      "source_manifest_sha256": "b33a9e1d8c206b9fd0b98f2a04d42b55e8b466ebe3f39675f22514573c596fcf"
+    },
+    "profiles": {
+      "attempt": "1",
+      "bytes": 49329025,
+      "head": "d397daea2c098746b47e88efa0cb566c6ef71103",
+      "id": 14282517708,
+      "label": "profiles",
+      "name": "public111-profiles-d397daea2c098746b47e88efa0cb566c6ef71103-1",
+      "run_id": 43979626193,
+      "sha256": "01eecec957e2866f5742791941bbe6f1fc1584f615210a4895261d6ca6f24fe9",
+      "source_manifest_sha256": "b33a9e1d8c206b9fd0b98f2a04d42b55e8b466ebe3f39675f22514573c596fcf"
+    }
+  },
+  "producer_head": "d397daea2c098746b47e88efa0cb566c6ef71103",
+  "producer_run": 43979626193,
+  "roles": {
+    "authority": {
+      "dependencies": [
+        "build",
+        "owner"
+      ],
+      "expected_status": "ACTUAL_PUBLIC111_PRIVATE_AUTHORITY_AND_CURRENT16_PASS",
+      "target": "authority"
+    },
+    "build": {
+      "dependencies": [],
+      "expected_status": "FRESH_PUMP_GRAPH_BUILD_READBACK_PASS",
+      "target": "build"
+    },
+    "connection": {
+      "dependencies": [
+        "build"
+      ],
+      "expected_status": "ACTUAL_PUBLIC111_HANDSHAKE324_PUBLIC90_TRANSPORT24_PASS",
+      "target": "connection"
+    },
+    "original": {
+      "dependencies": [],
+      "expected_status": "COMPLETE_BELLMAN_PUBLIC_ORIGINAL_REFERENCE_PASS",
+      "target": "original"
+    },
+    "owner": {
+      "dependencies": [],
+      "expected_status": "FRESH_CURRENT_OWNER243_AND_16_CONTROLS_PASS",
+      "target": "owner"
+    },
+    "profiles": {
+      "dependencies": [
+        "build"
+      ],
+      "expected_status": "FULL_CURRENT23_HISTORICAL7_PROFILES_PASS",
+      "target": "profiles"
+    }
+  },
+  "schema": "hepta.public111.existing-role-readback-plan.v1",
+  "scope": {
+    "async_pending_registry": false,
+    "byte_only_existing_archives": true,
+    "full_sdk": false,
+    "independent_readers_before_after_unchanged": true,
+    "no_native_or_rust_execution": true,
+    "no_prior_semantic_replay": true,
+    "production": false
+  }
+}
