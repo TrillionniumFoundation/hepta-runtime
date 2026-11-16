@@ -4,6 +4,7 @@ import argparse,contextlib,ctypes,hashlib,json,os,signal,struct,sys,time
 from pathlib import Path
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parent
+sys.path.insert(0,str(ROOT))
 sys.path.insert(0,str(ROOT/'source/scripts'))
 sys.path.insert(0,str(ROOT/'reference/params'))
 from hia_native_loader import NativeModule

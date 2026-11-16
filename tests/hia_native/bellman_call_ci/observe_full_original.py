@@ -4,6 +4,7 @@ import argparse,hashlib,io,json,os,shutil,struct,sys,tarfile,tomllib
 from pathlib import Path
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parent
+sys.path.insert(0,str(ROOT))
 sys.path.insert(0,str(ROOT/'reference/params'))
 from cases import all_cases
 from process_capture import run,put,sha

@@ -27,16 +27,20 @@ jobs:
           rustup toolchain install 1.95.0 --profile minimal
       - name: Execute unchanged Deserialize and complete plan on all 683 inputs
         run: |
-          python3 -I -B runtime/tests/hia_native/bellman_call_ci/observe_full_original.py --output "$RUNNER_TEMP/bellman-call-original"
+          python3 -I -B runtime/tests/hia_native/bellman_call_ci/observe_full_original.py --output "$RUNNER_TEMP/bellman-call-original" > "$RUNNER_TEMP/bellman-call-driver.stdout" 2> "$RUNNER_TEMP/bellman-call-driver.stderr"
       - name: Archive complete source, crate bytes and process streams
         if: always()
         run: |
           python3 -I -B - <<'PY'
           from pathlib import Path
-          import hashlib,json,os,tarfile
+          import hashlib,json,os,shutil,tarfile
           root=Path(os.environ['RUNNER_TEMP'])/'bellman-call-original'
           output=Path(os.environ['RUNNER_TEMP'])/'bellman-call-original-artifact';output.mkdir()
-          assert root.is_dir()
+          root.mkdir(exist_ok=True)
+          for suffix in ('stdout','stderr'):
+              p=Path(os.environ['RUNNER_TEMP'])/('bellman-call-driver.'+suffix)
+              if p.is_file():shutil.copyfile(p,root/('driver.'+suffix))
+          shutil.copytree(Path(os.environ['GITHUB_WORKSPACE'])/'runtime/tests/hia_native/bellman_call_ci',root/'recipe-source')
           inventory={p.relative_to(root).as_posix():{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in root.rglob('*') if p.is_file()}
           (root/'artifact-manifest.json').write_text(json.dumps({'files':inventory},indent=2,sort_keys=True)+'\n')
           archive=output/'original.tar.gz'
