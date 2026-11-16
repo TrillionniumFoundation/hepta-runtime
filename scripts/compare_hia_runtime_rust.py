@@ -2692,6 +2692,14 @@ RUST_PROCESS_DEADLINES = {
     "shell-outcome-rust-compare": ("shell_outcome", 300),
     "shell-output-rust-compare": ("shell_output_io", 300),
     "shell-foreground-rust-compare": ("shell_foreground", 300),
+    "shell-capture-path-rust-build": ("shell_capture_path", 300),
+    "shell-capture-path-rust-compare": ("shell_capture_path", 300),
+    "shell-capture-mkdir-rust-build": ("shell_capture_mkdir", 300),
+    "shell-capture-mkdir-rust-compare": ("shell_capture_mkdir", 300),
+    "shell-capture-file-rust-build": ("shell_capture_file", 300),
+    "shell-capture-file-rust-compare": ("shell_capture_file", 300),
+    "shell-capture-prepare-rust-build": ("shell_capture_prepare", 300),
+    "shell-capture-prepare-rust-compare": ("shell_capture_prepare", 300),
 }
 
 

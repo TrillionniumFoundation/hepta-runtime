@@ -819,6 +819,14 @@ class OriginalPipelineTests(unittest.TestCase):
             "shell-outcome-rust-compare": ("shell_outcome", 300),
             "shell-output-rust-compare": ("shell_output_io", 300),
             "shell-foreground-rust-compare": ("shell_foreground", 300),
+            "shell-capture-path-rust-build": ("shell_capture_path", 300),
+            "shell-capture-path-rust-compare": ("shell_capture_path", 300),
+            "shell-capture-mkdir-rust-build": ("shell_capture_mkdir", 300),
+            "shell-capture-mkdir-rust-compare": ("shell_capture_mkdir", 300),
+            "shell-capture-file-rust-build": ("shell_capture_file", 300),
+            "shell-capture-file-rust-compare": ("shell_capture_file", 300),
+            "shell-capture-prepare-rust-build": ("shell_capture_prepare", 300),
+            "shell-capture-prepare-rust-compare": ("shell_capture_prepare", 300),
         })
         part = native.read_json(self.shards / "state" / p.SHARD_REPORT)
         for name, (owner, timeout) in r.RUST_PROCESS_DEADLINES.items():
@@ -831,6 +839,10 @@ class OriginalPipelineTests(unittest.TestCase):
                         p.validate_process(self.shards / "state/data", dict(row, timeout_seconds=changed), owner)
             with self.assertRaisesRegex(ValueError, "unchanged maximum deadline"):
                 p.validate_process(self.shards / "state/data", row, "runtime_bytes")
+            with self.subTest(name=name, undeclared_process=True):
+                with self.assertRaisesRegex(ValueError, "unchanged maximum deadline"):
+                    p.validate_process(self.shards / "state/data",
+                        dict(row, name=name + "-undeclared", timeout_seconds=300), owner)
 
     def test_span_references_stay_in_bytes_with_all_five_actual_processes(self):
         self.assertIn(span.REFERENCE_KEY, p.reference_fields("bytes"))
