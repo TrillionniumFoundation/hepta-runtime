@@ -1,0 +1,155 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) < 64 or length(s) > 67108928:
+        return INVALID
+    if read64(s, 0) != INPUT_MAGIC or read64(s, 56) != 0:
+        return INVALID
+    if read64(s, 16) == 0 or read64(s, 48) != length(s) - 64:
+        return INVALID
+    op = read64(s, 8)
+    if op < 1 or op > 15:
+        return INVALID
+    if op > 2 and op != 15 and read64(s, 48) != 0:
+        return INVALID
+    if length(o) < 192:
+        return grow(o, 2, 192)
+    if length(w) < 256:
+        return grow(o, 1, 256)
+    if get(w, 0) == 0:
+        fill_range(w, 0, 256, 0)
+        put(w, 0, STATE_MAGIC)
+        put(w, 8, read64(s, 16))
+        put(w, 16, 1)
+        put(w, 72, 256)
+        put(w, 120, 1)
+    if get(w, 0) != STATE_MAGIC or get(w, 8) != read64(s, 16):
+        return INVALID
+    if get(w, 72) < 256 or get(w, 72) > length(w):
+        return INVALID
+    if op == 15:
+        return observe_message(s, o, w)
+    if op == 1:
+        return admit(s, o, w)
+    if op == 2:
+        return notification(s, o, w)
+    if op == 3:
+        return handler_response(s, o, w)
+    if op == 4:
+        return send_ack(s, o, w)
+    if op == 5:
+        return handler_dropped(s, o, w)
+    if op == 6:
+        return begin_drain(s, o, w)
+    if op == 7:
+        return drain_progress(s, o, w)
+    if op == 8:
+        return retire(s, o, w)
+    if op == 9:
+        return attach(s, o, w)
+    if op == 10:
+        return next_cancel(s, o, w)
+    if op == 11:
+        return cancel_ack(s, o, w)
+    if op == 13:
+        return queue_response(s, o, w)
+    if op == 14:
+        if controls_zero(s) == False:
+            return INVALID
+        return claim_response(o, w)
+    if read64(s, 32) != 0 or read64(s, 40) != 0:
+        return INVALID
+    return reply(o, w, 0, read64(s, 24))
+
+def admit(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if message_controls(s) == False:
+        return INVALID
+    if get(w, 24) != 0:
+        return BUSY
+    if message_header(s, 1) == False:
+        return INVALID
+    if pair_valid(s, 80) == False:
+        return INVALID
+    start = 64 + read64(s, 144)
+    size = read64(s, 152)
+    kind = read64(s, 104)
+    if size == 0 or size > 16777216:
+        return INVALID
+    if canonical_id(s, start, size, kind) == False:
+        return INVALID
+    used = get(w, 72)
+    record = (112 + size + 7) & 18446744073709551608
+    if used > 268435456 - record:
+        return grow(o, 3, used + record)
+    if length(w) < used + record:
+        return grow(o, 1, used + record)
+    generation = get(w, 16)
+    if generation == 18446744073709551615:
+        return RESOURCE
+    previous = find_input_id(s, w, start, size, kind)
+    if previous != 0:
+        put(w, previous + 16, 0)
+        put(w, 40, get(w, 40) - 1)
+    fill_range(w, used, record, 0)
+    put(w, used, record)
+    put(w, used + 8, generation)
+    put(w, used + 16, 1)
+    put(w, used + 64, kind)
+    put(w, used + 72, size)
+    copy_range(w, s, used + 112, start, size)
+    put(w, 16, generation + 1)
+    put(w, 40, get(w, 40) + 1)
+    put(w, 48, get(w, 48) + 1)
+    put(w, 64, get(w, 64) + 1)
+    put(w, 72, used + record)
+    advance(w)
+    return reply(o, w, 1, generation)
+
+def notification(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if message_controls(s) == False or message_header(s, 2) == False:
+        return INVALID
+    if get(w, 24) != 0:
+        return BUSY
+    if read64(s, 80) != 101:
+        return reply(o, w, 11, 0)
+    if pair_valid(s, 176) == False:
+        return INVALID
+    if cancellation_id(s, w) == False:
+        return INVALID
+    row = 0
+    if get(w, 144) != 0:
+        row = find_input_id(s, w, get(w, 128), get(w, 136), get(w, 144))
+    if row == 0:
+        advance(w)
+        return reply(o, w, 3, 0)
+    put(w, row + 16, 0)
+    cancel_context(w, row)
+    put(w, 40, get(w, 40) - 1)
+    advance(w)
+    return reply(o, w, 2, get(w, row + 8))
+
+
+def message_controls(s:readbuf) -> bool:
+    if read64(s, 8) != 15:
+        return controls_zero(s)
+    if read64(s, 24) != 0 or read64(s, 32) > 3:
+        return False
+    return read64(s, 40) <= 3
+
+def observe_message(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if message_controls(s) == False:
+        return INVALID
+    if read64(s, 48) < 256:
+        return INVALID
+    kind = read64(s, 72)
+    if message_header(s, kind) == False or kind > 4:
+        return INVALID
+    before = read64(s, 32)
+    after = read64(s, 40)
+    if before == 3:
+        return reply(o, w, 16, 0)
+    if kind == 1:
+        if before == 0 and after != 2:
+            return reply(o, w, 15, 0)
+        return admit(s, o, w)
+    if kind == 2 and before != 0:
+        return notification(s, o, w)
+    return reply(o, w, 16, 0)
