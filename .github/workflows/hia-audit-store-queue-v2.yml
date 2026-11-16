@@ -1,0 +1,128 @@
+name: Complete audit queue native domain and limited original comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-store-queue-6780-20261116]
+permissions:
+  contents: read
+jobs:
+  audit-queue:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      AUDIT_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/audit_store_queue_v1
+      AUDIT_SOURCE_SHA: ac8744576b149066e983cccdd25e626dd6b1471bb946408c0e7d7f28ea896e93
+    steps:
+      - name: Checkout frozen candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: tests/hia_native/audit_store_queue_v1
+          persist-credentials: false
+      - name: Checkout exact HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Checkout exact original target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /src/mcp/runtime/request_audit.rs
+            /src/mcp/runtime/request_audit_tests.rs
+          persist-credentials: false
+      - name: Verify exact source and compiler identities
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          test "$(git -C original-target rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          test "$(git -C original-target rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
+          python3 -I -B - <<'PY'
+          import os, sys
+          sys.path.insert(0,os.environ['AUDIT_SOURCE'])
+          from build import verify_source
+          assert verify_source()==os.environ['AUDIT_SOURCE_SHA']
+          from pathlib import Path
+          for source in Path(os.environ['AUDIT_SOURCE']).rglob('*.py'):
+              compile(source.read_bytes(),str(source),'exec')
+          PY
+          cmp original-target/Cargo.toml "$AUDIT_SOURCE/reference/target/Cargo.toml"
+          cmp original-target/src/mcp/runtime/request_audit.rs "$AUDIT_SOURCE/reference/target/src/mcp/runtime/request_audit.rs"
+          cmp original-target/src/mcp/runtime/request_audit_tests.rs "$AUDIT_SOURCE/reference/target/src/mcp/runtime/request_audit_tests.rs"
+      - name: Install exact original toolchain and native compiler tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+          printf 'AUDIT_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Execute complete frozen original and native domains
+        run: |
+          python3 -I -B "$AUDIT_SOURCE/run_gate.py" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$AUDIT_RUST_BIN" --output "$RUNNER_TEMP/audit-queue-output"
+      - name: Independently read complete evidence within the unchanged reader budget
+        run: |
+          python3 -I -B - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          source=Path(os.environ["AUDIT_SOURCE"])
+          sys.path.insert(0,str(source))
+          from process import Recorder
+          temporary=Path(os.environ["RUNNER_TEMP"])
+          recorder=Recorder(source,temporary/"audit-independent-processes")
+          raw,row=recorder.run("audit-independent-reader",[sys.executable,"-I","-B",
+              source/"verify_readonly.py","--output",temporary/"audit-queue-output",
+              "--source-manifest-sha256",os.environ["AUDIT_SOURCE_SHA"],"--require-controls"],timeout=180)
+          proof=json.loads(raw)
+          assert proof["before"]==proof["after"] and len(proof["probes"])==12
+          assert proof["native_or_rust_executions"]==proof["reader_writes"]==0
+          print(json.dumps({"status":proof["evidence"]["status"],"stdout":row["stdout"]},sort_keys=True))
+          PY
+      - name: Report failure location without replay
+        if: failure()
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "audit-queue-output"
+          for name in ("GATE.json", "native/CAPTURE.json", "original/CAPTURE.json", "reader-controls/result.json"):
+              path = root / name
+              if not path.is_file():
+                  continue
+              raw = path.read_bytes()
+              value = json.loads(raw)
+              keys = ("status", "error", "cases", "native_calls", "elapsed_seconds", "source_unchanged", "source_manifest_sha256", "physical_buffer_bytes")
+              print(json.dumps({"file": name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "summary": {k: value[k] for k in keys if k in value}}, sort_keys=True))
+          for path in sorted(root.rglob("*.stderr")):
+              if not path.is_file():
+                  continue
+              raw = path.read_bytes()
+              if raw:
+                  print(json.dumps({"file": path.relative_to(root).as_posix(), "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "tail_bytes": min(16384, len(raw)), "tail_utf8": raw[-16384:].decode("utf-8", errors="replace"), "complete_bytes_retained_in_archive": True}, sort_keys=True))
+          PY
+      - name: Preserve complete success or failure without replay
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/audit-queue-output"
+          python3 -I -B "$AUDIT_SOURCE/export.py" --capture "$RUNNER_TEMP/audit-queue-output" --archive "$RUNNER_TEMP/audit-store-queue-v2.tar.gz" > "$RUNNER_TEMP/audit-queue-export.stdout" 2> "$RUNNER_TEMP/audit-queue-export.stderr"
+      - name: Upload complete source and physical evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-store-queue-v2-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/audit-store-queue-v2.tar.gz
+            ${{ runner.temp }}/audit-store-queue-v2.tar.gz.json
+            ${{ runner.temp }}/audit-independent-processes
+            ${{ runner.temp }}/audit-queue-export.stdout
+            ${{ runner.temp }}/audit-queue-export.stderr
+          if-no-files-found: error
+          retention-days: 14

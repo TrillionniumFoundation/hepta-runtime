@@ -73,3 +73,42 @@ checked ticket exhaustion is reported as unavailable.
 `authoring/` is a source renderer. The executable implementation is generated HIA;
 Python is not part of its production path. Original Rust is retained solely as
 the immutable reference until full replacement qualification has closed.
+
+
+## Complete native capture and limited original comparison
+
+The v2 qualification recipe retains every v1 HIA function, every one of the
+70 frozen model scenarios (1,933 semantic calls), all 68 private refusals and
+the exact initial capacities. The manifest adds the complete evidence reader,
+original observers and process custody; it does not widen the runtime claim.
+
+The unchanged 7,395-byte target lock is compiled with Rust 1.95.0 and the exact
+target development profile. The unchanged 8,045-byte test excerpt runs all five
+original concurrency tests. A separate observer executes the original lock
+with six reader cohorts of 1, 2, 3, 32, 65 and 257 and a queued writer / reader /
+writer / reader schedule. Its 748 complete observable queue snapshots are
+compared byte for byte with the corresponding actual HIA output and state,
+using a selector frozen before any new execution.
+
+This is a limited original comparison. Intermediate clock / mutex events and
+all other private boundaries remain explicit model cases. The HIA component
+still requires a native mutex / condvar controller that binds actual thread
+ownership and performs the emitted inner-unlock effect before publishing
+queue release. Passing this recipe does not qualify that controller, the public
+request audit handler, or the whole runtime.
+
+The fixed reader consumes every actual call's input, full output before/after,
+and full workspace before/after. It checks complete growth transfer, unused
+buffer tails, private refusal immutability, compiler output, retained compiler
+sources, exact source excerpts, actual process commands/PIDs/PGIDs/budgets,
+original test output and original trace bytes. Sixteen frozen evidence
+mutations exercise deeper readers with repaired file/stream envelopes where
+appropriate. Two complete relocated copies are admitted before and after the
+refusals. All 20 guard proofs retain full before/after byte and filesystem
+metadata inventories and all 12 execution/write refusal probes.
+
+Native and reader processes retain the existing 180-second limits; Rust version
+inspection uses 60 seconds and reference compilation uses 900 seconds. The CI
+job retains its 15-minute outer limit. Failed processes are killed and reaped
+before evidence writes. Complete success or failure is archived with all source
+and retained physical evidence. No Rust or HIA runs during archive reading.

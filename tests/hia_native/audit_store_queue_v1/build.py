@@ -39,9 +39,16 @@ def build(hepta, output, cache=None):
     assert hashlib.sha256(builder.bootstrap().read_bytes()).hexdigest() == COMPILER
     module = builder.compile('audit-store-queue', ROOT / 'native/audit_store_queue.hepta',
                              standalone=None, buffer_profile='history.v1')
+    for name, expected in builder.identity['files'].items():
+        raw = (hepta / name).read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == expected
+        retained = output / 'compiler-source' / name
+        retained.parent.mkdir(parents=True, exist_ok=True)
+        retained.write_bytes(raw)
     assert verify_source() == source
     report = dict(schema='hepta.runtime.audit-store-queue.build.v1',
                   source_manifest_sha256=source, compiler_sha256=COMPILER,
+                  compiler_bootstrap='fresh pinned B1=B2=B3 on CI' if cache is None else 'copied verified B1=B2=B3',
                   module=str(module.relative_to(output)), module_manifest=pin(module.read_bytes()),
                   semantic_execution=False, whole_runtime_replaced=False)
     (output / 'BUILD.json').write_text(json.dumps(report, sort_keys=True, indent=2) + '\n')
