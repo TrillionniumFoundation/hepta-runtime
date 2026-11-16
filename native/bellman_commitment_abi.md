@@ -145,6 +145,7 @@ header fits the declared transport.
 | 12000–12031 | Preserved request digest |
 | 12032–12063 | Plan digest |
 | 12288–12303 | Canonical cursor and latched failure code |
+| 12352–14399 | Thirty-two private 64-byte binary64 text-cache entries |
 | 16384 onward | Canonical JSON bytes |
 
 The SHA update adapter reads only the canonical span or the identity span,
@@ -152,6 +153,21 @@ while its state and schedule remain below 8192. The formatter finishes before
 hashing begins. Every invocation resets the cursor and error latch after frame
 admission; qualification checks reuse after a budget refusal. Workspace bytes
 are private and may change on a serialization or capacity refusal.
+
+The bounded text cache belongs to this invocation. Only after the complete
+typed frame and initial capacities have passed validation does the entry clear
+all thirty-two cached lengths. No prior-call tag or payload is trusted. A slot
+contains the exact `u64` IEEE bits, a nonzero length of at most 32, and the
+formatter's complete bytes. Its slot index is the high five bits of the
+wrapping product `(bits ^ (bits >> 32)) * 11400714819323198485`. Every hit also
+compares the complete bits; signed zeros and hash collisions remain distinct.
+Misses call the unchanged imported formatter. A successful result no longer
+than 32 bytes is copied before publishing its length. Longer successful results
+use the original scratch span without caching, so the cache introduces no new
+formatting refusal. Both paths use the unchanged byte-budget and workspace
+reservation, and neither writes caller output until the complete request and
+its digests are ready. The cache does not overlap formatter/SHA scratch,
+identity bytes, integer digits, digests, counters, or canonical JSON storage.
 
 ## Qualification and remaining public work
 

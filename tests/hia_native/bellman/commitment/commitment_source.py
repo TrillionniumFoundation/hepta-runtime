@@ -13,6 +13,10 @@ def commitment(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
         return 4294967293
     if frame_valid(s, count) == False:
         return 4294967295
+    cache_index = 0
+    while cache_index < 32:
+        put(w, 12360 + cache_index * 64, 0)
+        cache_index = cache_index + 1
     put(w, 12288, 0)
     put(w, 12296, 0)
     text_request_open(w)
@@ -140,16 +144,29 @@ def reserve(w:mutbuf, size:u64) -> u64:
 def emit_float(w:mutbuf, bits:u64) -> u64:
     if w_get(w, 12296) != 0:
         return 0
-    size = format_bits(w, bits)
-    if size >= 4294967292:
-        put(w, 12296, 4294967292)
-        return 0
+    slot = 12352 + ((((bits ^ (bits >> 32)) * 11400714819323198485) >> 59) * 64)
+    size = w_get(w, slot + 8)
+    source = 6144
+    if size != 0 and size <= 32 and w_get(w, slot) == bits:
+        source = slot + 16
+    else:
+        size = format_bits(w, bits)
+        if size >= 4294967292:
+            put(w, 12296, 4294967292)
+            return 0
+        if size != 0 and size <= 32:
+            put(w, slot, bits)
+            index = 0
+            while index < size:
+                store(w, slot + 16 + index, byte(w, 6144 + index))
+                index = index + 1
+            put(w, slot + 8, size)
     at = reserve(w, size)
     if at == 0:
         return 0
     index = 0
     while index < size:
-        store(w, at + index, byte(w, 6144 + index))
+        store(w, at + index, byte(w, source + index))
         index = index + 1
     return 0
 

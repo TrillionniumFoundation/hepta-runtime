@@ -213,10 +213,11 @@ concurrency:
   group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# The same fresh cold/build bytes feed all eight complete native partitions.
+# The same fresh cold/build bytes feed all ten complete native partitions.
 # Prepare and native partitions retain 15 minutes; original groups run independently.
 # Every individual suite, owner and stream deadline remains unchanged.
 # Independent View render/state suites run apart from the complete public View chain.
+# Execution admission, effect ownership and diagnostic capture have one complete shard.
 # The batch partition includes all four atomic-write suites and its full 505 MiB case.
 # Seven original groups retain all recipes and fixed Rust 1.95.0; the final job admits every group.
 jobs:
@@ -294,7 +295,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [storage, batch, text, shell, view_components, view, json, config, system]
+        group: [storage, batch, text, shell, view_components, view, json, execution, config, system]
     steps:
       - name: Install filesystem syscall trace observer
         if: matrix.group == 'system' || matrix.group == 'shell' || matrix.group == 'config' || matrix.group == 'view'

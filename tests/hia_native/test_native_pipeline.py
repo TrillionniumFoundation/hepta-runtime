@@ -241,7 +241,7 @@ class NativePipelineTests(unittest.TestCase):
                          "test_runtime_mcp_raw_value.py", "test_runtime_mcp_raw_value_evidence.py")):
             positions = [partitions["view"].index(name) for name in ordered]
             self.assertEqual(positions, sorted(positions))
-        self.assertEqual(set(partitions), {"batch", "text", "shell", "view_components", "view", "json", "config", "system", "storage"})
+        self.assertEqual(set(partitions), {"batch", "text", "shell", "view_components", "view", "json", "execution", "config", "system", "storage"})
         self.assertEqual(partitions["storage"], q.storage_pipeline.TESTS)
         config = next(row for row in q.MODULES if row["key"] == "runtime_config")
         span = next(row for row in q.MODULES if row["key"] == "runtime_config_span")
@@ -483,7 +483,7 @@ class NativePipelineTests(unittest.TestCase):
                 p.partition_tests(changed)
 
     def test_diagnostic_capture_resources_and_controls_stay_in_order(self):
-        suites = p.partition_tests()["json"]
+        suites = p.partition_tests()["execution"]
         expected = q.serde_error_pipeline.TESTS
         self.assertEqual(tuple(name for name in suites if name in expected), expected)
         for changed in (expected[::-1], (expected[0], expected[2], expected[1])):
