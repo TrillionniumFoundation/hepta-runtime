@@ -169,3 +169,29 @@ addresses, sessions and following calls are still checked for every event.
 No physical observation, semantic result, refusal, recovery or deadline is
 removed. All HIA and original source bytes remain identical to revision 5.
 The new source and readers still require the complete fresh qualification gate.
+
+## Complete read-only guard traversal
+
+Revision 6 again completed all 842 native cases, all private controls and the
+complete guarded original comparison. The evidence-control process completed
+both physical relocations and twenty of its thirty-three refusals before the
+unchanged 180-second limit. Its full failed archive contains 63,657 files and
+3,442,057,179 logical bytes; every member and mode was independently read. The
+failure remains a failure, and all remaining controls are still required.
+
+Revision 7 removes repeated whole-ancestor path construction from snapshots.
+It traverses ordinary directories through held descriptors, opens each ordinary
+file with O_NOFOLLOW, reads every byte through EOF, and checks the opened and
+final metadata against the original stat. Each before/after record retains
+mode, inode, device, byte count, mtime, ctime and SHA-256. No file, directory,
+physical byte or hash is skipped or cached. The audit dispatcher retains only
+active guards, and nested cleanup always restores original descriptor methods.
+All twelve refusal probes and every existing audit refusal branch are retained.
+
+A frozen paired diagnostic over 29,195 entries produced exactly equal complete
+before/after records and probe records. Guard time changed from 44.13 seconds
+to 10.08 seconds. This diagnostic read existing captured bytes without native
+or Rust execution; it is not a qualification pass. The current source still
+requires a fresh 842-case gate, all thirty-three native and twelve original
+reader controls, both relocations, and the unchanged 180-second process and
+fifteen-minute CI limits.
