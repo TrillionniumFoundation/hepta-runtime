@@ -118,7 +118,6 @@ fn record(case: &str, generation: u64, kind: &str, fields: &str) {
 		std::process::id(), tid()).unwrap();
 }
 
-
 struct Observation {
 	kind: u64,
 	input: Vec<u8>,
@@ -206,7 +205,11 @@ extern "C" fn observe(pointer: *const u64, user: *const Core) {
 			let after = observed_bytes(event[5], 144);
 			assert_eq!(event[2], 128);
 			assert_eq!(&after[128..], &[0xa5; 16]);
-			let owner = if word(&before.input, 1) == 0 { 0 } else { actor };
+			let owner = if word(&before.input, 1) == 0 {
+				0
+			} else {
+				actor
+			};
 			let serial = before.serial;
 			record(&core.case, core.generation, "boundary", &format!(
 				"\"actor\":{owner},\"serial\":{serial},\"returned\":128,\"input_hex\":\"{}\",\"output_before_hex\":\"{}\",\"output_after_hex\":\"{}\"",
@@ -219,7 +222,10 @@ extern "C" fn observe(pointer: *const u64, user: *const Core) {
 			assert_eq!(capacity, required);
 			assert!(required > old_capacity);
 			assert_eq!(&after[..old_capacity], &before.queue[..old_capacity]);
-			assert_eq!(&after[old_capacity..required], vec![0; required - old_capacity]);
+			assert_eq!(
+				&after[old_capacity..required],
+				vec![0; required - old_capacity]
+			);
 			assert_eq!(&after[required..], &[0xa5; 16]);
 			let serial = word(&observed_bytes(event[5], 512), 3);
 			record(&core.case, core.generation, "growth", &format!(
@@ -442,7 +448,10 @@ impl Drop for Core {
 		};
 		assert_eq!(returned, 0);
 		let context = unsafe { *self.context.get() };
-		assert_eq!((context[0], context[1], context[4], context[5], context[6]), (0, 0, 0, 0, 0));
+		assert_eq!(
+			(context[0], context[1], context[4], context[5], context[6]),
+			(0, 0, 0, 0, 0)
+		);
 		assert_eq!(&context[16..], &[0xa5a5a5a5a5a5a5a5; 2]);
 		assert_eq!(&actor[512..], &[0xa5; 16]);
 	}

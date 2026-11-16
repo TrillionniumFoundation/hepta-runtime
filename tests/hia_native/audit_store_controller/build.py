@@ -45,13 +45,17 @@ def build(hepta, sync_source, output):
     for name, path in (
         ('audit-store-controller', ROOT / 'native/audit_store_controller.hepta'),
         ('audit-native-sync', sync_source / 'native/audit_sync_boundary.hepta'),
+        ('audit-controller-callable', ROOT / 'native/audit_controller_callable.hepta'),
     ):
         manifest = builder.compile(name, path, standalone=None, buffer_profile='history.v1')
         image = (manifest.parent / 'module.image.bin').read_bytes()
         if name == 'audit-store-controller':
             assert pin(image) == CONTROLLER_IMAGE
-        else:
+        elif name == 'audit-native-sync':
             assert hashlib.sha256(image).hexdigest() == SYNC_IMAGE_SHA
+        else:
+            expected = json.loads((ROOT / 'native/callable_compiler_pin.json').read_bytes())
+            assert pin(image) == expected['image']
         modules[name] = dict(manifest=str(manifest.relative_to(output)),
                              manifest_pin=pin(manifest.read_bytes()), image=pin(image))
     for name, expected in builder.identity['files'].items():

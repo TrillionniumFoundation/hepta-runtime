@@ -8,6 +8,8 @@
     "4": 105,
     "5": 270
   },
+  "callable_emitter_calls": 9,
+  "callable_emitter_refusals": 8,
   "clock_mapping_observations": 128,
   "context_count": 13,
   "contexts": {
@@ -69,6 +71,8 @@
       65
     ]
   },
+  "observer_free_calls": 15,
+  "observer_free_refusals": 9,
   "original_cases": [
     "exclusive_owner_panic_preserves_inner_poison_and_releases_fifo",
     "exclusive_threads_serialize_256_actual_critical_sections",
@@ -85,10 +89,12 @@
   "process_budgets": {
     "compiler-version": 60,
     "emit-boundary": 180,
+    "emit-callable": 180,
     "format": 60,
     "native-build": 900,
     "native-test-build": 900,
     "native-threads": 180,
+    "observer-free-native": 180,
     "original-build": 900,
     "original-threads": 180,
     "reader-controls": 180,
@@ -98,6 +104,8 @@
   "public_handler_qualified": false,
   "read_only_guard_probes": 12,
   "reader_refusals": [
+    "callable-instructions",
+    "observer-required",
     "emitted-instructions",
     "returned-code",
     "actual-thread-id",
@@ -116,6 +124,7 @@
     "5": 3,
     "6": 12
   },
+  "runtime_effect_pump_rust_required": false,
   "rust_profile": [
     "--edition=2021",
     "--test",
@@ -133,6 +142,6 @@
     "lto=off"
   ],
   "schema": "hepta.audit-store-controller.domain.v1",
-  "scope": "actual composed HIA audit lock controller and unchanged original owner tests",
+  "scope": "actual HIA/native callable audit lock, disabled-observer ABI, and unchanged original thread cases",
   "whole_runtime_replaced": false
 }

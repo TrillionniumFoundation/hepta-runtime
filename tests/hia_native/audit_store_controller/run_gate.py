@@ -23,7 +23,8 @@ def run(hepta, sync_source, output, rust_bin, expected_source):
     threads = semantic / 'threads'
     threads.mkdir()
     env, env_receipt = environment(os.environ, rust_bin)
-    env.update(HIA_AUDIT_CONTROLLER_IMAGE=str(semantic / 'build/modules/audit-store-controller/module.image.bin'),
+    env.update(HIA_AUDIT_CALLABLE_IMAGE=str(semantic / 'callable-emission/callable.bin'),
+               HIA_AUDIT_CONTROLLER_IMAGE=str(semantic / 'build/modules/audit-store-controller/module.image.bin'),
                HIA_AUDIT_SYNC_IMAGE=str(semantic / 'emission/boundary.bin'),
                HIA_AUDIT_CONTROLLER_JOURNAL=str(threads / 'journal.jsonl'),
                HIA_AUDIT_ORIGINAL_OBSERVATIONS=str(threads / 'original-observations.jsonl'))
@@ -57,10 +58,11 @@ def run(hepta, sync_source, output, rust_bin, expected_source):
             readers.run(name, [python, '-B', str(ROOT / script), '--output', str(output),
                         '--source-manifest-sha256', identity, *extra], timeout=180)
         result = dict(schema='hepta.audit-store-controller.gate.v1',
-                      status='COMPLETE_COMPOSED_HIA_AUDIT_CONTROLLER_PASS',
+                      status='COMPLETE_HIA_NATIVE_AUDIT_CALLABLE_PASS',
                       source_manifest_sha256=identity, original_tests=len(domain['original_cases']),
                       native_tests=len(domain['native_cases']), contexts=domain['context_count'],
                       actors=domain['actor_count'], api_completions=domain['api_completions'],
+                      observer_free_calls=15, observer_free_refusals=9, runtime_effect_pump_rust_required=False,
                       reader_refusals=len(domain['reader_refusals']), relocated_admissions=2,
                       post_refusal_admissions=2, elapsed_seconds=time.monotonic() - started,
                       scope=domain['scope'], public_handler_qualified=False, whole_runtime_replaced=False)

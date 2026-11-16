@@ -11,6 +11,8 @@ from read_only_guard import guarded
 import read_capture
 
 ERRORS = {
+    'callable-instructions': 'every composed instruction equals the frozen adapter and admitted HIA modules',
+    'observer-required': 'observer-free native process and closed domain',
     'emitted-instructions': 'exact emitted instruction bytes',
     'returned-code': 'every actual controller step returned its full frame',
     'actual-thread-id': 'native response and independently observed actual TID',
@@ -25,6 +27,14 @@ ERRORS = {
 
 
 def mutation(root, name):
+    if name == 'callable-instructions':
+        path = 'callable-emission/callable.bin'
+        raw = bytearray(read(root / path)); raw[0] ^= 1
+        return path, bytes(raw)
+    if name == 'observer-required':
+        path = 'observer-free/CALLABLE.json'
+        report = loads(read(root / path)); report['observer_pointer'] = 1
+        return path, encoded(report)
     if name in ('emitted-instructions', 'compile-image'):
         path = ('emission/boundary.bin' if name == 'emitted-instructions'
                 else 'build/modules/audit-store-controller/module.image.bin')
@@ -138,21 +148,21 @@ def run(output, expected_source):
                                proof=dict(file=str((folder / 'PROOF.json').relative_to(output)), **pin(encoded(proof))),
                                evidence=proof['evidence']))
     result = dict(schema='hepta.audit-store-controller.reader-controls.v1', source_manifest_sha256=expected_source,
-                  refusals=rows, admissions=admissions, guard_proofs=14, guards_per_proof=12,
+                  refusals=rows, admissions=admissions, guard_proofs=16, guards_per_proof=12,
                   native_or_rust_executions=0, reader_writes=0, whole_runtime_replaced=False)
     (output / 'CONTROLS.json').write_bytes(encoded(result))
     require(verify(output, baseline)['status'] == 'PASS', 'complete retained controls verify')
-    print(encoded(dict(status='PASS', refusals=10, relocated_admissions=2,
-                       post_refusal_admissions=2, guard_proofs=14, native_or_rust_executions=0)).decode(), end='')
+    print(encoded(dict(status='PASS', refusals=12, relocated_admissions=2,
+                       post_refusal_admissions=2, guard_proofs=16, native_or_rust_executions=0)).decode(), end='')
 
 
 def verify(output, baseline):
     report = loads(read(output / 'CONTROLS.json'))
     require(report['schema'] == 'hepta.audit-store-controller.reader-controls.v1'
-            and report['source_manifest_sha256'] == source() and report['guard_proofs'] == 14
+            and report['source_manifest_sha256'] == source() and report['guard_proofs'] == 16
             and report['guards_per_proof'] == 12 and report['native_or_rust_executions'] == report['reader_writes'] == 0
             and report['whole_runtime_replaced'] is False, 'source-bound inert reader controls')
-    require([row['name'] for row in report['refusals']] == list(ERRORS), 'all ten fixed physical mutations')
+    require([row['name'] for row in report['refusals']] == list(ERRORS), 'all twelve fixed physical mutations')
     require([row['name'] for row in report['admissions']] == ['relocation-a', 'relocation-b', 'post-refusal-a', 'post-refusal-b'],
             'two full relocations and two post-refusal admissions')
     original = output / 'semantic'
@@ -182,8 +192,8 @@ def verify(output, baseline):
         else:
             require(files(capture) == original_files and read_capture.semantic(capture) == baseline == row['evidence'],
                     'complete relocated or post-refusal capture remains admissible')
-    return dict(status='PASS', refusals=10, relocated_admissions=2, post_refusal_admissions=2,
-                guard_proofs=14, guards_per_proof=12, native_or_rust_executions=0, reader_writes=0)
+    return dict(status='PASS', refusals=12, relocated_admissions=2, post_refusal_admissions=2,
+                guard_proofs=16, guards_per_proof=12, native_or_rust_executions=0, reader_writes=0)
 
 
 if __name__ == '__main__':

@@ -6,11 +6,13 @@ import struct
 from common import (ROOT, COMPILER, HEPTA_COMMIT, HEPTA_TREE, envelope, files, loads,
                     pin, read, require, sha, source)
 from recipes import recipes
+import read_callable
 
 SYNC_SOURCE = 'e780e46fcdb3278b6b4e87b56da79397dc6f8abbb741e7260e7e71ac4bab07a5'
 IMAGES = {
     'audit-store-controller': '1c2d4e44f4d2185ef06dc1de0566f21a33f92bee61b05fa7ebed6ee9841de90a',
     'audit-native-sync': '3f680858821d674511aba0a59df606bc03bc9384216e6e4fa88b1a01c7bbeae5',
+    'audit-controller-callable': '1c7a1322303ac23f5a69535a804e40c56650ab152d8ed30f58ca29ce31a3322f',
 }
 EFFECTS = {
     10: (6, 0), 11: (1, 0), 12: (6, 0), 13: (6, 0), 14: (6, 0), 15: (4, 0),
@@ -398,10 +400,13 @@ def semantic(root):
     original = check_original()
     build = check_build(root, identity)
     emission = check_emission(root, identity)
+    callable_emission = read_callable.emission(root, identity)
     pids = check_processes(root, capture, domain)
+    observer_free = read_callable.observer_free(root, identity, pids['observer-free-native'])
     journal = check_journal(root, pids['native-threads'], domain)
-    return dict(schema='hepta.audit-store-controller.read.v1', status='COMPLETE_COMPOSED_HIA_AUDIT_CONTROLLER_PASS',
+    return dict(schema='hepta.audit-store-controller.read.v1', status='COMPLETE_HIA_NATIVE_AUDIT_CALLABLE_PASS',
                 source_manifest_sha256=identity, original=original, build=build, emission=emission,
+                callable_emission=callable_emission, observer_free=observer_free,
                 journal=journal, original_tests=len(domain['original_cases']), native_tests=len(domain['native_cases']),
                 scope=domain['scope'], public_handler_qualified=False, whole_runtime_replaced=False, semantic_reexecutions=0)
 
@@ -459,8 +464,10 @@ def check_build(root, identity):
     for name, image_sha in IMAGES.items():
         folder = build / 'modules' / name
         manifest = loads(read(folder / 'manifest.json'))
-        raw_source = read(ROOT / 'native/audit_store_controller.hepta' if name == 'audit-store-controller'
-                          else sync / 'native/audit_sync_boundary.hepta')
+        source_path = {'audit-store-controller': ROOT / 'native/audit_store_controller.hepta',
+                       'audit-native-sync': sync / 'native/audit_sync_boundary.hepta',
+                       'audit-controller-callable': ROOT / 'native/audit_controller_callable.hepta'}[name]
+        raw_source = read(source_path)
         image = read(folder / 'module.image.bin')
         output = read(folder / 'module.output.bin')
         receipt = loads(read(folder / 'module.receipt.json'))
