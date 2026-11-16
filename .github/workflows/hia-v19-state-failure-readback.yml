@@ -1,0 +1,43 @@
+name: HIA v19-state complete failure archive readback
+on:
+  push:
+    branches:
+      - hia-v19-state-failure-readback-6780-20261116
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: hia-v19-state-failure-readback-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  readback:
+    name: Read every retained failure byte (${{ matrix.kind }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [state]
+    steps:
+      - name: Checkout exact read-only reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/failure_archive_v19_state_ci
+      - name: Hash complete ZIP, tar, diagnostics and member bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -B tests/hia_native/failure_archive_v19_state_ci/readback.py \
+            --kind '${{ matrix.kind }}' --output "$RUNNER_TEMP/review"
+      - name: Retain full independent review including failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v19-state-failure-readback-${{ matrix.kind }}-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/review/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
