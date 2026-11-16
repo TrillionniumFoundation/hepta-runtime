@@ -49,6 +49,8 @@ SHARD_REPORT = "original-shard-report.json"
 CONTROLS = ("result-values-evidence-controls", "public-registry-evidence-controls", "result-storage-evidence-controls", "audit-readiness-evidence-controls", "audit-activity-evidence-controls", "audit-stamp-evidence-controls")
 COLLECTED_STATUS = "ORIGINALS_COLLECTED"
 COLLECTED_PHASE = "awaiting_quiescent_evidence_controls"
+CONTROLLED_STATUS = "EVIDENCE_CONTROLS_COMPLETED"
+CONTROLLED_PHASE = "awaiting_final_original_admission"
 
 
 def groups() -> dict[str, tuple[str, ...]]:
@@ -359,7 +361,7 @@ def verify_collected_receipts(output: Path, report: dict) -> None:
             or report.get("service_original_fixture_retirement") != service
             or report.get("json_reference_build") != json_build):
         raise ValueError("aggregate differs from all actual original shard completions")
-    if report.get("status") == "PASS" and len(tail) != len(CONTROLS):
+    if report.get("status") in ("PASS", CONTROLLED_STATUS) and len(tail) != len(CONTROLS):
         raise ValueError("complete original aggregate omitted quiescent evidence controls")
 
 
@@ -440,39 +442,68 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
         raise
 
 
-def finish_collection(output: Path, report: dict, started: float) -> dict:
+def control_completions(output: Path, report: dict) -> None:
+    """Require all six completed processes without claiming final admission."""
+    rows = report.get("checks", [])
+    if ([row.get("name") for row in rows if row.get("name") in CONTROLS] != list(CONTROLS)
+            or [row.get("name") for row in rows[-len(CONTROLS):]] != list(CONTROLS)):
+        raise ValueError("controlled collection requires every actual control exactly once and in order")
+    for row in rows[-len(CONTROLS):]:
+        if (row.get("timeout_seconds") != 180
+                or type(report.get(row["name"].replace("-", "_"))) is not dict):
+            raise ValueError("controlled collection omitted a complete control result or its original deadline")
+        validate_process(output, row)
+
+
+def finish_collection(output: Path, report: dict, started: float, *, controls_only: bool = False) -> dict:
     # All original jobs have terminated. The separately retained collection is
-    # not a qualification PASS; every mutation and final admission remains here.
+    # not a qualification PASS; controls-only stops before final admission.
     r.run_result_values_controls(output, report)
     r.run_public_registry_controls(output, report)
     r.run_result_storage_controls(output, report)
     r.run_audit_readiness_controls(output, report)
     r.run_audit_activity_controls(output, report)
     r.run_audit_stamp_controls(output, report)
+    control_completions(output, report)
+    if controls_only:
+        report.update(status=CONTROLLED_STATUS, phase=CONTROLLED_PHASE,
+                      rust_comparison_status="PARTIAL",
+                      original_collection_controls_elapsed_seconds=time.monotonic() - started)
+        q.save_report(output / "result.json", report)
+        return {"status": CONTROLLED_STATUS, "recipes": len(report["original_rust_comparisons"]),
+                "checks": len(report["checks"]), "whole_runtime_replaced": False}
+    return finish_admission(output, report, started)
+
+
+def finish_admission(output: Path, report: dict, started: float) -> dict:
+    # A separate final job re-admits the entire restored evidence tree. Merely
+    # completing the six control processes is never an aggregate PASS.
     report.update(status="PASS", phase="complete", rust_comparison_status="PASS")
     # No PASS report is written until the complete control tail, workflow
     # receipts, source, all native/original bytes and restored modes pass.
     r.check_input_pins(output, report)
     elapsed = time.monotonic() - started
-    report.update(original_collection_elapsed_seconds=elapsed +
+    controls_elapsed = report.get("original_collection_controls_elapsed_seconds", 0)
+    report.update(original_collection_elapsed_seconds=elapsed + controls_elapsed +
                   report.get("original_collection_assembly_elapsed_seconds", 0),
                   finished_at=datetime.now(timezone.utc).isoformat())
     if "original_collection_assembly_elapsed_seconds" in report:
-        report["original_collection_completion_elapsed_seconds"] = elapsed
+        report["original_collection_completion_elapsed_seconds"] = elapsed + controls_elapsed
+    if "original_collection_controls_elapsed_seconds" in report:
+        report["original_collection_final_admission_elapsed_seconds"] = elapsed
     q.save_report(output / "result.json", report)
     return {"status": "PASS", "recipes": len(report["original_rust_comparisons"]),
             "checks": len(report["checks"]), "whole_runtime_replaced": False}
 
 
-def complete_collection(output: Path, hepta: Path, native_sha: str, invocation: str,
-                        expected: dict, bundle: Path, collection_sha: str,
-                        source_artifacts: Path) -> dict:
+def restore_collection(output: Path, native_sha: str, invocation: str, expected: dict,
+                       bundle: Path, collection_sha: str, source_artifacts: Path,
+                       *, controls: bool = False) -> dict:
     # The new job receives the collection digest from the successful producer,
     # not from the transported report. Restore every byte from that manifest
     # and the independently retained native/original workflow artifacts.
     import hia_native_artifact_bundle as transport
     expected_shards(expected)
-    started = time.monotonic()
     manifest_path = p.owned(bundle, transport.MANIFEST)
     if (type(collection_sha) is not str or not p.SHA256.fullmatch(collection_sha)
             or p.digest(manifest_path) != collection_sha):
@@ -480,12 +511,22 @@ def complete_collection(output: Path, hepta: Path, native_sha: str, invocation: 
     manifest = p.read_json(manifest_path)
     transport.validate_manifest(manifest)
     wanted_sources = {"native": native_sha, **expected}
-    if (manifest["schema"] != transport.COLLECTION_SCHEMA
+    schema = transport.CONTROLS_SCHEMA if controls else transport.COLLECTION_SCHEMA
+    if (manifest["schema"] != schema
             or manifest["head"] != q.git_head() or manifest["invocation"] != invocation
             or {key: value["seal_sha256"] for key, value in manifest["sources"].items()} != wanted_sources):
         raise ValueError("collection belongs to another head, invocation or source seal")
-    transport.restore(bundle, source_artifacts, output, collection_sha, collection=True)
-    report = p.read_json(p.owned(output, "result.json"))
+    transport.restore(bundle, source_artifacts, output, collection_sha,
+                      collection=not controls, controls=controls)
+    return p.read_json(p.owned(output, "result.json"))
+
+
+def complete_collection(output: Path, hepta: Path, native_sha: str, invocation: str,
+                        expected: dict, bundle: Path, collection_sha: str,
+                        source_artifacts: Path, *, controls_only: bool = False) -> dict:
+    started = time.monotonic()
+    report = restore_collection(output, native_sha, invocation, expected, bundle,
+                                collection_sha, source_artifacts)
     try:
         elapsed = report.get("original_collection_assembly_elapsed_seconds")
         pipeline = {"schema": "hepta.runtime.original-pipeline.v1", "invocation": invocation,
@@ -504,15 +545,49 @@ def complete_collection(output: Path, hepta: Path, native_sha: str, invocation: 
         verify_collected_receipts(output, report)
         report.update(status="RUNNING", phase="original_rust_comparison", rust_comparison_status="RUNNING")
         q.save_report(output / "result.json", report)
-        return finish_collection(output, report, started)
+        return finish_collection(output, report, started, controls_only=controls_only)
     except BaseException as error:
         fail(output, report, error, "original_complete")
         raise
 
 
+def finalize_collection(output: Path, hepta: Path, native_sha: str, invocation: str,
+                        expected: dict, bundle: Path, controls_sha: str,
+                        source_artifacts: Path) -> dict:
+    started = time.monotonic()
+    report = restore_collection(output, native_sha, invocation, expected, bundle,
+                                controls_sha, source_artifacts, controls=True)
+    try:
+        pipeline = {"schema": "hepta.runtime.original-pipeline.v1", "invocation": invocation,
+            "native_sha256": native_sha, "shards": expected,
+            "recipes": [key for keys in groups().values() for key in keys]}
+        elapsed = [report.get(key) for key in ("original_collection_assembly_elapsed_seconds",
+                                               "original_collection_controls_elapsed_seconds")]
+        if (report.get("status") != CONTROLLED_STATUS or report.get("phase") != CONTROLLED_PHASE
+                or report.get("rust_comparison_status") != "PARTIAL"
+                or report.get("native_components_status") != "PASS"
+                or report.get("compiler_checkout") != str(hepta)
+                or report.get("original_qualification_pipeline") != pipeline
+                or any(type(value) not in (int, float) or not math.isfinite(value) or value < 0
+                       for value in elapsed)
+                or any(report.get(key) is not False for key in
+                       ("production_activated", "whole_runtime_replaced", "old_stack_removal_qualified"))):
+            raise ValueError("collection is not the complete controlled non-PASS aggregate")
+        control_completions(output, report)
+        report.update(status="RUNNING", phase="final_original_admission", rust_comparison_status="RUNNING")
+        q.save_report(output / "result.json", report)
+        # This full admission also rechecks every native/original workflow seal,
+        # control receipt, source, process, corpus, artifact byte and mode. The
+        # control programs are not executed a second time in this job.
+        return finish_admission(output, report, started)
+    except BaseException as error:
+        fail(output, report, error, "original_finalize")
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=("prepare", "shard", "collect", "complete"))
+    parser.add_argument("phase", choices=("prepare", "shard", "collect", "complete", "finalize"))
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--hepta", required=True, type=Path)
     parser.add_argument("--invocation", required=True)
@@ -524,13 +599,18 @@ def main() -> int:
     parser.add_argument("--rustc", default="rustc")
     parser.add_argument("--github-output", type=Path)
     parser.add_argument("--stage-only", action="store_true")
+    parser.add_argument("--controls-only", action="store_true")
     parser.add_argument("--collection-bundle", type=Path)
     parser.add_argument("--collection-sha256")
+    parser.add_argument("--controls-bundle", type=Path)
+    parser.add_argument("--controls-sha256")
     parser.add_argument("--source-artifacts", type=Path)
     args = parser.parse_args()
     if args.stage_only and args.phase != "collect":
         parser.error("--stage-only is valid only for original collection")
-    output = args.output.absolute() if args.phase == "complete" else args.output.resolve(strict=True)
+    if args.controls_only and args.phase != "complete":
+        parser.error("--controls-only is valid only for pending collection controls")
+    output = args.output.absolute() if args.phase in ("complete", "finalize") else args.output.resolve(strict=True)
     hepta = args.hepta.resolve(strict=True)
     if args.phase == "prepare":
         result = prepare(output, hepta, args.invocation)
@@ -555,6 +635,12 @@ def main() -> int:
                 parser.error("complete requires the collection bundle, workflow SHA256 and source artifacts")
             result = complete_collection(output, hepta, args.native_sha256, args.invocation, identities,
                 args.collection_bundle.resolve(strict=True), args.collection_sha256,
+                args.source_artifacts.resolve(strict=True), controls_only=args.controls_only)
+        elif args.phase == "finalize":
+            if args.controls_bundle is None or args.controls_sha256 is None or args.source_artifacts is None:
+                parser.error("finalize requires the controlled bundle, workflow SHA256 and source artifacts")
+            result = finalize_collection(output, hepta, args.native_sha256, args.invocation, identities,
+                args.controls_bundle.resolve(strict=True), args.controls_sha256,
                 args.source_artifacts.resolve(strict=True))
         else:
             result = collect(output, hepta, args.native_sha256, args.invocation,

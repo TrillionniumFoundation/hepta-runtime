@@ -28,6 +28,7 @@ import hia_native_rust_pipeline as r
 MANIFEST = 'aggregate-bundle.json'
 SCHEMA = 'hepta.runtime.aggregate-artifact-bundle.v1'
 COLLECTION_SCHEMA = 'hepta.runtime.original-collection-bundle.v1'
+CONTROLS_SCHEMA = 'hepta.runtime.original-controls-bundle.v1'
 
 
 def require(condition, message):
@@ -109,17 +110,18 @@ def source_maps(output, head, invocation, native_sha, shards):
     return sources, origins, baseline
 
 
-def export(output, destination, head, invocation, native_sha, shards, *, collection=False):
+def export(output, destination, head, invocation, native_sha, shards, *, collection=False, controls=False):
+    require(not (collection and controls), 'bundle stage must be unambiguous')
     require(not destination.exists() and not destination.is_symlink(), 'bundle destination is create-only')
     require(output != destination and output not in destination.parents,
         'bundle payload must be outside the immutable evidence tree')
     sources, origins, baseline = source_maps(output, head, invocation, native_sha, shards)
     report = p.read_json(p.owned(output, 'result.json'))
-    expected_status = r.COLLECTED_STATUS if collection else 'PASS'
-    expected_phase = r.COLLECTED_PHASE if collection else 'complete'
+    expected_status = r.COLLECTED_STATUS if collection else r.CONTROLLED_STATUS if controls else 'PASS'
+    expected_phase = r.COLLECTED_PHASE if collection else r.CONTROLLED_PHASE if controls else 'complete'
     require(report.get('status') == expected_status and report.get('phase') == expected_phase
         and report.get('native_components_status') == 'PASS'
-        and report.get('rust_comparison_status') == ('PARTIAL' if collection else 'PASS')
+        and report.get('rust_comparison_status') == ('PARTIAL' if collection or controls else 'PASS')
         and report.get('source_sha256') == baseline.get('source_sha256')
         and set(report.get('original_rust_comparisons', {})) == {key for keys in r.groups().values() for key in keys}
         and all(report.get(name) is False for name in
@@ -132,6 +134,7 @@ def export(output, destination, head, invocation, native_sha, shards, *, collect
         'bundle aggregate lacks the complete workflow-produced source bindings')
     if collection:
         require(not any(row.get('name') in r.CONTROLS for row in report.get('checks', []))
+            and not any(name.replace('-', '_') in report for name in r.CONTROLS)
             and not (output / 'regex-evidence-controls.json').exists(),
             'pending collection cannot import completed controls or claim qualification')
     else:
@@ -139,6 +142,11 @@ def export(output, destination, head, invocation, native_sha, shards, *, collect
             'bundle aggregate omitted its quiescent evidence controls')
         for row in report['checks'][-len(r.CONTROLS):]:
             r.validate_process(output, row)
+    if controls:
+        r.control_completions(output, report)
+        require(not (output / 'regex-evidence-controls.json').exists(),
+            'controlled non-PASS collection cannot import final qualification controls')
+    elif not collection:
         # This is a transport byte check. The preceding workflow steps performed
         # every semantic admission and all fourteen regex mutation controls.
         regex = p.read_json(p.owned(output, 'regex-evidence-controls.json'))
@@ -169,7 +177,8 @@ def export(output, destination, head, invocation, native_sha, shards, *, collect
             target.chmod(row['mode'])
             require(identity(target) == row, 'bundle payload changed while copying')
             rows[name] = {**row, 'origin': 'aggregate', 'member': 'data/' + name}
-    value = {'schema': COLLECTION_SCHEMA if collection else SCHEMA, 'head': head, 'invocation': invocation,
+    value = {'schema': COLLECTION_SCHEMA if collection else CONTROLS_SCHEMA if controls else SCHEMA,
+        'head': head, 'invocation': invocation,
         'sources': sources, 'files': rows,
         'root_mode': stat.S_IMODE(output.lstat().st_mode),
         'directories': {name: stat.S_IMODE((output / name).lstat().st_mode) for name in directories},
@@ -183,7 +192,7 @@ def export(output, destination, head, invocation, native_sha, shards, *, collect
     expected = {name: {key: row[key] for key in ('bytes', 'sha256', 'mode')}
         for name, row in rows.items() if row['origin'] == 'aggregate'}
     require(actual == expected, 'bundle aggregate payload is incomplete')
-    return {'status': 'COLLECTION_BUNDLE_EXPORTED' if collection else 'BUNDLE_EXPORTED',
+    return {'status': 'COLLECTION_BUNDLE_EXPORTED' if collection else 'CONTROLS_BUNDLE_EXPORTED' if controls else 'BUNDLE_EXPORTED',
         'sha256': p.digest(destination / MANIFEST),
         'complete_files': len(rows), 'payload_files': len(expected),
         'full_evidence_bytes': value['full_evidence_bytes'],
@@ -193,7 +202,7 @@ def export(output, destination, head, invocation, native_sha, shards, *, collect
 def validate_manifest(value):
     require(type(value) is dict and set(value) == {'schema', 'head', 'invocation', 'sources', 'files',
         'directories', 'root_mode', 'semantic_checks_executed_by_transport', 'full_evidence_bytes',
-        'bytes_referenced_in_retained_artifacts'} and value['schema'] in (SCHEMA, COLLECTION_SCHEMA)
+        'bytes_referenced_in_retained_artifacts'} and value['schema'] in (SCHEMA, COLLECTION_SCHEMA, CONTROLS_SCHEMA)
         and type(value['semantic_checks_executed_by_transport']) is int
         and value['semantic_checks_executed_by_transport'] == 0, 'unknown bundle schema or claims')
     require(type(value['root_mode']) is int and 0 <= value['root_mode'] <= 0o777,
@@ -232,12 +241,13 @@ def validate_manifest(value):
         and value['bytes_referenced_in_retained_artifacts'] == saved, 'bundle byte totals differ')
 
 
-def restore(bundle, sources, destination, expected, *, collection=False):
+def restore(bundle, sources, destination, expected, *, collection=False, controls=False):
+    require(not (collection and controls), 'bundle stage must be unambiguous')
     require(type(expected) is str and p.SHA256.fullmatch(expected)
         and p.digest(p.owned(bundle, MANIFEST)) == expected, 'bundle differs from its workflow-produced SHA256')
     value = p.read_json(bundle / MANIFEST)
     validate_manifest(value)
-    require(value['schema'] == (COLLECTION_SCHEMA if collection else SCHEMA),
+    require(value['schema'] == (COLLECTION_SCHEMA if collection else CONTROLS_SCHEMA if controls else SCHEMA),
         'bundle qualification stage differs; pending collection is not a completed aggregate')
     require(not destination.exists() and not destination.is_symlink(), 'restoration is create-only')
     require(set(path.name for path in bundle.iterdir()) == {MANIFEST, 'data'}, 'bundle has undeclared members')
@@ -298,6 +308,14 @@ def restore(bundle, sources, destination, expected, *, collection=False):
     payload, _ = p.inventory(bundle / 'data')
     require(set(payload) == {name for name, row in value['files'].items() if row['origin'] == 'aggregate'},
         'bundle payload has missing or extra members')
+    require(value['files'].get('result.json', {}).get('origin') == 'aggregate',
+        'bundle report must belong to the aggregate producer')
+    report = p.read_json(p.owned(bundle, 'data/result.json'))
+    expected_status = r.COLLECTED_STATUS if collection else r.CONTROLLED_STATUS if controls else 'PASS'
+    expected_phase = r.COLLECTED_PHASE if collection else r.CONTROLLED_PHASE if controls else 'complete'
+    require(report.get('status') == expected_status and report.get('phase') == expected_phase
+        and report.get('rust_comparison_status') == ('PARTIAL' if collection or controls else 'PASS'),
+        'bundle report claims another qualification stage before restoration')
     destination.mkdir(mode=0o700, parents=True)
     for name in sorted(value['directories'], key=lambda item: (item.count('/'), item)):
         (destination / name).mkdir(mode=0o700)
@@ -310,14 +328,14 @@ def restore(bundle, sources, destination, expected, *, collection=False):
     for name in sorted(value['directories'], key=lambda item: (-item.count('/'), item)):
         (destination / name).chmod(value['directories'][name])
     destination.chmod(value['root_mode'])
-    return {'status': 'COLLECTION_BUNDLE_RESTORED' if collection else 'BUNDLE_RESTORED',
+    return {'status': 'COLLECTION_BUNDLE_RESTORED' if collection else 'CONTROLS_BUNDLE_RESTORED' if controls else 'BUNDLE_RESTORED',
         'files': len(value['files']),
         'full_evidence_bytes': value['full_evidence_bytes'], 'semantic_checks_executed': 0}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('phase', choices=('export', 'export-collection', 'restore'))
+    parser.add_argument('phase', choices=('export', 'export-collection', 'export-controls', 'restore'))
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--destination', required=True, type=Path)
     parser.add_argument('--head')
@@ -328,14 +346,15 @@ def main():
     parser.add_argument('--expected-sha256')
     parser.add_argument('--github-output', type=Path)
     args = parser.parse_args()
-    if args.phase in ('export', 'export-collection'):
+    if args.phase in ('export', 'export-collection', 'export-controls'):
         shards = {}
         for item in args.shard_sha256:
             key, sep, digest = item.partition('=')
             require(sep == '=' and key not in shards, 'each original source SHA must occur once')
             shards[key] = digest
         result = export(args.output.absolute(), args.destination.absolute(), args.head,
-            args.invocation, args.native_sha256, shards, collection=args.phase == 'export-collection')
+            args.invocation, args.native_sha256, shards, collection=args.phase == 'export-collection',
+            controls=args.phase == 'export-controls')
     else:
         require(args.sources is not None, 'restore requires retained source artifacts')
         result = restore(args.output.absolute(), args.sources.absolute(),

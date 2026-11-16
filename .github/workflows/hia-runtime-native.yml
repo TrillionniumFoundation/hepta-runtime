@@ -686,11 +686,13 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  qualify:
-    name: All native evidence and complete original Rust comparisons
+  original_controls:
+    name: Complete every evidence control without aggregate qualification
     needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_collect]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      controls_sha256: ${{ steps.bundle.outputs.sha256 }}
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -745,19 +747,152 @@ jobs:
           name: hia-original-collection-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/hia-original-collection-bundle/
 
-      - name: Restore all bytes and complete quiescent controls and final admission
-        id: collect
+      - name: Restore every source and run all six quiescent evidence controls
+        id: controls
         env:
           RUSTUP_TOOLCHAIN: 1.95.0
         run: |
           rustup toolchain install 1.95.0 --profile minimal --component rustfmt
-          python3 -I -B runtime/scripts/hia_native_rust_pipeline.py complete \
+          python3 -I -B runtime/scripts/hia_native_rust_pipeline.py complete --controls-only \
             --hepta "$GITHUB_WORKSPACE/compiler" \
             --output "$RUNNER_TEMP/hia-runtime-native" \
             --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
             --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
             --collection-bundle "$RUNNER_TEMP/hia-original-collection-bundle" \
             --collection-sha256 "${{ needs.original_collect.outputs.collection_sha256 }}" \
+            --source-artifacts "$RUNNER_TEMP/hia-retained-inputs" \
+            --shard-sha256 "bytes=${{ needs.original_bytes.outputs.sha256 }}" \
+            --shard-sha256 "state=${{ needs.original_state.outputs.sha256 }}" \
+            --shard-sha256 "services=${{ needs.original_services.outputs.sha256 }}" \
+            --shard-sha256 "json=${{ needs.original_json.outputs.sha256 }}" \
+            --shard-sha256 "config=${{ needs.original_config.outputs.sha256 }}" \
+            --shard-sha256 "system=${{ needs.original_system.outputs.sha256 }}" \
+            --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
+            --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
+            --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
+            --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}"
+
+      - name: Bind completed controls without publishing aggregate PASS
+        id: bundle
+        run: |
+          python3 -I -B runtime/scripts/hia_native_artifact_bundle.py export-controls \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --destination "$RUNNER_TEMP/hia-original-controls-bundle" \
+            --head "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
+            --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}" \
+            --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
+            --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
+            --shard-sha256 "bytes=${{ needs.original_bytes.outputs.sha256 }}" \
+            --shard-sha256 "state=${{ needs.original_state.outputs.sha256 }}" \
+            --shard-sha256 "services=${{ needs.original_services.outputs.sha256 }}" \
+            --shard-sha256 "json=${{ needs.original_json.outputs.sha256 }}" \
+            --shard-sha256 "config=${{ needs.original_config.outputs.sha256 }}" \
+            --shard-sha256 "system=${{ needs.original_system.outputs.sha256 }}" \
+            --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Capture failed control-stage diagnostics outside live caches
+        if: ${{ always() && (steps.controls.outcome != 'success' || steps.bundle.outcome != 'success') }}
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure.py \
+            --source "$RUNNER_TEMP/hia-runtime-native" \
+            --destination "$RUNNER_TEMP/hia-native-diagnostics"
+
+      - name: Retain readable control-stage failure diagnostics
+        if: ${{ always() && (steps.controls.outcome != 'success' || steps.bundle.outcome != 'success') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-original-controls
+          path: ${{ runner.temp }}/hia-native-diagnostics/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain the non-PASS controlled index and complete new evidence
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-original-controls-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-original-controls-bundle/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+
+  qualify:
+    name: All native evidence and complete original Rust comparisons
+    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_collect, original_controls]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            .github
+
+      - name: Checkout pinned HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Install pinned independent Python reference libraries
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
+      - name: Verify exact source head
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+
+
+      - name: Download this invocation's admitted complete native evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: hia-native-complete-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-retained-inputs/hia-native-complete-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}/
+
+      - name: Download every successful original group separately
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: hia-original-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/hia-retained-inputs/
+          merge-multiple: false
+
+      - name: Download the source-bound non-PASS control results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: hia-original-controls-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-original-controls-bundle/
+
+      - name: Restore all bytes and perform the final complete admission
+        id: collect
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          python3 -I -B runtime/scripts/hia_native_rust_pipeline.py finalize \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
+            --controls-bundle "$RUNNER_TEMP/hia-original-controls-bundle" \
+            --controls-sha256 "${{ needs.original_controls.outputs.controls_sha256 }}" \
             --source-artifacts "$RUNNER_TEMP/hia-retained-inputs" \
             --shard-sha256 "bytes=${{ needs.original_bytes.outputs.sha256 }}" \
             --shard-sha256 "state=${{ needs.original_state.outputs.sha256 }}" \

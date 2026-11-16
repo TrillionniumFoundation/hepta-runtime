@@ -116,7 +116,7 @@ class OriginalPipelineTests(unittest.TestCase):
         shutil.copytree(self.native_copy, self.output)
         shutil.rmtree(self.shards); shutil.copytree(self.shards_copy, self.shards)
         self.expected = dict(type(self).expected)
-        for name in ("stage-bundle", "stage-artifacts"):
+        for name in ("stage-bundle", "stage-artifacts", "controls-bundle"):
             path = self.root / name
             if path.exists():
                 shutil.rmtree(path)
@@ -166,7 +166,38 @@ class OriginalPipelineTests(unittest.TestCase):
              patch.object(r, "run_audit_activity_controls", self.control(p.CONTROLS[4])), \
              patch.object(r, "run_audit_stamp_controls", self.control(p.CONTROLS[5])):
             return p.complete_collection(self.output, self.compiler, self.native_sha,
-                kwargs.get("invocation", self.invocation), kwargs.get("expected", self.expected), *args)
+                kwargs.get("invocation", self.invocation), kwargs.get("expected", self.expected), *args,
+                controls_only=kwargs.get("controls_only", False))
+
+    def prepare_controls(self):
+        args = self.prepare_collection()
+        with patch.object(r, "check_input_pins", side_effect=AssertionError("premature final admission")):
+            self.assertEqual(self.complete(args, controls_only=True)["status"], p.CONTROLLED_STATUS)
+        report = native.read_json(self.output / "result.json")
+        self.assertEqual((report["status"], report["phase"], report["rust_comparison_status"]),
+                         (p.CONTROLLED_STATUS, p.CONTROLLED_PHASE, "PARTIAL"))
+        self.assertEqual([row["name"] for row in report["checks"]][-len(p.CONTROLS):], list(p.CONTROLS))
+        bundle = self.root / "controls-bundle"
+        result = bundle_transport.export(self.output, bundle, "a" * 40, self.invocation,
+            self.native_sha, self.expected, controls=True)
+        self.assertEqual(result["status"], "CONTROLS_BUNDLE_EXPORTED")
+        shutil.rmtree(self.output)
+        return bundle, result["sha256"], args[2]
+
+    def finalize(self, args, **kwargs):
+        return p.finalize_collection(self.output, self.compiler, self.native_sha,
+            kwargs.get("invocation", self.invocation), kwargs.get("expected", self.expected), *args)
+
+    def rehash_report(self, bundle, mutation):
+        path = bundle / "data/result.json"
+        report = native.read_json(path); mutation(report); q.save_report(path, report)
+        manifest_path = bundle / bundle_transport.MANIFEST
+        manifest = native.read_json(manifest_path)
+        old = manifest["files"]["result.json"]["bytes"]
+        manifest["files"]["result.json"].update(native.file_identity(path))
+        manifest["full_evidence_bytes"] += path.stat().st_size - old
+        q.save_report(manifest_path, manifest)
+        return native.digest(manifest_path)
 
     def change_report(self, group, mutation, *, update_workflow=False):
         folder = self.shards / group
@@ -216,20 +247,142 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_collection_and_completion_jobs_keep_independent_external_seals_and_limits(self):
         text = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
-        stage = text.split("\n  original_collect:\n", 1)[1].split("\n  qualify:\n", 1)[0]
+        stage = text.split("\n  original_collect:\n", 1)[1].split("\n  original_controls:\n", 1)[0]
+        controls = text.split("\n  original_controls:\n", 1)[1].split("\n  qualify:\n", 1)[0]
         final = text.split("\n  qualify:\n", 1)[1]
         self.assertIn("hia_native_rust_pipeline.py collect --stage-only", stage)
         self.assertIn("hia_native_artifact_bundle.py export-collection", stage)
         self.assertIn("collection_sha256: ${{ steps.bundle.outputs.sha256 }}", stage)
         self.assertNotIn("id: regex", stage)
-        self.assertIn("original_collect]", final)
-        self.assertIn("hia_native_rust_pipeline.py complete", final)
-        self.assertIn('--collection-sha256 "${{ needs.original_collect.outputs.collection_sha256 }}"', final)
+        self.assertIn("original_collect]", controls)
+        self.assertIn("hia_native_rust_pipeline.py complete --controls-only", controls)
+        self.assertIn('--collection-sha256 "${{ needs.original_collect.outputs.collection_sha256 }}"', controls)
+        self.assertIn("hia_native_artifact_bundle.py export-controls", controls)
+        self.assertIn("controls_sha256: ${{ steps.bundle.outputs.sha256 }}", controls)
+        self.assertNotIn("id: regex", controls)
+        self.assertNotIn("hia_native_rust_pipeline.py finalize", controls)
+        self.assertIn("original_collect, original_controls]", final)
+        self.assertIn("hia_native_rust_pipeline.py finalize", final)
+        self.assertNotIn("hia_native_rust_pipeline.py complete", final)
+        self.assertIn('--controls-sha256 "${{ needs.original_controls.outputs.controls_sha256 }}"', final)
         self.assertIn('--source-artifacts "$RUNNER_TEMP/hia-retained-inputs"', final)
-        for section in (stage, final):
+        self.assertIn('name: hia-original-controls-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}', final)
+        for section in (stage, controls, final):
             self.assertIn("timeout-minutes: 15", section)
             for group in p.groups():
                 self.assertIn('--shard-sha256 "' + group + '=${{ needs.original_' + group + '.outputs.sha256 }}"', section)
+
+    def test_control_stage_is_nonpass_and_final_job_rechecks_without_executing_controls(self):
+        args = self.prepare_controls()
+        retained = native.read_json(args[0] / "data/result.json")
+        observed = []
+        def admit(output, report):
+            observed.append(report["status"])
+            self.assertEqual(native.read_json(output / "result.json")["status"], "RUNNING")
+            self.assertEqual(report["checks"], retained["checks"])
+            self.assertEqual(set(report["original_rust_comparisons"]), set(r.RECIPES))
+            p.verify_collected_receipts(output, report)
+        with patch.object(r, "check_input_pins", side_effect=admit), \
+             patch.object(p, "finish_collection", side_effect=AssertionError("controls reexecuted")):
+            self.assertEqual(self.finalize(args)["status"], "PASS")
+        self.assertEqual(observed, ["PASS"])
+        report = native.read_json(self.output / "result.json")
+        self.assertEqual(report["checks"], retained["checks"])
+        self.assertAlmostEqual(report["original_collection_elapsed_seconds"],
+            report["original_collection_assembly_elapsed_seconds"] +
+            report["original_collection_controls_elapsed_seconds"] +
+            report["original_collection_final_admission_elapsed_seconds"])
+
+    def test_finalizer_requires_control_job_digest_and_exact_original_workflow_sources(self):
+        bundle, digest, artifacts = self.prepare_controls()
+        with self.assertRaisesRegex(ValueError, "successful workflow job SHA256"):
+            self.finalize((bundle, "f" * 64, artifacts))
+        with self.assertRaisesRegex(ValueError, "another head, invocation or source seal"):
+            self.finalize((bundle, digest, artifacts), invocation="12345-2")
+        with patch.object(q, "git_head", new=lambda: "b" * 40):
+            with self.assertRaisesRegex(ValueError, "another head, invocation or source seal"):
+                self.finalize((bundle, digest, artifacts))
+        changed = dict(self.expected); changed["audit"] = "c" * 64
+        with self.assertRaisesRegex(ValueError, "another head, invocation or source seal"):
+            self.finalize((bundle, digest, artifacts), expected=changed)
+        self.assertFalse(self.output.exists())
+
+    def test_finalizer_rejects_uncontrolled_collection_and_changes_before_output_creation(self):
+        bundle, digest, artifacts = self.prepare_controls()
+        stage = self.root / "stage-bundle"
+        with self.assertRaisesRegex(ValueError, "another head, invocation or source seal"):
+            self.finalize((stage, native.digest(stage / bundle_transport.MANIFEST), artifacts))
+        native_name = bundle_transport.source_name("a" * 40, self.invocation, "native")
+        for path in (artifacts / native_name / "immutable-native.bin",
+                     bundle / ("data/" + p.CONTROLS[-1] + ".stdout")):
+            raw = path.read_bytes(); path.write_bytes(raw + b"changed after controlled job")
+            try:
+                with self.assertRaises(ValueError): self.finalize((bundle, digest, artifacts))
+                self.assertFalse(self.output.exists())
+            finally:
+                path.write_bytes(raw)
+
+    def test_rehashed_control_report_cannot_omit_reorder_duplicate_or_forge_completions(self):
+        bundle, _, artifacts = self.prepare_controls()
+        original = (bundle / "data/result.json").read_bytes()
+        manifest = (bundle / bundle_transport.MANIFEST).read_bytes()
+        changes = {
+            "omitted": lambda x: x["checks"].pop(),
+            "duplicate": lambda x: x["checks"].append(copy.deepcopy(x["checks"][-1])),
+            "reordered": lambda x: x["checks"].__setitem__(slice(-2, None), x["checks"][-2:][::-1]),
+            "failed": lambda x: x["checks"][-1].__setitem__("exit_code", 7),
+            "timed_out": lambda x: x["checks"][-1].__setitem__("timed_out", True),
+            "deadline": lambda x: x["checks"][-1].__setitem__("timeout_seconds", 179),
+            "missing_result": lambda x: x.pop(p.CONTROLS[-1].replace("-", "_")),
+            "premature_pass": lambda x: x.__setitem__("status", "PASS"),
+            "nonfinite_elapsed": lambda x: x.__setitem__("original_collection_controls_elapsed_seconds", float("inf")),
+        }
+        for name, change in changes.items():
+            with self.subTest(name=name):
+                (bundle / "data/result.json").write_bytes(original)
+                (bundle / bundle_transport.MANIFEST).write_bytes(manifest)
+                digest = self.rehash_report(bundle, change)
+                with self.assertRaises(ValueError): self.finalize((bundle, digest, artifacts))
+                if name == "premature_pass":
+                    self.assertFalse(self.output.exists())
+                else:
+                    failure = native.read_json(self.output / "result.json")
+                    self.assertEqual((failure["status"], failure["phase"]), ("FAIL", "original_finalize"))
+                    shutil.rmtree(self.output)
+
+    def test_rehashed_control_report_still_requires_original_receipts_and_current_sources(self):
+        bundle, _, artifacts = self.prepare_controls()
+        digest = self.rehash_report(bundle, lambda x: x["original_rust_comparisons"].pop("delta"))
+        with self.assertRaisesRegex(ValueError, "differs from all actual original"):
+            self.finalize((bundle, digest, artifacts))
+        self.assertEqual(native.read_json(self.output / "result.json")["status"], "FAIL")
+
+    def test_control_job_failure_cannot_be_exported_as_a_completed_control_stage(self):
+        args = self.prepare_collection()
+        real = self.control
+        def control(name):
+            if name != p.CONTROLS[-1]: return real(name)
+            def failed(output, report):
+                q.record_check(output, report, name=name,
+                    command=[sys.executable, "-I", "-c", "raise SystemExit(7)"], timeout=180)
+            return failed
+        with patch.object(self, "control", side_effect=control):
+            with self.assertRaisesRegex(RuntimeError, "failed; original stdout/stderr retained"):
+                self.complete(args, controls_only=True)
+        report = native.read_json(self.output / "result.json")
+        self.assertEqual((report["status"], report["phase"]), ("FAIL", "original_complete"))
+        self.assertEqual(report["checks"][-1]["exit_code"], 7)
+        with self.assertRaises(ValueError):
+            bundle_transport.export(self.output, self.root / "controls-bundle", "a" * 40,
+                self.invocation, self.native_sha, self.expected, controls=True)
+
+    def test_final_semantic_refusal_after_control_job_never_writes_pass(self):
+        args = self.prepare_controls()
+        with patch.object(r, "check_input_pins", side_effect=ValueError("final source/corpus refusal")):
+            with self.assertRaisesRegex(ValueError, "final source/corpus refusal"):
+                self.finalize(args)
+        report = native.read_json(self.output / "result.json")
+        self.assertEqual((report["status"], report["phase"]), ("FAIL", "original_finalize"))
 
     def test_staged_actual_process_merge_completes_every_control_before_one_final_admission(self):
         args = self.prepare_collection()

@@ -106,6 +106,90 @@ class ArtifactBundleTests(unittest.TestCase):
             (self.output / (name + '.stdout')).unlink()
             (self.output / (name + '.stderr')).unlink()
 
+    def controlled(self):
+        report = b.p.read_json(self.output / 'result.json')
+        report.update(status=b.r.CONTROLLED_STATUS, phase=b.r.CONTROLLED_PHASE,
+            rust_comparison_status='PARTIAL', original_collection_assembly_elapsed_seconds=0.1,
+            original_collection_controls_elapsed_seconds=0.2)
+        for name in b.r.CONTROLS:
+            report[name.replace('-', '_')] = {'transport_fixture_only': True}
+        save(self.output / 'result.json', report)
+        (self.output / 'regex-evidence-controls.json').unlink()
+
+    def test_completed_controls_transport_remains_nonpass_and_requires_its_own_stage(self):
+        self.controlled()
+        for kwargs in ({}, {'collection': True}):
+            with self.assertRaisesRegex(ValueError, 'exact collection stage'):
+                b.export(self.output, self.bundle, self.head, self.invocation,
+                    self.native_sha, self.shards, **kwargs)
+        result = b.export(self.output, self.bundle, self.head, self.invocation,
+            self.native_sha, self.shards, controls=True)
+        self.assertEqual(result['status'], 'CONTROLS_BUNDLE_EXPORTED')
+        self.assertEqual(result['semantic_checks_executed'], 0)
+        for kwargs in ({}, {'collection': True}):
+            with self.assertRaisesRegex(ValueError, 'qualification stage differs'):
+                b.restore(self.bundle, self.artifacts, self.root / 'restored', result['sha256'], **kwargs)
+        self.assertFalse((self.root / 'restored').exists())
+        restored = b.restore(self.bundle, self.artifacts, self.root / 'restored', result['sha256'], controls=True)
+        self.assertEqual(restored['status'], 'CONTROLS_BUNDLE_RESTORED')
+        self.assertEqual(b.p.inventory(self.output), b.p.inventory(self.root / 'restored'))
+        report = b.p.read_json(self.root / 'restored/result.json')
+        self.assertEqual((report['status'], report['rust_comparison_status']), (b.r.CONTROLLED_STATUS, 'PARTIAL'))
+
+    def test_controlled_transport_cannot_accept_final_pass_or_missing_actual_control(self):
+        with self.assertRaisesRegex(ValueError, 'exact collection stage'):
+            b.export(self.output, self.bundle, self.head, self.invocation,
+                self.native_sha, self.shards, controls=True)
+        result = self.export()
+        with self.assertRaisesRegex(ValueError, 'qualification stage differs'):
+            b.restore(self.bundle, self.artifacts, self.root / 'restored', result['sha256'], controls=True)
+        shutil.rmtree(self.bundle)
+        self.controlled()
+        original = b.p.read_json(self.output / 'result.json')
+        changes = [lambda x: x['checks'].pop(),
+            lambda x: x['checks'].append(copy.deepcopy(x['checks'][-1])),
+            lambda x: x['checks'][-1].__setitem__('timed_out', True),
+            lambda x: x['checks'][-1].__setitem__('exit_code', 1),
+            lambda x: x['checks'][-1].__setitem__('timeout_seconds', 179),
+            lambda x: x.pop(b.r.CONTROLS[-1].replace('-', '_'))]
+        for change in changes:
+            report = copy.deepcopy(original); change(report); save(self.output / 'result.json', report)
+            with self.assertRaises(ValueError):
+                b.export(self.output, self.bundle, self.head, self.invocation,
+                    self.native_sha, self.shards, controls=True)
+            self.assertFalse(self.bundle.exists())
+
+    def test_controlled_stage_cannot_import_regex_or_use_ambiguous_transport_flags(self):
+        self.controlled()
+        save(self.output / 'regex-evidence-controls.json', {'status': 'PASS'})
+        with self.assertRaisesRegex(ValueError, 'cannot import final qualification controls'):
+            b.export(self.output, self.bundle, self.head, self.invocation,
+                self.native_sha, self.shards, controls=True)
+        with self.assertRaisesRegex(ValueError, 'stage must be unambiguous'):
+            b.export(self.output, self.bundle, self.head, self.invocation,
+                self.native_sha, self.shards, collection=True, controls=True)
+        with self.assertRaisesRegex(ValueError, 'stage must be unambiguous'):
+            b.restore(self.bundle, self.artifacts, self.root / 'restored', 'a' * 64,
+                collection=True, controls=True)
+
+    def test_even_rehashed_controlled_payload_cannot_restore_a_premature_pass_report(self):
+        self.controlled()
+        b.export(self.output, self.bundle, self.head, self.invocation,
+            self.native_sha, self.shards, controls=True)
+        path = self.bundle / 'data/result.json'
+        report = b.p.read_json(path)
+        report.update(status='PASS', phase='complete', rust_comparison_status='PASS')
+        save(path, report)
+        manifest = b.p.read_json(self.bundle / b.MANIFEST)
+        old = manifest['files']['result.json']['bytes']
+        manifest['files']['result.json'].update(b.identity(path))
+        manifest['full_evidence_bytes'] += path.stat().st_size - old
+        save(self.bundle / b.MANIFEST, manifest)
+        with self.assertRaisesRegex(ValueError, 'another qualification stage before restoration'):
+            b.restore(self.bundle, self.artifacts, self.root / 'restored',
+                b.p.digest(self.bundle / b.MANIFEST), controls=True)
+        self.assertFalse((self.root / 'restored').exists())
+
     def test_nonpass_collection_preserves_all_bytes_without_claiming_complete_qualification(self):
         self.pending()
         with self.assertRaisesRegex(ValueError, 'exact collection stage'):
@@ -238,6 +322,12 @@ class ArtifactBundleTests(unittest.TestCase):
     def test_workflow_exports_only_after_all_admissions_and_keeps_all_input_artifacts(self):
         text = (ROOT / '.github/workflows/hia-runtime-native.yml').read_text()
         last = text.split('\n  qualify:\n', 1)[1]
+        controls = text.split('\n  original_controls:\n', 1)[1].split('\n  qualify:\n', 1)[0]
+        self.assertIn('hia_native_artifact_bundle.py export-controls', controls)
+        self.assertIn('controls_sha256: ${{ steps.bundle.outputs.sha256 }}', controls)
+        self.assertNotIn('id: regex', controls)
+        self.assertIn('hia_native_rust_pipeline.py finalize', last)
+        self.assertIn('--controls-sha256 "${{ needs.original_controls.outputs.controls_sha256 }}"', last)
         self.assertLess(last.index('id: regex'), last.index('id: bundle'))
         self.assertIn('path: ${{ runner.temp }}/hia-aggregate-bundle/', last)
         self.assertIn('--github-output "$GITHUB_OUTPUT"', last)
