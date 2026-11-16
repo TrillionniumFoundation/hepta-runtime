@@ -50,7 +50,7 @@ removal of those owners or production activation.
 The retained component registry declares 195 HIA sources, 87 component builds,
 225 native suites and 81 original Rust comparison recipes. Its explicit source
 profile preserves the historical public graph while keeping unrelated current
-component inputs. CI preserves all ten native partitions and eight original
+component inputs. CI preserves all eleven native partitions and eight original
 comparison partitions. The current 91-image public graph has its own complete
 source binding and qualification job. These registry counts do not change the production qualification
 status recorded in the migration inventory.

@@ -54,6 +54,7 @@ REFERENCE_OWNERS = {
     "view_regex_search_original_comparison": ("view_read", "view_params", "view_call", "runtime_mcp"),
     "view_regex_search_public_original_comparison": ("view_read", "view_params", "view_call", "runtime_mcp"),
     "span_raw_value_reference_builds": ("runtime_mcp",),
+    "runtime_mcp_original_fixture_retirement": ("runtime_mcp",),
 }
 
 
@@ -415,6 +416,53 @@ def retained_span_references(data: Path, report: dict, files: dict, state: dict)
             "stored complete comparison differs from its recipe result")
 
 
+def retained_public_original_retirement(data: Path, report: dict, files: dict) -> dict:
+    """Admit the public owner's complete retired archive before collection.
+
+    A shard does not contain the separately transported native files. Bind its
+    two archive members and all retained metadata to the completed recipe here;
+    the existing full public reader recomputes the semantic binding after all
+    native and original files have been collected.
+    """
+    field = "runtime_mcp_original_fixture_retirement"
+    value = report.get(field)
+    comparison = report.get("original_rust_comparisons", {}).get("runtime_mcp", {})
+    pipeline = comparison.get("pipeline", {})
+    origin = pipeline.get("native_fixture_retirement", {}).get("execution_output_root")
+    roots, prefix = public_fixtures.PROFILES["original"]
+    receipt_name, archive_name = prefix + ".json", prefix + ".bin.gz"
+    if (type(value) is not dict or comparison.get("status") != "PASS"
+            or q.json_bytes(value) != q.json_bytes(pipeline.get("original_fixture_retirement"))
+            or type(origin) is not str or not Path(origin).is_absolute()
+            or str(Path(origin)) != origin or ".." in Path(origin).parts
+            or type(value.get("complete_evidence_sha256")) is not str
+            or not p.SHA256.fullmatch(value["complete_evidence_sha256"])):
+        raise ValueError("public original fixture summary differs from its completed recipe")
+    expected = dict(schema="hepta.runtime.public-fixture-retirement.v1", status="PASS", profile="original",
+                    fixture_directories=list(roots), execution_output_root=origin,
+                    complete_evidence_sha256=value["complete_evidence_sha256"], semantic_invocations_added=0,
+                    source_inode_identifiers_are_provenance=True, reconstructed_original_inodes=False)
+    pins = value.get("artifact_sha256")
+    if (type(pins) is not dict or set(pins) != {receipt_name, archive_name}
+            or any(name not in files or type(pin) is not str or not p.SHA256.fullmatch(pin)
+                   or files[name]["sha256"] != pin
+                   or comparison.get("artifact_sha256", {}).get(name) != pin
+                   for name, pin in pins.items())):
+        raise ValueError("public original fixture archive is not retained by the completed recipe")
+    receipt = public_fixtures.decode(public_fixtures.artifact(data, receipt_name).read_bytes())
+    if (type(receipt) is not dict or set(receipt) != set(expected) | {"entries", "archive"}
+            or q.json_bytes({key: receipt[key] for key in expected}) != q.json_bytes(expected)):
+        raise ValueError("public original fixture retirement binding differs")
+    counts = public_fixtures.read_archive(data, receipt["entries"], roots, archive_name, receipt["archive"])
+    actual_pins = {name: public_fixtures.file_pin(public_fixtures.artifact(data, name))["sha256"]
+                   for name in (receipt_name, archive_name)}
+    actual = dict(expected, **counts, artifact_sha256=actual_pins)
+    if q.json_bytes(value) != q.json_bytes(actual):
+        raise ValueError("public original fixture archive summary differs from complete bytes")
+    public_fixtures.absent(data, roots)
+    return actual
+
+
 def retained_reference_fields(data: Path, report: dict, group: str, files: dict) -> dict:
     """Bind each owner receipt to the already verified native/original files.
 
@@ -439,6 +487,8 @@ def retained_reference_fields(data: Path, report: dict, group: str, files: dict)
         shared_json_build(report)
     if "span_raw_value_reference_builds" in fields:
         retained_span_references(data, report, files, fields["span_raw_value_reference_builds"])
+    if "runtime_mcp_original_fixture_retirement" in fields:
+        retained_public_original_retirement(data, report, files)
     specs = (
         ("request_context_reference", context_reference, "hepta.runtime.request-context-reference.v1"),
         ("result_publication_reference", publication_reference, "hepta.runtime.result-publication-reference.v1"),

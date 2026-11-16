@@ -207,8 +207,23 @@ class OriginalPipelineTests(unittest.TestCase):
                             "status": "PASS", "actual_python_process_fixture_only": True,
                             "artifact_sha256": copy.deepcopy(report[stem + "_original_comparison"]["artifact_sha256"])}
                     result["span_raw_value"] = cls.span_fixture(output, report, rustc)
+                    for relative in p.public_fixtures.ORIGINAL:
+                        tree = output / relative
+                        tree.mkdir(parents=True)
+                        payload = tree / "complete.bin"
+                        payload.write_bytes(b"complete public original reporting fixture\0\xff")
+                        payload.chmod(0o640)
+                        os.link(payload, tree / "same-inode.bin")
+                        (tree / "dangling").symlink_to("missing")
+                        os.mkfifo(tree / "owned-fifo", 0o600)
+                    workdir = {"actual_python_process_fixture_only": True}
+                    retirement = p.public_fixtures.retired(output, "original",
+                        dict(public=copy.deepcopy(result), workdir=workdir), str(output), create=True)
+                    report["runtime_mcp_original_fixture_retirement"] = copy.deepcopy(retirement)
                     result["pipeline"] = {"native_fixture_retirement": {
-                        "execution_output_root": str(output)}}
+                        "execution_output_root": str(output)}, "shared_workdir": workdir,
+                        "original_fixture_retirement": copy.deepcopy(retirement)}
+                    result["artifact_sha256"] = copy.deepcopy(retirement["artifact_sha256"])
                 return result
             return run
 
@@ -408,6 +423,81 @@ class OriginalPipelineTests(unittest.TestCase):
             self.change_report("bytes", mutation, update_workflow=True)
             with self.assertRaisesRegex(ValueError, "original shard is incomplete|fixture archive differs"):
                 self.collect()
+
+    def test_public_original_archive_is_owned_by_bytes_and_survives_collection(self):
+        field = "runtime_mcp_original_fixture_retirement"
+        self.assertIn(field, p.reference_fields("bytes"))
+        self.assertTrue(all(field not in p.reference_fields(group) for group in p.groups() if group != "bytes"))
+        part = native.read_json(self.shards / "bytes" / p.SHARD_REPORT)
+        expected = part[field]
+        self.assertEqual(expected["fixture_directories"], list(p.public_fixtures.ORIGINAL))
+        self.assertEqual((expected["files"], expected["symlinks"], expected["fifos"],
+                          expected["hardlink_groups"]), (4, 2, 2, 2))
+        self.assertEqual(expected["semantic_invocations_added"], 0)
+        self.collect()
+        report = native.read_json(self.output / "result.json")
+        self.assertEqual(report[field], expected)
+        self.assertEqual(p.retained_public_original_retirement(self.output, report,
+                         native.inventory(self.output)[0]), expected)
+
+    def test_public_original_archive_refuses_recounted_or_rebound_resigned_reports(self):
+        field = "runtime_mcp_original_fixture_retirement"
+        def mutate_both(part, values):
+            part[field].update(values)
+            part["original_rust_comparisons"]["runtime_mcp"]["pipeline"][
+                "original_fixture_retirement"].update(values)
+        for values in ({"files": 0}, {"complete_evidence_sha256": "0" * 64},
+                       {"execution_output_root": "/another-original-output"},
+                       {"semantic_invocations_added": False}):
+            with self.subTest(values=values):
+                self.setUp()
+                self.change_report("bytes", lambda part: mutate_both(part, values), update_workflow=True)
+                with self.assertRaisesRegex(ValueError, "public original fixture"):
+                    self.collect()
+
+    def test_public_original_archive_refuses_physical_receipt_rebinding_after_rehash(self):
+        self.collect()
+        report = native.read_json(self.output / "result.json")
+        field = "runtime_mcp_original_fixture_retirement"
+        name = "runtime-mcp-original/retired-fixtures.json"
+        receipt = native.read_json(self.output / name)
+        receipt["complete_evidence_sha256"] = "0" * 64
+        q.save_report(self.output / name, receipt)
+        digest = native.digest(self.output / name)
+        comparison = report["original_rust_comparisons"]["runtime_mcp"]
+        for value in (report[field], comparison["pipeline"]["original_fixture_retirement"]):
+            value["artifact_sha256"][name] = digest
+        comparison["artifact_sha256"][name] = digest
+        with self.assertRaisesRegex(ValueError, "public original fixture retirement binding differs"):
+            p.retained_public_original_retirement(self.output, report, native.inventory(self.output)[0])
+
+    def test_public_original_archive_reads_all_payload_bytes_after_outer_rehash(self):
+        self.collect()
+        report = native.read_json(self.output / "result.json")
+        field = "runtime_mcp_original_fixture_retirement"
+        name = "runtime-mcp-original/retired-fixtures.bin.gz"
+        receipt_name = "runtime-mcp-original/retired-fixtures.json"
+        raw = bytearray((self.output / name).read_bytes())
+        raw[-8] ^= 1
+        (self.output / name).write_bytes(raw)
+        receipt = native.read_json(self.output / receipt_name)
+        receipt["archive"] = p.public_fixtures.file_pin(self.output / name)
+        q.save_report(self.output / receipt_name, receipt)
+        pins = {key: native.digest(self.output / key) for key in (name, receipt_name)}
+        comparison = report["original_rust_comparisons"]["runtime_mcp"]
+        for value in (report[field], comparison["pipeline"]["original_fixture_retirement"]):
+            value["artifact_sha256"] = dict(pins)
+        comparison["artifact_sha256"].update(pins)
+        with self.assertRaises((ValueError, OSError, EOFError)):
+            p.retained_public_original_retirement(self.output, report, native.inventory(self.output)[0])
+
+    def test_public_original_archive_refuses_reappearing_retired_trees(self):
+        self.collect()
+        report = native.read_json(self.output / "result.json")
+        files = native.inventory(self.output)[0]
+        (self.output / p.public_fixtures.ORIGINAL[0]).mkdir()
+        with self.assertRaisesRegex(ValueError, "retired public fixture root reappeared"):
+            p.retained_public_original_retirement(self.output, report, files)
 
     def test_shared_view_archive_rejects_changed_binding_and_reappearing_targets(self):
         self.collect()
