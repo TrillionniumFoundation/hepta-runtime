@@ -1,0 +1,66 @@
+def constructor(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<64:
+        return INVALID
+    if read64(s,0)!=REQUEST or read64(s,8)!=1:
+        return INVALID
+    error=read64(s,16)
+    policy=read64(s,24)
+    size=read64(s,32)
+    if error>1 or policy>2:
+        return INVALID
+    if read64(s,40)!=0 or read64(s,48)!=0 or read64(s,56)!=0:
+        return INVALID
+    if size!=length(s)-64:
+        return INVALID
+    if size>3074457345618258580:
+        return RESOURCE
+    if length(o)<32:
+        return CAPACITY
+    if length(w)<16384+size:
+        return grow(o,1,16384+size)
+    if utf8(s,64,size)==0:
+        return INVALID
+    copy_range(w,s,16384,64,size)
+    prefix_size=PREFIX_SIZE
+    if policy==1:
+        prefix_size=LEGACY_PREFIX_SIZE
+    put(w,8232,0)
+    put(w,8248,64+prefix_size)
+    quote(o,w,0,size)
+    after_text=get(w,8248)
+    suffix_size=SUCCESS_SUFFIX_SIZE
+    if error==1:
+        suffix_size=ERROR_SUFFIX_SIZE
+    extent=after_text+suffix_size
+    if extent<after_text:
+        return RESOURCE
+    if length(o)<extent:
+        return grow(o,2,extent)
+    if policy==1:
+        legacy_prefix(o,64)
+    else:
+        current_prefix(o,64)
+    put(w,8232,1)
+    put(w,8248,64+prefix_size)
+    quote(o,w,0,size)
+    if error==1:
+        error_suffix(o,after_text)
+    else:
+        success_suffix(o,after_text)
+    put(o,0,RESPONSE)
+    put(o,8,0)
+    put(o,16,error)
+    put(o,24,policy)
+    put(o,32,64)
+    put(o,40,extent-64)
+    put(o,48,0)
+    put(o,56,0)
+    return 64
+
+def grow(o:mutbuf,kind:u64,required:u64) -> u32:
+    put(o,0,GROW_RESPONSE)
+    put(o,8,kind)
+    put(o,16,required)
+    put(o,24,0)
+    return GROW
+

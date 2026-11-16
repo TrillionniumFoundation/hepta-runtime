@@ -1,0 +1,117 @@
+name: HIA current target scope annotation
+
+on:
+  push:
+    branches: ['hia-scope-annotation-qualification-*', 'codex/**', main]
+    paths:
+      - 'native/scope_annotation*'
+      - 'native/text_result_constructor*'
+      - 'native/serde_json.hepta'
+      - 'native/serde_error.hepta'
+      - 'native/typed_result_json.hepta'
+      - 'scripts/*scope_annotation*'
+      - 'scripts/author_text_result_constructor.py'
+      - 'scripts/text_result_constructor.pseudo'
+      - 'scripts/hia_native_build.py'
+      - 'scripts/hia_native_loader.py'
+      - 'tests/hia_native/scope_annotation/**'
+      - '.github/workflows/hia-scope-annotation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-scope-annotation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  annotation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            tests/hia_native/scope_annotation
+            .github/workflows
+      - name: Checkout pinned HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Checkout independent unchanged target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          path: original
+          persist-credentials: false
+          sparse-checkout: |
+            src
+            vendor
+      - name: Verify source identities and install Rust 1.95
+        env:
+          EXPECTED_CANDIDATE: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_CANDIDATE"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C original rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          rustup toolchain install 1.95.0 --profile minimal
+          python3 -I -B - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0,str(Path('runtime/scripts').resolve()))
+          import hia_native_scope_annotation_qualification as q
+          evidence=q.source_evidence(Path('runtime'))
+          for name in ('Cargo.toml','Cargo.lock','src/mcp/runtime/caller_scope.rs'):
+              assert (Path('original')/name).read_bytes() == (Path('runtime')/q.PREFIX/'reference/target'/name).read_bytes()
+          print('Exact target and annotation source closure:',evidence['count'],evidence['sha256'])
+          PY
+      - name: Fetch exact target registry inputs without building target
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          set -euo pipefail
+          cargo fetch --locked --manifest-path original/Cargo.toml
+          git -C original diff --exit-code -- Cargo.lock
+      - name: Execute complete native and fresh original function domains
+        run: |
+          set -euo pipefail
+          rust_binary="$(rustup which --toolchain 1.95.0 rustc)"
+          python3 -I -B runtime/scripts/qualify_hia_scope_annotation.py \
+            --source-root "$GITHUB_WORKSPACE/runtime" \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --target "$GITHUB_WORKSPACE/original" \
+            --rust-bin "$(dirname "$rust_binary")" \
+            --output "$RUNNER_TEMP/scope-annotation" --phase all
+      - name: Independently reread all retained domains without execution
+        run: |
+          python3 -I -B runtime/tests/hia_native/scope_annotation/verify_readonly.py \
+            --source-root "$GITHUB_WORKSPACE/runtime" \
+            --output "$RUNNER_TEMP/scope-annotation" --phase verify
+      - name: Archive complete source and actual evidence
+        if: always()
+        run: |
+          python3 -I -B runtime/scripts/archive_hia_scope_annotation.py \
+            --source-root "$GITHUB_WORKSPACE/runtime" \
+            --capture "$RUNNER_TEMP/scope-annotation" \
+            --output "$RUNNER_TEMP/scope-annotation-artifact"
+      - name: Retain exact success or failure archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-scope-annotation-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/scope-annotation-artifact/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

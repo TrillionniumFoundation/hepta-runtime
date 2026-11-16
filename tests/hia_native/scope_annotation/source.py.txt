@@ -1,0 +1,494 @@
+def annotation(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<48 or read64(s,0)!=REQUEST or read64(s,8)!=1:
+        return INVALID
+    if read64(s,16)>1 or read64(s,24)>1 or read64(s,40)!=0:
+        return INVALID
+    size=read64(s,32)
+    if size>8388608 or size!=length(s)-48:
+        return INVALID
+    if length(w)<WORK or length(o)<64:
+        return CAPACITY
+    magic=get(w,0)
+    if magic!=0 and magic!=STATE:
+        return CONTRACT
+    if magic==0:
+        if get(w,8)!=0 or get(w,16)!=0:
+            return CONTRACT
+    phase=get(w,8)
+    if phase==0:
+        if utf8(s,48,size)==0:
+            return INVALID
+        if get(w,16)==18446744073709551615:
+            return CONTRACT
+        put(w,0,STATE)
+        put(w,24,length(s))
+        put(w,32,length(o))
+        put(w,40,length(w))
+        put(w,48,read64(s,16))
+        put(w,56,read64(s,24))
+        put(w,64,0)
+        put(w,72,0)
+        put(w,80,0)
+        put(w,88,0)
+        put(w,96,0)
+        copy_range(w,s,SNAPSHOT,0,length(s))
+        return issue(w,1,size)
+    if phase>3:
+        return CONTRACT
+    if resumed(s,o,w,phase)==0:
+        return CONTRACT
+    result=get(w,328)
+    if result==CAPACITY:
+        put(w,8,0)
+        return CAPACITY
+    if phase==1:
+        if result==INVALID:
+            return issue(w,2,size)
+        if result==0 or result>REGION:
+            return CONTRACT
+        put(w,64,result)
+        if byte(w,REPLY)!=123:
+            return finish_error(o,w,2,0)
+        if transform(w,result)!=0:
+            return CONTRACT
+        return issue_constructor(w)
+    if phase==3:
+        if result==CONSTRUCTOR_GROW:
+            if get(w,CONSTRUCTOR_REPLY)!=GROW_RESPONSE or get(w,CONSTRUCTOR_REPLY+24)!=0:
+                return CONTRACT
+            kind=get(w,CONSTRUCTOR_REPLY+8)
+            required=get(w,CONSTRUCTOR_REPLY+16)
+            if kind==1:
+                if required!=16384+get(w,72):
+                    return CONTRACT
+            elif kind==2:
+                if required<64:
+                    return CONTRACT
+            else:
+                return CONTRACT
+            put(w,8,0)
+            return CAPACITY
+        if result!=64 or get(w,CONSTRUCTOR_REPLY)!=CONSTRUCTOR_RESPONSE:
+            return CONTRACT
+        if get(w,CONSTRUCTOR_REPLY+8)!=0 or get(w,CONSTRUCTOR_REPLY+16)!=0 or get(w,CONSTRUCTOR_REPLY+24)!=0:
+            return CONTRACT
+        if get(w,CONSTRUCTOR_REPLY+32)!=64 or get(w,CONSTRUCTOR_REPLY+48)!=0 or get(w,CONSTRUCTOR_REPLY+56)!=0:
+            return CONTRACT
+        count=get(w,CONSTRUCTOR_REPLY+40)
+        if count>REGION:
+            return CONTRACT
+        put(w,80,count)
+        if count>65536:
+            return finish_error(o,w,3,count)
+        return finish(o,w,0,0,ANNOTATED,get(w,72))
+    if result<64 or result>1024 or get(w,REPLY)!=JSON_ERROR_RESULT:
+        return CONTRACT
+    if get(w,REPLY+8)!=1 or get(w,REPLY+16)<1 or get(w,REPLY+16)>3:
+        return CONTRACT
+    if get(w,REPLY+48)!=0 or get(w,REPLY+56)!=0:
+        return CONTRACT
+    size=get(w,REPLY+40)
+    if size!=result-64 or utf8_workspace(w,REPLY+64,size)==0:
+        return CONTRACT
+    return finish(o,w,1,1,REPLY+64,size)
+
+def utf8_workspace(w:mutbuf,at:u64,size:u64) -> u64:
+    return utf8(w,at,size)
+
+def issue(w:mutbuf,child:u64,size:u64) -> u32:
+    if get(w,16)==18446744073709551615:
+        return CONTRACT
+    magic=VALUE_REQUEST
+    capacity=REGION
+    if child==2:
+        magic=JSON_ERROR_REQUEST
+        capacity=1024
+    put(w,QUERY,magic)
+    put(w,QUERY+8,1)
+    put(w,QUERY+16,size)
+    copy_within(w,QUERY+24,SNAPSHOT+48,size)
+    return offer(w,child,size+24,REPLY,capacity)
+
+def issue_constructor(w:mutbuf) -> u32:
+    if get(w,16)==18446744073709551615:
+        return CONTRACT
+    size=get(w,72)
+    if size>REGION:
+        return CONTRACT
+    put(w,QUERY,CONSTRUCTOR_REQUEST)
+    put(w,QUERY+8,1)
+    put(w,QUERY+16,0)
+    put(w,QUERY+24,0)
+    put(w,QUERY+32,size)
+    put(w,QUERY+40,0)
+    put(w,QUERY+48,0)
+    put(w,QUERY+56,0)
+    copy_within(w,QUERY+64,ANNOTATED,size)
+    return offer(w,3,size+64,CONSTRUCTOR_REPLY,REGION+64)
+
+def offer(w:mutbuf,child:u64,size:u64,reply:u64,capacity:u64) -> u32:
+    sequence=get(w,16)
+    if sequence==18446744073709551615:
+        return CONTRACT
+    sequence=sequence+1
+    put(w,16,sequence)
+    put(w,8,child)
+    put(w,256,ACTION)
+    put(w,264,sequence)
+    put(w,272,child)
+    put(w,280,0)
+    put(w,288,QUERY)
+    put(w,296,size)
+    put(w,304,reply)
+    put(w,312,capacity)
+    put(w,320,0)
+    put(w,328,0)
+    put(w,336,0)
+    put(w,344,0)
+    return CALL
+
+def resumed(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u64:
+    if get(w,24)!=length(s) or get(w,32)!=length(o) or get(w,40)!=length(w):
+        return 0
+    if same_input(s,w,SNAPSHOT,length(s))==0:
+        return 0
+    sequence=get(w,16)
+    if get(w,256)!=ACTION or get(w,264)!=sequence or get(w,272)!=phase:
+        return 0
+    if get(w,280)!=0 or get(w,288)!=QUERY:
+        return 0
+    if get(w,320)!=sequence:
+        return 0
+    if get(w,336)!=0 or get(w,344)!=0 or get(w,328)>4294967295:
+        return 0
+    if phase==3:
+        size=get(w,72)
+        if size>REGION or get(w,296)!=size+64 or get(w,304)!=CONSTRUCTOR_REPLY or get(w,312)!=REGION+64:
+            return 0
+        if get(w,QUERY)!=CONSTRUCTOR_REQUEST or get(w,QUERY+8)!=1:
+            return 0
+        if get(w,QUERY+16)!=0 or get(w,QUERY+24)!=0 or get(w,QUERY+32)!=size:
+            return 0
+        if get(w,QUERY+40)!=0 or get(w,QUERY+48)!=0 or get(w,QUERY+56)!=0:
+            return 0
+        if same_workspace(w,QUERY+64,ANNOTATED,size)==0:
+            return 0
+        return 1
+    if get(w,296)!=length(s)-24 or get(w,304)!=REPLY:
+        return 0
+    magic=VALUE_REQUEST
+    capacity=REGION
+    if phase==2:
+        magic=JSON_ERROR_REQUEST
+        capacity=1024
+    if get(w,312)!=capacity or get(w,QUERY)!=magic:
+        return 0
+    if get(w,QUERY+8)!=1 or get(w,QUERY+16)!=length(s)-48:
+        return 0
+    if same_workspace(w,QUERY+24,SNAPSHOT+48,length(s)-48)==0:
+        return 0
+    return 1
+
+def same_input(s:readbuf,w:mutbuf,at:u64,size:u64) -> u64:
+    index=0
+    while index+8<=size:
+        if read64(s,index)!=get(w,at+index):
+            return 0
+        index=index+8
+    while index<size:
+        if byte(s,index)!=byte(w,at+index):
+            return 0
+        index=index+1
+    return 1
+
+def same_workspace(w:mutbuf,left:u64,right:u64,size:u64) -> u64:
+    index=0
+    while index+8<=size:
+        if get(w,left+index)!=get(w,right+index):
+            return 0
+        index=index+8
+    while index<size:
+        if byte(w,left+index)!=byte(w,right+index):
+            return 0
+        index=index+1
+    return 1
+
+def copy_within(w:mutbuf,target:u64,source:u64,size:u64) -> u64:
+    index=0
+    while index+8<=size:
+        put(w,target+index,get(w,source+index))
+        index=index+8
+    while index<size:
+        store(w,target+index,byte(w,source+index))
+        index=index+1
+    return 0
+
+def reserve(w:mutbuf,size:u64) -> u64:
+    at=get(w,104)
+    if get(w,112)!=0:
+        return 0
+    if at<ANNOTATED or at>ANNOTATED+REGION or size>ANNOTATED+REGION-at:
+        put(w,112,1)
+        return 0
+    put(w,104,at+size)
+    return at
+
+def emit_byte(w:mutbuf,value:u64) -> u64:
+    at=reserve(w,1)
+    if at!=0:
+        store(w,at,value)
+    return 0
+
+def emit_span(w:mutbuf,start:u64,size:u64) -> u64:
+    at=reserve(w,size)
+    if at!=0:
+        copy_within(w,at,start,size)
+    return 0
+
+def separator(w:mutbuf,start:u64) -> u64:
+    if get(w,104)!=start+1:
+        emit_byte(w,44)
+    return 0
+
+def string_end(w:mutbuf,start:u64,limit:u64) -> u64:
+    if start>=limit or byte(w,start)!=34:
+        return 0
+    cursor=start+1
+    while cursor<limit:
+        value=byte(w,cursor)
+        if value==34:
+            return cursor+1
+        if value==92:
+            cursor=cursor+1
+            if cursor>=limit:
+                return 0
+        cursor=cursor+1
+    return 0
+
+def value_end(w:mutbuf,start:u64,limit:u64) -> u64:
+    if start>=limit:
+        return 0
+    value=byte(w,start)
+    if value==34:
+        return string_end(w,start,limit)
+    if value!=123 and value!=91:
+        cursor=start
+        while cursor<limit:
+            value=byte(w,cursor)
+            if value==44 or value==93 or value==125:
+                return cursor
+            cursor=cursor+1
+        return cursor
+    depth=1
+    cursor=start+1
+    while cursor<limit:
+        value=byte(w,cursor)
+        if value==34:
+            cursor=string_end(w,cursor,limit)
+            if cursor==0:
+                return 0
+        else:
+            if value==123 or value==91:
+                depth=depth+1
+            if value==125 or value==93:
+                depth=depth-1
+                if depth==0:
+                    return cursor+1
+            cursor=cursor+1
+    return 0
+
+def key_order(w:mutbuf,start:u64,end:u64,key:u64) -> u64:
+    cursor=start+1
+    index=0
+    size=key_length(key)
+    while cursor<end-1:
+        if index==size:
+            return 2
+        decoded_value=decoded(w,cursor)
+        scalar=decoded_value&4294967295
+        if scalar>=1114112:
+            return 3
+        expected=key_byte(key,index)
+        if scalar<expected:
+            return 0
+        if scalar>expected:
+            return 2
+        cursor=decoded_value>>32
+        index=index+1
+    if index==size:
+        return 1
+    return 0
+
+def active_key(key:u64,search:u64) -> u64:
+    if key==3 or key==7:
+        return choose(search==0,1,0)
+    if key==4 or key==6 or key==8:
+        return search
+    return 1
+
+def next_key(key:u64,search:u64) -> u64:
+    while key<=8 and active_key(key,search)==0:
+        key=key+1
+    return key
+
+def emit_key(w:mutbuf,key:u64) -> u64:
+    emit_byte(w,34)
+    index=0
+    size=key_length(key)
+    while index<size:
+        emit_byte(w,key_byte(key,index))
+        index=index+1
+    emit_byte(w,34)
+    emit_byte(w,58)
+    return 0
+
+def emit_injected(w:mutbuf,key:u64) -> u64:
+    separator(w,ANNOTATED)
+    emit_key(w,key)
+    if key==1 or key==6:
+        literal_false(w)
+    elif key==2 or key==3 or key==4:
+        if get(w,48)==0:
+            literal_false(w)
+        else:
+            literal_true(w)
+    elif key==5 or key==7:
+        if get(w,48)==0:
+            literal_session(w)
+        else:
+            literal_credential(w)
+    else:
+        literal_interrupted(w)
+    return 0
+
+def transform(w:mutbuf,size:u64) -> u64:
+    limit=REPLY+size
+    if size<2 or byte(w,limit-1)!=125:
+        return 1
+    put(w,104,ANNOTATED)
+    put(w,112,0)
+    emit_byte(w,123)
+    cursor=REPLY+1
+    key=next_key(1,get(w,56))
+    while cursor<limit-1:
+        end=string_end(w,cursor,limit)
+        if end==0 or end>=limit or byte(w,end)!=58:
+            return 1
+        begin=end+1
+        after=value_end(w,begin,limit)
+        if after==0 or after>limit-1:
+            return 1
+        keep=1
+        scanning=1
+        while key<=8 and scanning!=0:
+            order=key_order(w,cursor,end,key)
+            if order==3:
+                return 1
+            if order==0:
+                scanning=0
+            else:
+                emit_injected(w,key)
+                key=next_key(key+1,get(w,56))
+                if order==1:
+                    keep=0
+                    scanning=0
+        if keep!=0:
+            separator(w,ANNOTATED)
+            emit_span(w,cursor,begin-cursor)
+            if get(w,56)==0 and key_order(w,cursor,end,9)==1 and byte(w,begin)==123:
+                if retention(w,begin,after)!=0:
+                    return 1
+            else:
+                emit_span(w,begin,after-begin)
+        cursor=after
+        if cursor<limit-1:
+            if byte(w,cursor)!=44:
+                return 1
+            cursor=cursor+1
+    while key<=8:
+        emit_injected(w,key)
+        key=next_key(key+1,get(w,56))
+    emit_byte(w,125)
+    if get(w,112)!=0:
+        return 1
+    put(w,72,get(w,104)-ANNOTATED)
+    return 0
+
+def retention(w:mutbuf,start:u64,end:u64) -> u64:
+    cursor=start+1
+    saved=0
+    saved_size=0
+    while cursor<end-1:
+        keyend=string_end(w,cursor,end)
+        if keyend==0 or keyend>=end or byte(w,keyend)!=58:
+            return 1
+        after=value_end(w,keyend+1,end)
+        if after==0 or after>end-1:
+            return 1
+        if key_order(w,cursor,keyend,11)==1:
+            saved=keyend+1
+            saved_size=after-saved
+        cursor=after
+        if cursor<end-1:
+            if byte(w,cursor)!=44:
+                return 1
+            cursor=cursor+1
+    if saved==0:
+        emit_span(w,start,end-start)
+        return 0
+    output_start=get(w,104)
+    emit_byte(w,123)
+    inserted=0
+    cursor=start+1
+    while cursor<end-1:
+        keyend=string_end(w,cursor,end)
+        after=value_end(w,keyend+1,end)
+        order=key_order(w,cursor,keyend,10)
+        if inserted==0 and order!=0:
+            emit_per_owner(w,output_start,saved,saved_size)
+            inserted=1
+        if order!=1 and key_order(w,cursor,keyend,11)!=1:
+            separator(w,output_start)
+            emit_span(w,cursor,after-cursor)
+        cursor=after
+        if cursor<end-1:
+            cursor=cursor+1
+    if inserted==0:
+        emit_per_owner(w,output_start,saved,saved_size)
+    emit_byte(w,125)
+    return 0
+
+def emit_per_owner(w:mutbuf,start:u64,value:u64,size:u64) -> u64:
+    separator(w,start)
+    emit_key(w,10)
+    emit_span(w,value,size)
+    return 0
+
+def finish_error(o:mutbuf,w:mutbuf,category:u64,wire_size:u64) -> u32:
+    at=ERROR_BUFFER
+    size=METADATA_ERROR_SIZE
+    if category==2:
+        error_metadata(w,at)
+    else:
+        error_budget(w,at)
+        size=BUDGET_ERROR_SIZE
+    put(w,80,wire_size)
+    return finish(o,w,1,category,at,size)
+
+def finish(o:mutbuf,w:mutbuf,kind:u64,category:u64,start:u64,size:u64) -> u32:
+    if size>length(o)-64:
+        put(w,8,0)
+        return CAPACITY
+    put(o,0,RESPONSE)
+    put(o,8,kind)
+    put(o,16,size)
+    put(o,24,get(w,80))
+    put(o,32,category)
+    put(o,40,get(w,72))
+    put(o,48,0)
+    put(o,56,0)
+    copy_range(o,w,64,start,size)
+    put(w,88,category)
+    put(w,96,size)
+    put(w,8,0)
+    return 64+size
