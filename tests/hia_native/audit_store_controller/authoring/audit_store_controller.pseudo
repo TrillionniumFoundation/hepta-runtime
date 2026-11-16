@@ -1,0 +1,555 @@
+def audit_controller(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if valid_input(s)==0:
+        return INVALID
+    if length(o)<512:
+        return CAPACITY
+    command=read64(s,8)
+    if command==0:
+        return initialize_queue(s,o,w)
+    if command==1 or command==2:
+        if actor_fresh(o)==0:
+            return STATE_ERROR
+        serial=0
+        if get(o,0)==ACTOR:
+            serial=get(o,24)
+        clear(o,0,512)
+        put(o,0,ACTOR)
+        put(o,24,serial)
+        put(o,40,command-1)
+        put(o,48,read64(s,40))
+        put(o,56,read64(s,48))
+        put(o,64,read64(s,56))
+        put(o,120,read64(s,64))
+        put(o,128,read64(s,32))
+        put(o,136,command)
+        return issue(o,PRE_CLOCK,6,0,0,0,0)
+    if actor_valid(o)==0:
+        return STATE_ERROR
+    if command==3:
+        return resume(s,o,w)
+    if get(o,32)!=HELD or get(o,104)!=1 or get(o,128)!=read64(s,32):
+        return STATE_ERROR
+    if command==4 and get(o,40)!=1:
+        return STATE_ERROR
+    put(o,120,read64(s,64))
+    put(o,136,command)
+    if command==4:
+        return issue(o,FINISH_ID,7,0,0,0,0)
+    return issue(o,DROP_ID,7,0,0,0,0)
+
+def valid_input(s:readbuf) -> u64:
+    if length(s)!=256 or read64(s,0)!=REQUEST or read64(s,8)>5:
+        return 0
+    if zero_input(s,72,128)==0:
+        return 0
+    command=read64(s,8)
+    if command==3:
+        if read64(s,16)==0 or (read64(s,24)!=0 and read64(s,24)!=128):
+            return 0
+        return zero_input(s,32,128)
+    if read64(s,16)!=0 or read64(s,24)!=0 or read64(s,32)==0 or zero_input(s,128,256)==0:
+        return 0
+    if read64(s,40)>1 or read64(s,64)>1:
+        return 0
+    if read64(s,40)==0 and (read64(s,48)!=0 or read64(s,56)!=0):
+        return 0
+    if command==2 and read64(s,40)!=1:
+        return 0
+    if command==0 or command==4 or command==5:
+        if zero_input(s,40,64)==0:
+            return 0
+        if command==0 and read64(s,64)!=0:
+            return 0
+    return 1
+
+def actor_fresh(o:mutbuf) -> u64:
+    if zero_mut(o,0,512)!=0:
+        return 1
+    if actor_valid(o)==0:
+        return 0
+    return choose(get(o,32)==DONE and get(o,88)==0 and get(o,96)==0 and get(o,104)==0,1,0)
+
+def actor_valid(o:mutbuf) -> u64:
+    if get(o,0)!=ACTOR or get(o,8)>2:
+        return 0
+    if get(o,40)>1 or get(o,48)>1 or get(o,88)>1 or get(o,96)>1 or get(o,104)>1 or get(o,120)>1:
+        return 0
+    if get(o,128)==0 or get(o,200)>1 or zero_mut(o,208,256)==0 or zero_mut(o,384,512)==0:
+        return 0
+    phase=get(o,32)
+    if get(o,8)==0:
+        if phase==DONE:
+            return choose(get(o,88)==0 and get(o,96)==0 and get(o,104)==0 and get(o,200)==0,1,0)
+        return choose(phase==HELD and get(o,88)==0 and get(o,104)==1 and get(o,200)==0 and get(o,96)==1-get(o,40),1,0)
+    if get(o,8)==2:
+        return choose(phase==GROW_QUEUE and get(o,88)==1 and get(o,104)==0 and get(o,200)==0 and get(o,192)>=144 and (get(o,192)&15)==0,1,0)
+    if (phase<PRE_CLOCK or phase>FAIL_UNLOCK) and (phase<FINISH_ID or phase>FINISH_POISON_UNLOCK) and (phase<DROP_ID or phase>DROP_UNLOCK):
+        return 0
+    return 1
+
+def initialize_queue(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if actor_fresh(o)==0:
+        return STATE_ERROR
+    if length(w)<128:
+        return CAPACITY
+    if zero_mut(w,0,128)==0:
+        return STATE_ERROR
+    clear(o,0,512)
+    put(o,0,ACTOR)
+    put(o,128,read64(s,32))
+    put(w,0,QUEUE)
+    put(w,48,128)
+    put(w,56,read64(s,32))
+    return finish(o,0)
+
+def queue_valid(w:mutbuf,o:mutbuf) -> u64:
+    if get(o,88)!=1 or length(w)<128:
+        return 0
+    if get(w,0)!=QUEUE or get(w,56)!=get(o,128):
+        return 0
+    if get(w,16)>1 or get(w,32)>1 or (get(w,16)!=0 and get(w,24)!=0):
+        return 0
+    count=get(w,40)
+    if count>MAX_ENTRIES or get(w,48)!=128+count*16 or get(w,48)>length(w):
+        return 0
+    if zero_mut(w,64,128)==0:
+        return 0
+    previous=0
+    at=128
+    while at<get(w,48):
+        ticket=get(w,at)
+        if ticket>=get(w,8) or (at!=128 and ticket<=previous) or get(w,at+8)>1:
+            return 0
+        previous=ticket
+        at=at+16
+    return 1
+
+def resume(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if read64(s,16)!=get(o,24):
+        return STATE_ERROR
+    phase=get(o,32)
+    if phase==GROW_QUEUE:
+        if get(o,8)!=2 or read64(s,24)!=0 or zero_input(s,128,256)==0:
+            return INVALID
+        if queue_valid(w,o)==0 or length(w)<get(o,192):
+            return STATE_ERROR
+        put(o,192,0)
+        return push_ticket(o,w)
+    if get(o,8)!=1 or valid_observation(s,o)==0:
+        return STATE_ERROR
+    if get(o,80)==0:
+        put(o,80,read64(s,152))
+    put(o,144,read64(s,192))
+    put(o,152,read64(s,200))
+    put(o,176,read64(s,168))
+    if phase<30:
+        return resume_acquire(s,o,w,phase)
+    if phase<50:
+        return resume_finish(s,o,w,phase)
+    return resume_drop(s,o,w,phase)
+
+def valid_observation(s:readbuf,o:mutbuf) -> u64:
+    if valid_effect(o)==0:
+        return 0
+    if read64(s,24)!=128 or read64(s,128)!=SYNC_RESPONSE or read64(s,136)!=get(o,264):
+        return 0
+    if read64(s,144)>2 or read64(s,152)==0 or read64(s,208)!=get(o,128) or read64(s,248)!=0:
+        return 0
+    if get(o,80)!=0 and read64(s,152)!=get(o,80):
+        return 0
+    if read64(s,168)>U32_MAX or read64(s,176)>1 or read64(s,184)>1 or read64(s,232)>1 or read64(s,240)>1:
+        return 0
+    operation=get(o,264)
+    kind=get(o,272)
+    result=read64(s,144)
+    if operation==4:
+        errno=read64(s,160)
+        if errno!=0 and errno!=4 and errno!=11 and errno!=110:
+            return 0
+        if result>1 or read64(s,216)!=read64(s,152) or read64(s,232)!=1:
+            return 0
+    elif read64(s,160)!=0:
+        return 0
+    if result==2 and operation!=2:
+        return 0
+    if operation==1 or (operation==2 and result!=2):
+        if read64(s,216+kind*8)!=read64(s,152) or read64(s,232+kind*8)!=1:
+            return 0
+        if result!=read64(s,176+kind*8):
+            return 0
+    if operation!=1 and operation!=2 and operation!=4 and result!=0:
+        return 0
+    if operation!=6 and (read64(s,192)!=0 or read64(s,200)!=0):
+        return 0
+    return 1
+
+def valid_effect(o:mutbuf) -> u64:
+    if get(o,256)!=SYNC_REQUEST or get(o,264)>7 or get(o,272)>1 or get(o,280)!=get(o,128):
+        return 0
+    if get(o,296)>1 or zero_mut(o,328,384)==0:
+        return 0
+    operation=get(o,264)
+    if operation==4:
+        if get(o,272)!=0 or get(o,288)>U32_MAX or get(o,296)!=0 or get(o,304)>1 or get(o,312)>I64_MAX or get(o,320)>=1000000000:
+            return 0
+        if get(o,304)==0 and (get(o,312)!=0 or get(o,320)!=0):
+            return 0
+    else:
+        if get(o,288)!=0 or zero_mut(o,304,328)==0:
+            return 0
+        if operation!=1 and operation!=2 and operation!=3:
+            if get(o,272)!=0 or get(o,296)!=0:
+                return 0
+    return 1
+
+def resume_acquire(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u32:
+    if phase==PRE_CLOCK:
+        if expired(o)!=0:
+            return finish(o,5)
+        put(o,160,get(o,144))
+        put(o,168,get(o,152))
+        return issue(o,QUEUE_LOCK,1,0,0,0,0)
+    if phase==QUEUE_LOCK:
+        put(o,88,1)
+        if read64(s,144)==1:
+            return queue_fail(o,6)
+        if queue_valid(w,o)==0:
+            return STATE_ERROR
+        return issue(o,QUEUE_CLOCK,6,0,0,0,0)
+    if phase==QUEUE_CLOCK:
+        if queue_valid(w,o)==0:
+            return STATE_ERROR
+        if expired(o)!=0:
+            return queue_fail(o,5)
+        if get(w,32)!=0 or (get(o,40)==1 and read64(s,184)!=0) or get(w,8)==MAXIMUM:
+            return queue_fail(o,6)
+        if get(w,48)>MAXIMUM-16:
+            return RESOURCE
+        if length(w)-get(w,48)<16:
+            return grow_queue(o,get(w,48)+16)
+        return push_ticket(o,w)
+    if phase==POLL_CLOCK:
+        return poll_queue(s,o,w)
+    if phase==WAIT_CLOCK:
+        return wait_remaining(o)
+    if phase==WAIT_QUEUE:
+        if queue_valid(w,o)==0:
+            return STATE_ERROR
+        if read64(s,144)==1:
+            return cancel_queue(o,w,6)
+        return issue(o,POLL_CLOCK,6,0,0,0,0)
+    if phase==NOTIFY_ADMIT:
+        return issue(o,UNLOCK_ADMIT,3,0,0,0,0)
+    if phase==UNLOCK_ADMIT:
+        put(o,88,0)
+        return issue(o,ADMIT_CLOCK,6,0,0,0,0)
+    if phase==ADMIT_CLOCK:
+        if expired(o)!=0:
+            put(o,112,5)
+            return issue(o,CLEANUP_LOCK,1,0,0,0,0)
+        if get(o,40)==1:
+            return held(o)
+        return issue(o,TRY_INNER,2,1,0,0,0)
+    if phase==TRY_INNER:
+        result=read64(s,144)
+        if result==2:
+            put(o,112,6)
+            return issue(o,CLEANUP_LOCK,1,0,0,0,0)
+        put(o,96,1)
+        if result==1:
+            put(o,112,6)
+            return issue(o,CLEANUP_INNER,3,1,0,0,0)
+        return issue(o,INNER_CLOCK,6,0,0,0,0)
+    if phase==INNER_CLOCK:
+        if expired(o)==0:
+            return held(o)
+        put(o,112,5)
+        return issue(o,CLEANUP_INNER,3,1,0,0,0)
+    if phase==CLEANUP_INNER:
+        put(o,96,0)
+        return issue(o,CLEANUP_LOCK,1,0,0,0,0)
+    if phase==CLEANUP_LOCK:
+        put(o,88,1)
+        if queue_valid(w,o)==0:
+            return STATE_ERROR
+        release_guard(o,w)
+        return issue(o,CLEANUP_NOTIFY,5,0,0,0,0)
+    if phase==CLEANUP_NOTIFY:
+        return issue(o,CLEANUP_UNLOCK,3,0,0,0,0)
+    if phase==CLEANUP_UNLOCK:
+        put(o,88,0)
+        return finish(o,get(o,112))
+    if phase==CANCEL_NOTIFY:
+        return issue(o,FAIL_UNLOCK,3,0,0,0,0)
+    if phase==FAIL_UNLOCK:
+        put(o,88,0)
+        return finish(o,get(o,112))
+    return STATE_ERROR
+
+def push_ticket(o:mutbuf,w:mutbuf) -> u32:
+    if queue_valid(w,o)==0 or get(w,48)>length(w)-16 or get(w,8)==MAXIMUM:
+        return STATE_ERROR
+    ticket=get(w,8)
+    used=get(w,48)
+    put(w,used,ticket)
+    put(w,used+8,get(o,40))
+    put(w,8,ticket+1)
+    put(w,40,get(w,40)+1)
+    put(w,48,used+16)
+    put(o,72,ticket)
+    put(o,200,1)
+    return issue(o,POLL_CLOCK,6,0,0,0,0)
+
+def poll_queue(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if queue_valid(w,o)==0 or get(o,200)!=1 or find_ticket(w,get(o,72))==0:
+        return STATE_ERROR
+    if expired(o)!=0:
+        return cancel_queue(o,w,5)
+    if get(w,32)!=0 or (get(o,40)==1 and read64(s,184)!=0):
+        return cancel_queue(o,w,6)
+    if get(w,16)==0 and get(w,128)==get(o,72) and get(w,136)==get(o,40):
+        if get(o,40)==1 or get(w,24)==0:
+            if get(o,40)==1 and get(w,24)==MAXIMUM:
+                return RESOURCE
+            retire(w,128)
+            put(o,200,0)
+            put(o,104,1)
+            if get(o,40)==0:
+                put(w,16,1)
+                return issue(o,UNLOCK_ADMIT,3,0,0,0,0)
+            put(w,24,get(w,24)+1)
+            return issue(o,NOTIFY_ADMIT,5,0,0,0,0)
+    if get(o,48)==0:
+        return issue(o,WAIT_QUEUE,4,0,0,0,0)
+    return issue(o,WAIT_CLOCK,6,0,0,0,0)
+
+def cancel_queue(o:mutbuf,w:mutbuf,result:u64) -> u32:
+    at=find_ticket(w,get(o,72))
+    if at==0 or get(o,200)!=1:
+        return STATE_ERROR
+    retire(w,at)
+    put(o,200,0)
+    put(o,112,result)
+    return issue(o,CANCEL_NOTIFY,5,0,0,0,0)
+
+def queue_fail(o:mutbuf,result:u64) -> u32:
+    put(o,112,result)
+    return issue(o,FAIL_UNLOCK,3,0,0,0,0)
+
+def resume_finish(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u32:
+    if phase==FINISH_ID:
+        return issue(o,FINISH_LOCK,1,0,0,0,0)
+    if phase==FINISH_LOCK:
+        put(o,88,1)
+        if read64(s,144)==1:
+            put(o,112,6)
+            return issue(o,FINISH_POISON_UNLOCK,3,0,0,0,0)
+        if queue_valid(w,o)==0:
+            return STATE_ERROR
+        if get(w,32)!=0:
+            return finish_shared(o,w,6)
+        return issue(o,FINISH_STATUS,7,0,0,0,0)
+    if phase==FINISH_STATUS:
+        if queue_valid(w,o)==0:
+            return STATE_ERROR
+        if read64(s,184)!=0:
+            return finish_shared(o,w,6)
+        return issue(o,FINISH_CLOCK,6,0,0,0,0)
+    if phase==FINISH_CLOCK:
+        if queue_valid(w,o)==0:
+            return STATE_ERROR
+        return finish_shared(o,w,choose(expired(o)!=0,5,0))
+    if phase==FINISH_NOTIFY:
+        return issue(o,FINISH_UNLOCK,3,0,0,0,0)
+    if phase==FINISH_UNLOCK:
+        put(o,88,0)
+        return finish(o,get(o,112))
+    if phase==FINISH_POISON_UNLOCK:
+        put(o,88,0)
+        return issue(o,DROP_LOCK,1,0,0,0,0)
+    return STATE_ERROR
+
+def finish_shared(o:mutbuf,w:mutbuf,result:u64) -> u32:
+    if get(o,40)!=1 or get(o,104)!=1 or get(o,88)!=1:
+        return STATE_ERROR
+    if get(w,24)==0:
+        put(w,32,1)
+        result=6
+    else:
+        put(w,24,get(w,24)-1)
+    put(o,104,0)
+    put(o,112,result)
+    return issue(o,FINISH_NOTIFY,5,0,0,0,0)
+
+def resume_drop(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u32:
+    if phase==DROP_ID:
+        put(o,112,0)
+        if get(o,96)!=0:
+            return issue(o,DROP_INNER,3,1,0,0,0)
+        return issue(o,DROP_LOCK,1,0,0,0,0)
+    if phase==DROP_INNER:
+        put(o,96,0)
+        return issue(o,DROP_LOCK,1,0,0,0,0)
+    if phase==DROP_LOCK:
+        put(o,88,1)
+        if queue_valid(w,o)==0:
+            return STATE_ERROR
+        release_guard(o,w)
+        return issue(o,DROP_NOTIFY,5,0,0,0,0)
+    if phase==DROP_NOTIFY:
+        return issue(o,DROP_UNLOCK,3,0,0,0,0)
+    if phase==DROP_UNLOCK:
+        put(o,88,0)
+        return finish(o,get(o,112))
+    return STATE_ERROR
+
+def release_guard(o:mutbuf,w:mutbuf) -> u64:
+    if get(o,40)==1:
+        if get(o,120)!=0:
+            put(w,32,1)
+        if get(w,24)==0:
+            put(w,32,1)
+        else:
+            put(w,24,get(w,24)-1)
+    else:
+        put(w,16,0)
+    put(o,104,0)
+    return 0
+
+def wait_remaining(o:mutbuf) -> u32:
+    if expired(o)!=0:
+        return issue(o,WAIT_QUEUE,4,0,1,0,0)
+    low=get(o,56)-get(o,144)
+    high=get(o,64)-get(o,152)-choose(get(o,56)<get(o,144),1,0)
+    if high>TIMEOUT_HIGH or (high==TIMEOUT_HIGH and low>TIMEOUT_LOW):
+        return issue(o,WAIT_QUEUE,4,0,1,I64_MAX,999999999)
+    remaining=high
+    seconds=0
+    shift=64
+    while shift!=0:
+        shift=shift-1
+        remaining=remaining*2+((low>>shift)&1)
+        seconds=seconds*2
+        if remaining>=1000000000:
+            remaining=remaining-1000000000
+            seconds=seconds+1
+    return issue(o,WAIT_QUEUE,4,0,1,seconds,remaining)
+
+def expired(o:mutbuf) -> u64:
+    if get(o,48)==0:
+        return 0
+    low=get(o,144)
+    high=get(o,152)
+    return choose(high>get(o,64) or (high==get(o,64) and low>=get(o,56)),1,0)
+
+def find_ticket(w:mutbuf,ticket:u64) -> u64:
+    at=128
+    while at<get(w,48):
+        if get(w,at)==ticket:
+            return at
+        at=at+16
+    return 0
+
+def retire(w:mutbuf,at:u64) -> u64:
+    end=get(w,48)-16
+    cursor=at
+    while cursor<end:
+        store(w,cursor,byte(w,cursor+16))
+        cursor=cursor+1
+    clear(w,end,end+16)
+    put(w,40,get(w,40)-1)
+    put(w,48,end)
+    return 0
+
+def grow_queue(o:mutbuf,needed:u64) -> u32:
+    if get(o,24)==MAXIMUM:
+        return RESOURCE
+    put(o,8,2)
+    put(o,16,0)
+    put(o,24,get(o,24)+1)
+    put(o,32,GROW_QUEUE)
+    put(o,192,needed)
+    clear(o,256,384)
+    return 512
+
+def issue(o:mutbuf,phase:u64,operation:u64,kind:u64,present:u64,seconds:u64,nanos:u64) -> u32:
+    if get(o,24)==MAXIMUM:
+        return RESOURCE
+    put(o,8,1)
+    put(o,16,0)
+    put(o,24,get(o,24)+1)
+    put(o,32,phase)
+    clear(o,256,384)
+    put(o,256,SYNC_REQUEST)
+    put(o,264,operation)
+    put(o,272,kind)
+    put(o,280,get(o,128))
+    if operation==1 or operation==2 or operation==3:
+        put(o,296,get(o,120))
+    if operation==4:
+        put(o,288,get(o,176))
+        put(o,304,present)
+        put(o,312,seconds)
+        put(o,320,nanos)
+    return 512
+
+def held(o:mutbuf) -> u32:
+    put(o,8,0)
+    put(o,16,3)
+    put(o,32,HELD)
+    clear(o,256,384)
+    return 512
+
+def finish(o:mutbuf,result:u64) -> u32:
+    put(o,8,0)
+    put(o,16,result)
+    put(o,32,DONE)
+    put(o,192,0)
+    clear(o,256,384)
+    return 512
+
+def read64(s:readbuf,at:u64) -> u64:
+    value=0
+    shift=0
+    while shift<64:
+        value=value|(byte(s,at)<<shift)
+        at=at+1
+        shift=shift+8
+    return value
+
+def get(w:mutbuf,at:u64) -> u64:
+    value=0
+    shift=0
+    while shift<64:
+        value=value|(byte(w,at)<<shift)
+        at=at+1
+        shift=shift+8
+    return value
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    shift=0
+    while shift<64:
+        store(w,at,(value>>shift)&255)
+        at=at+1
+        shift=shift+8
+    return 0
+
+def clear(w:mutbuf,begin:u64,end:u64) -> u64:
+    while begin<end:
+        store(w,begin,0)
+        begin=begin+1
+    return 0
+
+def zero_input(s:readbuf,begin:u64,end:u64) -> u64:
+    while begin<end:
+        if byte(s,begin)!=0:
+            return 0
+        begin=begin+1
+    return 1
+
+def zero_mut(w:mutbuf,begin:u64,end:u64) -> u64:
+    while begin<end:
+        if byte(w,begin)!=0:
+            return 0
+        begin=begin+1
+    return 1
