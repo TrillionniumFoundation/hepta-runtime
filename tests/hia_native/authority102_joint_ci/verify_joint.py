@@ -110,7 +110,38 @@ def join_controls(authority, batch):
         complete_component_readers_ran_before_controls=True, native_or_rust_executions=0)
 
 
-def prepare(source):
+def preload_input_definitions(source, batch, batch_run=None):
+    """Derive all fixed inputs before the guard; never perform fixture actions."""
+    capture = batch.read_public.capture
+    original = capture.case_rows
+    retained = {}
+    shapes = []
+    for domain, count in batch.DOMAINS.items():
+        if batch_run is None:
+            fixture = source / "readonly-input-definition" / domain
+        else:
+            native = doc(batch_run / "public" / domain / "native/result.json")
+            reference = doc(batch_run / "public" / domain / "original/result.json")
+            assert type(native["fixture"]) is str and native["fixture"] == reference["fixture"]
+            fixture = Path(native["fixture"])
+            assert fixture.is_absolute()
+        rows = original(domain, fixture)
+        assert len(rows) == count
+        key = (domain, fixture)
+        assert key not in retained
+        retained[key] = rows
+        shapes.append(dict(domain=domain, fixture=str(fixture), rows=count))
+    def input_rows(domain, fixture):
+        key = (domain, Path(fixture))
+        assert key in retained, "unadmitted complete input shape"
+        # Each reader gets independent dictionaries, exactly as regeneration
+        # would return. The original corpus functions and bytes stay unchanged.
+        return copy.deepcopy(retained[key])
+    capture.case_rows = input_rows
+    batch._joint_input_shapes = shapes
+
+
+def prepare(source, batch_run=None):
     source = Path(source)
     sys.path.insert(0, str(source / "authority-runner"))
     authority = load("_joint102_authority_reader", source / "authority-runner/verify_complete.py")
@@ -124,6 +155,7 @@ def prepare(source):
     # definitions before the guard; do not allow a later implicit pyc probe.
     controls = importlib.import_module("check_evidence")
     assert Path(controls.__file__).resolve(strict=True) == (source / "batch/check_evidence.py").resolve(strict=True)
+    preload_input_definitions(source, batch, batch_run)
     entry = load("_joint102_entry_reader", source / "entry102.py")
     return authority, batch, entry, prepared["guard"]
 
@@ -145,8 +177,21 @@ def check_imports(source, prepared):
             assert (reference / "project" / name).read_bytes() == raw
         assert Path(importlib.import_module("check_evidence").__file__).resolve(strict=True) == (
             source / "batch/check_evidence.py").resolve(strict=True)
+        counts = {}
+        for shape in batch._joint_input_shapes:
+            domain, fixture = shape["domain"], Path(shape["fixture"])
+            rows = batch.read_public.capture.case_rows(domain, fixture)
+            again = batch.read_public.capture.case_rows(domain, fixture)
+            assert rows == again and rows is not again and len(rows) == shape["rows"] == batch.DOMAINS[domain]
+            saved_name = rows[0]["name"]
+            rows[0]["name"] = "independent-reader-copy-control"
+            assert again[0]["name"] == saved_name
+            assert batch.read_public.capture.case_rows(domain, fixture)[0]["name"] == saved_name
+            counts[domain] = len(again)
+        assert counts == batch.DOMAINS and sum(counts.values()) == 1777
         return dict(repeated_builder_imports=2, physical_members=102,
             exact_original_source_files=len(generated), actual_builder_executions=0,
+            input_definitions=counts, independent_input_copies=True,
             native_or_rust_executions=0)
     report = prepared[3].guarded(operation, roots=[source], foreign_path="/dev/null")
     assert len(report["probes"]) == 11 and report["before"] == report["after"]
@@ -215,6 +260,8 @@ def verify(source, authority_archive, batch_run, prepared):
     return dict(schema="hepta.runtime.authority102-complete-joint-readonly.v1",
         status="READONLY_AUTHORITY102_AND_COMPLETE_BATCH_PASS", source=source_closure,
         exact_retained_source_copies=retained_sources,
+        preloaded_input_shapes=batch_reader._joint_input_shapes,
+        complete_inputs_rechecked_against_actual_capture_under_guard=True,
         authority_evidence_sha256=SHA(ENCODE(authority)), batch_evidence_sha256=SHA(ENCODE(batch)),
         entry_evidence_sha256=SHA(ENCODE(entry)), products=joined, join_controls=controls,
         authority_domains=dict(original_owner=243, current_public_owner=16, handshake_sessions=54,
@@ -242,14 +289,15 @@ if __name__ == "__main__":
     source = args.source.resolve(strict=True)
     assert pin(source / "joint-source.json")["sha256"] == args.expected_source_sha256
     check(source)
-    prepared = prepare(source)
     if args.imports_only:
         assert args.authority is None and args.batch is None
+        prepared = prepare(source)
         print(json.dumps(check_imports(source, prepared), sort_keys=True))
     else:
         assert args.authority is not None and args.batch is not None
         authority = args.authority.resolve(strict=True)
         batch = args.batch.resolve(strict=True)
+        prepared = prepare(source, batch_run=batch)
         guarded = prepared[3].guarded(lambda: verify(source, authority, batch, prepared),
             roots=[source, authority, batch], foreign_path="/dev/null")
         assert len(guarded["probes"]) == 11 and guarded["before"] == guarded["after"]
