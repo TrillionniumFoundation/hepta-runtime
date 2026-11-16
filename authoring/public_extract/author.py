@@ -10,8 +10,9 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from source_support import SHA, CANON, ENCODE, identity, require, tools
 from author_modules import controllers, frontend
+from author_catalog import catalog
 
-BASELINE_PIN = "d836d1d46c37aeaaf4ab1f5c388186f77b3b1469a396fbdd8dfb28933bf6ddd4"
+BASELINE_PIN = "92456e41c9614005b96f3404b1a6dfbc65cc77f798ffd5b0024018ffad156e54"
 SHARED = {
  "native/local_read.hepta":"a4eacfcdae04233097a2d37ae15447b2e6e99dd5325e98b409b4404896786df0",
  "native/file_lock_key.hepta":"99174dd26e97882b65489e9f913a2a22663546dcc783a678c9f571458841ddce",
@@ -75,6 +76,8 @@ def main():
     generated,owners=controllers(api,source,author)
     front,front_proof=frontend(api,source,author)
     generated.update(front)
+    catalog_files,catalog_proof=catalog(api,source,author)
+    generated.update(catalog_files)
     grouped={}
     for row in json.loads(physical(author,"source_edits.json")):
         grouped.setdefault(row["path"],[]).append(row)
@@ -99,16 +102,16 @@ def main():
         require(SHA(generated[name]) == pin, "qualified extract body source changed")
     source.update(generated)
     author_names=["author.py","source_support.py","author_modules.py","params.pseudo","gateway.pseudo",
-                  "caller.pseudo","adapter.pseudo","frontend.pseudo","source_edits.json","BASELINE.json","README.md"]
+                  "caller.pseudo","adapter.pseudo","frontend.pseudo","source_edits.json","BASELINE.json","README.md","author_catalog.py"]
     for name in author_names:
         source["authoring/public_extract/"+name]=physical(author,name)
     report={"schema":"hepta.runtime.public-extract-source-assembly.v1","status":"SOURCE_ASSEMBLED",
-        "baseline_commit":"05044de882e3c72f1f9bd243c85d15f203d62125","baseline_binding_sha256":BASELINE_PIN,
+        "baseline_commit":"fa2aed97cf22b720d85bd8d08b720aeadba3c4d6","baseline_binding_sha256":BASELINE_PIN,
         "author_profile_sha256":a.author_profile_sha256,"owners":owners,"frontend":front_proof,
-        "source_edits":patch_proof,"shared_original_owner_sources":SHARED,"copied_qualified_body_sources":COPIED,
+        "catalog":catalog_proof,"source_edits":patch_proof,"shared_original_owner_sources":SHARED,"copied_qualified_body_sources":COPIED,
         "direct_hia_members":110,"packed_hia_members":8,"physical_containers":111,"runtime_hia_images":118,
         "extract_slots":[59,60,61,62,63],"same_process_hub":400,"callable_context":456,"caller_installation":464,
-        "catalog_integration_pending":True,"native_semantics_executed":False,"rust_executed":False,
+        "catalog_integration_pending":False,"actual_native_catalog_assets_admitted":True,"native_semantics_executed":False,"rust_executed":False,
         "public_handler_qualified":False,"full_async_cancellation_qualified":False,
         "remote_qualified":False,"whole_runtime_replaced":False,"main_advanced":False}
     source["native/runtime_mcp_extract_source.json"]=ENCODE(report)
@@ -116,7 +119,7 @@ def main():
     binding["current_layout"].update(direct_hia_members=110,descriptor_slots=64,expected_physical_containers=111,
         expected_runtime_hia_images=118,extract_slots=[59,60,61,62,63],reserved_successor_slots=[],
         extract_context_offset=456,extract_install_offset=464,extract_local_body_only=True,
-        extract_catalog_integration_pending=True)
+        extract_catalog_integration_pending=False,advertised_catalog_tools=10)
     binding["qualification"].update({"extract_public":"NOT_RUN","full_sdk":False,"async":False})
     binding["extract_public_extension"]={"source_proof":"native/runtime_mcp_extract_source.json",
         "baseline_binding_sha256":BASELINE_PIN,"source_profile_sha256":a.author_profile_sha256,
@@ -134,7 +137,7 @@ def main():
     (a.output/"AUTHOR.json").write_bytes(ENCODE(report))
     require(admitted_author(author,a.author_profile_sha256)==profile,"author source mutated")
     admitted_base(a.baseline.resolve(strict=True),author)
-    print(json.dumps({k:v for k,v in report.items() if k not in ("owners","frontend","source_files")},sort_keys=True))
+    print(json.dumps({k:v for k,v in report.items() if k not in ("owners","frontend","catalog","source_files")},sort_keys=True))
 
 if __name__=="__main__":
     main()
