@@ -76,3 +76,58 @@ def header(o: mutbuf, status: u64, needed: u64) -> u32:
     put(o, 8, status)
     put(o, 80, needed)
     return 128
+
+def load(s: readbuf, at: u64) -> u64:
+    value = byte(s, at)
+    value = value | (byte(s, at + 1) << 8)
+    value = value | (byte(s, at + 2) << 16)
+    value = value | (byte(s, at + 3) << 24)
+    value = value | (byte(s, at + 4) << 32)
+    value = value | (byte(s, at + 5) << 40)
+    value = value | (byte(s, at + 6) << 48)
+    value = value | (byte(s, at + 7) << 56)
+    return value
+
+def get(s: mutbuf, at: u64) -> u64:
+    value = byte(s, at)
+    value = value | (byte(s, at + 1) << 8)
+    value = value | (byte(s, at + 2) << 16)
+    value = value | (byte(s, at + 3) << 24)
+    value = value | (byte(s, at + 4) << 32)
+    value = value | (byte(s, at + 5) << 40)
+    value = value | (byte(s, at + 6) << 48)
+    value = value | (byte(s, at + 7) << 56)
+    return value
+
+def table_load(s: mutbuf, at: u64) -> u64:
+    value = byte(s, at)
+    value = value | (byte(s, at + 1) << 8)
+    value = value | (byte(s, at + 2) << 16)
+    value = value | (byte(s, at + 3) << 24)
+    value = value | (byte(s, at + 4) << 32)
+    value = value | (byte(s, at + 5) << 40)
+    value = value | (byte(s, at + 6) << 48)
+    value = value | (byte(s, at + 7) << 56)
+    return value
+
+def put(w: mutbuf, at: u64, value: u64) -> u64:
+    store(w, at, value)
+    store(w, at + 1, value >> 8)
+    store(w, at + 2, value >> 16)
+    store(w, at + 3, value >> 24)
+    store(w, at + 4, value >> 32)
+    store(w, at + 5, value >> 40)
+    store(w, at + 6, value >> 48)
+    store(w, at + 7, value >> 56)
+    return value
+
+def table_store(w: mutbuf, at: u64, value: u64) -> u64:
+    store(w, at, value)
+    store(w, at + 1, value >> 8)
+    store(w, at + 2, value >> 16)
+    store(w, at + 3, value >> 24)
+    store(w, at + 4, value >> 32)
+    store(w, at + 5, value >> 40)
+    store(w, at + 6, value >> 48)
+    store(w, at + 7, value >> 56)
+    return 0

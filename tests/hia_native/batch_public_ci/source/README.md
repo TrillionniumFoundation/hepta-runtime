@@ -77,6 +77,22 @@ Local Rust compilation is not an admitted path. The recipe refuses a local
 fresh original build. All success claims depend on the actual new CI result;
 the package itself does not assert that an unexecuted comparison passed.
 
+## Fixed-width accessor revision
+
+The current parameter carrier replaces only `f26`, `f27`, `f28`, `f44` and
+`f45` with eight explicit byte accesses in their original order. Each access
+retains the HIA buffer bounds check and wrapping address arithmetic. The
+other 42 carrier functions, including all parsing, serialization, diagnostics
+and Unicode range data, remain exact. `native/accessor-proof.json` records the
+before/after identity and those unchanged functions. The retained baseline
+owner is not modified.
+
+This addresses an actual 180-second typed-native timeout in the first CI
+attempt. The complete source corpus, 3,143 calls, capacity grants, recorded
+720,021,713 bytes and process deadlines remain unchanged. Development replay
+compared every complete input/output/workspace byte with the prior carrier;
+the current-target fresh CI comparison remains a separate required gate.
+
 ## Composition boundary
 
 `ABI.md` defines the parameter carrier, body adapter and callable ownership.

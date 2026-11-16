@@ -81,7 +81,8 @@ def main():
 
     specs = {
         "batch_params": {
-            "retained": "batch_edit_params", "replacements": {"entry": "f0", "header": "f46"},
+            "retained": "batch_edit_params", "replacements": {"entry": "f0", "header": "f46",
+                "load": "f26", "get": "f27", "put": "f28", "table_load": "f44", "table_store": "f45"},
             "aliases": {"scan": "f15", "parse": "f3", "serialize": "f5",
                 "unicode_table": "f32", "diagnostic": "f23", "string_emit": "f14",
                 "load": "f26", "get": "f27", "put": "f28"},
