@@ -85,6 +85,8 @@ def run(source,build,native,controls,original,output):
             r=json.loads((base/'module.receipt.json').read_bytes());r['output_sha256']=q.sha(raw);save(base/'module.receipt.json',r)
             b=json.loads((base/'build.json').read_bytes());b['compile_receipt']=r;save(base/'build.json',b)
         mutation('rehashed-compiler-tail',['build/modules/catalog-policy/module.output.bin','build/modules/catalog-policy/module.receipt.json','build/modules/catalog-policy/build.json'],change_compiler)
+        mutation('rehashed-compiler-stdout',['build/modules/catalog-policy/module.stdout.log'],
+            edit_json('build/modules/catalog-policy/module.stdout.log',lambda v:v.__setitem__('native_elapsed_ns',v['native_elapsed_ns']+1)))
         def symlink(root,aliases):
             p=root/'source/catalog_policy.pseudo';p.unlink();p.symlink_to('declarations.json')
         mutation('admitted-symlink',['source/catalog_policy.pseudo'],symlink)
@@ -95,9 +97,9 @@ def run(source,build,native,controls,original,output):
             p=root/'source/catalog_policy.pseudo';p.unlink();os.mkfifo(p)
         mutation('admitted-fifo',['source/catalog_policy.pseudo'],fifo)
         admit()
-    assert len(rows)==14
+    assert len(rows)==15
     result={'schema':'hepta.runtime.catalog-policy-evidence-controls.v1','status':'PASS','actual_native_launches':0,
-        'actual_rust_launches':0,'admissions':3,'refusals':14,'records':rows,'independent_file_copies':True,
+        'actual_rust_launches':0,'admissions':3,'refusals':15,'records':rows,'independent_file_copies':True,
         'all_owned_snapshot_fixtures_retired':True,'complete_source_and_mutation_bytes_retained':True}
     save(output/'result.json',result);return result
 

@@ -155,7 +155,15 @@ def build_check(build, source):
         need(receipt["artifact_sha256"] == receipt["image_sha256"] == GENERATION and request["image_sha256"] == GENERATION, "actual fixed B3")
         need(receipt["output_sha256"] == sha(output) and len(output) == 1048576 and output[:len(image)] == image and output[len(image):] == bytes((0xA5,)) * (len(output)-len(image)), "complete compiler output and tail")
         need(reader.raw(prefix + "module.stderr.log") == b"", "native compiler stderr")
-        reader.raw(prefix + "module.stdout.log")
+        stdout = reader.document(prefix + "module.stdout.log")
+        stdout_fields = ("abi_status", "core_u32", "forbidden_compiler_modules_loaded", "image_sha256",
+            "limits", "loader_operations", "native_elapsed_ns", "output_sha256", "output_unchanged",
+            "result_u64", "return_encoding", "source_sha256", "source_unchanged", "status", "workspace_header")
+        need(type(stdout) is dict and set(stdout) == set(stdout_fields), "complete native compiler stdout fields")
+        expected_stdout = {key: receipt[key] for key in stdout_fields}
+        need(json.dumps(stdout, sort_keys=True, separators=(",", ":")) ==
+             json.dumps(expected_stdout, sort_keys=True, separators=(",", ":")),
+             "native compiler stdout/receipt custody")
         need(request["source_sha256"] == expected_source and request["workspace_fill"] == 0 and request["workspace_size"] == request["capacity"] == 1048576, "native compiler request bounds")
         need(Path(request["source"]).name == "module.input.bin" and Path(request["output"]).name == "module.output.bin" and Path(request["image"]).name == "B3.image.bin", "original compiler path roles")
         header = receipt["workspace_header"]
@@ -253,9 +261,9 @@ def evidence_controls_check(source, build, native, evidence):
     result=reader.document('result.json')
     labels=('missing-schema-row','wrong-native-call-count','missing-distinct-shape','wrong-cursor-attribution',
         'source-byte-change','forged-profile','rehashed-node-count','rehashed-request','rehashed-sdk-kind',
-        'whole-wire-extra-byte','rehashed-compiler-tail','admitted-symlink','admitted-hardlink','admitted-fifo')
+        'whole-wire-extra-byte','rehashed-compiler-tail','rehashed-compiler-stdout','admitted-symlink','admitted-hardlink','admitted-fifo')
     need(result['schema']=='hepta.runtime.catalog-policy-evidence-controls.v1' and result['status']=='PASS', 'evidence control completion')
-    need(result['admissions']==3 and result['refusals']==14 and result['actual_native_launches']==result['actual_rust_launches']==0,
+    need(result['admissions']==3 and result['refusals']==15 and result['actual_native_launches']==result['actual_rust_launches']==0,
         'read-only evidence control scope')
     need(result['independent_file_copies'] is True and result['all_owned_snapshot_fixtures_retired'] is True,
         'independent retired source/artifact snapshots')
@@ -275,7 +283,7 @@ def evidence_controls_check(source, build, native, evidence):
                 if label=='admitted-hardlink':need(changed==before and after['nlink']==2,'actual alias refusal fixture')
             elif after['type']=='symlink':need(label=='admitted-symlink' and after['target']=='declarations.json','actual symlink refusal fixture')
             else:need(label=='admitted-fifo' and stat.S_ISFIFO(after['mode']),'actual FIFO refusal fixture')
-    return {'status':'PASS','admissions':3,'refusals':14,'process_launches':0,'files':reader.files}
+    return {'status':'PASS','admissions':3,'refusals':15,'process_launches':0,'files':reader.files}
 
 def verify(source, build, native, original, *, verify_original=True):
     sources, asset, tools, raw_input = source_check(source)

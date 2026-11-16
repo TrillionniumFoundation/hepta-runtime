@@ -34,7 +34,11 @@ remain 30, 1800, 180 and 120 seconds. Native matrix and controls each retain a
 exact source profiles, three actual compiler images and their complete compile
 outputs, all native input/output/workspace bytes, all context mappings, original
 source/registry/build streams, 403 control records, relocation admissions and
-14 rehashed-record/source refusals. It does not infer completion from PASS text.
+15 rehashed-record/source refusals, retaining all original 14 plus compiler-stdout
+custody. It does not infer completion from PASS text. Each actual child stdout
+JSON field must agree with the native compiler receipt. The callable `verify()`
+and recipe `--phase verify` only read evidence; the separate `read_catalog.py`
+CLI writes a report only when its explicit `--receipt` option is supplied.
 The only excluded archive directory is the original Rust compiler intermediates;
 the actual reference ELF, complete original sources and all streams are retained.
 
