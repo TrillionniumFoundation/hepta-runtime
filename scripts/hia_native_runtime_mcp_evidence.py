@@ -133,7 +133,7 @@ def source_identity(root):
     raw=owned(root,'native/runtime_mcp_sources.json').read_bytes()
     require(type(SOURCE_MANIFEST_SHA256) is str and sha(raw)==SOURCE_MANIFEST_SHA256,
             'final source manifest changed or was not frozen')
-    proof=decode(raw);exact(sorted(proof),['schema','sources'],'source manifest fields differ')
+    proof=decode(raw);exact(sorted(proof),['batch_development_import','schema','sources'],'source manifest fields differ')
     exact(proof['schema'],'hepta.runtime.public-source-closure.v2','source manifest schema differs')
     require(type(proof['sources']) is dict and proof['sources'],'source closure absent')
     for name,expected in proof['sources'].items():

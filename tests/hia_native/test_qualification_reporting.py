@@ -2334,5 +2334,67 @@ class QualificationReportingTests(unittest.TestCase):
 
 
 
+    def test_public_source_manifest_complete_batch_import_contract(self):
+        import copy
+        import hia_native_runtime_mcp_evidence as reader
+        manifest = ROOT / "native/runtime_mcp_sources.json"
+        raw = manifest.read_bytes()
+        proof = reader.decode(raw)
+        self.assertEqual(sorted(proof), ["batch_development_import", "schema", "sources"])
+        admitted = reader.source_identity(ROOT)
+        self.assertEqual(admitted, {"manifest_sha256": reader.sha(raw), "files": proof["sources"]})
+        self.assertEqual(len(admitted["files"]), 151)
+        self.assertEqual(proof["batch_development_import"]["members"], 71)
+        copied = self.output / "source/native/runtime_mcp_sources.json"
+        copied.parent.mkdir(parents=True)
+        for name in ("missing-import", "unknown-field"):
+            with self.subTest(name=name):
+                altered = copy.deepcopy(proof)
+                if name == "missing-import":
+                    del altered["batch_development_import"]
+                else:
+                    altered["unbound"] = True
+                changed = reader.compact(altered)
+                copied.write_bytes(changed)
+                with patch.object(reader, "SOURCE_MANIFEST_SHA256", reader.sha(changed)):
+                    with self.assertRaisesRegex(ValueError, "source manifest fields differ"):
+                        reader.source_identity(copied.parent.parent)
+
+    def test_request_registry_admits_actual_generic_build_record(self):
+        import ast
+        import copy
+        import qualify_hia_runtime_native as main
+        import hia_native_request_registry_pipeline as reader
+        component = next(item for item in main.MODULES if item["key"] == reader.KEY)
+        self.assertNotIn("builder", component)
+        source = (ROOT / "scripts/qualify_hia_runtime_native.py").read_bytes()
+        function = next(node for node in ast.parse(source).body
+                        if isinstance(node, ast.FunctionDef) and node.name == "prepare_native")
+        assignments = [node for node in ast.walk(function) if isinstance(node, ast.Assign)
+                       and len(node.targets) == 1
+                       and ast.unparse(node.targets[0]) == "report['modules'][item['key']]"]
+        self.assertEqual(len(assignments), 1)
+        built = self.output / reader.MANIFEST
+        built.parent.mkdir(parents=True)
+        built.write_bytes(b'{"schema":"registration-metadata-fixture"}\n')
+        report = {"modules": {}}
+        program = ast.fix_missing_locations(ast.Module(body=assignments, type_ignores=[]))
+        exec(compile(program, "actual-prepare-native-module-record", "exec"),
+             {"item": component, "built": built, "output": self.output,
+              "report": report, "sha": main.sha})
+        self.assertEqual(report["modules"][reader.KEY]["builder"], "borrowed_bytes")
+        reader._module(self.output, report)
+        for bad in (None, "", "runtime_mcp", False, 0, {}):
+            with self.subTest(builder=bad):
+                altered = copy.deepcopy(report)
+                altered["modules"][reader.KEY]["builder"] = bad
+                with self.assertRaisesRegex(ValueError, "generic request-registry NativeBuild"):
+                    reader._module(self.output, altered)
+        altered = copy.deepcopy(report)
+        del altered["modules"][reader.KEY]["builder"]
+        with self.assertRaisesRegex(ValueError, "generic request-registry NativeBuild"):
+            reader._module(self.output, altered)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

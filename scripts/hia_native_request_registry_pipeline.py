@@ -117,7 +117,7 @@ def _module(output,report):
  item=report['modules'][KEY]
  same(item['manifest'],MANIFEST,'registered request-registry manifest')
  same(item['source'],'native/request_registry.hepta','registered HIA owner')
- require(item.get('builder')in(None,''),'generic request-registry NativeBuild')
+ same(item.get('builder'),'borrowed_bytes','generic request-registry NativeBuild')
  same(pin(Path(output)/MANIFEST)['sha256'],item['sha256'],'registered module identity')
 
 def _check(root,output,report,name,completed,binding,expected):
