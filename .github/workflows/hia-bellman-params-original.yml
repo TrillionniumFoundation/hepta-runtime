@@ -1,4 +1,4 @@
-name: HIA Bellman unchanged typed parameter observations
+name: HIA complete Bellman typed parameters and diagnostics
 on:
   workflow_dispatch:
   push:
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 jobs:
-  original:
+  typed:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -17,26 +17,39 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: pinned-Hepta
+          persist-credentials: false
       - name: Install fixed original toolchain
         run: rustup toolchain install 1.95.0 --profile minimal --no-self-update
-      - name: Observe every complete typed original result
+      - name: Fresh HIA, exact original types and all complete observations
         run: |
           umask 077
-          python -I -S -B tests/hia_native/bellman_params_ci/observe_original.py \
-            --output "$RUNNER_TEMP/bellman-params-original"
+          python -I -S -B tests/hia_native/bellman_params_ci/qualify.py \
+            --phase all --hepta "$GITHUB_WORKSPACE/pinned-Hepta" \
+            --output "$RUNNER_TEMP/bellman-params-evidence"
+      - name: Independent guarded read-only admission
+        run: |
+          python -I -S -B tests/hia_native/bellman_params_ci/readonly.py \
+            --output "$RUNNER_TEMP/bellman-params-evidence" \
+            > "$RUNNER_TEMP/bellman-params-reader.json"
+          cp "$RUNNER_TEMP/bellman-params-reader.json" "$RUNNER_TEMP/bellman-params-evidence/read-only.json"
       - name: Preserve all complete and failed observations
         if: always()
         run: |
-          if [ -d "$RUNNER_TEMP/bellman-params-original" ]; then
-            tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/bellman-params-original.tar.gz" bellman-params-original
-            sha256sum "$RUNNER_TEMP/bellman-params-original.tar.gz" > "$RUNNER_TEMP/bellman-params-original.tar.gz.sha256"
+          if [ -d "$RUNNER_TEMP/bellman-params-evidence" ]; then
+            tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/bellman-params-evidence.tar.gz" bellman-params-evidence
+            sha256sum "$RUNNER_TEMP/bellman-params-evidence.tar.gz" > "$RUNNER_TEMP/bellman-params-evidence.tar.gz.sha256"
           fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: bellman-params-original-${{ github.sha }}
+          name: bellman-params-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/bellman-params-original.tar.gz
-            ${{ runner.temp }}/bellman-params-original.tar.gz.sha256
+            ${{ runner.temp }}/bellman-params-evidence.tar.gz
+            ${{ runner.temp }}/bellman-params-evidence.tar.gz.sha256
           compression-level: 0
           if-no-files-found: error
