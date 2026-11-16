@@ -1,4 +1,4 @@
-name: Current installed public83 default entry
+name: Current installed public91 default entry
 on:
   workflow_dispatch:
   push:
@@ -10,18 +10,19 @@ permissions:
   contents: read
   actions: read
 jobs:
-  public-connection:
+  public-authority:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       LC_ALL: C.UTF-8
-      CONNECTION_SOURCE: ${{ github.workspace }}/public-reference/tests/hia_native/public_connection_ci
-      CONNECTION_RUNNER: ${{ github.workspace }}/public-reference/tests/hia_native/public_connection_ci_runner
+      AUTH_SOURCE: ${{ github.workspace }}/public-reference/tests/hia_native/public_authority_ci
+      AUTH_RUNNER: ${{ github.workspace }}/public-reference/tests/hia_native/public_authority_ci_runner
       EIGHT_SOURCE: ${{ github.workspace }}/retained-sdk/tests/hia_native/sdk_target_ci
+      RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Set runtime paths from the runner environment
         run: |
-          printf '%s\n' "CONNECTION_OUTPUT=$RUNNER_TEMP/public-connection-output" "CONNECTION_ARCHIVE=$RUNNER_TEMP/public-connection-evidence" "CATALOG_INPUT=$RUNNER_TEMP/public-connection-catalog-input" >> "$GITHUB_ENV"
+          printf '%s\n' "AUTH_OUTPUT=$RUNNER_TEMP/public-authority-output" "AUTH_ARCHIVE=$RUNNER_TEMP/public-authority-evidence" "CATALOG_INPUT=$RUNNER_TEMP/public-authority-catalog-input" >> "$GITHUB_ENV"
       - name: Checkout exact candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -34,15 +35,15 @@ jobs:
             tests/hia_native
             .github
           persist-credentials: false
-      - name: Checkout exact qualified current public source and recipe
+      - name: Checkout exact public authority source and recipe
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: TrillionniumFoundation/hepta-runtime
           path: public-reference
-          ref: 13138060cf5638fcb89510339e0c854f394be3da
+          ref: 71336e6a5aa4e74aef44635004b832a1cdacfe24
           sparse-checkout: |
-            tests/hia_native/public_connection_ci
-            tests/hia_native/public_connection_ci_runner
+            tests/hia_native/public_authority_ci
+            tests/hia_native/public_authority_ci_runner
           persist-credentials: false
       - name: Checkout immutable retained SDK source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -59,7 +60,7 @@ jobs:
           path: compiler
           ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
           persist-credentials: false
-      - name: Checkout exact target declarations
+      - name: Checkout exact target policy
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: TrillionniumFoundation/hepta-runtime
@@ -70,57 +71,63 @@ jobs:
             /Cargo.toml
             /Cargo.lock
             /src/mcp/server.rs
+            /src/mcp/fs/workdir.rs
+            /src/mcp/runtime/caller_scope.rs
+            /src/mcp/runtime/operation_crypto.rs
           persist-credentials: false
       - name: Verify frozen sources and exact identities
-        env:
-          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
-          python3 -I -B "$CONNECTION_RUNNER/run_ci.py" --source "$CONNECTION_SOURCE" --check-only
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
+          python3 -I -B "$AUTH_RUNNER/run_ci.py" --source "$AUTH_SOURCE" --check-only
+          python3 -I -B runtime/tests/hia_native/public91_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$AUTH_SOURCE" --check-source-only
           python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --check-only
           test "$(git -C "$GITHUB_WORKSPACE/retained-sdk" rev-parse HEAD)" = b4054165e9b7be63e9309c8223d04131ec4fe31e
           test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
           test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
           test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
           test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
-          test "$(git -C "$GITHUB_WORKSPACE/original-target" hash-object Cargo.toml)" = af0960b6ad360f26589de66e26cdcabe2fb3266f
-          test "$(git -C "$GITHUB_WORKSPACE/original-target" hash-object Cargo.lock)" = 23768e4ae7b4ba44d568134e91476b1c82069887
-          cmp "$GITHUB_WORKSPACE/original-target/Cargo.toml" "$CONNECTION_SOURCE/transport-reference/reference/target/Cargo.toml"
-          cmp "$GITHUB_WORKSPACE/original-target/Cargo.lock" "$CONNECTION_SOURCE/transport-reference/reference/target/Cargo.lock"
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.toml" "$AUTH_SOURCE/transport-reference/reference/target/Cargo.toml"
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.lock" "$AUTH_SOURCE/transport-reference/reference/target/Cargo.lock"
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.lock" "$AUTH_SOURCE/owner-reference/tests/hia_native/caller_owner_export/reference/Cargo.lock"
+          for name in src/mcp/server.rs src/mcp/fs/workdir.rs src/mcp/runtime/caller_scope.rs src/mcp/runtime/operation_crypto.rs; do
+            cmp "$GITHUB_WORKSPACE/original-target/$name" "$AUTH_SOURCE/target-policy/$name"
+          done
       - name: Recover exact qualified original get_info observation
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir "$CATALOG_INPUT"
           gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14194828118/zip > "$CATALOG_INPUT/qualified-catalog.zip"
-          python3 -I -B "$CONNECTION_RUNNER/extract_catalog_reference.py" --archive "$CATALOG_INPUT/qualified-catalog.zip" --output "$CATALOG_INPUT/selected"
+          python3 -I -B "$AUTH_RUNNER/extract_catalog_reference.py" --archive "$CATALOG_INPUT/qualified-catalog.zip" --output "$CATALOG_INPUT/selected"
       - name: Install native tools and exact Rust toolchain
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
           rustup toolchain install 1.95.0 --profile minimal
-          printf 'CONNECTION_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
-      - name: Fresh default public83 and current SDK reference qualification
+          printf 'AUTH_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Fresh default graph and complete original qualification
         run: |
-          python3 -I -B "$CONNECTION_RUNNER/run_ci.py" --source "$CONNECTION_SOURCE" --sdk-source "$EIGHT_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$CONNECTION_RUST_BIN" --get-info-reference "$CATALOG_INPUT/selected/current-get-info-original.stdout" --output "$CONNECTION_OUTPUT"
-      - name: Require complete readonly qualification
+          python3 -I -B "$AUTH_RUNNER/run_ci.py" --source "$AUTH_SOURCE" --sdk-source "$EIGHT_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$AUTH_RUST_BIN" --get-info-reference "$CATALOG_INPUT/selected/current-get-info-original.stdout" --output "$AUTH_OUTPUT"
+      - name: Require complete read-only qualification
         run: |
-          python3 -I -B "$CONNECTION_RUNNER/verify_complete.py" --source "$CONNECTION_SOURCE" --run "$CONNECTION_OUTPUT" --require-fresh --require-recipe-pass
+          python3 -I -B "$AUTH_RUNNER/verify_complete.py" --source "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --require-fresh --require-recipe-pass > "$RUNNER_TEMP/public-authority-independent-reader.json"
       - name: Exercise the actual installed main build entry
         run: |
-          python3 -I -B runtime/tests/hia_native/public83_entry.py --source "$GITHUB_WORKSPACE/runtime" --run "$CONNECTION_OUTPUT" --hepta "$GITHUB_WORKSPACE/compiler" --output "$CONNECTION_OUTPUT/main-default-entry"
-          python3 -I -B runtime/tests/hia_native/public83_entry.py --source "$GITHUB_WORKSPACE/runtime" --run "$CONNECTION_OUTPUT" --output "$CONNECTION_OUTPUT/main-default-entry" --verify-only
-      - name: Preserve successful or failed complete evidence
+          python3 -I -B runtime/tests/hia_native/public91_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --hepta "$GITHUB_WORKSPACE/compiler" --output "$AUTH_OUTPUT/main-default-entry"
+          python3 -I -B runtime/tests/hia_native/public91_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --output "$AUTH_OUTPUT/main-default-entry" --verify-only > "$RUNNER_TEMP/public-authority-entry-reader.json"
+      - name: Preserve complete successful or failed evidence
         if: always()
         run: |
-          python3 -I -B "$CONNECTION_RUNNER/export_artifact.py" --source "$CONNECTION_SOURCE" --run "$CONNECTION_OUTPUT" --catalog-input "$CATALOG_INPUT" --output "$CONNECTION_ARCHIVE"
+          python3 -I -B "$AUTH_RUNNER/export_artifact.py" --source "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --catalog-input "$CATALOG_INPUT" --output "$AUTH_ARCHIVE"
       - name: Upload complete source and execution evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: public-connection-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          name: public-authority-main-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/public-connection-evidence.tar.gz
-            ${{ runner.temp }}/public-connection-evidence.archive.json
+            ${{ runner.temp }}/public-authority-evidence.tar.gz
+            ${{ runner.temp }}/public-authority-evidence.archive.json
+            ${{ runner.temp }}/public-authority-independent-reader.json
+            ${{ runner.temp }}/public-authority-entry-reader.json
           if-no-files-found: error
           retention-days: 14

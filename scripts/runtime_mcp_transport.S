@@ -476,4 +476,4 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 448 /* 56 fixed public-engine image slots; connection55 is an owned leaf. */
+    .zero 456 /* 57 fixed slots; authority56 is a private callable capability. */

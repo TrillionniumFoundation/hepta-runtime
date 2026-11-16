@@ -20,9 +20,9 @@ from hia_native_loader import NativeModule
 from hia_native_entropy_qualification import inspect_elf, native_receipt
 from hia_native_authority_layout import validate_authority_layout
 
-PROFILE_SHA = "927cb5e16d8c3fcb9f4d61dc00c4aa48ae09592fec8e28cb2ba3deb4b0950b92"
-PACKER_SHA = "c54c54f664944b7a243d8e8e3d10e2ba623ab7e8e4f4189962542722617969d0"
-PROVENANCE_SHA = "9683325f1ab64d1e675ab12b967959944d579fcc28a4a18bde0c602317a354e1"
+PROFILE_SHA = "1bc46dd775110425c5350efa66cc1ccef3d393cd190a335e6717e013b369e367"
+PACKER_SHA = "ca5dc6711aa8e9d74de0b3972f8f7ea325a515dbf39166406365332ec18f5d3f"
+PROVENANCE_SHA = "4ddfde3bab2de9fea4869fa75f9f5e177023fa900f37f59080575a33b9165880"
 ABI = "hepta.runtime.borrowed-bytes.linux-x86_64.v1"
 
 

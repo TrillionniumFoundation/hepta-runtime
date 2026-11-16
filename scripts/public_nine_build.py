@@ -25,6 +25,7 @@ sha = lambda raw: hashlib.sha256(raw).hexdigest()
 BASE = 'scripts/config_mcp_grow_adapter.S'
 BOUNDARIES = [
     'scripts/runtime_mcp_extra_engine.S',
+    'scripts/runtime_mcp_authority_bridge.S',
     'scripts/runtime_text_install.S',
     'scripts/runtime_text_create_bridge.S',
     'scripts/runtime_text_body_bridge.S',
@@ -136,6 +137,14 @@ MEMBERS = [
     ('current_get_info', 'current_get_info', 'standard'),
     ('target_shutdown', 'sdk_shutdown_target', 'standard'),
     ('target_connection', 'sdk_connection_target', 'history.v1'),
+    ('authority', 'caller_authority', 'standard'),
+    ('authority_record', 'operation_record', 'standard'),
+    ('authority_kdf', 'operation_kdf', 'standard'),
+    ('authority_aead', 'operation_aead', 'standard'),
+    ('authority_nonce', 'operation_nonce', 'standard'),
+    ('authority_scope', 'operation_scope', 'standard'),
+    ('authority_entropy', 'entropy_policy', 'standard'),
+    ('authority_loader', 'authority_loader', 'standard'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -151,7 +160,7 @@ CONFIG_SYMBOLS = ['owner', 'fs', 'json', 'validation', 'identity', 'mcp',
                   'execution', 'execution_json', 'execution_core', 'value',
                   'publication', 'regex_syntax', 'regex_unicode_data',
                   'regex_hir', 'regex_nfa', 'regex_match', 'regex_controller']
-EXTRA = ['catalog', 'admission', 'gateway', 'client', 'params', 'session_context', 'session_state', 'policy', 'canonical', 'path_source', 'wide_value', 'owner', None, 'workdir_gateway', 'workdir_params', 'workdir_io', 'workdir_render', 'view_error', 'mcp', 'protocol', 'execution', 'fs_gateway', 'fs_params', 'fs_caller', 'fs_io', 'fs_render', 'fs_guard', 'fs_fence', None, None, None, None, None, None, None, 'text_call', None, 'text_gateway', 'text_params', 'tb_adapter', None, None, 'target_message', 'target_request', 'target_bridge', 'historical_protocol', 'text_constructor', None, None, None, None, None, None, 'target_shutdown', 'current_get_info', 'target_connection']
+EXTRA = ['catalog', 'admission', 'gateway', 'client', 'params', 'session_context', 'session_state', 'policy', 'canonical', 'path_source', 'wide_value', 'owner', None, 'workdir_gateway', 'workdir_params', 'workdir_io', 'workdir_render', 'view_error', 'mcp', 'protocol', 'execution', 'fs_gateway', 'fs_params', 'fs_caller', 'fs_io', 'fs_render', 'fs_guard', 'fs_fence', None, None, None, None, None, None, None, 'text_call', None, 'text_gateway', 'text_params', 'tb_adapter', None, None, 'target_message', 'target_request', 'target_bridge', 'historical_protocol', 'text_constructor', None, None, None, None, None, None, 'target_shutdown', 'current_get_info', 'target_connection', None]
 VIEW = ['view', 'read', 'read', 'read', 'endpoint', 'key', 'scope', 'lease',
         'cache', 'render', 'request_context', 'view_error', 'view_regex',
         'regex_syntax', 'regex_hir', 'regex_nfa', 'regex_match',
@@ -231,8 +240,6 @@ def checked_member(build, root, name, source, profile, manifest):
 def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
                       source_root: Path = ROOT, manifests: dict | None = None,
                       private_fixture: bool = False) -> Path:
-    if private_fixture:
-        raise ValueError('constructor public revision has no newly qualified private fixture')
     root = source_root.resolve(strict=True)
     binding = source_check(root)
     build = NativeBuild(hepta, output)
@@ -249,6 +256,14 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         row, images[member] = checked_member(build, root, member, source, profile, manifest)
         row['fresh_compile'] = not reused
         members.append(row)
+    authority_profile = json.loads((root / 'native/caller_owner_export_profile.json').read_bytes())
+    authority_names = ['authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader']
+    if len(authority_profile['members']) != 9:
+        raise ValueError('fixed authority profile member count differs')
+    for expected, authority_name in zip(authority_profile['members'], authority_names, strict=True):
+        actual = next(row for row in members if row['name'] == authority_name)
+        if any(actual[key] != expected[key] for key in ('source_sha256','image_sha256','image_bytes')):
+            raise ValueError('fixed authority source/image identity differs: ' + authority_name)
     assembly = adapter_source(root, private_fixture=private_fixture)
     write_new(folder / 'combined.S', assembly.encode())
 
@@ -282,13 +297,14 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 83
+    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 91
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
                                     view_images, VIEW, execute, root,
                                     create_images=[images[n] for n in ('lc_spec','lc_read','lc_path','lc_mkdir','lc_write','key','cache')],
-                                    body_images=[images[n] for n in ('tb_body','lc_read','key','tb_lock','tb_edit','tb_match','tb_history','tb_atomic','cache','tb_render','tb_unlink','view_error')])
+                                    body_images=[images[n] for n in ('tb_body','lc_read','key','tb_lock','tb_edit','tb_match','tb_history','tb_atomic','cache','tb_render','tb_unlink','view_error')],
+                                    authority_images=[images[n] for n in ('authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader')])
     processes.extend(steps)
     binary = folder / ('filesystem-fixture.elf' if private_fixture else 'runtime-mcp.elf')
     write_new(binary, elf, 0o500)
@@ -315,7 +331,12 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'link': link, 'pack': packed, 'boundary_processes': processes,
               'config_table': CONFIG, 'extra_table': EXTRA, 'view_table': VIEW, 'fence_table': FENCE,
               'private_instance_fixture': private_fixture, 'fixture_sessions': 2 if private_fixture else None,
-              'fixture_pseudo_selectors': [33, 34, 41] if private_fixture else [],
+              'fixture_pseudo_selectors': [33, 34, 41, 57, 58] if private_fixture else [],
+              'authority_slot': 56, 'authority_context_offset': 432,
+              'authority_fixed_local_members': ['authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader'],
+              'authority_transport_mode': 'stdio', 'authority_public_http_qualified': False,
+              'authority_projection_from_current_call': True, 'request_audit_integrated': False,
+              'annotation_integrated': False, 'private_descriptor_base': 8192, 'private_engine_bytes': 16384,
               'filesystem_gateway_slot': 21, 'filesystem_caller_slot': 23, 'filesystem_io_slot': 24,
               'filesystem_fence_slot': 27, 'native_fence_slot': 28,
               'view_scope_cache_alias_slots': {'29': 6, '30': 5, '31': 7, '32': 8},

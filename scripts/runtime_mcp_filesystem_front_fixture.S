@@ -4,7 +4,7 @@
 .section .text
 fs_fixture_public_request:
     mov rcx, [r12 + 72]
-    bt qword ptr [r12 + 56], rcx
+    bt qword ptr [r12 + 488], rcx
     jc fs_fixture_public_closed
     lea rsi, [r15 + 128]
     lea rdi, [r12 + 128]
@@ -20,7 +20,7 @@ fs_fixture_public_request:
     add rdx, 18 * 64
     mov r13, [rdx + 32]
     mov rax, [r13 + 8]
-    cmp rax, 2
+    cmp rax, 3
     ja fs_fixture_failure
     mov [r12 + 208], rax
     mov rax, [r13 + 16]
@@ -30,7 +30,7 @@ fs_fixture_public_request:
     test rax, rax
     jz fs_fixture_public_open
     mov rcx, [r12 + 72]
-    bts qword ptr [r12 + 56], rcx
+    bts qword ptr [r12 + 488], rcx
 fs_fixture_public_open:
     xor ecx, ecx
 fs_fixture_public_counter:
@@ -46,6 +46,8 @@ fs_fixture_public_counter:
     je fs_fixture_next
     cmp qword ptr [r12 + 208], 2
     je fs_fixture_public_publish
+    cmp qword ptr [r12 + 208], 3
+    je fs_fixture_public_publish_raw
     cmp qword ptr [r13 + 32], 0
     jne fs_fixture_failure
     mov edi, 1
@@ -53,6 +55,15 @@ fs_fixture_public_counter:
     mov rdx, [r13 + 24]
     call view_write_all
     test rax, rax
+    jnz fs_fixture_failure
+    jmp fs_fixture_public_newline
+fs_fixture_public_publish_raw:
+    cmp qword ptr [r13 + 32], 0
+    jne fs_fixture_failure
+    lea rdi, [r13 + 64]
+    mov rsi, [r13 + 24]
+    call runtime_publication_raw_span
+    test eax, eax
     jnz fs_fixture_failure
     jmp fs_fixture_public_newline
 fs_fixture_public_publish:
@@ -73,7 +84,7 @@ fs_fixture_public_newline:
     jnz fs_fixture_failure
     jmp fs_fixture_next
 fs_fixture_public_closed:
-    mov qword ptr [r12 + 208], 3
+    mov qword ptr [r12 + 208], 4
     mov qword ptr [r12 + 216], 1
     lea rdi, [r12 + 224]
     mov ecx, 6
@@ -82,7 +93,7 @@ fs_fixture_public_closed:
     call fs_fixture_public_header
     jmp fs_fixture_next
 fs_fixture_public_header:
-    mov rax, 0x323052504a534648 /* HFSJPR02 */
+    mov rax, 0x333052504a534648 /* HFSJPR03: raw publication3; closed4. */
     mov [r12 + 192], rax
     mov rax, [r12 + 72]
     mov [r12 + 200], rax

@@ -83,7 +83,7 @@ not activate a filesystem handler or replace a public route.
 ## Current public stdio entry
 
 The default `scripts/hia_native_runtime_mcp_build.py` API/CLI builds the current
-83-image graph and its actual nine-tool routes. TextEditor owns the Local four
+91-image graph and its actual nine-tool routes. TextEditor owns the Local four
 commands through the real caller/body/cache graph. The entry integrates current
 G1 projection, G2 connection admission, fixed current get_info, shared text
 result construction and serial transport/shutdown. Its full source closure is
@@ -139,7 +139,7 @@ activation remain unfinished. The original implementations stay in place.
 The component registry and its original public tests run from an explicit
 historical public source view. It restores the exact 58-image graph and leaves
 all unrelated current qualification bytes unchanged; it never changes this
-checkout's default 83-image entry.
+checkout's default 91-image entry.
 
 ```sh
 python3 -I -B tests/hia_native/historical_public58/materialize.py \

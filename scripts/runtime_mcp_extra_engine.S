@@ -1,6 +1,6 @@
 /* Private storage/continuation boundary. HIA owns all application decisions.
  * Fixed extra descriptors: entry, work_ptr, work_cap, sequence,
- * out_ptr, out_cap, return_u32, full_extent. 56 rows at engine+4096; slots47-52 are reserved for Batch.
+ * out_ptr, out_cap, return_u32, full_extent. 57 rows at engine+8192; slots47-52 are reserved for Batch.
  * Mechanical records at +512: busy,pending,sequence,child,input_offset,
  * input_len,actual_return,actual_extent. Completed children are not replayed.
  * The separate view engine retains its existing descriptor ABI. */
@@ -10,8 +10,8 @@
 .global runtime_grow_destroy
 .global runtime_grow_owned
 .global runtime_grow_target
-.equ RG_SLOTS, 56
-.equ RG_ENGINE, 8192
+.equ RG_SLOTS, 57
+.equ RG_ENGINE, 16384
 .equ RG_INVALID, 0xffffffff
 .equ RG_RESOURCE, 0xfffffffc
 .equ RG_CALL, 0xfffffff0
@@ -31,7 +31,7 @@ runtime_grow_create:
     jae runtime_grow_create_done
     mov rbx, rax
     mov [rbx], r12
-    lea rdx, [rbx + 4096]
+    lea rdx, [rbx + 8192]
     mov [rbx + 8], rdx
     mov [rbx + 24], r13
     mov rcx, 0x3230474e45475248 /* HRGENG02 */
@@ -53,7 +53,19 @@ runtime_grow_create_member:
     inc ecx
     cmp ecx, RG_SLOTS
     jb runtime_grow_create_member
+    mov rdi, rbx
+    call runtime_authority_create
+    test rax, rax
+    jnz runtime_grow_create_authority_failed
     mov rax, rbx
+    jmp runtime_grow_create_done
+runtime_grow_create_authority_failed:
+    mov r13, rax
+    mov rdi, rbx
+    mov esi, RG_ENGINE + 4096
+    mov eax, 11
+    syscall
+    mov rax, r13
 runtime_grow_create_done:
     pop r13
     pop r12
@@ -106,6 +118,9 @@ runtime_grow_destroy_admit:
     inc ebp
     cmp ebp, RG_SLOTS
     jb runtime_grow_destroy_admit
+    call runtime_authority_release
+    test rax, rax
+    jnz runtime_grow_destroy_done
     xor ebp, ebp
     xor r12d, r12d
     mov rbx, [r15 + 8]
@@ -214,6 +229,8 @@ runtime_grow_owned:
     jne runtime_grow_bad_early
     cmp qword ptr [r12 + 8], 0
     jne runtime_grow_bad_early
+    cmp ebp, 56
+    je runtime_grow_authority_dispatch
     cmp ebp, 40
     je runtime_grow_text_body_dispatch
     cmp ebp, 36
@@ -321,6 +338,8 @@ runtime_grow_text_installed:
     cmp rax, 1
     je runtime_grow_config_query_admitted
     cmp rax, 2
+    je runtime_grow_config_query_admitted
+    cmp rax, 3
     je runtime_grow_config_query_admitted
     cmp rax, 6
     je runtime_grow_config_query_admitted
@@ -1164,6 +1183,9 @@ runtime_grow_complete_action:
     call runtime_grow_trace
     jmp runtime_grow_resume
 
+runtime_grow_authority_dispatch:
+    call runtime_authority_owned
+    jmp runtime_grow_done
 runtime_grow_text_body_dispatch:
     call runtime_text_body_owned
     jmp runtime_grow_done
@@ -1421,7 +1443,7 @@ runtime_grow_target_sdk_protocol:
     lea rdx, [rip + runtime_grow_sdk_protocol_targets]
     jmp runtime_grow_target_byte
 runtime_grow_target_frontend:
-    cmp rsi, 11
+    cmp rsi, 12
     ja runtime_grow_target_invalid
     lea rdx, [rip + runtime_grow_frontend_targets]
     jmp runtime_grow_target_byte
@@ -1495,7 +1517,7 @@ runtime_grow_action_magics:
     .quad 0
     .ascii "HTLBCA01"
     .quad 0
-    .zero 120 /* 41 empty; SDK42-45, constructor46, Batch47-52, shutdown53, get_info54, connection55. */
+    .zero 128 /* 41 empty; SDK42-45, constructor46, Batch47-52, shutdown53, get_info54, connection55, authority56. */
 runtime_grow_sdk_protocol_targets:
     .byte 42, 43, 44, 45, 55
 runtime_grow_text_gateway_targets:
@@ -1509,7 +1531,7 @@ runtime_grow_filesystem_caller_targets:
 runtime_grow_fence_targets:
     .byte 11, 28, 17
 runtime_grow_frontend_targets:
-    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54
+    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54, 56
 runtime_grow_context_targets:
     .byte 6, 10, 7, 8
 runtime_grow_workdir_targets:

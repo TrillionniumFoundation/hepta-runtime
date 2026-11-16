@@ -49,7 +49,7 @@ def inspect_loaded(root_manifest, loader_manifest, scope_manifest):
     def same(a, b):
         return json.dumps(a, sort_keys=True, separators=(',', ':')) == json.dumps(b, sort_keys=True, separators=(',', ':'))
     profile_raw = (ROOT / 'native/authority_profile.json').read_bytes()
-    require(sha(profile_raw) == '927cb5e16d8c3fcb9f4d61dc00c4aa48ae09592fec8e28cb2ba3deb4b0950b92', 'fixed authority profile differs')
+    require(sha(profile_raw) == '1bc46dd775110425c5350efa66cc1ccef3d393cd190a335e6717e013b369e367', 'fixed authority profile differs')
     authority = json.loads(profile_raw)
     scope_path = Path(scope_manifest)
     scope_raw = scope_path.read_bytes()

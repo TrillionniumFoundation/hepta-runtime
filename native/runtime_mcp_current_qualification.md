@@ -1,78 +1,104 @@
-# Current public83 default stdio graph
+# Current public91 default stdio graph
 
-The default build API and command are `scripts/hia_native_runtime_mcp_build.py`.
-It calls the 83-member graph in `scripts/public_nine_build.py`; the complete
-source binding is `native/runtime_mcp_sources.json`. The native executable is
-`<output>/build/public-connection/runtime-mcp.elf`.
+The default API/command is `scripts/hia_native_runtime_mcp_build.py`. It invokes
+the 91-member `scripts/public_nine_build.py` graph, bound by
+`native/runtime_mcp_sources.json`. The executable is
+`<output>/build/public-authority/runtime-mcp.elf`.
 
-The current graph advertises nine actual routes: host_list, effective_config,
+The same nine routes remain registered: host_list, effective_config,
 execution_shadow_admit, View, Workdir, DirectoryCreate, FileMove, DirectoryMove
-and TextEditor. TextEditor reaches the actual shared Local four-command graph.
-The public stdio selector never exposes private observation actions.
+and TextEditor. TextEditor uses the actual shared Local four-command graph.
+Private observation/release actions remain outside public dispatch.
 
-## Source and actual qualification
+## Qualification state
 
-The frozen 249-file source checkpoint is commit
-`3aada51f16d4604b6d7daa7d79a6b680ef067012`. The default-entry CI wrapper is
-`13138060cf5638fcb89510339e0c854f394be3da`.
-[CI run 43819528742](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43819528742)
-completed the actual fresh 62/fresh 83 build and both current Rust references.
-The job remained 15 minutes. Full source, original inputs, processes, member
-images, compiler/bootstrap, captures and empty working directories were retained.
+The 454-file source package and eleven-file runner are published at
+`71336e6a5aa4e74aef44635004b832a1cdacfe24`.
+[Fresh run 43842615576](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43842615576)
+and job 133214768760 completed successfully within the unchanged 15-minute
+gate. Independent readback checked every ZIP and tar member: 11,501 files,
+865 directories and 2,408,437,854 uncompressed bytes. The complete read-only
+qualification then passed with 11 refusal probes and identical before/after
+bytes and metadata for all 12,354 observed entries. The qualified predecessor
+is preserved unchanged in [the public83 record](runtime_mcp_public83_qualification.md).
 
-An independent readback verified the artifact's complete 3,082 files and 490
-directories, representing 981,340,345 uncompressed bytes, then executed the
-readonly semantic reader successfully. The exact current ELF SHA-256 is
-`55e3b58344becaf3d9f2e769e2e845c508d908c41dd35df1ec69a395a2a1d949`.
+The fresh candidate has 91 newly compiled members and no reused candidate
+members. Its 19,099,648-byte executable has SHA-256
+`9f205064be8c6cbeeaafa4514a4f910eb2e1efa1faae3b2f980d4f8032e0c6bb`.
+The installation check also invoked the actual default builder using these
+same 91 checked member manifests and required byte-for-byte equality of the
+complete executable. That installation check reuses the fresh CI members;
+it is not an additional cold build. Main installation remains a separate action.
 
-| Domain | Actual complete comparison |
+Artifact 14215315052 is 464,032,476 bytes with ZIP SHA-256
+`f125349119ef7869035b7302ab7fca0d9d57c5514aba6d8554e541e4b1f6ed6a`.
+Its complete evidence tar has SHA-256
+`f8de00f1d5c6dedcd40834ec0954c8404586286fa009372f87326df8b62496f5`.
+
+The first public91 run completed every recorded step successfully but its overall
+GitHub conclusion was cancelled at the 15-minute boundary. Its full 11,500-file
+artifact and independent reader passed; that cancellation is retained. The new
+runner changes only gzip compression level, preserving all evidence members,
+all three full reader passes, every case and the 15-minute limit.
+
+| Required domain | Complete coverage |
 | --- | --- |
-| Current SDK connection | 54 sessions and 324 full responses against real rmcp 3.9 serve/negotiation; nine integral-float initialize IDs and 54 modern-metadata ping errors retained |
-| Ordinary public loop | Four processes, 90 responses, 30 filesystem snapshots, 12 TextEditor effects, eight same-session View cache checks |
-| Actual serial transport | 24 current-original framing cases; separate four codec-only original observations |
-| Build | 62 fresh retained comparison members and 83 fresh candidate members, zero reused candidate members, real HIA linker/packer |
+| Current SDK connection | 54 sessions, 324 full responses, retaining integral-float initialization IDs and modern metadata ping errors |
+| Ordinary public loop | Four processes, 90 responses and complete retained file/cache effects |
+| Serial input transport | 24 current-original framing cases and four separate codec-only observations |
+| Integrated authority | Two processes, four sessions, 56 frames, 28 full snapshots and 20 public responses |
+| Current authority component | All 23 unchanged native groups using the current owner/profile/image |
+| Current original authority | Fresh Rust 1.95: 243 rows plus 16 integrated lifecycle rows |
+| Historical authority receipt | Seven unchanged groups, 107 exact fixture files and original identities |
+| Actual default entry | 191 graph files plus six profile files; full ELF equality with that run's fresh91 |
 
-The actual target is `d3d75c30719db966b004756f610007a7c723729e`, using rmcp 3.9.0,
-Tokio 1.53.3, serde 1.0.229 and serde_json 1.0.151. Rust 1.95.0 executes only in
-the allowed CI/reference environment. Hepta is pinned to
-`d3e2c90173cf733e42b299d0c4274df4b593a12f`.
-
-Public90 compares its eight retained routes to the freshly rebuilt
-target-request62 graph and checks the ninth route's actual native effects. This
-gate does not freshly execute all nine current Rust handlers;
-`target_original_public_handler_comparison` remains false.
+Fresh CI, local normal execution and independent readers passed. The private capture
+preserves 500,662,272 full snapshot bytes, actual configuration/authority CALLs,
+same-session binding, distinct sessions, and actual/idempotent release. These
+observations do not replace fresh current originals or the installation gate.
 
 ## Ownership
 
-G1 normalizes the current typed message before actual G2 admission. Initializing
-requests preserve that canonical ID and negotiated version while real slot 54
-get_info supplies fixed current server fields. Direct G2 responses are copied
-into owned publication storage after capacity reservation. Legacy accepted ping
-and modern per-request method-not-found behavior follow actual G2 state.
+G1/G2 admit typed requests and metadata before tool dispatch. The frontend asks
+the actual configuration owner, then configured tool calls invoke current
+SessionOwnerBinding through child 12/global 56. Actual OS entropy supplies the
+stdio fallback; request JSON and peer metadata never supply credentials.
 
-Slot 46 is the unique shared text-result constructor. Slots 47–52 remain reserved
-for Batch. Slot 53 owns serial shutdown, 54 owns fixed current get_info and 55
-owns connection state. Shared engine offsets 400/408 remain the process hub and
-Text context; reserved 416/424 are not consumed by connection. Peer capabilities
-and request metadata do not authenticate a caller or export caller ownership.
-Existing configuration, execution, fence, Session and cache admission remains
-in its actual owners.
+The frontend validates the full 168-byte private response, copies its 80-byte
+HROWR001 body into owned storage, then enters the existing gateway. Protocol-only
+traffic leaves authority unbound. A configured tool request binds it, including
+ordinary handler validation errors, and later requests retain it until release.
+The private projection is not yet connected to annotation or request audit.
 
-## Remaining limits
+| Allocation | Meaning |
+| --- | --- |
+| Global 46 | Shared current text-result constructor |
+| Globals 47–52; engine +416/+424 | Batch reservation |
+| Globals 53/54/55 | Serial shutdown / fixed current get_info / connection |
+| Global 56; engine +432 | Authority callable / retained session context |
+| Engine +400/+408 | Process hub / Text context |
+| Engine and continuations | 16,384 bytes; 57 continuation rows at `[512,4160)` |
+| Descriptor table | `[8192,11840)`, reached through engine +8 |
 
-This does not qualify the complete current SDK or all 136 handlers. Other
-non-CallTool methods still use historical protocol projection after actual G2
-admission. The generic G2 initialization fixture is not a production handler.
-G2 op2 EOF is not connected to public shutdown, and native peer state for all 54
-sessions is not separately exported. Full asynchronous/task/future scheduling,
-cancellation timing, generic current response construction, remote branches,
-production activation and old-stack removal remain false. Oversized result
-output is separate from the 16 MiB serial input frame boundary.
+Private output is consumed before another CALL. Release requires drained calls,
+retires descriptors, wipes/unmaps the allocation, and clears +432 and descriptor
+56. Private fixture actions 57/58 are not production dispatch slots.
 
-The old 58 fixture and its full historical domains remain in
-`tests/hia_native/historical_public58`. Its retained pipeline runs from an
-explicit source view and keeps its original 58-member/source-binding checks.
-The main public job checks all 172 installed current graph files and executes the
-actual main build command with the same run's freshly compiled 83 members; it
-requires the complete resulting ELF to equal the separately qualified fresh 83
-executable.
+## Main entry and retained evidence
+
+The main job checks all 197 installed graph/profile files, invokes the actual
+main builder with the same run's fresh members, and requires complete ELF
+equality. Its reader launches no process, blocks writes/metadata mutations and
+checks full bytes/metadata before and after reading. The job remains 15 minutes.
+
+Historical pipelines use `tests/hia_native/historical_public58/materialize.py`,
+which restores public58 and seven old authority files. Old receipts retain their
+original identity. Target is `d3d75c30719db966b004756f610007a7c723729e`; current
+owner reference is `2058a9103177e23a37c562ee4eddbc0de5e1b5b9`; compiler is Hepta
+`d3e2c90173cf733e42b299d0c4274df4b593a12f`. Rust 1.95 runs only in approved CI.
+
+Whole current Rust public-handler comparison, annotation/audit, public HTTP
+authentication, concurrent binding, full async/task/future/cancellation,
+all 136 handlers, production activation and old-stack removal remain false.
+G2 peer-info is not a credential. Oversized result output remains separate from
+the 16 MiB serial input boundary.

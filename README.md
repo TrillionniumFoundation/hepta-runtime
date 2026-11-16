@@ -11,13 +11,17 @@ stdio protocol owner, and Linux ELF transport packers. The produced executables 
 libc, or a dynamic loader. A pinned Hepta compiler and explicit Python build
 and test drivers produce and verify those executables.
 
-The default native build command produces the **83-image, nine-tool** stdio
+The default native build command produces the **91-image, nine-tool** stdio
 service: `host_list`, `effective_config`, `execution_shadow_admit`, `view`,
 `workdir`, `directory_create`, `file_move`, `directory_move` and `text_editor`.
 TextEditor reaches the actual shared Local Create/Replace/Delete/Undo graph.
 The current SDK connection owner handles initialization, normalized request IDs
 and per-request metadata before public dispatch. The fixed get_info owner,
 text-result constructor and serial transport/shutdown owners are integrated.
+Configured tool calls also enter the actual serial SessionOwner binding owner.
+Its private stdio owner comes from OS entropy and remains stable for the
+session; protocol metadata never supplies caller credentials. The caller
+projection is retained privately and is not yet connected to annotation or audit.
 
 Build and launch the same entry exercised by the current qualification:
 
@@ -26,7 +30,7 @@ python3 -I -B scripts/hia_native_runtime_mcp_build.py \
   --hepta /absolute/path/to/pinned/Hepta \
   --bootstrap /absolute/path/to/verified/bootstrap \
   --output /absolute/path/to/new-public-build
-/absolute/path/to/new-public-build/build/public-connection/runtime-mcp.elf
+/absolute/path/to/new-public-build/build/public-authority/runtime-mcp.elf
 ```
 
 [Current public qualification](native/runtime_mcp_current_qualification.md)
@@ -47,7 +51,7 @@ The retained component registry declares 195 HIA sources, 87 component builds,
 225 native suites and 81 original Rust comparison recipes. Its explicit source
 profile preserves the historical public graph while keeping unrelated current
 component inputs. CI preserves all ten native partitions and eight original
-comparison partitions. The current 83-image public graph has its own complete
+comparison partitions. The current 91-image public graph has its own complete
 source binding and qualification job. These registry counts do not change the production qualification
 status recorded in the migration inventory.
 
