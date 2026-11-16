@@ -1,0 +1,51 @@
+{
+  "baseline_sha256": "462b5b9c0287a845ddcba325a46c1efa31bdb259bc30320ef01d804bff109798",
+  "diagnostic_process_seconds": 60,
+  "edits": [
+    {
+      "after": "PROCESS_SECONDS = 60\n",
+      "before": "PROCESS_SECONDS = 180\n"
+    },
+    {
+      "after": "        self.journal_fd = None\n        self.trace_fd = None\n        self.trace_path = self.output / 'host-trace.bin'\n        self.journal_path",
+      "before": "        self.journal_fd = None\n        self.journal_path"
+    },
+    {
+      "after": "            assert stat.S_ISREG(os.fstat(self.journal_fd).st_mode)\n            self.trace_fd = os.open(self.trace_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o600)\n            assert self.trace_fd == 4, 'fixed owned trace FD4 is unavailable'\n            assert stat.S_ISREG(os.fstat(self.trace_fd).st_mode)\n",
+      "before": "            assert stat.S_ISREG(os.fstat(self.journal_fd).st_mode)\n"
+    },
+    {
+      "after": "stderr=subprocess.PIPE, pass_fds=(3, 4), start_new_session=True)",
+      "before": "stderr=subprocess.PIPE, pass_fds=(3,), start_new_session=True)"
+    },
+    {
+      "after": "'binary': expected_binary, 'journal_fd': 3, 'trace_fd': 4}",
+      "before": "'binary': expected_binary, 'journal_fd': 3}"
+    },
+    {
+      "after": "        errors = []\n        if self.trace_fd is not None:\n            try:\n                os.close(self.trace_fd)\n            except BaseException as failure:\n                errors.append(failure)\n            self.trace_fd = None\n        if self.journal_fd is not None:\n",
+      "before": "        errors = []\n        if self.journal_fd is not None:\n"
+    },
+    {
+      "after": "            'trace': {'file': self.trace_path.name, **file_pin(self.trace_path)},\n            'private_owned_journal_fd': 3, 'private_owned_trace_fd': 4}",
+      "before": "            'private_owned_journal_fd': 3}"
+    }
+  ],
+  "executed": false,
+  "hia_source_changed": false,
+  "inverse_recovers_full_baseline": true,
+  "original_exchange_and_cleanup_methods_unchanged": true,
+  "production_process_seconds_unchanged": 180,
+  "schema": "hepta.runtime.fixed-fd4-stdio-observer.v1",
+  "successor_sha256": "50515c4c92120140c252a4dbbc3fb098e4dd7e8266182493afad8e57fafe47db",
+  "unchanged_original_method_ast": [
+    "_kill",
+    "_read",
+    "_reap",
+    "_remaining",
+    "close",
+    "error",
+    "exchange",
+    "journal_size"
+  ]
+}
