@@ -1,0 +1,392 @@
+def audit_lifetime(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if valid_input(s)==0:
+        return INVALID
+    if length(o)<512:
+        return CAPACITY
+    operation=read64(s,8)
+    if read64(s,48)==0:
+        if operation==7 or operation==8:
+            if guard_valid(o,read64(s,16))==0:
+                return STATE_ERROR
+            if operation==7 and read64(s,24)==0:
+                return INVALID
+            put(o,40,operation)
+            put(o,72,read64(s,24))
+            put(o,80,read64(s,32))
+            put(o,120,read64(s,40))
+            if operation==8:
+                return issue_sync(o,FINAL_UNLOCK,3)
+            return publish(s,o,w)
+        if fresh(o)==0:
+            return STATE_ERROR
+        serial=get(o,24)
+        clear(o,0,512)
+        put(o,0,ACTOR)
+        put(o,24,serial)
+        put(o,40,operation)
+        put(o,48,choose(operation==2,1,0))
+        put(o,72,read64(s,24))
+        put(o,80,read64(s,32))
+        put(o,104,read64(s,16))
+        put(o,120,read64(s,40))
+        return issue_sync(o,LOCKED,1)
+    if get(o,0)!=ACTOR or get(o,104)!=read64(s,16) or get(o,40)!=operation or get(o,80)!=read64(s,32):
+        return STATE_ERROR
+    if read64(s,48)!=get(o,24) or get(o,8)==0:
+        return STATE_ERROR
+    return resume(s,o,w)
+
+def valid_input(s:readbuf) -> u64:
+    if length(s)<192 or read64(s,0)!=REQUEST or read64(s,16)==0:
+        return 0
+    operation=read64(s,8)
+    if operation<1 or operation>8 or read64(s,32)!=length(s)-192 or read64(s,40)>1:
+        return 0
+    if operation==1 or operation==2 or operation==7:
+        if read64(s,24)==0:
+            return 0
+    elif read64(s,24)!=0:
+        return 0
+    if operation==5 or operation==6 or operation==8:
+        if read64(s,32)!=0:
+            return 0
+    if read64(s,48)==0:
+        return choose(read64(s,56)==0 and zeros_input(s,64+read64(s,32),length(s))!=0,1,0)
+    return choose(read64(s,56)==64 or read64(s,56)==128 or read64(s,56)==0,1,0)
+
+def fresh(o:mutbuf) -> u64:
+    if zeros(o,0,512)!=0:
+        return 1
+    return choose(get(o,0)==ACTOR and get(o,8)==0 and get(o,32)==DONE and get(o,88)==0,1,0)
+
+def guard_valid(o:mutbuf,generation:u64) -> u64:
+    return choose(get(o,0)==ACTOR and get(o,8)==0 and get(o,16)==2 and get(o,32)==HELD and get(o,48)==0 and get(o,88)==1 and get(o,96)!=0 and get(o,104)==generation,1,0)
+
+def map_valid(w:mutbuf,o:mutbuf) -> u64:
+    if get(o,88)!=1 or length(w)<64:
+        return 0
+    if get(w,0)!=MAP or get(w,8)!=get(o,104) or get(w,16)!=get(o,48):
+        return 0
+    if get(w,24)!=0 or get(w,48)!=0 or get(w,56)!=0:
+        return 0
+    used=get(w,40)
+    if used<64 or used>length(w) or (used&7)!=0 or get(w,32)>((used-64)>>4):
+        return 0
+    return 1
+
+def entry_next(w:mutbuf,at:u64) -> u64:
+    used=get(w,40)
+    if at<64 or at>used or used-at<16:
+        return 0
+    size=get(w,at)
+    if size>MAXIMUM-23:
+        return 0
+    size=(size+23)&MASK8
+    if size>used-at or get(w,at+8)==0:
+        return 0
+    return at+size
+
+def find_key(s:readbuf,w:mutbuf) -> u64:
+    at=64
+    while at<get(w,40):
+        after=entry_next(w,at)
+        if after==0:
+            return MAXIMUM
+        if get(w,at)==read64(s,32):
+            index=0
+            equal=1
+            while index<read64(s,32):
+                if byte(w,at+16+index)!=byte(s,64+index):
+                    equal=0
+                index=index+1
+            if equal!=0:
+                return at
+        at=after
+    return 0
+
+def resume(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    phase=get(o,32)
+    observation=64+read64(s,32)
+    if get(o,8)==1:
+        if read64(s,56)!=128 or read64(s,observation)!=SYNC_RESPONSE or read64(s,observation+8)!=get(o,264):
+            return STATE_ERROR
+        if read64(s,observation+80)!=get(o,104) or read64(s,observation+24)==0 or read64(s,observation+16)>1:
+            return STATE_ERROR
+        if get(o,96)!=0 and get(o,96)!=read64(s,observation+24):
+            return STATE_ERROR
+        put(o,96,read64(s,observation+24))
+        if phase==LOCKED:
+            if read64(s,observation+88+get(o,48)*8)!=get(o,96) or read64(s,observation+104+get(o,48)*8)!=1:
+                return STATE_ERROR
+            put(o,88,1)
+            if read64(s,observation+16)==1 and get(o,40)!=5:
+                put(o,16,100+get(o,48))
+                return issue_sync(o,ERROR_UNLOCK,3)
+            if map_valid(w,o)==0:
+                return STATE_ERROR
+            return after_lock(s,o,w)
+        if read64(s,observation+16)!=0:
+            return STATE_ERROR
+        if phase==ERROR_UNLOCK or phase==FINAL_UNLOCK or phase==QUERY_UNLOCK or phase==CLEAR_UNLOCK:
+            put(o,88,0)
+            if phase==QUERY_UNLOCK and get(o,40)==4 and get(o,48)==0:
+                put(o,48,1)
+                return issue_sync(o,LOCKED,1)
+            if phase==CLEAR_UNLOCK and get(o,48)==0:
+                put(o,48,1)
+                return issue_sync(o,LOCKED,1)
+            return done(o,get(o,16))
+        return STATE_ERROR
+    if get(o,8)==3:
+        if phase!=GROWN or read64(s,56)!=0 or map_valid(w,o)==0 or length(w)<get(o,128):
+            return STATE_ERROR
+        if zeros_input(s,observation,length(s))==0:
+            return INVALID
+        return publish(s,o,w)
+    if get(o,8)!=2 or read64(s,56)!=64:
+        return STATE_ERROR
+    if read64(s,observation)!=REF_RESPONSE or read64(s,observation+8)!=get(o,264) or read64(s,observation+48)!=get(o,272):
+        return STATE_ERROR
+    if read64(s,observation+24)!=get(o,280) or zeros_input(s,observation+64,length(s))==0:
+        return STATE_ERROR
+    if map_valid(w,o)==0:
+        return STATE_ERROR
+    if phase==PUBLISH_WEAK:
+        return publish_weak(s,o,w)
+    if phase==REPLACE_DROP:
+        return published(o)
+    if phase==PRUNE_COUNT:
+        if read64(s,observation+32)==0:
+            pointer=get(w,get(o,56)+8)
+            if retire(w,get(o,56))==0:
+                return STATE_ERROR
+            return issue_ref(o,PRUNE_DROP,5,pointer)
+        after=entry_next(w,get(o,56))
+        if after==0:
+            return STATE_ERROR
+        put(o,56,after)
+        return prune(s,o,w)
+    if phase==PRUNE_DROP:
+        return prune(s,o,w)
+    if phase==QUERY_UPGRADE:
+        if read64(s,observation+16)==0:
+            put(o,16,0)
+            return issue_sync(o,QUERY_UNLOCK,3)
+        if read64(s,observation+16)!=1:
+            return STATE_ERROR
+        return issue_ref(o,QUERY_LOAD,8,get(o,136))
+    if phase==QUERY_LOAD:
+        if read64(s,observation+56)>1:
+            return STATE_ERROR
+        put(o,112,read64(s,observation+56))
+        return issue_ref(o,QUERY_DROP,3,get(o,136))
+    if phase==QUERY_DROP:
+        put(o,16,get(o,112))
+        return issue_sync(o,QUERY_UNLOCK,3)
+    if phase==CLEAR_DROP:
+        return clear_map(o,w)
+    return STATE_ERROR
+
+def after_lock(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    operation=get(o,40)
+    if operation==1 or operation==2:
+        return publish(s,o,w)
+    if operation==3 or operation==4:
+        put(o,56,64)
+        return prune(s,o,w)
+    if operation==5:
+        return clear_map(o,w)
+    if operation==6:
+        return held(o)
+    return STATE_ERROR
+
+def publish(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if map_valid(w,o)==0:
+        return STATE_ERROR
+    at=0
+    if get(o,48)==0:
+        at=find_key(s,w)
+        if at==MAXIMUM:
+            return STATE_ERROR
+    put(o,64,at)
+    put(o,136,0)
+    if at==0:
+        keysize=get(o,80)
+        if keysize>MAXIMUM-23:
+            return RESOURCE
+        needed=(keysize+23)&MASK8
+        if get(w,40)>MAXIMUM-needed:
+            return RESOURCE
+        needed=needed+get(w,40)
+        if needed>length(w):
+            return grow(o,needed)
+    else:
+        put(o,136,get(w,at+8))
+    return issue_ref(o,PUBLISH_WEAK,4,get(o,72))
+
+def publish_weak(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    at=get(o,64)
+    if at==0:
+        at=get(w,40)
+        needed=(get(o,80)+23)&MASK8
+        if needed>length(w)-at:
+            return STATE_ERROR
+        put(w,at,get(o,80))
+        put(w,at+8,get(o,72))
+        index=0
+        while index<get(o,80):
+            store(w,at+16+index,byte(s,64+index))
+            index=index+1
+        clear(w,at+16+index,at+needed)
+        put(w,32,get(w,32)+1)
+        put(w,40,at+needed)
+    else:
+        if entry_next(w,at)==0 or get(w,at+8)!=get(o,136):
+            return STATE_ERROR
+        put(w,at+8,get(o,72))
+    if get(o,136)!=0:
+        return issue_ref(o,REPLACE_DROP,5,get(o,136))
+    return published(o)
+
+def published(o:mutbuf) -> u32:
+    if get(o,40)==7:
+        return held(o)
+    put(o,16,0)
+    return issue_sync(o,FINAL_UNLOCK,3)
+
+def prune(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if get(o,56)<get(w,40):
+        if entry_next(w,get(o,56))==0:
+            return STATE_ERROR
+        return issue_ref(o,PRUNE_COUNT,6,get(w,get(o,56)+8))
+    if get(o,56)!=get(w,40):
+        return STATE_ERROR
+    at=find_key(s,w)
+    if at==MAXIMUM:
+        return STATE_ERROR
+    if get(o,48)==1:
+        put(o,16,choose(get(o,112)!=0 or at!=0,1,0))
+        return issue_sync(o,QUERY_UNLOCK,3)
+    if at==0:
+        put(o,16,0)
+        return issue_sync(o,QUERY_UNLOCK,3)
+    put(o,136,get(w,at+8))
+    return issue_ref(o,QUERY_UPGRADE,7,get(o,136))
+
+def clear_map(o:mutbuf,w:mutbuf) -> u32:
+    if get(w,40)==64:
+        if get(w,32)!=0:
+            return STATE_ERROR
+        put(o,16,0)
+        return issue_sync(o,CLEAR_UNLOCK,3)
+    if entry_next(w,64)==0:
+        return STATE_ERROR
+    pointer=get(w,72)
+    if retire(w,64)==0:
+        return STATE_ERROR
+    return issue_ref(o,CLEAR_DROP,5,pointer)
+
+def retire(w:mutbuf,at:u64) -> u64:
+    after=entry_next(w,at)
+    if after==0 or get(w,32)==0:
+        return 0
+    used=get(w,40)
+    target=at
+    cursor=after
+    while cursor<used:
+        store(w,target,byte(w,cursor))
+        target=target+1
+        cursor=cursor+1
+    clear(w,target,used)
+    put(w,32,get(w,32)-1)
+    put(w,40,target)
+    return 1
+
+def issue_sync(o:mutbuf,phase:u64,operation:u64) -> u32:
+    if get(o,24)==MAXIMUM:
+        return RESOURCE
+    put(o,8,1)
+    put(o,24,get(o,24)+1)
+    put(o,32,phase)
+    clear(o,256,384)
+    put(o,256,SYNC_REQUEST)
+    put(o,264,operation)
+    put(o,272,get(o,48))
+    put(o,280,get(o,104))
+    put(o,296,get(o,120))
+    return 512
+
+def issue_ref(o:mutbuf,phase:u64,operation:u64,pointer:u64) -> u32:
+    if get(o,24)==MAXIMUM:
+        return RESOURCE
+    put(o,8,2)
+    put(o,24,get(o,24)+1)
+    put(o,32,phase)
+    clear(o,256,384)
+    put(o,256,REF_REQUEST)
+    put(o,264,operation)
+    put(o,272,get(o,48)+1)
+    put(o,280,pointer)
+    return 512
+
+def grow(o:mutbuf,needed:u64) -> u32:
+    if get(o,24)==MAXIMUM:
+        return RESOURCE
+    put(o,8,3)
+    put(o,24,get(o,24)+1)
+    put(o,32,GROWN)
+    put(o,128,needed)
+    clear(o,256,384)
+    return 512
+
+def held(o:mutbuf) -> u32:
+    put(o,8,0)
+    put(o,16,2)
+    put(o,32,HELD)
+    clear(o,256,384)
+    return 512
+
+def done(o:mutbuf,result:u64) -> u32:
+    put(o,8,0)
+    put(o,16,result)
+    put(o,32,DONE)
+    put(o,128,0)
+    clear(o,256,384)
+    return 512
+
+def read64(s:readbuf,at:u64) -> u64:
+    return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)|(byte(s,at+4)<<32)|(byte(s,at+5)<<40)|(byte(s,at+6)<<48)|(byte(s,at+7)<<56)
+
+def get(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)|(byte(w,at+4)<<32)|(byte(w,at+5)<<40)|(byte(w,at+6)<<48)|(byte(w,at+7)<<56)
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    store(w,at,value&255)
+    store(w,at+1,(value>>8)&255)
+    store(w,at+2,(value>>16)&255)
+    store(w,at+3,(value>>24)&255)
+    store(w,at+4,(value>>32)&255)
+    store(w,at+5,(value>>40)&255)
+    store(w,at+6,(value>>48)&255)
+    store(w,at+7,(value>>56)&255)
+    return 0
+
+def clear(w:mutbuf,begin:u64,end:u64) -> u64:
+    while begin<end:
+        store(w,begin,0)
+        begin=begin+1
+    return 0
+
+def zeros_input(s:readbuf,begin:u64,end:u64) -> u64:
+    while begin<end:
+        if byte(s,begin)!=0:
+            return 0
+        begin=begin+1
+    return 1
+
+def zeros(w:mutbuf,begin:u64,end:u64) -> u64:
+    while begin<end:
+        if byte(w,begin)!=0:
+            return 0
+        begin=begin+1
+    return 1
