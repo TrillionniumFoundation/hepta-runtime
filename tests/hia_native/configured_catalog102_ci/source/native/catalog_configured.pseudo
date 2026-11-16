@@ -1,0 +1,120 @@
+def configured(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(s) >= 16:
+        if read64(s, 8) == 7:
+            return select_catalog(s, o, w)
+    return retained_entry(s, o, w)
+def select_catalog(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(s) != 40:
+        return 4294967295
+    if read64(s, 0) != 3616443570523558472 or read64(s, 8) != 7:
+        return 4294967295
+    mode = read64(s, 16)
+    flags = read64(s, 24)
+    installed = read64(s, 32)
+    if mode > 1 or flags > 15 or installed > 3:
+        return 4294967295
+    if flags != 0 and (flags & 1) == 0:
+        return 4294967295
+    if length(o) < 32:
+        return 4294967294
+    if length(w) < 22152:
+        return grow(o, 1, 22152)
+    size = selected_size(mode, flags, installed)
+    if size > length(o) - 32:
+        return grow(o, 2, size + 32)
+    expand_workspace(w)
+    p = 32
+    if mode == 0:
+        p = prefix0(o, p)
+    else:
+        p = prefix1(o, p)
+    p = copy_span(o, p, w, 6960, 9)
+    index = 0
+    emitted = 0
+    while index < 11:
+        if visible(index, flags, installed) != 0:
+            if emitted != 0:
+                store(o, p, 44)
+                p = p + 1
+            p = copy_span(o, p, w, 6960 + span_start(index), span_size(index))
+            emitted = emitted + 1
+        index = index + 1
+    store(o, p, 93)
+    store(o, p + 1, 125)
+    store(o, p + 2, 125)
+    return result(o, size)
+def visible(index: u64, flags: u64, installed: u64) -> u64:
+    if index == 0 and (installed & 1) == 0:
+        return 0
+    if index == 9 and (installed & 2) == 0:
+        return 0
+    if (flags & 1) == 0:
+        if index == 3 or index == 4 or index == 6 or index == 9:
+            return 0
+    return 1
+def selected_size(mode: u64, flags: u64, installed: u64) -> u64:
+    total = 23
+    if mode == 1: total = 79
+    index = 0
+    count = 0
+    while index < 11:
+        if visible(index, flags, installed) != 0:
+            total = total + span_size(index)
+            count = count + 1
+        index = index + 1
+    return total + count - 1
+def span_start(index: u64) -> u64:
+    if index == 0: return 9
+    if index == 1: return 1922
+    if index == 2: return 2566
+    if index == 3: return 3538
+    if index == 4: return 4168
+    if index == 5: return 6515
+    if index == 6: return 7345
+    if index == 7: return 7699
+    if index == 8: return 9046
+    if index == 9: return 11897
+    return 14416
+def span_size(index: u64) -> u64:
+    if index == 0: return 1912
+    if index == 1: return 643
+    if index == 2: return 971
+    if index == 3: return 629
+    if index == 4: return 2346
+    if index == 5: return 829
+    if index == 6: return 353
+    if index == 7: return 1346
+    if index == 8: return 2850
+    if index == 9: return 2518
+    return 772
+def copy_span(o: mutbuf, p: u64, w: mutbuf, at: u64, size: u64) -> u64:
+    index = 0
+    while index < size:
+        store(o, p + index, byte(w, at + index))
+        index = index + 1
+    return p + size
+def expand_workspace(w: mutbuf) -> u64:
+    load_table(w)
+    p = 6960
+    i = 0
+    while i < 6956:
+        tag = byte(w, i)
+        i = i + 1
+        if tag < 128:
+            count = tag + 1
+            j = 0
+            while j < count:
+                store(w, p, byte(w, i))
+                p = p + 1
+                i = i + 1
+                j = j + 1
+        else:
+            distance = byte(w, i) | (byte(w, i + 1) << 8)
+            i = i + 2
+            count = (tag & 127) + 3
+            j = 0
+            while j < count:
+                store(w, p, byte(w, p - distance))
+                p = p + 1
+                j = j + 1
+    return p
