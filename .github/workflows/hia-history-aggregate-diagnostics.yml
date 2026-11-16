@@ -1,0 +1,44 @@
+name: Inspect retained history recovery failure without execution
+on:
+  push:
+    branches: [hia-history-aggregate-diagnostics-6780-20261116]
+    paths: ['.github/workflows/hia-history-aggregate-diagnostics.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: observer
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/history_aggregate_recovery/diagnostics-v1
+      - name: Download only the exact completed recovery artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14281552031 > "$RUNNER_TEMP/recovery-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14281552031/zip > "$RUNNER_TEMP/recovery-artifact.zip"
+      - name: Fully read archive and print exact failure streams
+        run: |
+          timeout --signal=KILL 900 python3 -I -S -B \
+            observer/qualification/history_aggregate_recovery/diagnostics-v1/inspect_recovery.py \
+            --zip "$RUNNER_TEMP/recovery-artifact.zip" \
+            --metadata "$RUNNER_TEMP/recovery-artifact.json" \
+            --output "$RUNNER_TEMP/history-recovery-diagnostics"
+      - name: Keep full source and complete diagnostic proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history-recovery-064b-complete-diagnostics
+          path: |
+            ${{ runner.temp }}/history-recovery-diagnostics/
+            ${{ runner.temp }}/recovery-artifact.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
