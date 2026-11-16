@@ -1,0 +1,541 @@
+{
+  "schema": "hepta.historical.reference-reader-static-audit.v1",
+  "commit": "7afd543feea2938b08ae8c10f1c6a911f23621ed",
+  "scope": "All Python files in scripts/ whose names contain reference or original; direct source and the matching function call sites inspected. This is not a repository-wide transitive-reader completeness claim.",
+  "files": [
+    {
+      "name": "capture_apk_service_reference.py",
+      "sha": "8974f0394492102c5ec32c9f94e19c0cacb45b04",
+      "bytes": 14060,
+      "matches": []
+    },
+    {
+      "name": "hia_native_config_reference.py",
+      "sha": "9efe7b6aa37f1f77ad08e4274bb6dd323e40dd9e",
+      "bytes": 4890,
+      "matches": []
+    },
+    {
+      "name": "hia_native_connection_reference.py",
+      "sha": "eb4e38d1200e738e7302665f6f73a2ecf5c426b9",
+      "bytes": 6098,
+      "matches": []
+    },
+    {
+      "name": "hia_native_filesystem_parity_reference.py",
+      "sha": "6172f0f03a0a8f9243845e826a525b962e72d707",
+      "bytes": 9223,
+      "matches": []
+    },
+    {
+      "name": "hia_native_filesystem_public_reference_source.py",
+      "sha": "00ae7e94c1cb90facf3ca155643d66b42ccddf68",
+      "bytes": 9619,
+      "matches": [
+        {
+          "line": 82,
+          "fn": "def source_evidence(root):",
+          "code": "    manifest_path = regular(root, MANIFEST)"
+        },
+        {
+          "line": 83,
+          "fn": "def source_evidence(root):",
+          "code": "    raw = manifest_path.read_bytes()"
+        }
+      ]
+    },
+    {
+      "name": "hia_native_public_registry_reference.py",
+      "sha": "074c75c63c226073ae4792a7eda4dca0dbb6f939",
+      "bytes": 5752,
+      "matches": []
+    },
+    {
+      "name": "hia_native_regex_reference.py",
+      "sha": "3ced88cbfccd5b5956a93a7e19d05eb8a8043e96",
+      "bytes": 2503,
+      "matches": []
+    },
+    {
+      "name": "hia_native_request_context_reference.py",
+      "sha": "81743c1941fd3d9f06738b017e0a9a7a3c6936b1",
+      "bytes": 20351,
+      "matches": []
+    },
+    {
+      "name": "hia_native_request_scope_reference.py",
+      "sha": "5bd8b7a60752bad4394c0935f8a1ec111b801dc8",
+      "bytes": 27503,
+      "matches": []
+    },
+    {
+      "name": "hia_native_result_publication_reference.py",
+      "sha": "a428c3b7b2b94988297c15edf5d35c0bb53f94dc",
+      "bytes": 29682,
+      "matches": []
+    },
+    {
+      "name": "hia_native_result_reference.py",
+      "sha": "81c34cd84c74fe53167683f3cfb9079ea302efae",
+      "bytes": 18382,
+      "matches": [
+        {
+          "line": 138,
+          "fn": "def registry_sources(root, project, metadata):",
+          "code": "def registry_sources(root, project, metadata):"
+        },
+        {
+          "line": 148,
+          "fn": "def registry_sources(root, project, metadata):",
+          "code": "        source = Path(package[\"manifest_path\"]).parent"
+        },
+        {
+          "line": 158,
+          "fn": "def registry_sources(root, project, metadata):",
+          "code": "        require(files(source) == members, \"actual locked registry source differs from complete package archive\")"
+        },
+        {
+          "line": 174,
+          "fn": "def registry_sources(root, project, metadata):",
+          "code": "        archives=archives, registry_source_files_verified=sum(row[\"files\"] for row in archives.values()))"
+        },
+        {
+          "line": 216,
+          "fn": "def build_reference(root, original, rustc, cargo):",
+          "code": "        report[\"registry\"] = registry_sources(root, project, metadata)"
+        },
+        {
+          "line": 234,
+          "fn": "def build_reference(root, original, rustc, cargo):",
+          "code": "            and files(project) == report[\"project_files\"] and registry_sources(root, project, metadata) == report[\"registry\"],"
+        }
+      ]
+    },
+    {
+      "name": "hia_native_result_storage_reference.py",
+      "sha": "a8ba0994f40b85f681adff3ed345a50466f80880",
+      "bytes": 33773,
+      "matches": [
+        {
+          "line": 71,
+          "fn": "def registry(project, retained, metadata, proof, root):",
+          "code": "def registry(project, retained, metadata, proof, root):"
+        },
+        {
+          "line": 79,
+          "fn": "def registry(project, retained, metadata, proof, root):",
+          "code": "        name = package['name'] + '-' + package['version'];source = Path(package['manifest_path']).parent"
+        },
+        {
+          "line": 80,
+          "fn": "def registry(project, retained, metadata, proof, root):",
+          "code": "        require(source.name == name and source.parent.parent.name == 'src', 'actual registry source is unexpected')"
+        },
+        {
+          "line": 85,
+          "fn": "def registry(project, retained, metadata, proof, root):",
+          "code": "            'actual complete registry source differs from locked package bytes')"
+        },
+        {
+          "line": 180,
+          "fn": "def build_reference(root, output, domain, rustc, cargo):",
+          "code": "        report['registry'] = registry(project, output / 'registry-archives', metadata, proof, root)"
+        },
+        {
+          "line": 189,
+          "fn": "def build_reference(root, output, domain, rustc, cargo):",
+          "code": "            and registry(project, output / 'registry-archives', metadata, proof, root) == report['registry']"
+        }
+      ]
+    },
+    {
+      "name": "hia_native_runtime_mcp_original.py",
+      "sha": "2e485ef54c95dcde6b397f67c1c0daa6f15c9d5d",
+      "bytes": 13097,
+      "matches": []
+    },
+    {
+      "name": "hia_native_runtime_mcp_reference.py",
+      "sha": "4e3926b4c396f9e4b56dff2886ad0b2c0b846b18",
+      "bytes": 35518,
+      "matches": [
+        {
+          "line": 256,
+          "fn": "def compare_supplement(root,native_corpus,native,output,evidence,view,workdir):",
+          "code": "    exact(termination.get('executable'),str(Path(origin['manifest_path']).parent/'runtime-mcp.elf'),'terminal native executable differs')"
+        }
+      ]
+    },
+    {
+      "name": "hia_native_serde_error_reference.py",
+      "sha": "0b7086d9f7bc9f1dd5f8f210294bd8c3cc5c467e",
+      "bytes": 26444,
+      "matches": [
+        {
+          "line": 51,
+          "fn": "def archive_members(raw, prefix):",
+          "code": "            evidence.require(len(value) == item.size, 'registry source truncated')"
+        },
+        {
+          "line": 57,
+          "fn": "def registry(metadata, expected, retained):",
+          "code": "def registry(metadata, expected, retained):"
+        },
+        {
+          "line": 66,
+          "fn": "def registry(metadata, expected, retained):",
+          "code": "        source = Path(package['manifest_path']).parent"
+        },
+        {
+          "line": 67,
+          "fn": "def registry(metadata, expected, retained):",
+          "code": "        evidence.require(source.name == name and source.parent.parent.name == 'src', 'registry source layout changed')"
+        },
+        {
+          "line": 75,
+          "fn": "def registry(metadata, expected, retained):",
+          "code": "            evidence.require(not item.is_symlink(), 'actual registry source symlink')"
+        },
+        {
+          "line": 81,
+          "fn": "def registry(metadata, expected, retained):",
+          "code": "        evidence.same(files,members,'actual full registry source differs from locked archive')"
+        },
+        {
+          "line": 136,
+          "fn": "def build(options, native):",
+          "code": "    directory = Path(crate['manifest_path']).parent"
+        },
+        {
+          "line": 145,
+          "fn": "def build(options, native):",
+          "code": "    registry_before = registry(metadata, contract['locked_packages'], output/'registry-archives')"
+        },
+        {
+          "line": 158,
+          "fn": "def build(options, native):",
+          "code": "    evidence.same(registry(metadata,contract['locked_packages'],output/'registry-archives'), registry_before,"
+        },
+        {
+          "line": 224,
+          "fn": "def verified_build(root, output, native, *, live_tools=True):",
+          "code": "        evidence.require(record['source'] == str(Path(package['manifest_path']).parent)"
+        }
+      ]
+    },
+    {
+      "name": "hia_native_shell_capture_file_reference.py",
+      "sha": "8f698a4d19b11c19906ea8826976cc6f4fccdd96",
+      "bytes": 33082,
+      "matches": [
+        {
+          "line": 301,
+          "fn": "def dynamic_bindings(output, ref, *, retain=False):",
+          "code": "def dynamic_bindings(output, ref, *, retain=False):"
+        },
+        {
+          "line": 439,
+          "fn": "def read_evidence(runtime, output, rustc=None, linker=None):",
+          "code": "    binding = dynamic_bindings(output, ref)"
+        },
+        {
+          "line": 517,
+          "fn": "def run(runtime, output, rustc, linker):",
+          "code": "        report['dynamic_binding'] = dynamic_bindings(output, ref, retain=True)"
+        }
+      ]
+    },
+    {
+      "name": "hia_native_shell_capture_mkdir_reference.py",
+      "sha": "60f82a765f7bfa01e7785dc9941a5faf552473d1",
+      "bytes": 30678,
+      "matches": [
+        {
+          "line": 266,
+          "fn": "def dynamic_bindings(output, ref, *, retain=False):",
+          "code": "def dynamic_bindings(output, ref, *, retain=False):"
+        },
+        {
+          "line": 404,
+          "fn": "def read_evidence(runtime, output, rustc=None, linker=None):",
+          "code": "    binding = dynamic_bindings(output, ref)"
+        },
+        {
+          "line": 482,
+          "fn": "def run(runtime, output, rustc, linker):",
+          "code": "        report['dynamic_binding'] = dynamic_bindings(output, ref, retain=True)"
+        }
+      ]
+    },
+    {
+      "name": "hia_native_shell_capture_path_reference.py",
+      "sha": "aa04f43462bd7ddbf599c2e63939f300d0ec3856",
+      "bytes": 17202,
+      "matches": []
+    },
+    {
+      "name": "hia_native_shell_capture_prepare_reference.py",
+      "sha": "1be17abcf628d690ed3e1a2b831b021b202eca9f",
+      "bytes": 35983,
+      "matches": [
+        {
+          "line": 342,
+          "fn": "def dynamic_bindings(output, ref, *, retain=False):",
+          "code": "def dynamic_bindings(output, ref, *, retain=False):"
+        },
+        {
+          "line": 480,
+          "fn": "def read_evidence(runtime, output, rustc=None, linker=None):",
+          "code": "    binding = dynamic_bindings(output, ref)"
+        },
+        {
+          "line": 558,
+          "fn": "def run(runtime, output, rustc, linker):",
+          "code": "        report['dynamic_binding'] = dynamic_bindings(output, ref, retain=True)"
+        }
+      ]
+    },
+    {
+      "name": "hia_native_shell_process_reference.py",
+      "sha": "048ed71646399e92e4f8bcc465cf09043ccc53e3",
+      "bytes": 61723,
+      "matches": [
+        {
+          "line": 401,
+          "fn": "def metadata_check(metadata, provenance, source_root, target, production=False):",
+          "code": "                       \"manifest_path\":package[\"manifest_path\"]}"
+        },
+        {
+          "line": 458,
+          "fn": "def registry_sources(metadata, provenance, output, retain=False):",
+          "code": "def registry_sources(metadata, provenance, output, retain=False):"
+        },
+        {
+          "line": 459,
+          "fn": "def registry_sources(metadata, provenance, output, retain=False):",
+          "code": "    \"\"\"Compare every compiled registry source byte to its original .crate hash.\"\"\""
+        },
+        {
+          "line": 471,
+          "fn": "def registry_sources(metadata, provenance, output, retain=False):",
+          "code": "        manifest=Path(package[\"manifest_path\"])"
+        },
+        {
+          "line": 474,
+          "fn": "def registry_sources(metadata, provenance, output, retain=False):",
+          "code": "                \"unexpected Cargo registry source layout\")"
+        },
+        {
+          "line": 475,
+          "fn": "def registry_sources(metadata, provenance, output, retain=False):",
+          "code": "        registry=source.parent.parent.parent"
+        },
+        {
+          "line": 503,
+          "fn": "def registry_sources(metadata, provenance, output, retain=False):",
+          "code": "                    \"registry source directory is a symlink\")"
+        },
+        {
+          "line": 515,
+          "fn": "def registry_sources(metadata, provenance, output, retain=False):",
+          "code": "    exact(len(packages),len(expected),\"registry source archive closure incomplete\")"
+        },
+        {
+          "line": 516,
+          "fn": "def registry_sources(metadata, provenance, output, retain=False):",
+          "code": "    return {\"schema\":\"hepta.runtime.shell-process-registry-source-check.v1\","
+        },
+        {
+          "line": 519,
+          "fn": "def registry_sources(metadata, provenance, output, retain=False):",
+          "code": "            \"new_or_modified_registry_source_used\":False}"
+        },
+        {
+          "line": 521,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "def retained_registry_sources(metadata, provenance, output):"
+        },
+        {
+          "line": 530,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "    captured=decode(read(output,\"registry-source-receipt.json\"))"
+        },
+        {
+          "line": 532,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "        \"schema\",\"packages\",\"package_count\",\"source_file_count\",\"new_or_modified_registry_source_used\"},"
+        },
+        {
+          "line": 534,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "    require(captured[\"schema\"]==\"hepta.runtime.shell-process-registry-source-check.v1\""
+        },
+        {
+          "line": 535,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "            and captured[\"new_or_modified_registry_source_used\"] is False,"
+        },
+        {
+          "line": 559,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "        manifest=Path(package[\"manifest_path\"])"
+        },
+        {
+          "line": 563,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "                and source.parent.parent.name==\"src\",\"unexpected captured Cargo registry source layout\")"
+        },
+        {
+          "line": 599,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "        exact(claimed,row,\"retained original registry source record differs: \"+label)"
+        },
+        {
+          "line": 601,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "    result={\"schema\":\"hepta.runtime.shell-process-registry-source-check.v1\","
+        },
+        {
+          "line": 604,
+          "fn": "def retained_registry_sources(metadata, provenance, output):",
+          "code": "            \"new_or_modified_registry_source_used\":False}"
+        },
+        {
+          "line": 714,
+          "fn": "def read_evidence(runtime: Path, output: Path, rustc: Path | None = None, cargo: Path | None = None):",
+          "code": "    registry=retained_registry_sources(metadata,provenance,output)"
+        },
+        {
+          "line": 715,
+          "fn": "def read_evidence(runtime: Path, output: Path, rustc: Path | None = None, cargo: Path | None = None):",
+          "code": "    exact(report[\"registry_source_verification\"],registry,\"actual original dependency source differs\")"
+        },
+        {
+          "line": 716,
+          "fn": "def read_evidence(runtime: Path, output: Path, rustc: Path | None = None, cargo: Path | None = None):",
+          "code": "    exact(decode(read(output,\"registry-source-receipt.json\")),registry,\"separate dependency source receipt differs\")"
+        },
+        {
+          "line": 717,
+          "fn": "def read_evidence(runtime: Path, output: Path, rustc: Path | None = None, cargo: Path | None = None):",
+          "code": "    require(report.get(\"registry_sources_unchanged_after_build\") is True,\"post-build dependency source check absent\")"
+        },
+        {
+          "line": 736,
+          "fn": "def read_evidence(runtime: Path, output: Path, rustc: Path | None = None, cargo: Path | None = None):",
+          "code": "            \"registry_source_receipt_sha256\":sha(read(output,\"registry-source-receipt.json\")),"
+        },
+        {
+          "line": 780,
+          "fn": "def run(runtime,output,rustc,cargo,offline=False):",
+          "code": "        registry=registry_sources(metadata,provenance,output,True)"
+        },
+        {
+          "line": 781,
+          "fn": "def run(runtime,output,rustc,cargo,offline=False):",
+          "code": "        report[\"registry_source_verification\"]=registry"
+        },
+        {
+          "line": 782,
+          "fn": "def run(runtime,output,rustc,cargo,offline=False):",
+          "code": "        (output/\"registry-source-receipt.json\").write_text(json.dumps(registry,sort_keys=True,indent=2)+\"\\n\")"
+        },
+        {
+          "line": 800,
+          "fn": "def run(runtime,output,rustc,cargo,offline=False):",
+          "code": "        exact(registry_sources(metadata,provenance,output,False),registry,\"registry source changed during build\")"
+        },
+        {
+          "line": 801,
+          "fn": "def run(runtime,output,rustc,cargo,offline=False):",
+          "code": "        report[\"registry_sources_unchanged_after_build\"]=True"
+        }
+      ]
+    },
+    {
+      "name": "hia_native_shell_reference.py",
+      "sha": "96fc4a391882af22f941707b80e69e2070942525",
+      "bytes": 19553,
+      "matches": []
+    },
+    {
+      "name": "hia_native_view_regex_search_reference.py",
+      "sha": "0a586ce093b41ddbd83f0fd8f2334f1f6b1196e9",
+      "bytes": 22893,
+      "matches": []
+    },
+    {
+      "name": "hia_native_view_search_reference.py",
+      "sha": "8ab1e6c4087d9ac8fa05bbe01e58772844b5830a",
+      "bytes": 22863,
+      "matches": []
+    },
+    {
+      "name": "hia_native_workdir_reference.py",
+      "sha": "65014fdb58c668412a8623b5fa3177334f239669",
+      "bytes": 36697,
+      "matches": []
+    },
+    {
+      "name": "prepare_batch_body_original.py",
+      "sha": "65810250d68d303a7ebc9f3dbb6b61a121e8cf56",
+      "bytes": 7245,
+      "matches": []
+    },
+    {
+      "name": "prepare_batch_render_original.py",
+      "sha": "1162246b7cf9150ad03174f527f59d1b17d85613",
+      "bytes": 3236,
+      "matches": []
+    },
+    {
+      "name": "prepare_chain_original.py",
+      "sha": "b1950a4c83fc4a4d4199443dfc8dfa48001e9578",
+      "bytes": 6483,
+      "matches": []
+    },
+    {
+      "name": "qualify_hia_shell_capture_prepare_original.py",
+      "sha": "8fa1bafe260d65cd352aedc18bf9636deabe25d4",
+      "bytes": 55985,
+      "matches": []
+    }
+  ],
+  "findings": [
+    {
+      "kind": "retained-cargo-reader",
+      "files": [
+        "scripts/hia_native_result_reference.py",
+        "scripts/hia_native_result_storage_reference.py"
+      ],
+      "finding": "Live registry source walks are invoked only by build_reference; result-storage build_evidence decodes retained registry-archives and complete members. No second direct offline Cargo-cache source walk was found in this selected scan."
+    },
+    {
+      "kind": "retained-cargo-reader",
+      "files": [
+        "scripts/hia_native_serde_error_reference.py"
+      ],
+      "finding": "verified_build compares producer manifest_path as an origin string, then reads output/registry-archives and complete original checksum/member records. live_tools remains a separate declared tool identity check."
+    },
+    {
+      "kind": "already-fixed",
+      "files": [
+        "scripts/hia_native_shell_process_reference.py"
+      ],
+      "finding": "read_evidence now uses retained_registry_sources. Existing producer registry_sources pre-build/post-build walks remain unchanged."
+    },
+    {
+      "kind": "live-system-dependency",
+      "files": [
+        "scripts/hia_native_shell_capture_file_reference.py",
+        "scripts/hia_native_shell_capture_prepare_reference.py",
+        "scripts/hia_native_shell_capture_mkdir_reference.py"
+      ],
+      "finding": "read_evidence still calls dynamic_bindings(retain=False), reading the current loader interpreter, configuration, and all current resolved libraries and comparing them to retained full bytes. This is a live-system portability condition, not a Cargo-cache walk."
+    }
+  ],
+  "actual_native_executions": 0,
+  "actual_rust_executions": 0,
+  "source_mutations": 0,
+  "unknown_aggregate_failure_cause": true
+}
