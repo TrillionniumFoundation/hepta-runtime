@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/authoring/public_extract/author.py", line 143, in <module>
+    main()
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/authoring/public_extract/author.py", line 79, in main
+    catalog_files,catalog_proof=catalog(api,source,author)
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/authoring/public_extract/author_catalog.py", line 126, in catalog
+    raw, names, proof = compile_delta(api, original, comp["aliases"], "\n".join(nodes), {}, "runtime_mcp_catalog_installed")
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/authoring/public_extract/source_support.py", line 112, in compile_delta
+    b.statements(node.body)
+  File "/home/runner/work/hepta-runtime/hepta-runtime/compiler/tools/generate_hia_selfhost.py", line 2080, in statements
+    else: raise ValueError(ast.dump(s))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: AnnAssign(target=Name(id='stride', ctx=Store()), annotation=Name(id='u64', ctx=Load()), value=Constant(value=8), simple=1)

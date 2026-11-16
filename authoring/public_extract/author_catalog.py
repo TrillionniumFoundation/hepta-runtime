@@ -50,7 +50,7 @@ def exact_tools(raw):
 
 def literal(name, raw):
     rows = ["def " + name + "(o: mutbuf, at: u64) -> u64:",
-            "    stride: u64 = 8", "    position: u64 = at"]
+            "    stride = 8", "    position = at"]
     words = len(raw) // 8 * 8
     for offset in range(0, words, 8):
         rows.append("    put(o, position, " + str(int.from_bytes(raw[offset:offset + 8], "little")) + ")")
