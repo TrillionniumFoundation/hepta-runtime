@@ -12,7 +12,7 @@ jobs:
     env:
       LC_ALL: C.UTF-8
       AUDIT_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/audit_store_queue_v1
-      AUDIT_SOURCE_SHA: ac8744576b149066e983cccdd25e626dd6b1471bb946408c0e7d7f28ea896e93
+      AUDIT_SOURCE_SHA: 3b6935ae95e2244ee01031ba63995950b53d29203fe549b7b1b720e2d643b33c
     steps:
       - name: Checkout frozen candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -63,7 +63,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
-          rustup toolchain install 1.95.0 --profile minimal
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          rustup run 1.95.0 rustfmt --check --edition 2021 --config hard_tabs=true,max_width=100 "$AUDIT_SOURCE/reference/original_tests.rs" "$AUDIT_SOURCE/reference/trace.rs"
           printf 'AUDIT_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
       - name: Execute complete frozen original and native domains
         run: |
