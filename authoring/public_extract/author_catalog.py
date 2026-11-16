@@ -49,11 +49,14 @@ def exact_tools(raw):
 
 
 def literal(name, raw):
-    rows = ["def " + name + "(o: mutbuf, at: u64) -> u64:"]
-    for offset in range(0, len(raw) // 8 * 8, 8):
-        rows.append("    put(o, at + " + str(offset) + ", " + str(int.from_bytes(raw[offset:offset + 8], "little")) + ")")
-    for offset in range(len(raw) // 8 * 8, len(raw)):
-        rows.append("    store(o, at + " + str(offset) + ", " + str(raw[offset]) + ")")
+    rows = ["def " + name + "(o: mutbuf, at: u64) -> u64:",
+            "    stride: u64 = 8", "    position: u64 = at"]
+    words = len(raw) // 8 * 8
+    for offset in range(0, words, 8):
+        rows.append("    put(o, position, " + str(int.from_bytes(raw[offset:offset + 8], "little")) + ")")
+        rows.append("    position = position + stride")
+    for offset in range(words, len(raw)):
+        rows.append("    store(o, position + " + str(offset - words) + ", " + str(raw[offset]) + ")")
     return "\n".join(rows + ["    return 0", ""])
 
 
