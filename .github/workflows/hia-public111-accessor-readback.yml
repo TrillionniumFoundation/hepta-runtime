@@ -1,0 +1,59 @@
+name: Read existing accessor evidence without semantic execution
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-public111-accessor-readback-6780-20261116']
+    paths: ['tests/hia_native/public111_accessor_readback_v1/**', '.github/workflows/hia-public111-accessor-readback.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "READER=$GITHUB_WORKSPACE/source/tests/hia_native/public111_accessor_readback_v1" "READBACK=$RUNNER_TEMP/accessor-readback" "DRIVER=$RUNNER_TEMP/accessor-readback-driver" >> "$GITHUB_ENV"
+      - name: Checkout frozen pure reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public111_accessor_readback_v1
+      - name: Verify exact sources and compile syntax only
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/source" rev-parse HEAD)" = "${{ github.sha }}"
+          python3 -I -S -B -c 'from pathlib import Path;import hashlib,json,sys;p=Path(sys.argv[1]);m=json.loads((p/"SOURCE.json").read_bytes());actual={q.name:{"bytes":q.stat().st_size,"sha256":hashlib.sha256(q.read_bytes()).hexdigest()} for q in p.iterdir() if q.is_file() and q.name!="SOURCE.json"};assert actual==m["files"];[compile((p/n).read_bytes(),n,"exec") for n in actual if n.endswith(".py")];print("source and syntax verified")' "$READER"
+      - name: Read full immutable archive and guarded paired and wire evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -S -B "$READER/readback.py" --output "$READBACK" > "$DRIVER.stdout" 2> "$DRIVER.stderr"
+      - name: Print complete source recovery records and compact metrics
+        if: always()
+        run: |
+          if test -f "$DRIVER.stdout"; then cat "$DRIVER.stdout"; fi
+          if test -f "$DRIVER.stderr"; then cat "$DRIVER.stderr"; fi
+      - name: Upload complete pure readback proof and source records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: accessor-readback-${{ github.sha }}
+          path: |
+            ${{ env.DRIVER }}.stdout
+            ${{ env.DRIVER }}.stderr
+            ${{ env.READBACK }}/READBACK.json
+            ${{ env.READBACK }}/READONLY.json
+            ${{ env.READBACK }}/archive.json
+            ${{ env.READBACK }}/capture/artifact-manifest.json
+            ${{ env.READBACK }}/capture/optimized-source/native/fixed_accessor_contraction.json
+            ${{ env.READBACK }}/capture/build/profile/manifest.json
+            ${{ env.READER }}
+          compression-level: 1
+          retention-days: 30
+          if-no-files-found: error
