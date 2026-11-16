@@ -37,8 +37,8 @@ PARTITIONS = {
               "shell_capture_file", "shell_capture_prepare"),
     "view_components": ("view_render", "view_render_growth", "view_cache", "history", "session_workdir"),
     "view": ("view_read", "view_params", "text_editor_params", "view_call", "runtime_mcp", "filesystem_public"),
-    "json": ("fence_json", "serde_json", "execution_shadow", "effect_fence",
-             "binary32_json", "typed_result_json", "request_result", "serde_error"),
+    "json": ("fence_json", "serde_json", "binary32_json", "typed_result_json", "request_result"),
+    "execution": ("execution_shadow", "effect_fence", "serde_error"),
     "config": ("runtime_config", "runtime_config_span"),
     "system": ("filesystem_parity", "binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
@@ -152,7 +152,7 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "shell", "view_components", "view", "json", "config", "system", "storage"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if set(partitions) != {"batch", "text", "shell", "view_components", "view", "json", "execution", "config", "system", "storage"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
         raise ValueError("every native module must belong to exactly one explicit partition")
     if partitions["config"] != ("runtime_config", "runtime_config_span"):
         raise ValueError("the complete configuration and regex owner requires its independent partition")

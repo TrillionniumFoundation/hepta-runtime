@@ -1,0 +1,71 @@
+name: HIA Batch input complete candidate
+on:
+  push:
+    branches: [hia-batch-qualification-6780-20261116]
+permissions:
+  contents: read
+concurrency:
+  group: hia-batch-qualification-6780-20261116
+  cancel-in-progress: false
+jobs:
+  complete:
+    name: Complete seven-owner Batch input qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Checkout pinned HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Install fixed reference toolchains
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+      - name: Verify source identity and all source controls
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.sha }}
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+          python3 -I -B runtime/.github/hia-batch-input-source-guard.py
+          python3 -I -B runtime/tests/hia_native/test_qualification_reporting.py
+          python3 -I -B runtime/tests/hia_native/test_native_pipeline.py
+          python3 -I -B runtime/tests/hia_native/test_original_pipeline.py
+      - name: Execute complete fresh native and original comparison
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          HIA_BATCH_RUST_BIN="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -I -B runtime/.github/hia-batch-input-focused.py \
+            --runtime "$GITHUB_WORKSPACE/runtime" \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-batch-complete" \
+            --rust-bin "$HIA_BATCH_RUST_BIN"
+      - name: Preserve complete actual evidence, including failures
+        if: always()
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
+            --source "$RUNNER_TEMP/hia-batch-complete" \
+            --output "$RUNNER_TEMP/hia-batch-retained"
+      - name: Retain captured inputs, outputs and process records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-batch-complete-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-batch-retained/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
