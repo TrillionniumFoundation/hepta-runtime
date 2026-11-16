@@ -1,0 +1,153 @@
+name: Class-5 admission v5 public task pump - fresh graph and complete 1394 wire
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-public-task-pump-qualification-6780-v5-20261116']
+    paths: ['tests/hia_native/public_task_pump_ci_v5/**', '.github/workflows/hia-public-task-pump-v5.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  PACKAGE_SHA256: '877a86169f0a21ec8ccd6ec8e6cd37b66122ea30d640300e80645fc97b645dd7'
+  RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  fresh-native-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set paths from the actual runner environment
+        run: |
+          printf '%s\n' "PUMP_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public_task_pump_ci_v5" "PUMP_BUILD=$RUNNER_TEMP/task-pump-build" "PUMP_EXPORT=$RUNNER_TEMP/task-pump-build-export" "PUMP_DRIVER=$RUNNER_TEMP/task-pump-build-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact isolated candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: tests/hia_native/public_task_pump_ci_v5
+          persist-credentials: false
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Check every source and immutable compiler identity
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -S -B "$PUMP_PACKAGE/ci/source_check.py" --package "$PUMP_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256"
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+      - name: Fresh worker, packed port, 92 graph members and three actual entries
+        run: |
+          python3 -I -S -B "$PUMP_PACKAGE/ci/run_build.py" --package "$PUMP_PACKAGE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$PUMP_BUILD" --manifest-sha256 "$PACKAGE_SHA256" > "$PUMP_DRIVER.stdout" 2> "$PUMP_DRIVER.stderr"
+      - name: Export and reread all success or failure build bytes
+        if: always()
+        run: |
+          python3 -I -S -B "$PUMP_PACKAGE/ci/archive.py" pack --capture "$PUMP_BUILD" --output "$PUMP_EXPORT" --package "$PUMP_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label build --driver-prefix "$PUMP_DRIVER"
+      - name: Upload complete build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: task-pump-v5-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PUMP_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  fresh-current-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set paths from the actual runner environment
+        run: |
+          printf '%s\n' "PUMP_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public_task_pump_ci_v5" "PUMP_ORIGINAL=$RUNNER_TEMP/task-pump-original" "PUMP_EXPORT=$RUNNER_TEMP/task-pump-original-export" "PUMP_DRIVER=$RUNNER_TEMP/task-pump-original-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact isolated candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: tests/hia_native/public_task_pump_ci_v5
+          persist-credentials: false
+      - name: Check every source before Rust execution
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
+          python3 -I -S -B "$PUMP_PACKAGE/ci/source_check.py" --package "$PUMP_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256"
+      - name: Install exact Rust toolchain in CI
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          printf '%s\n' "RUSTUP_TOOLCHAIN=1.95.0" >> "$GITHUB_ENV"
+          rustc +1.95.0 --version --verbose
+      - name: Fresh unchanged current SDK and complete original reference
+        run: |
+          python3 -I -S -B "$PUMP_PACKAGE/wire/reference/recipe.py" --output "$PUMP_ORIGINAL" > "$PUMP_DRIVER.stdout" 2> "$PUMP_DRIVER.stderr"
+      - name: Export and reread all success or failure original bytes
+        if: always()
+        run: |
+          python3 -I -S -B "$PUMP_PACKAGE/ci/archive.py" pack --capture "$PUMP_ORIGINAL" --output "$PUMP_EXPORT" --package "$PUMP_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label original --driver-prefix "$PUMP_DRIVER"
+      - name: Upload complete original evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: task-pump-v5-original-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PUMP_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  complete-public-wire:
+    needs: [fresh-native-build, fresh-current-original]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set paths from the actual runner environment
+        run: |
+          printf '%s\n' "PUMP_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public_task_pump_ci_v5" "PUMP_BUILD=$RUNNER_TEMP/task-pump-build" "PUMP_ORIGINAL=$RUNNER_TEMP/task-pump-original" "PUMP_NATIVE=$RUNNER_TEMP/task-pump-native" "PUMP_EXPORT=$RUNNER_TEMP/task-pump-native-export" "PUMP_DRIVER=$RUNNER_TEMP/task-pump-native-driver" "PUMP_BUILD_ARCHIVE=$RUNNER_TEMP/task-pump-build-input" "PUMP_ORIGINAL_ARCHIVE=$RUNNER_TEMP/task-pump-original-input" >> "$GITHUB_ENV"
+      - name: Checkout exact isolated candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: tests/hia_native/public_task_pump_ci_v5
+          persist-credentials: false
+      - name: Check the exact candidate package
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
+          python3 -I -S -B "$PUMP_PACKAGE/ci/source_check.py" --package "$PUMP_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256"
+      - name: Download only this run's fresh graph
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: task-pump-v5-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PUMP_BUILD_ARCHIVE }}
+      - name: Download only this run's fresh original
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: task-pump-v5-original-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PUMP_ORIGINAL_ARCHIVE }}
+      - name: Read every archive member and recover complete captures
+        run: |
+          python3 -I -S -B "$PUMP_PACKAGE/ci/archive.py" extract --archive "$PUMP_BUILD_ARCHIVE/capture.tar.gz" --receipt "$PUMP_BUILD_ARCHIVE/archive.json" --output "$PUMP_BUILD"
+          python3 -I -S -B "$PUMP_PACKAGE/ci/archive.py" extract --archive "$PUMP_ORIGINAL_ARCHIVE/capture.tar.gz" --receipt "$PUMP_ORIGINAL_ARCHIVE/archive.json" --output "$PUMP_ORIGINAL"
+      - name: Complete two-protocol native capture and joined read-only qualification
+        run: |
+          python3 -I -S -B "$PUMP_PACKAGE/ci/run_native.py" --package "$PUMP_PACKAGE" --build "$PUMP_BUILD" --original "$PUMP_ORIGINAL" --build-archive-receipt "$PUMP_BUILD_ARCHIVE/archive.json" --original-archive-receipt "$PUMP_ORIGINAL_ARCHIVE/archive.json" --output "$PUMP_NATIVE" --manifest-sha256 "$PACKAGE_SHA256" > "$PUMP_DRIVER.stdout" 2> "$PUMP_DRIVER.stderr"
+      - name: Export and reread every success or failure native byte
+        if: always()
+        run: |
+          python3 -I -S -B "$PUMP_PACKAGE/ci/archive.py" pack --capture "$PUMP_NATIVE" --output "$PUMP_EXPORT" --package "$PUMP_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label native --driver-prefix "$PUMP_DRIVER"
+      - name: Upload complete native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: task-pump-v5-native-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PUMP_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
