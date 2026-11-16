@@ -34,17 +34,49 @@ class CanonicalFocusedControls(unittest.TestCase):
                 **{suffix + field: value for suffix in ("stdout", "stderr")
                    for field, value in (("_bytes", 0), ("_sha256", hashlib.sha256(b"").hexdigest()))}}
 
-    def test_frozen_public_trace_is_checked_before_execution(self):
+    def copy_public_sources(self):
         relative = focus.filesystem_public_pipeline.DRIVERS
         source = focus.ROOT / relative
         target = self.output / relative
         target.mkdir(parents=True)
         for name in (*focus.filesystem_public_pipeline.DRIVER_FILES, "source_manifest.json"):
             shutil.copyfile(source / name, target / name)
+        reader = focus.filesystem_public_pipeline.reference_source.ORACLE + "/strict_reference.py"
+        (self.output / reader).parent.mkdir(parents=True)
+        shutil.copyfile(focus.ROOT / reader, self.output / reader)
+        return target
+
+    def test_frozen_public_trace_is_checked_before_execution(self):
+        target = self.copy_public_sources()
         focus.filesystem_public_pipeline.producer_sources(self.output)
         with (target / "strict_trace.py").open("ab") as stream:
             stream.write(b"\n# changed retained trace\n")
         with self.assertRaisesRegex(ValueError, "frozen SDK producer/reader source: strict_trace.py"):
+            focus.filesystem_public_pipeline.producer_sources(self.output)
+
+    def test_each_public_consumer_rejects_a_stale_reader_pin_before_execution(self):
+        target = self.copy_public_sources()
+        manifest = json.loads((target / "source_manifest.json").read_text())
+        for name in ("native_capture.py", "replay_original.py", "strict_original.py"):
+            with self.subTest(consumer=name):
+                original = (target / name).read_bytes()
+                changed = original.replace(b"'bytes': 63637", b"'bytes': 63585")
+                self.assertNotEqual(changed, original)
+                (target / name).write_bytes(changed)
+                altered = copy.deepcopy(manifest)
+                altered[name] = {"bytes": len(changed), "sha256": hashlib.sha256(changed).hexdigest()}
+                (target / "source_manifest.json").write_text(json.dumps(altered))
+                with self.assertRaisesRegex(ValueError, "frozen reference reader dependency: " + name):
+                    focus.filesystem_public_pipeline.producer_sources(self.output)
+                (target / name).write_bytes(original)
+                (target / "source_manifest.json").write_text(json.dumps(manifest))
+
+    def test_changed_reference_reader_is_rejected_before_execution(self):
+        self.copy_public_sources()
+        reader = self.output / focus.filesystem_public_pipeline.reference_source.ORACLE / "strict_reference.py"
+        with reader.open("ab") as stream:
+            stream.write(b"\n# changed reference reader\n")
+        with self.assertRaisesRegex(ValueError, "frozen reference reader dependency: native_capture.py"):
             focus.filesystem_public_pipeline.producer_sources(self.output)
 
     def native(self):

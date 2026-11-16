@@ -19,6 +19,8 @@ import time
 import traceback
 sys.dont_write_bytecode = True
 
+FROZEN_READER = {'bytes': 63637, 'sha256': 'cbf0848f546425a0b825ac7dbe9741e891e7c78b7c932a5b6e7ce602443e3c4d'}
+
 
 def load(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -56,7 +58,7 @@ def main():
             'stdin': None, 'stdout': {'path': str(out), **common.file_pin(out)}, 'stderr': {'path': str(err), **common.file_pin(err)}}])
     common.need(start_error is None and not timed_out and process.returncode == 0 and out.read_bytes().startswith(b'strace -- version ') and not err.read_bytes(), 'actual selected tracer version process')
     reader_pin = common.file_pin(args.reference_reader)
-    common.need(reader_pin == {'bytes': 63585, 'sha256': '98a52accc1b5c740221effde1895535a9cb9c2d719bad0f46d4f9fc02d2906ca'}, 'frozen input-source reader')
+    common.need(reader_pin == FROZEN_READER, 'frozen input-source reader')
     reference = load(args.reference_reader, '_filesystem_sdk_native_input_source')
     original_source = reference.Binder(args.reference_source)
     for name, (size, digest) in reference.SOURCES.items(): original_source.file(name, {'bytes': size, 'sha256': digest})

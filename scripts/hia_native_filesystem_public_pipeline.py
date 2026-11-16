@@ -5,6 +5,7 @@ HIA images. The native stage has no original-response input. The original stage
 rebuilds the unchanged Rust reference only after all native processes terminate.
 """
 from pathlib import Path
+import ast
 import importlib.util
 import json
 import math
@@ -86,6 +87,14 @@ def producer_sources(root):
     for name, expected in manifest.items():
         exact(reference_source.pin(read(root, DRIVERS + "/" + name)), expected,
               "frozen SDK producer/reader source: " + name)
+    reader = reference_source.pin(read(root, reference_source.ORACLE + "/strict_reference.py"))
+    for name in ("native_capture.py", "replay_original.py", "strict_original.py"):
+        tree = ast.parse(read(root, DRIVERS + "/" + name))
+        bindings = [node.value for node in tree.body if isinstance(node, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == "FROZEN_READER"
+                            for target in node.targets)]
+        need(len(bindings) == 1, "one frozen reference reader declaration: " + name)
+        exact(ast.literal_eval(bindings[0]), reader, "frozen reference reader dependency: " + name)
     return manifest
 
 

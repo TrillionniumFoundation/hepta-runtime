@@ -19,6 +19,8 @@ import time
 import traceback
 sys.dont_write_bytecode = True
 
+FROZEN_READER = {'bytes': 63637, 'sha256': 'cbf0848f546425a0b825ac7dbe9741e891e7c78b7c932a5b6e7ce602443e3c4d'}
+
 
 def local_module(path, name):
     spec = importlib.util.spec_from_file_location(name, path); result = importlib.util.module_from_spec(spec); spec.loader.exec_module(result); return result
@@ -35,7 +37,7 @@ def main():
     common.dump(a.output/'remote-process.json', {'pid': os.getpid(), 'cgroup': Path('/proc/self/cgroup').read_text(), 'argv': sys.argv})
     driver_sources = {name: common.file_pin(here/name) for name in ('capture_common.py', 'replay_original.py', 'strict_original.py')}
     reader_pin = common.file_pin(a.reference_reader)
-    common.need(reader_pin == {'bytes': 63585, 'sha256': '98a52accc1b5c740221effde1895535a9cb9c2d719bad0f46d4f9fc02d2906ca'}, 'frozen original reference reader identity')
+    common.need(reader_pin == FROZEN_READER, 'frozen original reference reader identity')
     q = local_module(a.reference_reader, '_frozen_filesystem_sdk_reference')
     admission_reader = local_module(here/'strict_original.py', '_filesystem_sdk_followup_portable_reader')
     binder = q.Binder(a.reference_source)

@@ -17,7 +17,7 @@ import stat
 import sys
 sys.dont_write_bytecode = True
 
-FROZEN_READER = {'bytes': 63585, 'sha256': '98a52accc1b5c740221effde1895535a9cb9c2d719bad0f46d4f9fc02d2906ca'}
+FROZEN_READER = {'bytes': 63637, 'sha256': 'cbf0848f546425a0b825ac7dbe9741e891e7c78b7c932a5b6e7ce602443e3c4d'}
 DRIVER_FILES = ('capture_common.py', 'replay_original.py', 'strict_original.py')
 COUNTS = {'groups': 12, 'scenarios': 28, 'steps': 332, 'public_calls': 323, 'private_controls': 9}
 

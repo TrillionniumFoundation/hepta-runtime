@@ -289,6 +289,8 @@ def prepare(output: Path, hepta: Path, invocation: str) -> dict:
     report, started = q.initial_report(hepta), time.monotonic()
     q.save_report(output / "result.json", report)
     try:
+        from hia_native_filesystem_public_pipeline import producer_sources
+        producer_sources(q.ROOT)
         partitions = partition_tests()
         binding = context(output, hepta, invocation)
         builder = q.prepare_native(output, hepta, report)

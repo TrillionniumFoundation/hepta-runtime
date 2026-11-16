@@ -33,6 +33,19 @@ class NativePipelineTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
 
+    def test_prepare_refuses_stale_public_reader_before_starting_compiler(self):
+        import hia_native_filesystem_public_pipeline as public
+        output = self.root / "refused-source"
+        with patch.object(q, "initial_report", return_value={}), \
+             patch.object(public, "producer_sources", side_effect=ValueError("stale frozen reference reader")), \
+             patch.object(q, "prepare_native") as compiler:
+            with self.assertRaisesRegex(ValueError, "stale frozen reference reader"):
+                p.prepare(output, self.root / "compiler", "source-refusal-control")
+            compiler.assert_not_called()
+        report = json.loads((output / "result.json").read_bytes())
+        self.assertEqual(report["status"], "FAIL")
+        self.assertEqual(report["phase"], "native_build")
+
     def public_fixture(self, name="public-owned"):
         output = self.root / name
         workdir = output / "runtime-mcp/files/workdir"
