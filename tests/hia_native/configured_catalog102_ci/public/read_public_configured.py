@@ -79,7 +79,7 @@ def verify(source,component,graph,manifest,output,expected_binary=None):
     assert md['status']=='PASS' and md['physical_images']==102 and md['catalog_installed_capability_mask']==1
     assert binary_pin=={'bytes':md['elf_bytes'],'sha256':md['elf_sha256']}
     if expected_binary is not None:assert binary_pin==expected_binary
-    assert md['source_binding']=={'manifest_sha256':shared.GRAPH_PROFILE,'files':binding['files']}
+    assert md['source_binding']=={'manifest_sha256':shared.GRAPH_PROFILE,'files':binding['sources']}
     assert md['catalog_config_presence_child']==6 and md['catalog_config_presence_operation']==3 and md['catalog_config_presence_phase']==18
     assert r.document('DOMAIN.json')==d.domain()
     assert r.document('binary-before.json')==binary_pin

@@ -24,7 +24,7 @@ def source_check(source,component,graph):
     raw=(graph/'native/runtime_mcp_sources.json').read_bytes()
     assert sha(raw)==GRAPH_PROFILE
     binding=json.loads(raw)
-    for name,expected in binding['files'].items():
+    for name,expected in binding['sources'].items():
         path=graph/name;info=path.lstat()
         assert not path.is_symlink() and stat.S_ISREG(info.st_mode)
         assert pin(path.read_bytes())==expected
