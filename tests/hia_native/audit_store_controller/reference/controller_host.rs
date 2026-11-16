@@ -1,9 +1,9 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Test-only mechanical pump for frozen HIA decisions and native kernel effects.
+//! Test-only actual-thread adapter observing the HIA/native callable composition.
 
-use std::cell::UnsafeCell;
+use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::VecDeque;
 use std::ffi::{c_int, c_long, c_void};
 use std::fs::{File, OpenOptions};
@@ -66,7 +66,7 @@ impl Drop for Image {
 }
 
 struct Images {
-	controller: Image,
+	callable: Image,
 	sync: Image,
 }
 
@@ -118,10 +118,122 @@ fn record(case: &str, generation: u64, kind: &str, fields: &str) {
 		std::process::id(), tid()).unwrap();
 }
 
+
+struct Observation {
+	kind: u64,
+	input: Vec<u8>,
+	output: Vec<u8>,
+	queue: Vec<u8>,
+	capacity: usize,
+	owned: bool,
+	initial: bool,
+	old_capacity: usize,
+	required: usize,
+	serial: u64,
+}
+
+thread_local! {
+	static CURRENT_ACTOR: Cell<u64> = const { Cell::new(0) };
+	static PENDING: RefCell<Option<Observation>> = const { RefCell::new(None) };
+}
+
+fn observed_bytes(pointer: u64, length: usize) -> Vec<u8> {
+	assert!(pointer != 0 || length == 0);
+	if length == 0 {
+		Vec::new()
+	} else {
+		unsafe { std::slice::from_raw_parts(pointer as *const u8, length) }.to_vec()
+	}
+}
+
+// This callback copies observations only. The native callable has already
+// chosen every operation and owns every buffer passed here.
+extern "C" fn observe(pointer: *const u64, user: *const Core) {
+	let event = unsafe { std::slice::from_raw_parts(pointer, 16) };
+	let core = unsafe { &*user };
+	let actor = CURRENT_ACTOR.with(Cell::get);
+	assert!(actor > 0);
+	assert!((1..=3).contains(&event[0]) && event[1] <= 1);
+	let capacity: usize = event[7].try_into().unwrap();
+	if event[1] == 0 {
+		let input = observed_bytes(event[3], event[4].try_into().unwrap());
+		let output = match event[0] {
+			1 => observed_bytes(event[5], 528),
+			2 => observed_bytes(event[5], 144),
+			_ => Vec::new(),
+		};
+		let queue = if event[0] == 2 {
+			Vec::new()
+		} else {
+			observed_bytes(event[6], capacity + 16)
+		};
+		let observation = Observation {
+			kind: event[0],
+			input,
+			output,
+			queue,
+			capacity,
+			owned: event[8] != 0,
+			initial: event[9] != 0,
+			old_capacity: event[10].try_into().unwrap(),
+			required: event[11].try_into().unwrap(),
+			serial: event[12],
+		};
+		PENDING.with(|pending| assert!(pending.replace(Some(observation)).is_none()));
+		return;
+	}
+	let before = PENDING.with(|pending| pending.take().unwrap());
+	assert_eq!(before.kind, event[0]);
+	assert_eq!(
+		before.input,
+		observed_bytes(event[3], event[4].try_into().unwrap())
+	);
+	match event[0] {
+		1 => {
+			let after = observed_bytes(event[5], 528);
+			let queue = observed_bytes(event[6], capacity + 16);
+			assert_eq!(event[2], 512);
+			assert_eq!(&after[512..], &[0xa5; 16]);
+			assert_eq!(&queue[capacity..], &[0xa5; 16]);
+			assert_eq!(before.capacity, capacity);
+			let owned = before.owned;
+			let initial = before.initial;
+			record(&core.case, core.generation, "controller", &format!(
+				"\"actor\":{actor},\"returned\":512,\"queue_owned\":{owned},\"initial\":{initial},\"queue_capacity\":{capacity},\"input_hex\":\"{}\",\"output_before_hex\":\"{}\",\"output_after_hex\":\"{}\",\"queue_before_hex\":\"{}\",\"queue_after_hex\":\"{}\"",
+				hex(&before.input), hex(&before.output), hex(&after), hex(&before.queue), hex(&queue)));
+		}
+		2 => {
+			let after = observed_bytes(event[5], 144);
+			assert_eq!(event[2], 128);
+			assert_eq!(&after[128..], &[0xa5; 16]);
+			let owner = if word(&before.input, 1) == 0 { 0 } else { actor };
+			let serial = before.serial;
+			record(&core.case, core.generation, "boundary", &format!(
+				"\"actor\":{owner},\"serial\":{serial},\"returned\":128,\"input_hex\":\"{}\",\"output_before_hex\":\"{}\",\"output_after_hex\":\"{}\"",
+				hex(&before.input), hex(&before.output), hex(&after)));
+		}
+		3 => {
+			let after = observed_bytes(event[6], capacity + 16);
+			let old_capacity = before.old_capacity;
+			let required = before.required;
+			assert_eq!(capacity, required);
+			assert!(required > old_capacity);
+			assert_eq!(&after[..old_capacity], &before.queue[..old_capacity]);
+			assert_eq!(&after[old_capacity..required], vec![0; required - old_capacity]);
+			assert_eq!(&after[required..], &[0xa5; 16]);
+			let serial = word(&observed_bytes(event[5], 512), 3);
+			record(&core.case, core.generation, "growth", &format!(
+				"\"actor\":{actor},\"serial\":{serial},\"old_capacity\":{old_capacity},\"required\":{required},\"before_hex\":\"{}\",\"after_hex\":\"{}\"",
+				hex(&before.queue), hex(&after)));
+		}
+		_ => unreachable!(),
+	}
+}
+
 struct Core {
 	images: Arc<Images>,
 	kernel: UnsafeCell<[u64; 10]>,
-	queue: UnsafeCell<Vec<u8>>,
+	context: UnsafeCell<[u64; 18]>,
 	generation: u64,
 	case: String,
 }
@@ -156,13 +268,11 @@ impl Actor {
 
 impl Core {
 	fn new() -> Arc<Self> {
-		let mut queue = vec![0; 144];
-		queue[128..].fill(0xa5);
 		let core = Arc::new(Self {
 			images: IMAGES
 				.get_or_init(|| {
 					Arc::new(Images {
-						controller: Image::load("HIA_AUDIT_CONTROLLER_IMAGE"),
+						callable: Image::load("HIA_AUDIT_CALLABLE_IMAGE"),
 						sync: Image::load("HIA_AUDIT_SYNC_IMAGE"),
 					})
 				})
@@ -179,14 +289,20 @@ impl Core {
 				0xa5a5a5a5a5a5a5a5,
 				0xa5a5a5a5a5a5a5a5,
 			]),
-			queue: UnsafeCell::new(queue),
+			context: UnsafeCell::new([0; 18]),
 			generation: CONTEXTS.fetch_add(1, Ordering::Relaxed),
 			case: std::thread::current().name().unwrap().to_owned(),
 		});
-		core.boundary(core.kernel_frame(0, 0), 0, 0);
+		unsafe {
+			let context = &mut *core.context.get();
+			context[2] = core.kernel.get() as u64;
+			context[3] = 64;
+			context[7] = observe as *const () as u64;
+			context[8] = Arc::as_ptr(&core) as u64;
+			context[16..].fill(0xa5a5a5a5a5a5a5a5);
+		}
 		let mut actor = Actor::new();
-		let frame = core.frame(0, None);
-		core.step(frame, &mut actor, true, true);
+		assert_eq!(core.pump(&mut actor, 0, None), 0);
 		assert_eq!(actor.word(1), 0);
 		assert_eq!(actor.word(2), 0);
 		core
@@ -257,90 +373,35 @@ impl Core {
 		frame
 	}
 
-	fn step(&self, mut frame: [u64; 32], actor: &mut Actor, queue_owned: bool, initial: bool) {
-		let before_input = frame;
-		let before_output = actor.bytes;
-		let mut dummy = [0xa5; 16];
-		let (pointer, capacity, before_queue) = if queue_owned {
-			let queue = unsafe { &mut *self.queue.get() };
-			(queue.as_mut_ptr(), queue.len() - 16, queue.clone())
-		} else {
-			(dummy.as_mut_ptr(), 0, dummy.to_vec())
-		};
+	fn pump(&self, actor: &mut Actor, command: u64, deadline: Option<Instant>) -> u64 {
+		let frame = self.frame(command, deadline);
+		let before = frame;
+		CURRENT_ACTOR.with(|current| {
+			assert_eq!(current.replace(actor.id), 0);
+		});
 		let returned = unsafe {
-			(self.images.controller.entry)(
-				frame.as_mut_ptr().cast(),
+			(self.images.callable.entry)(
+				frame.as_ptr().cast(),
 				256,
 				actor.bytes.as_mut_ptr(),
 				512,
-				pointer,
-				capacity,
+				self.context.get().cast(),
+				128,
 			)
 		};
-		assert_eq!(frame, before_input);
-		let after_queue = if queue_owned {
-			unsafe { (&*self.queue.get()).clone() }
-		} else {
-			dummy.to_vec()
-		};
-		record(&self.case, self.generation, "controller", &format!(
-			"\"actor\":{},\"returned\":{returned},\"queue_owned\":{queue_owned},\"initial\":{initial},\"queue_capacity\":{capacity},\"input_hex\":\"{}\",\"output_before_hex\":\"{}\",\"output_after_hex\":\"{}\",\"queue_before_hex\":\"{}\",\"queue_after_hex\":\"{}\"",
-			actor.id, hex(&byte_words(&frame)), hex(&before_output), hex(&actor.bytes),
-			hex(&before_queue), hex(&after_queue)));
+		CURRENT_ACTOR.with(|current| assert_eq!(current.replace(0), actor.id));
+		PENDING.with(|pending| assert!(pending.borrow().is_none()));
 		assert_eq!(returned, 512);
+		assert_eq!(frame, before);
 		assert_eq!(&actor.bytes[512..], &[0xa5; 16]);
-		assert_eq!(&after_queue[capacity..], &[0xa5; 16]);
-		assert_eq!(actor.word(0), u64::from_le_bytes(*b"HAUCOR01"));
-		assert!(actor.word(1) <= 2);
-		if !queue_owned {
-			assert_eq!(dummy, [0xa5; 16]);
-		}
+		assert_eq!(actor.word(1), 0);
+		actor.word(2)
 	}
 
-	fn pump(&self, actor: &mut Actor, command: u64, deadline: Option<Instant>) -> u64 {
-		self.step(self.frame(command, deadline), actor, false, false);
-		let mut queue_owned = false;
-		loop {
-			match actor.word(1) {
-				0 => return actor.word(2),
-				1 => {
-					let serial = actor.word(3);
-					let effect = std::array::from_fn(|index| word(&actor.bytes[256..384], index));
-					let response = self.boundary(effect, actor.id, serial);
-					queue_owned = response[11] == tid() && response[13] == 1;
-					let mut frame = [0; 32];
-					frame[0] = u64::from_le_bytes(*b"HAUCTL01");
-					frame[1] = 3;
-					frame[2] = serial;
-					frame[3] = 128;
-					frame[16..].copy_from_slice(&response);
-					self.step(frame, actor, queue_owned, false);
-				}
-				2 => {
-					assert!(queue_owned);
-					assert_eq!(actor.word(11), 1);
-					let serial = actor.word(3);
-					let required: usize = actor.word(24).try_into().unwrap();
-					let queue = unsafe { &mut *self.queue.get() };
-					let before = queue.clone();
-					let old_capacity = queue.len() - 16;
-					assert!(required > old_capacity);
-					queue.resize(required.checked_add(16).unwrap(), 0);
-					queue[old_capacity..required].fill(0);
-					queue[required..].fill(0xa5);
-					assert_eq!(&queue[..old_capacity], &before[..old_capacity]);
-					record(&self.case, self.generation, "growth", &format!(
-						"\"actor\":{},\"serial\":{serial},\"old_capacity\":{old_capacity},\"required\":{required},\"before_hex\":\"{}\",\"after_hex\":\"{}\"",
-						actor.id, hex(&before), hex(queue)));
-					let mut frame = [0; 32];
-					frame[0] = u64::from_le_bytes(*b"HAUCTL01");
-					frame[1] = 3;
-					frame[2] = serial;
-					self.step(frame, actor, true, false);
-				}
-				other => panic!("unknown HIA continuation status {other}"),
-			}
-		}
+	unsafe fn queue_owned(&self) -> &[u8] {
+		let pointer = unsafe { (*self.context.get())[4] } as *const u8;
+		let capacity = unsafe { (*self.context.get())[5] } as usize;
+		unsafe { std::slice::from_raw_parts(pointer, capacity + 16) }
 	}
 }
 
@@ -350,7 +411,7 @@ impl Drop for Core {
 		assert_eq!((status[13], status[14]), (0, 0));
 		let kernel = unsafe { *self.kernel.get() };
 		assert_eq!(&kernel[8..], &[0xa5a5a5a5a5a5a5a5; 2]);
-		let queue = unsafe { &*self.queue.get() };
+		let queue = unsafe { self.queue_owned() };
 		assert_eq!(word(queue, 2), 0);
 		assert_eq!(word(queue, 3), 0);
 		assert_eq!(word(queue, 5), 0);
@@ -366,6 +427,24 @@ impl Drop for Core {
 				hex(queue)
 			),
 		);
+		let frame = self.frame(6, None);
+		let mut actor = [0u8; 528];
+		actor[512..].fill(0xa5);
+		let returned = unsafe {
+			(self.images.callable.entry)(
+				frame.as_ptr().cast(),
+				256,
+				actor.as_mut_ptr(),
+				512,
+				self.context.get().cast(),
+				128,
+			)
+		};
+		assert_eq!(returned, 0);
+		let context = unsafe { *self.context.get() };
+		assert_eq!((context[0], context[1], context[4], context[5], context[6]), (0, 0, 0, 0, 0));
+		assert_eq!(&context[16..], &[0xa5a5a5a5a5a5a5a5; 2]);
+		assert_eq!(&actor[512..], &[0xa5; 16]);
 	}
 }
 
@@ -403,7 +482,7 @@ impl Probe {
 		assert!(response[2] <= 1);
 		let snapshot = if self.kind == 0 {
 			assert_eq!(response[11], tid());
-			let queue = unsafe { &*self.core.queue.get() };
+			let queue = unsafe { self.core.queue_owned() };
 			let count: usize = word(queue, 5).try_into().unwrap();
 			let waiting = (0..count)
 				.map(|index| (word(queue, 16 + index * 2), word(queue, 17 + index * 2)))

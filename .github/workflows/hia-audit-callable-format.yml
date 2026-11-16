@@ -1,0 +1,30 @@
+name: Format frozen audit callable fixture source
+on:
+  push:
+    branches: [hia-audit-callable-6780-20261116]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  format-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: tests/hia_native/audit_store_controller/reference
+          persist-credentials: false
+      - name: Install pinned source formatter
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+      - name: Format only the source fixture without compiling or running it
+        run: |
+          timeout 60 rustup run 1.95.0 rustfmt --edition 2021 --config hard_tabs=true,max_width=100 --emit stdout < tests/hia_native/audit_store_controller/reference/controller_host.rs > "$RUNNER_TEMP/controller_host.rs"
+          timeout 60 rustup run 1.95.0 rustfmt --check --edition 2021 --config hard_tabs=true,max_width=100 "$RUNNER_TEMP/controller_host.rs"
+          sha256sum "$RUNNER_TEMP/controller_host.rs"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-callable-formatted-${{ github.sha }}
+          path: ${{ runner.temp }}/controller_host.rs
+          retention-days: 14
+          if-no-files-found: error
