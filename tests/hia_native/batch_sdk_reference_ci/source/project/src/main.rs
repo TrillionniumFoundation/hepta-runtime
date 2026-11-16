@@ -77,7 +77,6 @@ mod mcp {
             use crate::utils::line_hash::line_id_at;
             include!("../original/view_cache.rs");
             include!("../original/removed_marker.rs");
-            include!("original_note_create.rs");
             include!("cache_observer.rs");
         }
         pub mod file_ops { include!("original_file_ops.rs"); }

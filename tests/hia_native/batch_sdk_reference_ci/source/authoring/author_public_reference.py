@@ -79,7 +79,7 @@ def compose(baseline, core):
     output["src/original_get_info.rs"] = (capability + b"\ntrait OriginalInfo { fn get_info(&self) -> ServerConfig; }\n"
         + b"impl OriginalInfo for OctofsServer {\n" + info + b"}\n")
     output["src/original_mkdir.rs"] = mkdir
-    output["src/original_note_create.rs"] = note
+    assert note in output["original/view_cache.rs"]
     output["src/main.rs"] = (Path(__file__).parent / "public_reference_main.rs").read_bytes()
     old_name = b"hepta-text-editor-gateway-local-original-oracle"
     new_name = b"hepta-batch-sdk-current-original-oracle"
