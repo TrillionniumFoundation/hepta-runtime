@@ -220,18 +220,28 @@ def verify_process(path,component,*,expected_group=None):
         cs=core_clocks.get(job,[]);ws=writer_clocks.get(job,[])
         assert [d[1] for d,n in ws]==list(range(1,len(ws)+1))
         for previous,current in zip(ws,ws[1:]):assert current[0][8]==previous[0][8]+previous[0][9]
+        # Cancellation retires interest, not the worker or its CLOCK trace.
+        # COMPLETE and READY still bind every checkpoint even without TAKE.
+        if job in clock_counts:assert clock_counts[job][1]<=finishes[job][0]
+        result_code=finishes[job][1]
+        if result_code==0:
+            count=struct.unpack_from('<Q',info['payload'],8)[0]
+            expected=[(1,i) for i in range(count)]+[(3,i) for i in range(count)]+[(4,i) for i in range(count)]+[(5,0)]
+            assert [(d[4],d[5]) for d,n in cs]==expected
+            assert ws and all(now<starts[job]+30000000000 for d,now in cs+ws)
+            assert [d[1] for d,n in cs]==list(range(1,count+1))+list(range(count+2,3*count+3))
+            assert ws[0][0][8]==0
+            last=ws[-1][0]
+            assert last[4:6]==[14,count] and last[9:13]==[1,0,0,2]
+        elif result_code==0xfffffdf0:
+            assert cs and cs[-1][1]>=starts[job]+30000000000
+        elif result_code==0xfffffde1:
+            assert ws and ws[-1][1]>=starts[job]+30000000000
         if job in bodies:
             bh,parts,value=bodies[job];assert bh[5]==starts[job] and bh[6:7]==[finishes[job][0]] and bh[8]==clock_counts.get(job,(0,0))[0]
             if bh[9]==0:
-                count=struct.unpack_from('<Q',info['payload'],8)[0]
-                expected=[(1,i) for i in range(count)]+[(3,i) for i in range(count)]+[(4,i) for i in range(count)]+[(5,0)]
-                assert [(d[4],d[5]) for d,n in cs]==expected
-                assert len(ws)>0 and all(now<starts[job]+30000000000 for d,now in cs+ws)
-                assert [d[1] for d,n in cs]==list(range(1,count+1))+list(range(count+2,3*count+3))
-            elif bh[9]==0xfffffdf0:
-                assert cs and cs[-1][1]>=starts[job]+30000000000
-            elif bh[9]==0xfffffde1:
-                assert ws and ws[-1][1]>=starts[job]+30000000000
+                assert bh[11]>=clock_counts[job][1]
+                assert ws[-1][0][8]+ws[-1][0][9]==len(parts[1])-128
     return {'status':'READ_ONLY_PROCESS_PASS','jobs':len(jobs),'pool_calls':sequence,'clock_calls':sum(v[0] for v in clock_counts.values()),
             'physical_clones':len(clones),'physical_reaps':len(reaped),'held_jobs':len(holds),'growth_calls':growth,
             'complete_stream_bytes':sum(len(v) for v in raw.values()),'streams':receipt['stdin']|{'output_sha256':receipt['stdout']['sha256'],'journal_sha256':receipt['stderr']['sha256']},

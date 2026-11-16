@@ -17,7 +17,7 @@ jobs:
       RUSTUP_TOOLCHAIN: '1.95.0'
       PYTHONDONTWRITEBYTECODE: '1'
       PYTHONHASHSEED: '0'
-      SOURCE_PINS: 1cd154ed65c8b1478f29f4eb9d9835f8076f65932359c29c29d43649b07937db
+      SOURCE_PINS: 3d9990db99ea9050696006d1ce2878558db38af31ac3b7ee5a3f69f6e1af16c3
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,12 +54,14 @@ jobs:
           from worker_reader_controls import copy_files
           copy_files(base/'capture',base/'relocated/capture')
           copy_files(source,base/'relocated/source')
+          copy_files(base/'controls',base/'relocated/controls')
           PY
       - name: Readonly relocated full reader under execution and write rejection
         run: |
           python -I -S -B "$RUNNER_TEMP/bellman-worker-qualified/relocated/source/tests/hia_native/blocking_worker/worker_readonly_guard.py" \
             --source-root "$RUNNER_TEMP/bellman-worker-qualified/relocated/source" \
             --capture "$RUNNER_TEMP/bellman-worker-qualified/relocated/capture" --source-pins-sha256 "$SOURCE_PINS" \
+            --controls "$RUNNER_TEMP/bellman-worker-qualified/relocated/controls" \
             --output "$RUNNER_TEMP/bellman-worker-qualified/READONLY.json"
       - name: Retain every success or failure byte
         if: always()
