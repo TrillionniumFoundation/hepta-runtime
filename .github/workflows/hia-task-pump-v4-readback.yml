@@ -1,0 +1,145 @@
+name: Export complete frozen task pump v4 build failure bytes
+on:
+  push:
+    branches: [hia-task-pump-v4-readback-6780-20261116]
+    paths: ['.github/workflows/hia-task-pump-v4-readback.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Recover the exact existing original artifact ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14246727319 > "$RUNNER_TEMP/original-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14246727319/zip > "$RUNNER_TEMP/original-artifact.zip"
+      - name: Verify and split all original bytes without semantic execution
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os,shutil
+          root=Path(os.environ['RUNNER_TEMP']);archive=root/'original-artifact.zip'
+          metadata=json.loads((root/'original-artifact.json').read_bytes())
+          digest='5c2a4f66b98166f78ce2d7be503070d8b0d41490c70bc07e6f4054f80642ff24'
+          assert metadata['id']==14246727319 and metadata['workflow_run']['id']==43908796631
+          assert metadata['workflow_run']['head_sha']=='36ad2437bfc59e8b32a8e37c41ca60f087fefb7b'
+          assert metadata['size_in_bytes']==archive.stat().st_size==567801838
+          assert metadata['digest']=='sha256:'+digest and metadata['expired'] is False
+          with archive.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==digest
+          destination=root/'complete-parts';destination.mkdir();parts=[];offset=0
+          with archive.open('rb') as source:
+              for index in range(3):
+                  raw=source.read(256<<20);assert raw
+                  folder=destination/str(index);folder.mkdir();(folder/'part.bin').write_bytes(raw)
+                  parts.append(dict(index=index,offset=offset,bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()));offset+=len(raw)
+              assert source.read(1)==b'' and offset==567801838
+          record=dict(schema='hepta.complete-original-artifact-zip-parts.v1',original_run=43908796631,
+              original_job=133444743269,original_artifact=14246727319,
+              original_head='36ad2437bfc59e8b32a8e37c41ca60f087fefb7b',
+              original_zip=dict(bytes=567801838,sha256=digest),parts=parts,
+              semantic_executions=0,original_failure_reclassified_as_pass=False,source_or_evidence_modified=False)
+          for row in parts:
+              folder=destination/str(row['index'])
+              (folder/'parts.json').write_text(json.dumps(record,sort_keys=True,indent=2)+'\n')
+              shutil.copyfile(root/'original-artifact.json',folder/'original-artifact.json')
+          print(json.dumps(record,sort_keys=True))
+          PY
+      - name: Read all existing tar members and exact failure streams
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib,json,os,tarfile,zipfile
+          root=Path(os.environ['RUNNER_TEMP']);archive=root/'original-artifact.zip'
+          out=root/'diagnostics';out.mkdir()
+          zip_rows={}
+          with zipfile.ZipFile(archive) as z:
+              assert set(z.namelist())=={'archive.json','capture.tar.gz'}
+              for item in z.infolist():
+                  assert item.filename not in zip_rows and not item.is_dir()
+                  with z.open(item) as stream:
+                      digest=hashlib.file_digest(stream,'sha256').hexdigest()
+                  zip_rows[item.filename]={'bytes':item.file_size,'sha256':digest}
+              receipt_raw=z.read('archive.json');receipt=json.loads(receipt_raw)
+              assert receipt['git_head']=='36ad2437bfc59e8b32a8e37c41ca60f087fefb7b'
+              assert receipt['run_id']=='43908796631' and receipt['run_attempt']=='1' and receipt['label']=='build'
+              assert receipt['archive']==zip_rows['capture.tar.gz']
+              assert receipt['archive']=={'bytes':567800879,'sha256':'35264e8621229735291ebf45e94e0e27c9d2d09f7bd5d1154629e001deb17b4c'}
+              assert receipt['captured_tree_modified_by_export'] is False and receipt['qualification_inferred_from_archive'] is False
+              expected=None;seen=set();total=0;selected={}
+              with z.open('capture.tar.gz') as compressed,tarfile.open(fileobj=compressed,mode='r|gz') as tar:
+                  for member in tar:
+                      assert member.isfile() and not member.issym() and not member.islnk()
+                      path=PurePosixPath(member.name)
+                      assert path.as_posix()==member.name and not path.is_absolute() and '..' not in path.parts
+                      assert member.name.startswith('capture/')
+                      name=member.name.removeprefix('capture/');assert name not in seen
+                      wanted=name in {'driver.stderr','driver.stdout','BUILD_ORIGIN.json','BUILD_PASS.json'} or name.startswith('processes/')
+                      h=hashlib.sha256();size=0;chunks=[]
+                      with tar.extractfile(member) as stream:
+                          while raw:=stream.read(1<<20):
+                              h.update(raw);size+=len(raw)
+                              if wanted or expected is None:chunks.append(raw)
+                      row={'bytes':size,'sha256':h.hexdigest(),'mode':member.mode}
+                      assert size==member.size
+                      if expected is None:
+                          assert name=='artifact-manifest.json'
+                          raw=b''.join(chunks);manifest=json.loads(raw)
+                          assert {k:row[k] for k in ('bytes','sha256')}==receipt['manifest']
+                          assert manifest['source_manifest_sha256']=='3cfb282a47f568e300e91ddf75b0a286bf1bc787e3c15fcc4bc30c46572c59c5'
+                          expected=dict(manifest['files']);expected[name]=row
+                          (out/'artifact-manifest.json').write_bytes(raw)
+                      assert row==expected[name],name
+                      if wanted:
+                          target=out/'selected'/name;target.parent.mkdir(parents=True,exist_ok=True)
+                          raw=b''.join(chunks);target.write_bytes(raw);selected[name]=row
+                          if name.endswith('.stderr') and raw:
+                              print(json.dumps({'path':name,'complete_bytes':row,'stderr':raw.decode('utf-8')},sort_keys=True))
+                          elif name.startswith('processes/') and name.endswith('.json'):
+                              print(json.dumps({'path':name,'complete_bytes':row,'receipt':json.loads(raw)},sort_keys=True))
+                      seen.add(name);total+=size
+              assert seen==set(expected)
+              assert {'files':len(seen),'logical_bytes':total}==receipt['readback']
+          (out/'original-archive.json').write_bytes(receipt_raw)
+          (out/'ZIP_FILES.json').write_text(json.dumps(zip_rows,sort_keys=True,indent=2)+'\n')
+          proof={'status':'COMPLETE_EXISTING_FAILURE_ARCHIVE_BYTE_READBACK','original_run':43908796631,'original_artifact':14246727319,'original_head':'36ad2437bfc59e8b32a8e37c41ca60f087fefb7b','files':len(seen),'logical_bytes':total,'selected':selected,'native_executions':0,'rust_executions':0,'original_failure_reclassified_as_pass':False,'source_or_evidence_modified':False}
+          (out/'READBACK.json').write_text(json.dumps(proof,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(proof,sort_keys=True))
+          PY
+      - name: Retain first complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: task-pump-v4-complete-part-0
+          path: ${{ runner.temp }}/complete-parts/0/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain second complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: task-pump-v4-complete-part-1
+          path: ${{ runner.temp }}/complete-parts/1/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain final complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: task-pump-v4-complete-part-2
+          path: ${{ runner.temp }}/complete-parts/2/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain complete failure receipts and streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: task-pump-v4-build-failure-diagnostics
+          path: ${{ runner.temp }}/diagnostics/
+          compression-level: 6
+          retention-days: 30
+          if-no-files-found: error
