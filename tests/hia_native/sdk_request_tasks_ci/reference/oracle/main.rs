@@ -116,7 +116,7 @@ impl Service<RoleServer> for GateService {
             index
         });
         if immediate {
-            return Ok(ServerResult::EmptyResult(EmptyResult::default()));
+            return Ok(ServerResult::EmptyResult(EmptyResult {}));
         }
         let outcome = rx.await.map_err(|_| ErrorData::internal_error("fixture gate dropped", None))?;
         self.0.update(|state| {
@@ -146,6 +146,9 @@ impl Service<RoleServer> for GateService {
 }
 
 struct SendGuard { shared: Arc<Shared>, index: usize, completed: bool }
+impl SendGuard {
+    fn complete(&mut self) { self.completed = true; }
+}
 impl Drop for SendGuard {
     fn drop(&mut self) {
         if !self.completed {
@@ -184,7 +187,7 @@ impl Transport<RoleServer> for ObservedTransport {
                 state.sends[index].status = if fail { "failed" } else { "done" };
                 shared.log(state,json!({"kind":"send_done","index":index,"success":!fail}));
             });
-            guard.completed = true;
+            guard.complete();
             if fail { Err(std::io::Error::other("ordinary fixture write failure")) } else { Ok(()) }
         }
     }
