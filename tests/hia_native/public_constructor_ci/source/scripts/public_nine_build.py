@@ -134,6 +134,7 @@ MEMBERS = [
     ('historical_protocol', 'runtime_mcp_protocol', 'history.v1'),
     ('text_constructor', 'text_result_constructor', 'history.v1'),
     ('current_get_info', 'current_get_info', 'standard'),
+    ('target_shutdown', 'sdk_shutdown_target', 'standard'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -149,7 +150,7 @@ CONFIG_SYMBOLS = ['owner', 'fs', 'json', 'validation', 'identity', 'mcp',
                   'execution', 'execution_json', 'execution_core', 'value',
                   'publication', 'regex_syntax', 'regex_unicode_data',
                   'regex_hir', 'regex_nfa', 'regex_match', 'regex_controller']
-EXTRA = ['catalog', 'admission', 'gateway', 'client', 'params', 'session_context', 'session_state', 'policy', 'canonical', 'path_source', 'wide_value', 'owner', None, 'workdir_gateway', 'workdir_params', 'workdir_io', 'workdir_render', 'view_error', 'mcp', 'protocol', 'execution', 'fs_gateway', 'fs_params', 'fs_caller', 'fs_io', 'fs_render', 'fs_guard', 'fs_fence', None, None, None, None, None, None, None, 'text_call', None, 'text_gateway', 'text_params', 'tb_adapter', None, None, 'target_message', 'target_request', 'target_bridge', 'historical_protocol', 'text_constructor', None, None, None, None, None, None, None, 'current_get_info']
+EXTRA = ['catalog', 'admission', 'gateway', 'client', 'params', 'session_context', 'session_state', 'policy', 'canonical', 'path_source', 'wide_value', 'owner', None, 'workdir_gateway', 'workdir_params', 'workdir_io', 'workdir_render', 'view_error', 'mcp', 'protocol', 'execution', 'fs_gateway', 'fs_params', 'fs_caller', 'fs_io', 'fs_render', 'fs_guard', 'fs_fence', None, None, None, None, None, None, None, 'text_call', None, 'text_gateway', 'text_params', 'tb_adapter', None, None, 'target_message', 'target_request', 'target_bridge', 'historical_protocol', 'text_constructor', None, None, None, None, None, None, 'target_shutdown', 'current_get_info']
 VIEW = ['view', 'read', 'read', 'read', 'endpoint', 'key', 'scope', 'lease',
         'cache', 'render', 'request_context', 'view_error', 'view_regex',
         'regex_syntax', 'regex_hir', 'regex_nfa', 'regex_match',
@@ -280,7 +281,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 81
+    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 82
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -322,7 +323,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'physical_image_members': [next(member for member, image in images.items() if image == path) for path in physical],
               'shared_session_slot': 6, 'shared_installed_config_owner_slot': 11,
               'public_frontend_slot': 18, 'protocol_slot': 19,
-              'frontend_transport_fixed_input_limit': None, 'frontend_reply_fixed_byte_limit': None,
+              'frontend_transport_fixed_input_limit': 16777216, 'frontend_reply_fixed_byte_limit': None,
               'json_nesting_depth_policy': 128, 'result_publication_grows': True,
               'public_configuration_from_stdin': False, 'public_private_instance_selectors': False,
               'actual_fixture_private_selectors': private_fixture,
@@ -346,6 +347,15 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'target_constructor_public_semantics_qualified': False,
               'typed_result_publication_uses_raw_owned_mode': True,
               'target_async_transport_integrated': False,
+              'target_serial_async_rw_framing_integrated': True,
+              'target_eof_shutdown_owner_integrated': True,
+              'target_shutdown_slot': 53,
+              'target_input_line_limit_includes_lf': True,
+              'target_eof_unterminated_tail_discarded': True,
+              'target_serial_transport_semantics_qualified': False,
+              'native_pending_handler_registry_qualified': False,
+              'native_future_cancellation_qualified': False,
+              'native_shutdown_timeout_timing_qualified': False,
               'catalog_source_qualified_separately': True,
               'full_sdk_qualified': False, 'full_136_route_qualified': False,
               'production_activated': False, 'old_path_removed': False,
