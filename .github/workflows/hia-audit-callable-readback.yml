@@ -1,0 +1,58 @@
+name: Independently read complete HIA audit callable artifact
+on:
+  push:
+    branches: [hia-audit-callable-evidence-6780-20261116]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-artifact-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: |
+            qualification/audit_store_callable
+            tests/hia_native/audit_store_controller/process.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Download the immutable original artifact without semantic execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir /tmp/hia-audit-callable-6780-ci-readback-v1
+          timeout 180 gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14278752888/zip > /tmp/hia-audit-callable-6780-ci-readback-v1/complete.zip
+          echo '61357f2850adc9744af7b71650d3a779b16d03b134ac816ba2f289dcd279c566  /tmp/hia-audit-callable-6780-ci-readback-v1/complete.zip' | sha256sum --check --strict
+      - name: Read every archive byte and invoke only the frozen inert reader
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import json,sys
+          root=Path.cwd()
+          source=root/'tests/hia_native/audit_store_controller'
+          sys.path.insert(0,str(source))
+          from process import Recorder
+          driver=root/'qualification/audit_store_callable/relocate_ci_v1.py'
+          recorder=Recorder(root,Path('/tmp/hia-audit-callable-6780-ci-readback-v1-outer'))
+          raw,row=recorder.run('complete-archive-read',[sys.executable,'-I','-B',str(driver),'4aee8c0792f70f441d9dc1bceae6a2b9c8ccaf66'],timeout=900)
+          print(raw.decode(),end='')
+          print(json.dumps({'outer_process':row,'native_or_rust_executions':0},sort_keys=True))
+          result=Path('/tmp/hia-audit-callable-6780-ci-readback-v1/READBACK.json').read_bytes()
+          print('COMPLETE_READBACK_JSON_BEGIN')
+          print(result.decode(),end='')
+          print('COMPLETE_READBACK_JSON_END')
+          PY
+      - name: Preserve complete proof or authoritative failed process
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-callable-independent-proof-${{ github.sha }}
+          path: |
+            /tmp/hia-audit-callable-6780-ci-readback-v1/*.json
+            /tmp/hia-audit-callable-6780-ci-readback-v1/reader-processes
+            /tmp/hia-audit-callable-6780-ci-readback-v1-outer
+          if-no-files-found: error
+          retention-days: 14
