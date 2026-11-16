@@ -54,12 +54,156 @@ jobs:
             python3 -I -B runtime/tests/hia_native/configured_catalog102_ci/ci/export_evidence.py \
               --input /tmp/hccfg --output "$RUNNER_TEMP/configured-catalog-archive"
           fi
-      - name: Upload complete bounded archive parts and manifest
+      - name: Upload complete archive manifest
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: hia-configured-catalog-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/configured-catalog-archive/
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-manifest
+          path: ${{ runner.temp }}/configured-catalog-archive/MANIFEST.json
           include-hidden-files: true
           if-no-files-found: warn
+          retention-days: 14
+      - name: Upload complete archive part 000
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part000
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-000
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 001
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part001
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-001
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 002
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part002
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-002
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 003
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part003
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-003
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 004
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part004
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-004
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 005
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part005
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-005
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 006
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part006
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-006
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 007
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part007
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-007
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 008
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part008
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-008
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 009
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part009
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-009
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 010
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part010
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-010
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 011
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part011
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-011
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 012
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part012
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-012
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 013
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part013
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-013
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 014
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part014
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-014
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload complete archive part 015
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-configured-catalog-${{ github.run_id }}-${{ github.run_attempt }}-part015
+          path: ${{ runner.temp }}/configured-catalog-archive/capture.tar.gz.part-015
+          include-hidden-files: true
+          if-no-files-found: ignore
           retention-days: 14
