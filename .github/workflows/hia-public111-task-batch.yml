@@ -11,7 +11,7 @@ env:
   LC_ALL: C.UTF-8
   PYTHONDONTWRITEBYTECODE: '1'
   PYTHONHASHSEED: '0'
-  PACKAGE_SHA256: '8fa3d16f69beccc0e9cfa9efffa66a897a7fe28a3f661c38b809a0c1584b6b41'
+  PACKAGE_SHA256: 'c946152ed088af82c14ad0a2c4ffa3c3f1efc8e2090f6d195646a51e6ce6442d'
   RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
   build:
@@ -46,6 +46,18 @@ jobs:
           python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
           test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
           test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+      - name: Check complete export of ordinary retained hard links
+        run: |
+          python3 -I -S -B "$P111_PACKAGE/ci/archive_controls.py" --archive-source "$P111_PACKAGE/ci/archive.py" --output "$RUNNER_TEMP/public111-archive-controls"
+      - name: Preserve complete archive controls
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public111-archive-controls-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public111-archive-controls/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
       - name: Install fixed native build dependencies
         run: |
           sudo apt-get update

@@ -101,7 +101,7 @@ def pack(a):
     manifest_raw = (json.dumps(manifest,sort_keys=True,indent=2)+"\n").encode()
     virtual["artifact-manifest.json"] = manifest_raw
     archive = output/"capture.tar.gz"
-    with tarfile.open(archive,"w:gz",compresslevel=1,format=tarfile.PAX_FORMAT,dereference=False) as tar:
+    with tarfile.open(archive,"w:gz",compresslevel=1,format=tarfile.PAX_FORMAT,dereference=True) as tar:
         for name in ["artifact-manifest.json",*sorted(inventory)]:
             if name in virtual:
                 value=virtual[name]

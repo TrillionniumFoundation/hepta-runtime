@@ -57,3 +57,22 @@ reader fix at final integration; this package does not overwrite that fix.
 All new Python scripts and layout adapters are explicitly new source. Original
 1490 joint inputs and all retained case definitions remain byte-identical.
 The source-only preflight is distinct from actual fresh CI qualification.
+
+## Export repair after the first complete run
+
+The first actual111 run is preserved in ci/ARCHIVE_FAILURE_V1.json. All eight
+roles that reached semantic execution completed; owner and connection then
+failed regular-member archive admission, and authority was skipped by its
+dependency. Existing Cargo hard links caused the exporter to emit tar link
+members. The sole exporter change materializes each admitted regular source
+file's complete bytes. The strict regular-only reader is unchanged.
+
+The build job preserves a small archive control artifact: an actual three-name
+hard link, an independent equal-byte file, executable mode, an empty file and
+an empty directory. It retains the old failed archive and the new complete
+archive/readback, with source bytes, inodes, modes, mtimes and ctimes unchanged.
+This archive test executes no captured HIA or Rust.
+
+This revision changes no production source or case definition. Final integration
+must retain both the 7afd Cargo reader repair and the 08ce shell-outcome JSON
+representation repair. Neither historic failure is relabeled.
