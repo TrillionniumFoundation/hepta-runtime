@@ -17,7 +17,6 @@ jobs:
     timeout-minutes: 15
     env:
       LC_ALL: C.UTF-8
-      CONT_ROOT: ${{ runner.temp }}/public102-entry-continuation
     steps:
       - name: Checkout this isolated continuation source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -52,6 +51,8 @@ jobs:
           path: compiler
           ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
           persist-credentials: false
+      - name: Bind the concrete runner temporary path
+        run: echo "CONT_ROOT=$RUNNER_TEMP/public102-entry-continuation" >> "$GITHUB_ENV"
       - name: Admit complete frozen sources without changing the cancelled job
         run: |
           test "$(git -C runtime rev-parse HEAD)" = "$RUNTIME_SHA"
