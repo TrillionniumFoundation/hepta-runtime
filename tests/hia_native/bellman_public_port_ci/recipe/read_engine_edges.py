@@ -70,7 +70,7 @@ def build_evidence(build, overlay, author):
         origin = doc(folder/'processes/engine-assemble.json')['cwd']
         tools = {'as':commands['engine-assemble'][0],'nm':commands['undefined'][0],'ld':commands['link'][0],'objcopy':commands['flat'][0]}
         expected = {n+'-assemble':[tools['as'],'--64',origin+'/'+n+'.S','-o',origin+'/'+n+'.o'] for n in ('engine','wrapper','stubs')}
-        expected.update(undefined=[tools['nm'],'-u',origin+'/engine.o'],link=[tools['ld'],'--build-id=none','-e','_start','-Ttext=0','-o',origin+'/linked.elf',origin+'/wrapper.o',origin+'/engine.o',origin+'/stubs.o'],flat=[tools['objcopy'],'-O','binary','--only-section=.text',origin+'/linked.elf',origin+'/module.bin'],symbols=[tools['nm'],'-n','-P',origin+'/linked.elf'])
+        expected.update(undefined=[tools['nm'],'-u',origin+'/engine.o'],link=[tools['ld'],'--build-id=none','-z','noexecstack','-e','_start','-Ttext=0','-o',origin+'/linked.elf',origin+'/wrapper.o',origin+'/engine.o',origin+'/stubs.o'],flat=[tools['objcopy'],'-O','binary','--only-section=.text',origin+'/linked.elf',origin+'/module.bin'],symbols=[tools['nm'],'-n','-P',origin+'/linked.elf'])
         count += processes(folder,expected)
         undefined = []
         for line in read(folder/'processes/undefined.stdout').decode().splitlines():

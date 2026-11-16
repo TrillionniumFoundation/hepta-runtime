@@ -84,7 +84,7 @@ def main():
   stubs='.intel_syntax noprefix\n.section .text\n'+''.join('.global '+name+'\n'+name+':\n' for name in undefined)+'    mov edi,71\n    mov eax,231\n    syscall\n    ud2\n.section .note.GNU-stack,"",@progbits\n'
   put(target/'stubs.S',stubs.encode())
   for name in ['wrapper','stubs']:run(target,name+'-assemble',[tools['as'],'--64',str(target/(name+'.S')),'-o',str(target/(name+'.o'))],env,limit=60)
-  run(target,'link',[tools['ld'],'--build-id=none','-e','_start','-Ttext=0','-o',str(target/'linked.elf'),str(target/'wrapper.o'),str(target/'engine.o'),str(target/'stubs.o')],env,limit=60)
+  run(target,'link',[tools['ld'],'--build-id=none','-z','noexecstack','-e','_start','-Ttext=0','-o',str(target/'linked.elf'),str(target/'wrapper.o'),str(target/'engine.o'),str(target/'stubs.o')],env,limit=60)
   run(target,'flat',[tools['objcopy'],'-O','binary','--only-section=.text',str(target/'linked.elf'),str(target/'module.bin')],env,limit=60)
   run(target,'symbols',[tools['nm'],'-n','-P',str(target/'linked.elf')],env,limit=60)
   symbols={r[0]:int(r[2],16) for line in (target/'processes/symbols.stdout').read_text().splitlines() if len(r:=line.split())>=3 and r[1].lower()=='t'}
