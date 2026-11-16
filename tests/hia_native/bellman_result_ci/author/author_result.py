@@ -49,6 +49,7 @@ def generate(hepta, runtime, target, destination):
     sys.dont_write_bytecode = True
     sys.path.insert(0, str(hepta))
     from tools.generate_hia_selfhost import Builder, compact_authoring_cfg, total_scalar_functions
+    from tools.hia_selfhost_limits import MAX_INSTRUCTIONS, MAX_FUNCTIONS, MAX_BLOCKS
     from hepta.hia_agent_assembly import assemble_program, render_assembly
     serde = (runtime/'native/serde_json.hepta').read_bytes()
     original = target.read_bytes()
@@ -102,7 +103,9 @@ def generate(hepta, runtime, target, destination):
     source+='    return text_object_close(w)\n'
     for name,raw in text.items():
         source+=f'\ndef text_{name}(w:mutbuf) -> u64:\n    at = reserve(w, {len(raw)})\n    if at == 0:\n        return 0\n'
-        source+=''.join(f'    store(w, at + {i}, {value})\n' for i,value in enumerate(raw))
+        full=len(raw)//8*8
+        source+=''.join(f'    put(w, at + {i}, {int.from_bytes(raw[i:i+8],"little")})\n' for i in range(0,full,8))
+        source+=''.join(f'    store(w, at + {i}, {raw[i]})\n' for i in range(full,len(raw)))
         source+='    return 0\n'
     for old,new in relocation.items():
         fn=functions[old]
@@ -128,6 +131,9 @@ def generate(hepta, runtime, target, destination):
         proof[old]=sha(json.dumps(functions[old],sort_keys=True,separators=(',',':')).encode())
     raw=render_assembly(doc).encode();parsed=assemble_program(raw).as_dict()
     assert parsed==doc
+    assert len(doc['functions'])<=MAX_FUNCTIONS
+    assert sum(len(f['blocks']) for f in doc['functions'])<=MAX_BLOCKS
+    assert sum(len(b['ops']) for f in doc['functions'] for b in f['blocks'])<=MAX_INSTRUCTIONS
     for f in doc['functions']:
         assert len(f['blocks'])<=256
         assert max(len(b['params']) for b in f['blocks'])<=16,f['name']
