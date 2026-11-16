@@ -1,0 +1,260 @@
+name: Inspect frozen f3 aggregate process framing without semantic execution
+on:
+  push:
+    branches: [hia-native-aggregate-inspect-f3-6780-20261116]
+    paths: ['.github/workflows/hia-native-aggregate-f3-inspection.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Recover the exact existing original artifact ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14239690567 > "$RUNNER_TEMP/original-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14239690567/zip > "$RUNNER_TEMP/original-artifact.zip"
+      - name: Verify and split all original bytes without semantic execution
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os,shutil
+          root=Path(os.environ['RUNNER_TEMP']);archive=root/'original-artifact.zip'
+          metadata=json.loads((root/'original-artifact.json').read_bytes())
+          digest='5602232672cbf3c3781b0bfc92ee548857e4648edb01e39702f381065ec0b04d'
+          assert metadata['id']==14239690567 and metadata['workflow_run']['id']==43881546048
+          assert metadata['workflow_run']['head_sha']=='f3dc639050728b6b6d09cf4c30a02811f187003c'
+          assert metadata['size_in_bytes']==archive.stat().st_size==744078783
+          assert metadata['digest']=='sha256:'+digest and metadata['expired'] is False
+          with archive.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==digest
+          destination=root/'complete-parts';destination.mkdir();parts=[];offset=0
+          with archive.open('rb') as source:
+              for index in range(3):
+                  raw=source.read(256<<20);assert raw
+                  folder=destination/str(index);folder.mkdir();(folder/'part.bin').write_bytes(raw)
+                  parts.append(dict(index=index,offset=offset,bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()));offset+=len(raw)
+              assert source.read(1)==b'' and offset==744078783
+          record=dict(schema='hepta.complete-original-artifact-zip-parts.v1',original_run=43881546048,
+              original_job=133394724557,original_artifact=14239690567,
+              original_head='f3dc639050728b6b6d09cf4c30a02811f187003c',
+              original_zip=dict(bytes=744078783,sha256=digest),parts=parts,
+              semantic_executions=0,original_failure_reclassified_as_pass=False,source_or_evidence_modified=False)
+          for row in parts:
+              folder=destination/str(row['index'])
+              (folder/'parts.json').write_text(json.dumps(record,sort_keys=True,indent=2)+'\n')
+              shutil.copyfile(root/'original-artifact.json',folder/'original-artifact.json')
+          print(json.dumps(record,sort_keys=True))
+          PY
+      - name: Retain first complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: f3-aggregate-complete-part-0
+          path: ${{ runner.temp }}/complete-parts/0/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain second complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: f3-aggregate-complete-part-1
+          path: ${{ runner.temp }}/complete-parts/1/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain final complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: f3-aggregate-complete-part-2
+          path: ${{ runner.temp }}/complete-parts/2/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+
+  report-inputs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: native
+            artifact: 14235146774
+            bytes: 746319939
+            digest: 8e7afb635f5523aeb730a147bd6a1e00517fdcc5e8e45eed1e00c11b95c5d80f
+          - role: batch
+            artifact: 14238501890
+            bytes: 1342925028
+            digest: b40514e0d3c1804b358b0ea6572132c025bf50513c766a7ffb124de0d0113577
+          - role: storage
+            artifact: 14237318161
+            bytes: 85857229
+            digest: c56db4217b497ef03d4b3c596d5711693336b92be748577fb4b04e66ac8ba983
+          - role: bytes
+            artifact: 14236359049
+            bytes: 626088266
+            digest: d7b2d1240e133fb607abc9f445a9c4f86e795ba55b9da1c5d517a4d2182f4e8c
+          - role: system
+            artifact: 14237905933
+            bytes: 379109139
+            digest: 6e6f5f72d408bfff76a042051bc4ed23431b89b3fbe96d53a2f05ca66088bd0f
+          - role: state
+            artifact: 14237281964
+            bytes: 233845786
+            digest: 1428aa748aec456b8d9d72f761184279cec5b2397c830a8003877d71008f3dac
+          - role: services
+            artifact: 14237057044
+            bytes: 303157400
+            digest: 4f33902e2a76d0c42e3bd674dd6bf1dec5cfb626c8541f344b4aa05cab1be8fb
+          - role: json
+            artifact: 14236963030
+            bytes: 400367929
+            digest: 63dcd21a24147f24b3088145ab1ea274ca8055a1719f989f404a2ce6315991c9
+          - role: config
+            artifact: 14235254474
+            bytes: 134197678
+            digest: 02aaeda785efe9fbdbd7db6ab0ca11811c66abed2127c6bbf88c90b7b71ab36b
+    steps:
+      - name: Download the exact existing report artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ matrix.artifact }}
+        run: |
+          gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$ARTIFACT_ID" > "$RUNNER_TEMP/input-artifact.json"
+          gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/input-artifact.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/git/blobs/2e719ae0470debd3d147e9dc86d70f8db5b4b046 > "$RUNNER_TEMP/pipeline-source.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/git/blobs/d44bfeef82bf559bdfd1ba5e684738e53e83d619 > "$RUNNER_TEMP/comparator-source.json"
+      - name: Read every ZIP member and export exact reports without execution
+        env:
+          ROLE: ${{ matrix.role }}
+          ARTIFACT_ID: ${{ matrix.artifact }}
+          ZIP_BYTES: ${{ matrix.bytes }}
+          ZIP_SHA256: ${{ matrix.digest }}
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os,shutil,zipfile
+          root=Path(os.environ['RUNNER_TEMP']);archive=root/'input-artifact.zip'
+          metadata=json.loads((root/'input-artifact.json').read_bytes());digest=os.environ['ZIP_SHA256']
+          assert metadata['id']==int(os.environ['ARTIFACT_ID']) and metadata['workflow_run']['id']==43881546048
+          assert metadata['workflow_run']['head_sha']=='f3dc639050728b6b6d09cf4c30a02811f187003c'
+          assert metadata['size_in_bytes']==archive.stat().st_size==int(os.environ['ZIP_BYTES'])
+          assert metadata['digest']=='sha256:'+digest and metadata['expired'] is False
+          with archive.open('rb') as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()==digest
+          out=root/'report-inputs';out.mkdir();selected={};files={};total=0
+          names={'original-native.json','original-native-report.json','original-shard.json','original-shard-report.json'}
+          with zipfile.ZipFile(archive) as zipped:
+              for item in zipped.infolist():
+                  assert item.filename not in files
+                  h=hashlib.sha256();size=0;parts=[];wanted=Path(item.filename).name in names
+                  with zipped.open(item) as stream:
+                      while raw:=stream.read(1<<20):
+                          h.update(raw);size+=len(raw)
+                          if wanted:parts.append(raw)
+                  assert size==item.file_size;total+=size
+                  identity=dict(bytes=size,sha256=h.hexdigest());files[item.filename]=identity
+                  if wanted:
+                      name=Path(item.filename).name;assert name not in selected
+                      (out/name).write_bytes(b''.join(parts));selected[name]=dict(zip_member=item.filename,**identity)
+          required='original-native-report.json' if os.environ['ROLE']=='native' else 'original-shard-report.json'
+          assert required in selected
+          (out/'ZIP_FILES.json').write_text(json.dumps(files,sort_keys=True,indent=2)+'\n')
+          shutil.copyfile(root/'input-artifact.json',out/'original-artifact.json')
+          proof=dict(status='COMPLETE_ZIP_READBACK_AND_EXACT_REPORT_EXPORT',role=os.environ['ROLE'],
+              original_run=43881546048,original_head='f3dc639050728b6b6d09cf4c30a02811f187003c',
+              original_artifact=int(os.environ['ARTIFACT_ID']),zip=dict(bytes=archive.stat().st_size,sha256=digest),
+              files=len(files),logical_bytes=total,selected=selected,native_executions=0,rust_executions=0,
+              source_or_evidence_modified=False,original_aggregate_failure_reclassified_as_pass=False)
+          (out/'REPORT-EXPORT.json').write_text(json.dumps(proof,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(proof,sort_keys=True))
+          PY
+
+      - name: Diagnose exact source-declared framing predicate on retained rows
+        env:
+          ROLE: ${{ matrix.role }}
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          from types import SimpleNamespace
+          import ast,base64,hashlib,json,os
+          root=Path(os.environ['RUNNER_TEMP']);out=root/'report-inputs'
+          specs={'pipeline':('2e719ae0470debd3d147e9dc86d70f8db5b4b046','scripts/hia_native_rust_pipeline.py'),
+                 'comparator':('d44bfeef82bf559bdfd1ba5e684738e53e83d619','scripts/compare_hia_runtime_rust.py')}
+          sources={};pins={}
+          for key,(expected,path) in specs.items():
+              metadata=json.loads((root/(key+'-source.json')).read_bytes())
+              assert metadata['sha']==expected and metadata['encoding']=='base64'
+              raw=base64.b64decode(metadata['content'],validate=False)
+              assert metadata['size']==len(raw)
+              assert hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==expected
+              sources[key]=raw.decode('utf-8')
+              pins[path]={'git_blob':expected,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
+              (out/(key+'.source.py')).write_bytes(raw)
+          tree=ast.parse(sources['comparator'])
+          values={}
+          for node in tree.body:
+              if isinstance(node,ast.Assign):
+                  for target in node.targets:
+                      if isinstance(target,ast.Name) and target.id in ('RUST_PROCESS_DEADLINES','SHARED_RUST_PROCESS_RECIPES'):
+                          assert target.id not in values
+                          values[target.id]=ast.literal_eval(node.value)
+          assert set(values)=={'RUST_PROCESS_DEADLINES','SHARED_RUST_PROCESS_RECIPES'}
+          nodes=[n for n in ast.parse(sources['pipeline']).body if isinstance(n,ast.FunctionDef) and n.name=='validate_process']
+          assert len(nodes)==1
+          node=nodes[0];function='\n'.join(sources['pipeline'].splitlines()[node.lineno-1:node.end_lineno])+'\n'
+          (out/'exact-validate-process.py').write_text(function)
+          calls=[]
+          env={'Path':Path,'r':SimpleNamespace(**values),
+               'p':SimpleNamespace(validate_check=lambda *args:calls.append(args[2:]))}
+          exec(compile(function,'<exact-f3-validate_process>','exec'),env)
+          diagnostic={'schema':'hepta.original-process-framing-diagnosis.v1','role':os.environ['ROLE'],
+              'original_run':43881546048,'original_head':'f3dc639050728b6b6d09cf4c30a02811f187003c','source':pins,
+              'predicate_source_sha256':hashlib.sha256(function.encode()).hexdigest(),
+              'native_executions':0,'rust_executions':0,'complete_shard_admission_claimed':False,
+              'completion_bytes_revalidated':False,'source_or_original_evidence_modified':False}
+          if os.environ['ROLE']=='native':
+              diagnostic.update(status='NATIVE_BASELINE_EXPORTED_ONLY')
+          else:
+              report=json.loads((out/'original-shard-report.json').read_bytes())
+              assert report['status']=='ORIGINAL_SHARD_PASS' and report['original_shard']['group']==os.environ['ROLE']
+              keys=report['original_shard']['recipes'];mapping=report['rust_recipe_processes']
+              assert set(keys)==set(mapping)
+              shared={k:v for k,v in values['SHARED_RUST_PROCESS_RECIPES'].items() if k in keys}
+              assert report['rust_recipe_shared_processes']==shared
+              owners={}
+              for key in keys:
+                  names=mapping[key];assert type(names)is list and names and len(names)==len(set(names))
+                  if key in shared:
+                      assert keys.index(shared[key])<keys.index(key) and names==mapping[shared[key]]
+                  else:
+                      assert not set(names)&set(owners)
+                      owners.update((name,key) for name in names)
+              rows=[row for row in report['checks'] if row.get('phase')=='original_rust_comparison']
+              assert [row['name'] for row in rows]==['original-rust-compiler-version-'+os.environ['ROLE'],*owners]
+              rejected=[]
+              for index,row in enumerate(rows):
+                  before=len(calls)
+                  try:env['validate_process'](out,row,owners.get(row['name']))
+                  except ValueError as error:
+                      rejected.append({'index':index,'owner':owners.get(row['name']),'row':row,
+                          'message':str(error),'timeout_type':type(row.get('timeout_seconds')).__name__,
+                          'command_element_types':[type(x).__name__ for x in row.get('command',[])]})
+                      assert len(calls)==before
+                  else:assert len(calls)==before+1
+              diagnostic.update(status='EXACT_FRAMING_PREDICATE_INSPECTED',original_rows=len(rows),rejected=rejected,
+                  first_rejected=rejected[0] if rejected else None,retained_report_sha256=hashlib.sha256((out/'original-shard-report.json').read_bytes()).hexdigest())
+          (out/'FRAMING-DIAGNOSIS.json').write_text(json.dumps(diagnostic,sort_keys=True,indent=2)+'\n')
+          print('EXACT_FRAMING_DIAGNOSIS '+json.dumps(diagnostic,sort_keys=True))
+          PY
+      - name: Retain byte inventories and complete original reports
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: f3-aggregate-report-input-${{ matrix.role }}
+          path: ${{ runner.temp }}/report-inputs/
+          compression-level: 6
+          retention-days: 14
+          if-no-files-found: error
