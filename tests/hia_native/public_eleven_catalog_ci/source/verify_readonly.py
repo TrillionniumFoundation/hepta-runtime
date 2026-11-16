@@ -8,6 +8,14 @@ ROOT=Path(__file__).resolve().parent
 sys.path.insert(0,str(ROOT))
 import verify_recipe
 import read_only_guard
+# Resolve both fixed reader modules before the filesystem guard. Importlib may
+# probe an absent bytecode cache even with -B; those probes remain forbidden
+# once verification starts. Actual source/capture checks still run in the guard.
+sys.path.insert(0,str(ROOT/'pipeline'))
+import read_projection
+import evidence_controls
+assert Path(read_projection.__file__).resolve(strict=True)==ROOT/'pipeline/read_projection.py'
+assert Path(evidence_controls.__file__).resolve(strict=True)==ROOT/'evidence_controls.py'
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True);p.add_argument('--foreign-path',type=Path,required=True)
