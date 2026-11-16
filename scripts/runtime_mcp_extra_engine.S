@@ -1,6 +1,6 @@
 /* Private storage/continuation boundary. HIA owns all application decisions.
  * Fixed extra descriptors: entry, work_ptr, work_cap, sequence,
- * out_ptr, out_cap, return_u32, full_extent. 57 rows at engine+8192; slots47-52 bind Batch while56 remains Authority.
+ * out_ptr, out_cap, return_u32, full_extent. 59 rows at engine+8192; Batch47-52, Authority56, Bellman57 and request registry58.
  * Mechanical records at +512: busy,pending,sequence,child,input_offset,
  * input_len,actual_return,actual_extent. Completed children are not replayed.
  * The separate view engine retains its existing descriptor ABI. */
@@ -10,7 +10,7 @@
 .global runtime_grow_destroy
 .global runtime_grow_owned
 .global runtime_grow_target
-.equ RG_SLOTS, 57
+.equ RG_SLOTS, 59
 .equ RG_ENGINE, 16384
 .equ RG_INVALID, 0xffffffff
 .equ RG_RESOURCE, 0xfffffffc
@@ -109,6 +109,10 @@ runtime_grow_destroy_io_admitted:
 runtime_grow_destroy_fs_admitted:
     cmp qword ptr [r15 + 416], 0
     jne runtime_grow_destroy_invalid
+    /* The process-owned Bellman port must be detached before freeing an engine. */
+    mov rax, [r15 + 440]
+    or rax, [r15 + 448]
+    jnz runtime_grow_destroy_invalid
     xor ebp, ebp
 runtime_grow_destroy_admit:
     mov rax, rbp
@@ -233,6 +237,8 @@ runtime_grow_owned:
     jne runtime_grow_bad_early
     cmp ebp, 52
     je runtime_grow_batch_body_dispatch
+    cmp ebp, 57
+    je runtime_grow_bellman_dispatch
     cmp ebp, 56
     je runtime_grow_authority_dispatch
     cmp ebp, 40
@@ -303,6 +309,26 @@ runtime_grow_allocate_output_ready:
     mov [rbx + 40], rcx
     bts qword ptr [r15 + 72], rbp
 runtime_grow_resume:
+    /* A new, admitted slot10 call ends the prior output loan. Reserve an
+     * input-sized output before the first parse to avoid a known full reparse
+     * on ordinary canonical output. This is only a mechanical hint: it is
+     * capped at64 MiB, never shrinks, and leaves all HIA-required growth and
+     * refusals below/above the hint to the original exact protocol. */
+    cmp ebp, 10
+    jne runtime_grow_value_hint_done
+    mov rdx, [rsp + 8]
+    add rdx, 64
+    jc runtime_grow_value_hint_done
+    cmp rdx, 67108864
+    ja runtime_grow_value_hint_done
+    cmp rdx, [rbx + 40]
+    jbe runtime_grow_value_hint_done
+    mov rdi, rbx
+    mov esi, 2
+    call runtime_grow_resize_borrow
+    test eax, eax
+    jnz runtime_grow_error
+runtime_grow_value_hint_done:
     cmp ebp, 27
     jne runtime_grow_resume_filesystem_caller
     cmp qword ptr [r15 + 232], 0
@@ -699,6 +725,8 @@ runtime_grow_frontend_result:
     mov rdx, 0x323052464d435248 /* HRCMFR02 */
     cmp [r13], rdx
     jne runtime_grow_bad
+    cmp qword ptr [r13 + 8], 4
+    je runtime_grow_frontend_pending
     cmp qword ptr [r13 + 8], 3
     ja runtime_grow_bad
     cmp qword ptr [r13 + 8], 3
@@ -717,6 +745,16 @@ runtime_grow_frontend_common:
     jc runtime_grow_bad
     add rax, 64
     jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_frontend_pending:
+    /* A pending host result is exactly 64 bytes, with no public payload. */
+    mov rax, [r13 + 16]
+    or rax, [r13 + 24]
+    or rax, [r13 + 32]
+    or rax, [r13 + 40]
+    or rax, [r13 + 56]
+    jnz runtime_grow_bad
+    mov eax, 64
     jmp runtime_grow_extent_ready
 runtime_grow_connection_result:
     cmp eax, 256
@@ -1276,6 +1314,15 @@ runtime_grow_batch_body_dispatch:
     call runtime_batch_body_owned
     jmp runtime_grow_done
 
+runtime_grow_bellman_dispatch:
+    /* The installed fixed packed port is a private capability, not an HIA
+     * child selector supplied by input. Its SysV owned entry preserves r15. */
+    mov rax, [rbx]
+    test rax, rax
+    jz runtime_grow_resource_early
+    add rax, 2469 /* fixed runtime_bellman_owned export, component identity-bound */
+    call rax
+    jmp runtime_grow_done
 runtime_grow_authority_dispatch:
     call runtime_authority_owned
     jmp runtime_grow_done
@@ -1557,7 +1604,7 @@ runtime_grow_target_sdk_protocol:
     lea rdx, [rip + runtime_grow_sdk_protocol_targets]
     jmp runtime_grow_target_byte
 runtime_grow_target_frontend:
-    cmp rsi, 13
+    cmp rsi, 14
     ja runtime_grow_target_invalid
     lea rdx, [rip + runtime_grow_frontend_targets]
     jmp runtime_grow_target_byte
@@ -1636,7 +1683,7 @@ runtime_grow_action_magics:
     .quad 0 /* 48 typed params */
     .ascii "HBECCA01" /* 49 caller */
     .ascii "HBBACA01" /* 50 adapter */
-    .zero 48 /* 51..56: no controller action; Authority is a capability. */
+    .zero 64 /* 51..58: no controller action; Authority and Bellman are capabilities. */
 runtime_grow_sdk_protocol_targets:
     .byte 42, 43, 44, 45, 55
 runtime_grow_text_gateway_targets:
@@ -1650,7 +1697,7 @@ runtime_grow_filesystem_caller_targets:
 runtime_grow_fence_targets:
     .byte 11, 28, 17
 runtime_grow_frontend_targets:
-    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54, 56, 47
+    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54, 56, 47, 57
 runtime_grow_context_targets:
     .byte 6, 10, 7, 8
 runtime_grow_workdir_targets:

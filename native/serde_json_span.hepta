@@ -1809,49 +1809,131 @@ end
 fn f18(v0:mutbuf,v1:u64) -> (u64) effects(read,write,trap) entry(b0)
 block b0(v0:mutbuf,v1:u64)
   v2:u64 = const() {"value":0}
-  jump b1(v0,v1,v2,v2)
-block b1(v3:mutbuf,v4:u64,v5:u64,v6:u64)
-  v7:u64 = const() {"value":8}
-  v8:bool = compare.lt(v6,v7)
-  branch v8 b2(v3,v4,v5,v6) b3(v3,v5)
-block b2(v9:mutbuf,v10:u64,v11:u64,v12:u64)
-  v17:u64 = int.add.wrap(v10,v12)
-  v18:usize = int.cast(v17) {"mode":"wrap"}
-  v19:u8 = buffer.load(v9,v18)
-  v20:u64 = int.cast(v19) {"mode":"wrap"}
-  v21:u64 = const() {"value":8}
-  v22:u64 = int.mul.wrap(v12,v21)
-  v23:u64 = int.shl.checked(v20,v22)
-  v24:u64 = bit.or(v11,v23)
-  v25:u64 = const() {"value":1}
-  v26:u64 = int.add.wrap(v12,v25)
-  jump b1(v9,v10,v24,v26)
-block b3(v13:mutbuf,v15:u64)
-  ret(v15)
+  v3:u64 = int.add.wrap(v1,v2)
+  v4:usize = int.cast(v3) {"mode":"wrap"}
+  v5:u8 = buffer.load(v0,v4)
+  v6:u64 = int.cast(v5) {"mode":"wrap"}
+  v7:u64 = int.shl.checked(v6,v2)
+  v8:u64 = bit.or(v2,v7)
+  v9:u64 = const() {"value":1}
+  v10:u64 = int.add.wrap(v1,v9)
+  v11:usize = int.cast(v10) {"mode":"wrap"}
+  v12:u8 = buffer.load(v0,v11)
+  v13:u64 = int.cast(v12) {"mode":"wrap"}
+  v14:u64 = const() {"value":8}
+  v15:u64 = int.shl.checked(v13,v14)
+  v16:u64 = bit.or(v8,v15)
+  v17:u64 = const() {"value":2}
+  v18:u64 = int.add.wrap(v1,v17)
+  v19:usize = int.cast(v18) {"mode":"wrap"}
+  v20:u8 = buffer.load(v0,v19)
+  v21:u64 = int.cast(v20) {"mode":"wrap"}
+  v22:u64 = const() {"value":16}
+  v23:u64 = int.shl.checked(v21,v22)
+  v24:u64 = bit.or(v16,v23)
+  v25:u64 = const() {"value":3}
+  v26:u64 = int.add.wrap(v1,v25)
+  v27:usize = int.cast(v26) {"mode":"wrap"}
+  v28:u8 = buffer.load(v0,v27)
+  v29:u64 = int.cast(v28) {"mode":"wrap"}
+  v30:u64 = const() {"value":24}
+  v31:u64 = int.shl.checked(v29,v30)
+  v32:u64 = bit.or(v24,v31)
+  v33:u64 = const() {"value":4}
+  v34:u64 = int.add.wrap(v1,v33)
+  v35:usize = int.cast(v34) {"mode":"wrap"}
+  v36:u8 = buffer.load(v0,v35)
+  v37:u64 = int.cast(v36) {"mode":"wrap"}
+  v38:u64 = const() {"value":32}
+  v39:u64 = int.shl.checked(v37,v38)
+  v40:u64 = bit.or(v32,v39)
+  v41:u64 = const() {"value":5}
+  v42:u64 = int.add.wrap(v1,v41)
+  v43:usize = int.cast(v42) {"mode":"wrap"}
+  v44:u8 = buffer.load(v0,v43)
+  v45:u64 = int.cast(v44) {"mode":"wrap"}
+  v46:u64 = const() {"value":40}
+  v47:u64 = int.shl.checked(v45,v46)
+  v48:u64 = bit.or(v40,v47)
+  v49:u64 = const() {"value":6}
+  v50:u64 = int.add.wrap(v1,v49)
+  v51:usize = int.cast(v50) {"mode":"wrap"}
+  v52:u8 = buffer.load(v0,v51)
+  v53:u64 = int.cast(v52) {"mode":"wrap"}
+  v54:u64 = const() {"value":48}
+  v55:u64 = int.shl.checked(v53,v54)
+  v56:u64 = bit.or(v48,v55)
+  v57:u64 = const() {"value":7}
+  v58:u64 = int.add.wrap(v1,v57)
+  v59:usize = int.cast(v58) {"mode":"wrap"}
+  v60:u8 = buffer.load(v0,v59)
+  v61:u64 = int.cast(v60) {"mode":"wrap"}
+  v62:u64 = const() {"value":56}
+  v63:u64 = int.shl.checked(v61,v62)
+  v64:u64 = bit.or(v56,v63)
+  ret(v64)
 end
 fn f19(v0:mutbuf,v1:u64,v2:u64) -> (u64) effects(read,write,trap) entry(b0)
 block b0(v0:mutbuf,v1:u64,v2:u64)
   v3:u64 = const() {"value":0}
-  jump b1(v0,v1,v2,v3)
-block b1(v4:mutbuf,v5:u64,v6:u64,v7:u64)
-  v8:u64 = const() {"value":8}
-  v9:bool = compare.lt(v7,v8)
-  branch v9 b2(v4,v5,v6,v7) b3(v4)
-block b2(v10:mutbuf,v11:u64,v12:u64,v13:u64)
-  v18:u64 = int.add.wrap(v11,v13)
-  v19:u64 = const() {"value":255}
-  v20:u64 = bit.and(v12,v19)
-  v21:usize = int.cast(v18) {"mode":"wrap"}
-  v22:u8 = int.cast(v20) {"mode":"wrap"}
-  _ = buffer.store(v10,v21,v22)
-  v23:u64 = const() {"value":8}
-  v24:u64 = int.shr.checked(v12,v23)
-  v25:u64 = const() {"value":1}
-  v26:u64 = int.add.wrap(v13,v25)
-  jump b1(v10,v11,v24,v26)
-block b3(v14:mutbuf)
-  v27:u64 = const() {"value":0}
-  ret(v27)
+  v4:u64 = int.add.wrap(v1,v3)
+  v5:u64 = const() {"value":255}
+  v6:u64 = bit.and(v2,v5)
+  v7:usize = int.cast(v4) {"mode":"wrap"}
+  v8:u8 = int.cast(v6) {"mode":"wrap"}
+  _ = buffer.store(v0,v7,v8)
+  v9:u64 = const() {"value":8}
+  v10:u64 = int.shr.checked(v2,v9)
+  v11:u64 = const() {"value":1}
+  v12:u64 = int.add.wrap(v1,v11)
+  v13:u64 = bit.and(v10,v5)
+  v14:usize = int.cast(v12) {"mode":"wrap"}
+  v15:u8 = int.cast(v13) {"mode":"wrap"}
+  _ = buffer.store(v0,v14,v15)
+  v16:u64 = int.shr.checked(v10,v9)
+  v17:u64 = const() {"value":2}
+  v18:u64 = int.add.wrap(v1,v17)
+  v19:u64 = bit.and(v16,v5)
+  v20:usize = int.cast(v18) {"mode":"wrap"}
+  v21:u8 = int.cast(v19) {"mode":"wrap"}
+  _ = buffer.store(v0,v20,v21)
+  v22:u64 = int.shr.checked(v16,v9)
+  v23:u64 = const() {"value":3}
+  v24:u64 = int.add.wrap(v1,v23)
+  v25:u64 = bit.and(v22,v5)
+  v26:usize = int.cast(v24) {"mode":"wrap"}
+  v27:u8 = int.cast(v25) {"mode":"wrap"}
+  _ = buffer.store(v0,v26,v27)
+  v28:u64 = int.shr.checked(v22,v9)
+  v29:u64 = const() {"value":4}
+  v30:u64 = int.add.wrap(v1,v29)
+  v31:u64 = bit.and(v28,v5)
+  v32:usize = int.cast(v30) {"mode":"wrap"}
+  v33:u8 = int.cast(v31) {"mode":"wrap"}
+  _ = buffer.store(v0,v32,v33)
+  v34:u64 = int.shr.checked(v28,v9)
+  v35:u64 = const() {"value":5}
+  v36:u64 = int.add.wrap(v1,v35)
+  v37:u64 = bit.and(v34,v5)
+  v38:usize = int.cast(v36) {"mode":"wrap"}
+  v39:u8 = int.cast(v37) {"mode":"wrap"}
+  _ = buffer.store(v0,v38,v39)
+  v40:u64 = int.shr.checked(v34,v9)
+  v41:u64 = const() {"value":6}
+  v42:u64 = int.add.wrap(v1,v41)
+  v43:u64 = bit.and(v40,v5)
+  v44:usize = int.cast(v42) {"mode":"wrap"}
+  v45:u8 = int.cast(v43) {"mode":"wrap"}
+  _ = buffer.store(v0,v44,v45)
+  v46:u64 = int.shr.checked(v40,v9)
+  v47:u64 = const() {"value":7}
+  v48:u64 = int.add.wrap(v1,v47)
+  v49:u64 = bit.and(v46,v5)
+  v50:usize = int.cast(v48) {"mode":"wrap"}
+  v51:u8 = int.cast(v49) {"mode":"wrap"}
+  _ = buffer.store(v0,v50,v51)
+  v52:u64 = int.shr.checked(v46,v9)
+  ret(v3)
 end
 fn f20(v0:mutbuf,v1:u64) -> (u64) effects(read,write,trap) entry(b0)
 block b0(v0:mutbuf,v1:u64)
@@ -2576,25 +2658,69 @@ end
 fn f25(v0:readbuf,v1:u64) -> (u64) effects(read,write,trap) entry(b0)
 block b0(v0:readbuf,v1:u64)
   v2:u64 = const() {"value":0}
-  jump b1(v0,v1,v2,v2)
-block b1(v3:readbuf,v4:u64,v5:u64,v6:u64)
-  v7:u64 = const() {"value":8}
-  v8:bool = compare.lt(v6,v7)
-  branch v8 b2(v3,v4,v5,v6) b3(v3,v5)
-block b2(v9:readbuf,v10:u64,v11:u64,v12:u64)
-  v17:u64 = int.add.wrap(v10,v12)
-  v18:usize = int.cast(v17) {"mode":"wrap"}
-  v19:u8 = buffer.load(v9,v18)
-  v20:u64 = int.cast(v19) {"mode":"wrap"}
-  v21:u64 = const() {"value":8}
-  v22:u64 = int.mul.wrap(v12,v21)
-  v23:u64 = int.shl.checked(v20,v22)
-  v24:u64 = bit.or(v11,v23)
-  v25:u64 = const() {"value":1}
-  v26:u64 = int.add.wrap(v12,v25)
-  jump b1(v9,v10,v24,v26)
-block b3(v13:readbuf,v15:u64)
-  ret(v15)
+  v3:u64 = int.add.wrap(v1,v2)
+  v4:usize = int.cast(v3) {"mode":"wrap"}
+  v5:u8 = buffer.load(v0,v4)
+  v6:u64 = int.cast(v5) {"mode":"wrap"}
+  v7:u64 = int.shl.checked(v6,v2)
+  v8:u64 = bit.or(v2,v7)
+  v9:u64 = const() {"value":1}
+  v10:u64 = int.add.wrap(v1,v9)
+  v11:usize = int.cast(v10) {"mode":"wrap"}
+  v12:u8 = buffer.load(v0,v11)
+  v13:u64 = int.cast(v12) {"mode":"wrap"}
+  v14:u64 = const() {"value":8}
+  v15:u64 = int.shl.checked(v13,v14)
+  v16:u64 = bit.or(v8,v15)
+  v17:u64 = const() {"value":2}
+  v18:u64 = int.add.wrap(v1,v17)
+  v19:usize = int.cast(v18) {"mode":"wrap"}
+  v20:u8 = buffer.load(v0,v19)
+  v21:u64 = int.cast(v20) {"mode":"wrap"}
+  v22:u64 = const() {"value":16}
+  v23:u64 = int.shl.checked(v21,v22)
+  v24:u64 = bit.or(v16,v23)
+  v25:u64 = const() {"value":3}
+  v26:u64 = int.add.wrap(v1,v25)
+  v27:usize = int.cast(v26) {"mode":"wrap"}
+  v28:u8 = buffer.load(v0,v27)
+  v29:u64 = int.cast(v28) {"mode":"wrap"}
+  v30:u64 = const() {"value":24}
+  v31:u64 = int.shl.checked(v29,v30)
+  v32:u64 = bit.or(v24,v31)
+  v33:u64 = const() {"value":4}
+  v34:u64 = int.add.wrap(v1,v33)
+  v35:usize = int.cast(v34) {"mode":"wrap"}
+  v36:u8 = buffer.load(v0,v35)
+  v37:u64 = int.cast(v36) {"mode":"wrap"}
+  v38:u64 = const() {"value":32}
+  v39:u64 = int.shl.checked(v37,v38)
+  v40:u64 = bit.or(v32,v39)
+  v41:u64 = const() {"value":5}
+  v42:u64 = int.add.wrap(v1,v41)
+  v43:usize = int.cast(v42) {"mode":"wrap"}
+  v44:u8 = buffer.load(v0,v43)
+  v45:u64 = int.cast(v44) {"mode":"wrap"}
+  v46:u64 = const() {"value":40}
+  v47:u64 = int.shl.checked(v45,v46)
+  v48:u64 = bit.or(v40,v47)
+  v49:u64 = const() {"value":6}
+  v50:u64 = int.add.wrap(v1,v49)
+  v51:usize = int.cast(v50) {"mode":"wrap"}
+  v52:u8 = buffer.load(v0,v51)
+  v53:u64 = int.cast(v52) {"mode":"wrap"}
+  v54:u64 = const() {"value":48}
+  v55:u64 = int.shl.checked(v53,v54)
+  v56:u64 = bit.or(v48,v55)
+  v57:u64 = const() {"value":7}
+  v58:u64 = int.add.wrap(v1,v57)
+  v59:usize = int.cast(v58) {"mode":"wrap"}
+  v60:u8 = buffer.load(v0,v59)
+  v61:u64 = int.cast(v60) {"mode":"wrap"}
+  v62:u64 = const() {"value":56}
+  v63:u64 = int.shl.checked(v61,v62)
+  v64:u64 = bit.or(v56,v63)
+  ret(v64)
 end
 fn f26(v0:readbuf,v1:mutbuf,v2:mutbuf) -> (u64) effects(read,write,trap) entry(b0)
 block b0(v0:readbuf,v1:mutbuf,v2:mutbuf)

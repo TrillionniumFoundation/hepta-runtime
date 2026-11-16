@@ -7,13 +7,13 @@ public_span_start:
     cld
     mov rax, [rsp]
     lea r14, [rsp + rax * 8 + 16]
-    sub rsp, 256
+    sub rsp, 4096
     mov r12, rsp
-    mov [r12 + 248], r15
     xor eax, eax
     mov rdi, r12
-    mov ecx, 240
+    mov ecx, 4096
     rep stosb
+    mov [r12 + 248], r15
     mov rdi, r14
     call runtime_filesystem_hub_create
     cmp rax, -4095
@@ -48,6 +48,7 @@ public_span_start:
     syscall
     test rax, rax
     js public_span_fail
+    call pump_initialize
     mov edi, 4096
     call view_allocate
     cmp rax, -4095
@@ -113,6 +114,9 @@ public_span_next:
     mov qword ptr [r12 + 8], 0
     mov qword ptr [r12 + 16], 0
 public_span_scan:
+    call pump_tick
+    cmp qword ptr [r12 + PM_BARRIER], 0
+    jne public_span_wait_input
     mov rcx, [r12 + 8]
     mov rdx, [r12]
     cmp rdx, rbp
@@ -181,17 +185,7 @@ public_span_read_size:
     jc public_span_fail
     jmp public_span_scan
 public_span_wait_input:
-    mov dword ptr [r12 + 192], 0
-    mov dword ptr [r12 + 196], 1
-    lea rdi, [r12 + 192]
-    mov esi, 1
-    mov rdx, -1
-    mov eax, 7
-    syscall
-    cmp rax, -4
-    je public_span_wait_input
-    cmp rax, 1
-    jne public_span_fail
+    call pump_wait
     jmp public_span_scan
 public_span_begin_discard:
     mov qword ptr [r12 + 48], 1
@@ -225,96 +219,11 @@ public_span_request:
     sub rsi, 3
     jz public_span_next
 public_span_request_ready:
-    mov r8d, 18
-    call runtime_grow_owned
-    cmp eax, 64
-    jne public_span_fail
-    mov rdx, [r15 + 8]
-    add rdx, 18 * 64
-    mov r13, [rdx + 32]
-    mov rax, [r13 + 16]
-    mov [r12 + 40], rax
-    cmp qword ptr [r13 + 8], 0
-    je public_span_silent
-    cmp qword ptr [r13 + 8], 2
-    je public_span_publish
-    cmp qword ptr [r13 + 8], 3
-    je public_span_publish_raw
-    cmp qword ptr [r13 + 8], 1
-    jne public_span_fail
-    cmp qword ptr [r13 + 32], 0
-    jne public_span_fail
-    mov edi, 1
-    lea rsi, [r13 + 64]
-    mov rdx, [r13 + 24]
-    call public_span_write
-    test eax, eax
-    jnz public_span_fail
-    jmp public_span_newline
-public_span_publish_raw:
-    cmp qword ptr [r13 + 32], 0
-    jne public_span_fail
-    lea rdi, [r13 + 64]
-    mov rsi, [r13 + 24]
-    call runtime_publication_raw_span
-    test eax, eax
-    jnz public_span_fail
-    jmp public_span_newline
-public_span_publish:
-    lea rdi, [r13 + 64]
-    mov rsi, [r13 + 24]
-    lea rdx, [rdi + rsi]
-    mov rcx, [r13 + 32]
-    mov r8, [r13 + 40]
-    call runtime_publication_span
-    test eax, eax
-    jnz public_span_fail
-public_span_newline:
-    mov edi, 1
-    lea rsi, [rip + newline]
-    mov edx, 1
-    call public_span_write
-    test eax, eax
-    jnz public_span_fail
-    jmp public_span_next
-public_span_silent:
-    mov rax, [r13 + 24]
-    or rax, [r13 + 32]
-    or rax, [r13 + 40]
-    jnz public_span_fail
+    call pump_accept
     jmp public_span_next
 public_span_finish:
-    /* Every public response has completed its actual write/ACK/DROP above.
-     * This serial graph has no pending handler registry. The shared HIA
-     * shutdown owner receives the observed empty send/child counts. */
-    mov eax, 1
-    mov ecx, 1
-    call public_span_shutdown_step
-    test eax, eax
-    jnz public_span_fail
-    mov eax, 2
-    mov ecx, 2
-    call public_span_shutdown_step
-    test eax, eax
-    jnz public_span_fail
-    mov eax, 4
-    mov ecx, 3
-    call public_span_shutdown_step
-    test eax, eax
-    jnz public_span_fail
-    mov edi, 1
-    mov eax, 3
-    syscall
-    cmp rax, -4 /* Linux has already released this descriptor on EINTR. */
-    je public_span_writer_closed
-    test rax, rax
-    jnz public_span_fail
-public_span_writer_closed:
-    mov eax, 5
-    mov ecx, 4
-    call public_span_shutdown_step
-    test eax, eax
-    jnz public_span_fail
+    call pump_finish
+    /* SDK registry58 has closed transport and drained owned tasks. */
     call runtime_batch_body_release
     test rax, rax
     jnz public_span_fail
@@ -353,6 +262,7 @@ public_span_writer_closed:
     mov r15, [r12 + 248]
     jmp frame_eof /* Existing HIA config lease/lock teardown. */
 public_span_fail:
+    call pump_restore_fd_flags
     mov r15, [r12 + 248]
     jmp fatal /* Never convert resource/invariant failure to business text. */
 /* HIA decides the shutdown action. The native boundary verifies the complete
@@ -479,4 +389,4 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 456 /* 57 fixed slots; authority56 is a private callable capability. */
+    .zero 472 /* 59 fixed slots; Bellman57 and SDK registry58. */
