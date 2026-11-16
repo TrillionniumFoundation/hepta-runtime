@@ -1,0 +1,89 @@
+def render(s:readbuf,o:mutbuf,w:mutbuf,kind:u64) -> u32:
+    if kind!=3:
+        return retained_render(s,o,w,kind)
+    put(w,8,111)
+    put(w,136,kind)
+    return prepare_constructor(s,o,w)
+
+def prepare(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u32:
+    if phase==11:
+        return prepare_constructor(s,o,w)
+    return retained_prepare(s,o,w,phase)
+
+def prepare_constructor(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    size=get(w,688)
+    if size>18446744073709551551:
+        return request_grow(o,w,3,0)
+    if reserve(w,0,size+64)==0:
+        return pending_grow(o,w)
+    if reserve(w,1,64)==0:
+        return pending_grow(o,w)
+    at=region(w,0)
+    policy=1
+    if get(w,88)!=0:
+        policy=2
+    put(w,at,CONSTRUCTOR_REQUEST)
+    put(w,at+8,1)
+    put(w,at+16,get(w,184))
+    put(w,at+24,policy)
+    put(w,at+32,size)
+    put(w,at+40,0)
+    put(w,at+48,0)
+    put(w,at+56,0)
+    copy_within(w,at+64,region(w,5),size)
+    return child(w,10,size+64,11)
+
+def after_constructor(s:readbuf,o:mutbuf,w:mutbuf,returned:u64,extent:u64) -> u32:
+    if returned!=64 or extent<64:
+        return INVALID
+    at=region(w,1)
+    if get(w,at)!=CONSTRUCTOR_RESPONSE or get(w,at+8)!=0:
+        return INVALID
+    if get(w,at+16)!=get(w,184):
+        return INVALID
+    policy=1
+    if get(w,88)!=0:
+        policy=2
+    if get(w,at+24)!=policy or get(w,at+32)!=64:
+        return INVALID
+    if get(w,at+48)!=0 or get(w,at+56)!=0:
+        return INVALID
+    size=get(w,at+40)
+    if size!=extent-64:
+        return INVALID
+    return constructor_envelope(s,o,w,size)
+
+def constructor_envelope(s:readbuf,o:mutbuf,w:mutbuf,wire_size:u64) -> u32:
+    original=region(w,2)
+    id_kind=get(w,original+40)
+    id_size=4
+    if id_kind==3:
+        id_size=get(w,original+48)
+    elif id_kind==4:
+        id_size=json_size(w,original+192,get(w,original+48))
+    if id_size>18446744073709551487:
+        return request_grow(o,w,3,0)
+    fixed=literal_size(1)+id_size+RESULT_KEY_SIZE+1
+    if wire_size>18446744073709551615-fixed:
+        return request_grow(o,w,3,0)
+    total=fixed+wire_size
+    if reserve(w,7,total)==0:
+        return pending_grow(o,w)
+    start=region(w,7)
+    out=start+literal(w,start,1)
+    original=region(w,2)
+    if id_kind==3:
+        copy_within(w,out,original+192,get(w,original+48))
+        out=out+get(w,original+48)
+    elif id_kind==4:
+        out=json_write(w,out,original+192,get(w,original+48))
+    else:
+        out=out+literal(w,out,7)
+    out=result_key(w,out)
+    copy_within(w,out,region(w,1)+64,wire_size)
+    out=out+wire_size
+    store(w,out,125)
+    if out+1!=start+total:
+        return INVALID
+    return finish(o,w,3,total,0,get(w,184))
+
