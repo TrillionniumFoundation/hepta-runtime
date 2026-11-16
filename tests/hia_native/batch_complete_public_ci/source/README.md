@@ -137,3 +137,15 @@ parameter route: the native returned the target's missing-`path` diagnostic,
 whereas the reference's out-of-domain branch returned a different error.
 The existing row is retained and the exact target declaration is added; its
 name and input are not rewritten to hide the failed comparison.
+
+
+## v7 bounded access performance candidate
+
+The v6 60-second `path-over8m` timeout and its complete archive remain a failed
+qualification. This version changes two actual HIA owners, with no changes to
+the fixed 417/417/926/17 input lanes, 15/13 stdio cases, or their 60/180-second
+deadlines. The private text constructor adds a checked ordinary ASCII word
+path; Batch Planner input unrolls six fixed eight-byte byte-access loops. Their
+entry/validation/parser/error/growth behavior stays unchanged. Source authors,
+exact baseline inputs and AST restoration proofs are included. This source
+declaration does not claim a successful fresh v7 gate before it actually runs.
