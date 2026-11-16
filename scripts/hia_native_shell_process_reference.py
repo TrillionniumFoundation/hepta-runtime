@@ -588,7 +588,7 @@ def retained_registry_sources(metadata, provenance, output):
                 files[relative]=pin(raw)
         require(files and "Cargo.toml" in files,"retained registry archive manifest missing")
         generated=claimed["cargo_generated_files"]
-        require(type(generated) is dict and set(generated)<= {".cargo-ok"},
+        require(type(generated) is dict and set(generated)== {".cargo-ok"},
                 "unretained Cargo generated source is not admitted")
         generated={name:pin(b'{"v":1}') for name in generated}
         row={"package":package_identity(package),"original_lock_checksum":locked["checksum"],

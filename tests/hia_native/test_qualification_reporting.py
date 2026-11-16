@@ -2707,6 +2707,7 @@ class ShellProcessRetainedRegistryTests(unittest.TestCase):
             ("retained path", lambda r: r["packages"][0]["retained_archive"].update(path="../outside.crate")),
             ("original checksum", lambda r: r["packages"][0].update(original_lock_checksum="0" * 64)),
             ("generated marker", lambda r: r["packages"][0]["cargo_generated_files"][".cargo-ok"].update(sha256="0" * 64)),
+            ("missing generated marker", lambda r: r["packages"][0]["cargo_generated_files"].pop(".cargo-ok")),
             ("unretained generated file", lambda r: r["packages"][0]["cargo_generated_files"].update({".cargo-checksum.json": {"bytes": 0, "sha256": "0" * 64}})),
             ("summary count", lambda r: r.update(source_file_count=1)),
             ("package count", lambda r: r.update(package_count=2)),
