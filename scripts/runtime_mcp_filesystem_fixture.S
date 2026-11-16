@@ -263,7 +263,7 @@ fs_fixture_failure:
     jmp fatal
 .balign 8
 grow_fixture_images:
-    .zero 456 /* 57 fixed public-engine slots. */
+    .zero 472 /* 59 fixed public-engine slots; original private selectors are unchanged. */
 
 /* Private qualification observation. These actions never enter stdio JSON. */
 fs_fixture_authority_release:

@@ -289,18 +289,24 @@ def adapter_source(root: Path, images=None, *, private_fixture=False,
     # images is accepted for older evidence-reader callers; this prefix embeds
     # no image bytes. All fixed addresses are filled by the executed HIA packer.
     if private_fixture:
-        raise ValueError('historical filesystem fixture belongs to its frozen serial source view')
-    if private_pump_trace and not private_pump_fixture:
-        raise ValueError('fixed trace entry requires the fixed journal fixture')
-    transport = (root / TRANSPORT).read_text()
-    fixed = combine_async(combine((root / BASE).read_text(), transport))
-    if fixed.count('\n_start:\n') != 1:
-        raise ValueError('private fixture capability entry anchor differs')
-    fixed = fixed.replace('\n_start:\n',
-        '\n_start:\n.if PM_FIXED_FIXTURE_FDS\n    call pump_fixture_preflight\n.endif\n', 1)
-    source = ('.equ PM_FIXED_FIXTURE_FDS,' + str(int(private_pump_fixture)) + '\n'
-              + '.equ PM_FIXED_TRACE_FD,' + str(int(private_pump_trace)) + '\n'
-              + '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed)
+        if private_pump_fixture or private_pump_trace:
+            raise ValueError('private instance carrier cannot expose pump observation descriptors')
+        transport = '\n'.join((root / name).read_text() for name in FIXTURE_BOUNDARIES)
+        fixed = combine((root / BASE).read_text(), transport)
+        carrier = [name for name in BOUNDARIES if not name.startswith('scripts/runtime_mcp_task_')]
+        source = '\n'.join((root / name).read_text() for name in carrier) + '\n' + fixed
+    else:
+        if private_pump_trace and not private_pump_fixture:
+            raise ValueError('fixed trace entry requires the fixed journal fixture')
+        transport = (root / TRANSPORT).read_text()
+        fixed = combine_async(combine((root / BASE).read_text(), transport))
+        if fixed.count('\n_start:\n') != 1:
+            raise ValueError('private fixture capability entry anchor differs')
+        fixed = fixed.replace('\n_start:\n',
+            '\n_start:\n.if PM_FIXED_FIXTURE_FDS\n    call pump_fixture_preflight\n.endif\n', 1)
+        source = ('.equ PM_FIXED_FIXTURE_FDS,' + str(int(private_pump_fixture)) + '\n'
+                  + '.equ PM_FIXED_TRACE_FD,' + str(int(private_pump_trace)) + '\n'
+                  + '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed)
     for name in re.findall(r'^\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):
         if name == '_start':
             continue
@@ -422,7 +428,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
                                     authority_images=[images[n] for n in ('authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader')],
                                     batch_images=[images[n] for n in ('batch_body','batch_lock','key','tb_history','tb_atomic','cache','lc_read','tb_lock','tb_edit','batch_plan','endpoint','batch_verify','batch_apply','batch_render')])
     processes.extend(steps)
-    binary = folder / ('task-pump-fixture.elf' if private_pump_fixture else 'runtime-mcp.elf')
+    binary = folder / ('filesystem-fixture.elf' if private_fixture else 'task-pump-fixture.elf' if private_pump_fixture else 'runtime-mcp.elf')
     write_new(binary, elf, 0o500)
     processes.append(execute(folder, 'readelf', ['readelf', '-lW', str(binary)], 30))
     headers = (folder / 'readelf.stdout').read_bytes()
@@ -444,19 +450,19 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
                   'package': str(package), 'build_root': str(port_build),
                   'worker_build_root': str(worker_build), 'runtime_hia_images': 8,
                   'elf_bytes': len(port_bytes), 'elf_sha256': sha(port_bytes)}},
-              'task_registry_slot': 58, 'task_registry_operation15_integrated': True,
-              'task_event_pump_integrated': True, 'task_event_pump_qualified': False,
+              'task_registry_slot': 58, 'task_registry_operation15_integrated': not private_fixture,
+              'task_event_pump_integrated': not private_fixture, 'task_event_pump_qualified': False,
               'private_task_pump_fixture': private_pump_fixture,
               'fixed_journal_fd': 3 if private_pump_fixture else None,
               'private_task_pump_trace': private_pump_trace,
               'fixed_host_trace_fd': 4 if private_pump_trace else None,
               'journal_fd_caller_owned': private_pump_fixture,
               'ordinary_notification_drops_handler_future': False,
-              'async_eof_policy_owner': 58, 'historical_shutdown53_retained': True,
+              'async_eof_policy_owner': None if private_fixture else 58, 'historical_shutdown53_retained': True,
               'compiler_commit': build.identity['commit'], 'compiler_image_sha256': build.compiler_sha256,
               'source_root': str(root), 'build_root': str(output.resolve()), 'manifest_path': str(manifest.resolve()),
               'elf': binary.name, 'elf_sha256': sha(elf), 'elf_bytes': len(elf),
-              'source_binding': binding, 'boundary_sources': {path: binding['files'][path]['sha256'] for path in [BASE, *(FIXTURE_BOUNDARIES if private_fixture else [TRANSPORT]), *BOUNDARIES]},
+              'source_binding': binding, 'boundary_sources': {path: binding['files'][path]['sha256'] for path in [BASE, *(FIXTURE_BOUNDARIES if private_fixture else [TRANSPORT]), *(name for name in BOUNDARIES if not private_fixture or not name.startswith('scripts/runtime_mcp_task_'))]},
               'assembled_source_sha256': sha(assembly.encode()), 'object_sha256': sha((folder / 'bridge.o').read_bytes()),
               'link': link, 'pack': packed, 'boundary_processes': processes,
               'config_table': CONFIG, 'extra_table': EXTRA, 'view_table': VIEW, 'fence_table': FENCE,
