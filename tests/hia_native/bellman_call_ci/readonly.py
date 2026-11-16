@@ -19,6 +19,7 @@ def main():
     args=verify.parse_arguments();roots={ROOT}
     for name,value in vars(args).items():
         value=value.resolve(strict=True);setattr(args,name,value);roots.add(value)
+    roots.add(args.bridge.parent)
     before=snapshot(roots);refusals=[];started=time.monotonic()
     def guard(event,arguments):
         blocked={'subprocess.Popen','os.system','os.posix_spawn','os.fork','os.forkpty','ctypes.dlopen','ctypes.dlsym','mmap.__new__',

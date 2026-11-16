@@ -4,6 +4,7 @@ import argparse,contextlib,ctypes,json,os,signal,struct,sys,time
 from pathlib import Path
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parent;sys.path.insert(0,str(ROOT))
+from bridge_check import admit_bridge
 from observe import Capture,Bridge,Caller,NativeModule,WorkerProcess,source_check,pin,u64,put,wire,write,frame,originals,CALL,GROW,DELIVERY,INVALID
 BUSY=b'native Bellman planning capacity exhausted; no work admitted'
 
@@ -154,8 +155,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     for name in ('build','reference','bridge','output'):p.add_argument('--'+name,type=Path,required=True)
     a=p.parse_args();source=source_check();a.output=a.output.absolute();capture=Capture(a.output)
-    expected=json.loads((ROOT/'worker-pin.json').read_bytes());component=json.loads((a.bridge/'component.json').read_bytes())
-    assert pin((a.bridge/'component.json').read_bytes())==expected['component']
+    expected=json.loads((ROOT/'worker-pin.json').read_bytes());component,worker_build=admit_bridge(a.bridge)
     domain=json.loads((ROOT/'domain.json').read_bytes());limit=domain['lifecycle_deadline_seconds'];start=time.monotonic();report=dict(status='RUNNING',source_manifest=source)
     try:
         chosen={}

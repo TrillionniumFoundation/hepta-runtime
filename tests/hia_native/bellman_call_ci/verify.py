@@ -5,6 +5,7 @@ from pathlib import Path
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parent;sys.path.insert(0,str(ROOT))
 from caller_worker_evidence import verify_process,packets
+from bridge_check import admit_bridge
 B3='bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
 TIME=re.compile(rb'("native_operation_wall_seconds":)(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?=[,}])')
 def pin(raw):return dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
@@ -181,7 +182,7 @@ def verify_original(package,original,native_results):
         if p.is_file():assert p.read_bytes()==(original/'reference'/p.relative_to(package/'reference')).read_bytes()
     assert source(original/'recipe-source')==source(package)
     assert pin((original/'original-plan').read_bytes())==report['binary']
-    for name,limit in [('rustc-version',30),('cargo-version',30),('cargo-build',300),('cargo-metadata',120),('original',60)]:
+    for name,limit in [('rustc-version',30),('cargo-version',30),('cargo-build',300),('cargo-metadata',120),('params-original',60),('original',60)]:
         process=read(original/'processes'/(name+'.json'))
         assert process['started'] is True and process['timed_out'] is False and process['returncode']==0
         assert process['pid']==process['pgid'] and process['pid']>0 and process['parent_pid']>0
@@ -209,6 +210,29 @@ def verify_original(package,original,native_results):
     inputs=(original/'original.stdin').read_bytes();assert pin(inputs)==report['complete_input']
     raw_inputs=packets(inputs);frozen_inputs=read(package/'reference/params/corpus-domain.json')['cases'];assert len(raw_inputs)==len(frozen_inputs)==683
     for raw,frozen in zip(raw_inputs,frozen_inputs):assert pin(raw)=={key:frozen[key] for key in ('bytes','sha256')}
+    typed_report=read(original/'typed/original.json')
+    assert typed_report['status']=='ORIGINAL_OBSERVED_NATIVE_REQUIRED' and typed_report['case_count']==683
+    assert typed_report['successful_typed']==401 and typed_report['typed_errors']==282
+    assert typed_report['source_manifest']==source(package) and typed_report['original_source_sha256']==report['original_source_sha256']
+    assert typed_report['native_qualified'] is False and typed_report['whole_runtime_replaced'] is False and typed_report['public_handler_qualified'] is False
+    assert pin((original/'original-params').read_bytes())==typed_report['binary']
+    typed=(original/'typed/original.stdout').read_bytes();assert typed==(original/'processes/params-original.stdout').read_bytes()
+    assert pin(typed)==typed_report['complete_output']==read(package/'domain.json')['original_output']
+    assert (original/'typed/original.stdin').read_bytes()==inputs and pin(inputs)==typed_report['complete_input']
+    typed_records=packets(typed);domain_rows=read(package/'domain.json')['cases']
+    assert len(typed_records)==len(typed_report['cases'])==len(domain_rows)==683
+    for frame,row,declared,raw_input in zip(typed_records,typed_report['cases'],domain_rows,raw_inputs):
+        assert frame[:8]==b'HBPOR001'
+        status,canonical_length,body_length,count,r0,r1,r2=struct.unpack_from('<7Q',frame,8)
+        assert (r0,r1,r2)==(0,0,0) and len(frame)==64+canonical_length+body_length
+        canonical=frame[64:64+canonical_length];body=frame[64+canonical_length:]
+        assert status==row['status']==declared['status'] and count==row['states']==declared['states']
+        assert (row['group'],row['name'])==(declared['group'],declared['name'])
+        assert pin(raw_input)==row['raw'] and pin(canonical)==row['canonical']==declared['canonical'] and pin(body)==row['body']==declared['body']
+    baseline=(package/'reference/params_observer_baseline.rs').read_text()
+    params=(package/'reference/full_plan/params.rs').read_text()
+    assert params[params.index('fn word('):]==baseline[baseline.index('fn word('):]
+    assert '#[path = "../weight_bellman.rs"]\nmod original;\nuse original::{BellmanAction, BellmanPlanParams};' in params
     data=(original/'processes/original.stdout').read_bytes();assert pin(data)==report['complete_output']
     records=packets(data);domain=read(package/'domain.json');assert len(records)==len(report['cases'])==len(domain['cases'])==683
     counts={0:0,1:0,2:0}
@@ -228,7 +252,7 @@ def verify_original(package,original,native_results):
         counts[status]+=1
     assert counts=={0:301,1:282,2:100}
     return dict(cases=683,success_json=301,typed_errors=282,business_errors=100,registry_packages=132,
-        complete_registry_source_files=total_source_files,only_normalized_field='native_operation_wall_seconds',
+        complete_registry_source_files=total_source_files,complete_original_typed_cases=683,complete_typed_output=typed_report['complete_output'],only_normalized_field='native_operation_wall_seconds',
         original_complete_output=report['complete_output'],full_error_bytes_compared=True)
 
 def verify_controls(package,output,component):
@@ -291,11 +315,10 @@ def parse_arguments():
     for name in ('package','build','ordinary','unicode','original-package','original','controls-package','controls','bridge'):p.add_argument('--'+name,type=Path,required=True)
     return p.parse_args()
 def verify_all(a):
-    component=read(a.bridge/'component.json');pinning=read(a.package/'worker-pin.json')
-    assert pin((a.bridge/'component.json').read_bytes())==pinning['component'] and pin((a.bridge/'bellman-worker.elf').read_bytes())==pinning['executable']
+    component,worker_build=admit_bridge(a.bridge)
     built=build_check(a.package,a.build);ordinary,results=verify_group(a.package,a.ordinary,component)
     unicode,more=verify_group(a.package,a.unicode,component);assert not set(results).intersection(more);results.update(more)
     original=verify_original(a.original_package,a.original,results);controls=verify_controls(a.controls_package,a.controls,component)
-    return dict(status='READ_ONLY_CALLER683_AND_FRESH_ORIGINAL_PASS',build=built,ordinary=ordinary,unicode=unicode,original=original,controls=controls,
+    return dict(status='READ_ONLY_CALLER683_AND_FRESH_ORIGINAL_PASS',worker_build=worker_build,build=built,ordinary=ordinary,unicode=unicode,original=original,controls=controls,
         native_processes_started=0,original_processes_started=0,public_handler_qualified=False,whole_runtime_replaced=False)
 if __name__=='__main__':print(json.dumps(verify_all(parse_arguments()),sort_keys=True))

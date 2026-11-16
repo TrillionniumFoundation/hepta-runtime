@@ -10,6 +10,7 @@ sys.path.insert(0,str(ROOT/'reference/params'))
 from hia_native_loader import NativeModule
 from native_observe import originals
 from worker_transport import WorkerProcess,frame,decode_journal
+from bridge_check import admit_bridge
 CALL=0xfffffff0;GROW=0xffffffd0;DELIVERY=0xffffffcd;INVALID=0xffffffff
 def pin(raw):return dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
 def u64(raw,at):return struct.unpack_from('<Q',raw,at)[0]
@@ -195,8 +196,7 @@ def main():
     p.add_argument('--group',choices=('ordinary','unicode'),required=True);a=p.parse_args()
     source=source_check();a.output=a.output.absolute();capture=Capture(a.output)
     domain=json.loads((ROOT/'domain.json').read_bytes());limit=domain[a.group+'_deadline_seconds'];start=time.monotonic()
-    worker_pin=json.loads((ROOT/'worker-pin.json').read_bytes());component=a.bridge/'component.json'
-    assert pin(component.read_bytes())==worker_pin['component']
+    worker_pin=json.loads((ROOT/'worker-pin.json').read_bytes());component,worker_build=admit_bridge(a.bridge)
     executable=(a.bridge/'bellman-worker.elf').resolve(strict=True);assert pin(executable.read_bytes())==worker_pin['executable']
     report=dict(status='RUNNING',source_manifest=source,group=a.group,timeout_seconds=limit,whole_runtime_replaced=False,public_handler_qualified=False)
     process=None
