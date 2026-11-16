@@ -20,7 +20,7 @@ sys.dont_write_bytecode=True
 AUTHOR="73ed04df99353d00c2a48e5f5f972b650e3dae44f187f03edd3955fc477f3995"
 PROOF="7a8b139fc3c6ced9fcfc51124c105f0ee5d16fe8ffd71339b06e7164607f3aee"
 BASE_COMPOSITION="059338b25022129d79a61866f9e0af31528654a552f73a0ade8bd0ae9f21b06c"
-CURRENT_COMPOSITION="af8ffd948e8cc616933e58b6c224a33021ef1cbeddb6f1fadf12d337ce2b3aa8"
+CURRENT_COMPOSITION="4c000b5d100ffcd7df60ae29e504bb2199fcfa098a218cc5b62300418536ae67"
 SOURCES={
  "native/sdk_message_target.hepta":("4346674242b7f00cd97cee2b04e958a7552923623a79a1355d469c251add2968","3246ce5e5975851c71a4f487408f8ea5a69983f711614ea7d49d58c720be4961"),
  "native/serde_json_span.hepta":("7a9355792f5044c9887c4194df5bc169664cf08fa8d084e8480c941fa2416a41","eb7bf96e7944d8d69fa0ee441ecbf3fc2a79daaa233a3f9706f0fc324eb39f7d")}
@@ -59,6 +59,7 @@ def verify(package,hepta=None):
   rows[name]={"before_sha256":before_hash,"after_sha256":after_hash,"before_bytes":len(before),"after_bytes":len(after)}
  previous=(baseline/"native/sdk_request_task_composition.json").read_bytes()
  current=(graph/"native/sdk_request_task_composition.json").read_bytes()
+ require(json.loads(current)["constants"]==json.loads(previous)["constants"],"all original u64 constants retained exactly")
  require(sha(previous)==BASE_COMPOSITION and sha(current)==CURRENT_COMPOSITION
   and current==current_composition(previous),"current registry message dependency composition")
  if hepta is not None:

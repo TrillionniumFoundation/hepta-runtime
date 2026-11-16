@@ -2,7 +2,7 @@
 
 This candidate installs the combined graph at the repository's default
 scripts/hia_native_runtime_mcp_build.py entry. The package graph/source snapshot
-contains the exact 390 source files of commit 05044de882e3c72f1f9bd243c85d15f203d62125.
+contains the exact 390 source files of commit fa2aed97cf22b720d85bd8d08b720aeadba3c4d6.
 Every job verifies all 390 actual checkout files before execution. The package
 does not substitute a qualification-only builder for the installed entry.
 
@@ -80,7 +80,7 @@ representation repair. Neither historic failure is relabeled.
 ## Fixed accessor successor
 
 The current default graph is the exact 390-file source at
-05044de882e3c72f1f9bd243c85d15f203d62125. Only G1 and Value HIA access
+fa2aed97cf22b720d85bd8d08b720aeadba3c4d6. Only G1 and Value HIA access
 wrappers change. Six byte helpers retain every checked byte access in order,
 including wrapping addresses and partial writes; 658 wrapper call sites are
 contracted with an exact full-source inverse. The entire parser and numeric
@@ -106,3 +106,12 @@ All nine roles and their complete domains remain. This successor does not raise
 180/60-second native limits or the 15-minute job limits and does not install a
 configuration catalog or extract_lines route. The root integration must still
 carry both 7afd and 08ce reader repairs.
+
+## Preserved source-preflight refusal
+
+Run 43978664883 rejected the composition metadata before any HIA or Rust execution.
+The JSON writer had rounded six original unsigned 64-bit literals. This revision
+restores their exact original decimal text and rebinds the complete source closure.
+All HIA, assembly, original fixtures, domains, and deadlines remain unchanged.
+The complete four job logs and artifact identities are retained under `failures/`.
+Those artifact hashes are API identities, not a claim of independent archive readback.

@@ -6,8 +6,8 @@ sys.path.insert(0,str(Path(__file__).resolve().parent))
 from common import pin,require,verify
 import author_shape_admission
 import verify_adapters
-BINDING="d836d1d46c37aeaaf4ab1f5c388186f77b3b1469a396fbdd8dfb28933bf6ddd4"
-GRAPH_COMMIT="05044de882e3c72f1f9bd243c85d15f203d62125"
+BINDING="92456e41c9614005b96f3404b1a6dfbc65cc77f798ffd5b0024018ffad156e54"
+GRAPH_COMMIT="fa2aed97cf22b720d85bd8d08b720aeadba3c4d6"
 def git_blob(raw):
     return hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
 def installed_source(package,root):
