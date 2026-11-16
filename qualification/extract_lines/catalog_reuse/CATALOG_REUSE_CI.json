@@ -1,0 +1,61 @@
+{
+  "native_reexecutions": 0,
+  "processes": [
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/extract_lines/catalog_reuse/download.py",
+        "--output",
+        "/home/runner/work/_temp/extract-catalog-reuse/archive"
+      ],
+      "elapsed_seconds": 15.196771311,
+      "exit_code": 0,
+      "name": "download-complete-archive",
+      "status": "PASS",
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 568,
+        "sha256": "3470ab891d308dd2c9d2ed48af4892134f1117248c71b8c1050e8553383cd233"
+      },
+      "timed_out": false,
+      "timeout_seconds": 180
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/extract_lines/catalog_reuse/read_reuse.py",
+        "--capture",
+        "/home/runner/work/_temp/extract-catalog-reuse/archive",
+        "--reader-source",
+        "/home/runner/work/hepta-runtime/hepta-runtime/runtime/authoring/public_extract/catalog_reader",
+        "--output",
+        "/home/runner/work/_temp/extract-catalog-reuse/evidence"
+      ],
+      "elapsed_seconds": 26.727593231,
+      "exit_code": 0,
+      "name": "complete-readonly-and-select",
+      "status": "PASS",
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 534,
+        "sha256": "055a283a323259b835e298af8e2a2bc4e66e2456b1f5c0fa791b6757808f00fb"
+      },
+      "timed_out": false,
+      "timeout_seconds": 180
+    }
+  ],
+  "rust_executions": 0,
+  "schema": "hepta.runtime.extract-catalog-reuse-ci.v1",
+  "source_sha256": "b461cee53e020567986eb2bf1759436fb55f5946ba557b5829a017e6205b3844",
+  "status": "RETAINED_CATALOG_READONLY_PASS"
+}
