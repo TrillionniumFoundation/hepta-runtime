@@ -89,7 +89,7 @@ def original_state(row, command):
     parsed = {}
     for name, magic, parse in (("history", b"HLTBHS01", original.history),
             ("locks", b"HLTBLK01", original.locks)):
-        raw = bytes.fromhex(row[name + "_snapshot_hex"])
+        raw = bytes.fromhex(row[("lock" if name == "locks" else name) + "_snapshot_hex"])
         need(raw[:8] == magic, "original state observer magic")
         value = parse(raw)
         need(value["phase"] == 1 and value["generation"] == command["id"] + 1,
