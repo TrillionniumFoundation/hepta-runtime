@@ -14,11 +14,24 @@ jobs:
     env:
       LC_ALL: C.UTF-8
       RUSTUP_TOOLCHAIN: 1.95.0
-      CARGO_HOME: ${{ runner.temp }}/sdk-target-cargo-cache
       SDK_SOURCE_DIR: ${{ github.workspace }}/runtime/tests/hia_native/sdk_target_ci
-      SDK_OUTPUT_DIR: ${{ runner.temp }}/sdk-target-qualified-output
-      SDK_CACHE_PREPARATION_DIR: ${{ runner.temp }}/sdk-target-cache-preparation
     steps:
+      - name: Configure isolated build directories on the assigned runner
+        run: |
+          python3 -I -B - <<'PY'
+          import os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          bindings = {
+              'CARGO_HOME': root/'sdk-target-cargo-cache',
+              'SDK_OUTPUT_DIR': root/'sdk-target-qualified-output',
+              'SDK_CACHE_PREPARATION_DIR': root/'sdk-target-cache-preparation',
+          }
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              for key, value in bindings.items():
+                  stream.write(f'{key}={value}\n')
+          PY
+
       - name: Checkout this exact recipe revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
