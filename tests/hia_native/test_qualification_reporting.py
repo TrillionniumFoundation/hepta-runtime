@@ -2604,5 +2604,175 @@ class QualificationReportingTests(unittest.TestCase):
         group_kill.assert_called_once_with(12345, probe.signal.SIGKILL)
 
 
+class ShellProcessRetainedRegistryTests(unittest.TestCase):
+    """The aggregate must read sealed source bytes without producer caches."""
+
+    def setUp(self):
+        import importlib
+        import io
+        import tarfile
+        self.reference = importlib.import_module("hia_native_shell_process_reference")
+        self.folder = tempfile.TemporaryDirectory(prefix="hia-shell-registry-")
+        self.addCleanup(self.folder.cleanup)
+        self.root = Path(self.folder.name)
+        self.output = self.root / "captured"
+        self.output.mkdir()
+        self.producer = self.root / "producer"
+        self.label = "fixture-1.0.0"
+        self.source = self.producer / "registry/src/index" / self.label
+        self.source.mkdir(parents=True)
+        self.archive = self.producer / "registry/cache/index" / (self.label + ".crate")
+        self.archive.parent.mkdir(parents=True)
+        self.files = {"Cargo.toml": b'[package]\nname="fixture"\nversion="1.0.0"\n',
+                      "src/lib.rs": b"pub fn value() -> u32 { 7 }\n"}
+        def packed(extra=()):
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+                for name, raw, kind in [(self.label + "/" + key, value, "file")
+                                        for key, value in self.files.items()] + list(extra):
+                    member = tarfile.TarInfo(name)
+                    if kind == "symlink":
+                        member.type = tarfile.SYMTYPE
+                        member.linkname = "Cargo.toml"
+                        tar.addfile(member)
+                    elif kind == "hardlink":
+                        member.type = tarfile.LNKTYPE
+                        member.linkname = self.label + "/Cargo.toml"
+                        tar.addfile(member)
+                    elif kind == "fifo":
+                        member.type = tarfile.FIFOTYPE
+                        tar.addfile(member)
+                    else:
+                        member.size = len(raw)
+                        tar.addfile(member, io.BytesIO(raw))
+            return buffer.getvalue()
+        self.packed = packed
+        self.archive.write_bytes(packed())
+        for name, raw in self.files.items():
+            target = self.source / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+        (self.source / ".cargo-ok").write_bytes(b'{"v":1}')
+        package = {"name": "fixture", "version": "1.0.0", "source": "registry+fixture",
+                   "manifest_path": str(self.source / "Cargo.toml")}
+        self.metadata = {"packages": [package]}
+        self.provenance = {"registry_dependencies": [{key: package[key]
+            for key in ("name", "version", "source")} | {"checksum": self.reference.sha(self.archive.read_bytes())}]}
+        self.baseline = self.reference.registry_sources(self.metadata, self.provenance, self.output, True)
+        self.receipt = self.output / "registry-source-receipt.json"
+        self.write_receipt(self.baseline)
+
+    def write_receipt(self, value):
+        self.receipt.write_text(json.dumps(value, sort_keys=True, indent=2) + "\n")
+
+    def read_retained(self):
+        return self.reference.retained_registry_sources(self.metadata, self.provenance, self.output)
+
+    def test_live_before_after_scan_and_absent_producer_cache(self):
+        import shutil
+        self.assertEqual(self.reference.registry_sources(self.metadata, self.provenance, self.output, False),
+                         self.baseline)
+        (self.source / "src/lib.rs").write_bytes(b"changed original source")
+        with self.assertRaisesRegex(ValueError, "actual cached crate source changed"):
+            self.reference.registry_sources(self.metadata, self.provenance, self.output, False)
+        (self.source / "src/lib.rs").write_bytes(self.files["src/lib.rs"])
+        shutil.rmtree(self.producer)
+        with self.assertRaisesRegex(ValueError, "missing source"):
+            self.reference.registry_sources(self.metadata, self.provenance, self.output, False)
+        reads = []
+        original = self.reference.owned
+        def owned(root, relative):
+            actual = Path(root) / relative
+            self.assertTrue(actual.is_relative_to(self.output), "reader opened producer/foreign bytes")
+            reads.append(actual.relative_to(self.output).as_posix())
+            return original(root, relative)
+        before = {path.relative_to(self.output).as_posix(): path.read_bytes()
+                  for path in self.output.rglob("*") if path.is_file()}
+        with patch.object(self.reference, "owned", side_effect=owned), \
+             patch.object(self.reference.subprocess, "Popen", side_effect=AssertionError("reader executed a process")):
+            self.assertEqual(self.read_retained(), self.baseline)
+        self.assertEqual(set(reads), {"registry-source-receipt.json", "dependency-archives/fixture-1.0.0.crate"})
+        self.assertEqual(before, {path.relative_to(self.output).as_posix(): path.read_bytes()
+                                  for path in self.output.rglob("*") if path.is_file()})
+
+    def test_full_retained_receipt_and_bytes_refuse_rehashed_mutations(self):
+        import copy
+        mutations = [
+            ("source bytes", lambda r: r["packages"][0]["source_files"]["src/lib.rs"].update(sha256="0" * 64)),
+            ("source extent", lambda r: r["packages"][0]["source_files"]["src/lib.rs"].update(bytes=1)),
+            ("missing source", lambda r: r["packages"][0]["source_files"].pop("src/lib.rs")),
+            ("extra source", lambda r: r["packages"][0]["source_files"].update(extra={"bytes": 0, "sha256": "0" * 64})),
+            ("producer path", lambda r: r["packages"][0].update(source_path="/another/producer")),
+            ("archive path", lambda r: r["packages"][0].update(archive_cache_path="/another/cache")),
+            ("retained path", lambda r: r["packages"][0]["retained_archive"].update(path="../outside.crate")),
+            ("original checksum", lambda r: r["packages"][0].update(original_lock_checksum="0" * 64)),
+            ("generated marker", lambda r: r["packages"][0]["cargo_generated_files"][".cargo-ok"].update(sha256="0" * 64)),
+            ("unretained generated file", lambda r: r["packages"][0]["cargo_generated_files"].update({".cargo-checksum.json": {"bytes": 0, "sha256": "0" * 64}})),
+            ("summary count", lambda r: r.update(source_file_count=1)),
+            ("package count", lambda r: r.update(package_count=2)),
+            ("scope", lambda r: r.update(new_or_modified_registry_source_used=True)),
+            ("unknown field", lambda r: r["packages"][0].update(unregistered=True)),
+        ]
+        for label, mutate in mutations:
+            changed = copy.deepcopy(self.baseline)
+            mutate(changed)
+            self.write_receipt(changed)
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                self.read_retained()
+            self.write_receipt(self.baseline)
+        retained = self.output / "dependency-archives" / self.archive.name
+        raw = retained.read_bytes()
+        retained.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            self.read_retained()
+        retained.write_bytes(raw)
+        self.assertEqual(self.read_retained(), self.baseline)
+
+    def test_archive_inventory_refuses_unregistered_link_and_nonregular_sources(self):
+        import os
+        retained = self.output / "dependency-archives" / self.archive.name
+        raw = retained.read_bytes()
+        foreign = self.root / "unadmitted.crate"
+        foreign.write_bytes(raw)
+        for kind in ("symlink", "hardlink", "fifo", "missing"):
+            retained.unlink()
+            if kind == "symlink": retained.symlink_to(foreign)
+            if kind == "hardlink": os.link(foreign, retained)
+            if kind == "fifo": os.mkfifo(retained)
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                self.read_retained()
+            if kind != "missing": retained.unlink()
+            retained.write_bytes(raw)
+        extra = retained.parent / "unregistered.crate"
+        extra.write_bytes(raw)
+        with self.assertRaisesRegex(ValueError, "unregistered ordinary"):
+            self.read_retained()
+        extra.unlink()
+        self.assertEqual(self.read_retained(), self.baseline)
+
+    def test_archive_members_remain_exact_even_with_rehashed_outer_archive(self):
+        retained = self.output / "dependency-archives" / self.archive.name
+        baseline = retained.read_bytes()
+        cases = [(self.label + "/src/lib.rs", b"duplicate", "file"),
+                 (self.label + "/../outside", b"x", "file"),
+                 ("/" + self.label + "/outside", b"x", "file"),
+                 (self.label + "//outside", b"x", "file"),
+                 (self.label + "/./outside", b"x", "file"),
+                 ("other-1.0.0/outside", b"x", "file"),
+                 (self.label + "/link", b"", "symlink"),
+                 (self.label + "/link", b"", "hardlink"),
+                 (self.label + "/fifo", b"", "fifo")]
+        for member in cases:
+            changed = self.packed([member])
+            retained.write_bytes(changed)
+            self.provenance["registry_dependencies"][0]["checksum"] = self.reference.sha(changed)
+            with self.subTest(member=member), self.assertRaisesRegex(ValueError, "archive (path|contains|member)|duplicate retained"):
+                self.read_retained()
+        retained.write_bytes(baseline)
+        self.provenance["registry_dependencies"][0]["checksum"] = self.reference.sha(baseline)
+        self.assertEqual(self.read_retained(), self.baseline)
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
