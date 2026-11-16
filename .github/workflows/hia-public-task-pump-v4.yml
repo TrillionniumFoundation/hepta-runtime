@@ -1,8 +1,8 @@
-name: Frozen v4 public task pump - fresh graph and complete 1394 wire
+name: Frozen v4 public task pump r2 - fresh graph and complete 1394 wire
 on:
   workflow_dispatch:
   push:
-    branches: ['hia-public-task-pump-qualification-6780-v4-20261116']
+    branches: ['hia-public-task-pump-qualification-6780-v4-r2-20261116']
     paths: ['tests/hia_native/public_task_pump_ci_v4/**', '.github/workflows/hia-public-task-pump-v4.yml']
 permissions:
   contents: read
@@ -11,7 +11,7 @@ env:
   LC_ALL: C.UTF-8
   PYTHONDONTWRITEBYTECODE: '1'
   PYTHONHASHSEED: '0'
-  PACKAGE_SHA256: '3cfb282a47f568e300e91ddf75b0a286bf1bc787e3c15fcc4bc30c46572c59c5'
+  PACKAGE_SHA256: '953569310b8ea0ebd28d0fa8528dd5e75b5183094ec291026f9db0f5c487a390'
   RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
   fresh-native-build:

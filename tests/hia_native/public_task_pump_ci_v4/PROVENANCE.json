@@ -69,5 +69,40 @@
     "old_stack_removed": false
   },
   "compiler_scope": "development fixed point freshly built once, then strictly verified same-CI reuse; no matching-source cold claim",
-  "new_ci_executed_at_source_freeze": false
+  "new_ci_executed_at_source_freeze": false,
+  "revision": 2,
+  "prior_ci_attempt": {
+    "commit": "36ad2437bfc59e8b32a8e37c41ca60f087fefb7b",
+    "run": 43908796631,
+    "original_job": 133444742669,
+    "original_job_conclusion": "success",
+    "build_job": 133444743269,
+    "build_job_conclusion": "failure",
+    "fresh_worker_port_graph_entries_and_build_reader": "ACTUAL_PASS_BEFORE_CONTROL_FAILURE",
+    "failure": "Fourth physical control tried to write its new 0555 packed-capability clone before temporarily enabling owner write.",
+    "failure_stderr": {
+      "bytes": 899,
+      "sha256": "acbce03d3382110eed22638f75ac9dc5c46dd658f2844461d625cb76456a9ce8"
+    },
+    "build_artifact": {
+      "id": 14246727319,
+      "bytes": 567801838,
+      "sha256": "5c2a4f66b98166f78ce2d7be503070d8b0d41490c70bc07e6f4054f80642ff24"
+    },
+    "byte_only_readback": {
+      "commit": "c3202b8b4555cf119def4ed70c7623a079d899d7",
+      "run": 43910449753,
+      "files": 18483,
+      "logical_bytes": 2566125379,
+      "native_executions": 0,
+      "rust_executions": 0
+    },
+    "full_public_1394_started": false,
+    "failure_reclassified_as_pass": false
+  },
+  "revision_changes": [
+    "Only newly copied physical control files temporarily gain owner-write for their mutation, then recover the exact original mode even on failure.",
+    "The pure control reader also checks every clone file mode against the complete original build.",
+    "No HIA, Rust, original observer, wire corpus, inner deadline or workflow budget changes."
+  ]
 }
