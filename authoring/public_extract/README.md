@@ -31,9 +31,10 @@ actual retained assets are admitted, the overlay keeps the old nine-item
 catalog and records extract_lines as a candidate extra registered route.
 
 This checkpoint contains the source author and reviewable mechanical overlays.
-Generated HIA assembly, frozen public corpus, actual native/original comparison,
+The source-only CI emits HIA assembly and preservation proofs, then checks both
+mechanical prefixes. A frozen public corpus, actual native/original comparison,
 controls, independent readonly evidence and a final source-bound public handoff
-are not claimed here. Local body qualification remains in
+remain necessary before public qualification. Local body qualification remains in
 qualification/extract_lines/HANDOFF.json at d21c245e034df644200bc0a49261a00a5551ebab.
 Full asynchronous scheduling, Remote execution and whole-runtime replacement
 are explicitly false. This source author must never be used as a semantic

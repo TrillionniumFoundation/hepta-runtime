@@ -1,0 +1,66 @@
+name: Author actual HIA public extract source
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['authoring/public_extract/**', '.github/workflows/hia-extract-public-source.yml']
+permissions:
+  contents: write
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      EXTRACT_AUTHOR: ${{ github.workspace }}/runtime/authoring/public_extract
+      EXTRACT_AUTHOR_SHA: 0dca1018eafc60017144a3350dcec2f67c103ef202cd5643c3b812101b3144dd
+    steps:
+      - name: Checkout exact review source and complete default111 snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            authoring/public_extract
+            tests/hia_native/public_extract_ci/base
+      - name: Checkout the exact HIA source authoring tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Admit source, generate HIA and assemble mechanical boundaries
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B "$EXTRACT_AUTHOR/ci_source.py" --baseline "$GITHUB_WORKSPACE/runtime/tests/hia_native/public_extract_ci/base" --hepta "$GITHUB_WORKSPACE/compiler" --output "$RUNNER_TEMP/extract-public-source" --author-profile-sha256 "$EXTRACT_AUTHOR_SHA"
+      - name: Publish exact generated default source on the review branch
+        env:
+          GH_SOURCE_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -B "$EXTRACT_AUTHOR/publish_source.py" --capture "$RUNNER_TEMP/extract-public-source" --runtime "$GITHUB_WORKSPACE/runtime" --expected-head "$GITHUB_SHA" --branch hia-extract-public-6780-20261116
+      - name: Show retained failure without rerunning
+        if: failure()
+        run: |
+          python3 -I -B - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"extract-public-source"
+          for path in [root/"SOURCE_CI.json",*sorted((root/"processes").glob("*.stderr"))]:
+              if path.is_file():
+                  raw=path.read_bytes()
+                  if raw:print(json.dumps({"file":str(path.relative_to(root)),"bytes":len(raw),"tail":raw[-16000:].decode(errors="replace")}))
+          PY
+      - name: Retain complete source author output and any failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-public-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/extract-public-source
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
