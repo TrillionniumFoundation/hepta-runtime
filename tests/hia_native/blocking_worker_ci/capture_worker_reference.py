@@ -77,6 +77,7 @@ def main():
     put(output/'worker-reference-pins.json',raw)
     binary,env,registry=build(source,output,pins)
     sys.path.insert(0,str(output/'source/tests/hia_native/blocking_worker'))
+    sys.path.insert(0,str(output/'source/tests/hia_native/blocking_worker/reference'))
     from worker_cases import graph_cases,original_graphs,duration_cases,lines
     from qualify_bellman import ERRORS
     graphs=original_graphs();actual=replay(output,binary,env,'ordinary',lines(graphs))
