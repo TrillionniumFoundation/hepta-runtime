@@ -1,6 +1,6 @@
 """Run the complete native gate across source-bound, independently retained jobs.
 
-One fresh cold/build artifact is admitted by its workflow-produced SHA256. Nine
+One fresh cold/build artifact is admitted by its workflow-produced SHA256. Eleven
 explicit partitions execute every registered suite once. Collection rechecks all
 raw process bytes, immutable build inputs and complete shard inventories before
 the unchanged evidence owners can advance to the original Rust comparisons.
@@ -28,7 +28,8 @@ import qualify_hia_runtime_native as q
 
 PARTITIONS = {
     "storage": tuple(q.storage_pipeline.KEYS),
-    "batch": ("batch_edit_params", "batch_plan_input", "batch_plan", "batch_apply", "batch_diff", "atomic_write", "write_chain", "batch_write"),
+    "batch_planning": ("batch_edit_params", "batch_plan_input", "batch_plan"),
+    "batch_effects": ("batch_apply", "batch_diff", "atomic_write", "write_chain", "batch_write"),
     "text": ("runtime_bytes", "runtime_protocol", "text_budget", "request_context", "response_hints", "result_publication", "request_scope_lifecycle",
              "line_endpoint", "line_verify",
              "delta", "editable_content", "file_locks", "file_lock_service",
@@ -153,8 +154,13 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "shell", "view_components", "view", "json", "execution", "config", "system", "storage"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if set(partitions) != {"batch_planning", "batch_effects", "text", "shell", "view_components", "view", "json", "execution", "config", "system", "storage"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
         raise ValueError("every native module must belong to exactly one explicit partition")
+    # Keep each producer with its evidence readers, while leaving upload time
+    # inside each unchanged job deadline. Both groups use the same prepared seal.
+    if (partitions["batch_planning"] != ("batch_edit_params", "batch_plan_input", "batch_plan")
+            or partitions["batch_effects"] != ("batch_apply", "batch_diff", "atomic_write", "write_chain", "batch_write")):
+        raise ValueError("the complete Batch planning and effect families require their independent partitions")
     if partitions["config"] != ("runtime_config", "runtime_config_span"):
         raise ValueError("the complete configuration and regex owner requires its independent partition")
     # Public View readers share the local-call and search captures. Their full
@@ -181,7 +187,8 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
                and [names.index(name) for name in ordered_locks] == sorted(names.index(name) for name in ordered_locks)
                for names in result.values()):
         raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
-    for group in (q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS),
+    for group in (("test_batch_plan.py", "test_batch_plan_evidence.py"),
+                  q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS),
                   q.batch_write_pipeline.q.SUITES, q.serde_error_pipeline.TESTS, q.storage_pipeline.TESTS,
                   (q.local_create_spec_qualification.MODULE["test"],
                    *q.local_create_spec_qualification.MODULE["additional_tests"])):

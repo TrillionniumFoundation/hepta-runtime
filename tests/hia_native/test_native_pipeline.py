@@ -254,7 +254,7 @@ class NativePipelineTests(unittest.TestCase):
                          "test_runtime_mcp_raw_value.py", "test_runtime_mcp_raw_value_evidence.py")):
             positions = [partitions["view"].index(name) for name in ordered]
             self.assertEqual(positions, sorted(positions))
-        self.assertEqual(set(partitions), {"batch", "text", "shell", "view_components", "view", "json", "execution", "config", "system", "storage"})
+        self.assertEqual(set(partitions), {"batch_planning", "batch_effects", "text", "shell", "view_components", "view", "json", "execution", "config", "system", "storage"})
         self.assertEqual(partitions["storage"], q.storage_pipeline.TESTS)
         config = next(row for row in q.MODULES if row["key"] == "runtime_config")
         span = next(row for row in q.MODULES if row["key"] == "runtime_config_span")
@@ -262,7 +262,8 @@ class NativePipelineTests(unittest.TestCase):
                          (config["test"], *config["additional_tests"],
                           span["test"], *span["additional_tests"]))
         self.assertTrue(set(partitions["config"]).isdisjoint(partitions["json"]))
-        self.assertEqual(tuple(partitions["batch"]),
+        self.assertEqual((len(partitions["batch_planning"]), len(partitions["batch_effects"])), (4, 23))
+        self.assertEqual(partitions["batch_planning"] + partitions["batch_effects"],
             ("test_batch_edit_params.py", "test_batch_plan_input.py", "test_batch_plan.py", "test_batch_plan_evidence.py", "test_batch_apply.py",
              "test_batch_apply_contract.py", "test_batch_apply_artifacts.py", "test_batch_apply_evidence.py",
              "test_batch_diff.py",
@@ -393,11 +394,36 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(tuple(value.strip() for value in groups[1].split(",")), tuple(p.PARTITIONS))
         self.assertEqual(block.count("    timeout-minutes: 15\n"), 1)
         self.assertIn("      fail-fast: false\n", block)
+        self.assertIn("    needs: prepare\n", block)
+        self.assertEqual(block.count('--prepared-sha256 "${{ needs.prepare.outputs.prepared_sha256 }}"'), 1)
+        self.assertEqual(block.count('--invocation "${{ github.run_id }}-${{ github.run_attempt }}"'), 1)
+        self.assertIn('name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}', block)
+        self.assertIn('name: hia-native-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-${{ matrix.group }}', block)
+        originals = re.findall(r"^  original_([a-z]+):$", workflow, re.MULTILINE)
+        self.assertEqual(originals, ["bytes", "state", "services", "json", "config", "system", "batch", "storage"])
+        original_workflow = (ROOT / ".github/workflows/hia-runtime-original-shard.yml").read_text()
+        self.assertEqual(original_workflow.count("    timeout-minutes: 45\n"), 1)
         changed = copy.deepcopy(p.PARTITIONS)
         changed["json"] += changed["config"]
         changed["config"] = ()
         with self.assertRaisesRegex(ValueError, "independent partition"):
             p.partition_tests(changed)
+
+    def test_batch_families_cannot_be_recombined_or_move_evidence_across_jobs(self):
+        for change in ("recombine", "move_apply", "split_plan_evidence"):
+            changed = copy.deepcopy(p.PARTITIONS)
+            modules = q.MODULES
+            if change == "recombine":
+                changed["batch"] = changed.pop("batch_planning") + changed.pop("batch_effects")
+            elif change == "move_apply":
+                changed["batch_planning"] += ("batch_apply",)
+                changed["batch_effects"] = changed["batch_effects"][1:]
+            else:
+                modules = tuple(dict(row, additional_tests=()) if row["key"] == "batch_plan" else
+                                dict(row, additional_tests=(*row.get("additional_tests", ()), "test_batch_plan_evidence.py"))
+                                if row["key"] == "batch_apply" else row for row in modules)
+            with self.subTest(change=change), patch.object(q, "MODULES", modules), self.assertRaises(ValueError):
+                p.partition_tests(changed)
 
     def test_failure_diagnostics_survive_denied_fixtures_without_mutation(self):
         source = self.root / "failed"; source.mkdir()
@@ -695,10 +721,13 @@ class NativePipelineTests(unittest.TestCase):
                 p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
             evidence.assert_not_called()
             self.assertEqual(p.read_json(output / "result.json")["status"], "FAIL")
-            shutil.rmtree(shards / "config")
-            with self.assertRaisesRegex(ValueError, "exactly " + str(len(p.PARTITIONS))):
-                p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
-            evidence.assert_not_called()
+            for missing in ("config", "batch_planning", "batch_effects"):
+                with self.subTest(missing=missing):
+                    shutil.rmtree(shards / missing)
+                    with self.assertRaisesRegex(ValueError, "exactly " + str(len(p.PARTITIONS))):
+                        p.collect(output, self.root, "a" * 64, "reporting-fixture", shards)
+                    evidence.assert_not_called()
+                    shutil.copytree(destination, shards / missing)
 
     def test_all_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):
         from contextlib import ExitStack
