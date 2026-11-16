@@ -1,4 +1,4 @@
-name: Inspect frozen annotation revision 3 failure without semantic replay
+name: Read retained annotation workload timing without replay
 on:
   push:
     branches: [hia-scope-span-inspect-r3-6780-20261116]
@@ -10,14 +10,39 @@ jobs:
   inspect:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - revision: r3
+            artifact: 14239997887
+            run: 43898646439
+            head: ffc4f26b8e7531d5dba3f7df9291c2897b92f6cc
+            bytes: 215829313
+            sha256: 7fc55f93b36369f3396f82759384e372970ca3880b4e0d35d1b2e4da264e5c7d
+            manifest: 3bea8745891f100a5e13422f422cf9b4a1749c9b5d9b27814e227dc44af33764
+          - revision: r4
+            artifact: 14243826825
+            run: 43902785659
+            head: 8441262d8076c1d4864665ea234d488ef24b9ebb
+            bytes: 212141035
+            sha256: 1a5750418c60cf67d7259527b38ed0a7ada1006e14eadb8b9ab889432f94d861
+            manifest: e61552f0d8f05dc2a9c5608d5ff9a76e44038a239df306a5159bd7d6edee0ed7
+    env:
+      SOURCE_ARTIFACT_ID: ${{ matrix.artifact }}
+      SOURCE_RUN_ID: ${{ matrix.run }}
+      SOURCE_HEAD: ${{ matrix.head }}
+      SOURCE_ZIP_BYTES: ${{ matrix.bytes }}
+      SOURCE_ZIP_SHA256: ${{ matrix.sha256 }}
+      SOURCE_MANIFEST_SHA256: ${{ matrix.manifest }}
     steps:
       - name: Download exact retained failure bytes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14239997887 > "$RUNNER_TEMP/input-artifact.json"
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14239997887/zip > "$RUNNER_TEMP/input-artifact.zip"
-      - name: Verify every archive byte and inspect actual constructor frames
+          gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$SOURCE_ARTIFACT_ID" > "$RUNNER_TEMP/input-artifact.json"
+          gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$SOURCE_ARTIFACT_ID/zip" > "$RUNNER_TEMP/input-artifact.zip"
+      - name: Read complete archive and actual call timing records
         run: |
           python3 -I -B - <<'PY'
           """Inspect complete existing failure bytes; never execute native code or Rust."""
@@ -33,11 +58,11 @@ jobs:
           def put(name,value):
               (reports/name).write_text(json.dumps(value,sort_keys=True,indent=2)+"\n")
           metadata=json.loads((root/"input-artifact.json").read_bytes())
-          digest="7fc55f93b36369f3396f82759384e372970ca3880b4e0d35d1b2e4da264e5c7d"
-          assert metadata["id"]==14239997887 and metadata["workflow_run"]["id"]==43898646439
-          assert metadata["workflow_run"]["head_sha"]=="ffc4f26b8e7531d5dba3f7df9291c2897b92f6cc"
+          digest=os.environ["SOURCE_ZIP_SHA256"]
+          assert metadata["id"]==int(os.environ["SOURCE_ARTIFACT_ID"]) and metadata["workflow_run"]["id"]==int(os.environ["SOURCE_RUN_ID"])
+          assert metadata["workflow_run"]["head_sha"]==os.environ["SOURCE_HEAD"]
           assert metadata["expired"] is False and metadata["digest"]=="sha256:"+digest
-          assert metadata["size_in_bytes"]==215829313 and pin(root/"input-artifact.zip")==dict(bytes=215829313,sha256=digest)
+          assert metadata["size_in_bytes"]==int(os.environ["SOURCE_ZIP_BYTES"]) and pin(root/"input-artifact.zip")==dict(bytes=int(os.environ["SOURCE_ZIP_BYTES"]),sha256=digest)
           zip_rows={}
           with zipfile.ZipFile(root/"input-artifact.zip") as archive:
               assert len(archive.infolist())==4 and set(archive.namelist())=={"annotation-span-v2.tar.gz","annotation-span-v2.tar.gz.json","annotation-export.stdout","annotation-export.stderr"}
@@ -50,7 +75,7 @@ jobs:
           receipt=json.loads((package/"annotation-span-v2.tar.gz.json").read_bytes())
           assert pin(archive_path)=={k:receipt[k] for k in ("bytes","sha256")}
           assert receipt["all_members_reread"] is True and receipt["gate_status"]=="FAIL"
-          assert receipt["source_manifest_sha256"]=="3bea8745891f100a5e13422f422cf9b4a1749c9b5d9b27814e227dc44af33764"
+          assert receipt["source_manifest_sha256"]==os.environ["SOURCE_MANIFEST_SHA256"]
           members={}
           with tarfile.open(archive_path,"r|gz") as archive:
               while item:=archive.next():
@@ -66,92 +91,53 @@ jobs:
           expected=dict(manifest["files"]);expected["artifact-manifest.json"]=dict(bytes=len(raw),sha256=sha(raw),mode=0o644)
           assert members==expected and len(members)==receipt["files"]
           assert sum(row["bytes"] for row in members.values())==receipt["logical_bytes"]
-          assert manifest["git_head"]==metadata["workflow_run"]["head_sha"] and int(manifest["run_id"])==43898646439
+          assert manifest["git_head"]==metadata["workflow_run"]["head_sha"] and int(manifest["run_id"])==int(os.environ["SOURCE_RUN_ID"])
           assert manifest["semantic_reexecutions_by_exporter"]==0 and manifest["gate_status"]=="FAIL"
           put("ZIP_FILES.json",zip_rows);put("TAR_FILES.json",members);put("original-archive-receipt.json",receipt)
-          data=recovered/"run/controls"
-          calls=[json.loads(line) for line in (data/"calls.jsonl").read_bytes().splitlines()]
-          rows={row["sha256"]:row for row in (json.loads(line) for line in (data/"buffers.jsonl").read_bytes().splitlines())}
-          def actual(descriptor):
-              output=bytearray()
-              for key in descriptor["chunks"]:
-                  row=rows[key];compressed=(data/row["file"]).read_bytes()
-                  assert dict(bytes=len(compressed),sha256=sha(compressed))==dict(bytes=row["compressed_bytes"],sha256=row["compressed_sha256"])
-                  raw=gzip.decompress(compressed);assert len(raw)==row["bytes"] and sha(raw)==key
-                  output.extend(raw)
-              assert len(output)==descriptor["bytes"] and sha(output)==descriptor["sha256"]
-              return bytes(output)
-          observations=[]
+          data=recovered/"run/native"
+          def ledger(name):
+              raw=(data/name).read_bytes();records=[];tail=None
+              lines=raw.splitlines()
+              for index,line in enumerate(lines):
+                  try:records.append(json.loads(line))
+                  except (ValueError,UnicodeDecodeError):
+                      assert index==len(lines)-1
+                      tail=dict(bytes=len(line),sha256=sha(line))
+              return records,tail
+          calls,call_tail=ledger("calls.jsonl")
+          cases,case_tail=ledger("cases.jsonl")
+          owners={};case_cost={}
           for row in calls:
-              if row["case"].startswith("constructor-small-output-"):
-                  request=(data/row["folder"]/"input.bin").read_bytes()
-                  before,after=actual(row["output_before"]),actual(row["output_after"])
-                  wb,wa=actual(row["workspace_before"]),actual(row["workspace_after"])
-                  observations.append(dict(call=row["call"],case=row["case"],return_code=row["return_code"],
-                      output_capacity=row["output_capacity"],workspace_capacity=row["workspace_capacity"],
-                      input_hex=request.hex(),input_sha256=sha(request),output_before_hex=before.hex(),output_after_hex=after.hex(),
-                      workspace_unchanged=wb==wa,workspace_bytes=len(wb),
-                      growth_words=list(struct.unpack("<3Q",after[8:32])) if after[:8]==b"HGRWS002" else None))
-          summary=dict(status="COMPLETE_EXISTING_ARCHIVE_BYTES_READ",original_run=43898646439,original_job=133408956494,
-              artifact_id=14239997887,original_zip=dict(bytes=215829313,sha256=digest),
+              bucket=owners.setdefault(row["owner"],dict(calls=0,seconds=0.0,workspace_bytes=0,output_bytes=0))
+              bucket["calls"]+=1;bucket["seconds"]+=row["elapsed_seconds"]
+              bucket["workspace_bytes"]+=row["workspace_capacity"];bucket["output_bytes"]+=row["output_capacity"]
+              case_cost[row["case"]]=case_cost.get(row["case"],0.0)+row["elapsed_seconds"]
+          largest=[{k:row[k] for k in ("call","owner","case","elapsed_seconds","return_code","output_capacity","workspace_capacity")}
+                   for row in sorted(calls,key=lambda row:row["elapsed_seconds"],reverse=True)[:30]]
+          processes=json.loads((recovered/"run/gate-processes/processes.json").read_bytes())
+          native_process=next(row for row in processes if row["name"]=="native-domain")
+          summary=dict(status="COMPLETE_EXISTING_ARCHIVE_BYTES_READ",original_run=int(os.environ["SOURCE_RUN_ID"]),
+              original_head=os.environ["SOURCE_HEAD"],artifact_id=int(os.environ["SOURCE_ARTIFACT_ID"]),
+              original_zip=dict(bytes=int(os.environ["SOURCE_ZIP_BYTES"]),sha256=digest),
               files=len(members),logical_bytes=receipt["logical_bytes"],all_archive_files_bytes_modes_verified=True,
-              source_manifest_sha256=receipt["source_manifest_sha256"],constructor_observations=observations,
-              native_summary=json.loads((recovered/"run/native/CAPTURE.json").read_bytes()),
-              original_replay=json.loads((recovered/"run/original/REPLAY.json").read_bytes()),
+              source_manifest_sha256=receipt["source_manifest_sha256"],
+              native_capture_metadata=json.loads((data/"CAPTURE.json").read_bytes()),
+              native_process=native_process,completed_case_records=len(cases),complete_call_records=len(calls),
+              last_completed_cases=cases[-3:],last_complete_calls=calls[-2:],
+              call_ledger_incomplete_tail=call_tail,case_ledger_incomplete_tail=case_tail,
+              per_owner=owners,largest_calls=largest,
+              most_native_seconds_by_case=sorted(case_cost.items(),key=lambda row:row[1],reverse=True)[:30],
+              sum_observed_native_seconds=sum(row["elapsed_seconds"] for row in calls),
               native_executions=0,rust_executions=0,original_failure_reclassified_as_pass=False,complete_gate_pass=False)
-          put("READBACK.json",summary);print(json.dumps(summary,sort_keys=True))
+          put("PERFORMANCE.json",summary)
+          summary["last_complete_calls"]=[{k:row[k] for k in ("call","owner","case","elapsed_seconds","return_code","output_capacity","workspace_capacity")} for row in calls[-2:]]
+          print(json.dumps(summary,sort_keys=True))
           PY
-      - name: Independently read completed components without replay
-        run: |
-          cat > "$RUNNER_TEMP/read-scope-completed.py" <<'PY'
-          """Read completed components of a failed gate; the failed control gate stays failed."""
-          from pathlib import Path
-          import gzip, hashlib, json, os, sys, tarfile, tomllib
-          root=Path(os.environ["RUNNER_TEMP"])/"scope-inspection"
-          source,run=root/"recovered/source",root/"recovered/run"
-          sys.dont_write_bytecode=True
-          sys.path.insert(0,str(source))
-          import qualify as q
-          import read_capture, original_reader, extract_reference, controls, cases, evidence_controls, original_evidence_controls
-          from read_only_guard import guarded
-          source_sha=q.verify_source()
-          assert source_sha=="3bea8745891f100a5e13422f422cf9b4a1749c9b5d9b27814e227dc44af33764"
-          def read_completed():
-              build=q.build_evidence(run/"build",source_sha)
-              native,_=q.native_evidence(run/"native",run/"build",source_sha)
-              original=original_reader.original_evidence(run/"original",run/"native",source_root=source)
-              return dict(status="COMPLETED_NATIVE_AND_ORIGINAL_COMPONENTS_READ",build=build,native=native,original=original,
-                          controls_qualified=False,complete_gate_pass=False,original_failure_reclassified_as_pass=False)
-          result=guarded(read_completed,roots=[source,run],foreign_path=Path("/dev/null"))
-          assert len(result["probes"])==12 and result["before"]==result["after"]
-          assert result["native_or_rust_executions"]==result["reader_writes"]==0
-          raw=(json.dumps(result,sort_keys=True,indent=2)+"\n").encode()
-          (root/"reports/completed-components-reader.json").write_bytes(raw)
-          print(json.dumps(dict(evidence=result["evidence"],guard_probes=len(result["probes"]),unchanged_entries=len(result["before"]),
-              proof_bytes=len(raw),proof_sha256=hashlib.sha256(raw).hexdigest(),native_executions=0,rust_executions=0),sort_keys=True))
-          PY
-          python3 -I -B - <<'PY'
-          from pathlib import Path
-          import os,sys
-          root=Path(os.environ["RUNNER_TEMP"])/"scope-inspection"
-          source=root/"recovered/source"
-          sys.path.insert(0,str(source))
-          from rust_reference import Recorder,environment
-          env,_=environment(os.environ)
-          rec=Recorder(source,root/"reports/reader-processes",env)
-          try:
-              stdout,process=rec.run("read-completed-components",[sys.executable,"-I","-B",Path(os.environ["RUNNER_TEMP"])/"read-scope-completed.py"],timeout=180)
-              print(stdout.decode())
-          except BaseException:
-              for path in sorted((root/"reports/reader-processes").glob("*.stderr")):
-                  print(path.read_text(),file=sys.stderr)
-              raise
-          PY
-      - name: Preserve complete inspection reports
+      - name: Preserve complete readback and diagnostic reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: scope-r3-existing-artifact-inspection-${{ github.sha }}
+          name: scope-timing-${{ matrix.revision }}-${{ github.sha }}
           path: ${{ runner.temp }}/scope-inspection/reports/
           retention-days: 14
           if-no-files-found: error
