@@ -1,0 +1,50 @@
+name: Read every byte of the retained 08ce aggregate
+on:
+  push:
+    branches: [hia-history-aggregate-index-6780-20261116]
+    paths: ['.github/workflows/hia-history-aggregate-index.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  index:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen byte-only observer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: observer
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/history_aggregate_recovery/index-v1
+      - name: Download exact existing failed aggregate without replay
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14274528318 > "$RUNNER_TEMP/original-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14274528318/zip > "$RUNNER_TEMP/original-artifact.zip"
+      - name: Read complete ZIP and TAR bytes and retain every member identity
+        run: |
+          timeout --signal=KILL 900 python3 -I -S -B observer/qualification/history_aggregate_recovery/index-v1/index_archive.py \
+            --zip "$RUNNER_TEMP/original-artifact.zip" \
+            --metadata "$RUNNER_TEMP/original-artifact.json" \
+            --output "$RUNNER_TEMP/history-aggregate-index" \
+            > "$RUNNER_TEMP/history-aggregate-index.stdout" \
+            2> "$RUNNER_TEMP/history-aggregate-index.stderr"
+      - name: Retain exact diagnostics and full byte index including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history-08ce-complete-archive-index
+          path: |
+            ${{ runner.temp }}/history-aggregate-index/
+            ${{ runner.temp }}/history-aggregate-index.stdout
+            ${{ runner.temp }}/history-aggregate-index.stderr
+            ${{ runner.temp }}/original-artifact.json
+          include-hidden-files: true
+          compression-level: 6
+          if-no-files-found: error
+          retention-days: 14
