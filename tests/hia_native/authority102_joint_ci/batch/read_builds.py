@@ -98,15 +98,20 @@ def bootstrap(root):
                 "complete bootstrap generations differ")
 
 
+def source_module(name, path):
+    """Load only the admitted source bytes, without an implicit pyc file probe."""
+    path = Path(path)
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    exec(compile(regular(path), str(path), "exec", dont_inherit=True), module.__dict__)
+    return module
+
 def load_builder(source):
     """Import only the admitted build definitions; no build method is called."""
     source = Path(source).resolve(strict=True)
     sys.dont_write_bytecode = True
     sys.path.insert(0, str(source / "scripts"))
-    spec = importlib.util.spec_from_file_location("batch_public_admitted_builder", source / "scripts/public_nine_build.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return source_module("batch_public_admitted_builder", source / "scripts/public_nine_build.py")
 
 
 def object_layout(raw):
@@ -333,10 +338,7 @@ def original(folder, source):
         "current original target/owner scope")
     sources(report, source)
     project = folder / "project"
-    spec = importlib.util.spec_from_file_location("batch_public_original_author",
-        source / "authoring/author_public_reference.py")
-    author = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(author)
+    author = source_module("batch_public_original_author", source / "authoring/author_public_reference.py")
     generated, proof = author.compose(source / "baseline", source / "core")
     require(proof == read_json(source / "project/SOURCE.json")
         and report["target_files"] == proof["target_files"]

@@ -120,8 +120,39 @@ def prepare(source):
     sys.path.insert(0, str(source / "batch"))
     batch = load("_joint102_batch_recipe", source / "batch/run_recipe.py")
     batch.read_builds.load_builder(source / "batch/native-source")
+    # This module is imported by the complete Batch reader. Admit its exact
+    # definitions before the guard; do not allow a later implicit pyc probe.
+    controls = importlib.import_module("check_evidence")
+    assert Path(controls.__file__).resolve(strict=True) == (source / "batch/check_evidence.py").resolve(strict=True)
     entry = load("_joint102_entry_reader", source / "entry102.py")
     return authority, batch, entry, prepared["guard"]
+
+
+def check_imports(source, prepared):
+    """Retain all 11 guard refusals while checking repeat imports and exact authors."""
+    batch = prepared[1]
+    def operation():
+        for _ in range(2):
+            builder = batch.read_builds.load_builder(source / "batch/native-source")
+            assert len(builder.MEMBERS) == 102
+            assert builder.source_check(source / "batch/native-source")["manifest_sha256"] == BINDING
+        reference = source / "batch/original-reference"
+        author = batch.read_builds.source_module("batch_public_original_author",
+            reference / "authoring/author_public_reference.py")
+        generated, proof = author.compose(reference / "baseline", reference / "core")
+        assert proof == doc(reference / "project/SOURCE.json")
+        for name, raw in generated.items():
+            assert (reference / "project" / name).read_bytes() == raw
+        assert Path(importlib.import_module("check_evidence").__file__).resolve(strict=True) == (
+            source / "batch/check_evidence.py").resolve(strict=True)
+        return dict(repeated_builder_imports=2, physical_members=102,
+            exact_original_source_files=len(generated), actual_builder_executions=0,
+            native_or_rust_executions=0)
+    report = prepared[3].guarded(operation, roots=[source], foreign_path="/dev/null")
+    assert len(report["probes"]) == 11 and report["before"] == report["after"]
+    return dict(status="EXACT_JOINT_READER_IMPORTS_PASS", evidence=report["evidence"],
+        readonly=dict(probes=report["probes"], files=len(report["before"]),
+            complete_before_after_equal=True, native_or_rust_executions=0))
 
 
 def source_copies(source, authority_archive, batch_run):
@@ -202,19 +233,26 @@ def verify(source, authority_archive, batch_run, prepared):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("source", "authority", "batch"):
-        parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--source", type=Path, required=True)
+    for name in ("authority", "batch"):
+        parser.add_argument("--" + name, type=Path)
     parser.add_argument("--expected-source-sha256", required=True)
+    parser.add_argument("--imports-only", action="store_true")
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
-    authority = args.authority.resolve(strict=True)
-    batch = args.batch.resolve(strict=True)
     assert pin(source / "joint-source.json")["sha256"] == args.expected_source_sha256
     check(source)
     prepared = prepare(source)
-    guarded = prepared[3].guarded(lambda: verify(source, authority, batch, prepared),
-        roots=[source, authority, batch], foreign_path="/dev/null")
-    assert len(guarded["probes"]) == 11 and guarded["before"] == guarded["after"]
-    print(json.dumps(dict(status=guarded["evidence"]["status"], evidence=guarded["evidence"],
-        readonly=dict(probes=guarded["probes"], files=len(guarded["before"]),
-            complete_before_after_equal=True, native_or_rust_executions=0)), sort_keys=True))
+    if args.imports_only:
+        assert args.authority is None and args.batch is None
+        print(json.dumps(check_imports(source, prepared), sort_keys=True))
+    else:
+        assert args.authority is not None and args.batch is not None
+        authority = args.authority.resolve(strict=True)
+        batch = args.batch.resolve(strict=True)
+        guarded = prepared[3].guarded(lambda: verify(source, authority, batch, prepared),
+            roots=[source, authority, batch], foreign_path="/dev/null")
+        assert len(guarded["probes"]) == 11 and guarded["before"] == guarded["after"]
+        print(json.dumps(dict(status=guarded["evidence"]["status"], evidence=guarded["evidence"],
+            readonly=dict(probes=guarded["probes"], files=len(guarded["before"]),
+                complete_before_after_equal=True, native_or_rust_executions=0)), sort_keys=True))

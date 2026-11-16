@@ -56,6 +56,7 @@ jobs:
       - name: Verify complete sources and unchanged target inputs
         run: |
           python3 -I -B "$JOINT_SOURCE/check_package.py" --source "$JOINT_SOURCE" --expected-sha256 "$JOINT_PROFILE"
+          python3 -I -B "$JOINT_SOURCE/verify_joint.py" --source "$JOINT_SOURCE" --expected-source-sha256 "$JOINT_PROFILE" --imports-only
           python3 -I -B "$JOINT_SOURCE/authority-runner/run_ci.py" --source "$JOINT_SOURCE/authority" --check-only
           python3 -I -B "$JOINT_SOURCE/entry102.py" --source "$JOINT_SOURCE/installed" --reference-package "$JOINT_SOURCE/authority" --check-source-only
           test "$(git -C runtime rev-parse HEAD)" = '${{ github.sha }}'
