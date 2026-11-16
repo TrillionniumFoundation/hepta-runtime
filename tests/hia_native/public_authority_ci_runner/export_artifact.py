@@ -62,7 +62,7 @@ def main():
     for key,raw in objects.items():rows[key]=dict(bytes=len(raw),sha256=SHA(raw))
     objects["artifact-manifest.json"]=encoded(dict(schema="hepta.public91-authority.artifact-manifest.v1",files=rows,
         directories=sorted(directories),complete_source_and_captures=True,existing_binary_inputs=False))
-    with tarfile.open(archive_path,"w:gz",format=tarfile.PAX_FORMAT) as tar:
+    with tarfile.open(archive_path,"w:gz",format=tarfile.PAX_FORMAT,compresslevel=1) as tar:
         for key,mode in sorted(directories.items()):
             info=tarfile.TarInfo(key);info.type=tarfile.DIRTYPE;info.mode=mode;info.mtime=0;tar.addfile(info)
         for key in sorted(set(files)|set(objects)):
