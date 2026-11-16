@@ -44,8 +44,13 @@ jobs:
           sparse-checkout: |
             native
             scripts
+            authoring
             tests/hia_native
             .github/workflows
+      - name: Materialize explicit historical qualification source
+        run: |
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --output "$RUNNER_TEMP/hia-historical-public58" > "$RUNNER_TEMP/hia-historical-public58-profile.json"
+          printf 'HIA_QUALIFICATION_SOURCE=%s\n' "$RUNNER_TEMP/hia-historical-public58" >> "$GITHUB_ENV"
       - name: Checkout fixed HIA compiler
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -81,8 +86,8 @@ jobs:
           rustup toolchain install 1.95.0 --profile minimal
           python3 -I -B - <<'PY'
           from pathlib import Path
-          import sys
-          source = Path('runtime/tests/hia_native/local_text_body').resolve()
+          import os, sys
+          source = Path(os.environ['HIA_QUALIFICATION_SOURCE']) / 'tests/hia_native/local_text_body'
           sys.path.insert(0, str(source))
           import verify_reference
           import portable_support
@@ -95,15 +100,22 @@ jobs:
       - name: Run every native case and fresh complete original pair
         run: |
           HIA_BODY_RUSTC="$(rustup which --toolchain 1.95.0 rustc)"
-          python3 -I -B runtime/scripts/qualify_hia_local_text_body.py \
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/qualify_hia_local_text_body.py \
             --hepta "$GITHUB_WORKSPACE/compiler" \
             --toolchain "$(dirname "$HIA_BODY_RUSTC")" \
             --output "$RUNNER_TEMP/hia-local-text-body" \
             --phase all
       - name: Reopen complete source and process evidence
         run: |
-          python3 -I -B runtime/scripts/qualify_hia_local_text_body.py \
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/qualify_hia_local_text_body.py \
             --output "$RUNNER_TEMP/hia-local-text-body" --phase verify
+      - name: Retain complete qualification source profile
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/hia-historical-public58/HISTORICAL_PUBLIC_SOURCE.json"; then
+            mkdir -p "$RUNNER_TEMP/hia-local-text-body"
+            cp "$RUNNER_TEMP/hia-historical-public58/HISTORICAL_PUBLIC_SOURCE.json" "$RUNNER_TEMP/hia-local-text-body/source-profile.json"
+          fi
       - name: Retain complete input, output, state and failure evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

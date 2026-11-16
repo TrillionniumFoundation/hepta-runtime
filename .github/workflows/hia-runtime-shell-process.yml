@@ -91,6 +91,10 @@ jobs:
           path: runtime
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Materialize explicit historical qualification source
+        run: |
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --output "$RUNNER_TEMP/hia-historical-public58" > "$RUNNER_TEMP/hia-historical-public58-profile.json"
+          printf 'HIA_QUALIFICATION_SOURCE=%s\n' "$RUNNER_TEMP/hia-historical-public58" >> "$GITHUB_ENV"
       - name: Checkout fixed HIA compiler
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -112,15 +116,22 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: 1.95.0
         run: |
-          python3 -I -B runtime/scripts/qualify_hia_shell_process.py \
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/qualify_hia_shell_process.py \
             --hepta "$GITHUB_WORKSPACE/compiler" \
             --output "$RUNNER_TEMP/hia-shell-process" \
             --rustc "$(rustup which --toolchain 1.95.0 rustc)" \
             --cargo "$(rustup which --toolchain 1.95.0 cargo)"
+      - name: Retain complete qualification source profile
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/hia-historical-public58/HISTORICAL_PUBLIC_SOURCE.json"; then
+            mkdir -p "$RUNNER_TEMP/hia-shell-process"
+            cp "$RUNNER_TEMP/hia-historical-public58/HISTORICAL_PUBLIC_SOURCE.json" "$RUNNER_TEMP/hia-shell-process/source-profile.json"
+          fi
       - name: Stage failed process reports and untouched fixtures
         if: failure()
         run: |
-          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/hia_native_failure_evidence.py \
             --source "$RUNNER_TEMP/hia-shell-process" \
             --output "$RUNNER_TEMP/hia-shell-failure-evidence"
       - name: Retain failure diagnostics and archive, including incomplete archives
