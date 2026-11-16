@@ -1,0 +1,43 @@
+name: Bellman complete public SDK original reference
+on:
+  push:
+    branches: [hia-bellman-public-reference-6780-20261116]
+    paths:
+      - 'tests/hia_native/bellman_public_reference_ci/**'
+      - '.github/workflows/hia-bellman-public-reference.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact frozen public reference source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/bellman_public_reference_ci
+      - name: Verify source identity and install the fixed original compiler
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          rustup toolchain install 1.95.0 --profile minimal
+      - name: Observe complete original typed, plan and both public SDK domains
+        run: |
+          python3 -I -S -B runtime/tests/hia_native/bellman_public_reference_ci/recipe.py --output "$RUNNER_TEMP/bellman-public-reference" > "$RUNNER_TEMP/bellman-public-driver.stdout" 2> "$RUNNER_TEMP/bellman-public-driver.stderr"
+      - name: Preserve every success or failure source and process byte
+        if: always()
+        run: |
+          python3 -I -S -B runtime/tests/hia_native/bellman_public_reference_ci/archive.py --capture "$RUNNER_TEMP/bellman-public-reference" --output "$RUNNER_TEMP/bellman-public-reference-artifact" --driver-prefix "$RUNNER_TEMP/bellman-public-driver"
+      - name: Retain complete immutable public reference evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bellman-public-reference-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bellman-public-reference-artifact/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
