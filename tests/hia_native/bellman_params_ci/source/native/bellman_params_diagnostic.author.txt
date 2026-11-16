@@ -1,0 +1,608 @@
+def compile(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) < 192 or length(s) > 536870912:
+        return 4294967295
+    if read64(s, 0) != PARAMS_MAGIC or read64(s, 8) != 1:
+        return 4294967295
+    if read64(s, 16) != 0 or read64(s, 24) != 0 or read64(s, 32) != 0:
+        return 4294967295
+    if read64(s, 104) != 0 or read64(s, 112) != 0 or read64(s, 120) != 0:
+        return 4294967295
+    if read64(s, 128) != INPUT_MAGIC or read64(s, 136) != 1 or read64(s, 144) != length(s) - 192:
+        return 4294967295
+    if read64(s, 152) != 0 or read64(s, 160) != 0 or read64(s, 168) != 0 or read64(s, 176) != 0 or read64(s, 184) != 0:
+        return 4294967295
+    if valid_descriptor(s) == 0:
+        return 4294967295
+    if length(o) < 64:
+        return 4294967294
+    if length(w) < 65536:
+        return reply(o, 2, 0, 65536)
+    put(w, 8192, 0)
+    put(w, 8200, 0)
+    init_literals(w)
+    if read64(s, 40) <= 2 and read64(s, 48) == 4:
+        unicode_table(w)
+    if render(s, w) == 0:
+        return 4294967293
+    size = get(w, 8192)
+    if length(w) < 65536 + size:
+        return reply(o, 2, 0, 65536 + size)
+    if length(o) < 64 + size:
+        return reply(o, 3, 0, 64 + size)
+    reply(o, 0, size, 0)
+    copy_workspace(o, w, 64, 65536, size)
+    return 64 + size
+
+def valid_descriptor(s:readbuf) -> u64:
+    code = read64(s, 40)
+    kind = read64(s, 48)
+    expected = read64(s, 56)
+    count = read64(s, 64)
+    start = read64(s, 72)
+    end = read64(s, 80)
+    tag = read64(s, 88)
+    bits = read64(s, 96)
+    if code < 1 or code > 6:
+        return 0
+    string = 0
+    if code <= 2:
+        if kind > 6 or expected < 1 or expected > 11 or count != 0:
+            return 0
+        if code == 2 and (kind != 3 or expected != 9):
+            return 0
+        if kind == 3:
+            if tag < 3 or tag > 5:
+                return 0
+            if tag == 4 and (bits >> 63) == 0:
+                return 0
+            if tag == 5 and ((bits >> 52) & 2047) == 2047:
+                return 0
+            if code == 2 and (tag == 5 or (tag == 3 and bits <= 4294967295)):
+                return 0
+        else:
+            if tag != 0 or bits != 0:
+                return 0
+        string = choose(kind == 4, 1, 0)
+    else:
+        if kind != 0 or tag != 0 or bits != 0:
+            return 0
+        if code != 3 and count != 0:
+            return 0
+        if code == 3:
+            if expected != 4 and (expected < 12 or expected > 19):
+                return 0
+        if code == 4 and (expected < 1 or expected > 9):
+            return 0
+        if code == 5:
+            if expected < 1 or expected > 5:
+                return 0
+            string = 1
+        if code == 6:
+            if expected != 0:
+                return 0
+            string = 1
+    if string != 0:
+        if start < 64 or start >= end or end > length(s) - 128 or end - start < 2:
+            return 0
+        if byte(s, 128 + start) != 34 or byte(s, 127 + end) != 34:
+            return 0
+    else:
+        if start != 0 or end != 0:
+            return 0
+    return 1
+
+def reply(o:mutbuf, status:u64, size:u64, required:u64) -> u32:
+    fill_range(o, 0, 64, 0)
+    put(o, 0, OUTPUT_MAGIC)
+    put(o, 8, status)
+    put(o, 16, size)
+    put(o, 24, required)
+    return 64
+
+def emit(w:mutbuf, value:u64) -> u64:
+    offset = get(w, 8192)
+    if 65536 + offset < length(w):
+        store(w, 65536 + offset, value)
+    put(w, 8192, offset + 1)
+    return 0
+
+def emit_text(w:mutbuf, identifier:u64) -> u64:
+    at = get(w, 32768 + identifier * 16)
+    size = get(w, 32776 + identifier * 16)
+    index = 0
+    while index < size:
+        emit(w, byte(w, at + index))
+        index = index + 1
+    return 0
+
+def emit_integer(w:mutbuf, value:u64) -> u64:
+    digits = 1
+    power = 10
+    while digits < 20 and value >= power:
+        digits = digits + 1
+        if digits < 20:
+            power = power * 10
+    remaining = digits
+    power = 1
+    while remaining > 1:
+        power = power * 10
+        remaining = remaining - 1
+    while digits > 0:
+        digit = 0
+        while value >= power:
+            value = value - power
+            digit = digit + 1
+        emit(w, 48 + digit)
+        digits = digits - 1
+        power = 1
+        remaining = digits
+        while remaining > 1:
+            power = power * 10
+            remaining = remaining - 1
+    return 0
+
+def emit_number(s:readbuf, w:mutbuf) -> u64:
+    bits = read64(s, 96)
+    tag = read64(s, 88)
+    if tag == 5:
+        emit_text(w, 10)
+        size = format_bits(w, bits)
+        if size == 0 or size > 32:
+            return 0
+        index = 0
+        while index < size:
+            emit(w, byte(w, 6144 + index))
+            index = index + 1
+    else:
+        emit_text(w, 9)
+        if tag == 4:
+            emit(w, 45)
+            bits = 0 - bits
+        emit_integer(w, bits)
+    emit(w, 96)
+    return 1
+
+def emit_utf8(w:mutbuf, value:u64) -> u64:
+    if value < 128:
+        emit(w, value)
+        return 0
+    if value < 2048:
+        emit(w, 192 | (value >> 6))
+        emit(w, 128 | (value & 63))
+        return 0
+    if value < 65536:
+        emit(w, 224 | (value >> 12))
+        emit(w, 128 | ((value >> 6) & 63))
+        emit(w, 128 | (value & 63))
+        return 0
+    emit(w, 240 | (value >> 18))
+    emit(w, 128 | ((value >> 12) & 63))
+    emit(w, 128 | ((value >> 6) & 63))
+    emit(w, 128 | (value & 63))
+    return 0
+
+def emit_debug(w:mutbuf, value:u64) -> u64:
+    if needs_escape(w, value) == False:
+        return emit_utf8(w, value)
+    emit(w, 92)
+    short = short_escape(value)
+    if short != 0:
+        emit(w, short)
+        return 0
+    emit(w, 117)
+    emit(w, 123)
+    shifts = 0
+    copy = value
+    while copy >= 16:
+        shifts = shifts + 4
+        copy = copy >> 4
+    emit(w, hex_digit((value >> shifts) & 15))
+    while shifts > 0:
+        shifts = shifts - 4
+        emit(w, hex_digit((value >> shifts) & 15))
+    emit(w, 125)
+    return 0
+
+def emit_string(s:readbuf, w:mutbuf, debug:u64) -> u64:
+    p = 129 + read64(s, 72)
+    end = 127 + read64(s, 80)
+    if debug != 0:
+        emit(w, 34)
+    while p < end:
+        p = decoded(s, w, p, end)
+        if p == 0:
+            return 0
+        cp = get(w, 16456)
+        if debug != 0:
+            emit_debug(w, cp)
+        else:
+            emit_utf8(w, cp)
+    if debug != 0:
+        emit(w, 34)
+    return 1
+
+def render(s:readbuf, w:mutbuf) -> u64:
+    code = read64(s, 40)
+    expected = read64(s, 56)
+    emit_text(w, code)
+    if code <= 2:
+        kind = read64(s, 48)
+        if kind == 0:
+            emit_text(w, 11)
+        if kind == 1:
+            emit_text(w, 12)
+        if kind == 2:
+            emit_text(w, 13)
+        if kind == 3:
+            if emit_number(s, w) == 0:
+                return 0
+        if kind == 4:
+            emit_text(w, 14)
+            if emit_string(s, w, 1) == 0:
+                return 0
+        if kind == 5:
+            emit_text(w, 15)
+        if kind == 6:
+            emit_text(w, 16)
+        emit_text(w, 7)
+        emit_text(w, 100 + expected)
+        return 1
+    if code == 3:
+        emit_integer(w, read64(s, 64))
+        emit_text(w, 7)
+        emit_text(w, 100 + expected)
+        return 1
+    if code == 4:
+        emit_text(w, 200 + expected)
+        emit(w, 96)
+        return 1
+    if emit_string(s, w, 0) == 0:
+        return 0
+    emit(w, 96)
+    emit_text(w, 7)
+    if code == 5:
+        emit_text(w, 300 + expected)
+    else:
+        emit_text(w, 306)
+    return 1
+
+def read64(s: readbuf, p: u64) -> u64:
+    return byte(s, p) | byte(s, p + 1) << 8 | byte(s, p + 2) << 16 | byte(s, p + 3) << 24 | byte(s, p + 4) << 32 | byte(s, p + 5) << 40 | byte(s, p + 6) << 48 | byte(s, p + 7) << 56
+
+def get(w: mutbuf, p: u64) -> u64:
+    return byte(w, p) | byte(w, p + 1) << 8 | byte(w, p + 2) << 16 | byte(w, p + 3) << 24 | byte(w, p + 4) << 32 | byte(w, p + 5) << 40 | byte(w, p + 6) << 48 | byte(w, p + 7) << 56
+
+def put(w: mutbuf, p: u64, v: u64) -> u64:
+    store(w, p, v)
+    store(w, p + 1, v >> 8)
+    store(w, p + 2, v >> 16)
+    store(w, p + 3, v >> 24)
+    store(w, p + 4, v >> 32)
+    store(w, p + 5, v >> 40)
+    store(w, p + 6, v >> 48)
+    store(w, p + 7, v >> 56)
+    return 0
+
+def hex_input(c: u64) -> u64:
+    if c >= 48 and c <= 57:
+        return c - 48
+    if c >= 65 and c <= 70:
+        return c - 55
+    if c >= 97 and c <= 102:
+        return c - 87
+    return 16
+
+def hex4(s: readbuf, p: u64, end: u64) -> u64:
+    if p + 4 > end:
+        return 65536
+    result = 0
+    i = 0
+    while i < 4:
+        digit = hex_input(byte(s, p + i))
+        if digit > 15:
+            return 65536
+        result = result << 4 | digit
+        i = i + 1
+    return result
+
+def decoded(s: readbuf, w: mutbuf, p: u64, end: u64) -> u64:
+    if p >= end:
+        return 0
+    c = byte(s, p)
+    if c < 32 or c == 34:
+        return 0
+    if c == 92:
+        if p + 1 >= end:
+            return 0
+        e = byte(s, p + 1)
+        value = 1114112
+        if e == 34 or e == 92 or e == 47:
+            value = e
+        if e == 98:
+            value = 8
+        if e == 102:
+            value = 12
+        if e == 110:
+            value = 10
+        if e == 114:
+            value = 13
+        if e == 116:
+            value = 9
+        if value != 1114112:
+            put(w, P + 72, value)
+            return p + 2
+        if e != 117:
+            return 0
+        value = hex4(s, p + 2, end)
+        if value > 65535 or (value >= 56320 and value <= 57343):
+            return 0
+        q = p + 6
+        if value >= 55296 and value <= 56319:
+            if q + 6 > end:
+                return 0
+            if byte(s, q) != 92 or byte(s, q + 1) != 117:
+                return 0
+            low = hex4(s, q + 2, end)
+            if low < 56320 or low > 57343:
+                return 0
+            value = 65536 + (value - 55296 << 10) + low - 56320
+            q = q + 6
+        put(w, P + 72, value)
+        return q
+    if c < 128:
+        put(w, P + 72, c)
+        return p + 1
+    width = 0
+    value = 0
+    minimum = 0
+    if c >= 194 and c <= 223:
+        width = 2
+        value = c & 31
+        minimum = 128
+    if c >= 224 and c <= 239:
+        width = 3
+        value = c & 15
+        minimum = 2048
+    if c >= 240 and c <= 244:
+        width = 4
+        value = c & 7
+        minimum = 65536
+    if width == 0 or p + width > end:
+        return 0
+    i = 1
+    while i < width:
+        d = byte(s, p + i)
+        if d < 128 or d > 191:
+            return 0
+        value = value << 6 | d & 63
+        i = i + 1
+    if value < minimum or value > 1114111 or (value >= 55296 and value <= 57343):
+        return 0
+    put(w, P + 72, value)
+    return p + width
+def init_literals(w:mutbuf) -> u64:
+    put(w, 32784, 40960)
+    put(w, 32792, 14)
+    put(w, 40960, 2334106421097295465)
+    put(w, 40968, 35435182061940)
+    put(w, 32800, 40976)
+    put(w, 32808, 15)
+    put(w, 40976, 2334106421097295465)
+    put(w, 40984, 9071406690886006)
+    put(w, 32816, 40992)
+    put(w, 32824, 15)
+    put(w, 40992, 2334106421097295465)
+    put(w, 41000, 9122048415524204)
+    put(w, 32832, 41008)
+    put(w, 32840, 15)
+    put(w, 41008, 2334956331002456429)
+    put(w, 41016, 27057213451626854)
+    put(w, 32848, 41024)
+    put(w, 32856, 15)
+    put(w, 41024, 2336936577129475701)
+    put(w, 41032, 27057213451626854)
+    put(w, 32864, 41040)
+    put(w, 32872, 17)
+    put(w, 41040, 2336936577129475701)
+    put(w, 41048, 2338615471172116854)
+    put(w, 41056, 96)
+    put(w, 32880, 41064)
+    put(w, 32888, 11)
+    put(w, 41064, 8386658464824631340)
+    put(w, 41072, 2122853)
+    put(w, 32912, 41080)
+    put(w, 32920, 9)
+    put(w, 41080, 2338042651316874857)
+    put(w, 41088, 96)
+    put(w, 32928, 41096)
+    put(w, 32936, 16)
+    put(w, 41096, 7453010381916564582)
+    put(w, 41104, 6926664244459958304)
+    put(w, 32944, 41112)
+    put(w, 32952, 4)
+    put(w, 41112, 1819047278)
+    put(w, 32960, 41120)
+    put(w, 32968, 15)
+    put(w, 41120, 2336912344890699618)
+    put(w, 41128, 27133144178189920)
+    put(w, 32976, 41136)
+    put(w, 32984, 14)
+    put(w, 41136, 2336912344890699618)
+    put(w, 41144, 105988878398560)
+    put(w, 32992, 41152)
+    put(w, 33000, 7)
+    put(w, 41152, 9120923167913075)
+    put(w, 33008, 41160)
+    put(w, 33016, 8)
+    put(w, 41160, 7305804402566194547)
+    put(w, 33024, 41168)
+    put(w, 33032, 3)
+    put(w, 41168, 7364973)
+    put(w, 34384, 41176)
+    put(w, 34392, 24)
+    put(w, 41176, 4764936376279004275)
+    put(w, 41184, 7804859518959774821)
+    put(w, 41192, 8317411230710001249)
+    put(w, 34400, 41200)
+    put(w, 34408, 10)
+    put(w, 41200, 7954893446713647201)
+    put(w, 41208, 25955)
+    put(w, 34416, 41216)
+    put(w, 34424, 19)
+    put(w, 41216, 4764936376279004275)
+    put(w, 41224, 8382164696193330277)
+    put(w, 41232, 6648929)
+    put(w, 34432, 41240)
+    put(w, 34440, 20)
+    put(w, 41240, 8746397786911567457)
+    put(w, 41248, 7453005948419206944)
+    put(w, 41256, 908093556)
+    put(w, 34448, 41264)
+    put(w, 34456, 36)
+    put(w, 41264, 7809644666444607081)
+    put(w, 41272, 7306922588689693036)
+    put(w, 41280, 4764928756888707172)
+    put(w, 41288, 7152119047967763557)
+    put(w, 41296, 1852795252)
+    put(w, 34464, 41304)
+    put(w, 34472, 18)
+    put(w, 41304, 2338615471172116854)
+    put(w, 41312, 7594873770396181609)
+    put(w, 41320, 29285)
+    put(w, 34480, 41328)
+    put(w, 34488, 3)
+    put(w, 41328, 3421798)
+    put(w, 34496, 41336)
+    put(w, 34504, 20)
+    put(w, 41336, 4764936376279004275)
+    put(w, 41344, 8233264433513393253)
+    put(w, 41352, 1751346785)
+    put(w, 34512, 41360)
+    put(w, 34520, 3)
+    put(w, 41360, 3289973)
+    put(w, 34528, 41368)
+    put(w, 34536, 38)
+    put(w, 41368, 8511931266251256947)
+    put(w, 41376, 4764936423187509857)
+    put(w, 41384, 7152119047967763557)
+    put(w, 41392, 7301524918509726068)
+    put(w, 41400, 119165720030578)
+    put(w, 34544, 41408)
+    put(w, 34552, 38)
+    put(w, 41408, 8511931266251256947)
+    put(w, 41416, 4764936423187509857)
+    put(w, 41424, 7152119047967763557)
+    put(w, 41432, 8017315784284924276)
+    put(w, 41440, 111555037983854)
+    put(w, 34560, 41448)
+    put(w, 34568, 39)
+    put(w, 41448, 4764936376279004275)
+    put(w, 41456, 7804859518959774821)
+    put(w, 41464, 8317411230710001249)
+    put(w, 41472, 2319670916074272544)
+    put(w, 41480, 32772479204551781)
+    put(w, 34576, 41488)
+    put(w, 34584, 34)
+    put(w, 41488, 4764936376279004275)
+    put(w, 41496, 8382164696193330277)
+    put(w, 41504, 7526756837608485985)
+    put(w, 41512, 7308609286519664928)
+    put(w, 41520, 29806)
+    put(w, 34592, 41528)
+    put(w, 34600, 36)
+    put(w, 41528, 4764936376279004275)
+    put(w, 41536, 8233264433513393253)
+    put(w, 41544, 8388366762028265057)
+    put(w, 41552, 7882825904369705064)
+    put(w, 41560, 1937010277)
+    put(w, 34608, 41568)
+    put(w, 34616, 53)
+    put(w, 41568, 8511931266251256947)
+    put(w, 41576, 4764936423187509857)
+    put(w, 41584, 7152119047967763557)
+    put(w, 41592, 7301524918509726068)
+    put(w, 41600, 8583980055488195954)
+    put(w, 41608, 7810684524113196137)
+    put(w, 41616, 500068347237)
+    put(w, 34624, 41624)
+    put(w, 34632, 53)
+    put(w, 41624, 8511931266251256947)
+    put(w, 41632, 4764936423187509857)
+    put(w, 41640, 7152119047967763557)
+    put(w, 41648, 8017315784284924276)
+    put(w, 41656, 8583972444806149230)
+    put(w, 41664, 7810684524113196137)
+    put(w, 41672, 500068347237)
+    put(w, 34640, 41680)
+    put(w, 34648, 23)
+    put(w, 41680, 7810684804444677478)
+    put(w, 41688, 7575181517142715749)
+    put(w, 41696, 34165616355123310)
+    put(w, 34656, 41704)
+    put(w, 34664, 21)
+    put(w, 41704, 7954884599197540401)
+    put(w, 41712, 8171063682062164084)
+    put(w, 41720, 435459876213)
+    put(w, 34672, 41728)
+    put(w, 34680, 22)
+    put(w, 41728, 7954884599197540404)
+    put(w, 41736, 7310222278734672756)
+    put(w, 41744, 111477728310641)
+    put(w, 35984, 41752)
+    put(w, 35992, 6)
+    put(w, 41752, 126879581434995)
+    put(w, 36000, 41760)
+    put(w, 36008, 7)
+    put(w, 41760, 32491047111385953)
+    put(w, 36016, 41768)
+    put(w, 36024, 4)
+    put(w, 41768, 1684957547)
+    put(w, 36032, 41776)
+    put(w, 36040, 5)
+    put(w, 41776, 435761734006)
+    put(w, 36048, 41784)
+    put(w, 36056, 8)
+    put(w, 41784, 8315167063272419938)
+    put(w, 36064, 41792)
+    put(w, 36072, 11)
+    put(w, 41792, 7811883199053656688)
+    put(w, 41800, 7959657)
+    put(w, 36080, 41808)
+    put(w, 36088, 9)
+    put(w, 41808, 8030889439828079987)
+    put(w, 41816, 114)
+    put(w, 36096, 41824)
+    put(w, 36104, 6)
+    put(w, 41824, 110442424264050)
+    put(w, 36112, 41832)
+    put(w, 36120, 3)
+    put(w, 41832, 6645094)
+    put(w, 37584, 41840)
+    put(w, 37592, 8)
+    put(w, 41840, 6950010200488440672)
+    put(w, 37600, 41848)
+    put(w, 37608, 9)
+    put(w, 41848, 8317708060514804064)
+    put(w, 41856, 96)
+    put(w, 37616, 41864)
+    put(w, 37624, 7)
+    put(w, 41864, 27133152768128608)
+    put(w, 37632, 41872)
+    put(w, 37640, 10)
+    put(w, 41872, 7307199721141068384)
+    put(w, 41880, 24691)
+    put(w, 37648, 41888)
+    put(w, 37656, 50)
+    put(w, 41888, 6926648854366744175)
+    put(w, 41896, 7811883199053656688)
+    put(w, 41904, 8313680287095157865)
+    put(w, 41912, 8245936382198113141)
+    put(w, 41920, 7023193685820976224)
+    put(w, 41928, 7306633136754943090)
+    put(w, 41936, 24677)
+    put(w, 37664, 41944)
+    put(w, 37672, 24)
+    put(w, 41944, 7020664787908785248)
+    put(w, 41952, 7160759083381842028)
+    put(w, 41960, 6946087117364948591)
+    return 0

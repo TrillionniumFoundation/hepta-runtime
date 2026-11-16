@@ -26,7 +26,8 @@ Python or Rust. Rust is an unchanged-type reference executed only in CI.
 The parser uses an explicit dynamically sized stack, rather than the lexical
 JSON recursion limit: RawValue expansion can create a canonical Value deeper
 than the original text parser's per-deserializer depth limit. Private input is
-bounded by the existing 16 MiB ingress extent. Output publication is atomic;
+bounded by the existing 512 MiB private batch-plan buffer profile, allowing
+the upstream Value owner's complete canonical expansion. Output publication is atomic;
 capacity requests and invalid frames are separate from typed user errors.
 
 All whole-runtime and public-handler qualification claims remain false until
