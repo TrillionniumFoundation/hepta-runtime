@@ -1,0 +1,78 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(s) < 26 or load(s, 0) != RAW_REQUEST or load(s, 8) != length(s) - 24 or load(s, 16) != 0:
+        return INVALID
+    if byte(s, 24) != 123 or byte(s, length(s) - 1) != 125:
+        return INVALID
+    if length(o) < 128:
+        return CAPACITY
+    if length(w) < 32768:
+        return header(o, 2, 32768)
+    fill_range(w, 0, 1024, 0)
+    extent = scan(s, w, 24)
+    if extent == MAXIMUM - 1:
+        return header(o, 2, get(w, 136))
+    if extent != length(s):
+        return INVALID
+    error = parse(s, w)
+    if error == MAXIMUM:
+        return INVALID
+    if error == 0:
+        put(w, 112, 0)
+        put(w, 120, 0)
+        error = serialize(s, w, o)
+    if error != 0:
+        if error == MAXIMUM:
+            return INVALID
+        unicode_table(w)
+        put(w, 128, 0)
+        put(w, 112, 0)
+        put(w, 120, 0)
+        diagnostic(s, w, o)
+        size = get(w, 120)
+        if get(w, 128) != 0 or size > MAXIMUM - 128:
+            return header(o, 4, MAXIMUM)
+        if size + 128 > length(o):
+            return header(o, 3, size + 128)
+        header(o, 1, 0)
+        put(o, 72, size)
+        put(w, 112, 1)
+        put(w, 120, 128)
+        diagnostic(s, w, o)
+        return 128
+    json_size = get(w, 120)
+    path_size = get(w, 96)
+    if get(w, 128) != 0 or path_size > MAXIMUM - 192:
+        return header(o, 4, MAXIMUM)
+    total = 192 + path_size
+    if path_size > MAXIMUM - total:
+        return header(o, 4, MAXIMUM)
+    total = total + path_size
+    if json_size > MAXIMUM - total:
+        return header(o, 4, MAXIMUM)
+    total = total + json_size
+    if total > length(o):
+        return header(o, 3, total)
+    header(o, 0, 0)
+    put(o, 16, 1)
+    put(o, 24, path_size)
+    put(o, 32, 1)
+    put(o, 40, 64 + path_size + json_size)
+    string_emit(s, w, o, get(w, 80), 128)
+    at = 128 + path_size
+    fill_range(o, at, 64, 0)
+    put(o, at, RAW_RESULT)
+    put(o, at + 16, path_size)
+    put(o, at + 24, json_size)
+    put(o, at + 32, get(w, 104))
+    string_emit(s, w, o, get(w, 80), at + 64)
+    put(w, 112, 1)
+    put(w, 120, at + 64 + path_size)
+    serialize(s, w, o)
+    return 128
+
+def header(o: mutbuf, status: u64, needed: u64) -> u32:
+    fill_range(o, 0, 128, 0)
+    put(o, 0, RESULT)
+    put(o, 8, status)
+    put(o, 80, needed)
+    return 128

@@ -1,0 +1,27 @@
+[package]
+name = "hepta-batch-public-original-oracle"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+publish = false
+
+[[bin]]
+name = "hepta-batch-body-original-oracle"
+path = "src/main.rs"
+
+[[bin]]
+name = "hepta-batch-params-original-oracle"
+path = "src/params.rs"
+
+[dependencies]
+anyhow = "=1.0.104"
+rmcp = { version = "=3.9.0", default-features = false, features = ["server", "transport-async-rw"] }
+schemars = "=1.2.2"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip", "raw_value"] }
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util"] }
+
+[features]
+remote-fs = []
+
+[workspace]

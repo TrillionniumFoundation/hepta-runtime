@@ -1,0 +1,31 @@
+def after_params(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if get(w, 48) != 0 or code != 128 or size < 128 or get(w, at) != PARAMS_RESULT or get(w, at + 8) > 1:
+        return INVALID
+    i = 80
+    while i < 128:
+        if get(w, at + i) != 0:
+            return INVALID
+        i = i + 8
+    if get(w, at + 8) == 1:
+        i = 16
+        while i < 72:
+            if get(w, at + i) != 0:
+                return INVALID
+            i = i + 8
+        if get(w, at + 72) != size - 128:
+            return INVALID
+        return finish(o, w, 2, at + 128, size - 128)
+    path = get(w, at + 24)
+    content = get(w, at + 40)
+    if get(w, at + 16) != 1 or get(w, at + 32) != 1 or get(w, at + 48) != 0 or get(w, at + 56) != 0 or get(w, at + 64) != 0 or get(w, at + 72) != 0:
+        return INVALID
+    if path > size - 128 or content != size - 128 - path or content < 64:
+        return INVALID
+    if reserve(w, 2, size) == 0:
+        return pending_grow(o, w)
+    move_range(w, region(w, 2), at, size)
+    put(w, 96, path)
+    put(w, 104, 0)
+    put(w, 232, size)
+    return prepare(s, o, w, 2)
