@@ -1,0 +1,64 @@
+name: Reopen actual catalog assets for public extract
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-catalog-6780-20261116']
+    paths: ['qualification/extract_lines/catalog_reuse/**', '.github/workflows/hia-extract-catalog-reuse.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  retained-catalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      CATALOG_SOURCE_SHA: b461cee53e020567986eb2bf1759436fb55f5946ba557b5829a017e6205b3844
+    steps:
+      - name: Checkout exact inert reader source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/extract_lines/catalog_reuse
+            authoring/public_extract
+      - name: Reopen the entire same successful artifact and select actual native outputs
+        env:
+          GH_ARCHIVE_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -B runtime/qualification/extract_lines/catalog_reuse/ci.py --runtime "$GITHUB_WORKSPACE/runtime" --output "$RUNNER_TEMP/extract-catalog-reuse" --source-sha256 "$CATALOG_SOURCE_SHA"
+      - name: Preserve source-bound actual assets in the evidence branch
+        env:
+          GH_SOURCE_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -B runtime/qualification/extract_lines/catalog_reuse/publish.py --capture "$RUNNER_TEMP/extract-catalog-reuse" --expected-head "$GITHUB_SHA" --branch hia-extract-catalog-6780-20261116
+      - name: Show complete retained failure location without replay
+        if: failure()
+        run: |
+          python3 -I -B - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"extract-catalog-reuse"
+          for path in [root/"CATALOG_REUSE_CI.json",*sorted((root/"processes").glob("*.stderr"))]:
+              if path.is_file():
+                  raw=path.read_bytes()
+                  if raw:print(json.dumps({"file":str(path.relative_to(root)),"bytes":len(raw),"tail":raw[-16000:].decode(errors="replace")}))
+          PY
+      - name: Preserve complete original ZIP, proof, selected buffers and failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-catalog-reuse-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/extract-catalog-reuse/archive/catalog.zip
+            ${{ runner.temp }}/extract-catalog-reuse/archive/*.json
+            ${{ runner.temp }}/extract-catalog-reuse/evidence
+            ${{ runner.temp }}/extract-catalog-reuse/processes
+            ${{ runner.temp }}/extract-catalog-reuse/*.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
