@@ -87,14 +87,22 @@ def producer_sources(root):
     for name, expected in manifest.items():
         exact(reference_source.pin(read(root, DRIVERS + "/" + name)), expected,
               "frozen SDK producer/reader source: " + name)
-    reader = reference_source.pin(read(root, reference_source.ORACLE + "/strict_reference.py"))
-    for name in ("native_capture.py", "replay_original.py", "strict_original.py"):
+    def declared(name, constant):
         tree = ast.parse(read(root, DRIVERS + "/" + name))
         bindings = [node.value for node in tree.body if isinstance(node, ast.Assign)
-                    and any(isinstance(target, ast.Name) and target.id == "FROZEN_READER"
+                    and any(isinstance(target, ast.Name) and target.id == constant
                             for target in node.targets)]
-        need(len(bindings) == 1, "one frozen reference reader declaration: " + name)
-        exact(ast.literal_eval(bindings[0]), reader, "frozen reference reader dependency: " + name)
+        need(len(bindings) == 1, "one frozen reader declaration: " + name + ":" + constant)
+        return ast.literal_eval(bindings[0])
+
+    reader = reference_source.pin(read(root, reference_source.ORACLE + "/strict_reference.py"))
+    for name in ("native_capture.py", "replay_original.py", "strict_original.py"):
+        exact(declared(name, "FROZEN_READER"), reader, "frozen reference reader dependency: " + name)
+    for constant, path in (("BUILD_READER_SHA", "scripts/hia_native_filesystem_public_build.py"),
+                           ("BUILD_PRIMITIVE_SHA", "scripts/hia_native_runtime_mcp_evidence.py")):
+        expected = reference_source.pin(read(root, path))["sha256"]
+        exact(declared("strict_native.py", constant), expected,
+              "frozen native build reader dependency: " + constant)
     return manifest
 
 

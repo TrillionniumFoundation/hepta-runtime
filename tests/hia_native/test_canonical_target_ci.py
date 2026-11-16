@@ -44,6 +44,9 @@ class CanonicalFocusedControls(unittest.TestCase):
         reader = focus.filesystem_public_pipeline.reference_source.ORACLE + "/strict_reference.py"
         (self.output / reader).parent.mkdir(parents=True)
         shutil.copyfile(focus.ROOT / reader, self.output / reader)
+        for reader in ("scripts/hia_native_filesystem_public_build.py", "scripts/hia_native_runtime_mcp_evidence.py"):
+            (self.output / reader).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(focus.ROOT / reader, self.output / reader)
         return target
 
     def test_frozen_public_trace_is_checked_before_execution(self):
@@ -78,6 +81,36 @@ class CanonicalFocusedControls(unittest.TestCase):
             stream.write(b"\n# changed reference reader\n")
         with self.assertRaisesRegex(ValueError, "frozen reference reader dependency: native_capture.py"):
             focus.filesystem_public_pipeline.producer_sources(self.output)
+
+    def test_each_native_build_consumer_pin_is_checked_before_execution(self):
+        target = self.copy_public_sources()
+        manifest = json.loads((target / "source_manifest.json").read_text())
+        original = (target / "strict_native.py").read_bytes()
+        for constant in ("BUILD_READER_SHA", "BUILD_PRIMITIVE_SHA"):
+            with self.subTest(constant=constant):
+                prefix = constant.encode() + b" = '"
+                start = original.index(prefix) + len(prefix)
+                changed = original[:start] + b"0" * 64 + original[start + 64:]
+                (target / "strict_native.py").write_bytes(changed)
+                altered = copy.deepcopy(manifest)
+                altered["strict_native.py"] = {"bytes": len(changed), "sha256": hashlib.sha256(changed).hexdigest()}
+                (target / "source_manifest.json").write_text(json.dumps(altered))
+                with self.assertRaisesRegex(ValueError, "frozen native build reader dependency: " + constant):
+                    focus.filesystem_public_pipeline.producer_sources(self.output)
+                (target / "strict_native.py").write_bytes(original)
+                (target / "source_manifest.json").write_text(json.dumps(manifest))
+
+    def test_each_changed_native_build_reader_is_rejected_before_execution(self):
+        self.copy_public_sources()
+        for constant, relative in (("BUILD_READER_SHA", "scripts/hia_native_filesystem_public_build.py"),
+                                   ("BUILD_PRIMITIVE_SHA", "scripts/hia_native_runtime_mcp_evidence.py")):
+            with self.subTest(constant=constant):
+                path = self.output / relative
+                original = path.read_bytes()
+                path.write_bytes(original + b"\n# changed native build reader\n")
+                with self.assertRaisesRegex(ValueError, "frozen native build reader dependency: " + constant):
+                    focus.filesystem_public_pipeline.producer_sources(self.output)
+                path.write_bytes(original)
 
     def native(self):
         prepared = {"status": "NATIVE_BUILD_READY", "phase": "native_build_complete",
