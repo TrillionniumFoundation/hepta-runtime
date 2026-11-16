@@ -68,6 +68,7 @@ import hia_native_session_qualification as session_qualification
 import hia_native_file_lock_pipeline as file_lock_pipeline
 import hia_native_connection_qualification as connection_qualification
 import hia_native_public_registry_qualification as public_registry_qualification
+import hia_native_public_lifecycle_qualification as public_lifecycle_qualification
 import hia_native_result_qualification as result_qualification
 import hia_native_serde_error_pipeline as serde_error_pipeline
 import hia_native_result_storage_pipeline as storage_pipeline
@@ -221,6 +222,11 @@ MODULES = (
                           "test_sdk_connection_elf.py", "test_sdk_connection_controls.py"),
      "companion_sources": ("native/sdk_message.hepta", "native/sdk_default_fixture.hepta",
                            "native/sdk_connection_packer.hepta")},
+    {"key": "public_lifecycle", "name": "public-lifecycle", "source": 'native/public_call_lifecycle.hepta',
+     "builder": "public_lifecycle", "manifest_env": "HIA_PUBLIC_LIFECYCLE_BUILD",
+     "test": "test_public_lifecycle_bridge.py",
+     "additional_tests": ("test_public_lifecycle_normal.py",),
+     "companion_sources": ('native/caller_authority_connection.hepta', 'native/config_installed_owner.hepta', 'native/config_result_identity.hepta', 'native/public_eligible_mapper.hepta', 'native/public_lifecycle_dispatch.hepta', 'native/public_lifecycle_packer.hepta', 'native/public_result_wire.hepta', 'native/regex_nfa_callable.hepta', 'native/request_audit_active_pin.hepta', 'native/request_audit_archive_anchor.hepta', 'native/request_audit_archive_inner.hepta', 'native/request_audit_archive_legacy.hepta', 'native/request_audit_archive_metadata.hepta', 'native/request_audit_archive_registry.hepta', 'native/request_audit_archive_save.hepta', 'native/request_audit_archive_write.hepta', 'native/request_audit_clock.hepta', 'native/request_audit_cold_cache.hepta', 'native/request_audit_identity.hepta', 'native/request_audit_observation.hepta', 'native/request_audit_record_visitor.hepta', 'native/request_audit_retention_files.hepta', 'native/request_audit_shared_stamp.hepta', 'native/request_audit_ticket.hepta', 'native/request_audit_ticket_leaves.hepta', 'native/request_audit_ticket_service.hepta', 'native/request_audit_ticket_storage.hepta', 'native/request_result_intent.hepta', 'native/request_result_locks.hepta', 'native/request_result_record.hepta', 'native/sdk_message_rawvalue.hepta')},
     {"key": "public_registry", "name": "public-registry", "source": "native/public_tool_dispatch.hepta",
      "builder": "public_registry", "manifest_env": "HIA_PUBLIC_REGISTRY_BUILD",
      "test": "run_public_registry_cases.py",
@@ -413,6 +419,7 @@ def sources() -> dict:
     paths.update(ROOT / name for name in ORIGINAL_RUNTIME_BLOBS)
     paths.update(ROOT / name for name in service_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in public_registry_qualification.source_pins(ROOT))
+    paths.update(ROOT / name for name in public_lifecycle_qualification.source_pins(ROOT))
     paths.update(ROOT / name for name in result_qualification.source_pins(ROOT))
     paths.update(ROOT / name for name in serde_error_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in storage_pipeline.sources(ROOT))
@@ -561,6 +568,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                         if set(tests) & set(service_pipeline.DIRECTORY_TESTS) else {})
     config_commands.update({name: command for name, command in service_commands.items()
                             if name in service_pipeline.DIRECTORY_TESTS})
+    if set(tests) & set(public_lifecycle_qualification.TESTS):
+        config_commands.update(public_lifecycle_qualification.test_commands(ROOT, output, report))
     if set(tests) & set(public_registry_qualification.TESTS):
         config_commands.update(public_registry_qualification.test_commands(ROOT, output, report))
     if set(tests) & set((*result_qualification.TESTS, result_qualification.CONTROL_TEST)):
@@ -1076,6 +1085,10 @@ def audit_stamp_evidence(output: Path, report: dict, *, create: bool = False) ->
 
 def result_values_evidence(output: Path, report: dict) -> dict:
     return result_qualification.native_evidence(ROOT, output, report, completed_test_summary)
+
+
+def public_lifecycle_evidence(output: Path, report: dict, *, create=False) -> dict:
+    return public_lifecycle_qualification.native_evidence(ROOT, output, report, completed_test_summary, create=create)
 
 
 def public_registry_evidence(output: Path, report: dict, *, create=False) -> dict:
@@ -2371,6 +2384,8 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
             built = build_workdir_service(hepta, output / "build", source_root=ROOT)
         elif item.get("builder") == "sdk_connection":
             built = connection_qualification.build_connection(hepta, output / "build", ROOT)
+        elif item.get("builder") == "public_lifecycle":
+            built = public_lifecycle_qualification.build_public_lifecycle(hepta, output / "build/public-lifecycle", ROOT)
         elif item.get("builder") == "public_registry":
             built = public_registry_qualification.build_public_registry(hepta, output / "build", ROOT)
         elif item.get("builder") == "runtime_config":
@@ -2443,6 +2458,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(service_pipeline.test_commands(ROOT, output, report))
     commands.update(connection_qualification.test_commands(ROOT, output, report))
     commands.update(public_registry_qualification.test_commands(ROOT, output, report))
+    commands.update(public_lifecycle_qualification.test_commands(ROOT, output, report))
     commands.update(result_qualification.test_commands(ROOT, output, report))
     commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
     commands.update(storage_pipeline.test_commands(ROOT, output, report))
@@ -2488,6 +2504,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["workdir_service_evidence"] = workdir_service_evidence(output, report)
     report["sdk_connection_evidence"] = sdk_connection_evidence(output, report, create=True)
     report["public_registry_evidence"] = public_registry_evidence(output, report, create=True)
+    report["public_lifecycle_evidence"] = public_lifecycle_evidence(output, report, create=True)
     report["result_values_evidence"] = result_values_evidence(output, report)
     report["serde_error_evidence"] = serde_error_evidence(output, report)
     report["result_storage_evidence"] = result_storage_evidence(output, report, create=True)
@@ -2562,6 +2579,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["atomic_write_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["public_lifecycle_evidence"]["artifact_sha256"])
     for key in ("directory_service", "workdir_service", "sdk_connection", "public_registry"):
         report["rust_oracle_inputs"].update(report[key + "_evidence"]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report[key + "_evidence"]["corpus_sha256"])

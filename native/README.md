@@ -14,6 +14,45 @@ partial original-tool coverage; configured remote hosts and complete original
 authorization behavior remain outside that profile. Production activation and
 deletion of the original runtime remain incomplete.
 
+## Selected public call lifecycle
+
+The [public lifecycle graph](public_lifecycle_abi.md) composes the existing
+`host_list`, `effective_config` and `execution_shadow_admit` routes with the
+trusted session owner, installed configuration, actual audit Ticket, retained
+result Intent, typed response metadata and final wire rendering. It is an
+explicitly selected serial stdio profile. The 71 semantic images have one source
+path each in [the fixed graph](public_lifecycle_graph.json); 40 existing sources
+are reused and 31 selected semantic sources are added. One further HIA module
+packs the executable in two bounded calls. Historical dependency directories,
+intermediate variants and executable evidence are not copied into this tree.
+
+The metadata bridge now loads its conversion workspace size as an immediate
+constant. An early ResultIntent business error can therefore return its original
+response, retire its owner and allow the next request to continue. The frozen
+repair comparison covers 64 native/original process pairs and 359 requests per
+side, including two ordinary file-conflict recovery cases. A separate direct
+bridge unit checks the error return and subsequent successful calls. This scope
+uses ordinary local files and normal requests; it does not add syscall
+interception, fault injection or external-host tests.
+
+The portable gate builds all 71 semantic images and the packer, executes two
+native suites, then freshly compiles one Rust 1.95 reference with 274 unchanged
+original blocks and 138 locked packages. Its paired replay compares complete
+wire responses and filesystem records, including the original outer `call_tool`
+ordering. The new native partition and original group retain the 180-second
+process and 15-minute job limits. A completed focused run is separate from the
+final aggregate CI result.
+
+This selected graph does not finish repository-wide consolidation. Earlier
+profiles still have distinct checked interfaces and source-bound qualification
+gates. Their replacement requires choosing the final shared owner versions,
+rebinding every caller and fixed packer, carrying their complete behavior domains
+into the replacement gates, and then removing superseded sources and entries.
+Original failure captures remain in external immutable archives. The 125 tool
+handlers and 10 production owner categories remain `not_ported`; asynchronous
+public routing, active Archive Index behavior, production activation and removal
+of the original implementation remain incomplete.
+
 ## Private result storage components
 
 The [result storage integration](result_storage_integration.md) adds nine native

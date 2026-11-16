@@ -1,0 +1,197 @@
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Direct bridge unit: real allocation/drop; synthetic child reply and metadata slot.
+.intel_syntax noprefix
+.equ EX_META_LOCAL, 1168
+.equ EX_META_ADDRESS, 1176
+.equ EX_CONFIG_IG, 1184
+.text
+.global _start
+_start:
+    lea r15, [rip + outer]
+    lea rax, [rip + intent]
+    mov [r15 + EX_CONFIG_IG], rax
+    mov [rax + 128], r15
+    lea rdx, [rip + cache_word]
+    mov [r15 + EX_META_ADDRESS], rdx
+    mov ebx, 11
+    mov ebp, 12
+    mov r12d, 13
+    mov r13d, 14
+    mov r14d, 15
+    call invoke
+    cmp qword ptr [rip + reply], 1
+    jne fatal
+    lea rax, [rip + intent]
+    mov rax, [rax + 48]
+    test rax, rax
+    jz fatal
+    mov [rip + first_context], rax
+    call invoke
+    cmp qword ptr [rip + reply], 0
+    jne fatal
+    lea rax, [rip + intent]
+    mov rax, [rax + 48]
+    cmp rax, [rip + first_context]
+    jne fatal
+    call retire
+    # Repeating final cleanup is harmless for this now-empty owner.
+    lea rdi, [rip + intent]
+    call tk_intent_conversion_drop
+    call check_retired
+    # A fresh owner can allocate after the earlier business-error reply and drop.
+    lea rax, [rip + intent]
+    mov [r15 + EX_CONFIG_IG], rax
+    mov [rax + 128], r15
+    lea rdx, [rip + cache_word]
+    mov [r15 + EX_META_ADDRESS], rdx
+    mov ebx, 11
+    mov ebp, 12
+    mov r12d, 13
+    mov r13d, 14
+    mov r14d, 15
+    call invoke
+    cmp qword ptr [rip + reply], 0
+    jne fatal
+    lea rax, [rip + intent]
+    mov rax, [rax + 48]
+    mov [rip + first_context], rax
+    call retire
+    cmp qword ptr [rip + child_calls], 3
+    jne fatal
+    mov eax, 1
+    mov edi, 1
+    lea rsi, [rip + success]
+    mov edx, 26
+    syscall
+    cmp rax, 26
+    jne fatal
+    xor edi, edi
+    mov eax, 60
+    syscall
+invoke:
+    lea rdi, [rip + request]
+    mov esi, 27
+    lea rdx, [rip + reply]
+    mov ecx, 128
+    call ex_metadata_call
+    cmp eax, 64
+    jne fatal
+    cmp ebx, 11
+    jne fatal
+    cmp ebp, 12
+    jne fatal
+    cmp r12d, 13
+    jne fatal
+    cmp r13d, 14
+    jne fatal
+    cmp r14d, 15
+    jne fatal
+    lea rax, [rip + outer]
+    cmp r15, rax
+    jne fatal
+    ret
+retire:
+    lea rdi, [rip + intent]
+    call tk_intent_conversion_drop
+    call check_retired
+    # Query only the former private allocation, with no syscall interception.
+    mov rdi, [rip + first_context]
+    mov esi, 4096
+    lea rdx, [rip + vector]
+    mov eax, 27
+    syscall
+    cmp rax, -12
+    jne fatal
+    ret
+check_retired:
+    lea rax, [rip + intent]
+    cmp qword ptr [rax + 48], 0
+    jne fatal
+    cmp qword ptr [rax + 128], 0
+    jne fatal
+    cmp qword ptr [r15 + EX_CONFIG_IG], 0
+    jne fatal
+    cmp qword ptr [r15 + EX_META_LOCAL], 2
+    jne fatal
+    lea rax, [r15 + EX_META_LOCAL]
+    cmp [r15 + EX_META_ADDRESS], rax
+    jne fatal
+    ret
+tk_intent_result_metadata_call:
+    lea rax, [rip + intent]
+    cmp [rax + 48], rdi
+    jne fatal
+    cmp [rdi + 8], rax
+    jne fatal
+    lea rax, [rip + request]
+    cmp rsi, rax
+    jne fatal
+    cmp rdx, 27
+    jne fatal
+    lea rax, [rip + reply]
+    cmp rcx, rax
+    jne fatal
+    cmp r8, 128
+    jne fatal
+    inc qword ptr [rip + child_calls]
+    xor eax, eax
+    cmp qword ptr [rip + child_calls], 1
+    sete al
+    mov [rcx], rax
+    # This direct child fixture returns an error first, then successful replies.
+    mov ebx, 101
+    mov ebp, 102
+    mov r12d, 103
+    mov r13d, 104
+    mov r14d, 105
+    mov r15d, 106
+    mov eax, 64
+    ret
+tk_intent_metadata_address:
+    lea rdx, [rip + cache_word]
+    ret
+tk_intent_config_drop:
+    jmp ex_intent_config_drop
+tk_intent_contract_failure:
+tk_intent_resource_failure:
+fatal:
+    mov edi, 97
+    mov eax, 60
+    syscall
+@METADATA_CALL@
+
+# Keep this definition after the bridge, matching the full composition order.
+.equ tk_CV_BYTES, 817889280
+@CONFIG_DROP@
+
+@ALLOCATION@
+
+@CONVERSION_DROP@
+
+.section .rodata
+request:
+    .ascii "direct-business-error-reply"
+request_end:
+success:
+    .ascii "METADATA_BRIDGE_UNIT_PASS\n"
+success_end:
+.data
+.balign 8
+cache_word:
+    .quad 2
+.bss
+.balign 4096
+outer:
+    .skip 4096
+intent:
+    .skip 256
+reply:
+    .skip 128
+first_context:
+    .skip 8
+child_calls:
+    .skip 8
+vector:
+    .skip 8
+.section .note.GNU-stack,"",@progbits

@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_service_pipeline as service_pipeline
 import hia_native_public_registry_qualification as public_registry_qualification
+import hia_native_public_lifecycle_qualification as public_lifecycle_qualification
 import hia_native_result_qualification as result_qualification
 import hia_native_serde_error_pipeline as serde_error_pipeline
 import hia_native_result_storage_pipeline as storage_pipeline
@@ -38,7 +39,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        history_evidence, json_evidence, execution_evidence, effect_fence_evidence, config_evidence,
                                        session_evidence, file_locks_evidence, file_lock_service_evidence,
                                        write_chain_evidence, directory_service_evidence,
-                                       workdir_service_evidence, sdk_connection_evidence, public_registry_evidence, result_values_evidence,
+                                       workdir_service_evidence, sdk_connection_evidence, public_registry_evidence, public_lifecycle_evidence, result_values_evidence,
                                        serde_error_evidence, result_storage_evidence, audit_readiness_evidence, audit_activity_evidence, audit_stamp_evidence, batch_write_evidence, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
@@ -272,6 +273,12 @@ def check_input_pins(output: Path, report: dict) -> None:
     if "result_values_evidence_controls" in report:
         if report["result_values_evidence_controls"] != result_values_control_evidence(output, report):
             raise ValueError("typed result original controls changed")
+    if report.get("public_lifecycle_evidence") != public_lifecycle_evidence(output, report):
+        raise ValueError("public lifecycle complete native evidence differs")
+    if "public_lifecycle" in report.get("original_rust_comparisons", {}):
+        actual = public_lifecycle_qualification.original_evidence(ROOT, output, report, completed_test_summary)
+        if report["original_rust_comparisons"]["public_lifecycle"] != actual:
+            raise ValueError("public lifecycle complete original evidence differs")
     if report.get("public_registry_evidence") != public_registry_evidence(output, report):
         raise ValueError("required public registry native process evidence differs")
     if "public_registry" in report.get("original_rust_comparisons", {}):
@@ -348,7 +355,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir", "file_locks", "file_lock_service", "write_chain", "directory_service", "workdir_service", "sdk_connection", "public_registry", "result_values", "batch_write", "result_storage", "audit_readiness", "audit_activity", "audit_stamp"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "atomic_write", "history", "execution_shadow", "effect_fence", "runtime_config", "session_workdir", "file_locks", "file_lock_service", "write_chain", "directory_service", "workdir_service", "sdk_connection", "public_registry", "public_lifecycle", "result_values", "batch_write", "result_storage", "audit_readiness", "audit_activity", "audit_stamp"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -1653,6 +1660,23 @@ def run_result_values_controls(output: Path, report: dict) -> None:
     report["result_values_evidence_controls"] = result_values_control_evidence(output, report)
 
 
+def compare_public_lifecycle(output: Path, report: dict, rustc: Path) -> dict:
+    before = public_lifecycle_evidence(output, report)
+    if before != report.get("public_lifecycle_evidence"):
+        raise ValueError("public lifecycle native evidence changed before original replay")
+    command = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_public_lifecycle_original.py"),
+               "--repo", str(ROOT), "--build", str(output / "build/public-lifecycle/build.json"),
+               "--output", str(output / "public-lifecycle-original"),
+               "--cargo", str(executable(str(rustc.with_name("cargo")))),
+               "--rustc", str(rustc), "--rustfmt", str(executable(str(rustc.with_name("rustfmt"))))]
+    record_check(output, report, name="public-lifecycle-rust-compare", command=command,
+                 timeout=180, env=qualification_env())
+    result = public_lifecycle_qualification.original_evidence(ROOT, output, report, completed_test_summary)
+    if public_lifecycle_evidence(output, report) != before:
+        raise ValueError("public lifecycle native evidence changed during original replay")
+    return result
+
+
 def compare_public_registry(output: Path, report: dict, rustc: Path) -> dict:
     before = public_registry_evidence(output, report)
     if before != report.get("public_registry_evidence"):
@@ -1751,6 +1775,7 @@ RECIPES = {"serde_error": compare_serde_error, "batch_write": compare_batch_writ
            "write_chain": compare_write_chain, "directory_service": compare_directory_service,
            "workdir_service": compare_workdir_service, "sdk_connection": compare_sdk_connection,
            "public_registry": compare_public_registry,
+           "public_lifecycle": compare_public_lifecycle,
            "binary32_json": compare_binary32_json, "typed_result_json": compare_typed_result_json,
            "request_result": compare_request_result,
            "fence_json": compare_fence_json, "serde_json": compare_serde_json, "execution_shadow": compare_execution,

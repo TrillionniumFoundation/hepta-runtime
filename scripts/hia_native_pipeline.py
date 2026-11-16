@@ -1,6 +1,6 @@
 """Run the complete native gate across source-bound, independently retained jobs.
 
-One fresh cold/build artifact is admitted by its workflow-produced SHA256. Seven
+One fresh cold/build artifact is admitted by its workflow-produced SHA256. Eight
 explicit partitions execute every registered suite once. Collection rechecks all
 raw process bytes, immutable build inputs and complete shard inventories before
 the unchanged evidence owners can advance to the original Rust comparisons.
@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qualify_hia_runtime_native as q
 
 PARTITIONS = {
+    "public": ("public_lifecycle",),
     "audit": (tuple(q.stamp_pipeline.KEYS) + tuple(q.audit_pipeline.KEYS) + tuple(q.activity_pipeline.KEYS)),
     "storage": tuple(q.storage_pipeline.KEYS),
     "batch": ("batch_plan", "batch_apply", "atomic_write", "write_chain", "batch_write"),
@@ -146,8 +147,10 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "json", "config", "system", "storage", "audit"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if set(partitions) != {"batch", "text", "json", "config", "system", "storage", "audit", "public"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
         raise ValueError("every native module must belong to exactly one explicit partition")
+    if partitions["public"] != ("public_lifecycle",):
+        raise ValueError("the complete public lifecycle requires its independent partition")
     if partitions["config"] != ("runtime_config",):
         raise ValueError("the complete configuration and regex owner requires its independent partition")
     if partitions["storage"] != tuple(q.storage_pipeline.KEYS):
@@ -434,7 +437,7 @@ def collect(output: Path, hepta: Path, expected: str, invocation: str, shards: P
     try:
         folders = sorted(shards.iterdir())
         if len(folders) != len(PARTITIONS) or any(p.is_symlink() or not p.is_dir() for p in folders):
-            raise ValueError("collector requires exactly seven complete shard artifacts")
+            raise ValueError("collector requires exactly eight complete shard artifacts")
         parts, copies, all_files, all_directories = {}, {}, {}, set()
         for folder in folders:
             receipt_path, report_path = owned(folder, "shard.json"), owned(folder, "shard-report.json")

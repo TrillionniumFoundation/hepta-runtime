@@ -26,6 +26,7 @@ import qualify_hia_runtime_native as q
 import compare_hia_runtime_rust as r
 
 GROUPS = {
+    "public": ("public_lifecycle",),
     "audit": (tuple(r.stamp_pipeline.KEYS) + tuple(r.audit_pipeline.KEYS) + tuple(r.activity_pipeline.KEYS)),
     "storage_types": tuple(key for key, domain in r.storage_pipeline.KEYS.items()
                            if domain in r.storage_pipeline.q.PURE),
@@ -56,13 +57,15 @@ CONTROLLED_PHASE = "awaiting_final_original_admission"
 def groups() -> dict[str, tuple[str, ...]]:
     flat = tuple(key for keys in GROUPS.values() for key in keys)
     if (set(GROUPS) != {"bytes", "state", "services", "json", "config", "system", "batch",
-                      "storage_types", "storage_files", "audit"}
+                      "storage_types", "storage_files", "audit", "public"}
             or len(flat) != len(set(flat)) or set(flat) != set(r.RECIPES)):
         raise ValueError("every original recipe must belong to exactly one declared group")
     for together in (("fence_json", "serde_json"), tuple(r.result_qualification.KEYS),
                      tuple(r.PARALLEL_RUST_RECIPES), ("write_chain", "workdir_service")):
         if not any(set(together) <= set(keys) for keys in GROUPS.values()):
             raise ValueError("a shared build or evidence lifetime crosses original groups")
+    if GROUPS["public"] != ("public_lifecycle",):
+        raise ValueError("the complete public lifecycle requires its independent original group")
     if GROUPS["config"] != ("runtime_config",):
         raise ValueError("configuration and regex require their complete independent recipe")
     # Each storage recipe owns its Cargo target, replay and retained output.

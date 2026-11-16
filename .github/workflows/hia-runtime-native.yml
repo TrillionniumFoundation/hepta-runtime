@@ -16,6 +16,7 @@ on:
       - 'scripts/public_*'
       - 'scripts/author_public_*'
       - 'scripts/build_public_registry.py'
+      - 'scripts/build_public_lifecycle.py'
       - 'scripts/build_result_values.py'
       - 'scripts/build_result_storage.py'
       - 'scripts/result_storage_*'
@@ -33,6 +34,9 @@ on:
       - 'scripts/check_stamp_evidence.py'
       - 'scripts/qualify_audit_stamp.py'
       - 'src/mcp/runtime/namespace_version.rs'
+      - 'src/mcp/runtime/operation_async.rs'
+      - 'src/mcp/runtime/request_archive_index.rs'
+      - 'src/mcp/runtime/request_audit_batch.rs'
       - 'scripts/result_value_registry.py'
       - 'scripts/author_serde_error.py'
       - 'scripts/serde_error_*'
@@ -115,6 +119,7 @@ on:
       - 'scripts/public_*'
       - 'scripts/author_public_*'
       - 'scripts/build_public_registry.py'
+      - 'scripts/build_public_lifecycle.py'
       - 'scripts/build_result_values.py'
       - 'scripts/build_result_storage.py'
       - 'scripts/result_storage_*'
@@ -132,6 +137,9 @@ on:
       - 'scripts/check_stamp_evidence.py'
       - 'scripts/qualify_audit_stamp.py'
       - 'src/mcp/runtime/namespace_version.rs'
+      - 'src/mcp/runtime/operation_async.rs'
+      - 'src/mcp/runtime/request_archive_index.rs'
+      - 'src/mcp/runtime/request_audit_batch.rs'
       - 'scripts/result_value_registry.py'
       - 'scripts/author_serde_error.py'
       - 'scripts/serde_error_*'
@@ -209,10 +217,10 @@ concurrency:
   group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# The same fresh cold/build bytes feed all seven complete native partitions.
+# The same fresh cold/build bytes feed all eight complete native partitions.
 # Each job retains the original 15-minute limit; suite/owner limits are unchanged.
 # The batch partition includes all four atomic-write suites and its full 505 MiB case.
-# Ten original groups retain all recipes and fixed Rust 1.95.0; the final job admits every group.
+# Eleven original groups retain all recipes and fixed Rust 1.95.0; the final job admits every group.
 jobs:
   prepare:
     name: Fresh full compiler cold gate and all native images
@@ -281,7 +289,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [audit, storage, batch, text, json, config, system]
+        group: [public, audit, storage, batch, text, json, config, system]
     steps:
       - name: Checkout exact runtime source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -460,6 +468,16 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  original_public:
+    name: Complete original public lifecycle recipe
+    needs: native_collect
+    uses: ./.github/workflows/hia-runtime-original-shard.yml
+    with:
+      group: public
+      runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+
   original_bytes:
     name: Complete original bytes recipes
     needs: native_collect
@@ -562,7 +580,7 @@ jobs:
 
   original_collect:
     name: Collect every original result without aggregate qualification
-    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit]
+    needs: [native_collect, original_public, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -636,6 +654,7 @@ jobs:
             --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
             --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
             --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
+            --shard-sha256 "public=${{ needs.original_public.outputs.sha256 }}" \
             --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}"
 
       - name: Bind the pending collection to all retained source artifacts
@@ -647,6 +666,7 @@ jobs:
             --head "${{ github.event.pull_request.head.sha || github.sha }}" \
             --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
             --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
+            --shard-sha256 "public=${{ needs.original_public.outputs.sha256 }}" \
             --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}" \
             --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
             --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
@@ -688,7 +708,7 @@ jobs:
 
   original_controls:
     name: Complete every evidence control without aggregate qualification
-    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_collect]
+    needs: [native_collect, original_public, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_collect]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -770,6 +790,7 @@ jobs:
             --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
             --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
             --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
+            --shard-sha256 "public=${{ needs.original_public.outputs.sha256 }}" \
             --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}"
 
       - name: Bind completed controls without publishing aggregate PASS
@@ -781,6 +802,7 @@ jobs:
             --head "${{ github.event.pull_request.head.sha || github.sha }}" \
             --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
             --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
+            --shard-sha256 "public=${{ needs.original_public.outputs.sha256 }}" \
             --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}" \
             --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
             --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
@@ -823,7 +845,7 @@ jobs:
 
   qualify:
     name: All native evidence and complete original Rust comparisons
-    needs: [native_collect, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_collect, original_controls]
+    needs: [native_collect, original_public, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_collect, original_controls]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -903,6 +925,7 @@ jobs:
             --shard-sha256 "batch=${{ needs.original_batch.outputs.sha256 }}" \
             --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
             --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \
+            --shard-sha256 "public=${{ needs.original_public.outputs.sha256 }}" \
             --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}"
 
       - name: Reject altered configuration and regex evidence
@@ -926,6 +949,7 @@ jobs:
             --head "${{ github.event.pull_request.head.sha || github.sha }}" \
             --invocation "${{ github.run_id }}-${{ github.run_attempt }}" \
             --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
+            --shard-sha256 "public=${{ needs.original_public.outputs.sha256 }}" \
             --shard-sha256 "audit=${{ needs.original_audit.outputs.sha256 }}" \
             --shard-sha256 "storage_types=${{ needs.original_storage_types.outputs.sha256 }}" \
             --shard-sha256 "storage_files=${{ needs.original_storage_files.outputs.sha256 }}" \

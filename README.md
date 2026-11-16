@@ -17,6 +17,13 @@ workers. [The source coverage inventory](native/migration.json) records these
 remaining owners individually. The native profile's passing component tests
 do not qualify removal of those owners or production activation.
 
+The [selected public lifecycle](native/public_lifecycle_abi.md) additionally
+connects three configuration routes to the actual audit and result owners in an
+explicit serial stdio profile. Its fixed graph reuses existing canonical module
+paths and includes normal business-error recovery. It remains a separate
+qualification profile; all 125 production handlers and 10 owner categories are
+still recorded as `not_ported`.
+
 ## Concurrent execution
 
 Independent requests have no Hepta Runtime execution-count ceiling. SSH,
