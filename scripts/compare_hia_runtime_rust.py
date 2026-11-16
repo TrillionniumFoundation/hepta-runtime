@@ -1661,14 +1661,18 @@ def run_result_values_controls(output: Path, report: dict) -> None:
 
 
 def compare_public_lifecycle(output: Path, report: dict, rustc: Path) -> dict:
+    from public_lifecycle_retained import create_admission, pin, obj
     before = public_lifecycle_evidence(output, report)
     if before != report.get("public_lifecycle_evidence"):
         raise ValueError("public lifecycle native evidence changed before original replay")
+    admission = create_admission(ROOT, output, report, completed_test_summary)
     command = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/compare_public_lifecycle_original.py"),
                "--repo", str(ROOT), "--build", str(output / "build/public-lifecycle/build.json"),
                "--output", str(output / "public-lifecycle-original"),
                "--cargo", str(executable(str(rustc.with_name("cargo")))),
-               "--rustc", str(rustc), "--rustfmt", str(executable(str(rustc.with_name("rustfmt"))))]
+               "--rustc", str(rustc), "--rustfmt", str(executable(str(rustc.with_name("rustfmt")))),
+               "--native-admission", str(admission), "--native-admission-sha256", pin(admission)["sha256"],
+               "--native-invocation", obj(admission)["invocation"]]
     record_check(output, report, name="public-lifecycle-rust-compare", command=command,
                  timeout=180, env=qualification_env())
     result = public_lifecycle_qualification.original_evidence(ROOT, output, report, completed_test_summary)

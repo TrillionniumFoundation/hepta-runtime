@@ -15,12 +15,17 @@ from public_lifecycle_registry import encoded, regular, require, sha, source_pin
 from hia_native_public_lifecycle_reference import prepare,check
 from hia_native_public_lifecycle_qualification import verify_build,normal_evidence,inventory
 from public_lifecycle_crates import REMOVED,registry
+from public_lifecycle_retained import admit, pin
+from normal_original import verify as retained_pair_evidence
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ('repo','build','output','cargo','rustc','rustfmt'):
         parser.add_argument('--'+name,required=True,type=Path)
+    parser.add_argument('--native-admission',required=True,type=Path)
+    parser.add_argument('--native-admission-sha256',required=True)
+    parser.add_argument('--native-invocation',required=True)
     parser.add_argument('--offline',action='store_true')
     args=parser.parse_args()
     root=args.repo.resolve(strict=True)
@@ -28,17 +33,22 @@ def main():
     output=args.output.resolve();output.mkdir(mode=0o700,parents=True,exist_ok=False)
     manifest=args.build.resolve(strict=True);built=verify_build(root,manifest)
     pins=source_pins(root);native=manifest.parent/built['executable']
+    admission=args.native_admission.resolve(strict=True)
+    retained=admit(admission,args.native_admission_sha256,args.native_invocation,root,manifest,execution=True)
     cargo,rustc,rustfmt=(p.absolute()for p in (args.cargo,args.rustc,args.rustfmt))
     project=output/'project';target=output/'target';temporary=output/'temporary';temporary.mkdir(mode=0o700)
     env={k:v for k,v in os.environ.items()if k not in REMOVED and not k.startswith('HIA_')}
     env.update(RUSTC=str(rustc),CARGO_TARGET_DIR=str(target),TMPDIR=str(temporary),
         CARGO_NET_OFFLINE='true'if args.offline else 'false')
     begin=time.monotonic()
-    report=dict(schema='hepta.public-lifecycle.original-result.v1',status='RUNNING',sources=pins,
+    report=dict(schema='hepta.public-lifecycle.original-result.v2',status='RUNNING',sources=pins,
         build_sha256=sha(regular(manifest)),native_build_evidence=built,cargo=str(cargo),rustc=str(rustc),
         rustfmt=str(rustfmt),tool_sha256={str(p):sha(regular(p.resolve(strict=True)))for p in (cargo,rustc,rustfmt)},
         processes=[],fresh_actual_cargo_build=False,original_blocks=274,locked_registry_dependencies=138,
         native_processes=0,original_processes=0,requests_per_implementation=0,
+        retained_native_processes=64,retained_native_requests=359,retained_native=retained,
+        native_admission=str(admission),native_admission_sha256=args.native_admission_sha256,
+        native_invocation=args.native_invocation,
         actual_outer_call_tool_included=True,original_index_present_branch_qualified=False,
         syscall_interception=False,fault_injection=False,external_host_operations=0,
         production_activated=False,whole_runtime_replaced=False,
@@ -90,21 +100,33 @@ def main():
         report['original_binary']=dict(origin=str(origin),path=str(binary),bytes=len(raw),sha256=sha(raw))
         report['registry_after']=registry(metadata,lock,original_lock,output/'registry')
         require(report['registry_after']==report['registry_before'],'actual registry sources changed during build')
-        command=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/normal_runner.py',
-            '--native',native,'--original',binary,'--output',output/'paired']
+        command=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/normal_original.py',
+            '--admission',admission,'--admission-sha256',args.native_admission_sha256,
+            '--invocation',args.native_invocation,'--build',manifest,
+            '--original',binary,'--output',output/'paired']
         out,err=run('normal-pairs',command,root,120)
-        paired=normal_evidence(root,output/'paired',native,binary)
+        paired=retained_pair_evidence(output/'paired',binary,admission,args.native_admission_sha256,
+            args.native_invocation,manifest)
         require(not err and json.loads(out)==paired,'actual complete paired summary differs')
         require(check(root,project)==report['prepared'] and source_pins(root)==pins
             and verify_build(root,manifest)==built and regular(binary)==raw and regular(origin)==raw,
             'reference or native source changed during replay')
         require(registry(metadata,lock,original_lock,output/'registry')==report['registry_before'],
             'actual installed registry changed during replay')
+        require(admit(admission,args.native_admission_sha256,args.native_invocation,root,manifest,execution=True)==retained,
+            'current native capture or execution binding changed')
+        controls=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/retained_controls.py',
+            '--admission',admission,'--admission-sha256',args.native_admission_sha256,
+            '--invocation',args.native_invocation,'--build',manifest,'--output',output/'controls']
+        out,err=run('retained-native-controls',controls,root,30)
+        require(not err and json.loads(out)==dict(status='PASS',rejected_controls=15,
+            complete_restoration=True,native_processes=0,original_processes=0),
+            'retained native evidence controls failed')
         require(target.is_dir() and not target.is_symlink() and target.parent==output,
             'Cargo cache is not the owned disposable build directory')
         shutil.rmtree(target)
         report['cargo_cache_retired_after_binary_and_source_verification']=True
-        report.update(native_processes=64,original_processes=64,requests_per_implementation=359,
+        report.update(native_processes=0,original_processes=64,requests_per_implementation=359,
             paired=paired,complete_wire_and_filesystem_equality=True,status='PASS')
     except BaseException as error:
         report.update(status='FAIL',error=repr(error));raise
@@ -112,14 +134,14 @@ def main():
         # Cargo caches remain excluded. The actual binary, complete retained
         # crate archives, sources and replay streams are immutable evidence.
         artifacts={}
-        for branch in ('project','registry','paired'):
+        for branch in ('project','registry','paired','controls'):
             if (output/branch).exists():
                 artifacts.update({branch+'/'+p:d for p,d in inventory(output/branch).items()})
         for path in output.iterdir():
             if path.is_file() and path.name!='result.json':artifacts[path.name]=sha(regular(path))
         report['artifacts']=artifacts;save()
         print(json.dumps({k:report[k]for k in ('status','fresh_actual_cargo_build','native_processes',
-            'original_processes','requests_per_implementation','original_blocks','locked_registry_dependencies')},sort_keys=True))
+            'retained_native_processes','original_processes','requests_per_implementation','original_blocks','locked_registry_dependencies')},sort_keys=True))
 
 
 if __name__=='__main__':main()

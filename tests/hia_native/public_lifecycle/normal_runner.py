@@ -44,9 +44,13 @@ def configuration(state,case):
 def request(method,params,ident):
     return q.compact(dict(jsonrpc='2.0',id=ident,method=method,params=params))
 
-def run(binary,side,folder,case,update):
+def run(binary,side,folder,case,update,*,retained_common=None):
     d=folder/side;d.mkdir(mode=0o700)
-    common=folder/'common';common.mkdir(mode=0o700,exist_ok=True)
+    common=folder/'common' if retained_common is None else Path(retained_common)
+    if retained_common is not None:
+        assert side=='original' and common.is_dir() and not common.is_symlink()
+        assert (common/'config.json').is_file() and not (common/'state').exists()
+    common.mkdir(mode=0o700,exist_ok=True)
     state=common/'state';state.mkdir(mode=0o700)
     config=common/'config.json';config_bytes=q.compact(configuration(state,case))
     if config.exists():assert config.read_bytes()==config_bytes

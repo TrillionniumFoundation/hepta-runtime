@@ -265,13 +265,17 @@ def verify_original(root,folder,manifest):
     import tomllib
     from public_lifecycle_crates import REMOVED,package_files
     from hia_native_public_lifecycle_reference import check
+    from public_lifecycle_retained import ADMISSION, admit, pin
+    sys.path.insert(0,str(Path(root)/'tests/hia_native/public_lifecycle'))
+    from normal_original import verify as retained_pair_evidence
     root,folder,manifest=Path(root).resolve(strict=True),Path(folder).resolve(strict=True),Path(manifest).resolve(strict=True)
     original=object_at(folder/'result.json');built=verify_build(root,manifest)
-    require(original['schema']=='hepta.public-lifecycle.original-result.v1' and original['status']=='PASS'
+    require(original['schema']=='hepta.public-lifecycle.original-result.v2' and original['status']=='PASS'
         and original['sources']==source_pins(root) and original['native_build_evidence']==built
         and original['build_sha256']==sha(regular(manifest)) and original['fresh_actual_cargo_build']is True
         and original['original_blocks']==274 and original['locked_registry_dependencies']==138
-        and original['native_processes']==original['original_processes']==64
+        and original['native_processes']==0 and original['original_processes']==64
+        and original['retained_native_processes']==64 and original['retained_native_requests']==359
         and original['requests_per_implementation']==359 and original['actual_outer_call_tool_included']is True
         and original['complete_wire_and_filesystem_equality']is True
         and original['cargo_cache_retired_after_binary_and_source_verification']is True
@@ -294,18 +298,30 @@ def verify_original(root,folder,manifest):
         path=str(binary),bytes=len(raw),sha256=sha(raw)) and stat.S_IMODE(binary.stat().st_mode)==0o500,
         'retained original executable differs')
     native=manifest.parent/built['executable']
+    admission=folder.parent/ADMISSION
+    require(original['native_admission']==str(admission)
+        and original['native_admission_sha256']==pin(admission)['sha256'],
+        'current native admission identity differs')
+    retained=admit(admission,original['native_admission_sha256'],original['native_invocation'],root,manifest)
+    require(original['retained_native']==retained,'retained native phase differs')
     commands=[('rustc-version',[original['rustc'],'--version','--verbose'],root,10),
         ('cargo-fetch',[original['cargo'],'fetch','--locked',*offline],folder/'project',120),
         ('cargo-metadata',[original['cargo'],'metadata','--locked','--format-version','1',*offline],folder/'project',30),
         ('cargo-build',[original['cargo'],'build','--release','--locked','--bin','hia-public-eligible-original',*offline],folder/'project',120),
-        ('normal-pairs',[sys.executable,'-I','-B',str(root/'tests/hia_native/public_lifecycle/normal_runner.py'),
-            '--native',str(native),'--original',str(binary),'--output',str(folder/'paired')],root,120)]
+        ('normal-pairs',[sys.executable,'-I','-B',str(root/'tests/hia_native/public_lifecycle/normal_original.py'),
+            '--admission',str(admission),'--admission-sha256',original['native_admission_sha256'],
+            '--invocation',original['native_invocation'],'--build',str(manifest),
+            '--original',str(binary),'--output',str(folder/'paired')],root,120),
+        ('retained-native-controls',[sys.executable,'-I','-B',str(root/'tests/hia_native/public_lifecycle/retained_controls.py'),
+            '--admission',str(admission),'--admission-sha256',original['native_admission_sha256'],
+            '--invocation',original['native_invocation'],'--build',str(manifest),
+            '--output',str(folder/'controls')],root,30)]
     require([r['name']for r in original['processes']]==[r[0]for r in commands],'original process inventory differs')
     for row,(name,command,cwd,timeout)in zip(original['processes'],commands,strict=True):
         out,err=completed(folder,name,row,command,cwd,timeout)
         require(type(row['pid'])is int and row['pid']>0,'actual reference PID absent')
         if name=='rustc-version':require(not err and b'release: 1.95.0\n'in out,'actual Rust version changed')
-        if name in ('cargo-metadata','normal-pairs'):require(not err,'unexpected original stdout framing')
+        if name in ('cargo-metadata','normal-pairs','retained-native-controls'):require(not err,'unexpected original stdout framing')
     expected_tools={original['cargo'],original['rustc'],original['rustfmt']}
     require(set(original['tool_sha256'])==expected_tools,'original tool domain changed')
     for path,digest in original['tool_sha256'].items():
@@ -338,18 +354,31 @@ def verify_original(root,folder,manifest):
             and row==dict(package=package,archive=dict(bytes=len(archive),sha256=sha(archive)),
                 members=package_files(archive,name),actual_source=str(Path(source['manifest_path']).parent)),
             'complete locked crate/member evidence differs')
-    paired=normal_evidence(root,folder/'paired',native,binary)
+    paired=retained_pair_evidence(folder/'paired',binary,admission,original['native_admission_sha256'],
+        original['native_invocation'],manifest)
     require(original['paired']==paired and json.loads(regular(folder/'normal-pairs.stdout'))==paired,
         'complete actual pair evidence differs')
+    controls=object_at(folder/'controls/result.json')
+    names=['invocation','context-invocation','source-root','output-root','native-count','request-count',
+        'new-native-count','deadline','source-pin','manifest','completed-command','completed-exit',
+        'capture-inventory','extra-field','complete-native-stream']
+    expected_controls=[dict(name=name,rejected=True,recomputed_admission_digest=name!='complete-native-stream')for name in names]
+    require(controls==dict(schema='hepta.public-lifecycle.retained-controls.v1',status='PASS',
+        admission=pin(admission),invocation=original['native_invocation'],rejected_controls=15,
+        controls=expected_controls,before=retained,after=retained,complete_restoration=True,
+        native_processes=0,original_processes=0,syscall_interception=False,fault_injection=False)
+        and json.loads(regular(folder/'retained-native-controls.stdout'))==dict(status='PASS',
+            rejected_controls=15,complete_restoration=True,native_processes=0,original_processes=0),
+        'complete data rejection controls changed')
     actual={}
-    for branch in ('project','registry','paired'):
+    for branch in ('project','registry','paired','controls'):
         actual.update({branch+'/'+name:digest for name,digest in inventory(folder/branch).items()})
     for path in folder.iterdir():
         if path.is_file()and path.name!='result.json':actual[path.name]=sha(regular(path))
     require(actual==original['artifacts'],'complete immutable original artifacts changed')
     return dict(schema='hepta.public-lifecycle.original-admission.v1',status='PASS',sources=original['sources'],
         artifacts=actual,original_builds=1,locked_registry_dependencies=138,original_blocks=274,
-        native_processes=64,original_processes=64,requests_per_implementation=359,
+        native_processes=0,retained_native_processes=64,original_processes=64,requests_per_implementation=359,
         new_executions_in_admission=0,production_activated=False,whole_runtime_replaced=False)
 
 
@@ -359,12 +388,16 @@ def original_command(root,output,report):
     original=object_at(folder/'result.json')
     command=[sys.executable,'-I','-B',str(root/'tests/hia_native/compare_public_lifecycle_original.py'),
         '--repo',str(root),'--build',str(output/'build/public-lifecycle/build.json'),'--output',str(folder),
-        '--cargo',original['cargo'],'--rustc',original['rustc'],'--rustfmt',original['rustfmt']]
+        '--cargo',original['cargo'],'--rustc',original['rustc'],'--rustfmt',original['rustfmt'],
+        '--native-admission',original['native_admission'],
+        '--native-admission-sha256',original['native_admission_sha256'],
+        '--native-invocation',original['native_invocation']]
     if original['environment']['offline']:command.append('--offline')
     return command
 
 
 def original_evidence(root,output,report,completed_test_summary):
+    from public_lifecycle_retained import ADMISSION, PHASE
     root,output=Path(root).resolve(strict=True),Path(output).resolve(strict=True)
     native=native_evidence(root,output,report,completed_test_summary)
     folder=output/'public-lifecycle-original';manifest=output/'build/public-lifecycle/build.json'
@@ -372,11 +405,23 @@ def original_evidence(root,output,report,completed_test_summary):
     row,summary=completed_test_summary(output,report,'public-lifecycle-rust-compare')
     out,err=completed(output,'public-lifecycle-rust-compare',row,original_command(root,output,report),root,180,aggregate=True)
     original=object_at(folder/'result.json')
+    binding=object_at(output/ADMISSION)
+    if 'original_shard' in report:
+        require(binding['context']['mode']=='ci-original-pipeline'
+            and binding['invocation']==report['original_shard']['invocation']
+            and binding['context']['native_seal_sha256']==report['original_shard']['native_sha256'],
+            'original consumer used another workflow native phase')
+    else:
+        require(binding['context']['mode']=='owned-component-validation'
+            and binding['invocation']=='aggregate:'+report['started_at'],
+            'original consumer used another owned native phase')
     expected={k:original[k]for k in ('status','fresh_actual_cargo_build','native_processes',
-        'original_processes','requests_per_implementation','original_blocks','locked_registry_dependencies')}
+        'retained_native_processes','original_processes','requests_per_implementation','original_blocks','locked_registry_dependencies')}
     require(not err and json.loads(out)==summary==expected,'actual original wrapper completion differs')
     artifacts=dict(native['artifact_sha256'])
     artifacts.update({'public-lifecycle-original/'+name:digest for name,digest in result.pop('artifacts').items()})
     for path in (folder/'result.json',output/'public-lifecycle-rust-compare.stdout',output/'public-lifecycle-rust-compare.stderr'):
         keep(output,artifacts,path)
+    keep(output,artifacts,output/ADMISSION)
+    if binding['context']['mode']=='owned-component-validation':keep(output,artifacts,output/PHASE)
     return {**result,'artifact_sha256':artifacts}

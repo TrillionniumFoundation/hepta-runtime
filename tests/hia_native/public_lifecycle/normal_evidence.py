@@ -66,10 +66,12 @@ class CapturePath:
         return raw
 
 
-def verify_capture(folder, case, process, binary, paired):
+def verify_capture(folder, case, process, binary, paired, *, retained_common=None):
     folder=Path(folder)
+    common=folder.parent/'common' if retained_common is None else Path(retained_common)
+    assert retained_common is None or process['side']=='original'
     assert process['cwd']==str(folder) and process['side']==folder.name
-    assert process['argv']==[str(binary),'--runtime-config',str(folder.parent/'common/config.json')]
+    assert process['argv']==[str(binary),'--runtime-config',str(common/'config.json')]
     assert process['status']=='PASS' and process['exit_code']==0 and process['reaped'] is True
     assert type(process['pid']) is int and process['pid']>0
     assert process['frames']==len(case['events']) and process['response_timeout_seconds']==30
@@ -78,8 +80,8 @@ def verify_capture(folder, case, process, binary, paired):
     assert (folder/'stderr').read_bytes()==b''
     input_bytes=b''.join(bytes.fromhex(v)+b'\n' for v in case['events'])
     assert (folder/'input.bin').read_bytes()==input_bytes
-    raw_config=(folder.parent/'common/config.json').read_bytes()
-    assert raw_config==q.compact(configuration(folder.parent/'common/state',case))
+    raw_config=(common/'config.json').read_bytes()
+    assert raw_config==q.compact(configuration(common/'state',case))
     with gzip.open(folder/'observations.jsonl.gz','rb')as stream:
         rows=[json.loads(line)for line in stream]
     assert len(rows)==len(case['events'])

@@ -62,10 +62,19 @@ complete wire response against retained original bytes, and validates complete
 live filesystem snapshots. The original recipe performs a fresh Rust 1.95
 locked build of the selected 38-file reference, checks 274 unchanged original
 blocks and all 138 locked crate archives and installed source members, then
-executes another 64 native and 64 original processes with 359 requests each.
-Both implementations use the same fixture pathname in sequence. Complete
+executes 64 new original processes with 359 requests against this invocation's
+complete native captures. The original recipe starts no new native processes.
+It binds the retained 64-process/359-request native domain to the current source,
+images, fixture corpus, completed native phase and external CI seal. Both
+implementations use the same fixture pathname in sequence. Complete
 request/response streams, snapshots, process exit records, and typed retained
-payload bytes remain available for read-only admission.
+payload bytes are reconstructed and compared before and after the replay.
+
+Fifteen data-only rejection controls check the native admission and its complete
+streams, then require full restoration and repeat admission. These controls do
+not execute either implementation. The 180-second recipe deadline and all
+native and original cases remain unchanged. The two earlier CI timeouts remain
+failures in the external evidence archive.
 
 Two cases use an ordinary pre-existing application file at the results-directory
 pathname. They require the original business error, remove that owned fixture,
