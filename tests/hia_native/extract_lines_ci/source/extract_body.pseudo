@@ -1,0 +1,1108 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(w) < 2048:
+        return CAPACITY
+    if get(w, 0) == 0:
+        return initialize(s, o, w)
+    if state_valid(w) == False:
+        return INVALID
+    if get(w, 144) > length(w):
+        return WORK_GROW
+    if get(w, 152) > length(o):
+        return OUT_GROW
+    put(w, 144, 0)
+    put(w, 152, 0)
+    if get(w, 48) != 0:
+        if callback_valid(s, w) == False:
+            return INVALID
+        if reserve(w, length(s)) == 0:
+            return WORK_GROW
+        at = get(w, 72)
+        copy_range(w, s, at, 0, length(s))
+        set_blob(w, 9, at, length(s))
+        put(w, 72, at + length(s))
+        put(w, 48, 0)
+        put(w, 344, load(s, 40))
+        if after_child(w) == 0:
+            return INVALID
+    else:
+        if get(w, 8) == 14 and get(w, 336) == 1 and wake_valid(s, w):
+            if reserve(w, length(s)) == 0:
+                return WORK_GROW
+            at = get(w, 72)
+            copy_range(w, s, at, 0, length(s))
+            set_blob(w, 9, at, length(s))
+            put(w, 72, at + length(s))
+            put(w, 336, 0)
+        elif equal_input(s, w, blob(w, 9), blob_size(w, 9)) == False:
+            return INVALID
+    return drive(o, w)
+
+def initialize(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if initial_valid(s, 0, length(s)) == False:
+        return INVALID
+    if length(s) > MAXIMUM - 2048:
+        return RESOURCE
+    if length(w) < 2048 + length(s):
+        put(w, 144, 2048 + length(s))
+        return WORK_GROW
+    fill_range(w, 0, 2048, 0)
+    put(w, 0, STATE)
+    put(w, 8, 1)
+    put(w, 16, load(s, 24))
+    put(w, 24, load(s, 16))
+    put(w, 72, 2048 + length(s))
+    copy_range(w, s, 2048, 0, length(s))
+    set_blob(w, 0, 2048, length(s))
+    set_blob(w, 9, 2048, length(s))
+    return drive(o, w)
+
+def initial_valid(s: readbuf, base: u64, size: u64) -> bool:
+    if base > length(s) or size > length(s) - base or size < 128:
+        return False
+    if load(s, base) != REQUEST or load(s, base + 8) != 1:
+        return False
+    if load(s, base + 16) < 1 or load(s, base + 16) > 2 or load(s, base + 24) == 0:
+        return False
+    index = 88
+    while index < 128:
+        if load(s, base + index) != 0:
+            return False
+        index = index + 8
+    at = base + 128
+    end = base + size
+    index = 0
+    while index < 7:
+        count = load(s, base + 32 + index * 8)
+        if count > end - at:
+            return False
+        if index == 2 or index == 3:
+            if utf8(s, at, count) == 0:
+                return False
+        elif index >= 4:
+            if index != 5 or count != 0:
+                if endpoint_valid(s, at, count) == False:
+                    return False
+        at = at + count
+        index = index + 1
+    return at == end
+
+def endpoint_valid(s: readbuf, at: u64, size: u64) -> bool:
+    if size < 32 or load(s, at) != ENDPOINT or load(s, at + 16) != size - 32:
+        return False
+    kind = load(s, at + 8)
+    if kind > 3:
+        return False
+    if kind != 0 and load(s, at + 24) != 0:
+        return False
+    if kind < 2:
+        return size == 32
+    return utf8(s, at + 32, size - 32) != 0
+
+def state_valid(w: mutbuf) -> bool:
+    if get(w, 0) != STATE or get(w, 72) < 2048 or get(w, 72) > length(w):
+        return False
+    if get(w, 24) < 1 or get(w, 24) > 2 or get(w, 16) == 0:
+        return False
+    phase = get(w, 8)
+    if phase == 0 or phase > 100:
+        return False
+    if phase > 33 and phase != 80 and phase != 90 and phase != 100:
+        return False
+    if get(w, 48) > 14 or get(w, 176) > 1 or get(w, 336) > 1 or get(w, 32) > 1:
+        return False
+    if get(w, 176) != 0 and get(w, 168) == 0:
+        return False
+    if get(w, 48) != 0:
+        if get(w, 40) == 0 or get(w, 48) != expected_child(phase):
+            return False
+    if get(w, 336) != 0:
+        if phase != 14 or get(w, 48) != 0 or get(w, 168) == 0 or get(w, 176) != 0:
+            return False
+    if phase == 100 and (get(w, 48) != 0 or get(w, 168) != 0 or get(w, 176) != 0):
+        return False
+    index = 0
+    while index < 16:
+        at = blob(w, index)
+        size = blob_size(w, index)
+        if at == 0:
+            if size != 0:
+                return False
+        elif at < 2048 or at > get(w, 72) or size > get(w, 72) - at:
+            return False
+        index = index + 1
+    at = blob(w, 0)
+    if at != 2048 or initial_valid(w, at, blob_size(w, 0)) == False:
+        return False
+    if get(w, at + 16) != get(w, 24) or get(w, at + 24) != get(w, 16):
+        return False
+    if blob(w, 9) == 0:
+        return False
+    if phase == 80:
+        if get(w, 352) < 1 or get(w, 352) > 22:
+            return False
+        at = get(w, 360)
+        size = get(w, 368)
+        if at == 0:
+            if size != 0:
+                return False
+        elif at < 2048 or at > get(w, 72) or size > get(w, 72) - at:
+            return False
+    if phase == 100 and blob(w, 8) == 0:
+        return False
+    return True
+
+def expected_child(phase: u64) -> u64:
+    if phase <= 3:
+        return 13
+    if phase == 4 or phase == 5 or phase == 16 or phase == 17 or phase == 23 or phase == 24:
+        return 1
+    if phase == 6 or phase == 8 or phase == 10 or phase == 18 or phase == 19 or phase == 21 or phase == 30:
+        return 5
+    if phase == 7 or phase == 9 or phase == 20:
+        return 14
+    if phase == 11:
+        return 9
+    if phase == 12:
+        return 11
+    if phase == 13 or phase == 25 or phase == 28:
+        return 2
+    if phase == 14 or phase == 15 or phase == 31 or phase == 32:
+        return 3
+    if phase == 22:
+        return 4
+    if phase == 26:
+        return 6
+    if phase == 27:
+        return 7
+    if phase == 29:
+        return 8
+    if phase == 33:
+        return 12
+    return 0
+
+def callback_valid(s: readbuf, w: mutbuf) -> bool:
+    if length(s) < 64 or load(s, 0) != CALLBACK or load(s, 8) != 2:
+        return False
+    if load(s, 16) != get(w, 16) or load(s, 24) != get(w, 40) or load(s, 32) != get(w, 48):
+        return False
+    if load(s, 40) >= FIRST_ERROR or load(s, 48) != length(s) - 64 or load(s, 56) != 0:
+        return False
+    return True
+
+def wake_valid(s: readbuf, w: mutbuf) -> bool:
+    if length(s) != 48 or load(s, 0) != WAKE:
+        return False
+    if load(s, 8) != get(w, 16) or load(s, 16) != get(w, 40) or load(s, 24) != get(w, 168):
+        return False
+    return load(s, 32) == 0 and load(s, 40) == 0
+
+def equal_input(s: readbuf, w: mutbuf, at: u64, size: u64) -> bool:
+    if length(s) != size:
+        return False
+    index = 0
+    while index < size:
+        if byte(s, index) != byte(w, at + index):
+            return False
+        index = index + 1
+    return True
+
+def blob(w: mutbuf, index: u64) -> u64:
+    return get(w, 512 + index * 16)
+
+def blob_size(w: mutbuf, index: u64) -> u64:
+    return get(w, 520 + index * 16)
+
+def set_blob(w: mutbuf, index: u64, at: u64, size: u64) -> u64:
+    put(w, 512 + index * 16, at)
+    put(w, 520 + index * 16, size)
+    return 1
+
+def initial_part(w: mutbuf, index: u64) -> u64:
+    start = blob(w, 0)
+    at = start + 128
+    i = 0
+    while i < index:
+        at = at + get(w, start + 32 + i * 8)
+        i = i + 1
+    return at
+
+def initial_size(w: mutbuf, index: u64) -> u64:
+    return get(w, blob(w, 0) + 32 + index * 8)
+
+def reserve(w: mutbuf, size: u64) -> u64:
+    at = get(w, 72)
+    if size > MAXIMUM - at:
+        put(w, 144, MAXIMUM)
+        return 0
+    if at + size > length(w):
+        put(w, 144, at + size)
+        return 0
+    return 1
+
+def output_room(o: mutbuf, w: mutbuf, size: u64) -> bool:
+    if size > length(o):
+        put(w, 152, size)
+        return False
+    return True
+
+def child_begin(o: mutbuf, w: mutbuf, size: u64) -> bool:
+    if size > MAXIMUM - 64 or get(w, 40) == MAXIMUM:
+        put(w, 152, MAXIMUM)
+        return False
+    return output_room(o, w, size + 64)
+
+def child_finish(o: mutbuf, w: mutbuf, child: u64, size: u64) -> u32:
+    sequence = get(w, 40) + 1
+    put(o, 0, CHILD_CALL)
+    put(o, 8, 64 + size)
+    put(o, 16, child)
+    put(o, 24, sequence)
+    put(o, 32, get(w, 16))
+    put(o, 40, 1)
+    put(o, 48, size)
+    put(o, 56, 0)
+    put(w, 40, sequence)
+    put(w, 48, child)
+    return CALL
+
+def forwarded(o: mutbuf, w: mutbuf, child: u64, at: u64, size: u64) -> u32:
+    if child_begin(o, w, size) == False:
+        return OUT_GROW
+    copy_range(o, w, 64, at, size)
+    return child_finish(o, w, child, size)
+
+def read_request(o: mutbuf, w: mutbuf, part: u64, operation: u64) -> u32:
+    size = initial_size(w, part)
+    if child_begin(o, w, 64 + size) == False:
+        return OUT_GROW
+    fill_range(o, 64, 64, 0)
+    put(o, 64, READ)
+    put(o, 72, operation)
+    put(o, 80, size)
+    copy_range(o, w, 128, initial_part(w, part), size)
+    return child_finish(o, w, 1, 64 + size)
+
+def key_request(o: mutbuf, w: mutbuf) -> u32:
+    size = initial_size(w, 1)
+    if child_begin(o, w, 64 + size) == False:
+        return OUT_GROW
+    fill_range(o, 64, 64, 0)
+    put(o, 64, KEY)
+    put(o, 72, 1)
+    put(o, 80, size)
+    copy_range(o, w, 128, initial_part(w, 1), size)
+    return child_finish(o, w, 2, 64 + size)
+
+def lock_request(o: mutbuf, w: mutbuf, operation: u64) -> u32:
+    size = 0
+    if operation == 1:
+        size = blob_size(w, 7)
+    if child_begin(o, w, 64 + size) == False:
+        return OUT_GROW
+    fill_range(o, 64, 64, 0)
+    put(o, 64, LOCK)
+    put(o, 72, operation)
+    put(o, 80, get(w, 168))
+    put(o, 88, size)
+    if size != 0:
+        copy_range(o, w, 128, blob(w, 7), size)
+    return child_finish(o, w, 3, 64 + size)
+
+def data_request(o: mutbuf, w: mutbuf, operation: u64, a: u64, b: u64, c: u64, first: u64, first_size: u64, second: u64, second_size: u64) -> u32:
+    if first_size > MAXIMUM - 96 or second_size > MAXIMUM - 96 - first_size:
+        return RESOURCE
+    size = 96 + first_size + second_size
+    if child_begin(o, w, size) == False:
+        return OUT_GROW
+    fill_range(o, 64, 96, 0)
+    put(o, 64, DATA)
+    put(o, 72, operation)
+    put(o, 80, a)
+    put(o, 88, b)
+    put(o, 96, c)
+    put(o, 112, first_size)
+    put(o, 120, second_size)
+    copy_range(o, w, 160, first, first_size)
+    copy_range(o, w, 160 + first_size, second, second_size)
+    return child_finish(o, w, 5, size)
+
+def fail(w: mutbuf, kind: u64, at: u64, size: u64, a: u64, b: u64) -> u64:
+    put(w, 352, kind)
+    put(w, 360, at)
+    put(w, 368, size)
+    put(w, 376, a)
+    put(w, 384, b)
+    put(w, 8, 80)
+    put(w, 32, 1)
+    return 1
+
+def is_null(w: mutbuf, index: u64) -> bool:
+    size = initial_size(w, index)
+    if size == 0:
+        return True
+    at = initial_part(w, index)
+    if size != 36 or get(w, at + 8) != 3:
+        return False
+    return byte(w, at + 32) == 110 and byte(w, at + 33) == 117 and byte(w, at + 34) == 108 and byte(w, at + 35) == 108
+
+def empty_path(w: mutbuf, index: u64) -> bool:
+    at = initial_part(w, index)
+    end = at + initial_size(w, index)
+    while at < end:
+        value = decode_scalar(w, at, end)
+        at = value >> 32
+        c = value & 4294967295
+        if c != 32 and (c < 9 or c > 13) and c != 133 and c != 160 and c != 5760 and (c < 8192 or c > 8202) and c != 8232 and c != 8233 and c != 8239 and c != 8287 and c != 12288:
+            return False
+    return True
+
+def drive(o: mutbuf, w: mutbuf) -> u32:
+    steps = 0
+    while steps < 64:
+        steps = steps + 1
+        phase = get(w, 8)
+        if phase == 1:
+            if empty_path(w, 2):
+                fail(w, 1, 0, 0, 0, 0)
+            elif is_null(w, 4):
+                fail(w, 2, 0, 0, 0, 0)
+            else:
+                return forwarded(o, w, 13, initial_part(w, 4), initial_size(w, 4))
+        elif phase == 2:
+            if is_null(w, 5):
+                put(w, 216, get(w, 192))
+                put(w, 224, get(w, 200))
+                put(w, 232, get(w, 208))
+                put(w, 8, 3)
+            else:
+                return forwarded(o, w, 13, initial_part(w, 5), initial_size(w, 5))
+        elif phase == 3:
+            if empty_path(w, 3):
+                fail(w, 5, 0, 0, 0, 0)
+            elif is_null(w, 6):
+                fail(w, 6, 0, 0, 0, 0)
+            else:
+                return forwarded(o, w, 13, initial_part(w, 6), initial_size(w, 6))
+        elif phase == 4:
+            return read_request(o, w, 0, 1)
+        elif phase == 5:
+            return read_request(o, w, 0, 2)
+        elif phase == 6:
+            return data_request(o, w, 1, get(w, 192), get(w, 200), get(w, 208), blob(w, 1), blob_size(w, 1), 0, 0)
+        elif phase == 7 or phase == 9 or phase == 20:
+            return forwarded(o, w, 14, blob(w, 10), blob_size(w, 10))
+        elif phase == 8:
+            return data_request(o, w, 1, get(w, 216), get(w, 224), get(w, 232), blob(w, 1), blob_size(w, 1), 0, 0)
+        elif phase == 10:
+            if get(w, 264) > get(w, 272):
+                fail(w, 12, 0, 0, get(w, 264), get(w, 272))
+            else:
+                return data_request(o, w, 2, get(w, 264), get(w, 272), 0, blob(w, 1), blob_size(w, 1), 0, 0)
+        elif phase == 11:
+            return parent_request(o, w)
+        elif phase == 12:
+            return mkdir_request(o, w)
+        elif phase == 13 or phase == 25 or phase == 28:
+            return key_request(o, w)
+        elif phase == 14:
+            if get(w, 336) != 0:
+                return waiting(o, w)
+            return lock_request(o, w, 3)
+        elif phase == 15:
+            return lock_request(o, w, 1)
+        elif phase == 16 or phase == 23:
+            return read_request(o, w, 1, 1)
+        elif phase == 17 or phase == 24:
+            return read_request(o, w, 1, 2)
+        elif phase == 18:
+            return data_request(o, w, 5, 0, 0, 0, blob(w, 4), blob_size(w, 4), 0, 0)
+        elif phase == 19:
+            return data_request(o, w, 1, get(w, 240), get(w, 248), get(w, 256), blob(w, 4), blob_size(w, 4), 0, 0)
+        elif phase == 21:
+            selected = blob(w, 2)
+            return data_request(o, w, 3, get(w, 304), get(w, 312), 0, blob(w, 4), blob_size(w, 4), selected + 64, get(w, selected + 32))
+        elif phase == 22:
+            return forwarded(o, w, 4, blob(w, 10), blob_size(w, 10))
+        elif phase == 26:
+            return history_request(o, w)
+        elif phase == 27:
+            return atomic_request(o, w)
+        elif phase == 29:
+            return cache_request(o, w)
+        elif phase == 30:
+            return render_request(o, w)
+        elif phase == 31:
+            return lock_request(o, w, 5)
+        elif phase == 32:
+            return lock_request(o, w, 6)
+        elif phase == 33:
+            if child_begin(o, w, 16) == False:
+                return OUT_GROW
+            put(o, 64, ERROR)
+            put(o, 72, get(w, 392))
+            return child_finish(o, w, 12, 16)
+        elif phase == 80:
+            if render_error(w) == 0:
+                return WORK_GROW
+        elif phase == 90:
+            if get(w, 176) != 0:
+                put(w, 8, 31)
+            elif get(w, 168) != 0:
+                put(w, 8, 32)
+            else:
+                put(w, 8, 100)
+        elif phase == 100:
+            return final_result(o, w)
+        else:
+            return INVALID
+    return INVALID
+
+def parent_request(o: mutbuf, w: mutbuf) -> u32:
+    size = initial_size(w, 1)
+    if child_begin(o, w, 64 + size) == False:
+        return OUT_GROW
+    fill_range(o, 64, 64, 0)
+    put(o, 64, PARENT)
+    put(o, 72, 2)
+    put(o, 104, size)
+    copy_range(o, w, 128, initial_part(w, 1), size)
+    return child_finish(o, w, 9, 64 + size)
+
+def mkdir_request(o: mutbuf, w: mutbuf) -> u32:
+    size = blob_size(w, 3)
+    if child_begin(o, w, 64 + size) == False:
+        return OUT_GROW
+    fill_range(o, 64, 64, 0)
+    put(o, 64, MKDIR)
+    put(o, 72, 1)
+    put(o, 88, size)
+    copy_range(o, w, 128, blob(w, 3), size)
+    return child_finish(o, w, 11, 64 + size)
+
+def history_request(o: mutbuf, w: mutbuf) -> u32:
+    key_size = blob_size(w, 7)
+    value_size = blob_size(w, 6)
+    if key_size > MAXIMUM - 64 or value_size > MAXIMUM - 64 - key_size:
+        return RESOURCE
+    size = 64 + key_size + value_size
+    if child_begin(o, w, size) == False:
+        return OUT_GROW
+    fill_range(o, 64, 64, 0)
+    put(o, 64, HISTORY)
+    put(o, 72, 1)
+    put(o, 80, 67108864)
+    put(o, 88, key_size)
+    put(o, 96, value_size)
+    copy_range(o, w, 128, blob(w, 7), key_size)
+    copy_range(o, w, 128 + key_size, blob(w, 6), value_size)
+    return child_finish(o, w, 6, size)
+
+def atomic_request(o: mutbuf, w: mutbuf) -> u32:
+    path_size = initial_size(w, 1)
+    value_size = blob_size(w, 5)
+    if path_size > MAXIMUM - 64 or value_size > MAXIMUM - 64 - path_size:
+        return RESOURCE
+    size = 64 + path_size + value_size
+    if child_begin(o, w, size) == False:
+        return OUT_GROW
+    fill_range(o, 64, 64, 0)
+    put(o, 64, ATOMIC)
+    put(o, 72, 1)
+    put(o, 80, path_size)
+    put(o, 88, value_size)
+    copy_range(o, w, 128, initial_part(w, 1), path_size)
+    copy_range(o, w, 128 + path_size, blob(w, 5), value_size)
+    return child_finish(o, w, 7, size)
+
+def cache_request(o: mutbuf, w: mutbuf) -> u32:
+    key_size = blob_size(w, 7)
+    before = blob_size(w, 4)
+    after = blob_size(w, 5)
+    if key_size > MAXIMUM - 48 or before > MAXIMUM - 48 - key_size or after > MAXIMUM - 48 - key_size - before:
+        return RESOURCE
+    size = 48 + key_size + before + after
+    if child_begin(o, w, size) == False:
+        return OUT_GROW
+    put(o, 64, CACHE)
+    put(o, 72, 7)
+    put(o, 80, get(w, 24))
+    put(o, 88, key_size)
+    put(o, 96, before)
+    put(o, 104, after)
+    copy_range(o, w, 112, blob(w, 7), key_size)
+    copy_range(o, w, 112 + key_size, blob(w, 4), before)
+    copy_range(o, w, 112 + key_size + before, blob(w, 5), after)
+    return child_finish(o, w, 8, size)
+
+def render_request(o: mutbuf, w: mutbuf) -> u32:
+    first = initial_size(w, 2)
+    second = initial_size(w, 3)
+    selected = blob(w, 2)
+    echo_size = get(w, selected + 40)
+    echo = selected + 64 + get(w, selected + 32)
+    target_size = blob_size(w, 4)
+    if first > MAXIMUM - 96 or second > MAXIMUM - 96 - first or echo_size > MAXIMUM - 96 - first - second or target_size > MAXIMUM - 96 - first - second - echo_size:
+        return RESOURCE
+    size = 96 + first + second + echo_size + target_size
+    if child_begin(o, w, size) == False:
+        return OUT_GROW
+    fill_range(o, 64, 96, 0)
+    put(o, 64, DATA)
+    put(o, 72, 4)
+    put(o, 80, get(w, 264))
+    put(o, 88, get(w, 272))
+    put(o, 96, get(w, 296))
+    put(o, 112, first)
+    put(o, 120, second)
+    put(o, 128, echo_size)
+    put(o, 136, target_size)
+    copy_range(o, w, 160, initial_part(w, 2), first)
+    copy_range(o, w, 160 + first, initial_part(w, 3), second)
+    copy_range(o, w, 160 + first + second, echo, echo_size)
+    copy_range(o, w, 160 + first + second + echo_size, blob(w, 4), target_size)
+    return child_finish(o, w, 5, size)
+
+def waiting(o: mutbuf, w: mutbuf) -> u32:
+    if output_room(o, w, 48) == False:
+        return OUT_GROW
+    put(o, 0, WAIT_RESULT)
+    put(o, 8, get(w, 16))
+    put(o, 16, get(w, 40))
+    put(o, 24, get(w, 168))
+    put(o, 32, 0)
+    put(o, 40, 0)
+    return WAIT
+
+def final_result(o: mutbuf, w: mutbuf) -> u32:
+    size = blob_size(w, 8)
+    if size >= FIRST_ERROR - 32:
+        return RESOURCE
+    if output_room(o, w, 32 + size) == False:
+        return OUT_GROW
+    put(o, 0, RESULT)
+    put(o, 8, 1)
+    put(o, 16, get(w, 32))
+    put(o, 24, size)
+    copy_range(o, w, 32, blob(w, 8), size)
+    return 32 + size
+
+def after_child(w: mutbuf) -> u64:
+    phase = get(w, 8)
+    if phase <= 3:
+        return after_endpoint(w)
+    if phase == 4 or phase == 5 or phase == 16 or phase == 17 or phase == 23 or phase == 24:
+        return after_read(w)
+    if phase == 6 or phase == 8 or phase == 19 or phase == 21:
+        return after_packet(w)
+    if phase == 7 or phase == 9 or phase == 20:
+        return after_verified(w)
+    if phase == 10:
+        return after_selected(w)
+    if phase == 11 or phase == 12 or phase == 33:
+        return after_parent(w)
+    if phase == 13 or phase == 25 or phase == 28:
+        return after_key(w)
+    if phase == 14 or phase == 15 or phase == 31 or phase == 32:
+        return after_lock(w)
+    if phase == 18:
+        at = blob(w, 9) + 64
+        if get(w, 344) != 16 or blob_size(w, 9) != 80 or get(w, at + 8) > 1:
+            return 0
+        put(w, 280, get(w, at))
+        put(w, 288, get(w, at + 8))
+        if get(w, 240) == 2:
+            if blob_size(w, 4) == 0:
+                return fail(w, 16, 0, 0, 0, 0)
+            put(w, 8, 19)
+            return 1
+        value = get(w, 248)
+        if value >= 9223372036854775808 and value != MAXIMUM:
+            return fail(w, 15, 0, 0, value, 0)
+        put(w, 296, value)
+        return prepare_insert(w)
+    if phase == 22:
+        return after_edit(w)
+    if phase == 26:
+        return after_history(w)
+    if phase == 27:
+        return after_atomic(w)
+    if phase == 29:
+        at = blob(w, 9) + 64
+        if get(w, 344) != 32 or blob_size(w, 9) != 96 or get(w, at) != CACHE_RESULT:
+            return 0
+        if get(w, at + 8) != 0 or get(w, at + 16) != 0 or get(w, at + 24) != 0:
+            return 0
+        put(w, 8, 30)
+        return 1
+    if phase == 30:
+        size = blob_size(w, 9) - 64
+        at = blob(w, 9) + 64
+        if get(w, 344) != size or utf8(w, at, size) == 0:
+            return 0
+        set_blob(w, 8, at, size)
+        put(w, 32, 0)
+        put(w, 8, 90)
+        return 1
+    return 0
+
+def after_endpoint(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    size = blob_size(w, 9) - 64
+    if size < 32 or get(w, 344) != 32 or get(w, at) != ENDPOINT_RESULT:
+        return 0
+    tag = get(w, at + 8)
+    value = get(w, at + 16)
+    auxiliary = get(w, at + 24)
+    phase = get(w, 8)
+    if tag == 0:
+        if value < 1 or value > 7 or auxiliary != size - 32 or utf8(w, at + 32, auxiliary) == 0:
+            return 0
+        kind = 3
+        if phase == 2:
+            kind = 4
+        elif phase == 3:
+            kind = 7
+        return fail(w, kind, at + 32, auxiliary, 0, 0)
+    if size != 32 or tag > 2:
+        return 0
+    if tag == 1 and auxiliary != 0:
+        return 0
+    if tag == 2 and (value == 0 or auxiliary > 65535):
+        return 0
+    destination = 192 + (phase - 1) * 24
+    put(w, destination, tag)
+    put(w, destination + 8, value)
+    put(w, destination + 16, auxiliary)
+    put(w, 8, phase + 1)
+    return 1
+
+def after_read(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    size = blob_size(w, 9) - 64
+    phase = get(w, 8)
+    operation = 2
+    if phase == 4 or phase == 16 or phase == 23:
+        operation = 1
+    if size < 32 or get(w, 344) != size or get(w, at) != READ_RESULT or get(w, at + 8) != operation:
+        return 0
+    kind = get(w, at + 16)
+    if kind > 1 or get(w, at + 24) != size - 32:
+        return 0
+    if operation == 1:
+        if kind != 0 or size != 40 or get(w, at + 32) > 1:
+            return 0
+        exists = get(w, at + 32)
+        if phase == 4:
+            if exists == 0:
+                return fail(w, 8, 0, 0, 0, 0)
+            put(w, 8, 5)
+        elif phase == 16:
+            if exists != 0:
+                put(w, 8, 17)
+            else:
+                set_blob(w, 4, at + 32, 0)
+                put(w, 8, 18)
+        else:
+            if exists != 0:
+                put(w, 8, 24)
+            else:
+                put(w, 8, 27)
+        return 1
+    if utf8(w, at + 32, size - 32) == 0:
+        return 0
+    if kind != 0:
+        error = 20
+        if phase == 5:
+            error = 9
+        elif phase == 17:
+            error = 14
+        return fail(w, error, at + 32, size - 32, 0, 0)
+    if phase == 5:
+        set_blob(w, 1, at + 32, size - 32)
+        put(w, 8, 6)
+    elif phase == 17:
+        set_blob(w, 4, at + 32, size - 32)
+        put(w, 8, 18)
+    else:
+        set_blob(w, 6, at + 32, size - 32)
+        put(w, 8, 25)
+    return 1
+
+def after_packet(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    size = blob_size(w, 9) - 64
+    phase = get(w, 8)
+    if get(w, 344) != size:
+        return 0
+    if phase != 21:
+        if size < 64 or get(w, at) != VERIFY_REQUEST or get(w, at + 40) != size - 64:
+            return 0
+        if get(w, at + 48) != 0 or get(w, at + 56) != 0:
+            return 0
+    else:
+        if size < 80:
+            return 0
+    set_blob(w, 10, at, size)
+    put(w, 8, phase + 1)
+    return 1
+
+def after_verified(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    size = blob_size(w, 9) - 64
+    phase = get(w, 8)
+    if size < 40 or get(w, 344) != size or get(w, at) != VERIFY_RESULT or get(w, at + 32) != size - 40:
+        return 0
+    if get(w, at + 24) != 0 or get(w, at + 8) > 1:
+        return 0
+    if get(w, at + 8) != 0:
+        if get(w, at + 16) != 0 or utf8(w, at + 40, size - 40) == 0:
+            return 0
+        kind = 10
+        if phase == 9:
+            kind = 11
+        elif phase == 20:
+            kind = 17
+        return fail(w, kind, at + 40, size - 40, 0, 0)
+    value = get(w, at + 16)
+    if size != 40 or value == 0 or value > get(w, blob(w, 10) + 24):
+        return 0
+    if phase == 7:
+        put(w, 264, value)
+        put(w, 8, 8)
+    elif phase == 9:
+        put(w, 272, value)
+        put(w, 8, 10)
+    else:
+        put(w, 296, value)
+        return prepare_insert(w)
+    return 1
+
+def after_selected(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    size = blob_size(w, 9) - 64
+    if size < 64 or get(w, 344) != size or get(w, at) != SELECT:
+        return 0
+    if get(w, at + 8) != get(w, 272) - get(w, 264) + 1 or get(w, at + 16) < get(w, 272) or get(w, at + 24) > 1:
+        return 0
+    first = get(w, at + 32)
+    second = get(w, at + 40)
+    if first == 0 or first > size - 64 or second != size - 64 - first or get(w, at + 48) != 0 or get(w, at + 56) != 0:
+        return 0
+    if byte(w, at + 64 + first - 1) != 10 or utf8(w, at + 64, size - 64) == 0:
+        return 0
+    set_blob(w, 2, at, size)
+    put(w, 8, 11)
+    return 1
+
+def after_parent(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    size = blob_size(w, 9) - 64
+    phase = get(w, 8)
+    if phase == 33:
+        if get(w, 344) != size or utf8(w, at, size) == 0:
+            return 0
+        return fail(w, 13, at, size, 0, 0)
+    if phase == 12:
+        if size != 32 or get(w, 344) != 32 or get(w, at) != MKDIR_RESULT or get(w, at + 24) > 2:
+            return 0
+        kind = get(w, at + 8)
+        value = get(w, at + 16)
+        if kind == 1:
+            if value == 0 or value > 4095:
+                return 0
+            put(w, 392, value)
+            put(w, 8, 33)
+            return 1
+        if value != 0 or kind > 2:
+            return 0
+        if kind == 2:
+            return fail(w, 13, 0, 0, 1, 0)
+        put(w, 8, 13)
+        return 1
+    if size < 80 or get(w, 344) != 80 or get(w, at) != PARENT_RESULT or get(w, at + 8) != 2 or get(w, at + 16) != size:
+        return 0
+    present = get(w, at + 24)
+    if present > 1 or get(w, at + 32) != 0 or get(w, at + 40) != size - 80:
+        return 0
+    if get(w, at + 48) != 0 or get(w, at + 56) != 0 or get(w, at + 64) != 0 or get(w, at + 72) != 0:
+        return 0
+    if present == 0:
+        if size != 80:
+            return 0
+        put(w, 8, 13)
+    else:
+        set_blob(w, 3, at + 80, size - 80)
+        put(w, 8, 12)
+    return 1
+
+def after_key(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    size = blob_size(w, 9) - 64
+    if size < 32 or get(w, 344) != size or get(w, at) != KEY_RESULT or get(w, at + 8) != 1:
+        return 0
+    if get(w, at + 16) != size - 32 or get(w, at + 24) != 0 or utf8(w, at + 32, size - 32) == 0:
+        return 0
+    set_blob(w, 7, at + 32, size - 32)
+    phase = get(w, 8)
+    if phase == 13:
+        put(w, 8, 15)
+    elif phase == 25:
+        put(w, 8, 26)
+    else:
+        put(w, 8, 29)
+    return 1
+
+def after_lock(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    if blob_size(w, 9) != 128 or get(w, 344) != 64 or get(w, at) != LOCK_RESULT:
+        return 0
+    phase = get(w, 8)
+    status = get(w, at + 16)
+    token = get(w, at + 24)
+    if phase == 15:
+        if get(w, at + 8) != 1 or status != 0 or token == 0:
+            return 0
+        put(w, 168, token)
+        put(w, 8, 14)
+        return 1
+    if token != get(w, 168) or token == 0:
+        return 0
+    if phase == 14:
+        if get(w, at + 8) != 3 or status > 1:
+            return 0
+        if status == 1:
+            put(w, 336, 1)
+        else:
+            put(w, 176, 1)
+            put(w, 8, 16)
+        return 1
+    if status != 0:
+        return 0
+    if phase == 31:
+        if get(w, at + 8) != 5:
+            return 0
+        put(w, 176, 0)
+        put(w, 8, 32)
+    else:
+        if get(w, at + 8) != 6:
+            return 0
+        put(w, 168, 0)
+        put(w, 8, 100)
+    return 1
+
+def prepare_insert(w: mutbuf) -> u64:
+    value = get(w, 296)
+    if value == MAXIMUM:
+        value = get(w, 280)
+    if value > get(w, 280):
+        return fail(w, 18, 0, 0, value, get(w, 280))
+    put(w, 304, value)
+    trailing = get(w, 288)
+    if blob_size(w, 4) == 0 or get(w, 296) == MAXIMUM:
+        trailing = get(w, blob(w, 2) + 24)
+    put(w, 312, trailing)
+    put(w, 8, 21)
+    return 1
+
+def after_edit(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    size = blob_size(w, 9) - 64
+    if size < 80 or get(w, 344) != size or get(w, at) != EDIT_RESULT:
+        return 0
+    selected = get(w, at + 64)
+    error = get(w, at + 72)
+    if selected > size - 80 or error != size - 80 - selected or get(w, at + 8) > 1:
+        return 0
+    if utf8(w, at + 80, size - 80) == 0:
+        return 0
+    if get(w, at + 8) != 0:
+        return fail(w, 19, at + 80 + selected, error, 0, 0)
+    if error != 0 or get(w, at + 16) != 1 or get(w, at + 56) != selected:
+        return 0
+    set_blob(w, 5, at + 80, selected)
+    put(w, 8, 23)
+    return 1
+
+def after_history(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    if blob_size(w, 9) != 128 or get(w, 344) != 64 or get(w, at) != HISTORY_RESULT:
+        return 0
+    kind = get(w, at + 8)
+    if get(w, at + 16) != 0 or get(w, at + 56) != 0:
+        return 0
+    if kind == 3:
+        return fail(w, 21, 0, 0, 0, 0)
+    if kind != 0:
+        return 0
+    put(w, 8, 27)
+    return 1
+
+def after_atomic(w: mutbuf) -> u64:
+    at = blob(w, 9) + 64
+    size = blob_size(w, 9) - 64
+    if size < 32 or get(w, 344) != size or get(w, at) != ATOMIC_RESULT or get(w, at + 24) != size - 32:
+        return 0
+    kind = get(w, at + 8)
+    if kind > 1 or utf8(w, at + 32, size - 32) == 0:
+        return 0
+    if kind == 1:
+        return fail(w, 22, at + 32, size - 32, 0, 0)
+    if size != 32 or get(w, at + 16) != 0:
+        return 0
+    put(w, 8, 28)
+    return 1
+
+def render_error(w: mutbuf) -> u64:
+    parent_size = blob_size(w, 3)
+    first = initial_size(w, 2)
+    second = initial_size(w, 3)
+    extra = get(w, 368)
+    if parent_size > (MAXIMUM - 1024) // 3:
+        put(w, 144, MAXIMUM)
+        return 0
+    needed = 1024 + parent_size * 3
+    if first > MAXIMUM - needed:
+        put(w, 144, MAXIMUM)
+        return 0
+    needed = needed + first
+    if second > MAXIMUM - needed:
+        put(w, 144, MAXIMUM)
+        return 0
+    needed = needed + second
+    if extra > MAXIMUM - needed:
+        put(w, 144, MAXIMUM)
+        return 0
+    needed = needed + extra
+    if reserve(w, needed) == 0:
+        return 0
+    start = get(w, 72)
+    put(w, 400, start)
+    kind = get(w, 352)
+    if kind == 1:
+        message_literal(w, 0)
+    elif kind == 2:
+        message_literal(w, 1)
+    elif kind == 3:
+        message_literal(w, 2)
+        message_extra(w)
+    elif kind == 4:
+        message_literal(w, 3)
+        message_extra(w)
+    elif kind == 5:
+        message_literal(w, 4)
+    elif kind == 6:
+        message_literal(w, 5)
+    elif kind == 7:
+        message_literal(w, 6)
+        message_extra(w)
+    elif kind == 8:
+        message_literal(w, 7)
+        message_copy(w, initial_part(w, 2), first)
+    elif kind == 9:
+        message_literal(w, 8)
+        message_copy(w, initial_part(w, 2), first)
+        message_literal(w, 9)
+        message_extra(w)
+    elif kind == 10:
+        message_literal(w, 10)
+        message_extra(w)
+    elif kind == 11:
+        message_literal(w, 11)
+        message_extra(w)
+    elif kind == 12:
+        message_literal(w, 12)
+        message_number(w, get(w, 376))
+        message_literal(w, 13)
+        message_number(w, get(w, 384))
+        message_literal(w, 14)
+    elif kind == 13:
+        message_literal(w, 15)
+        message_copy(w, initial_part(w, 3), second)
+        message_literal(w, 16)
+        message_lossy(w, blob(w, 3), parent_size)
+        message_literal(w, 9)
+        if get(w, 376) != 0:
+            message_literal(w, 17)
+        else:
+            message_extra(w)
+    elif kind == 14:
+        message_literal(w, 18)
+        message_copy(w, initial_part(w, 3), second)
+        message_literal(w, 9)
+        message_extra(w)
+    elif kind == 15:
+        message_literal(w, 19)
+        message_byte(w, 45)
+        message_number(w, 0 - get(w, 376))
+        message_literal(w, 20)
+    elif kind == 16:
+        message_literal(w, 21)
+    elif kind == 17:
+        message_literal(w, 22)
+        message_extra(w)
+    elif kind == 18:
+        message_literal(w, 23)
+        message_number(w, get(w, 376))
+        message_literal(w, 24)
+        message_number(w, get(w, 384))
+        message_literal(w, 25)
+        message_copy(w, initial_part(w, 3), second)
+        message_literal(w, 26)
+    elif kind == 19 or kind == 20:
+        message_extra(w)
+    elif kind == 21:
+        message_literal(w, 27)
+    elif kind == 22:
+        message_literal(w, 28)
+        message_copy(w, initial_part(w, 3), second)
+        message_literal(w, 9)
+        message_extra(w)
+    else:
+        return 0
+    end = get(w, 400)
+    set_blob(w, 8, start, end - start)
+    put(w, 72, end)
+    put(w, 8, 90)
+    return 1
+
+def message_byte(w: mutbuf, value: u64) -> u64:
+    at = get(w, 400)
+    store(w, at, value)
+    put(w, 400, at + 1)
+    return 1
+
+def message_copy(w: mutbuf, source: u64, size: u64) -> u64:
+    at = get(w, 400)
+    copy_range(w, w, at, source, size)
+    put(w, 400, at + size)
+    return 1
+
+def message_extra(w: mutbuf) -> u64:
+    return message_copy(w, get(w, 360), get(w, 368))
+
+def message_number(w: mutbuf, value: u64) -> u64:
+    size = 0
+    while value > 9:
+        store(w, 448 + size, 48 + value % 10)
+        value = value // 10
+        size = size + 1
+    message_byte(w, 48 + value)
+    while size != 0:
+        size = size - 1
+        message_byte(w, byte(w, 448 + size))
+    return 1
+
+def message_lossy(w: mutbuf, at: u64, size: u64) -> u64:
+    end = at + size
+    while at < end:
+        decoded = decode_scalar(w, at, end)
+        next = decoded >> 32
+        value = decoded & 4294967295
+        if value == 4294967295:
+            message_byte(w, 239)
+            message_byte(w, 191)
+            message_byte(w, 189)
+        else:
+            message_copy(w, at, next - at)
+        at = next
+    return 1
