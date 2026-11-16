@@ -4,7 +4,8 @@ import gzip, json, stat, struct, sys
 sys.dont_write_bytecode=True
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
-import common as c
+import catalog_ci_support as c
+import registry_evidence
 PREPARED={}
 INSTALLED={"batch_edit","directory_create","directory_move","effective_config","execution_shadow_admit",
     "file_move","host_list","text_editor","view","weight_bellman_plan","workdir"}
@@ -97,8 +98,11 @@ def verify_build(package,original,output,*,expected_roots,expected_parent):
                     sequence+=1
     c.need(sequence==report["projection_records"]==1728 and actual==index and iat==len(input_raw)
         and oat==len(output_raw),"complete original/mask/SDK input and output domain")
+    archives=registry_evidence.verify(original,output)
+    c.need(report["registry_packages"]==archives["packages"],"complete registry capture")
+    r.files.update(archives["files"])
     r.complete()
-    return {"status":"COMPLETE_CURRENT_CONFIGURED_SDK_READONLY_PASS","direct_original":previous,
+    return {"status":"COMPLETE_CURRENT_CONFIGURED_SDK_READONLY_PASS","direct_original":previous,"locked_registry":archives,
         "actual_sdk_records":1728,"typed_records":864,"peer_wire_records":864,"records":wire_rows,
         "files":r.files,"binaries":report["binaries"],"process_launches":0,"native_execution":False,"rust_execution":False}
 

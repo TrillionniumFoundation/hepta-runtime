@@ -65,8 +65,24 @@ def source_check(package=ROOT):
     need(data["schema"] == "hepta.runtime.configured-catalog-ci-source.v1"
         and data["target_commit"] == TARGET and data["compiler_commit"] == COMPILER,
         "exact target and compiler")
-    actual = {p.relative_to(package).as_posix() for p in package.rglob("*") if p.is_file()}
-    need(actual == set(data["files"]) | {"PACKAGE.json"}, "complete recipe source domain")
+    actual = set(); directories = set()
+    for folder, dirs, names in os.walk(package, followlinks=False):
+        base = Path(folder)
+        need(stat.S_ISDIR(base.lstat().st_mode) and base.resolve(strict=True) == base,
+            "physical source directory")
+        for name in dirs:
+            path = base / name
+            need(stat.S_ISDIR(path.lstat().st_mode), "no source directory aliases")
+            directories.add(path.relative_to(package).as_posix())
+        for name in names:
+            path = base / name
+            need(stat.S_ISREG(path.lstat().st_mode), "no source special files")
+            actual.add(path.relative_to(package).as_posix())
+    wanted = set(data["files"]) | {"PACKAGE.json"}
+    need(actual == wanted, "complete recipe source domain")
+    expected_directories = {p.as_posix() for name in wanted
+        for p in Path(name).parents if p != Path(".")}
+    need(directories == expected_directories, "complete source directory domain")
     for name, expected in data["files"].items():
         p = Path(name)
         need(not p.is_absolute() and ".." not in p.parts and p.as_posix() == name, "source path")

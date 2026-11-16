@@ -4,7 +4,7 @@ import ast, json, math, struct, sys
 sys.dont_write_bytecode=True
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
-import common as c
+import catalog_ci_support as c
 import graph_read_support as support
 PREPARED={}
 

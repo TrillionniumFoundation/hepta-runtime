@@ -4,7 +4,7 @@ import argparse,os,sys,time,traceback
 sys.dont_write_bytecode=True
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
-import common as c
+import catalog_ci_support as c
 
 def run(package,binary,output):
     c.need(os.environ.get("GITHUB_ACTIONS")=="true","original SDK replay is CI-only")

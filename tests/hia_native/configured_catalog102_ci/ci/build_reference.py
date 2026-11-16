@@ -4,7 +4,8 @@ import argparse, os, shutil, struct, sys, time
 sys.dont_write_bytecode=True
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
-import common as c
+import catalog_ci_support as c
+import registry_evidence
 
 def projection_inputs(original, output):
     index=[];sequence=0
@@ -70,7 +71,10 @@ def run(package,target,original,output):
         c.need(c.regular(target/"src/mcp/server.rs")==c.regular(original/"instrumented-server.rs"),"original server changed")
         for name,source in mapping.items():
             c.need(c.regular(target/"examples"/(name+".rs"))==c.regular(package/"ci"/source),"observer source changed")
-        report.update(status="FRESH_CURRENT_SDK_EXECUTION_COMPLETE",binaries=binaries,
+        for name,expected in original_sources["originals"].items():
+            if name!="src/mcp/server.rs":c.need(c.pin(c.regular(target/name))==expected,"complete original source changed: "+name)
+        registry_packages=registry_evidence.capture(original,output)
+        report.update(status="FRESH_CURRENT_SDK_EXECUTION_COMPLETE",binaries=binaries,registry_packages=registry_packages,
             projection_records=len(index),build_process=build,replay_process=replay,
             observer_sources={name:c.pin(c.regular(package/"ci"/source)) for name,source in mapping.items()},
             elapsed_ns=time.monotonic_ns()-start)

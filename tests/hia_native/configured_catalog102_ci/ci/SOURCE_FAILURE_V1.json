@@ -1,0 +1,51 @@
+{
+  "schema": "hepta.runtime.configured-catalog-source-admission-failure.v1",
+  "source_head": "05050bb479e7641ea28093af138a5d4e8a0ba98f",
+  "job_id": "1a1e5bde1fa-392-39c6",
+  "state": {
+    "at_unix_ms": 1794855801930,
+    "audit_recorded": true,
+    "automatic_retry": false,
+    "cancelled": false,
+    "exit_code": 1,
+    "job_id": "1a1e5bde1fa-392-39c6",
+    "launch_nonce": "78345fe8e797c42c6db6d46ffd31fc58",
+    "log_bytes": {
+      "stderr": {
+        "seen": 806,
+        "stored": 806
+      },
+      "stdout": {
+        "seen": 0,
+        "stored": 0
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_synced": {
+      "stderr": true,
+      "stdout": true
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "output_durable": true,
+    "state": "failed",
+    "terminal_publication_confirmed": true,
+    "terminal_publication_protocol": 1,
+    "timed_out": false
+  },
+  "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 23, in <module>\n    read_reference.prepare(DEST)\n    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"/home/qq/hepta-runtime-migration-6780/configured-catalog-v1-20261116/source/ci/read_reference.py\", line 17, in prepare\n    import configured_common,public_domain,public_common,read_public_configured\n  File \"/home/qq/hepta-runtime-migration-6780/configured-catalog-v1-20261116/source/source/configured_common.py\", line 12, in <module>\n    import static_common as retained\n  File \"/home/qq/hepta-runtime-migration-6780/configured-catalog-v1-20261116/source/source/retained/static_common.py\", line 15, in <module>\n    BASE = pipeline.base_reader(ROOT / 'pipeline')\n           ^^^^^^^^^^^^^^^^^^^^\nAttributeError: module 'common' has no attribute 'base_reader'\n",
+  "stderr_pin": {
+    "bytes": 806,
+    "sha256": "e99a3c20b19bc26026f0fd182e5b76654d330e9008fdda001c7b6a660b2ae11c"
+  },
+  "native_execution": false,
+  "rust_execution": false,
+  "cause": "CI helper named common shadowed the unchanged retained pipeline common module during preloading.",
+  "correction": "Rename only new helper/imports to catalog_ci_support; retained source bytes remain exact."
+}

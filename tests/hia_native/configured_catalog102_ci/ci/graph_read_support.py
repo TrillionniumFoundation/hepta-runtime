@@ -1,7 +1,7 @@
 """Exact retained compiler/ELF reader functions; no execution is performed."""
 from pathlib import Path
 import json, struct
-from common import regular, read_json, need as require, pin as PIN, sha as SHA
+from catalog_ci_support import regular, read_json, need as require, pin as PIN, sha as SHA
 
 GENERATION = "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
 COMMIT = "d3e2c90173cf733e42b299d0c4274df4b593a12f"
