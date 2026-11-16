@@ -1,0 +1,42 @@
+{
+  "changes": [
+    [
+      "def verify_process(path,component,*,expected_group=None):",
+      "def verify_process(path,component,*,timeout_seconds):"
+    ],
+    [
+      "assert receipt['timeout_seconds']==60 and receipt['elapsed_seconds']<=60",
+      "assert receipt['timeout_seconds']==timeout_seconds and receipt['elapsed_seconds']<=timeout_seconds"
+    ],
+    [
+      "requests={};replies={};ready={};bodies={};all_output=[]",
+      "requests=[];replies={};ready={};bodies={};all_output=[]"
+    ],
+    [
+      "assert r[2] not in requests and r[2]>0",
+      "assert r[2]>0"
+    ],
+    [
+      "requests[r[2]]=(r,b[64:])",
+      "requests.append((r,b[64:]))"
+    ],
+    [
+      "assert h[3] in requests and h[3] not in replies",
+      "assert len(replies)<len(requests) and h[3]==requests[len(replies)][0][2]"
+    ],
+    [
+      "replies[h[3]]=b;r,payload=requests[h[3]]",
+      "position=len(replies);replies[position]=b;r,payload=requests[position]"
+    ],
+    [
+      "assert set(replies)==set(requests)",
+      "assert set(replies)==set(range(len(requests)))"
+    ]
+  ],
+  "new_sha256": "cf17bf26e0e37408237ac25b8dbf75308a4e0a0d7728168915e73f15abe55f08",
+  "old_qualification_relabelled": false,
+  "original_sha256": "3391d2814df7e06ca2ae10f330fca2db8a9e9afbe4cfe544b9865911f2f4d3ad",
+  "pool_and_journal_validation_unchanged": true,
+  "purpose": "Serial control stream binds replies by exact order and exact unchanged tag. Caller tags persist across commands; old standalone unique-tag evidence remains unchanged. New caller domain retains its predeclared whole-process deadline.",
+  "schema": "hepta.bellman-call.worker-reader.v1"
+}
