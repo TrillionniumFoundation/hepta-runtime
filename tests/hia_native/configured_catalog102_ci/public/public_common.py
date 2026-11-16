@@ -5,7 +5,7 @@ sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parent
 TRUSTED_PROFILE=(ROOT/'public-source-profile.json').read_bytes() if (ROOT/'public-source-profile.json').exists() else None
 COMPONENT_PROFILE='185985fa09b9260405ede5eef335d8b5a703a80951783a171c846ceb57742bc3'
-GRAPH_PROFILE='94c449ee6f1870b8af8ab9d9a8d942760b06e0b523b1062d924991d2c8c96d45'
+GRAPH_PROFILE='ecb525b9fcf506007520fe670d893a77b52217d60d9c37f0e1af76d943bce06b'
 sha=lambda raw:hashlib.sha256(raw).hexdigest()
 pin=lambda raw:{'bytes':len(raw),'sha256':sha(raw)}
 

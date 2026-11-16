@@ -1,4 +1,4 @@
-def after_connection(o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+def after_connection(o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
     if size < 256 or size > BRIDGE_CAP or code != size:
         return INVALID
     if get(w, BRIDGE) != CONNECTION_OUTPUT:
@@ -44,46 +44,67 @@ def list_projection(o:mutbuf, w:mutbuf) -> u32:
         return INVALID
     if connection_pair(w, MESSAGE, extent, 96) == False:
         return INVALID
+    if connection_pair(w, BRIDGE, get(w, 64), 144) == False:
+        return INVALID
     id_at = get(w, MESSAGE + 80)
     id_size = get(w, MESSAGE + 88)
     meta_present = get(w, MESSAGE + 32)
     meta_at = get(w, MESSAGE + 96)
     meta_size = get(w, MESSAGE + 104)
+    version_at = get(w, BRIDGE + 144)
+    version_size = get(w, BRIDGE + 152)
     if id_at == 0 or id_size == 0 or meta_present > 1:
         return INVALID
-    if meta_present == 1:
-        if meta_at == 0 or meta_size < 2:
-            return INVALID
-    else:
-        meta_size = 0
-    if id_size > ORIGINAL_CAP - 128:
+    if meta_at == 0 or meta_size < 2:
+        return INVALID
+    if id_size > TEMP_CAP - 192:
         return RESOURCE
-    if meta_size > ORIGINAL_CAP - 128 - id_size:
+    if meta_size > TEMP_CAP - 192 - id_size:
         return RESOURCE
-    at = response_prefix(w, ORIGINAL + 32)
-    copy_within(w, at, MESSAGE + id_at, id_size)
-    at = list_request_suffix(w, at + id_size)
-    if meta_present == 1:
-        at = metadata_key(w, at)
-        copy_within(w, at, MESSAGE + meta_at, meta_size)
-        at = at + meta_size
-    store(w, at, 125)
-    store(w, at + 1, 125)
-    size = at + 2 - ORIGINAL - 32
-    put(w, ORIGINAL, PROTOCOL_INPUT)
-    put(w, ORIGINAL + 8, get(w, 32))
-    put(w, ORIGINAL + 16, size)
-    put(w, ORIGINAL + 24, 0)
-    return child(w, 4, 3, ORIGINAL, size + 32, TEMP, TEMP_CAP)
+    if version_size > TEMP_CAP - 192 - id_size - meta_size:
+        return RESOURCE
+    version_present = 0
+    if version_at != 0:
+        version_present = 1
+    modern = resolved_cache_hints(w, BRIDGE + version_at, version_size, version_present)
+    fill_range(w, TEMP, 192, 0)
+    put(w, TEMP, PROTOCOL_OUTPUT)
+    put(w, TEMP + 16, 3)
+    put(w, TEMP + 32, get(w, 32))
+    put(w, TEMP + 40, 3)
+    put(w, TEMP + 48, id_size)
+    put(w, TEMP + 56, meta_size)
+    put(w, TEMP + 64, version_size)
+    put(w, TEMP + 72, version_present)
+    put(w, TEMP + 80, meta_present)
+    put(w, TEMP + 88, modern)
+    put(w, TEMP + 104, 192 + id_size)
+    put(w, TEMP + 112, meta_size)
+    if version_present == 1:
+        put(w, TEMP + 120, 192 + id_size + meta_size)
+    put(w, TEMP + 128, version_size)
+    put(w, TEMP + 144, LIST_TAG)
+    copy_within(w, TEMP + 192, MESSAGE + id_at, id_size)
+    copy_within(w, TEMP + 192 + id_size, MESSAGE + meta_at, meta_size)
+    if version_size != 0:
+        copy_within(w, TEMP + 192 + id_size + meta_size, BRIDGE + version_at, version_size)
+    total = 192 + id_size + meta_size + version_size
+    put(w, 88, total)
+    put(w, 8, 6)
+    return finish(o, w, 192, total)
 
-def list_request_suffix(w:mutbuf, at:u64) -> u64:
-    put(w,at+0,7237117975334822444)
-    put(w,at+8,8317145136326916642)
-    put(w,at+16,2462380979812658223)
-    put(w,at+24,4189037517031498096)
-    store(w,at+32,123)
-    return at+33
-
-def metadata_key(w:mutbuf, at:u64) -> u64:
-    put(w,at+0,4189017755953749794)
-    return at+8
+def resolved_cache_hints(w:mutbuf, start:u64, size:u64, present:u64) -> u64:
+    if present == 0:
+        return 0
+    index = 0
+    while index < 10:
+        if index >= size:
+            return 0
+        actual = byte(w, start + index)
+        expected = context_threshold(index)
+        if actual > expected:
+            return 1
+        if actual < expected:
+            return 0
+        index = index + 1
+    return 1

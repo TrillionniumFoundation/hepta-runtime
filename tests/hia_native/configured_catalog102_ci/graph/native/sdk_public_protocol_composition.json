@@ -14,6 +14,7 @@
     "after_request": "f8",
     "child": "f5",
     "connection_pair": "f12",
+    "context_threshold": "f21",
     "copy_within": "f10",
     "direct_frame": "f14",
     "empty_result": "f15",
@@ -24,10 +25,9 @@
     "grow": "f4",
     "initialize_frame": "f13",
     "list_projection": "f19",
-    "list_request_suffix": "f20",
-    "metadata_key": "f21",
     "put": "f3",
     "read64": "f1",
+    "resolved_cache_hints": "f20",
     "response_prefix": "f16",
     "start": "f6"
   },
@@ -79,37 +79,44 @@
     "TEMP_CAP": 20971520,
     "WORK_MIN": 218103808
   },
-  "current_list_projection": {
+  "current_ping_context_and_wire": true,
+  "current_typed_initialize_identifier": true,
+  "current_typed_list_extension": {
     "added_functions": {
       "list_projection": "f19",
-      "list_request_suffix": "f20",
-      "metadata_key": "f21"
+      "qualified_context_threshold": "f21",
+      "resolved_cache_hints": "f20"
     },
-    "author_sha256": "07fa9ab1d6f5e9d9f0d0636f3805a559e22c25ceb315e36e2d8a82c1a0716476",
     "baseline_sha256": "27f486900a1486e3a79fa32d41af45f01847f0d01e79ac3a23ea5baf0f274f5a",
     "changed_functions": [
       "f11"
     ],
-    "current_typed_message_admission_required": true,
+    "cursor_after_actual_typed_acceptance": "Current target list_tools ignores the typed cursor. No public JSON is accepted by this private producer.",
+    "functions": 22,
     "g1_actual_metadata_pair": 96,
     "g1_canonical_id_pair": 80,
     "g1_metadata_presence_word": 32,
-    "g1_request_disposition": 1,
-    "g1_typed_variant": 15,
+    "g1_source_sha256": "e1ef0dd6bb5993f6ad07499ee68e5a63b1fbd4a97ebf0e17b89aec1234af6a6b",
+    "g1_variant": 15,
     "g2_admitted_kind": 2,
-    "metadata_is_not_synthesized_from_peer_capabilities": true,
-    "public_handler_qualified": false,
-    "remaining_projection": "The retained historical protocol and actual metadata admission still execute on the typed ID and actual request metadata; current connection admission has already succeeded.",
-    "retained_after_connection_reproduced_exactly": true,
-    "retained_author_sha256": "98d2850cb1e52d96d754643d76ebf0c56f459f85afeb897b6c9eaa24e3e211f0",
-    "schema": "hepta.runtime.current-sdk-list-projection-source.v1",
-    "source_bytes": 61785,
-    "source_functions": 22,
-    "source_sha256": "06e09a957878e1059d258cf141fa21e649b2459758bd72a1c16b557414ad9733",
-    "target_connection_source_sha256": "a3e6353b4d8e98682e6605e711bc19c533d8d524c2eb1b55c788709974a234f2",
-    "target_handler_ignores_cursor": true,
-    "target_message_source_sha256": "e1ef0dd6bb5993f6ad07499ee68e5a63b1fbd4a97ebf0e17b89aec1234af6a6b",
-    "unchanged_functions": {
+    "g2_feature_word32_used_for_features": false,
+    "g2_lifecycle_word24_used_for_features": false,
+    "g2_resolved_version_pair": 144,
+    "g2_source_sha256": "a3e6353b4d8e98682e6605e711bc19c533d8d524c2eb1b55c788709974a234f2",
+    "g2_version_is_complete_raw_utf8": true,
+    "header_bytes": 192,
+    "historical_raw_offsets_used_for_list": false,
+    "metadata_and_version_are_owned_payloads": true,
+    "projection_magic": "HRCLST01",
+    "public_all_configuration_qualified": false,
+    "qualified_protocol_policy_sha256": "8a8e922b2d4e9bec6b1bf7f0184f9ea2cd42c8ab44c6b94d80f94f87fd3e0751",
+    "qualified_threshold_function": {
+      "from": "f3",
+      "relocated_ast_sha256": "6948722d59dc620c4bcc98b5af4aedc523141a5312c27f4db9704500b5fabffa",
+      "to": "f21"
+    },
+    "resolved_comparison": "None=false; for each index 0..9, exhausted=false, byte>threshold=true, byte<threshold=false; all ten equal=true. Exact original Rust str lexicographic predicate.",
+    "retained_exact_functions": {
       "f0": "67ac1dd8f2d69b42f53fb194737076cf2902d9782f934ff1258c10b91d4f19d4",
       "f1": "0d748e76355019d671d64b7fb43842271f24aea857369006123d1c86d6489bca",
       "f10": "54bda6334e508dae5b2bd24ed29d2197429a7a4803705b580cd3bce80e01ebc1",
@@ -129,10 +136,11 @@
       "f8": "a4fb7a8733adf0878fcc2e5f64cff966474b72ee6c940ed3b2e57aca29d1a4ef",
       "f9": "d86e71209bfa18039903b3015654fb59e8b5c8a515602c7d97ccbc3ede5c0a99"
     },
+    "schema": "hepta.current-typed-list-projection.v2",
+    "source_bytes": 66000,
+    "source_sha256": "b79868ad5363eaeea18cbc388c23635709374a4436aebe7f0b0bbb02c65a07c5",
     "whole_runtime_replaced": false
   },
-  "current_ping_context_and_wire": true,
-  "current_typed_initialize_identifier": true,
   "full_async_runtime_qualified": false,
   "full_sdk_qualified": false,
   "functions": 22,
@@ -243,9 +251,13 @@
     "f6": "3796aa6d514e7800ba6e1087dd63491f2a4f3481378e3905c332a7e73e09d614",
     "f9": "82522a89f58ddd5b61e86f98a558c8dd387f5ec4f7806db1f3dd8ef528fac8fe"
   },
-  "retained_prior_composition_source_sha256": "03662a01a89826d8712bbca4dc607dcfd81397745df24fe26e87bf1269f955c8",
+  "retained_pre_list_source_metadata": {
+    "functions": 18,
+    "source_bytes": 53647,
+    "source_sha256": "03662a01a89826d8712bbca4dc607dcfd81397745df24fe26e87bf1269f955c8"
+  },
   "schema": "hepta.runtime.public-connection-controller.v1",
   "sdk_default_fixture_linked": false,
-  "source_bytes": 61785,
-  "source_sha256": "06e09a957878e1059d258cf141fa21e649b2459758bd72a1c16b557414ad9733"
+  "source_bytes": 66000,
+  "source_sha256": "b79868ad5363eaeea18cbc388c23635709374a4436aebe7f0b0bbb02c65a07c5"
 }
