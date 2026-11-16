@@ -315,6 +315,9 @@ public_span_writer_closed:
     call public_span_shutdown_step
     test eax, eax
     jnz public_span_fail
+    call runtime_batch_body_release
+    test rax, rax
+    jnz public_span_fail
     call runtime_text_body_release
     test rax, rax
     jnz public_span_fail

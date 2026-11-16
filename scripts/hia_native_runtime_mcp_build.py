@@ -1,4 +1,4 @@
-"""Build the current 91-image, nine-tool HIA stdio executable.
+"""Build the current 102-image, nine-tool HIA stdio executable.
 
 This is the default public build API and command. Historical 58-image
 qualification uses its explicit, source-pinned test profile.
@@ -26,7 +26,7 @@ def main():
         assert args.bootstrap is not None,"Local builds require an already verified B3 copy."
         assert SHA((args.bootstrap/"B3.image.bin").read_bytes())=="bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
     output.mkdir(parents=True);started=time.monotonic()
-    report=dict(schema="hepta.runtime.public91-authority.build.v1",status="RUNNING",rust_executed=False,
+    report=dict(schema="hepta.runtime.public102-authority-batch.build.v1",status="RUNNING",rust_executed=False,
         actual_target_handshake_compared=False,full_async_runtime_qualified=False,full_sdk_qualified=False,
         independent_cold_qualified=False,production_activated=False,old_path_removed=False,
         default_public_entrypoint=True)
@@ -34,19 +34,19 @@ def main():
     save()
     try:
         if args.bootstrap:shutil.copytree(args.bootstrap.resolve(strict=True),output/"build/bootstrap")
-        assert len(MEMBERS)==91 and len(EXTRA)==57
-        assert EXTRA[47:53]==[None]*6 and EXTRA[53:]==["target_shutdown","current_get_info","target_connection",None]
+        assert len(MEMBERS)==102 and len(EXTRA)==57
+        assert EXTRA[47:53]==['batch_gateway','batch_params','batch_call','batch_adapter','batch_input',None] and EXTRA[53:]==["target_shutdown","current_get_info","target_connection",None]
         reuse=json.loads(args.reuse_manifests.resolve(strict=True).read_bytes()) if args.reuse_manifests else {}
         assert set(reuse).issubset({name for name,_,_ in MEMBERS})
         put(output/"reuse.json",reuse)
         manifest=build_runtime_mcp(args.hepta.resolve(strict=True),output/"build",
-            name="public-authority",source_root=source,manifests=reuse or None)
+            name="public-authority-batch",source_root=source,manifests=reuse or None)
         raw=manifest.read_bytes();md=json.loads(raw)
-        assert md["physical_images"]==len(md["members"])==91
+        assert md["physical_images"]==len(md["members"])==102
         fresh=sum(row["fresh_compile"] is True for row in md["members"])
-        assert fresh==91-len(reuse)
+        assert fresh==102-len(reuse)
         binary=manifest.parent/md["elf"];assert SHA(binary.read_bytes())==md["elf_sha256"]
-        report.update(status="NATIVE_BUILD_PASS",physical_images=91,manifest=str(manifest),
+        report.update(status="NATIVE_BUILD_PASS",physical_images=102,manifest=str(manifest),
             manifest_sha256=SHA(raw),elf=str(binary),elf_bytes=binary.stat().st_size,
             elf_sha256=md["elf_sha256"],fresh_member_compiles=fresh,checked_reused_members=len(reuse),
             bootstrap_reused=args.bootstrap is not None,fresh_hia_link_and_pack=True,

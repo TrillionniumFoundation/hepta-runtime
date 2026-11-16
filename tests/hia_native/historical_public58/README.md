@@ -1,6 +1,6 @@
 # Historical public58 and authority source profile
 
-The default service builds the current 91-image, nine-tool graph. This directory
+The default service builds the current 102-image graph with nine catalog entries and an additional Batch route. This directory
 preserves the older 58-image public fixture and the original authority profile
 used by its retained component pipeline. Current authority has a separate
 current-SDK comparison and evidence reader.
@@ -12,9 +12,11 @@ Those seven restore the old root, profile, packer, provenance and three pin
 consumers, keeping the original receipt bound to its actual source and images.
 
 `PROFILE.json` records every size, SHA-256 and Git blob. Before creating a source
-view, the materializer checks 191 current graph files and six extra authority
-profile files. It restores 119 old inputs and excludes 58 current-public-only
-files. The v22 `vendor` preservation remains intact.
+view, the materializer checks 218 current graph files and six extra authority
+profile files. It restores 119 old inputs and excludes 75 current-public-only
+files. The shared Batch input performance proof and its two exact authoring
+inputs remain in the historical source view; the global Batch qualifier still
+binds all 26 source inputs, including the five dependencies restored here. The v22 `vendor` preservation remains intact.
 
 ```sh
 python3 -I -B tests/hia_native/historical_public58/materialize.py \
@@ -31,8 +33,14 @@ hashes and changes no input. Every old suite and deadline remains intact.
 | Retained public native/original pipelines | Exact old public58 graph, private fixture and complete old corpora |
 | Retained authority native/original pipeline | Restored old root/profile/packer and original receipt pins |
 | Current authority qualification | Current owner; 23 native groups, fresh 243 original rows and 16 integrated lifecycle rows |
-| User default native build | Main root; current91 API/CLI |
-| Current main qualification | 197 installed files, fresh91, actual main entry and whole-executable comparison |
+| User default native build | Main root; current102 API/CLI |
+| Current main qualification | 224 installed files, two independent fresh102 graphs, actual main entry and whole-executable comparison |
+
+The current workflow also retains all 1,777 complete Batch rows and 28 stdio
+rows for each native and original provider. Both the frozen reference entry
+and the actual installed main entry must produce the same complete executable.
+The catalog remains the qualified nine-entry catalog; this change does not
+claim a ten-tool or eleven-tool catalog.
 
 The historical public reader still requires source-binding SHA-256
 `0b7730769d36a4851e2d56ab717f7ce07c27d43bb728290aa7b5b32d014e82f2`.

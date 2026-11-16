@@ -9,7 +9,7 @@ block b0(v0:readbuf,v1:mutbuf,v2:mutbuf)
 block b1(v7:readbuf,v8:mutbuf,v9:mutbuf)
   v15:usize = buffer.len(v7)
   v16:u64 = int.cast(v15) {"mode":"wrap"}
-  v17:u64 = const() {"value":33554432}
+  v17:u64 = const() {"value":167772160}
   v18:bool = compare.gt(v16,v17)
   jump b2(v7,v8,v9,v18)
 block b2(v11:readbuf,v12:mutbuf,v13:mutbuf,v14:bool)
@@ -200,7 +200,7 @@ block b39(v424:readbuf,v425:mutbuf,v426:mutbuf,v427:u64,v428:u64,v431:u64,v432:u
   v447:u64 = int.cast(v446) {"mode":"wrap"}
   v448:u64 = const() {"value":100663296}
   v449:bool = compare.lt(v447,v448)
-  jump b40(v424,v425,v426,v427,v428,v431,v432,v433,v449)
+  branch v449 b40(v424,v425,v426,v427,v428,v431,v432,v433,v449) b74(v424,v425,v426,v427,v428,v431,v432,v433,v447)
 block b40(v435:readbuf,v436:mutbuf,v437:mutbuf,v438:u64,v439:u64,v442:u64,v443:u64,v444:u64,v445:bool)
   branch v445 b41(v435,v436,v437) b42(v435,v436,v437,v438,v439,v442,v443,v444)
 block b41(v450:readbuf,v451:mutbuf,v452:mutbuf)
@@ -439,6 +439,29 @@ block b73(v1140:readbuf,v1141:mutbuf,v1142:mutbuf,v1143:u64,v1144:u64,v1149:u64,
   _ = loan.end(v1205)
   v1208:u32 = int.cast(v1166) {"mode":"wrap"}
   ret(v1208)
+block b74(v1209:readbuf,v1210:mutbuf,v1211:mutbuf,v1212:u64,v1213:u64,v1214:u64,v1215:u64,v1216:u64,v1217:u64)
+  v1218:usize = buffer.len(v1209)
+  v1219:u64 = int.cast(v1218) {"mode":"wrap"}
+  v1220:u64 = const() {"value":33554432}
+  v1221:u64 = int.add.wrap(v1220,v1219)
+  v1222:bool = compare.lt(v1217,v1221)
+  v1223:bool = const() {"value":false}
+  branch v1222 b75(v1210,v1221) b40(v1209,v1210,v1211,v1212,v1213,v1214,v1215,v1216,v1223)
+block b75(v1224:mutbuf,v1225:u64)
+  v1226:u64 = const() {"value":0}
+  v1227:u64 = const() {"value":3616443635283937096}
+  v1228:u64 = call(v1224,v1226,v1227) {"function":"f6"}
+  v1229:u64 = const() {"value":8}
+  v1230:u64 = const() {"value":1}
+  v1231:u64 = call(v1224,v1229,v1230) {"function":"f6"}
+  v1232:u64 = const() {"value":16}
+  v1233:u64 = call(v1224,v1232,v1225) {"function":"f6"}
+  v1234:u64 = const() {"value":24}
+  v1235:u64 = const() {"value":0}
+  v1236:u64 = call(v1224,v1234,v1235) {"function":"f6"}
+  v1237:u64 = const() {"value":4294967248}
+  v1238:u32 = int.cast(v1237) {"mode":"wrap"}
+  ret(v1238)
 end
 fn f1(v0:mutbuf,v1:u64) -> (u64) effects(read,write,trap) entry(b0)
 block b0(v0:mutbuf,v1:u64)

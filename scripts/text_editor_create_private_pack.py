@@ -4,7 +4,7 @@ import hashlib,json,struct,time
 SHA=lambda raw:hashlib.sha256(raw).hexdigest()
 def write(path,value):path.write_text(json.dumps(value,indent=2,sort_keys=True)+'\n')
 
-def pack(out,native,physical,configuration,images,view_images,view_slots,execute,source_root,*,create_images,body_images,authority_images):
+def pack(out,native,physical,configuration,images,view_images,view_slots,execute,source_root,*,create_images,body_images,authority_images,batch_images):
     from hia_native_loader import NativeModule
     processes=[execute(out,'relocations',['readelf','-r',str(out/'bridge.o')],30)]
     if b'There are no relocations' not in (out/'relocations.stdout').read_bytes():
@@ -46,6 +46,8 @@ def pack(out,native,physical,configuration,images,view_images,view_slots,execute
     for slot,image in enumerate(body_images):patches.append((1,256+symbols['runtime_text_body_images']+slot*8,indices[image]))
     if len(authority_images)!=9:raise ValueError('private authority table differs')
     for slot,image in enumerate(authority_images):patches.append((1,256+symbols['runtime_authority_images']+slot*8,indices[image]))
+    if len(batch_images)!=14:raise ValueError('private Batch table differs')
+    for slot,image in enumerate(batch_images):patches.append((1,256+symbols['runtime_batch_body_images']+slot*8,indices[image]))
     raw_images=[image.read_bytes() for image in ordered]
     packed_input=(b'HIAIMG02'+struct.pack('<4Q',len(prefix),len(ordered),len(patches),0)+prefix
         +b''.join(struct.pack('<Q',len(image)) for image in raw_images)

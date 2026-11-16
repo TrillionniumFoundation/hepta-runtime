@@ -1,4 +1,5 @@
 {
+  "baseline_source_sha256": "6a054cdbfe2d481900cc725b97cba73181afb4331192a0de81af4f8b2aff1492",
   "functions": {
     "copy_string": "f22",
     "decoded": "f5",
@@ -26,6 +27,10 @@
     "validate": "f31",
     "word": "f3"
   },
+  "import_changes": [
+    "Original import source function hashes remain provenance for the baseline before relocation.",
+    "Private f16/f17/f18/f24/f25/f30 replace only checked eight-byte access loops with the same eight ordered accesses. The full source proof records both ASTs; every parser and semantic function remains exact."
+  ],
   "imports": [
     {
       "functions": {
@@ -92,9 +97,87 @@
       "source_sha256": "18953ed21ea1ff65266d562a552958f3d0c08857801bf95ca1779743fad0f0fd"
     }
   ],
+  "local_fixed_access_derivation": {
+    "all_parser_and_semantic_functions_unchanged": true,
+    "author_sha256": "c05eeedc3e755738f177a3fd4a4948a5383382ea2fac9494dade8b0d338924cb",
+    "baseline_sha256": "6a054cdbfe2d481900cc725b97cba73181afb4331192a0de81af4f8b2aff1492",
+    "blocks": 585,
+    "changed": {
+      "f16": {
+        "after_ast": "9afd592941645d7d308cff07dc59eaa7c884d3813aaf23cd7d30abf963f48d82",
+        "before_ast": "df7dbe08d6bdb095807445e14683169dbc649a18e538d3e22371dce949c4ba9e",
+        "operations": "same checked byte accesses at at+0..7, same wrapping address arithmetic, same shifts, same return"
+      },
+      "f17": {
+        "after_ast": "cd7dc47622aa716cb8969983ecaa03078aa6a7bb681347e08ff1869ca8760990",
+        "before_ast": "3b3dede99c1ba116c6f67e5d16b6614558368c12609e2468947874be7dbb29b5",
+        "operations": "same checked byte accesses at at+0..7, same wrapping address arithmetic, same shifts, same return"
+      },
+      "f18": {
+        "after_ast": "4e2efc85a1266d0fcc6187735b11e3647e56f70878b8cd377da4be9ae6980cea",
+        "before_ast": "a1fec3dcc6a2f4363bbc48549e17cd1146cd70fc1bb55f06a1b6171a2c63729d",
+        "operations": "same checked byte accesses at at+0..7, same wrapping address arithmetic, same shifts, same return"
+      },
+      "f24": {
+        "after_ast": "6235f71c25d1a0cce148145110ffdfe73708a2a00e99d1e664b1af5f8f7b45f7",
+        "before_ast": "681c804e08da20bdc284dd097a08ee5891c08dd46e6efb6d12d3d9d3a170fb74",
+        "operations": "same checked byte accesses at at+0..7, same wrapping address arithmetic, same shifts, same return"
+      },
+      "f25": {
+        "after_ast": "6ffac5043c78aca2daae331c29e0689adea38617a6ac8cd8661789b97e9f987c",
+        "before_ast": "655520afdd482e158642f5642eb764c8aa276949846ddf23d19099c18e3d96c8",
+        "operations": "same checked byte accesses at at+0..7, same wrapping address arithmetic, same shifts, same return"
+      },
+      "f30": {
+        "after_ast": "a352cb997ec06f2b03e4b247e7970beb0f1f1355f36df6d2f5e8c768034ad618",
+        "before_ast": "ead5e19e95ffe337ed1b510723f6b21fb8eb4d03a9f8aa12ff9c0f373b215644",
+        "operations": "same checked byte accesses at at+0..7, same wrapping address arithmetic, same shifts, same return"
+      }
+    },
+    "dsl_sha256": "664baeff0ce51df59a4063383eadd0bc9034a19e980ad047ac4b0f5957730e9f",
+    "entry_unchanged": true,
+    "functions": 32,
+    "native_executed": false,
+    "ops": 2509,
+    "schema": "hepta.batch-input-fixed-access.v1",
+    "source_bytes": 154410,
+    "source_sha256": "f73328d368dc5fd88d1c3b63c32d3af8a4a83dc9bb0eac0a9b444ec4207c2757",
+    "unchanged_functions": [
+      "f0",
+      "f1",
+      "f2",
+      "f3",
+      "f4",
+      "f5",
+      "f6",
+      "f7",
+      "f8",
+      "f9",
+      "f10",
+      "f11",
+      "f12",
+      "f13",
+      "f14",
+      "f15",
+      "f19",
+      "f20",
+      "f21",
+      "f22",
+      "f23",
+      "f26",
+      "f27",
+      "f28",
+      "f29",
+      "f31"
+    ]
+  },
   "public_mcp_route_replaced": false,
   "schema": "hepta.runtime.batch-plan-input-composition.v1",
-  "source_sha256": "6a054cdbfe2d481900cc725b97cba73181afb4331192a0de81af4f8b2aff1492",
+  "source_reproduction_stages": [
+    "scripts/performance_baselines/batch_plan_input.hepta",
+    "scripts/author_input_fixed.py"
+  ],
+  "source_sha256": "f73328d368dc5fd88d1c3b63c32d3af8a4a83dc9bb0eac0a9b444ec4207c2757",
   "whole_runtime_replaced": false,
   "whole_view_replaced": false
 }

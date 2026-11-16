@@ -1,4 +1,4 @@
-name: Current installed public91 default entry
+name: Current installed public102 default entry
 on:
   workflow_dispatch:
   push:
@@ -9,21 +9,26 @@ on:
 permissions:
   contents: read
   actions: read
+env:
+  JOINT_SOURCE: ${{ github.workspace }}/public-reference/tests/hia_native/authority102_joint_ci
+  RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  JOINT_PROFILE: '5ff90d433a604920d689f56ffd38e3c95e622f0ab5b72bc143d500d4c9e6404d'
 jobs:
-  public-authority:
+  authority:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       LC_ALL: C.UTF-8
-      AUTH_SOURCE: ${{ github.workspace }}/public-reference/tests/hia_native/public_authority_ci
-      AUTH_RUNNER: ${{ github.workspace }}/public-reference/tests/hia_native/public_authority_ci_runner
-      EIGHT_SOURCE: ${{ github.workspace }}/retained-sdk/tests/hia_native/sdk_target_ci
-      RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Set runtime paths from the runner environment
-        run: |
-          printf '%s\n' "AUTH_OUTPUT=$RUNNER_TEMP/public-authority-output" "AUTH_ARCHIVE=$RUNNER_TEMP/public-authority-evidence" "CATALOG_INPUT=$RUNNER_TEMP/public-authority-catalog-input" >> "$GITHUB_ENV"
-      - name: Checkout exact candidate source
+      - name: Checkout immutable qualified joint recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: public-reference
+          ref: f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          sparse-checkout: tests/hia_native/authority102_joint_ci
+          persist-credentials: false
+      - name: Checkout the exact installed main candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: runtime
@@ -35,17 +40,7 @@ jobs:
             tests/hia_native
             .github
           persist-credentials: false
-      - name: Checkout exact public authority source and recipe
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: public-reference
-          ref: 71336e6a5aa4e74aef44635004b832a1cdacfe24
-          sparse-checkout: |
-            tests/hia_native/public_authority_ci
-            tests/hia_native/public_authority_ci_runner
-          persist-credentials: false
-      - name: Checkout immutable retained SDK source
+      - name: Checkout exact retained SDK source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: TrillionniumFoundation/hepta-runtime
@@ -60,7 +55,7 @@ jobs:
           path: compiler
           ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
           persist-credentials: false
-      - name: Checkout exact target policy
+      - name: Checkout exact current target
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: TrillionniumFoundation/hepta-runtime
@@ -75,59 +70,236 @@ jobs:
             /src/mcp/runtime/caller_scope.rs
             /src/mcp/runtime/operation_crypto.rs
           persist-credentials: false
-      - name: Verify frozen sources and exact identities
+      - name: Verify complete sources and unchanged target inputs
         run: |
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          python3 -I -B "$AUTH_RUNNER/run_ci.py" --source "$AUTH_SOURCE" --check-only
-          python3 -I -B runtime/tests/hia_native/public91_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$AUTH_SOURCE" --check-source-only
+          python3 -I -B "$JOINT_SOURCE/check_package.py" --source "$JOINT_SOURCE" --expected-sha256 "$JOINT_PROFILE"
+          python3 -I -B "$JOINT_SOURCE/verify_joint.py" --source "$JOINT_SOURCE" --expected-source-sha256 "$JOINT_PROFILE" --imports-only
+          python3 -I -B "$JOINT_SOURCE/authority-runner/run_ci.py" --source "$JOINT_SOURCE/authority" --check-only
+          python3 -I -B "$JOINT_SOURCE/entry102.py" --source "$JOINT_SOURCE/installed" --reference-package "$JOINT_SOURCE/authority" --check-source-only
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" --check-source-only
+          python3 -I -B runtime/tests/hia_native/public102_install_controls.py --source "$GITHUB_WORKSPACE/runtime" --joint-source "$JOINT_SOURCE"
           python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --check-only
-          test "$(git -C "$GITHUB_WORKSPACE/retained-sdk" rev-parse HEAD)" = b4054165e9b7be63e9309c8223d04131ec4fe31e
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
-          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
-          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
-          cmp "$GITHUB_WORKSPACE/original-target/Cargo.toml" "$AUTH_SOURCE/transport-reference/reference/target/Cargo.toml"
-          cmp "$GITHUB_WORKSPACE/original-target/Cargo.lock" "$AUTH_SOURCE/transport-reference/reference/target/Cargo.lock"
-          cmp "$GITHUB_WORKSPACE/original-target/Cargo.lock" "$AUTH_SOURCE/owner-reference/tests/hia_native/caller_owner_export/reference/Cargo.lock"
+          test "$(git -C runtime rev-parse HEAD)" = "$RUNTIME_SHA"
+          test "$(git -C public-reference rev-parse HEAD)" = f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          test "$(git -C retained-sdk rev-parse HEAD)" = b4054165e9b7be63e9309c8223d04131ec4fe31e
+          test "$(git -C original-target rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          test "$(git -C original-target rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
+          cmp original-target/Cargo.toml "$JOINT_SOURCE/authority/transport-reference/reference/target/Cargo.toml"
+          cmp original-target/Cargo.lock "$JOINT_SOURCE/authority/transport-reference/reference/target/Cargo.lock"
+          cmp original-target/Cargo.lock "$JOINT_SOURCE/authority/owner-reference/tests/hia_native/caller_owner_export/reference/Cargo.lock"
           for name in src/mcp/server.rs src/mcp/fs/workdir.rs src/mcp/runtime/caller_scope.rs src/mcp/runtime/operation_crypto.rs; do
-            cmp "$GITHUB_WORKSPACE/original-target/$name" "$AUTH_SOURCE/target-policy/$name"
+            cmp "original-target/$name" "$JOINT_SOURCE/authority/target-policy/$name"
           done
-      - name: Recover exact qualified original get_info observation
+      - name: Recover exact qualified get_info observation
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir "$CATALOG_INPUT"
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14194828118/zip > "$CATALOG_INPUT/qualified-catalog.zip"
-          python3 -I -B "$AUTH_RUNNER/extract_catalog_reference.py" --archive "$CATALOG_INPUT/qualified-catalog.zip" --output "$CATALOG_INPUT/selected"
-      - name: Install native tools and exact Rust toolchain
+          mkdir "$RUNNER_TEMP/joint-catalog-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14194828118/zip > "$RUNNER_TEMP/joint-catalog-input/qualified-catalog.zip"
+          python3 -I -B "$JOINT_SOURCE/authority-runner/extract_catalog_reference.py" --archive "$RUNNER_TEMP/joint-catalog-input/qualified-catalog.zip" --output "$RUNNER_TEMP/joint-catalog-input/selected"
+      - name: Install exact Rust and native build tools
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
           rustup toolchain install 1.95.0 --profile minimal
-          printf 'AUTH_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
-      - name: Fresh default graph and complete original qualification
+      - name: Fresh 102 graph and complete Authority original domains
         run: |
-          python3 -I -B "$AUTH_RUNNER/run_ci.py" --source "$AUTH_SOURCE" --sdk-source "$EIGHT_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$AUTH_RUST_BIN" --get-info-reference "$CATALOG_INPUT/selected/current-get-info-original.stdout" --output "$AUTH_OUTPUT"
-      - name: Require complete read-only qualification
+          joint_rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -I -B "$JOINT_SOURCE/authority-runner/run_ci.py" --source "$JOINT_SOURCE/authority" \
+            --sdk-source "$GITHUB_WORKSPACE/retained-sdk/tests/hia_native/sdk_target_ci" \
+            --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$joint_rust_bin" \
+            --get-info-reference "$RUNNER_TEMP/joint-catalog-input/selected/current-get-info-original.stdout" \
+            --output "$RUNNER_TEMP/joint-authority-output"
+      - name: Reopen complete Authority profile without execution
         run: |
-          python3 -I -B "$AUTH_RUNNER/verify_complete.py" --source "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --require-fresh --require-recipe-pass > "$RUNNER_TEMP/public-authority-independent-reader.json"
-      - name: Exercise the actual installed main build entry
+          python3 -I -B "$JOINT_SOURCE/authority-runner/verify_complete.py" --source "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --require-fresh --require-recipe-pass > "$RUNNER_TEMP/joint-authority-reader.json"
+      - name: Exercise explicit successor default entry
         run: |
-          python3 -I -B runtime/tests/hia_native/public91_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --hepta "$GITHUB_WORKSPACE/compiler" --output "$AUTH_OUTPUT/main-default-entry"
-          python3 -I -B runtime/tests/hia_native/public91_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --output "$AUTH_OUTPUT/main-default-entry" --verify-only > "$RUNNER_TEMP/public-authority-entry-reader.json"
-      - name: Preserve complete successful or failed evidence
+          python3 -I -B "$JOINT_SOURCE/entry102.py" --source "$JOINT_SOURCE/installed" --reference-package "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --hepta "$GITHUB_WORKSPACE/compiler" --output "$RUNNER_TEMP/joint-authority-output/main-default-entry"
+          python3 -I -B "$JOINT_SOURCE/entry102.py" --source "$JOINT_SOURCE/installed" --reference-package "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --output "$RUNNER_TEMP/joint-authority-output/main-default-entry" --verify-only > "$RUNNER_TEMP/joint-entry-reader.json"
+          python3 -I -B "$JOINT_SOURCE/check_package.py" --source "$JOINT_SOURCE" --expected-sha256 "$JOINT_PROFILE"
+      - name: Exercise the actual installed main default entry
+        run: |
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --hepta "$GITHUB_WORKSPACE/compiler" --output "$RUNNER_TEMP/joint-authority-output/installed-main-entry"
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --output "$RUNNER_TEMP/joint-authority-output/installed-main-entry" --verify-only > "$RUNNER_TEMP/installed-main-entry-reader.json"
+          python3 -I -B runtime/tests/hia_native/public102_install_controls.py --source "$GITHUB_WORKSPACE/runtime" --joint-source "$JOINT_SOURCE" > "$RUNNER_TEMP/installed-main-source-controls.json"
+      - name: Preserve complete successful or failed Authority evidence
         if: always()
         run: |
-          python3 -I -B "$AUTH_RUNNER/export_artifact.py" --source "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --catalog-input "$CATALOG_INPUT" --output "$AUTH_ARCHIVE"
-      - name: Upload complete source and execution evidence
+          python3 -I -B "$JOINT_SOURCE/authority-runner/export_artifact.py" --source "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --catalog-input "$RUNNER_TEMP/joint-catalog-input" --output "$RUNNER_TEMP/joint-authority-evidence"
+      - name: Upload complete Authority evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: public-authority-main-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          name: installed-public102-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/public-authority-evidence.tar.gz
-            ${{ runner.temp }}/public-authority-evidence.archive.json
-            ${{ runner.temp }}/public-authority-independent-reader.json
-            ${{ runner.temp }}/public-authority-entry-reader.json
+            ${{ runner.temp }}/joint-authority-evidence.tar.gz
+            ${{ runner.temp }}/joint-authority-evidence.archive.json
+            ${{ runner.temp }}/joint-authority-reader.json
+            ${{ runner.temp }}/joint-entry-reader.json
+            ${{ runner.temp }}/installed-main-entry-reader.json
+            ${{ runner.temp }}/installed-main-source-controls.json
+          if-no-files-found: error
+          retention-days: 14
+  batch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the same immutable qualified joint recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: public-reference
+          ref: f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          sparse-checkout: tests/hia_native/authority102_joint_ci
+          persist-credentials: false
+      - name: Checkout the exact installed main candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            tests/hia_native
+            .github
+          persist-credentials: false
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Checkout independent complete current original
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+      - name: Verify complete candidate source
+        run: |
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" --check-source-only
+          python3 -I -B runtime/tests/hia_native/public102_install_controls.py --source "$GITHUB_WORKSPACE/runtime" --joint-source "$JOINT_SOURCE"
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --check-only
+          python3 -I -B "$JOINT_SOURCE/check_package.py" --source "$JOINT_SOURCE" --expected-sha256 "$JOINT_PROFILE"
+          test "$(git -C runtime rev-parse HEAD)" = "$RUNTIME_SHA"
+          test "$(git -C public-reference rev-parse HEAD)" = f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C original rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+      - name: Install exact Rust and native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+      - name: Fresh complete 1777 and 28 native and original Batch domains
+        run: |
+          joint_rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -B "$JOINT_SOURCE/batch/run_recipe.py" --phase all \
+            --hepta "$GITHUB_WORKSPACE/compiler" --target "$GITHUB_WORKSPACE/original" \
+            --rust-bin "$joint_rust_bin" --output "$RUNNER_TEMP/joint-batch-output"
+      - name: Reopen complete Batch evidence without execution
+        run: |
+          python3 -B "$JOINT_SOURCE/batch/run_recipe.py" --phase verify --output "$RUNNER_TEMP/joint-batch-output" > "$RUNNER_TEMP/joint-batch-reader.json"
+          python3 -I -B "$JOINT_SOURCE/check_package.py" --source "$JOINT_SOURCE" --expected-sha256 "$JOINT_PROFILE"
+      - name: Preserve complete successful or failed Batch evidence
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/joint-batch-output"; then
+            python3 -B "$JOINT_SOURCE/batch/export_evidence.py" --input "$RUNNER_TEMP/joint-batch-output" --output "$RUNNER_TEMP/joint-batch-evidence"
+          fi
+      - name: Upload complete Batch evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: installed-public102-batch-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/joint-batch-evidence/
+            ${{ runner.temp }}/joint-batch-reader.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+  joint-readonly:
+    needs: [authority, batch]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout immutable trusted joint reader and complete source pins
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: public-reference
+          ref: f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          sparse-checkout: tests/hia_native/authority102_joint_ci
+          persist-credentials: false
+      - name: Checkout the exact installed main candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            tests/hia_native
+            .github
+          persist-credentials: false
+      - name: Download exact same-head Authority artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: installed-public102-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/joint-authority-download
+      - name: Download exact same-head Batch artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: installed-public102-batch-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/joint-batch-download
+      - name: Recover and verify every retained regular byte
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$RUNTIME_SHA"
+          test "$(git -C public-reference rev-parse HEAD)" = f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" --check-source-only
+          python3 -I -B runtime/tests/hia_native/public102_install_controls.py --source "$GITHUB_WORKSPACE/runtime" --joint-source "$JOINT_SOURCE"
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --check-only
+          python3 -I -B "$JOINT_SOURCE/check_package.py" --source "$JOINT_SOURCE" --expected-sha256 "$JOINT_PROFILE"
+          python3 -I -B "$JOINT_SOURCE/extract_archive.py" --kind authority \
+            --archive "$RUNNER_TEMP/joint-authority-download/joint-authority-evidence.tar.gz" \
+            --index "$RUNNER_TEMP/joint-authority-download/joint-authority-evidence.archive.json" \
+            --output "$RUNNER_TEMP/joint-authority-readback" > "$RUNNER_TEMP/joint-authority-extraction.json"
+          python3 -I -B "$JOINT_SOURCE/extract_archive.py" --kind batch \
+            --archive "$RUNNER_TEMP/joint-batch-download/joint-batch-evidence/batch-public-complete.tar.gz" \
+            --index "$RUNNER_TEMP/joint-batch-download/joint-batch-evidence/archive.json" \
+            --output "$RUNNER_TEMP/joint-batch-readback" > "$RUNNER_TEMP/joint-batch-extraction.json"
+      - name: Complete guarded joint reread and exact executable equality
+        run: |
+          python3 -I -B "$JOINT_SOURCE/verify_joint.py" --source "$JOINT_SOURCE" \
+            --expected-source-sha256 "$JOINT_PROFILE" --authority "$RUNNER_TEMP/joint-authority-readback" \
+            --batch "$RUNNER_TEMP/joint-batch-readback" > "$RUNNER_TEMP/joint-complete-readback.json"
+      - name: Reopen the installed main entry after complete artifact relocation
+        run: |
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-readback/run" --output "$RUNNER_TEMP/joint-authority-readback/run/installed-main-entry" --verify-only > "$RUNNER_TEMP/installed-main-relocated-entry-reader.json"
+          python3 -I -B runtime/tests/hia_native/public102_install_controls.py --source "$GITHUB_WORKSPACE/runtime" --joint-source "$JOINT_SOURCE" > "$RUNNER_TEMP/installed-main-relocated-source-controls.json"
+      - name: Preserve joint readonly result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: installed-public102-joint-readonly-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/joint-authority-extraction.json
+            ${{ runner.temp }}/joint-batch-extraction.json
+            ${{ runner.temp }}/joint-complete-readback.json
+            ${{ runner.temp }}/installed-main-relocated-entry-reader.json
+            ${{ runner.temp }}/installed-main-relocated-source-controls.json
           if-no-files-found: error
           retention-days: 14
