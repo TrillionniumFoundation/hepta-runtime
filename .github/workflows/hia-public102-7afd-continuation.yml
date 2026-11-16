@@ -1,0 +1,275 @@
+name: Complete retained 7afd public102 default entry
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-public102-7afd-continuation-6780-20261116]
+permissions:
+  contents: read
+  actions: read
+env:
+  RUNTIME_SHA: 7afd543feea2938b08ae8c10f1c6a911f23621ed
+  JOINT_SOURCE: ${{ github.workspace }}/public-reference/tests/hia_native/authority102_joint_ci
+  CONT_SOURCE: ${{ github.workspace }}/continuation/tests/hia_native/public102_entry_continuation
+  JOINT_PROFILE: 5ff90d433a604920d689f56ffd38e3c95e622f0ab5b72bc143d500d4c9e6404d
+jobs:
+  actual-entry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      CONT_ROOT: ${{ runner.temp }}/public102-entry-continuation
+    steps:
+      - name: Checkout this isolated continuation source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: continuation
+          ref: ${{ github.sha }}
+          sparse-checkout: tests/hia_native/public102_entry_continuation
+          persist-credentials: false
+      - name: Checkout immutable complete joint recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: public-reference
+          ref: f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          sparse-checkout: tests/hia_native/authority102_joint_ci
+          persist-credentials: false
+      - name: Checkout the exact original installed candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: 7afd543feea2938b08ae8c10f1c6a911f23621ed
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            tests/hia_native
+            .github
+          persist-credentials: false
+      - name: Checkout exact compiler for the actual entry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Admit complete frozen sources without changing the cancelled job
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$RUNTIME_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C public-reference rev-parse HEAD)" = f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          test "$(git -C continuation rev-parse HEAD)" = "${{ github.sha }}"
+          python3 -I -B "$CONT_SOURCE/continue_entry.py" source
+          python3 -I -B "$JOINT_SOURCE/check_package.py" --source "$JOINT_SOURCE" --expected-sha256 "$JOINT_PROFILE"
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" --check-source-only
+          python3 -I -B runtime/tests/hia_native/public102_install_controls.py --source "$GITHUB_WORKSPACE/runtime" --joint-source "$JOINT_SOURCE"
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --check-only
+      - name: Recover all exact already fresh Authority bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/public102-baseline-download"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14257528012 > "$RUNNER_TEMP/public102-baseline-download/authority.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14257528012/zip > "$RUNNER_TEMP/public102-baseline-download/authority.zip"
+          python3 -I -B "$CONT_SOURCE/continue_entry.py" prepare \
+            --root "$CONT_ROOT" --joint "$JOINT_SOURCE" \
+            --metadata "$RUNNER_TEMP/public102-baseline-download/authority.json" \
+            --archive "$RUNNER_TEMP/public102-baseline-download/authority.zip"
+          mkdir "$CONT_ROOT/records"
+      - name: Reopen the full unchanged Authority and captured isolated entry
+        run: |
+          python3 -I -B "$JOINT_SOURCE/authority-runner/verify_complete.py" --source "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --require-fresh --require-recipe-pass > "$CONT_ROOT/records/authority-reader.json"
+          python3 -I -B "$JOINT_SOURCE/entry102.py" --source "$JOINT_SOURCE/installed" --reference-package "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --output "$RUNNER_TEMP/joint-authority-output/main-default-entry" \
+            --verify-only > "$CONT_ROOT/records/isolated-entry-reader.json"
+      - name: Execute only the missing actual installed default entry
+        run: |
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/joint-authority-output/installed-main-entry" > "$CONT_ROOT/records/actual-main-entry.stdout"
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --output "$RUNNER_TEMP/joint-authority-output/installed-main-entry" \
+            --verify-only > "$CONT_ROOT/records/actual-main-entry-reader.json"
+          python3 -I -B runtime/tests/hia_native/public102_install_controls.py --source "$GITHUB_WORKSPACE/runtime" \
+            --joint-source "$JOINT_SOURCE" > "$CONT_ROOT/records/installed-source-controls.json"
+          python3 -I -B "$CONT_SOURCE/continue_entry.py" seal-proof --root "$CONT_ROOT"
+      - name: Seal the complete successor with the unchanged export reader
+        run: |
+          python3 -I -B "$JOINT_SOURCE/authority-runner/export_artifact.py" --source "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/joint-authority-output" --catalog-input "$CONT_ROOT/authority/catalog-input" \
+            --output "$CONT_ROOT/continuation-evidence"
+          python3 -I -B "$CONT_SOURCE/continue_entry.py" split \
+            --archive "$CONT_ROOT/continuation-evidence.tar.gz" --index "$CONT_ROOT/continuation-evidence.archive.json" \
+            --output "$CONT_ROOT/parts"
+          mkdir "$CONT_ROOT/metadata"
+          cp "$CONT_ROOT/parts/parts.json" "$CONT_ROOT/parts/archive.json" "$CONT_ROOT/PREPARED.json" "$CONT_ROOT/PRESERVED.json" "$CONT_ROOT/metadata/"
+      - name: Preserve continuation metadata and complete failure prefix
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-metadata
+          path: |
+            ${{ runner.temp }}/public102-entry-continuation/metadata/
+            ${{ runner.temp }}/public102-entry-continuation/PREPARED.json
+            ${{ runner.temp }}/public102-entry-continuation/PRESERVED.json
+            ${{ runner.temp }}/public102-entry-continuation/records/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve complete archive part 00
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-part00
+          path: ${{ runner.temp }}/public102-entry-continuation/parts/part00.bin
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Preserve complete archive part 01
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-part01
+          path: ${{ runner.temp }}/public102-entry-continuation/parts/part01.bin
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Preserve complete archive part 02
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-part02
+          path: ${{ runner.temp }}/public102-entry-continuation/parts/part02.bin
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Preserve complete archive part 03
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-part03
+          path: ${{ runner.temp }}/public102-entry-continuation/parts/part03.bin
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Preserve complete archive part 04
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-part04
+          path: ${{ runner.temp }}/public102-entry-continuation/parts/part04.bin
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Preserve complete archive part 05
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-part05
+          path: ${{ runner.temp }}/public102-entry-continuation/parts/part05.bin
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Preserve complete archive part 06
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-part06
+          path: ${{ runner.temp }}/public102-entry-continuation/parts/part06.bin
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Preserve complete archive part 07
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-part07
+          path: ${{ runner.temp }}/public102-entry-continuation/parts/part07.bin
+          if-no-files-found: ignore
+          retention-days: 14
+  relocated-readonly:
+    needs: [actual-entry]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout this exact continuation source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: continuation
+          ref: ${{ github.sha }}
+          sparse-checkout: tests/hia_native/public102_entry_continuation
+          persist-credentials: false
+      - name: Checkout the immutable complete joint reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: public-reference
+          ref: f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          sparse-checkout: tests/hia_native/authority102_joint_ci
+          persist-credentials: false
+      - name: Checkout the unchanged 7afd installed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: 7afd543feea2938b08ae8c10f1c6a911f23621ed
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            tests/hia_native
+            .github
+          persist-credentials: false
+      - name: Download this continuation's exact metadata
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-metadata
+          path: ${{ runner.temp }}/continuation-metadata
+      - name: Download every exact continuation part
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-part*
+          merge-multiple: true
+          path: ${{ runner.temp }}/continuation-parts
+      - name: Admit sources and recover every continuation byte
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$RUNTIME_SHA"
+          test "$(git -C public-reference rev-parse HEAD)" = f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          python3 -I -B "$CONT_SOURCE/continue_entry.py" source
+          python3 -I -B "$JOINT_SOURCE/check_package.py" --source "$JOINT_SOURCE" --expected-sha256 "$JOINT_PROFILE"
+          python3 -I -B "$CONT_SOURCE/continue_entry.py" join \
+            --root "$RUNNER_TEMP/continuation-parts" --index "$RUNNER_TEMP/continuation-metadata/metadata/parts.json" \
+            --metadata "$RUNNER_TEMP/continuation-metadata/metadata/archive.json" \
+            --output "$RUNNER_TEMP/continuation-complete.tar.gz"
+          mkdir "$RUNNER_TEMP/continuation-readers"
+          python3 -I -B "$JOINT_SOURCE/extract_archive.py" --kind authority \
+            --archive "$RUNNER_TEMP/continuation-complete.tar.gz" --index "$RUNNER_TEMP/continuation-metadata/metadata/archive.json" \
+            --output "$RUNNER_TEMP/continuation-authority" > "$RUNNER_TEMP/continuation-readers/authority-extraction.json"
+      - name: Recover the same-head complete successful Batch artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/continuation-batch-download"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14257128505 > "$RUNNER_TEMP/continuation-batch-download/artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14257128505/zip > "$RUNNER_TEMP/continuation-batch-download/artifact.zip"
+          python3 -I -B "$CONT_SOURCE/continue_entry.py" prepare-batch \
+            --root "$RUNNER_TEMP/continuation-batch" --joint "$JOINT_SOURCE" \
+            --metadata "$RUNNER_TEMP/continuation-batch-download/artifact.json" --archive "$RUNNER_TEMP/continuation-batch-download/artifact.zip" \
+            > "$RUNNER_TEMP/continuation-readers/batch-extraction.json"
+      - name: Run the complete unchanged guarded joint reader
+        run: |
+          python3 -I -B "$JOINT_SOURCE/verify_joint.py" --source "$JOINT_SOURCE" \
+            --expected-source-sha256 "$JOINT_PROFILE" --authority "$RUNNER_TEMP/continuation-authority" \
+            --batch "$RUNNER_TEMP/continuation-batch/batch" > "$RUNNER_TEMP/continuation-readers/joint-complete.json"
+      - name: Reopen the actual installed entry after full artifact relocation
+        run: |
+          python3 -I -B runtime/tests/hia_native/public102_entry.py --source "$GITHUB_WORKSPACE/runtime" --reference-package "$JOINT_SOURCE/authority" \
+            --run "$RUNNER_TEMP/continuation-authority/run" --output "$RUNNER_TEMP/continuation-authority/run/installed-main-entry" \
+            --verify-only > "$RUNNER_TEMP/continuation-readers/installed-main-relocated.json"
+          python3 -I -B runtime/tests/hia_native/public102_install_controls.py --source "$GITHUB_WORKSPACE/runtime" \
+            --joint-source "$JOINT_SOURCE" > "$RUNNER_TEMP/continuation-readers/installed-source-controls.json"
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --check-only \
+            > "$RUNNER_TEMP/continuation-readers/historical-source-controls.json"
+          python3 -I -B "$CONT_SOURCE/continue_entry.py" final --authority "$RUNNER_TEMP/continuation-authority" \
+            --records "$RUNNER_TEMP/continuation-readers" --output "$RUNNER_TEMP/public102-continuation-FINAL.json"
+      - name: Preserve complete independent reader results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public102-7afd-entry-${{ github.run_id }}-${{ github.run_attempt }}-readonly
+          path: |
+            ${{ runner.temp }}/continuation-readers/
+            ${{ runner.temp }}/public102-continuation-FINAL.json
+            ${{ runner.temp }}/continuation-batch/PREPARED.json
+          if-no-files-found: error
+          retention-days: 14
