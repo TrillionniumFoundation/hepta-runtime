@@ -36,7 +36,7 @@ jobs:
           package=pathlib.Path('tests/hia_native/bellman_byte_access_ci/package').resolve()
           sys.path.insert(0,str(package/'recipe'))
           from qualify_port import source_evidence
-          print(source_evidence(package,'2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1'))
+          print(source_evidence(package,'c5c6f38d067210e9f0c2df6cab2e0e43e4e239da1fefc020a95439b699b45531'))
           PY
           python -I -S -B tests/hia_native/bellman_byte_access_ci/package/byte-access/verify_source_delta.py --package "$GITHUB_WORKSPACE/tests/hia_native/bellman_byte_access_ci/package" --hepta "$GITHUB_WORKSPACE/worker-compiler"
       - name: Fresh HIA and unchanged original complete worker domains
@@ -94,7 +94,7 @@ jobs:
     timeout-minutes: 15
     env:
       PYTHONDONTWRITEBYTECODE: '1'
-      PORT_SOURCE_SHA256: 2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1
+      PORT_SOURCE_SHA256: c5c6f38d067210e9f0c2df6cab2e0e43e4e239da1fefc020a95439b699b45531
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4

@@ -66,8 +66,19 @@ def main():
   assert port.call('detach',[port.ctx,ctypes.addressof(e1)])==0
   assert port.call('destroy',[port.ctx])==BUSY
   port.resume(pid4);port.wait_ready(j4)
-  assert port.call('destroy',[port.ctx])==0
-  groups.append({'name':'shutdown-drain-after-detach','stop':stop4,'job':j4})
+  # READY publishes completion, but the OS child can still be leaving its
+  # final instructions. Preserve the same total 60-second domain while
+  # servicing real reap progress until destroy retires the owned handle.
+  destroy_attempts=[]
+  while True:
+   assert time.monotonic()-start<60
+   destroy_attempts.append(port.calls)
+   code=port.call('destroy',[port.ctx])
+   if code==0:break
+   assert code==BUSY
+   port.service();port.receive(expected=0)
+   time.sleep(.001)
+  groups.append({'name':'shutdown-drain-after-detach','stop':stop4,'job':j4,'destroy_attempts':destroy_attempts})
   assert [get(e,32) for e in port.events]==[j1,j3,j2,j4]
   elapsed=time.monotonic()-start;assert elapsed<60
   result={'status':'ACTUAL_NATIVE_PORT_LIFECYCLE_PASS','groups':groups,'controls':controls,'control_count':len(controls),'engines':2,'private_tags':7,'worker_jobs':4,'ready':4,'export_calls':port.calls,'elapsed_seconds':elapsed,'timeout_seconds':60,'executable_sha256':port.component['executable_sha256'],'source_sha256':port.component['source_sha256'],'public_handler_qualified':False}

@@ -3,7 +3,7 @@ import argparse,gc,hashlib,json,os,pathlib,shutil,stat,subprocess,sys,time,trace
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parent))
 from read_port import verify,read,doc,sha,get,journal_records
-CASES=['cancelled-core-clock','cancelled-final-writer-clock','missing-mode1-delivery','caller-workspace-identity','ready-fifo-copy','changed-mechanical-source','changed-domain-claim']
+CASES=['cancelled-core-clock','cancelled-final-writer-clock','missing-mode1-delivery','caller-workspace-identity','ready-fifo-copy','changed-mechanical-source','changed-domain-claim','missing-final-destroy-attempt']
 def encoded(x):return (json.dumps(x,sort_keys=True,indent=2)+'\n').encode()
 def file_pin(path):
  assert stat.S_ISREG(path.lstat().st_mode)
@@ -89,6 +89,10 @@ def mutation(case,run,build):
   details={'old':ready[0]['event'],'new':ready[1]['event']};ready[0]['event']=ready[1]['event'];result['run/capture/calls.jsonl']=jsonl(rows)
  elif case=='changed-mechanical-source':
   name='source/runtime_mcp_bellman_port.S';result['build/'+name]=read(build/name)+b'\n/* changed source */\n'
+ elif case=='missing-final-destroy-attempt':
+  value=doc(capture/'RESULT.json');attempts=value['groups'][3]['destroy_attempts']
+  assert attempts;details={'removed_actual_destroy_call':attempts.pop()}
+  result['run/capture/RESULT.json']=encoded(value)
  elif case=='changed-domain-claim':
   value=doc(capture/'RESULT.json');value['controls'][0]='omitted-empty-control';result['run/capture/RESULT.json']=encoded(value)
  else:raise AssertionError(case)

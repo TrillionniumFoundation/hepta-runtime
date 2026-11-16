@@ -213,6 +213,23 @@ def verify(build,capture):
  assert blob(groups[1]['event'])==ready_views[0] and groups[1]['token']==1
  assert groups[2]['small_job']==3 and groups[2]['wide_job']==2 and blob(groups[2]['wide_result'])[64:]==taken[2][1][2][64:]
  assert groups[3]['job']==4 and groups[3]['stop']=={k:v for k,v in stops[2].items() if k!='phase'}
+ assert set(groups[3])=={'name','job','stop','destroy_attempts'}
+ attempts=groups[3]['destroy_attempts']
+ assert isinstance(attempts,list) and attempts and all(type(i) is int for i in attempts)
+ assert len(set(attempts))==len(attempts) and attempts==sorted(attempts)
+ last_ready=max(row['call'] for row in rows if row['phase']=='ready' and row['code']==32)
+ assert attempts[0]==last_ready+2 and attempts[-1]==len(begins)-1
+ assert begins[last_ready+1]['name']=='ready_release' and ends[last_ready+1]['return']==0
+ for at,index in enumerate(attempts):
+  assert begins[index]['name']=='destroy' and begins[index]['label'] is None
+  terminal=at==len(attempts)-1
+  assert ends[index]['return']==(0 if terminal else 0xfffffff8)
+  state=begins[index]['before'];context=blob(state['context'])
+  assert not state['rows'] and not state['ready'] and get(context,32)==2 and get(context,96)==0
+  if not terminal:
+   assert begins[index]['before']==ends[index]['after'] and attempts[at+1]==index+3
+   assert begins[index+1]['name']=='service' and ends[index+1]['return'] in (0,1)
+   assert begins[index+2]['name']=='ready_receive' and ends[index+2]['return']==0
  assert result['control_count']==len(result['controls'])==29 and len(set(result['controls']))==29
  expected_controls=['empty','short-magic','short-header','trailing','magic']+['word-'+str(i) for i in range(8,64,8)]+['foreign-engine-tag','unstarted-poll','unstarted-cancel','duplicate-start','duplicate-cancel','retired-poll','borrow-service','borrow-attach','borrow-detach','borrow-shutdown','borrow-destroy','borrow-receive','borrow-invoke','wrong-ready-token','released-ready-token','detached-engine','closed-allocation']
  assert result['controls']==expected_controls
