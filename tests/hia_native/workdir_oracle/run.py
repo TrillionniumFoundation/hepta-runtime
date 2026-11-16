@@ -217,6 +217,7 @@ def main():
     output = args.output.absolute()
     output.mkdir(parents=True, exist_ok=False)
     source_before = {name: identity(ROOT / name) for name in sources.HARNESS_FILES}
+    policy_before = sources.target_source_pins()
     runtime_before = {name: identity(args.runtime_root / name) for name in sources.SOURCE_FILES}
     crate = output / "crate"
     materialized = sources.materialize(args.runtime_root, crate)
@@ -253,7 +254,9 @@ def main():
     source_after = {name: identity(ROOT / name) for name in sources.HARNESS_FILES}
     runtime_after = {name: identity(args.runtime_root / name) for name in sources.SOURCE_FILES}
     assert source_before == source_after and runtime_before == runtime_after
+    assert sources.target_source_pins() == policy_before
     (output / "source-pins.json").write_bytes(canonical({"harness": source_before, "original": runtime_before,
+        "canonical_policy_target": policy_before,
         "materialized": {name: identity(crate / name) for name in ("Cargo.toml", "Cargo.lock", "src/main.rs")},
         "executables": {name: {"invocation": str(path.absolute()), "resolved": str(path.resolve()),
             **identity(path)} for name, path in (("cargo", args.cargo), ("rustc", args.rustc), ("strace", args.strace), ("original", binary))}}))

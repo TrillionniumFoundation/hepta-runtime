@@ -15,25 +15,7 @@ import struct
 import sys
 sys.dont_write_bytecode = True
 
-SOURCES = {
-    'run.py': (13360, '1f69ff1e20e3c9df32723cb85c1f21b3dbe6a52867b8731d22a0606f0f5f813a'),
-    'cases.py': (17379, '9bb4cc6f0c0afdc520c27b07224b85194eed9bbf3644f7a2450a8831a2ebd3b8'),
-    'oracle/Cargo.toml': (566, 'd77389383acbb28b6bfda9cd0bf6ee433c3fbc493cfc90048393d8e26ccb58fb'),
-    'oracle/Cargo.lock': (19713, 'f8230631dd6c8095bcca8e30d388450750171cb08e5c386798444610cbed24e1'),
-    'oracle/verify_sources.py': (7488, 'cb3f5e7d1c5e78ab8c3194bb418a27f12274ef9292703323e2c8fa3c7f4049a0'),
-    'oracle/src/driver.rs': (28609, '0d72cbc158030baf09dd7ec6fcfe35737f96ad918d4bf57a6eb1e02b81e31d23'),
-    'oracle/original/Cargo.lock': (90148, '7f39704b92d5fc762a98a5313949034db464ca9485827b19b5dde7aa69902d43'),
-    'oracle/original/Cargo.toml': (4157, '377e7dca547f0ff0d832fb28cf01862a6d84b4b6ed42c8b36dae9075cbbbb78f'),
-    'oracle/original/config.rs': (25272, '228f83aa263920ef16e6fca93ce52292cae3cecae5be4b47788a7070fee97f35'),
-    'oracle/original/delta.rs': (9765, 'a21e86bc959ce79f35cb7695e908fa37d5fd5fb56e00673ecf4a8cd291c080e1'),
-    'oracle/original/effect_owner_fence.rs': (23890, '1e2f2cd32289cd93915076981436b79c04a2756dfc184fa219f043a88f907207'),
-    'oracle/original/mcp_mod.rs': (3316, '9e9b7933372418ef361f85d64a1d36567618b13ae77c45d16df16799231b690c'),
-    'oracle/original/parity_ops.rs': (11952, '0e608303d16c22b95dc99bae2e6bb00ba0571872f52d15a7fe8e2f021286ccc1'),
-    'oracle/original/remote.rs': (48174, 'd87cae1d18cfaf3479cc94e0df8c8c6eefe5d2eec34f62b7ba0f0c4693704d8c'),
-    'oracle/original/request_ctx.rs': (2860, '81ebf6e68bcf8c119c83274a090b5e4796d00b3ca6d889c92e9922be0612e943'),
-    'oracle/original/server.rs': (178908, 'ea43d13d2e870188abc33afca771eb3f5ecacdf982a56467c7b7c2fa0fa81d0d'),
-    'oracle/original/text_editing.rs': (63372, 'e55ce4df73d6e0b70e4065900d317f6b7329670ab6fcba44979ca69dcac80590'),
-}
+SOURCES = {'run.py': (13360, '1f69ff1e20e3c9df32723cb85c1f21b3dbe6a52867b8731d22a0606f0f5f813a'), 'cases.py': (17379, '9bb4cc6f0c0afdc520c27b07224b85194eed9bbf3644f7a2450a8831a2ebd3b8'), 'oracle/Cargo.toml': (566, 'd77389383acbb28b6bfda9cd0bf6ee433c3fbc493cfc90048393d8e26ccb58fb'), 'oracle/Cargo.lock': (19713, 'f8230631dd6c8095bcca8e30d388450750171cb08e5c386798444610cbed24e1'), 'oracle/verify_sources.py': (8329, 'ea711d71d4bf2943fe5293102c73b76c35c14262c42873a8369f343c30c9e428'), 'oracle/src/driver.rs': (28609, '0d72cbc158030baf09dd7ec6fcfe35737f96ad918d4bf57a6eb1e02b81e31d23'), 'oracle/original/Cargo.lock': (90148, '7f39704b92d5fc762a98a5313949034db464ca9485827b19b5dde7aa69902d43'), 'oracle/original/Cargo.toml': (4157, '377e7dca547f0ff0d832fb28cf01862a6d84b4b6ed42c8b36dae9075cbbbb78f'), 'oracle/original/config.rs': (25272, '228f83aa263920ef16e6fca93ce52292cae3cecae5be4b47788a7070fee97f35'), 'oracle/original/delta.rs': (9765, 'a21e86bc959ce79f35cb7695e908fa37d5fd5fb56e00673ecf4a8cd291c080e1'), 'oracle/original/effect_owner_fence.rs': (23890, '1e2f2cd32289cd93915076981436b79c04a2756dfc184fa219f043a88f907207'), 'oracle/original/mcp_mod.rs': (3316, '9e9b7933372418ef361f85d64a1d36567618b13ae77c45d16df16799231b690c'), 'oracle/original/parity_ops.rs': (11952, '0e608303d16c22b95dc99bae2e6bb00ba0571872f52d15a7fe8e2f021286ccc1'), 'oracle/original/remote.rs': (48174, 'd87cae1d18cfaf3479cc94e0df8c8c6eefe5d2eec34f62b7ba0f0c4693704d8c'), 'oracle/original/request_ctx.rs': (2860, '81ebf6e68bcf8c119c83274a090b5e4796d00b3ca6d889c92e9922be0612e943'), 'oracle/original/server.rs': (178908, 'ea43d13d2e870188abc33afca771eb3f5ecacdf982a56467c7b7c2fa0fa81d0d'), 'oracle/original/text_editing.rs': (63372, 'e55ce4df73d6e0b70e4065900d317f6b7329670ab6fcba44979ca69dcac80590'), 'oracle/original/current_canonical_policy.rs': (27112, '75a95e0376eb2ebf92f4dbbc0f8d93cbe4aa53ae35c78aa144589d226bf9c7c6')}
 TOOL = '/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/'
 FENCE = ('HEPTA_EFFECT_OWNER_FENCE_DIR', 'HEPTA_EFFECT_OWNER_SELF', 'HEPTA_EFFECT_OWNER_FENCE_REQUIRED')
 TRACE = 'trace=%file,close,write,getpgid,getdents64,flock,fcntl,dup,dup2,dup3'
@@ -593,7 +575,7 @@ def reference_evidence(source_root, capture_root):
     need(old_source.is_absolute() and old_fixture.is_absolute() and old_fixture.name == 'fixtures' and
          '..' not in old_source.parts and '..' not in old_fixture.parts, 'actual execution root paths')
     fields(source_report, ('source_root', 'source_files', 'original'), 'complete source report')
-    same(source_report['source_root'], str(old_source), 'source execution provenance'); same(source_report['source_files'], source.artifacts, 'exact seventeen-file source graph')
+    same(source_report['source_root'], str(old_source), 'source execution provenance'); same(source_report['source_files'], source.artifacts, 'exact eighteen-file source graph')
     same(source_report['original'], original, 'unchanged original closure/normalized original dependency subset')
     for name, raw in materialized.items(): need(capture.data('crate/'+name) == raw, 'byte-exact actual compiled crate '+name)
     cases_factory = load(source.file('cases.py'), '_filesystem_sdk_cases'); replay = load(source.file('run.py'), '_filesystem_sdk_producer')

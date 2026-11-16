@@ -1705,13 +1705,22 @@ class QualificationReportingTests(unittest.TestCase):
 
     def test_public_filesystem_original_sources_are_exact_runtime_materializations(self):
         import hia_native_filesystem_public_reference_source as source
+        import hia_native_canonical_target as canonical_target
         document, original, sources = source.source_evidence(ROOT)
-        self.assertEqual(len(original), 17)
-        self.assertEqual(len(source.ORIGINALS), 11)
+        self.assertEqual(len(original), 18)
+        self.assertEqual(len(source.ORIGINALS), 12)
+        self.assertEqual(document['canonical_policy_target'], canonical_target.source_evidence(ROOT))
+        self.assertIs(document['selected_policy_is_current_target'], True)
+        self.assertIs(document['other_historical_sdk_and_config_sources_unchanged'], True)
         self.assertFalse((ROOT / source.ORACLE / 'oracle/original').exists())
         for name, location in source.ORIGINALS.items():
             self.assertEqual(original['oracle/original/' + name], (ROOT / location).read_bytes())
-            self.assertIn(location, ORIGINAL_RUNTIME_BLOBS)
+            if name == 'current_canonical_policy.rs':
+                self.assertEqual(location, canonical_target.REFERENCE)
+                self.assertEqual(document['canonical_policy_target']['target_git_blob'],
+                                 canonical_target.TARGET_BLOB)
+            else:
+                self.assertIn(location, ORIGINAL_RUNTIME_BLOBS)
         before = source.materialize(ROOT, self.output)
         self.assertEqual(source.verify_materialized(ROOT, self.output), before)
         self.assertIs(before['original_semantics_executed'], False)

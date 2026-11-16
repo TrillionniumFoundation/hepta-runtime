@@ -10,9 +10,10 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import hia_native_workdir_service_build as native
+import hia_native_canonical_target as canonical_target
 
 SOURCE_INDEX = "native/workdir_qualification_sources.json"
-SOURCE_INDEX_SHA256 = '2ede67793c75ccb0704f3ffd32cb5ff2b5c49da5846b2dbc86f89dce2f14afc9'
+SOURCE_INDEX_SHA256 = '6535b7c6c6284c8b9f4200de7864843d5eaafea1b260f62f6d5e22edc1001d8d'
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 require = native.require
 FLAGS = ("whole_runtime_replaced", "production_activated", "old_stack_removal_qualified")
@@ -49,7 +50,7 @@ def source_inventory(root=ROOT):
     raw = native.file(root, SOURCE_INDEX).read_bytes()
     require(sha(raw) == SOURCE_INDEX_SHA256, "workdir qualification input index differs")
     index = json.loads(raw)
-    require(index["schema"] == "hepta.workdir.qualification-sources.v1" and len(index["files"]) == 80,
+    require(index["schema"] == "hepta.workdir.qualification-sources.v1" and len(index["files"]) == 84,
             "workdir executed input domain differs")
     result = {}
     for name, expected in index["files"].items():
@@ -372,6 +373,10 @@ def inspect_original(directory, source_root, bundle, manifest_sha):
                 "retained original compiler input differs")
     for name, digest in report["source_sha256"].items():
         require(sha(native.file(source_root, name).read_bytes()) == digest, "original comparison driver changed")
+    require(report.get("canonical_policy_reference") == canonical_target.verify_compiled_config(
+        native.file(source_root, "src/mcp/runtime/config.rs").read_bytes(),
+        native.file(reference, "owner/mcp/runtime/config.rs").read_bytes(), source_root),
+        "current-target canonical source is not the actual compiled carrier")
     binary_sha = report["original_executable_sha256"]
     require(sha(native.file(directory, "target/release/hia-workdir-reference").read_bytes()) == binary_sha,
             "actual original executable changed")
@@ -424,7 +429,7 @@ def admit_private(directory, hepta, build_root, *, source_root=ROOT):
     report = obj(directory / "result.json")
     scopes(report); duration(report["elapsed_seconds"], 600)
     require(report["schema"] == "hepta.workdir.portable-qualification.v1" and report["status"] == "PASS"
-            and report["source_unchanged"] is True and report["source_files"] == 80
+            and report["source_unchanged"] is True and report["source_files"] == 84
             and report["remote_execution_qualified"] is False and report["fresh_full_cold_gate"] is False,
             "actual portable workdir phase incomplete")
     names = ("native-build", "native-parameters", "native-caller-controls", "native-installed-regex", "workdir-rust-compare")

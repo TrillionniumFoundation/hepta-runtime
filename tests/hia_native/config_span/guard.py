@@ -211,7 +211,7 @@ def trace_summary(path, replies):
             need(pending_canonical == (seq, phase, kind, path_offset, path_length), "actual canonical ACK binds requested effect")
             canonical_sequence = seq
             pending_canonical = None
-            need(kind in range(1, 8) and (errno == 0 or 0 < errno <= 4095), "actual canonical syscall kind/error")
+            need(kind in range(1, 9) and (errno == 0 or 0 < errno <= 4095), "actual canonical syscall kind/error")
             signed = result - (1 << 64) if result >> 63 else result
             if errno:
                 need(signed == -errno and got == 0, "exact syscall failure completion")

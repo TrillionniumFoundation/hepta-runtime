@@ -1060,7 +1060,7 @@ canon_handle_effect:
     mov r14, qword ptr [r13+16]
     cmp r14, 1
     jb fatal
-    cmp r14, 7
+    cmp r14, 8
     ja fatal
     cmp r14, 4
     je canon_canonical_readlink
@@ -1078,6 +1078,8 @@ canon_handle_effect:
     cmp qword ptr [r13+40], rax
     jne fatal
     call canon_exact_path
+    cmp r14, 8
+    je canon_lstat
     cmp r14, 1
     je canon_statx_path
     jmp canon_legacy_stat
@@ -1115,6 +1117,13 @@ canon_legacy_stat:
     mov edi, -100
     lea rdx, [r12+512]
     xor r10d, r10d
+    mov eax, 262
+    syscall
+    jmp canon_zero_result
+canon_lstat:
+    mov edi, -100
+    lea rdx, [r12+512]
+    mov r10d, 0x100
     mov eax, 262
     syscall
     jmp canon_zero_result

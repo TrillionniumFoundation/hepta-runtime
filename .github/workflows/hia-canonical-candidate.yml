@@ -1,0 +1,250 @@
+name: HIA Canonical Target Candidate Qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'hia-canonical-qualification-6780-20261116'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-canonical-target-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Exact source controls and fresh fixed-point build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      prepared-sha256: ${{ steps.prepare.outputs.prepared_sha256 }}
+    env:
+      RUSTUP_TOOLCHAIN: 1.95.0
+      RUNTIME_SHA: ${{ github.sha }}
+      CANONICAL_INVOCATION: ${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout the exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            tests/oracles
+            .github
+
+      - name: Checkout the fixed HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Install the fixed cold bootstrap compiler
+        run: rustup toolchain install 1.95.0 --profile minimal
+
+      - name: Install pinned independent Python references
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
+      - name: Run unchanged source controls and focused transport controls
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$RUNTIME_SHA"
+          python3 -I -B runtime/tests/hia_native/test_qualification_reporting.py
+          python3 -I -B runtime/tests/hia_native/test_native_pipeline.py
+          python3 -I -B runtime/tests/hia_native/test_original_pipeline.py
+          python3 -I -B runtime/tests/hia_native/test_canonical_target_ci.py
+          python3 -I -B runtime/tests/hia_native/canonical_target_ci.py source-check --head "$RUNTIME_SHA"
+
+      - name: Execute ordinary cold qualification and complete registered native builds
+        id: prepare
+        run: |
+          python3 -I -B runtime/tests/hia_native/canonical_target_ci.py prepare \
+            --head "$RUNTIME_SHA" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-canonical-native" --invocation "$CANONICAL_INVOCATION"
+
+      - name: Retain the exact fresh prepared artifact
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-build-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-canonical-native/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Capture preparation failure bytes
+        if: ${{ always() && steps.prepare.outcome != 'success' }}
+        run: |
+          python3 -I -B runtime/scripts/hia_native_failure_evidence.py \
+            --source "$RUNNER_TEMP/hia-canonical-native" \
+            --output "$RUNNER_TEMP/canonical-prepare-diagnostics"
+
+      - name: Retain preparation failure evidence
+        if: ${{ always() && steps.prepare.outcome != 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-prepare-failure-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/canonical-prepare-diagnostics/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  native_directory:
+    needs: prepare
+    uses: ./.github/workflows/hia-runtime-canonical-group.yml
+    with:
+      phase: native
+      group: directory
+      runtime-sha: ${{ github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      prepared-sha256: ${{ needs.prepare.outputs.prepared-sha256 }}
+
+  native_workdir:
+    needs: prepare
+    uses: ./.github/workflows/hia-runtime-canonical-group.yml
+    with:
+      phase: native
+      group: workdir
+      runtime-sha: ${{ github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      prepared-sha256: ${{ needs.prepare.outputs.prepared-sha256 }}
+
+  native_configuration:
+    needs: prepare
+    uses: ./.github/workflows/hia-runtime-canonical-group.yml
+    with:
+      phase: native
+      group: configuration
+      runtime-sha: ${{ github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      prepared-sha256: ${{ needs.prepare.outputs.prepared-sha256 }}
+
+  native_public:
+    needs: prepare
+    uses: ./.github/workflows/hia-runtime-canonical-group.yml
+    with:
+      phase: native
+      group: public
+      runtime-sha: ${{ github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      prepared-sha256: ${{ needs.prepare.outputs.prepared-sha256 }}
+
+  original_directory:
+    needs: [prepare, native_directory]
+    uses: ./.github/workflows/hia-runtime-canonical-group.yml
+    with:
+      phase: original
+      group: directory
+      runtime-sha: ${{ github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      prepared-sha256: ${{ needs.prepare.outputs.prepared-sha256 }}
+      native-sha256: ${{ needs.native_directory.outputs.sha256 }}
+
+  original_workdir:
+    needs: [prepare, native_workdir]
+    uses: ./.github/workflows/hia-runtime-canonical-group.yml
+    with:
+      phase: original
+      group: workdir
+      runtime-sha: ${{ github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      prepared-sha256: ${{ needs.prepare.outputs.prepared-sha256 }}
+      native-sha256: ${{ needs.native_workdir.outputs.sha256 }}
+
+  original_configuration:
+    needs: [prepare, native_configuration]
+    uses: ./.github/workflows/hia-runtime-canonical-group.yml
+    with:
+      phase: original
+      group: configuration
+      runtime-sha: ${{ github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      prepared-sha256: ${{ needs.prepare.outputs.prepared-sha256 }}
+      native-sha256: ${{ needs.native_configuration.outputs.sha256 }}
+
+  original_public:
+    needs: [prepare, native_public]
+    uses: ./.github/workflows/hia-runtime-canonical-group.yml
+    with:
+      phase: original
+      group: public
+      runtime-sha: ${{ github.sha }}
+      invocation: ${{ github.run_id }}-${{ github.run_attempt }}
+      prepared-sha256: ${{ needs.prepare.outputs.prepared-sha256 }}
+      native-sha256: ${{ needs.native_public.outputs.sha256 }}
+
+  collect:
+    name: Require every independently admitted complete caller domain
+    needs: [original_directory, original_workdir, original_configuration, original_public]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            tests/oracles
+            .github
+
+      - name: Install pinned source reader dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
+      - name: Download each job's independent complete evidence admission
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: canonical-admission-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/canonical-admissions/
+
+      - name: Cross-check all four exact workflow-produced admissions
+        env:
+          RUNTIME_SHA: ${{ github.sha }}
+          CANONICAL_INVOCATION: ${{ github.run_id }}-${{ github.run_attempt }}
+          DIRECTORY_SHA: ${{ needs.original_directory.outputs.sha256 }}
+          DIRECTORY_ADMISSION: ${{ needs.original_directory.outputs.admission-sha256 }}
+          WORKDIR_SHA: ${{ needs.original_workdir.outputs.sha256 }}
+          WORKDIR_ADMISSION: ${{ needs.original_workdir.outputs.admission-sha256 }}
+          CONFIGURATION_SHA: ${{ needs.original_configuration.outputs.sha256 }}
+          CONFIGURATION_ADMISSION: ${{ needs.original_configuration.outputs.admission-sha256 }}
+          PUBLIC_SHA: ${{ needs.original_public.outputs.sha256 }}
+          PUBLIC_ADMISSION: ${{ needs.original_public.outputs.admission-sha256 }}
+        run: |
+          python3 -I -B runtime/tests/hia_native/canonical_target_ci.py collect \
+            --head "$RUNTIME_SHA" --invocation "$CANONICAL_INVOCATION" \
+            --admissions "$RUNNER_TEMP/canonical-admissions" \
+            --expected "directory=$DIRECTORY_SHA:$DIRECTORY_ADMISSION" \
+            --expected "workdir=$WORKDIR_SHA:$WORKDIR_ADMISSION" \
+            --expected "configuration=$CONFIGURATION_SHA:$CONFIGURATION_ADMISSION" \
+            --expected "public=$PUBLIC_SHA:$PUBLIC_ADMISSION" \
+            --result "$RUNNER_TEMP/canonical-final/COMPLETE.json"
+
+      - name: Retain the complete focused result and all group identities
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-complete-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/canonical-final/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

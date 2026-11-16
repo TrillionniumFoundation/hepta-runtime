@@ -24,10 +24,11 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import hia_native_directory_service_build as native
+import hia_native_canonical_target as canonical_target
 
 REFERENCE = 'tests/hia_native/directory_service_oracle'
 REFERENCE_MANIFEST = 'native/directory_reference_sources.json'
-REFERENCE_SHA256 = '2ce37e366bfba11e5b7a72f2c982a8b40a37d7c49cb0495bf21f2f1b3f6a5001'
+REFERENCE_SHA256 = '82573f093ba7dc33913a993cc9a6858e880e26cf705b2d79405e766de52c0570'
 TESTS = ('directory_service_support.py', 'test_directory_service.py', 'directory_service_kernel.py',
     'directory_service_faults.py', 'test_directory_service_transport.py', 'test_directory_service_build.py',
     'test_directory_service_evidence.py', 'test_directory_service_regex.py')
@@ -67,12 +68,18 @@ def record(path):
 def source_inventory(root=ROOT):
     _, _, _, material, _ = native.load_sources(root)
     source = dict(material)
+    for name, expected in canonical_target.source_pins(root).items():
+        data = native.file(root, name).read_bytes()
+        require(record(native.file(root, name)) == expected, 'current policy source input differs')
+        source[name] = data
     raw = native.file(root, REFERENCE_MANIFEST).read_bytes()
     require(sha(raw) == REFERENCE_SHA256, 'directory reference manifest differs')
     source[REFERENCE_MANIFEST] = raw
     reference = json.loads(raw)
     require(reference.get('schema') == 'hepta.directory.reference-source-manifest.v1'
-            and reference.get('original_body_changes') is False and len(reference['files']) == 25,
+            and reference.get('original_body_changes') is False and len(reference['files']) == 25
+            and reference.get('canonical_policy_target') == canonical_target.source_evidence(root)
+            and reference.get('other_historical_config_bytes_unchanged') is True,
             'directory reference source contract differs')
     for name, expected in reference['files'].items():
         full = REFERENCE + '/' + name; data = native.file(root, full).read_bytes()
@@ -92,6 +99,10 @@ def original_source(root, runtime):
     require(extraction.get('schema') == 'hepta.directory-service.original-source-extraction.v1'
             and len(extraction['original_inputs']) == 8 and len(extraction['slices']) == 11,
             'directory original extraction domain differs')
+    require(extraction.get('config_full_module_unchanged') is False
+            and extraction.get('other_historical_config_bytes_unchanged') is True
+            and extraction.get('canonical_policy_target') == canonical_target.source_evidence(root),
+            'directory current-target policy projection differs')
     original = {}
     for name, expected in extraction['original_inputs'].items():
         raw = native.file(runtime, name).read_bytes()
@@ -100,7 +111,10 @@ def original_source(root, runtime):
     for target, source in [('owner/mcp/runtime/config.rs', 'src/mcp/runtime/config.rs'),
             ('owner/mcp/runtime/effect_owner_fence.rs', 'src/mcp/runtime/effect_owner_fence.rs'),
             ('owner/mcp/request_ctx.rs', 'src/mcp/request_ctx.rs')]:
-        require((project / target).read_bytes() == original[source], 'directory complete original module differs')
+        if source == 'src/mcp/runtime/config.rs':
+            canonical_target.verify_compiled_config(original[source], (project / target).read_bytes(), root)
+        else:
+            require((project / target).read_bytes() == original[source], 'directory complete original module differs')
     spec = {
         'path_source_enum': ('src/mcp/fs/remote.rs', '#[derive(Debug, Clone)]\npub enum PathSource', '\nimpl PathSource', 'owner/mcp/fs/remote.rs'),
         'parse_path_source': ('src/mcp/fs/remote.rs', 'pub fn parse_path_source(', '\n/// Resolve a path string', 'owner/mcp/fs/remote.rs'),
@@ -132,7 +146,9 @@ def original_source(root, runtime):
         require(dependency['source'] == old['source'] and dependency['checksum'] == old['checksum'],
                 'directory original dependency pin differs')
     return dict(original_inputs=extraction['original_inputs'], exact_slices=extraction['slices'],
-        dependencies=100, complete_original_modules=3, copyright_only_additions=8,
+        dependencies=100, complete_original_modules=2, copyright_only_additions=8,
+        canonical_policy_target=canonical_target.source_evidence(root),
+        other_historical_config_bytes_unchanged=True,
         session_body_sha256=extraction['session_owner_sha256'])
 
 

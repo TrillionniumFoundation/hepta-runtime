@@ -568,7 +568,7 @@ def sources() -> dict:
         "runtime_mcp_filesystem_fixture.S", "runtime_mcp_filesystem_front_fixture.S",
         "runtime_mcp_filesystem_io_bridge.S", "runtime_mcp_filesystem_observer.S",
         "runtime_mcp_filesystem_view_bridge.S",
-        "hia_native_workdir_reference.py", "runtime_mcp_extra_engine.S", "runtime_mcp_canonical_bridge.S",
+        "hia_native_workdir_reference.py", "hia_native_canonical_target.py", "runtime_mcp_extra_engine.S", "runtime_mcp_canonical_bridge.S",
         "runtime_mcp_transport.S", "runtime_mcp_execution_bridge.S",
         "runtime_mcp_view_bridge.S", "runtime_mcp_workdir_io_bridge.S",
         "hia_native_view_cache_build.py", "hia_native_view_cache_qualification.py",

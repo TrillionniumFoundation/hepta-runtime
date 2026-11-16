@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 import tomllib
+import importlib.util
 
 ROOT = Path(__file__).resolve().parent
 SOURCE_FILES = (
@@ -49,6 +50,18 @@ def function(text, name):
     return block(text, matches[0].start())
 
 
+def target_source():
+    repo = ROOT.parents[2]
+    spec = importlib.util.spec_from_file_location('_workdir_current_canonical_source', repo / 'scripts/hia_native_canonical_target.py')
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    return module, repo
+
+
+def target_source_pins():
+    module, repo = target_source()
+    return module.source_pins(repo)
+
+
 def parts(runtime_root):
     runtime_root = Path(runtime_root)
     server = (runtime_root / "src/mcp/server.rs").read_text()
@@ -78,6 +91,8 @@ def parts(runtime_root):
                  "normalize_absolute", "canonical_policy_path", "path_under", "check_local_path",
                  "remote_path_allowed", "check_remote_path"):
         result[name] = function(config, name)
+    module, repo = target_source()
+    result["canonical_policy_path"] = module.selected_function(repo).decode()
     return result
 
 
@@ -120,6 +135,9 @@ def check_sources(runtime_root):
     for name, expected in manifest["files"].items():
         if pin((Path(runtime_root) / name).read_bytes()) != expected:
             raise AssertionError("original source differs: " + name)
+    module, repo = target_source()
+    if manifest.get("canonical_policy_target") != module.source_evidence(repo):
+        raise AssertionError("current-target canonical policy source differs")
     raw, extracted = source(runtime_root)
     if {name: pin(value.encode()) for name, value in extracted.items()} != manifest["extractions"]:
         raise AssertionError("original extraction differs")
@@ -136,6 +154,7 @@ def materialize(runtime_root, destination):
         shutil.copyfile(ROOT / name, destination / name)
     (destination / "src/main.rs").write_bytes(raw)
     return {"source_commit": manifest["commit"], "source": pin(raw),
+            "canonical_policy_target": manifest["canonical_policy_target"],
             "original_file_count": len(SOURCE_FILES), "original_body_count": len(manifest["extractions"]),
             "registry_dependencies": count, "original_bodies_unchanged": True,
             "actual_sdk_parameters_extractor": True, "actual_sdk_method_adapter": True,

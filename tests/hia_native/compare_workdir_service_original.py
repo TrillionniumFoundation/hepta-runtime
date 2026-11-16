@@ -15,7 +15,7 @@ import tomllib
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 REMOVED_ENV = ("RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "RUSTC_BOOTSTRAP", "RUSTFLAGS",
                "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_TARGET", "RUST_TARGET_PATH")
-IDENTITY_SHA256 = "2404cf048d5dddf8c0b43635c91eac4abe6968b299477398887d783fff45c4b5"
+IDENTITY_SHA256 = 'b7e9f58bf39d07fb7e526bf7e88d54bc803889b40db6fe6383d759752761b796'
 
 
 def require(condition, reason):
@@ -42,6 +42,8 @@ def main():
     root = args.repo.resolve(strict=True)
     out = args.output.resolve()
     out.mkdir(mode=0o700, parents=True, exist_ok=False)
+    sys.path.insert(0, str(root / "scripts"))
+    import hia_native_canonical_target as canonical_target
     reference = root / "tests/hia_native/workdir_service_oracle"
     identity_raw = (reference / "source-identity.json").read_bytes()
     require(SHA(identity_raw) == IDENTITY_SHA256, "workdir original source identity differs")
@@ -49,7 +51,9 @@ def main():
     files = identity["files"]
     require(identity["schema"] == "hepta.workdir.original-project.v1"
             and identity["locked_registry_dependencies"] == 100
-            and identity["remote_effects_are_unreachable_fences"] is True, "original project scope differs")
+            and identity["remote_effects_are_unreachable_fences"] is True
+            and identity.get("canonical_policy_target") == canonical_target.source_evidence(root)
+            and identity.get("other_historical_config_bytes_unchanged") is True, "original project scope differs")
     project = out / "project"
     project.mkdir(mode=0o700)
     for name, pin in files.items():
@@ -63,6 +67,13 @@ def main():
     for name, pin in extraction["original_inputs"].items():
         raw = regular(root, name).read_bytes()
         require((len(raw), SHA(raw)) == (pin["bytes"], pin["sha256"]), "original runtime source changed: " + name)
+    canonical_policy_reference = canonical_target.verify_compiled_config(
+        regular(root, "src/mcp/runtime/config.rs").read_bytes(),
+        regular(project, "owner/mcp/runtime/config.rs").read_bytes(), root)
+    require(extraction.get("canonical_policy_target") == canonical_policy_reference["current_target_policy"]
+            and extraction.get("full_config_module_unchanged") is False
+            and extraction.get("other_historical_config_bytes_unchanged") is True,
+            "workdir current-target policy projection differs")
     production = {(p["name"], p["version"]): p for p in tomllib.loads((project / "original-runtime.lock").read_text())["package"]}
     dependencies = [p for p in tomllib.loads((project / "Cargo.lock").read_text())["package"] if "source" in p]
     require(len(dependencies) == 100, "original dependency count differs")
@@ -102,6 +113,7 @@ def main():
     source_names = ("tests/hia_native/compare_workdir_service_original.py", "tests/hia_native/probe_workdir_original.py",
         "tests/hia_native/compare_workdir_original.py", "tests/hia_native/test_workdir_service_regex.py",
         "tests/hia_native/test_workdir_params.py", "scripts/hia_native_loader.py")
+    source_names += tuple(canonical_target.source_pins(root))
     source_pins = {name: SHA(regular(root, name).read_bytes()) for name in source_names}
     manifest_path = args.native_manifest.resolve(strict=True)
     manifest = json.loads(manifest_path.read_bytes())
@@ -112,6 +124,7 @@ def main():
     started = time.monotonic()
     report = dict(schema="hepta.workdir.fresh-original-comparison.v1", status="FAIL", checks=[],
         original_source_identity_sha256=IDENTITY_SHA256, original_project_files=files,
+        canonical_policy_reference=canonical_policy_reference,
         source_sha256=source_pins, native_manifest_sha256=SHA(manifest_path.read_bytes()),
         native_executable_sha256=native_sha, locked_registry_dependencies=100, sdk_files=sdk_files,
         sdk_crate_sha256=SHA(crate), sdk_installed_files_verified=175,
