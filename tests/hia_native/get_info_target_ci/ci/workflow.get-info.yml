@@ -1,0 +1,94 @@
+name: Fixed current get_info HIA from source
+on:
+  workflow_dispatch:
+    inputs:
+      source_path:
+        description: Repository path of the frozen fixed get_info recipe
+        required: true
+        default: tests/hia_native/get_info_target_ci
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  fixed-get-info:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      LC_ALL: C.UTF-8
+      GET_INFO_SOURCE: ${{ github.workspace }}/runtime/${{ inputs.source_path || 'tests/hia_native/get_info_target_ci' }}
+    steps:
+      - name: Set runtime paths from the runner environment
+        run: |
+          printf '%s\n' \
+            "GET_INFO_ZIP=$RUNNER_TEMP/get-info-input/reference.zip" \
+            "GET_INFO_OUTPUT=$RUNNER_TEMP/get-info-run" \
+            "GET_INFO_REVIEW=$RUNNER_TEMP/get-info-readback.json" \
+            "GET_INFO_ARCHIVE=$RUNNER_TEMP/get-info-evidence" \
+            >> "$GITHUB_ENV"
+
+      - name: Checkout the exact candidate source revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout the exact Hepta compiler source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Check the complete recipe and compiler identities
+        run: |
+          python3 -I -B "$GET_INFO_SOURCE/scripts/run_ci.py" \
+            --source "$GET_INFO_SOURCE" --check-only
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+
+      - name: Fetch and hash the immutable successful original reference
+        env:
+          GET_INFO_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -B "$GET_INFO_SOURCE/scripts/download_reference.py" --output "$GET_INFO_ZIP"
+
+      - name: Install the native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+
+      - name: Generate from primary source, compile fresh HIA, capture and compare
+        run: |
+          python3 -I -B "$GET_INFO_SOURCE/scripts/run_ci.py" \
+            --source "$GET_INFO_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --reference-zip "$GET_INFO_ZIP" --output "$GET_INFO_OUTPUT"
+
+      - name: Independently read all retained original and native bytes
+        run: |
+          python3 -I -B "$GET_INFO_SOURCE/scripts/verify.py" \
+            --source "$GET_INFO_SOURCE" --run "$GET_INFO_OUTPUT" \
+            --reference-zip "$GET_INFO_ZIP" --require-pass > "$GET_INFO_REVIEW"
+
+      - name: Preserve complete successful or failed evidence
+        if: always()
+        run: |
+          python3 -I -B "$GET_INFO_SOURCE/scripts/export_artifact.py" \
+            --source "$GET_INFO_SOURCE" --run "$GET_INFO_OUTPUT" \
+            --reference-zip "$GET_INFO_ZIP" --readonly-report "$GET_INFO_REVIEW" \
+            --output "$GET_INFO_ARCHIVE"
+
+      - name: Upload complete source and evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: get-info-current-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/get-info-evidence.tar.gz
+            ${{ runner.temp }}/get-info-evidence.archive.json
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,31 @@
+def get_info(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)!=32:
+        return INVALID
+    if read64(s,0)!=REQUEST:
+        return INVALID
+    if read64(s,8)!=1:
+        return INVALID
+    if read64(s,16)!=0:
+        return INVALID
+    if read64(s,24)!=0:
+        return INVALID
+    if length(o)<32:
+        return CAPACITY
+    if length(o)<64+WIRE_BYTES:
+        put(o,0,GROW_RESPONSE)
+        put(o,8,2)
+        put(o,16,64+WIRE_BYTES)
+        put(o,24,0)
+        return GROW
+    at=emit_info(o,64)
+    if at!=64+WIRE_BYTES:
+        return RESOURCE
+    put(o,0,RESPONSE)
+    put(o,8,0)
+    put(o,16,1)
+    put(o,24,0)
+    put(o,32,64)
+    put(o,40,WIRE_BYTES)
+    put(o,48,0)
+    put(o,56,0)
+    return 64
