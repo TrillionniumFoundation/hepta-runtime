@@ -1,0 +1,110 @@
+name: Public91 serial SessionOwner and fresh current originals
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-public-authority-qualification-6780-v1-20261116]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  public-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      AUTH_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/public_authority_ci
+      AUTH_RUNNER: ${{ github.workspace }}/runtime/tests/hia_native/public_authority_ci_runner
+      EIGHT_SOURCE: ${{ github.workspace }}/retained-sdk/tests/hia_native/sdk_target_ci
+      RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Set runtime paths from the runner environment
+        run: |
+          printf '%s\n' "AUTH_OUTPUT=$RUNNER_TEMP/public-authority-output" "AUTH_ARCHIVE=$RUNNER_TEMP/public-authority-evidence" "CATALOG_INPUT=$RUNNER_TEMP/public-authority-catalog-input" >> "$GITHUB_ENV"
+      - name: Checkout exact candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: |
+            tests/hia_native/public_authority_ci
+            tests/hia_native/public_authority_ci_runner
+          persist-credentials: false
+      - name: Checkout immutable retained SDK source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: retained-sdk
+          ref: b4054165e9b7be63e9309c8223d04131ec4fe31e
+          sparse-checkout: tests/hia_native/sdk_target_ci
+          persist-credentials: false
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Checkout exact target policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /Cargo.lock
+            /src/mcp/server.rs
+            /src/mcp/fs/workdir.rs
+            /src/mcp/runtime/caller_scope.rs
+            /src/mcp/runtime/operation_crypto.rs
+          persist-credentials: false
+      - name: Verify frozen sources and exact identities
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
+          python3 -I -B "$AUTH_RUNNER/run_ci.py" --source "$AUTH_SOURCE" --check-only
+          test "$(git -C "$GITHUB_WORKSPACE/retained-sdk" rev-parse HEAD)" = b4054165e9b7be63e9309c8223d04131ec4fe31e
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.toml" "$AUTH_SOURCE/transport-reference/reference/target/Cargo.toml"
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.lock" "$AUTH_SOURCE/transport-reference/reference/target/Cargo.lock"
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.lock" "$AUTH_SOURCE/owner-reference/tests/hia_native/caller_owner_export/reference/Cargo.lock"
+          for name in src/mcp/server.rs src/mcp/fs/workdir.rs src/mcp/runtime/caller_scope.rs src/mcp/runtime/operation_crypto.rs; do
+            cmp "$GITHUB_WORKSPACE/original-target/$name" "$AUTH_SOURCE/target-policy/$name"
+          done
+      - name: Recover exact qualified original get_info observation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$CATALOG_INPUT"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14194828118/zip > "$CATALOG_INPUT/qualified-catalog.zip"
+          python3 -I -B "$AUTH_RUNNER/extract_catalog_reference.py" --archive "$CATALOG_INPUT/qualified-catalog.zip" --output "$CATALOG_INPUT/selected"
+      - name: Install native tools and exact Rust toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+          printf 'AUTH_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Fresh default graph and complete original qualification
+        run: |
+          python3 -I -B "$AUTH_RUNNER/run_ci.py" --source "$AUTH_SOURCE" --sdk-source "$EIGHT_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$AUTH_RUST_BIN" --get-info-reference "$CATALOG_INPUT/selected/current-get-info-original.stdout" --output "$AUTH_OUTPUT"
+      - name: Require complete read-only qualification
+        run: |
+          python3 -I -B "$AUTH_RUNNER/verify_complete.py" --source "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --require-fresh --require-recipe-pass > "$RUNNER_TEMP/public-authority-independent-reader.json"
+      - name: Preserve complete successful or failed evidence
+        if: always()
+        run: |
+          python3 -I -B "$AUTH_RUNNER/export_artifact.py" --source "$AUTH_SOURCE" --run "$AUTH_OUTPUT" --catalog-input "$CATALOG_INPUT" --output "$AUTH_ARCHIVE"
+      - name: Upload complete source and execution evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-authority-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/public-authority-evidence.tar.gz
+            ${{ runner.temp }}/public-authority-evidence.archive.json
+            ${{ runner.temp }}/public-authority-independent-reader.json
+          if-no-files-found: error
+          retention-days: 14
