@@ -1,0 +1,207 @@
+{
+  "ci/authority/capture_private_binding.py": {
+    "original_git_source": "f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a",
+    "original_path": "authority/drivers/capture_private_binding.py",
+    "changes": [
+      {
+        "before": "md['physical_images']==102",
+        "after": "md['physical_images']==104",
+        "count": 1
+      }
+    ],
+    "explicit_original_helper_search_path": true,
+    "ordinary_case_data_changed": false
+  },
+  "ci/authority/verify_private_binding.py": {
+    "original_git_source": "f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a",
+    "original_path": "authority/drivers/verify_private_binding.py",
+    "changes": [
+      {
+        "before": "md['physical_images']==len(md['members'])==102",
+        "after": "md['physical_images']==104 and len(md['members'])==103",
+        "count": 1
+      },
+      {
+        "before": "len(names)==len(positions)==102 and len(set(names))==102",
+        "after": "len(names)==len(positions)==104 and len(set(names))==104",
+        "count": 1
+      },
+      {
+        "before": "    for name,at in zip(names,positions,strict=True):\n        row=members[name];module=",
+        "after": "    for name,at in zip(names,positions,strict=True):\n        if name==\"bellman_port\":\n            capability=md[\"packed_capabilities\"][\"57\"]\n            path=module_path(str(Path(capability[\"build_root\"])/\"bellman-port-packed.elf\"),module_map)\n            image=path.read_bytes()\n            need(file_pin(path)=={\"bytes\":capability[\"elf_bytes\"],\"sha256\":capability[\"elf_sha256\"]},\n                 \"complete packed capability bytes\")\n            need(doc(source/\"native/bellman_port_component.json\")[\"executable\"]==file_pin(path),\n                 \"immutable packed capability source declaration\")\n            need(at%16==0 and elf[at:at+len(image)]==image,\"every loaded packed capability byte\")\n            addresses[name]=4194304+at\n            continue\n        row=members[name];module=",
+        "count": 1
+      },
+      {
+        "before": "engine[4160:8192]==bytes(4032) and engine[11840:]==bytes(4544)",
+        "after": "engine[4288:8192]==bytes(3904) and engine[11968:]==bytes(4416)",
+        "count": 1
+      },
+      {
+        "before": "'57th row and table boundaries remain disjoint'",
+        "after": "'59-row continuation and descriptor boundaries remain disjoint'",
+        "count": 1
+      },
+      {
+        "before": "for slot in range(57):",
+        "after": "for slot in range(59):",
+        "count": 1
+      },
+      {
+        "before": "name=md['extra_table'][slot]",
+        "after": "name='bellman_port' if slot==57 else md['extra_table'][slot]",
+        "count": 1
+      },
+      {
+        "before": "need(slot<57,'trace uses only fixed public table')",
+        "after": "need(slot<59,'trace uses only fixed public table')",
+        "count": 1
+      }
+    ],
+    "explicit_original_helper_search_path": true,
+    "ordinary_case_data_changed": false
+  },
+  "ci/authority/qualify_public.py": {
+    "original_git_source": "f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a",
+    "original_path": "authority/drivers/qualify_public.py",
+    "changes": [
+      {
+        "before": "'hepta.runtime.authority-batch-union-build.v1'",
+        "after": "'hepta.runtime.public-task-batch-build.v1'",
+        "count": 1
+      },
+      {
+        "before": "md['physical_images'] == 102",
+        "after": "md['physical_images'] == 104",
+        "count": 1
+      }
+    ],
+    "explicit_original_helper_search_path": true,
+    "ordinary_case_data_changed": false
+  },
+  "ci/authority/capture_transport_native.py": {
+    "original_git_source": "f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a",
+    "original_path": "authority/drivers/capture_transport_native.py",
+    "changes": [
+      {
+        "before": "built[\"physical_images\"]==102",
+        "after": "built[\"physical_images\"]==104",
+        "count": 1
+      },
+      {
+        "before": "physical_images=102",
+        "after": "physical_images=104",
+        "count": 1
+      }
+    ],
+    "explicit_original_helper_search_path": true,
+    "ordinary_case_data_changed": false
+  },
+  "ci/authority/verify_handshake.py": {
+    "original_git_source": "f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a",
+    "original_path": "authority/drivers/verify_handshake.py",
+    "changes": [
+      {
+        "before": "built[\"physical_images\"]==102",
+        "after": "built[\"physical_images\"]==104",
+        "count": 1
+      },
+      {
+        "before": "build/\"build/public-authority-batch\"",
+        "after": "build/\"build/public-task-batch\"",
+        "count": 1
+      },
+      {
+        "before": "physical_images=102",
+        "after": "physical_images=104",
+        "count": 1
+      }
+    ],
+    "explicit_original_helper_search_path": true,
+    "ordinary_case_data_changed": false
+  },
+  "ci/authority/verify_public.py": {
+    "original_git_source": "f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a",
+    "original_path": "authority/drivers/verify_public.py",
+    "changes": [
+      {
+        "before": "built['physical_images'] == 102",
+        "after": "built['physical_images'] == 104",
+        "count": 1
+      },
+      {
+        "before": "build / 'build/public-authority-batch'",
+        "after": "build / 'build/public-task-batch'",
+        "count": 1
+      },
+      {
+        "before": "'hepta.runtime.authority-batch-union-build.v1'",
+        "after": "'hepta.runtime.public-task-batch-build.v1'",
+        "count": 1
+      },
+      {
+        "before": "md['physical_images'] == len(md['members']) == 102",
+        "after": "md['physical_images'] == 104 and len(md['members']) == 103",
+        "count": 1
+      },
+      {
+        "before": "len(md['extra_table']) == 57",
+        "after": "len(md['extra_table']) == 59",
+        "count": 1
+      },
+      {
+        "before": "['target_shutdown', 'current_get_info', 'target_connection', None]",
+        "after": "['target_shutdown', 'current_get_info', 'target_connection', None, None, 'request_tasks']",
+        "count": 1
+      },
+      {
+        "before": "len(positions) == len(order) == 102 and len(set(order)) == 102",
+        "after": "len(positions) == len(order) == 104 and len(set(order)) == 104",
+        "count": 1
+      },
+      {
+        "before": "    fresh = sum((row['fresh_compile'] is True for row in md['members']))",
+        "after": "    capability = md[\"packed_capabilities\"][\"57\"]\n    capability_path = module_path(str(Path(capability[\"build_root\"])/\"bellman-port-packed.elf\"))\n    capability_raw = hashed(capability_path,capability[\"elf_sha256\"],capability[\"elf_bytes\"])\n    assert read_json(source/\"native/bellman_port_component.json\")[\"executable\"] == {\n        \"bytes\":len(capability_raw),\"sha256\":SHA(capability_raw)}\n    at = positions[order.index(\"bellman_port\")]\n    assert at%16==0 and elf[at:at+len(capability_raw)]==capability_raw\n    by_name[\"bellman_port\"] = {\"image_bytes\":len(capability_raw),\"image_sha256\":SHA(capability_raw)}\n    fresh = sum((row['fresh_compile'] is True for row in md['members']))",
+        "count": 1
+      },
+      {
+        "before": "== 102 - fresh",
+        "after": "== 103 - fresh",
+        "count": 1
+      },
+      {
+        "before": "(len(linked), 102, len(md['pack']['fixed_patches']), 0)",
+        "after": "(len(linked), 104, len(md['pack']['fixed_patches']), 0)",
+        "count": 1
+      },
+      {
+        "before": "struct.unpack_from('<102Q',",
+        "after": "struct.unpack_from('<104Q',",
+        "count": 1
+      },
+      {
+        "before": "40 + len(linked) + 102 * 8",
+        "after": "40 + len(linked) + 104 * 8",
+        "count": 1
+      },
+      {
+        "before": "'physical_images': 102",
+        "after": "'physical_images': 104",
+        "count": 1
+      },
+      {
+        "before": "'checked_reused_members': 102 - fresh",
+        "after": "'checked_reused_members': 103 - fresh",
+        "count": 1
+      }
+    ],
+    "explicit_original_helper_search_path": false,
+    "ordinary_case_data_changed": false
+  },
+  "ci/authority/verify_private_readonly.py": {
+    "original_git_source": "f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a",
+    "original_path": "authority/drivers/verify_private_readonly.py",
+    "changes": [],
+    "explicit_original_helper_search_path": true,
+    "ordinary_case_data_changed": false
+  }
+}
