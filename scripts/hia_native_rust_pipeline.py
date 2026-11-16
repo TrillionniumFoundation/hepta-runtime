@@ -27,6 +27,7 @@ import compare_hia_runtime_rust as r
 import hia_native_request_context_reference as context_reference
 import hia_native_result_publication_reference as publication_reference
 import hia_native_request_scope_reference as scope_reference
+import hia_native_runtime_mcp_fixtures as public_fixtures
 
 GROUPS = {
     "storage": tuple(r.storage_pipeline.KEYS),
@@ -188,6 +189,30 @@ def fail(output: Path, report: dict, error: BaseException, phase: str) -> None:
     q.save_report(output / "result.json", report)
 
 
+def view_original_retirement(output: Path, report: dict, *, create: bool = False) -> dict:
+    """Archive the shared View trees after every original consumer has finished.
+
+    The caller admits all original process bytes first. These three fixed test
+    roots are separate from the retained reference sources, binaries, streams,
+    and snapshots. Their complete bytes, hardlinks, modes and attributes enter
+    the existing descriptor-bound archive before any live target is retired.
+    """
+    comparisons = report["original_rust_comparisons"]
+    names = ("view_read", "view_params", "view_call", "runtime_mcp")
+    fields = ("view_search_original_comparison", "view_search_public_original_comparison",
+              "view_regex_search_original_comparison", "view_regex_search_public_original_comparison")
+    if any(type(comparisons.get(name)) is not dict or comparisons[name].get("status") != "PASS"
+           for name in names) or any(type(report.get(name)) is not dict
+                                     or report[name].get("status") != "PASS" for name in fields):
+        raise ValueError("shared View fixture retirement requires every complete original consumer")
+    if not comparisons["view_read"] == comparisons["view_params"] == comparisons["view_call"]:
+        raise ValueError("shared View fixture retirement owners disagree")
+    evidence = {name: comparisons[name] for name in names}
+    evidence.update((name, report[name]) for name in fields)
+    origin = comparisons["runtime_mcp"]["pipeline"]["native_fixture_retirement"]["execution_output_root"]
+    return public_fixtures.retired(output, "view-original", evidence, origin, create=create)
+
+
 def shard(output: Path, hepta: Path, expected: str, invocation: str, group: str,
           destination: Path, rustc_name: str) -> dict:
     seal, baseline = admit_native(output, hepta, expected, invocation, exact=True)
@@ -206,6 +231,8 @@ def shard(output: Path, hepta: Path, expected: str, invocation: str, group: str,
             report["service_original_fixture_retirement"] = r.service_pipeline.original_fixture_transport(
                 q.ROOT, output, report, rustc, q.completed_test_summary, create=True)
         r.check_input_pins(output, report)
+        if group == "bytes":
+            report["view_original_fixture_retirement"] = view_original_retirement(output, report, create=True)
         admit_native(output, hepta, expected, invocation, exact=False)
         if q.sha(rustc) != report["rust_compiler"]["invocation_executable_sha256"]:
             raise ValueError("Rust compiler changed during its actual original group")
@@ -490,6 +517,8 @@ def admit_shard(data: Path, seal_path: Path, report_path: Path, baseline: dict, 
                  "original_shard_elapsed_seconds", "original_shard_finished_at"}
     if group == "services":
         additions.add("service_original_fixture_retirement")
+    if group == "bytes":
+        additions.add("view_original_fixture_retirement")
     additions.update(reference_fields(group))
     keys = groups()[group]
     if (set(part) != set(baseline) | additions
@@ -515,6 +544,8 @@ def admit_shard(data: Path, seal_path: Path, report_path: Path, baseline: dict, 
     if set(native_files) & set(seal["files"]):
         raise ValueError("original shard would replace native evidence")
     retained_reference_fields(data, part, group, {**native_files, **seal["files"]})
+    if group == "bytes" and part["view_original_fixture_retirement"] != view_original_retirement(data, part):
+        raise ValueError("shared View original fixture archive differs from the complete shard")
     compiler = part["rust_compiler"]
     if (set(compiler) != {"invocation_path", "resolved_path", "invocation_executable_sha256", "version"}
             or type(compiler["invocation_path"]) is not str or not Path(compiler["invocation_path"]).is_absolute()
@@ -558,6 +589,7 @@ def verify_collected_receipts(output: Path, report: dict) -> None:
     native_seal, baseline = admit_native(output, Path(report["compiler_checkout"]), pipeline["native_sha256"],
                                          pipeline["invocation"], exact=False)
     rows, comparisons, mapping, shared, parallel, compilers, references, service = [], {}, {}, {}, {}, [], {}, None
+    view_retirement = None
     for group in groups():
         folder = output / "original-qualification-shards" / group
         _, part = admit_shard(output, p.owned(folder, SHARD_SEAL), p.owned(folder, SHARD_REPORT),
@@ -571,6 +603,8 @@ def verify_collected_receipts(output: Path, report: dict) -> None:
         compilers.append(part["rust_compiler"])
         if group == "services":
             service = part["service_original_fixture_retirement"]
+        if group == "bytes":
+            view_retirement = part["view_original_fixture_retirement"]
         references.update((field, part[field]) for field in reference_fields(group))
     prefix = baseline["checks"] + rows
     tail = report.get("checks", [])[len(prefix):]
@@ -582,6 +616,7 @@ def verify_collected_receipts(output: Path, report: dict) -> None:
             or any(item != compilers[0] for item in compilers)
             or report.get("rust_compiler") != compilers[0]
             or report.get("service_original_fixture_retirement") != service
+            or report.get("view_original_fixture_retirement") != view_retirement
             or any(q.json_bytes(report.get(field)) != q.json_bytes(value) for field, value in references.items())):
         raise ValueError("aggregate differs from all actual original shard completions")
     if report.get("status") == "PASS" and len(tail) != len(CONTROLS):
@@ -646,6 +681,8 @@ def collect(output: Path, hepta: Path, native_sha: str, invocation: str,
             compilers.append(part["rust_compiler"])
             if group == "services":
                 report["service_original_fixture_retirement"] = part["service_original_fixture_retirement"]
+            if group == "bytes":
+                report["view_original_fixture_retirement"] = part["view_original_fixture_retirement"]
             for field in reference_fields(group):
                 report[field] = copy.deepcopy(part[field])
         if any(item != compilers[0] for item in compilers):

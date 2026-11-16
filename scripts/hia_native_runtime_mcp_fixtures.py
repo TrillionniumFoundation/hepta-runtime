@@ -24,9 +24,12 @@ from hia_native_runtime_mcp_evidence import compact, decode, exact, require, sha
 MAGIC = b"HMPFX001"
 NATIVE = ("runtime-mcp/files",)
 ORIGINAL = ("runtime-mcp-original/over64-files", "workdir-original/fixtures")
+VIEW_ORIGINAL = ("view-call-original/fixtures", "view-search-original/fixtures",
+                 "view-regex-search-original/fixtures")
 PROFILES = {
     "native": (NATIVE, "runtime-mcp/retired-fixtures"),
     "original": (ORIGINAL, "runtime-mcp-original/retired-fixtures"),
+    "view-original": (VIEW_ORIGINAL, "view-call-original/retired-shared-fixtures"),
 }
 RESTORE = "runtime-mcp-original-fixture-restore.json"
 HEX = re.compile(r"(?:[0-9a-f]{2})*\Z")

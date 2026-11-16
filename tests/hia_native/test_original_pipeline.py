@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -191,6 +192,14 @@ class OriginalPipelineTests(unittest.TestCase):
                             "schema": "hepta.runtime." + slug + "-original-comparison.v1", "status": "PASS",
                             "actual_python_process_fixture_only": True, "original_output": folder,
                             "required_original_checks": list(checks), "artifact_sha256": pins}
+                    for relative in p.public_fixtures.VIEW_ORIGINAL:
+                        tree = output / relative
+                        tree.mkdir(parents=True)
+                        payload = tree / "complete.bin"
+                        payload.write_bytes(b"complete original reporting fixture\0\xff")
+                        payload.chmod(0o640)
+                        os.link(payload, tree / "same-inode.bin")
+                        (tree / "dangling").symlink_to("missing")
                 if key == "runtime_mcp":
                     for stem in ("view_search", "view_regex_search"):
                         report[stem + "_public_original_comparison"] = {
@@ -198,6 +207,8 @@ class OriginalPipelineTests(unittest.TestCase):
                             "status": "PASS", "actual_python_process_fixture_only": True,
                             "artifact_sha256": copy.deepcopy(report[stem + "_original_comparison"]["artifact_sha256"])}
                     result["span_raw_value"] = cls.span_fixture(output, report, rustc)
+                    result["pipeline"] = {"native_fixture_retirement": {
+                        "execution_output_root": str(output)}}
                 return result
             return run
 
@@ -373,6 +384,42 @@ class OriginalPipelineTests(unittest.TestCase):
             self.assertFalse(staged.exists(), name)
             self.assertEqual(native.file_identity(self.output / name), pin, name)
             self.assertEqual((self.output / name).stat().st_nlink, 1, name)
+
+    def test_shared_view_original_archive_survives_actual_shard_transport(self):
+        part = native.read_json(self.shards / "bytes" / p.SHARD_REPORT)
+        expected = part["view_original_fixture_retirement"]
+        self.assertEqual(expected["profile"], "view-original")
+        self.assertEqual(expected["fixture_directories"], list(p.public_fixtures.VIEW_ORIGINAL))
+        self.assertEqual((expected["files"], expected["symlinks"], expected["hardlink_groups"]), (6, 3, 3))
+        self.assertEqual(expected["semantic_invocations_added"], 0)
+        self.collect()
+        report = native.read_json(self.output / "result.json")
+        self.assertEqual(report["view_original_fixture_retirement"], expected)
+        self.assertEqual(p.view_original_retirement(self.output, report), expected)
+        for relative in p.public_fixtures.VIEW_ORIGINAL:
+            self.assertFalse((self.output / relative).exists())
+        self.assertTrue((self.output / "view-search-original/original.stdout").is_file())
+        self.assertTrue((self.output / "view-regex-search-original/input.bin").is_file())
+
+    def test_original_view_archive_cannot_be_omitted_or_recounted_in_resigned_report(self):
+        for mutation in (lambda part: part.pop("view_original_fixture_retirement"),
+                         lambda part: part["view_original_fixture_retirement"].update(files=0)):
+            self.setUp()
+            self.change_report("bytes", mutation, update_workflow=True)
+            with self.assertRaisesRegex(ValueError, "original shard is incomplete|fixture archive differs"):
+                self.collect()
+
+    def test_shared_view_archive_rejects_changed_binding_and_reappearing_targets(self):
+        self.collect()
+        report = native.read_json(self.output / "result.json")
+        changed = copy.deepcopy(report)
+        changed["original_rust_comparisons"]["runtime_mcp"]["extra"] = "resigned result"
+        with self.assertRaisesRegex(ValueError, "retirement binding differs"):
+            p.view_original_retirement(self.output, changed)
+        target = self.output / p.public_fixtures.VIEW_ORIGINAL[0]
+        target.mkdir()
+        with self.assertRaisesRegex(ValueError, "reappeared"):
+            p.view_original_retirement(self.output, report)
 
     def test_workflow_keeps_independent_hash_outputs_and_distinct_wall_budgets(self):
         workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
