@@ -15,6 +15,7 @@ def audit_lifetime(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
             put(o,80,read64(s,32))
             put(o,120,read64(s,40))
             if operation==8:
+                put(o,16,0)
                 return issue_sync(o,FINAL_UNLOCK,3)
             return publish(s,o,w)
         if fresh(o)==0:

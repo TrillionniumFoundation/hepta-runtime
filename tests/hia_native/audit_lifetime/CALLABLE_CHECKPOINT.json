@@ -2,7 +2,7 @@
   "compiler": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
   "files": {
     "README.md": "c97600caca245d936cf57e91ad098c9300aa3bb4",
-    "authoring/audit_lifetime.pseudo": "92dab2e44935635b20e1435dac72cd6ee589e24a",
+    "authoring/audit_lifetime.pseudo": "1d2fd2aa4e25b624e104494b85e631bb26cc566f",
     "authoring/audit_lifetime_callable.S.in": "a0121c8aa59250d2ea7dc07d85c793e4fe649848",
     "authoring/audit_refs.S": "af8856b2ddc72d56fe0c6ba2fb8842f00a939177",
     "authoring/author_lifetime.py": "a9c12d62cab441e55f20d51a639af20cd7ac756c",
@@ -64,8 +64,19 @@
     "run_id": 43978833741
   },
   "native_mechanical_pump_present": true,
-  "parent": "8c320af69730afd8f7244b701e8b6f10145a3d48",
+  "parent": "449ac35780faef93eb75af42d1f37160aa551ddb",
   "preserved_authoring_failure_blob": "7ce92dfc6be3db5c38861f8f43a8efdfd753f98a",
+  "prior_lifecycle_failure": {
+    "conclusion": "failure",
+    "expected_result": 0,
+    "head": "449ac35780faef93eb75af42d1f37160aa551ddb",
+    "job_id": 133718877441,
+    "observed_actual_custody": 0,
+    "observed_final_phase": 91,
+    "observed_result": 2,
+    "run_id": 43987367236,
+    "stage": "observer-disabled cohort guard release"
+  },
   "prior_qualification_failure": {
     "compiler_error": 54,
     "conclusion": "failure",
@@ -86,8 +97,8 @@
   "public_handler_qualified": false,
   "qualification_completed": false,
   "rust_build_or_execution": false,
-  "schema": "hepta.audit-lifetime.callable-source-checkpoint.v3",
-  "source_change": "Emit the same ordered fixed instruction bytes through eight-byte HIA helper calls, keeping the existing compiler instruction limit, ABI, adapter bytes, payload loops and all frozen runtime scenarios.",
+  "schema": "hepta.audit-lifetime.callable-source-checkpoint.v4",
+  "source_change": "Clear the held-cohort result before issuing the actual final unlock. The released guard then returns completed result zero; lock, reference, map and panic behavior are unchanged.",
   "source_only": true,
   "target": "d3d75c30719db966b004756f610007a7c723729e",
   "whole_runtime_replaced": false
