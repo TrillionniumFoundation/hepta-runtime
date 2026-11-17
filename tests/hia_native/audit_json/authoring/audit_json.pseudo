@@ -1,0 +1,371 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<24 or length(s)>=CAPACITY:
+        return INVALID
+    if read64(s,0)!=REQUEST or read64(s,16)!=length(s)-24:
+        return INVALID
+    op=read64(s,8)
+    if op<1 or op>5:
+        return INVALID
+    if (op==1 or op==2 or op==5) and length(s)>2072:
+        return INVALID
+    if length(w)<8192:
+        return CAPACITY
+    fill_range(w,0,512,0)
+    if op==1 or op==2 or op==5:
+        kind=1
+        if op==2:
+            kind=2
+        return decode_root(s,o,w,kind,op==5)
+    kind=1
+    if op==4:
+        kind=2
+    if projection_valid(s,kind)==0:
+        return INVALID
+    count=render(s,o,w,kind,0)
+    if count>=CAPACITY or count>length(o):
+        return CAPACITY
+    return render(s,o,w,kind,1)
+
+def decode_root(s:readbuf,o:mutbuf,w:mutbuf,kind:u64,borrowed:bool) -> u32:
+    at=whitespace(s,24)
+    if at>=length(s):
+        return INVALID
+    if byte(s,at)==123:
+        at=parse_map(s,w,kind,at+1,borrowed)
+    else:
+        if byte(s,at)!=91:
+            return INVALID
+        at=parse_seq(s,w,kind,at+1,borrowed)
+    if at==INVALID or whitespace(s,at)!=length(s):
+        return INVALID
+    count=128
+    if kind==1:
+        count=count+get(w,136)+get(w,152)+get(w,168)
+    if count>length(o):
+        return CAPACITY
+    fill_range(o,0,128,0)
+    put(o,0,PROJECTION)
+    put(o,8,kind)
+    if kind==2:
+        index=0
+        while index<4:
+            put(o,64+index*8,get(w,64+index*8))
+            index=index+1
+        return 128
+    put(o,16,get(w,32))
+    put(o,24,get(w,48))
+    put(o,32,get(w,56))
+    put(o,40,get(w,64))
+    put(o,48,get(w,72))
+    index=0
+    at=128
+    while index<3:
+        put(o,64+index*16,at)
+        put(o,72+index*16,get(w,136+index*16))
+        at=copy_string(s,o,get(w,128+index*16),at)
+        index=index+1
+    return at
+
+def parse_map(s:readbuf,w:mutbuf,kind:u64,at:u64,borrowed:bool) -> u64:
+    seen=0
+    at=whitespace(s,at)
+    while at<length(s):
+        if byte(s,at)==125:
+            required=31
+            if kind==2:
+                required=15
+            if (seen&required)!=required:
+                return INVALID
+            return at+1
+        if byte(s,at)!=34:
+            return INVALID
+        field=identify_field(s,at,kind)
+        if field==INVALID or (seen&(1<<field))!=0:
+            return INVALID
+        at=string_info(s,w,at)
+        if at==INVALID:
+            return INVALID
+        at=whitespace(s,at)
+        if at>=length(s) or byte(s,at)!=58:
+            return INVALID
+        at=parse_field(s,w,kind,field,whitespace(s,at+1),borrowed)
+        if at==INVALID:
+            return INVALID
+        seen=seen|(1<<field)
+        at=whitespace(s,at)
+        if at>=length(s):
+            return INVALID
+        if byte(s,at)!=125:
+            if byte(s,at)!=44:
+                return INVALID
+            at=whitespace(s,at+1)
+            if at>=length(s) or byte(s,at)==125:
+                return INVALID
+    return INVALID
+
+def parse_seq(s:readbuf,w:mutbuf,kind:u64,at:u64,borrowed:bool) -> u64:
+    count=6
+    if kind==2:
+        count=4
+    index=0
+    while index<count:
+        at=parse_field(s,w,kind,index,whitespace(s,at),borrowed)
+        if at==INVALID:
+            return INVALID
+        at=whitespace(s,at)
+        index=index+1
+        if index<count:
+            if at>=length(s) or byte(s,at)!=44:
+                return INVALID
+            at=at+1
+    if at>=length(s) or byte(s,at)!=93:
+        return INVALID
+    return at+1
+
+def parse_field(s:readbuf,w:mutbuf,kind:u64,field:u64,at:u64,borrowed:bool) -> u64:
+    if at>=length(s):
+        return INVALID
+    if kind==2:
+        at=unsigned(s,w,at,64)
+        if at==INVALID:
+            return INVALID
+        put(w,64+field*8,get(w,8))
+        return at
+    if field<3:
+        if byte(s,at)!=34:
+            return INVALID
+        end=string_info(s,w,at)
+        if end==INVALID:
+            return INVALID
+        if borrowed:
+            index=at+1
+            while index+1<end:
+                if byte(s,index)==92:
+                    return INVALID
+                index=index+1
+        put(w,128+field*16,at+1)
+        put(w,136+field*16,get(w,24))
+        return end
+    if field==3:
+        return state_value(s,w,at)
+    if field==4:
+        at=unsigned(s,w,at,128)
+        if at==INVALID:
+            return INVALID
+        put(w,48,get(w,8))
+        put(w,56,get(w,16))
+        return at
+    if byte(s,at)==110:
+        return literal_match(s,at,13)
+    at=unsigned(s,w,at,64)
+    if at==INVALID:
+        return INVALID
+    put(w,32,1)
+    put(w,72,get(w,8))
+    return at
+
+def state_value(s:readbuf,w:mutbuf,at:u64) -> u64:
+    map=0
+    if byte(s,at)==123:
+        map=1
+        at=whitespace(s,at+1)
+    if at>=length(s) or byte(s,at)!=34:
+        return INVALID
+    state=0
+    while state<3:
+        if decoded_matches(s,at,10+state)!=0:
+            put(w,64,state)
+            at=string_info(s,w,at)
+            if map==0:
+                return at
+            at=whitespace(s,at)
+            if at>=length(s) or byte(s,at)!=58:
+                return INVALID
+            at=literal_match(s,whitespace(s,at+1),13)
+            if at==INVALID:
+                return INVALID
+            at=whitespace(s,at)
+            if at>=length(s) or byte(s,at)!=125:
+                return INVALID
+            return at+1
+        state=state+1
+    return INVALID
+
+def identify_field(s:readbuf,at:u64,kind:u64) -> u64:
+    index=0
+    count=6
+    base=0
+    if kind==2:
+        count=4
+        base=6
+    while index<count:
+        if decoded_matches(s,at,base+index)!=0:
+            return index
+        index=index+1
+    return INVALID
+
+def decoded_matches(s:readbuf,at:u64,literal:u64) -> u64:
+    index=0
+    count=literal_length(literal)
+    at=at+1
+    while index<count:
+        item=decoded(s,at)
+        if (item&4294967295)!=literal_byte(literal,index):
+            return 0
+        at=item>>32
+        index=index+1
+    if (decoded(s,at)&4294967295)!=1114112:
+        return 0
+    return 1
+
+def literal_match(s:readbuf,at:u64,literal:u64) -> u64:
+    count=literal_length(literal)
+    if at>length(s) or count>length(s)-at:
+        return INVALID
+    index=0
+    while index<count:
+        if byte(s,at+index)!=literal_byte(literal,index):
+            return INVALID
+        index=index+1
+    return at+count
+
+def projection_valid(s:readbuf,kind:u64) -> u64:
+    count=length(s)-24
+    if count<128 or read64(s,24)!=PROJECTION or read64(s,32)!=kind:
+        return 0
+    if read64(s,80)!=0 or read64(s,136)!=0 or read64(s,144)!=0:
+        return 0
+    if kind==2:
+        if count!=128 or read64(s,120)!=0 or read64(s,128)!=0:
+            return 0
+        at=40
+        while at<80:
+            if read64(s,at)!=0:
+                return 0
+            at=at+8
+        return 1
+    present=read64(s,40)
+    if present>1 or read64(s,64)>2:
+        return 0
+    if present==0 and read64(s,72)!=0:
+        return 0
+    index=0
+    at=128
+    while index<3:
+        size=read64(s,96+index*16)
+        if read64(s,88+index*16)!=at or size>count-at:
+            return 0
+        if utf8_valid(s,24+at,size)==0:
+            return 0
+        at=at+size
+        index=index+1
+    if at!=count:
+        return 0
+    return 1
+
+def utf8_valid(s:readbuf,at:u64,count:u64) -> u64:
+    end=at+count
+    while at<end:
+        if byte(s,at)<128:
+            at=at+1
+        else:
+            item=decoded(s,at)
+            if (item&4294967295)>=1114112 or (item>>32)>end:
+                return 0
+            at=item>>32
+    return 1
+
+def render(s:readbuf,o:mutbuf,w:mutbuf,kind:u64,writing:u64) -> u64:
+    at=emit(o,0,123,writing)
+    index=0
+    count=6
+    base=0
+    if kind==2:
+        count=4
+        base=6
+    while index<count:
+        if index!=0:
+            at=emit(o,at,44,writing)
+        at=emit(o,at,34,writing)
+        at=write_literal(o,at,base+index,writing)
+        at=emit(o,at,34,writing)
+        at=emit(o,at,58,writing)
+        at=render_field(s,o,w,kind,index,at,writing)
+        index=index+1
+    return emit(o,at,125,writing)
+
+def render_field(s:readbuf,o:mutbuf,w:mutbuf,kind:u64,index:u64,at:u64,writing:u64) -> u64:
+    if kind==2:
+        return write_number(o,w,at,read64(s,88+index*8),0,writing)
+    if index<3:
+        return write_string(s,o,24+read64(s,88+index*16),read64(s,96+index*16),at,writing)
+    if index==3:
+        at=emit(o,at,34,writing)
+        at=write_literal(o,at,10+read64(s,64),writing)
+        return emit(o,at,34,writing)
+    if index==4:
+        return write_number(o,w,at,read64(s,48),read64(s,56),writing)
+    if read64(s,40)==0:
+        return write_literal(o,at,13,writing)
+    return write_number(o,w,at,read64(s,72),0,writing)
+
+def write_number(o:mutbuf,w:mutbuf,at:u64,low:u64,high:u64,writing:u64) -> u64:
+    end=decimal128(w,256,low,high)
+    index=256
+    while index<end:
+        at=emit(o,at,byte(w,index),writing)
+        index=index+1
+    return at
+
+def write_string(s:readbuf,o:mutbuf,start:u64,count:u64,at:u64,writing:u64) -> u64:
+    at=emit(o,at,34,writing)
+    index=0
+    while index<count:
+        value=byte(s,start+index)
+        if value==34 or value==92:
+            at=emit(o,at,92,writing)
+            at=emit(o,at,value,writing)
+        else:
+            if value<32:
+                short=0
+                if value==8:
+                    short=98
+                if value==9:
+                    short=116
+                if value==10:
+                    short=110
+                if value==12:
+                    short=102
+                if value==13:
+                    short=114
+                at=emit(o,at,92,writing)
+                if short!=0:
+                    at=emit(o,at,short,writing)
+                else:
+                    at=emit(o,at,117,writing)
+                    at=emit(o,at,48,writing)
+                    at=emit(o,at,48,writing)
+                    at=emit(o,at,hex_digit(value>>4),writing)
+                    at=emit(o,at,hex_digit(value&15),writing)
+            else:
+                at=emit(o,at,value,writing)
+        index=index+1
+    return emit(o,at,34,writing)
+
+def write_literal(o:mutbuf,at:u64,literal:u64,writing:u64) -> u64:
+    index=0
+    count=literal_length(literal)
+    while index<count:
+        at=emit(o,at,literal_byte(literal,index),writing)
+        index=index+1
+    return at
+
+def emit(o:mutbuf,at:u64,value:u64,writing:u64) -> u64:
+    if writing!=0:
+        store(o,at,value)
+    return at+1
+
+def hex_digit(value:u64) -> u64:
+    if value<10:
+        return value+48
+    return value+87
