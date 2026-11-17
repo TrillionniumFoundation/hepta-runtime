@@ -1,0 +1,586 @@
+Current runner version: '2.338.2'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {2b9b558d-d916-4884-b5a3-d6dbdbb0df84}
+Region: southcentralus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+24.04.5
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-24.04
+Version: 20261111.370.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+Complete job name: complete
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  path: runtime
+  persist-credentials: false
+  sparse-checkout: tests/hia_native/audit_storage_core
+  repository: TrillionniumFoundation/hepta-runtime
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+##[endgroup]
+Syncing repository: TrillionniumFoundation/hepta-runtime
+##[group]Getting Git version info
+Working directory is '/home/runner/work/hepta-runtime/hepta-runtime/runtime'
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME='/home/runner/work/_temp/77648ee4-2987-4eca-aec7-b0475c883cd7' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/runtime
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime/runtime
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/
+[command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/hepta-runtime
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path /home/runner/work/_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/runtime/.git.path /github/runner_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/runtime/.git/worktrees/*.path /github/runner_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin +c4a4857148765d214ad3760dde9e127ebcabfada:refs/remotes/origin/hia-audit-storage-qualification-6780-20261117
+From https://github.com/TrillionniumFoundation/hepta-runtime
+ * [new ref]         c4a4857148765d214ad3760dde9e127ebcabfada -> origin/hia-audit-storage-qualification-6780-20261117
+[command]/usr/bin/git branch --list --remote origin/hia-audit-storage-qualification-6780-20261117
+  origin/hia-audit-storage-qualification-6780-20261117
+[command]/usr/bin/git rev-parse refs/remotes/origin/hia-audit-storage-qualification-6780-20261117
+c4a4857148765d214ad3760dde9e127ebcabfada
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+##[group]Setting up sparse checkout
+[command]/usr/bin/git sparse-checkout set tests/hia_native/audit_storage_core
+##[endgroup]
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B hia-audit-storage-qualification-6780-20261117 refs/remotes/origin/hia-audit-storage-qualification-6780-20261117
+Updating files:   0% (1/778)
+Updating files:   1% (8/778)
+Updating files:   2% (16/778)
+Updating files:   3% (24/778)
+Updating files:   4% (32/778)
+Updating files:   5% (39/778)
+Updating files:   6% (47/778)
+Updating files:   7% (55/778)
+Updating files:   8% (63/778)
+Updating files:   9% (71/778)
+Updating files:  10% (78/778)
+Updating files:  11% (86/778)
+Updating files:  12% (94/778)
+Updating files:  13% (102/778)
+Updating files:  14% (109/778)
+Updating files:  15% (117/778)
+Updating files:  16% (125/778)
+Updating files:  17% (133/778)
+Updating files:  18% (141/778)
+Updating files:  19% (148/778)
+Updating files:  20% (156/778)
+Updating files:  21% (164/778)
+Updating files:  22% (172/778)
+Updating files:  23% (179/778)
+Updating files:  24% (187/778)
+Updating files:  25% (195/778)
+Updating files:  26% (203/778)
+Updating files:  27% (211/778)
+Updating files:  28% (218/778)
+Updating files:  29% (226/778)
+Updating files:  30% (234/778)
+Updating files:  31% (242/778)
+Updating files:  32% (249/778)
+Updating files:  33% (257/778)
+Updating files:  34% (265/778)
+Updating files:  35% (273/778)
+Updating files:  36% (281/778)
+Updating files:  37% (288/778)
+Updating files:  38% (296/778)
+Updating files:  39% (304/778)
+Updating files:  40% (312/778)
+Updating files:  41% (319/778)
+Updating files:  42% (327/778)
+Updating files:  43% (335/778)
+Updating files:  44% (343/778)
+Updating files:  45% (351/778)
+Updating files:  46% (358/778)
+Updating files:  47% (366/778)
+Updating files:  48% (374/778)
+Updating files:  49% (382/778)
+Updating files:  50% (389/778)
+Updating files:  51% (397/778)
+Updating files:  52% (405/778)
+Updating files:  53% (413/778)
+Updating files:  54% (421/778)
+Updating files:  55% (428/778)
+Updating files:  56% (436/778)
+Updating files:  57% (444/778)
+Updating files:  58% (452/778)
+Updating files:  59% (460/778)
+Updating files:  60% (467/778)
+Updating files:  61% (475/778)
+Updating files:  62% (483/778)
+Updating files:  63% (491/778)
+Updating files:  64% (498/778)
+Updating files:  65% (506/778)
+Updating files:  66% (514/778)
+Updating files:  67% (522/778)
+Updating files:  68% (530/778)
+Updating files:  69% (537/778)
+Updating files:  70% (545/778)
+Updating files:  71% (553/778)
+Updating files:  72% (561/778)
+Updating files:  73% (568/778)
+Updating files:  74% (576/778)
+Updating files:  75% (584/778)
+Updating files:  76% (592/778)
+Updating files:  77% (600/778)
+Updating files:  78% (607/778)
+Updating files:  79% (615/778)
+Updating files:  80% (623/778)
+Updating files:  81% (631/778)
+Updating files:  82% (638/778)
+Updating files:  83% (646/778)
+Updating files:  84% (654/778)
+Updating files:  85% (662/778)
+Updating files:  86% (670/778)
+Updating files:  87% (677/778)
+Updating files:  88% (685/778)
+Updating files:  89% (693/778)
+Updating files:  90% (701/778)
+Updating files:  91% (708/778)
+Updating files:  92% (716/778)
+Updating files:  93% (724/778)
+Updating files:  94% (732/778)
+Updating files:  95% (740/778)
+Updating files:  96% (747/778)
+Updating files:  97% (755/778)
+Updating files:  98% (763/778)
+Updating files:  99% (771/778)
+Updating files: 100% (778/778)
+Updating files: 100% (778/778), done.
+Switched to a new branch 'hia-audit-storage-qualification-6780-20261117'
+branch 'hia-audit-storage-qualification-6780-20261117' set up to track 'origin/hia-audit-storage-qualification-6780-20261117'.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+c4a4857148765d214ad3760dde9e127ebcabfada
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/runtime/.git.path
+includeif.gitdir:/github/workspace/runtime/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path
+/home/runner/work/_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-a87fe89f\-d7c3\-48d0\-9350\-fd3406b902d0\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-a87fe89f\-d7c3\-48d0\-9350\-fd3406b902d0\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/runtime/.git.path
+/github/runner_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/runtime/.git.path \/github\/runner_temp\/git\-credentials\-a87fe89f\-d7c3\-48d0\-9350\-fd3406b902d0\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/runtime/.git/worktrees/*.path
+/github/runner_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/runtime/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-a87fe89f\-d7c3\-48d0\-9350\-fd3406b902d0\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config '/home/runner/work/_temp/git-credentials-a87fe89f-d7c3-48d0-9350-fd3406b902d0.config'
+##[endgroup]
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  repository: TrillionniumFoundation/Hepta
+  ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+  path: compiler
+  persist-credentials: false
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+##[endgroup]
+Syncing repository: TrillionniumFoundation/Hepta
+##[group]Getting Git version info
+Working directory is '/home/runner/work/hepta-runtime/hepta-runtime/compiler'
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME='/home/runner/work/_temp/b54f80c2-7d11-491c-b997-2ece5af1be92' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/compiler
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime/compiler
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/
+[command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/Hepta
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git.path /home/runner/work/_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/compiler/.git.path /github/runner_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/compiler/.git/worktrees/*.path /github/runner_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin d3e2c90173cf733e42b299d0c4274df4b593a12f
+From https://github.com/TrillionniumFoundation/Hepta
+ * branch            d3e2c90173cf733e42b299d0c4274df4b593a12f -> FETCH_HEAD
+[command]/usr/bin/git rev-parse --verify --quiet d3e2c90173cf733e42b299d0c4274df4b593a12f^{object}
+d3e2c90173cf733e42b299d0c4274df4b593a12f
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+[command]/usr/bin/git sparse-checkout disable
+[command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force d3e2c90173cf733e42b299d0c4274df4b593a12f
+Note: switching to 'd3e2c90173cf733e42b299d0c4274df4b593a12f'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at d3e2c90 Serialize complete selfhost evidence without indentation overhead
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+d3e2c90173cf733e42b299d0c4274df4b593a12f
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git.path
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/compiler/.git.path
+includeif.gitdir:/github/workspace/compiler/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git.path
+/home/runner/work/_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-2cf32128\-4732\-484d\-89de\-d55f20fd7afa\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-2cf32128\-4732\-484d\-89de\-d55f20fd7afa\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/compiler/.git.path
+/github/runner_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/compiler/.git.path \/github\/runner_temp\/git\-credentials\-2cf32128\-4732\-484d\-89de\-d55f20fd7afa\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/compiler/.git/worktrees/*.path
+/github/runner_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/compiler/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-2cf32128\-4732\-484d\-89de\-d55f20fd7afa\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config '/home/runner/work/_temp/git-credentials-2cf32128-4732-484d-89de-d55f20fd7afa.config'
+##[endgroup]
+##[group]Run rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+[36;1mrustup toolchain install 1.95.0 --profile minimal --component rustfmt[0m
+[36;1msudo apt-get update[0m
+[36;1msudo apt-get install -y strace[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+info: syncing channel updates for 1.95.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-04-16 for version 1.95.0 (59807616e 2026-04-14)
+info: downloading 4 components
+
+  1.95.0-x86_64-unknown-linux-gnu installed - rustc 1.95.0 (59807616e 2026-04-14)
+
+Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [711 kB]
+Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [781 kB]
+Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1450 kB]
+Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [316 kB]
+Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1713 kB]
+Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [345 kB]
+Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1883 kB]
+Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [430 kB]
+Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.6 kB]
+Get:16 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1196 kB]
+Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [238 kB]
+Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1229 kB]
+Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1788 kB]
+Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [411 kB]
+Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.7 kB]
+Fetched 13.1 MB in 1s (12.5 MB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+strace is already the newest version (6.8-0ubuntu2).
+strace set to manually installed.
+0 upgraded, 0 newly installed, 0 to remove and 21 not upgraded.
+##[group]Run test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+[36;1mtest "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"[0m
+[36;1mpython3 -I -B - <<'PY'[0m
+[36;1mimport os,sys[0m
+[36;1mfrom pathlib import Path[0m
+[36;1mroot=Path('runtime/tests/hia_native/audit_storage_core').resolve()[0m
+[36;1msys.path.insert(0,str(root))[0m
+[36;1mimport common[0m
+[36;1massert common.source()==os.environ['EXPECTED_SOURCE'][0m
+[36;1mfor path in root.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')[0m
+[36;1mprint('COMPLETE_SOURCE_ADMISSION_PASS',common.source())[0m
+[36;1mPY[0m
+shell: /usr/bin/bash -e {0}
+env:
+  EXPECTED_SOURCE: 35b5d7c107e0583ac3a25cdcabf5ec9f547fbb31840079c49b5486230b8281e6
+##[endgroup]
+COMPLETE_SOURCE_ADMISSION_PASS 35b5d7c107e0583ac3a25cdcabf5ec9f547fbb31840079c49b5486230b8281e6
+##[group]Run source="$GITHUB_WORKSPACE/runtime/tests/hia_native/audit_storage_core"
+[36;1msource="$GITHUB_WORKSPACE/runtime/tests/hia_native/audit_storage_core"[0m
+[36;1mrustbin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"[0m
+[36;1mpython3 -I -B "$source/run_capture.py" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$rustbin" --output "$RUNNER_TEMP/audit-record-io-run/semantic" --temporary "$RUNNER_TEMP/audit-record-io-build"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+format PASS 0.008775595000003023
+toolchain PASS 0.0059357739999938985
+cargo-version PASS 0.010254406999990806
+strace-version PASS 0.08100570900001003
+native-build PASS 4.539336641999995
+rust-fetch PASS 0.4962330060000113
+rust-vendor PASS 0.12219389699998828
+rust-build PASS 7.244541774000027
+native PASS 4.054241226999977
+original PASS 1.6086130449999985
+##[group]Run python3 -I -B runtime/tests/hia_native/audit_storage_core/qualify.py --phase semantic --output "$RUNNER_TEMP/audit-record-io-run"
+[36;1mpython3 -I -B runtime/tests/hia_native/audit_storage_core/qualify.py --phase semantic --output "$RUNNER_TEMP/audit-record-io-run"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+Traceback (most recent call last):
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/reader_cli.py", line 46, in <module>
+    a=p.parse_args();run(a.kind,a.capture.resolve(strict=True),a.controls.absolute(),a.report.absolute())
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/reader_cli.py", line 32, in run
+    value=read_only_guard.guarded(lambda:read_capture.verify(capture,controls if kind=='final' else None),
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/read_only_guard.py", line 173, in guarded
+    result = operation()
+             ^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/reader_cli.py", line 32, in <lambda>
+    value=read_only_guard.guarded(lambda:read_capture.verify(capture,controls if kind=='final' else None),
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/read_capture.py", line 51, in verify
+    result=semantic(root)
+           ^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/read_capture.py", line 36, in semantic
+    dependencies=read_build.dependencies(root)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/read_build.py", line 119, in dependencies
+    require(len(raw)==member.size and read(root/'vendor'/name/relative)==raw,
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/common.py", line 38, in read
+    before = path.lstat()
+             ^^^^^^^^^^^^
+  File "/usr/lib/python3.12/pathlib.py", line 849, in lstat
+    return self.stat(follow_symlinks=False)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/pathlib.py", line 842, in stat
+    return os.stat(self, follow_symlinks=follow_symlinks)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/runner/work/_temp/audit-record-io-run/semantic/vendor/anyhow-1.0.104/.gitignore'
+Traceback (most recent call last):
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/qualify.py", line 38, in <module>
+    a=p.parse_args();run(a.phase,a.output.resolve(strict=True))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/qualify.py", line 20, in run
+    raw,row=recorder.run('reader-'+phase,argv,timeout=180)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/process.py", line 100, in run
+    raise RuntimeError("recorded command failed: "+name)
+RuntimeError: recorded command failed: reader-semantic
+##[error]Process completed with exit code 1.
+##[group]Run mkdir -p "$RUNNER_TEMP/audit-record-io-run"
+[36;1mmkdir -p "$RUNNER_TEMP/audit-record-io-run"[0m
+[36;1mpython3 -I -B runtime/tests/hia_native/audit_storage_core/export.py --capture "$RUNNER_TEMP/audit-record-io-run" --archive "$RUNNER_TEMP/audit-record-io-complete.tar.gz"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "all_logical_files_reread": true,
+  "all_object_bytes_and_modes_reread": true,
+  "archive": "audit-record-io-complete.tar.gz",
+  "bytes": 30010406,
+  "gate_status": "NO_GATE_RECORD",
+  "logical_bytes": 132979131,
+  "logical_files": 2602,
+  "mode": 420,
+  "native_or_rust_executions": 0,
+  "schema": "hepta.audit-record-io.complete-archive-read.v1",
+  "sha256": "65b9f6d62c521c12d74c455c85aa3ab770f7559392ba071a57028d122b7d3257",
+  "unique_bytes": 125326752,
+  "unique_objects": 2372,
+  "whole_runtime_replaced": false
+}
+##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+with:
+  name: audit-record-io-complete-c4a4857148765d214ad3760dde9e127ebcabfada
+  path: /home/runner/work/_temp/audit-record-io-complete.tar.gz
+/home/runner/work/_temp/audit-record-io-complete.tar.gz.json
+
+  if-no-files-found: error
+  retention-days: 14
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+##[endgroup]
+(node:3741) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Multiple search paths detected. Calculating the least common ancestor of all paths
+The least common ancestor is /home/runner/work/_temp. This will be the root directory of the artifact
+With the provided path, there will be 2 files uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:3741) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 8388608
+Uploaded bytes 16777216
+Uploaded bytes 25165824
+Uploaded bytes 29880685
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is 30b0ab0030e4706360dd1ea24bbebd2e8a27380d0b57b930e38fc72c55277cf4
+Finalizing artifact upload
+Artifact audit-record-io-complete-c4a4857148765d214ad3760dde9e127ebcabfada.zip successfully finalized. Artifact ID 14307841184
+Artifact audit-record-io-complete-c4a4857148765d214ad3760dde9e127ebcabfada has been successfully uploaded! Final size is 29880685 bytes. Artifact ID is 14307841184
+Artifact download URL: https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44036845015/artifacts/14307841184
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME='/home/runner/work/_temp/8f882813-bb34-4323-a7ae-f26a1f4ab600' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/compiler
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME='/home/runner/work/_temp/89f07c4d-7bcf-435c-8791-0f1347b69109' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/runtime
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes
+##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
