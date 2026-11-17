@@ -1,0 +1,67 @@
+name: Actual eight publisher direct future captures
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-direct-capture-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  capture:
+    strategy:
+      fail-fast: false
+      matrix:
+        first: [22, 24, 26, 28]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runner paths
+        run: |
+          printf '%s\n' "DC_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_direct_capture_v1" "DC_PUBLIC=$GITHUB_WORKSPACE/public-reader/tests/hia_native/publication_duplex_complete_read_v2" "DC_BUILD=$GITHUB_WORKSPACE/base-recipe/tests/hia_native/publication_duplex_build_v3" "DC_DIRECT=$GITHUB_WORKSPACE/direct-recipe/tests/hia_native/publication_direct_build_v1" "DC_PREP=$RUNNER_TEMP/direct-domain-prepared" "DC_RUN=$RUNNER_TEMP/direct-domain-capture" "DC_DRIVER=$RUNNER_TEMP/direct-domain-driver" "DC_EXPORT=$RUNNER_TEMP/direct-domain-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_direct_capture_v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: public-reader
+          ref: 61066b30cb274d56b48e7dd24b33fa1aaede0c60
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_complete_read_v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: base-recipe
+          ref: f4a348f6661aec513ac63e1807ff697e81704b3e
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: direct-recipe
+          ref: 5eb43d0ffa9d29b80706d5c359a78346325dc02f
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_direct_build_v1
+      - name: Complete actual original and both full graph admissions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$DC_SOURCE/prepare.py" --public-reader "$DC_PUBLIC" --build-recipe "$DC_BUILD" --direct-recipe "$DC_DIRECT" --output "$DC_PREP" > "$DC_DRIVER.prepare.stdout" 2> "$DC_DRIVER.prepare.stderr"
+          cat "$DC_DRIVER.prepare.stdout"
+      - name: Actual unchanged direct future inputs
+        run: |
+          python3 -I -S -B "$DC_SOURCE/run.py" --prepared "$DC_PREP" --output "$DC_RUN" --first '${{ matrix.first }}' --count 2 > "$DC_DRIVER.stdout" 2> "$DC_DRIVER.stderr"
+          cat "$DC_DRIVER.stdout"
+      - name: Retain all success or failure bytes
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["DC_RUN"]); r.mkdir(exist_ok=True); p=r/"prepare-records"; p.mkdir(); s=pathlib.Path(os.environ["DC_PREP"]); [shutil.copy2(x,p/x.name) for x in s.glob("*") if x.is_file()]; [shutil.copy2(pathlib.Path(os.environ["DC_DRIVER"]+v),p/("driver"+v)) for v in (".prepare.stdout",".prepare.stderr") if pathlib.Path(os.environ["DC_DRIVER"]+v).exists()]'
+          python3 -I -S -B "$DC_SOURCE/archive.py" pack --source "$DC_SOURCE" --capture "$DC_RUN" --output "$DC_EXPORT" --driver-prefix "$DC_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; [print(p.read_text()) for p in (pathlib.Path(os.environ["DC_DRIVER"]+".prepare.stderr"),pathlib.Path(os.environ["DC_DRIVER"]+".stderr")) if p.exists()]'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-direct-capture-v1-${{ matrix.first }}-${{ github.sha }}
+          path: ${{ env.DC_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
