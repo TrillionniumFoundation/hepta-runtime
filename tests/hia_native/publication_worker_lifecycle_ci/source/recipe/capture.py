@@ -42,8 +42,8 @@ def capture_case(binary,case,output):
         (output/"COMMANDS.json").write_bytes(canonical(commands))
         (output/"HOST.json").write_bytes(canonical(host))
         (output/"FILESYSTEM.json").write_bytes(canonical(shots))
-    def event(name,**fields):
-        host.append(dict(event=name,after_commands=len(commands),monotonic_ns=time.monotonic_ns(),**fields));save()
+    def event(event_type,**fields):
+        host.append(dict(event=event_type,after_commands=len(commands),monotonic_ns=time.monotonic_ns(),**fields));save()
     def shot(name):
         shots.append(dict(name=name,after_commands=len(commands),files=snapshot(work,store)));save()
     def lock(name):
