@@ -1,0 +1,67 @@
+name: Independently read every uploaded Scope WAIT evidence byte
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-scope-uploaded-read-6780-20261117']
+    paths: ['tests/hia_native/public123_scope_uploaded_read_ci/**', '.github/workflows/hia-extract-scope-uploaded-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        name:
+          - ordinary-a-legacy-complete
+          - ordinary-b-legacy-complete
+          - eof-legacy-complete
+          - eof-modern-complete
+          - ordinary-a-modern-complete
+          - ordinary-b-modern-complete
+          - ordinary-a-legacy-semantic
+          - ordinary-a-modern-semantic
+          - ordinary-b-modern-semantic
+    steps:
+      - name: Checkout frozen independent readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_scope_uploaded_read_ci
+      - name: Complete source admission
+        run: |
+          printf '%s\n' "READ_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_uploaded_read_ci" "READ_CAPTURE=$RUNNER_TEMP/scope-uploaded-read" "READ_EXPORT=$RUNNER_TEMP/scope-uploaded-export" "READ_DRIVER=$RUNNER_TEMP/scope-uploaded-driver" >> "$GITHUB_ENV"
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_uploaded_read_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 'b7b1c0e2143373fd3455e9fc04dd7ba5acb3235090e86c42bf687c1f77e1404a'
+          python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_uploaded_read_ci/check_source.py"
+      - name: Independently read full archives and actual retained evidence
+        env:
+          READ_NAME: ${{ matrix.name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$READ_PACKAGE/driver.py" --name "$READ_NAME" --output "$READ_CAPTURE" > "$READ_DRIVER.stdout" 2> "$READ_DRIVER.stderr"
+          read_status=$?
+          cat "$READ_DRIVER.stderr"
+          cat "$READ_DRIVER.stdout"
+          exit "$read_status"
+      - name: Preserve every success or failure byte
+        if: always()
+        run: |
+          python3 -I -S -B "$READ_PACKAGE/archive.py" pack --source "$READ_PACKAGE" --capture "$READ_CAPTURE" --output "$READ_EXPORT" --driver-prefix "$READ_DRIVER"
+      - name: Upload complete independent read
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: scope-uploaded-read-${{ matrix.name }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.READ_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
