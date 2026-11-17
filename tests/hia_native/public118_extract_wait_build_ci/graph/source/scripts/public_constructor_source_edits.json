@@ -1,0 +1,101 @@
+{
+  "scripts/runtime_mcp_extra_engine.S": [
+    {
+      "old": "46 rows at engine+4096",
+      "new": "47 rows at engine+4096"
+    },
+    {
+      "old": ".equ RG_SLOTS, 46",
+      "new": ".equ RG_SLOTS, 47"
+    },
+    {
+      "old": "    cmp ebp, 18\n    je runtime_grow_frontend_result\n",
+      "new": "    cmp ebp, 18\n    je runtime_grow_frontend_result\n    cmp ebp, 46\n    je runtime_grow_text_constructor_result\n"
+    },
+    {
+      "old": "runtime_grow_frontend_result:\n",
+      "new": "runtime_grow_text_constructor_result:\n    cmp eax, 64\n    jne runtime_grow_bad\n    mov rdx, 0x3130535243545248 /* HRTCRS01 */\n    cmp [r13], rdx\n    jne runtime_grow_bad\n    cmp qword ptr [r13 + 8], 0\n    jne runtime_grow_bad\n    cmp qword ptr [r13 + 16], 1\n    ja runtime_grow_bad\n    cmp qword ptr [r13 + 24], 2\n    ja runtime_grow_bad\n    cmp qword ptr [r13 + 32], 64\n    jne runtime_grow_bad\n    mov rax, [r13 + 48]\n    or rax, [r13 + 56]\n    jnz runtime_grow_bad\n    mov rax, [r13 + 40]\n    add rax, 64\n    jc runtime_grow_bad\n    jmp runtime_grow_extent_ready\nruntime_grow_frontend_result:\n"
+    },
+    {
+      "old": "    mov rdx, 0x323052464d435248 /* HRCMFR02 */\n    cmp [r13], rdx\n    jne runtime_grow_bad\n    cmp qword ptr [r13 + 8], 2\n    ja runtime_grow_bad\n",
+      "new": "    mov rdx, 0x323052464d435248 /* HRCMFR02 */\n    cmp [r13], rdx\n    jne runtime_grow_bad\n    cmp qword ptr [r13 + 8], 3\n    ja runtime_grow_bad\n    cmp qword ptr [r13 + 8], 3\n    jne runtime_grow_frontend_common\n    cmp qword ptr [r13 + 32], 0\n    jne runtime_grow_bad\nruntime_grow_frontend_common:\n"
+    },
+    {
+      "old": "runtime_grow_target_frontend:\n    cmp rsi, 9\n",
+      "new": "runtime_grow_target_frontend:\n    cmp rsi, 10\n"
+    },
+    {
+      "old": "    .zero 40 /* Slot41 remains empty; SDK leaves occupy42-45. */",
+      "new": "    .zero 48 /* Slot41 empty; SDK leaves42-45 and text constructor46. */"
+    },
+    {
+      "old": "    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37",
+      "new": "    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46"
+    }
+  ],
+  "scripts/runtime_mcp_transport.S": [
+    {
+      "old": "    cmp qword ptr [r13 + 8], 2\n    je public_span_publish\n",
+      "new": "    cmp qword ptr [r13 + 8], 2\n    je public_span_publish\n    cmp qword ptr [r13 + 8], 3\n    je public_span_publish_raw\n"
+    },
+    {
+      "old": "public_span_publish:\n",
+      "new": "public_span_publish_raw:\n    cmp qword ptr [r13 + 32], 0\n    jne public_span_fail\n    lea rdi, [r13 + 64]\n    mov rsi, [r13 + 24]\n    call runtime_publication_raw_span\n    test eax, eax\n    jnz public_span_fail\n    jmp public_span_newline\npublic_span_publish:\n"
+    },
+    {
+      "old": "    .zero 368",
+      "new": "    .zero 376"
+    }
+  ],
+  "scripts/runtime_mcp_filesystem_fixture.S": [
+    {
+      "old": "    .zero 368",
+      "new": "    .zero 376"
+    }
+  ],
+  "scripts/hia_native_runtime_mcp_adapter.py": [
+    {
+      "old": "'    mov rbx, rsp\\n    mov qword ptr [rbx + 48], 0\\n    mov rax, 0x3130425550505248\\n'",
+      "new": "'    mov rbx, rsp\\n    mov qword ptr [rbx + 48], 0\\n    mov qword ptr [rbx + 56], 3\\n    mov rax, 0x3130425550505248\\n'"
+    },
+    {
+      "old": "    return adapter+",
+      "new": "    adapter=replace(adapter,\"    mov qword ptr [r12 + PUB_SRC + 32], 3\\n\",\"    mov rax, [rbx + 56]\\n    mov [r12 + PUB_SRC + 32], rax\\n\")\n    adapter=replace(adapter,\"    mov rsi, [rbx]\\n    mov rcx, [rbx + 8]\\n    mov edi, 13\\n    call pub_import\\n\",\"    cmp qword ptr [rbx + 56], 3\\n    jne pub_skip_trusted_prefix\\n    mov rsi, [rbx]\\n    mov rcx, [rbx + 8]\\n    mov edi, 13\\n    call pub_import\\npub_skip_trusted_prefix:\\n\")\n    return adapter+"
+    },
+    {
+      "old": ".global runtime_publication_span\n",
+      "new": ".global runtime_publication_span\n.global runtime_publication_raw_span\n"
+    },
+    {
+      "old": "runtime_publication_span:\n    cmp r8, 1\n",
+      "new": "runtime_publication_raw_span:\n    mov rdx, rdi\n    mov rcx, rsi\n    xor edi, edi\n    xor esi, esi\n    xor r8d, r8d\n    xor r9d, r9d\n    jmp runtime_publication_common\nruntime_publication_span:\n    mov r9d, 3\nruntime_publication_common:\n    cmp r8, 1\n"
+    },
+    {
+      "old": "    mov qword ptr [rbx + 48], 1\n    jmp pub_begin\n",
+      "new": "    mov qword ptr [rbx + 48], 1\n    mov [rbx + 56], r9\n    jmp pub_begin\n"
+    }
+  ],
+  "scripts/public_nine_build.py": [
+    {
+      "old": "    ('rf_owner', 'effect_owner_fence', 'standard'),",
+      "new": "    ('text_constructor', 'text_result_constructor', 'history.v1'),\n    ('rf_owner', 'effect_owner_fence', 'standard'),"
+    },
+    {
+      "old": "'target_bridge', 'historical_protocol']",
+      "new": "'target_bridge', 'historical_protocol', 'text_constructor']"
+    },
+    {
+      "old": "len(MEMBERS) != 79",
+      "new": "len(MEMBERS) != 80"
+    },
+    {
+      "old": "    root = source_root.resolve(strict=True)\n",
+      "new": "    if private_fixture:\n        raise ValueError('constructor public revision has no newly qualified private fixture')\n    root = source_root.resolve(strict=True)\n"
+    },
+    {
+      "old": "              'target_response_owner_integrated': False,",
+      "new": "              'target_response_owner_integrated': False,\n              'target_text_constructor_integrated': True,\n              'target_text_constructor_slot': 46,\n              'target_text_constructor_source_sha256': '3a4c9b40136e0c3dbf3b580e475447e94fb79913f93416a0ec906da6d294996d',\n              'target_constructor_public_semantics_qualified': False,\n              'typed_result_publication_uses_raw_owned_mode': True,"
+    }
+  ]
+}
+
