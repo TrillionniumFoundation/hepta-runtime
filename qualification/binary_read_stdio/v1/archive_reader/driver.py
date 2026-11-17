@@ -24,12 +24,12 @@ def main():
     stage="fetch"
     try:
         outputs={}
-        for stage,limit in(("fetch",60),("restore",180),("read",180)):
+        for stage,limit in(("prior",60),("fetch",60),("restore",180),("read",180)):
             raw,row=rec.run(stage,[sys.executable,"-I","-S","-B",ROOT/"archive_reader.py",stage,
                 "--work",work,"--source-manifest-sha256",a.source_manifest_sha256],timeout=limit)
             outputs[stage]=decode(raw)
         result=dict(status="PASS",stage="complete",source_manifest=identity,binding=binding,
-            processes=rec.records,archive=outputs["restore"],read=outputs["read"],
+            processes=rec.records,archive=outputs["restore"],read=outputs["read"],prior_export_failure=outputs["prior"],
             application_hia_executions=0,rust_executions=0)
         (work/"proof/GATE.json").write_bytes(encode(result));print(encode(result).decode(),end="")
     except BaseException as error:

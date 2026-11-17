@@ -239,11 +239,38 @@ def complete(work):
             original_capture_status="FAIL",pure_recovery_status="PASS",saved_guard_proofs=12,saved_guard_probes=132,
             application_hia_executions=0,rust_executions=0,whole_runtime_replaced=False)
     return readonly.guarded(operation,roots=[ROOT,work/"download",work/"original"])
+def prior_export(work):
+    binding=decode((ROOT/"PRIOR_EXPORT_FAILURE.json").read_bytes())
+    folder=work/"proof/prior-export";folder.mkdir()
+    fetched=fetch(folder,binding);archive=folder/"download/complete.zip";rows={}
+    with zipfile.ZipFile(archive)as zipped:
+        for member in zipped.infolist():
+            safe(member.filename)
+            require(not member.is_dir()and member.filename not in rows
+                and member.filename in("processes/complete-export.stderr","processes/complete-export.stdout","processes/processes.json"),
+                "previous export archive member domain")
+            raw=zipped.read(member);require(len(raw)==member.file_size,"complete previous export stream")
+            path=folder/member.filename;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
+            rows[member.filename]=rawpin(raw)
+    require(set(rows)=={"processes/complete-export.stderr","processes/complete-export.stdout","processes/processes.json"},
+        "complete previous export member set")
+    process=decode((folder/"processes/processes.json").read_bytes())
+    require(len(process)==1 and process[0]["name"]=="complete-export"and process[0]["exit_code"]==1
+        and process[0]["completed"]is True and process[0]["timed_out"]is False,"previous export actual failure")
+    for channel in("stdout","stderr"):
+        value=process[0][channel]
+        require({k:value[k]for k in("bytes","sha256")}==rows["processes/"+value["file"]],"full previous export process binding")
+    stderr=(folder/"processes/complete-export.stderr").read_bytes()
+    require(b"ModuleNotFoundError: No module named 'common'"in stderr
+        and (folder/"processes/complete-export.stdout").read_bytes()==b"","source-layout export defect differs")
+    return dict(status="PRESERVED_EXPORT_FAILURE_READ_PASS",binding=binding,zip=fetched["zip"],members=rows,
+        stderr=stderr.decode(),application_hia_executions=0,rust_executions=0)
 if __name__=="__main__":
-    p=argparse.ArgumentParser();p.add_argument("stage",choices=["fetch","restore","read"])
+    p=argparse.ArgumentParser();p.add_argument("stage",choices=["prior","fetch","restore","read"])
     p.add_argument("--work",type=Path,required=True);p.add_argument("--source-manifest-sha256",required=True)
     a=p.parse_args();before,bound=frozen(a.source_manifest_sha256);work=a.work.absolute()
-    if a.stage=="fetch":result=fetch(work,bound)
+    if a.stage=="prior":result=prior_export(work)
+    elif a.stage=="fetch":result=fetch(work,bound)
     elif a.stage=="restore":result=unpack(work,bound)
     else:
         result=complete(work);(work/"proof/READONLY.json").write_bytes(encode(result))

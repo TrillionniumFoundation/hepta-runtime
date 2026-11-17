@@ -13,7 +13,7 @@ import sys
 import tarfile
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parent
-sys.path.insert(0,str(ROOT/"qualified/scripts"))
+sys.path.insert(0,str(ROOT/"qualified/qualified/scripts"))
 from common import canonical,decode,pin,require
 
 def identity(path):

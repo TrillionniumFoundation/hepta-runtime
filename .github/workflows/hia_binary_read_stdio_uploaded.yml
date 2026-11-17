@@ -2,7 +2,7 @@ name: Independently read qualified HIA binary read stdio archive
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-read-stdio-uploaded-6780-20261117]
+    branches: [hia-binary-read-stdio-uploaded-fixed-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -15,7 +15,7 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       GH_TOKEN: ${{ github.token }}
       BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_read_stdio/v1/archive_reader
-      BINARY_MANIFEST: 1d0148b9b882dd6fdcb0487e5a7e17b34774d75d9b701163f6e8b898e65b3cf7
+      BINARY_MANIFEST: f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2
     steps:
       - name: Checkout frozen independent uploaded reader
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
