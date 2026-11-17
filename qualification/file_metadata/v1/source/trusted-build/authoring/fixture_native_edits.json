@@ -1,0 +1,119 @@
+{
+  "baseline": {
+    "git_blob": "b977904e628e251c2803357021917f20aaa75747",
+    "bytes": 11631,
+    "sha256": "0fdf1b8fa54bfcc86a99705c6328993643b168a4d7671bb074a2983ef6a84964"
+  },
+  "renames": [
+    [
+      "binary_read_body",
+      "file_metadata"
+    ],
+    [
+      ".Lbrd_",
+      ".Lmdt_"
+    ],
+    [
+      ".Lbrf_",
+      ".Lmtf_"
+    ],
+    [
+      "0x3130514644524248 /* HBRDFQ01 */",
+      "0x3130514654444d48 /* HMDTFQ01 */"
+    ],
+    [
+      "0x3130524644524248 /* HBRDFR01 */",
+      "0x3130524654444d48 /* HMDTFR01 */"
+    ],
+    [
+      "0x3130524a44524248 /* HBRDJR01 */",
+      "0x3130524a54444d48 /* HMDTJR01 */"
+    ],
+    [
+      "0x31304b4844524248 /* HBRDHK01 */",
+      "0x31304b4854444d48 /* HMDTHK01 */"
+    ]
+  ],
+  "patches": [
+    {
+      "before": " * FD4 effect notifications, FD5 acknowledgements and its two held parents.",
+      "after": " * FD4 effect notifications, FD5 acknowledgements and four held file FDs.",
+      "offset": 232
+    },
+    {
+      "before": "    cmp r14, 13\n    ja .Lmtf_fatal",
+      "after": "    cmp r14, 17\n    ja .Lmtf_fatal",
+      "offset": 1565
+    },
+    {
+      "before": "    cmp r14, 10\n    je .Lmtf_hold_parent\n    cmp r14, 11\n    je .Lmtf_invoke_at",
+      "after": "    cmp r14, 10\n    je .Lmtf_hold_file\n    cmp r14, 11\n    je .Lmtf_hold_file",
+      "offset": 1798
+    },
+    {
+      "before": "    cmp r14, 12\n    je .Lmtf_drop_parent\n    cmp r14, 13\n    je .Lmtf_parent_stat",
+      "after": "    cmp r14, 12\n    je .Lmtf_drop_file\n    cmp r14, 13\n    je .Lmtf_drop_file\n    cmp r14, 14\n    je .Lmtf_file_stat\n    cmp r14, 15\n    je .Lmtf_file_stat\n    cmp r14, 16\n    je .Lmtf_close_retained\n    cmp r14, 17\n    je .Lmtf_close_retained",
+      "offset": 2004
+    },
+    {
+      "before": ".Lmtf_invoke_ready:\n    mov rdi, r12\n    lea rsi, [rbp+64]\n    mov rdx, r13\n    call file_metadata_invoke",
+      "after": ".Lmtf_invoke_ready:\n    cmp r13, 96\n    jb .Lmtf_no_context\n    xor esi, esi\n    xor edx, edx\n    mov rax, [rbp+88]\n    cmp rax, 2\n    je .Lmtf_invoke_capabilities\n    mov rsi, [r15+32+rbx*8]\n    test rsi, rsi\n    jz .Lmtf_no_context\n    cmp rax, 3\n    jne .Lmtf_invoke_capabilities\n    mov rdx, [r15+48+rbx*8]\n    test rdx, rdx\n    jz .Lmtf_no_context\n.Lmtf_invoke_capabilities:\n    mov rdi, r12\n    lea rcx, [rbp+64]\n    mov r8, r13\n    call file_metadata_invoke",
+      "offset": 2793
+    },
+    {
+      "before": ".Lmtf_hold_parent:\n    mov r12, [r15+rbx*8]\n    cmp qword ptr [r15+32+rbx*8], 0\n    jne .Lmtf_create_busy\n    lea rdi, [rbp+64]\n    mov rsi, r13\n    call .Lmdt_name\n    test eax, eax\n    jnz .Lmtf_no_context\n    lea rdi, [rbp+64]\n    mov esi, 0xb0000\n    xor edx, edx\n    mov eax, 2\n    syscall\n    mov r13, rax\n    xor r14d, r14d\n    xor ebp, ebp\n    cmp rax, -4095\n    jae .Lmtf_reply\n    mov [r15+32+rbx*8], rax\n    jmp .Lmtf_reply\n.Lmtf_invoke_at:\n    mov r12, [r15+rbx*8]\n    cmp qword ptr [r15+32+rbx*8], 0\n    je .Lmtf_no_context\n    test r12, r12\n    jnz .Lmtf_invoke_at_ready\n    lea rdi, [rip+.Lmtf_journal]\n    mov esi, 3\n    call file_metadata_create\n    cmp rax, -4095\n    jae .Lmtf_fatal\n    mov r12, rax\n    mov [r15+rbx*8], rax\n.Lmtf_invoke_at_ready:\n    mov rdi, r12\n    mov rsi, [r15+32+rbx*8]\n    lea rdx, [rbp+64]\n    mov rcx, r13\n    call file_metadata_invoke_at\n    jmp .Lmtf_invocation_returned\n.Lmtf_drop_parent:\n    mov r12, [r15+rbx*8]\n    mov rdi, [r15+32+rbx*8]\n    test rdi, rdi\n    jz .Lmtf_no_context\n    mov eax, 3\n    syscall\n    mov qword ptr [r15+32+rbx*8], 0\n    mov r13, rax\n    xor r14d, r14d\n    xor ebp, ebp\n    jmp .Lmtf_reply\n.Lmtf_parent_stat:\n    mov r12, [r15+rbx*8]\n    mov rdi, [r15+32+rbx*8]\n    test rdi, rdi\n    jz .Lmtf_no_context\n    lea rsi, [r15+512]\n    mov eax, 5\n    syscall\n    mov r13, rax\n    xor r14d, r14d\n    xor ebp, ebp\n    test rax, rax\n    jnz .Lmtf_reply\n    lea r14, [r15+512]\n    mov ebp, 144\n    jmp .Lmtf_reply\n\n",
+      "after": ".Lmtf_hold_file:\n    mov r12, [r15+rbx*8]\n    mov rax, r14\n    sub rax, 10\n    shl rax, 4\n    add rax, 32\n    cmp qword ptr [r15+rax+rbx*8], 0\n    jne .Lmtf_create_busy\n    /* The carrier, not the metadata callable, opens this explicitly selected\n     * fixture file. A read-only FD allows directories and nonblocking FIFOs\n     * to reach the original metadata function's own regular-file checks. */\n    lea rdi, [rbp+64]\n    mov rsi, r13\n    call .Lmdt_name\n    test eax, eax\n    jnz .Lmtf_no_context\n    lea rdi, [rbp+64]\n    mov esi, 0xa0800 /* O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK */\n    xor edx, edx\n    mov eax, 2\n    syscall\n    mov r13, rax\n    cmp rax, -4095\n    jae .Lmtf_file_response\n    mov rcx, r14\n    sub rcx, 10\n    shl rcx, 4\n    add rcx, 32\n    mov [r15+rcx+rbx*8], rax\n.Lmtf_file_response:\n    xor r14d, r14d\n    xor ebp, ebp\n    jmp .Lmtf_reply\n.Lmtf_drop_file:\n    mov r12, [r15+rbx*8]\n    mov r14, r14\n    sub r14, 12\n    shl r14, 4\n    add r14, 32\n    mov rdi, [r15+r14+rbx*8]\n    test rdi, rdi\n    jz .Lmtf_no_context\n    mov eax, 3\n    syscall\n    mov qword ptr [r15+r14+rbx*8], 0\n    mov r13, rax\n    jmp .Lmtf_file_response\n.Lmtf_close_retained:\n    /* Private negative-input fixture only: actually close the held FD while\n     * keeping its numeric argument. No replacement FD is opened afterwards. */\n    mov r12, [r15+rbx*8]\n    sub r14, 16\n    shl r14, 4\n    add r14, 32\n    mov rdi, [r15+r14+rbx*8]\n    test rdi, rdi\n    jz .Lmtf_no_context\n    mov eax, 3\n    syscall\n    mov r13, rax\n    jmp .Lmtf_file_response\n.Lmtf_file_stat:\n    mov r12, [r15+rbx*8]\n    sub r14, 14\n    shl r14, 4\n    add r14, 32\n    mov rdi, [r15+r14+rbx*8]\n    test rdi, rdi\n    jz .Lmtf_no_context\n    lea rsi, [r15+512]\n    mov eax, 5\n    syscall\n    mov r13, rax\n    xor r14d, r14d\n    xor ebp, ebp\n    test rax, rax\n    jnz .Lmtf_reply\n    lea r14, [r15+512]\n    mov ebp, 144\n    jmp .Lmtf_reply\n\n",
+      "offset": 3441
+    },
+    {
+      "before": ".Lmtf_eof_parent:\n    mov rdi, [r15+32+rbx*8]\n    test rdi, rdi\n    jz .Lmtf_eof_next\n    mov eax, 3\n    syscall\n    test rax, rax\n    jnz .Lmtf_fatal\n    mov qword ptr [r15+32+rbx*8], 0\n.Lmtf_eof_next:",
+      "after": ".Lmtf_eof_parent:\n    mov r14d, 32\n.Lmtf_eof_file:\n    mov rdi, [r15+r14+rbx*8]\n    test rdi, rdi\n    jz .Lmtf_eof_file_next\n    mov eax, 3\n    syscall\n    test rax, rax\n    jz .Lmtf_eof_file_closed\n    cmp rax, -9 /* only the explicit close-retained negative fixture */\n    jne .Lmtf_fatal\n.Lmtf_eof_file_closed:\n    mov qword ptr [r15+r14+rbx*8], 0\n.Lmtf_eof_file_next:\n    add r14, 16\n    cmp r14, 64\n    jb .Lmtf_eof_file\n.Lmtf_eof_next:",
+      "offset": 8122
+    },
+    {
+      "before": "    cmp qword ptr [r15+rax+rbx*8], 0",
+      "after": "    lea rcx, [r15+rbx*8]\n    cmp qword ptr [rcx+rax], 0",
+      "offset": 3547
+    },
+    {
+      "before": "    mov [r15+rcx+rbx*8], rax",
+      "after": "    lea rdx, [r15+rbx*8]\n    mov [rdx+rcx], rax",
+      "offset": 4225
+    },
+    {
+      "before": "    mov rdi, [r15+r14+rbx*8]",
+      "after": "    lea rdx, [r15+rbx*8]\n    mov rdi, [rdx+r14]",
+      "offset": 4456
+    },
+    {
+      "before": "    mov rdi, [r15+r14+rbx*8]",
+      "after": "    lea rdx, [r15+rbx*8]\n    mov rdi, [rdx+r14]",
+      "offset": 4906
+    },
+    {
+      "before": "    mov rdi, [r15+r14+rbx*8]",
+      "after": "    lea rdx, [r15+rbx*8]\n    mov rdi, [rdx+r14]",
+      "offset": 5157
+    },
+    {
+      "before": "    mov rdi, [r15+r14+rbx*8]",
+      "after": "    lea rdx, [r15+rbx*8]\n    mov rdi, [rdx+r14]",
+      "offset": 8268
+    },
+    {
+      "before": "    mov qword ptr [r15+r14+rbx*8], 0",
+      "after": "    lea rdx, [r15+rbx*8]\n    mov qword ptr [rdx+r14], 0",
+      "offset": 4573
+    },
+    {
+      "before": "    mov qword ptr [r15+r14+rbx*8], 0",
+      "after": "    lea rdx, [r15+rbx*8]\n    mov qword ptr [rdx+r14], 0",
+      "offset": 8569
+    },
+    {
+      "before": "    mov r14, r14\n",
+      "after": "",
+      "offset": 4392
+    }
+  ]
+}
