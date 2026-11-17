@@ -78,6 +78,34 @@ def extract(output):
     report=dict(status="COMPLETE_FAILED_GATEWAY_V3_ARTIFACT_BYTES_PASS",source_commit="0b7c15818c9cbfac1ec710122e62de9a078f74d9",
         artifact=ARTIFACT,run=44037633975,job=133884253395,zip=ZIP,archive=TAR,files=FILES,logical_bytes=LOGICAL,
         executed_hia=False,executed_rust=False)
+    # The frozen exporter records ordinary files, so a genuinely empty
+    # Writer block directory has no TAR member. Restore only the exact store
+    # whose complete snapshot has zero blocks and whose full manifest prefix
+    # is absent. No evidence content, reader rule or filesystem observation changes.
+    empty=[]
+    for profile in ("configured","absent","denied","fence_required","capabilities","body"):
+        prefix="capture/profiles/"+profile
+        target=selected/prefix/"retired-fixture-buffers"
+        if target.exists():continue
+        snapshot=selected/prefix/"RETIRED_FIXTURE.json"
+        require(snapshot.is_file(),"missing complete retired snapshot")
+        retirement=json.loads(snapshot.read_bytes())
+        def no_blocks(value):
+            if isinstance(value,dict):
+                if "blocks" in value:
+                    require(set(value)=={"bytes","sha256","blocks"} and value["bytes"]==0
+                        and value["blocks"]==[] and value["sha256"]==hashlib.sha256(b"").hexdigest(),
+                        "missing retired buffer directory contains required bytes")
+                for child in value.values():no_blocks(child)
+            elif isinstance(value,list):
+                for child in value:no_blocks(child)
+        no_blocks(retirement["complete_snapshot"])
+        require(not any(name.startswith(prefix+"/retired-fixture-buffers/") for name in wanted),
+            "manifest contained missing retired buffer bytes")
+        target.mkdir()
+        empty.append(dict(path=prefix+"/retired-fixture-buffers",snapshot=pin(snapshot),
+            complete_manifest_prefix_files=0,complete_snapshot_blocks=0))
+    (a.output/"EMPTY_STORES.json").write_bytes(encode(empty))
     (a.output/"REVIEW.json").write_bytes(encode(report))
     print(json.dumps(report,sort_keys=True),flush=True)
     return selected
