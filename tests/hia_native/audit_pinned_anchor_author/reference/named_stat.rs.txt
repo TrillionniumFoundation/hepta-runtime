@@ -1,0 +1,23 @@
+fn named_stat_with_component(
+	directory: &File,
+	component: &std::ffi::CStr,
+) -> Result<Option<libc::stat>> {
+	let mut metadata = std::mem::MaybeUninit::<libc::stat>::uninit();
+	if unsafe {
+		libc::fstatat(
+			directory.as_raw_fd(),
+			component.as_ptr(),
+			metadata.as_mut_ptr(),
+			libc::AT_SYMLINK_NOFOLLOW,
+		)
+	} == 0
+	{
+		return Ok(Some(unsafe { metadata.assume_init() }));
+	}
+	let error = std::io::Error::last_os_error();
+	if error.kind() == std::io::ErrorKind::NotFound {
+		Ok(None)
+	} else {
+		Err(error.into())
+	}
+}
