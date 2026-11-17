@@ -1,0 +1,47 @@
+name: Qualify actual borrowed directories and filesystem mutations
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-read-at-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_read_at/v1/source
+      BINARY_MANIFEST: 1db027f9a0b83d7be09ac5ac70cb992d77b79d63e96b30e09f79d4d2ef88fa9d
+    steps:
+      - name: Checkout frozen actual filesystem qualification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_read_at/v1/source
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Run original and native borrowed-parent mutation domain
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/scripts/driver.py" run \
+            --work "$RUNNER_TEMP/binary-read-at" --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Retain complete evidence including any failed capture
+        if: always()
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/binary-read-at" --output "$RUNNER_TEMP/binary-read-at-export" \
+            --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Upload all captured bytes and process receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-read-at-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-read-at-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
