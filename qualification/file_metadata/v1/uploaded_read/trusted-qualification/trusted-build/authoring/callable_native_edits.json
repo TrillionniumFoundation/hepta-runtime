@@ -1,0 +1,143 @@
+{
+  "baseline": {
+    "git_blob": "9b1ff9387b86ac3970a9e4b465a1541cd282c0ce",
+    "sha256": "6441013cb96a0b81084a6e8eb0bd633bbedc25dca034bfc1cb141496db22e5db",
+    "bytes": 20530
+  },
+  "renames": [
+    [
+      "binary_read_body",
+      "file_metadata"
+    ],
+    [
+      ".Lbrd_",
+      ".Lmdt_"
+    ],
+    [
+      "B_ENTER",
+      "M_ENTER"
+    ],
+    [
+      "B_LEAVE",
+      "M_LEAVE"
+    ],
+    [
+      "B_MAGIC",
+      "M_MAGIC"
+    ],
+    [
+      "B_INVALID",
+      "M_INVALID"
+    ],
+    [
+      "B_BUSY",
+      "M_BUSY"
+    ],
+    [
+      "B_RESOURCE",
+      "M_RESOURCE"
+    ],
+    [
+      "B_MAX_WORK",
+      "M_MAX_WORK"
+    ],
+    [
+      "B_MAX_OUT",
+      "M_MAX_OUT"
+    ],
+    [
+      "B_MAX_INPUT",
+      "M_MAX_INPUT"
+    ],
+    [
+      "B_REPLY_CAP",
+      "M_REPLY_CAP"
+    ],
+    [
+      "B_CHILD_OUT",
+      "M_CHILD_OUT"
+    ]
+  ],
+  "patches": [
+    {
+      "before": ".equ M_MAGIC, 0x3130494344524248",
+      "after": ".equ M_MAGIC, 0x3130494354444d48 /* HMDTCI01 */",
+      "offset": 502
+    },
+    {
+      "before": ".equ M_REPLY_CAP, 2101248",
+      "after": ".equ M_REPLY_CAP, 69632",
+      "offset": 710
+    },
+    {
+      "before": ".equ M_CHILD_OUT, 1400832",
+      "after": ".equ M_CHILD_OUT, 4096",
+      "offset": 734
+    },
+    {
+      "before": "    lea rax, [rip+.Lmdt_stat]\n    mov [r12+32], rax\n",
+      "after": "",
+      "offset": 3279
+    },
+    {
+      "before": "    xor ebx, ebx\n.Lmdt_destroy_fd:\n    mov rdi, [r12+256+rbx*8]\n    cmp rdi, -1\n    je .Lmdt_destroy_fd_next\n    mov eax, 3\n    syscall\n    mov qword ptr [r12+256+rbx*8], -1\n.Lmdt_destroy_fd_next:\n    inc ebx\n    cmp ebx, 8\n    jb .Lmdt_destroy_fd\n",
+      "after": "    /* All file capabilities are borrowed. Destruction never closes an FD. */\n",
+      "offset": 5547
+    },
+    {
+      "before": ".Lmdt_fd_find:\n    xor eax, eax\n.Lmdt_fd_find_loop:\n    cmp [r12+256+rax*8], rdi\n    je .Lmdt_fd_find_return\n    inc eax\n    cmp eax, 8\n    jb .Lmdt_fd_find_loop\n    cmp qword ptr [r12+352], 1\n    jne .Lmdt_fd_not_owned\n    cmp [r12+344], rdi\n    jne .Lmdt_fd_not_owned\n    mov eax, 8 /* Borrowed parent capability, never an owned close slot. */\n    jmp .Lmdt_fd_find_return\n.Lmdt_fd_not_owned:\n    mov rax, -1\n.Lmdt_fd_find_return:\n    ret\n",
+      "after": "",
+      "offset": 6947
+    },
+    {
+      "before": ".Lmdt_os:\n    M_ENTER\n    mov rbp, [r12+104]\n    mov rbx, [rbp+24]\n    mov qword ptr [r12+240], 0\n    cmp rbx, 1\n    je .Lmdt_os_root\n    cmp rbx, 9\n    je .Lmdt_os_euid\n    mov rdi, [rbp+32]\n    call .Lmdt_fd_find\n    cmp rax, -1\n    je .Lmdt_os_bad\n    mov r15, rax\n    cmp rbx, 2\n    je .Lmdt_os_openat\n    cmp rbx, 3\n    je .Lmdt_os_openat\n    cmp rbx, 5\n    je .Lmdt_os_close\n    cmp rbx, 6\n    je .Lmdt_os_fstat\n    cmp rbx, 11\n    je .Lmdt_os_read\n    cmp rbx, 19\n    je .Lmdt_os_seek\n    jmp .Lmdt_os_bad\n.Lmdt_os_root:\n    mov rax, [rbp+32]\n    or rax, [rbp+40]\n    or rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    lea rdi, [rip+.Lmdt_root_path]\n    mov esi, 0xb0000\n    xor edx, edx\n    mov eax, 2\n    syscall\n    jmp .Lmdt_os_opened\n.Lmdt_os_openat:\n    mov rax, [rbp+40]\n    or rax, [rbp+48]\n    jnz .Lmdt_os_bad\n    lea rdi, [rbp+64]\n    mov rsi, [rbp+56]\n    call .Lmdt_name\n    test eax, eax\n    jnz .Lmdt_os_bad\n    mov edx, 0xb0000\n    cmp rbx, 2\n    je .Lmdt_os_openat_call\n    mov edx, 0xa0800\n.Lmdt_os_openat_call:\n    mov rdi, [rbp+32]\n    lea rsi, [rbp+64]\n    xor r10d, r10d\n    mov eax, 257\n    syscall\n.Lmdt_os_opened:\n    mov [r12+232], rax\n    cmp rax, -4095\n    jae .Lmdt_os_ok\n    mov r13, rax\n    mov rdi, rax\n    call .Lmdt_fd_find\n    cmp rax, -1\n    jne .Lmdt_os_bad\n    xor eax, eax\n.Lmdt_os_fd_insert:\n    cmp qword ptr [r12+256+rax*8], -1\n    je .Lmdt_os_fd_insert_at\n    inc eax\n    cmp eax, 8\n    jb .Lmdt_os_fd_insert\n    mov rdi, r13\n    mov eax, 3\n    syscall\n    jmp .Lmdt_os_bad\n.Lmdt_os_fd_insert_at:\n    mov [r12+256+rax*8], r13\n    inc qword ptr [r12+184]\n    jmp .Lmdt_os_ok\n.Lmdt_os_close:\n    cmp r15d, 8\n    je .Lmdt_os_bad\n    mov rax, [rbp+40]\n    or rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    mov eax, 3\n    syscall\n    mov [r12+232], rax\n    /* Linux close retires this owned descriptor even on a late close error. */\n    mov qword ptr [r12+256+r15*8], -1\n    dec qword ptr [r12+184]\n    jmp .Lmdt_os_ok\n.Lmdt_os_fstat:\n    mov rax, [rbp+40]\n    or rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    mov rdi, [r12+120]\n    add rdi, 96\n    xor eax, eax\n    mov ecx, 18\n    rep stosq\n    mov rdi, [rbp+32]\n    mov rsi, [r12+120]\n    add rsi, 96\n    mov eax, 5\n    syscall\n    mov [r12+232], rax\n    test rax, rax\n    jnz .Lmdt_os_ok\n    mov qword ptr [r12+240], 144\n    jmp .Lmdt_os_ok\n.Lmdt_os_euid:\n    mov rax, [rbp+32]\n    or rax, [rbp+40]\n    or rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    mov eax, 107\n    syscall\n    jmp .Lmdt_os_return_raw\n.Lmdt_os_read:\n    mov rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    mov rdx, [rbp+40]\n    test rdx, rdx\n    jz .Lmdt_os_bad\n    cmp rdx, 1048576\n    ja .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    mov rsi, [r12+120]\n    add rsi, 96\n    xor eax, eax\n    syscall\n    mov [r12+232], rax\n    cmp rax, -4095\n    jae .Lmdt_os_ok\n    cmp rax, 1048576\n    ja .Lmdt_os_bad\n    mov [r12+240], rax\n    jmp .Lmdt_os_ok\n.Lmdt_os_seek:\n    mov rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    mov rsi, [rbp+40]\n    xor edx, edx\n    mov eax, 8\n    syscall\n.Lmdt_os_return_raw:\n    mov [r12+232], rax\n.Lmdt_os_ok:\n    xor eax, eax\n    jmp .Lmdt_os_done\n.Lmdt_os_bad:\n    mov eax, M_INVALID\n.Lmdt_os_done:\n    M_LEAVE\n.Lmdt_root_path:\n    .asciz \"/\"\n\n",
+      "after": ".Lmdt_os:\n    M_ENTER\n    mov rbp, [r12+104]\n    mov rbx, [rbp+24]\n    mov qword ptr [r12+240], 0\n    cmp qword ptr [r12+368], 1\n    jne .Lmdt_os_bad\n    cmp qword ptr [r12+360], 2\n    je .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    cmp rdi, [r12+344]\n    je .Lmdt_os_read_admitted\n    cmp qword ptr [r12+360], 3\n    jne .Lmdt_os_bad\n    cmp rdi, [r12+352]\n    jne .Lmdt_os_bad\n.Lmdt_os_read_admitted:\n    cmp rbx, 1\n    je .Lmdt_os_fstat\n    cmp rbx, 2\n    je .Lmdt_os_list\n    cmp rbx, 3\n    je .Lmdt_os_get\n    cmp qword ptr [r12+360], 3\n    jne .Lmdt_os_bad\n    cmp rdi, [r12+352]\n    jne .Lmdt_os_bad\n    cmp rbx, 4\n    je .Lmdt_os_chown\n    cmp rbx, 5\n    je .Lmdt_os_chmod\n    cmp rbx, 6\n    je .Lmdt_os_remove\n    cmp rbx, 7\n    je .Lmdt_os_set\n    cmp rbx, 8\n    je .Lmdt_os_fsync\n    jmp .Lmdt_os_bad\n.Lmdt_os_fstat:\n    mov rax, [rbp+40]\n    or rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    mov rdi, [r12+120]\n    add rdi, 96\n    xor eax, eax\n    mov ecx, 18\n    rep stosq\n    mov rdi, [rbp+32]\n    mov rsi, [r12+120]\n    add rsi, 96\n    mov eax, 5\n    syscall\n    mov [r12+232], rax\n    test rax, rax\n    jnz .Lmdt_os_ok\n    mov qword ptr [r12+240], 144\n    jmp .Lmdt_os_ok\n.Lmdt_os_list:\n    mov rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    mov rdx, [rbp+40]\n    test rdx, rdx\n    jz .Lmdt_os_bad\n    cmp rdx, 65536\n    ja .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    mov rsi, [r12+120]\n    add rsi, 96\n    mov eax, 196 /* flistxattr */\n    syscall\n    jmp .Lmdt_os_read_result\n.Lmdt_os_get:\n    cmp qword ptr [rbp+48], 0\n    jne .Lmdt_os_bad\n    mov rax, [rbp+40]\n    test rax, rax\n    jz .Lmdt_os_bad\n    cmp rax, 65536\n    ja .Lmdt_os_bad\n    mov rsi, [rbp+56]\n    cmp rsi, 65536\n    ja .Lmdt_os_bad\n    lea rdi, [rbp+64]\n    call .Lmdt_name\n    test eax, eax\n    jnz .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    lea rsi, [rbp+64]\n    mov rdx, [r12+120]\n    add rdx, 96\n    mov r10, [rbp+40]\n    mov eax, 193 /* fgetxattr */\n    syscall\n.Lmdt_os_read_result:\n    mov [r12+232], rax\n    cmp rax, -4095\n    jae .Lmdt_os_ok\n    cmp rax, [rbp+40]\n    ja .Lmdt_os_bad\n    mov [r12+240], rax\n    jmp .Lmdt_os_ok\n.Lmdt_os_chown:\n    cmp qword ptr [rbp+56], 0\n    jne .Lmdt_os_bad\n    mov rax, [rbp+40]\n    or rax, [rbp+48]\n    shr rax, 32\n    jnz .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    mov rsi, [rbp+40]\n    mov rdx, [rbp+48]\n    mov eax, 93 /* fchown */\n    syscall\n    jmp .Lmdt_os_result\n.Lmdt_os_chmod:\n    mov rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    cmp qword ptr [rbp+40], 4095\n    ja .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    mov rsi, [rbp+40]\n    mov eax, 91 /* fchmod */\n    syscall\n    jmp .Lmdt_os_result\n.Lmdt_os_remove:\n    mov rax, [rbp+40]\n    or rax, [rbp+48]\n    jnz .Lmdt_os_bad\n    mov rsi, [rbp+56]\n    cmp rsi, 65536\n    ja .Lmdt_os_bad\n    lea rdi, [rbp+64]\n    call .Lmdt_name\n    test eax, eax\n    jnz .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    lea rsi, [rbp+64]\n    mov eax, 199 /* fremovexattr */\n    syscall\n    jmp .Lmdt_os_result\n.Lmdt_os_set:\n    mov rsi, [rbp+40]\n    cmp rsi, 65535\n    ja .Lmdt_os_bad\n    cmp qword ptr [rbp+48], 65536\n    ja .Lmdt_os_bad\n    inc rsi\n    mov rax, rsi\n    add rax, [rbp+48]\n    cmp rax, [rbp+56]\n    jne .Lmdt_os_bad\n    lea rdi, [rbp+64]\n    call .Lmdt_name\n    test eax, eax\n    jnz .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    lea rsi, [rbp+64]\n    mov rdx, [rbp+40]\n    lea rdx, [rsi+rdx+1]\n    mov r10, [rbp+48]\n    xor r8d, r8d\n    mov eax, 190 /* fsetxattr */\n    syscall\n    jmp .Lmdt_os_result\n.Lmdt_os_fsync:\n    mov rax, [rbp+40]\n    or rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lmdt_os_bad\n    mov rdi, [rbp+32]\n    mov eax, 74 /* fsync */\n    syscall\n.Lmdt_os_result:\n    mov [r12+232], rax\n.Lmdt_os_ok:\n    xor eax, eax\n    jmp .Lmdt_os_done\n.Lmdt_os_bad:\n    mov eax, M_INVALID\n.Lmdt_os_done:\n    M_LEAVE\n\n",
+      "offset": 7185
+    },
+    {
+      "before": "/* rdi context, rsi immutable complete HBRDQ001 start, rdx length. */\n.global file_metadata_invoke\nfile_metadata_invoke:\n    M_ENTER\n    mov r12, rdi\n    mov r13, rsi\n    mov r14, rdx\n    xor r15d, r15d\n    mov rbp, -1\n    jmp .Lmdt_invoke_validate_context\n\n/* Fixed graph-only borrowed parent entry: context, parent FD, complete packet,\n * packet length. The packet's FD word must be zero; only this trusted register\n * binding can supply the capability. The caller retains parent ownership. */\n.global file_metadata_invoke_at\nfile_metadata_invoke_at:\n    M_ENTER\n    mov r12, rdi\n    mov rbp, rsi\n    mov r13, rdx\n    mov r14, rcx\n    mov r15d, 1\n    cmp rbp, 2147483647\n    ja .Lmdt_invoke_reject\n.Lmdt_invoke_validate_context:\n    mov rax, M_MAGIC\n    cmp [r12], rax\n    jne .Lmdt_invoke_reject\n    cmp qword ptr [r12+8], 4096\n    jne .Lmdt_invoke_reject\n    cmp qword ptr [r12+56], 0\n    jne .Lmdt_invoke_busy\n    cmp qword ptr [r12+184], 0\n    jne .Lmdt_invoke_reject\n    cmp qword ptr [r12+352], 0\n    jne .Lmdt_invoke_reject\n    cmp r14, 96\n    jb .Lmdt_invoke_reject\n    cmp r14, M_MAX_INPUT\n    ja .Lmdt_invoke_reject\n    test r13, r13\n    jz .Lmdt_invoke_reject\n    mov rax, 0x3130305144524248 /* HBRDQ001 */\n    test r15d, r15d\n    jz .Lmdt_invoke_magic_ready\n    mov rax, 0x3130444644524248 /* HBRDFD01 */\n    cmp qword ptr [r13+32], 0\n    jne .Lmdt_invoke_reject\n.Lmdt_invoke_magic_ready:\n    cmp [r13], rax\n    jne .Lmdt_invoke_reject\n    cmp qword ptr [r13+8], 1\n    jne .Lmdt_invoke_reject\n    cmp qword ptr [r13+16], 0\n    jne .Lmdt_invoke_reject\n    cmp qword ptr [r12+192], -1\n    je .Lmdt_invoke_reject\n    lea rdi, [r12+64]\n    mov rsi, r14\n    call .Lmdt_grow\n    test eax, eax\n    jnz .Lmdt_invoke_return\n    mov rdi, [r12+64]\n    mov rsi, r13\n    mov rcx, r14\n    rep movsb\n    test r15d, r15d\n    jz .Lmdt_invoke_input_ready\n    mov rax, [r12+64]\n    mov [rax+32], rbp\n    mov [r12+344], rbp\n    mov qword ptr [r12+352], 1\n.Lmdt_invoke_input_ready:\n    mov [r12+80], r14\n    mov rax, [r12+64]\n    mov [r12+200], rax\n    mov [r12+208], r14\n    inc qword ptr [r12+192]\n    mov qword ptr [r12+248], 0\n    mov qword ptr [r12+56], 1\n    mov qword ptr [r12+168], 0\n    mov qword ptr [r12+176], 0\n",
+      "after": "/* Trusted graph entry: rdi context, rsi borrowed source FD,\n * rdx borrowed target FD, rcx complete immutable HMDTQ001 packet, r8 length.\n * Both packet FD words must be zero. This entry injects only bound registers. */\n.global file_metadata_invoke\nfile_metadata_invoke:\n    M_ENTER\n    mov r12, rdi\n    mov r15, rsi\n    mov rbp, rdx\n    mov r13, rcx\n    mov r14, r8\n    cmp r15, 2147483647\n    ja .Lmdt_invoke_reject\n    cmp rbp, 2147483647\n    ja .Lmdt_invoke_reject\n    mov rax, M_MAGIC\n    cmp [r12], rax\n    jne .Lmdt_invoke_reject\n    cmp qword ptr [r12+8], 4096\n    jne .Lmdt_invoke_reject\n    cmp qword ptr [r12+56], 0\n    jne .Lmdt_invoke_busy\n    mov rax, [r12+184]\n    or rax, [r12+344]\n    or rax, [r12+352]\n    or rax, [r12+360]\n    or rax, [r12+368]\n    jnz .Lmdt_invoke_reject\n    cmp r14, 96\n    jb .Lmdt_invoke_reject\n    cmp r14, M_MAX_INPUT\n    ja .Lmdt_invoke_reject\n    test r13, r13\n    jz .Lmdt_invoke_reject\n    mov rax, 0x3130305154444d48 /* HMDTQ001 */\n    cmp [r13], rax\n    jne .Lmdt_invoke_reject\n    cmp qword ptr [r13+8], 1\n    jne .Lmdt_invoke_reject\n    mov rax, [r13+16]\n    or rax, [r13+32]\n    or rax, [r13+40]\n    jnz .Lmdt_invoke_reject\n    mov rbx, [r13+24]\n    cmp rbx, 1\n    jb .Lmdt_invoke_reject\n    cmp rbx, 3\n    ja .Lmdt_invoke_reject\n    cmp rbx, 3\n    je .Lmdt_invoke_cap_ready\n    test rbp, rbp\n    jnz .Lmdt_invoke_reject\n    cmp rbx, 1\n    je .Lmdt_invoke_cap_ready\n    test r15, r15\n    jnz .Lmdt_invoke_reject\n.Lmdt_invoke_cap_ready:\n    cmp qword ptr [r12+192], -1\n    je .Lmdt_invoke_reject\n    lea rdi, [r12+64]\n    mov rsi, r14\n    call .Lmdt_grow\n    test eax, eax\n    jnz .Lmdt_invoke_return\n    mov rdi, [r12+64]\n    mov rsi, r13\n    mov rcx, r14\n    rep movsb\n    mov rax, [r12+64]\n    mov [rax+32], r15\n    mov [rax+40], rbp\n    mov [r12+344], r15\n    mov [r12+352], rbp\n    mov [r12+360], rbx\n    mov qword ptr [r12+368], 1\n    mov [r12+80], r14\n    mov rax, [r12+64]\n    mov [r12+200], rax\n    mov [r12+208], r14\n    inc qword ptr [r12+192]\n    mov qword ptr [r12+248], 0\n    mov qword ptr [r12+56], 1\n    mov qword ptr [r12+168], 0\n    mov qword ptr [r12+176], 0\n",
+      "offset": 11000
+    },
+    {
+      "before": "    mov rax, 0x3130305344524248 /* HBRDS001 */",
+      "after": "    mov rax, 0x3130305253444d48 /* HMDSR001 */",
+      "offset": 14207
+    },
+    {
+      "before": "    mov rax, 0x3130305144524248\n",
+      "after": "    mov rax, 0x3130305154444d48 /* HMDTQ001 */\n",
+      "offset": 16666
+    },
+    {
+      "before": "    mov rax, [rbp+24]\n    cmp rax, 2\n    je .Lmdt_child_stat\n    cmp rax, 1\n    jne .Lmdt_invoke_failed\n    mov rax, [r12+24]\n    mov [r12+320], rax\n    mov qword ptr [r12+328], 1398104\n    mov qword ptr [r12+336], 1184\n    jmp .Lmdt_child_start\n.Lmdt_child_stat:\n    mov rax, [r12+32]\n    mov [r12+320], rax\n    mov qword ptr [r12+328], 128\n    mov qword ptr [r12+336], 256\n",
+      "after": "    cmp qword ptr [rbp+24], 1\n    jne .Lmdt_invoke_failed\n    mov rax, [r12+24]\n    mov [r12+320], rax\n    mov qword ptr [r12+328], 64\n    mov qword ptr [r12+336], 1184\n",
+      "offset": 15048
+    },
+    {
+      "before": ".Lmdt_invoke_final:\n    cmp qword ptr [r12+184], 0\n    jne .Lmdt_invoke_failed\n    cmp qword ptr [rbp+8], 3\n    je .Lmdt_invoke_error\n    mov rax, [rbp+24]\n    or rax, [rbp+32]\n    or rax, [rbp+40]\n    or rax, [rbp+48]\n    jnz .Lmdt_invoke_failed\n    jmp .Lmdt_invoke_borrow\n.Lmdt_invoke_error:\n    cmp qword ptr [rbp+24], 1\n    jb .Lmdt_invoke_failed\n    cmp qword ptr [rbp+24], 14\n    ja .Lmdt_invoke_failed\n    cmp qword ptr [rbp+32], 4095\n    ja .Lmdt_invoke_failed\n    cmp qword ptr [rbp+48], 1\n    ja .Lmdt_invoke_failed\n    mov rax, [rbp+40]\n    cmp rax, [rbp+56]\n    ja .Lmdt_invoke_failed\n.Lmdt_invoke_borrow:\n    /* All owned file descriptors are drained. The parent's capability and\n     * lifetime remain with the calling graph, including on business errors. */\n    mov qword ptr [r12+344], 0\n    mov qword ptr [r12+352], 0\n    mov rax, [rbp+56]\n    add rax, 64\n    mov [r12+168], rax\n    mov qword ptr [r12+56], 2\n    mov eax, 64\n    jmp .Lmdt_invoke_return\n",
+      "after": ".Lmdt_invoke_final:\n    cmp qword ptr [r12+184], 0\n    jne .Lmdt_invoke_failed\n    cmp qword ptr [rbp+8], 3\n    je .Lmdt_invoke_error\n    mov rax, [rbp+24]\n    cmp rax, [r12+360]\n    jne .Lmdt_invoke_failed\n    mov rax, [rbp+32]\n    or rax, [rbp+40]\n    or rax, [rbp+48]\n    jnz .Lmdt_invoke_failed\n    jmp .Lmdt_invoke_borrow\n.Lmdt_invoke_error:\n    cmp qword ptr [rbp+24], 1\n    jb .Lmdt_invoke_failed\n    cmp qword ptr [rbp+24], 14\n    ja .Lmdt_invoke_failed\n    cmp qword ptr [rbp+32], 4095\n    ja .Lmdt_invoke_failed\n    mov rax, [rbp+40]\n    cmp qword ptr [rbp+48], 0\n    je .Lmdt_invoke_error_extent\n    cmp qword ptr [rbp+48], 2\n    jne .Lmdt_invoke_failed\n    add rax, 8\n    jc .Lmdt_invoke_failed\n.Lmdt_invoke_error_extent:\n    cmp rax, [rbp+56]\n    jne .Lmdt_invoke_failed\n.Lmdt_invoke_borrow:\n    /* Source and target remain owned by the parent. No dup or close occurs. */\n    mov qword ptr [r12+344], 0\n    mov qword ptr [r12+352], 0\n    mov qword ptr [r12+360], 0\n    mov qword ptr [r12+368], 0\n    mov rax, [rbp+56]\n    add rax, 64\n    mov [r12+168], rax\n    mov qword ptr [r12+56], 2\n    mov eax, 64\n    jmp .Lmdt_invoke_return\n",
+      "offset": 18174
+    },
+    {
+      "before": ".Lmdt_invoke_record_failure:\n    mov [r12+176], rax\n",
+      "after": ".Lmdt_invoke_record_failure:\n    mov qword ptr [r12+344], 0\n    mov qword ptr [r12+352], 0\n    mov qword ptr [r12+360], 0\n    mov qword ptr [r12+368], 0\n    mov [r12+176], rax\n",
+      "offset": 19445
+    },
+    {
+      "before": ".global file_metadata_stat_call_displacement\n.Lmdt_stat:\n    .byte 0xe9\nfile_metadata_stat_call_displacement:\n    .long 0\n",
+      "after": "",
+      "offset": 20184
+    },
+    {
+      "before": " * Fixed synchronous binary-read capability. All binary-read policy is HIA.\n",
+      "after": " * Fixed borrowed-file metadata capability. All metadata policy is HIA.\n",
+      "offset": 74
+    },
+    {
+      "before": "/* Destruction refuses active or borrowed contexts. Fatal private failures may\n * close still-owned OS descriptors; they never masquerade as body success. */",
+      "after": "/* Destruction refuses active or borrowed response contexts. File descriptors\n * are borrowed and are never duplicated, closed, reopened or retired here. */",
+      "offset": 5035
+    }
+  ]
+}
