@@ -92,6 +92,11 @@ runtime_text_body_hub_destroy:
     mov rax, 0x3142554842544c48
     cmp [r12], rax
     jne rtbh_destroy_invalid
+.ifdef RUNTIME_LOCK_WAKE_HOOK
+    mov rax,[r12+XW_HUB_HEAD]
+    or rax,[r12+XW_HUB_COUNT]
+    jnz rtbh_destroy_invalid
+.endif
     xor ebp, ebp
 rtbh_destroy_slot:
     mov rbx, rbp

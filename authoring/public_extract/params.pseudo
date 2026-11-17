@@ -1,0 +1,196 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) < 128:
+        return CAPACITY
+    if length(s) < 26 or load(s, 0) != PARAMS_REQUEST or load(s, 8) != length(s) - 24 or load(s, 16) != 0:
+        return INVALID
+    if byte(s, 24) != 123 or byte(s, length(s) - 1) != 125:
+        return INVALID
+    if length(w) < 32768:
+        return capacity(o, 2, 32768)
+    fill_range(w, 0, 1024, 0)
+    status = project(s, w)
+    if status == MAXIMUM:
+        return INVALID
+    if status == MAXIMUM - 1:
+        if get(w, 48) != 0:
+            return capacity(o, 4, 0)
+        return capacity(o, 2, get(w, 40))
+    if status == 1:
+        put(w, 112, 0)
+        put(w, 120, 128)
+        diagnostic(s, w, o)
+        size = get(w, 120)
+        if get(w, 48) != 0:
+            return capacity(o, 4, 0)
+        if size > length(o):
+            return capacity(o, 3, size)
+        header(o)
+        put(o, 8, 1)
+        put(o, 72, size - 128)
+        put(w, 112, 1)
+        put(w, 120, 128)
+        diagnostic(s, w, o)
+        return 128
+    size = 128
+    i = 0
+    while i < 5:
+        count = output_size(w, i)
+        if count > MAXIMUM - size:
+            return capacity(o, 4, 0)
+        size = size + count
+        i = i + 1
+    if size > length(o):
+        return capacity(o, 3, size)
+    header(o)
+    put(o, 16, 1)
+    put(o, 24, output_size(w, 0))
+    put(o, 40, output_size(w, 1))
+    put(o, 48, output_size(w, 2))
+    put(o, 56, output_size(w, 3))
+    put(o, 64, output_size(w, 4))
+    at = 128
+    at = copy_string(s, w, o, get(w, 520), at)
+    at = copy_string(s, w, o, get(w, 712), at)
+    at = output_endpoint(s, w, o, 1, at)
+    at = output_endpoint(s, w, o, 2, at)
+    at = output_endpoint(s, w, o, 4, at)
+    if at != size:
+        return INVALID
+    return 128
+
+def project(s: readbuf, w: mutbuf) -> u64:
+    at = 25
+    end = length(s) - 1
+    while at < end:
+        if byte(s, at) != 34:
+            return MAXIMUM
+        key_end = string_info(s, w, at)
+        if key_end == MAXIMUM or key_end >= end or byte(s, key_end) != 58:
+            return MAXIMUM
+        which = field_key(s, at, key_end)
+        start = key_end + 1
+        next = skip_value(s, w, start)
+        if next >= MAXIMUM - 1:
+            return next
+        if next > end:
+            return MAXIMUM
+        if which < 5:
+            row = 512 + which * 64
+            if get(w, row) != 0:
+                return MAXIMUM
+            result = field(s, w, which, start, next)
+            if result != 0:
+                return result
+        if next == end:
+            at = end
+        elif byte(s, next) == 44 and next + 1 < end:
+            at = next + 1
+        else:
+            return MAXIMUM
+    which = 0
+    while which < 5:
+        if which != 2 and get(w, 512 + which * 64) == 0:
+            put(w, 256, 2)
+            put(w, 272, which)
+            return 1
+        which = which + 1
+    return 0
+
+def field(s: readbuf, w: mutbuf, which: u64, at: u64, end: u64) -> u64:
+    row = 512 + which * 64
+    first = byte(s, at)
+    if which == 0 or which == 3:
+        if first != 34:
+            put(w, 256, 1)
+            put(w, 264, at)
+            return 1
+        next = string_info(s, w, at)
+        if next != end:
+            return MAXIMUM
+        put(w, row, 1)
+        put(w, row + 8, at)
+        put(w, row + 24, get(w, 16))
+        return 0
+    if which == 2 and first == 110:
+        if end - at != 4:
+            return MAXIMUM
+        return 0
+    put(w, row, 1)
+    put(w, row + 8, at)
+    put(w, row + 16, end - at)
+    if first == 34:
+        next = string_info(s, w, at)
+        if next != end:
+            return MAXIMUM
+        put(w, row + 24, get(w, 16))
+        put(w, row + 32, 2)
+    elif first == 45 or (first >= 48 and first <= 57):
+        kind = 1
+        bits = 0
+        if integer(s, w, at, end) == 1:
+            magnitude = get(w, 8)
+            negative = get(w, 16)
+            if negative == 0 and magnitude <= 9223372036854775807:
+                kind = 0
+                bits = magnitude
+            elif negative == 1 and magnitude <= 9223372036854775808:
+                kind = 0
+                bits = 0 - magnitude
+        put(w, row + 32, kind)
+        put(w, row + 40, bits)
+    else:
+        put(w, row + 24, end - at)
+        put(w, row + 32, 3)
+    return 0
+
+def output_size(w: mutbuf, which: u64) -> u64:
+    if which == 0:
+        return get(w, 536)
+    if which == 1:
+        return get(w, 728)
+    index = choose(which == 2, 1, choose(which == 3, 2, 4))
+    row = 512 + index * 64
+    if get(w, row) == 0:
+        return 0
+    count = get(w, row + 24)
+    if count > MAXIMUM - 32:
+        return MAXIMUM
+    return 32 + count
+
+def output_endpoint(s: readbuf, w: mutbuf, o: mutbuf, which: u64, at: u64) -> u64:
+    row = 512 + which * 64
+    if get(w, row) == 0:
+        return at
+    kind = get(w, row + 32)
+    count = get(w, row + 24)
+    put(o, at, ENDPOINT)
+    put(o, at + 8, kind)
+    put(o, at + 16, count)
+    put(o, at + 24, get(w, row + 40))
+    if kind == 2:
+        return copy_string(s, w, o, get(w, row + 8), at + 32)
+    if kind == 3:
+        copy_range(o, s, at + 32, get(w, row + 8), count)
+    return at + 32 + count
+
+def diagnostic(s: readbuf, w: mutbuf, o: mutbuf) -> u64:
+    if get(w, 256) == 1:
+        diagnostic_literal(w, o, 0)
+        unexpected(s, w, o, get(w, 264))
+        diagnostic_literal(w, o, 1)
+    else:
+        diagnostic_literal(w, o, 2)
+        diagnostic_literal(w, o, 3 + get(w, 272))
+        emit(w, o, 96)
+    return 0
+
+def header(o: mutbuf) -> u64:
+    fill_range(o, 0, 128, 0)
+    put(o, 0, PARAMS_RESULT)
+    return 0
+
+def capacity(o: mutbuf, status: u64, required: u64) -> u32:
+    header(o)
+    put(o, 8, status)
+    put(o, 80, required)
+    return 128

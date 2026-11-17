@@ -1,0 +1,96 @@
+def noncall_request(o: mutbuf, w: mutbuf) -> u32:
+    if get(w, MESSAGE + 16) == 19:
+        return custom_request(o, w)
+    return child(w, 4, 3, ORIGINAL, get(w, 24), TEMP, TEMP_CAP)
+
+def custom_request(o: mutbuf, w: mutbuf) -> u32:
+    size = get(w, 48)
+    if connection_pair(w, MESSAGE, size, 64) == False or connection_pair(w, MESSAGE, size, 80) == False:
+        return INVALID
+    method = get(w, MESSAGE + 64)
+    method_size = get(w, MESSAGE + 72)
+    identifier = get(w, MESSAGE + 80)
+    identifier_size = get(w, MESSAGE + 88)
+    if method == 0 or identifier == 0 or identifier_size == 0:
+        return INVALID
+    quoted = quote_size(w, MESSAGE + method, method_size)
+    if identifier_size > TEMP_CAP - 250:
+        return RESOURCE
+    if quoted > TEMP_CAP - 250 - identifier_size:
+        return RESOURCE
+    start = TEMP + 192
+    at = response_prefix(w, start)
+    copy_range(w, w, at, MESSAGE + identifier, identifier_size)
+    at = at + identifier_size
+    at = error_prefix(w, at)
+    at = quote_write(w, at, MESSAGE + method, method_size)
+    store(w, at, 125)
+    store(w, at + 1, 125)
+    at = at + 2
+    return direct_frame(o, w, start, at - start, 0)
+
+def quote_size(w: mutbuf, start: u64, count: u64) -> u64:
+    i = 0
+    result = 2
+    while i < count:
+        value = byte(w, start + i)
+        if escape_code(value) != 0:
+            result = result + 2
+        elif value < 32:
+            result = result + 6
+        else:
+            result = result + 1
+        i = i + 1
+    return result
+
+def quote_write(w: mutbuf, at: u64, start: u64, count: u64) -> u64:
+    store(w, at, 34)
+    at = at + 1
+    i = 0
+    while i < count:
+        value = byte(w, start + i)
+        escaped = escape_code(value)
+        if escaped != 0:
+            store(w, at, 92)
+            store(w, at + 1, escaped)
+            at = at + 2
+        elif value < 32:
+            store(w, at, 92)
+            store(w, at + 1, 117)
+            store(w, at + 2, 48)
+            store(w, at + 3, 48)
+            upper = value >> 4
+            lower = value & 15
+            store(w, at + 4, choose(upper < 10, upper + 48, upper + 87))
+            store(w, at + 5, choose(lower < 10, lower + 48, lower + 87))
+            at = at + 6
+        else:
+            store(w, at, value)
+            at = at + 1
+        i = i + 1
+    store(w, at, 34)
+    return at + 1
+
+def escape_code(value: u64) -> u64:
+    if value == 34 or value == 92:
+        return value
+    if value == 8:
+        return 98
+    if value == 9:
+        return 116
+    if value == 10:
+        return 110
+    if value == 12:
+        return 102
+    if value == 13:
+        return 114
+    return 0
+
+def error_prefix(w: mutbuf, at: u64) -> u64:
+    put(w, at + 0, 2482168881970749996)
+    put(w, at + 8, 2478497599504677690)
+    put(w, at + 16, 3184379420856233274)
+    put(w, at + 24, 7306916068917079330)
+    store(w, at + 32, 34)
+    store(w, at + 33, 58)
+    return at + 34

@@ -25,12 +25,22 @@ from text_editor_create_private_pack import pack
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 BASE = 'scripts/config_mcp_grow_adapter.S'
 BOUNDARIES = [
+    'scripts/text_publication_callable.S',
+    'scripts/runtime_publication_body_bridge.S',
+    'scripts/runtime_publication_install.S',
+    'scripts/runtime_publication_scope_bridge.S',
+    'scripts/runtime_extract_wait.S',
     'scripts/runtime_mcp_task_storage.S',
+    'scripts/runtime_mcp_task_extract.S',
     'scripts/runtime_mcp_task_trace.S',
     'scripts/runtime_mcp_task_policy.S',
     'scripts/runtime_mcp_task_worker.S',
     'scripts/runtime_mcp_task_send.S',
     'scripts/runtime_mcp_task_teardown.S',
+    'scripts/runtime_extract_body_bridge.S',
+    'scripts/runtime_extract_cache_bridge.S',
+    'scripts/runtime_extract_install.S',
+    'scripts/local_extract_lines_callable.S',
     'scripts/runtime_batch_body_bridge.S',
     'scripts/runtime_batch_cache_bridge.S',
     'scripts/runtime_batch_install.S',
@@ -169,6 +179,18 @@ MEMBERS = [
     ('batch_call', 'batch_call', 'history.v1'),
     ('batch_adapter', 'batch_body_adapter', 'history.v1'),
     ('request_tasks', 'sdk_request_task_registry', 'history.v1'),
+    ('extract_gateway', 'extract_gateway', 'history.v1'),
+    ('extract_params', 'extract_params', 'history.v1'),
+    ('extract_call', 'extract_call', 'history.v1'),
+    ('extract_adapter', 'extract_body_adapter', 'history.v1'),
+    ('extract_body', 'extract_body', 'history.v1'),
+    ('extract_data', 'extract_data', 'history.v1'),
+    ('extract_line_verify', 'extract_line_verify', 'history.v1'),
+    ('publisher_gateway', 'text_publication_gateway', 'history.v1'),
+    ('publisher_params', 'text_file_write_params', 'history.v1'),
+    ('publisher_call', 'text_publication_call', 'history.v1'),
+    ('publisher_body', 'text_file_publication', 'history.v1'),
+    ('publisher_errno', 'directory_errno', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -253,6 +275,8 @@ FALSE_FLAGS = ['complete_sdk_frontend', 'whole_view_replaced', 'whole_runtime_re
                'fresh_cold_qualified']
 
 EXTRA.extend([None, 'request_tasks'])
+EXTRA.extend(['extract_gateway', 'extract_params', 'extract_call', 'extract_adapter', None])
+EXTRA.extend(['publisher_gateway', 'publisher_params', 'publisher_call', None, None])
 PORT_PACKAGE_SHA256 = '2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1'
 
 
@@ -307,6 +331,7 @@ def adapter_source(root: Path, images=None, *, private_fixture=False,
         source = ('.equ PM_FIXED_FIXTURE_FDS,' + str(int(private_pump_fixture)) + '\n'
                   + '.equ PM_FIXED_TRACE_FD,' + str(int(private_pump_trace)) + '\n'
                   + '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed)
+    source = '.equ RUNTIME_LOCK_WAKE_HOOK,1\n' + source
     for name in re.findall(r'^\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):
         if name == '_start':
             continue
@@ -410,6 +435,9 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
     processes.append(execute(folder, 'assemble', ['as', '--64', '-o', str(folder / 'bridge.o'), str(folder / 'combined.S')], 60))
     configuration = {symbol: images[member] for symbol, member in zip(CONFIG_SYMBOLS, CONFIG)}
     configuration.update({name: images[name] for name in FENCE})
+    configuration.update(text_publication_body=images['publisher_body'],
+                         text_publication_codec=images['rf_sha'],
+                         text_publication_errno=images['publisher_errno'])
     extra = {slot: images[member] for slot, member in enumerate(EXTRA) if member is not None}
     extra[57] = images['bellman_port']
     view_images = {member: images[member] for member in VIEW}
@@ -418,7 +446,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 103
+    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 115
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -426,7 +454,8 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
                                     create_images=[images[n] for n in ('lc_spec','lc_read','lc_path','lc_mkdir','lc_write','key','cache')],
                                     body_images=[images[n] for n in ('tb_body','lc_read','key','tb_lock','tb_edit','tb_match','tb_history','tb_atomic','cache','tb_render','tb_unlink','view_error')],
                                     authority_images=[images[n] for n in ('authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader')],
-                                    batch_images=[images[n] for n in ('batch_body','batch_lock','key','tb_history','tb_atomic','cache','lc_read','tb_lock','tb_edit','batch_plan','endpoint','batch_verify','batch_apply','batch_render')])
+                                    batch_images=[images[n] for n in ('batch_body','batch_lock','key','tb_history','tb_atomic','cache','lc_read','tb_lock','tb_edit','batch_plan','endpoint','batch_verify','batch_apply','batch_render')],
+                                    extract_images=[images[n] for n in ('extract_body','lc_read','key','tb_lock','tb_edit','extract_data','tb_history','tb_atomic','cache','lc_path','lc_mkdir','view_error','endpoint','extract_line_verify')])
     processes.extend(steps)
     binary = folder / ('filesystem-fixture.elf' if private_fixture else 'task-pump-fixture.elf' if private_pump_fixture else 'runtime-mcp.elf')
     write_new(binary, elf, 0o500)
@@ -443,7 +472,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         if any(old[key] != value for key, value in row.items()):
             raise ValueError('public member changed during link')
     manifest = folder / 'manifest.json'
-    result = {'schema': 'hepta.runtime.public-task-batch-build.v1', 'status': 'PASS',
+    result = {'schema': 'hepta.runtime.public-task-batch-extract-build.v1', 'status': 'PASS',
               'members': members, 'physical_images': len(physical),
               'runtime_hia_images': len(MEMBERS) + 8,
               'packed_capabilities': {'57': {'sources': port_sources, 'build': port_evidence,
@@ -467,12 +496,30 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'link': link, 'pack': packed, 'boundary_processes': processes,
               'config_table': CONFIG, 'extra_table': EXTRA, 'view_table': VIEW, 'fence_table': FENCE,
               'private_instance_fixture': private_fixture, 'fixture_sessions': 2 if private_fixture else None,
-              'fixture_pseudo_selectors': [33, 34, 41, 57, 58] if private_fixture else [],
+              'fixture_pseudo_selectors': [33, 34, 41, 57, 58, 64] if private_fixture else [],
               'authority_slot': 56, 'authority_context_offset': 432,
+              'extract_private_slots': [59,60,61,62,63],
+              'extract_public_route_registered': True, 'extract_public_route_qualified': False,
+              'extract_context_offset': 456, 'extract_install_offset': 464,
+              'extract_actual_lock_wait_retention': True,
+              'extract_wait_chain_slots': [18,59,61,62,63],
+              'extract_wait_uses_actual_hia_reserved_lease': True,
+              'extract_wait_future_drop_after_transport_close': True,
+              'extract_wait_source_registered_but_qualified': False,
+              'extract_shared_hub_offset': 400, 'extract_body_image_count': 14,
+              'extract_callable_scope_borrow_maximum': 1048672,
+              'extract_local_body_only': True, 'extract_remote_qualified': False,
+              'extract_catalog_policy_qualified': False,
               'batch_private_slots': [47,48,49,50,51,52],
+              'publication_fixed_descriptors': [64,65,66,67,68],
+              'publication_forget_capability': {'slot': 68, 'parent': 66, 'local': 6, 'scope_output_loan': 96},
+              'publication_callable_context': 'descriptor67+8',
+              'publication_borrow_retained_until_parent_delivery': True,
+              'publication_gateway_caller_qualified': False,
+              'publication_public_route_registered': True,
               'batch_public_route_registered': True, 'batch_public_route_qualified': False,
               'batch_gateway_caller_qualified': False, 'batch_callable_scope_borrow_maximum': 1048672,
-              'advertised_catalog_tools': 9,
+              'advertised_catalog_tools': 11,
               'candidate_extra_registered_tools': ['batch_edit', 'weight_bellman_plan'],
               'combined_installed102_task_pump_qualified': False,
               'authority_fixed_local_members': ['authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader'],
@@ -492,7 +539,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'public_configuration_from_stdin': False, 'public_private_instance_selectors': False,
               'actual_fixture_private_selectors': private_fixture,
               'implemented_tools': ['host_list', 'effective_config', 'execution_shadow_admit', 'view', 'workdir',
-                                    'directory_create', 'file_move', 'directory_move', 'text_editor'],
+                                    'directory_create', 'file_move', 'directory_move', 'text_editor', 'extract_lines'],
               'filesystem_sdk_semantic_qualification': 'NOT_RUN',
               'runtime_host_semantics': False, 'semantic_qualification': 'NOT_RUN',
               'public_text_editor_route_registered_in_candidate_source': True,
@@ -523,7 +570,8 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'native_pending_handler_registry_qualified': False,
               'native_future_cancellation_qualified': False,
               'native_shutdown_timeout_timing_qualified': False,
-              'catalog_source_qualified_separately': True,
+              'catalog_source_qualified_separately': False,
+              'catalog_target_policy_assets_admitted': True,
               'full_sdk_qualified': False, 'full_136_route_qualified': False,
               'production_activated': False, 'old_path_removed': False,
               'private_text_editor_call_slot': 35, 'private_local_create_slot': 36,

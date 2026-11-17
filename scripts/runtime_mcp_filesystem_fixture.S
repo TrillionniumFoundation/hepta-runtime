@@ -112,6 +112,8 @@ fs_fixture_next:
     jne fs_fixture_failure
     cmp qword ptr [r12 + 72], 1
     ja fs_fixture_failure
+    cmp qword ptr [r12 + 80], 64
+    je fs_fixture_authority_selector
     cmp qword ptr [r12 + 80], 56
     je fs_fixture_authority_selector
     cmp qword ptr [r12 + 80], 57
@@ -142,6 +144,8 @@ fs_fixture_input_ready:
     jne fs_fixture_failure
     mov rax, [r12 + 72]
     mov r15, [r12 + rax * 8]
+    cmp qword ptr [r12 + 80], 64
+    je fs_fixture_extract_history_setup
     cmp qword ptr [r12 + 80], 57
     je fs_fixture_authority_snapshot
     cmp qword ptr [r12 + 80], 58
@@ -206,6 +210,9 @@ fs_fixture_finish:
     xor r13d, r13d
 fs_fixture_finish_session:
     mov r15, [r12 + r13 * 8]
+    call runtime_extract_body_release
+    test rax, rax
+    jnz fs_fixture_failure
     call runtime_batch_body_release
     test rax, rax
     jnz fs_fixture_failure
@@ -263,7 +270,7 @@ fs_fixture_failure:
     jmp fatal
 .balign 8
 grow_fixture_images:
-    .zero 472 /* 59 fixed public-engine slots; original private selectors are unchanged. */
+    .zero 552 /* 69 fixed engine slots; private extract selector64 remains a fixture alias. */
 
 /* Private qualification observation. These actions never enter stdio JSON. */
 fs_fixture_authority_release:
@@ -315,6 +322,100 @@ fs_fixture_authority_absent:
     mov edi, 1
     mov rsi, [r12 + 240]
     mov rdx, [r12 + 248]
+    call view_write_all
+    test rax, rax
+    jnz fs_fixture_failure
+    jmp fs_fixture_next
+
+/* Fixture-only setup of the existing HIA history owner. No history state or
+ * result is constructed here. The full unchanged HIA owner validates input.
+ * The frozen seed frames fit the original 4096-byte arenas; growth is not
+ * silently emulated. Public stdio does not include this fixture file. */
+.section .text
+fs_fixture_extract_history_setup:
+    cmp qword ptr [r12 + 88], 64
+    jb fs_fixture_failure
+    cmp qword ptr [r12 + 88], 2048
+    ja fs_fixture_failure
+    mov rbx, [r15 + 400]
+    test rbx, rbx
+    jz fs_fixture_failure
+    mov rax, 0x3142554842544c48
+    cmp [rbx], rax
+    jne fs_fixture_failure
+    add rbx, 128
+    /* A public process constructs this shared HIA owner before either Session.
+     * Fixture operation0 requests a fresh history. First use the same owner's
+     * finalize operation4, then forward the original initialize frame. Both
+     * replies and every state change are produced by the actual HIA owner. */
+    mov rdi, [r12 + 24]
+    mov rax, 0x3130515453494848
+    cmp [rdi], rax
+    jne fs_fixture_extract_history_direct
+    cmp qword ptr [rdi + 8], 0
+    jne fs_fixture_extract_history_direct
+    cmp qword ptr [r12 + 88], 64
+    jne fs_fixture_extract_history_direct
+    mov ecx, 16
+fs_fixture_extract_history_zero_fields:
+    cmp qword ptr [rdi + rcx], 0
+    jne fs_fixture_extract_history_direct
+    add rcx, 8
+    cmp rcx, 64
+    jb fs_fixture_extract_history_zero_fields
+    sub rsp, 64
+    mov rsi, rdi
+    mov rdi, rsp
+    mov ecx, 8
+    rep movsq
+    mov qword ptr [rsp + 8], 4
+    mov rdi, rsp
+    mov esi, 64
+    mov rdx, [rbx + 24]
+    mov rcx, [rbx + 32]
+    mov r8, [rbx + 8]
+    mov r9, [rbx + 16]
+    call qword ptr [rbx]
+    add rsp, 64
+    cmp rax, 64
+    jne fs_fixture_failure
+    mov rdx, [rbx + 24]
+    mov rax, 0x3130525453494848
+    cmp [rdx], rax
+    jne fs_fixture_failure
+    cmp qword ptr [rdx + 8], 0
+    jne fs_fixture_failure
+fs_fixture_extract_history_direct:
+    mov rdi, [r12 + 24]
+    mov rsi, [r12 + 88]
+    mov rdx, [rbx + 24]
+    mov rcx, [rbx + 32]
+    mov r8, [rbx + 8]
+    mov r9, [rbx + 16]
+    call qword ptr [rbx]
+    mov [rbx + 40], rax
+    cmp rax, 64
+    jne fs_fixture_failure
+    mov [r12 + 216], rax
+    mov qword ptr [r12 + 224], 64
+    mov rax, 0x3230525846534648
+    mov [r12 + 192], rax
+    mov rax, [r12 + 72]
+    mov [r12 + 200], rax
+    mov qword ptr [r12 + 208], 64
+    lea rdi, [r12 + 232]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    mov edi, 1
+    lea rsi, [r12 + 192]
+    mov edx, 104
+    call view_write_all
+    test rax, rax
+    jnz fs_fixture_failure
+    mov edi, 1
+    mov rsi, [rbx + 24]
+    mov edx, 64
     call view_write_all
     test rax, rax
     jnz fs_fixture_failure

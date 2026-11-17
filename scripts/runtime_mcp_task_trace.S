@@ -151,12 +151,25 @@ pump_trace_frontend:
     cmp qword ptr [r12+PM_TRACE_FD],0
     jl pump_trace_frontend_done
     mov rbp,rsi
+    mov r14,rdi
     call pump_trace_clear_tail
     cmp qword ptr [rbp+PN_DESCRIPTOR+16],1408
     jb public_span_fail
     mov rax,[rbp+PN_DESCRIPTOR+56]
+    cmp qword ptr [rbp+PN_X_ACTIVE],0
+    je pump_trace_settled_extent
+    cmp qword ptr [rbp+PN_X_ACTIVE],1
+    jne public_span_fail
+    test rax,rax
+    jnz public_span_fail
+    mov edx,0xffffffdf
+    cmp [rbp+PN_DESCRIPTOR+48],rdx
+    jne public_span_fail
+    jmp pump_trace_admitted_extent
+pump_trace_settled_extent:
     cmp rax,64
     jb public_span_fail
+pump_trace_admitted_extent:
     cmp rax,[rbp+PN_DESCRIPTOR+40]
     ja public_span_fail
     mov [r12+PM_TRACE_C_LEN],rax
@@ -168,6 +181,9 @@ pump_trace_frontend:
     mov r8,[rbp+PN_DESCRIPTOR+8]
     mov r9d,1408
     call pump_trace_emit
+    mov rdi,rbp
+    mov rsi,r14
+    call pump_trace_extract
 pump_trace_frontend_done:
     PM_RETURN
 
@@ -233,3 +249,132 @@ pump_trace_closed:
     call pump_trace_emit
 pump_trace_closed_done:
     PM_RETURN
+
+/* Complete retained extract mappings at detach/restore/retire boundaries.
+ * Events9/15 contain full node/context/control/hub/engine bytes. Events10
+ * observe root18 then59..63; events11 all14 callable rows; events12 the two
+ * actual shared rows; events13 five independent owned regions; event14 the
+ * cache/hint frame. Every allocated byte of these mappings is copied. These
+ * observations do not execute an owner or acknowledge a completion. */
+pump_trace_extract:
+    PM_SAVE
+    mov rbp,rdi
+    mov r13,[rbp+PN_X_CONTEXT]
+    test r13,r13
+    jnz pxt_context
+    cmp qword ptr [rbp+PN_X_ACTIVE],1
+    jne pxt_done
+    cmp qword ptr [rbp+PN_OWNERSHIP],0
+    jne public_span_fail
+    mov r13,[r15+456]
+    test r13,r13
+    jz public_span_fail
+pxt_context:
+    mov r14,[r13+152]
+    test r14,r14
+    jz public_span_fail
+    call pump_trace_clear_tail
+    mov [r12+PM_TRACE_C_PTR],r14
+    mov qword ptr [r12+PM_TRACE_C_LEN],4096
+    mov edi,9
+    mov rsi,rbp
+    mov rdx,rbp
+    mov ecx,4096
+    mov r8,r13
+    mov r9d,4096
+    call pump_trace_emit
+    call pump_trace_clear_tail
+    mov edi,15
+    mov rsi,rbp
+    mov rdx,[r13+80]
+    mov ecx,4096
+    mov r8,r15
+    mov r9d,16384
+    call pump_trace_emit
+    xor ebx,ebx
+pxt_extra:
+    lea rdx,[rbp+PN_DESCRIPTOR]
+    test ebx,ebx
+    jz pxt_extra_row
+    lea rax,[rbx-1]
+    shl rax,6
+    lea rdx,[rbp+rax+PN_X_DESCRIPTORS]
+pxt_extra_row:
+    mov rax,[rdx+32]
+    mov [r12+PM_TRACE_C_PTR],rax
+    mov rax,[rdx+40]
+    mov [r12+PM_TRACE_C_LEN],rax
+    mov r8,[rdx+8]
+    mov r9,[rdx+16]
+    mov edi,10
+    mov rsi,rbp
+    mov ecx,64
+    call pump_trace_emit
+    inc ebx
+    cmp ebx,6
+    jb pxt_extra
+    xor ebx,ebx
+pxt_callable:
+    mov rax,rbx
+    shl rax,6
+    lea rdx,[r14+rax+256]
+    mov rax,[rdx+24]
+    mov [r12+PM_TRACE_C_PTR],rax
+    mov rax,[rdx+32]
+    mov [r12+PM_TRACE_C_LEN],rax
+    mov r8,[rdx+8]
+    mov r9,[rdx+16]
+    mov edi,11
+    mov rsi,rbp
+    mov ecx,64
+    call pump_trace_emit
+    inc ebx
+    cmp ebx,14
+    jb pxt_callable
+    xor ebx,ebx
+pxt_shared:
+    mov rax,rbx
+    shl rax,6
+    mov rdx,[r13+80]
+    lea rdx,[rdx+rax+64]
+    mov rax,[rdx+24]
+    mov [r12+PM_TRACE_C_PTR],rax
+    mov rax,[rdx+32]
+    mov [r12+PM_TRACE_C_LEN],rax
+    mov r8,[rdx+8]
+    mov r9,[rdx+16]
+    mov edi,12
+    mov rsi,rbp
+    mov ecx,64
+    call pump_trace_emit
+    inc ebx
+    cmp ebx,2
+    jb pxt_shared
+    xor ebx,ebx
+pxt_region:
+    call pump_trace_clear_tail
+    lea rax,[rip+pxt_regions]
+    mov rdx,[rax+rbx*8]
+    add rdx,r14
+    mov r8,[rdx]
+    mov r9,[rdx+8]
+    mov edi,13
+    mov rsi,rbp
+    mov ecx,16
+    call pump_trace_emit
+    inc ebx
+    cmp ebx,5
+    jb pxt_region
+    call pump_trace_clear_tail
+    lea rdx,[r13+256+184]
+    mov r8,[rdx]
+    mov r9,[rdx+8]
+    mov edi,14
+    mov rsi,rbp
+    mov ecx,16
+    call pump_trace_emit
+pxt_done:
+    PM_RETURN
+.balign 8
+pxt_regions:
+    .quad 0,24,160,1536,1584
