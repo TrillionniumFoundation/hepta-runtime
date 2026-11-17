@@ -58,7 +58,12 @@ def main():
     warm=run_recipe.verify(recipe)
     spec=importlib.util.spec_from_file_location('catalog_absent_guard',ROOT/'read_only_guard.py')
     guard=importlib.util.module_from_spec(spec);spec.loader.exec_module(guard)
-    guarded=guard.guarded(lambda:run_recipe.verify(recipe),roots=[capture,ROOT],foreign_path=Path('/etc/hostname'))
+    spec=importlib.util.spec_from_file_location('catalog_exact_source_loader',ROOT/'source_only_loader.py')
+    source_loader=importlib.util.module_from_spec(spec);spec.loader.exec_module(source_loader)
+    with source_loader.exact_source_only(recipe/'source') as loader_calls:
+        guarded=guard.guarded(lambda:run_recipe.verify(recipe),roots=[capture,ROOT],foreign_path=Path('/etc/hostname'))
+    assert loader_calls
+    put(out/'SOURCE_LOADER.json',{'status':'EXACT_RETAINED_PYTHON_SOURCE_LOADED','calls':loader_calls,'bytecode_reads':0,'source_bytes_modified':False,'native_or_rust_executions':0})
     assert guarded['evidence']==warm and warm['status']=='PASS' and warm['process_launches']==0
     rows=json.loads((recipe/'native/result.json').read_bytes())['shapes']
     selected=[r for r in rows if r['flags']==0];assert len(selected)==2 and {r['modern'] for r in selected}=={0,1}
@@ -85,6 +90,6 @@ def main():
     asset={'schema':'hepta.runtime.public118.catalog-absent-actual-assets.v1','status':'ACTUAL_NATIVE_FLAGS_ZERO_ASSETS_READ','source':want['source'],'run':43813791993,'artifact':14201568537,'archive':want['archive'],'declared_input_tools':136,'shapes':shapes,'files':assets,'native_or_rust_executions':0,'source_of_literal':'retained actual policy -> serde Value -> SDK typed Tool bytes','expected_wires_used_as_implementation':False}
     put(out/'assets/ASSETS.json',asset);print('ACTUAL_ASSET '+json.dumps({'path':'ASSETS.json',**filepin(out/'assets/ASSETS.json'),'content':(out/'assets/ASSETS.json').read_text()},sort_keys=True))
     put(out/'READONLY.json',guarded);put(out/'ARCHIVE_FILES.json',files);put(out/'ZIP_FILES.json',outer)
-    result={'status':'COMPLETE_CATALOG_ABSENT_ASSETS_READ_PASS','complete_archive_files':len(files),'source':os.environ['GITHUB_SHA'],'run':os.environ['GITHUB_RUN_ID'],'recipe_capture_source':want['source'],'profile':a.profile,'archive':want['archive'],'original_reader_full_pass':True,'actual_native_calls_previously_captured':warm['matrix_native_calls']+warm['control_native_calls'],'guard_probes':len(guarded['probes']),'guard_before_equals_after':guarded['before']==guarded['after'],'assets':filepin(out/'assets/ASSETS.json'),'native_or_rust_executions':0}
+    result={'status':'COMPLETE_CATALOG_ABSENT_ASSETS_READ_PASS','complete_archive_files':len(files),'source':os.environ['GITHUB_SHA'],'run':os.environ['GITHUB_RUN_ID'],'recipe_capture_source':want['source'],'profile':a.profile,'archive':want['archive'],'original_reader_full_pass':True,'exact_source_loader':filepin(out/'SOURCE_LOADER.json'),'actual_native_calls_previously_captured':warm['matrix_native_calls']+warm['control_native_calls'],'guard_probes':len(guarded['probes']),'guard_before_equals_after':guarded['before']==guarded['after'],'assets':filepin(out/'assets/ASSETS.json'),'native_or_rust_executions':0}
     put(out/'RESULT.json',result);print('ABSENT_ASSET_RESULT '+json.dumps(result,sort_keys=True))
 if __name__=='__main__':main()

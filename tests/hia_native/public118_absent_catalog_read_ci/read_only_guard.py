@@ -128,7 +128,7 @@ def guarded(operation, *, roots, foreign_path):
                 raise ValueError("read-only guard allowed " + name)
         prior = len(denied)
         result = operation()
-        require(len(denied) == prior, "reader attempted a forbidden operation")
+        require(len(denied) == prior, "reader attempted a forbidden operation: " + repr(denied[prior:]))
     finally:
         active[0] = False
         os.open, os.close = original_open, original_close
