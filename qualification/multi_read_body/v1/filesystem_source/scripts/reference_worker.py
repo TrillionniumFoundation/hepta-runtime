@@ -133,5 +133,5 @@ while True:
     state[slot]=2;reply(0,encoded(value),slot)
 # The unchanged original finally blocks already ran. Their first-fstat leaked FDs
 # remain physically open through every logical context release/destroy and EOF.
-write(4,b"HMRDEOF1"+bytes(56));require(read(5,8)==bytes(8),"original pre-exit ACK")
 if control:os.close(control)
+write(4,b"HMRDEOF1"+bytes(56));require(read(5,8)==bytes(8),"original pre-exit ACK")
