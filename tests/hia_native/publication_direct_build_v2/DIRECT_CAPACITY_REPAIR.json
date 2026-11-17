@@ -1,0 +1,68 @@
+{
+  "schema": "hepta.publication.direct-page-capacity.repair.v1",
+  "production": "7567502bf4e76b5975a689b988e9f96e1206462a",
+  "production_changes": 0,
+  "before": {
+    "bytes": 10974,
+    "sha256": "8109b34fbbec477221f9852fbfb6a7a3ae46599d84e94363951862fae8bc4d95",
+    "git_blob": "9f0ca75cbc359d62ba51c01d60f46759bc446f79"
+  },
+  "after": {
+    "bytes": 11151,
+    "sha256": "7e708069fdebcb6419d77c6146321f84cb66b7b632dac2d6e0f0bf7f8cb739ca",
+    "git_blob": "746cac2dedf260c93806ce8ef0f28a648975e767"
+  },
+  "actual_allocator": {
+    "path": "scripts/view_call_engine.S",
+    "bytes": 24723,
+    "sha256": "b138920b829acb0ad2bd6b116735ea86cc87f0bc7dea4e6bd4c86f006c70bde5",
+    "git_blob": "5d543c88cd696008d5d27da7635d41cb13f93995"
+  },
+  "edits": [
+    {
+      "before": "    mov [rbp+PN_INPUT_LENGTH],rdi\n    mov [rbp+PN_INPUT_CAPACITY],rdi\n",
+      "after": "    mov [rbp+PN_INPUT_LENGTH],rdi\n    add rdi,4095\n    jc public_span_fail\n    and rdi,-4096\n    mov [rbp+PN_INPUT_CAPACITY],rdi\n"
+    },
+    {
+      "before": "     * any gateway entry, preserving the unpolled-future boundary. */\n    mov rdi,[r13+DC_LENGTH]\n    call view_allocate\n",
+      "after": "     * any gateway entry, preserving the unpolled-future boundary. */\n    mov rdi,[r13+DC_LENGTH]\n    add rdi,4095\n    jc public_span_fail\n    and rdi,-4096\n    call view_allocate\n"
+    },
+    {
+      "before": "    mov rdi,rbp\n    mov rsi,[r13+DC_LENGTH]\n    add rsi,4096\n",
+      "after": "    mov rdi,rbp\n    mov rsi,[r13+DC_LENGTH]\n    add rsi,4095\n    jc public_span_fail\n    and rsi,-4096\n    add rsi,4096\n"
+    }
+  ],
+  "actual_failure": {
+    "source": "5728d913461e67485bfbd775cd766603d96efbdb",
+    "run": 44132425631,
+    "pure_read_source": "b75d01ade72f68a88c1b7811507da110beca671c",
+    "pure_read_run": 44133608862,
+    "inputs": [
+      {
+        "case": 22,
+        "length": 243,
+        "operation": 9
+      },
+      {
+        "case": 24,
+        "length": 246,
+        "operation": 6
+      },
+      {
+        "case": 26,
+        "length": 245,
+        "operation": 6
+      },
+      {
+        "case": 28,
+        "length": 254,
+        "operation": 6
+      }
+    ],
+    "exit_code": 111,
+    "qualified": false
+  },
+  "capacity_rule": "capacity=(length+4095)&~4095; original length and every copied input byte retained; mapping extent=capacity+4096 guard page",
+  "future_cases": 8,
+  "application_executed": false
+}

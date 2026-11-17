@@ -1,0 +1,37 @@
+{
+  "schema": "hepta.publication.direct-fixture.source-delta.v1",
+  "base": {
+    "bytes": 21993,
+    "sha256": "e4de0d3aaeaa8ab8301ca5b3d089dd124cf8e5fb2eb2719eb4a5280f42d12182",
+    "git_blob": "4be8f6c548820c15f3d0ce9af19ed654d5ae5cf8"
+  },
+  "after": {
+    "bytes": 22111,
+    "sha256": "1c893eb91e6f61b6284c87513ea4c9f32f91c2e95427e2055e0111f88bde3fd8",
+    "git_blob": "85c85420101f7d2b5a320ea18c6b38d852437a9b"
+  },
+  "edits": [
+    {
+      "before": "    cmp rax,5\n    ja public_span_fail\n",
+      "after": "    cmp rax,11\n    ja public_span_fail\n"
+    },
+    {
+      "before": "df_control_payload_ready:\n    mov rax,[r13+DC_OPERATION]\n",
+      "after": "df_control_payload_ready:\n    mov rax,[r13+DC_OPERATION]\n    cmp rax,6\n    jae direct_control\n"
+    },
+    {
+      "before": "    call duplex_service_current\n    inc ebx\n",
+      "after": "    call duplex_service_current\n    call direct_tick\n    inc ebx\n"
+    },
+    {
+      "before": "    call duplex_write_reply\n    cmp qword ptr [r13+DC_FINAL],1\n",
+      "after": "    call duplex_write_reply\n    call direct_after_reply\n    cmp qword ptr [r13+DC_FINAL],1\n"
+    },
+    {
+      "before": "df_control_finalize:\n    mov rax,[r13+DC_PM0]\n",
+      "after": "df_control_finalize:\n    call direct_finalize_admit\n    mov rax,[r13+DC_PM0]\n"
+    }
+  ],
+  "production": "7567502bf4e76b5975a689b988e9f96e1206462a",
+  "production_changes": 0
+}
