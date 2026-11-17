@@ -1,0 +1,89 @@
+name: Qualify private persistent audit anchor
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-pinned-anchor-qualification-v1-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  anchor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_pinned_anchor_ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Install the unchanged original toolchain and syscall observer
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          sudo apt-get update -qq
+          sudo apt-get install -y strace binutils
+      - name: Admit the frozen complete source
+        run: |
+          export ANCHOR_ROOT="$RUNNER_TEMP/audit-pinned-anchor-v1"
+          printf 'ANCHOR_ROOT=%s\n' "$ANCHOR_ROOT" >> "$GITHUB_ENV"
+          printf 'ANCHOR_RUST=%s\n' "$(rustup which --toolchain 1.95.0 rustc | xargs dirname)" >> "$GITHUB_ENV"
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import hashlib,os,shutil
+          from pathlib import Path
+          root=Path(os.environ["ANCHOR_ROOT"]);root.mkdir(exist_ok=False)
+          shutil.copytree("runtime/tests/hia_native/audit_pinned_anchor_ci",root/"source")
+          assert hashlib.sha256((root/"source/SOURCE.json").read_bytes()).hexdigest()=="925dede1dfdd747371c7101ad3cb7a2075e59c57d6326312737c71098ff9ecbf"
+          (root/"run").mkdir()
+          PY
+          timeout --signal=KILL 60 python3 -I -B "$ANCHOR_ROOT/source/source_check.py"
+      - name: Fresh build, actual observed and observer-free native, full original, and controls
+        run: |
+          python3 -I -B "$ANCHOR_ROOT/source/run_capture.py" \
+            --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$ANCHOR_RUST" \
+            --output "$ANCHOR_ROOT/run/semantic" --temporary "$RUNNER_TEMP/audit-pinned-anchor-owned-v1" \
+            > "$ANCHOR_ROOT/run/producer.stdout" 2> "$ANCHOR_ROOT/run/producer.stderr"
+          cat "$ANCHOR_ROOT/run/producer.stdout"
+      - name: Complete strict semantic readback
+        run: |
+          python3 -I -B "$ANCHOR_ROOT/source/qualify.py" --phase semantic --output "$ANCHOR_ROOT/run" \
+            > "$ANCHOR_ROOT/run/semantic.stdout" 2> "$ANCHOR_ROOT/run/semantic.stderr"
+          cat "$ANCHOR_ROOT/run/semantic.stdout"
+      - name: Physical rehashed refusals and independent full relocations
+        run: |
+          python3 -I -B "$ANCHOR_ROOT/source/qualify.py" --phase controls --output "$ANCHOR_ROOT/run" \
+            > "$ANCHOR_ROOT/run/controls.stdout" 2> "$ANCHOR_ROOT/run/controls.stderr"
+      - name: Independent full guarded final read
+        run: |
+          python3 -I -B "$ANCHOR_ROOT/source/qualify.py" --phase final --output "$ANCHOR_ROOT/run" \
+            > "$ANCHOR_ROOT/run/final.stdout" 2> "$ANCHOR_ROOT/run/final.stderr"
+          cat "$ANCHOR_ROOT/run/GATE.json"
+      - name: Preserve and reread every successful or failed captured byte
+        if: always()
+        run: |
+          if test -f "$ANCHOR_ROOT/source/export.py"; then
+            python3 -I -B "$ANCHOR_ROOT/source/export.py" --workspace "$ANCHOR_ROOT" \
+              --archive "$RUNNER_TEMP/audit-pinned-anchor-v1.tar.gz"
+          fi
+      - name: Upload complete private anchor evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-pinned-anchor-v1-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/audit-pinned-anchor-v1.tar.gz
+            ${{ runner.temp }}/audit-pinned-anchor-v1.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
