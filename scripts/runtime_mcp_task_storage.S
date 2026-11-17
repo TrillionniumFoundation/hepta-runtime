@@ -162,9 +162,14 @@ pump_fixture_preflight:
 .endif
     ret
 
-/* One process-owned fixed port. All future sessions must share this handle. */
+/* The process host owns the fixed port. The ordinary stdio host creates it;
+ * another session receives that exact private capability through this entry.
+ * No public request can select or replace the process-owned handle. */
 pump_initialize:
+    xor edi,edi
+pump_initialize_shared:
     PM_SAVE
+    mov r14,rdi
     mov qword ptr [r12+PM_EPOCH],1
     mov qword ptr [r12+PM_TRACE_FD],-1
     mov qword ptr [r12+PM_JOURNAL],-1
@@ -252,8 +257,14 @@ pump_initialize:
     mov [r12+PM_JOURNAL],rax
     mov qword ptr [r12+PM_JOURNAL_OWNED],1
 .endif
+    test r14,r14
+    jnz pump_initialize_existing_port
     mov rdi,[r12+PM_JOURNAL]
     call pump_port_create
+    jmp pump_initialize_port_result
+pump_initialize_existing_port:
+    mov rax,r14
+pump_initialize_port_result:
     mov rdx,rax
     shr rdx,32
     jnz pump_port_created

@@ -439,6 +439,58 @@
     "shared_lease7_cache8": true,
     "worker_qualification": "840522dd42ff3332158f0cccad802425f3708a26"
   },
+  "publication_session_runtime_extension": {
+    "baseline": "a4d92ceadabb59376088be7301f26b06e44cf849",
+    "changes": [
+      {
+        "after": {
+          "bytes": 26124,
+          "git_blob": "2245f1cea25b5bcdd07b2dfc1c5f41886c50a3fe",
+          "sha256": "77e2b0dbf79458ea9042ace1a0b0017ba132762ddc250f2bdf51e7569b5771df"
+        },
+        "before": {
+          "bytes": 25754,
+          "git_blob": "f5d79b98f62cf14afb5145f07ece70ded2b2f79c",
+          "sha256": "751b374047e35381ecd7bbd013fca05c5b6a3c4e5fbb1c5cdb348350bd632d93"
+        },
+        "path": "scripts/runtime_mcp_task_storage.S"
+      },
+      {
+        "after": {
+          "bytes": 5160,
+          "git_blob": "f13a28292bee6bafd2b036cf1bb9c2e77184d49a",
+          "sha256": "410c5a1203affd90c349d1d9538161ab803547d9d4915ab4165c4e19f5b4ff1d"
+        },
+        "before": {
+          "bytes": 4064,
+          "git_blob": "e6a95ae4fe8d0cef4c0be3a4a0a4aae0038d89f6",
+          "sha256": "aa65121c2e98420b971f697d445f2781038e756b7b47ac966809dd1a02ae1ca1"
+        },
+        "path": "scripts/runtime_mcp_task_teardown.S"
+      }
+    ],
+    "explicit_shared_port_admission": "pump_initialize_shared receives only an actual private native port capability; pump_port_attach validates it",
+    "lifetime": "pump_finish_service detaches; the process host calls pump_finish_runtime once after all services and pump_finish_storage per session; ordinary pump_finish calls these in original order",
+    "not_public_control": true,
+    "original_single_session_order": [
+      "actual registry EOF",
+      "old sends and bounded drain",
+      "writer close",
+      "context cancellation",
+      "handler future Drop",
+      "registry retirement",
+      "port detach",
+      "port shutdown",
+      "publication pool close",
+      "port reap",
+      "publication pool reap",
+      "journal close",
+      "scratch retirement"
+    ],
+    "production_hia_bytes_changed": 0,
+    "public_async_qualified": false,
+    "schema": "hepta.runtime.publisher.session-runtime-separation.v1"
+  },
   "publication_trace_immediate_extension": {
     "after": {
       "bytes": 14904,
@@ -1179,6 +1231,26 @@
     "authoring/publication_immediate_v1/author.py": {
       "bytes": 6760,
       "sha256": "e01ec88e24ac933c4a33d9d6cd2ced2919e0ed15299659902b45bb68b16d099e"
+    },
+    "authoring/publication_runtime_v1/ABI.md": {
+      "bytes": 1760,
+      "sha256": "59a1a8a56f58ce7cc68cba652790803a53f8f0352f76c4fbe6c193d4d21cbe5b"
+    },
+    "authoring/publication_runtime_v1/BASE_SOURCE_ROWS.json": {
+      "bytes": 143560,
+      "sha256": "7fcc9b4d08106759b5882c83b6c3568d84828667a905ed14e3fffe4a7845bbb1"
+    },
+    "authoring/publication_runtime_v1/CHANGES.json": {
+      "bytes": 12653,
+      "sha256": "8aff719cd6f02c790f53f57e6330b0ef3b6b4533fd1b35acebb7da2fbb0eda62"
+    },
+    "authoring/publication_runtime_v1/SOURCE_MANIFEST.json": {
+      "bytes": 916,
+      "sha256": "02c0b43d71546b6ff09573a95374dbf5b1c7541f66d5b4d2df86f3a91174cfc9"
+    },
+    "authoring/publication_runtime_v1/author.py": {
+      "bytes": 7090,
+      "sha256": "9dd6ed5c85b84896781f2d280ba15b23e56407a7706bbc1b9350bb928d606208"
     },
     "authoring/sdk_accessor/author_accessors.py": {
       "bytes": 11199,
@@ -2761,12 +2833,12 @@
       "sha256": "a5bbfba10ab9bf95b5f12be72ba301a39bf0fed79c4f467660481a3b14abb228"
     },
     "scripts/runtime_mcp_task_storage.S": {
-      "bytes": 25754,
-      "sha256": "751b374047e35381ecd7bbd013fca05c5b6a3c4e5fbb1c5cdb348350bd632d93"
+      "bytes": 26124,
+      "sha256": "77e2b0dbf79458ea9042ace1a0b0017ba132762ddc250f2bdf51e7569b5771df"
     },
     "scripts/runtime_mcp_task_teardown.S": {
-      "bytes": 4064,
-      "sha256": "aa65121c2e98420b971f697d445f2781038e756b7b47ac966809dd1a02ae1ca1"
+      "bytes": 5160,
+      "sha256": "410c5a1203affd90c349d1d9538161ab803547d9d4915ab4165c4e19f5b4ff1d"
     },
     "scripts/runtime_mcp_task_trace.S": {
       "bytes": 11034,
