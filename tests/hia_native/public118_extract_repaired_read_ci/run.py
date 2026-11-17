@@ -95,11 +95,22 @@ def main():
             assert archive==selected
             result=reader.verify_build(package,capture,BUILD_PROFILE)
             old_controls=controls.verify_controls(package,capture,BUILD_PROFILE)
-            assert json.loads((capture/'processes/read-build.stdout').read_bytes())==result
+            recorded=json.loads((capture/'processes/read-build.stdout').read_bytes())
+            relocated=json.loads(json.dumps(result));origin=json.loads((capture/'BUILD_ORIGIN.json').read_bytes());path_bindings=[]
+            # descriptor() reports the current evidence location. Bind exactly
+            # these eight paths to the unchanged original capture-relative path.
+            for label in ('production','journal','trace','instances'):
+                for kind in ('elf','manifest'):
+                    actual=Path(result['entries'][label][kind]['path']);relative=actual.relative_to(capture)
+                    expected=str(Path(origin['output'])/relative)
+                    assert recorded['entries'][label][kind]['path']==expected
+                    relocated['entries'][label][kind]['path']=expected
+                    path_bindings.append({'entry':label,'kind':kind,'actual':str(actual),'producer':expected,'relative':relative.as_posix()})
+            assert len(path_bindings)==8 and relocated==recorded
             assert old_controls['refusals']==4 and result['runtime_hia_images']==118 and result['fresh_direct_members']==110
             return {'status':'COMPLETE_PUBLIC118_ARCHIVE_STREAM_READ_PASS','source':IDENTITY['source'],'run':IDENTITY['run'],
                 'artifact':IDENTITY['artifact'],'zip':{k:IDENTITY[k] for k in ('bytes','sha256')},'archive':archive,
-                'build_qualification':result,'original_physical_controls':old_controls,'all_regular_members_read':True,
+                'build_qualification':result,'complete_report_relocation':path_bindings,'original_physical_controls':old_controls,'all_regular_members_read':True,
                 'all_original_modes_checked':True,'native_executed':False,'rust_executed':False}
         checked=guard.guarded(verify,roots=[capture,ROOT,a.input.absolute().parent],foreign_path=Path('/dev/null'))
         assert checked['before']==checked['after'] and len(checked['probes'])==11 and checked['reader_writes']==checked['native_or_rust_executions']==0

@@ -32,7 +32,7 @@ jobs:
           gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14293655303/zip > "$RUNNER_TEMP/public118-repaired-build-input/complete.zip"
       - name: Guard every original byte and split the unchanged ZIP
         run: |
-          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_repaired_read_ci/run.py" --input "$RUNNER_TEMP/public118-repaired-build-input/complete.zip" --output "$RUNNER_TEMP/public118-repaired-build-read" --profile '4d2bb0df45a41f69e5406fcc847924161cc6c105384e0491e239d1dc430be18f' > "$RUNNER_TEMP/public118-repaired-build-read.stdout" 2> "$RUNNER_TEMP/public118-repaired-build-read.stderr"
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_repaired_read_ci/run.py" --input "$RUNNER_TEMP/public118-repaired-build-input/complete.zip" --output "$RUNNER_TEMP/public118-repaired-build-read" --profile 'a7bf202c5282685ce50a369ab716c1f9cc3b8fdb1d5cd9c56c5419d833890308' > "$RUNNER_TEMP/public118-repaired-build-read.stdout" 2> "$RUNNER_TEMP/public118-repaired-build-read.stderr"
       - name: Preserve complete reader and success or failure proof
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
