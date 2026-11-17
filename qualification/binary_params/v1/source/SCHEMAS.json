@@ -1,0 +1,204 @@
+{
+  "schema": "hepta.runtime.binary-params.schema-input.v1",
+  "target_commit": "d3d75c30719db966b004756f610007a7c723729e",
+  "types": [
+    {
+      "id": 1,
+      "name": "file_info",
+      "type": "FileInfoParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "path",
+          2,
+          "string"
+        ]
+      ],
+      "variants": []
+    },
+    {
+      "id": 2,
+      "name": "binary_read",
+      "type": "BinaryReadParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "path",
+          2,
+          "string"
+        ],
+        [
+          "offset",
+          9,
+          "option_u64"
+        ],
+        [
+          "limit",
+          10,
+          "option_u64"
+        ],
+        [
+          "expected_version",
+          4,
+          "option_string"
+        ]
+      ],
+      "variants": []
+    },
+    {
+      "id": 3,
+      "name": "binary_write",
+      "type": "BinaryWriteParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "path",
+          2,
+          "string"
+        ],
+        [
+          "data_base64",
+          3,
+          "string"
+        ],
+        [
+          "expected_version",
+          4,
+          "string"
+        ]
+      ],
+      "variants": []
+    },
+    {
+      "id": 4,
+      "name": "binary_upload",
+      "type": "BinaryUploadParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "path",
+          2,
+          "string"
+        ],
+        [
+          "action",
+          12,
+          "enum"
+        ],
+        [
+          "upload_id",
+          5,
+          "string"
+        ],
+        [
+          "offset",
+          9,
+          "option_u64"
+        ],
+        [
+          "data_base64",
+          3,
+          "option_string"
+        ],
+        [
+          "expected_version",
+          4,
+          "option_string"
+        ],
+        [
+          "size",
+          11,
+          "option_u64"
+        ],
+        [
+          "sha256",
+          6,
+          "option_string"
+        ]
+      ],
+      "variants": [
+        "chunk",
+        "commit",
+        "abort"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "binary_patch_inode",
+      "type": "InodePatchParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "path",
+          2,
+          "string"
+        ],
+        [
+          "action",
+          12,
+          "enum"
+        ],
+        [
+          "transaction_id",
+          7,
+          "string"
+        ],
+        [
+          "acknowledge_non_atomic",
+          13,
+          "bool"
+        ],
+        [
+          "preserve_special_bits",
+          14,
+          "default_bool"
+        ],
+        [
+          "offset",
+          9,
+          "option_u64"
+        ],
+        [
+          "expected_version",
+          4,
+          "option_string"
+        ],
+        [
+          "expected_sha256",
+          8,
+          "option_string"
+        ],
+        [
+          "data_base64",
+          3,
+          "option_string"
+        ]
+      ],
+      "variants": [
+        "apply",
+        "status",
+        "recover"
+      ]
+    }
+  ]
+}
