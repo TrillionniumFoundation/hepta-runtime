@@ -1,0 +1,3 @@
+# Actual mixed-opener public comparison
+
+Run the 15 frozen additional original opener inputs once against the admitted public HIA executable. Reuse all complete original stdout, stderr, exit status, accepted input, milestones and filesystem captures from source efbb5db36ce9e6b81baf71ff9ca1fbff6a64c693 and run 44025050277. The original domain is never replayed. Every raw input, the all-lines collector and strict reader remain byte-identical to their original source. Four physical rejection controls and complete guarded reads remain mandatory. The exchange, lane and job limits remain 60 seconds, 180 seconds and 15 minutes. This does not qualify public WAIT/cancellation or full SDK behavior.
