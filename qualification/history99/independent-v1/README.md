@@ -1,0 +1,7 @@
+# Independent complete main99 control readback
+
+This new pure reader admits the exact two uploaded successful continuation ZIPs, every byte of each inner gzip/TAR including end markers and padding, the full member sets and modes, all complete frozen Git source blobs, and all original source/capture/control data. It recreates separate physical copies for reading; it executes no captured HIA/Rust program and reruns no original mutation suite.
+
+The guarded stage binds the actual PID/PGID/argv/deadline and complete stdout/stderr to the recorded controls; verifies every physical relocated filesystem copy; recomputes all original guard-equivalence rows; admits all 80 complete original reader calls and their full journal; and rechecks the 14 configuration/regex refusals, six admissions, and exact nine restored mutation paths. The full 180,288-member original TAR index and immutable 2.59 MB input inspection bind all 2,879 historical source files and each selected artifact back to the unchanged main99 report. The fixed twelve-probe no-write/no-process/native-map guard snapshots all input bytes and metadata before and after.
+
+The original main99 workflow remains FAIL; its already successful 405-check/81-recipe aggregate is not repeated or relabeled. These results close only its filesystem and configuration/regex evidence-control continuation. No main-branch file is installed here. Both pure guarded readers retain a 180-second process deadline; each whole-archive read retains the existing 900-second ceiling within a 15-minute job.
