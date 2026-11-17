@@ -1,0 +1,36 @@
+name: Freeze valid public118 catalog input domain only
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_valid_catalog_inputs_ci/**', '.github/workflows/hia-extract-public-valid-catalog-inputs.yml']
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  inputs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact pure input generator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          sparse-checkout: tests/hia_native/public118_valid_catalog_inputs_ci
+      - name: Freeze full input identities without runtime execution
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_valid_catalog_inputs_ci/run.py" --output "$RUNNER_TEMP/valid-catalog-inputs" --profile '1233cbc669925bef0593490316574f9721673659a8b7ddf8fbfec822cc9d3e60'
+      - name: Retain exact input declaration
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: valid-catalog-inputs-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/valid-catalog-inputs
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
