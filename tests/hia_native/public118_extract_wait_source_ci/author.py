@@ -45,7 +45,7 @@ def apply(installed,hepta,destination):
     for row in baseline:
         name=row['path'];path=installed/name
         assert name and not name.startswith('/') and '..' not in Path(name).parts
-        assert path.is_file() and not path.is_symlink()
+        assert path.is_file() and not path.is_symlink(),name
         raw=path.read_bytes()
         assert PIN(raw)=={k:row[k] for k in ('bytes','sha256')},name
         assert format(stat.S_IFREG|stat.S_IMODE(path.stat().st_mode),'o')==row['mode']
