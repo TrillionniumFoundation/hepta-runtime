@@ -1,0 +1,5 @@
+# Native raw stdio differential
+
+This entry uses the fixed 432-source public graph and its already qualified native ELF. It runs no original runtime process and performs no rebuild. All 108 original real-stdio processes remain the exact immutable successful captures from run 44013495462. The complete old archives, four old physical refusals per domain, every actual stream and filesystem observation are reopened before comparison. The recording source and all input bytes remain byte-identical. Complete accepted stdin, raw stdout, stderr, filesystem milestones, final state and actual exit codes are compared. A separate actual-exit control updates all affected receipt pins and must still be rejected by the differential.
+
+The 60-second exchange, 180-second lane and 15-minute CI budgets are unchanged. Any mismatch remains a failure with its whole archive. This gate does not qualify public WAIT or full asynchronous cancellation. The retained README describes the original-only source; the current workflow runs run_native.py.
