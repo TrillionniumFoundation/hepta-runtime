@@ -1,0 +1,112 @@
+{
+  "schema": "hepta.runtime.binary-entropy.unique-production-install-rows.v1",
+  "commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+  "prefix": "qualification/binary_entropy/v1/native_build",
+  "package_relative_destinations": true,
+  "default_repository_install_performed": false,
+  "unique_rows": [
+    {
+      "package_destination": "native/binary_entropy.hepta",
+      "path": "native/binary_entropy.hepta",
+      "mode": "100644",
+      "bytes": 85905,
+      "sha256": "d32de55e6d9ed7342821b9deca29e33f833938adbaa53fdad9b9e5845b5bd790",
+      "git_blob": "aa8a6d65337aca13a74bcab4f0b187b21addbb0a",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build"
+    },
+    {
+      "package_destination": "native/binary_entropy_composition.json",
+      "path": "native/binary_entropy_composition.json",
+      "mode": "100644",
+      "bytes": 5059,
+      "sha256": "777139ecefd1e210f2b62b530b47433e509196a70a9374df4bd07c2bb867c5f7",
+      "git_blob": "815d8a3002b324865ceb8ca08886ce8d3f7e1298",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build"
+    },
+    {
+      "package_destination": "asm/binary_entropy_callable.S",
+      "path": "asm/binary_entropy_callable.S",
+      "mode": "100644",
+      "bytes": 18832,
+      "sha256": "2f4c794f6f394cf20622c8e32022a473e966ab0fef2e06e8bf522402d5ed1063",
+      "git_blob": "5eaa65374dcaa4866e24928712d07a246790920c",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build"
+    },
+    {
+      "package_destination": "asm/process_orphans.S",
+      "path": "asm/process_orphans.S",
+      "mode": "100644",
+      "bytes": 4691,
+      "sha256": "f1d4e92b9d2ce68c68dcbc730950eaddaf3aa1093f143d34924c3eafc302e050",
+      "git_blob": "92461ce73f40377f9185ee81c5fcc8c01b76c8c7",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build"
+    }
+  ],
+  "build_only_shared_rows": [
+    {
+      "package_destination": "compiler/elf_static_linker.hepta",
+      "path": "compiler/elf_static_linker.hepta",
+      "mode": "100644",
+      "bytes": 95933,
+      "sha256": "66063b0e8d9b244a8ccec27a31554fe8e77f309ac1fc981286e63befa7559cef",
+      "git_blob": "57b5b51e4714ba9f9f304e8cb3c04cbbee0ae3c2",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build"
+    },
+    {
+      "package_destination": "native/runtime_mcp_image_packer.hepta",
+      "path": "native/runtime_mcp_image_packer.hepta",
+      "mode": "100644",
+      "bytes": 35890,
+      "sha256": "db45ecd1a0e52bb5410ce45106f90b0e2a032f553b5b816cb9388b4e45c2286b",
+      "git_blob": "193e196563a68a3387466001374f156a3235212b",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build"
+    }
+  ],
+  "components": [
+    {
+      "id": "binary_entropy",
+      "source": "native/binary_entropy.hepta",
+      "composition": "native/binary_entropy_composition.json",
+      "native_custodian": "asm/binary_entropy_callable.S",
+      "requires": [
+        "process_orphans"
+      ],
+      "create_abi": "binary_entropy_create(callback, callback_context, shared_process_pool)",
+      "exports": [
+        "binary_entropy_invoke",
+        "binary_entropy_release"
+      ],
+      "one_serialized_entropy_context_per_process": true,
+      "cache_and_fallback_live_until_process_exit": true,
+      "no_reset_or_destroy": true
+    },
+    {
+      "id": "process_orphans",
+      "source": "asm/process_orphans.S",
+      "upstream_commit": "c8113282ace81deafdaa3eea1199fce3a44ac7c8",
+      "unchanged": true,
+      "link_once_per_process_image": true,
+      "trusted_graph_must_supply_one_shared_pool_per_process": true,
+      "append_only_no_descriptor_close": true
+    }
+  ],
+  "all_production_dependencies_bound": true,
+  "whole_44_file_rebuild_index": "SOURCE_ROWS.json#/sections/native_build",
+  "excluded_from_production": [
+    "asm/binary_entropy_fixture.S",
+    "reference/",
+    "target/",
+    "baseline/",
+    "authoring/",
+    "author-evidence/",
+    "prior-build/",
+    "qualification-only scripts"
+  ],
+  "whole_runtime_replaced": false
+}

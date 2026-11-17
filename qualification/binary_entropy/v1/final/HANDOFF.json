@@ -1,0 +1,397 @@
+{
+  "schema": "hepta.runtime.binary-entropy.final-private-qualification.v1",
+  "status": "PRIVATE_PROCESS_LIFETIME_ENTROPY_AND_UUID4_CLOSED",
+  "production": {
+    "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+    "source_prefix": "qualification/binary_entropy/v1/native_build",
+    "manifest_sha256": "a594c84bafa2dbc7069dc151cdff5199106c94a3f0b58681c9124aae5ca5dda5",
+    "source_files": 44,
+    "hia": {
+      "package_destination": "native/binary_entropy.hepta",
+      "path": "native/binary_entropy.hepta",
+      "mode": "100644",
+      "bytes": 85905,
+      "sha256": "d32de55e6d9ed7342821b9deca29e33f833938adbaa53fdad9b9e5845b5bd790",
+      "git_blob": "aa8a6d65337aca13a74bcab4f0b187b21addbb0a",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build",
+      "functions": 23,
+      "instructions": 1711,
+      "blocks": 279
+    },
+    "composition": {
+      "package_destination": "native/binary_entropy_composition.json",
+      "path": "native/binary_entropy_composition.json",
+      "mode": "100644",
+      "bytes": 5059,
+      "sha256": "777139ecefd1e210f2b62b530b47433e509196a70a9374df4bd07c2bb867c5f7",
+      "git_blob": "815d8a3002b324865ceb8ca08886ce8d3f7e1298",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build"
+    },
+    "native_custodian": {
+      "package_destination": "asm/binary_entropy_callable.S",
+      "path": "asm/binary_entropy_callable.S",
+      "mode": "100644",
+      "bytes": 18832,
+      "sha256": "2f4c794f6f394cf20622c8e32022a473e966ab0fef2e06e8bf522402d5ed1063",
+      "git_blob": "5eaa65374dcaa4866e24928712d07a246790920c",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build"
+    },
+    "shared_process_pool": {
+      "package_destination": "asm/process_orphans.S",
+      "path": "asm/process_orphans.S",
+      "mode": "100644",
+      "bytes": 4691,
+      "sha256": "f1d4e92b9d2ce68c68dcbc730950eaddaf3aa1093f143d34924c3eafc302e050",
+      "git_blob": "92461ce73f40377f9185ee81c5fcc8c01b76c8c7",
+      "source_commit": "a74ab0d0a4158c72f85921119dad76aca89d6a23",
+      "source_prefix": "qualification/binary_entropy/v1/native_build"
+    },
+    "executable": {
+      "bytes": 114688,
+      "sha256": "bd54d90278b44be6a592590c57d575f41821ce0dfbb605a5d668fb3e5c604950"
+    },
+    "runtime_images": 1,
+    "hia_compiles": 3,
+    "copied_b3_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
+    "runtime_requires_python": false,
+    "runtime_requires_libc": false,
+    "build_run_id": 44148710357,
+    "build_job_id": 134270783180,
+    "build_status": "PASS"
+  },
+  "abi": {
+    "input": "HENTQ001, 96-byte start, command1, sequence0, mode1 raw16 or mode2 UUID4 lowercase hex32; all reserved fields zero",
+    "output": "HENTR001 64-byte transport header; kind0 complete value, kind1 syscall capability, kind3 complete nested HBRDS001 error, kind4 workspace growth, kind5 output growth",
+    "entry_return": 64,
+    "workspace_minimum": 1024,
+    "native_workspace_initial": 4096,
+    "resume": "Private exact-sequence command2 plus up to144 retained bytes; actual negative raw errno1..4095 has no payload; exact accepted reply may be repeated only for capacity recovery",
+    "create": "binary_entropy_create(callback, callback_context, shared_process_pool)",
+    "invoke": "binary_entropy_invoke(context, packet, packet_bytes)",
+    "release": "binary_entropy_release(context) returns a completed loan to ready while retaining cache and sticky fallback",
+    "process_lifetime": "Create exactly one serialized entropy context per process, supplied with the same shared append-only orphan pool as all other file primitives. Retain it until process exit. No reset or destroy API exists.",
+    "error_classes": {
+      "15": "Not used by entropy; required by strict Base64 downstream",
+      "16": "NotImplementedError: /dev/urandom (or equivalent) not found",
+      "17": "RuntimeError: Failed to read N bytes from /dev/urandom, N1..16"
+    },
+    "formatter_dependency": "The closed path_error32 only supports wire classes1..14. Integrating write/upload must use the qualified literal-error successor for classes15..17."
+  },
+  "policy": {
+    "getrandom": "Linux syscall318, flags0; retry EINTR, accumulate partial results, retry zero progress. EPERM or ENOSYS disables getrandom for the rest of the process and restarts a full16-byte device request.",
+    "cache": "Validate the cached descriptor with one fstat attempt. On error or changed device/inode, forget it without closing it and transfer its history to the shared process pool before a new open.",
+    "device": "Open /dev/urandom O_RDONLY|O_CLOEXEC with EINTR retry. Initial fstat is one attempt. Failure closes the candidate once while preserving the fstat error. Cache survives read errors.",
+    "read": "Read remaining entropy bytes, retry EINTR and accumulate partial bytes. EOF reports the exact remaining byte count.",
+    "uuid4": "Modify only version and variant bits of the completed raw16 bytes and encode32 lowercase hexadecimal characters.",
+    "orphan_reuse": "A forgotten numeric descriptor can be reused by a later open. Old pool history does not grant authority to close or consume the active descriptor."
+  },
+  "target": {
+    "repository": "TrillionniumFoundation/hepta-runtime",
+    "commit": "d3d75c30719db966b004756f610007a7c723729e",
+    "file": {
+      "path": "target/binary_file.py",
+      "mode": "100644",
+      "bytes": 12196,
+      "sha256": "c15e8900b0ab867b221ff08d5a10401c8b656c87676f57b478b9a21219f7fe12",
+      "git_blob": "e5dddd844cb9ab869f4784a93f228a8a5ac91a74"
+    },
+    "hepta_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+    "platform": "Linux x86_64; serialized CPython3.12.3 entropy and UUID4 behavior",
+    "cpython_binary": {
+      "bytes": 8020928,
+      "sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f"
+    }
+  },
+  "actual": {
+    "producer_commit": "aca51de6c3bb17360cafd091e2887b09bc072664",
+    "producer_run_id": 44154559030,
+    "producer_job_id": 134291670499,
+    "producer_status": "FAIL_AT_PURE_READER_AFTER_ALL_APPLICATIONS_COMPLETED",
+    "original_application_calls": 97,
+    "native_application_calls": 97,
+    "totals": {
+      "actual_capability_calls": 228,
+      "actual_pairs": 97,
+      "cases": 42,
+      "full_event_bytes": 18785520,
+      "full_event_records": 2727,
+      "native_hia_calls": 325,
+      "observed_capability_calls": 213,
+      "observed_native_hia_calls": 303,
+      "observer_off_pairs": 7,
+      "original_errors": 53,
+      "original_successes": 44,
+      "orphan_transfers": 5
+    },
+    "random_bytes_compared_only_to_their_own_actual_origin": true,
+    "pure_recovery": {
+      "commit": "2d32972bc9e72ea3421ce35003e15df0b27e94dc",
+      "run_id": 44157105720,
+      "job_id": 134300669833,
+      "status": "PASS",
+      "diagnosis": {
+        "failures": [
+          {
+            "capabilities": [
+              {
+                "a": 6,
+                "b": 0,
+                "operation": 3,
+                "payload_hex": "",
+                "return_value": -9,
+                "sequence": 1
+              },
+              {
+                "a": 6,
+                "b": 0,
+                "operation": 6,
+                "payload_hex": "",
+                "return_value": 0,
+                "sequence": 2
+              },
+              {
+                "a": 0,
+                "b": 0,
+                "operation": 2,
+                "payload_hex": "",
+                "return_value": 6,
+                "sequence": 3
+              },
+              {
+                "a": 6,
+                "b": 0,
+                "operation": 3,
+                "payload_hex": "07000000000000000a000000000000000100000000000000b621000000000000000000000000000009010000000000000000000000000000001000000000000000000000000000000aa5fc6a00000000d7f0e032000000000aa5fc6a00000000d7f0e032000000000aa5fc6a00000000d7f0e03200000000000000000000000000000000000000000000000000000000",
+                "return_value": 0,
+                "sequence": 4
+              },
+              {
+                "a": 6,
+                "b": 16,
+                "operation": 5,
+                "payload_hex": "1515768a877a246240a7bb55a6dc03b6",
+                "return_value": 16,
+                "sequence": 5
+              }
+            ],
+            "case": "cache-closed",
+            "index": 1,
+            "message": "real successful stat/close/transfer response"
+          }
+        ],
+        "pure_case_checks": 97
+      },
+      "correction": {
+        "after": {
+          "bytes": 17085,
+          "git_blob": "29bb7671fb2a127f11846649eca3bc2eb9727252",
+          "key": "entropyReadCaptureFixed",
+          "sha256": "63fb77e8413732b1f5d68b97a9ff24065551999bdf1270894b7db27510470c10"
+        },
+        "before": {
+          "bytes": 16787,
+          "git_blob": "2e9cf92c6ac346c5541a6f5358cf31536f87664f",
+          "sha256": "6c32fe4b8dc571af6d647b4a549e56ab47f965cf39dc6e62e973d70a4fa3265c"
+        },
+        "new_application_executions": 0,
+        "production_hia_native_and_inputs_unchanged": true,
+        "reason": "A deliberately closed cached descriptor has a real unfiltered EBADF fstat before HIA forgets it. Require exactly the first cached stat in that frozen case and call; do not permit any other unexplained error.",
+        "replacements": [
+          {
+            "after": "def faults(case,caps,filters,index,next_fd):\n    for position,cap in enumerate(caps):",
+            "before": "def faults(case,caps,filters):\n    for cap in caps:"
+          },
+          {
+            "after": "if case[\"kind\"]==\"cache-closed\"and index==1 and position==0:\n            require(op==3 and a==next_fd and value==-9 and cap[\"payload_hex\"]==\"\",\n                \"actual deliberately closed cached descriptor returns EBADF\")\n        elif matched:require(value==-matched[-1],\"actual kernel response matches installed seccomp fault\")",
+            "before": "if matched:require(value==-matched[-1],\"actual kernel response matches installed seccomp fault\")"
+          },
+          {
+            "after": "faults(case,actual[\"capabilities\"],b[\"filters\"],index,right[\"start\"][\"next_fd\"])",
+            "before": "faults(case,actual[\"capabilities\"],b[\"filters\"])"
+          }
+        ],
+        "schema": "hepta.runtime.binary-entropy.pure-reader-correction.v1"
+      },
+      "new_original_or_native_applications": 0,
+      "physical_refusals": 7,
+      "complete_relocations": 2
+    },
+    "uploaded_independent": {
+      "commit": "7d1106f521dfbd4a3b884030d97cd30f6a6cb7ff",
+      "run_id": 44158614913,
+      "job_id": 134306012668,
+      "status": "PASS",
+      "input": {
+        "archive_schema": "hepta.runtime.binary-entropy-recovery.complete-archive.v1",
+        "artifact": {
+          "bytes": 1383652893,
+          "id": 14360639095,
+          "sha256": "e5a9a1e0d6ce9c288b684b39079e33d9a389f92a28db4d6d4b0feaf31001cf11"
+        },
+        "commit": "2d32972bc9e72ea3421ce35003e15df0b27e94dc",
+        "gate_status": "PASS",
+        "job_id": 134300669833,
+        "manifest_sha256": "60e355225869b7510e9849e33cb0a053b99c7398ae3c72edca5b6b85a17f1825",
+        "new_application_executions": 0,
+        "run_id": 44157105720,
+        "schema": "hepta.runtime.binary-entropy.independent-archive-input.v1",
+        "tar": {
+          "bytes": 1383647817,
+          "directories": 1303,
+          "logical_bytes": 3248581962,
+          "logical_files": 10748,
+          "sha256": "66bbc612f7d9fba1235c8cf036f36bb61f8ca3063716b07923305e976b0266ca",
+          "unique_bytes": 1709902327,
+          "unique_objects": 1987
+        }
+      },
+      "unchanged_entries": 14169,
+      "new_guard_probes": 11,
+      "full_saved_guard_file_references": 11498,
+      "new_original_or_native_applications": 0
+    }
+  },
+  "private": {
+    "producer_commit": "20803939424006be4ca7b9d1793101662202bd6b",
+    "producer_run_id": 44163622032,
+    "producer_job_id": 134323716000,
+    "status": "PASS",
+    "binding": {
+      "schema": "hepta.runtime.binary-entropy.private-independent-archive-input.v1",
+      "commit": "20803939424006be4ca7b9d1793101662202bd6b",
+      "run_id": 44163622032,
+      "job_id": 134323716000,
+      "manifest_sha256": "cd4f214c7482de80cf122d0299a343f784c4f865936ec03a6edb920ed4e9cb18",
+      "archive_schema": "hepta.runtime.binary-entropy-private.complete-archive.v1",
+      "gate_status": "PASS",
+      "artifact": {
+        "id": 14364202310,
+        "bytes": 459806856,
+        "sha256": "4280a73daf0ffb979d889becb07c4af2f7a5d159fcbf5148f54faa807178c5e2"
+      },
+      "tar": {
+        "bytes": 459801777,
+        "sha256": "8af6a1138823efe1bb81ea9f7d57853de144f0c67d769f06e52550267b1b3acf",
+        "logical_files": 13975,
+        "logical_bytes": 1283186496,
+        "directories": 330,
+        "unique_objects": 2095,
+        "unique_bytes": 753936155
+      },
+      "new_application_executions": 0
+    },
+    "private_hia_entry_calls": 216,
+    "private_native_admission_calls": 24,
+    "framing_calls": 37,
+    "flow_programs": 29,
+    "flow_calls": 179,
+    "complete_buffer_files": 1397,
+    "complete_buffer_bytes": 3075320,
+    "physical_refusals": 4,
+    "complete_relocations": 2,
+    "actual_kernel_entropy_applications": 0,
+    "synthetic_responses_claim_no_actual_kernel_execution": true,
+    "uploaded_independent": {
+      "commit": "e32b1e0a70da23704958ea4796055b9d09223212",
+      "run_id": 44164522869,
+      "job_id": 134326916641,
+      "status": "PASS",
+      "source_manifest_sha256": "984f935ca07e9dd2ad2c1b3f34ff56ba40de092443737b9338e534e6b103e0c7",
+      "unchanged_entries": 16510,
+      "new_guard_probes": 11,
+      "full_saved_guard_file_references": 14391,
+      "prior_reader_failure": {
+        "application_calls": 0,
+        "message": "all private buffers agree with frozen independent reader",
+        "status": "REPRODUCED_PRIOR_PURE_FAILURE"
+      },
+      "complete_json_roundtrip_patch": {
+        "key": "entropyPrivateReaderPatch",
+        "git_blob": "551f1ca50bf38f93969658eb109eba91b3c4b000",
+        "bytes": 1385,
+        "sha256": "9fdfba69a565404b54ed62ce2d99e720d82190bc5918b02f10284ab54abbe75f"
+      },
+      "new_original_or_native_applications": 0,
+      "proof_artifact": {
+        "id": 14363813820,
+        "name": "binary-entropy-private-independent-e32b1e0a70da23704958ea4796055b9d09223212-1",
+        "size_in_bytes": 1816507,
+        "url": "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14363813820",
+        "archive_download_url": "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14363813820/zip",
+        "expired": false,
+        "created_at": "2026-11-17T20:00:32Z",
+        "expires_at": "2026-12-17T20:00:30Z",
+        "updated_at": "2026-11-17T20:00:32Z",
+        "digest": "sha256:603d9eda0a3034168e2772d5ce3b607d122c4e67d290c20ab478599999067889",
+        "workflow_run": {
+          "id": 44164522869,
+          "repository_id": 1400900949,
+          "head_repository_id": 1400900949,
+          "head_branch": "hia-binary-entropy-private-independent-fixed-6780-20261117",
+          "head_sha": "e32b1e0a70da23704958ea4796055b9d09223212"
+        }
+      },
+      "proof_archive": {
+        "all_logical_files_and_directories_bound": true,
+        "all_object_bytes_and_modes_reread": true,
+        "archive": "evidence.tar.gz",
+        "bytes": 1811880,
+        "directories": 23,
+        "gate_status": "PASS",
+        "logical_bytes": 22603880,
+        "logical_files": 85,
+        "mode": 420,
+        "new_application_executions_during_export": 0,
+        "schema": "hepta.runtime.binary-entropy-private-independent.complete-archive-read.v1",
+        "sha256": "49eb4b6962a2abdca1654b6216c4ac10a04b4960956de76c3fbc0609fd83358c",
+        "unique_bytes": 11838352,
+        "unique_objects": 75,
+        "whole_runtime_replaced": false
+      }
+    }
+  },
+  "retained_failures": [
+    {
+      "commit": "df9695169142c742d84fb38d7f27465bbeca044c",
+      "run_id": 44145189335,
+      "kind": "Build-only fixture symbol declaration; zero applications; preserved in native-build prior-build."
+    },
+    {
+      "commit": "aca51de6c3bb17360cafd091e2887b09bc072664",
+      "run_id": 44154559030,
+      "kind": "Pure reader incorrectly expected a deliberately closed cached descriptor fstat to succeed; all97 original/native pairs retained and recovered without replay."
+    },
+    {
+      "commit": "3030267db2845c79fe56f8dbc3dca502edeb5e23",
+      "run_id": 44164047645,
+      "kind": "Pure tuple versus persisted JSON-array comparison; reproduced then canonicalized as complete objects without altering actual buffers or policy checks."
+    }
+  ],
+  "budgets": {
+    "application_seconds": 60,
+    "pure_reader_seconds": 180,
+    "build_seconds": 900,
+    "workflow_minutes": 15,
+    "unknown_never_replayed": true,
+    "completed_actual_applications_never_replayed": true
+  },
+  "scope": {
+    "private_process_lifetime_entropy": true,
+    "shared_process_orphan_pool": true,
+    "whole_random_uuid_profile": true,
+    "public_route": false,
+    "write_upload_integrated": false,
+    "arbitrary_python_signal_handlers": false,
+    "allocation_failure_semantics": false,
+    "concurrent_cpython_cache_install": false,
+    "fork_inherited_python_cache": false,
+    "all_136_handlers": false,
+    "old_stack_removed": false,
+    "whole_runtime_replaced": false
+  },
+  "main_updated": false,
+  "main_head": "5a5a35b355b7b58a23da797acd0002a832fc919b"
+}
