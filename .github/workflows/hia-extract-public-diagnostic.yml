@@ -1,0 +1,54 @@
+name: Retained extract public callback diagnostic
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_extract_diagnostic_ci/**', '.github/workflows/hia-extract-public-diagnostic.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  PACKAGE_SHA256: 'abc2d6b6814b4a0f226969109f6232feb3f5875eca76695c60d9b0f0e73ca3af'
+jobs:
+  diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen diagnostic and unchanged public request source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_extract_diagnostic_ci
+      - name: Checkout pinned Hepta for copied B3 verification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Download the same previously qualified 118-image native build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api /repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286335670 > "$RUNNER_TEMP/extract-diag-native.json"
+          gh api /repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286335670/zip > "$RUNNER_TEMP/extract-diag-native.zip"
+      - name: Rebuild the diagnostic prefix and capture only the failing request
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_diagnostic_ci/run.py" --input "$RUNNER_TEMP/extract-diag-native.zip" --retained "$RUNNER_TEMP/public118-build" --source "$GITHUB_WORKSPACE/runtime" --compiler "$GITHUB_WORKSPACE/compiler" --output "$RUNNER_TEMP/extract-diag" > "$RUNNER_TEMP/extract-diag-driver.stdout" 2> "$RUNNER_TEMP/extract-diag-driver.stderr"
+      - name: Preserve every diagnostic success or failure source and evidence byte
+        if: always()
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_diagnostic_ci/retained/ci/archive.py" pack --capture "$RUNNER_TEMP/extract-diag" --output "$RUNNER_TEMP/extract-diag-export" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_diagnostic_ci" --manifest-sha256 "$PACKAGE_SHA256" --label diagnostic --driver-prefix "$RUNNER_TEMP/extract-diag-driver"
+      - name: Upload complete diagnostic archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-public-diagnostic-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/extract-diag-export/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error

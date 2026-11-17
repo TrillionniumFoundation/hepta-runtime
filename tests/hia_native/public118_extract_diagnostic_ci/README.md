@@ -1,0 +1,3 @@
+# Diagnostic prefix for the retained extract public integration
+
+This source changes only diagnostic observation bytes after the actual callable returns and retains the exact 118 HIA images from build 43986339038. It records the first previously failing public request, its full process streams and the existing callback/context state. It is not a production candidate or a qualification claim. No Rust reference is replayed. Every old native archive member is verified, and the copied B3 is reverified before the prefix linker and packer execute in CI. The first semantic failures and all original reference results remain in run 43996474802.
