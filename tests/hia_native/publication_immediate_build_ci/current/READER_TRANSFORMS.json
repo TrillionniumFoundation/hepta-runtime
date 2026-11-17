@@ -1,0 +1,67 @@
+{
+  "source": {
+    "bytes": 20863,
+    "sha256": "5f8a2543b03e54f31647175e42c621347e4afcabb553fd827097f080851fea76",
+    "git_blob": "4a007fab263ee6f8429e6723d0f82aa400d15de3"
+  },
+  "edits": [
+    {
+      "before": "def verify(retained,output):",
+      "after": "def verify(retained,output,previous):"
+    },
+    {
+      "before": "retained=Path(retained).resolve(strict=True);output=Path(output).resolve(strict=True)",
+      "after": "retained=Path(retained).resolve(strict=True);output=Path(output).resolve(strict=True);previous=Path(previous).resolve(strict=True)"
+    },
+    {
+      "before": "require(report[\"status\"]==\"ACTUAL_PUBLICATION_WORKER124_BUILD_PASS\" and report[\"fresh_direct_hia_compiles\"]==4 and report[\"verified_reused_direct_hia_members\"]==112,\"four actual new compiles and112 exact retained owners\")",
+      "after": "require(report[\"status\"]==\"ACTUAL_PUBLICATION_WORKER124_IMMEDIATE_BUILD_PASS\" and report[\"fresh_direct_hia_compiles\"]==0 and report[\"verified_reused_direct_hia_members\"]==116,\"all116 direct images actually reverified and reused\")"
+    },
+    {
+      "before": "origin_output=Path(origin[\"output\"]);origin_retained=Path(origin[\"retained\"])",
+      "after": "origin_output=Path(origin[\"output\"]);origin_retained=Path(origin[\"retained\"]);origin_previous=Path(origin[\"previous\"])"
+    },
+    {
+      "before": "folder=output/\"build-public/modules\"/module if is_new else native/\"build-public/modules\"/module",
+      "after": "folder=previous/\"build-public/modules\"/module if is_new else native/\"build-public/modules\"/module"
+    },
+    {
+      "before": "origin_folder=origin_output/\"build-public/modules\"/module if is_new else origin_retained/\"capture/native-build/build-public/modules\"/module",
+      "after": "origin_folder=origin_previous/\"build-public/modules\"/module if is_new else origin_retained/\"capture/native-build/build-public/modules\"/module"
+    },
+    {
+      "before": "require(m[\"members\"] == [dict(x[\"row\"],fresh_compile=(role==\"public\" and name in FRESH)) for name,x in fresh.items()],",
+      "after": "require(m[\"members\"] == [dict(x[\"row\"],fresh_compile=False) for name,x in fresh.items()],"
+    },
+    {
+      "before": "        if role==\"public\":module_names|={\"async-public-\"+name.replace(\"_\",\"-\") for name in FRESH}\n",
+      "after": ""
+    },
+    {
+      "before": "        body, symbols = object_text_and_symbols(obj)\n",
+      "after": "        body, symbols = object_text_and_symbols(obj)\n        if not instance:\n            op=body[symbols[\"pump_trace_publication\"]:symbols[\"pump_trace_emit\"]]\n            require(op.count(bytes.fromhex(\"41b900400000\"))==1 and bytes.fromhex(\"448b0c2500400000\") not in op,\"actual engine extent immediate encoding\")\n"
+    },
+    {
+      "before": "\"direct_fresh_members\":4 if role==\"public\" else 0",
+      "after": "\"direct_fresh_members\":0"
+    },
+    {
+      "before": "\"reverified_retained_direct_members\":112 if role==\"public\" else 116",
+      "after": "\"reverified_retained_direct_members\":116"
+    },
+    {
+      "before": "\"status\":\"COMPLETE_ACTUAL_PUBLICATION_WORKER124_BUILD_READ_PASS\",\"runtime_hia_images\":124,\"fresh_direct\":4,\"reverified_reused_direct\":112",
+      "after": "\"status\":\"COMPLETE_ACTUAL_PUBLICATION_WORKER124_IMMEDIATE_BUILD_READ_PASS\",\"runtime_hia_images\":124,\"fresh_direct\":0,\"reverified_reused_direct\":116"
+    },
+    {
+      "before": "\"source_files\":521",
+      "after": "\"source_files\":525"
+    }
+  ],
+  "result": {
+    "bytes": 21062,
+    "sha256": "aea0ac435f0a345d48499f748ec719dffba543e11b156e92716ef38762433eaf",
+    "git_blob": "0479418d0f224304ef72d8fb166b5239d27db5d4"
+  },
+  "all_unlisted_reader_source_unchanged": true
+}
