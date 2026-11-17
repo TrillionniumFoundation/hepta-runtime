@@ -1,0 +1,7 @@
+# HIA structured diagnostics qualification
+
+This immutable CI package compiles a fresh dual-envelope formatter and applies it once to the declared complete successor domain. It retains all 25 qualified legacy HIA functions and all 4,464 legacy semantic inputs and 280 legacy controls. Actual CPython references are captured afresh for this successor comparison, including every errno from 1 through 4,095, every Unicode scalar in the old filename representation domain, metadata literal errors, metadata errors with no filename, and integer FD errors across 222 exact decimal inputs. None of these captures is a retry of a failed or unknown application.
+
+All 12,239 reference/native comparisons and 647 native boundary applications, full buffers and process streams are retained. The 222 FD inputs are exact decimal strings in the frozen domain; runtime packets and journals carry exact u64 values. The metadata descriptor bridge still admits only nonnegative Linux int descriptors. The pure formatter separately covers full-width unsigned integer data including UINT64_MAX.
+
+All source and readers are frozen before first application. Eight physical corruption controls include an honestly resealed quoted-integer error, and two complete relocation controls use no semantic execution. Every source/build process, original/native process and read-only reader has an explicit budget; complete failed evidence is retained. This package does not integrate a public route, grant FD authority or replace the remaining runtime.
