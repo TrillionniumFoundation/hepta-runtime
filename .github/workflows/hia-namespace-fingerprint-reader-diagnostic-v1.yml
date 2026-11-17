@@ -1,0 +1,35 @@
+name: Inspect retained fingerprint readdir boundary
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-namespace-fingerprint-reader-diagnostic-v1-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_fingerprint_reader_diagnostic_v1
+      - name: Download exactly the retained completed producer, without replay
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14340924600/zip > "$RUNNER_TEMP/failed.zip"
+      - name: Full ZIP, TAR and logical-file read, then exact diagnostics
+        run: |
+          timeout --signal=KILL 180 python3 -I -B tests/hia_native/namespace_fingerprint_reader_diagnostic_v1/inspect.py \
+            --archive "$RUNNER_TEMP/failed.zip" --output "$RUNNER_TEMP/inspection"
+      - name: Keep full byte-read receipts and selected unchanged evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: namespace-fingerprint-producer-inspection-${{ github.sha }}
+          path: ${{ runner.temp }}/inspection
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
