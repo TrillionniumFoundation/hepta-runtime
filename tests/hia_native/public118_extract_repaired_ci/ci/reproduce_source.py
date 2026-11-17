@@ -26,13 +26,14 @@ def verify(package,capture):
     expected={r['path']:{k:r[k] for k in ('bytes','sha256','git_blob','mode')}
         for r in json.loads((package/'INPUTS.json').read_bytes())['installed_graph_rows']}
     produced=inventory(capture/'source')
-    require(len(expected)==432 and produced==expected,'complete source reproduction differs')
+    require(len(expected)==436 and produced==expected,'complete source reproduction differs')
     require((capture/'AUTHOR.json').read_bytes()==(package/'source_origin/AUTHOR.json').read_bytes(),
         'complete source author proof differs')
     require((capture/'RETAINED_REPAIR_AUTHOR.json').read_bytes()==(package/'source_origin/RETAINED_REPAIR_AUTHOR.json').read_bytes(),'complete prior source author proof differs')
-    require(set(inventory(capture))=={'source/'+p for p in expected}|{'AUTHOR.json','RETAINED_REPAIR_AUTHOR.json'},
+    require((capture/'RETAINED_OWNER_CLEAR_AUTHOR.json').read_bytes()==(package/'source_origin/RETAINED_OWNER_CLEAR_AUTHOR.json').read_bytes(),'complete retained caller-clear source proof differs')
+    require(set(inventory(capture))=={'source/'+p for p in expected}|{'AUTHOR.json','RETAINED_REPAIR_AUTHOR.json','RETAINED_OWNER_CLEAR_AUTHOR.json'},
         'source reproduction inventory differs')
-    return {'status':'EXTRACT_SOURCE_REPRODUCTION_PASS','source_files':432,
+    return {'status':'EXTRACT_SOURCE_REPRODUCTION_PASS','source_files':436,
         'source_binding':pin(capture/'source/native/runtime_mcp_sources.json'),
         'author':pin(capture/'AUTHOR.json'),'all_bytes_and_modes_equal':True,
         'native_or_rust_executed':False}
@@ -51,6 +52,13 @@ def main():
     overlay=types.ModuleType('retained_caller_clear_source_author');overlay.__file__=str(clear)
     exec(compile(clear.read_bytes(),str(clear),'exec',dont_inherit=True),overlay.__dict__)
     proof=overlay.apply(out/'source',a.hepta.resolve(strict=True))
+    prior=(json.dumps(proof,sort_keys=True,indent=2)+'\n').encode()
+    require(prior==(package/'source_origin/RETAINED_OWNER_CLEAR_AUTHOR.json').read_bytes(),'exact retained caller-clear source reproduction')
+    (out/'RETAINED_OWNER_CLEAR_AUTHOR.json').write_bytes(prior)
+    custom=package/'graph/source/authoring/public_custom_request/author.py'
+    current=types.ModuleType('typed_custom_request_source_author');current.__file__=str(custom)
+    exec(compile(custom.read_bytes(),str(custom),'exec',dont_inherit=True),current.__dict__)
+    proof=current.apply(out/'source',a.hepta.resolve(strict=True))
     (out/'AUTHOR.json').write_bytes((json.dumps(proof,sort_keys=True,indent=2)+'\n').encode())
     print(json.dumps(verify(package,out),sort_keys=True))
 if __name__=='__main__':main()
