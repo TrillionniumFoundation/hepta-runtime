@@ -1,0 +1,63 @@
+name: Exact extract public raw stdio reference build
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_extract_stdio_reference_ci/**', '.github/workflows/hia-extract-public-stdio-reference.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  PACKAGE_SHA256: '625113df9a0a26d11440d75377c09e3d4792c209195de564d6cec13ef546fa91'
+jobs:
+  reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set fixed source and fresh evidence paths
+        run: |
+          printf '%s\n' "EXTRACT_REFERENCE_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public118_extract_stdio_reference_ci" "EXTRACT_REFERENCE_RUN=$RUNNER_TEMP/extract-public-stdio-reference" "EXTRACT_REFERENCE_EXPORT=$RUNNER_TEMP/extract-public-stdio-reference-export" "EXTRACT_REFERENCE_DRIVER=$RUNNER_TEMP/extract-public-stdio-reference-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact source package
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_extract_stdio_reference_ci
+      - name: Checkout complete original target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+      - name: Verify full source closure before Rust
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = '${{ github.sha }}'
+          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
+          python3 -I -S -B "$EXTRACT_REFERENCE_PACKAGE/ci/source_check.py" --package "$EXTRACT_REFERENCE_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256"
+      - name: Install the exact Rust compiler in CI
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          printf '%s\n' "RUSTUP_TOOLCHAIN=1.95.0" "EXTRACT_RUST_BIN=$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+          rustc +1.95.0 --version --verbose
+      - name: Build exact original and read every source and registry byte
+        run: |
+          python3 -I -S -B "$EXTRACT_REFERENCE_PACKAGE/ci/run_reference.py" --package "$EXTRACT_REFERENCE_PACKAGE" --target "$GITHUB_WORKSPACE/original-target" --rust-bin "$EXTRACT_RUST_BIN" --output "$EXTRACT_REFERENCE_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$EXTRACT_REFERENCE_DRIVER.stdout" 2> "$EXTRACT_REFERENCE_DRIVER.stderr"
+      - name: Retain complete source and success or failure evidence
+        if: always()
+        run: |
+          python3 -I -S -B "$EXTRACT_REFERENCE_PACKAGE/ci/archive.py" pack --capture "$EXTRACT_REFERENCE_RUN" --output "$EXTRACT_REFERENCE_EXPORT" --package "$EXTRACT_REFERENCE_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label extract-reference --driver-prefix "$EXTRACT_REFERENCE_DRIVER"
+      - name: Upload complete reference evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-public-stdio-reference-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.EXTRACT_REFERENCE_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
