@@ -1,0 +1,62 @@
+name: Independently read complete uploaded publication callable proof
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-callable-archive-6780-v1-20261117']
+    paths: ['qualification/text-publication-callable-archive-v1/**', '.github/workflows/hia-text-publication-callable-archive-v1.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  full-uploaded-byte-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PC_SOURCE=$GITHUB_WORKSPACE/runtime/qualification/text-publication-callable-archive-v1/source" "PC_ROOT=$RUNNER_TEMP/text-publication-callable-archive" "PC_EVIDENCE=$RUNNER_TEMP/text-publication-callable-independent-proof" "PC_EXPORT=$RUNNER_TEMP/text-publication-callable-independent-export" "PC_DRIVER=$RUNNER_TEMP/text-publication-callable-independent-driver" "PC_ARCHIVER=$GITHUB_WORKSPACE/runtime/qualification/text-publication-callable-readback-v1/source/archive.py" >> "$GITHUB_ENV"
+      - name: Checkout exact pure source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/text-publication-callable-archive-v1/source
+            qualification/text-publication-callable-readback-v1/source
+      - name: Full source identity and syntax
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$PC_SOURCE/read_uploaded.py" | cut -d' ' -f1)" = 0487766797f19b4fffe36e5cdffa3b8536bcd06b249dc7060165f48d38110fed
+          python3 -I -S -B -c 'import ast,sys,pathlib;ast.parse(pathlib.Path(sys.argv[1]).read_bytes())' "$PC_SOURCE/read_uploaded.py"
+      - name: Read complete frozen ZIP TAR all members and guarded proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$PC_SOURCE/read_uploaded.py" --output "$PC_ROOT" > "$PC_DRIVER.stdout" 2> "$PC_DRIVER.stderr"
+          pc_status=$?
+          cat "$PC_DRIVER.stderr"
+          test "$pc_status" -ne 0 || cat "$PC_DRIVER.stdout"
+          exit "$pc_status"
+      - name: Preserve complete proof and source without semantic execution
+        if: always()
+        run: |
+          mkdir -p "$PC_EVIDENCE"
+          for pc_name in FILES.json ARCHIVE.json INDEPENDENT.json FULL_READ_INDEX.json; do
+            if test -f "$PC_ROOT/$pc_name"; then cp "$PC_ROOT/$pc_name" "$PC_EVIDENCE/$pc_name"; fi
+          done
+          if test -d "$PC_ROOT/selected"; then cp -a "$PC_ROOT/selected" "$PC_EVIDENCE/selected"; fi
+          python3 -I -S -B "$PC_ARCHIVER" pack --source "$PC_SOURCE" --capture "$PC_EVIDENCE" --output "$PC_EXPORT" --driver-prefix "$PC_DRIVER"
+      - name: Upload independently read complete-byte proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-callable-independent-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PC_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
