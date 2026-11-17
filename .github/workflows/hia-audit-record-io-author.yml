@@ -33,7 +33,7 @@ jobs:
           sys.path.insert(0,str(source))
           import hashlib,json
           raw_manifest=(source/'AUTHOR_SOURCE.json').read_bytes()
-          assert hashlib.sha256(raw_manifest).hexdigest()=='ac48f9fb07da3d23171b267deff823e70dc070cadb605fee17f59498fa279cf2'
+          assert hashlib.sha256(raw_manifest).hexdigest()=='5253eea52eeee684f999560e537e56c673e4237cab21c600115e6f36c6a5b5eb'
           manifest=json.loads(raw_manifest)
           for name,pin in manifest['files'].items():
               raw=(source/name).read_bytes()
@@ -42,9 +42,13 @@ jobs:
           for path in source.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')
           from process import Recorder
           recorder=Recorder(source,Path(os.environ['RUNNER_TEMP'])/'audit-record-io-author-processes')
-          raw,row=recorder.run('source-author',[sys.executable,'-I','-B',source/'authoring/author_record_io.py',
-              '--root',source,'--hepta',Path('compiler').resolve()],timeout=60)
-          print(raw.decode(),end='')
+          try:
+              raw,row=recorder.run('source-author',[sys.executable,'-I','-B',source/'authoring/author_record_io.py',
+                  '--root',source,'--hepta',Path('compiler').resolve()],timeout=60)
+              print(raw.decode(),end='')
+          finally:
+              error=recorder.directory/'source-author.stderr'
+              if error.is_file():sys.stderr.write(error.read_text())
           PY
       - name: Preserve complete source and authoring process
         if: always()
