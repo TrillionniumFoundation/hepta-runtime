@@ -1,0 +1,64 @@
+name: Exact target direct SSH custody reference v2
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-ssh-original-custody-6780-v2-20261117']
+    paths: ['qualification/ssh_direct/v1/original_reference_source_v2/**', '.github/workflows/hia-ssh-original-custody-v2.yml']
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "SO_PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/original_reference_source_v2" "SO_OUTPUT=$RUNNER_TEMP/ssh-original-custody" "SO_EXPORT=$RUNNER_TEMP/ssh-original-custody-export" "SO_DRIVER=$RUNNER_TEMP/ssh-original-custody-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact candidate reference
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/original_reference_source_v2
+      - name: Checkout exact unchanged target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+          sparse-checkout: |
+            src
+      - name: Bind exact complete original SSH owner and tests
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git -C "$GITHUB_WORKSPACE/target" rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          test "$(sha256sum "$SO_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = c2efc7a143c6556e48767f65065930fac1a7a527ae9a2630bdbcf0ab92a5adf1
+      - name: Install exact Rust1.95
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          printf '%s\n' "SO_RUST_BIN=$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Fresh unchanged original child-custody tests
+        run: |
+          set +e
+          python3 -I -S -B "$SO_PACKAGE/recipe/build_reference.py" --source "$SO_PACKAGE" --output "$SO_OUTPUT" --toolchain "$SO_RUST_BIN" --target "$GITHUB_WORKSPACE/target" > "$SO_DRIVER.stdout" 2> "$SO_DRIVER.stderr"
+          tp_status=$?
+          cat "$SO_DRIVER.stderr"
+          cat "$SO_DRIVER.stdout"
+          exit "$tp_status"
+      - name: Preserve complete reference and any failure
+        if: always()
+        run: |
+          python3 -I -S -B "$SO_PACKAGE/recipe/archive.py" pack --source "$SO_PACKAGE" --capture "$SO_OUTPUT" --output "$SO_EXPORT" --driver-prefix "$SO_DRIVER"
+      - name: Upload full reference archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ssh-original-custody-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.SO_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
