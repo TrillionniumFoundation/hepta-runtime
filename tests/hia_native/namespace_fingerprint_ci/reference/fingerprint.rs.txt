@@ -1,0 +1,54 @@
+fn fingerprint(directory: &File) -> Result<Version> {
+	let fd = unsafe {
+		libc::openat(
+			directory.as_raw_fd(),
+			c".".as_ptr(),
+			libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC,
+		)
+	};
+	if fd < 0 {
+		return Err(std::io::Error::last_os_error().into());
+	}
+	let pointer = unsafe { libc::fdopendir(fd) };
+	if pointer.is_null() {
+		unsafe { libc::close(fd) };
+		return Err(std::io::Error::last_os_error().into());
+	}
+	struct Stream(*mut libc::DIR);
+	impl Drop for Stream {
+		fn drop(&mut self) {
+			unsafe { libc::closedir(self.0) };
+		}
+	}
+	let stream = Stream(pointer);
+	let mut hash = Sha256::new();
+	loop {
+		#[cfg(target_os = "linux")]
+		let errno = unsafe { libc::__errno_location() };
+		#[cfg(target_os = "macos")]
+		let errno = unsafe { libc::__error() };
+		#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+		anyhow::bail!("namespace cache validation unavailable on this platform");
+		#[cfg(any(target_os = "linux", target_os = "macos"))]
+		{
+			unsafe { *errno = 0 };
+			let entry = unsafe { libc::readdir(stream.0) };
+			if entry.is_null() {
+				if unsafe { *errno } != 0 {
+					return Err(std::io::Error::last_os_error().into());
+				}
+				break;
+			}
+			let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
+			if name == b"." || name == b".." {
+				continue;
+			}
+			hash.update((name.len() as u64).to_le_bytes());
+			hash.update(name);
+			hash.update(unsafe { (*entry).d_ino }.to_le_bytes());
+			hash.update([unsafe { (*entry).d_type }]);
+		}
+	}
+	Ok(Version::Fingerprint(hash.finalize().into()))
+}
+
