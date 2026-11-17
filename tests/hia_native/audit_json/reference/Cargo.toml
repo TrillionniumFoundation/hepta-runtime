@@ -11,3 +11,12 @@ path = "oracle.rs"
 [dependencies]
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["float_roundtrip", "raw_value"] }
+
+[profile.dev]
+opt-level = 1
+debug = 2
+debug-assertions = true
+overflow-checks = true
+codegen-units = 256
+lto = false
+panic = "unwind"
