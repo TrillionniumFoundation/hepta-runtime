@@ -1,113 +1,151 @@
-# Current default111 public qualification
+# Current default124 public qualification
 
-This profile contains **111 HIA components in 104 physical containers**, not
-111 tools. Its installed catalog still advertises nine tools. Batch and
-Bellman have actual call paths and bounded comparison evidence; the later
-configuration-aware catalog is outside this source freeze.
+This graph has **124 HIA components in 117 physical containers**, comprising
+116 direct HIA owners and eight HIA owners in one packed worker capability.
+It routes thirteen of the fixed target's 136 handlers. The remaining 123
+handlers are not routed here. The configuration-aware catalog advertises
+eleven tools, or eight without runtime configuration; Batch and Bellman
+have actual call routes but are not in that advertised set.
 
-## Exact source and executable
+## Exact source and entry
 
 | Identity | Pin |
 |---|---|
-| Production source commit | `fa2aed97cf22b720d85bd8d08b720aeadba3c4d6` |
-| Complete qualification source | `d397daea2c098746b47e88efa0cb566c6ef71103` |
-| Source binding, 390 files | `92456e41c9614005b96f3404b1a6dfbc65cc77f798ffd5b0024018ffad156e54` |
-| Complete recipe PACKAGE SHA256 | `b33a9e1d8c206b9fd0b98f2a04d42b55e8b466ebe3f39675f22514573c596fcf` |
-| Production ELF, 23,486,464 bytes | `a48bfdc90539794ba702c7082d740915ff5152d6d1b308bed9891a17fb6fc151` |
-| Fixed FD3 observer ELF, 23,486,464 bytes | `db3d922727d2deac49b3d46fc476d92433c55a53eade086bfb15004025bca822` |
+| Captured runtime source | `7567502bf4e76b5975a689b988e9f96e1206462a` |
+| Captured 536-file binding SHA256 | `d74b6b84051ebe0045e8cb1f828d0b2b7b9ae8be5d21c916cbc05d20c4381913` |
+| Default-install source candidate | `3e0df6186bc55163ccec50bbe8aa09364ce5eeae` |
+| Installed-form 536-file binding SHA256 | `9b5776d0bbfe51b3ba032be6ba402899ea20f9dd263a8d3fa379c8dc6519a890` |
+| Fresh actual default-entry qualification | `c498ff39923f7dd0bf9e13881c1572044ef5fdbd` |
+| Public ELF, 26,247,168 bytes | `cfc51c7004da6dd45d7d42314188563b6e83c6b03df4478a2281ef0b5d750755` |
 | Hepta compiler | `d3e2c90173cf733e42b299d0c4274df4b593a12f` |
+| Bootstrap SHA256 | `bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0` |
 | Current original target | `d3d75c30719db966b004756f610007a7c723729e` |
 
-The public default is `scripts/hia_native_runtime_mcp_build.py`. It freshly
-builds the worker and packed capability from `runtime_support/bellman_port`,
-then the 103 direct owners. The qualified build compiled 111 HIA components
-fresh with no reused bootstrap or direct member. The journal, trace and
-private-instance entries reused only those exact same-CI members; the full
-graph reader checked their mechanical differences and all packed bytes.
+The two source bindings differ only in seven Python default-builder inventory
+corrections and that file's binding entry. All HIA and assembly bytes stay
+identical. The exact inverse is checked by the default-entry qualification.
+The default command freshly compiles all 116 direct and eight packed members;
+its actual public ELF equals the application-qualified captured binary.
 
-## Completed domains
+The implementation entry remains
+`scripts/hia_native_runtime_mcp_build.py`. Its output is
+`build/public-task-batch/runtime-mcp.elf` beneath the selected output directory.
+The repository README gives the build and launch commands. CI omits
+`--bootstrap` and performs fresh compilation.
 
-[Fresh nine-role CI 43979626193](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43979626193)
-completed all nine roles successfully, with a 15-minute limit for every role.
+## Completed current domains
 
-| Role | Retained domain |
+| Domain | Actual result and immutable provenance |
 |---|---|
-| build | Actual default entry, 103 fresh direct plus eight fresh packed HIA owners; complete graph and physical controls |
-| original | Fresh Rust 1.95.0 current SDK/Bellman public reference, all 1,394 records |
-| native | Two real stdio processes, 1,394 records, 1,366 tool cases, 1,393 complete responses; full FD3 worker journal and reader controls |
-| batch-reference | Fresh current original, all 1,777 private cases and 28 stdio requests |
-| batch | Four private domains of 417, 417, 926 and 17 cases; both stdio domains, complete filesystem/state comparison and retained controls |
-| owner | Complete 243-row current SessionOwner reference and 16 controls |
-| authority | Two private processes, four sessions, 56 frames, 28 snapshots, retained current-original comparison |
-| connection | All 54 handshake sessions / 324 responses, public90, transport24 and four codec-EOF observations |
-| profiles | Complete current23 and historical7 public profiles |
+| Default build | [44161188882](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44161188882): 116 fresh direct plus eight fresh packed owners, zero reused members; independent uploaded read of 4,277 files / 449,874,363 bytes and eleven guard probes |
+| Ordinary publisher | [44166316581](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44166316581), source `274c4481`: 686 complete current-native comparisons, 574 carrier and 112 real stdio inputs across both protocol versions |
+| Uploaded ordinary evidence | [44168371179](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44168371179), source `7d35fd3f`: all twelve full archives, 9,052 files / 892,729,982 logical bytes, 9,748 unchanged physical entries and 264 fresh guard refusals |
+| Public publisher lifecycle | 22 actual SDK scenarios on the real two-session pump; complete join `61066b30` / [44128567875](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44128567875), followed by all four independent uploaded roles `8ccd9b8f` / [44131496162](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44131496162) |
+| Direct future lifecycle | Eight complete actual scenarios: `32ead8d8` / [44148313242](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44148313242), then uploaded independent read `965269d6` / [44158525511](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44158525511) |
+| Cross-edge evidence controls | Six honestly resealed physical refusals and two independent full relocations: `afcb1f90` / [44161969318](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44161969318); uploaded reread `e67a535d` / [44165366005](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44165366005), all eight fresh eleven-probe guards |
+| Extract predecessor | Final `ec5f7aba` retains all 24 original and 24 native Local WAIT/cancel/EOF scenarios on exact source `320862f0`, including the shared fence and Scope/context movers. Its scope and identity are retained; it is not relabeled as a new publisher-worker application run. |
 
-The 1,394-record observer used the fixed FD3 entry. The two processes completed
-in 134.871454651 and 135.154940671 seconds, within the original 180-second
-process limit. The per-exchange limit stayed 60 seconds. Complete wire
-comparison retains the one established elapsed-wall-time normalization;
-other response bytes and all original inputs remain in the evidence.
+The ordinary gate ran only the 24 new native processes. Its actual original
+SDK captures had already completed and were reused byte for byte. No original
+implementation was rerun to regenerate expected output. All source transforms,
+full input rows, source manifests, original dependency records, process streams,
+files and observer buffers remain bound. The only ordinary wire normalization
+is the successful publisher's version token, after all seven actual stat
+fields are checked against that role's observed file.
 
-The fresh reference preserves actual SDK `arguments` root-Map behavior,
-including its distinction from nested Value decoding. It does not replace
-public SDK rejection behavior with the older private Value reference.
+The 22-plus-eight lifecycle comparison binds whole public responses, files,
+cache/session state, history and locks to the complete actual caller, host
+and worker records. Direct8 alone retains 3,534,288,500 raw host bytes and
+139,649,629 raw worker bytes. The physical mutations alter actual generation,
+Scope opcode/token, pending body loan, worker tag and normal Forget phase,
+then honestly update outer hashes; the full semantic join must still reject
+them. Relocations retain all bytes and metadata in independent storage.
 
-## Complete independent readback
+The exact per-exchange limit remains 60 seconds, each actual application
+process and bounded pure reader remains 180 seconds, and each CI job remains
+15 minutes. The uploaded readers execute no HIA, Rust or application process.
+No completed application was replayed for a reader correction.
 
-[Six-role independent readback 43981207344](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43981207344)
-and [remaining three-role readback 43982826481](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43982826481)
-both completed successfully. Each role recovered the complete original ZIP
-and TAR, checked all source Git objects and member byte/mode inventories, and
-ran the original full reader under eleven physical guard probes. Before and
-after inventories were equal, with no HIA/Rust execution or reader writes.
+Complete source rows, archive identities, preserved failures and semantic
+scope are retained in
+[async30/HANDOFF.json](../qualification/publication_async30/v1/HANDOFF.json),
+[ordinary124/HANDOFF.json](../qualification/publication124_ordinary/v1/HANDOFF.json)
+and the [installation handoff](../qualification/public124_final/v1/HANDOFF.json).
 
-Local byte-only verification additionally read all nine original archives:
-2,629,421,961 ZIP bytes, 63,389 members and 12,383,573,483 logical bytes.
-The 741,930,469-byte build ZIP exceeded the download connector's size limit.
-[Byte-only export 43984231360](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43984231360)
-split that existing ZIP into three verified ranges. Reassembly matched the
-original full SHA256 before the complete TAR/member read. No semantic
-execution was repeated to recover those bytes.
+## Public dispatch and ownership
 
-## Preserved failures and limits
+The routed names are `host_list`, `effective_config`,
+`execution_shadow_admit`, `view`, `workdir`, `directory_create`,
+`file_move`, `directory_move`, `text_editor`, `batch_edit`,
+`weight_bellman_plan`, `extract_lines` and `text_file_write`.
 
-The earlier 180-second failure remains a failure with its full retained prefix.
-The narrow accessor optimization preserves checked byte-access ordering,
-first-failure and partial-write behavior, and every parser/Value conversion.
-Its exact inverse and symbolic proofs are retained alongside the new source.
+Current G1 projection 42, G2 connection 55, typed request 43 and bridge 44 feed
+frontend 18. A future handler joins those HIA admission edges; a host-side JSON
+parser must not select capabilities. Publisher child 16 enters gateway 64,
+typed 65, caller 66, actual worker 67 and the borrowed post-await Scope-forget
+capability 68. Extract remains 59–63; Authority 56, Bellman 57 and registry 58
+retain their roles.
 
-Source preflight `f47c7f1ffb6cbb4fd8b4738649d3aacd6348dad5` remains failed:
-a JavaScript number round trip changed six u64 literals in a composition
-file. The successor restored the exact integer text, without changing HIA
-or assembly for this repair. All four failed role archives were fully read;
-their failure is not relabeled as a qualification pass.
+The descriptor base is 8192 and the engine is 16384 bytes for 69 slots.
+Low ownership words remain at 64/72; extended words are 12608/12616.
+Publisher uses process-hub 216 and pending-node[1184,1896).
+Fence27 uses [3584,3744); Scope 6/Context 10 use[3744,3888).
+Lease 7 and Cache 8 stay shared. Full pending descriptor, continuation, input,
+workspace/output and SDK/host generation identities move with their request.
 
-Full asynchronous request interleaving, cancellation and concurrent identity,
-full SDK behavior, all 136 handlers, configuration-aware catalog integration,
-request audit, scope annotation, production activation and old-stack removal
-remain false. SDK notification cancellation is not equivalent to dropping
-the handler future. Peer metadata is not an identity credential. The serial
-wire domain does not establish those remaining lifecycle properties.
+SDK notification cancellation and direct future destruction are distinct.
+The former cancels the request context and removes that registry generation
+while the handler may finish its body and post-await Forget. Actual direct
+future Drop skips that post-await action, increments the caller generation
+once and uses Scope opcode 8, zero lease, reason 2. Normal completion advances
+four times and uses opcode 7. A zero Scope 68 descriptor before actual Forget
+is legitimate. A closed borrowed alias is cleared only after complete
+trace/ACK; Scope 6 remains the buffer owner.
 
-Slots 47-52 remain Batch, 53 shutdown, 54 get_info, 55 connection, 56 authority,
-57 Bellman port and 58 request registry. Slots 59-63 are reserved for the
-separate extract_lines successor. The private pending ABI remains phase97,
-64-byte HRCMFR02 kind4, record offset1280 and control offset1344.
+Each of the two session pumps selects its actual input/output open-file
+descriptions before entry. Both reach phase 4 only after registry drain and
+port detach. Shared worker/runtime shutdown occurs once before session
+storage and logs retire. These are the qualified Local ownership boundaries;
+they do not implement the separate SSH direct-child owner.
 
-## Main installation
+## Installation and historical isolation
 
-The exact graph delta from base `0a8f9d6603abaf85f702ff2626dbe75f5d5f841c`
-contains ten changed and 172 new files; 208 other bound files are unchanged.
-Apply those explicit rows, rather than replacing the repository. Preserve
-the disjoint `7afd543f` Cargo reader fixes and `08ce7b6f` outcome JSON
-normalization fix, including the later combined reporting test file.
+The unique installation plan is based on exact integration
+`5a5a35b355b7b58a23da797acd0002a832fc919b`. Of 536 bound production files,
+174 are added or changed and 362 remain byte identical. The history profile
+is rebound to that complete current closure while its 120 historical restores
+remain exact. Its materialized 58-image tree was source-checked independently,
+including eight real source mutations. The disjoint Cargo archive reader,
+outcome JSON-normalization, historical workflow restoration, public evidence
+prefix and pure-filesystem reader fixes remain in the parent chain.
 
-The main workflow keeps all nine original roles and command bodies. It
-checks out the immutable recipe at `d397daea`, checks the actual candidate's
-390 source bytes and executable modes, and invokes that candidate's default
-builder. For pull requests the candidate and captured source identity use
-the exact PR head, not the synthetic merge revision. This workflow overlay
-is source-reviewed; installing it is a separate main-branch action.
+The current workflow validates the actual candidate/PR head, checks all 536
+qualified source bytes, invokes that candidate's default builder, and
+independently rereads the uploaded build. This is an installed-entry build
+gate with zero target applications; the bounded application evidence above
+is separately bound to the exact same ELF. A runtime-source change requires
+a new explicit qualification and source-row update.
 
-Historical 58-, 91- and 102-component evidence retains its exact source
-profile. The previous documentation is preserved at base commit `0a8f9d6`.
+The full previous 111 nine-role result at
+`d397daea2c098746b47e88efa0cb566c6ef71103` / [43979626193](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/43979626193)
+remains available with its complete independent readbacks. Its 1,394 public
+records, Batch domains, Authority, connection, transport and profiles are
+historical evidence for that exact graph. They are not silently counted as
+new 124 runs. The old qualification document remains at parent 5a5a35b3.
+
+## Preserved failures and remaining scope
+
+Earlier source, process, lifecycle and reader failures remain in their
+original archives. The final Direct8 reader corrected wrong assumptions
+about legitimate all-zero 68 and actual Drop generation/opcode; it did not
+change the original outcomes. The first physical relocation reader's
+tuple/list comparison and the first uploaded reader's manifest-schema
+mistake also remain failed. Later pure reads corrected only those source
+assumptions, with zero application replay. Earlier public timeout and u64
+composition-text failures retain their separate identities.
+
+Full SDK behavior across all handlers, unrestricted asynchronous interleaving,
+Remote SSH and observation-pool custody, global audit integration, complete
+136-handler replacement, production activation and old-stack removal remain
+false. Independently qualified private modules are not additional public
+handlers. The existing runtime remains available for the 123 unrouted routes.

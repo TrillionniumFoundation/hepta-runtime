@@ -1,705 +1,114 @@
-name: Current installed public111 default entry
+name: Current installed public124 default entry
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/**', main]
-    paths: ['native/**', 'scripts/**', 'authoring/**', 'runtime_support/**', 'tests/hia_native/**', '.github/workflows/hia-public-current.yml', '.github/workflows/hia-runtime-native.yml']
+    branches: ['codex/**', main, 'hia-publication124-final-entry-6780-v1-20261117']
+    paths: ['native/**', 'scripts/**', 'authoring/**', 'runtime_support/**', 'tests/hia_native/**', 'qualification/public124_default_entry_v1/**', '.github/workflows/hia-public-current.yml', '.github/workflows/hia-runtime-native.yml']
   pull_request:
-    paths: ['native/**', 'scripts/**', 'authoring/**', 'runtime_support/**', 'tests/hia_native/**', '.github/workflows/hia-public-current.yml', '.github/workflows/hia-runtime-native.yml']
+    paths: ['native/**', 'scripts/**', 'authoring/**', 'runtime_support/**', 'tests/hia_native/**', 'qualification/public124_default_entry_v1/**', '.github/workflows/hia-public-current.yml', '.github/workflows/hia-runtime-native.yml']
 permissions:
   contents: read
   actions: read
 env:
-  LC_ALL: C.UTF-8
   PYTHONDONTWRITEBYTECODE: '1'
-  PYTHONHASHSEED: '0'
-  PACKAGE_SHA256: 'b33a9e1d8c206b9fd0b98f2a04d42b55e8b466ebe3f39675f22514573c596fcf'
-  RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  LC_ALL: C.UTF-8
 jobs:
-  build:
+  default:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Set paths from the actual runner environment
+      - name: Set runtime paths
         run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          printf '%s\n' "P111_PACKAGE=$GITHUB_WORKSPACE/qualification-source/tests/hia_native/public111_task_batch_ci" "P111_RUN=$RUNNER_TEMP/public111-build" "P111_EXPORT=$RUNNER_TEMP/public111-build-export" "P111_DRIVER=$RUNNER_TEMP/public111-build-driver" >> "$GITHUB_ENV"
-      - name: Checkout immutable fully qualified public111 recipe
+          printf '%s\n' "PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/public124_default_entry_v1/source" "CAPTURE=$RUNNER_TEMP/publication-default124/capture" "EXPORT=$RUNNER_TEMP/publication-default124-export" "DRIVER=$RUNNER_TEMP/publication-default124-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact candidate and complete current source closure
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: qualification-source
-          ref: d397daea2c098746b47e88efa0cb566c6ef71103
-          sparse-checkout: tests/hia_native/public111_task_batch_ci
-          persist-credentials: false
-      - name: Checkout the exact candidate default entry and complete source package
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: runtime
+          path: candidate
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+          sparse-checkout-cone-mode: false
           sparse-checkout: |
-            native
-            scripts
-            authoring
-            runtime_support
-            tests/hia_native
-      - name: Checkout the exact Hepta compiler
+            /qualification/public124_default_entry_v1/
+            /native/
+            /scripts/
+            /runtime_support/
+            /authoring/
+            /tests/constructor_cases.py
+            /tests/hia_native/runtime_mcp*
+            /tests/hia_native/test_runtime_mcp.py
+            /tests/hia_native/view_call_oracle/
+            /tests/hia_native/workdir_oracle/
+      - name: Checkout exact Hepta compiler
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: TrillionniumFoundation/Hepta
           path: compiler
           ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
           persist-credentials: false
-      - name: Verify exact candidate and all source bytes before execution
+      - name: Verify fixed source and exact seven narrow entry edits
         run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/qualification-source" rev-parse HEAD)" = d397daea2c098746b47e88efa0cb566c6ef71103
-          python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
-      - name: Check complete export of ordinary retained hard links
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(sha256sum "$PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 73a626fdc201bb4b0020101fef06c738141b609587038ca17485974a7254bcc8
+          python3 -I -S -B -c 'import json,os,pathlib; root=pathlib.Path(os.environ["GITHUB_WORKSPACE"])/"candidate"; rows=json.loads((pathlib.Path(os.environ["PACKAGE"])/"SOURCE_ROWS.json").read_bytes()); assert len(rows)==536; assert all(not (root/r["path"]).is_symlink() and (root/r["path"]).stat().st_mode&0o777==int(r["mode"][-3:],8) for r in rows)'
+          python3 -I -S -B "$PACKAGE/entry.py" prepare --source "$GITHUB_WORKSPACE/candidate" --capture "$CAPTURE"
+      - name: Invoke the actual fresh default build command
         run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive_controls.py" --archive-source "$P111_PACKAGE/ci/archive.py" --output "$RUNNER_TEMP/public111-archive-controls"
-      - name: Preserve complete archive controls
+          set +e
+          python3 -I -S -B "$CAPTURE/source/scripts/hia_native_runtime_mcp_build.py" --source "$CAPTURE/source" --hepta "$GITHUB_WORKSPACE/compiler" --output "$CAPTURE/default-build" > "$DRIVER.stdout" 2> "$DRIVER.stderr"
+          entry_status=$?
+          cat "$DRIVER.stderr"
+          test "$entry_status" -ne 0 || cat "$DRIVER.stdout"
+          exit "$entry_status"
+      - name: Guard the complete default entry read
+        run: python3 -I -S -B "$PACKAGE/entry.py" read --capture "$CAPTURE" --output "$CAPTURE-readonly.json"
+      - name: Preserve all source and actual build bytes including any failure
+        if: always()
+        run: python3 -I -S -B "$PACKAGE/archive.py" pack --source "$PACKAGE" --capture "$CAPTURE" --output "$EXPORT" --driver-prefix "$DRIVER"
+      - name: Upload complete evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: public111-archive-controls-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/public111-archive-controls/
+          name: public124-default-entry-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.EXPORT }}
           compression-level: 0
-          retention-days: 30
           if-no-files-found: error
-      - name: Install fixed native build dependencies
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
-      - name: Execute the complete build domain under unchanged inner deadlines
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/run_build.py" --package "$P111_PACKAGE" --installed-source "$GITHUB_WORKSPACE/runtime" --hepta "$GITHUB_WORKSPACE/compiler" --output "$P111_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$P111_DRIVER.stdout" 2> "$P111_DRIVER.stderr"
-      - name: Export and reread every success or failure capture byte
-        if: always()
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" pack --capture "$P111_RUN" --output "$P111_EXPORT" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label build --driver-prefix "$P111_DRIVER"
-      - name: Upload complete build evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: public111-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_EXPORT }}
-          if-no-files-found: error
-          compression-level: 0
           retention-days: 30
-
-  original:
+  uploaded-read:
+    needs: default
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Set paths from the actual runner environment
+      - name: Set runtime paths
         run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          printf '%s\n' "P111_PACKAGE=$GITHUB_WORKSPACE/qualification-source/tests/hia_native/public111_task_batch_ci" "P111_RUN=$RUNNER_TEMP/public111-original" "P111_EXPORT=$RUNNER_TEMP/public111-original-export" "P111_DRIVER=$RUNNER_TEMP/public111-original-driver" >> "$GITHUB_ENV"
-      - name: Checkout immutable fully qualified public111 recipe
+          printf '%s\n' "PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/public124_default_entry_v1/source" "WORK=$RUNNER_TEMP/publication-default124-read-work" "PROOF=$RUNNER_TEMP/publication-default124-proof" "EXPORT=$RUNNER_TEMP/publication-default124-read-export" "DRIVER=$RUNNER_TEMP/publication-default124-read-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact frozen pure reader
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: qualification-source
-          ref: d397daea2c098746b47e88efa0cb566c6ef71103
-          sparse-checkout: tests/hia_native/public111_task_batch_ci
-          persist-credentials: false
-      - name: Checkout the exact candidate default entry and complete source package
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: runtime
+          path: candidate
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-          sparse-checkout: |
-            native
-            scripts
-            authoring
-            runtime_support
-            tests/hia_native
-      - name: Verify exact candidate and all source bytes before execution
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/qualification-source" rev-parse HEAD)" = d397daea2c098746b47e88efa0cb566c6ef71103
-          python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
-      - name: Install Rust 1.95.0 only in CI
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          rustup toolchain install 1.95.0 --profile minimal
-          printf '%s\n' "RUSTUP_TOOLCHAIN=1.95.0" "P111_RUST_BIN=$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
-          rustc +1.95.0 --version --verbose
-      - name: Execute the complete original domain under unchanged inner deadlines
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/wire/reference/recipe.py" --output "$P111_RUN" > "$P111_DRIVER.stdout" 2> "$P111_DRIVER.stderr"
-      - name: Export and reread every success or failure capture byte
-        if: always()
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" pack --capture "$P111_RUN" --output "$P111_EXPORT" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label original --driver-prefix "$P111_DRIVER"
-      - name: Upload complete original evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: public111-original-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_EXPORT }}
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
-
-  owner:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Set paths from the actual runner environment
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          printf '%s\n' "P111_PACKAGE=$GITHUB_WORKSPACE/qualification-source/tests/hia_native/public111_task_batch_ci" "P111_RUN=$RUNNER_TEMP/public111-owner" "P111_EXPORT=$RUNNER_TEMP/public111-owner-export" "P111_DRIVER=$RUNNER_TEMP/public111-owner-driver" >> "$GITHUB_ENV"
-      - name: Checkout immutable fully qualified public111 recipe
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: qualification-source
-          ref: d397daea2c098746b47e88efa0cb566c6ef71103
-          sparse-checkout: tests/hia_native/public111_task_batch_ci
-          persist-credentials: false
-      - name: Checkout the exact candidate default entry and complete source package
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: runtime
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            native
-            scripts
-            authoring
-            runtime_support
-            tests/hia_native
-      - name: Checkout the exact Hepta compiler
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/Hepta
-          path: compiler
-          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
-          persist-credentials: false
-      - name: Verify exact candidate and all source bytes before execution
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/qualification-source" rev-parse HEAD)" = d397daea2c098746b47e88efa0cb566c6ef71103
-          python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
-      - name: Install fixed native build dependencies
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
-      - name: Install Rust 1.95.0 only in CI
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          rustup toolchain install 1.95.0 --profile minimal
-          printf '%s\n' "RUSTUP_TOOLCHAIN=1.95.0" "P111_RUST_BIN=$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
-          rustc +1.95.0 --version --verbose
-      - name: Execute the complete owner domain under unchanged inner deadlines
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/run_domains.py" --role owner --package "$P111_PACKAGE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$P111_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$P111_DRIVER.stdout" 2> "$P111_DRIVER.stderr"
-      - name: Export and reread every success or failure capture byte
-        if: always()
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" pack --capture "$P111_RUN" --output "$P111_EXPORT" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label owner --driver-prefix "$P111_DRIVER"
-      - name: Upload complete owner evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: public111-owner-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_EXPORT }}
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
-
-  batch-reference:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Set paths from the actual runner environment
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          printf '%s\n' "P111_PACKAGE=$GITHUB_WORKSPACE/qualification-source/tests/hia_native/public111_task_batch_ci" "P111_RUN=$RUNNER_TEMP/public111-batch-reference" "P111_EXPORT=$RUNNER_TEMP/public111-batch-reference-export" "P111_DRIVER=$RUNNER_TEMP/public111-batch-reference-driver" >> "$GITHUB_ENV"
-      - name: Checkout immutable fully qualified public111 recipe
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: qualification-source
-          ref: d397daea2c098746b47e88efa0cb566c6ef71103
-          sparse-checkout: tests/hia_native/public111_task_batch_ci
-          persist-credentials: false
-      - name: Checkout the exact candidate default entry and complete source package
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: runtime
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            native
-            scripts
-            authoring
-            runtime_support
-            tests/hia_native
-      - name: Checkout the exact Hepta compiler
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/Hepta
-          path: compiler
-          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
-          persist-credentials: false
-      - name: Checkout the complete exact current Rust target
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: original-target
-          ref: d3d75c30719db966b004756f610007a7c723729e
-          persist-credentials: false
-      - name: Verify exact candidate and all source bytes before execution
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/qualification-source" rev-parse HEAD)" = d397daea2c098746b47e88efa0cb566c6ef71103
-          python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
-          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
-          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
-      - name: Install fixed native build dependencies
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
-      - name: Install Rust 1.95.0 only in CI
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          rustup toolchain install 1.95.0 --profile minimal
-          printf '%s\n' "RUSTUP_TOOLCHAIN=1.95.0" "P111_RUST_BIN=$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
-          rustc +1.95.0 --version --verbose
-      - name: Execute the complete batch-reference domain under unchanged inner deadlines
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/run_batch.py" --role batch-reference --package "$P111_PACKAGE" --hepta "$GITHUB_WORKSPACE/compiler" --target "$GITHUB_WORKSPACE/original-target" --rust-bin "$P111_RUST_BIN" --output "$P111_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$P111_DRIVER.stdout" 2> "$P111_DRIVER.stderr"
-      - name: Export and reread every success or failure capture byte
-        if: always()
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" pack --capture "$P111_RUN" --output "$P111_EXPORT" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label batch-reference --driver-prefix "$P111_DRIVER"
-      - name: Upload complete batch-reference evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: public111-batch-reference-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_EXPORT }}
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
-
-  profiles:
-    needs: [build]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Set paths from the actual runner environment
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          printf '%s\n' "P111_PACKAGE=$GITHUB_WORKSPACE/qualification-source/tests/hia_native/public111_task_batch_ci" "P111_RUN=$RUNNER_TEMP/public111-profiles" "P111_EXPORT=$RUNNER_TEMP/public111-profiles-export" "P111_DRIVER=$RUNNER_TEMP/public111-profiles-driver" "P111_BUILD=$RUNNER_TEMP/public111-build" "P111_BUILD_ARCHIVE=$RUNNER_TEMP/public111-build-archive" >> "$GITHUB_ENV"
-      - name: Checkout immutable fully qualified public111 recipe
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: qualification-source
-          ref: d397daea2c098746b47e88efa0cb566c6ef71103
-          sparse-checkout: tests/hia_native/public111_task_batch_ci
-          persist-credentials: false
-      - name: Checkout the exact candidate default entry and complete source package
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: runtime
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            native
-            scripts
-            authoring
-            runtime_support
-            tests/hia_native
-      - name: Checkout the exact Hepta compiler
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/Hepta
-          path: compiler
-          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
-          persist-credentials: false
-      - name: Verify exact candidate and all source bytes before execution
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/qualification-source" rev-parse HEAD)" = d397daea2c098746b47e88efa0cb566c6ef71103
-          python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
-      - name: Install fixed native build dependencies
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
-      - name: Download this attempt's complete build evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: public111-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_BUILD_ARCHIVE }}
-      - name: Verify and extract every build archive member
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" extract --archive "$P111_BUILD_ARCHIVE/capture.tar.gz" --receipt "$P111_BUILD_ARCHIVE/archive.json" --output "$P111_BUILD"
-      - name: Execute the complete profiles domain under unchanged inner deadlines
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/run_domains.py" --role profiles --package "$P111_PACKAGE" --hepta "$GITHUB_WORKSPACE/compiler" --build "$P111_BUILD" --build-receipt "$P111_BUILD_ARCHIVE/archive.json" --output "$P111_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$P111_DRIVER.stdout" 2> "$P111_DRIVER.stderr"
-      - name: Export and reread every success or failure capture byte
-        if: always()
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" pack --capture "$P111_RUN" --output "$P111_EXPORT" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label profiles --driver-prefix "$P111_DRIVER"
-      - name: Upload complete profiles evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: public111-profiles-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_EXPORT }}
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
-
-  authority:
-    needs: [build, owner]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Set paths from the actual runner environment
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          printf '%s\n' "P111_PACKAGE=$GITHUB_WORKSPACE/qualification-source/tests/hia_native/public111_task_batch_ci" "P111_RUN=$RUNNER_TEMP/public111-authority" "P111_EXPORT=$RUNNER_TEMP/public111-authority-export" "P111_DRIVER=$RUNNER_TEMP/public111-authority-driver" "P111_BUILD=$RUNNER_TEMP/public111-build" "P111_BUILD_ARCHIVE=$RUNNER_TEMP/public111-build-archive" "P111_OWNER=$RUNNER_TEMP/public111-owner" "P111_OWNER_ARCHIVE=$RUNNER_TEMP/public111-owner-archive" >> "$GITHUB_ENV"
-      - name: Checkout immutable fully qualified public111 recipe
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: qualification-source
-          ref: d397daea2c098746b47e88efa0cb566c6ef71103
-          sparse-checkout: tests/hia_native/public111_task_batch_ci
-          persist-credentials: false
-      - name: Checkout the exact candidate default entry and complete source package
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: runtime
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            native
-            scripts
-            authoring
-            runtime_support
-            tests/hia_native
-      - name: Verify exact candidate and all source bytes before execution
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/qualification-source" rev-parse HEAD)" = d397daea2c098746b47e88efa0cb566c6ef71103
-          python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
-      - name: Download this attempt's complete build evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: public111-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_BUILD_ARCHIVE }}
-      - name: Verify and extract every build archive member
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" extract --archive "$P111_BUILD_ARCHIVE/capture.tar.gz" --receipt "$P111_BUILD_ARCHIVE/archive.json" --output "$P111_BUILD"
-      - name: Download this attempt's complete owner evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: public111-owner-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_OWNER_ARCHIVE }}
-      - name: Verify and extract every owner archive member
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" extract --archive "$P111_OWNER_ARCHIVE/capture.tar.gz" --receipt "$P111_OWNER_ARCHIVE/archive.json" --output "$P111_OWNER"
-      - name: Execute the complete authority domain under unchanged inner deadlines
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/run_domains.py" --role authority --package "$P111_PACKAGE" --build "$P111_BUILD" --build-receipt "$P111_BUILD_ARCHIVE/archive.json" --owner "$P111_OWNER" --owner-receipt "$P111_OWNER_ARCHIVE/archive.json" --output "$P111_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$P111_DRIVER.stdout" 2> "$P111_DRIVER.stderr"
-      - name: Export and reread every success or failure capture byte
-        if: always()
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" pack --capture "$P111_RUN" --output "$P111_EXPORT" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label authority --driver-prefix "$P111_DRIVER"
-      - name: Upload complete authority evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: public111-authority-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_EXPORT }}
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
-
-  connection:
-    needs: [build]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Set paths from the actual runner environment
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          printf '%s\n' "P111_PACKAGE=$GITHUB_WORKSPACE/qualification-source/tests/hia_native/public111_task_batch_ci" "P111_RUN=$RUNNER_TEMP/public111-connection" "P111_EXPORT=$RUNNER_TEMP/public111-connection-export" "P111_DRIVER=$RUNNER_TEMP/public111-connection-driver" "P111_BUILD=$RUNNER_TEMP/public111-build" "P111_BUILD_ARCHIVE=$RUNNER_TEMP/public111-build-archive" "P111_CATALOG=$RUNNER_TEMP/public111-catalog-reference" >> "$GITHUB_ENV"
-      - name: Checkout immutable fully qualified public111 recipe
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: qualification-source
-          ref: d397daea2c098746b47e88efa0cb566c6ef71103
-          sparse-checkout: tests/hia_native/public111_task_batch_ci
-          persist-credentials: false
-      - name: Checkout the exact candidate default entry and complete source package
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: runtime
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            native
-            scripts
-            authoring
-            runtime_support
-            tests/hia_native
-      - name: Checkout the exact Hepta compiler
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/Hepta
-          path: compiler
-          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
-          persist-credentials: false
-      - name: Checkout the immutable retained SDK source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: retained-sdk
-          ref: b4054165e9b7be63e9309c8223d04131ec4fe31e
-          sparse-checkout: tests/hia_native/sdk_target_ci
-          persist-credentials: false
-      - name: Verify exact candidate and all source bytes before execution
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/qualification-source" rev-parse HEAD)" = d397daea2c098746b47e88efa0cb566c6ef71103
-          python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
-          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
-          test "$(git -C "$GITHUB_WORKSPACE/retained-sdk" rev-parse HEAD)" = b4054165e9b7be63e9309c8223d04131ec4fe31e
-      - name: Install fixed native build dependencies
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
-      - name: Install Rust 1.95.0 only in CI
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          rustup toolchain install 1.95.0 --profile minimal
-          printf '%s\n' "RUSTUP_TOOLCHAIN=1.95.0" "P111_RUST_BIN=$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
-          rustc +1.95.0 --version --verbose
-      - name: Download this attempt's complete build evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: public111-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_BUILD_ARCHIVE }}
-      - name: Verify and extract every build archive member
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" extract --archive "$P111_BUILD_ARCHIVE/capture.tar.gz" --receipt "$P111_BUILD_ARCHIVE/archive.json" --output "$P111_BUILD"
-      - name: Recover the exact original get_info observation
+          sparse-checkout: qualification/public124_default_entry_v1/source
+      - name: Read every uploaded byte and repeat guarded full graph validation
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          mkdir "$P111_CATALOG"
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14194828118/zip > "$P111_CATALOG/qualified-catalog.zip"
-          python3 -I -S -B "$P111_PACKAGE/joint/authority-runner/extract_catalog_reference.py" --archive "$P111_CATALOG/qualified-catalog.zip" --output "$P111_CATALOG/selected"
-      - name: Execute the complete connection domain under unchanged inner deadlines
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/run_domains.py" --role connection --package "$P111_PACKAGE" --hepta "$GITHUB_WORKSPACE/compiler" --build "$P111_BUILD" --build-receipt "$P111_BUILD_ARCHIVE/archive.json" --sdk-source "$GITHUB_WORKSPACE/retained-sdk/tests/hia_native/sdk_target_ci" --rust-bin "$P111_RUST_BIN" --get-info-reference "$P111_CATALOG/selected/current-get-info-original.stdout" --output "$P111_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$P111_DRIVER.stdout" 2> "$P111_DRIVER.stderr"
-      - name: Export and reread every success or failure capture byte
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(sha256sum "$PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 73a626fdc201bb4b0020101fef06c738141b609587038ca17485974a7254bcc8
+          set +e
+          python3 -I -S -B "$PACKAGE/read_uploaded.py" --run "${{ github.run_id }}" --artifact-name "public124-default-entry-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}" --work "$WORK" --output "$PROOF" > "$DRIVER.stdout" 2> "$DRIVER.stderr"
+          read_status=$?
+          cat "$DRIVER.stderr"
+          test "$read_status" -ne 0 || cat "$DRIVER.stdout"
+          exit "$read_status"
+      - name: Preserve complete independent proof and any failure
         if: always()
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" pack --capture "$P111_RUN" --output "$P111_EXPORT" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label connection --driver-prefix "$P111_DRIVER"
-      - name: Upload complete connection evidence
+        run: python3 -I -S -B "$PACKAGE/archive.py" pack --source "$PACKAGE" --capture "$PROOF" --output "$EXPORT" --driver-prefix "$DRIVER"
+      - name: Upload complete independent proof
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: public111-connection-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_EXPORT }}
-          if-no-files-found: error
+          name: public124-default-entry-read-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.EXPORT }}
           compression-level: 0
-          retention-days: 30
-
-  native:
-    needs: [build, original]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Set paths from the actual runner environment
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          printf '%s\n' "P111_PACKAGE=$GITHUB_WORKSPACE/qualification-source/tests/hia_native/public111_task_batch_ci" "P111_RUN=$RUNNER_TEMP/public111-native" "P111_EXPORT=$RUNNER_TEMP/public111-native-export" "P111_DRIVER=$RUNNER_TEMP/public111-native-driver" "P111_BUILD=$RUNNER_TEMP/public111-build" "P111_BUILD_ARCHIVE=$RUNNER_TEMP/public111-build-archive" "P111_ORIGINAL=$RUNNER_TEMP/public111-original" "P111_ORIGINAL_ARCHIVE=$RUNNER_TEMP/public111-original-archive" >> "$GITHUB_ENV"
-      - name: Checkout immutable fully qualified public111 recipe
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: qualification-source
-          ref: d397daea2c098746b47e88efa0cb566c6ef71103
-          sparse-checkout: tests/hia_native/public111_task_batch_ci
-          persist-credentials: false
-      - name: Checkout the exact candidate default entry and complete source package
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: runtime
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            native
-            scripts
-            authoring
-            runtime_support
-            tests/hia_native
-      - name: Verify exact candidate and all source bytes before execution
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/qualification-source" rev-parse HEAD)" = d397daea2c098746b47e88efa0cb566c6ef71103
-          python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
-      - name: Download this attempt's complete build evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: public111-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_BUILD_ARCHIVE }}
-      - name: Verify and extract every build archive member
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" extract --archive "$P111_BUILD_ARCHIVE/capture.tar.gz" --receipt "$P111_BUILD_ARCHIVE/archive.json" --output "$P111_BUILD"
-      - name: Download this attempt's complete original evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: public111-original-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_ORIGINAL_ARCHIVE }}
-      - name: Verify and extract every original archive member
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" extract --archive "$P111_ORIGINAL_ARCHIVE/capture.tar.gz" --receipt "$P111_ORIGINAL_ARCHIVE/archive.json" --output "$P111_ORIGINAL"
-      - name: Execute the complete native domain under unchanged inner deadlines
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/run_native.py" --package "$P111_PACKAGE" --build "$P111_BUILD" --original "$P111_ORIGINAL" --build-archive-receipt "$P111_BUILD_ARCHIVE/archive.json" --original-archive-receipt "$P111_ORIGINAL_ARCHIVE/archive.json" --output "$P111_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$P111_DRIVER.stdout" 2> "$P111_DRIVER.stderr"
-      - name: Export and reread every success or failure capture byte
-        if: always()
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" pack --capture "$P111_RUN" --output "$P111_EXPORT" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label native --driver-prefix "$P111_DRIVER"
-      - name: Upload complete native evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: public111-native-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_EXPORT }}
           if-no-files-found: error
-          compression-level: 0
           retention-days: 30
-
-  batch:
-    needs: [build, batch-reference]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Set paths from the actual runner environment
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          printf '%s\n' "P111_PACKAGE=$GITHUB_WORKSPACE/qualification-source/tests/hia_native/public111_task_batch_ci" "P111_RUN=$RUNNER_TEMP/public111-batch" "P111_EXPORT=$RUNNER_TEMP/public111-batch-export" "P111_DRIVER=$RUNNER_TEMP/public111-batch-driver" "P111_BUILD=$RUNNER_TEMP/public111-build" "P111_BUILD_ARCHIVE=$RUNNER_TEMP/public111-build-archive" "P111_BATCH_REFERENCE=$RUNNER_TEMP/deps/public111-batch-reference" "P111_BATCH_REFERENCE_ARCHIVE=$RUNNER_TEMP/public111-batch-reference-archive" >> "$GITHUB_ENV"
-      - name: Checkout immutable fully qualified public111 recipe
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: TrillionniumFoundation/hepta-runtime
-          path: qualification-source
-          ref: d397daea2c098746b47e88efa0cb566c6ef71103
-          sparse-checkout: tests/hia_native/public111_task_batch_ci
-          persist-credentials: false
-      - name: Checkout the exact candidate default entry and complete source package
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: runtime
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            native
-            scripts
-            authoring
-            runtime_support
-            tests/hia_native
-      - name: Verify exact candidate and all source bytes before execution
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
-          test "$(git -C "$GITHUB_WORKSPACE/qualification-source" rev-parse HEAD)" = d397daea2c098746b47e88efa0cb566c6ef71103
-          python3 -I -S -B "$P111_PACKAGE/ci/source_check.py" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
-      - name: Download this attempt's complete build evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: public111-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_BUILD_ARCHIVE }}
-      - name: Verify and extract every build archive member
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" extract --archive "$P111_BUILD_ARCHIVE/capture.tar.gz" --receipt "$P111_BUILD_ARCHIVE/archive.json" --output "$P111_BUILD"
-      - name: Download this attempt's complete batch-reference evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: public111-batch-reference-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_BATCH_REFERENCE_ARCHIVE }}
-      - name: Verify and extract every batch-reference archive member
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" extract --archive "$P111_BATCH_REFERENCE_ARCHIVE/capture.tar.gz" --receipt "$P111_BATCH_REFERENCE_ARCHIVE/archive.json" --output "$P111_BATCH_REFERENCE"
-      - name: Execute the complete batch domain under unchanged inner deadlines
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/run_batch.py" --role batch --package "$P111_PACKAGE" --build "$P111_BUILD" --build-receipt "$P111_BUILD_ARCHIVE/archive.json" --batch-reference "$P111_BATCH_REFERENCE" --batch-reference-receipt "$P111_BATCH_REFERENCE_ARCHIVE/archive.json" --output "$P111_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$P111_DRIVER.stdout" 2> "$P111_DRIVER.stderr"
-      - name: Export and reread every success or failure capture byte
-        if: always()
-        run: |
-          export GITHUB_SHA="$RUNTIME_SHA"
-          python3 -I -S -B "$P111_PACKAGE/ci/archive.py" pack --capture "$P111_RUN" --output "$P111_EXPORT" --package "$P111_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label batch --driver-prefix "$P111_DRIVER"
-      - name: Upload complete batch evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: public111-batch-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.P111_EXPORT }}
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
-

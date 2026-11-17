@@ -82,19 +82,34 @@ not activate a filesystem handler or replace a public route.
 
 ## Current public stdio entry
 
-The default `scripts/hia_native_runtime_mcp_build.py` API/CLI builds the current
-91-image graph and its actual nine-tool routes. TextEditor owns the Local four
-commands through the real caller/body/cache graph. The entry integrates current
-G1 projection, G2 connection admission, fixed current get_info, shared text
-result construction and serial transport/shutdown. Its full source closure is
-`runtime_mcp_sources.json`; exact source and qualification limits are in
-[runtime_mcp_current_qualification.md](runtime_mcp_current_qualification.md).
+The default `scripts/hia_native_runtime_mcp_build.py` API/CLI builds 124 HIA
+components in 117 physical containers, using 69 private descriptor slots.
+Its complete 536-file source closure is `runtime_mcp_sources.json`.
+Thirteen target handlers have actual routes; the configured catalog advertises
+eleven, or eight without runtime configuration. Batch and Bellman remain
+routed separately from catalog advertising. The other 123 target handlers
+are not routed by this graph.
 
-The ordinary current qualification freshly compiles 62 comparison members and
-83 candidate members, freshly builds both current Rust 1.95.0 references, and
-compares all 324 handshake responses, public90 and framing24. Codec EOF's four
-observations remain a separate original-only domain. The actual default build
-and launch commands are in the repository README.
+The graph includes current G1/G2 SDK admission, SessionOwner identity,
+TextEditor, Batch/Bellman paths, Local extract and the Local text publisher.
+The publisher has complete 686-case ordinary and 22-public/eight-direct
+lifecycle comparison evidence. Extract retains its separately qualified
+24 original/native Local WAIT, cancellation and EOF scenarios. Full response,
+file, cache, history, lock and worker ownership records remain in the exact
+qualification archives. These bounded results do not establish Remote SSH,
+all SDK concurrency, global request audit or removal of the existing runtime.
+
+The default CI freshly builds all 116 direct and eight packed HIA owners,
+checks the complete installed-source closure and the exact resulting ELF,
+and independently reads the uploaded build. The application-qualified public
+ELF is 26,247,168 bytes with SHA256
+`cfc51c7004da6dd45d7d42314188563b6e83c6b03df4478a2281ef0b5d750755`.
+The old nine-role 111-component gate remains bound to its original source;
+its case counts are not recast as a new graph qualification.
+
+Exact provenance, completed domains, preserved failures, build commands and
+remaining limits are in
+[runtime_mcp_current_qualification.md](runtime_mcp_current_qualification.md).
 
 ## Historical public local filesystem composition
 

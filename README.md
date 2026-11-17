@@ -7,51 +7,63 @@ and Linux ELF transport packers. The resulting program runs without Python,
 Rust, libc, or a dynamic loader. A pinned Hepta compiler and explicit Python
 build and evidence readers produce and verify the executable.
 
-The default native builder assembles **111 HIA components**: 103 directly linked
-owners and an eight-component shared worker capability in 104 physical containers.
-The installed catalog advertises nine tools: `host_list`, `effective_config`,
+The default native builder assembles **124 HIA components**: 116 directly linked
+owners and an eight-component shared worker capability in 117 physical containers.
+The graph routes thirteen target handlers: `host_list`, `effective_config`,
 `execution_shadow_admit`, `view`, `workdir`, `directory_create`, `file_move`,
-`directory_move` and `text_editor`. The graph also contains the actual Batch
-and Bellman call paths; advertising them through a configuration-aware catalog
-is a separately qualified successor. Component counts are not tool counts.
+`directory_move`, `text_editor`, `batch_edit`, `weight_bellman_plan`,
+`extract_lines` and `text_file_write`. The configured catalog advertises eleven
+tools, or eight when runtime configuration is absent; Batch and Bellman have
+actual routes but remain outside that advertised set. Component counts are
+not tool counts.
 
-TextEditor uses shared Local Create/Replace/Delete/Undo owners. Current SDK
-connection, metadata admission, get_info, typed text construction, serial
-framing and shutdown are integrated. Configured calls enter the actual
-SessionOwner binding owner. Its private stdio identity comes from OS entropy;
-protocol peer information is not a caller credential. The request registry
-and shared Bellman worker are integrated, while complete asynchronous
-interleaving, cancellation and shutdown qualification remains open.
+TextEditor retains shared Local Create/Replace/Delete/Undo owners. The Local
+extract and text-file publisher call chains use the actual configuration,
+SessionOwner, path-policy, Scope, cache, history and lock owners. Current SDK
+connection, metadata admission, get_info, typed text construction, transport
+and shutdown stay in the graph. Protocol peer information is not an identity
+credential.
+
+The bounded publisher lifecycle qualification includes 22 public SDK scenarios
+and eight direct handler-future scenarios on the real two-session pump and
+shared process pool. SDK notification cancellation can leave the handler
+running through its blocking body and post-await Forget. Direct future Drop
+instead follows the original Scope-cancel path and skips that post-await
+Forget. EOF drains both session pumps and closes the shared runtime once.
+These results establish the declared Local domain, not full SDK concurrency
+or Remote execution.
 
 Build and launch the actual default entry with an explicit verified bootstrap:
 
 ```sh
-python3 -I -B scripts/hia_native_runtime_mcp_build.py \
-  --hepta /absolute/path/to/pinned/Hepta \
-  --bootstrap /absolute/path/to/verified/bootstrap \
-  --output /absolute/path/to/new-public-build
+python3 -I -B scripts/hia_native_runtime_mcp_build.py   --hepta /absolute/path/to/pinned/Hepta   --bootstrap /absolute/path/to/verified/bootstrap   --output /absolute/path/to/new-public-build
 /absolute/path/to/new-public-build/build/public-task-batch/runtime-mcp.elf
 ```
 
-CI omits `--bootstrap` and freshly compiles all 111 components. The
+CI omits `--bootstrap` and freshly compiles all 124 components. The
 [current public qualification](native/runtime_mcp_current_qualification.md)
-binds the 390 exact source files, actual default builder, nine CI roles,
-complete 1,394-record public wire domain, 1,777 private Batch cases and 28
-Batch stdio requests, Authority domains, 54-session handshake, public90 and
-transport24. Each CI role retains its 15-minute limit; public observer
-processes retain 180 seconds and each exchange retains 60 seconds.
+binds all 536 source files and the actual default command. The complete new
+publisher regression compares 686 current-native cases with immutable actual
+current-Rust captures, including whole wire, file contents, session/cache,
+history and locks. All 24 native processes keep their original 180-second
+limit, with 60 seconds per exchange. Independent uploaded readers recheck
+the complete captures without executing either implementation.
 
 The dedicated [historical 58-image source profile](tests/hia_native/historical_public58/README.md)
-preserves its original wide-input and SDK comparison evidence. Historical
-91- and 102-component profiles also retain their original source identities.
-The current default workflow uses the immutable qualified recipe and checks
-the actual candidate checkout before building it; it does not substitute a
-historical executable for the installed entry.
+restores its exact 120 historical files and excludes current-only sources.
+The prior 91-, 102- and 111-component qualifications retain their original
+source identities. The old nine-role 111 result is retained evidence for that
+graph; it is not relabeled as a 124-component result. The current default
+workflow checks the exact candidate or PR head against the qualified
+536-source closure, builds that default entry, and requires the resulting
+ELF to equal the application-qualified current binary.
 
-The production target has 136 registered tool handlers. The existing
-production runtime still owns the remaining filesystem, process, host, SSH,
-HTTP, document, REA and model-worker behavior. [The source coverage inventory](native/migration.json)
-and [exact target snapshot](native/migration_target.json) retain these gaps.
+The production target has 136 registered tool handlers. The current graph
+routes thirteen, leaving **123 unrouted target handlers**. The existing
+production runtime continues to own the remaining filesystem, process,
+host, SSH, HTTP, document, REA and model-worker behavior.
+[The source coverage inventory](native/migration.json) and
+[exact target snapshot](native/migration_target.json) retain these gaps.
 Full SDK, full asynchronous runtime, full handler replacement, production
 activation and removal of the old runtime remain unqualified.
 
