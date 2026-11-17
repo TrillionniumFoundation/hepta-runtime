@@ -1,0 +1,11 @@
+# Native HIA held parent directory
+
+The private Linux x86-64 parent-directory owner is qualified against the frozen original binary_file.py. All 48 original/native pairs, 10 observer-off cases, 66 private protocol/lifecycle controls, six actual filesystem mutation pairs, two real RLIMIT descriptor pairs and two multi-context ownership pairs passed. Eight physically corrupted archives were rejected and two complete relocations passed.
+
+The production image is unchanged from df5302d08fb20bd69c9803c9670a8cfce437a708. It acquires and retains the real parent directory, lends it synchronously to child file operations and closes it only through the HIA completion path. Each close retains the actual descriptor ledger, including FD0. Final names are returned as data without opening the final target. EOF drains held contexts through their HIA transition; normal release and destruction refuse while a loan is outstanding.
+
+The first campaign completed and retained42 original/native pairs before a reference-only descriptor preflight failed before any g06 application input. The corrected continuation reused and re-read every byte from those42 pairs, then executed only the6 previously unexecuted pairs plus the10 observer-off cases. No UNKNOWN application was replayed. The two failed diagnostic/preflight outcomes remain explicitly recorded.
+
+Independent uploaded reading at44118209285 reconstructed all81,582 files and1,675 directories (4,908,511,588 logical bytes), compared exact bytes and modes, re-read complete producer receipts, every full journal buffer and all physical controls, and passed11 read-only guards across86,074 unchanged entries. It executed no application and no Rust. The retained observations include668 HIA body calls,571 actual OS effects,4,520 journal records and397,628,222 full journal-buffer bytes. Its85.789-second full read remained within the180-second budget.
+
+This closes the private held-parent capability. Public transport, metadata/file-info composition, write/upload publication, all SDK handlers and removal of the old runtime require their own completed integration gates. The main integration remains111 components/9 public tools until those gates pass.
