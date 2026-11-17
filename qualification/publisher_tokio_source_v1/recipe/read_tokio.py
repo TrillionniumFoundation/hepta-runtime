@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Read exact retained Tokio source; execute no application or compiler."""
 from pathlib import Path
-import argparse,json
+import argparse,json,sys
+sys.dont_write_bytecode=True
+sys.path.insert(0,str(Path(__file__).resolve().parent))
 from dependency import restore
 from common import canonical,decode,pin,require
 p=argparse.ArgumentParser()
