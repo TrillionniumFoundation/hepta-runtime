@@ -1,0 +1,16 @@
+{
+  "schema": "hepta.runtime.publisher.public-reader-repair.v1",
+  "source": "12673dd9a3a3e625be1ec3774535269275c7ab85",
+  "run": 44052213159,
+  "graph_source": "e5d701339c16c4b1bd1801252d2357721452687c",
+  "graph_binding": "63e5974cfd4d0569ff0443df78de9d433e673c1010e7c05104b8c21849912e2e",
+  "actual_processes_complete": 48,
+  "capture_rows_per_role": 686,
+  "comparison_pass_lanes": 16,
+  "comparison_failure_lanes": 8,
+  "failure": "New public reader incorrectly demanded native cache return code32. The unchanged actual native cache ABI and retained original fixture use the complete output length.",
+  "repair": "Replace only that constant with len(primary['output']); all four full cache responses are still byte-compared against actual original responses and full session state. No source/inputs/limits/execution changed.",
+  "native_replayed": false,
+  "rust_replayed": false,
+  "initial_failures_preserved": true
+}

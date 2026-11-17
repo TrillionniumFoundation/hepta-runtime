@@ -1,0 +1,64 @@
+{
+  "schema": "publication124-ordinary-exact-source-transform-v1",
+  "retained_source": "24ae71cb3c017269d3c82d44b4ba5476fee17045",
+  "transforms": {
+    "recipe/capture_native.py": {
+      "before": "recipe/capture_public.py",
+      "edits": [
+        [
+          "\"\"\"Run actual public wire through the fixed graph and actual current SDK.\"\"\"",
+          "\"\"\"Capture only the new native graph; retain the previously completed actual SDK role.\"\"\""
+        ],
+        [
+          "require(pin(native)==deps[mode+\"_binary_pin\"] and pin(original)==deps[\"original_binary_pin\"],\"frozen actual executable differs\")",
+          "require(pin(native)==deps[mode+\"_binary_pin\"],\"frozen actual native executable differs\")"
+        ],
+        [
+          "for role,binary in ((\"native\",native),(\"original\",original)):",
+          "for role,binary in ((\"native\",native),):"
+        ],
+        [
+          "native_binary=pin(native),original_binary=pin(original),",
+          "native_binary=pin(native),original_binary=deps[\"original_binary_pin\"],"
+        ]
+      ],
+      "before_pin": {
+        "bytes": 7643,
+        "sha256": "729d66b8426e1f47e76ea2aaaf257460ffd10a2fcfd4fe5e3a040ef50d719b0d",
+        "git_blob": "65f5facf55c7726c96e4d71e5fd6d2801232f698"
+      },
+      "after_pin": {
+        "bytes": 7609,
+        "sha256": "e323129be3f5f4026439f808fd8f6a84fce250744cf0c5bdb8f6da6437ef15d1",
+        "git_blob": "6fbd333db26e5ac4a0d40e0916022a2de486c256"
+      }
+    },
+    "recipe/read_current.py": {
+      "before": "recipe/read_public.py",
+      "edits": [
+        [
+          "from dependencies import verify_receipt",
+          "from current_dependencies import verify_receipt"
+        ],
+        [
+          "captured={role:process(capture,role,declared,fixture_root,mode,deps) for role in (\"native\",\"original\")}",
+          "captured={role:process(capture,role,declared,fixture_root,mode,\\\n        deps[\"retained_original_dependencies\"] if role==\"original\" else deps) for role in (\"native\",\"original\")}"
+        ],
+        [
+          "graph_hia_images=123,physical_images=116,",
+          "graph_hia_images=124,physical_images=117,"
+        ]
+      ],
+      "before_pin": {
+        "bytes": 15185,
+        "sha256": "0773da271a02b292a77550ce6ada68e21dd0a470a216e20b225efa20e778df60",
+        "git_blob": "63d77a6e7f4f2c49646cc796515efea70190538c"
+      },
+      "after_pin": {
+        "bytes": 15267,
+        "sha256": "b6019d795d1fa29fe4340f0a2e551f0f8d7c75c68b86914cbae6e85c12a74473",
+        "git_blob": "886dee255d41bc9e3ea4c8568b164bafae61cbbb"
+      }
+    }
+  }
+}
