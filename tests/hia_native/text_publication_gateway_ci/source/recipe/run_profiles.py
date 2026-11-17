@@ -6,18 +6,35 @@ from pathlib import Path
 import argparse
 import json
 import subprocess
+import shutil
 import sys
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from common import canonical,require,pin
+from common import canonical,require,pin,decode
 from input_domain import PROFILES
 def main():
     p=argparse.ArgumentParser()
     for name in ("source","dependencies","original-build","output"):p.add_argument("--"+name,type=Path,required=True)
     a=p.parse_args();require(not a.output.exists(),"new profile output");a.output.mkdir(parents=True)
     receipts=[];failed=False
+    deps=decode(a.dependencies.read_bytes())
+    a.original_build=Path(deps["original_build"])
     for profile in PROFILES:
         for kind in ("capture","read"):
+            if profile=="absent" and kind=="capture":
+                source=Path(deps["retained_absent"]);destination=a.output/profile
+                before={p.relative_to(source).as_posix():dict(pin=pin(p),mode=p.stat().st_mode&0o777)
+                    for p in source.rglob("*") if p.is_file()}
+                shutil.copytree(source,destination)
+                after={p.relative_to(destination).as_posix():dict(pin=pin(p),mode=p.stat().st_mode&0o777)
+                    for p in destination.rglob("*") if p.is_file()}
+                require(before==after,"retained complete 26-case capture changed during relocation")
+                row=dict(profile=profile,kind="retained_capture",returncode=0,
+                    actual_run=44032621165,source=str(source),destination=str(destination),
+                    complete_files=before,hia_executed=False,rust_executed=False)
+                receipts.append(row);(a.output/"PROFILES.json").write_bytes(canonical(receipts))
+                print(json.dumps({k:v for k,v in row.items() if k!="complete_files"},sort_keys=True),flush=True)
+                continue
             if kind=="read" and receipts[-1]["returncode"]!=0:break
             command=[sys.executable,"-I","-S","-B",str(a.source/"recipe"/("capture_gateway.py" if kind=="capture" else "read_gateway.py"))]
             if kind=="capture":

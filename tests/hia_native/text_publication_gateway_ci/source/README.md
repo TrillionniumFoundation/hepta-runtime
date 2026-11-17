@@ -9,3 +9,7 @@ Profiles are configured, absent configuration, denied configuration, required-bu
 Both actual process limits remain 180 seconds and each exchange remains 60 seconds. The workflow limit is 15 minutes. Only actual observed seven-field file versions are normalized after verification against their own file stat. Other complete response bytes are compared.
 
 This is a development gateway comparison, not complete public/async qualification. Existing body/callable qualification and all earlier author/compiler failures are immutable. Actual public SDK route, async cancellation/drain, full runtime replacement, all 136 handlers and production activation remain false.
+
+## v2 fixture/reader correction
+
+The exact v1 invalid empty-host startup failure and native trace-reader rejection remain archived. v2 supplies the same non-contacted registered host shape used by the established Text75 fixture, so the real configuration validator can admit the intended ordinary configured domain. It changes no HIA or original Rust bytes. It reuses the actual v1 fresh Rust build only after every source byte is equal. The already completed absent-config 26-case process capture is relocated byte-for-byte and reread without any HIA/Rust execution. Five other profiles were not reached before startup refusal and now execute with the corrected valid configuration. Native private stderr is fully retained and validated as exact 224-byte HRGTR002 records; original stderr remains empty. All 191 input rows and 180/60 limits are retained.

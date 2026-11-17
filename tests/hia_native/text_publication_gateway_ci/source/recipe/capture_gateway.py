@@ -115,7 +115,7 @@ def main():
     a=p.parse_args();require(os.environ.get("GITHUB_ACTIONS")=="true","execution is restricted to CI")
     require(not a.output.exists(),"new capture output required");a.output.mkdir(parents=True)
     deps=decode(a.dependencies.read_bytes());original=decode((a.original_build/"BUILD.json").read_bytes())
-    source=Path(deps["source"]);native=Path(deps["binary"]);original_binary=Path(original["binary"])
+    source=Path(deps["source"]);native=Path(deps["binary"]);original_binary=Path(deps.get("original_binary",original["binary"]))
     require(pin(native)==dict(bytes=deps["binary_bytes"],sha256=deps["binary_sha256"]),"native binary changed")
     require(pin(original_binary)==dict(bytes=original["bytes"],sha256=original["sha256"]),"original binary changed")
     root=a.output/"fixtures-root";ACTIVE_FIXTURE=root;ACTIVE_OUTPUT=a.output
@@ -127,7 +127,10 @@ def main():
     configured=a.profile!="absent"
     if configured:
         config.write_bytes(canonical(dict(state_dir=str(a.output/"controller-state"),
-            controller_workspace_roots=[] if a.profile=="denied" else [str(root)],hosts={})))
+            controller_workspace_roots=[] if a.profile=="denied" else [str(root)],
+            hosts={"fixture":dict(ssh_target="uncontacted-gateway-reference",remote_state_dir="/unused-runtime-state",
+                allow_write=True,allowed_read_path_prefixes=["/allowed"],allowed_write_path_prefixes=["/allowed"],
+                protected_path_prefixes=["/allowed/protected"])})))
         config.chmod(0o600)
     legacy=prepare(Path(__file__).resolve().parents[1]/"retained/text75_qualify.py")
     legacy.SOURCE=source;legacy.OUT=a.output
