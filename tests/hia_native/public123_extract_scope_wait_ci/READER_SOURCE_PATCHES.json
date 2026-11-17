@@ -1,0 +1,89 @@
+{
+  "schema": "hepta.runtime.request-owned-scope.native-readers.v1",
+  "before_source": "2ac89fe95c909115066c4da88fdf5f17a245ea30",
+  "retained_previous": {
+    "schema": "hepta.runtime.request-owned-fence.native-readers.v1",
+    "native_run_before": "42cccdc859b494d300f8756227b19c91009a0a72",
+    "native_run_patches": [
+      {
+        "before": "import callable_common,read_capture,read_only_guard as guard,wait_domain,failure_read",
+        "after": "import callable_common,read_only_guard as guard,wait_domain,failure_read\nimport read_capture_fixed as read_capture"
+      },
+      {
+        "before": "identity=json.loads((HERE/\"IDENTITY.json\").read_bytes())",
+        "after": "identity=json.loads((HERE/\"IDENTITY.json\").read_bytes())\nstage=identity[\"reader_stage_patch\"]\noriginal_reader=(source/\"read_capture.py\").read_text()\nassert original_reader.count(stage[\"before\"])==1 and original_reader.replace(stage[\"before\"],stage[\"after\"])==(HERE/\"read_capture_fixed.py\").read_text()"
+      },
+      {
+        "before": "ready[\"status\"]==\"COMPLETE_UPLOADED_NATIVE_SUCCESSOR_READY\"",
+        "after": "ready[\"status\"]==\"COMPLETE_UPLOADED_FENCE_SUCCESSOR_READY\""
+      }
+    ],
+    "controls_before": "61e3a24e8d01aed2c912873039882bd99b248436",
+    "controls_patches": [
+      {
+        "before": "HERE=Path(__file__).resolve().parent;sys.path.insert(0,str(HERE))",
+        "after": "HERE=Path(__file__).resolve().parent\nsource=Path(os.environ[\"WAIT_SOURCE\"]).resolve(strict=True)\nsys.path[:0]=[str(source),str(source/\"build_reader\"),str(HERE)]"
+      },
+      {
+        "before": "import read_capture,read_only_guard as guard",
+        "after": "import read_capture_fixed as read_capture\nimport read_only_guard as guard"
+      },
+      {
+        "before": "roots=[working,HERE]",
+        "after": "roots=[working,HERE,source]"
+      }
+    ],
+    "trace_stage_fix": {
+      "before": "\n                        need(obs.q(a,232)[0]==5 and obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")",
+      "after": "\n                        state,kind,ownership=obs.q(a,24)[0],obs.q(a,232)[0],obs.q(a,216)[0]\n                        need((kind==0 and state==0 and ownership==3) or (kind==5 and state==1 and ownership in (0,3)),\"actual detach-before-registration or retained-pending trace stage\")\n                        need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")"
+    },
+    "application_executions": 0,
+    "fence_observation_patch": {
+      "before": "                        need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")\n",
+      "after": "                        need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")\n                        fence_owner,fence_installed,fence_native,fence_hub=obs.q(a,3720)[0],obs.q(a,3712)[0],obs.q(a,3728)[0],obs.q(a,3736)[0]\n                        if ownership==3:\n                            need(fence_owner==3 and fence_installed==1 and fence_hub!=0,\"complete admitted fence ownership moves with pending node\")\n                            need(obs.q(a,3584+8)[0]!=0 and obs.q(a,3584+16)[0]>=4096 and obs.q(a,3584+32)[0]!=0 and obs.q(a,3584+40)[0]>=48,\"retained complete actual fence descriptor\")\n                            need(obs.q(a,3648)[0]==obs.q(a,3648+8)[0]==0,\"settled fence child borrow retained\")\n                        else:\n                            need(fence_owner==fence_installed==fence_native==fence_hub==0,\"fence metadata transferred back before actual HIA resume\")\n"
+    },
+    "native_run_final_source_proof_patch": {
+      "before": "assert original_reader.count(stage[\"before\"])==1 and original_reader.replace(stage[\"before\"],stage[\"after\"])==(HERE/\"read_capture_fixed.py\").read_text()",
+      "after": "assert original_reader.count(stage[\"before\"])==1\nreader=original_reader.replace(stage[\"before\"],stage[\"after\"])\nfence_reader=identity[\"reader_fence_patch\"]\nassert reader.count(fence_reader[\"before\"])==1 and reader.replace(fence_reader[\"before\"],fence_reader[\"after\"])==(HERE/\"read_capture_fixed.py\").read_text()"
+    }
+  },
+  "scope_observation_patches": [
+    {
+      "before": "counts={};final=[];pending=[];actual_lock_calls=[]",
+      "after": "counts={};final=[];pending=[];actual_lock_calls=[];scope_mappings=[];scope_pending=None"
+    },
+    {
+      "before": "1<=event<=16",
+      "after": "1<=event<=18"
+    },
+    {
+      "before": "                if event==9:\n                    need(an==bn==cn==4096,",
+      "after": "                if event==9:\n                    need(scope_pending is None,\"previous complete Scope/context observation pair\")\n                    need(an==bn==cn==4096,"
+    },
+    {
+      "before": "                        pending.append({\"trace_sequence\":seq,",
+      "after": "                        scope_owner,scope_view=obs.q(a,3872)[0],obs.q(a,3880)[0]\n                        need((ownership==3 and scope_owner==3 and scope_view!=0) or (ownership==0 and scope_owner==scope_view==0),\"actual Scope/context ownership transfer\")\n                        scope_pending={\"node\":node,\"stage\":0,\"scope\":bytes(a[3744:3808]),\"context\":bytes(a[3808:3872]),\"sequence\":seq,\"owner\":scope_owner}\n                        pending.append({\"trace_sequence\":seq,"
+    },
+    {
+      "before": "                elif event==16:\n",
+      "after": "                elif event in (17,18):\n                    need(scope_pending is not None and scope_pending[\"node\"]==node and scope_pending[\"stage\"]==event-17,\"ordered actual request Scope/context pair\")\n                    descriptor=scope_pending[\"scope\" if event==17 else \"context\"]\n                    need(an==64 and bytes(a)==descriptor and bn==obs.q(a,16)[0] and cn==obs.q(a,32)[0] and obs.q(a,8)[0]!=0 and obs.q(a,24)[0]!=0 and obs.q(a,56)[0]==0,\"complete exact owned Scope/context descriptor and buffers\")\n                    if event==17:\n                        need(bn>=16785920 and cn>=64 and b[:8]==b\"HRSCST01\" and obs.q(b,8)[0]==1 and obs.q(b,24)[0]==1 and obs.q(b,264)[0]==0 and obs.q(b,64)[0]!=0,\"actual active HIA Scope with settled child borrow\")\n                        scope_pending[\"lease\"]=obs.q(b,64)[0]\n                    else:\n                        need(bn>=512 and cn>=32 and b[:8]==b\"HRCXST01\" and obs.q(b,8)[0]==1,\"actual task-local request-context owner\")\n                        used,top,depth=obs.q(b,24,3)\n                        need(depth>0 and 64<=top and top+32<=used<=obs.q(b,16)[0] and used<=bn and obs.q(b,top+8)[0]==scope_pending[\"lease\"],\"actual context top belongs to the same retained Scope lease\")\n                    scope_mappings.append({\"event\":event,\"trace_sequence\":seq,\"pending_sequence\":scope_pending[\"sequence\"],\"node\":node,\"owner\":scope_pending[\"owner\"],\"lease\":scope_pending[\"lease\"],\"descriptor\":pin(a),\"workspace\":pin(b),\"output\":pin(c)})\n                    scope_pending[\"stage\"]+=1\n                    if event==18:scope_pending=None\n                elif event==16:\n"
+    },
+    {
+      "before": "    if side==\"native\":need(pending and actual_lock_calls,\"actual public WAIT and HIA lock calls were observed\")",
+      "after": "    if side==\"native\":\n        need(pending and actual_lock_calls,\"actual public WAIT and HIA lock calls were observed\")\n        need(scope_pending is None and counts.get(\"17\")==counts.get(\"18\")==len(pending) and len(scope_mappings)==2*len(pending),\"complete retained request Scope/context pairs\")"
+    },
+    {
+      "before": "return {\"events\":counts,\"pending_nodes\":pending,\"fixture_hia_calls\":actual_lock_calls,\"final\":final}",
+      "after": "return {\"events\":counts,\"pending_nodes\":pending,\"fixture_hia_calls\":actual_lock_calls,\"request_scope_mappings\":scope_mappings,\"final\":final}"
+    },
+    {
+      "before": "\"native_fixture_hia_calls\":len(b[\"trace\"][\"fixture_hia_calls\"]),\"both_actual_runtime_drop_boundaries\":True",
+      "after": "\"native_fixture_hia_calls\":len(b[\"trace\"][\"fixture_hia_calls\"]),\"complete_scope_context_observations\":len(b[\"trace\"][\"request_scope_mappings\"]),\"both_actual_runtime_drop_boundaries\":True"
+    }
+  ],
+  "native_run_source_proof": {
+    "before": "assert reader.count(fence_reader[\"before\"])==1 and reader.replace(fence_reader[\"before\"],fence_reader[\"after\"])==(HERE/\"read_capture_fixed.py\").read_text()",
+    "after": "assert reader.count(fence_reader[\"before\"])==1\nreader=reader.replace(fence_reader[\"before\"],fence_reader[\"after\"])\nfor patch in identity[\"reader_scope_patches\"]:\n    assert reader.count(patch[\"before\"])==1\n    reader=reader.replace(patch[\"before\"],patch[\"after\"])\nassert reader==(HERE/\"read_capture_fixed.py\").read_text()"
+  },
+  "actual_runtime_semantics_in_readers": false
+}
