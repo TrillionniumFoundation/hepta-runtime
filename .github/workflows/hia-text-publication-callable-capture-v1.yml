@@ -1,0 +1,70 @@
+name: Actual native publication callable full capture
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-callable-capture-6780-v1-20261117']
+    paths: ['tests/hia_native/text_publication_callable_ci/**', '.github/workflows/hia-text-publication-callable-capture-v1.yml']
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  body-qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PC_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/text_publication_callable_ci/source" "PC_OUTPUT=$RUNNER_TEMP/text-publication-callable-capture-qualification" "PC_EXPORT=$RUNNER_TEMP/text-publication-callable-capture-export" "PC_DRIVER=$RUNNER_TEMP/text-publication-callable-capture-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact source candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/text_publication_callable_ci/source
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify complete candidate and compiler source
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$PC_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 982cb3ad3fe24da3019ebc9b3cdd847b34b78877a65e3a1cbb94f69b9b657226
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -S -B "$PC_SOURCE/scripts/run_capture.py" check --source "$PC_SOURCE"
+      - name: Install exact Rust compiler for original reference
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          printf '%s\n' "PC_RUST_BIN=$(rustup which --toolchain 1.95.0 rustc | xargs dirname)" >> "$GITHUB_ENV"
+      - name: Fresh HIA and original body, complete unchanged file domain
+        run: |
+          set +e
+          python3 -I -S -B "$PC_SOURCE/scripts/run_capture.py" run --source "$PC_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$PC_RUST_BIN" --output "$PC_OUTPUT" > "$PC_DRIVER.stdout" 2> "$PC_DRIVER.stderr"
+          pc_status=$?
+          cat "$PC_DRIVER.stderr"
+          test "$pc_status" -ne 0 || cat "$PC_DRIVER.stdout"
+          exit "$pc_status"
+      - name: Preserve interrupted owned fixture state without execution
+        if: always()
+        run: |
+          python3 -I -S -B "$PC_SOURCE/body-source/scripts/finalize_fixture.py" --output "$PC_OUTPUT/body"
+      - name: Preserve complete source and build success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PC_SOURCE/scripts/archive.py" pack --source "$PC_SOURCE" --capture "$PC_OUTPUT" --output "$PC_EXPORT" --driver-prefix "$PC_DRIVER"
+      - name: Upload full evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-callable-capture-qualification-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PC_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
