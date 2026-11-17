@@ -2,7 +2,7 @@ name: Qualify full native binary diagnostic rendering
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-error-qualify-6780-20261117]
+    branches: [hia-binary-error-qualify-fixed-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -14,7 +14,7 @@ jobs:
       LC_ALL: C.UTF-8
       PYTHONDONTWRITEBYTECODE: '1'
       BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_error/v1/source
-      BINARY_MANIFEST: 9107c56ff3ff6c36650807a044eb7874aab244b9c83324a6090a067b2cce0ccf
+      BINARY_MANIFEST: ec7cd63994df106b221c287f9aa2f19c8cfc2579c6b051b2302d12bb5b1fc485
     steps:
       - name: Checkout frozen formatter and complete domain
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
