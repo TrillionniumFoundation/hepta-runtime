@@ -1,0 +1,75 @@
+name: Build actual persistent namespace Watcher native callable
+on:
+  push:
+    branches: [hia-namespace-watcher-native-source-v3-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_watcher_native_source_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Admit the complete frozen author and source
+        run: |
+          export NAMESPACE_ROOT="$RUNNER_TEMP/namespace-watcher-native-source-v3"
+          printf 'NAMESPACE_ROOT=%s\n' "$NAMESPACE_ROOT" >> "$GITHUB_ENV"
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import hashlib,os,shutil
+          from pathlib import Path
+          root=Path(os.environ["NAMESPACE_ROOT"]);root.mkdir(exist_ok=False)
+          shutil.copytree("runtime/tests/hia_native/namespace_watcher_native_source_v3",root/"source")
+          assert hashlib.sha256((root/"source/SOURCE.json").read_bytes()).hexdigest()=="853e94093f8650b24027f15dc7eff7354256343f33deb9239fa7667f74db65b8"
+          (root/"outer").mkdir()
+          PY
+          timeout --signal=KILL 60 python3 -I -B "$NAMESPACE_ROOT/source/source_check_callable.py"
+      - name: Preserve and fully reread all actual failed native source and relocation bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14350724074/zip > "$NAMESPACE_ROOT/prior.zip"
+          timeout --signal=KILL 180 python3 -I -B "$NAMESPACE_ROOT/source/restore_failure.py" --archive "$NAMESPACE_ROOT/prior.zip" \
+            --output "$NAMESPACE_ROOT/prior" --pins "$NAMESPACE_ROOT/source/NATIVE_FAILURE_PINS.json"
+          timeout --signal=KILL 180 python3 -I -B "$NAMESPACE_ROOT/source/inspect_native_failure.py" --prior "$NAMESPACE_ROOT/prior"
+      - name: Fresh source build then eight actual native engineering cases and full readback
+        run: |
+          python3 -I -B "$NAMESPACE_ROOT/source/prepare_callable.py" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$NAMESPACE_ROOT/run" > "$NAMESPACE_ROOT/outer/prepare.stdout" 2> "$NAMESPACE_ROOT/outer/prepare.stderr"
+          cat "$NAMESPACE_ROOT/outer/prepare.stdout"
+      - name: Preserve every complete source and build byte including failures
+        if: always()
+        run: |
+          if test -f "$NAMESPACE_ROOT/source/export.py"; then
+            timeout --signal=KILL 180 python3 -I -B "$NAMESPACE_ROOT/source/export.py" --workspace "$NAMESPACE_ROOT" \
+              --archive "$RUNNER_TEMP/namespace-watcher-native-source-v3.tar.gz"
+          fi
+          if test -f "$NAMESPACE_ROOT/outer/prepare.stderr"; then cat "$NAMESPACE_ROOT/outer/prepare.stderr"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-watcher-native-source-v3
+          path: |
+            ${{ runner.temp }}/namespace-watcher-native-source-v3.tar.gz
+            ${{ runner.temp }}/namespace-watcher-native-source-v3.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
