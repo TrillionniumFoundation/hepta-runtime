@@ -1,0 +1,118 @@
+name: Compare request-owned fence native WAIT against retained original
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-fence-lifetime-6780-20261117']
+    paths: ['tests/hia_native/public123_extract_fence_wait_ci/**', '.github/workflows/hia-extract-fence-native-wait.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  ordinary-a-legacy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set exact source and evidence locations
+        run: |
+          printf '%s\n' "WAIT_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_fence_wait_ci" "WAIT_BUILD_SOURCE=$GITHUB_WORKSPACE/build-source/tests/hia_native/public123_extract_fence_lifetime_ci" "WAIT_SOURCE=$GITHUB_WORKSPACE/capture-source/tests/hia_native/public123_extract_contention_ci" "WAIT_INPUTS=$RUNNER_TEMP/fence-native-inputs" "WAIT_CAPTURE=$RUNNER_TEMP/fence-native-contention" "WAIT_EXPORT=$RUNNER_TEMP/fence-native-contention-export" "WAIT_DRIVER=$RUNNER_TEMP/fence-native-driver" "WAIT_INPUT_DRIVER=$RUNNER_TEMP/fence-native-input-driver" "WAIT_PREVIOUS_DRIVER=$RUNNER_TEMP/fence-native-previous-driver" "WAIT_PREVIOUS_INPUTS=$RUNNER_TEMP/fence-native-previous-inputs" >> "$GITHUB_ENV"
+      - name: Checkout frozen native-only driver
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_fence_wait_ci
+      - name: Checkout exact successful build readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: build-source
+          ref: b73f72448bfb3ce8b7740a2aeb19b8a904fb738b
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_fence_lifetime_ci
+      - name: Checkout exact previous build source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: previous-build-source
+          ref: eceaaa36f5b92b64d83807f9d2605f744c652e80
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_local_policy_ci
+      - name: Checkout exact pure previous restoration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: previous-native-source
+          ref: 42cccdc859b494d300f8756227b19c91009a0a72
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_wait_fixed_native_ci
+      - name: Checkout unchanged actual input and capture helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: capture-source
+          ref: 61e3a24e8d01aed2c912873039882bd99b248436
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_contention_ci
+      - name: Exact source admission
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = '${{ github.sha }}'
+          test "$(git -C "$GITHUB_WORKSPACE/build-source" rev-parse HEAD)" = 'b73f72448bfb3ce8b7740a2aeb19b8a904fb738b'
+          test "$(git -C "$GITHUB_WORKSPACE/capture-source" rev-parse HEAD)" = '61e3a24e8d01aed2c912873039882bd99b248436'
+          test "$(sha256sum "$WAIT_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 'e56c3f90ce85de41c60ecc559a23a7b8836d93e8ce6ae3965c39c4580e2a2203'
+          python3 -I -S -B "$WAIT_PACKAGE/check_source.py"
+      - name: Independently read previous graph archives with the frozen original readers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$GITHUB_WORKSPACE/previous-native-source/tests/hia_native/public123_extract_wait_fixed_native_ci/restore_native.py" --build-source "$GITHUB_WORKSPACE/previous-build-source/tests/hia_native/public123_extract_local_policy_ci" --capture-source "$WAIT_SOURCE" --output "$WAIT_PREVIOUS_INPUTS" > "$WAIT_PREVIOUS_DRIVER.stdout" 2> "$WAIT_PREVIOUS_DRIVER.stderr"
+          wait_status=$?
+          cat "$WAIT_PREVIOUS_DRIVER.stderr"
+          cat "$WAIT_PREVIOUS_DRIVER.stdout"
+          exit "$wait_status"
+      - name: Independent complete uploaded successor and retained graph read
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$WAIT_PACKAGE/restore_native.py" --build-source "$WAIT_BUILD_SOURCE" --capture-source "$WAIT_SOURCE" --retained-inputs "$WAIT_PREVIOUS_INPUTS" --output "$WAIT_INPUTS" > "$WAIT_INPUT_DRIVER.stdout" 2> "$WAIT_INPUT_DRIVER.stderr"
+          wait_status=$?
+          cat "$WAIT_INPUT_DRIVER.stderr"
+          cat "$WAIT_INPUT_DRIVER.stdout"
+          exit "$wait_status"
+      - name: Retain original four and execute native only under unchanged deadlines
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$WAIT_PACKAGE/native_run.py" --capture-source "$WAIT_SOURCE" --inputs "$WAIT_INPUTS" --output "$WAIT_CAPTURE" --domain ordinary-a-legacy > "$WAIT_DRIVER.stdout" 2> "$WAIT_DRIVER.stderr"
+          wait_status=$?
+          cat "$WAIT_DRIVER.stderr"
+          cat "$WAIT_DRIVER.stdout"
+          exit "$wait_status"
+      - name: Eight physical evidence refusals and two complete relocations
+        run: |
+          python3 -I -S -B "$WAIT_PACKAGE/controls.py" --capture "$WAIT_CAPTURE" --output "$WAIT_CAPTURE-reader-controls"
+      - name: Retain preflight records and exact successor driver
+        if: always()
+        run: |
+          mkdir -p "$WAIT_CAPTURE"
+          if test -f "$WAIT_PREVIOUS_DRIVER.stdout"; then cp "$WAIT_PREVIOUS_DRIVER.stdout" "$WAIT_CAPTURE/previous-input-reader.stdout"; fi
+          if test -f "$WAIT_PREVIOUS_DRIVER.stderr"; then cp "$WAIT_PREVIOUS_DRIVER.stderr" "$WAIT_CAPTURE/previous-input-reader.stderr"; fi
+          if test -f "$WAIT_INPUT_DRIVER.stdout"; then cp "$WAIT_INPUT_DRIVER.stdout" "$WAIT_CAPTURE/input-reader.stdout"; fi
+          if test -f "$WAIT_INPUT_DRIVER.stderr"; then cp "$WAIT_INPUT_DRIVER.stderr" "$WAIT_CAPTURE/input-reader.stderr"; fi
+          if test ! -d "$WAIT_CAPTURE/recipe-extension"; then cp -R "$WAIT_PACKAGE" "$WAIT_CAPTURE/recipe-extension"; fi
+      - name: Completely archive success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$WAIT_SOURCE/archive.py" pack --source "$WAIT_SOURCE" --capture "$WAIT_CAPTURE" --output "$WAIT_EXPORT" --driver-prefix "$WAIT_DRIVER"
+      - name: Upload complete retained pair
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fence-native-WAIT-ordinary-a-legacy-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.WAIT_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

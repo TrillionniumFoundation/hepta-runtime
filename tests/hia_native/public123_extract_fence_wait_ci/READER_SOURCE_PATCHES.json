@@ -1,0 +1,46 @@
+{
+  "schema": "hepta.runtime.request-owned-fence.native-readers.v1",
+  "native_run_before": "42cccdc859b494d300f8756227b19c91009a0a72",
+  "native_run_patches": [
+    {
+      "before": "import callable_common,read_capture,read_only_guard as guard,wait_domain,failure_read",
+      "after": "import callable_common,read_only_guard as guard,wait_domain,failure_read\nimport read_capture_fixed as read_capture"
+    },
+    {
+      "before": "identity=json.loads((HERE/\"IDENTITY.json\").read_bytes())",
+      "after": "identity=json.loads((HERE/\"IDENTITY.json\").read_bytes())\nstage=identity[\"reader_stage_patch\"]\noriginal_reader=(source/\"read_capture.py\").read_text()\nassert original_reader.count(stage[\"before\"])==1 and original_reader.replace(stage[\"before\"],stage[\"after\"])==(HERE/\"read_capture_fixed.py\").read_text()"
+    },
+    {
+      "before": "ready[\"status\"]==\"COMPLETE_UPLOADED_NATIVE_SUCCESSOR_READY\"",
+      "after": "ready[\"status\"]==\"COMPLETE_UPLOADED_FENCE_SUCCESSOR_READY\""
+    }
+  ],
+  "controls_before": "61e3a24e8d01aed2c912873039882bd99b248436",
+  "controls_patches": [
+    {
+      "before": "HERE=Path(__file__).resolve().parent;sys.path.insert(0,str(HERE))",
+      "after": "HERE=Path(__file__).resolve().parent\nsource=Path(os.environ[\"WAIT_SOURCE\"]).resolve(strict=True)\nsys.path[:0]=[str(source),str(source/\"build_reader\"),str(HERE)]"
+    },
+    {
+      "before": "import read_capture,read_only_guard as guard",
+      "after": "import read_capture_fixed as read_capture\nimport read_only_guard as guard"
+    },
+    {
+      "before": "roots=[working,HERE]",
+      "after": "roots=[working,HERE,source]"
+    }
+  ],
+  "trace_stage_fix": {
+    "before": "\n                        need(obs.q(a,232)[0]==5 and obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")",
+    "after": "\n                        state,kind,ownership=obs.q(a,24)[0],obs.q(a,232)[0],obs.q(a,216)[0]\n                        need((kind==0 and state==0 and ownership==3) or (kind==5 and state==1 and ownership in (0,3)),\"actual detach-before-registration or retained-pending trace stage\")\n                        need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")"
+  },
+  "application_executions": 0,
+  "fence_observation_patch": {
+    "before": "                        need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")\n",
+    "after": "                        need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")\n                        fence_owner,fence_installed,fence_native,fence_hub=obs.q(a,3720)[0],obs.q(a,3712)[0],obs.q(a,3728)[0],obs.q(a,3736)[0]\n                        if ownership==3:\n                            need(fence_owner==3 and fence_installed==1 and fence_hub!=0,\"complete admitted fence ownership moves with pending node\")\n                            need(obs.q(a,3584+8)[0]!=0 and obs.q(a,3584+16)[0]>=4096 and obs.q(a,3584+32)[0]!=0 and obs.q(a,3584+40)[0]>=48,\"retained complete actual fence descriptor\")\n                            need(obs.q(a,3648)[0]==obs.q(a,3648+8)[0]==0,\"settled fence child borrow retained\")\n                        else:\n                            need(fence_owner==fence_installed==fence_native==fence_hub==0,\"fence metadata transferred back before actual HIA resume\")\n"
+  },
+  "native_run_final_source_proof_patch": {
+    "before": "assert original_reader.count(stage[\"before\"])==1 and original_reader.replace(stage[\"before\"],stage[\"after\"])==(HERE/\"read_capture_fixed.py\").read_text()",
+    "after": "assert original_reader.count(stage[\"before\"])==1\nreader=original_reader.replace(stage[\"before\"],stage[\"after\"])\nfence_reader=identity[\"reader_fence_patch\"]\nassert reader.count(fence_reader[\"before\"])==1 and reader.replace(fence_reader[\"before\"],fence_reader[\"after\"])==(HERE/\"read_capture_fixed.py\").read_text()"
+  }
+}
