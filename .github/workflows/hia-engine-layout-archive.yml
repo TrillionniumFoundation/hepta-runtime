@@ -14,7 +14,6 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       LAYOUT_ZIP_SOURCE: ${{ github.workspace }}/runtime/qualification/runtime_engine_layout/v1/archive_reader
       LAYOUT_ZIP_SHA: a91d1576bcde71e20157d197dd099325914b1f0faff16c63fcb05bbfe52039b8
-      LAYOUT_ZIP_OUTPUT: ${{ runner.temp }}/engine-layout-complete-zip
     steps:
       - name: Checkout fixed inert reader and exact archive binding
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -23,6 +22,9 @@ jobs:
           ref: ${{ github.sha }}
           sparse-checkout: qualification/runtime_engine_layout/v1/archive_reader
           persist-credentials: false
+      - name: Bind the owned temporary output directory
+        run: |
+          printf 'LAYOUT_ZIP_OUTPUT=%s\n' "$RUNNER_TEMP/engine-layout-complete-zip" >> "$GITHUB_ENV"
       - name: Verify all frozen reader bytes before reading the artifact
         run: |
           test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
