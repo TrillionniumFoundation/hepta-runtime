@@ -1,0 +1,46 @@
+name: Pure complete uploaded public118 catalog proof inspection
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_catalog_proof_inspect_ci/**', '.github/workflows/hia-extract-public-catalog-proof-inspect.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  complete-proofs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen pure proof reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_catalog_proof_inspect_ci
+      - name: Download exact retained proof archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/extract-proof-input"
+          for id in 14307980023 14306369610 14306725753 14305783919; do
+            gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$id" > "$RUNNER_TEMP/extract-proof-input/$id.json"
+            gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$id/zip" > "$RUNNER_TEMP/extract-proof-input/$id.zip"
+          done
+      - name: Read every uploaded byte and report actual catalog observations
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_catalog_proof_inspect_ci/run.py" --input "$RUNNER_TEMP/extract-proof-input" --output "$RUNNER_TEMP/extract-proof-read" --profile 'e9de77414b49b1c63434dbf1370711fd5e0a650223a885fa8980655164df292e'
+      - name: Retain full proof read including source and guards
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-complete-uploaded-catalog-proofs-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/extract-proof-read
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
