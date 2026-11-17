@@ -2,7 +2,7 @@ name: Independent uploaded Direct8 physical evidence
 on:
   workflow_dispatch:
   push:
-    branches: ['hia-publication-direct-physical-upload-6780-v1-20261117']
+    branches: ['hia-publication-direct-physical-upload-6780-v2-20261117']
 permissions:
   contents: read
   actions: read
@@ -13,13 +13,13 @@ jobs:
     steps:
       - name: Set exact runner paths
         run: |
-          printf '%s\n' "PD_SOURCE=$GITHUB_WORKSPACE/direct-reader/tests/hia_native/publication_direct_complete_read_v3" "PD_PUBLIC=$GITHUB_WORKSPACE/public-reader/tests/hia_native/publication_duplex_complete_read_v2" "PD_BUILD=$GITHUB_WORKSPACE/build-recipe/tests/hia_native/publication_duplex_build_v3" "PD_DIRECT=$GITHUB_WORKSPACE/direct-recipe/tests/hia_native/publication_direct_build_v3" "PD_PRODUCER=$GITHUB_WORKSPACE/capture-recipe/tests/hia_native/publication_direct_capture_v3" "PD_PREP=$RUNNER_TEMP/direct-complete-prepared" "PD_RETAINED=$RUNNER_TEMP/direct-complete-retained" "PD_CAPTURE=$RUNNER_TEMP/direct-complete-proof" "PD_DRIVER=$RUNNER_TEMP/direct-complete-driver" "PD_EXPORT=$RUNNER_TEMP/direct-complete-export" "PD_WRAPPER=$GITHUB_WORKSPACE/candidate/qualification/publication_direct_physical_upload_v1" "PD_PROOF=$RUNNER_TEMP/direct-uploaded-proof" >> "$GITHUB_ENV"
+          printf '%s\n' "PD_SOURCE=$GITHUB_WORKSPACE/direct-reader/tests/hia_native/publication_direct_complete_read_v3" "PD_PUBLIC=$GITHUB_WORKSPACE/public-reader/tests/hia_native/publication_duplex_complete_read_v2" "PD_BUILD=$GITHUB_WORKSPACE/build-recipe/tests/hia_native/publication_duplex_build_v3" "PD_DIRECT=$GITHUB_WORKSPACE/direct-recipe/tests/hia_native/publication_direct_build_v3" "PD_PRODUCER=$GITHUB_WORKSPACE/capture-recipe/tests/hia_native/publication_direct_capture_v3" "PD_PREP=$RUNNER_TEMP/direct-complete-prepared" "PD_RETAINED=$RUNNER_TEMP/direct-complete-retained" "PD_CAPTURE=$RUNNER_TEMP/direct-complete-proof" "PD_DRIVER=$RUNNER_TEMP/direct-complete-driver" "PD_EXPORT=$RUNNER_TEMP/direct-complete-export" "PD_WRAPPER=$GITHUB_WORKSPACE/candidate/qualification/publication_direct_physical_upload_v2" "PD_PROOF=$RUNNER_TEMP/direct-uploaded-proof" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: candidate
           ref: ${{ github.sha }}
           persist-credentials: false
-          sparse-checkout: qualification/publication_direct_physical_upload_v1
+          sparse-checkout: qualification/publication_direct_physical_upload_v2
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: direct-reader
@@ -73,7 +73,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: publication-direct-physical-uploaded-v1-${{ github.sha }}
+          name: publication-direct-physical-uploaded-v2-${{ github.sha }}
           path: ${{ env.PD_EXPORT }}
           compression-level: 0
           if-no-files-found: error

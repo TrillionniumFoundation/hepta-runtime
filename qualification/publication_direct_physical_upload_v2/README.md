@@ -1,0 +1,5 @@
+# Independent uploaded Direct8 physical evidence
+
+This source reads the complete frozen afcb1f90 uploaded archive, restores each original completed capture, checks exact before/after bytes and metadata, and reruns only the unchanged pure readers. It never calls the application, HIA, compiler, Rust, or mutator. Six honest reseals and two complete independent relocations retain the original 180-second per-reader and 15-minute CI bounds. Every original semantic result, command, state, file, worker journal, and host trace remains required. The old control v1 tuple-versus-JSON-list refusal remains retained with its original failure conclusion.
+
+V2 preserves the complete first uploaded-reader failure. The physical producer manifest explicitly has four path/mode/bytes/SHA256 rows and no Git-blob field; V2 admits that exact frozen schema, full manifest pin, file set, bytes and modes. The semantic readers, mutations, original captures, six refusals, two relocations and all time bounds are unchanged.
