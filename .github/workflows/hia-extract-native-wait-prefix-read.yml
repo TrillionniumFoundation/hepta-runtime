@@ -1,0 +1,56 @@
+name: Read completed first native WAIT case and retained next failure
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-local-policy-6780-20261117']
+    paths: ['tests/hia_native/public123_extract_wait_prefix_read_ci/**', '.github/workflows/hia-extract-native-wait-prefix-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_wait_prefix_read_ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: 61e3a24e8d01aed2c912873039882bd99b248436
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_contention_ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: native-source
+          ref: 42cccdc859b494d300f8756227b19c91009a0a72
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_wait_fixed_native_ci
+      - name: Complete uploaded failure and actual completed pair read
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_prefix_read_ci/read.py" | cut -d' ' -f1)" = '9bffb31fad6a7e7ff6135a4f934ef22eed99f580b00bad4a193ca365f135f803'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_prefix_read_ci/IDENTITY.json" | cut -d' ' -f1)" = 'd83454a7144aa854f5e665bc55bfdddf25ccbeed73e9568a0e11868becc7f251'
+          python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_prefix_read_ci/read.py" --source "$GITHUB_WORKSPACE/source/tests/hia_native/public123_extract_contention_ci" --native-source "$GITHUB_WORKSPACE/native-source/tests/hia_native/public123_extract_wait_fixed_native_ci" --output "$RUNNER_TEMP/first-native-prefix-read" > "$RUNNER_TEMP/first-native-prefix.stdout" 2> "$RUNNER_TEMP/first-native-prefix.stderr" || { cat "$RUNNER_TEMP/first-native-prefix.stderr"; exit 1; }
+          cat "$RUNNER_TEMP/first-native-prefix.stdout"
+      - name: Preserve complete input archives and reads
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: first-native-prefix-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/first-native-prefix-read
+            ${{ runner.temp }}/first-native-prefix.stdout
+            ${{ runner.temp }}/first-native-prefix.stderr
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
