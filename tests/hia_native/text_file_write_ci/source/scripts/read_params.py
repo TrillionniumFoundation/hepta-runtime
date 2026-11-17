@@ -209,24 +209,24 @@ def control_evidence(controls, records):
             require(wire == invalid[number - 28] and before == b"\x7b" * 40000 and len(out) == 256, "private refusal domain changed")
             require(actual["return_code"] == 0xffffffff and before == after and out == b"\xa5" * len(out), "invalid private frame accepted")
         elif kind == "short-output":
-            require(wire == wires[number // 14] and len(out) == (0, 1, 127)[number % 14 - 1] and before == b"\x7b" * (len(wire) + 65536), "short-output input changed")
+            require(wire == wires[number // 14] and len(out) == (0, 1, 127)[number % 14 - 1] and before == b"\x7b" * (max(len(wire), 128) + 65536), "short-output input changed")
             require(actual["return_code"] == 0xfffffffe and before == after and out == b"\xa5" * len(out), "short-output control changed")
         else:
             require(wire in refs, "unbound control wire")
             full = refs[wire]
             status, needed, result = frame(2, actual["return_code"], out)
             if kind == "output-boundary":
-                require(len(out) == (128, len(full) - 1, len(full), len(full) + 17)[number % 14 - 4] and before == b"\x7b" * (len(wire) + 65536), "output boundary input changed")
+                require(len(out) == (128, len(full) - 1, len(full), len(full) + 17)[number % 14 - 4] and before == b"\x7b" * (max(len(wire), 128) + 65536), "output boundary input changed")
                 require(row["required"] == len(full), "output required extent changed")
                 require((status == 3 and needed == len(full)) if len(out) < len(full) else result == full, "output boundary changed")
             elif kind == "dirty-workspace":
-                expected = b"\x7b" * (len(wire) + 65536) if number % 14 == 11 else dirty[wire]
+                expected = b"\x7b" * (max(len(wire), 128) + 65536) if number % 14 == 11 else dirty[wire]
                 require(before == expected, "dirty workspace state was replaced")
                 require(result == full and len(out) == len(full) + 7, "dirty reuse changed complete result")
                 dirty[wire] = after
             else:
-                require(before == b"\x7b" * (0, 1, len(wire) + 65535)[number % 14 - 8] and len(out) == len(full) + 11, "workspace growth input changed")
-                require(kind == "workspace-growth" and status == 2 and needed == len(wire) + 65536 and before == after, "workspace refusal changed caller state")
+                require(before == b"\x7b" * (0, 1, max(len(wire), 128) + 65535)[number % 14 - 8] and len(out) == len(full) + 11, "workspace growth input changed")
+                require(kind == "workspace-growth" and status == 2 and needed == max(len(wire), 128) + 65536 and before == after, "workspace refusal changed caller state")
                 current = after + bytes(needed - len(after))
                 capacity = len(full)
                 for call in row["resume_calls"]:

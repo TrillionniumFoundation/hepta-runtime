@@ -144,13 +144,13 @@ class Recorder:
             full, calls = self.complete(2, cid, wire, label='control-reference')
             self.controls.append({'kind': 'reference', 'calls': calls, 'response_sha256': sha(full)})
             for cap in (0, 1, 127):
-                before = b'\x7b' * (len(wire) + 65536)
+                before = b'\x7b' * (max(len(wire), 128) + 65536)
                 code, out, after, index = self.invoke(2, cid + 1, 'short-output', wire, before, cap)
                 assert (code, out, after) == (CAPACITY, b'\xa5' * cap, before)
                 self.controls.append({'kind': 'short-output', 'call': index})
             for capacity in (128, len(full) - 1, len(full), len(full) + 17):
                 code, out, after, index = self.invoke(2, cid + 2, 'output-boundary', wire,
-                    b'\x7b' * (len(wire) + 65536), capacity)
+                    b'\x7b' * (max(len(wire), 128) + 65536), capacity)
                 assert code == 128
                 if capacity < len(full):
                     assert word(out, 8) == 3 and word(out, 80) == len(full)
@@ -158,16 +158,16 @@ class Recorder:
                 else:
                     assert out == full + b'\xa5' * (capacity - len(full))
                 self.controls.append({'kind': 'output-boundary', 'call': index, 'required': len(full)})
-            for size in (0, 1, len(wire) + 65535):
+            for size in (0, 1, max(len(wire), 128) + 65535):
                 before = b'\x7b' * size
                 code, out, after, index = self.invoke(2, cid + 3, 'workspace-growth', wire, before, len(full) + 11)
-                assert code == 128 and word(out, 8) == 2 and word(out, 80) == len(wire) + 65536
+                assert code == 128 and word(out, 8) == 2 and word(out, 80) == max(len(wire), 128) + 65536
                 assert after == before and out[128:] == b'\xa5' * (len(full) + 11 - 128)
                 resumed, calls = self.complete(2, cid + 4, wire, before=after + bytes(word(out, 80) - size),
                                                capacity=len(full), label='growth-resume')
                 assert resumed == full
                 self.controls.append({'kind': 'workspace-growth', 'call': index, 'resume_calls': calls})
-            dirty = b'\x7b' * (len(wire) + 65536)
+            dirty = b'\x7b' * (max(len(wire), 128) + 65536)
             for repeat in range(3):
                 code, out, dirty, index = self.invoke(2, cid + 5, 'dirty-workspace', wire, dirty, len(full) + 7)
                 assert code == 128 and out == full + b'\xa5' * 7

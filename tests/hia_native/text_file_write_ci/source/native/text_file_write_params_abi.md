@@ -37,7 +37,7 @@ payloads contain the entire current typed-deserialization diagnostic. Growth
 replies contain only the header; the caller preserves the complete retained
 workspace, appends zeroes when growing it, and retries the same immutable input.
 Output suffixes beyond the published extent remain unchanged. Each admitted call
-requires `input_length + 65536` workspace bytes. The first 1024 scratch bytes and
+requires `max(input_length, 128) + 65536` workspace bytes. The first 1024 scratch bytes and
 the 128-byte field table at 65536 are reset; exact retained helper functions use
 their original scratch ranges below that table.
 
