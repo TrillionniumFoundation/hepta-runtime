@@ -1,0 +1,137 @@
+def after_params(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if get(w, 48) != 0 or code != 128 or size < 128 or get(w, at) != PARAMS_RESULT or get(w, at + 8) > 1:
+        return INVALID
+    i = 80
+    while i < 128:
+        if get(w, at + i) != 0:
+            return INVALID
+        i = i + 8
+    if get(w, at + 8) == 1:
+        i = 16
+        while i < 72:
+            if get(w, at + i) != 0:
+                return INVALID
+            i = i + 8
+        if get(w, at + 72) != size - 128:
+            return INVALID
+        return finish(o, w, 2, at + 128, size - 128)
+    if valid_params(w, at, size) == False:
+        return INVALID
+    if reserve(w, 2, size) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 2), at, size)
+    put(w, 96, get(w, at + 24))
+    put(w, 104, get(w, at + 40))
+    put(w, 232, size)
+    return prepare(s, o, w, 2)
+
+def policy_next(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    which = get(w, 136)
+    if which > 1:
+        return prepare(s, o, w, 9)
+    count = choose(which == 0, get(w, 96), get(w, 104))
+    at = region(w, 2) + 128 + choose(which == 0, 0, get(w, 96))
+    cursor = get(w, 144)
+    if cursor > count:
+        if which == 1:
+            put(w, 136, 2)
+            return prepare(s, o, w, 9)
+        put(w, 136, 1)
+        put(w, 144, 0)
+        cursor = 0
+        count = get(w, 104)
+        at = region(w, 2) + 128 + get(w, 96)
+    if cursor == 0 and count >= 9:
+        literal(w, 2048, 4)
+        if equal(w, at, 2048, 9):
+            size = literal(w, 2048, 1)
+            return complete(s, o, w, 1, 2048, size)
+    next = cursor
+    while next < count and byte(w, at + next) != 124:
+        next = next + 1
+    first = trim_start(w, at + cursor, at + next)
+    last = trim_end(w, first, at + next)
+    if first == last:
+        size = literal(w, 2048, 2)
+        return complete(s, o, w, 1, 2048, size)
+    put(w, 144, next + 1)
+    put(w, 152, first)
+    put(w, 160, last - first)
+    return prepare(s, o, w, 6)
+
+def prepare_policy(o: mutbuf, w: mutbuf, remote: bool) -> u32:
+    resolved = region(w, 1)
+    host = get(w, resolved + 40)
+    user = get(w, resolved + 48)
+    path = get(w, resolved + 56)
+    head = choose(remote, 64, 24)
+    host_size = choose(remote, host, 0)
+    if host_size > MAXIMUM - head or path > MAXIMUM - head - host_size:
+        return request_grow(o, w, 3, 0)
+    size = head + host_size + path
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    write = choose(get(w, 136) == 1, 1, 0)
+    if remote == False:
+        put(w, at, LOCAL_POLICY)
+        put(w, at + 8, 1)
+        put(w, at + 16, path)
+        copy_range(w, w, at + 24, resolved + 96, path)
+        return child(w, 6, size, 7)
+    put(w, at, CONFIG_REQUEST)
+    put(w, at + 8, 8)
+    put(w, at + 16, size - 24)
+    put(w, at + 24, get(w, resolved + 24))
+    put(w, at + 32, get(w, resolved + 32))
+    put(w, at + 40, write)
+    put(w, at + 48, host)
+    put(w, at + 56, path)
+    copy_range(w, w, at + 64, resolved + 96, host)
+    copy_range(w, w, at + 64 + host, resolved + 96 + host + user, path)
+    return child(w, 4, size, 8)
+
+def valid_params(s: readbuf, base: u64, size: u64) -> bool:
+    if base > length(s) or size > length(s) - base or size < 128:
+        return False
+    if load(s, base) != PARAMS_RESULT or load(s, base + 8) != 0 or load(s, base + 16) != 1 or load(s, base + 32) != 0:
+        return False
+    i = 72
+    while i < 128:
+        if load(s, base + i) != 0:
+            return False
+        i = i + 8
+    source = load(s, base + 24)
+    target = load(s, base + 40)
+    start = load(s, base + 48)
+    end = load(s, base + 56)
+    append = load(s, base + 64)
+    left = size - 128
+    if source > left:
+        return False
+    left = left - source
+    if target > left:
+        return False
+    left = left - target
+    if start > left or start < 32:
+        return False
+    left = left - start
+    if end > left or (end != 0 and end < 32):
+        return False
+    left = left - end
+    if append != left or append < 32:
+        return False
+    at = base + 128 + source + target
+    i = 0
+    while i < 3:
+        count = choose(i == 0, start, choose(i == 1, end, append))
+        if count != 0:
+            if load(s, at) != ENDPOINT or load(s, at + 16) != count - 32:
+                return False
+            kind = load(s, at + 8)
+            if kind > 3 or (kind < 2 and count != 32) or (kind != 0 and load(s, at + 24) != 0):
+                return False
+        at = at + count
+        i = i + 1
+    return at == base + size

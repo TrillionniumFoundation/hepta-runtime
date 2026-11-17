@@ -1,0 +1,66 @@
+name: Compile exact extract Local policy operation repair
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-local-policy-6780-20261117']
+    paths: ['tests/hia_native/public123_extract_local_policy_ci/**', '.github/workflows/hia-extract-local-policy-repair.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set fixed evidence locations
+        run: |
+          printf '%s\n' "WAIT_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_local_policy_ci" "WAIT_CAPTURE=$RUNNER_TEMP/extract-local-policy-build" "WAIT_RETAINED=$RUNNER_TEMP/extract-local-policy-retained" "WAIT_EXPORT=$RUNNER_TEMP/extract-local-policy-export" "WAIT_DRIVER=$RUNNER_TEMP/extract-local-policy-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_local_policy_ci
+      - name: Checkout exact compiler source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Complete source and syntax admission
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = '${{ github.sha }}'
+          test "$(sha256sum "$WAIT_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '1f900b51cf582e323dadf38ebfcedbbc833369b7fb54ff9433ea4b3ceb82d725'
+          python3 -I -S -B "$WAIT_PACKAGE/check_source.py"
+      - name: Reverify retained B3 and 114 members then compile sole changed owner and two entries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$WAIT_PACKAGE/build.py" --output "$WAIT_CAPTURE" --retained "$WAIT_RETAINED" --hepta "$GITHUB_WORKSPACE/compiler" > "$WAIT_DRIVER.stdout" 2> "$WAIT_DRIVER.stderr"
+          wait_status=$?
+          cat "$WAIT_DRIVER.stderr"
+          test "$wait_status" -ne 0 || cat "$WAIT_DRIVER.stdout"
+          exit "$wait_status"
+      - name: Six physical refusals and one complete relocation with read-only guards
+        run: |
+          python3 -I -S -B "$WAIT_PACKAGE/controls.py" --retained "$WAIT_RETAINED/retained" --fixture "$WAIT_CAPTURE" --output "$WAIT_CAPTURE-reader-controls"
+      - name: Preserve complete build and source on success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$WAIT_PACKAGE/archive.py" pack --source "$WAIT_PACKAGE" --capture "$WAIT_CAPTURE" --output "$WAIT_EXPORT" --driver-prefix "$WAIT_DRIVER"
+      - name: Upload complete ordinary evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-local-policy-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.WAIT_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
