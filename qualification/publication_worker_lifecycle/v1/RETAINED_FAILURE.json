@@ -1,0 +1,55 @@
+{
+  "schema": "hepta.runtime.publication-worker.lifecycle-retained-failures.v1",
+  "failures": [
+    {
+      "source": "4b96ee6d51918ebee3b920d256e3f4dcd5853aeb",
+      "run": 44083526245,
+      "job": 134040006233,
+      "conclusion": "failure",
+      "artifact": 14328073348,
+      "zip": {
+        "bytes": 121129607,
+        "sha256": "842d8387f884605025a50702434c62e5402ce7e4bf8ffa91457f5b572947c57d"
+      },
+      "tar": {
+        "bytes": 120777655,
+        "sha256": "9ce226edad763161f106b4157ec36583a32e4de7a60579fbb1d59dc2ad5515f3"
+      },
+      "full_read": {
+        "source": "b6a7d0128bd9b5a9ec365db1ac5176afab1749c1",
+        "run": 44084497527,
+        "job": 134043260993,
+        "status": "FAILED_LIFECYCLE_COMPLETE_ARCHIVE_READ_PASS",
+        "files": 1292,
+        "directories": 75,
+        "logical_bytes": 211286747
+      },
+      "completed_native_commands": 1,
+      "completed_native_cases": 0,
+      "diagnosis": "Fixture event(name, **fields) collided with holder event payload name=; the exception recurred during unlock cleanup. No publication body was submitted.",
+      "capture_stderr": {
+        "pin": {
+          "bytes": 1733,
+          "sha256": "01667ba78763c47a31287ebc49b08ae232df1f07b615f3a27a80cbf8351be895"
+        },
+        "text": "Traceback (most recent call last):\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/publication_worker_lifecycle_ci/source/recipe/capture.py\", line 117, in capture_case\n    create();lock(\"held\")\n             ^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/publication_worker_lifecycle_ci/source/recipe/capture.py\", line 52, in lock\n    event(\"holder_locked\",name=name,identity=stat_fd(fd))\nTypeError: capture_case.<locals>.event() got multiple values for argument 'name'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/publication_worker_lifecycle_ci/source/recipe/capture.py\", line 206, in <module>\n    if __name__==\"__main__\":main()\n                            ^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/publication_worker_lifecycle_ci/source/recipe/capture.py\", line 199, in main\n    row=capture_case(binary,case,root/\"cases\"/(\"%03d\"%case[\"case\"]));results.append(row)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/publication_worker_lifecycle_ci/source/recipe/capture.py\", line 180, in capture_case\n    for name in list(locks):unlock(name)\n                            ^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/publication_worker_lifecycle_ci/source/recipe/capture.py\", line 56, in unlock\n    event(\"holder_unlocked\",name=name,identity=before)\nTypeError: capture_case.<locals>.event() got multiple values for argument 'name'\n"
+      },
+      "repair": {
+        "path": "recipe/capture.py",
+        "before": {
+          "bytes": 12348,
+          "sha256": "dffcce7acbe794c7cc915e87a5635fd793d65e83baf2644ce644f83d6eb2ce73",
+          "git_blob": "753bf2a9c4bd21ebf908a6eb1976ed3dca5fe551"
+        },
+        "after": {
+          "bytes": 12360,
+          "sha256": "a272c190d4279d8552da2e7dbee07f5b31f00ed5742c8a7a052781cee7537ab1",
+          "git_blob": "c646b12fbe43ef96422266346fc4f2097d7a5f8e"
+        },
+        "change": "Rename only the internal event positional formal and its one use to event_type. Emitted event field and all input-only lifecycle cases remain byte-identical."
+      },
+      "application_replay": false,
+      "qualification_upgraded": false
+    }
+  ]
+}
