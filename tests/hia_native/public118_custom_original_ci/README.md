@@ -1,0 +1,5 @@
+# Typed CustomRequest public input domain
+
+This freezes 71 fresh real stdio processes per protocol era, 142 total. All 32 ASCII control bytes, quote, backslash, UTF-8, an empty method, a 4096-character method, ten signed/numeric/string identifier forms, and absent/null/scalar/object parameter shapes are input only. Five known methods provide adjacent typed-classification checks. Every case has a ping anchor, a trial and ping recovery batch, a ping barrier and full EOF drain. No expected reply or response count is supplied. All actual streams, effects and exit status are retained by the unchanged all-lines collector and complete reader.
+
+The previously qualified original stdio binary is copied and completely reverified. No Rust or HIA compilation occurs, and neither the retained 835 original operations nor the retained original 108 raw-process scenarios is replayed. The full new source is frozen before these new originals execute. Exchange/drain 60 seconds, whole lane 180 seconds, and 15-minute jobs are unchanged. This is ordinary protocol classification, without a public WAIT/cancel claim.
