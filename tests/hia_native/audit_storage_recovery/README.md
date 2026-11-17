@@ -1,0 +1,7 @@
+# Exact pure-reader recovery
+
+The original c4a4857148765d214ad3760dde9e127ebcabfada / 44036845015 producer remains FAIL. Its complete actual fresh build and all ten producer processes completed; the reader first rejected Cargo's omission of Git metadata from its vendor copy. Independent read-only inspection c517784ff877f6747209303e36d108abecacf65a / 44037302837 read all 2,602 logical files and 132,979,131 bytes, every ZIP/TAR/object byte and mode, and found exactly twelve .gitignore/.gitattributes entries absent from vendor. No compiled registry source byte differed.
+
+This adapter continues only pure readback and the previously skipped physical controls. It retains the complete original package, receipts, inputs, buffers and errors without rebinding them. Every byte of all nineteen locked .crate files, including the twelve metadata members, remains required. Vendor must contain exactly every other member and its complete checksum map. The twelve precise omissions are pinned individually; arbitrary omissions are rejected. Native graph pins and original child PGID are also checked explicitly.
+
+The original HIA, Rust functions, corpus, buffers, ABI refusals and all producer results are unchanged. No HIA or Rust is rerun. Each reader/control process keeps 180 seconds, the workflow keeps 15 minutes, all fourteen physical refusals and two relocated admissions remain required, and each existing twelve-probe read-only guard gains only this explicit source-root admission. No public-handler or whole-runtime flag is raised.
