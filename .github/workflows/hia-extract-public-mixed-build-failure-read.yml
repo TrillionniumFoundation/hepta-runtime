@@ -1,0 +1,44 @@
+name: Pure complete terminal public118 mixed build diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_mixed_build_failure_read_ci/**', '.github/workflows/hia-extract-public-mixed-build-failure-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen pure readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_mixed_build_failure_read_ci
+      - name: Download same complete failed build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/mixed-build-failure-input"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14304250580' > "$RUNNER_TEMP/mixed-build-failure-input/artifact.json"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14304250580/zip' > "$RUNNER_TEMP/mixed-build-failure-input/complete.zip"
+      - name: Read every archive byte and the original complete failed process
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_mixed_build_failure_read_ci/run.py" --input "$RUNNER_TEMP/mixed-build-failure-input/complete.zip" --output "$RUNNER_TEMP/mixed-build-failure-read" --profile '2714102447fe9716fd9033105839df88b95af77075b631223fa0f80825e163b2'
+      - name: Preserve complete pure reader proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public118-mixed-failed-build-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mixed-build-failure-read/proof
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
