@@ -1,0 +1,9 @@
+# Actual public publication worker graph build
+
+Production source is `1c5c6d5632d54c2eb30abeb47568d63b4cb743c3`, a single successor of the qualified shared WAIT graph `320862f03902153b5c804d1b68142126a9c7a606`. All 521 input bytes are bound. Source authoring and five full GNU assembly boundaries passed at 2777020700674b598f16f032cfc18d70c7eea5d0 / run44091790178. No public async application result is inherited.
+
+The build restores and completely rereads the actual e5d701 123-image source/compiler/pack archive, reuses exactly 112 source-identical HIA receipts and the existing packed eight-image port, freshly compiles the frontend, publisher caller, corrected Extract gateway and publisher worker, then freshly links/packs the production, FD3/FD4/FD6 observed and private two-session serial carrier entries. All are 124 runtime HIA images in 117 physical containers and 69 fixed descriptors. Copying the retained B3 does not count as a new cold bootstrap.
+
+The entire previous complete graph reader is preserved. An explicit 21-step transformation updates only this graph's source identity, new/reused membership, the worker fixed symbol, three entry variants and exact counts. Actual full compiler inputs/outputs/receipts, fixed pack patches, complete pack input/output/workspace and final ELF are still reconstructed and compared. The uploaded-archive role independently reads every member and reruns the full reader under the retained 11-refusal guard. The source-history role reads all four source-author archives, preserving both failures. These are build and byte-read qualifications; no application runs occur.
+
+Actual public lifecycle, the declared stale-generation control and retained ordinary public regression domains follow this build. Full SDK, all 136 routes, SSH, audit and old-stack removal remain false. No local HIA or Rust execution is part of this recipe.
