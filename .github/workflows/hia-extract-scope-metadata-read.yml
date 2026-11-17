@@ -40,7 +40,7 @@ jobs:
       - name: Fixed complete source admission
         run: |
           printf '%s\n' "DIAG_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_metadata_read_ci" "DIAG_SOURCE=$GITHUB_WORKSPACE/capture-source/tests/hia_native/public123_extract_contention_ci" "DIAG_NATIVE=$GITHUB_WORKSPACE/native-source/tests/hia_native/public123_extract_scope_wait_ci" "DIAG_CAPTURE=$RUNNER_TEMP/scope-metadata-read" "DIAG_EXPORT=$RUNNER_TEMP/scope-metadata-export" "DIAG_DRIVER=$RUNNER_TEMP/scope-metadata-driver" >> "$GITHUB_ENV"
-          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_metadata_read_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '640453ae9affd0da00a2d39ffea95318cd60bf8fea428217f4b13a6063884c85'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_metadata_read_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '49647593f86761650ddbf77945628b9ac3366a249c91a35a3a8517c74071a0d4'
           python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_metadata_read_ci/check_source.py"
       - name: Read complete archive and compare actual retained fields under guards
         env:

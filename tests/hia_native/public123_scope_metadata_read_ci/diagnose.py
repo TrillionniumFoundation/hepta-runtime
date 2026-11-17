@@ -63,4 +63,7 @@ proof=guard.guarded(inspect,roots=[out,source,native,HERE],foreign_path=Path("/d
 put(out/"READ_ONLY.json",proof)
 for row in proof["evidence"]["cases"]:
     print("ACTUAL_COMPLETE_FIELD_COMPARISON",json.dumps({k:v for k,v in row.items() if k!="complete_raw_metadata"},sort_keys=True),flush=True)
+for row in proof["evidence"]["cases"]:
+    if row["case"]!=3:continue
+    print("ACTUAL_RAW_METADATA_IDENTITY",json.dumps({"case":row["case"],"name":row["name"],"raw":row["complete_raw_metadata"]},sort_keys=True),flush=True)
 put(out/"RESULT.json",{"status":proof["evidence"]["status"],"application_executions":0,"guard_probes":len(proof["probes"]),"qualified":False})
