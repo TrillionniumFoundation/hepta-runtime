@@ -1,0 +1,93 @@
+{
+  "schema": "hepta.runtime.file-info-at.read67-pool-rebind.v1",
+  "previous_production": "8a1ab5839ed3b5699916c7c1b8e113aade1d9417",
+  "read67_production": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+  "read67_final": "8bb4e020fc8a728ec7b06e8ffa510052d5e8fa64",
+  "formatter34_production": "2464624eee505339adfd6b6297a7f7eb00672bd8",
+  "formatter34_final": "96a3ecccb3b054a9bf0059659040d4bb9e38e4a9",
+  "body40_unchanged": {
+    "path": "native/file_info_at.hepta",
+    "mode": "100644",
+    "git_blob": "2ac3a9129d04cc175919acfb2e6c26ae0cb3979c",
+    "bytes": 138308,
+    "sha256": "e3a835a23cb7b8d61ce1a24719a2289bcad3a3487f2dd4c09d7c9d1f68becde5"
+  },
+  "production_edits": [
+    {
+      "path": "asm/file_info_at_callable.S",
+      "before_path": "reference/info_callable_before.S",
+      "before": {
+        "path": "asm/file_info_at_callable.S",
+        "mode": "100644",
+        "git_blob": "bdfabd4ee72be938e762ac040ffb04ff8d30bbaa",
+        "bytes": 23781,
+        "sha256": "58e6658aa997eb96c05f094f2df731e68f9f35c8043499e78eced9fc84ef44b5"
+      },
+      "after": {
+        "bytes": 23804,
+        "sha256": "22b47d8bef2a58ea8d32546324569eb72e66d10a4731b6dbdaa519803638f564"
+      },
+      "edits": [
+        {
+          "old": "    mov rdi, r13\n    mov rsi, r14\n    call binary_read_body_create\n",
+          "new": "    mov rdi, r13\n    mov rsi, r14\n    mov rdx, [r12+376]\n    call binary_read_body_create\n",
+          "occurrences": 1
+        }
+      ]
+    }
+  ],
+  "fixture_edits": [
+    {
+      "path": "asm/file_info_at_fixture.S",
+      "before_path": "reference/info_fixture_before.S",
+      "before": {
+        "path": "asm/file_info_at_fixture.S",
+        "mode": "100644",
+        "git_blob": "a5376d482099594e61c732fe4a9397021ad39d18",
+        "bytes": 19596,
+        "sha256": "71f47ff8d7f10dab9f2ae2b124217436fe6e2556c70473441112058b294112b9"
+      },
+      "after": {
+        "bytes": 20199,
+        "sha256": "1f450debab671bcc29b816a3841f1eae67763b25d8f4bf1e741c35609890a834"
+      },
+      "edits": [
+        {
+          "old": "    cmp r14, 20\n    ja .Liff_fatal\n",
+          "new": "    cmp r14, 21\n    ja .Liff_fatal\n",
+          "occurrences": 1
+        },
+        {
+          "old": "    cmp r14, 18\n    je .Liff_arm_fstat_error\n",
+          "new": "    cmp r14, 18\n    je .Liff_arm_fstat_error\n    cmp r14, 21\n    je .Liff_arm_read_fstat_error\n",
+          "occurrences": 1
+        },
+        {
+          "old": ".Liff_pool_snapshot:\n",
+          "new": ".Liff_arm_read_fstat_error:\n    cmp qword ptr [r15+88], 0\n    jne .Liff_no_context\n    mov qword ptr [r15+88], 2\n    xor r13d, r13d\n    jmp .Liff_empty_reply\n\n.Liff_pool_snapshot:\n",
+          "occurrences": 1
+        },
+        {
+          "old": "    cmp qword ptr [rbx+88], 1\n    jne .Liff_journal_hook_ok\n    movabs rax, 0x31304943464e4948\n    cmp [r12], rax\n    jne .Liff_journal_hook_ok\n    cmp qword ptr [r14+24], 2\n    jne .Liff_journal_hook_ok\n    mov rax, [r12+88]\n    cmp qword ptr [rax+8], 13\n    jne .Liff_journal_hook_ok\n    mov rdi, [r14+32]\n",
+          "new": "    cmp qword ptr [rbx+88], 1\n    je .Liff_journal_info_fault\n    cmp qword ptr [rbx+88], 2\n    jne .Liff_journal_hook_ok\n    movabs rax, 0x3130494344524248 /* HBRDCI01 */\n    cmp [r12], rax\n    jne .Liff_journal_hook_ok\n    cmp qword ptr [r14+24], 2\n    jne .Liff_journal_hook_ok\n    mov rax, [r12+88]\n    cmp qword ptr [rax+8], 25\n    jne .Liff_journal_hook_ok\n    jmp .Liff_journal_install_fault\n.Liff_journal_info_fault:\n    movabs rax, 0x31304943464e4948\n    cmp [r12], rax\n    jne .Liff_journal_hook_ok\n    cmp qword ptr [r14+24], 2\n    jne .Liff_journal_hook_ok\n    mov rax, [r12+88]\n    cmp qword ptr [rax+8], 13\n    jne .Liff_journal_hook_ok\n.Liff_journal_install_fault:\n    mov rdi, [r14+32]\n",
+          "occurrences": 1
+        },
+        {
+          "old": "    cmp qword ptr [r14+24], 2\n    jne .Liff_journal_hook_ok\n    mov rax, [r12+88]\n    cmp qword ptr [rax+8], 25\n",
+          "new": "    cmp qword ptr [r14+24], 6\n    jne .Liff_journal_hook_ok\n    mov rax, [r12+88]\n    cmp qword ptr [rax+8], 25\n",
+          "occurrences": 1
+        }
+      ]
+    }
+  ],
+  "application_executions": 0,
+  "qualification_pending": true,
+  "fixture_failure": {
+    "build": "769181fa985a02a238cc4932752cd47443683ae9",
+    "run": 44198269115,
+    "source": "22d17c24ab7284c30e5808afe9bbfc0dae938b07",
+    "effect": "cmd21 matched info opcode2 instead of read opcode6; first-fstat EIO was not installed",
+    "production_owners_changed": false,
+    "completed_original_calls_must_be_reused": true
+  }
+}
