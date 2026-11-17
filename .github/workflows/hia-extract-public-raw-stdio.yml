@@ -1,0 +1,85 @@
+name: Capture exact original extract raw stdio domains
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_extract_raw_stdio_ci/**', '.github/workflows/hia-extract-public-raw-stdio.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  original-raw:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        domain: [stdio-legacy, stdio-modern, protocol-legacy, protocol-modern, eof-legacy, eof-modern]
+    steps:
+      - name: Checkout complete frozen input and all-lines capture
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_extract_raw_stdio_ci
+      - name: Download the exact retained raw stdio reference build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/raw-reference-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14289717989 > "$RUNNER_TEMP/raw-reference-input/reference.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14289717989/zip > "$RUNNER_TEMP/raw-reference-input/reference.zip"
+      - name: Capture the actual raw domain under unchanged 180 and 60 second limits
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_raw_stdio_ci/run.py" --input "$RUNNER_TEMP/raw-reference-input" --output "$RUNNER_TEMP/raw-capture" --domain '${{ matrix.domain }}' --profile '916beb483e0750ce03ca15c71644e4beb60a1a25f4fd10286ae0e036f25c7fd6' > "$RUNNER_TEMP/raw-driver.stdout" 2> "$RUNNER_TEMP/raw-driver.stderr"
+      - name: Retain all original source and success or failure bytes
+        if: always()
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_raw_stdio_ci/ci/archive.py" pack --capture "$RUNNER_TEMP/raw-capture" --output "$RUNNER_TEMP/raw-export" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_raw_stdio_ci" --manifest-sha256 '916beb483e0750ce03ca15c71644e4beb60a1a25f4fd10286ae0e036f25c7fd6' --label raw-stdio --driver-prefix "$RUNNER_TEMP/raw-driver"
+      - name: Show retained terminal result
+        if: always()
+        run: |
+          python3 -I -S -B -c 'from pathlib import Path; import os; p=Path(os.environ["RUNNER_TEMP"]); print((p/"raw-driver.stdout").read_text()); print((p/"raw-driver.stderr").read_text())'
+      - name: Upload complete original raw capture
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-original-raw-${{ matrix.domain }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/raw-export
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+  build-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen pure proof reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_extract_raw_stdio_ci
+      - name: Download exact successful independent native proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/native-proof-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14296594349/zip > "$RUNNER_TEMP/native-proof-input/proof.zip"
+      - name: Read full prior native proof without runtime execution
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_raw_stdio_ci/read_build_proof.py" --zip "$RUNNER_TEMP/native-proof-input/proof.zip" --output "$RUNNER_TEMP/native-proof-read"
+      - name: Preserve full independent proof read
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public118-clear-final-proof-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/native-proof-read
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
