@@ -1,0 +1,57 @@
+name: Shared publication async exact source composition
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-public-async-source-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set actual runner paths
+        run: |
+          printf '%s\n' "PA_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/publication_async_source_v1" "PA_RUN=$RUNNER_TEMP/publication-async-source" "PA_DRIVER=$RUNNER_TEMP/publication-async-author" "PA_EXPORT=$RUNNER_TEMP/publication-async-source-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/publication_async_source_v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: baseline
+          ref: 320862f03902153b5c804d1b68142126a9c7a606
+          persist-credentials: false
+          sparse-checkout: |
+            authoring
+            native
+            scripts
+            runtime_support
+            tests/hia_native
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Exact 486-source author, whole AST and five mechanical boundaries
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PA_SOURCE/author.py" --baseline "$GITHUB_WORKSPACE/baseline" --hepta "$GITHUB_WORKSPACE/compiler" --output "$PA_RUN" > "$PA_DRIVER.stdout" 2> "$PA_DRIVER.stderr"
+          cat "$PA_DRIVER.stdout"
+      - name: Retain every complete source or failure byte
+        if: always()
+        run: |
+          python3 -I -S -B "$PA_SOURCE/archive.py" pack --source "$PA_SOURCE" --capture "$PA_RUN" --output "$PA_EXPORT" --driver-prefix "$PA_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; p=pathlib.Path(os.environ["PA_DRIVER"]+".stderr"); print(p.read_text() if p.exists() else ""); root=pathlib.Path(os.environ["PA_RUN"]); [print(str(q)+"\n"+q.read_text()) for q in sorted(root.rglob("*.stderr")) if q.stat().st_size]'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-async-source-${{ github.sha }}
+          path: ${{ env.PA_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
