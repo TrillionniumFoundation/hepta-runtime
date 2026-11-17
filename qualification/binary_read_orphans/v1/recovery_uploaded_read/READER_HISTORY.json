@@ -1,0 +1,29 @@
+{
+  "schema": "hepta.runtime.read-orphans.uploaded-reader-history.v1",
+  "original_applications_replayed": 0,
+  "native_applications_replayed": 0,
+  "physical_controls_replayed": 0,
+  "failed_independent": {
+    "commit": "5cb0cd4c3c669d80a733f2a86c6040db9e278448",
+    "run": 44136066532,
+    "reason": "The copied independent reader expected three roots for each physical/relocation guard, but the exact frozen producer guarded only selected source and complete data. Both actual root sets and all 11 denials remain mandatory."
+  },
+  "correction": {
+    "path": "scripts/read_recovery_evidence.py",
+    "changes": [
+      {
+        "before": "saved_guard(guard,{recovery_origin:tree(recovery_source),selected_origin:tree(selected_source),data_origin:tree(copied)})",
+        "after": "saved_guard(guard,{selected_origin:tree(selected_source),data_origin:tree(copied)})"
+      },
+      {
+        "before": "saved_guard(guard,{recovery_origin:tree(recovery_source),base+\"/source\":tree(root/\"source\"),base+\"/data\":tree(root/\"data\")})",
+        "after": "saved_guard(guard,{base+\"/source\":tree(root/\"source\"),base+\"/data\":tree(root/\"data\")})"
+      },
+      {
+        "before": "    binding=source_evidence(recovery_source);gate=decode((capture/\"GATE.json\").read_bytes())",
+        "after": "    binding=source_evidence(recovery_source);gate=decode((capture/\"GATE.json\").read_bytes())\n    producer=(recovery_source/\"scripts/physical_controls.py\").read_text()\n    require(producer.count(\"guard=guarded(lambda:outcome(selected_source,selected,a.group),roots=[selected_source,selected])\")==1\n        and producer.count(\"guard=guarded(lambda:read_capture.verify(new_source,new_data,a.group),roots=[new_source,new_data])\")==1,\n        \"actual physical/relocated guards freeze exactly their complete source and data roots\")"
+      }
+    ]
+  },
+  "recovery_and_application_bytes_unchanged": true
+}

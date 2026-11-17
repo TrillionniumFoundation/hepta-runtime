@@ -10,6 +10,10 @@ def identities(root):
 def verify(recovery_source,capture,name,upstream):
     recovery_source,capture,upstream=Path(recovery_source),Path(capture),Path(upstream)
     binding=source_evidence(recovery_source);gate=decode((capture/"GATE.json").read_bytes())
+    producer=(recovery_source/"scripts/physical_controls.py").read_text()
+    require(producer.count("guard=guarded(lambda:outcome(selected_source,selected,a.group),roots=[selected_source,selected])")==1
+        and producer.count("guard=guarded(lambda:read_capture.verify(new_source,new_data,a.group),roots=[new_source,new_data])")==1,
+        "actual physical/relocated guards freeze exactly their complete source and data roots")
     require(gate["status"]=="PASS"and gate["source"]==binding and gate["group"]==name
         and gate["original_application_executions"]==gate["native_application_executions"]==gate["compiler_executions"]==gate["rust_executions"]==0
         and gate["original_archive_included_in_full"]is True and gate["whole_runtime_replaced"]is False,"exact pure recovery gate")
@@ -99,7 +103,7 @@ def verify(recovery_source,capture,name,upstream):
         guard=decode((root/"READONLY.json").read_bytes())
         selected_origin=controls_origin+"/"+c["name"]+"/source"if c["name"]=="source-manifest"else original_source
         data_origin=controls_origin+"/"+c["name"]+"/data"
-        guarded_files+=saved_guard(guard,{recovery_origin:tree(recovery_source),selected_origin:tree(selected_source),data_origin:tree(copied)})
+        guarded_files+=saved_guard(guard,{selected_origin:tree(selected_source),data_origin:tree(copied)})
         require(guard["evidence"]==c["evidence"]and guard["evidence"]["status"]=="REJECTED"and c["guard_probes"]==11,
             "physical original guarded rejection")
     for index,c in enumerate(controls["relocations"],1):
@@ -108,7 +112,7 @@ def verify(recovery_source,capture,name,upstream):
         require((sf,sd)==(source_files,source_dirs)and(df,dd)==(base_files,base_dirs),"all complete relocated source/data bytes and modes")
         guard=decode((root/"READONLY.json").read_bytes())
         base=controls_origin+"/"+c["name"]
-        guarded_files+=saved_guard(guard,{recovery_origin:tree(recovery_source),base+"/source":tree(root/"source"),base+"/data":tree(root/"data")})
+        guarded_files+=saved_guard(guard,{base+"/source":tree(root/"source"),base+"/data":tree(root/"data")})
         require(guard["evidence"]==actual==c["evidence"]and c["guard_probes"]==11 and c["entries"]==guard["entries"],"complete retained relocation result")
     return dict(status="COMPLETE_UPLOADED_READ_ORPHANS_RECOVERY_QUALIFICATION_PASS",group=name,actual=actual,
         retained=value,producer_processes=len(processes),retained_recovery_guards=11,retained_recovery_guard_probes=121,

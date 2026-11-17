@@ -2,7 +2,7 @@ name: Independently read all uploaded read-orphan captures and recovery evidence
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-read-orphans-uploaded-read-6780-20261117]
+    branches: [hia-binary-read-orphans-uploaded-read-v2-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -20,7 +20,7 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       GH_TOKEN: ${{ github.token }}
       ORPHAN_SOURCE: ${{ github.workspace }}/qualification/binary_read_orphans/v1/recovery_uploaded_read
-      ORPHAN_MANIFEST: 712d90b0bc7200d4f7ae55c14282add22c7d82b66a7f73b23b1e22e285da776a
+      ORPHAN_MANIFEST: 48d92d48c83b0d446a7190eb8cb631863cef1886ae302d047ba618b2f2ad3645
       ORPHAN_GROUP: ${{ matrix.group }}
     steps:
       - name: Checkout exact full source-owned pure readers
