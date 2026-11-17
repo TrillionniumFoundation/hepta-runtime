@@ -1,4 +1,4 @@
-name: Repaired public118 native domains against retained originals
+name: Caller clear public118 native domains against retained originals
 on:
   workflow_dispatch:
   push:
@@ -39,25 +39,25 @@ jobs:
           sparse-checkout: tests/hia_native/public118_extract_native_successor_ci
       - name: Admit every exact source and unchanged original input
         run: |
-          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci/source_check.py" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci" --profile 'e2cdde0e66a38d4bf0b313c1f764b5bcf73e77c9fbf0ef6796b08d1ce09f15c4'
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci/source_check.py" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci" --profile 'f994f5b8d2a34a8c4a56cb014ef14b733021249392ccfefeb3065435416f72a5'
       - name: Download the fixed successful build and original domain
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir "$RUNNER_TEMP/public118-input"
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14293655303 > "$RUNNER_TEMP/public118-input/native.json"
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14293655303/zip > "$RUNNER_TEMP/public118-input/native.zip"
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14293772158 > "$RUNNER_TEMP/public118-input/native-proof.json"
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14293772158/zip > "$RUNNER_TEMP/public118-input/native-proof.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14297256599 > "$RUNNER_TEMP/public118-input/native.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14297256599/zip > "$RUNNER_TEMP/public118-input/native.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14296594349 > "$RUNNER_TEMP/public118-input/native-proof.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14296594349/zip > "$RUNNER_TEMP/public118-input/native-proof.zip"
           gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}' > "$RUNNER_TEMP/public118-input/prior.json"
           gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}/zip' > "$RUNNER_TEMP/public118-input/prior.zip"
       - name: Capture only the complete new native lane and compare all originals
         run: |
-          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci/run.py" --input "$RUNNER_TEMP/public118-input" --output "$RUNNER_TEMP/public118-domain" --domain '${{ matrix.domain }}' --profile 'e2cdde0e66a38d4bf0b313c1f764b5bcf73e77c9fbf0ef6796b08d1ce09f15c4' > "$RUNNER_TEMP/public118-domain-driver.stdout" 2> "$RUNNER_TEMP/public118-domain-driver.stderr"
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci/run.py" --input "$RUNNER_TEMP/public118-input" --output "$RUNNER_TEMP/public118-domain" --domain '${{ matrix.domain }}' --profile 'f994f5b8d2a34a8c4a56cb014ef14b733021249392ccfefeb3065435416f72a5' > "$RUNNER_TEMP/public118-domain-driver.stdout" 2> "$RUNNER_TEMP/public118-domain-driver.stderr"
       - name: Retain every original failure and new evidence byte
         if: always()
         run: |
-          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci/ci/archive.py" pack --capture "$RUNNER_TEMP/public118-domain" --output "$RUNNER_TEMP/public118-domain-export" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci" --manifest-sha256 'e2cdde0e66a38d4bf0b313c1f764b5bcf73e77c9fbf0ef6796b08d1ce09f15c4' --label '${{ matrix.domain }}' --driver-prefix "$RUNNER_TEMP/public118-domain-driver"
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci/ci/archive.py" pack --capture "$RUNNER_TEMP/public118-domain" --output "$RUNNER_TEMP/public118-domain-export" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_native_successor_ci" --manifest-sha256 'f994f5b8d2a34a8c4a56cb014ef14b733021249392ccfefeb3065435416f72a5' --label '${{ matrix.domain }}' --driver-prefix "$RUNNER_TEMP/public118-domain-driver"
       - name: Upload complete successor evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
