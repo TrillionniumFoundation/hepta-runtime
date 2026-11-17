@@ -1,0 +1,442 @@
+{
+  "schema": "hepta.runtime.binary-entropy.actual-input-domain.v1",
+  "profile": "serialized-linux-x86_64-cpython-3.12.3",
+  "application_deadline_seconds": 60,
+  "pure_deadline_seconds": 180,
+  "build_deadline_seconds": 900,
+  "randomness_comparison": "Both sides use actual kernel entropy. Compare native raw output to its complete real syscall responses, UUID projection to its own observed raw entropy, and compare exact error/cache/descriptor transitions. Never compare unrelated random bytes for equality.",
+  "original_observer": "os.urandom observer delegates to the unchanged built-in. uuid.uuid4 and UUID construction are unchanged. Observer-off cases call original functions directly. No syscall result replacement.",
+  "native_observer": "Fixed callback records full context, input, output and work bytes, and actual boundary packets. It never returns a replacement syscall result.",
+  "faults": "Real per-process seccomp ERRNO filters, actual descriptor close/replacement and RLIMIT_NOFILE. No infinite EINTR or zero getrandom input.",
+  "cases": [
+    {
+      "name": "normal",
+      "kind": "normal",
+      "modes": [
+        1,
+        2,
+        1,
+        2
+      ],
+      "observer": true
+    },
+    {
+      "name": "normal-off",
+      "kind": "normal",
+      "modes": [
+        2,
+        1,
+        2
+      ],
+      "observer": false
+    },
+    {
+      "name": "fallback-1",
+      "kind": "fallback",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true,
+      "errno": 1
+    },
+    {
+      "name": "fallback-off-1",
+      "kind": "fallback",
+      "modes": [
+        2,
+        1
+      ],
+      "observer": false,
+      "errno": 1
+    },
+    {
+      "name": "sticky-1",
+      "kind": "sticky",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true,
+      "errno": 1,
+      "after_errno": 5
+    },
+    {
+      "name": "fallback-38",
+      "kind": "fallback",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true,
+      "errno": 38
+    },
+    {
+      "name": "fallback-off-38",
+      "kind": "fallback",
+      "modes": [
+        2,
+        1
+      ],
+      "observer": false,
+      "errno": 38
+    },
+    {
+      "name": "sticky-38",
+      "kind": "sticky",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true,
+      "errno": 38,
+      "after_errno": 5
+    },
+    {
+      "name": "getrandom-error-5",
+      "kind": "getrandom-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 5
+    },
+    {
+      "name": "getrandom-error-22",
+      "kind": "getrandom-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 22
+    },
+    {
+      "name": "getrandom-error-9",
+      "kind": "getrandom-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 9
+    },
+    {
+      "name": "getrandom-error-28",
+      "kind": "getrandom-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 28
+    },
+    {
+      "name": "getrandom-error-11",
+      "kind": "getrandom-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 11
+    },
+    {
+      "name": "getrandom-error-95",
+      "kind": "getrandom-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 95
+    },
+    {
+      "name": "getrandom-error-13",
+      "kind": "getrandom-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 13
+    },
+    {
+      "name": "getrandom-error-17",
+      "kind": "getrandom-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 17
+    },
+    {
+      "name": "open-error-2",
+      "kind": "open-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 2
+    },
+    {
+      "name": "open-error-6",
+      "kind": "open-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 6
+    },
+    {
+      "name": "open-error-19",
+      "kind": "open-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 19
+    },
+    {
+      "name": "open-error-13",
+      "kind": "open-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 13
+    },
+    {
+      "name": "open-error-24",
+      "kind": "open-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 24
+    },
+    {
+      "name": "open-error-5",
+      "kind": "open-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 5
+    },
+    {
+      "name": "open-error-40",
+      "kind": "open-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 40
+    },
+    {
+      "name": "open-error-22",
+      "kind": "open-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 22
+    },
+    {
+      "name": "initial-stat-5",
+      "kind": "initial-stat",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 5
+    },
+    {
+      "name": "initial-stat-4",
+      "kind": "initial-stat",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 4
+    },
+    {
+      "name": "initial-stat-75",
+      "kind": "initial-stat",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 75
+    },
+    {
+      "name": "initial-stat-9",
+      "kind": "initial-stat",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 9
+    },
+    {
+      "name": "initial-stat-close-failure",
+      "kind": "initial-stat-close",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 5,
+      "close_errno": 4
+    },
+    {
+      "name": "read-error-5",
+      "kind": "read-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 5
+    },
+    {
+      "name": "read-error-9",
+      "kind": "read-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 9
+    },
+    {
+      "name": "read-error-11",
+      "kind": "read-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 11
+    },
+    {
+      "name": "read-error-22",
+      "kind": "read-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 22
+    },
+    {
+      "name": "read-error-0",
+      "kind": "read-error",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true,
+      "errno": 0
+    },
+    {
+      "name": "cache-stat-5",
+      "kind": "cache-stat",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true,
+      "errno": 5
+    },
+    {
+      "name": "cache-stat-9",
+      "kind": "cache-stat",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true,
+      "errno": 9
+    },
+    {
+      "name": "cache-stat-4",
+      "kind": "cache-stat",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true,
+      "errno": 4
+    },
+    {
+      "name": "cache-replaced",
+      "kind": "cache-replaced",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true
+    },
+    {
+      "name": "cache-closed",
+      "kind": "cache-closed",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true
+    },
+    {
+      "name": "descriptor-zero",
+      "kind": "fd-zero",
+      "modes": [
+        2,
+        1
+      ],
+      "observer": true
+    },
+    {
+      "name": "descriptor-one-free",
+      "kind": "one-free",
+      "modes": [
+        1,
+        2,
+        1
+      ],
+      "observer": true
+    },
+    {
+      "name": "descriptor-no-free",
+      "kind": "no-free",
+      "modes": [
+        1,
+        2
+      ],
+      "observer": true
+    }
+  ]
+}
