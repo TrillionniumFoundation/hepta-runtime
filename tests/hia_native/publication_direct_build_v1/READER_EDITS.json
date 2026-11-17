@@ -1,0 +1,39 @@
+{
+  "source": {
+    "bytes": 21505,
+    "sha256": "42b1caee44a9fef4bec3b5d4941241b8ccf23ceb85d220dab7d5c5badf63ed51",
+    "git_blob": "ce11aad54cc775f5dc34645bd63287a17154bb89"
+  },
+  "edits": [
+    {
+      "before": "import read_graph,dynamic_builder,duplex_boundary,source_repair",
+      "after": "import read_graph,dynamic_builder,direct_compose,source_repair"
+    },
+    {
+      "before": "\"ACTUAL_PUBLICATION124_TWO_SESSION_BUILD_PASS\"",
+      "after": "\"ACTUAL_PUBLICATION124_DIRECT_BUILD_PASS\""
+    },
+    {
+      "before": "set(report[\"roles\"])=={\"public\",\"publisher\",\"filesystem\",\"duplex\"}",
+      "after": "set(report[\"roles\"])=={\"direct\"}"
+    },
+    {
+      "before": "for label,role in ((\"production\",\"public\"),(\"observed\",\"publisher\"),(\"instances\",\"filesystem\"),(\"duplex\",\"duplex\")):",
+      "after": "for label,role in ((\"direct\",\"direct\"),):"
+    },
+    {
+      "before": "private, traced = label in (\"observed\",\"duplex\"), label in (\"observed\",\"duplex\")",
+      "after": "private, traced = True, True"
+    },
+    {
+      "before": "if label==\"duplex\":\n            require(doc(output/\"DUPLEX.json\")==duplex_boundary.evidence(),\"complete private fixture source and ABI\")\n            assembly_text=duplex_boundary.compose(assembly_text)",
+      "after": "if label==\"direct\":\n            require(doc(output/\"DIRECT.json\")==direct_compose.evidence(),\"complete fixed private direct fixture source and ABI\")\n            assembly_text=direct_compose.compose(assembly_text)"
+    },
+    {
+      "before": "\"COMPLETE_ACTUAL_PUBLICATION124_TWO_SESSION_BUILD_READ_PASS\"",
+      "after": "\"COMPLETE_ACTUAL_PUBLICATION124_DIRECT_BUILD_READ_PASS\""
+    }
+  ],
+  "all_other_bytes_exact": true,
+  "hia_runtime_unchanged": true
+}
