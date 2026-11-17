@@ -250,5 +250,29 @@
     "before": "'catalog_source_qualified_separately': True,",
     "path": "scripts/public_nine_build.py",
     "purpose": "keep new compiled catalog qualification distinct from admitted actual literal assets"
+  },
+  {
+    "after": "    cmp qword ptr [r12 + 80], 64\n    je fs_fixture_authority_selector\n    cmp qword ptr [r12 + 80], 56\n",
+    "before": "    cmp qword ptr [r12 + 80], 56\n",
+    "path": "scripts/runtime_mcp_filesystem_fixture.S",
+    "purpose": "admit fixture-only selector64 before the unchanged runtime descriptor admission"
+  },
+  {
+    "after": "    cmp qword ptr [r12 + 80], 64\n    je fs_fixture_extract_history_setup\n    cmp qword ptr [r12 + 80], 57\n    je fs_fixture_authority_snapshot\n",
+    "before": "    cmp qword ptr [r12 + 80], 57\n    je fs_fixture_authority_snapshot\n",
+    "path": "scripts/runtime_mcp_filesystem_fixture.S",
+    "purpose": "forward history setup only in the private two-session carrier"
+  },
+  {
+    "after": " test rax, rax\n    jnz fs_fixture_failure\n    mov edi, 1\n    mov rsi, [r12 + 240]\n    mov rdx, [r12 + 248]\n    call view_write_all\n    test rax, rax\n    jnz fs_fixture_failure\n    jmp fs_fixture_next\n\n/* Fixture-only setup of the existing HIA history owner. No history state or\n * result is constructed here. The full unchanged HIA owner validates input.\n * The frozen seed frames fit the original 4096-byte arenas; growth is not\n * silently emulated. Public stdio does not include this fixture file. */\n.section .text\nfs_fixture_extract_history_setup:\n    cmp qword ptr [r12 + 88], 64\n    jb fs_fixture_failure\n    cmp qword ptr [r12 + 88], 2048\n    ja fs_fixture_failure\n    mov rbx, [r15 + 400]\n    test rbx, rbx\n    jz fs_fixture_failure\n    mov rax, 0x3142554842544c48\n    cmp [rbx], rax\n    jne fs_fixture_failure\n    add rbx, 128\n    mov rdi, [r12 + 24]\n    mov rsi, [r12 + 88]\n    mov rdx, [rbx + 24]\n    mov rcx, [rbx + 32]\n    mov r8, [rbx + 8]\n    mov r9, [rbx + 16]\n    call qword ptr [rbx]\n    mov [rbx + 40], rax\n    cmp rax, 64\n    jne fs_fixture_failure\n    mov [r12 + 216], rax\n    mov qword ptr [r12 + 224], 64\n    mov rax, 0x3230525846534648\n    mov [r12 + 192], rax\n    mov rax, [r12 + 72]\n    mov [r12 + 200], rax\n    mov qword ptr [r12 + 208], 64\n    lea rdi, [r12 + 232]\n    xor eax, eax\n    mov ecx, 8\n    rep stosq\n    mov edi, 1\n    lea rsi, [r12 + 192]\n    mov edx, 104\n    call view_write_all\n    test rax, rax\n    jnz fs_fixture_failure\n    mov edi, 1\n    mov rsi, [rbx + 24]\n    mov edx, 64\n    call view_write_all\n    test rax, rax\n    jnz fs_fixture_failure\n    jmp fs_fixture_next\n",
+    "before": " test rax, rax\n    jnz fs_fixture_failure\n    mov edi, 1\n    mov rsi, [r12 + 240]\n    mov rdx, [r12 + 248]\n    call view_write_all\n    test rax, rax\n    jnz fs_fixture_failure\n    jmp fs_fixture_next\n",
+    "path": "scripts/runtime_mcp_filesystem_fixture.S",
+    "purpose": "retain complete existing private carrier and append a fixed real HIA history setup call"
+  },
+  {
+    "after": "'fixture_pseudo_selectors': [33, 34, 41, 57, 58, 64] if private_fixture else [],",
+    "before": "'fixture_pseudo_selectors': [33, 34, 41, 57, 58] if private_fixture else [],",
+    "path": "scripts/public_nine_build.py",
+    "purpose": "declare the fixture-only original history setup selector separately from the 64 runtime descriptors"
   }
 ]
