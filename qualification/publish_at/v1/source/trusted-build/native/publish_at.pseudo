@@ -1,0 +1,812 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<96 or length(s)>=4294901760:
+        return 4294967295
+    if load(s,0)!=3544386032303951944 or load(s,88)!=length(s)-96:
+        return 4294967295
+    command=load(s,8)
+    if command!=1 and command!=2:
+        return 4294967295
+    if length(o)<64:
+        return 4294967294
+    if command==1:
+        if valid_publish_start(s)==0:
+            return 4294967295
+        needed=publish_required(load(s,40),load(s,48),load(s,56))
+        if needed>=4294901760:
+            return 4294967295
+        if length(w)<needed:
+            return publish_short(o,4,needed)
+        if get(w,0)==3544386058073755720:
+            if get(w,8)!=0 and get(w,8)!=99:
+                return 4294967295
+        fill_range(w,0,8192,0)
+        put(w,0,3544386058073755720)
+        put(w,8,1)
+        put(w,56,load(s,32))
+        put(w,64,load(s,40))
+        put(w,72,load(s,48))
+        put(w,80,load(s,56))
+        put(w,88,load(s,64))
+        put(w,96,18446744073709551615)
+        put(w,104,18446744073709551615)
+        put(w,112,18446744073709551615)
+        put(w,120,18446744073709551615)
+        put(w,184,publish_error_capacity(get(w,64),get(w,72)))
+        put(w,192,needed)
+        put(w,200,8192+get(w,64)+1)
+        put(w,208,get(w,200)+get(w,72)+1)
+        put(w,216,get(w,208)+get(w,80))
+        put(w,224,get(w,216)+get(w,184))
+        copy_in(s,w,96,8192,get(w,64))
+        store(w,8192+get(w,64),0)
+        copy_in(s,w,96+get(w,64),get(w,200),get(w,72))
+        store(w,get(w,200)+get(w,72),0)
+        copy_in(s,w,96+get(w,64)+get(w,72),get(w,208),get(w,80))
+    else:
+        if length(w)<8192 or get(w,0)!=3544386058073755720:
+            return 4294967295
+        if length(w)<get(w,192):
+            return publish_short(o,4,get(w,192))
+        if load(s,32)!=0 or load(s,40)!=0 or load(s,48)!=0 or load(s,56)!=0:
+            return 4294967295
+        if load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+            return 4294967295
+        if length(s)-96>1048576:
+            return 4294967295
+        if negative(load(s,24))!=0:
+            if length(s)!=96 or load(s,24)<18446744073709551615-4094:
+                return 4294967295
+        sequence=load(s,16)
+        if get(w,24)!=0:
+            if sequence!=get(w,24):
+                return 4294967295
+            copy_in(s,w,96,get(w,224),length(s)-96)
+            put(w,32,sequence)
+            put(w,40,load(s,24))
+            put(w,48,length(s)-96)
+            put(w,24,0)
+        else:
+            if sequence!=get(w,32) or load(s,24)!=get(w,40) or length(s)-96!=get(w,48):
+                return 4294967295
+            at=0
+            while at<get(w,48):
+                if byte(s,96+at)!=byte(w,get(w,224)+at):
+                    return 4294967295
+                at=at+1
+    status=4294967293
+    while status==4294967293:
+        phase=get(w,8)
+        if phase>=100 and phase<120:
+            status=regular_flow(o,w)
+        else:
+            if phase>=210 and phase<220:
+                status=expected_flow(o,w)
+            else:
+                if phase>=90 and phase<=99:
+                    status=publish_finish(o,w)
+                else:
+                    if phase<=50:
+                        status=publish_before(o,w)
+                    else:
+                        status=publish_after(o,w)
+    return status
+
+def valid_publish_start(s:readbuf) -> u64:
+    if load(s,16)!=0 or load(s,24)!=1 or load(s,32)>2147483647:
+        return 0
+    if load(s,64)>1 or load(s,72)!=0 or load(s,80)!=0:
+        return 0
+    name=load(s,40)
+    temp=load(s,48)
+    prior=load(s,56)
+    left=length(s)-96
+    if name>left:
+        return 0
+    left=left-name
+    if temp>left or prior!=left-temp:
+        return 0
+    if load(s,64)==0 and prior!=0:
+        return 0
+    if utf8(s,96,name)==0 or utf8(s,96+name,temp)==0 or utf8(s,96+name+temp,prior)==0:
+        return 0
+    at=0
+    while at<name+temp:
+        if byte(s,96+at)==47:
+            return 0
+        at=at+1
+    return 1
+
+def publish_error_capacity(name:u64,temp:u64) -> u64:
+    return name+temp+1024
+
+def publish_required(name:u64,temp:u64,prior:u64) -> u64:
+    return 8192+name+1+temp+1+prior+publish_error_capacity(name,temp)+1048576
+
+def publish_short(o:mutbuf,kind:u64,size:u64) -> u32:
+    fill_range(o,0,64,0)
+    put(o,0,3544386036598919240)
+    put(o,8,kind)
+    put(o,32,size)
+    return 64
+
+def publish_request(w:mutbuf,o:mutbuf,phase:u64,kind:u64,op:u64,a:u64,b:u64,c:u64,at:u64,size:u64) -> u64:
+    if size>length(w) or at>length(w)-size:
+        return 4294967295
+    if length(o)<64+size:
+        return publish_short(o,5,64+size)
+    sequence=get(w,16)+1
+    if sequence==0:
+        return 4294967295
+    fill_range(o,0,64,0)
+    put(o,0,3544386036598919240)
+    put(o,8,kind)
+    put(o,16,sequence)
+    put(o,24,op)
+    put(o,32,a)
+    put(o,40,b)
+    put(o,48,c)
+    put(o,56,size)
+    copy_out(w,o,at,64,size)
+    put(w,16,sequence)
+    put(w,24,sequence)
+    put(w,8,phase)
+    return 64
+
+def error_class(number:u64) -> u64:
+    if number==1 or number==13:
+        return 2
+    if number==2:
+        return 4
+    if number==20:
+        return 5
+    if number==21:
+        return 6
+    if number==17:
+        return 7
+    if number==4:
+        return 8
+    if number==11 or number==114 or number==115:
+        return 9
+    if number==32 or number==108:
+        return 10
+    if number==110:
+        return 11
+    if number==104:
+        return 12
+    if number==103:
+        return 13
+    if number==111:
+        return 14
+    return 3
+
+def error_header(w:mutbuf,tag:u64,klass:u64,number:u64,literal:u64,named:u64,size:u64) -> u64:
+    fill_range(w,get(w,216),64,0)
+    put(w,get(w,216),tag)
+    put(w,get(w,216)+8,3)
+    put(w,get(w,216)+16,get(w,16))
+    put(w,get(w,216)+24,klass)
+    put(w,get(w,216)+32,number)
+    put(w,get(w,216)+40,literal)
+    put(w,get(w,216)+48,named)
+    put(w,get(w,216)+56,size)
+    put(w,176,64+size)
+    return 0
+
+def publish_literal(w:mutbuf,code:u64) -> u64:
+    at=get(w,216)+64
+    end=at
+    if code==1:
+        end=literal_embedded(w,at)
+    if code==2:
+        end=literal_regular(w,at)
+    if code==3:
+        end=literal_destination(w,at)
+    if code==4:
+        end=literal_source(w,at)
+    if end==at:
+        return 4294967295
+    error_header(w,3544386040927240776,1,0,end-at,0,end-at)
+    put(w,8,90)
+    return 4294967293
+
+def publish_os_error(w:mutbuf,number:u64,named:u64) -> u64:
+    if number==0 or number>4095 or named>3:
+        return 4294967295
+    size=0
+    if named==1:
+        size=get(w,64)
+        copy_within(w,get(w,216)+64,8192,size)
+    if named==2:
+        size=get(w,72)
+        copy_within(w,get(w,216)+64,get(w,200),size)
+    if named==3:
+        size=get(w,72)+get(w,64)
+        copy_within(w,get(w,216)+64,get(w,200),get(w,72))
+        copy_within(w,get(w,216)+64+get(w,72),8192,get(w,64))
+        error_header(w,3544386036649119560,error_class(number),number,get(w,72),3,size)
+    else:
+        kind=0
+        if named!=0:
+            kind=1
+        error_header(w,3544386040927240776,error_class(number),number,0,kind,size)
+    put(w,8,90)
+    return 4294967293
+
+def is_absent(w:mutbuf) -> u64:
+    if get(w,80)!=6:
+        return 0
+    if byte(w,get(w,208))!=97 or byte(w,get(w,208)+1)!=98 or byte(w,get(w,208)+2)!=115:
+        return 0
+    if byte(w,get(w,208)+3)!=101 or byte(w,get(w,208)+4)!=110 or byte(w,get(w,208)+5)!=116:
+        return 0
+    return 1
+
+def regular_start(w:mutbuf,role:u64,next:u64) -> u64:
+    if get(w,96)!=18446744073709551615:
+        return 4294967295
+    put(w,128,role)
+    put(w,136,next)
+    if role==2:
+        put(w,232,get(w,200))
+        put(w,240,get(w,72))
+    else:
+        put(w,232,8192)
+        put(w,240,get(w,64))
+    put(w,8,100)
+    return 4294967293
+
+def regular_failure(w:mutbuf) -> u64:
+    if get(w,128)==1 and get(w,176)>=64:
+        if get(w,get(w,216))==3544386040927240776 and get(w,get(w,216)+32)==2:
+            put(w,176,0)
+            put(w,160,0)
+            put(w,8,214)
+            return 4294967293
+    put(w,8,90)
+    return 4294967293
+
+def regular_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==100:
+        at=0
+        while at<get(w,240):
+            if byte(w,get(w,232)+at)==0:
+                publish_literal(w,1)
+                return regular_failure(w)
+            at=at+1
+        put(w,8,102)
+        return 4294967293
+    if phase==102:
+        operation=1
+        if get(w,128)==2:
+            operation=6
+        return publish_request(w,o,103,1,operation,get(w,56),0,0,get(w,232),get(w,240)+1)
+    if phase==103:
+        if result==18446744073709551615-3:
+            put(w,8,102)
+            return 4294967293
+        if negative(result)!=0:
+            named=1
+            if get(w,128)==2:
+                named=2
+            publish_os_error(w,0-result,named)
+            return regular_failure(w)
+        if result>2147483647 or get(w,48)!=0:
+            return 4294967295
+        put(w,96,result)
+        put(w,8,104)
+        return 4294967293
+    if phase==104:
+        return publish_request(w,o,105,1,2,get(w,96),0,0,0,0)
+    if phase==105:
+        if result==18446744073709551615-3:
+            put(w,8,104)
+            return 4294967293
+        if negative(result)!=0:
+            put(w,144,0-result)
+            put(w,8,108)
+            return 4294967293
+        if result!=0 or get(w,48)!=144:
+            return 4294967295
+        copy_within(w,256,get(w,224),144)
+        if (u32_at(w,256+24)&61440)!=32768:
+            publish_literal(w,2)
+            put(w,8,112)
+            return 4294967293
+        if get(w,128)==2:
+            put(w,8,106)
+        else:
+            put(w,8,110)
+        return 4294967293
+    if phase==106:
+        return publish_request(w,o,107,1,5,0,0,0,0,0)
+    if phase==107:
+        if get(w,48)!=0 or result>4294967295:
+            return 4294967295
+        if u32_at(w,256+28)!=result or get(w,256+16)!=1 or (u32_at(w,256+24)&63)!=0:
+            publish_literal(w,2)
+            put(w,8,112)
+        else:
+            put(w,8,110)
+        return 4294967293
+    if phase==108:
+        return publish_request(w,o,109,1,4,get(w,96),0,0,0,0)
+    if phase==109:
+        if result!=0 or get(w,48)!=0:
+            return 4294967295
+        put(w,96,18446744073709551615)
+        publish_os_error(w,get(w,144),0)
+        return regular_failure(w)
+    if phase==110:
+        role=get(w,128)
+        if role==1:
+            if get(w,104)!=18446744073709551615:
+                return 4294967295
+            put(w,104,get(w,96))
+        else:
+            if role==2:
+                if get(w,120)!=18446744073709551615:
+                    return 4294967295
+                put(w,120,get(w,96))
+            else:
+                if role!=3 or get(w,112)!=18446744073709551615:
+                    return 4294967295
+                put(w,112,get(w,96))
+        put(w,96,18446744073709551615)
+        put(w,8,get(w,136))
+        return 4294967293
+    if phase==112:
+        return publish_request(w,o,113,1,3,get(w,96),0,0,0,0)
+    if phase==113:
+        if get(w,48)!=0:
+            return 4294967295
+        put(w,96,18446744073709551615)
+        if negative(result)!=0:
+            publish_os_error(w,0-result,0)
+        else:
+            if result!=0:
+                return 4294967295
+        return regular_failure(w)
+    return 4294967295
+
+def expected_start(w:mutbuf,next:u64) -> u64:
+    if get(w,104)!=18446744073709551615 or get(w,176)!=0:
+        return 4294967295
+    put(w,160,0)
+    put(w,152,next)
+    return regular_start(w,1,210)
+
+def stat_packet(w:mutbuf) -> u64:
+    put(w,1024,3544423364495168328)
+    put(w,1024+8,1)
+    put(w,1024+16,get(w,256))
+    put(w,1024+24,get(w,256+8))
+    put(w,1024+32,get(w,256+48))
+    put(w,1024+40,get(w,256+88))
+    put(w,1024+48,get(w,256+96))
+    put(w,1024+56,get(w,256+104))
+    put(w,1024+64,get(w,256+112))
+    return 0
+
+def expected_match(w:mutbuf) -> u64:
+    if get(w,152)==20:
+        put(w,168,get(w,160))
+    else:
+        if get(w,152)!=70:
+            return 4294967295
+    put(w,8,get(w,152))
+    return 4294967293
+
+def expected_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==210:
+        return publish_request(w,o,211,1,2,get(w,104),0,0,0,0)
+    if phase==211:
+        if result==18446744073709551615-3:
+            put(w,8,210)
+            return 4294967293
+        if negative(result)!=0:
+            publish_os_error(w,0-result,0)
+        else:
+            if result!=0 or get(w,48)!=144:
+                return 4294967295
+            copy_within(w,256,get(w,224),144)
+            put(w,160,1)
+        put(w,8,212)
+        return 4294967293
+    if phase==212:
+        return publish_request(w,o,213,1,3,get(w,104),0,0,0,0)
+    if phase==213:
+        if get(w,48)!=0:
+            return 4294967295
+        put(w,104,18446744073709551615)
+        if negative(result)!=0:
+            publish_os_error(w,0-result,0)
+        else:
+            if result!=0:
+                return 4294967295
+        if get(w,176)!=0:
+            if get(w,get(w,216))==3544386040927240776 and get(w,get(w,216)+32)==2:
+                put(w,176,0)
+                put(w,160,0)
+            else:
+                put(w,8,90)
+                return 4294967293
+        put(w,8,214)
+        return 4294967293
+    if phase==214:
+        if get(w,88)==0:
+            return publish_literal(w,3)
+        if get(w,160)==0:
+            if is_absent(w)==0:
+                return publish_literal(w,3)
+            return expected_match(w)
+        put(w,8,216)
+        return 4294967293
+    if phase==216:
+        stat_packet(w)
+        return publish_request(w,o,217,2,1,0,0,0,1024,72)
+    if phase==217:
+        if result==0 or result>122 or result!=get(w,48):
+            return 4294967295
+        if result!=get(w,80) or equal(w,get(w,224),get(w,208),result)==0:
+            return publish_literal(w,3)
+        return expected_match(w)
+    return 4294967295
+
+def publish_before(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==1:
+        return expected_start(w,20)
+    if phase==20:
+        return regular_start(w,2,30)
+    if phase==30:
+        if get(w,168)==0:
+            put(w,8,50)
+            return 4294967293
+        return regular_start(w,3,40)
+    if phase==40:
+        return publish_request(w,o,41,1,2,get(w,112),0,0,0,0)
+    if phase==41:
+        if result==18446744073709551615-3:
+            put(w,8,40)
+            return 4294967293
+        if negative(result)!=0:
+            return publish_os_error(w,0-result,0)
+        if result!=0 or get(w,48)!=144:
+            return 4294967295
+        copy_within(w,256,get(w,224),144)
+        put(w,8,42)
+        return 4294967293
+    if phase==42:
+        stat_packet(w)
+        return publish_request(w,o,43,2,1,0,0,0,1024,72)
+    if phase==43:
+        if result==0 or result>122 or result!=get(w,48):
+            return 4294967295
+        if result!=get(w,80) or equal(w,get(w,224),get(w,208),result)==0:
+            return publish_literal(w,4)
+        put(w,8,44)
+        return 4294967293
+    if phase==44:
+        fill_range(w,1024,96,0)
+        put(w,1024,3544386032604826952)
+        put(w,1024+8,1)
+        put(w,1024+24,3)
+        return publish_request(w,o,45,2,2,get(w,112),get(w,120),0,1024,96)
+    if phase==45:
+        if result!=get(w,48) or result<64 or result>1048576:
+            return 4294967295
+        if get(w,get(w,224))!=3544386036883017032 or get(w,get(w,224)+56)!=result-64:
+            return 4294967295
+        if get(w,get(w,224)+8)==3:
+            if result>get(w,184):
+                return 4294967295
+            copy_within(w,get(w,216),get(w,224),result)
+            put(w,176,result)
+            put(w,8,90)
+            return 4294967293
+        if get(w,get(w,224)+8)!=0 or get(w,get(w,224)+24)!=3:
+            return 4294967295
+        if get(w,get(w,224)+32)!=0 or get(w,get(w,224)+40)!=0 or get(w,get(w,224)+48)!=0:
+            return 4294967295
+        put(w,8,48)
+        return 4294967293
+    if phase==48:
+        return publish_request(w,o,49,1,3,get(w,112),0,0,0,0)
+    if phase==49:
+        if get(w,48)!=0:
+            return 4294967295
+        put(w,112,18446744073709551615)
+        if negative(result)!=0:
+            return publish_os_error(w,0-result,0)
+        if result!=0:
+            return 4294967295
+        put(w,8,50)
+        return 4294967293
+    if phase==50:
+        return publish_request(w,o,51,1,7,get(w,120),0,0,0,0)
+    return 4294967295
+
+def publish_after(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==51:
+        if result==18446744073709551615-3:
+            put(w,8,50)
+            return 4294967293
+        if negative(result)!=0:
+            return publish_os_error(w,0-result,0)
+        if result!=0 or get(w,48)!=0:
+            return 4294967295
+        put(w,8,52)
+        return 4294967293
+    if phase==52:
+        return publish_request(w,o,53,1,3,get(w,120),0,0,0,0)
+    if phase==53:
+        if get(w,48)!=0:
+            return 4294967295
+        put(w,120,18446744073709551615)
+        if negative(result)!=0:
+            return publish_os_error(w,0-result,0)
+        if result!=0:
+            return 4294967295
+        put(w,8,60)
+        return 4294967293
+    if phase==60:
+        return expected_start(w,70)
+    if phase==70:
+        if is_absent(w)!=0:
+            return publish_request(w,o,71,1,8,get(w,56),get(w,64)+1,get(w,72)+1,8192,get(w,64)+get(w,72)+2)
+        return publish_request(w,o,75,1,10,get(w,56),get(w,64)+1,get(w,72)+1,8192,get(w,64)+get(w,72)+2)
+    if phase==71:
+        if negative(result)!=0:
+            return publish_os_error(w,0-result,3)
+        if result!=0 or get(w,48)!=0:
+            return 4294967295
+        put(w,8,72)
+        return 4294967293
+    if phase==72:
+        return publish_request(w,o,73,1,9,get(w,56),0,0,get(w,200),get(w,72)+1)
+    if phase==73:
+        if negative(result)!=0:
+            return publish_os_error(w,0-result,2)
+        if result!=0 or get(w,48)!=0:
+            return 4294967295
+        put(w,8,76)
+        return 4294967293
+    if phase==75:
+        if negative(result)!=0:
+            return publish_os_error(w,0-result,3)
+        if result!=0 or get(w,48)!=0:
+            return 4294967295
+        put(w,8,76)
+        return 4294967293
+    if phase==76:
+        return publish_request(w,o,77,1,7,get(w,56),0,0,0,0)
+    if phase==77:
+        if result==18446744073709551615-3:
+            put(w,8,76)
+            return 4294967293
+        if negative(result)!=0:
+            return publish_os_error(w,0-result,0)
+        if result!=0 or get(w,48)!=0:
+            return 4294967295
+        put(w,8,90)
+        return 4294967293
+    return 4294967295
+
+def publish_finish(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==90:
+        if get(w,96)!=18446744073709551615 or get(w,104)!=18446744073709551615:
+            return 4294967295
+        if get(w,112)!=18446744073709551615:
+            return publish_request(w,o,91,1,3,get(w,112),0,0,0,0)
+        if get(w,120)!=18446744073709551615:
+            return publish_request(w,o,92,1,3,get(w,120),0,0,0,0)
+        put(w,8,99)
+        return 4294967293
+    if phase==91 or phase==92:
+        if get(w,48)!=0:
+            return 4294967295
+        if phase==91:
+            put(w,112,18446744073709551615)
+        else:
+            put(w,120,18446744073709551615)
+        if negative(result)!=0:
+            return publish_os_error(w,0-result,0)
+        if result!=0:
+            return 4294967295
+        put(w,8,90)
+        return 4294967293
+    if phase==99:
+        size=get(w,176)
+        if length(o)<64+size:
+            return publish_short(o,5,64+size)
+        fill_range(o,0,64,0)
+        put(o,0,3544386036598919240)
+        put(o,16,get(w,16))
+        if size!=0:
+            put(o,8,3)
+        put(o,56,size)
+        copy_out(w,o,get(w,216),64,size)
+        return 64
+    return 4294967295
+
+def copy_within(w:mutbuf,dst:u64,src:u64,size:u64) -> u64:
+    if dst>src and dst<src+size:
+        at=size
+        while at!=0:
+            at=at-1
+            store(w,dst+at,byte(w,src+at))
+    else:
+        at=0
+        while size-at>=8:
+            put(w,dst+at,get(w,src+at))
+            at=at+8
+        while at<size:
+            store(w,dst+at,byte(w,src+at))
+            at=at+1
+    return size
+
+def literal_embedded(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,101)
+    store(w,at+1,109)
+    store(w,at+2,98)
+    store(w,at+3,101)
+    store(w,at+4,100)
+    store(w,at+5,100)
+    store(w,at+6,101)
+    store(w,at+7,100)
+    store(w,at+8,32)
+    store(w,at+9,110)
+    store(w,at+10,117)
+    store(w,at+11,108)
+    store(w,at+12,108)
+    store(w,at+13,32)
+    store(w,at+14,98)
+    store(w,at+15,121)
+    store(w,at+16,116)
+    store(w,at+17,101)
+    return at+18
+
+def literal_regular(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,105)
+    store(w,at+1,110)
+    store(w,at+2,118)
+    store(w,at+3,97)
+    store(w,at+4,108)
+    store(w,at+5,105)
+    store(w,at+6,100)
+    store(w,at+7,32)
+    store(w,at+8,114)
+    store(w,at+9,101)
+    store(w,at+10,103)
+    store(w,at+11,117)
+    store(w,at+12,108)
+    store(w,at+13,97)
+    store(w,at+14,114)
+    store(w,at+15,32)
+    store(w,at+16,102)
+    store(w,at+17,105)
+    store(w,at+18,108)
+    store(w,at+19,101)
+    store(w,at+20,32)
+    store(w,at+21,111)
+    store(w,at+22,114)
+    store(w,at+23,32)
+    store(w,at+24,112)
+    store(w,at+25,114)
+    store(w,at+26,105)
+    store(w,at+27,118)
+    store(w,at+28,97)
+    store(w,at+29,116)
+    store(w,at+30,101)
+    store(w,at+31,32)
+    store(w,at+32,115)
+    store(w,at+33,105)
+    store(w,at+34,100)
+    store(w,at+35,101)
+    store(w,at+36,99)
+    store(w,at+37,97)
+    store(w,at+38,114)
+    return at+39
+
+def literal_destination(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,100)
+    store(w,at+1,101)
+    store(w,at+2,115)
+    store(w,at+3,116)
+    store(w,at+4,105)
+    store(w,at+5,110)
+    store(w,at+6,97)
+    store(w,at+7,116)
+    store(w,at+8,105)
+    store(w,at+9,111)
+    store(w,at+10,110)
+    store(w,at+11,32)
+    store(w,at+12,118)
+    store(w,at+13,101)
+    store(w,at+14,114)
+    store(w,at+15,115)
+    store(w,at+16,105)
+    store(w,at+17,111)
+    store(w,at+18,110)
+    store(w,at+19,32)
+    store(w,at+20,99)
+    store(w,at+21,104)
+    store(w,at+22,97)
+    store(w,at+23,110)
+    store(w,at+24,103)
+    store(w,at+25,101)
+    store(w,at+26,100)
+    store(w,at+27,59)
+    store(w,at+28,32)
+    store(w,at+29,110)
+    store(w,at+30,111)
+    store(w,at+31,32)
+    store(w,at+32,112)
+    store(w,at+33,117)
+    store(w,at+34,98)
+    store(w,at+35,108)
+    store(w,at+36,105)
+    store(w,at+37,99)
+    store(w,at+38,97)
+    store(w,at+39,116)
+    store(w,at+40,105)
+    store(w,at+41,111)
+    store(w,at+42,110)
+    store(w,at+43,32)
+    store(w,at+44,112)
+    store(w,at+45,101)
+    store(w,at+46,114)
+    store(w,at+47,102)
+    store(w,at+48,111)
+    store(w,at+49,114)
+    store(w,at+50,109)
+    store(w,at+51,101)
+    store(w,at+52,100)
+    return at+53
+
+def literal_source(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,115)
+    store(w,at+1,111)
+    store(w,at+2,117)
+    store(w,at+3,114)
+    store(w,at+4,99)
+    store(w,at+5,101)
+    store(w,at+6,32)
+    store(w,at+7,99)
+    store(w,at+8,104)
+    store(w,at+9,97)
+    store(w,at+10,110)
+    store(w,at+11,103)
+    store(w,at+12,101)
+    store(w,at+13,100)
+    store(w,at+14,32)
+    store(w,at+15,98)
+    store(w,at+16,101)
+    store(w,at+17,102)
+    store(w,at+18,111)
+    store(w,at+19,114)
+    store(w,at+20,101)
+    store(w,at+21,32)
+    store(w,at+22,109)
+    store(w,at+23,101)
+    store(w,at+24,116)
+    store(w,at+25,97)
+    store(w,at+26,100)
+    store(w,at+27,97)
+    store(w,at+28,116)
+    store(w,at+29,97)
+    store(w,at+30,32)
+    store(w,at+31,99)
+    store(w,at+32,111)
+    store(w,at+33,112)
+    store(w,at+34,121)
+    return at+35

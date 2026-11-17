@@ -1,0 +1,39 @@
+name: Check frozen publication qualification source
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-publish-at-source-preflight-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      PUBLISH_SOURCE: ${{ github.workspace }}/runtime/qualification/publish_at/v1/source
+      PUBLISH_MANIFEST: 7a8a24fb1f35f2409d7b7856f1e01952ebb0eec3b75f27701395421a817a47b9
+    steps:
+      - name: Checkout exact frozen source and all readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/publish_at/v1/source
+          persist-credentials: false
+      - name: Verify source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Source and input check with zero application executions
+        run: |
+          python3 -I -S -B "$PUBLISH_SOURCE/scripts/preflight.py" \
+            --output "$RUNNER_TEMP/publish-source-preflight" --source-manifest-sha256 "$PUBLISH_MANIFEST"
+      - name: Retain complete source check process streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publish-source-preflight-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publish-source-preflight
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
