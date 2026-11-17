@@ -6,9 +6,12 @@ import io
 import json
 import os
 import stat
+import sys
 import tarfile
 import zipfile
 ADAPTER=Path(__file__).resolve().parent
+sys.path.insert(0,str(ADAPTER))
+import restore
 
 def encoded(v):return (json.dumps(v,sort_keys=True,indent=2,allow_nan=False)+'\n').encode()
 def sha(b):return hashlib.sha256(b).hexdigest()
@@ -27,7 +30,6 @@ def inventory(root):
     return rows
 
 def run(restored,recovery,archive,original_zip):
-    import restore
     raw_zip=original_zip.read_bytes()
     if len(raw_zip)!=restore.ZIP_SIZE or sha(raw_zip)!=restore.ZIP_SHA:raise ValueError('complete original ZIP before final export')
     with zipfile.ZipFile(io.BytesIO(raw_zip)) as z:

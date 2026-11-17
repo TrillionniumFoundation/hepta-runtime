@@ -17,7 +17,7 @@ jobs:
           sparse-checkout: tests/hia_native/audit_storage_recovery
       - name: Complete adapter source admission
         env:
-          EXPECTED_SOURCE: fc3b3fa40e2b9d6a7f0ebf159ef22bfd5e7b763887fb5a3154be237b4c7d8fa8
+          EXPECTED_SOURCE: b15f253b6fd6a0ae306c1844cef269df1c5477f9fcaac09b8f9cec6581129e8d
         run: |
           python3 -I -B - <<'PY'
           from pathlib import Path
@@ -29,6 +29,7 @@ jobs:
           assert read_adapter.check_adapter()==os.environ['EXPECTED_SOURCE']
           for path in root.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')
           PY
+          python3 -I -B tests/hia_native/audit_storage_recovery/export.py --help
       - name: Download the exact existing failed producer artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,9 +49,19 @@ jobs:
         run: |
           python3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase final --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"
       - name: Preserve original failure unchanged and all complete recovery evidence
+        id: complete_export
         if: always()
         run: |
           python3 -I -B tests/hia_native/audit_storage_recovery/export.py --restored "$RUNNER_TEMP/audit-record-io-retained" --recovery "$RUNNER_TEMP/audit-record-io-recovery" --original-zip "$RUNNER_TEMP/original-failure.zip" --archive "$RUNNER_TEMP/audit-record-io-recovery.tar.gz"
+      - name: Preserve all retained files if the qualified exporter fails
+        if: ${{ always() && steps.complete_export.outcome == 'failure' }}
+        run: |
+          items=()
+          for entry in audit-record-io-retained audit-record-io-recovery original-failure.zip audit-record-io-recovery.tar.gz audit-record-io-recovery.tar.gz.json; do
+            if [ -e "$RUNNER_TEMP/$entry" ]; then items+=("$entry"); fi
+          done
+          tar --format=pax -czf "$RUNNER_TEMP/audit-record-io-recovery-fallback.tar.gz" -C "$RUNNER_TEMP" "${items[@]}" -C "$GITHUB_WORKSPACE" tests/hia_native/audit_storage_recovery
+          sha256sum "$RUNNER_TEMP/audit-record-io-recovery-fallback.tar.gz" > "$RUNNER_TEMP/audit-record-io-recovery-fallback.sha256"
       - name: Upload full objects and full-byte reread receipt
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -59,5 +70,7 @@ jobs:
           path: |
             ${{ runner.temp }}/audit-record-io-recovery.tar.gz
             ${{ runner.temp }}/audit-record-io-recovery.tar.gz.json
+            ${{ runner.temp }}/audit-record-io-recovery-fallback.tar.gz
+            ${{ runner.temp }}/audit-record-io-recovery-fallback.sha256
           if-no-files-found: error
           retention-days: 14
