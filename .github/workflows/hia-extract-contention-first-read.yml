@@ -1,0 +1,41 @@
+name: Read retained actual contention first failure
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public123_extract_contention_inspect_ci/**', '.github/workflows/hia-extract-contention-first-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/public123_extract_contention_inspect_ci
+            tests/hia_native/public123_extract_contention_ci
+      - name: Pure complete archive read and failure inspection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_contention_inspect_ci/inspect.py" | cut -d' ' -f1)" = '4a4e4a5a0daded8d6ecfed738329d762b55c3877331276b7b7051d91fc8eeeea'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_contention_inspect_ci/IDENTITY.json" | cut -d' ' -f1)" = '0f67f4c0465e07d3c7ad77871b07243bc080f1cff1ca30b85b3892455bb61d8d'
+          python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_contention_inspect_ci/inspect.py" --source "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_contention_ci" --output "$RUNNER_TEMP/contention-inspection"
+      - name: Retain complete original artifact and all pure reader results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: contention-first-inspection-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/contention-inspection/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
