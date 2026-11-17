@@ -1,0 +1,57 @@
+name: Public118 retained original reference complete read
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_extract_reference_read_ci/**', '.github/workflows/hia-extract-public-reference-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  retained-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact reader and retained source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/public118_extract_reference_read_ci
+            tests/hia_native/public118_extract_reference_ci
+      - name: Download the same retained reference artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/extract-reference-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286891582 > "$RUNNER_TEMP/extract-reference-input/artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/runs/43988628108 > "$RUNNER_TEMP/extract-reference-input/original-run.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286891582/zip > "$RUNNER_TEMP/extract-reference-input/complete.zip"
+      - name: Verify and extract every original archive member
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_reference_read_ci/prepare.py" --input "$RUNNER_TEMP/extract-reference-input/complete.zip" --output "$RUNNER_TEMP/extract-reference-read" --original-package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_reference_ci" > "$RUNNER_TEMP/extract-reference-extraction.stdout" 2> "$RUNNER_TEMP/extract-reference-extraction.stderr"
+      - name: Read the successful build and all four controls under the unchanged guard
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_reference_read_ci/read_retained.py" --capture "$RUNNER_TEMP/extract-reference-read/capture" --profile '5b501830b5c36e0aef03036bbc1cb7c3c6f179e3b45f122923938e99988d61a0' > "$RUNNER_TEMP/extract-reference-retained-read.stdout" 2> "$RUNNER_TEMP/extract-reference-retained-read.stderr"
+      - name: Preserve the complete independent reader proof and original failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-public-reference-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/extract-reference-read/proof
+            ${{ runner.temp }}/extract-reference-extraction.stdout
+            ${{ runner.temp }}/extract-reference-extraction.stderr
+            ${{ runner.temp }}/extract-reference-retained-read.stdout
+            ${{ runner.temp }}/extract-reference-retained-read.stderr
+            ${{ runner.temp }}/extract-reference-input/artifact.json
+            ${{ runner.temp }}/extract-reference-input/original-run.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

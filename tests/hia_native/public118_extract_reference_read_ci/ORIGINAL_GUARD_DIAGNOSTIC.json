@@ -1,0 +1,76 @@
+{
+  "error": "ValueError('reader attempted a forbidden operation')",
+  "foreign_open_events": [
+    {
+      "event": "open",
+      "flags": 524288,
+      "mode": "r",
+      "path": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/encodings/__pycache__/utf_8_sig.cpython-312.pyc"
+    },
+    {
+      "event": "open",
+      "flags": 524288,
+      "mode": "r",
+      "path": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/encodings/__pycache__/ascii.cpython-312.pyc"
+    },
+    {
+      "event": "open",
+      "flags": 524288,
+      "mode": "r",
+      "path": "/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/reference/retained/authoring/__pycache__/author_public_reference.cpython-312.pyc"
+    },
+    {
+      "event": "open",
+      "flags": 524865,
+      "mode": "w",
+      "path": "/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/CAPTURE.json"
+    },
+    {
+      "event": "open",
+      "flags": 524289,
+      "mode": null,
+      "path": "/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/CAPTURE.json"
+    },
+    {
+      "event": "open",
+      "flags": 524288,
+      "mode": "r",
+      "path": "/dev/null"
+    },
+    {
+      "event": "open",
+      "flags": 524288,
+      "mode": "r",
+      "path": "/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/reference/retained/authoring/__pycache__/author_public_reference.cpython-312.pyc"
+    },
+    {
+      "event": "open",
+      "flags": 524288,
+      "mode": "r",
+      "path": "/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/reference/retained/authoring/__pycache__/author_public_reference.cpython-312.pyc"
+    },
+    {
+      "event": "open",
+      "flags": 524288,
+      "mode": "r",
+      "path": "/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/reference/retained/authoring/__pycache__/author_public_reference.cpython-312.pyc"
+    },
+    {
+      "event": "open",
+      "flags": 524288,
+      "mode": "r",
+      "path": "/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/reference/retained/authoring/__pycache__/author_public_reference.cpython-312.pyc"
+    },
+    {
+      "event": "open",
+      "flags": 524288,
+      "mode": "r",
+      "path": "/tmp/extract-public-6780-resume/diagnose_reference_guard.py"
+    }
+  ],
+  "full_source_and_evidence_unchanged": true,
+  "native_executed": false,
+  "rust_executed": false,
+  "status": "FAIL",
+  "traceback": "Traceback (most recent call last):\n  File \"/tmp/extract-public-6780-resume/diagnose_reference_guard.py\", line 29, in <module>\n    proof=read_gate.guarded(package,OUT,'fec98075c21e5761ae344d786d457144c5fb01aa48ab7427bb65748b26ea9e22')\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/ci/read_gate.py\", line 37, in guarded\n    report=read_only_guard.guarded(lambda:verify(package,capture,profile),roots=[package,capture],foreign_path=Path('/dev/null'))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/ci/read_only_guard.py\", line 106, in guarded\n    require(len(denied) == prior, \"reader attempted a forbidden operation\")\n  File \"/tmp/extract-public-6780-resume/reference-v1-diagnostic-capture/ci-package/ci/read_only_guard.py\", line 15, in require\n    if not value:raise ValueError(message)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\nValueError: reader attempted a forbidden operation\n"
+}
