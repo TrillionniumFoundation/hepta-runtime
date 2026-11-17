@@ -1,0 +1,60 @@
+name: Complete inert read of retained audit lifetime controls
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-lifetime-control-recovery-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  lifetime-complete-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      RECOVERY_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/audit_lifetime_control_recovery
+      RECOVERY_SHA: a48a31916902730a26d8ec4c2408ecdccbb94ffdc430f459b3dff34f5ec99a47
+    steps:
+      - name: Checkout frozen continuation and unchanged actual reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: |
+            tests/hia_native/audit_lifetime_control_recovery
+            tests/hia_native/audit_lifetime_read_recovery
+          persist-credentials: false
+      - name: Verify exact source and initialize the owned evidence path
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          printf 'RECOVERY_OUTPUT=%s\n' "$RUNNER_TEMP/audit-lifetime-control-recovery" >> "$GITHUB_ENV"
+          python3 -I -B - <<'PY'
+          import os,runpy
+          from pathlib import Path
+          root=Path(os.environ['RECOVERY_SOURCE'])
+          module=runpy.run_path(str(root/'continue.py'))
+          assert module['identity']()==os.environ['RECOVERY_SHA']
+          PY
+      - name: Restore all completed controls and reread every byte and mode
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -B "$RECOVERY_SOURCE/continue.py" restore --destination "$RECOVERY_OUTPUT" --source-manifest-sha256 "$RECOVERY_SHA"
+      - name: Complete the original independent read within 180 seconds
+        run: python3 -I -B "$RECOVERY_SOURCE/continue.py" independent --destination "$RECOVERY_OUTPUT" --source-manifest-sha256 "$RECOVERY_SHA"
+      - name: Preserve complete success or failure without semantic or control replay
+        if: always()
+        run: |
+          mkdir -p "$RECOVERY_OUTPUT"
+          python3 -I -B "$RECOVERY_SOURCE/continue.py" export --destination "$RECOVERY_OUTPUT" --source-manifest-sha256 "$RECOVERY_SHA" > "$RUNNER_TEMP/audit-lifetime-recovery-export.stdout" 2> "$RUNNER_TEMP/audit-lifetime-recovery-export.stderr"
+      - name: Upload complete retained evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-lifetime-control-recovery-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/audit-lifetime-recovery.tar.gz
+            ${{ runner.temp }}/audit-lifetime-recovery.tar.gz.json
+            ${{ runner.temp }}/audit-lifetime-recovery-export.stdout
+            ${{ runner.temp }}/audit-lifetime-recovery-export.stderr
+          if-no-files-found: error
+          retention-days: 14
