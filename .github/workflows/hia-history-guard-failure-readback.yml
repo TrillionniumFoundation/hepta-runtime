@@ -1,0 +1,58 @@
+name: Independently read retained historical guard failure
+on:
+  push:
+    branches: [hia-history-aggregate-readback-6780-20261117]
+    paths: ['.github/workflows/hia-history-guard-failure-readback.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen pure readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/history_aggregate_recovery/independent-readback-v7
+      - name: Verify all frozen reader bytes
+        run: |
+          echo "c13bf4a488f6c61131ee7dfa015b9b80cd4df932020c4c19b84a7d7e9635123f  qualification/history_aggregate_recovery/independent-readback-v7/read_proof_archive_v2.py" | sha256sum --check --strict
+          echo "d08c129d5bb843fe15055c4cb6415e32fb13e602b644bbe563d7d53ff7e29b32  qualification/history_aggregate_recovery/independent-readback-v7/inspect_guard_failure_v9.py" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/history-guard-readback/logs"
+      - name: Download the exact retained failed artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14296507699 > "$RUNNER_TEMP/history-guard-readback/artifact-metadata.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14296507699/zip > "$RUNNER_TEMP/history-guard-readback/failed-input.zip"
+      - name: Independently reopen every ZIP TAR source and proof byte
+        run: |
+          timeout --signal=KILL 900 python3 -I -S -B             qualification/history_aggregate_recovery/independent-readback-v7/read_proof_archive_v2.py             --zip "$RUNNER_TEMP/history-guard-readback/failed-input.zip"             --zip-bytes 29038592 --zip-sha256 e3db3588454f3f3aaa906c18007f45ffcc8499ba2113c79967f55b312793fad8             --source-manifest-sha256 a8d6dfb580710edf285497f314a24ae5aa34545bbd3961e762903a7128faa639             --output "$RUNNER_TEMP/history-guard-extracted"             > "$RUNNER_TEMP/history-guard-readback/logs/archive.stdout"             2> "$RUNNER_TEMP/history-guard-readback/logs/archive.stderr"
+          cp "$RUNNER_TEMP/history-guard-extracted/COMPLETE_READBACK.json" "$RUNNER_TEMP/history-guard-readback/COMPLETE_READBACK.json"
+          cp "$RUNNER_TEMP/history-guard-extracted/COMPLETE_MEMBER_PINS.json" "$RUNNER_TEMP/history-guard-readback/COMPLETE_MEMBER_PINS.json"
+      - name: Bind the full caught denial to the preserved failure
+        run: |
+          timeout --signal=KILL 180 python3 -I -S -B             qualification/history_aggregate_recovery/independent-readback-v7/inspect_guard_failure_v9.py             --readback "$RUNNER_TEMP/history-guard-extracted"             --output "$RUNNER_TEMP/history-guard-readback/GUARD_FAILURE_REVIEW.json"             > "$RUNNER_TEMP/history-guard-readback/logs/inspection.stdout"             2> "$RUNNER_TEMP/history-guard-readback/logs/inspection.stderr"
+      - name: Preserve complete diagnostic output
+        if: always()
+        run: |
+          for stream in archive.stdout archive.stderr inspection.stdout inspection.stderr; do
+            if test -f "$RUNNER_TEMP/history-guard-readback/logs/$stream"; then
+              cat "$RUNNER_TEMP/history-guard-readback/logs/$stream"
+            fi
+          done
+      - name: Retain exact input ZIP and full independent proof including failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history-guard-readback-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/history-guard-readback/
+          compression-level: 0
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
