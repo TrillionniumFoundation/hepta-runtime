@@ -1,0 +1,42 @@
+name: Read exact public118 teardown trace without execution
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_extract_teardown_read_ci/**', '.github/workflows/hia-extract-public-teardown-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  native-domain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout complete frozen inputs and readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_extract_teardown_read_ci
+      - name: Download only the fixed successful diagnostic archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14294528768/zip > "$RUNNER_TEMP/diagnostic.zip"
+      - name: Read every original diagnostic byte and actual EOF trace
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_teardown_read_ci/run.py" --archive "$RUNNER_TEMP/diagnostic.zip" --output "$RUNNER_TEMP/teardown-read" --profile '@PROFILE@'
+      - name: Upload complete successor evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-public-teardown-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/teardown-read
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
