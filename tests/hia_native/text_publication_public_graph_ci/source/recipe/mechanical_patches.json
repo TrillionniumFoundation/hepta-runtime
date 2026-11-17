@@ -1,0 +1,112 @@
+[
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "    call runtime_authority_release\n    test rax, rax\n    jnz runtime_grow_destroy_done\n",
+    "after": "    call runtime_publication_body_destroy\n    test rax, rax\n    jnz runtime_grow_destroy_done\n    call runtime_authority_release\n    test rax, rax\n    jnz runtime_grow_destroy_done\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "    cmp ebp, 52\n    je runtime_grow_batch_body_dispatch\n",
+    "after": "    cmp ebp, 68\n    je runtime_grow_publication_forget_dispatch\n    cmp ebp, 67\n    je runtime_grow_publication_body_dispatch\n    cmp ebp, 52\n    je runtime_grow_batch_body_dispatch\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "runtime_grow_extract_installed:\n    cmp ebp, 11\n",
+    "after": "runtime_grow_extract_installed:\n    cmp ebp, 66\n    jne runtime_grow_publication_installed\n    mov rdx, [rbx + 8]\n    cmp qword ptr [rdx], 0\n    jne runtime_grow_publication_installed\n    call runtime_publication_install_caller\n    test eax, eax\n    jnz runtime_grow_error\nruntime_grow_publication_installed:\n    cmp ebp, 11\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "runtime_grow_classify_result:\n",
+    "after": "runtime_grow_classify_result:\n    cmp ebp, 64\n    je runtime_grow_text_gateway_result\n    cmp ebp, 66\n    je runtime_grow_text_gateway_result\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "    cmp ebp, 48\n    je runtime_grow_batch_params_result\n",
+    "after": "    cmp ebp, 65\n    je runtime_grow_publication_params_result\n    cmp ebp, 48\n    je runtime_grow_batch_params_result\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "runtime_grow_batch_params_result:\n",
+    "after": "runtime_grow_publication_params_result:\n    cmp eax, 128\n    jne runtime_grow_bad\n    mov rdx, 0x3130525250505448 /* HTPPRR01 */\n    cmp [r13], rdx\n    jne runtime_grow_bad\n    mov rdx, [r13 + 48]\n    or rdx, [r13 + 56]\n    or rdx, [r13 + 64]\n    or rdx, [r13 + 88]\n    or rdx, [r13 + 96]\n    or rdx, [r13 + 104]\n    or rdx, [r13 + 112]\n    or rdx, [r13 + 120]\n    jnz runtime_grow_bad\n    mov rax, [r13 + 8]\n    cmp rax, 4\n    ja runtime_grow_bad\n    je runtime_grow_resource\n    cmp rax, 2\n    jae runtime_grow_text_params_growth\n    cmp qword ptr [r13 + 80], 0\n    jne runtime_grow_bad\n    test rax, rax\n    jnz runtime_grow_publication_params_error\n    cmp qword ptr [r13 + 72], 0\n    jne runtime_grow_bad\n    mov rax, [r13 + 16]\n    cmp rax, 1\n    jb runtime_grow_bad\n    cmp rax, 3\n    ja runtime_grow_bad\n    mov rax, [r13 + 24]\n    add rax, [r13 + 32]\n    jc runtime_grow_bad\n    add rax, [r13 + 40]\n    jc runtime_grow_bad\n    add rax, 128\n    jc runtime_grow_bad\n    jmp runtime_grow_extent_ready\nruntime_grow_publication_params_error:\n    mov rdx, [r13 + 16]\n    or rdx, [r13 + 24]\n    or rdx, [r13 + 32]\n    or rdx, [r13 + 40]\n    jnz runtime_grow_bad\n    jmp runtime_grow_text_params_error\n\nruntime_grow_batch_params_result:\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "runtime_grow_batch_body_dispatch:\n",
+    "after": "runtime_grow_publication_forget_dispatch:\n    call runtime_publication_forget_owned\n    jmp runtime_grow_done\n\nruntime_grow_publication_body_dispatch:\n    call runtime_publication_body_owned\n    jmp runtime_grow_done\n\nruntime_grow_batch_body_dispatch:\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "runtime_grow_target:\n",
+    "after": "runtime_grow_target:\n    cmp edi, 64\n    je runtime_grow_target_publication_gateway\n    cmp edi, 66\n    je runtime_grow_target_publication_caller\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "runtime_grow_target_batch_gateway:\n",
+    "after": "runtime_grow_target_publication_gateway:\n    cmp rsi, 8\n    ja runtime_grow_target_invalid\n    lea rdx, [rip + runtime_grow_publication_gateway_targets]\n    jmp runtime_grow_target_byte\nruntime_grow_target_publication_caller:\n    cmp rsi, 6\n    ja runtime_grow_target_invalid\n    lea rdx, [rip + runtime_grow_publication_caller_targets]\n    jmp runtime_grow_target_byte\nruntime_grow_target_batch_gateway:\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "    .quad 0 /* 63 fixed native extract callable */\n",
+    "after": "    .quad 0 /* 63 fixed native extract callable */\n    .ascii \"HTPWGA01\" /* 64 publisher gateway */\n    .quad 0 /* 65 publisher typed params */\n    .ascii \"HTPCCA01\" /* 66 publisher caller */\n    .quad 0 /* 67 descriptor-owned synchronous publisher capability */\n    .quad 0 /* 68 fixed publisher Forget Scope output loan */\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "runtime_grow_sdk_protocol_targets:\n",
+    "after": "runtime_grow_publication_gateway_targets:\n    .byte 65, 27, 5, 6, 11, 9, 7, 66, 3\nruntime_grow_publication_caller_targets:\n    .byte 29, 9, 67, 11, 7, 30, 68\nruntime_grow_sdk_protocol_targets:\n"
+  },
+  {
+    "path": "scripts/public_nine_build.py",
+    "before": "BOUNDARIES = [\n",
+    "after": "BOUNDARIES = [\n    'scripts/text_publication_callable.S',\n    'scripts/runtime_publication_body_bridge.S',\n    'scripts/runtime_publication_install.S',\n    'scripts/runtime_publication_scope_bridge.S',\n"
+  },
+  {
+    "path": "scripts/public_nine_build.py",
+    "before": "    ('rf_owner', 'effect_owner_fence', 'standard'),\n",
+    "after": "    ('publisher_gateway', 'text_publication_gateway', 'history.v1'),\n    ('publisher_params', 'text_file_write_params', 'history.v1'),\n    ('publisher_call', 'text_publication_call', 'history.v1'),\n    ('publisher_body', 'text_file_publication', 'history.v1'),\n    ('publisher_errno', 'directory_errno', 'history.v1'),\n    ('rf_owner', 'effect_owner_fence', 'standard'),\n"
+  },
+  {
+    "path": "scripts/public_nine_build.py",
+    "before": "EXTRA.extend(['extract_gateway', 'extract_params', 'extract_call', 'extract_adapter', None])\n",
+    "after": "EXTRA.extend(['extract_gateway', 'extract_params', 'extract_call', 'extract_adapter', None])\nEXTRA.extend(['publisher_gateway', 'publisher_params', 'publisher_call', None, None])\n"
+  },
+  {
+    "path": "scripts/public_nine_build.py",
+    "before": "    configuration.update({name: images[name] for name in FENCE})\n",
+    "after": "    configuration.update({name: images[name] for name in FENCE})\n    configuration.update(text_publication_body=images['publisher_body'],\n                         text_publication_codec=images['rf_sha'],\n                         text_publication_errno=images['publisher_errno'])\n"
+  },
+  {
+    "path": "scripts/public_nine_build.py",
+    "before": "or len(MEMBERS) != 110\n",
+    "after": "or len(MEMBERS) != 115\n"
+  },
+  {
+    "path": "scripts/public_nine_build.py",
+    "before": "              'batch_private_slots': [47,48,49,50,51,52],\n",
+    "after": "              'batch_private_slots': [47,48,49,50,51,52],\n              'publication_fixed_descriptors': [64,65,66,67,68],\n              'publication_forget_capability': {'slot': 68, 'parent': 66, 'local': 6, 'scope_output_loan': 96},\n              'publication_callable_context': 'descriptor67+8',\n              'publication_borrow_retained_until_parent_delivery': True,\n              'publication_gateway_caller_qualified': False,\n              'publication_public_route_registered': True,\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_transport.S",
+    "before": "    .zero 512 /* 64 fixed engine slots; extract59..63. */",
+    "after": "    .zero 552 /* 69 fixed engine slots; extract59..63 and publication64..68. */"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "runtime_grow_target_frontend:\n    cmp rsi, 15\n",
+    "after": "runtime_grow_target_frontend:\n    cmp rsi, 16\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_extra_engine.S",
+    "before": "runtime_grow_frontend_targets:\n    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54, 56, 47, 57, 59\n",
+    "after": "runtime_grow_frontend_targets:\n    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54, 56, 47, 57, 59, 64\n"
+  },
+  {
+    "path": "scripts/runtime_mcp_filesystem_fixture.S",
+    "before": "    .zero 512 /* 64 fixed engine slots; extract59..63. */",
+    "after": "    .zero 552 /* 69 fixed engine slots; private extract selector64 remains a fixture alias. */"
+  },
+  {
+    "path": "scripts/public_nine_build.py",
+    "before": "              'advertised_catalog_tools': 10,\n",
+    "after": "              'advertised_catalog_tools': 11,\n"
+  }
+]
