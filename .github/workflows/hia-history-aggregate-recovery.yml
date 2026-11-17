@@ -1,4 +1,4 @@
-name: Recover retained 08ce aggregate through exact static code admission
+name: Recover retained 08ce aggregate with read-only source regeneration
 on:
   push:
     branches: [hia-history-aggregate-recovery-6780-20261116]
@@ -25,7 +25,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
           sparse-checkout: |
-            qualification/history_aggregate_recovery/readback-v3
+            qualification/history_aggregate_recovery/readback-v4
       - name: Checkout exact unchanged historical runtime
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -68,9 +68,9 @@ jobs:
           echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
       - name: Verify source closure and pure Python mechanical controls
         run: |
-          echo "72d7259b5479eec1cba576db3493891d5d192efa5d0fbd15637ad1455abe14f3  observer/qualification/history_aggregate_recovery/readback-v3/SOURCE_MANIFEST.json" | sha256sum --check --strict
+          echo "9e637165bbdd3802df81a315dd06c0d968fd108781de76725ff713a4792b72f4  observer/qualification/history_aggregate_recovery/readback-v4/SOURCE_MANIFEST.json" | sha256sum --check --strict
           timeout --signal=KILL 60 "$RUNNER_TEMP/hia-native-python/bin/python3" -I -B \
-            observer/qualification/history_aggregate_recovery/readback-v3/preflight.py \
+            observer/qualification/history_aggregate_recovery/readback-v4/preflight.py \
             --output "$RUNNER_TEMP/history-recovery-proof/PREFLIGHT.json" \
             > "$RUNNER_TEMP/history-recovery-proof/logs/preflight.stdout" \
             2> "$RUNNER_TEMP/history-recovery-proof/logs/preflight.stderr"
@@ -102,7 +102,7 @@ jobs:
       - name: Restore every original byte and mode against the complete frozen index
         run: |
           timeout --signal=KILL 900 python3 -I -S -B \
-            observer/qualification/history_aggregate_recovery/readback-v3/restore_archive.py \
+            observer/qualification/history_aggregate_recovery/readback-v4/restore_archive.py \
             --zip "$RUNNER_TEMP/history-original-artifact.zip" \
             --metadata "$RUNNER_TEMP/history-recovery-proof/original-artifact.json" \
             --index-zip "$RUNNER_TEMP/history-index-artifact.zip" \
@@ -113,28 +113,28 @@ jobs:
       - name: Fully read unchanged eight-shard evidence with the exact prefix correction
         run: |
           "$RUNNER_TEMP/hia-native-python/bin/python3" -I -B \
-            observer/qualification/history_aggregate_recovery/readback-v3/read_recovered.py \
-            --fix "$GITHUB_WORKSPACE/observer/qualification/history_aggregate_recovery/readback-v3/reference/fixed_comparator.py" \
+            observer/qualification/history_aggregate_recovery/readback-v4/read_recovered.py \
+            --fix "$GITHUB_WORKSPACE/observer/qualification/history_aggregate_recovery/readback-v4/reference/fixed_comparator.py" \
             --output "$RUNNER_TEMP/history-recovery-proof/reader" \
             > "$RUNNER_TEMP/history-recovery-proof/logs/reader.stdout" \
             2> "$RUNNER_TEMP/history-recovery-proof/logs/reader.stderr"
       - name: Complete the two original skipped evidence controls with unchanged deadlines
         run: |
           "$RUNNER_TEMP/hia-native-python/bin/python3" -I -B \
-            observer/qualification/history_aggregate_recovery/readback-v3/run_skipped.py \
+            observer/qualification/history_aggregate_recovery/readback-v4/run_skipped.py \
             --output "$RUNNER_TEMP/history-recovery-proof/skipped" \
             > "$RUNNER_TEMP/history-recovery-proof/logs/skipped.stdout" \
             2> "$RUNNER_TEMP/history-recovery-proof/logs/skipped.stderr"
       - name: Verify every original byte and mode remains and bind all new proofs
         run: |
           "$RUNNER_TEMP/hia-native-python/bin/python3" -I -B \
-            observer/qualification/history_aggregate_recovery/readback-v3/finish_recovery.py \
+            observer/qualification/history_aggregate_recovery/readback-v4/finish_recovery.py \
             --output "$RUNNER_TEMP/history-recovery-proof" \
             --index-zip "$RUNNER_TEMP/history-index-artifact.zip"
       - name: Archive complete new proofs and any failed working-copy differences
         if: always()
         run: |
-          python3 -I -B observer/qualification/history_aggregate_recovery/readback-v3/export_proof.py \
+          python3 -I -B observer/qualification/history_aggregate_recovery/readback-v4/export_proof.py \
             --proof "$RUNNER_TEMP/history-recovery-proof" \
             --output "$RUNNER_TEMP/history-recovery-export" \
             --index-zip "$RUNNER_TEMP/history-index-artifact.zip"
