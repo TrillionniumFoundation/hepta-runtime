@@ -1,0 +1,33 @@
+{
+  "schema": "hepta.runtime.binary-read-stdio.retained-reader-errata.v1",
+  "preserved_producer": {
+    "commit": "937dc8ffd42d27a8537269df1010b9807c3b374c",
+    "run": 44090455584,
+    "status": "FAIL",
+    "stage": "controls-controls"
+  },
+  "diagnostic": {
+    "commit": "dd6fc9212d61ba56595d13cd4e9026976865413c",
+    "run": 44091755761,
+    "status": "SUCCESS",
+    "source": "all 3776 files, complete stream and process receipts retained"
+  },
+  "changes": [
+    {
+      "reader": "read_stdio.process",
+      "reason": "Reference interpreter startup may close an enumerated FD before readlink. Four original receipts retain nonempty maps, a false complete-FD-snapshot flag, no pre-EOF output, and actual successful terminal exit. Keep all original bytes. Require complete fixed-FD observation only for the native helper."
+    },
+    {
+      "reader": "read_stdio.recovered_controls",
+      "reason": "First 10 controls have complete case rows. Control 11 has a full 134217729-byte input, actual exit111/wait28416, empty all output/journals, reaped PID, and a retained post-exit /proc/PID/fd PermissionError. Read that existing terminal receipt without synthesizing a producer CAPTURE or changing its FAIL."
+    },
+    {
+      "reader": "read_all.verify",
+      "reason": "Retain and fully read the last producer's exit1/empty stdout/exact PermissionError stderr; all 22 preceding producers remain success."
+    }
+  ],
+  "unchanged_production_elves": true,
+  "unchanged_hia_and_bridge_sources": true,
+  "application_replays": 0,
+  "scope": "private fixed binary read stdio only"
+}
