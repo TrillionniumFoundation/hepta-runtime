@@ -1,0 +1,77 @@
+name: Read exact native WAIT failure with fixed private trace
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public123_extract_wait_trace_diagnostic_ci/**', '.github/workflows/hia-extract-public123-wait-trace-diagnostic.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set fixed package and evidence paths
+        run: |
+          printf '%s\n' "WAIT_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_trace_diagnostic_ci" "WAIT_CAPTURE=$RUNNER_TEMP/shared123-wait-trace-fixture" "WAIT_RETAINED=$RUNNER_TEMP/shared123-wait-trace-retained" "WAIT_EXPORT=$RUNNER_TEMP/shared123-wait-trace-export" "WAIT_DRIVER=$RUNNER_TEMP/shared123-wait-trace-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact source package
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_wait_trace_diagnostic_ci
+      - name: Checkout exact unchanged contention input and observation source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: capture-base
+          ref: 61e3a24e8d01aed2c912873039882bd99b248436
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_contention_ci
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify exact source and syntax
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = '${{ github.sha }}'
+          test "$(sha256sum "$WAIT_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '5624799d6ad404005d4e77054a2dced3da72d34356a11517c493940ff3d58782'
+          python3 -I -S -B "$WAIT_PACKAGE/check_source.py"
+      - name: Read complete shared123 and build only the added test carrier
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$WAIT_PACKAGE/build_fixture.py" --output "$WAIT_CAPTURE" --retained "$WAIT_RETAINED" --hepta "$GITHUB_WORKSPACE/compiler" > "$WAIT_DRIVER.stdout" 2> "$WAIT_DRIVER.stderr"
+          wait_status=$?
+          cat "$WAIT_DRIVER.stderr"
+          test "$wait_status" -ne 0 || cat "$WAIT_DRIVER.stdout"
+          exit "$wait_status"
+      - name: Four physical refusals and complete relocation under read-only guards
+        run: |
+          python3 -I -S -B "$WAIT_PACKAGE/controls.py" --retained "$WAIT_RETAINED/retained" --fixture "$WAIT_CAPTURE" --output "$WAIT_CAPTURE-reader-controls"
+      - name: Capture native contention with existing fixed engine trace and read complete failure
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/capture-base" rev-parse HEAD)" = '61e3a24e8d01aed2c912873039882bd99b248436'
+          python3 -I -S -B "$WAIT_PACKAGE/diagnostic.py" --capture-source "$GITHUB_WORKSPACE/capture-base/tests/hia_native/public123_extract_contention_ci" --fixture "$WAIT_CAPTURE"
+      - name: Preserve full fixed carrier and proof success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$WAIT_PACKAGE/archive.py" pack --source "$WAIT_PACKAGE" --capture "$WAIT_CAPTURE" --output "$WAIT_EXPORT" --driver-prefix "$WAIT_DRIVER"
+      - name: Upload complete evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: shared123-wait-trace-fixture-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.WAIT_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
