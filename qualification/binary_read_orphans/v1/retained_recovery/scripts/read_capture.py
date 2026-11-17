@@ -464,9 +464,11 @@ def comparison_effects(rows,case):
                 require(type(opened)is int and 0<=opened<=2147483647 and opened not in paths,
                     "actual open returns a fresh live descriptor")
                 paths[opened]=absolute
+        elif op==9:
+            require(fd==0 and not row["args"],"actual geteuid has no descriptor operand")
         else:
             require(fd in paths,"actual operation requires its live opened or borrowed descriptor")
-            if op==9 and row["ok"]:del paths[fd]
+            if op==5 and row["ok"]:del paths[fd]
         if row.get("ok")and isinstance(row.get("value"),dict)and set(row["value"])=={"bytes_hex"}:
             raw=bytes.fromhex(row["value"]["bytes_hex"]);row["value"]=dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
         out.append(row)

@@ -2,7 +2,7 @@ name: Recover complete read-orphan effects without application replay
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-read-orphans-recovery-6780-20261117]
+    branches: [hia-binary-read-orphans-recovery-v2-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -14,7 +14,7 @@ jobs:
       LC_ALL: C.UTF-8
       PYTHONDONTWRITEBYTECODE: '1'
       ORPHAN_SOURCE: ${{ github.workspace }}/qualification/binary_read_orphans/v1/retained_recovery
-      ORPHAN_MANIFEST: 3844e1a46444e9a80a1328f905c9ce28666d7cdfedd25e6c05e22aa7daf2dc03
+      ORPHAN_MANIFEST: a8e0ab7a9608abe3e7c8fa0a1e42be4e45d74603506a8b98a49a69e0ec5b3ff2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -47,7 +47,7 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       GH_TOKEN: ${{ github.token }}
       ORPHAN_SOURCE: ${{ github.workspace }}/qualification/binary_read_orphans/v1/retained_recovery
-      ORPHAN_MANIFEST: 3844e1a46444e9a80a1328f905c9ce28666d7cdfedd25e6c05e22aa7daf2dc03
+      ORPHAN_MANIFEST: a8e0ab7a9608abe3e7c8fa0a1e42be4e45d74603506a8b98a49a69e0ec5b3ff2
       ORPHAN_GROUP: ${{ matrix.group }}
     steps:
       - name: Checkout exact source and complete trusted upstream build source

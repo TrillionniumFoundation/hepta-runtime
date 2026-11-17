@@ -30,6 +30,15 @@ def reader_contract(root):
     for name in("cases","protocol","read_journal","build_reuse","read_build_evidence"):
         require((root/"scripts"/(name+".py")).read_bytes()==(root/"trusted-qualification/scripts"/(name+".py")).read_bytes(),
             "full input, ABI, journal and native build readers unchanged")
+    module=ast.parse((root/"trusted-qualification/scripts/reference_worker.py").read_bytes())
+    proxy=next(n for n in module.body if isinstance(n,ast.ClassDef)and n.name=="Proxy")
+    for name,opcode in(("close",5),("geteuid",9)):
+        method=next(n for n in proxy.body if isinstance(n,ast.FunctionDef)and n.name==name)
+        require(len(method.body)==1 and isinstance(method.body[0],ast.Return),"exact original proxy method")
+        call=method.body[0].value
+        require(isinstance(call,ast.Call)and isinstance(call.func,ast.Attribute)and call.func.attr=="call"
+            and isinstance(call.args[0],ast.Constant)and call.args[0].value==opcode,"actual fixed original syscall opcode")
+        if name=="geteuid":require(isinstance(call.args[1],ast.Constant)and call.args[1].value==0,"geteuid has no file capability")
     return dict(status="EXACT_LIVE_PARENT_PATH_READER_DERIVATION_PASS",before=change["before"],after=change["after"],
         production_changed=False,applications_replayed=0,diagnostic_commit=change["diagnostic_commit"],
         diagnostic_run=change["diagnostic_run"])
