@@ -6,6 +6,7 @@
 .intel_syntax noprefix
 .section .text
 .global _start
+.type _start, @function
 _start:
     and rsp, -16
     cld
