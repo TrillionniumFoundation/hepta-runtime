@@ -19,11 +19,15 @@ def verify(package):
     author=json.loads((package/"source_origin/AUTHOR.json").read_bytes())
     rows=json.loads((package/"INPUTS.json").read_bytes())["installed_graph_rows"]
     actual={r["path"]:{k:r[k] for k in ("bytes","sha256")} for r in rows}
-    require(len(actual)==428 and actual==author["source_files"],"complete authored graph identity")
+    require(len(actual)==432 and actual==author["source_files"],"complete authored graph identity")
+    require(author["baseline_source"]=="36a061b94f4cb607912fe6f7c14b3c1a0014c466"
+        and author["baseline_binding"]=="8016acfef110430ce56aaac1b956fc56a27463fd3362d29280620f185013573d"
+        and author["native_or_rust_executed"] is False,"exact caller-clear source provenance")
+    author=json.loads((package/"source_origin/RETAINED_REPAIR_AUTHOR.json").read_bytes())
     require(author["baseline_commit"]=="a521066dfa07db38e6a22bd2f03d1dae3c203cc2"
         and author["sdk_baseline_commit"]=="fa2aed97cf22b720d85bd8d08b720aeadba3c4d6"
         and author["baseline_binding_sha256"]=="2c423747b2827c3a6d0993b89583c47691640ea44fcf5f77e6c0ed2aaaf0dc70"
         and author["runtime_hia_images"]==118 and author["direct_hia_members"]==110
         and author["extract_slots"]==[59,60,61,62,63]
         and author["native_semantics_executed"] is False,"exact source-only extension provenance")
-    return {"status":"EXTRACT_BUILD_SOURCE_ADAPTERS_PASS","files":len(proof["files"]),"graph_files":428,"native_or_rust_executed":False}
+    return {"status":"EXTRACT_BUILD_SOURCE_ADAPTERS_PASS","files":len(proof["files"]),"graph_files":432,"native_or_rust_executed":False}

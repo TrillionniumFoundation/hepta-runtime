@@ -26,12 +26,13 @@ def verify(package,capture):
     expected={r['path']:{k:r[k] for k in ('bytes','sha256','git_blob','mode')}
         for r in json.loads((package/'INPUTS.json').read_bytes())['installed_graph_rows']}
     produced=inventory(capture/'source')
-    require(len(expected)==428 and produced==expected,'complete source reproduction differs')
+    require(len(expected)==432 and produced==expected,'complete source reproduction differs')
     require((capture/'AUTHOR.json').read_bytes()==(package/'source_origin/AUTHOR.json').read_bytes(),
         'complete source author proof differs')
-    require(set(inventory(capture))=={'source/'+p for p in expected}|{'AUTHOR.json'},
+    require((capture/'RETAINED_REPAIR_AUTHOR.json').read_bytes()==(package/'source_origin/RETAINED_REPAIR_AUTHOR.json').read_bytes(),'complete prior source author proof differs')
+    require(set(inventory(capture))=={'source/'+p for p in expected}|{'AUTHOR.json','RETAINED_REPAIR_AUTHOR.json'},
         'source reproduction inventory differs')
-    return {'status':'EXTRACT_SOURCE_REPRODUCTION_PASS','source_files':428,
+    return {'status':'EXTRACT_SOURCE_REPRODUCTION_PASS','source_files':432,
         'source_binding':pin(capture/'source/native/runtime_mcp_sources.json'),
         'author':pin(capture/'AUTHOR.json'),'all_bytes_and_modes_equal':True,
         'native_or_rust_executed':False}
@@ -44,5 +45,12 @@ def main():
     module=types.ModuleType('retained_extract_source_author');module.__file__=str(author)
     exec(compile(author.read_bytes(),str(author),'exec',dont_inherit=True),module.__dict__)
     module.generate(package/'repair_inputs/base',package/'repair_inputs/configured',a.hepta.resolve(strict=True),out)
+    prior=(out/'AUTHOR.json').read_bytes();require(prior==(package/'source_origin/RETAINED_REPAIR_AUTHOR.json').read_bytes(),'retained exact source reproduction')
+    (out/'RETAINED_REPAIR_AUTHOR.json').write_bytes(prior)
+    clear=package/'graph/source/authoring/public_owner_clear/author.py'
+    overlay=types.ModuleType('retained_caller_clear_source_author');overlay.__file__=str(clear)
+    exec(compile(clear.read_bytes(),str(clear),'exec',dont_inherit=True),overlay.__dict__)
+    proof=overlay.apply(out/'source',a.hepta.resolve(strict=True))
+    (out/'AUTHOR.json').write_bytes((json.dumps(proof,sort_keys=True,indent=2)+'\n').encode())
     print(json.dumps(verify(package,out),sort_keys=True))
 if __name__=='__main__':main()

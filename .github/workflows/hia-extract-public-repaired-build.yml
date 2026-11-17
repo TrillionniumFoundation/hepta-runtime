@@ -1,4 +1,4 @@
-name: Repaired public118 extract native build and complete physical readback
+name: Qualified caller-clear public118 graph and complete build readback
 on:
   workflow_dispatch:
   push:
@@ -11,7 +11,7 @@ env:
   LC_ALL: C.UTF-8
   PYTHONDONTWRITEBYTECODE: '1'
   PYTHONHASHSEED: '0'
-  PACKAGE_SHA256: '2e5cf893eeb0068465801c9f6f5e43a347c95d75c9d830878b899e9eb9710370'
+  PACKAGE_SHA256: '0b4ca4c707b6a144f8e4b81490da6df3d07049c0391cdab6e7a5b0abebe919f2'
   RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
   build:
@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Set paths from the actual runner environment
         run: |
-          printf '%s\n' "P118_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public118_extract_repaired_ci" "P118_RUN=$RUNNER_TEMP/public118-repaired-build" "P118_EXPORT=$RUNNER_TEMP/public118-repaired-build-export" "P118_DRIVER=$RUNNER_TEMP/public118-repaired-build-driver" >> "$GITHUB_ENV"
+          printf '%s\n' "P118_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public118_extract_repaired_ci" "P118_RUN=$RUNNER_TEMP/public118-clear-build" "P118_EXPORT=$RUNNER_TEMP/public118-clear-build-export" "P118_DRIVER=$RUNNER_TEMP/public118-clear-build-driver" >> "$GITHUB_ENV"
       - name: Checkout the exact candidate default entry and complete source package
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -48,13 +48,13 @@ jobs:
           test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
       - name: Check complete export of ordinary retained hard links
         run: |
-          python3 -I -S -B "$P118_PACKAGE/ci/archive_controls.py" --archive-source "$P118_PACKAGE/ci/archive.py" --output "$RUNNER_TEMP/public118-repaired-archive-controls"
+          python3 -I -S -B "$P118_PACKAGE/ci/archive_controls.py" --archive-source "$P118_PACKAGE/ci/archive.py" --output "$RUNNER_TEMP/public118-clear-archive-controls"
       - name: Preserve complete archive controls
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: public118-repaired-archive-controls-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/public118-repaired-archive-controls/
+          name: public118-clear-archive-controls-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public118-clear-archive-controls/
           compression-level: 0
           retention-days: 30
           if-no-files-found: error
@@ -73,7 +73,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: public118-repaired-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          name: public118-clear-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           path: ${{ env.P118_EXPORT }}
           if-no-files-found: error
           compression-level: 0

@@ -7,15 +7,15 @@ from common import pin,require,verify
 import author_shape_admission
 import verify_adapters
 import extract_adapters
-BINDING="8016acfef110430ce56aaac1b956fc56a27463fd3362d29280620f185013573d"
-GRAPH_COMMIT="36a061b94f4cb607912fe6f7c14b3c1a0014c466"
+BINDING="dd5af0b52523e7652ca4a763fef0f8c1865b773b07f2cf6dd05b42e9e5c66438"
+GRAPH_COMMIT="9250e574640dc4a9050f6b7b42275ef9809317bd"
 def git_blob(raw):
     return hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
 def installed_source(package,root):
     package,root=Path(package).resolve(strict=True),Path(root).resolve(strict=True)
     inputs=json.loads((package/"INPUTS.json").read_bytes())
     result={}
-    require(len(inputs["installed_graph_rows"])==428,"complete installed source inventory")
+    require(len(inputs["installed_graph_rows"])==432,"complete installed source inventory")
     for row in inputs["installed_graph_rows"]:
         name=row["path"]
         require(not Path(name).is_absolute() and ".." not in Path(name).parts,"source path")
@@ -41,7 +41,7 @@ def source(package,manifest_sha256,*,syntax=False):
         require(git_blob((package/name).read_bytes())==row["git_blob"],"complete Git identity: "+name)
     inputs=json.loads((package/"INPUTS.json").read_bytes())
     require(inputs["schema"]=="hepta.runtime.public118-extract.inputs.v1"
-        and inputs["graph"]["files"]==428 and inputs["graph"]["source_commit"]==GRAPH_COMMIT
+        and inputs["graph"]["files"]==432 and inputs["graph"]["source_commit"]==GRAPH_COMMIT
         and inputs["graph"]["source_binding_sha256"]==BINDING
         and inputs["port"]["files"]==143 and inputs["original"]["files"]==31,"fixed source closures differ")
     graph=installed_source(package,package/"graph/source")
