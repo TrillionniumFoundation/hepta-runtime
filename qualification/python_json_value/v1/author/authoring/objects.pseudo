@@ -1,0 +1,364 @@
+def string_compare(w:mutbuf,left:u64,right:u64) -> u64:
+    a = get(w,left+40)
+    b = get(w,right+40)
+    an = get(w,left+48)
+    bn = get(w,right+48)
+    n = choose(an < bn,an,bn)
+    i = 0
+    while i < n:
+        x = get32(w,a+i*4)
+        y = get32(w,b+i*4)
+        if x < y:
+            return 1
+        if x > y:
+            return 2
+        i = i+1
+    if an < bn:
+        return 1
+    if an > bn:
+        return 2
+    return 0
+
+def merge_pair(w:mutbuf,left:u64,right:u64,left_count:u64,right_count:u64) -> u64:
+    while left_count > 0 or (right_count > 0 and right != 0):
+        if left_count == 0:
+            chosen = right
+            right = get(w,right+16)
+            right_count = right_count-1
+        elif right_count == 0 or right == 0:
+            chosen = left
+            left = get(w,left+16)
+            left_count = left_count-1
+        elif string_compare(w,get(w,left+32),get(w,right+32)) != 2:
+            chosen = left
+            left = get(w,left+16)
+            left_count = left_count-1
+        else:
+            chosen = right
+            right = get(w,right+16)
+            right_count = right_count-1
+        tail = get(w,SORT_TAIL)
+        if tail == 0:
+            put(w,SORT_HEAD,chosen)
+        else:
+            put(w,tail+16,chosen)
+        put(w,SORT_TAIL,chosen)
+    return right
+
+def sort_object(w:mutbuf,node:u64) -> u64:
+    if get(w,node+48) < 2:
+        return 0
+    width = 1
+    head = get(w,node+24)
+    going = True
+    while going:
+        put(w,SORT_HEAD,0)
+        put(w,SORT_TAIL,0)
+        left = head
+        merges = 0
+        while left != 0:
+            merges = merges+1
+            right = left
+            count = 0
+            while count < width and right != 0:
+                count = count+1
+                right = get(w,right+16)
+            left = merge_pair(w,left,right,count,width)
+        put(w,get(w,SORT_TAIL)+16,0)
+        head = get(w,SORT_HEAD)
+        if merges <= 1:
+            going = False
+        else:
+            width = width<<1
+    cursor = head
+    head = 0
+    tail = 0
+    count = 0
+    while cursor != 0:
+        selected = cursor
+        cursor = get(w,cursor+16)
+        while cursor != 0 and string_compare(w,get(w,selected+32),get(w,cursor+32)) == 0:
+            selected = cursor
+            cursor = get(w,cursor+16)
+        if head == 0:
+            head = selected
+        else:
+            put(w,tail+16,selected)
+        tail = selected
+        count = count+1
+    put(w,tail+16,0)
+    put(w,node+24,head)
+    put(w,node+40,(tail<<8)|(get(w,node+40)&255))
+    put(w,node+48,count)
+    return 0
+
+def merge_update(w:mutbuf,node:u64,other:u64) -> u64:
+    child = get(w,other+24)
+    if child == 0:
+        return 0
+    if get(w,node+24) == 0:
+        put(w,node+24,child)
+    else:
+        put(w,(get(w,node+40)>>8)+16,child)
+    while child != 0:
+        put(w,child+8,node)
+        tail = child
+        child = get(w,child+16)
+    put(w,node+40,(tail<<8)|(get(w,node+40)&255))
+    put(w,node+48,get(w,node+48)+get(w,other+48))
+    sort_object(w,node)
+    return 0
+
+def lookup(s:readbuf,w:mutbuf,node:u64,begin:u64,size:u64,optional:bool) -> u64:
+    tag = get(w,node)
+    if tag != 7:
+        put(w,DETAIL,tag)
+        put(w,ERR,choose(optional,18,14))
+        return 0
+    item = get(w,node+24)
+    while item != 0:
+        key = get(w,item+32)
+        if get(w,key+48) == size:
+            i = 0
+            same = True
+            while i < size and same:
+                same = get32(w,get(w,key+40)+i*4) == character(s,begin+i)
+                i = i+1
+            if same:
+                return item
+        item = get(w,item+16)
+    if optional == False:
+        put(w,ERR,13)
+        put(w,KEY_BASE,begin)
+        put(w,KEY_SIZE,size)
+    return 0
+
+def truth(w:mutbuf,node:u64) -> u64:
+    if node == 0:
+        return 0
+    tag = get(w,node)
+    if tag == 0 or tag == 1:
+        return 0
+    if tag == 2:
+        return 1
+    if tag == 4:
+        return choose((get(w,node+40)&9223372036854775807) != 0,1,0)
+    if tag >= 5:
+        return choose(get(w,node+48) != 0,1,0)
+    return 1
+
+def integer_zero(s:readbuf,w:mutbuf,node:u64) -> bool:
+    tag = get(w,node)
+    if tag == 1:
+        return True
+    if tag == 2:
+        return False
+    return get(w,node+48) == 1 and character(s,get(w,node+40)) == 48
+
+def integer_negative(s:readbuf,w:mutbuf,node:u64) -> bool:
+    if get(w,node) != 3:
+        return False
+    return get(w,node+40) != (get(w,node+56)&4294967295) and integer_zero(s,w,node) == False
+
+def integer_size(w:mutbuf,node:u64) -> u64:
+    if get(w,node) == 3:
+        return get(w,node+48)
+    return 1
+
+def integer_digit(s:readbuf,w:mutbuf,node:u64,index:u64) -> u64:
+    if get(w,node) == 1:
+        return 48
+    if get(w,node) == 2:
+        return 49
+    return character(s,get(w,node+40)+index)
+
+def scalar_truth(s:readbuf,w:mutbuf,node:u64) -> u64:
+    if node != 0 and get(w,node) == 3:
+        return choose(integer_zero(s,w,node),0,1)
+    return truth(w,node)
+
+def value_result(s:readbuf,o:mutbuf,w:mutbuf,node:u64) -> u32:
+    if node == 0:
+        if length(o) < 64:
+            return 4294967294
+        header(o,0,0,0,0,0,0,0)
+        return 64
+    tag = get(w,node)
+    size = 0
+    units = 0
+    encoding = 0
+    bits = 0
+    if tag == 3:
+        units = integer_size(w,node)+choose(integer_negative(s,w,node),1,0)
+        size = units
+        encoding = 2
+    elif tag == 4:
+        bits = get(w,node+40)
+    elif tag == 5:
+        units = get(w,node+48)
+        size = units*4
+        encoding = 1
+    elif tag >= 6:
+        span = get(w,node+56)
+        units = (span>>32)-(span&4294967295)
+        size = units*4
+        encoding = 1
+    if length(o) < 64+size:
+        return 4294967294
+    header(o,0,tag,scalar_truth(s,w,node),bits,units,encoding,size)
+    if tag == 3:
+        integer_output(s,o,w,node,0,True)
+    elif tag == 5:
+        i = 0
+        while i < size:
+            store(o,64+i,byte(w,get(w,node+40)+i))
+            i = i+1
+    elif tag >= 6:
+        at = get(w,node+56)&4294967295
+        i = 0
+        while i < size:
+            store(o,64+i,byte(s,64+at*4+i))
+            i = i+1
+    return 64+size
+
+def integer_output(s:readbuf,o:mutbuf,w:mutbuf,node:u64,at:u64,writing:bool) -> u64:
+    if integer_negative(s,w,node):
+        at = pemit(o,at,45,writing)
+    i = 0
+    while i < integer_size(w,node):
+        at = pemit(o,at,integer_digit(s,w,node,i),writing)
+        i = i+1
+    return at
+
+def pemit(o:mutbuf,at:u64,cp:u64,writing:bool) -> u64:
+    if writing:
+        store(o,64+at,cp)
+    return at+1
+
+def small_text(o:mutbuf,at:u64,value:u64,size:u64,writing:bool) -> u64:
+    i = 0
+    while i < size:
+        at = pemit(o,at,(value>>(i*8))&255,writing)
+        i = i+1
+    return at
+
+def hex_digit(value:u64) -> u64:
+    if value < 10:
+        return value+48
+    return value+87
+
+def escape_unit(o:mutbuf,at:u64,cp:u64,writing:bool) -> u64:
+    at = pemit(o,at,92,writing)
+    at = pemit(o,at,117,writing)
+    at = pemit(o,at,hex_digit((cp>>12)&15),writing)
+    at = pemit(o,at,hex_digit((cp>>8)&15),writing)
+    at = pemit(o,at,hex_digit((cp>>4)&15),writing)
+    return pemit(o,at,hex_digit(cp&15),writing)
+
+def string_output(o:mutbuf,w:mutbuf,node:u64,at:u64,writing:bool) -> u64:
+    at = pemit(o,at,34,writing)
+    i = 0
+    while i < get(w,node+48):
+        cp = get32(w,get(w,node+40)+i*4)
+        if cp >= 32 and cp <= 126 and cp != 34 and cp != 92:
+            at = pemit(o,at,cp,writing)
+        elif cp == 34 or cp == 92:
+            at = pemit(o,at,92,writing)
+            at = pemit(o,at,cp,writing)
+        elif cp == 8 or cp == 9 or cp == 10 or cp == 12 or cp == 13:
+            code = 98
+            if cp == 9:
+                code = 116
+            elif cp == 10:
+                code = 110
+            elif cp == 12:
+                code = 102
+            elif cp == 13:
+                code = 114
+            at = pemit(o,at,92,writing)
+            at = pemit(o,at,code,writing)
+        elif cp >= 65536:
+            at = escape_unit(o,at,55296+((cp-65536)>>10),writing)
+            at = escape_unit(o,at,56320+((cp-65536)&1023),writing)
+        else:
+            at = escape_unit(o,at,cp,writing)
+        i = i+1
+    return pemit(o,at,34,writing)
+
+def number_output(o:mutbuf,w:mutbuf,node:u64,at:u64,writing:bool) -> u64:
+    bits = get(w,node+40)
+    magnitude = bits&9223372036854775807
+    if magnitude > 9218868437227405312:
+        return small_text(o,at,5136718,3,writing)
+    if magnitude == 9218868437227405312:
+        if bits>>63 != 0:
+            at = pemit(o,at,45,writing)
+        return small_text(o,at,8751735898823355977,8,writing)
+    size = format_binary64(w,bits,8336)
+    if size > 64:
+        put(w,ERR,16)
+        return 0
+    i = 0
+    while i < size:
+        at = pemit(o,at,byte(w,8336+i),writing)
+        i = i+1
+    return at
+
+def serialize(s:readbuf,o:mutbuf,w:mutbuf,root:u64,writing:bool) -> u64:
+    node = root
+    at = 0
+    depth = 0
+    while node != 0:
+        tag = get(w,node)
+        complete = True
+        if tag == 0:
+            at = small_text(o,at,1819047278,4,writing)
+        elif tag == 1:
+            at = small_text(o,at,435728179558,5,writing)
+        elif tag == 2:
+            at = small_text(o,at,1702195828,4,writing)
+        elif tag == 3:
+            at = integer_output(s,o,w,node,at,writing)
+        elif tag == 4:
+            at = number_output(o,w,node,at,writing)
+            if get(w,ERR) != 0:
+                return 0
+        elif tag == 5:
+            at = string_output(o,w,node,at,writing)
+        else:
+            if depth >= get(w,DUMP_BUDGET):
+                put(w,ERR,17)
+                return 0
+            depth = depth+1
+            at = pemit(o,at,choose(tag == 6,91,123),writing)
+            child = get(w,node+24)
+            if child == 0:
+                at = pemit(o,at,choose(tag == 6,93,125),writing)
+                depth = depth-1
+            else:
+                if tag == 7:
+                    at = string_output(o,w,get(w,child+32),at,writing)
+                    at = pemit(o,at,58,writing)
+                    at = pemit(o,at,32,writing)
+                node = child
+                complete = False
+        while complete and node != 0:
+            if node == root:
+                node = 0
+            else:
+                parent = get(w,node+8)
+                sibling = get(w,node+16)
+                if sibling != 0:
+                    at = pemit(o,at,44,writing)
+                    at = pemit(o,at,32,writing)
+                    if get(w,parent) == 7:
+                        at = string_output(o,w,get(w,sibling+32),at,writing)
+                        at = pemit(o,at,58,writing)
+                        at = pemit(o,at,32,writing)
+                    node = sibling
+                    complete = False
+                else:
+                    at = pemit(o,at,choose(get(w,parent) == 6,93,125),writing)
+                    depth = depth-1
+                    node = parent
+    return at
