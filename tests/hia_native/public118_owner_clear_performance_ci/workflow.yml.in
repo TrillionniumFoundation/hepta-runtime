@@ -1,0 +1,61 @@
+name: Qualify caller authority complete zeroing performance
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_owner_clear_performance_ci/**', '.github/workflows/hia-public118-owner-clear.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  qualify-owner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact paired source and independent readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_owner_clear_performance_ci
+      - name: Checkout the exact pinned HIA compiler source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: Hepta
+          persist-credentials: false
+      - name: Download qualified native images and complete independent proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/owner-clear-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14293655303 > "$RUNNER_TEMP/owner-clear-input/native.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14293655303/zip > "$RUNNER_TEMP/owner-clear-input/native.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14293772158 > "$RUNNER_TEMP/owner-clear-input/native-proof.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14293772158/zip > "$RUNNER_TEMP/owner-clear-input/native-proof.zip"
+      - name: Compile only three new HIA images and compare every actual buffer
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_owner_clear_performance_ci/run.py" --input "$RUNNER_TEMP/owner-clear-input" --hepta "$GITHUB_WORKSPACE/Hepta" --output "$RUNNER_TEMP/owner-clear" --profile '@PROFILE@' > "$RUNNER_TEMP/owner-clear-driver.stdout" 2> "$RUNNER_TEMP/owner-clear-driver.stderr"
+      - name: Retain complete success or failure and physical controls
+        if: always()
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_owner_clear_performance_ci/base/ci/archive.py" pack --capture "$RUNNER_TEMP/owner-clear" --output "$RUNNER_TEMP/owner-clear-export" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_owner_clear_performance_ci" --manifest-sha256 '@PROFILE@' --label caller-clear --driver-prefix "$RUNNER_TEMP/owner-clear-driver"
+      - name: Show the retained terminal status
+        if: always()
+        run: |
+          python3 -I -S -B -c 'from pathlib import Path; import os; p=Path(os.environ["RUNNER_TEMP"]); print((p/"owner-clear-driver.stdout").read_text()); print((p/"owner-clear-driver.stderr").read_text())'
+      - name: Upload complete exact evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public118-owner-clear-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/owner-clear-export
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

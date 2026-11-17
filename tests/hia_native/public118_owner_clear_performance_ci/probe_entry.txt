@@ -1,0 +1,10 @@
+fn f0(v0:readbuf,v1:mutbuf,v2:mutbuf) -> (u32) effects(read,write,trap) entry(b0)
+block b0(v0:readbuf,v1:mutbuf,v2:mutbuf)
+  v3:u64 = const() {"value":0}
+  v4:u64 = call(v0,v3) {"function":"f21"}
+  v5:u64 = const() {"value":8}
+  v6:u64 = call(v0,v5) {"function":"f21"}
+  v7:u64 = call(v2,v4,v6) {"function":"f20"}
+  v8:u32 = int.cast(v7) {"mode":"wrap"}
+  ret(v8)
+end
