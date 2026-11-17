@@ -1,0 +1,58 @@
+name: Publisher uploaded graph and reference failure byte readback
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-public-build-read-6780-v1-20261117']
+    paths: ['qualification/publication_public_build_read_v1/**', '.github/workflows/hia-text-publication-public-build-read-v1.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  bytes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Runtime paths
+        run: |
+          printf '%s\n' "READ_PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/publication_public_build_read_v1" "READ_OUTPUT=$RUNNER_TEMP/publication-build-read" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/publication_public_build_read_v1
+      - name: Bind pure readers
+        run: |
+          test "$(git -C candidate rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$READ_PACKAGE/PACKAGE.json" | cut -d' ' -f1)" = 2a8f6dc64de06fce9627eb813b4e5b46d81d89c2d019e6ca8cebe16785d1dfcf
+          python3 -I -S -B - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ["READ_PACKAGE"])
+          value=json.loads((root/"PACKAGE.json").read_bytes())
+          assert {p.name for p in root.iterdir()}=={r["path"] for r in value["files"]}|{"PACKAGE.json"}
+          for row in value["files"]:
+              raw=(root/row["path"]).read_bytes()
+              assert len(raw)==row["bytes"] and hashlib.sha256(raw).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==row["git_blob"]
+              if row["path"].endswith(".py"):compile(raw,row["path"],"exec")
+          PY
+      - name: Read all failed reference bytes and actual Cargo stderr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -S -B "$READ_PACKAGE/read_failed_reference.py" --output "$READ_OUTPUT/reference"
+      - name: Read all uploaded graph bytes
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -S -B "$READ_PACKAGE/read_graph.py" --output "$READ_OUTPUT/graph"
+      - name: Preserve complete pure read proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publication-build-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.READ_OUTPUT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
