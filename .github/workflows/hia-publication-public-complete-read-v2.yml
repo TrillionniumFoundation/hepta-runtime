@@ -1,0 +1,59 @@
+name: 'Complete retained publisher public wire and worker lifecycle'
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-public-complete-read-6780-v2-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [legacy-a, legacy-b, modern-a, modern-b]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set exact runner paths
+        run: |
+          printf '%s\n' "PC_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_duplex_complete_read_v2" "PC_BUILD=$GITHUB_WORKSPACE/build-recipe/tests/hia_native/publication_duplex_build_v3" "PC_PREP=$RUNNER_TEMP/publication-complete-prepared" "PC_RETAINED=$RUNNER_TEMP/publication-complete-retained" "PC_CAPTURE=$RUNNER_TEMP/publication-complete-proof" "PC_DRIVER=$RUNNER_TEMP/publication-complete-driver" "PC_EXPORT=$RUNNER_TEMP/publication-complete-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_complete_read_v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: build-recipe
+          ref: f4a348f6661aec513ac63e1807ff697e81704b3e
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_v3
+      - name: Full source and uploaded graph/original admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PC_SOURCE/prepare.py" --build-recipe "$PC_BUILD" --output "$PC_PREP" > "$PC_DRIVER.prepare.stdout" 2> "$PC_DRIVER.prepare.stderr"
+          cat "$PC_DRIVER.prepare.stdout"
+      - name: Pure whole retained partition wire state and worker join
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PC_SOURCE/recover_read.py" --prepared "$PC_PREP" --build-recipe "$PC_BUILD" --retained "$PC_RETAINED" --output "$PC_CAPTURE" --role '${{ matrix.role }}' > "$PC_DRIVER.stdout" 2> "$PC_DRIVER.stderr"
+          cat "$PC_DRIVER.stdout"
+      - name: Retain complete pure-read success or failure
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PC_CAPTURE"]); r.mkdir(exist_ok=True); p=r/"prepare-records"; p.mkdir(); s=pathlib.Path(os.environ["PC_PREP"]); [shutil.copy2(x,p/x.name) for x in s.glob("*") if x.is_file()]; [shutil.copy2(pathlib.Path(os.environ["PC_DRIVER"]+v),p/("driver"+v)) for v in (".prepare.stdout",".prepare.stderr") if pathlib.Path(os.environ["PC_DRIVER"]+v).exists()]'
+          python3 -I -S -B "$PC_SOURCE/archive.py" pack --source "$PC_SOURCE" --capture "$PC_CAPTURE" --output "$PC_EXPORT" --driver-prefix "$PC_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; [print(p.read_text()) for p in (pathlib.Path(os.environ["PC_DRIVER"]+".prepare.stderr"),pathlib.Path(os.environ["PC_DRIVER"]+".stderr")) if p.exists()]'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-complete-read-v2-${{ matrix.role }}-${{ github.sha }}
+          path: ${{ env.PC_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
