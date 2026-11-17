@@ -1,0 +1,41 @@
+name: Read all24 actual original WAIT references
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public123_extract_wait_reference_read_ci/**', '.github/workflows/hia-extract-original-wait-reference-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/public123_extract_wait_reference_read_ci
+            tests/hia_native/public123_extract_contention_ci
+      - name: Pure complete six archives and all24 actual original captures
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_reference_read_ci/read.py" | cut -d' ' -f1)" = 'bcc470cb2eba156af8c76ce85ea60f6ed5bf90215213bfa2787882de3fcea8cf'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_reference_read_ci/INPUTS.json" | cut -d' ' -f1)" = 'a6f1afc516ed6db31156b88fc6368d123cb22f2712235844a6330a1c7107924e'
+          python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_reference_read_ci/read.py" --source "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_contention_ci" --output "$RUNNER_TEMP/all24-original-WAIT-read"
+      - name: Retain complete original artifact and all pure reader results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: all24-original-WAIT-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/all24-original-WAIT-read/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
