@@ -1,0 +1,56 @@
+name: Publication callable complete retained-byte readback
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-callable-readback-6780-v1-20261117']
+    paths: ['qualification/text-publication-callable-readback-v1/**', '.github/workflows/hia-text-publication-callable-readback-v1.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  full-retained-readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PC_SOURCE=$GITHUB_WORKSPACE/runtime/qualification/text-publication-callable-readback-v1/source" "PC_OUTPUT=$RUNNER_TEMP/text-publication-callable-readback" "PC_EXPORT=$RUNNER_TEMP/text-publication-callable-readback-export" "PC_DRIVER=$RUNNER_TEMP/text-publication-callable-readback-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact readback source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/text-publication-callable-readback-v1/source
+      - name: Verify complete pure reader source
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$PC_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 0daba1b773cb31a04f15eb2519c167416fa589b754003cfb49c9aba3a3af6f25
+          python3 -I -S -B "$PC_SOURCE/run_readback.py" check --source "$PC_SOURCE"
+      - name: Restore full frozen archive and read all native original and physical evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$PC_SOURCE/run_readback.py" run --source "$PC_SOURCE" --output "$PC_OUTPUT" > "$PC_DRIVER.stdout" 2> "$PC_DRIVER.stderr"
+          pc_status=$?
+          cat "$PC_DRIVER.stderr"
+          test "$pc_status" -ne 0 || cat "$PC_DRIVER.stdout"
+          exit "$pc_status"
+      - name: Preserve complete readback success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PC_SOURCE/archive.py" pack --source "$PC_SOURCE" --capture "$PC_OUTPUT" --output "$PC_EXPORT" --driver-prefix "$PC_DRIVER"
+      - name: Upload complete retained-byte proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-callable-readback-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PC_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
