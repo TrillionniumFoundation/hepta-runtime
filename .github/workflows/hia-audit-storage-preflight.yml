@@ -1,0 +1,42 @@
+name: Audit record I/O source preflight
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-storage-preflight-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_storage_core
+      - name: Fixed Rust formatter in CI only
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+      - name: Complete source pins and Python parse, then format new wrappers only
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,sys,subprocess
+          root=Path('tests/hia_native/audit_storage_core').resolve()
+          sys.path.insert(0,str(root))
+          import common,protocol
+          print('SOURCE',common.source())
+          for path in root.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          rows=protocol.cases(root)
+          assert sum(len(c['steps']) for c in rows)==459
+          for i,c in enumerate(rows):
+              for j,s in enumerate(c['steps']):protocol.initial(i,j,s)
+          for name in ('reference/main.rs','reference/mcp/runtime/storage.rs'):
+              p=subprocess.run(['rustup','run','1.95.0','rustfmt','--edition','2021','--config',
+                  'skip_children=true,hard_tabs=true,max_width=100','--emit','stdout',str(root/name)],
+                  stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=60)
+              assert not p.stderr,p.stderr
+              print('FORMATTED_FILE_BEGIN '+json.dumps(dict(path=name,bytes=len(p.stdout),
+                  sha256=hashlib.sha256(p.stdout).hexdigest()),sort_keys=True))
+              sys.stdout.write(p.stdout.decode());print('FORMATTED_FILE_END')
+          print('SOURCE_PREFLIGHT_PASS_NO_HIA_OR_RUST_REPLAY')
+          PY
