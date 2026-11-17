@@ -2,7 +2,7 @@ name: Diagnose complete retained binary read stdio capture
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-read-stdio-diagnostic-6780-20261117]
+    branches: [hia-binary-read-stdio-diagnostic-details-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -15,7 +15,7 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       GH_TOKEN: ${{ github.token }}
       BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_read_stdio/v1/diagnostic
-      BINARY_MANIFEST: 309fc27ff2ad55ca6841fb9a6aaeb9bee9702fd7851a0a6c61ca21af0833ef9f
+      BINARY_MANIFEST: 9ba6a111dacab68429b404b0d34f6757f1f8d7f5094942f019496c94b2b9f818
     steps:
       - name: Checkout frozen independent uploaded reader
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

@@ -207,6 +207,16 @@ def complete(work):
                 written_bytes=sum(v["count"]for v in p["writes"]),pid=p["pid"],parent_pid=p["parent_pid"],
                 parent_pgid=p["parent_pgid"],child_pgid=p["child_pgid"],same_outer_process_group=p["same_outer_process_group"],
                 after_reap_proc_absent=p["after_reap_proc_absent"],elapsed_ns=p["elapsed_ns"],streams=streams))
+        main_process_diagnostics=[]
+        for role in("original","production","observed"):
+            for group in read_stdio.domain()["groups"]:
+                folder=capture/role/group["name"]
+                rows=decode((folder/"cases.json").read_bytes())
+                for row in rows:
+                    p=row["process"];before=p["before_eof"]
+                    main_process_diagnostics.append(dict(role=role,group=group["name"],id=row["id"],
+                        returncode=p["returncode"],completed=p["completed"],stdin_broken_pipe=p["stdin_broken_pipe"],
+                        before_eof=before,stream_bytes={k:v["raw"]["bytes"]for k,v in p["streams"].items()}))
         main_groups=[];semantic_error=None
         try:
             build=read_all.build_reuse.verify(source,capture/"build-reuse")
@@ -225,7 +235,7 @@ def complete(work):
             logical_bytes=sum(r["bytes"]for r in manifest["files"].values()),
             successful_producers=successful,completed_control_rows=len(control_rows),
             control_summary_present=(control_root/"CAPTURE.json").exists(),control_processes=diagnostics,
-            completed_strict_main_groups=main_groups,strict_main_error=semantic_error,
+            main_process_diagnostics=main_process_diagnostics,completed_strict_main_groups=main_groups,strict_main_error=semantic_error,
             semantic_qualification_claim=False,application_hia_executions=0,rust_executions=0)
     return readonly.guarded(operation,roots=[ROOT,work/"download",work/"original"])
 if __name__=="__main__":
