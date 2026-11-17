@@ -1,0 +1,37 @@
+name: Read complete retained publisher gateway failure
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-gateway-read-6780-v1-20261117']
+    paths: ['qualification/text-publication-gateway-failure-v1/**', '.github/workflows/hia-text-publication-gateway-read-v1.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/text-publication-gateway-failure-v1
+      - name: Read every retained ZIP and TAR byte without execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B qualification/text-publication-gateway-failure-v1/read_archive.py --output "$RUNNER_TEMP/publisher-gateway-readback"
+      - name: Preserve complete pure read proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-gateway-readback-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/publisher-gateway-readback/REVIEW.json
+            ${{ runner.temp }}/publisher-gateway-readback/DIAGNOSTIC.json
+            ${{ runner.temp }}/publisher-gateway-readback/FILES.json
+            ${{ runner.temp }}/publisher-gateway-readback/ARCHIVE.json
+          if-no-files-found: error
+          retention-days: 30
