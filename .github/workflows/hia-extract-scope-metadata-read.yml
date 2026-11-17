@@ -1,0 +1,67 @@
+name: Read retained Scope WAIT metadata difference without applications
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-scope-lifetime-6780-20261117']
+    paths: ['tests/hia_native/public123_scope_metadata_read_ci/**', '.github/workflows/hia-extract-scope-metadata-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen pure reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_scope_metadata_read_ci
+      - name: Checkout exact original capture reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: capture-source
+          ref: 61e3a24e8d01aed2c912873039882bd99b248436
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_contention_ci
+      - name: Checkout exact Scope observer reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: native-source
+          ref: 458646736e2fbceb59c1252617f94e1267c2dff3
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_scope_wait_ci
+      - name: Fixed complete source admission
+        run: |
+          printf '%s\n' "DIAG_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_metadata_read_ci" "DIAG_SOURCE=$GITHUB_WORKSPACE/capture-source/tests/hia_native/public123_extract_contention_ci" "DIAG_NATIVE=$GITHUB_WORKSPACE/native-source/tests/hia_native/public123_extract_scope_wait_ci" "DIAG_CAPTURE=$RUNNER_TEMP/scope-metadata-read" "DIAG_EXPORT=$RUNNER_TEMP/scope-metadata-export" "DIAG_DRIVER=$RUNNER_TEMP/scope-metadata-driver" >> "$GITHUB_ENV"
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_metadata_read_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '640453ae9affd0da00a2d39ffea95318cd60bf8fea428217f4b13a6063884c85'
+          python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_metadata_read_ci/check_source.py"
+      - name: Read complete archive and compare actual retained fields under guards
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$DIAG_PACKAGE/diagnose.py" --capture-source "$DIAG_SOURCE" --native-source "$DIAG_NATIVE" --output "$DIAG_CAPTURE" > "$DIAG_DRIVER.stdout" 2> "$DIAG_DRIVER.stderr"
+          diag_status=$?
+          cat "$DIAG_DRIVER.stderr"
+          cat "$DIAG_DRIVER.stdout"
+          exit "$diag_status"
+      - name: Archive complete pure read and original failure
+        if: always()
+        run: |
+          python3 -I -S -B "$DIAG_SOURCE/archive.py" pack --source "$DIAG_PACKAGE" --capture "$DIAG_CAPTURE" --output "$DIAG_EXPORT" --driver-prefix "$DIAG_DRIVER"
+      - name: Upload complete retained diagnosis
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: scope-metadata-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.DIAG_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
