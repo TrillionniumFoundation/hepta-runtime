@@ -1,0 +1,21 @@
+{
+  "correct_field": "native.total_effects",
+  "correct_value": 4243,
+  "evidence": {
+    "read_native_source": {
+      "bytes": 11020,
+      "git_blob": "e8fc630eb693d5fad2941a33f9ba5b00018e9bf4",
+      "mode": "100644",
+      "path": "read_native.py",
+      "sha256": "e52eff1b6993c04085aa0e1b2847b740ae465c0dbd0ce75e89c5e9712b8b0bd8"
+    },
+    "reason": "The exact qualified verifier returns effects=len(events), including kind3 JSON rows. Thus filesystem effects=4243-404; owner calls=459+4243=4702; native calls=4702+404+658=5764."
+  },
+  "filesystem_effects": 3839,
+  "json_effects": 404,
+  "old_field": "native.real_filesystem_effects",
+  "old_value": 4243,
+  "original_handoff": "581b8e4d31dc9a7bb2e63ca8f8e2b79eea04989b",
+  "schema": "hepta.audit-record-io.count-label-erratum.v1",
+  "scope": "Count label correction only. No source, captured bytes, outcomes or process identity changed; no execution."
+}
