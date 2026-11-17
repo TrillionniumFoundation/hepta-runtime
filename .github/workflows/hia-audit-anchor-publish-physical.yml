@@ -1,7 +1,7 @@
 name: Complete archive publisher physical readback
 on:
   push:
-    branches: [hia-audit-anchor-publish-physical-v1-6780-20261117]
+    branches: [hia-audit-anchor-publish-physical-v2-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -12,16 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          sparse-checkout: tests/hia_native/audit_anchor_publish_physical_v1
+          sparse-checkout: tests/hia_native/audit_anchor_publish_physical_v2
       - name: Freeze complete source before pure controls
         run: |
           mkdir "$RUNNER_TEMP/publish-physical"
-          cp -a tests/hia_native/audit_anchor_publish_physical_v1 "$RUNNER_TEMP/publish-physical/source"
+          cp -a tests/hia_native/audit_anchor_publish_physical_v2 "$RUNNER_TEMP/publish-physical/source"
           python3 -I -B - <<'PY'
           import hashlib,json,os
           from pathlib import Path
           r=Path(os.environ["RUNNER_TEMP"])/"publish-physical/source";raw=(r/"SOURCE.json").read_bytes()
-          assert hashlib.sha256(raw).hexdigest()=="e77bd376c3e034bd4fbd011fa926518561623b0245ac077712fc9888fbc07958"
+          assert hashlib.sha256(raw).hexdigest()=="8f1eab37b5a904f9b0b961d2e221ed6d91091f636c9a488e725af7d49cb8d8eb"
           for p,pin in json.loads(raw)["files"].items():
               b=(r/p).read_bytes();assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"]
               assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==pin["git_blob"]
@@ -42,14 +42,14 @@ jobs:
         run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-physical/source/run.py" --retained "$RUNNER_TEMP/publish-physical/restored/retained" --output "$RUNNER_TEMP/publish-physical/output" --phase verify
       - name: Preserve complete actual success or failure and every physical copy
         if: always()
-        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-physical/source/export.py" --workspace "$RUNNER_TEMP/publish-physical" --archive "$RUNNER_TEMP/publish-physical/audit-publisher-physical-v1.tar.gz"
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-physical/source/export.py" --workspace "$RUNNER_TEMP/publish-physical" --archive "$RUNNER_TEMP/publish-physical/audit-publisher-physical-v2.tar.gz"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-anchor-publisher-physical-v1
+          name: audit-anchor-publisher-physical-v2
           path: |
-            ${{ runner.temp }}/publish-physical/audit-publisher-physical-v1.tar.gz
-            ${{ runner.temp }}/publish-physical/audit-publisher-physical-v1.tar.gz.json
+            ${{ runner.temp }}/publish-physical/audit-publisher-physical-v2.tar.gz
+            ${{ runner.temp }}/publish-physical/audit-publisher-physical-v2.tar.gz.json
           include-hidden-files: true
           if-no-files-found: error
           compression-level: 0
