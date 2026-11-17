@@ -1,0 +1,47 @@
+name: Independently read complete uploaded native binary read evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-read-body-uploaded-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_read_body/v1/archive_reader
+      BINARY_MANIFEST: 370c8e2aa79d30bf5f0487c247f62be49846b7ed70de1323efc2ff0b186c41a3
+    steps:
+      - name: Checkout frozen independent uploaded reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_read_body/v1/archive_reader
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Independently read all uploaded bytes without application execution
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/driver.py" run \
+            --work "$RUNNER_TEMP/binary-read-body-uploaded" --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Retain complete evidence including any failed capture
+        if: always()
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/driver.py" export \
+            --work "$RUNNER_TEMP/binary-read-body-uploaded" --output "$RUNNER_TEMP/binary-read-body-uploaded-export" \
+            --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Upload all captured bytes and process receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-read-body-uploaded-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-read-body-uploaded-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
