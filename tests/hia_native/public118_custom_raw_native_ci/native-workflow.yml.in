@@ -1,0 +1,66 @@
+name: Typed CustomRequest public118 retained raw108 native comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_custom_raw_native_ci/**', '.github/workflows/hia-extract-public-custom-raw-native.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  native-raw:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {domain: eof-legacy, artifact: 14297946912}
+          - {domain: stdio-legacy, artifact: 14297861825}
+          - {domain: stdio-modern, artifact: 14297856872}
+          - {domain: eof-modern, artifact: 14297772086}
+          - {domain: protocol-modern, artifact: 14297542099}
+          - {domain: protocol-legacy, artifact: 14297004705}
+    steps:
+      - name: Checkout complete frozen native and original source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_custom_raw_native_ci
+      - name: Download exact native proof and original raw capture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/raw-native-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14299168708 > "$RUNNER_TEMP/raw-native-input/native.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14299168708/zip > "$RUNNER_TEMP/raw-native-input/native.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14300450769 > "$RUNNER_TEMP/raw-native-input/native-proof.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14300450769/zip > "$RUNNER_TEMP/raw-native-input/native-proof.zip"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}' > "$RUNNER_TEMP/raw-native-input/prior.json"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}/zip' > "$RUNNER_TEMP/raw-native-input/prior.zip"
+      - name: Run only the new native raw input domain and compare complete observations
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_custom_raw_native_ci/run_native.py" --input "$RUNNER_TEMP/raw-native-input" --output "$RUNNER_TEMP/raw-native-capture" --domain '${{ matrix.domain }}' --profile '@PROFILE@' > "$RUNNER_TEMP/raw-native-driver.stdout" 2> "$RUNNER_TEMP/raw-native-driver.stderr"
+      - name: Retain every success or failure and every physical control
+        if: always()
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_custom_raw_native_ci/ci/archive.py" pack --capture "$RUNNER_TEMP/raw-native-capture" --output "$RUNNER_TEMP/raw-native-export" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_custom_raw_native_ci" --manifest-sha256 '@PROFILE@' --label raw-native --driver-prefix "$RUNNER_TEMP/raw-native-driver"
+      - name: Show complete terminal diagnostic
+        if: always()
+        run: |
+          python3 -I -S -B -c 'from pathlib import Path; import os; p=Path(os.environ["RUNNER_TEMP"]); print((p/"raw-native-driver.stdout").read_text()); print((p/"raw-native-driver.stderr").read_text())'
+      - name: Upload complete native raw capture
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-custom-native-raw-${{ matrix.domain }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/raw-native-export
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

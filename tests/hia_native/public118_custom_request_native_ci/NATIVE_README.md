@@ -1,0 +1,7 @@
+# Native-only 142 retained typed CustomRequest comparison
+
+The exact public ELF is 24854528 bytes with SHA-256 7968583b5493cf983a19d24b6476e3864c0253dfbce87d785246b6dbfa8376b8. It is copied and reverified from the complete independent-qualified 436-source public118 build. This gate uses the same full-stream collector, input generator, filesystem observer and strict differential reader as its complete retained original captures. It records every actual stdout line, stderr byte, partial input, barrier, EOF, exit and fixture state without assuming a response count.
+
+The two original domains are unchanged from source 8f39dec5d5ef788553a70eb54d7996cf4d8f352a / run 44017767730. Each contains 71 fresh process inputs, including known method parameter shapes, all 32 ASCII controls, quotes, backslashes, UTF-8, long methods, canonical IDs and custom parameter shapes. No expected response was authored.
+
+Only the new native public processes execute. Original semantics and the native build are not replayed. The full original capture and its four physical controls are reopened, followed by four fresh native differential controls. All input, source, wire, filesystem, process and proof bytes remain in the final archive. The exchange, full lane and job budgets remain 60 seconds, 180 seconds and 15 minutes. This gate does not qualify concurrent public WAIT, cancellation, full async or whole-runtime replacement.

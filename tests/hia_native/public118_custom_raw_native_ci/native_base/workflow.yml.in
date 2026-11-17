@@ -1,0 +1,73 @@
+name: Typed CustomRequest public118 native domains against retained originals
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_custom_native_ci/**', '.github/workflows/hia-extract-public-custom-native.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  native-domain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {domain: typed-legacy, artifact: 14290890399}
+          - {domain: typed-modern, artifact: 14290780637}
+          - {domain: session-legacy, artifact: 14289628987}
+          - {domain: session-modern, artifact: 14290241916}
+          - {domain: context-legacy, artifact: 14290556468}
+          - {domain: context-modern, artifact: 14290241997}
+          - {domain: body-legacy, artifact: 14289302657}
+          - {domain: body-modern, artifact: 14289429196}
+          - {domain: catalog-legacy, artifact: 14289094292}
+          - {domain: catalog-modern, artifact: 14289758074}
+    steps:
+      - name: Checkout complete frozen inputs and readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_custom_native_ci
+      - name: Admit every exact source and unchanged original input
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_custom_native_ci/source_check.py" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_custom_native_ci" --profile '@PROFILE@'
+      - name: Download the fixed successful build and original domain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/public118-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14299168708 > "$RUNNER_TEMP/public118-input/native.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14299168708/zip > "$RUNNER_TEMP/public118-input/native.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14300450769 > "$RUNNER_TEMP/public118-input/native-proof.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14300450769/zip > "$RUNNER_TEMP/public118-input/native-proof.zip"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}' > "$RUNNER_TEMP/public118-input/prior.json"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}/zip' > "$RUNNER_TEMP/public118-input/prior.zip"
+      - name: Capture only the complete new native lane and compare all originals
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_custom_native_ci/run.py" --input "$RUNNER_TEMP/public118-input" --output "$RUNNER_TEMP/public118-domain" --domain '${{ matrix.domain }}' --profile '@PROFILE@' > "$RUNNER_TEMP/public118-domain-driver.stdout" 2> "$RUNNER_TEMP/public118-domain-driver.stderr"
+      - name: Retain every original failure and new evidence byte
+        if: always()
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_custom_native_ci/ci/archive.py" pack --capture "$RUNNER_TEMP/public118-domain" --output "$RUNNER_TEMP/public118-domain-export" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_custom_native_ci" --manifest-sha256 '@PROFILE@' --label '${{ matrix.domain }}' --driver-prefix "$RUNNER_TEMP/public118-domain-driver"
+      - name: Show complete terminal diagnostic
+        if: always()
+        run: |
+          python3 -I -S -B -c 'from pathlib import Path; import os; p=Path(os.environ["RUNNER_TEMP"]); print((p/"public118-domain-driver.stdout").read_text()); print((p/"public118-domain-driver.stderr").read_text())'
+      - name: Upload complete successor evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-public-custom-native-${{ matrix.domain }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public118-domain-export
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
