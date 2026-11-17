@@ -341,7 +341,7 @@ _start:
 /* Private direct leaf qualification. Both complete 4 KiB physical arenas are
  * returned before and after invocation, including bytes outside passed caps. */
 .Lmmf_utf8_direct:
-    cmp r13, 48
+    cmp r13, 32
     jb .Lmmf_no_context
     mov rax, [rbp+64]
     cmp rax, 4096
