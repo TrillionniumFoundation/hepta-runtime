@@ -1,0 +1,47 @@
+name: Independently read complete uploaded file-info-at-recovery qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-file-info-at-recovery-uploaded-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [attribute-boundaries, reopen-race, content-boundaries, metadata-gap, ordinary-a, refusals-a, large-a, hash-race-a, hash-race-b, refusals-b, metadata-race, large-b, descriptor, ordinary-b, orphan-a, orphan-b, observer-off-b, observer-off-a]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      INFO_SOURCE: ${{ github.workspace }}/qualification/file_info_at/v1/recovery_uploaded_read
+      INFO_MANIFEST: 90a146c8c4ddfd3e670aa105954a6160ed6adf712ef949a13bd12207dc2fe313
+      INFO_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact full source-owned pure readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v1/recovery_uploaded_read
+          persist-credentials: false
+      - name: Read all archive objects source buffers effects controls and guarded records
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/driver.py" read --work "$RUNNER_TEMP/file-info-at-recovery-independent" --group "$INFO_GROUP" --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Retain complete independent reader and all process streams
+        if: always()
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/driver.py" export --work "$RUNNER_TEMP/file-info-at-recovery-independent" --group "$INFO_GROUP" --output "$RUNNER_TEMP/file-info-at-recovery-independent-export" --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Upload complete independently bound proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: file-info-at-recovery-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/file-info-at-recovery-independent-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

@@ -1,0 +1,16 @@
+{
+  "schema": "hepta.runtime.file-info-at.diagnostic-reader-correction.v1",
+  "original_commit": "763f99b9ab00e450850efba88508e393afbe5238",
+  "original_run": 44121186142,
+  "before": "require(all(a[k]==b[k]for k in(\"type\",\"errno\",\"filename\",\"message\",\"exact_str\")),\"complete actual exception and native formatter\")",
+  "after": "require(all(a[k]==b[k]for k in(\"type\",\"errno\",\"filename\",\"message\")),\"complete actual structured exception\")\n        require(b[\"exact_str\"]==a[\"type\"]+\": \"+a[\"exact_str\"],\"complete actual top-level diagnostic and native formatter\")",
+  "structured_error_reference": {
+    "commit": "031650c38d4a2a8c052fb296c4dd68c7d010d3ca",
+    "path": "qualification/structured_error/v1/source_corrected/scripts/original.py",
+    "git_blob": "5a24dd8d916ed7f9cb222622728e1758be5cbbbd"
+  },
+  "reason": "The original worker retains str(exception), while the actual frozen formatter returns type(exception).__name__ + ': ' + str(exception), exactly as the original binary_file.py top-level handler. Compare all structured fields unchanged and this complete actual diagnostic. Retain all original FAIL/PASS captures and perform no application replay.",
+  "original_target_unchanged": true,
+  "native_images_unchanged": true,
+  "applications_replayed": 0
+}
