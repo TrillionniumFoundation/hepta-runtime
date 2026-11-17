@@ -2,7 +2,7 @@ name: Build fixed text publication native callable
 on:
   workflow_dispatch:
   push:
-    branches: ['hia-text-publication-callable-build-6780-v2-20261117']
+    branches: ['hia-text-publication-callable-build-6780-v3-20261117']
 permissions:
   contents: read
 env:
@@ -31,7 +31,7 @@ jobs:
       - name: Verify exact source closure
         run: |
           test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(sha256sum "$PC_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = a036bc4d8ee78531a7562ad8b2162fe0aa965be189c359361b40bc9ffe96d096
+          test "$(sha256sum "$PC_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = ebea2936498de46c47415211f2c68151828f30bc747a522191d14e4a4e34404f
           test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
           test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
           python3 -I -S -B "$PC_SOURCE/scripts/build_callable.py" check --source "$PC_SOURCE"

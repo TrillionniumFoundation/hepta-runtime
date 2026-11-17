@@ -46,6 +46,8 @@ def object_layout(raw):
     names=sections[struct.unpack_from("<H",raw,62)[0]];strings=raw[names[4]:names[4]+names[5]]
     labels=[strings[h[0]:strings.index(0,h[0])].decode() for h in sections]
     index=labels.index(".text");text=sections[index];symbols={}
+    require(not any(h[2]&2 and h[5] and i!=index for i,h in enumerate(sections)),
+        "callable object contains an unexpected non-text allocated section")
     require(not any(h[1] in (4,9) and h[5] for h in sections),"unexpected ELF relocation")
     for h in sections:
         if h[1]!=2:continue
@@ -99,11 +101,17 @@ def build(source,hepta,output):
     with NativeModule(link_manifest,manifest_sha256=members["linker"]["identity"]["sha256"]) as module:
         code,raw,work=module.invoke_raw(frame,output_capacity=8<<20,workspace_capacity=32<<20,output_fill=0,workspace_fill=0)
     (output/"link.output.bin").write_bytes(raw);(output/"link.workspace.bin").write_bytes(work)
-    require(256<len(text)+256==code<=len(raw),"linked output extent differs")
+    text_end=256+len(text);aligned=(text_end+4095)&~4095
+    require(256<text_end<=code==aligned<=len(raw),"linked output extent differs")
     prefix=raw[:code];(output/"prefix.elf").write_bytes(prefix)
-    require(prefix[256:]==text and prefix[:4]==b"\x7fELF"
-        and struct.unpack_from("<Q",prefix,24)[0]==4194304+256+symbols["_start"]
-        and struct.unpack_from("<Q",prefix,96)[0]==code,"actual linker text or entry differs")
+    require(prefix[256:text_end]==text and prefix[text_end:]==bytes(code-text_end)
+        and raw[code:]==bytes(len(raw)-code) and prefix[:4]==b"\x7fELF"
+        and struct.unpack_from("<Q",prefix,24)[0]==4194304+232
+        and prefix[238]==0xe8
+        and 243+struct.unpack_from("<i",prefix,239)[0]==256+symbols["_start"]
+        and struct.unpack_from("<QQ",prefix,96)==(text_end,text_end)
+        and struct.unpack_from("<QQQ",prefix,128)==(code,4194304+code,4194304+code),
+        "actual linker text, startup call, segments or zero padding differ")
     images=[]
     for name in ("publication","codec","errno"):
         m=output/members[name]["manifest"];meta=decode(m.read_bytes());images.append((m.parent/meta["image"]).read_bytes())
@@ -132,6 +140,8 @@ def build(source,hepta,output):
         members=members,actual_hia_compiles=5,runtime_images=3,mechanical_processes=records,
         linked_return=code,packer_return=pack_code,patches=patches,image_offsets=positions,
         image_order=["publication","codec","errno"],exports={k:v for k,v in symbols.items() if k.startswith("text_publication_")},
+        artifacts={name:pin(output/name) for name in ("combined.S","bridge.o","link.input.bin",
+            "link.output.bin","link.workspace.bin","prefix.elf","pack.input.bin","pack.output.bin","pack.workspace.bin")},
         executable=pin(elf),scope=SCOPE,native_semantics_executed=False,
         runtime_python_required=False,runtime_libc_required=False)
     (output/"BUILD.json").write_bytes(encoded(result));print(json.dumps(result,sort_keys=True))
