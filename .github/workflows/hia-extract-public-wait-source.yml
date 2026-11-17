@@ -1,0 +1,48 @@
+name: Pure extract WAIT source and boundary assembly
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_extract_wait_source_ci/**', '.github/workflows/hia-extract-public-wait-source.yml']
+permissions:
+  contents: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  PACKAGE_SHA256: 'b8ba603fec3458760f3bd322bc891f9c7e53fed5586c733de1352f85a69ae01c'
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            runtime_support
+            tests/hia_native/public118_extract_wait_source_ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify all source bytes, reproduce HIA source, assemble without executing images
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public118_extract_wait_source_ci/run.py" --package "$GITHUB_WORKSPACE/runtime/tests/hia_native/public118_extract_wait_source_ci" --installed-source "$GITHUB_WORKSPACE/runtime" --hepta "$GITHUB_WORKSPACE/compiler" --output "$RUNNER_TEMP/extract-wait-source" --manifest-sha256 "$PACKAGE_SHA256"
+      - name: Preserve complete source and actual assembler receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-wait-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/extract-wait-source/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9

@@ -1,0 +1,283 @@
+{
+  "schema": "hepta.runtime.extract-wait-exact-source-splices.v1",
+  "baseline_source": "58e1e21f4e3e8af93f0f49e15e652d71fa1b6b71",
+  "baseline_binding": "348e86674cb61cb4fa2f88466df70a010bfbbdb654f7289778e1f6e223e6f80d",
+  "files": {
+    "scripts/runtime_mcp_extra_engine.S": {
+      "before": {
+        "bytes": 49743,
+        "sha256": "e7e60c1b471d99d2a9e223db35f321f6c7c99b48ed7cab50dac7176b3b513d96"
+      },
+      "after": {
+        "bytes": 54263,
+        "sha256": "d61bb9e36cc1468e77154407cba8b2c53a79419a2b61c67d4153c75458660545"
+      },
+      "splices": [
+        {
+          "from": ".global runtime_grow_owned\n",
+          "to": ".global runtime_grow_owned\n.global runtime_grow_suspended\n"
+        },
+        {
+          "from": ".equ RG_DELIVERY, 0xffffffcd\n",
+          "to": ".equ RG_DELIVERY, 0xffffffcd\n.equ RG_WAIT, 0xffffffdf\n"
+        },
+        {
+          "from": "runtime_grow_owned:\n    push rbp",
+          "to": "runtime_grow_owned:\n    xor r9d, r9d\n    jmp runtime_grow_entry\n\n/* Only the host-owned retained future may enter this continuation. r9 is\n * 2=actual lock wake, 3=actual future destruction after transport close. */\nruntime_grow_suspended:\n    cmp r9, 2\n    je runtime_grow_entry\n    cmp r9, 3\n    je runtime_grow_entry\n    mov eax, RG_INVALID\n    ret\nruntime_grow_entry:\n    push rbp"
+        },
+        {
+          "from": "    mov [rsp + 8], rsi\n    mov rbp, r8",
+          "to": "    mov [rsp + 8], rsi\n    mov [rsp + 80], r9\n    mov rbp, r8"
+        },
+        {
+          "from": "    lea r12, [r15 + rax + 512]\n    cmp qword ptr [r12], 0",
+          "to": "    lea r12, [r15 + rax + 512]\n    cmp qword ptr [rsp + 80], 0\n    jne runtime_grow_resume_suspended\n    cmp qword ptr [r12], 0"
+        },
+        {
+          "from": "    call runtime_grow_owned\n    mov [r12 + 48], rax\n    cmp eax, 0xffff0000",
+          "to": "    call runtime_grow_owned\nruntime_grow_child_returned:\n    cmp eax, RG_WAIT\n    je runtime_grow_suspend\n    mov [r12 + 48], rax\n    cmp eax, 0xffff0000"
+        },
+        {
+          "from": "runtime_grow_extract_body_dispatch:",
+          "to": "/* Retain CALL sequence/input and every owned buffer while the child waits.\n * No HIA completion or delivery marker is written until the child completes. */\nruntime_grow_suspend:\n    mov rdi, rbp\n    mov rsi, [r12 + 24]\n    call runtime_grow_extract_chain\n    test eax, eax\n    jnz runtime_grow_bad\n    mov eax, RG_WAIT\n    mov [r12 + 48], rax\n    mov qword ptr [r12 + 56], 0\n    mov qword ptr [r12 + 8], 2\n    mov [rbx + 48], rax\n    mov qword ptr [rbx + 56], 0\n    jmp runtime_grow_done\n\nruntime_grow_resume_suspended:\n    cmp qword ptr [r12], 1\n    jne runtime_grow_bad_early\n    cmp ebp, 63\n    je runtime_grow_resume_extract_body\n    cmp qword ptr [r12 + 8], 2\n    jne runtime_grow_bad_early\n    mov eax, RG_WAIT\n    cmp [rbx + 48], rax\n    jne runtime_grow_bad_early\n    cmp [r12 + 48], rax\n    jne runtime_grow_bad_early\n    mov rax, [rbx + 56]\n    or rax, [r12 + 56]\n    jnz runtime_grow_bad_early\n    mov rdi, rbp\n    mov rsi, [r12 + 24]\n    call runtime_grow_extract_chain\n    test eax, eax\n    jnz runtime_grow_bad_early\n    cmp qword ptr [rbx + 16], 4096\n    jb runtime_grow_bad_early\n    mov r14, [rbx + 8]\n    test r14, r14\n    jz runtime_grow_bad_early\n    lea r13, [r14 + 256]\n    lea rdx, [rip + runtime_grow_action_magics]\n    mov rax, [rdx + rbp * 8]\n    cmp [r13], rax\n    jne runtime_grow_bad_early\n    mov rax, [r12 + 16]\n    test rax, rax\n    jz runtime_grow_bad_early\n    cmp [rbx + 24], rax\n    jne runtime_grow_bad_early\n    cmp [r14 + 16], rax\n    jne runtime_grow_bad_early\n    cmp [r13 + 8], rax\n    jne runtime_grow_bad_early\n    mov rax, [r13 + 24]\n    or rax, [r13 + 64]\n    or rax, [r13 + 72]\n    or rax, [r13 + 80]\n    or rax, [r13 + 88]\n    or rax, [r13 + 96]\n    or rax, [r13 + 104]\n    jnz runtime_grow_bad_early\n    mov rax, [r12 + 32]\n    cmp [r13 + 32], rax\n    jne runtime_grow_bad_early\n    cmp rax, 4096\n    jb runtime_grow_bad_early\n    cmp rax, [rbx + 16]\n    ja runtime_grow_bad_early\n    mov rcx, [rbx + 16]\n    sub rcx, rax\n    mov rdx, [r12 + 40]\n    cmp [r13 + 40], rdx\n    jne runtime_grow_bad_early\n    cmp rdx, rcx\n    ja runtime_grow_bad_early\n    add rax, rdx\n    mov rdx, [r13 + 48]\n    cmp rdx, 4096\n    jb runtime_grow_bad_early\n    cmp rdx, [rbx + 16]\n    ja runtime_grow_bad_early\n    mov rcx, [rbx + 16]\n    sub rcx, rdx\n    cmp [r13 + 56], rcx\n    ja runtime_grow_bad_early\n    cmp qword ptr [r13 + 56], 32\n    jb runtime_grow_bad_early\n    add rdx, [r13 + 56]\n    cmp rdx, [r13 + 32]\n    jbe runtime_grow_resume_span_disjoint\n    cmp rax, [r13 + 48]\n    ja runtime_grow_bad_early\nruntime_grow_resume_span_disjoint:\n    mov rdi, rbp\n    mov rsi, [r13 + 16]\n    call runtime_grow_target\n    cmp [r12 + 24], rax\n    jne runtime_grow_bad_early\n    mov [rsp + 16], rax\n    mov rdi, r14\n    add rdi, [r12 + 32]\n    mov rsi, [r12 + 40]\n    mov r8, rax\n    mov r9, [rsp + 80]\n    call runtime_grow_suspended\n    jmp runtime_grow_child_returned\nruntime_grow_resume_extract_body:\n    cmp qword ptr [r12 + 8], 0\n    jne runtime_grow_bad_early\n    mov rdx, [rsp + 80]\n    call runtime_extract_body_resume\n    jmp runtime_grow_done\n\n/* This concrete future owns exactly the admitted extract chain. */\nruntime_grow_extract_chain:\n    cmp edi, 18\n    jne runtime_grow_extract_chain_59\n    cmp esi, 59\n    je runtime_grow_extract_chain_ok\n    jmp runtime_grow_extract_chain_bad\nruntime_grow_extract_chain_59:\n    cmp edi, 59\n    jne runtime_grow_extract_chain_61\n    cmp esi, 61\n    je runtime_grow_extract_chain_ok\n    jmp runtime_grow_extract_chain_bad\nruntime_grow_extract_chain_61:\n    cmp edi, 61\n    jne runtime_grow_extract_chain_62\n    cmp esi, 62\n    je runtime_grow_extract_chain_ok\n    jmp runtime_grow_extract_chain_bad\nruntime_grow_extract_chain_62:\n    cmp edi, 62\n    jne runtime_grow_extract_chain_bad\n    cmp esi, 63\n    jne runtime_grow_extract_chain_bad\nruntime_grow_extract_chain_ok:\n    xor eax, eax\n    ret\nruntime_grow_extract_chain_bad:\n    mov eax, RG_INVALID\n    ret\n\nruntime_grow_extract_body_dispatch:"
+        }
+      ]
+    },
+    "scripts/local_extract_lines_callable.S": {
+      "before": {
+        "bytes": 70441,
+        "sha256": "8dee0e9bc68ea26c65f48e1119e9e90c2c52eb95dcce9fb20c595fee47fb2eaf"
+      },
+      "after": {
+        "bytes": 70947,
+        "sha256": "870396a65db9675419f0756bc993cf82e7f3d26c575ed6004a472635f2ef6884"
+      },
+      "splices": [
+        {
+          "from": "lel_pure_again:\n    mov rdi,r12\n    mov rsi,r13\n    mov rdx,[rbx+24]\n    mov rcx,[rbx+32]\n    mov r8,[rbx+8]\n    mov r9,[rbx+16]\n    call qword ptr [rbx]\n",
+          "to": "lel_pure_again:\n    mov rdi,r12\n    mov rsi,r13\n    mov rdx,[rbx+24]\n    mov rcx,[rbx+32]\n    mov r8,[rbx+8]\n    mov r9,[rbx+16]\n    call qword ptr [rbx]\n.ifdef RUNTIME_LOCK_WAKE_HOOK\n    cmp r14,3\n    jne lel_wake_observed\n    cmp rax,64\n    jne lel_wake_observed\n    mov rdi,[r15+lel_PUBLIC_CTX]\n    mov rdi,[rdi+80]\n    mov rsi,[rbx+24]\n    call runtime_lock_wake_record\n    test eax,eax\n    jnz lel_contract\n    mov eax,64\nlel_wake_observed:\n.endif\n"
+        },
+        {
+          "from": "    cmp [r15+lel_CLEAN_OUTPUT+24],rbx\n    jne lel_callable_drop_bad\n",
+          "to": "    cmp [r15+lel_CLEAN_OUTPUT+24],rbx\n    jne lel_callable_drop_bad\n.ifdef RUNTIME_LOCK_WAKE_HOOK\n    mov rdi,[r15+lel_PUBLIC_CTX]\n    mov rdi,[rdi+80]\n    lea rsi,[r15+lel_CLEAN_OUTPUT]\n    call runtime_lock_wake_record\n    test eax,eax\n    jnz lel_callable_drop_bad\n.endif\n"
+        }
+      ]
+    },
+    "scripts/local_text_body_callable.S": {
+      "before": {
+        "bytes": 66089,
+        "sha256": "5120f566fe8e4ace6c441d2dd110188663cb29bcc28af26a759b44a6f86b15b6"
+      },
+      "after": {
+        "bytes": 66595,
+        "sha256": "1b826184e24356bd0666d7842ed732afde6e46285c160fbf26b1bf5491c574ee"
+      },
+      "splices": [
+        {
+          "from": "ltb_pure_again:\n    mov rdi,r12\n    mov rsi,r13\n    mov rdx,[rbx+24]\n    mov rcx,[rbx+32]\n    mov r8,[rbx+8]\n    mov r9,[rbx+16]\n    call qword ptr [rbx]\n",
+          "to": "ltb_pure_again:\n    mov rdi,r12\n    mov rsi,r13\n    mov rdx,[rbx+24]\n    mov rcx,[rbx+32]\n    mov r8,[rbx+8]\n    mov r9,[rbx+16]\n    call qword ptr [rbx]\n.ifdef RUNTIME_LOCK_WAKE_HOOK\n    cmp r14,3\n    jne ltb_wake_observed\n    cmp rax,64\n    jne ltb_wake_observed\n    mov rdi,[r15+ltb_PUBLIC_CTX]\n    mov rdi,[rdi+80]\n    mov rsi,[rbx+24]\n    call runtime_lock_wake_record\n    test eax,eax\n    jnz ltb_contract\n    mov eax,64\nltb_wake_observed:\n.endif\n"
+        },
+        {
+          "from": "    cmp [r15+ltb_CLEAN_OUTPUT+24],rbx\n    jne ltb_callable_drop_bad\n",
+          "to": "    cmp [r15+ltb_CLEAN_OUTPUT+24],rbx\n    jne ltb_callable_drop_bad\n.ifdef RUNTIME_LOCK_WAKE_HOOK\n    mov rdi,[r15+ltb_PUBLIC_CTX]\n    mov rdi,[rdi+80]\n    lea rsi,[r15+ltb_CLEAN_OUTPUT]\n    call runtime_lock_wake_record\n    test eax,eax\n    jnz ltb_callable_drop_bad\n.endif\n"
+        }
+      ]
+    },
+    "scripts/local_batch_body_callable.S": {
+      "before": {
+        "bytes": 70979,
+        "sha256": "29e3a08373ed344ab6a50616b0e26eaf4b819cf776d170c9b78ea50c56625f07"
+      },
+      "after": {
+        "bytes": 71485,
+        "sha256": "7e5dfef882dd1f916a018533289c400087757e298b3e6878a689bebfee357072"
+      },
+      "splices": [
+        {
+          "from": "lbb_pure_again:\n    mov rdi,r12\n    mov rsi,r13\n    mov rdx,[rbx+24]\n    mov rcx,[rbx+32]\n    mov r8,[rbx+8]\n    mov r9,[rbx+16]\n    call qword ptr [rbx]\n",
+          "to": "lbb_pure_again:\n    mov rdi,r12\n    mov rsi,r13\n    mov rdx,[rbx+24]\n    mov rcx,[rbx+32]\n    mov r8,[rbx+8]\n    mov r9,[rbx+16]\n    call qword ptr [rbx]\n.ifdef RUNTIME_LOCK_WAKE_HOOK\n    cmp r14,7\n    jne lbb_wake_observed\n    cmp rax,64\n    jne lbb_wake_observed\n    mov rdi,[r15+lbb_PUBLIC_CTX]\n    mov rdi,[rdi+80]\n    mov rsi,[rbx+24]\n    call runtime_lock_wake_record\n    test eax,eax\n    jnz lbb_contract\n    mov eax,64\nlbb_wake_observed:\n.endif\n"
+        },
+        {
+          "from": "    cmp [r15+lbb_CLEAN_OUTPUT+24],rbx\n    jne lbb_callable_drop_bad\n",
+          "to": "    cmp [r15+lbb_CLEAN_OUTPUT+24],rbx\n    jne lbb_callable_drop_bad\n.ifdef RUNTIME_LOCK_WAKE_HOOK\n    mov rdi,[r15+lbb_PUBLIC_CTX]\n    mov rdi,[rdi+80]\n    lea rsi,[r15+lbb_CLEAN_OUTPUT]\n    call runtime_lock_wake_record\n    test eax,eax\n    jnz lbb_callable_drop_bad\n.endif\n"
+        }
+      ]
+    },
+    "scripts/runtime_extract_body_bridge.S": {
+      "before": {
+        "bytes": 7828,
+        "sha256": "f901967259d7af73c7fd5d9f4be63670e93b9696cf3949225af50398b375bfc4"
+      },
+      "after": {
+        "bytes": 9458,
+        "sha256": "7710eceb293c567f6efcf5baefd5ba4707c971eca640d71e4c6569345d17b13b"
+      },
+      "splices": [
+        {
+          "from": "/* Fixed extract_lines callable: the existing process hub owns locks/history.\n * Engine+456 owns this callable context; owner 3/6 borrow the same hub rows.\n * Private WAIT is retained exactly; this attachment adds no waiter scheduler. */\n.intel_syntax noprefix\n.section .text\n.global runtime_extract_body_owned\n.global runtime_extract_body_release\n.global runtime_extract_body_hint\n/* Fixed native slot63, owned result retained until parent delivery completes. */\nruntime_extract_body_owned:\n    push rbx\n    push rbp\n    push r12\n    push r13\n    push r14\n    sub rsp, 32\n    mov [rsp], rdi\n    mov [rsp + 8], rsi\n    mov rbx, [r15 + 8]\n    add rbx, 63*64\n    lea rbp, [r15 + 512 + 63*64]\n    cmp qword ptr [rbp], 0\n    jne rex_invalid\n    cmp qword ptr [rbp + 8], 0\n    jne rex_invalid\n    mov qword ptr [rbp], 1\n    mov qword ptr [rbx + 48], 0\n    mov qword ptr [rbx + 56], 0\n    mov r14, [r15 + 400]\n    test r14, r14\n    jz rex_invalid_active\n    mov rax, 0x3142554842544c48\n    cmp [r14], rax\n    jne rex_invalid_active\n    mov r12, [r15 + 456]\n    test r12, r12\n    jnz rex_existing\n    mov edi, 4096\n    call view_allocate\n    cmp rax, -4095\n    jae rex_resource_active\n    mov r12, rax\n    mov [r15 + 456], rax\n    mov [r12 + 256 + 168], r15\n    jmp rex_context_ready\nrex_existing:\n    cmp qword ptr [r12 + 152], 0\n    je rex_context_ready\n    mov rdi, r12\n    call local_extract_lines_release\n    test eax, eax\n    jnz rex_invalid_active\nrex_context_ready:\n    mov rdi, r12\n    xor eax, eax\n    mov ecx, 24\n    rep stosq\n    mov rax, 0x3130494354584548 /* HEXTCI01 */\n    mov [r12], rax\n    mov qword ptr [r12 + 8], 192\n    lea rax, [rip + runtime_extract_body_images]\n    mov [r12 + 16], rax\n    lea rax, [rip + runtime_extract_cache]\n    mov [r12 + 24], rax\n    lea rax, [r12 + 256]\n    mov [r12 + 32], rax\n    mov [r12 + 48], rax\n    lea rax, [rip + runtime_extract_body_hint]\n    mov [r12 + 40], rax\n    lea rax, [r14 + 64]\n    mov [r12 + 56], rax\n    lea rax, [r14 + 128]\n    mov [r12 + 64], rax\n    lea rax, [rip + runtime_text_body_shared_grow]\n    mov [r12 + 72], rax\n    mov [r12 + 80], r14\n    lea rax, [r14 + 8]\n    mov [r12 + 88], rax\n    mov rax, [r15 + 32]\n    mov [r12 + 96], rax\n    mov rdi, r12\n    mov rsi, [rsp]\n    mov rdx, [rsp + 8]\n    inc qword ptr [r15 + 128]\n    call local_extract_lines_run\n    mov edx, eax\n    cmp rax, rdx\n    jne rex_invalid_active\n    cmp [r12 + 128], rax\n    jne rex_invalid_active\n    /* A scheduling WAIT remains distinct; this serial fixture has no waiter\n     * executor. Never spin, fabricate a wake, or release an undrained owner. */\n    cmp eax, 0xffffffdf\n    je rex_undrained\n    cmp qword ptr [r12 + 136], 1\n    jne rex_invalid_active\n    cmp qword ptr [r12 + 144], 1\n    jne rex_invalid_active\n    cmp qword ptr [r12 + 160], 0\n    jne rex_invalid_active\n    mov [rbx + 48], rax\n    mov rcx, [r12 + 112]\n    mov [rbx + 32], rcx\n    mov rcx, [r12 + 120]\n    mov [rbx + 40], rcx\n    mov [rbx + 56], rcx\n    cmp eax, 0xffff0000\n    jae rex_private\n    cmp rax, rcx\n    jne rex_invalid_active\n    jmp rex_complete\nrex_private:\n    test rcx, rcx\n    jnz rex_invalid_active\n    jmp rex_complete\nrex_resource_active:\n    mov eax, 0xfffffffc\n    jmp rex_error\nrex_invalid_active:\n    mov eax, 0xffffffff\nrex_error:\n    mov [rbx + 48], rax\n    mov qword ptr [rbx + 56], 0\nrex_complete:\n    mov qword ptr [rbp], 0\n    jmp rex_done\nrex_undrained:\n    mov [rbx + 48], rax\n    mov qword ptr [rbx + 56], 0\n    jmp rex_done\nrex_invalid:\n    mov eax, 0xffffffff\nrex_done:\n    add rsp, 32\n    pop r14\n    pop r13\n    pop r12\n    pop rbp\n    pop rbx\n    ret\n\n",
+          "to": "/* Extract callable attachment. The process hub owns shared locks/history.\n * Engine+456 is transferred with its actual caller chain while lock WAIT\n * suspends. Only an HIA-selected wake or actual future Drop resumes it. */\n.intel_syntax noprefix\n.section .text\n.global runtime_extract_body_owned\n.global runtime_extract_body_resume\n.global runtime_extract_body_release\n.global runtime_extract_body_release_context\n.global runtime_extract_body_hint\nruntime_extract_body_owned:\n    xor edx,edx\n    jmp rex_body_entry\n/* rdx 2=actual lock wake; 3=actual future destruction after transport close. */\nruntime_extract_body_resume:\n    cmp rdx,2\n    je rex_body_entry\n    cmp rdx,3\n    je rex_body_entry\n    mov eax,0xffffffff\n    ret\nrex_body_entry:\n    push rbx\n    push rbp\n    push r12\n    push r13\n    push r14\n    sub rsp,32\n    mov [rsp],rdi\n    mov [rsp+8],rsi\n    mov [rsp+16],rdx\n    mov rbx,[r15+8]\n    add rbx,63*64\n    lea rbp,[r15+512+63*64]\n    cmp qword ptr [rbp+8],0\n    jne rex_invalid\n    test rdx,rdx\n    jnz rex_resume_admit\n    cmp qword ptr [rbp],0\n    jne rex_invalid\n    mov qword ptr [rbp],1\n    mov qword ptr [rbx+48],0\n    mov qword ptr [rbx+56],0\n    mov r14,[r15+400]\n    test r14,r14\n    jz rex_invalid_active\n    mov rax,0x3142554842544c48\n    cmp [r14],rax\n    jne rex_invalid_active\n    mov r12,[r15+456]\n    test r12,r12\n    jnz rex_existing\n    mov edi,4096\n    call view_allocate\n    cmp rax,-4095\n    jae rex_resource_active\n    mov r12,rax\n    mov [r15+456],rax\n    mov [r12+256+168],r15\n    jmp rex_context_ready\nrex_existing:\n    mov rdi,r12\n    call runtime_extract_wait_unlink\n    test eax,eax\n    jnz rex_invalid_active\n    cmp qword ptr [r12+152],0\n    je rex_context_ready\n    mov rdi,r12\n    call local_extract_lines_release\n    test eax,eax\n    jnz rex_invalid_active\nrex_context_ready:\n    mov rdi,r12\n    xor eax,eax\n    mov ecx,24\n    rep stosq\n    mov rax,0x3130494354584548\n    mov [r12],rax\n    mov qword ptr [r12+8],192\n    lea rax,[rip+runtime_extract_body_images]\n    mov [r12+16],rax\n    lea rax,[rip + runtime_extract_cache]\n    mov [r12+24],rax\n    lea rax,[r12+256]\n    mov [r12+32],rax\n    mov [r12+48],rax\n    lea rax,[rip + runtime_extract_body_hint]\n    mov [r12+40],rax\n    lea rax,[r14+64]\n    mov [r12+56],rax\n    lea rax,[r14+128]\n    mov [r12+64],rax\n    lea rax,[rip + runtime_text_body_shared_grow]\n    mov [r12+72],rax\n    mov [r12+80],r14\n    lea rax,[r14+8]\n    mov [r12+88],rax\n    mov rax,[r15+32]\n    mov [r12+96],rax\n    mov rdi,r12\n    mov rsi,[rsp]\n    mov rdx,[rsp+8]\n    inc qword ptr [r15+128]\n    call local_extract_lines_run\n    jmp rex_actual_return\nrex_resume_admit:\n    cmp qword ptr [rbp],1\n    jne rex_invalid\n    mov eax,0xffffffdf\n    cmp [rbx+48],rax\n    jne rex_invalid\n    cmp qword ptr [rbx+56],0\n    jne rex_invalid\n    mov r12,[r15+456]\n    test r12,r12\n    jz rex_invalid\n    mov rax,[r15+400]\n    cmp [r12+80],rax\n    jne rex_invalid\n    cmp [r12+256+168],r15\n    jne rex_invalid\n    cmp qword ptr [r12+XW_LINKED],1\n    jne rex_invalid\n    cmp qword ptr [rsp+16],3\n    je rex_resume_drop\n    cmp qword ptr [r12+XW_READY],1\n    jne rex_invalid\n    mov qword ptr [r12+XW_READY],0\n    mov rdi,r12\n    inc qword ptr [r15+128]\n    call local_extract_lines_resume\n    jmp rex_actual_return\nrex_resume_drop:\n    mov rdi,r12\n    inc qword ptr [r15+128]\n    call local_extract_lines_cancel_wait\nrex_actual_return:\n    mov edx,eax\n    cmp rax,rdx\n    jne rex_invalid_active\n    cmp [r12+128],rax\n    jne rex_invalid_active\n    cmp eax,0xffffffdf\n    je rex_undrained\n    cmp qword ptr [r12+136],1\n    jne rex_invalid_active\n    cmp qword ptr [r12+144],1\n    jne rex_invalid_active\n    cmp qword ptr [r12+160],0\n    jne rex_invalid_active\n    mov [rsp+24],rax\n    mov rdi,r12\n    call runtime_extract_wait_unlink\n    test eax,eax\n    jnz rex_invalid_active\n    mov rax,[rsp+24]\n    mov [rbx+48],rax\n    mov rcx,[r12+112]\n    mov [rbx+32],rcx\n    mov rcx,[r12+120]\n    mov [rbx+40],rcx\n    mov [rbx+56],rcx\n    cmp eax,0xffff0000\n    jae rex_private\n    cmp rax,rcx\n    jne rex_invalid_active\n    jmp rex_complete\nrex_private:\n    test rcx,rcx\n    jnz rex_invalid_active\n    jmp rex_complete\nrex_resource_active:\n    mov eax,0xfffffffc\n    jmp rex_error\nrex_invalid_active:\n    mov eax,0xffffffff\nrex_error:\n    mov [rbx+48],rax\n    mov qword ptr [rbx+56],0\nrex_complete:\n    mov qword ptr [rbp],0\n    jmp rex_done\nrex_undrained:\n    mov rdi,r12\n    call runtime_extract_wait_link\n    test eax,eax\n    jnz rex_invalid_active\n    mov eax,0xffffffdf\n    mov [rbx+48],rax\n    mov qword ptr [rbx+56],0\n    jmp rex_done\nrex_invalid:\n    mov eax,0xffffffff\nrex_done:\n    add rsp,32\n    pop r14\n    pop r13\n    pop r12\n    pop rbp\n    pop rbx\n    ret\n\n"
+        },
+        {
+          "from": "runtime_extract_body_release:\n    push rbx\n    mov rbx, [r15 + 456]\n    test rbx, rbx\n    jz rexh_release_success\n    cmp qword ptr [rbx + 152], 0\n    je rexh_release_frame\n    mov rdi, rbx\n    call local_extract_lines_release\n    test eax, eax\n    jnz rexh_release_done\nrexh_release_frame:\n    mov rdi, [rbx + 256 + 184]\n    test rdi, rdi\n    jz rexh_release_control\n    mov rsi, [rbx + 256 + 192]\n    add rsi, 4096\n    mov eax, 11\n    syscall\n    test rax, rax\n    jnz rexh_release_done\n    mov qword ptr [rbx + 256 + 184], 0\n    mov qword ptr [rbx + 256 + 192], 0\nrexh_release_control:\n    mov rdi, rbx\n    mov esi, 8192\n    mov eax, 11\n    syscall\n    test rax, rax\n    jnz rexh_release_done\n    mov qword ptr [r15 + 456], 0\nrexh_release_success:\n    xor eax, eax\nrexh_release_done:\n    pop rbx\n    ret\n",
+          "to": "runtime_extract_body_release:\n    sub rsp,8\n    mov rdi,[r15+456]\n    call runtime_extract_body_release_context\n    test eax,eax\n    jnz rexh_release_engine_done\n    mov qword ptr [r15+456],0\nrexh_release_engine_done:\n    add rsp,8\n    ret\n\n/* Release the exact detached node's context, never another engine borrow. */\nruntime_extract_body_release_context:\n    push rbx\n    mov rbx,rdi\n    test rbx,rbx\n    jz rexh_release_success\n    mov rdi,rbx\n    call runtime_extract_wait_unlink\n    test eax,eax\n    jnz rexh_release_done\n    cmp qword ptr [rbx+XW_LINKED],0\n    jne rexh_release_invalid\n    cmp qword ptr [rbx+152],0\n    je rexh_release_frame\n    mov rdi,rbx\n    call local_extract_lines_release\n    test eax,eax\n    jnz rexh_release_done\nrexh_release_frame:\n    mov rdi,[rbx+256+184]\n    test rdi,rdi\n    jz rexh_release_control\n    mov rsi,[rbx+256+192]\n    add rsi,4096\n    jc rexh_release_invalid\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz rexh_release_done\n    mov qword ptr [rbx+256+184],0\n    mov qword ptr [rbx+256+192],0\nrexh_release_control:\n    mov rdi,rbx\n    mov esi,8192\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz rexh_release_done\nrexh_release_success:\n    xor eax,eax\n    jmp rexh_release_done\nrexh_release_invalid:\n    mov eax,0xffffffff\nrexh_release_done:\n    pop rbx\n    ret\n"
+        }
+      ]
+    },
+    "scripts/runtime_mcp_task_storage.S": {
+      "before": {
+        "bytes": 12070,
+        "sha256": "ac114b8f3305a135e9e260454b6196b938e710276d8f5e539983bece0b5c1031"
+      },
+      "after": {
+        "bytes": 12951,
+        "sha256": "44c1a86502ccb0b4b02bc7907ecea35d14421a90428efba4dc6488882b236138"
+      },
+      "splices": [
+        {
+          "from": ".equ PN_WRITE_KIND,464\n",
+          "to": ".equ PN_WRITE_KIND,464\n.equ PN_X_ACTIVE,480\n.equ PN_X_DESCRIPTORS,512\n.equ PN_X_CONTINUATIONS,832\n.equ PN_X_CONTEXT,1152\n.equ PN_X_INSTALLED,1160\n.equ PN_X_WORKMAP,1168\n.equ PN_X_OUTMAP,1176\n"
+        },
+        {
+          "from": "    mov rax,[r14]\n    or rax,[r14+8]\n    jnz public_span_fail\n    cmp qword ptr [rbx+48],64\n    jne public_span_fail\n    cmp qword ptr [rbx+56],64\n    jb public_span_fail\n    lea rdi,[rbp+PN_DESCRIPTOR]\n",
+          "to": "    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    jne pump_detach_extract_wait\n    mov rax,[r14]\n    or rax,[r14+8]\n    jnz public_span_fail\n    cmp qword ptr [rbx+48],64\n    jne public_span_fail\n    cmp qword ptr [rbx+56],64\n    jb public_span_fail\n    jmp pump_detach_frontend_admitted\npump_detach_extract_wait:\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    cmp qword ptr [r14],1\n    jne public_span_fail\n    cmp qword ptr [r14+8],2\n    jne public_span_fail\n    mov eax,0xffffffdf\n    cmp [rbx+48],rax\n    jne public_span_fail\n    cmp [r14+48],rax\n    jne public_span_fail\n    mov rax,[rbx+56]\n    or rax,[r14+56]\n    jnz public_span_fail\npump_detach_frontend_admitted:\n    lea rdi,[rbp+PN_DESCRIPTOR]\n"
+        },
+        {
+          "from": "    mov rdi,rbp\n    call pump_trace_detached\n",
+          "to": "    mov rdi,rbp\n    call pump_extract_detach\n    mov rdi,rbp\n    call pump_trace_detached\n"
+        },
+        {
+          "from": "    mov rdi,rbp\n    call pump_trace_restored\n",
+          "to": "    mov rdi,rbp\n    call pump_extract_restore\n    mov rdi,rbp\n    call pump_trace_restored\n"
+        },
+        {
+          "from": "pump_retire_untracked:\n    mov rdi,rbp\n    call pump_trace_retired\n",
+          "to": "pump_retire_untracked:\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    jne public_span_fail\n    mov rdi,rbp\n    call pump_trace_retired\n    mov rdi,rbp\n    call pump_extract_retire\n"
+        }
+      ]
+    },
+    "scripts/runtime_mcp_task_policy.S": {
+      "before": {
+        "bytes": 7808,
+        "sha256": "4466a14472e8cf83c388168f010f0b68c59c620f292c0ab3b9f6a241a3a9d05b"
+      },
+      "after": {
+        "bytes": 8183,
+        "sha256": "ff282bd764b0fc81a2c60254d15136c2d437dfed143663c6f898a867cf39642e"
+      },
+      "splices": [
+        {
+          "from": "    call runtime_grow_owned\n    cmp eax,64\n    jne public_span_fail\n    /* Copy the current G1 borrow before another public request replaces it. */\n",
+          "to": "    call runtime_grow_owned\n    cmp eax,64\n    je pump_accept_frontend_returned\n    cmp eax,0xffffffdf\n    jne public_span_fail\n    mov qword ptr [rbp+PN_X_ACTIVE],1\npump_accept_frontend_returned:\n    /* Copy the current G1 borrow before another public request replaces it. */\n"
+        },
+        {
+          "from": "pump_handle_frontend:\n    PM_SAVE\n    mov rbp,rdi\n    mov r13,[rbp+PN_DESCRIPTOR+32]\n",
+          "to": "pump_handle_frontend:\n    PM_SAVE\n    mov rbp,rdi\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    je pump_handle_settled_frontend\n    mov rdi,rbp\n    call pump_extract_pending\n    jmp pump_frontend_done\npump_handle_settled_frontend:\n    mov r13,[rbp+PN_DESCRIPTOR+32]\n"
+        },
+        {
+          "from": "/* Notification cancellation delivers the context token only. The original\n * Bellman method ignores that token. Keep its future; never issue cmd3 here. */",
+          "to": "/* Notification cancellation delivers the context token only. The original\n * Bellman and extract methods ignore that token. Keep their actual futures;\n * command3 belongs only to future destruction after transport close. */"
+        }
+      ]
+    },
+    "scripts/runtime_mcp_task_worker.S": {
+      "before": {
+        "bytes": 4421,
+        "sha256": "8360feef0ed3a1a7367e545fc22b3374d46f0c17b30e98388af6f18ad7b769e4"
+      },
+      "after": {
+        "bytes": 4598,
+        "sha256": "c6472bbc3cd248a02c53aa737cca5683566278a0adebfc5e9b28f010e6197ea7"
+      },
+      "splices": [
+        {
+          "from": "pump_resume_prepare:\n    mov rbx,[rbp+PN_DESCRIPTOR+8]\n",
+          "to": "pump_resume_prepare:\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    je pump_resume_bellman_prepare\n    mov rdi,rbp\n    mov rsi,r13\n    call pump_resume_extract\n    PM_RETURN\npump_resume_bellman_prepare:\n    mov rbx,[rbp+PN_DESCRIPTOR+8]\n"
+        }
+      ]
+    },
+    "scripts/runtime_mcp_task_send.S": {
+      "before": {
+        "bytes": 6671,
+        "sha256": "a82c4dfccead322e9a5ed83a2e8f8889c425b6c19dffdcfa49621b7558d9cf78"
+      },
+      "after": {
+        "bytes": 6701,
+        "sha256": "ad09c39d2102b1dabbee88964f0060bc8de4a33b5b6b4890e15fb7a0b10fc3d3"
+      },
+      "splices": [
+        {
+          "from": "pump_tick:\n    PM_SAVE\n    call pump_service_worker\n    call pump_deliver_context_cancellation\n",
+          "to": "pump_tick:\n    PM_SAVE\n    call pump_service_worker\n    call pump_service_extract\n    call pump_deliver_context_cancellation\n"
+        }
+      ]
+    },
+    "scripts/runtime_mcp_task_trace.S": {
+      "before": {
+        "bytes": 6567,
+        "sha256": "07811fb8667b3aba90d1928b28738ca25624eeb329d986b29b1193dd8d86bc82"
+      },
+      "after": {
+        "bytes": 9888,
+        "sha256": "2bb1c787ec1d5fa43b54cebc3619601df96bfde6249aa323a244f5bbecc32f5c"
+      },
+      "splices": [
+        {
+          "from": "    mov rbp,rsi\n    call pump_trace_clear_tail\n    cmp qword ptr [rbp+PN_DESCRIPTOR+16],1408\n",
+          "to": "    mov rbp,rsi\n    mov r14,rdi\n    call pump_trace_clear_tail\n    cmp qword ptr [rbp+PN_DESCRIPTOR+16],1408\n"
+        },
+        {
+          "from": "    mov rax,[rbp+PN_DESCRIPTOR+56]\n    cmp rax,64\n    jb public_span_fail\n    cmp rax,[rbp+PN_DESCRIPTOR+40]\n",
+          "to": "    mov rax,[rbp+PN_DESCRIPTOR+56]\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    je pump_trace_settled_extent\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    test rax,rax\n    jnz public_span_fail\n    mov edx,0xffffffdf\n    cmp [rbp+PN_DESCRIPTOR+48],rdx\n    jne public_span_fail\n    jmp pump_trace_admitted_extent\npump_trace_settled_extent:\n    cmp rax,64\n    jb public_span_fail\npump_trace_admitted_extent:\n    cmp rax,[rbp+PN_DESCRIPTOR+40]\n"
+        },
+        {
+          "from": "    mov r9d,1408\n    call pump_trace_emit\npump_trace_frontend_done:\n",
+          "to": "    mov r9d,1408\n    call pump_trace_emit\n    mov rdi,rbp\n    mov rsi,r14\n    call pump_trace_extract\npump_trace_frontend_done:\n"
+        },
+        {
+          "from": null,
+          "to": "\n/* Complete retained extract mappings at detach/restore/retire boundaries.\n * Events9/15 contain full node/context/control/hub/engine bytes. Events10\n * observe root18 then59..63; events11 all14 callable rows; events12 the two\n * actual shared rows; events13 five independent owned regions; event14 the\n * cache/hint frame. Every allocated byte of these mappings is copied. These\n * observations do not execute an owner or acknowledge a completion. */\npump_trace_extract:\n    PM_SAVE\n    mov rbp,rdi\n    mov r13,[rbp+PN_X_CONTEXT]\n    test r13,r13\n    jnz pxt_context\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne pxt_done\n    cmp qword ptr [rbp+PN_OWNERSHIP],0\n    jne public_span_fail\n    mov r13,[r15+456]\n    test r13,r13\n    jz public_span_fail\npxt_context:\n    mov r14,[r13+152]\n    test r14,r14\n    jz public_span_fail\n    call pump_trace_clear_tail\n    mov [r12+PM_TRACE_C_PTR],r14\n    mov qword ptr [r12+PM_TRACE_C_LEN],4096\n    mov edi,9\n    mov rsi,rbp\n    mov rdx,rbp\n    mov ecx,4096\n    mov r8,r13\n    mov r9d,4096\n    call pump_trace_emit\n    call pump_trace_clear_tail\n    mov edi,15\n    mov rsi,rbp\n    mov rdx,[r13+80]\n    mov ecx,4096\n    mov r8,r15\n    mov r9d,16384\n    call pump_trace_emit\n    xor ebx,ebx\npxt_extra:\n    lea rdx,[rbp+PN_DESCRIPTOR]\n    test ebx,ebx\n    jz pxt_extra_row\n    lea rax,[rbx-1]\n    shl rax,6\n    lea rdx,[rbp+rax+PN_X_DESCRIPTORS]\npxt_extra_row:\n    mov rax,[rdx+32]\n    mov [r12+PM_TRACE_C_PTR],rax\n    mov rax,[rdx+40]\n    mov [r12+PM_TRACE_C_LEN],rax\n    mov r8,[rdx+8]\n    mov r9,[rdx+16]\n    mov edi,10\n    mov rsi,rbp\n    mov ecx,64\n    call pump_trace_emit\n    inc ebx\n    cmp ebx,6\n    jb pxt_extra\n    xor ebx,ebx\npxt_callable:\n    mov rax,rbx\n    shl rax,6\n    lea rdx,[r14+rax+256]\n    mov rax,[rdx+24]\n    mov [r12+PM_TRACE_C_PTR],rax\n    mov rax,[rdx+32]\n    mov [r12+PM_TRACE_C_LEN],rax\n    mov r8,[rdx+8]\n    mov r9,[rdx+16]\n    mov edi,11\n    mov rsi,rbp\n    mov ecx,64\n    call pump_trace_emit\n    inc ebx\n    cmp ebx,14\n    jb pxt_callable\n    xor ebx,ebx\npxt_shared:\n    mov rax,rbx\n    shl rax,6\n    mov rdx,[r13+80]\n    lea rdx,[rdx+rax+64]\n    mov rax,[rdx+24]\n    mov [r12+PM_TRACE_C_PTR],rax\n    mov rax,[rdx+32]\n    mov [r12+PM_TRACE_C_LEN],rax\n    mov r8,[rdx+8]\n    mov r9,[rdx+16]\n    mov edi,12\n    mov rsi,rbp\n    mov ecx,64\n    call pump_trace_emit\n    inc ebx\n    cmp ebx,2\n    jb pxt_shared\n    xor ebx,ebx\npxt_region:\n    call pump_trace_clear_tail\n    lea rax,[rip+pxt_regions]\n    mov rdx,[rax+rbx*8]\n    add rdx,r14\n    mov r8,[rdx]\n    mov r9,[rdx+8]\n    mov edi,13\n    mov rsi,rbp\n    mov ecx,16\n    call pump_trace_emit\n    inc ebx\n    cmp ebx,5\n    jb pxt_region\n    call pump_trace_clear_tail\n    lea rdx,[r13+256+184]\n    mov r8,[rdx]\n    mov r9,[rdx+8]\n    mov edi,14\n    mov rsi,rbp\n    mov ecx,16\n    call pump_trace_emit\npxt_done:\n    PM_RETURN\n.balign 8\npxt_regions:\n    .quad 0,24,160,1536,1584\n"
+        }
+      ]
+    },
+    "scripts/runtime_text_body_bridge.S": {
+      "before": {
+        "bytes": 12207,
+        "sha256": "4d051751dde5b3d2d802772c284cf2d6ab07951b53efa14f1cb0f77d216bc01d"
+      },
+      "after": {
+        "bytes": 12333,
+        "sha256": "04c082344054ddef3b625f6be9650280b0355dd95fe4acc1d5d10d5f21227d7a"
+      },
+      "splices": [
+        {
+          "from": "    cmp [r12], rax\n    jne rtbh_destroy_invalid\n    xor ebp, ebp\n",
+          "to": "    cmp [r12], rax\n    jne rtbh_destroy_invalid\n.ifdef RUNTIME_LOCK_WAKE_HOOK\n    mov rax,[r12+XW_HUB_HEAD]\n    or rax,[r12+XW_HUB_COUNT]\n    jnz rtbh_destroy_invalid\n.endif\n    xor ebp, ebp\n"
+        }
+      ]
+    },
+    "scripts/public_nine_build.py": {
+      "before": {
+        "bytes": 33416,
+        "sha256": "9b9dd4a078ef6be495fd60b0e7b1905fbdc8529a51532e0e1d750dd985ca2878"
+      },
+      "after": {
+        "bytes": 33876,
+        "sha256": "b8a76fe1eac76e0323558bba00b3595fe4b4a2a9f9c7d85f10d5f8e2723ba643"
+      },
+      "splices": [
+        {
+          "from": "BOUNDARIES = [\n    'scripts/runtime_mcp_task_storage.S',\n",
+          "to": "BOUNDARIES = [\n    'scripts/runtime_extract_wait.S',\n    'scripts/runtime_mcp_task_storage.S',\n    'scripts/runtime_mcp_task_extract.S',\n"
+        },
+        {
+          "from": "    for name in re.findall(r'^\\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):\n",
+          "to": "    source = '.equ RUNTIME_LOCK_WAKE_HOOK,1\\n' + source\n    for name in re.findall(r'^\\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):\n"
+        },
+        {
+          "from": "              'extract_context_offset': 456, 'extract_install_offset': 464,\n",
+          "to": "              'extract_context_offset': 456, 'extract_install_offset': 464,\n              'extract_actual_lock_wait_retention': True,\n              'extract_wait_chain_slots': [18,59,61,62,63],\n              'extract_wait_uses_actual_hia_reserved_lease': True,\n              'extract_wait_future_drop_after_transport_close': True,\n              'extract_wait_source_registered_but_qualified': False,\n"
+        }
+      ]
+    }
+  }
+}
