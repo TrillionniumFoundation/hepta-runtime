@@ -1,0 +1,75 @@
+name: Export complete frozen public111 build bytes
+on:
+  push:
+    branches: [hia-public111-build-byte-export-6780-20261117]
+    paths: ['.github/workflows/hia-public111-build-byte-export.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Recover the exact existing original artifact ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14282953118 > "$RUNNER_TEMP/original-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14282953118/zip > "$RUNNER_TEMP/original-artifact.zip"
+      - name: Verify and split all original bytes without semantic execution
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os,shutil
+          root=Path(os.environ['RUNNER_TEMP']);archive=root/'original-artifact.zip'
+          metadata=json.loads((root/'original-artifact.json').read_bytes())
+          digest='deecbd7eba816a7c59f2bb749664b132de4db14176e1814c65ef3d62c26d6b15'
+          assert metadata['id']==14282953118 and metadata['workflow_run']['id']==43979626193
+          assert metadata['workflow_run']['head_sha']=='d397daea2c098746b47e88efa0cb566c6ef71103'
+          assert metadata['size_in_bytes']==archive.stat().st_size==741930469
+          assert metadata['digest']=='sha256:'+digest and metadata['expired'] is False
+          with archive.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==digest
+          destination=root/'complete-parts';destination.mkdir();parts=[];offset=0
+          with archive.open('rb') as source:
+              for index in range(3):
+                  raw=source.read(256<<20);assert raw
+                  folder=destination/str(index);folder.mkdir();(folder/'part.bin').write_bytes(raw)
+                  parts.append(dict(index=index,offset=offset,bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()));offset+=len(raw)
+              assert source.read(1)==b'' and offset==741930469
+          record=dict(schema='hepta.complete-original-artifact-zip-parts.v1',original_run=43979626193,
+              original_job=133692433112,original_artifact=14282953118,
+              original_head='d397daea2c098746b47e88efa0cb566c6ef71103',
+              original_zip=dict(bytes=741930469,sha256=digest),parts=parts,
+              semantic_executions=0,original_failure_reclassified_as_pass=False,source_or_evidence_modified=False)
+          for row in parts:
+              folder=destination/str(row['index'])
+              (folder/'parts.json').write_text(json.dumps(record,sort_keys=True,indent=2)+'\n')
+              shutil.copyfile(root/'original-artifact.json',folder/'original-artifact.json')
+          print(json.dumps(record,sort_keys=True))
+          PY
+      - name: Retain first complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public111-build-complete-part-0
+          path: ${{ runner.temp }}/complete-parts/0/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+      - name: Retain second complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public111-build-complete-part-1
+          path: ${{ runner.temp }}/complete-parts/1/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+      - name: Retain final complete byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public111-build-complete-part-2
+          path: ${{ runner.temp }}/complete-parts/2/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
