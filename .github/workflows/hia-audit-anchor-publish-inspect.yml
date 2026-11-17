@@ -1,0 +1,57 @@
+name: Inspect exact uploaded audit publisher evidence
+on:
+  push:
+    branches: [hia-audit-anchor-publish-inspect-v1-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          sparse-checkout: tests/hia_native/audit_anchor_publish_inspect_v1
+      - name: Freeze and admit the pure reader
+        run: |
+          mkdir "$RUNNER_TEMP/publish-inspect"
+          cp -a tests/hia_native/audit_anchor_publish_inspect_v1 "$RUNNER_TEMP/publish-inspect/source"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["RUNNER_TEMP"])/"publish-inspect/source"
+          raw=(r/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="62a78df37ac22f00705f90621a9fd27737a3b4ec2a0a8fcb80e0ec8912157160"
+          for p,pin in json.loads(raw)["files"].items():
+              b=(r/p).read_bytes();assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"]
+              compile(b,str(r/p),"exec")
+          PY
+      - name: Download the exact complete producer archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14329030766/zip > "$RUNNER_TEMP/publish-inspect/original.zip"
+      - name: Read and restore every uploaded byte and mode
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-inspect/source/restore.py" --archive "$RUNNER_TEMP/publish-inspect/original.zip" --output "$RUNNER_TEMP/publish-inspect/restored"
+      - name: Inspect complete locked source and all original result records
+        run: |
+          timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-inspect/source/inspect.py" --root "$RUNNER_TEMP/publish-inspect/restored/prior" --output "$RUNNER_TEMP/publish-inspect/proof" > "$RUNNER_TEMP/publish-inspect/inspect.stdout" 2> "$RUNNER_TEMP/publish-inspect/inspect.stderr"
+          cat "$RUNNER_TEMP/publish-inspect/inspect.stdout"
+      - name: Keep any actual failure
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/publish-inspect/inspect.stderr"; then cat "$RUNNER_TEMP/publish-inspect/inspect.stderr"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: audit-anchor-publish-inspect-v1
+          path: |
+            ${{ runner.temp }}/publish-inspect/proof
+            ${{ runner.temp }}/publish-inspect/source
+            ${{ runner.temp }}/publish-inspect/*.stdout
+            ${{ runner.temp }}/publish-inspect/*.stderr
+            ${{ runner.temp }}/publish-inspect/restored/RESTORE.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 30
