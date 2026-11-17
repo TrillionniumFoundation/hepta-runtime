@@ -70,6 +70,13 @@
 .equ PN_X_INSTALLED,1160
 .equ PN_X_WORKMAP,1168
 .equ PN_X_OUTMAP,1176
+/* Actual request-owned effect-fence controller; native context remains session-owned. */
+.equ PN_F_DESCRIPTOR,3584
+.equ PN_F_CONTINUATION,3648
+.equ PN_F_INSTALLED,3712
+.equ PN_F_OWNERSHIP,3720
+.equ PN_F_NATIVE,3728
+.equ PN_F_HUB,3736
 .macro PM_SAVE
     push rbp
     push rbx
@@ -412,6 +419,8 @@ pump_detach_frontend_admitted:
     mov rdi,rbp
     call pump_extract_detach
     mov rdi,rbp
+    call pump_fence_detach
+    mov rdi,rbp
     call pump_trace_detached
     PM_RETURN
 
@@ -463,6 +472,8 @@ pump_restore_frontend:
     mov rdi,rbp
     call pump_extract_restore
     mov rdi,rbp
+    call pump_fence_restore
+    mov rdi,rbp
     call pump_trace_restored
     PM_RETURN
 
@@ -498,6 +509,11 @@ pump_retire_node:
     cmp eax,8
     jne public_span_fail
 pump_retire_untracked:
+    mov rax,[rbp+PN_F_INSTALLED]
+    or rax,[rbp+PN_F_OWNERSHIP]
+    or rax,[rbp+PN_F_NATIVE]
+    or rax,[rbp+PN_F_HUB]
+    jnz public_span_fail
     cmp qword ptr [rbp+PN_X_ACTIVE],0
     jne public_span_fail
     mov rdi,rbp
@@ -544,6 +560,211 @@ pump_unlink_found:
     test rax,rax
     jnz public_span_fail
     xor eax,eax
+    PM_RETURN
+
+/* Move an admitted guard with its suspended request. Slot27's child borrow
+ * is complete, but its actual +112 token stays live until HIA RELEASE. */
+pump_fence_detach:
+    PM_SAVE
+    mov rbp,rdi
+    mov rax,[rbp+PN_F_INSTALLED]
+    or rax,[rbp+PN_F_OWNERSHIP]
+    or rax,[rbp+PN_F_NATIVE]
+    or rax,[rbp+PN_F_HUB]
+    jnz public_span_fail
+    mov rbx,[r15+8]
+    add rbx,27*64
+    lea r14,[r15+512+27*64]
+    mov rax,[r14]
+    or rax,[r14+8]
+    jnz public_span_fail
+    mov r13,[rbx+8]
+    test r13,r13
+    jz pf_detach_absent
+    cmp qword ptr [rbx+16],4096
+    jb public_span_fail
+    cmp qword ptr [r15+232],1
+    jne public_span_fail
+    cmp qword ptr [r13+8],0
+    jne public_span_fail
+    cmp qword ptr [r13+64],1
+    jne public_span_fail
+    cmp qword ptr [r13+112],0
+    je pf_detach_done
+    cmp qword ptr [rbp+PN_X_ACTIVE],1
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_X_CONTEXT],0
+    je public_span_fail
+    bt qword ptr [r15+64],27
+    jnc public_span_fail
+    bt qword ptr [r15+72],27
+    jnc public_span_fail
+    lea rdi,[rbp+PN_F_DESCRIPTOR]
+    mov rsi,rbx
+    mov ecx,8
+    rep movsq
+    lea rdi,[rbp+PN_F_CONTINUATION]
+    mov rsi,r14
+    mov ecx,8
+    rep movsq
+    mov qword ptr [rbp+PN_F_INSTALLED],1
+    mov qword ptr [rbp+PN_F_OWNERSHIP],3
+    mov rax,[r15+208]
+    mov [rbp+PN_F_NATIVE],rax
+    mov rax,[r15+224]
+    test rax,rax
+    jz public_span_fail
+    mov [rbp+PN_F_HUB],rax
+    btr qword ptr [r15+64],27
+    btr qword ptr [r15+72],27
+    lea rdi,[rbx+8]
+    xor eax,eax
+    mov ecx,7
+    rep stosq
+    mov rdi,r14
+    mov ecx,8
+    rep stosq
+    mov qword ptr [r15+232],0
+    jmp pf_detach_done
+pf_detach_absent:
+    cmp qword ptr [r15+232],0
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_X_ACTIVE],0
+    jne public_span_fail
+pf_detach_done:
+    PM_RETURN
+
+/* Retire only an already released reusable controller before restoring a
+ * retained request. Its shared native fence and session reference stay alive. */
+pump_fence_clear_idle:
+    PM_SAVE
+    mov rbx,[r15+8]
+    add rbx,27*64
+    lea r14,[r15+512+27*64]
+    mov rax,[r14]
+    or rax,[r14+8]
+    jnz public_span_fail
+    mov r13,[rbx+8]
+    test r13,r13
+    jz pf_idle_absent
+    cmp qword ptr [r15+232],1
+    jne public_span_fail
+    cmp qword ptr [rbx+16],4096
+    jb public_span_fail
+    cmp qword ptr [r13+64],1
+    jne public_span_fail
+    mov rax,[r13+8]
+    or rax,[r13+112]
+    jnz public_span_fail
+    bt qword ptr [r15+64],27
+    jnc public_span_fail
+    bt qword ptr [r15+72],27
+    jnc public_span_fail
+    mov rdi,r13
+    mov rsi,[rbx+16]
+    add rsi,4096
+    jc public_span_fail
+    mov eax,11
+    syscall
+    test rax,rax
+    jnz public_span_fail
+    mov rdi,[rbx+32]
+    test rdi,rdi
+    jz public_span_fail
+    mov rsi,[rbx+40]
+    test rsi,rsi
+    jz public_span_fail
+    add rsi,4096
+    jc public_span_fail
+    mov eax,11
+    syscall
+    test rax,rax
+    jnz public_span_fail
+    btr qword ptr [r15+64],27
+    btr qword ptr [r15+72],27
+    lea rdi,[rbx+8]
+    xor eax,eax
+    mov ecx,7
+    rep stosq
+    mov rdi,r14
+    mov ecx,8
+    rep stosq
+    mov qword ptr [r15+232],0
+    jmp pf_idle_done
+pf_idle_absent:
+    cmp qword ptr [r15+232],0
+    jne public_span_fail
+    bt qword ptr [r15+64],27
+    jc public_span_fail
+    bt qword ptr [r15+72],27
+    jc public_span_fail
+    mov rax,[rbx+16]
+    or rax,[rbx+24]
+    or rax,[rbx+32]
+    or rax,[rbx+40]
+    or rax,[rbx+48]
+    or rax,[rbx+56]
+    jnz public_span_fail
+pf_idle_done:
+    PM_RETURN
+
+pump_fence_restore:
+    PM_SAVE
+    mov rbp,rdi
+    cmp qword ptr [rbp+PN_F_OWNERSHIP],0
+    je pf_restore_absent
+    cmp qword ptr [rbp+PN_F_OWNERSHIP],3
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_F_INSTALLED],1
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_X_ACTIVE],1
+    jne public_span_fail
+    mov rax,[rbp+PN_F_NATIVE]
+    cmp [r15+208],rax
+    jne public_span_fail
+    mov rax,[rbp+PN_F_HUB]
+    test rax,rax
+    jz public_span_fail
+    cmp [r15+224],rax
+    jne public_span_fail
+    call pump_fence_clear_idle
+    mov rbx,[r15+8]
+    add rbx,27*64
+    lea r14,[r15+512+27*64]
+    mov rax,[rbp+PN_F_DESCRIPTOR]
+    cmp [rbx],rax
+    jne public_span_fail
+    mov r13,[rbp+PN_F_DESCRIPTOR+8]
+    test r13,r13
+    jz public_span_fail
+    cmp qword ptr [r13+8],0
+    jne public_span_fail
+    cmp qword ptr [r13+112],0
+    je public_span_fail
+    mov rdi,rbx
+    lea rsi,[rbp+PN_F_DESCRIPTOR]
+    mov ecx,8
+    rep movsq
+    mov rdi,r14
+    lea rsi,[rbp+PN_F_CONTINUATION]
+    mov ecx,8
+    rep movsq
+    bts qword ptr [r15+64],27
+    bts qword ptr [r15+72],27
+    mov qword ptr [r15+232],1
+    mov qword ptr [rbp+PN_F_INSTALLED],0
+    mov qword ptr [rbp+PN_F_OWNERSHIP],0
+    mov qword ptr [rbp+PN_F_NATIVE],0
+    mov qword ptr [rbp+PN_F_HUB],0
+    jmp pf_restore_done
+pf_restore_absent:
+    mov rax,[rbp+PN_F_INSTALLED]
+    or rax,[rbp+PN_F_NATIVE]
+    or rax,[rbp+PN_F_HUB]
+    jnz public_span_fail
+    cmp qword ptr [rbp+PN_X_ACTIVE],0
+    jne public_span_fail
+pf_restore_done:
     PM_RETURN
 
 /* Best-effort restoration on an invariant failure. The ordinary close path
