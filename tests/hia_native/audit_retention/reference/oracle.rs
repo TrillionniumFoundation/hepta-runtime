@@ -156,7 +156,6 @@ fn project_record<S: AsRef<str>>(record: &RecordFields<S>) -> Vec<u8> {
 	out
 }
 
-
 type Result<T> = std::result::Result<T, u64>;
 struct File;
 struct Archive;
@@ -190,7 +189,10 @@ thread_local! {
 
 impl Fixture {
 	fn pick(&mut self, group: &str, key: &str, default: Rule) -> Rule {
-		let counter = self.counters.entry((group.to_owned(), key.to_owned())).or_default();
+		let counter = self
+			.counters
+			.entry((group.to_owned(), key.to_owned()))
+			.or_default();
 		let at = *counter;
 		*counter += 1;
 		self.rules
@@ -203,21 +205,35 @@ impl Fixture {
 	fn record(&mut self, kind: u64, argument: &[u8], rule: &Rule, payload: &[u8]) {
 		self.sequence += 1;
 		let mut reply = b"HATRQ001".to_vec();
-		for word in [3, self.sequence, kind, rule.status, rule.error, payload.len() as u64, 0] {
+		for word in [
+			3,
+			self.sequence,
+			kind,
+			rule.status,
+			rule.error,
+			payload.len() as u64,
+			0,
+		] {
 			reply.extend_from_slice(&word.to_le_bytes());
 		}
 		reply.extend_from_slice(payload);
 		self.trace.extend_from_slice(b"HTREFF01");
 		self.trace.extend_from_slice(&kind.to_le_bytes());
-		self.trace.extend_from_slice(&(argument.len() as u64).to_le_bytes());
+		self.trace
+			.extend_from_slice(&(argument.len() as u64).to_le_bytes());
 		self.trace.extend_from_slice(argument);
-		self.trace.extend_from_slice(&(reply.len() as u64).to_le_bytes());
+		self.trace
+			.extend_from_slice(&(reply.len() as u64).to_le_bytes());
 		self.trace.extend_from_slice(&reply);
 	}
 }
 
 fn zero_rule() -> Rule {
-	Rule { status: 0, error: 0, record_hex: None }
+	Rule {
+		status: 0,
+		error: 0,
+		record_hex: None,
+	}
 }
 
 fn is_active(request_id: &str) -> Result<bool> {
@@ -244,10 +260,18 @@ impl Archive {
 					error: 0,
 					record_hex: Some(encode(&project_record(record))),
 				},
-				None => Rule { status: 1, error: 901, record_hex: None },
+				None => Rule {
+					status: 1,
+					error: 901,
+					record_hex: None,
+				},
 			};
 			let rule = fixture.pick("archive", filename, default);
-			let payload = rule.record_hex.as_ref().map(|value| decode(value)).unwrap_or_default();
+			let payload = rule
+				.record_hex
+				.as_ref()
+				.map(|value| decode(value))
+				.unwrap_or_default();
 			fixture.record(2, filename.as_bytes(), &rule, &payload);
 			match rule.status {
 				0 => Ok(parse_record(&payload)),
@@ -295,7 +319,11 @@ fn parse_record(raw: &[u8]) -> Record {
 			_ => panic!("invalid typed state"),
 		},
 		accepted_unix_ms: u128::from(get(raw, 24)) | (u128::from(get(raw, 32)) << 64),
-		elapsed_ms: if get(raw, 16) == 0 { None } else { Some(get(raw, 48)) },
+		elapsed_ms: if get(raw, 16) == 0 {
+			None
+		} else {
+			Some(get(raw, 48))
+		},
 	}
 }
 
@@ -318,12 +346,16 @@ fn invoke(case: Case) -> Vec<u8> {
 		.map(|index| {
 			let at = get(&frame, table + index * 16) as usize;
 			let size = get(&frame, table + index * 16 + 8) as usize;
-			std::str::from_utf8(&frame[at..at + size]).unwrap().to_owned()
+			std::str::from_utf8(&frame[at..at + size])
+				.unwrap()
+				.to_owned()
 		})
 		.collect();
 	let mut archive = HashMap::new();
 	for record in &records {
-		archive.entry(format!("{}.json", record.request_id)).or_insert_with(|| record.clone());
+		archive
+			.entry(format!("{}.json", record.request_id))
+			.or_insert_with(|| record.clone());
 	}
 	FIXTURE.with_borrow_mut(|state| {
 		assert!(state.is_none());
@@ -339,8 +371,15 @@ fn invoke(case: Case) -> Vec<u8> {
 		1 => {
 			assert!(pending.is_empty() && get(&frame, 32) == 1);
 			retain_before_begin(&File, &Archive, owner, &mut records)
-		},
-		2 => retain_for_batch(&File, &Archive, owner, &mut records, &pending, get(&frame, 32) == 1),
+		}
+		2 => retain_for_batch(
+			&File,
+			&Archive,
+			owner,
+			&mut records,
+			&pending,
+			get(&frame, 32) == 1,
+		),
 		_ => panic!("invalid fixture operation"),
 	};
 	let fixture = FIXTURE.with_borrow_mut(|state| state.take().unwrap());
@@ -350,7 +389,12 @@ fn invoke(case: Case) -> Vec<u8> {
 		Err(error) => (3, error),
 	};
 	let mut output = b"HATRV001".to_vec();
-	for word in [status, error, records.len() as u64, fixture.trace.len() as u64] {
+	for word in [
+		status,
+		error,
+		records.len() as u64,
+		fixture.trace.len() as u64,
+	] {
 		output.extend_from_slice(&word.to_le_bytes());
 	}
 	for record in records {
