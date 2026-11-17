@@ -193,6 +193,9 @@ rpa_resume_admit:
     mov rax,[rax+216]
     cmp [r12+PA_POOL],rax
     jne rpa_invalid
+    mov rax,[r13+24]
+    cmp [r12+PA_TAG],rax
+    jne rpa_invalid
     cmp qword ptr [r12+PA_STAGE],1
     jne rpa_invalid
     cmp qword ptr [r12+PA_JOB],0

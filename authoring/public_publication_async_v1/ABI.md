@@ -14,7 +14,7 @@ This source candidate extends only production `320862f03902153b5c804d1b68142126a
 | Effect fence 27 | existing PN [3584, 3744) | Existing complete admitted guard, retained until actual release |
 | Scope 6 and Context 10 | existing PN [3744, 3888) | Request owned; lease 7 and cache 8 stay shared |
 
-The bridge accepts only the actual caller66 child2 input loan. The retained edges are exactly 18→64→66→67. Raw WAIT is 0xffffffdf with zero result extent; parent continuations retain busy=1, pending=2, the original sequence, input and complete owned mappings. There is no invented HRCMFR02 result. Ordinary completion remains raw64 with the complete HTPBS001 response extent, and the real worker borrow lasts until caller delivery and task retirement.
+The bridge accepts only the actual caller66 child2 input loan. Every resume also binds its saved PA_TAG to that currently admitted caller66 generation before worker poll or Drop. The retained edges are exactly 18→64→66→67. Raw WAIT is 0xffffffdf with zero result extent; parent continuations retain busy=1, pending=2, the original sequence, input and complete owned mappings. There is no invented HRCMFR02 result. Ordinary completion remains raw64 with the complete HTPBS001 response extent, and the real worker borrow lasts until caller delivery and task retirement.
 
 The native context holds magic HTPAWC01, bytes4096, engine@16, hub@24, pool@32, job@40, tag@48, stage@56, private PN@64, full 320-byte HIA worker reply@128 and full 64-byte HPTWB001 borrow@448. Stage1 is admitted/pending, stage2 owns the worker result loan, stage3 records actual future Drop. No public JSON field selects a pointer, job, private tag, context or operation.
 
