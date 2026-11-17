@@ -1,0 +1,58 @@
+name: Audit pinned anchor independent uploaded evidence read
+on:
+  push:
+    branches: [hia-audit-pinned-anchor-independent-v1-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Admit separately frozen independent reader source
+        run: |
+          export ANCHOR_INDEPENDENT="$RUNNER_TEMP/audit-pinned-anchor-independent-v1"
+          printf 'ANCHOR_INDEPENDENT=%s\n' "$ANCHOR_INDEPENDENT" >> "$GITHUB_ENV"
+          mkdir "$ANCHOR_INDEPENDENT"
+          cp -a tests/hia_native/audit_pinned_anchor_independent_v1 "$ANCHOR_INDEPENDENT/source"
+          mkdir "$ANCHOR_INDEPENDENT/proof"
+          python3 -I -B - <<'PY'
+          import hashlib,os
+          from pathlib import Path
+          source=Path(os.environ["ANCHOR_INDEPENDENT"])/"source"
+          assert hashlib.sha256((source/"SOURCE.json").read_bytes()).hexdigest()=="bffbd8b4e51bf406d22da90e8c06607ea113b7088a21c3e5492fff296b110288"
+          for p in source.rglob("*.py"):compile(p.read_bytes(),str(p),"exec")
+          PY
+      - name: Retrieve exact successful recovery upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14325127327/zip > "$ANCHOR_INDEPENDENT/uploaded.zip"
+      - name: Reopen every complete ZIP/TAR/source/original byte and mode
+        run: |
+          timeout --signal=KILL 180 python3 -I -B "$ANCHOR_INDEPENDENT/source/read_archive.py" --archive "$ANCHOR_INDEPENDENT/uploaded.zip" --destination "$ANCHOR_INDEPENDENT/relocated" --receipt "$ANCHOR_INDEPENDENT/proof/ARCHIVE.json"
+      - name: Reopen complete relocated semantic/control evidence under unchanged guard
+        run: |
+          timeout --signal=KILL 180 python3 -I -B "$ANCHOR_INDEPENDENT/source/verify.py" --destination "$ANCHOR_INDEPENDENT/relocated" --receipt "$ANCHOR_INDEPENDENT/proof/GUARDED.json" --source-sha256 bffbd8b4e51bf406d22da90e8c06607ea113b7088a21c3e5492fff296b110288 > "$ANCHOR_INDEPENDENT/proof/verify.stdout" 2> "$ANCHOR_INDEPENDENT/proof/verify.stderr"
+          cat "$ANCHOR_INDEPENDENT/proof/verify.stdout"
+      - name: Preserve complete independent failure diagnostics
+        if: always()
+        run: |
+          if test -f "$ANCHOR_INDEPENDENT/proof/verify.stderr"; then cat "$ANCHOR_INDEPENDENT/proof/verify.stderr"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: audit-pinned-anchor-independent-v1
+          path: |
+            ${{ runner.temp }}/audit-pinned-anchor-independent-v1/proof
+            ${{ runner.temp }}/audit-pinned-anchor-independent-v1/source
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 30
