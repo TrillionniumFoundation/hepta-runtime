@@ -32,10 +32,18 @@ def instrument(root,out):
     p.write_text(text)
     proof={'schema':'extract.public118.native-diagnostic-overlay.v1','base_source':'a521066dfa07db38e6a22bd2f03d1dae3c203cc2','before':{'bytes':len(before.encode()),'sha256':sha(before.encode())},'after':{'bytes':len(text.encode()),'sha256':sha(text.encode())},'changes':['after callable return, observe existing contexts without changing return or any admission','hint callback stores stage and actual return in previously unused opaque bytes232..255'],'diagnostic_only':True,'production_candidate':False,'semantic_checks_removed':False}
     put(out/'DIAGNOSTIC_OVERLAY.json',proof)
+    cache=root/'scripts/runtime_extract_cache_bridge.S';cache_before=cache.read_text()
+    old='    cmp qword ptr [rsi + 8], 3\n    jne rec_cache_invalid\n'
+    new='    cmp qword ptr [rsi + 8], 3\n    je rec_cache_operation\n    cmp qword ptr [rsi + 8], 7\n    jne rec_cache_invalid\n'
+    cache_after=exactly(cache_before,old,new);cache.write_text(cache_after)
+    cache_proof={'before':{'bytes':len(cache_before.encode()),'sha256':sha(cache_before.encode())},'after':{'bytes':len(cache_after.encode()),'sha256':sha(cache_after.encode())},'operation':7,'reason':'source-owned invalidate-local-variants request after the real extract file edit','HIA_payload_validation_unchanged':True}
+    put(out/'CACHE_OPERATION7_FIX.json',cache_proof)
     binding=root/'native/runtime_mcp_sources.json';old=binding.read_bytes()
     assert sha(old)=='2c423747b2827c3a6d0993b89583c47691640ea44fcf5f77e6c0ed2aaaf0dc70'
     v=json.loads(old);assert v['sources']['scripts/runtime_extract_body_bridge.S']==proof['before']
-    v['sources']['scripts/runtime_extract_body_bridge.S']=proof['after'];put(binding,v)
+    v['sources']['scripts/runtime_extract_body_bridge.S']=proof['after']
+    assert v['sources']['scripts/runtime_extract_cache_bridge.S']==cache_proof['before']
+    v['sources']['scripts/runtime_extract_cache_bridge.S']=cache_proof['after'];put(binding,v)
     put(out/'DIAGNOSTIC_BINDING.json',{'old_sha256':sha(old),'new_sha256':sha(binding.read_bytes())})
 def main():
     assert os.environ.get('GITHUB_ACTIONS')=='true'
