@@ -1,0 +1,48 @@
+name: Publication session runtime lifetime source gate
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-runtime-source-6780-v1-20261117']
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PI_PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/publication_runtime_separation_v1" "PI_RUN=$RUNNER_TEMP/publication-runtime-source" "PI_DRIVER=$RUNNER_TEMP/publication-runtime-driver" "PI_EXPORT=$RUNNER_TEMP/publication-runtime-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/publication_runtime_separation_v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: baseline
+          ref: a4d92ceadabb59376088be7301f26b06e44cf849
+          persist-credentials: false
+          sparse-checkout: |
+            authoring
+            native
+            scripts
+            runtime_support
+            tests/hia_native
+      - name: Exact source inverse and five actual native boundaries
+        run: |
+          python3 -I -S -B "$PI_PACKAGE/source/author.py" --baseline "$GITHUB_WORKSPACE/baseline" --output "$PI_RUN" > "$PI_DRIVER.stdout" 2> "$PI_DRIVER.stderr"
+          cat "$PI_DRIVER.stdout"
+      - name: Preserve all new source and actual disassembly
+        if: always()
+        run: |
+          python3 -I -S -B "$PI_PACKAGE/exporter/archive.py" pack --source "$PI_PACKAGE" --capture "$PI_RUN" --output "$PI_EXPORT" --driver-prefix "$PI_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; p=pathlib.Path(os.environ["PI_DRIVER"]+".stderr"); print(p.read_text() if p.exists() else "")'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-runtime-source-${{ github.sha }}
+          path: ${{ env.PI_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
