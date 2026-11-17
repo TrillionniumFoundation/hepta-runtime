@@ -1,0 +1,5 @@
+# Strict Base64 decode completed
+
+All 11,918 actual CPython/native HIA pairs passed: 9,010 complete decoded results and 2,908 exact errors. The 503 private calls include 228 framing/UTF-8 refusals, 92 capacity refusals and 183 complete admitted results. Every output tail and workspace byte was compared. Nine honestly altered captures were rejected and two full relocations admitted. The independent uploaded reader completed in 48.860447939 seconds under the unchanged 180-second limit, checked all 29,511 files / 5,530,392,858 logical bytes and 34,857 unchanged entries, with zero application or physical-producer replays.
+
+The unchanged production source has 19 functions, 1,971 operations and a 77,104-byte native image. Its only installed production files are the HIA source and raw composition receipt; authoring/reference/qualification drivers are build and evidence material. The final HIA/runtime package must explicitly render Error class 15, integrate caller chunk limits in their original order, and close write/upload/public routes. These routes and the default graph are not changed by this leaf.
