@@ -9,3 +9,5 @@ The recipe fresh-compiles115 direct HIA images plus the packed8 worker images, t
 Both configurations advertise exact actual native Tool metadata:11 installed entries with runtime configuration and8 without it. The existing hidden Batch/Bellman route policy is unchanged. Root's default integration and historical workflow fixes are not modified by this isolated graph.
 
 All exchange/lane budgets remain60/180 seconds in later semantic recipes. This build keeps its existing15-minute job and internal compiler/link/pack bounds.
+
+Revision2 preserves the first graph-build failure, where a second entry tried to create the first entry's wide-elf-linker directory. Each entry now has its own fresh pack/linker directory and copied, checked bootstrap; only the leaf manifests remain intentionally shared through strict checked_member. No graph source, ABI, HIA image, request domain or time budget changed. The complete uploaded failed artifact is independently reread in this job.

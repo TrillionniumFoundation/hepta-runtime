@@ -59,11 +59,12 @@ def main():
         for label, command in commands:
             report["processes"].append(run_build_step(output, label, command))
             put(output / "BUILD.json", report)
-        shutil.copytree(output / "worker/build/bootstrap", output / "build/bootstrap")
         reuse = None
         for role, flags in (("public", {}), ("filesystem", {"private_fixture": True}),
                             ("trace", {"private_pump_fixture": True, "private_pump_trace": True})):
-            manifest = build_runtime_mcp(hepta, output / "build", name="publication-" + role,
+            role_build = output / ("build-" + role)
+            shutil.copytree(output / "worker/build/bootstrap", role_build / "bootstrap")
+            manifest = build_runtime_mcp(hepta, role_build, name="publication-" + role,
                 source_root=source, manifests=reuse, bellman_port_build=output / "port/build-v3",
                 bellman_port_package=package, bellman_worker_build=output / "worker", **flags)
             raw = manifest.read_bytes()
