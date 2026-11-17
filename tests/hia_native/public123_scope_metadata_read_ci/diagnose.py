@@ -8,7 +8,7 @@ for name in ("capture-source","native-source","output"):p.add_argument("--"+name
 a=p.parse_args();source=a.capture_source.resolve(strict=True);native=a.native_source.resolve(strict=True);out=a.output.absolute()
 assert not out.exists();out.mkdir(parents=True)
 sys.path[:0]=[str(native),str(source),str(source/"build_reader"),str(HERE)]
-import callable_common,read_only_guard as guard,read_capture_fixed as reader
+import callable_common,read_only_guard as guard,read_capture_fixed as reader,atomic_frames
 from restore_inputs import flat_archive
 from restore_graph import download
 from capture_common import file_pin
@@ -57,7 +57,6 @@ def inspect():
             case=json.loads((actual/side/("%03d"%i)/"CASE.json").read_bytes())
             snapshots=[case["initial"]]+[s["snapshot"] for s in case["steps"] if "snapshot" in s]+[case["final"]]
             raw.append({"side":side,"snapshots":[s["complete_metadata"] for s in snapshots]})
-        import atomic_frames
         atomic=atomic_frames.inspect(actual/"native"/("%03d"%i)/"process") if i==3 else None
         result.append({"atomic":atomic,"case":i,"name":left["name"],"fields":fields,"final":final,"complete_raw_metadata":raw,"native_complete_scope_context_observations":len(right["trace"]["request_scope_mappings"])})
     return {"status":"COMPLETE_RETAINED_PAIR_DIAGNOSTIC_READ","application_executions":0,"qualified":False,"cases":result}
