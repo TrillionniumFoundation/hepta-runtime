@@ -270,7 +270,7 @@ fs_fixture_failure:
     jmp fatal
 .balign 8
 grow_fixture_images:
-    .zero 512 /* 64 fixed engine slots; extract59..63. */
+    .zero 552 /* 69 fixed engine slots; private extract selector64 remains a fixture alias. */
 
 /* Private qualification observation. These actions never enter stdio JSON. */
 fs_fixture_authority_release:

@@ -25,6 +25,10 @@ from text_editor_create_private_pack import pack
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 BASE = 'scripts/config_mcp_grow_adapter.S'
 BOUNDARIES = [
+    'scripts/text_publication_callable.S',
+    'scripts/runtime_publication_body_bridge.S',
+    'scripts/runtime_publication_install.S',
+    'scripts/runtime_publication_scope_bridge.S',
     'scripts/runtime_extract_wait.S',
     'scripts/runtime_mcp_task_storage.S',
     'scripts/runtime_mcp_task_extract.S',
@@ -182,6 +186,11 @@ MEMBERS = [
     ('extract_body', 'extract_body', 'history.v1'),
     ('extract_data', 'extract_data', 'history.v1'),
     ('extract_line_verify', 'extract_line_verify', 'history.v1'),
+    ('publisher_gateway', 'text_publication_gateway', 'history.v1'),
+    ('publisher_params', 'text_file_write_params', 'history.v1'),
+    ('publisher_call', 'text_publication_call', 'history.v1'),
+    ('publisher_body', 'text_file_publication', 'history.v1'),
+    ('publisher_errno', 'directory_errno', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -267,6 +276,7 @@ FALSE_FLAGS = ['complete_sdk_frontend', 'whole_view_replaced', 'whole_runtime_re
 
 EXTRA.extend([None, 'request_tasks'])
 EXTRA.extend(['extract_gateway', 'extract_params', 'extract_call', 'extract_adapter', None])
+EXTRA.extend(['publisher_gateway', 'publisher_params', 'publisher_call', None, None])
 PORT_PACKAGE_SHA256 = '2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1'
 
 
@@ -425,6 +435,9 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
     processes.append(execute(folder, 'assemble', ['as', '--64', '-o', str(folder / 'bridge.o'), str(folder / 'combined.S')], 60))
     configuration = {symbol: images[member] for symbol, member in zip(CONFIG_SYMBOLS, CONFIG)}
     configuration.update({name: images[name] for name in FENCE})
+    configuration.update(text_publication_body=images['publisher_body'],
+                         text_publication_codec=images['rf_sha'],
+                         text_publication_errno=images['publisher_errno'])
     extra = {slot: images[member] for slot, member in enumerate(EXTRA) if member is not None}
     extra[57] = images['bellman_port']
     view_images = {member: images[member] for member in VIEW}
@@ -433,7 +446,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 110
+    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 115
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -498,9 +511,15 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'extract_local_body_only': True, 'extract_remote_qualified': False,
               'extract_catalog_policy_qualified': False,
               'batch_private_slots': [47,48,49,50,51,52],
+              'publication_fixed_descriptors': [64,65,66,67,68],
+              'publication_forget_capability': {'slot': 68, 'parent': 66, 'local': 6, 'scope_output_loan': 96},
+              'publication_callable_context': 'descriptor67+8',
+              'publication_borrow_retained_until_parent_delivery': True,
+              'publication_gateway_caller_qualified': False,
+              'publication_public_route_registered': True,
               'batch_public_route_registered': True, 'batch_public_route_qualified': False,
               'batch_gateway_caller_qualified': False, 'batch_callable_scope_borrow_maximum': 1048672,
-              'advertised_catalog_tools': 10,
+              'advertised_catalog_tools': 11,
               'candidate_extra_registered_tools': ['batch_edit', 'weight_bellman_plan'],
               'combined_installed102_task_pump_qualified': False,
               'authority_fixed_local_members': ['authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader'],
