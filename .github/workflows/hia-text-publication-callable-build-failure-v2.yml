@@ -1,0 +1,39 @@
+name: Read complete retained publication callable build failure
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-callable-build-failure-read-6780-v2-20261117']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  full-bytes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime variables
+        run: |
+          printf '%s\n' "PB_READ=$RUNNER_TEMP/text-publication-callable-build-failure-v2" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/text_publication_callable_build_failure_v2
+      - name: Complete ZIP, TAR and member verification without execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum qualification/text_publication_callable_build_failure_v2/read_failure.py | cut -d' ' -f1)" = 3641227be728801b7e36c1c13790b21d185efbeaaad042370fc4221f0e4e2a51
+          python3 -I -S -B qualification/text_publication_callable_build_failure_v2/read_failure.py --output "$PB_READ"
+      - name: Preserve complete readback and selected exact original evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-callable-build-failure-${{ github.sha }}
+          path: ${{ env.PB_READ }}/proof
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
