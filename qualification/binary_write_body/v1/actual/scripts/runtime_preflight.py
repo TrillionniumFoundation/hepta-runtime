@@ -15,9 +15,17 @@ def capture(source,output):
     require(pin(python)==expected and signal.getsignal(13)==signal.getsignal(25)==signal.SIG_IGN,"actual original interpreter/signal profile")
     modules={}
     for name,module in(("base64",base64),("binascii",binascii),("fcntl",fcntl),("hashlib",hashlib),("json",json),("os",os),("uuid",uuid)):
-        path=Path(module.__file__).resolve(strict=True);raw=path.read_bytes();out=output/(name+path.suffix);out.write_bytes(raw)
+        origin=module.__spec__.origin
+        if not hasattr(module,"__file__"):
+            require(name in sys.builtin_module_names and origin=="built-in","actual built-in module provenance")
+            path=python;out=output/"python.elf";kind="built-in-elf"
+        else:
+            path=Path(module.__file__).resolve(strict=True);out=output/(name+path.suffix);kind="module-file"
+        raw=path.read_bytes()
+        if out.exists():require(out.read_bytes()==raw,"one shared actual builtin ELF")
+        else:out.write_bytes(raw)
         require(pin(out)==pin(path),"complete actual standard-library input")
-        modules[name]=dict(path=str(path),copy=out.name,**pin(out))
+        modules[name]=dict(path=str(path),copy=out.name,kind=kind,origin=origin,interpreter=expected,**pin(out))
     syntax=[]
     for path in sorted(source.rglob("*.py")):
         compile(path.read_bytes(),str(path),"exec",flags=ast.PyCF_ONLY_AST);syntax.append(path.relative_to(source).as_posix())

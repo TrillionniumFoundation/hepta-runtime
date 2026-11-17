@@ -2,7 +2,7 @@ name: Qualify full HIA locked binary write against actual original
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-write-actual-6780-20261117]
+    branches: [hia-binary-write-actual-v2-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -10,7 +10,7 @@ env:
   LC_ALL: C.UTF-8
   PYTHONDONTWRITEBYTECODE: '1'
   WRITE_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_write_body/v1/actual
-  WRITE_MANIFEST: 2c68c8cc301bc3ff596a9545b0cf13146cd2abff68e838f8c43cf336937f61f1
+  WRITE_MANIFEST: 5a4adda7189b444d5451381e815eaf7defdc4db0e42b77b222c9c630e8f3eb57
 jobs:
   source:
     runs-on: ubuntu-24.04
