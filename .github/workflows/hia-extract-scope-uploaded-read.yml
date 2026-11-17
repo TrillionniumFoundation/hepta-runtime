@@ -25,9 +25,6 @@ jobs:
           - eof-modern-complete
           - ordinary-a-modern-complete
           - ordinary-b-modern-complete
-          - ordinary-a-legacy-semantic
-          - ordinary-a-modern-semantic
-          - ordinary-b-modern-semantic
     steps:
       - name: Checkout frozen independent readers
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -39,7 +36,7 @@ jobs:
       - name: Complete source admission
         run: |
           printf '%s\n' "READ_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_uploaded_read_ci" "READ_CAPTURE=$RUNNER_TEMP/scope-uploaded-read" "READ_EXPORT=$RUNNER_TEMP/scope-uploaded-export" "READ_DRIVER=$RUNNER_TEMP/scope-uploaded-driver" >> "$GITHUB_ENV"
-          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_uploaded_read_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 'b7b1c0e2143373fd3455e9fc04dd7ba5acb3235090e86c42bf687c1f77e1404a'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_uploaded_read_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '5bd9581fd93a16fa59918d9533d216edc1d70ab2bb45edb02a9ca200f0e7813c'
           python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_uploaded_read_ci/check_source.py"
       - name: Independently read full archives and actual retained evidence
         env:

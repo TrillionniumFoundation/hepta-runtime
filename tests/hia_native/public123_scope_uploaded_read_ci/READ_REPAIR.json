@@ -1,0 +1,13 @@
+{
+  "schema": "hepta.runtime.scope-uploaded-reader.literal-exception-repair.v1",
+  "retained_failure": {
+    "source": "431aa632255a2f0a778a42908d97ca05f5d24414",
+    "run": 44081729963,
+    "roles": "six complete roles; semantic independent roles unaffected",
+    "reason": "Independent pure reader enumerated ValueError but omitted json.JSONDecodeError, a subclass caught and retained by the original physical control reader."
+  },
+  "change": "For a .json physical target only, recreate json.loads on the complete saved changed bytes, require the exact JSONDecodeError message and position to equal the recorded control error. Full bytes/mode/source/guard checks retained.",
+  "application_executions": 0,
+  "budget_seconds": 180,
+  "complete_role_only": true
+}

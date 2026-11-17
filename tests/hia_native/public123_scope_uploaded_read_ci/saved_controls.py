@@ -68,7 +68,15 @@ def controls(capture,root,recipe,source,process,qualification,reader,prepared,ro
                 require(before==actual[target].read_bytes() and after==bytes([before[0]^1])+before[1:],"all before/after physical bytes")
                 require(pin(path/"before.bin")==mutation["before"] and pin(path/"after.bin")==mutation["after"],"complete physical mutation pins")
                 roots[0][target]=(path/"after.bin",mutation["mode"])
-                require(proof["evidence"]["status"]=="PHYSICAL_EVIDENCE_REJECTED" and proof["evidence"]["type"] in ("ValueError","AssertionError","KeyError","UnicodeDecodeError"),"actual physical rejection")
+                error_type=proof["evidence"]["type"]
+                allowed=error_type in ("ValueError","AssertionError","KeyError","UnicodeDecodeError")
+                if error_type=="JSONDecodeError" and target.endswith(".json"):
+                    try:json.loads(after)
+                    except json.JSONDecodeError as error:
+                        require(str(error)==proof["evidence"]["error"],"exact original JSONDecodeError bytes, position and message")
+                        allowed=True
+                    else:raise AssertionError("saved invalid JSON control parsed successfully")
+                require(proof["evidence"]["status"]=="PHYSICAL_EVIDENCE_REJECTED" and allowed,"actual physical rejection: "+repr(proof["evidence"]))
                 names={"before.bin","after.bin","MUTATION.json","READ.json","RETIREMENT.json"}
             else:
                 require(mutation is None and proof["evidence"]==qualification,"exact complete relocated evidence")
