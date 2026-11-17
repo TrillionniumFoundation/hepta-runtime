@@ -1,0 +1,1695 @@
+{
+  "descriptor_complete_reads": 2,
+  "descriptor_refusals": [
+    {
+      "name": "directory-no-follow-required",
+      "refusal": "history-aggregate read-only guard: unprotected-directory-open"
+    },
+    {
+      "name": "foreign-directory",
+      "refusal": "history-aggregate read-only guard: foreign-read"
+    },
+    {
+      "name": "preexisting-directory-descriptor",
+      "refusal": "history-aggregate read-only guard: foreign-file-descriptor"
+    },
+    {
+      "name": "relative-parent-escape",
+      "refusal": "history-aggregate read-only guard: noncanonical-descriptor-path"
+    },
+    {
+      "name": "replaced-directory-descriptor",
+      "refusal": "history-aggregate read-only guard: foreign-file-descriptor"
+    },
+    {
+      "name": "relative-descriptor-write",
+      "refusal": "history-aggregate read-only guard: descriptor-write-open"
+    }
+  ],
+  "guard_refusals": [
+    {
+      "guard_event": "file-write",
+      "name": "python-file-write",
+      "refusal": "history-aggregate read-only guard: file-write"
+    },
+    {
+      "guard_event": "descriptor-write-open",
+      "name": "descriptor-open",
+      "refusal": "history-aggregate read-only guard: descriptor-write-open"
+    },
+    {
+      "guard_event": "descriptor-write",
+      "name": "descriptor-write",
+      "refusal": "history-aggregate read-only guard: descriptor-write"
+    },
+    {
+      "guard_event": "filesystem-mutation",
+      "name": "metadata-mode",
+      "refusal": "history-aggregate read-only guard: filesystem-mutation"
+    },
+    {
+      "guard_event": "filesystem-mutation",
+      "name": "metadata-time",
+      "refusal": "history-aggregate read-only guard: filesystem-mutation"
+    },
+    {
+      "guard_event": "filesystem-mutation",
+      "name": "directory-create",
+      "refusal": "history-aggregate read-only guard: filesystem-mutation"
+    },
+    {
+      "guard_event": "process-execution",
+      "name": "subprocess",
+      "refusal": "history-aggregate read-only guard: process-execution"
+    },
+    {
+      "guard_event": "process-execution",
+      "name": "shell",
+      "refusal": "history-aggregate read-only guard: process-execution"
+    },
+    {
+      "guard_event": "native-mapping",
+      "name": "native-dlopen",
+      "refusal": "history-aggregate read-only guard: native-mapping"
+    },
+    {
+      "guard_event": "native-mapping",
+      "name": "native-mmap",
+      "refusal": "history-aggregate read-only guard: native-mapping"
+    },
+    {
+      "guard_event": "foreign-read",
+      "name": "producer-or-foreign-read",
+      "refusal": "history-aggregate read-only guard: foreign-read"
+    },
+    {
+      "guard_event": "foreign-file-descriptor",
+      "name": "unadmitted-file-descriptor",
+      "refusal": "history-aggregate read-only guard: foreign-file-descriptor"
+    }
+  ],
+  "mechanical_refusals": [
+    "new-directory",
+    "existing-foreign-directory",
+    "create-only-existing-directory",
+    "undeclared-process",
+    "modified-metadata-deadline",
+    "uncaptured-declared-metadata"
+  ],
+  "native_or_rust_executions": 0,
+  "prefix_regressions": 8,
+  "prefix_stdout": "test_actual_prior_command_limit_exit_and_full_stream_pin_remain_bound (_original_prefix_regressions.PublicControlCheckpointTests.test_actual_prior_command_limit_exit_and_full_stream_pin_remain_bound) ... ok\ntest_control_moved_ahead_of_a_prior_process_is_refused (_original_prefix_regressions.PublicControlCheckpointTests.test_control_moved_ahead_of_a_prior_process_is_refused) ... ok\ntest_every_other_complete_snapshot_binding_remains_required (_original_prefix_regressions.PublicControlCheckpointTests.test_every_other_complete_snapshot_binding_remains_required) ... ok\ntest_exact_current_prefix_is_admitted (_original_prefix_regressions.PublicControlCheckpointTests.test_exact_current_prefix_is_admitted) ... ok\ntest_later_storage_control_preserves_the_original_public_snapshot (_original_prefix_regressions.PublicControlCheckpointTests.test_later_storage_control_preserves_the_original_public_snapshot) ... ok\ntest_missing_and_duplicate_own_process_are_refused (_original_prefix_regressions.PublicControlCheckpointTests.test_missing_and_duplicate_own_process_are_refused) ... ok\ntest_missing_inserted_or_reordered_prior_process_is_refused (_original_prefix_regressions.PublicControlCheckpointTests.test_missing_inserted_or_reordered_prior_process_is_refused) ... ok\ntest_real_completion_failure_is_not_reclassified (_original_prefix_regressions.PublicControlCheckpointTests.test_real_completion_failure_is_not_reclassified) ... ok\n\n----------------------------------------------------------------------\nRan 8 tests in 0.243s\n\nOK\n",
+  "retained_schema_controls": {
+    "actual_original_semantics_replayed": false,
+    "admissions": [
+      {
+        "folder": "/tmp/history-schema-write-controls-txg4yo2c/capture/view-call-original",
+        "initial_inventory": {
+          "public-input-schema.json": {
+            "bytes": 16,
+            "ctime_ns": 1794879035016705804,
+            "device": 39,
+            "inode": 86467,
+            "mode": 33188,
+            "mtime_ns": 1794879035016705804,
+            "sha256": "5357bab47fa8be4279f2e9a4e022c2c8ee97dc45e770f2536c0c06ee0ea5a7bf"
+          },
+          "public-schema.stdout": {
+            "bytes": 29,
+            "ctime_ns": 1794879035016613858,
+            "device": 39,
+            "inode": 86465,
+            "mode": 33188,
+            "mtime_ns": 1794879035016613858,
+            "sha256": "ba8fff1a6f8172ea7efb84f66d671716bd35bd146fd8fd85762d92d5dadf6cfa"
+          },
+          "raw-input-schema.json": {
+            "bytes": 13,
+            "ctime_ns": 1794879035016690932,
+            "device": 39,
+            "inode": 86466,
+            "mode": 33188,
+            "mtime_ns": 1794879035016690932,
+            "sha256": "189ba3b54660c876dc54f6270b65eeb5be4ffd8cabab4c52249af7c6e6c42bfe"
+          }
+        },
+        "input_name": "public-schema.stdout",
+        "native_or_rust_executions": 0,
+        "original_summary_function_modified": false,
+        "output": "/tmp/history-schema-write-controls-txg4yo2c/capture",
+        "output_names": [
+          "raw-input-schema.json",
+          "public-input-schema.json"
+        ],
+        "pending_frame": false,
+        "pending_operations": [],
+        "physical_writes": 0,
+        "records": [
+          {
+            "caller_function": "additional_reference_summary",
+            "caller_source": "tests/hia_native/view_call_oracle/run.py",
+            "folder": "/tmp/history-schema-write-controls-txg4yo2c/capture/view-call-original",
+            "operations": [
+              {
+                "complete_bytes": {
+                  "bytes": 13,
+                  "sha256": "189ba3b54660c876dc54f6270b65eeb5be4ffd8cabab4c52249af7c6e6c42bfe"
+                },
+                "input_stream": {
+                  "bytes": 29,
+                  "sha256": "ba8fff1a6f8172ea7efb84f66d671716bd35bd146fd8fd85762d92d5dadf6cfa"
+                },
+                "operation": "write_bytes",
+                "path": "raw-input-schema.json",
+                "physical_writes": 0
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 16,
+                  "sha256": "5357bab47fa8be4279f2e9a4e022c2c8ee97dc45e770f2536c0c06ee0ea5a7bf"
+                },
+                "input_stream": {
+                  "bytes": 29,
+                  "sha256": "ba8fff1a6f8172ea7efb84f66d671716bd35bd146fd8fd85762d92d5dadf6cfa"
+                },
+                "operation": "write_bytes",
+                "path": "public-input-schema.json",
+                "physical_writes": 0
+              }
+            ],
+            "parent_function": "view_reference",
+            "parent_source": "scripts/hia_native_runtime_mcp_original.py",
+            "status": "PASS"
+          }
+        ],
+        "schema": "hepta.history.retained-schema-writebacks.v1",
+        "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source",
+        "source_files": {
+          "scripts/hia_native_runtime_mcp_original.py": {
+            "bytes": 13097,
+            "sha256": "b051ed49dba6dfa33cdc17b812caa9ff395746905aba1bc395f99cc00ce60ec9"
+          },
+          "tests/hia_native/view_call_oracle/run.py": {
+            "bytes": 13903,
+            "sha256": "19ed876d121a1c917c667ccc3ead4dae1ed25c4a5b7cf1744625773c921ca33b"
+          }
+        },
+        "summary_result_cached": false,
+        "violations": []
+      },
+      {
+        "folder": "/tmp/history-schema-write-controls-txg4yo2c/capture/view-call-original",
+        "initial_inventory": {
+          "public-input-schema.json": {
+            "bytes": 16,
+            "ctime_ns": 1794879035016705804,
+            "device": 39,
+            "inode": 86467,
+            "mode": 33188,
+            "mtime_ns": 1794879035016705804,
+            "sha256": "5357bab47fa8be4279f2e9a4e022c2c8ee97dc45e770f2536c0c06ee0ea5a7bf"
+          },
+          "public-schema.stdout": {
+            "bytes": 29,
+            "ctime_ns": 1794879035020078110,
+            "device": 39,
+            "inode": 86465,
+            "mode": 33188,
+            "mtime_ns": 1794879035020078110,
+            "sha256": "ba8fff1a6f8172ea7efb84f66d671716bd35bd146fd8fd85762d92d5dadf6cfa"
+          },
+          "raw-input-schema.json": {
+            "bytes": 13,
+            "ctime_ns": 1794879035019632461,
+            "device": 39,
+            "inode": 86466,
+            "mode": 33188,
+            "mtime_ns": 1794879035019632461,
+            "sha256": "189ba3b54660c876dc54f6270b65eeb5be4ffd8cabab4c52249af7c6e6c42bfe"
+          }
+        },
+        "input_name": "public-schema.stdout",
+        "native_or_rust_executions": 0,
+        "original_summary_function_modified": false,
+        "output": "/tmp/history-schema-write-controls-txg4yo2c/capture",
+        "output_names": [
+          "raw-input-schema.json",
+          "public-input-schema.json"
+        ],
+        "pending_frame": false,
+        "pending_operations": [],
+        "physical_writes": 0,
+        "records": [
+          {
+            "caller_function": "additional_reference_summary",
+            "caller_source": "tests/hia_native/view_call_oracle/run.py",
+            "folder": "/tmp/history-schema-write-controls-txg4yo2c/capture/view-call-original",
+            "operations": [
+              {
+                "complete_bytes": {
+                  "bytes": 13,
+                  "sha256": "189ba3b54660c876dc54f6270b65eeb5be4ffd8cabab4c52249af7c6e6c42bfe"
+                },
+                "input_stream": {
+                  "bytes": 29,
+                  "sha256": "ba8fff1a6f8172ea7efb84f66d671716bd35bd146fd8fd85762d92d5dadf6cfa"
+                },
+                "operation": "write_bytes",
+                "path": "raw-input-schema.json",
+                "physical_writes": 0
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 16,
+                  "sha256": "5357bab47fa8be4279f2e9a4e022c2c8ee97dc45e770f2536c0c06ee0ea5a7bf"
+                },
+                "input_stream": {
+                  "bytes": 29,
+                  "sha256": "ba8fff1a6f8172ea7efb84f66d671716bd35bd146fd8fd85762d92d5dadf6cfa"
+                },
+                "operation": "write_bytes",
+                "path": "public-input-schema.json",
+                "physical_writes": 0
+              }
+            ],
+            "parent_function": "view_reference",
+            "parent_source": "scripts/hia_native_runtime_mcp_original.py",
+            "status": "PASS"
+          }
+        ],
+        "schema": "hepta.history.retained-schema-writebacks.v1",
+        "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source",
+        "source_files": {
+          "scripts/hia_native_runtime_mcp_original.py": {
+            "bytes": 13097,
+            "sha256": "b051ed49dba6dfa33cdc17b812caa9ff395746905aba1bc395f99cc00ce60ec9"
+          },
+          "tests/hia_native/view_call_oracle/run.py": {
+            "bytes": 13903,
+            "sha256": "19ed876d121a1c917c667ccc3ead4dae1ed25c4a5b7cf1744625773c921ca33b"
+          }
+        },
+        "summary_result_cached": false,
+        "violations": []
+      }
+    ],
+    "complete_files_per_pair": 2,
+    "complete_pair_admissions": 2,
+    "control_callers_are_test_owned_python_stubs": true,
+    "early_and_late_alias_restoration": true,
+    "execution_attempts": [],
+    "fixture_file_bytes_restored": true,
+    "native_or_rust_executions": 0,
+    "original_summary_function_modified": false,
+    "refusals": [
+      {
+        "exception": "PermissionError",
+        "message": "read-only retained schema writeback: undeclared summary writer",
+        "name": "undeclared-summary-writer"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only retained schema writeback: undeclared summary caller",
+        "name": "undeclared-summary-caller"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only retained schema writeback: summary output root",
+        "name": "summary-wrong-root"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only retained schema writeback: summary output order or identity",
+        "name": "summary-wrong-order"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only retained schema writeback: complete recomputed schema bytes differ",
+        "name": "summary-changed-argument"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only retained schema writeback: retained schema bytes or metadata changed",
+        "name": "summary-changed-target"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only retained schema writeback: retained schema bytes or metadata changed",
+        "name": "summary-changed-input"
+      },
+      {
+        "exception": "ValueError",
+        "message": "complete original retained schema writeback pairs",
+        "name": "summary-omitted-second-write"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only retained schema writeback: summary bytes type",
+        "name": "summary-nonbytes"
+      },
+      {
+        "exception": "ValueError",
+        "message": "exact schema-writeback source: tests/hia_native/view_call_oracle/run.py",
+        "name": "changed-summary-source"
+      }
+    ],
+    "schema": "hepta.history.retained-schema-writeback-controls.v1",
+    "source_files_unchanged": true,
+    "status": "PASS"
+  },
+  "schema": "hepta.history.recovery-source-controls.v1",
+  "source_files": 18,
+  "source_manifest_sha256": "422c0a69ddbef37fa3431a898101f87529f511b14e81284f265730f7945c6b25",
+  "source_reconstruction_controls": {
+    "actual_generator_summary": {
+      "actual_original_get_info": true,
+      "actual_original_public_schema_functions": true,
+      "actual_sdk_parameters_adapter_fixture": true,
+      "actual_tokio_filesystem_io": true,
+      "additional_sources": {
+        "view_call_info_sdk": {
+          "bytes": 5411,
+          "sha256": "34e8c9211f7fa0a1bfb0e4fb6115cdef2d0d0a163b25309575f105f52d5cdb24"
+        },
+        "view_call_public_schema": {
+          "bytes": 5274,
+          "sha256": "1ea4bf7023497756eab9bb427974ffc9016dd83e0e7b72c7b9009b277c3ad884"
+        },
+        "view_call_router_sdk": {
+          "bytes": 7319,
+          "sha256": "d141e40c67ba155bb5094fd6201eebb027f73fa7599e07857b6fdb5ed04b3bf3"
+        }
+      },
+      "extracted_original_bodies_unchanged": true,
+      "original_full_tool_catalog_executed": false,
+      "original_source_files_match": true,
+      "original_view_handler_body_executed": false,
+      "registry_dependencies": 74,
+      "sdk_source": {
+        "bytes": 6339,
+        "sha256": "06fc7d117966546075f2802dce2adb0206cfce80aeddb83e52f212b6a450e8c7"
+      },
+      "source": {
+        "bytes": 60952,
+        "sha256": "8af898eff39c2922ae33769f246e5f6bcfdf249eb5c6a33205f3e0a8d52f6c30"
+      },
+      "source_commit": "70df0bca4c5062ee0565fb1feacc1f7e3e4864df",
+      "unsupported_branches_abort": true,
+      "whole_view_migrated": false
+    },
+    "actual_original_semantics_replayed": false,
+    "admissions": [
+      {
+        "active_reconstruction": false,
+        "crate": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original/crate",
+        "default_encoding": "locale",
+        "expected_callers": [
+          [
+            "scripts/hia_native_view_call_qualification.py",
+            "_original_evidence",
+            "view-original-materialization-"
+          ],
+          [
+            "scripts/hia_native_runtime_mcp_original.py",
+            "view_reference",
+            "runtime-mcp-original-source-"
+          ]
+        ],
+        "expected_directories": [
+          ".",
+          "src",
+          "src/bin"
+        ],
+        "expected_files": [
+          "Cargo.toml",
+          "Cargo.lock",
+          "src/main.rs",
+          "src/bin/view_call_sdk.rs",
+          "src/bin/view_call_router_sdk.rs",
+          "src/bin/view_call_public_schema.rs",
+          "src/bin/view_call_info_sdk.rs"
+        ],
+        "initial_inventory": {
+          ".": {
+            "bytes": 100,
+            "ctime_ns": 1794879034874590139,
+            "device": 39,
+            "inode": 86439,
+            "mode": 16877,
+            "mtime_ns": 1794879034874590139,
+            "sha256": null
+          },
+          "Cargo.lock": {
+            "bytes": 17877,
+            "ctime_ns": 1794879034874709225,
+            "device": 39,
+            "inode": 86442,
+            "mode": 33188,
+            "mtime_ns": 1794879034874709225,
+            "sha256": "6932ec85da80777fd533f446c78e176f65b37b5dd353b8be8c9bfce19d2c3615"
+          },
+          "Cargo.toml": {
+            "bytes": 513,
+            "ctime_ns": 1794879034874590139,
+            "device": 39,
+            "inode": 86441,
+            "mode": 33188,
+            "mtime_ns": 1794879034874590139,
+            "sha256": "033a2cbc482001ea4e2d8ea069a338f24d0c87cc2b6d05800b7184fc47e86af4"
+          },
+          "src": {
+            "bytes": 80,
+            "ctime_ns": 1794879034874771377,
+            "device": 39,
+            "inode": 86440,
+            "mode": 16877,
+            "mtime_ns": 1794879034874771377,
+            "sha256": null
+          },
+          "src/bin": {
+            "bytes": 120,
+            "ctime_ns": 1794879034877451249,
+            "device": 39,
+            "inode": 86444,
+            "mode": 16877,
+            "mtime_ns": 1794879034877451249,
+            "sha256": null
+          },
+          "src/bin/view_call_info_sdk.rs": {
+            "bytes": 5411,
+            "ctime_ns": 1794879034877535184,
+            "device": 39,
+            "inode": 86448,
+            "mode": 33188,
+            "mtime_ns": 1794879034877535184,
+            "sha256": "34e8c9211f7fa0a1bfb0e4fb6115cdef2d0d0a163b25309575f105f52d5cdb24"
+          },
+          "src/bin/view_call_public_schema.rs": {
+            "bytes": 5274,
+            "ctime_ns": 1794879034877451249,
+            "device": 39,
+            "inode": 86447,
+            "mode": 33188,
+            "mtime_ns": 1794879034877451249,
+            "sha256": "1ea4bf7023497756eab9bb427974ffc9016dd83e0e7b72c7b9009b277c3ad884"
+          },
+          "src/bin/view_call_router_sdk.rs": {
+            "bytes": 7319,
+            "ctime_ns": 1794879034877262971,
+            "device": 39,
+            "inode": 86446,
+            "mode": 33188,
+            "mtime_ns": 1794879034877262971,
+            "sha256": "d141e40c67ba155bb5094fd6201eebb027f73fa7599e07857b6fdb5ed04b3bf3"
+          },
+          "src/bin/view_call_sdk.rs": {
+            "bytes": 6339,
+            "ctime_ns": 1794879034877122123,
+            "device": 39,
+            "inode": 86445,
+            "mode": 33188,
+            "mtime_ns": 1794879034877122123,
+            "sha256": "06fc7d117966546075f2802dce2adb0206cfce80aeddb83e52f212b6a450e8c7"
+          },
+          "src/main.rs": {
+            "bytes": 60952,
+            "ctime_ns": 1794879034874771377,
+            "device": 39,
+            "inode": 86443,
+            "mode": 33188,
+            "mtime_ns": 1794879034874771377,
+            "sha256": "8af898eff39c2922ae33769f246e5f6bcfdf249eb5c6a33205f3e0a8d52f6c30"
+          }
+        },
+        "locale_encoding": "UTF-8",
+        "materialization_summary_cached": false,
+        "native_or_rust_executions": 0,
+        "new_file_writes": 0,
+        "original_materialize_function_modified": false,
+        "output": "/tmp/history-source-reconstruction-controls-c0bmktae/capture",
+        "records": [
+          {
+            "caller_function": "_original_evidence",
+            "caller_source": "scripts/hia_native_view_call_qualification.py",
+            "crate": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original/crate",
+            "error": null,
+            "operations": [
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": true,
+                "path": ".",
+                "physical_writes": 0
+              },
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": false,
+                "path": "src",
+                "physical_writes": 0
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 513,
+                  "sha256": "033a2cbc482001ea4e2d8ea069a338f24d0c87cc2b6d05800b7184fc47e86af4"
+                },
+                "operation": "copyfile",
+                "path": "Cargo.toml",
+                "physical_writes": 0,
+                "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source/tests/hia_native/view_call_oracle/Cargo.toml"
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 17877,
+                  "sha256": "6932ec85da80777fd533f446c78e176f65b37b5dd353b8be8c9bfce19d2c3615"
+                },
+                "operation": "copyfile",
+                "path": "Cargo.lock",
+                "physical_writes": 0,
+                "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source/tests/hia_native/view_call_oracle/Cargo.lock"
+              },
+              {
+                "characters": 60669,
+                "complete_bytes": {
+                  "bytes": 60952,
+                  "sha256": "8af898eff39c2922ae33769f246e5f6bcfdf249eb5c6a33205f3e0a8d52f6c30"
+                },
+                "operation": "write_text",
+                "path": "src/main.rs",
+                "physical_writes": 0
+              },
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": false,
+                "path": "src/bin",
+                "physical_writes": 0
+              },
+              {
+                "characters": 6339,
+                "complete_bytes": {
+                  "bytes": 6339,
+                  "sha256": "06fc7d117966546075f2802dce2adb0206cfce80aeddb83e52f212b6a450e8c7"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_sdk.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 7310,
+                "complete_bytes": {
+                  "bytes": 7319,
+                  "sha256": "d141e40c67ba155bb5094fd6201eebb027f73fa7599e07857b6fdb5ed04b3bf3"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_router_sdk.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 5274,
+                "complete_bytes": {
+                  "bytes": 5274,
+                  "sha256": "1ea4bf7023497756eab9bb427974ffc9016dd83e0e7b72c7b9009b277c3ad884"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_public_schema.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 5411,
+                "complete_bytes": {
+                  "bytes": 5411,
+                  "sha256": "34e8c9211f7fa0a1bfb0e4fb6115cdef2d0d0a163b25309575f105f52d5cdb24"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_info_sdk.rs",
+                "physical_writes": 0
+              }
+            ],
+            "status": "PASS",
+            "temporary_path": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original",
+            "temporary_prefix": "view-original-materialization-"
+          }
+        ],
+        "schema": "hepta.history.view-source-reconstruction.v2",
+        "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source",
+        "source_files": {
+          "scripts/hia_native_runtime_mcp_original.py": {
+            "bytes": 13097,
+            "sha256": "b051ed49dba6dfa33cdc17b812caa9ff395746905aba1bc395f99cc00ce60ec9"
+          },
+          "scripts/hia_native_view_call_qualification.py": {
+            "bytes": 87273,
+            "sha256": "6797db0667a828bd38ad27784cf7d17e1414b9bb1a7ed7a5891ed3938f78b85d"
+          },
+          "tests/hia_native/view_call_oracle/run.py": {
+            "bytes": 13903,
+            "sha256": "19ed876d121a1c917c667ccc3ead4dae1ed25c4a5b7cf1744625773c921ca33b"
+          },
+          "tests/hia_native/view_call_oracle/verify_sources.py": {
+            "bytes": 14395,
+            "sha256": "2118c3d91971887451bd3d72f468dfcfeb8e74f853c54f9273829fa676e4356c"
+          }
+        },
+        "violations": []
+      },
+      {
+        "active_reconstruction": false,
+        "crate": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original/crate",
+        "default_encoding": "locale",
+        "expected_callers": [
+          [
+            "scripts/hia_native_view_call_qualification.py",
+            "_original_evidence",
+            "view-original-materialization-"
+          ],
+          [
+            "scripts/hia_native_runtime_mcp_original.py",
+            "view_reference",
+            "runtime-mcp-original-source-"
+          ]
+        ],
+        "expected_directories": [
+          ".",
+          "src",
+          "src/bin"
+        ],
+        "expected_files": [
+          "Cargo.toml",
+          "Cargo.lock",
+          "src/main.rs",
+          "src/bin/view_call_sdk.rs",
+          "src/bin/view_call_router_sdk.rs",
+          "src/bin/view_call_public_schema.rs",
+          "src/bin/view_call_info_sdk.rs"
+        ],
+        "initial_inventory": {
+          ".": {
+            "bytes": 100,
+            "ctime_ns": 1794879034874590139,
+            "device": 39,
+            "inode": 86439,
+            "mode": 16877,
+            "mtime_ns": 1794879034874590139,
+            "sha256": null
+          },
+          "Cargo.lock": {
+            "bytes": 17877,
+            "ctime_ns": 1794879034874709225,
+            "device": 39,
+            "inode": 86442,
+            "mode": 33188,
+            "mtime_ns": 1794879034874709225,
+            "sha256": "6932ec85da80777fd533f446c78e176f65b37b5dd353b8be8c9bfce19d2c3615"
+          },
+          "Cargo.toml": {
+            "bytes": 513,
+            "ctime_ns": 1794879034874590139,
+            "device": 39,
+            "inode": 86441,
+            "mode": 33188,
+            "mtime_ns": 1794879034874590139,
+            "sha256": "033a2cbc482001ea4e2d8ea069a338f24d0c87cc2b6d05800b7184fc47e86af4"
+          },
+          "src": {
+            "bytes": 80,
+            "ctime_ns": 1794879034874771377,
+            "device": 39,
+            "inode": 86440,
+            "mode": 16877,
+            "mtime_ns": 1794879034874771377,
+            "sha256": null
+          },
+          "src/bin": {
+            "bytes": 120,
+            "ctime_ns": 1794879034877451249,
+            "device": 39,
+            "inode": 86444,
+            "mode": 16877,
+            "mtime_ns": 1794879034877451249,
+            "sha256": null
+          },
+          "src/bin/view_call_info_sdk.rs": {
+            "bytes": 5411,
+            "ctime_ns": 1794879034877535184,
+            "device": 39,
+            "inode": 86448,
+            "mode": 33188,
+            "mtime_ns": 1794879034877535184,
+            "sha256": "34e8c9211f7fa0a1bfb0e4fb6115cdef2d0d0a163b25309575f105f52d5cdb24"
+          },
+          "src/bin/view_call_public_schema.rs": {
+            "bytes": 5274,
+            "ctime_ns": 1794879034877451249,
+            "device": 39,
+            "inode": 86447,
+            "mode": 33188,
+            "mtime_ns": 1794879034877451249,
+            "sha256": "1ea4bf7023497756eab9bb427974ffc9016dd83e0e7b72c7b9009b277c3ad884"
+          },
+          "src/bin/view_call_router_sdk.rs": {
+            "bytes": 7319,
+            "ctime_ns": 1794879034877262971,
+            "device": 39,
+            "inode": 86446,
+            "mode": 33188,
+            "mtime_ns": 1794879034877262971,
+            "sha256": "d141e40c67ba155bb5094fd6201eebb027f73fa7599e07857b6fdb5ed04b3bf3"
+          },
+          "src/bin/view_call_sdk.rs": {
+            "bytes": 6339,
+            "ctime_ns": 1794879034877122123,
+            "device": 39,
+            "inode": 86445,
+            "mode": 33188,
+            "mtime_ns": 1794879034877122123,
+            "sha256": "06fc7d117966546075f2802dce2adb0206cfce80aeddb83e52f212b6a450e8c7"
+          },
+          "src/main.rs": {
+            "bytes": 60952,
+            "ctime_ns": 1794879034874771377,
+            "device": 39,
+            "inode": 86443,
+            "mode": 33188,
+            "mtime_ns": 1794879034874771377,
+            "sha256": "8af898eff39c2922ae33769f246e5f6bcfdf249eb5c6a33205f3e0a8d52f6c30"
+          }
+        },
+        "locale_encoding": "UTF-8",
+        "materialization_summary_cached": false,
+        "native_or_rust_executions": 0,
+        "new_file_writes": 0,
+        "original_materialize_function_modified": false,
+        "output": "/tmp/history-source-reconstruction-controls-c0bmktae/capture",
+        "records": [
+          {
+            "caller_function": "view_reference",
+            "caller_source": "scripts/hia_native_runtime_mcp_original.py",
+            "crate": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original/crate",
+            "error": null,
+            "operations": [
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": true,
+                "path": ".",
+                "physical_writes": 0
+              },
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": false,
+                "path": "src",
+                "physical_writes": 0
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 513,
+                  "sha256": "033a2cbc482001ea4e2d8ea069a338f24d0c87cc2b6d05800b7184fc47e86af4"
+                },
+                "operation": "copyfile",
+                "path": "Cargo.toml",
+                "physical_writes": 0,
+                "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source/tests/hia_native/view_call_oracle/Cargo.toml"
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 17877,
+                  "sha256": "6932ec85da80777fd533f446c78e176f65b37b5dd353b8be8c9bfce19d2c3615"
+                },
+                "operation": "copyfile",
+                "path": "Cargo.lock",
+                "physical_writes": 0,
+                "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source/tests/hia_native/view_call_oracle/Cargo.lock"
+              },
+              {
+                "characters": 60669,
+                "complete_bytes": {
+                  "bytes": 60952,
+                  "sha256": "8af898eff39c2922ae33769f246e5f6bcfdf249eb5c6a33205f3e0a8d52f6c30"
+                },
+                "operation": "write_text",
+                "path": "src/main.rs",
+                "physical_writes": 0
+              },
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": false,
+                "path": "src/bin",
+                "physical_writes": 0
+              },
+              {
+                "characters": 6339,
+                "complete_bytes": {
+                  "bytes": 6339,
+                  "sha256": "06fc7d117966546075f2802dce2adb0206cfce80aeddb83e52f212b6a450e8c7"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_sdk.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 7310,
+                "complete_bytes": {
+                  "bytes": 7319,
+                  "sha256": "d141e40c67ba155bb5094fd6201eebb027f73fa7599e07857b6fdb5ed04b3bf3"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_router_sdk.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 5274,
+                "complete_bytes": {
+                  "bytes": 5274,
+                  "sha256": "1ea4bf7023497756eab9bb427974ffc9016dd83e0e7b72c7b9009b277c3ad884"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_public_schema.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 5411,
+                "complete_bytes": {
+                  "bytes": 5411,
+                  "sha256": "34e8c9211f7fa0a1bfb0e4fb6115cdef2d0d0a163b25309575f105f52d5cdb24"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_info_sdk.rs",
+                "physical_writes": 0
+              }
+            ],
+            "status": "PASS",
+            "temporary_path": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original",
+            "temporary_prefix": "runtime-mcp-original-source-"
+          }
+        ],
+        "schema": "hepta.history.view-source-reconstruction.v2",
+        "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source",
+        "source_files": {
+          "scripts/hia_native_runtime_mcp_original.py": {
+            "bytes": 13097,
+            "sha256": "b051ed49dba6dfa33cdc17b812caa9ff395746905aba1bc395f99cc00ce60ec9"
+          },
+          "scripts/hia_native_view_call_qualification.py": {
+            "bytes": 87273,
+            "sha256": "6797db0667a828bd38ad27784cf7d17e1414b9bb1a7ed7a5891ed3938f78b85d"
+          },
+          "tests/hia_native/view_call_oracle/run.py": {
+            "bytes": 13903,
+            "sha256": "19ed876d121a1c917c667ccc3ead4dae1ed25c4a5b7cf1744625773c921ca33b"
+          },
+          "tests/hia_native/view_call_oracle/verify_sources.py": {
+            "bytes": 14395,
+            "sha256": "2118c3d91971887451bd3d72f468dfcfeb8e74f853c54f9273829fa676e4356c"
+          }
+        },
+        "violations": []
+      },
+      {
+        "active_reconstruction": false,
+        "crate": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original/crate",
+        "default_encoding": "locale",
+        "expected_callers": [
+          [
+            "scripts/hia_native_view_call_qualification.py",
+            "_original_evidence",
+            "view-original-materialization-"
+          ],
+          [
+            "scripts/hia_native_runtime_mcp_original.py",
+            "view_reference",
+            "runtime-mcp-original-source-"
+          ]
+        ],
+        "expected_directories": [
+          ".",
+          "src",
+          "src/bin"
+        ],
+        "expected_files": [
+          "Cargo.toml",
+          "Cargo.lock",
+          "src/main.rs",
+          "src/bin/view_call_sdk.rs",
+          "src/bin/view_call_router_sdk.rs",
+          "src/bin/view_call_public_schema.rs",
+          "src/bin/view_call_info_sdk.rs"
+        ],
+        "initial_inventory": {
+          ".": {
+            "bytes": 100,
+            "ctime_ns": 1794879034919112935,
+            "device": 39,
+            "inode": 86439,
+            "mode": 16877,
+            "mtime_ns": 1794879034919112935,
+            "sha256": null
+          },
+          "Cargo.lock": {
+            "bytes": 17877,
+            "ctime_ns": 1794879034948365755,
+            "device": 39,
+            "inode": 86442,
+            "mode": 33188,
+            "mtime_ns": 1794879034948365755,
+            "sha256": "6932ec85da80777fd533f446c78e176f65b37b5dd353b8be8c9bfce19d2c3615"
+          },
+          "Cargo.toml": {
+            "bytes": 513,
+            "ctime_ns": 1794879034874590139,
+            "device": 39,
+            "inode": 86441,
+            "mode": 33188,
+            "mtime_ns": 1794879034874590139,
+            "sha256": "033a2cbc482001ea4e2d8ea069a338f24d0c87cc2b6d05800b7184fc47e86af4"
+          },
+          "src": {
+            "bytes": 80,
+            "ctime_ns": 1794879034874771377,
+            "device": 39,
+            "inode": 86440,
+            "mode": 16877,
+            "mtime_ns": 1794879034874771377,
+            "sha256": null
+          },
+          "src/bin": {
+            "bytes": 120,
+            "ctime_ns": 1794879034967229134,
+            "device": 39,
+            "inode": 86444,
+            "mode": 16877,
+            "mtime_ns": 1794879034967229134,
+            "sha256": null
+          },
+          "src/bin/view_call_info_sdk.rs": {
+            "bytes": 5411,
+            "ctime_ns": 1794879034967240220,
+            "device": 39,
+            "inode": 86461,
+            "mode": 33188,
+            "mtime_ns": 1794879034967240220,
+            "sha256": "34e8c9211f7fa0a1bfb0e4fb6115cdef2d0d0a163b25309575f105f52d5cdb24"
+          },
+          "src/bin/view_call_public_schema.rs": {
+            "bytes": 5274,
+            "ctime_ns": 1794879034877451249,
+            "device": 39,
+            "inode": 86447,
+            "mode": 33188,
+            "mtime_ns": 1794879034877451249,
+            "sha256": "1ea4bf7023497756eab9bb427974ffc9016dd83e0e7b72c7b9009b277c3ad884"
+          },
+          "src/bin/view_call_router_sdk.rs": {
+            "bytes": 7319,
+            "ctime_ns": 1794879034877262971,
+            "device": 39,
+            "inode": 86446,
+            "mode": 33188,
+            "mtime_ns": 1794879034877262971,
+            "sha256": "d141e40c67ba155bb5094fd6201eebb027f73fa7599e07857b6fdb5ed04b3bf3"
+          },
+          "src/bin/view_call_sdk.rs": {
+            "bytes": 6339,
+            "ctime_ns": 1794879034877122123,
+            "device": 39,
+            "inode": 86445,
+            "mode": 33188,
+            "mtime_ns": 1794879034877122123,
+            "sha256": "06fc7d117966546075f2802dce2adb0206cfce80aeddb83e52f212b6a450e8c7"
+          },
+          "src/main.rs": {
+            "bytes": 60952,
+            "ctime_ns": 1794879034966382021,
+            "device": 39,
+            "inode": 86443,
+            "mode": 33188,
+            "mtime_ns": 1794879034966382021,
+            "sha256": "8af898eff39c2922ae33769f246e5f6bcfdf249eb5c6a33205f3e0a8d52f6c30"
+          }
+        },
+        "locale_encoding": "UTF-8",
+        "materialization_summary_cached": false,
+        "native_or_rust_executions": 0,
+        "new_file_writes": 0,
+        "original_materialize_function_modified": false,
+        "output": "/tmp/history-source-reconstruction-controls-c0bmktae/capture",
+        "records": [
+          {
+            "caller_function": "_original_evidence",
+            "caller_source": "scripts/hia_native_view_call_qualification.py",
+            "crate": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original/crate",
+            "error": null,
+            "operations": [
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": true,
+                "path": ".",
+                "physical_writes": 0
+              },
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": false,
+                "path": "src",
+                "physical_writes": 0
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 513,
+                  "sha256": "033a2cbc482001ea4e2d8ea069a338f24d0c87cc2b6d05800b7184fc47e86af4"
+                },
+                "operation": "copyfile",
+                "path": "Cargo.toml",
+                "physical_writes": 0,
+                "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source/tests/hia_native/view_call_oracle/Cargo.toml"
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 17877,
+                  "sha256": "6932ec85da80777fd533f446c78e176f65b37b5dd353b8be8c9bfce19d2c3615"
+                },
+                "operation": "copyfile",
+                "path": "Cargo.lock",
+                "physical_writes": 0,
+                "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source/tests/hia_native/view_call_oracle/Cargo.lock"
+              },
+              {
+                "characters": 60669,
+                "complete_bytes": {
+                  "bytes": 60952,
+                  "sha256": "8af898eff39c2922ae33769f246e5f6bcfdf249eb5c6a33205f3e0a8d52f6c30"
+                },
+                "operation": "write_text",
+                "path": "src/main.rs",
+                "physical_writes": 0
+              },
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": false,
+                "path": "src/bin",
+                "physical_writes": 0
+              },
+              {
+                "characters": 6339,
+                "complete_bytes": {
+                  "bytes": 6339,
+                  "sha256": "06fc7d117966546075f2802dce2adb0206cfce80aeddb83e52f212b6a450e8c7"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_sdk.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 7310,
+                "complete_bytes": {
+                  "bytes": 7319,
+                  "sha256": "d141e40c67ba155bb5094fd6201eebb027f73fa7599e07857b6fdb5ed04b3bf3"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_router_sdk.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 5274,
+                "complete_bytes": {
+                  "bytes": 5274,
+                  "sha256": "1ea4bf7023497756eab9bb427974ffc9016dd83e0e7b72c7b9009b277c3ad884"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_public_schema.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 5411,
+                "complete_bytes": {
+                  "bytes": 5411,
+                  "sha256": "34e8c9211f7fa0a1bfb0e4fb6115cdef2d0d0a163b25309575f105f52d5cdb24"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_info_sdk.rs",
+                "physical_writes": 0
+              }
+            ],
+            "status": "PASS",
+            "temporary_path": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original",
+            "temporary_prefix": "view-original-materialization-"
+          }
+        ],
+        "schema": "hepta.history.view-source-reconstruction.v2",
+        "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source",
+        "source_files": {
+          "scripts/hia_native_runtime_mcp_original.py": {
+            "bytes": 13097,
+            "sha256": "b051ed49dba6dfa33cdc17b812caa9ff395746905aba1bc395f99cc00ce60ec9"
+          },
+          "scripts/hia_native_view_call_qualification.py": {
+            "bytes": 87273,
+            "sha256": "6797db0667a828bd38ad27784cf7d17e1414b9bb1a7ed7a5891ed3938f78b85d"
+          },
+          "tests/hia_native/view_call_oracle/run.py": {
+            "bytes": 13903,
+            "sha256": "19ed876d121a1c917c667ccc3ead4dae1ed25c4a5b7cf1744625773c921ca33b"
+          },
+          "tests/hia_native/view_call_oracle/verify_sources.py": {
+            "bytes": 14395,
+            "sha256": "2118c3d91971887451bd3d72f468dfcfeb8e74f853c54f9273829fa676e4356c"
+          }
+        },
+        "violations": []
+      },
+      {
+        "active_reconstruction": false,
+        "crate": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original/crate",
+        "default_encoding": "locale",
+        "expected_callers": [
+          [
+            "scripts/hia_native_view_call_qualification.py",
+            "_original_evidence",
+            "view-original-materialization-"
+          ],
+          [
+            "scripts/hia_native_runtime_mcp_original.py",
+            "view_reference",
+            "runtime-mcp-original-source-"
+          ]
+        ],
+        "expected_directories": [
+          ".",
+          "src",
+          "src/bin"
+        ],
+        "expected_files": [
+          "Cargo.toml",
+          "Cargo.lock",
+          "src/main.rs",
+          "src/bin/view_call_sdk.rs",
+          "src/bin/view_call_router_sdk.rs",
+          "src/bin/view_call_public_schema.rs",
+          "src/bin/view_call_info_sdk.rs"
+        ],
+        "initial_inventory": {
+          ".": {
+            "bytes": 100,
+            "ctime_ns": 1794879034919112935,
+            "device": 39,
+            "inode": 86439,
+            "mode": 16877,
+            "mtime_ns": 1794879034919112935,
+            "sha256": null
+          },
+          "Cargo.lock": {
+            "bytes": 17877,
+            "ctime_ns": 1794879034948365755,
+            "device": 39,
+            "inode": 86442,
+            "mode": 33188,
+            "mtime_ns": 1794879034948365755,
+            "sha256": "6932ec85da80777fd533f446c78e176f65b37b5dd353b8be8c9bfce19d2c3615"
+          },
+          "Cargo.toml": {
+            "bytes": 513,
+            "ctime_ns": 1794879034874590139,
+            "device": 39,
+            "inode": 86441,
+            "mode": 33188,
+            "mtime_ns": 1794879034874590139,
+            "sha256": "033a2cbc482001ea4e2d8ea069a338f24d0c87cc2b6d05800b7184fc47e86af4"
+          },
+          "src": {
+            "bytes": 80,
+            "ctime_ns": 1794879034874771377,
+            "device": 39,
+            "inode": 86440,
+            "mode": 16877,
+            "mtime_ns": 1794879034874771377,
+            "sha256": null
+          },
+          "src/bin": {
+            "bytes": 120,
+            "ctime_ns": 1794879034967229134,
+            "device": 39,
+            "inode": 86444,
+            "mode": 16877,
+            "mtime_ns": 1794879034967229134,
+            "sha256": null
+          },
+          "src/bin/view_call_info_sdk.rs": {
+            "bytes": 5411,
+            "ctime_ns": 1794879034967240220,
+            "device": 39,
+            "inode": 86461,
+            "mode": 33188,
+            "mtime_ns": 1794879034967240220,
+            "sha256": "34e8c9211f7fa0a1bfb0e4fb6115cdef2d0d0a163b25309575f105f52d5cdb24"
+          },
+          "src/bin/view_call_public_schema.rs": {
+            "bytes": 5274,
+            "ctime_ns": 1794879034877451249,
+            "device": 39,
+            "inode": 86447,
+            "mode": 33188,
+            "mtime_ns": 1794879034877451249,
+            "sha256": "1ea4bf7023497756eab9bb427974ffc9016dd83e0e7b72c7b9009b277c3ad884"
+          },
+          "src/bin/view_call_router_sdk.rs": {
+            "bytes": 7319,
+            "ctime_ns": 1794879034877262971,
+            "device": 39,
+            "inode": 86446,
+            "mode": 33188,
+            "mtime_ns": 1794879034877262971,
+            "sha256": "d141e40c67ba155bb5094fd6201eebb027f73fa7599e07857b6fdb5ed04b3bf3"
+          },
+          "src/bin/view_call_sdk.rs": {
+            "bytes": 6339,
+            "ctime_ns": 1794879034877122123,
+            "device": 39,
+            "inode": 86445,
+            "mode": 33188,
+            "mtime_ns": 1794879034877122123,
+            "sha256": "06fc7d117966546075f2802dce2adb0206cfce80aeddb83e52f212b6a450e8c7"
+          },
+          "src/main.rs": {
+            "bytes": 60952,
+            "ctime_ns": 1794879034966382021,
+            "device": 39,
+            "inode": 86443,
+            "mode": 33188,
+            "mtime_ns": 1794879034966382021,
+            "sha256": "8af898eff39c2922ae33769f246e5f6bcfdf249eb5c6a33205f3e0a8d52f6c30"
+          }
+        },
+        "locale_encoding": "UTF-8",
+        "materialization_summary_cached": false,
+        "native_or_rust_executions": 0,
+        "new_file_writes": 0,
+        "original_materialize_function_modified": false,
+        "output": "/tmp/history-source-reconstruction-controls-c0bmktae/capture",
+        "records": [
+          {
+            "caller_function": "view_reference",
+            "caller_source": "scripts/hia_native_runtime_mcp_original.py",
+            "crate": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original/crate",
+            "error": null,
+            "operations": [
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": true,
+                "path": ".",
+                "physical_writes": 0
+              },
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": false,
+                "path": "src",
+                "physical_writes": 0
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 513,
+                  "sha256": "033a2cbc482001ea4e2d8ea069a338f24d0c87cc2b6d05800b7184fc47e86af4"
+                },
+                "operation": "copyfile",
+                "path": "Cargo.toml",
+                "physical_writes": 0,
+                "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source/tests/hia_native/view_call_oracle/Cargo.toml"
+              },
+              {
+                "complete_bytes": {
+                  "bytes": 17877,
+                  "sha256": "6932ec85da80777fd533f446c78e176f65b37b5dd353b8be8c9bfce19d2c3615"
+                },
+                "operation": "copyfile",
+                "path": "Cargo.lock",
+                "physical_writes": 0,
+                "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source/tests/hia_native/view_call_oracle/Cargo.lock"
+              },
+              {
+                "characters": 60669,
+                "complete_bytes": {
+                  "bytes": 60952,
+                  "sha256": "8af898eff39c2922ae33769f246e5f6bcfdf249eb5c6a33205f3e0a8d52f6c30"
+                },
+                "operation": "write_text",
+                "path": "src/main.rs",
+                "physical_writes": 0
+              },
+              {
+                "exist_ok": false,
+                "mode": 511,
+                "operation": "mkdir",
+                "parents": false,
+                "path": "src/bin",
+                "physical_writes": 0
+              },
+              {
+                "characters": 6339,
+                "complete_bytes": {
+                  "bytes": 6339,
+                  "sha256": "06fc7d117966546075f2802dce2adb0206cfce80aeddb83e52f212b6a450e8c7"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_sdk.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 7310,
+                "complete_bytes": {
+                  "bytes": 7319,
+                  "sha256": "d141e40c67ba155bb5094fd6201eebb027f73fa7599e07857b6fdb5ed04b3bf3"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_router_sdk.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 5274,
+                "complete_bytes": {
+                  "bytes": 5274,
+                  "sha256": "1ea4bf7023497756eab9bb427974ffc9016dd83e0e7b72c7b9009b277c3ad884"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_public_schema.rs",
+                "physical_writes": 0
+              },
+              {
+                "characters": 5411,
+                "complete_bytes": {
+                  "bytes": 5411,
+                  "sha256": "34e8c9211f7fa0a1bfb0e4fb6115cdef2d0d0a163b25309575f105f52d5cdb24"
+                },
+                "operation": "write_text",
+                "path": "src/bin/view_call_info_sdk.rs",
+                "physical_writes": 0
+              }
+            ],
+            "status": "PASS",
+            "temporary_path": "/tmp/history-source-reconstruction-controls-c0bmktae/capture/view-call-original",
+            "temporary_prefix": "runtime-mcp-original-source-"
+          }
+        ],
+        "schema": "hepta.history.view-source-reconstruction.v2",
+        "source": "/tmp/hia-history-recovery-bd685-review-6780/failure-v5-full-readback/proof/recovery/failure-working-copy-delta/materialized-source",
+        "source_files": {
+          "scripts/hia_native_runtime_mcp_original.py": {
+            "bytes": 13097,
+            "sha256": "b051ed49dba6dfa33cdc17b812caa9ff395746905aba1bc395f99cc00ce60ec9"
+          },
+          "scripts/hia_native_view_call_qualification.py": {
+            "bytes": 87273,
+            "sha256": "6797db0667a828bd38ad27784cf7d17e1414b9bb1a7ed7a5891ed3938f78b85d"
+          },
+          "tests/hia_native/view_call_oracle/run.py": {
+            "bytes": 13903,
+            "sha256": "19ed876d121a1c917c667ccc3ead4dae1ed25c4a5b7cf1744625773c921ca33b"
+          },
+          "tests/hia_native/view_call_oracle/verify_sources.py": {
+            "bytes": 14395,
+            "sha256": "2118c3d91971887451bd3d72f468dfcfeb8e74f853c54f9273829fa676e4356c"
+          }
+        },
+        "violations": []
+      }
+    ],
+    "complete_generator_admissions": 4,
+    "control_callers_are_test_owned_python_stubs": true,
+    "early_and_late_alias_restoration": true,
+    "exact_caller_prefix_pairs": [
+      [
+        "scripts/hia_native_view_call_qualification.py",
+        "_original_evidence",
+        "view-original-materialization-"
+      ],
+      [
+        "scripts/hia_native_runtime_mcp_original.py",
+        "view_reference",
+        "runtime-mcp-original-source-"
+      ]
+    ],
+    "execution_attempts": [],
+    "fixture_file_bytes_restored": true,
+    "generated_files_per_admission": 7,
+    "native_or_rust_executions": 0,
+    "operations_per_admission": 10,
+    "original_materialize_function_modified": false,
+    "original_materialize_source_sha256": "2118c3d91971887451bd3d72f468dfcfeb8e74f853c54f9273829fa676e4356c",
+    "refusals": [
+      {
+        "exception": "ValueError",
+        "message": "exact unchanged source-reconstruction dependency: scripts/hia_native_view_call_qualification.py",
+        "name": "changed-bound-source"
+      },
+      {
+        "exception": "ValueError",
+        "message": "complete original seven-file crate inventory",
+        "name": "extra-crate-member"
+      },
+      {
+        "exception": "ValueError",
+        "message": "complete original seven-file crate inventory",
+        "name": "missing-crate-member"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: undeclared temporary-directory request",
+        "name": "wrong-temporary-prefix"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: undeclared source caller",
+        "name": "undeclared-temporary-caller"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: nested source reconstruction",
+        "name": "nested-reconstruction"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: source write outside reconstruction",
+        "name": "write-outside-reconstruction"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: source copy identity or options",
+        "name": "wrong-copy-source"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: source operation order or destination",
+        "name": "wrong-operation-order"
+      },
+      {
+        "exception": "ValueError",
+        "message": "complete original source-reconstruction operation order",
+        "name": "omitted-materialization"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: source write_text argument contract",
+        "name": "write-text-options"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: complete copied original bytes differ",
+        "name": "changed-captured-copy"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: complete regenerated original bytes differ",
+        "name": "changed-captured-generated"
+      },
+      {
+        "exception": "ValueError",
+        "message": "non-aliased crate member",
+        "name": "aliased-crate-member"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: undeclared temporary-directory request",
+        "name": "wrong-public-temporary-prefix"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: undeclared temporary-directory request",
+        "name": "public-prefix-on-view-caller"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "read-only source reconstruction: undeclared source caller",
+        "name": "undeclared-public-caller"
+      },
+      {
+        "exception": "ValueError",
+        "message": "exact unchanged source-reconstruction dependency: scripts/hia_native_runtime_mcp_original.py",
+        "name": "changed-public-bound-source"
+      }
+    ],
+    "schema": "hepta.history.source-reconstruction-controls.v2",
+    "source_files_unchanged": true,
+    "status": "PASS"
+  },
+  "static_code_controls": {
+    "complete_static_admissions": 1,
+    "early_and_late_alias_restoration": true,
+    "forbidden_execution_attempts": [],
+    "kernel_mapping_and_seals_retested": false,
+    "native_or_rust_executions": 0,
+    "new_executable_mappings": 0,
+    "prefix": {
+      "constructor_statements": 31,
+      "kernel_mapping_and_seals_retested": false,
+      "loader_sha256": "58e2fe0492379340d7471a7857e1aa5de1a9a5d1e37a118852278b131bb1fe06",
+      "pre_cdll_ast_sha256": "d70b79a84c9d83485f50f6b08f13d8141e87106b31fdf3c74c65fbe36635f3cc",
+      "pre_cdll_source_sha256": "ffc713cf4b074b114503fb8931ebd4350baa3a80094283725743954841dcde7c",
+      "unchanged_pre_cdll_statements": 23
+    },
+    "refusals": [
+      {
+        "exception": "PermissionError",
+        "message": "retained aggregate static admission refuses native invoke",
+        "name": "execution-invoke"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "retained aggregate static admission refuses native invoke_raw",
+        "name": "execution-invoke_raw"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "retained aggregate static admission refuses native session",
+        "name": "execution-session"
+      },
+      {
+        "exception": "PermissionError",
+        "message": "retained aggregate static admission refuses native _invoke_buffers",
+        "name": "execution-_invoke_buffers"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native module ABI/compiler differs",
+        "name": "schema"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native module ABI/compiler differs",
+        "name": "abi"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native module ABI/compiler differs",
+        "name": "compiler-commit"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native member must be a plain basename",
+        "name": "source-basename"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native member must be a plain basename",
+        "name": "image-basename"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native member hash is invalid",
+        "name": "member-hash-shape"
+      },
+      {
+        "exception": "ValueError",
+        "message": "unknown native buffer profile",
+        "name": "profile"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native module declared buffer capacity is invalid",
+        "name": "boolean-capacity"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native module declared buffer capacity is invalid",
+        "name": "zero-capacity"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native module declared buffer capacity is invalid",
+        "name": "maximum-capacity"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native source identity mismatch",
+        "name": "complete-source-digest"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native image identity mismatch",
+        "name": "complete-image-digest"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native manifest identity mismatch",
+        "name": "manifest-digest"
+      },
+      {
+        "exception": "ValueError",
+        "message": "duplicate native manifest field",
+        "name": "duplicate-manifest-field"
+      },
+      {
+        "exception": "ValueError",
+        "message": "static module admission remains within the retained capture",
+        "name": "foreign-manifest"
+      },
+      {
+        "exception": "ValueError",
+        "message": "constructor pin differs from the registered module table",
+        "name": "registered-manifest-pin"
+      },
+      {
+        "exception": "ValueError",
+        "message": "complete registered module table",
+        "name": "registered-table-count"
+      },
+      {
+        "exception": "ValueError",
+        "message": "registered complete manifest bytes",
+        "name": "registered-table-pin"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native source identity mismatch",
+        "name": "empty-source"
+      },
+      {
+        "exception": "ValueError",
+        "message": "native image identity mismatch",
+        "name": "changed-image-bytes"
+      },
+      {
+        "exception": "ValueError",
+        "message": "exact historical loader source",
+        "name": "changed-loader-source"
+      }
+    ],
+    "schema": "hepta.history.static-code-controls.v1",
+    "status": "PASS"
+  },
+  "status": "PASS"
+}
