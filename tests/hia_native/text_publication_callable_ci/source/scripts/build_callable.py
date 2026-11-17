@@ -4,6 +4,7 @@
 """Fresh fixed HIA compilation, actual HIA ELF link and actual HIA image pack."""
 from pathlib import Path
 import argparse
+import json
 import os
 import re
 import shutil
