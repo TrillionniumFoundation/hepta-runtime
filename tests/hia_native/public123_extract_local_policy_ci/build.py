@@ -15,6 +15,7 @@ def main():
     target=restore_graph.restore(a.retained)
     put(out/"RETAINED_ARCHIVE.json",doc(a.retained/"RESTORE.json"))
     shutil.copyfile(a.retained/"FILES.json",out/"RETAINED_FILES.json")
+    read_graph.prepare(target) # Resolve read-only dependencies before capability guards.
     before_read=guard.guarded(lambda:read_graph.verify(target),roots=[target,HERE],foreign_path=Path("/dev/null"))
     put(out/"BEFORE_READ.json",before_read)
     native=target/"capture/native-build";graph=out/"source"

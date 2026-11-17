@@ -36,7 +36,7 @@ jobs:
       - name: Complete source and syntax admission
         run: |
           test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = '${{ github.sha }}'
-          test "$(sha256sum "$WAIT_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '1f900b51cf582e323dadf38ebfcedbbc833369b7fb54ff9433ea4b3ceb82d725'
+          test "$(sha256sum "$WAIT_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 'a0987cdcf9083a216b3533f5b9a085038159806c5029d44200de264368af2e9b'
           python3 -I -S -B "$WAIT_PACKAGE/check_source.py"
       - name: Reverify retained B3 and 114 members then compile sole changed owner and two entries
         env:
