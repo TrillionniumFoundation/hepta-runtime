@@ -58,8 +58,8 @@ def compose(base, package, output):
     before_layout = engine.read_text()
     upgraded = layout.upgrade(before_layout)
     require(layout.undo(upgraded) == before_layout, "qualified layout inverse differs")
-    engine.write_text(layout.rebind(upgraded, 68))
-    require(layout.layout(68)["descriptor_base"] == 8192 and layout.layout(68)["engine_bytes"] == 16384,
+    engine.write_text(layout.rebind(upgraded, 69))
+    require(layout.layout(69)["descriptor_base"] == 8192 and layout.layout(69)["engine_bytes"] == 16384,
         "installed fixed descriptor/engine displacement changed")
     for name, rows in changed.items():
         raw = (source / name).read_text()
@@ -79,13 +79,15 @@ def compose(base, package, output):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(path.read_bytes())
         added.append(name)
-    note = dict(schema="hepta.runtime.text-publication.graph-composition.v1",
+    note = dict(schema="hepta.runtime.text-publication.graph-composition.v2",
         base_commit="99d107c062a6eb3f226dd82b05283aeecbd3c495",
         base_binding=pin(expected_raw), unchanged_sources=len(before["sources"])-len(changed),
         changed_sources=sorted(changed), added_sources=added,
         exact_inverse_mechanical_patches=True, layout_source_commit="7c78115f0d61026d50bab6e2e7043dfb997f1454",
-        layout=layout.layout(68), publisher_slots=[64,65,66,67], extract_reserved_slots=[59,60,61,62,63],
-        caller_children=[29,9,67,11,7,30], gateway_children=[65,27,5,6,11,9,7,66,3],
+        layout=layout.layout(69), publisher_slots=[64,65,66,67,68], extract_reserved_slots=[59,60,61,62,63],
+        caller_children=[29,9,67,11,7,30,68], gateway_children=[65,27,5,6,11,9,7,66,3],
+        scope_forget_capability=dict(slot=68, parent=66, local=6, output_loan=96,
+            restored_owned_capacity=True, request_and_cache_key_from_actual_hia=True),
         callable_context="descriptor67+8", callable_context_capacity=4096,
         callable_borrow_until_complete_parent_delivery=True, body_syscalls_and_policy_unchanged=True,
         session_cache_forget_owned_by_hia_caller=True, public_route=False, full_async=False,

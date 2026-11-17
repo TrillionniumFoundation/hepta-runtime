@@ -38,8 +38,8 @@ def main():
         shutil.copyfile(hepta / name, path)
         require(SHA(path.read_bytes()) == digest, "retained compiler source differs")
     put(output / "compiler-identity.json", compiler_identity)
-    require(len(MEMBERS) == 108 and len(EXTRA) == 68, "fixed publisher graph inventory differs")
-    require(EXTRA[59:] == [None]*5 + ["publisher_gateway", "publisher_params", "publisher_call", None],
+    require(len(MEMBERS) == 108 and len(EXTRA) == 69, "fixed publisher graph inventory differs")
+    require(EXTRA[59:] == [None]*5 + ["publisher_gateway", "publisher_params", "publisher_call", None, None],
         "publisher or reserved extract descriptors differ")
     package = source / "runtime_support/bellman_port"
     require(SHA((package / "PACKAGE.json").read_bytes()) == PORT_PACKAGE_SHA256, "retained port package differs")
