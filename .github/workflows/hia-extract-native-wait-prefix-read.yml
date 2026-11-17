@@ -38,8 +38,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_prefix_read_ci/read.py" | cut -d' ' -f1)" = '9bffb31fad6a7e7ff6135a4f934ef22eed99f580b00bad4a193ca365f135f803'
-          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_prefix_read_ci/IDENTITY.json" | cut -d' ' -f1)" = 'd83454a7144aa854f5e665bc55bfdddf25ccbeed73e9568a0e11868becc7f251'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_prefix_read_ci/read.py" | cut -d' ' -f1)" = 'f3019c26872aa842b68e84379de23b5ed2c69909adcd62806d481d4c1a98e8c7'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_prefix_read_ci/IDENTITY.json" | cut -d' ' -f1)" = '85e18610b3b581e283de7af2de31fe56ca3d8cd8b2a4cbd99d9e1ba49b6beeba'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_prefix_read_ci/read_capture_fixed.py" | cut -d' ' -f1)" = '5d6104f13b0d712c85068846587183aea43ca8f49aa049f43dfe64446aab52f0'
           python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_prefix_read_ci/read.py" --source "$GITHUB_WORKSPACE/source/tests/hia_native/public123_extract_contention_ci" --native-source "$GITHUB_WORKSPACE/native-source/tests/hia_native/public123_extract_wait_fixed_native_ci" --output "$RUNNER_TEMP/first-native-prefix-read" > "$RUNNER_TEMP/first-native-prefix.stdout" 2> "$RUNNER_TEMP/first-native-prefix.stderr" || { cat "$RUNNER_TEMP/first-native-prefix.stderr"; exit 1; }
           cat "$RUNNER_TEMP/first-native-prefix.stdout"
       - name: Preserve complete input archives and reads

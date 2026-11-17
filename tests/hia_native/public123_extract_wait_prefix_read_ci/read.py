@@ -7,9 +7,10 @@ p=argparse.ArgumentParser()
 for k in ("source","native-source","output"):p.add_argument("--"+k,type=Path,required=True)
 args=p.parse_args();source=args.source.resolve(strict=True);native_source=args.native_source.resolve(strict=True);out=args.output.absolute()
 assert not out.exists();out.mkdir(parents=True)
-sys.path[:0]=[str(source),str(source/"build_reader"),str(native_source)]
-import callable_common,read_capture,read_only_guard as guard,failure_read
-from read_capture import *
+sys.path[:0]=[str(source),str(source/"build_reader"),str(native_source),str(HERE)]
+import callable_common,read_only_guard as guard,failure_read
+import read_capture_fixed as read_capture
+from read_capture_fixed import *
 from restore_inputs import flat_archive
 from restore_graph import download
 def put(p,x):p.write_text(json.dumps(x,sort_keys=True,indent=2)+"\n")
@@ -24,6 +25,8 @@ for root,actual in ((out/"retained/recipe-source",source),(out/"retained/capture
     for row in json.loads((root/"SOURCE_MANIFEST.json").read_bytes())["files"]:
         assert (root/row["path"]).read_bytes()==(actual/row["path"]).read_bytes()
 original=(source/"read_capture.py").read_text()
+stage=identity["reader_stage_patch"]
+assert original.count(stage["before"])==1 and original.replace(stage["before"],stage["after"])==(HERE/"read_capture_fixed.py").read_text()
 body=original[original.index("def read(folder,side,binary):"):original.index("\ndef compare(")]
 for previous,current in identity["prefix_edits"]:
     assert body.count(previous)==1
