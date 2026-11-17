@@ -57,7 +57,7 @@ def main():
                              for n in domain["new_slot_counts"]]
     for role,count,engine in roles:
         folder=out/role;folder.mkdir()
-        combined=(".equ PM_FIXED_TRACE_FD, 0\n"+engine+"\n"+
+        combined=(".equ PM_FIXED_TRACE_FD, 0\n.equ PM_FIXED_FIXTURE_FDS, 0\n"+engine+"\n"+
             read(ROOT/"reference/runtime_mcp_task_storage.S").decode()+"\n"+
             read(ROOT/"reference/runtime_mcp_workdir_io_bridge.S").decode()+"\n"+
             read(ROOT/"reference/runtime_mcp_filesystem_io_bridge.S").decode()+"\n"+
