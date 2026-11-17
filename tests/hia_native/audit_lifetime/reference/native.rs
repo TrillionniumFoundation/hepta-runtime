@@ -14,7 +14,14 @@ use std::time::Instant;
 type Result<T> = std::result::Result<T, String>;
 type Entry = unsafe extern "C" fn(*const u8, usize, *mut u8, usize, *mut u8, usize) -> u32;
 extern "C" {
-	fn mmap(address: *mut c_void, length: usize, protection: i32, flags: i32, fd: i32, offset: i64) -> *mut c_void;
+	fn mmap(
+		address: *mut c_void,
+		length: usize,
+		protection: i32,
+		flags: i32,
+		fd: i32,
+		offset: i64,
+	) -> *mut c_void;
 	fn mprotect(address: *mut c_void, length: usize, protection: i32) -> i32;
 	fn munmap(address: *mut c_void, length: usize) -> i32;
 	fn syscall(number: i64, ...) -> i64;
@@ -37,7 +44,11 @@ impl Image {
 			assert_ne!(address as isize, -1);
 			std::ptr::copy_nonoverlapping(raw.as_ptr(), address.cast::<u8>(), raw.len());
 			assert_eq!(mprotect(address, length, 5), 0);
-			Self { address, length, entry: std::mem::transmute::<*mut c_void, Entry>(address) }
+			Self {
+				address,
+				length,
+				entry: std::mem::transmute::<*mut c_void, Entry>(address),
+			}
 		}
 	}
 }
@@ -96,13 +107,23 @@ fn copied(pointer: u64, length: usize) -> Vec<u8> {
 }
 fn record(kind: &str, fields: &str) {
 	let journal = JOURNAL.get_or_init(|| {
-		Mutex::new(OpenOptions::new().write(true).create_new(true)
-			.open(std::env::var("HIA_LIFETIME_JOURNAL").unwrap()).unwrap())
+		Mutex::new(
+			OpenOptions::new()
+				.write(true)
+				.create_new(true)
+				.open(std::env::var("HIA_LIFETIME_JOURNAL").unwrap())
+				.unwrap(),
+		)
 	});
 	let mut file = journal.lock().unwrap();
 	let index = INDICES.fetch_add(1, Ordering::Relaxed);
-	writeln!(file, "{{\"record\":\"{kind}\",\"index\":{index},\"pid\":{},\"tid\":{},{fields}}}",
-		std::process::id(), tid()).unwrap();
+	writeln!(
+		file,
+		"{{\"record\":\"{kind}\",\"index\":{index},\"pid\":{},\"tid\":{},{fields}}}",
+		std::process::id(),
+		tid()
+	)
+	.unwrap();
 }
 
 struct Observation {
@@ -121,7 +142,9 @@ thread_local! {
 // Optional observation is restricted to copying buffers already chosen by
 // the native pump. It performs no registry, ownership, or effect decisions.
 extern "C" fn observe(pointer: *const u64, user: *const Core) {
-	let event: [u64; 16] = unsafe { std::slice::from_raw_parts(pointer, 16) }.try_into().unwrap();
+	let event: [u64; 16] = unsafe { std::slice::from_raw_parts(pointer, 16) }
+		.try_into()
+		.unwrap();
 	let core = unsafe { &*user };
 	assert_eq!(event[13], core.context.get() as u64);
 	assert!((1..=4).contains(&event[0]) && event[1] <= 1);
@@ -130,14 +153,28 @@ extern "C" fn observe(pointer: *const u64, user: *const Core) {
 	assert!(actor > 0 && call > 0);
 	let capacity: usize = event[7].try_into().unwrap();
 	let input = copied(event[3], event[4].try_into().unwrap());
-	let output = copied(event[5], match event[0] { 1 | 4 => 528, 2 => 144, 3 => 80, _ => unreachable!() });
+	let output = copied(
+		event[5],
+		match event[0] {
+			1 | 4 => 528,
+			2 => 144,
+			3 => 80,
+			_ => unreachable!(),
+		},
+	);
 	let map = if event[0] == 1 || event[0] == 4 {
 		copied(event[6], capacity + 16)
 	} else {
 		Vec::new()
 	};
 	if event[1] == 0 {
-		let before = Observation { event, input, output, map, started: Instant::now() };
+		let before = Observation {
+			event,
+			input,
+			output,
+			map,
+			started: Instant::now(),
+		};
 		PENDING.with(|pending| assert!(pending.replace(Some(before)).is_none()));
 		return;
 	}
@@ -176,13 +213,20 @@ impl Actor {
 	fn new() -> Self {
 		let mut bytes = [0; 528];
 		bytes[512..].fill(0xa5);
-		Self { bytes, id: ACTORS.fetch_add(1, Ordering::Relaxed), not_send: PhantomData }
+		Self {
+			bytes,
+			id: ACTORS.fetch_add(1, Ordering::Relaxed),
+			not_send: PhantomData,
+		}
 	}
 }
 
 impl Core {
 	fn new() -> Box<Self> {
-		let core = Box::new(Self { kernel: UnsafeCell::new([0; 10]), context: UnsafeCell::new([0; 18]) });
+		let core = Box::new(Self {
+			kernel: UnsafeCell::new([0; 10]),
+			context: UnsafeCell::new([0; 18]),
+		});
 		unsafe {
 			(*core.kernel.get())[8..].fill(0xa5a5a5a5a5a5a5a5);
 			let context = &mut *core.context.get();
@@ -204,7 +248,9 @@ impl Core {
 		words[3] = pointer;
 		words[4] = key.len() as u64;
 		words[5] = u64::from(std::thread::panicking());
-		if operation == 0 { words[5] = 0; }
+		if operation == 0 {
+			words[5] = 0;
+		}
 		let mut input = bytes(&words);
 		input.extend_from_slice(key.as_bytes());
 		input.extend_from_slice(&[0; 128]);
@@ -213,11 +259,27 @@ impl Core {
 		let before = input.clone();
 		let call = CALLS.fetch_add(1, Ordering::Relaxed);
 		let id = actor.id;
-		record("public-start", &format!("\"actor\":{id},\"call\":{call},\"input_hex\":\"{}\",\"actor_hex\":\"{}\"", hex(&input), hex(&actor.bytes)));
+		record(
+			"public-start",
+			&format!(
+				"\"actor\":{id},\"call\":{call},\"input_hex\":\"{}\",\"actor_hex\":\"{}\"",
+				hex(&input),
+				hex(&actor.bytes)
+			),
+		);
 		CURRENT_ACTOR.with(|current| assert_eq!(current.replace(id), 0));
 		CURRENT_CALL.with(|current| assert_eq!(current.replace(call), 0));
 		let started = Instant::now();
-		let returned = unsafe { (images().callable.entry)(input.as_ptr(), length, actor.bytes.as_mut_ptr(), 512, self.context.get().cast(), 128) };
+		let returned = unsafe {
+			(images().callable.entry)(
+				input.as_ptr(),
+				length,
+				actor.bytes.as_mut_ptr(),
+				512,
+				self.context.get().cast(),
+				128,
+			)
+		};
 		let elapsed = started.elapsed().as_nanos();
 		CURRENT_CALL.with(|current| assert_eq!(current.replace(0), call));
 		CURRENT_ACTOR.with(|current| assert_eq!(current.replace(0), id));
@@ -238,7 +300,16 @@ impl Core {
 		frame[5] = u64::from(std::thread::panicking());
 		let before = frame;
 		let mut output = [0xa5; 144];
-		let returned = unsafe { (images().sync.entry)(frame.as_ptr().cast(), 128, output.as_mut_ptr(), 128, self.kernel.get().cast(), 64) };
+		let returned = unsafe {
+			(images().sync.entry)(
+				frame.as_ptr().cast(),
+				128,
+				output.as_mut_ptr(),
+				128,
+				self.kernel.get().cast(),
+				64,
+			)
+		};
 		record("boundary-external", &format!("\"returned\":{returned},\"input_hex\":\"{}\",\"output_before_hex\":\"{}\",\"output_after_hex\":\"{}\"", hex(&bytes(&frame)), hex(&[0xa5; 144]), hex(&output)));
 		assert_eq!(frame, before);
 		assert_eq!(returned, 128);
@@ -259,19 +330,47 @@ impl Core {
 		let kernel = unsafe { *self.kernel.get() };
 		assert_eq!(&context[16..], &[0xa5a5a5a5a5a5a5a5; 2]);
 		assert_eq!(&kernel[8..], &[0xa5a5a5a5a5a5a5a5; 2]);
-		let active = if context[4] == 0 { Vec::new() } else { unsafe { self.map_owned(0) } };
-		let pins = if context[7] == 0 { Vec::new() } else { unsafe { self.map_owned(1) } };
+		let active = if context[4] == 0 {
+			Vec::new()
+		} else {
+			unsafe { self.map_owned(0) }
+		};
+		let pins = if context[7] == 0 {
+			Vec::new()
+		} else {
+			unsafe { self.map_owned(1) }
+		};
 		record("quiescent", &format!("\"phase\":{phase:?},\"context_hex\":\"{}\",\"kernel_hex\":\"{}\",\"active_hex\":\"{}\",\"pins_hex\":\"{}\"", hex(&bytes(&context)), hex(&bytes(&kernel)), hex(&active), hex(&pins)));
 	}
 }
 
-fn core() -> &'static Core { CORE.get_or_init(Core::new) }
+fn core() -> &'static Core {
+	CORE.get_or_init(Core::new)
+}
 
 fn reference(operation: u64, kind: u64, pointer: u64) -> [u64; 8] {
-	let frame = [u64::from_le_bytes(*b"HARREF01"), operation, kind, pointer, 0, 0, 0, 0];
+	let frame = [
+		u64::from_le_bytes(*b"HARREF01"),
+		operation,
+		kind,
+		pointer,
+		0,
+		0,
+		0,
+		0,
+	];
 	let before = frame;
 	let mut output = [0xa5; 80];
-	let returned = unsafe { (images().refs.entry)(frame.as_ptr().cast(), 64, output.as_mut_ptr(), 64, std::ptr::null_mut(), 0) };
+	let returned = unsafe {
+		(images().refs.entry)(
+			frame.as_ptr().cast(),
+			64,
+			output.as_mut_ptr(),
+			64,
+			std::ptr::null_mut(),
+			0,
+		)
+	};
 	record("reference-external", &format!("\"returned\":{returned},\"input_hex\":\"{}\",\"output_before_hex\":\"{}\",\"output_after_hex\":\"{}\"", hex(&bytes(&frame)), hex(&[0xa5; 80]), hex(&output)));
 	assert_eq!(frame, before);
 	assert_eq!(returned, 64);
@@ -280,22 +379,33 @@ fn reference(operation: u64, kind: u64, pointer: u64) -> [u64; 8] {
 	assert_eq!(result[0], u64::from_le_bytes(*b"HARRES01"));
 	assert_eq!(result[1], operation);
 	assert_eq!(result[6], kind);
-	if operation >= 2 { assert_eq!(result[3], pointer); }
+	if operation >= 2 {
+		assert_eq!(result[3], pointer);
+	}
 	result
 }
 
-struct Strong { pointer: u64, kind: u64 }
+struct Strong {
+	pointer: u64,
+	kind: u64,
+}
 impl Strong {
 	fn new(kind: u64) -> Self {
 		let result = reference(kind - 1, kind, 0);
 		assert_eq!(result[2], 1);
-		Self { pointer: result[3], kind }
+		Self {
+			pointer: result[3],
+			kind,
+		}
 	}
 }
 impl Clone for Strong {
 	fn clone(&self) -> Self {
 		assert_eq!(reference(2, self.kind, self.pointer)[2], 1);
-		Self { pointer: self.pointer, kind: self.kind }
+		Self {
+			pointer: self.pointer,
+			kind: self.kind,
+		}
 	}
 }
 impl Drop for Strong {
@@ -307,9 +417,15 @@ impl Drop for Strong {
 #[derive(Clone)]
 struct Marker(Strong);
 impl Marker {
-	fn new() -> Self { Self(Strong::new(1)) }
-	fn finish(&self) { assert_eq!(reference(9, 1, self.0.pointer)[7], 0); }
-	fn value(&self) -> bool { reference(8, 1, self.0.pointer)[7] != 0 }
+	fn new() -> Self {
+		Self(Strong::new(1))
+	}
+	fn finish(&self) {
+		assert_eq!(reference(9, 1, self.0.pointer)[7], 0);
+	}
+	fn value(&self) -> bool {
+		reference(8, 1, self.0.pointer)[7] != 0
+	}
 	fn downgrade(&self) -> WeakMarker {
 		assert_eq!(reference(4, 1, self.0.pointer)[2], 1);
 		WeakMarker(self.0.pointer)
@@ -318,18 +434,27 @@ impl Marker {
 
 #[derive(Clone)]
 struct Pin(Strong);
-impl Pin { fn new() -> Self { Self(Strong::new(2)) } }
+impl Pin {
+	fn new() -> Self {
+		Self(Strong::new(2))
+	}
+}
 
 struct WeakMarker(u64);
 impl WeakMarker {
 	fn upgrade(&self) -> Option<Marker> {
 		match reference(7, 1, self.0)[2] {
 			0 => None,
-			1 => Some(Marker(Strong { pointer: self.0, kind: 1 })),
+			1 => Some(Marker(Strong {
+				pointer: self.0,
+				kind: 1,
+			})),
 			other => panic!("invalid upgrade result {other}"),
 		}
 	}
-	fn strong_count(&self) -> usize { reference(6, 1, self.0)[4].try_into().unwrap() }
+	fn strong_count(&self) -> usize {
+		reference(6, 1, self.0)[4].try_into().unwrap()
+	}
 }
 impl Clone for WeakMarker {
 	fn clone(&self) -> Self {
@@ -338,7 +463,9 @@ impl Clone for WeakMarker {
 	}
 }
 impl Drop for WeakMarker {
-	fn drop(&mut self) { assert!(matches!(reference(5, 1, self.0)[2], 0 | 2)); }
+	fn drop(&mut self) {
+		assert!(matches!(reference(5, 1, self.0)[2], 0 | 2));
+	}
 }
 
 fn result(value: u64) -> Result<u64> {
@@ -349,9 +476,12 @@ fn result(value: u64) -> Result<u64> {
 		other => panic!("invalid registry result {other}"),
 	}
 }
-fn setup() { let _ = core(); }
+fn setup() {
+	let _ = core();
+}
 fn publish_active(key: &str, marker: &Marker) -> Result<()> {
-	result(core().pump(&mut Actor::new(), 1, key, marker.0.pointer)).map(|value| assert_eq!(value, 0))
+	result(core().pump(&mut Actor::new(), 1, key, marker.0.pointer))
+		.map(|value| assert_eq!(value, 0))
 }
 fn publish_pin(key: &str, pin: &Pin) -> Result<()> {
 	result(core().pump(&mut Actor::new(), 2, key, pin.0.pointer)).map(|value| assert_eq!(value, 0))
@@ -369,7 +499,9 @@ fn is_active(key: &str) -> Result<bool> {
 	})
 }
 
-struct ActiveGuard { actor: Actor }
+struct ActiveGuard {
+	actor: Actor,
+}
 fn held() -> Result<ActiveGuard> {
 	let mut actor = Actor::new();
 	let value = result(core().pump(&mut actor, 6, "", 0))?;
@@ -382,16 +514,24 @@ impl ActiveGuard {
 	}
 }
 impl Drop for ActiveGuard {
-	fn drop(&mut self) { assert_eq!(core().pump(&mut self.actor, 8, "", 0), 0); }
+	fn drop(&mut self) {
+		assert_eq!(core().pump(&mut self.actor, 8, "", 0), 0);
+	}
 }
 
-struct PinGuard { not_send: PhantomData<MutexGuard<'static, ()>> }
+struct PinGuard {
+	not_send: PhantomData<MutexGuard<'static, ()>>,
+}
 fn pin_guard() -> PinGuard {
 	assert_eq!(core().boundary(1, 1)[2], 0);
-	PinGuard { not_send: PhantomData }
+	PinGuard {
+		not_send: PhantomData,
+	}
 }
 impl Drop for PinGuard {
-	fn drop(&mut self) { assert_eq!(core().boundary(3, 1)[2], 0); }
+	fn drop(&mut self) {
+		assert_eq!(core().boundary(3, 1)[2], 0);
+	}
 }
 
 fn sizes() -> (usize, usize, usize) {
@@ -408,8 +548,19 @@ fn sizes() -> (usize, usize, usize) {
 		position += (length + 23) & !7;
 	}
 	assert_eq!(position, word(&pins, 5) as usize);
-	let answer = (word(&active, 4) as usize, keys.len(), word(&pins, 4) as usize);
-	record("map-probe", &format!("\"active_hex\":\"{}\",\"pins_hex\":\"{}\"", hex(&active), hex(&pins)));
+	let answer = (
+		word(&active, 4) as usize,
+		keys.len(),
+		word(&pins, 4) as usize,
+	);
+	record(
+		"map-probe",
+		&format!(
+			"\"active_hex\":\"{}\",\"pins_hex\":\"{}\"",
+			hex(&active),
+			hex(&pins)
+		),
+	);
 	assert_eq!(core.boundary(3, 1)[2], 0);
 	assert_eq!(core.boundary(3, 0)[2], 0);
 	answer
@@ -420,7 +571,9 @@ fn finalize() {
 	core.quiescent("before-disposal");
 	assert_eq!(core.pump(&mut Actor::new(), 5, "", 0), 0);
 	let context = unsafe { *core.context.get() };
-	assert!([0, 1, 4, 5, 6, 7, 8, 9].iter().all(|index| context[*index] == 0));
+	assert!([0, 1, 4, 5, 6, 7, 8, 9]
+		.iter()
+		.all(|index| context[*index] == 0));
 	assert_eq!(context[2], core.kernel.get() as u64);
 	assert_eq!(context[3], 64);
 	core.quiescent("disposed");

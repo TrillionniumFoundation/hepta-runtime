@@ -1,0 +1,108 @@
+name: Complete HIA native audit lifetime owner
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-lifetime-qualify-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  audit-lifetime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      LIFETIME_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/audit_lifetime
+      SYNC_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/audit_native_sync
+      LIFETIME_SOURCE_SHA: cad75d383133035dd35ccf6c3bf81fae6d50afb19e0d8ec19bc53a3cd81bc8ab
+    steps:
+      - name: Checkout frozen candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: |
+            tests/hia_native/audit_lifetime
+            tests/hia_native/audit_native_sync
+          persist-credentials: false
+      - name: Checkout exact HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify exact source and compiler identities
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import os,sys
+          from pathlib import Path
+          source=Path(os.environ['LIFETIME_SOURCE'])
+          sys.path.insert(0,str(source))
+          from common import source as verify_source
+          assert verify_source()==os.environ['LIFETIME_SOURCE_SHA']
+          for path in source.rglob('*.py'):
+              compile(path.read_bytes(),str(path),'exec')
+          PY
+      - name: Install exact test toolchain and native compiler tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          printf 'LIFETIME_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Execute the actual HIA lifetime owner and paired original thread domain
+        run: |
+          python3 -I -B "$LIFETIME_SOURCE/run_gate.py" --hepta "$GITHUB_WORKSPACE/compiler" --sync-source "$SYNC_SOURCE" --rust-bin "$LIFETIME_RUST_BIN" --output "$RUNNER_TEMP/audit-lifetime-output" --source-manifest-sha256 "$LIFETIME_SOURCE_SHA"
+      - name: Independently read complete evidence within the original budget
+        run: |
+          python3 -I -B - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          source=Path(os.environ['LIFETIME_SOURCE'])
+          sys.path.insert(0,str(source))
+          from process import Recorder
+          temporary=Path(os.environ['RUNNER_TEMP'])
+          recorder=Recorder(source,temporary/'audit-lifetime-independent')
+          raw,row=recorder.run('independent-reader',[sys.executable,'-I','-B',source/'verify_readonly.py',
+              '--output',temporary/'audit-lifetime-output','--source-manifest-sha256',os.environ['LIFETIME_SOURCE_SHA'],
+              '--require-controls'],timeout=180)
+          proof=json.loads(raw)
+          assert proof['before']==proof['after'] and len(proof['probes'])==12
+          assert proof['native_or_rust_executions']==proof['reader_writes']==0
+          print(json.dumps({'status':proof['evidence']['status'],'stdout':row['stdout']},sort_keys=True))
+          PY
+      - name: Report failure location without replay
+        if: failure()
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'audit-lifetime-output'
+          for path in [root/'GATE.json',*sorted(root.rglob('*.stderr'))]:
+              if path.is_file():
+                  raw=path.read_bytes()
+                  if raw:
+                      print(json.dumps({'file':str(path.relative_to(root)),'bytes':len(raw),
+                          'sha256':hashlib.sha256(raw).hexdigest(),'complete_utf8':raw.decode('utf-8',errors='replace'),
+                          'complete_bytes_retained':True},sort_keys=True))
+          PY
+      - name: Preserve complete success or failure without replay
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/audit-lifetime-output"
+          python3 -I -B "$LIFETIME_SOURCE/export.py" --capture "$RUNNER_TEMP/audit-lifetime-output" --archive "$RUNNER_TEMP/audit-lifetime.tar.gz" > "$RUNNER_TEMP/audit-lifetime-export.stdout" 2> "$RUNNER_TEMP/audit-lifetime-export.stderr"
+      - name: Upload complete source and physical evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-lifetime-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/audit-lifetime.tar.gz
+            ${{ runner.temp }}/audit-lifetime.tar.gz.json
+            ${{ runner.temp }}/audit-lifetime-independent
+            ${{ runner.temp }}/audit-lifetime-export.stdout
+            ${{ runner.temp }}/audit-lifetime-export.stderr
+          if-no-files-found: error
+          retention-days: 14

@@ -74,7 +74,10 @@ fn publish_active(key: &str, marker: &Marker) -> Result<()> {
 }
 
 fn publish_pin(key: &str, pin: &Pin) -> Result<()> {
-	read_pins()?.entry(key.to_owned()).or_default().push(Arc::downgrade(&pin.0));
+	read_pins()?
+		.entry(key.to_owned())
+		.or_default()
+		.push(Arc::downgrade(&pin.0));
 	Ok(())
 }
 
@@ -83,14 +86,32 @@ fn pin_guard() -> MutexGuard<'static, HashMap<String, Vec<Weak<()>>>> {
 }
 
 fn sizes() -> (usize, usize, usize) {
-	let active = ACTIVE.get().unwrap().lock().unwrap_or_else(|error| error.into_inner());
-	let pins = READ_PINS.get().unwrap().lock().unwrap_or_else(|error| error.into_inner());
+	let active = ACTIVE
+		.get()
+		.unwrap()
+		.lock()
+		.unwrap_or_else(|error| error.into_inner());
+	let pins = READ_PINS
+		.get()
+		.unwrap()
+		.lock()
+		.unwrap_or_else(|error| error.into_inner());
 	(active.len(), pins.len(), pins.values().map(Vec::len).sum())
 }
 
 fn finalize() {
-	ACTIVE.get().unwrap().lock().unwrap_or_else(|error| error.into_inner()).clear();
-	READ_PINS.get().unwrap().lock().unwrap_or_else(|error| error.into_inner()).clear();
+	ACTIVE
+		.get()
+		.unwrap()
+		.lock()
+		.unwrap_or_else(|error| error.into_inner())
+		.clear();
+	READ_PINS
+		.get()
+		.unwrap()
+		.lock()
+		.unwrap_or_else(|error| error.into_inner())
+		.clear();
 }
 
 include!("cases.rs");

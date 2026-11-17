@@ -4,7 +4,10 @@
 // These exact scenarios run once per fresh original/native process.
 fn check<T: std::fmt::Debug + PartialEq>(label: &str, observed: T, expected: T) {
 	assert_eq!(observed, expected, "{label}");
-	println!("{{\"label\":{label:?},\"value\":{:?}}}", format!("{observed:?}"));
+	println!(
+		"{{\"label\":{label:?},\"value\":{:?}}}",
+		format!("{observed:?}")
+	);
 }
 
 fn active_lifecycle() {
@@ -84,7 +87,12 @@ fn pruning_all_ids() {
 }
 
 fn keys_and_growth() {
-	let keys = ["".to_owned(), "a\0b".to_owned(), "读取-🧪".to_owned(), "k".repeat(8193)];
+	let keys = [
+		"".to_owned(),
+		"a\0b".to_owned(),
+		"读取-🧪".to_owned(),
+		"k".repeat(8193),
+	];
 	let marker = Marker::new();
 	let pin = Pin::new();
 	for key in &keys {
@@ -92,10 +100,18 @@ fn keys_and_growth() {
 		publish_pin(key, &pin).unwrap();
 	}
 	for (index, key) in keys.iter().enumerate() {
-		check(&format!("exact_key_{index}"), is_dispatch_active(key), Ok(true));
+		check(
+			&format!("exact_key_{index}"),
+			is_dispatch_active(key),
+			Ok(true),
+		);
 	}
 	check("prefix_not_equal", is_active("a"), Ok(false));
-	check("long_prefix_not_equal", is_active(&"k".repeat(8192)), Ok(false));
+	check(
+		"long_prefix_not_equal",
+		is_active(&"k".repeat(8192)),
+		Ok(false),
+	);
 	check("distinct_keys", sizes(), (4, 4, 4));
 	marker.finish();
 	for key in &keys {
@@ -122,10 +138,22 @@ fn cohort_atomic_publication() {
 		finished_tx.send((first, second)).unwrap();
 	});
 	started_rx.recv().unwrap();
-	check("cohort_blocks_reader", finished_rx.recv_timeout(std::time::Duration::from_millis(40)).is_err(), true);
+	check(
+		"cohort_blocks_reader",
+		finished_rx
+			.recv_timeout(std::time::Duration::from_millis(40))
+			.is_err(),
+		true,
+	);
 	guard.insert("cohort-second", &second);
 	drop(guard);
-	check("whole_cohort_visible", finished_rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap(), (true, true));
+	check(
+		"whole_cohort_visible",
+		finished_rx
+			.recv_timeout(std::time::Duration::from_secs(5))
+			.unwrap(),
+		(true, true),
+	);
 	worker.join().unwrap();
 	drop(first);
 	drop(second);
@@ -140,8 +168,16 @@ fn cohort_panic_poison() {
 		panic!("intentional active guard unwind");
 	}));
 	check("caught_active_unwind", result.is_err(), true);
-	check("active_poison_error", is_dispatch_active("poisoned"), Err("request audit active registry unavailable".to_owned()));
-	check("held_poison_error", held().err(), Some("request audit active registry unavailable".to_owned()));
+	check(
+		"active_poison_error",
+		is_dispatch_active("poisoned"),
+		Err("request audit active registry unavailable".to_owned()),
+	);
+	check(
+		"held_poison_error",
+		held().err(),
+		Some("request audit active registry unavailable".to_owned()),
+	);
 	drop(marker);
 }
 
@@ -174,8 +210,16 @@ fn pin_poison_active_true() {
 	let marker = Marker::new();
 	publish_active("live", &marker).unwrap();
 	poison_pin_lock();
-	check("dispatch_ignores_pin_lock", is_dispatch_active("live"), Ok(true));
-	check("any_checks_poison_even_if_active", is_active("live"), Err("request read pin state unavailable".to_owned()));
+	check(
+		"dispatch_ignores_pin_lock",
+		is_dispatch_active("live"),
+		Ok(true),
+	);
+	check(
+		"any_checks_poison_even_if_active",
+		is_active("live"),
+		Err("request read pin state unavailable".to_owned()),
+	);
 	drop(marker);
 }
 
@@ -184,8 +228,13 @@ fn active_poison_first() {
 	assert!(std::panic::catch_unwind(|| {
 		let _guard = held().unwrap();
 		panic!("intentional second poison");
-	}).is_err());
-	check("active_error_precedes_pin", is_active("missing"), Err("request audit active registry unavailable".to_owned()));
+	})
+	.is_err());
+	check(
+		"active_error_precedes_pin",
+		is_active("missing"),
+		Err("request audit active registry unavailable".to_owned()),
+	);
 }
 
 fn strong_clone_contenders() {
@@ -211,7 +260,11 @@ fn strong_clone_contenders() {
 	}
 	check("last_strong_after_contention", weak.strong_count(), 1);
 	marker.finish();
-	check("release_visible_to_upgrade", weak.upgrade().unwrap().value(), false);
+	check(
+		"release_visible_to_upgrade",
+		weak.upgrade().unwrap().value(),
+		false,
+	);
 	drop(marker);
 	check("zero_strong_after_drop", weak.strong_count(), 0);
 	check("no_resurrection", weak.upgrade().is_none(), true);
@@ -252,9 +305,17 @@ fn map_disposal_outliving_strong() {
 	publish_pin("outlive", &pin).unwrap();
 	finalize();
 	check("strong_survives_map_disposal", marker.value(), true);
-	check("external_weak_survives_map_disposal", weak.strong_count(), 1);
+	check(
+		"external_weak_survives_map_disposal",
+		weak.strong_count(),
+		1,
+	);
 	marker.finish();
-	check("external_upgrade_after_map_disposal", weak.upgrade().unwrap().value(), false);
+	check(
+		"external_upgrade_after_map_disposal",
+		weak.upgrade().unwrap().value(),
+		false,
+	);
 	drop(marker);
 	drop(pin);
 	check("external_weak_expires", weak.upgrade().is_none(), true);
@@ -273,7 +334,11 @@ fn capacity_beyond_512() {
 	}
 	check("no_512_entry_quota", sizes(), (513, 513, 513));
 	check("entry_513_visible", is_active("item-0512"), Ok(true));
-	check("entry_513_dispatch", is_dispatch_active("item-0512"), Ok(true));
+	check(
+		"entry_513_dispatch",
+		is_dispatch_active("item-0512"),
+		Ok(true),
+	);
 	drop(owners);
 	check("all_513_reclaimed", is_active("missing"), Ok(false));
 	check("both_maps_empty", sizes(), (0, 0, 0));
@@ -286,9 +351,17 @@ fn pin_active_combination() {
 	publish_pin("combined", &pin).unwrap();
 	marker.finish();
 	check("finished_but_pinned", is_active("combined"), Ok(true));
-	check("finished_not_dispatch", is_dispatch_active("combined"), Ok(false));
+	check(
+		"finished_not_dispatch",
+		is_dispatch_active("combined"),
+		Ok(false),
+	);
 	drop(marker);
-	check("dropped_marker_still_pinned", is_active("combined"), Ok(true));
+	check(
+		"dropped_marker_still_pinned",
+		is_active("combined"),
+		Ok(true),
+	);
 	drop(pin);
 	check("both_lifetimes_ended", is_active("combined"), Ok(false));
 }
@@ -311,13 +384,21 @@ fn concurrent_shared_key() {
 	}
 	ready.wait();
 	check("all_concurrent_pins_visible", sizes(), (1, 1, 16));
-	check("concurrent_last_marker_visible", is_dispatch_active("shared"), Ok(true));
+	check(
+		"concurrent_last_marker_visible",
+		is_dispatch_active("shared"),
+		Ok(true),
+	);
 	check("concurrent_any_visible", is_active("shared"), Ok(true));
 	release.wait();
 	for worker in workers {
 		worker.join().unwrap();
 	}
-	check("concurrent_lifetimes_finished", is_active("shared"), Ok(false));
+	check(
+		"concurrent_lifetimes_finished",
+		is_active("shared"),
+		Ok(false),
+	);
 	check("concurrent_maps_pruned", sizes(), (0, 0, 0));
 }
 
