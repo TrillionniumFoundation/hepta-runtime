@@ -254,7 +254,8 @@ pump_trace_closed_done:
  * Events9/15 contain full node/context/control/hub/engine bytes. Events10
  * observe root18 then59..63; events11 all14 callable rows; events12 the two
  * actual shared rows; events13 five independent owned regions; event14 the
- * cache/hint frame. Every allocated byte of these mappings is copied. These
+ * cache/hint frame. Events17/18 observe the complete pending Scope/context.
+ * Every allocated byte of these mappings is copied. These
  * observations do not execute an owner or acknowledge a completion. */
 pump_trace_extract:
     PM_SAVE
@@ -291,6 +292,8 @@ pxt_context:
     mov r8,r15
     mov r9d,16384
     call pump_trace_emit
+    mov rdi,rbp
+    call pump_trace_scope
     xor ebx,ebx
 pxt_extra:
     lea rdx,[rbp+PN_DESCRIPTOR]
@@ -375,6 +378,54 @@ pxt_region:
     call pump_trace_emit
 pxt_done:
     PM_RETURN
+/* Full Scope6 and task-local context10 buffers from their actual owner. */
+pump_trace_scope:
+    PM_SAVE
+    mov rbp,rdi
+    cmp qword ptr [rbp+PN_X_ACTIVE],1
+    jne pts_done
+    xor ebx,ebx
+pts_next:
+    cmp qword ptr [rbp+PN_S_OWNERSHIP],3
+    je pts_retained
+    cmp qword ptr [rbp+PN_S_OWNERSHIP],0
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_S_VIEW],0
+    jne public_span_fail
+    mov rdx,[r15+16]
+    test rdx,rdx
+    jz public_span_fail
+    mov rdx,[rdx+8]
+    mov eax,6
+    test ebx,ebx
+    jz pts_live_slot
+    mov eax,10
+pts_live_slot:
+    shl rax,6
+    add rdx,rax
+    jmp pts_row
+pts_retained:
+    mov rdx,rbx
+    shl rdx,6
+    lea rdx,[rbp+rdx+PN_S_DESCRIPTOR]
+pts_row:
+    call pump_trace_clear_tail
+    mov rax,[rdx+24]
+    mov [r12+PM_TRACE_C_PTR],rax
+    mov rax,[rdx+32]
+    mov [r12+PM_TRACE_C_LEN],rax
+    mov r8,[rdx+8]
+    mov r9,[rdx+16]
+    lea edi,[rbx+17]
+    mov rsi,rbp
+    mov ecx,64
+    call pump_trace_emit
+    inc ebx
+    cmp ebx,2
+    jb pts_next
+pts_done:
+    PM_RETURN
+
 .balign 8
 pxt_regions:
     .quad 0,24,160,1536,1584

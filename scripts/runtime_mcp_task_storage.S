@@ -77,6 +77,12 @@
 .equ PN_F_OWNERSHIP,3720
 .equ PN_F_NATIVE,3728
 .equ PN_F_HUB,3736
+/* Actual operation Scope and task-local request context follow the future.
+ * The session lease list and cache remain their original shared HIA owners. */
+.equ PN_S_DESCRIPTOR,3744
+.equ PN_S_CONTEXT,3808
+.equ PN_S_OWNERSHIP,3872
+.equ PN_S_VIEW,3880
 .macro PM_SAVE
     push rbp
     push rbx
@@ -421,6 +427,8 @@ pump_detach_frontend_admitted:
     mov rdi,rbp
     call pump_fence_detach
     mov rdi,rbp
+    call pump_scope_detach
+    mov rdi,rbp
     call pump_trace_detached
     PM_RETURN
 
@@ -474,6 +482,8 @@ pump_restore_frontend:
     mov rdi,rbp
     call pump_fence_restore
     mov rdi,rbp
+    call pump_scope_restore
+    mov rdi,rbp
     call pump_trace_restored
     PM_RETURN
 
@@ -509,6 +519,9 @@ pump_retire_node:
     cmp eax,8
     jne public_span_fail
 pump_retire_untracked:
+    mov rax,[rbp+PN_S_OWNERSHIP]
+    or rax,[rbp+PN_S_VIEW]
+    jnz public_span_fail
     mov rax,[rbp+PN_F_INSTALLED]
     or rax,[rbp+PN_F_OWNERSHIP]
     or rax,[rbp+PN_F_NATIVE]
@@ -561,6 +574,262 @@ pump_unlink_found:
     jnz public_span_fail
     xor eax,eax
     PM_RETURN
+
+/* Scope6 Begin clones the actual session lease through shared lease7/op2.
+ * Only Scope6 and task-local context10 are request-owned. Their settled
+ * descriptor rows, full work/output mappings and sequences move together.
+ * The next HIA Begin initializes new zero mappings through its original
+ * context INIT/PUSH and lease CLONE; this boundary performs no HIA operation. */
+pump_scope_detach:
+    PM_SAVE
+    mov rbp,rdi
+    mov rax,[rbp+PN_S_OWNERSHIP]
+    or rax,[rbp+PN_S_VIEW]
+    jnz public_span_fail
+    cmp qword ptr [rbp+PN_X_ACTIVE],0
+    je ps_detach_done
+    cmp qword ptr [rbp+PN_X_ACTIVE],1
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_X_CONTEXT],0
+    je public_span_fail
+    mov r13,[r15+16]
+    test r13,r13
+    jz public_span_fail
+    cmp qword ptr [r13+32],0
+    jne public_span_fail
+    mov rbx,[r13+8]
+    add rbx,6*64
+    call pump_scope_admit_row
+    mov r14,[rbx+8]
+    mov rax,0x3130545343535248 /* HRSCST01 */
+    cmp [r14],rax
+    jne public_span_fail
+    cmp qword ptr [r14+8],1
+    jne public_span_fail
+    cmp qword ptr [r14+24],1
+    jne public_span_fail
+    cmp qword ptr [r14+64],0
+    je public_span_fail
+    lea rdi,[rbp+PN_S_DESCRIPTOR]
+    mov rsi,rbx
+    mov ecx,8
+    rep movsq
+    mov rbx,[r13+8]
+    add rbx,10*64
+    call pump_scope_admit_context
+    mov rdx,[rbx+8]
+    mov rax,0x3130545358435248 /* HRCXST01 */
+    cmp [rdx],rax
+    jne public_span_fail
+    cmp qword ptr [rdx+8],1
+    jne public_span_fail
+    cmp qword ptr [rdx+40],0
+    je public_span_fail
+    mov rcx,[rdx+32]
+    cmp rcx,64
+    jb public_span_fail
+    mov rax,rcx
+    add rax,32
+    jc public_span_fail
+    cmp rax,[rdx+24]
+    ja public_span_fail
+    cmp rax,[rbx+16]
+    ja public_span_fail
+    mov rax,[rdx+rcx+8]
+    cmp [r14+64],rax
+    jne public_span_fail
+    lea rdi,[rbp+PN_S_CONTEXT]
+    mov rsi,rbx
+    mov ecx,8
+    rep movsq
+    mov qword ptr [rbp+PN_S_OWNERSHIP],3
+    mov [rbp+PN_S_VIEW],r13
+    /* The exact old mappings remain retained in the two pending rows. */
+    mov rbx,[r13+8]
+    add rbx,6*64
+    call pump_scope_fresh_row
+    mov rbx,[r13+8]
+    add rbx,10*64
+    call pump_scope_fresh_row
+    call pump_scope_clear_alias
+ps_detach_done:
+    PM_RETURN
+
+pump_scope_fresh_row:
+    sub rsp,8
+    mov rdi,[rbx+16]
+    call view_allocate
+    cmp rax,-4095
+    jae public_span_fail
+    mov [rbx+8],rax
+    mov rdi,[rbx+32]
+    call view_allocate
+    cmp rax,-4095
+    jae public_span_fail
+    mov [rbx+24],rax
+    mov qword ptr [rbx+40],0
+    mov qword ptr [rbx+48],0
+    mov qword ptr [rbx+56],0
+    add rsp,8
+    ret
+
+/* rbx is an actual view row, not an extra-engine descriptor. */
+pump_scope_admit_context:
+    cmp qword ptr [rbx],0
+    je public_span_fail
+    cmp qword ptr [rbx+8],0
+    je public_span_fail
+    cmp qword ptr [rbx+16],512
+    jb public_span_fail
+    cmp qword ptr [rbx+24],0
+    je public_span_fail
+    cmp qword ptr [rbx+32],32
+    jb public_span_fail
+    cmp qword ptr [rbx+56],0
+    jne public_span_fail
+    ret
+pump_scope_admit_row:
+    sub rsp,8
+    call pump_scope_admit_context
+    add rsp,8
+    cmp qword ptr [rbx+16],16785920
+    jb public_span_fail
+    cmp qword ptr [rbx+32],64
+    jb public_span_fail
+    mov rax,[rbx+8]
+    cmp qword ptr [rax+264],0
+    jne public_span_fail
+    ret
+
+/* Slot29 borrows a completed Scope result, owning no physical mappings. */
+pump_scope_clear_alias:
+    cmp qword ptr [r15+512+29*64],0
+    jne public_span_fail
+    cmp qword ptr [r15+520+29*64],0
+    jne public_span_fail
+    bt qword ptr [r15+64],29
+    jc public_span_fail
+    bt qword ptr [r15+72],29
+    jc public_span_fail
+    mov rdi,[r15+8]
+    add rdi,29*64+8
+    xor eax,eax
+    mov ecx,7
+    rep stosq
+    ret
+
+/* Retire only a pristine pair or one actually closed by the original HIA.
+ * Shared lease7 retains every real clone and cache8 retains the same instance. */
+pump_scope_restore:
+    PM_SAVE
+    mov rbp,rdi
+    cmp qword ptr [rbp+PN_S_OWNERSHIP],0
+    je ps_restore_absent
+    cmp qword ptr [rbp+PN_S_OWNERSHIP],3
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_X_ACTIVE],1
+    jne public_span_fail
+    mov r13,[rbp+PN_S_VIEW]
+    test r13,r13
+    jz public_span_fail
+    cmp [r15+16],r13
+    jne public_span_fail
+    cmp qword ptr [r13+32],0
+    jne public_span_fail
+    mov rbx,[r13+8]
+    add rbx,6*64
+    call pump_scope_admit_row
+    mov rax,[rbp+PN_S_DESCRIPTOR]
+    cmp [rbx],rax
+    jne public_span_fail
+    mov r14,[rbx+8]
+    cmp qword ptr [r14],0
+    je ps_restore_pristine
+    mov rax,0x3130545343535248 /* HRSCST01 */
+    cmp [r14],rax
+    jne public_span_fail
+    cmp qword ptr [r14+8],1
+    jne public_span_fail
+    cmp qword ptr [r14+24],0
+    jne public_span_fail
+    cmp qword ptr [r14+64],0
+    jne public_span_fail
+    jmp ps_restore_context
+ps_restore_pristine:
+    mov rdi,r14
+    mov ecx,33
+    xor eax,eax
+    repe scasq
+    jne public_span_fail
+ps_restore_context:
+    mov rbx,[r13+8]
+    add rbx,10*64
+    call pump_scope_admit_context
+    mov rax,[rbp+PN_S_CONTEXT]
+    cmp [rbx],rax
+    jne public_span_fail
+    mov r14,[rbx+8]
+    cmp qword ptr [r14],0
+    je ps_context_pristine
+    mov rax,0x3130545358435248 /* HRCXST01 */
+    cmp [r14],rax
+    jne public_span_fail
+    cmp qword ptr [r14+8],1
+    jne public_span_fail
+    cmp qword ptr [r14+24],64
+    jne public_span_fail
+    mov rax,[r14+32]
+    or rax,[r14+40]
+    jnz public_span_fail
+    jmp ps_restore_idle
+ps_context_pristine:
+    mov rdi,r14
+    mov ecx,8
+    xor eax,eax
+    repe scasq
+    jne public_span_fail
+ps_restore_idle:
+    call pump_scope_clear_alias
+    mov rbx,[r13+8]
+    add rbx,6*64
+    call pump_scope_unmap_idle
+    mov rdi,rbx
+    lea rsi,[rbp+PN_S_DESCRIPTOR]
+    mov ecx,8
+    rep movsq
+    mov rbx,[r13+8]
+    add rbx,10*64
+    call pump_scope_unmap_idle
+    mov rdi,rbx
+    lea rsi,[rbp+PN_S_CONTEXT]
+    mov ecx,8
+    rep movsq
+    mov qword ptr [rbp+PN_S_OWNERSHIP],0
+    mov qword ptr [rbp+PN_S_VIEW],0
+    jmp ps_restore_done
+ps_restore_absent:
+    cmp qword ptr [rbp+PN_S_VIEW],0
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_X_ACTIVE],0
+    jne public_span_fail
+ps_restore_done:
+    PM_RETURN
+pump_scope_unmap_idle:
+    mov rdi,[rbx+8]
+    mov rsi,[rbx+16]
+    add rsi,4096
+    mov eax,11
+    syscall
+    test rax,rax
+    jnz public_span_fail
+    mov rdi,[rbx+24]
+    mov rsi,[rbx+32]
+    add rsi,4096
+    mov eax,11
+    syscall
+    test rax,rax
+    jnz public_span_fail
+    ret
 
 /* Move an admitted guard with its suspended request. Slot27's child borrow
  * is complete, but its actual +112 token stays live until HIA RELEASE. */
