@@ -91,7 +91,7 @@ def check_processes(output):
         "cargo-metadata": [str(rust / "cargo"), "metadata", "--locked", "--offline", "--format-version", "1", "--manifest-path", str(at / "reference/Cargo.toml")],
         "cargo-build": [str(rust / "cargo"), "build", "--locked", "--offline", "--manifest-path", str(at / "reference/Cargo.toml")],
         "original-tests": [str(rust / "cargo"), "test", "--locked", "--offline", "--manifest-path", str(at / "reference/Cargo.toml"), "--", "--nocapture"],
-        "original": [str(at / "rust-target/debug/hepta-binary-params-original-oracle")],
+        "original": [str(at / "rust-target/x86_64-unknown-linux-gnu/debug/hepta-binary-params-original-oracle")],
         "native": py + [str(source / "scripts/native_capture.py"), "--qualification", str(at)],
     }
     for name, argv in expected.items():
@@ -117,10 +117,10 @@ def read_all(source, output):
             require(path.read_bytes() == owned(output, "reference/" + path.relative_to(source / "reference").as_posix()).read_bytes(), "original fixture source changed")
     registry = inventory(source, output)
     require(registry == decode(owned(output, "registry-evidence.json").read_bytes()), "registry complete evidence differs")
-    binary = owned(output, "rust-target/debug/hepta-binary-params-original-oracle")
+    binary = owned(output, "rust-target/x86_64-unknown-linux-gnu/debug/hepta-binary-params-original-oracle")
     require(pin(binary) == decode(owned(output, "original-binary.json").read_bytes()), "actual original binary changed")
     origin = decode(owned(output, "ORIGIN.json").read_bytes())
-    require(processes["original"]["argv"] == [str(Path(origin["output"]) / "rust-target/debug/hepta-binary-params-original-oracle")], "original command used another binary")
+    require(processes["original"]["argv"] == [str(Path(origin["output"]) / "rust-target/x86_64-unknown-linux-gnu/debug/hepta-binary-params-original-oracle")], "original command used another binary")
     native = read_capture(source, output)
     original = compare_original(output, native)
     return dict(status="COMPLETE_TYPED_COMPARISON_PASS", source=src, native={key: value for key, value in native.items() if key != "results"},
@@ -159,7 +159,7 @@ def execute(source, hepta, rust_bin, output):
     run_process(output, "original-tests", [cargo, "test", "--locked", "--offline", "--manifest-path", manifest, "--", "--nocapture"], env=env)
     from registry_evidence import inventory
     (output / "registry-evidence.json").write_bytes(canonical(inventory(source, output, capture=True)))
-    binary = output / "rust-target/debug/hepta-binary-params-original-oracle"
+    binary = output / "rust-target/x86_64-unknown-linux-gnu/debug/hepta-binary-params-original-oracle"
     (output / "original-binary.json").write_bytes(canonical(pin(binary)))
     import params_cases
     run_process(output, "original", [binary], data=params_cases.encoded(), env=env)
