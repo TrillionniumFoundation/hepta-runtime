@@ -1,0 +1,46 @@
+name: Read complete failed wide Watcher evidence without replay
+on:
+  push:
+    branches: [hia-namespace-watcher-wide-inspect-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_watcher_wide_inspect
+      - name: Verify exact pure inspection source
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          p=Path("tests/hia_native/namespace_watcher_wide_inspect");b=(p/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(b).hexdigest()=="cecdf68fa0fc37f1956873412ff14b57bbea78a45aec29d43251bb503002ad7a"
+          for n,r in json.loads(b)["files"].items():
+              raw=(p/n).read_bytes();assert len(raw)==r["bytes"] and hashlib.sha256(raw).hexdigest()==r["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==r["git_blob"]
+              if n.endswith(".py"):compile(raw,n,"exec")
+          PY
+      - name: Download exact failed full source and capture archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14356203008/zip > "$RUNNER_TEMP/failed.zip"
+      - name: Read every ZIP TAR source mode and actual complete buffer prefix
+        run: timeout --signal=KILL 180 python3 -I -B tests/hia_native/namespace_watcher_wide_inspect/inspect.py --archive "$RUNNER_TEMP/failed.zip" --output "$RUNNER_TEMP/watcher-wide-inspect"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: watcher-wide-inspect
+          path: |
+            ${{ runner.temp }}/watcher-wide-inspect/INSPECT.json
+            ${{ runner.temp }}/watcher-wide-inspect/restored/RESTORE.json
+            ${{ runner.temp }}/watcher-wide-inspect/restored/artifact-manifest.json
+            ${{ runner.temp }}/watcher-wide-inspect/restored/exporter.json
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 30
