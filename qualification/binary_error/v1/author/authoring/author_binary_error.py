@@ -10,7 +10,7 @@ SHA=lambda raw:hashlib.sha256(raw).hexdigest()
 CANON=lambda value:json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
 CLASSES=["ValueError","PermissionError","OSError","FileNotFoundError","NotADirectoryError",
     "IsADirectoryError","FileExistsError","InterruptedError","BlockingIOError","BrokenPipeError",
-    "TimeoutError","ConnectionResetError","ConnectionAbortedError","ConnectionRefusedError"]
+    "TimeoutError","ConnectionResetError","ConnectionAbortedError","ConnectionRefusedError","ProcessLookupError","ChildProcessError"]
 def main():
     p=argparse.ArgumentParser()
     for n in("source","hepta","output"):p.add_argument("--"+n,type=Path,required=True)
@@ -43,7 +43,7 @@ def main():
     expected_classes={}
     for number in range(1,4096):
         expected_classes[number]={1:2,13:2,2:4,20:5,21:6,17:7,4:8,11:9,114:9,115:9,
-            32:10,108:10,110:11,104:12,103:13,111:14}.get(number,3)
+            32:10,108:10,110:11,104:12,103:13,111:14,3:15,10:16}.get(number,3)
     assert classes==expected_classes
     errno_count=max(errors)+1
     assert errno_count==134 and unicodedata.unidata_version=="15.0.0",(errno_count,unicodedata.unidata_version)

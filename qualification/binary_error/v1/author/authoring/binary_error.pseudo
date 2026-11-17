@@ -28,6 +28,8 @@ def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
     if length(w)<WORK_SIZE:
         return CAPACITY
     install_data(w)
+    if number!=0:
+        kind=rendered_errno_class(number)
     class_word=get(w,(kind-1)*8)
     class_at=class_word&4294967295
     class_size=class_word>>32
@@ -102,6 +104,13 @@ def errno_class(number:u64) -> u64:
     if number==111:
         return 14
     return 3
+
+def rendered_errno_class(number:u64) -> u64:
+    if number==3:
+        return 15
+    if number==10:
+        return 16
+    return errno_class(number)
 
 def digits(number:u64) -> u64:
     if number<10:
