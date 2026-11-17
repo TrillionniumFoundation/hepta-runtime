@@ -1,0 +1,22 @@
+{
+  "producer": "5dba9360341c265e028382372b8af5c1e676f5f0",
+  "run": 44117774195,
+  "job": 134160466237,
+  "artifact": 14344431431,
+  "zip": {
+    "bytes": 611192893,
+    "sha256": "29bd9bd970a9de306fe1e5cf56d1a688de63e90abe0dc1a7c11ab8ce755fcc39"
+  },
+  "status": "FAIL",
+  "stage": "pure source-author export comparison before any new assembler/linker/packer",
+  "source_author_completed": true,
+  "production": "7567502bf4e76b5975a689b988e9f96e1206462a",
+  "reason": "The actual author sorts Path objects; the new reader sorted whole path strings. Six positions around worker-reference and worker-reference-pins differ solely in ordering.",
+  "repair": {
+    "path": "current/source_repair.py",
+    "before": "for path in sorted(rows)]",
+    "after": "for path in sorted(rows,key=Path)]",
+    "all_other_reader_and_production_bytes_unchanged": true
+  },
+  "hia_or_rust_replayed": false
+}

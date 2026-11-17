@@ -1,0 +1,268 @@
+{
+  "schema": "hepta.runtime.extract.request-owned-scope-cumulative-source-proof.v1",
+  "baseline_source": "fc73c39569c2c36ed027662d3f9e96614bd4b7d3",
+  "source_commit": "320862f03902153b5c804d1b68142126a9c7a606",
+  "intermediate_fence_source": "81fa9990d60d57e658709506d03a9c7daaf29a32",
+  "complete_source_files": 486,
+  "unchanged_hia_files": 138,
+  "scope_extension": {
+    "schema": "hepta.runtime.request-owned-scope-and-context.v1",
+    "baseline_source": "81fa9990d60d57e658709506d03a9c7daaf29a32",
+    "view_owned_slots": [
+      6,
+      10
+    ],
+    "shared_session_slots": [
+      7,
+      8
+    ],
+    "scope_proxy_slot": 29,
+    "pending_fields": {
+      "scope_descriptor": 3744,
+      "context_descriptor": 3808,
+      "ownership": 3872,
+      "view": 3880,
+      "range_end_exclusive": 3888
+    },
+    "actual_scope_begin_clones_session_lease_operation": 2,
+    "actual_context_init_push_pop_unchanged": true,
+    "no_synthetic_hia_state": true,
+    "no_early_scope_or_lease_release": true,
+    "complete_owned_work_output_and_descriptor_moved": true,
+    "private_complete_trace_events": [
+      17,
+      18
+    ],
+    "all_138_hia_sources_unchanged": true,
+    "actual_wait_public_lifecycle_qualified": false,
+    "source_only": true
+  },
+  "fence_extension": {
+    "schema": "hepta.runtime.request-owned-effect-fence-controller.v1",
+    "baseline_source": "fc73c39569c2c36ed027662d3f9e96614bd4b7d3",
+    "controller_slot": 27,
+    "native_backend_slot": 28,
+    "controller_installed_offset": 232,
+    "native_session_offset": 208,
+    "hub_offset": 224,
+    "pending_fields": {
+      "descriptor": 3584,
+      "continuation": 3648,
+      "installed": 3712,
+      "ownership": 3720,
+      "native": 3728,
+      "hub": 3736,
+      "range_end_exclusive": 3744
+    },
+    "actual_hia_guard_moved_without_release": true,
+    "all_hia_sources_unchanged": true,
+    "idle_controller_retired_only_after_hia_release": true,
+    "same_session_native_config_borrow": {
+      "requires_same_hub_and_native": true,
+      "requires_exact_config_bytes": true,
+      "requires_no_busy_frame_or_eof": true,
+      "adds_native_reference": false,
+      "keeps_cross_session_reference_rule": true,
+      "uses_actual_counter_baseline": true
+    },
+    "source_only": true,
+    "actual_wait_multi_permit_qualified": false,
+    "public_lifecycle_qualified": false
+  },
+  "patches": [
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": ".equ PN_X_OUTMAP,1176\n",
+      "after": ".equ PN_X_OUTMAP,1176\n/* Actual request-owned effect-fence controller; native context remains session-owned. */\n.equ PN_F_DESCRIPTOR,3584\n.equ PN_F_CONTINUATION,3648\n.equ PN_F_INSTALLED,3712\n.equ PN_F_OWNERSHIP,3720\n.equ PN_F_NATIVE,3728\n.equ PN_F_HUB,3736\n"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "    call pump_extract_detach\n    mov rdi,rbp\n    call pump_trace_detached",
+      "after": "    call pump_extract_detach\n    mov rdi,rbp\n    call pump_fence_detach\n    mov rdi,rbp\n    call pump_trace_detached"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "    call pump_extract_restore\n    mov rdi,rbp\n    call pump_trace_restored",
+      "after": "    call pump_extract_restore\n    mov rdi,rbp\n    call pump_fence_restore\n    mov rdi,rbp\n    call pump_trace_restored"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "pump_retire_untracked:\n    cmp qword ptr [rbp+PN_X_ACTIVE],0",
+      "after": "pump_retire_untracked:\n    mov rax,[rbp+PN_F_INSTALLED]\n    or rax,[rbp+PN_F_OWNERSHIP]\n    or rax,[rbp+PN_F_NATIVE]\n    or rax,[rbp+PN_F_HUB]\n    jnz public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0"
+    },
+    {
+      "path": "scripts/runtime_mcp_filesystem_fence_bridge.S",
+      "before": "fs_fence_configure:\n    cmp qword ptr [r14 + 208], 0\n    jne fs_fence_invalid\n    mov r15, [rdx + 8]",
+      "after": "fs_fence_configure:\n    mov qword ptr [rsp + 32], 0\n    cmp qword ptr [r14 + 208], 0\n    je fs_fence_configure_lookup\n    mov rax, [r14 + 208]\n    cmp [rdx + 8], rax\n    jne fs_fence_invalid\n    cmp qword ptr [rax + RF_BUSY], 0\n    jne fs_fence_invalid\n    cmp qword ptr [rax + RF_G_FRAME], 0\n    jne fs_fence_invalid\n    cmp qword ptr [rax + RF_G_EOF], 0\n    jne fs_fence_invalid\n    mov qword ptr [rsp + 32], 1\nfs_fence_configure_lookup:\n    mov r15, [rdx + 8]"
+    },
+    {
+      "path": "scripts/runtime_mcp_filesystem_fence_bridge.S",
+      "before": "    cmp qword ptr [r15 + RF_REFERENCES], -1\n    je fs_fence_resource\n    inc qword ptr [r15 + RF_REFERENCES]\n    mov rax, [r15 + RF_NATIVE_CALLS]",
+      "after": "    /* Same-session reborrow follows the full immutable config comparison.\n     * A separate session still owns exactly one additional native reference. */\n    cmp qword ptr [rsp + 32], 1\n    je fs_fence_same_session_borrow\n    cmp qword ptr [r15 + RF_REFERENCES], -1\n    je fs_fence_resource\n    inc qword ptr [r15 + RF_REFERENCES]\nfs_fence_same_session_borrow:\n    mov rax, [r15 + RF_NATIVE_CALLS]"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "/* Best-effort restoration on an invariant failure.",
+      "after": "/* Move an admitted guard with its suspended request. Slot27's child borrow\n * is complete, but its actual +112 token stays live until HIA RELEASE. */\npump_fence_detach:\n    PM_SAVE\n    mov rbp,rdi\n    mov rax,[rbp+PN_F_INSTALLED]\n    or rax,[rbp+PN_F_OWNERSHIP]\n    or rax,[rbp+PN_F_NATIVE]\n    or rax,[rbp+PN_F_HUB]\n    jnz public_span_fail\n    mov rbx,[r15+8]\n    add rbx,27*64\n    lea r14,[r15+512+27*64]\n    mov rax,[r14]\n    or rax,[r14+8]\n    jnz public_span_fail\n    mov r13,[rbx+8]\n    test r13,r13\n    jz pf_detach_absent\n    cmp qword ptr [rbx+16],4096\n    jb public_span_fail\n    cmp qword ptr [r15+232],1\n    jne public_span_fail\n    cmp qword ptr [r13+8],0\n    jne public_span_fail\n    cmp qword ptr [r13+64],1\n    jne public_span_fail\n    cmp qword ptr [r13+112],0\n    je pf_detach_done\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_CONTEXT],0\n    je public_span_fail\n    bt qword ptr [r15+64],27\n    jnc public_span_fail\n    bt qword ptr [r15+72],27\n    jnc public_span_fail\n    lea rdi,[rbp+PN_F_DESCRIPTOR]\n    mov rsi,rbx\n    mov ecx,8\n    rep movsq\n    lea rdi,[rbp+PN_F_CONTINUATION]\n    mov rsi,r14\n    mov ecx,8\n    rep movsq\n    mov qword ptr [rbp+PN_F_INSTALLED],1\n    mov qword ptr [rbp+PN_F_OWNERSHIP],3\n    mov rax,[r15+208]\n    mov [rbp+PN_F_NATIVE],rax\n    mov rax,[r15+224]\n    test rax,rax\n    jz public_span_fail\n    mov [rbp+PN_F_HUB],rax\n    btr qword ptr [r15+64],27\n    btr qword ptr [r15+72],27\n    lea rdi,[rbx+8]\n    xor eax,eax\n    mov ecx,7\n    rep stosq\n    mov rdi,r14\n    mov ecx,8\n    rep stosq\n    mov qword ptr [r15+232],0\n    jmp pf_detach_done\npf_detach_absent:\n    cmp qword ptr [r15+232],0\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    jne public_span_fail\npf_detach_done:\n    PM_RETURN\n\n/* Retire only an already released reusable controller before restoring a\n * retained request. Its shared native fence and session reference stay alive. */\npump_fence_clear_idle:\n    PM_SAVE\n    mov rbx,[r15+8]\n    add rbx,27*64\n    lea r14,[r15+512+27*64]\n    mov rax,[r14]\n    or rax,[r14+8]\n    jnz public_span_fail\n    mov r13,[rbx+8]\n    test r13,r13\n    jz pf_idle_absent\n    cmp qword ptr [r15+232],1\n    jne public_span_fail\n    cmp qword ptr [rbx+16],4096\n    jb public_span_fail\n    cmp qword ptr [r13+64],1\n    jne public_span_fail\n    mov rax,[r13+8]\n    or rax,[r13+112]\n    jnz public_span_fail\n    bt qword ptr [r15+64],27\n    jnc public_span_fail\n    bt qword ptr [r15+72],27\n    jnc public_span_fail\n    mov rdi,r13\n    mov rsi,[rbx+16]\n    add rsi,4096\n    jc public_span_fail\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    mov rdi,[rbx+32]\n    test rdi,rdi\n    jz public_span_fail\n    mov rsi,[rbx+40]\n    test rsi,rsi\n    jz public_span_fail\n    add rsi,4096\n    jc public_span_fail\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    btr qword ptr [r15+64],27\n    btr qword ptr [r15+72],27\n    lea rdi,[rbx+8]\n    xor eax,eax\n    mov ecx,7\n    rep stosq\n    mov rdi,r14\n    mov ecx,8\n    rep stosq\n    mov qword ptr [r15+232],0\n    jmp pf_idle_done\npf_idle_absent:\n    cmp qword ptr [r15+232],0\n    jne public_span_fail\n    bt qword ptr [r15+64],27\n    jc public_span_fail\n    bt qword ptr [r15+72],27\n    jc public_span_fail\n    mov rax,[rbx+16]\n    or rax,[rbx+24]\n    or rax,[rbx+32]\n    or rax,[rbx+40]\n    or rax,[rbx+48]\n    or rax,[rbx+56]\n    jnz public_span_fail\npf_idle_done:\n    PM_RETURN\n\npump_fence_restore:\n    PM_SAVE\n    mov rbp,rdi\n    cmp qword ptr [rbp+PN_F_OWNERSHIP],0\n    je pf_restore_absent\n    cmp qword ptr [rbp+PN_F_OWNERSHIP],3\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_F_INSTALLED],1\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    mov rax,[rbp+PN_F_NATIVE]\n    cmp [r15+208],rax\n    jne public_span_fail\n    mov rax,[rbp+PN_F_HUB]\n    test rax,rax\n    jz public_span_fail\n    cmp [r15+224],rax\n    jne public_span_fail\n    call pump_fence_clear_idle\n    mov rbx,[r15+8]\n    add rbx,27*64\n    lea r14,[r15+512+27*64]\n    mov rax,[rbp+PN_F_DESCRIPTOR]\n    cmp [rbx],rax\n    jne public_span_fail\n    mov r13,[rbp+PN_F_DESCRIPTOR+8]\n    test r13,r13\n    jz public_span_fail\n    cmp qword ptr [r13+8],0\n    jne public_span_fail\n    cmp qword ptr [r13+112],0\n    je public_span_fail\n    mov rdi,rbx\n    lea rsi,[rbp+PN_F_DESCRIPTOR]\n    mov ecx,8\n    rep movsq\n    mov rdi,r14\n    lea rsi,[rbp+PN_F_CONTINUATION]\n    mov ecx,8\n    rep movsq\n    bts qword ptr [r15+64],27\n    bts qword ptr [r15+72],27\n    mov qword ptr [r15+232],1\n    mov qword ptr [rbp+PN_F_INSTALLED],0\n    mov qword ptr [rbp+PN_F_OWNERSHIP],0\n    mov qword ptr [rbp+PN_F_NATIVE],0\n    mov qword ptr [rbp+PN_F_HUB],0\n    jmp pf_restore_done\npf_restore_absent:\n    mov rax,[rbp+PN_F_INSTALLED]\n    or rax,[rbp+PN_F_NATIVE]\n    or rax,[rbp+PN_F_HUB]\n    jnz public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    jne public_span_fail\npf_restore_done:\n    PM_RETURN\n\n/* Best-effort restoration on an invariant failure."
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": ".equ PN_F_HUB,3736\n.macro PM_SAVE",
+      "after": ".equ PN_F_HUB,3736\n/* Actual operation Scope and task-local request context follow the future.\n * The session lease list and cache remain their original shared HIA owners. */\n.equ PN_S_DESCRIPTOR,3744\n.equ PN_S_CONTEXT,3808\n.equ PN_S_OWNERSHIP,3872\n.equ PN_S_VIEW,3880\n.macro PM_SAVE"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "    call pump_fence_detach\n    mov rdi,rbp\n    call pump_trace_detached",
+      "after": "    call pump_fence_detach\n    mov rdi,rbp\n    call pump_scope_detach\n    mov rdi,rbp\n    call pump_trace_detached"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "    call pump_fence_restore\n    mov rdi,rbp\n    call pump_trace_restored",
+      "after": "    call pump_fence_restore\n    mov rdi,rbp\n    call pump_scope_restore\n    mov rdi,rbp\n    call pump_trace_restored"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "pump_retire_untracked:\n    mov rax,[rbp+PN_F_INSTALLED]",
+      "after": "pump_retire_untracked:\n    mov rax,[rbp+PN_S_OWNERSHIP]\n    or rax,[rbp+PN_S_VIEW]\n    jnz public_span_fail\n    mov rax,[rbp+PN_F_INSTALLED]"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "/* Move an admitted guard with its suspended request. Slot27's child borrow",
+      "after": "/* Scope6 Begin clones the actual session lease through shared lease7/op2.\n * Only Scope6 and task-local context10 are request-owned. Their settled\n * descriptor rows, full work/output mappings and sequences move together.\n * The next HIA Begin initializes new zero mappings through its original\n * context INIT/PUSH and lease CLONE; this boundary performs no HIA operation. */\npump_scope_detach:\n    PM_SAVE\n    mov rbp,rdi\n    mov rax,[rbp+PN_S_OWNERSHIP]\n    or rax,[rbp+PN_S_VIEW]\n    jnz public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    je ps_detach_done\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_CONTEXT],0\n    je public_span_fail\n    mov r13,[r15+16]\n    test r13,r13\n    jz public_span_fail\n    cmp qword ptr [r13+32],0\n    jne public_span_fail\n    mov rbx,[r13+8]\n    add rbx,6*64\n    call pump_scope_admit_row\n    mov r14,[rbx+8]\n    mov rax,0x3130545343535248 /* HRSCST01 */\n    cmp [r14],rax\n    jne public_span_fail\n    cmp qword ptr [r14+8],1\n    jne public_span_fail\n    cmp qword ptr [r14+24],1\n    jne public_span_fail\n    cmp qword ptr [r14+64],0\n    je public_span_fail\n    lea rdi,[rbp+PN_S_DESCRIPTOR]\n    mov rsi,rbx\n    mov ecx,8\n    rep movsq\n    mov rbx,[r13+8]\n    add rbx,10*64\n    call pump_scope_admit_context\n    mov rdx,[rbx+8]\n    mov rax,0x3130545358435248 /* HRCXST01 */\n    cmp [rdx],rax\n    jne public_span_fail\n    cmp qword ptr [rdx+8],1\n    jne public_span_fail\n    cmp qword ptr [rdx+40],0\n    je public_span_fail\n    mov rcx,[rdx+32]\n    cmp rcx,64\n    jb public_span_fail\n    mov rax,rcx\n    add rax,32\n    jc public_span_fail\n    cmp rax,[rdx+24]\n    ja public_span_fail\n    cmp rax,[rbx+16]\n    ja public_span_fail\n    mov rax,[rdx+rcx+8]\n    cmp [r14+64],rax\n    jne public_span_fail\n    lea rdi,[rbp+PN_S_CONTEXT]\n    mov rsi,rbx\n    mov ecx,8\n    rep movsq\n    mov qword ptr [rbp+PN_S_OWNERSHIP],3\n    mov [rbp+PN_S_VIEW],r13\n    /* The exact old mappings remain retained in the two pending rows. */\n    mov rbx,[r13+8]\n    add rbx,6*64\n    call pump_scope_fresh_row\n    mov rbx,[r13+8]\n    add rbx,10*64\n    call pump_scope_fresh_row\n    call pump_scope_clear_alias\nps_detach_done:\n    PM_RETURN\n\npump_scope_fresh_row:\n    sub rsp,8\n    mov rdi,[rbx+16]\n    call view_allocate\n    cmp rax,-4095\n    jae public_span_fail\n    mov [rbx+8],rax\n    mov rdi,[rbx+32]\n    call view_allocate\n    cmp rax,-4095\n    jae public_span_fail\n    mov [rbx+24],rax\n    mov qword ptr [rbx+40],0\n    mov qword ptr [rbx+48],0\n    mov qword ptr [rbx+56],0\n    add rsp,8\n    ret\n\n/* rbx is an actual view row, not an extra-engine descriptor. */\npump_scope_admit_context:\n    cmp qword ptr [rbx],0\n    je public_span_fail\n    cmp qword ptr [rbx+8],0\n    je public_span_fail\n    cmp qword ptr [rbx+16],512\n    jb public_span_fail\n    cmp qword ptr [rbx+24],0\n    je public_span_fail\n    cmp qword ptr [rbx+32],32\n    jb public_span_fail\n    cmp qword ptr [rbx+56],0\n    jne public_span_fail\n    ret\npump_scope_admit_row:\n    sub rsp,8\n    call pump_scope_admit_context\n    add rsp,8\n    cmp qword ptr [rbx+16],16785920\n    jb public_span_fail\n    cmp qword ptr [rbx+32],64\n    jb public_span_fail\n    mov rax,[rbx+8]\n    cmp qword ptr [rax+264],0\n    jne public_span_fail\n    ret\n\n/* Slot29 borrows a completed Scope result, owning no physical mappings. */\npump_scope_clear_alias:\n    cmp qword ptr [r15+512+29*64],0\n    jne public_span_fail\n    cmp qword ptr [r15+520+29*64],0\n    jne public_span_fail\n    bt qword ptr [r15+64],29\n    jc public_span_fail\n    bt qword ptr [r15+72],29\n    jc public_span_fail\n    mov rdi,[r15+8]\n    add rdi,29*64+8\n    xor eax,eax\n    mov ecx,7\n    rep stosq\n    ret\n\n/* Retire only a pristine pair or one actually closed by the original HIA.\n * Shared lease7 retains every real clone and cache8 retains the same instance. */\npump_scope_restore:\n    PM_SAVE\n    mov rbp,rdi\n    cmp qword ptr [rbp+PN_S_OWNERSHIP],0\n    je ps_restore_absent\n    cmp qword ptr [rbp+PN_S_OWNERSHIP],3\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    mov r13,[rbp+PN_S_VIEW]\n    test r13,r13\n    jz public_span_fail\n    cmp [r15+16],r13\n    jne public_span_fail\n    cmp qword ptr [r13+32],0\n    jne public_span_fail\n    mov rbx,[r13+8]\n    add rbx,6*64\n    call pump_scope_admit_row\n    mov rax,[rbp+PN_S_DESCRIPTOR]\n    cmp [rbx],rax\n    jne public_span_fail\n    mov r14,[rbx+8]\n    cmp qword ptr [r14],0\n    je ps_restore_pristine\n    mov rax,0x3130545343535248 /* HRSCST01 */\n    cmp [r14],rax\n    jne public_span_fail\n    cmp qword ptr [r14+8],1\n    jne public_span_fail\n    cmp qword ptr [r14+24],0\n    jne public_span_fail\n    cmp qword ptr [r14+64],0\n    jne public_span_fail\n    jmp ps_restore_context\nps_restore_pristine:\n    mov rdi,r14\n    mov ecx,33\n    xor eax,eax\n    repe scasq\n    jne public_span_fail\nps_restore_context:\n    mov rbx,[r13+8]\n    add rbx,10*64\n    call pump_scope_admit_context\n    mov rax,[rbp+PN_S_CONTEXT]\n    cmp [rbx],rax\n    jne public_span_fail\n    mov r14,[rbx+8]\n    cmp qword ptr [r14],0\n    je ps_context_pristine\n    mov rax,0x3130545358435248 /* HRCXST01 */\n    cmp [r14],rax\n    jne public_span_fail\n    cmp qword ptr [r14+8],1\n    jne public_span_fail\n    cmp qword ptr [r14+24],64\n    jne public_span_fail\n    mov rax,[r14+32]\n    or rax,[r14+40]\n    jnz public_span_fail\n    jmp ps_restore_idle\nps_context_pristine:\n    mov rdi,r14\n    mov ecx,8\n    xor eax,eax\n    repe scasq\n    jne public_span_fail\nps_restore_idle:\n    call pump_scope_clear_alias\n    mov rbx,[r13+8]\n    add rbx,6*64\n    call pump_scope_unmap_idle\n    mov rdi,rbx\n    lea rsi,[rbp+PN_S_DESCRIPTOR]\n    mov ecx,8\n    rep movsq\n    mov rbx,[r13+8]\n    add rbx,10*64\n    call pump_scope_unmap_idle\n    mov rdi,rbx\n    lea rsi,[rbp+PN_S_CONTEXT]\n    mov ecx,8\n    rep movsq\n    mov qword ptr [rbp+PN_S_OWNERSHIP],0\n    mov qword ptr [rbp+PN_S_VIEW],0\n    jmp ps_restore_done\nps_restore_absent:\n    cmp qword ptr [rbp+PN_S_VIEW],0\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    jne public_span_fail\nps_restore_done:\n    PM_RETURN\npump_scope_unmap_idle:\n    mov rdi,[rbx+8]\n    mov rsi,[rbx+16]\n    add rsi,4096\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    mov rdi,[rbx+24]\n    mov rsi,[rbx+32]\n    add rsi,4096\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    ret\n\n/* Move an admitted guard with its suspended request. Slot27's child borrow"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_trace.S",
+      "before": " * cache/hint frame. Every allocated byte of these mappings is copied. These",
+      "after": " * cache/hint frame. Events17/18 observe the complete pending Scope/context.\n * Every allocated byte of these mappings is copied. These"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_trace.S",
+      "before": "    mov r9d,16384\n    call pump_trace_emit\n    xor ebx,ebx\npxt_extra:",
+      "after": "    mov r9d,16384\n    call pump_trace_emit\n    mov rdi,rbp\n    call pump_trace_scope\n    xor ebx,ebx\npxt_extra:"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_trace.S",
+      "before": ".balign 8\npxt_regions:",
+      "after": "/* Full Scope6 and task-local context10 buffers from their actual owner. */\npump_trace_scope:\n    PM_SAVE\n    mov rbp,rdi\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne pts_done\n    xor ebx,ebx\npts_next:\n    cmp qword ptr [rbp+PN_S_OWNERSHIP],3\n    je pts_retained\n    cmp qword ptr [rbp+PN_S_OWNERSHIP],0\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_S_VIEW],0\n    jne public_span_fail\n    mov rdx,[r15+16]\n    test rdx,rdx\n    jz public_span_fail\n    mov rdx,[rdx+8]\n    mov eax,6\n    test ebx,ebx\n    jz pts_live_slot\n    mov eax,10\npts_live_slot:\n    shl rax,6\n    add rdx,rax\n    jmp pts_row\npts_retained:\n    mov rdx,rbx\n    shl rdx,6\n    lea rdx,[rbp+rdx+PN_S_DESCRIPTOR]\npts_row:\n    call pump_trace_clear_tail\n    mov rax,[rdx+24]\n    mov [r12+PM_TRACE_C_PTR],rax\n    mov rax,[rdx+32]\n    mov [r12+PM_TRACE_C_LEN],rax\n    mov r8,[rdx+8]\n    mov r9,[rdx+16]\n    lea edi,[rbx+17]\n    mov rsi,rbp\n    mov ecx,64\n    call pump_trace_emit\n    inc ebx\n    cmp ebx,2\n    jb pts_next\npts_done:\n    PM_RETURN\n\n.balign 8\npxt_regions:"
+    }
+  ],
+  "scope_source_proof": {
+    "schema": "hepta.runtime.request-owned-scope-and-context.v1",
+    "baseline_source": "81fa9990d60d57e658709506d03a9c7daaf29a32",
+    "baseline_binding": {
+      "bytes": 113120,
+      "sha256": "dc10afee4618c97ff65bbdc8f62979ee970e194d725ff1f18b85b11ed3a95588"
+    },
+    "source_only": true,
+    "view_owned_slots": [
+      6,
+      10
+    ],
+    "shared_session_slots": [
+      7,
+      8
+    ],
+    "scope_proxy_slot": 29,
+    "pending_fields": {
+      "scope_descriptor": 3744,
+      "context_descriptor": 3808,
+      "ownership": 3872,
+      "view": 3880,
+      "range_end_exclusive": 3888
+    },
+    "actual_scope_begin_clones_session_lease_operation": 2,
+    "actual_context_init_push_pop_unchanged": true,
+    "no_synthetic_hia_state": true,
+    "no_early_scope_or_lease_release": true,
+    "complete_owned_work_output_and_descriptor_moved": true,
+    "private_complete_trace_events": [
+      17,
+      18
+    ],
+    "all_138_hia_sources_unchanged": true,
+    "actual_wait_public_lifecycle_qualified": false,
+    "complete_source_files": 486,
+    "unchanged_hia_files": 138,
+    "after_binding": {
+      "bytes": 114044,
+      "sha256": "a3c1aeb0bfa828cebadbc153d97baeaeb320523b550e5398f2bd182e69ea4c02"
+    },
+    "patches": [
+      {
+        "path": "scripts/runtime_mcp_task_storage.S",
+        "before": ".equ PN_F_HUB,3736\n.macro PM_SAVE",
+        "after": ".equ PN_F_HUB,3736\n/* Actual operation Scope and task-local request context follow the future.\n * The session lease list and cache remain their original shared HIA owners. */\n.equ PN_S_DESCRIPTOR,3744\n.equ PN_S_CONTEXT,3808\n.equ PN_S_OWNERSHIP,3872\n.equ PN_S_VIEW,3880\n.macro PM_SAVE"
+      },
+      {
+        "path": "scripts/runtime_mcp_task_storage.S",
+        "before": "    call pump_fence_detach\n    mov rdi,rbp\n    call pump_trace_detached",
+        "after": "    call pump_fence_detach\n    mov rdi,rbp\n    call pump_scope_detach\n    mov rdi,rbp\n    call pump_trace_detached"
+      },
+      {
+        "path": "scripts/runtime_mcp_task_storage.S",
+        "before": "    call pump_fence_restore\n    mov rdi,rbp\n    call pump_trace_restored",
+        "after": "    call pump_fence_restore\n    mov rdi,rbp\n    call pump_scope_restore\n    mov rdi,rbp\n    call pump_trace_restored"
+      },
+      {
+        "path": "scripts/runtime_mcp_task_storage.S",
+        "before": "pump_retire_untracked:\n    mov rax,[rbp+PN_F_INSTALLED]",
+        "after": "pump_retire_untracked:\n    mov rax,[rbp+PN_S_OWNERSHIP]\n    or rax,[rbp+PN_S_VIEW]\n    jnz public_span_fail\n    mov rax,[rbp+PN_F_INSTALLED]"
+      },
+      {
+        "path": "scripts/runtime_mcp_task_storage.S",
+        "before": "/* Move an admitted guard with its suspended request. Slot27's child borrow",
+        "after": "/* Scope6 Begin clones the actual session lease through shared lease7/op2.\n * Only Scope6 and task-local context10 are request-owned. Their settled\n * descriptor rows, full work/output mappings and sequences move together.\n * The next HIA Begin initializes new zero mappings through its original\n * context INIT/PUSH and lease CLONE; this boundary performs no HIA operation. */\npump_scope_detach:\n    PM_SAVE\n    mov rbp,rdi\n    mov rax,[rbp+PN_S_OWNERSHIP]\n    or rax,[rbp+PN_S_VIEW]\n    jnz public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    je ps_detach_done\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_CONTEXT],0\n    je public_span_fail\n    mov r13,[r15+16]\n    test r13,r13\n    jz public_span_fail\n    cmp qword ptr [r13+32],0\n    jne public_span_fail\n    mov rbx,[r13+8]\n    add rbx,6*64\n    call pump_scope_admit_row\n    mov r14,[rbx+8]\n    mov rax,0x3130545343535248 /* HRSCST01 */\n    cmp [r14],rax\n    jne public_span_fail\n    cmp qword ptr [r14+8],1\n    jne public_span_fail\n    cmp qword ptr [r14+24],1\n    jne public_span_fail\n    cmp qword ptr [r14+64],0\n    je public_span_fail\n    lea rdi,[rbp+PN_S_DESCRIPTOR]\n    mov rsi,rbx\n    mov ecx,8\n    rep movsq\n    mov rbx,[r13+8]\n    add rbx,10*64\n    call pump_scope_admit_context\n    mov rdx,[rbx+8]\n    mov rax,0x3130545358435248 /* HRCXST01 */\n    cmp [rdx],rax\n    jne public_span_fail\n    cmp qword ptr [rdx+8],1\n    jne public_span_fail\n    cmp qword ptr [rdx+40],0\n    je public_span_fail\n    mov rcx,[rdx+32]\n    cmp rcx,64\n    jb public_span_fail\n    mov rax,rcx\n    add rax,32\n    jc public_span_fail\n    cmp rax,[rdx+24]\n    ja public_span_fail\n    cmp rax,[rbx+16]\n    ja public_span_fail\n    mov rax,[rdx+rcx+8]\n    cmp [r14+64],rax\n    jne public_span_fail\n    lea rdi,[rbp+PN_S_CONTEXT]\n    mov rsi,rbx\n    mov ecx,8\n    rep movsq\n    mov qword ptr [rbp+PN_S_OWNERSHIP],3\n    mov [rbp+PN_S_VIEW],r13\n    /* The exact old mappings remain retained in the two pending rows. */\n    mov rbx,[r13+8]\n    add rbx,6*64\n    call pump_scope_fresh_row\n    mov rbx,[r13+8]\n    add rbx,10*64\n    call pump_scope_fresh_row\n    call pump_scope_clear_alias\nps_detach_done:\n    PM_RETURN\n\npump_scope_fresh_row:\n    sub rsp,8\n    mov rdi,[rbx+16]\n    call view_allocate\n    cmp rax,-4095\n    jae public_span_fail\n    mov [rbx+8],rax\n    mov rdi,[rbx+32]\n    call view_allocate\n    cmp rax,-4095\n    jae public_span_fail\n    mov [rbx+24],rax\n    mov qword ptr [rbx+40],0\n    mov qword ptr [rbx+48],0\n    mov qword ptr [rbx+56],0\n    add rsp,8\n    ret\n\n/* rbx is an actual view row, not an extra-engine descriptor. */\npump_scope_admit_context:\n    cmp qword ptr [rbx],0\n    je public_span_fail\n    cmp qword ptr [rbx+8],0\n    je public_span_fail\n    cmp qword ptr [rbx+16],512\n    jb public_span_fail\n    cmp qword ptr [rbx+24],0\n    je public_span_fail\n    cmp qword ptr [rbx+32],32\n    jb public_span_fail\n    cmp qword ptr [rbx+56],0\n    jne public_span_fail\n    ret\npump_scope_admit_row:\n    sub rsp,8\n    call pump_scope_admit_context\n    add rsp,8\n    cmp qword ptr [rbx+16],16785920\n    jb public_span_fail\n    cmp qword ptr [rbx+32],64\n    jb public_span_fail\n    mov rax,[rbx+8]\n    cmp qword ptr [rax+264],0\n    jne public_span_fail\n    ret\n\n/* Slot29 borrows a completed Scope result, owning no physical mappings. */\npump_scope_clear_alias:\n    cmp qword ptr [r15+512+29*64],0\n    jne public_span_fail\n    cmp qword ptr [r15+520+29*64],0\n    jne public_span_fail\n    bt qword ptr [r15+64],29\n    jc public_span_fail\n    bt qword ptr [r15+72],29\n    jc public_span_fail\n    mov rdi,[r15+8]\n    add rdi,29*64+8\n    xor eax,eax\n    mov ecx,7\n    rep stosq\n    ret\n\n/* Retire only a pristine pair or one actually closed by the original HIA.\n * Shared lease7 retains every real clone and cache8 retains the same instance. */\npump_scope_restore:\n    PM_SAVE\n    mov rbp,rdi\n    cmp qword ptr [rbp+PN_S_OWNERSHIP],0\n    je ps_restore_absent\n    cmp qword ptr [rbp+PN_S_OWNERSHIP],3\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    mov r13,[rbp+PN_S_VIEW]\n    test r13,r13\n    jz public_span_fail\n    cmp [r15+16],r13\n    jne public_span_fail\n    cmp qword ptr [r13+32],0\n    jne public_span_fail\n    mov rbx,[r13+8]\n    add rbx,6*64\n    call pump_scope_admit_row\n    mov rax,[rbp+PN_S_DESCRIPTOR]\n    cmp [rbx],rax\n    jne public_span_fail\n    mov r14,[rbx+8]\n    cmp qword ptr [r14],0\n    je ps_restore_pristine\n    mov rax,0x3130545343535248 /* HRSCST01 */\n    cmp [r14],rax\n    jne public_span_fail\n    cmp qword ptr [r14+8],1\n    jne public_span_fail\n    cmp qword ptr [r14+24],0\n    jne public_span_fail\n    cmp qword ptr [r14+64],0\n    jne public_span_fail\n    jmp ps_restore_context\nps_restore_pristine:\n    mov rdi,r14\n    mov ecx,33\n    xor eax,eax\n    repe scasq\n    jne public_span_fail\nps_restore_context:\n    mov rbx,[r13+8]\n    add rbx,10*64\n    call pump_scope_admit_context\n    mov rax,[rbp+PN_S_CONTEXT]\n    cmp [rbx],rax\n    jne public_span_fail\n    mov r14,[rbx+8]\n    cmp qword ptr [r14],0\n    je ps_context_pristine\n    mov rax,0x3130545358435248 /* HRCXST01 */\n    cmp [r14],rax\n    jne public_span_fail\n    cmp qword ptr [r14+8],1\n    jne public_span_fail\n    cmp qword ptr [r14+24],64\n    jne public_span_fail\n    mov rax,[r14+32]\n    or rax,[r14+40]\n    jnz public_span_fail\n    jmp ps_restore_idle\nps_context_pristine:\n    mov rdi,r14\n    mov ecx,8\n    xor eax,eax\n    repe scasq\n    jne public_span_fail\nps_restore_idle:\n    call pump_scope_clear_alias\n    mov rbx,[r13+8]\n    add rbx,6*64\n    call pump_scope_unmap_idle\n    mov rdi,rbx\n    lea rsi,[rbp+PN_S_DESCRIPTOR]\n    mov ecx,8\n    rep movsq\n    mov rbx,[r13+8]\n    add rbx,10*64\n    call pump_scope_unmap_idle\n    mov rdi,rbx\n    lea rsi,[rbp+PN_S_CONTEXT]\n    mov ecx,8\n    rep movsq\n    mov qword ptr [rbp+PN_S_OWNERSHIP],0\n    mov qword ptr [rbp+PN_S_VIEW],0\n    jmp ps_restore_done\nps_restore_absent:\n    cmp qword ptr [rbp+PN_S_VIEW],0\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    jne public_span_fail\nps_restore_done:\n    PM_RETURN\npump_scope_unmap_idle:\n    mov rdi,[rbx+8]\n    mov rsi,[rbx+16]\n    add rsi,4096\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    mov rdi,[rbx+24]\n    mov rsi,[rbx+32]\n    add rsi,4096\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    ret\n\n/* Move an admitted guard with its suspended request. Slot27's child borrow"
+      },
+      {
+        "path": "scripts/runtime_mcp_task_trace.S",
+        "before": " * cache/hint frame. Every allocated byte of these mappings is copied. These",
+        "after": " * cache/hint frame. Events17/18 observe the complete pending Scope/context.\n * Every allocated byte of these mappings is copied. These"
+      },
+      {
+        "path": "scripts/runtime_mcp_task_trace.S",
+        "before": "    mov r9d,16384\n    call pump_trace_emit\n    xor ebx,ebx\npxt_extra:",
+        "after": "    mov r9d,16384\n    call pump_trace_emit\n    mov rdi,rbp\n    call pump_trace_scope\n    xor ebx,ebx\npxt_extra:"
+      },
+      {
+        "path": "scripts/runtime_mcp_task_trace.S",
+        "before": ".balign 8\npxt_regions:",
+        "after": "/* Full Scope6 and task-local context10 buffers from their actual owner. */\npump_trace_scope:\n    PM_SAVE\n    mov rbp,rdi\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne pts_done\n    xor ebx,ebx\npts_next:\n    cmp qword ptr [rbp+PN_S_OWNERSHIP],3\n    je pts_retained\n    cmp qword ptr [rbp+PN_S_OWNERSHIP],0\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_S_VIEW],0\n    jne public_span_fail\n    mov rdx,[r15+16]\n    test rdx,rdx\n    jz public_span_fail\n    mov rdx,[rdx+8]\n    mov eax,6\n    test ebx,ebx\n    jz pts_live_slot\n    mov eax,10\npts_live_slot:\n    shl rax,6\n    add rdx,rax\n    jmp pts_row\npts_retained:\n    mov rdx,rbx\n    shl rdx,6\n    lea rdx,[rbp+rdx+PN_S_DESCRIPTOR]\npts_row:\n    call pump_trace_clear_tail\n    mov rax,[rdx+24]\n    mov [r12+PM_TRACE_C_PTR],rax\n    mov rax,[rdx+32]\n    mov [r12+PM_TRACE_C_LEN],rax\n    mov r8,[rdx+8]\n    mov r9,[rdx+16]\n    lea edi,[rbx+17]\n    mov rsi,rbp\n    mov ecx,64\n    call pump_trace_emit\n    inc ebx\n    cmp ebx,2\n    jb pts_next\npts_done:\n    PM_RETURN\n\n.balign 8\npxt_regions:"
+      }
+    ],
+    "binding_splices": [
+      {
+        "before": "\"scripts/runtime_mcp_task_storage.S\": {\n      \"bytes\": 18406,\n      \"sha256\": \"143023803703a8762f082ca65015258531f193e9ff52a8198f4ecf3b5fa8a63c\"\n    }",
+        "after": "\"scripts/runtime_mcp_task_storage.S\": {\n      \"bytes\": 25219,\n      \"sha256\": \"d5042ee378836ae51bbe4298185a55212311f3342b1855bf33f606ff9dfa1c5c\"\n    }"
+      },
+      {
+        "before": "\"scripts/runtime_mcp_task_trace.S\": {\n      \"bytes\": 9888,\n      \"sha256\": \"2bb1c787ec1d5fa43b54cebc3619601df96bfde6249aa323a244f5bbecc32f5c\"\n    }",
+        "after": "\"scripts/runtime_mcp_task_trace.S\": {\n      \"bytes\": 11003,\n      \"sha256\": \"503ff2bfbcabaaa950d307dc11c97987c5cdaacd32214f7ab1d38d3ae0e00f5c\"\n    }"
+      }
+    ],
+    "binding_extension_tail": {
+      "before": "\n}\n",
+      "after": ",\n  \"request_owned_scope_extension\": {\n    \"schema\": \"hepta.runtime.request-owned-scope-and-context.v1\",\n    \"baseline_source\": \"81fa9990d60d57e658709506d03a9c7daaf29a32\",\n    \"view_owned_slots\": [\n      6,\n      10\n    ],\n    \"shared_session_slots\": [\n      7,\n      8\n    ],\n    \"scope_proxy_slot\": 29,\n    \"pending_fields\": {\n      \"scope_descriptor\": 3744,\n      \"context_descriptor\": 3808,\n      \"ownership\": 3872,\n      \"view\": 3880,\n      \"range_end_exclusive\": 3888\n    },\n    \"actual_scope_begin_clones_session_lease_operation\": 2,\n    \"actual_context_init_push_pop_unchanged\": true,\n    \"no_synthetic_hia_state\": true,\n    \"no_early_scope_or_lease_release\": true,\n    \"complete_owned_work_output_and_descriptor_moved\": true,\n    \"private_complete_trace_events\": [\n      17,\n      18\n    ],\n    \"all_138_hia_sources_unchanged\": true,\n    \"actual_wait_public_lifecycle_qualified\": false,\n    \"source_only\": true\n  }\n}\n"
+    },
+    "complete_inverse_bytes": true,
+    "retained_failure": {
+      "source": "2ac89fe95c909115066c4da88fdf5f17a245ea30",
+      "run": 44068793752,
+      "job": 133989354049,
+      "artifact": 14321647957,
+      "zip": {
+        "bytes": 31938207,
+        "sha256": "8f2176906bc625f883415d445a25a629c45a781898f81337065d74ec5f6f0942"
+      },
+      "archive": {
+        "bytes": 31809602,
+        "sha256": "9ed0bbe3a81c0ea5619bcda18bcfbbfd828afb5e97d3773608efdb66a2fe0daa"
+      },
+      "files": 601,
+      "logical_bytes": 100959099,
+      "actual_failure": "second concurrent request: request Scope6/alias29 active Begin refused 0xfffffffd; original24 retained without replay",
+      "whole_lane_qualified": false
+    }
+  },
+  "source_only": true,
+  "actual_wait_or_public_lifecycle_qualified": false
+}
