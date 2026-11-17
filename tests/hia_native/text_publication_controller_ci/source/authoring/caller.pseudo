@@ -50,10 +50,10 @@ def prepare_resolve(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
     if state == 0:
         if valid_expectation(s) == False:
             count = publisher_literal(w, 2048, 1)
-            return business_error(s, o, w, 2048, count)
+            return preflight_error(s, o, w, 2048, count)
         if load(s, 80) > 65536:
             count = publisher_literal(w, 2048, 2)
-            return business_error(s, o, w, 2048, count)
+            return preflight_error(s, o, w, 2048, count)
         return prepare_presence(o, w)
     if state == 1:
         return prepare_path(s, o, w)
@@ -338,3 +338,12 @@ def after_forget(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
         return INVALID
     put(w, 440, 3)
     return prepare(s, o, w, 4)
+
+def preflight_error(s: readbuf, o: mutbuf, w: mutbuf, at: u64, count: u64) -> u32:
+    if reserve(w, 4, count) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 4), at, count)
+    put(w, 200, count)
+    put(w, 216, 1)
+    put(w, 8, 105)
+    return prepare_scope(o, w, 5)

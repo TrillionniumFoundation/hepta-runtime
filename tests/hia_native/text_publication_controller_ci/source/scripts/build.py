@@ -39,6 +39,11 @@ def run(source, hepta, output):
     generated = output / "generated"
     row = process(output, "author", [sys.executable, "-I", "-S", "-B", source / "scripts/author.py",
         "--source", source, "--hepta", hepta, "--output", generated])
+    for path in sorted((generated / "native").iterdir()):
+        raw = path.read_bytes()
+        print("GENERATED_SOURCE_JSON:" + json.dumps({"path": path.relative_to(generated).as_posix(),
+            "bytes": len(raw), "sha256": __import__("hashlib").sha256(raw).hexdigest(),
+            "text": raw.decode("utf-8")}, sort_keys=True), flush=True)
     typed = generated / "native/text_file_write_params.hepta"
     shutil.copyfile(source / "native/text_file_write_params.hepta", typed)
     from hia_native_build import NativeBuild

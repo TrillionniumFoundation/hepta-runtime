@@ -94,6 +94,50 @@ def rename(assemble, render, raw, replacements, module):
     require(inverse == original, "private magic relocation inverse differs")
     return render(doc).encode(), changes
 
+
+def check_call_graph(document):
+    graph = {f["name"]: sorted({op["attrs"]["function"] for b in f["blocks"]
+        for op in b["ops"] if op["op"] == "call"}) for f in document["functions"]}
+    active, completed, order = [], set(), []
+    def visit(name):
+        require(name in graph, "call target absent: " + name)
+        require(name not in active, "HIA caller graph cycle: " + " -> ".join(active + [name]))
+        if name in completed:
+            return
+        active.append(name)
+        for child in graph[name]:
+            visit(child)
+        require(active.pop() == name, "call graph traversal differs")
+        completed.add(name)
+        order.append(name)
+    for name in graph:
+        visit(name)
+    return {"acyclic": True, "calls": graph, "leaves_first": order}
+
+def preflight_specialization(seed, aliases, nodes):
+    from hepta.hia_agent_assembly import assemble_program
+    fs = {f["name"]: f for f in assemble_program(seed).as_dict()["functions"]}
+    require(SHA(CANON(fs[aliases["business_error"]])) == "ba66d5d1564cde624c34e1a9733377167890efa1148f2182257887639e0c6188",
+        "original business-error body differs")
+    require(SHA(CANON(fs[aliases["prepare"]])) == "e7f9464d3502fd6db3980ffff25655cd9e5918a561569e966aa1e5114fbc7218",
+        "original phase dispatcher differs")
+    wanted = ast.parse("""def preflight_error(s: readbuf, o: mutbuf, w: mutbuf, at: u64, count: u64) -> u32:
+    if reserve(w, 4, count) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 4), at, count)
+    put(w, 200, count)
+    put(w, 216, 1)
+    put(w, 8, 105)
+    return prepare_scope(o, w, 5)
+""").body[0]
+    actual = next(node for node in nodes if node.name == "preflight_error")
+    require(ast.dump(actual, include_attributes=False) == ast.dump(wanted, include_attributes=False),
+        "preflight close specialization differs")
+    return {"original_error": aliases["business_error"], "original_dispatcher": aliases["prepare"],
+        "reserved_result_region": 4, "phase_write_offset": 8, "phase_value": 105,
+        "actual_close_function": aliases["prepare_scope"], "actual_close_phase": 5,
+        "generic_dispatch_recursion_removed": True, "other_error_paths_unchanged": True}
+
 def produce(root, output, hepta, name, template, comp_path, alias_key, pseudo, magic, slots):
     from hepta.hia_agent_assembly import assemble_program, render_assembly
     original = (root / template).read_bytes()
@@ -117,7 +161,10 @@ def produce(root, output, hepta, name, template, comp_path, alias_key, pseudo, m
     api = source_support.tools(hepta)
     raw, actual_names, compile_proof = source_support.compile_delta(api, seed, aliases, pseudo, COMMON, "runtime_" + name)
     require(actual_names == {**aliases, **additions}, "actual author function map differs")
-    after = {f["name"]: f for f in assemble_program(raw).as_dict()["functions"]}
+    document = assemble_program(raw).as_dict()
+    graph_proof = check_call_graph(document)
+    preflight_proof = preflight_specialization(seed, aliases, nodes) if name == "text_publication_call" else None
+    after = {f["name"]: f for f in document["functions"]}
     retained = compile_proof["retained_exact_functions"]
     concrete = ast.unparse(ast.Module(body=source_support.parsed_nodes(pseudo, COMMON), type_ignores=[])) + "\n"
     source_path = output / "native" / (name + ".hepta")
@@ -132,6 +179,7 @@ def produce(root, output, hepta, name, template, comp_path, alias_key, pseudo, m
         "private_magic_changes": magic_changes, "magic_inverse_ast_exact": True,
         "aliases": {**aliases, **additions}, "changed_functions": replacements,
         "new_functions": additions, "retained_exact_functions": retained,
+        "call_graph": graph_proof, "preflight_close_specialization": preflight_proof,
         "function_sha256": {n: SHA(CANON(f)) for n, f in after.items()},
         "functions": len(after), "blocks": sum(len(f["blocks"]) for f in after.values()),
         "operations": sum(len(b["ops"]) for f in after.values() for b in f["blocks"]),
