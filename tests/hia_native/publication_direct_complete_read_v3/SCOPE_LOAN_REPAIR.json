@@ -1,0 +1,36 @@
+{
+  "schema": "hepta.publication.direct-reader.scope-loan-repair.v2",
+  "before": {
+    "bytes": 25525,
+    "sha256": "3f5fd84fa9dbbdcd336e74d17511127e01f223a8d5d5927ef56a7ce2afb8a3c4",
+    "git_blob": "824b70bb6452a9355c7606e772d2b7030f9fdc15"
+  },
+  "after": {
+    "bytes": 25553,
+    "sha256": "5cdb5e8d9d592af61971b79e7496c5db0b0c442ec613488d060e08edb5c82449",
+    "git_blob": "f33b32e4f32cc93eee3bdaeedac14b6786bc06b0"
+  },
+  "exact_replacements": [
+    {
+      "before": "if slot==68 and not any(a):",
+      "after": "if slot==68 and group[\"phase\"] in (2,3) and not any(a):"
+    }
+  ],
+  "production_changed": false,
+  "domain_changed": false,
+  "native_or_original_replayed": false,
+  "reason": "Descriptor68 is initially unused while the actual body await is pending. The fixed bridge lends the Scope only on the real caller child6 Forget. An all-zero pending descriptor is not a retirement event. Count loan termination only at an actual settled phase2 or phase3; final per-job termination, full mapping checks and after-reply direct storage retirement stay mandatory.",
+  "actual_scope_source": {
+    "path": "scripts/runtime_publication_scope_bridge.S",
+    "bytes": 5308,
+    "sha256": "76a3249b4f6c8288040694ba317d7ca74ce961494314d920666cc389b588a737",
+    "git_blob": "d36e9594281f93c2daeb95e20bc74afae0bb9dbd"
+  },
+  "failure": {
+    "source": "9be08d0284fcd2ec3a49c06d451a7542307458bb",
+    "run": 44140685941,
+    "assertion": "only a settled direct future can end its Scope68 loan",
+    "preserved": true,
+    "semantic_replay": false
+  }
+}

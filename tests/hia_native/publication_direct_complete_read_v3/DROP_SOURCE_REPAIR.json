@@ -1,0 +1,170 @@
+{
+  "schema": "hepta.publication.direct-reader.scope-cancel-repair.v3",
+  "before": {
+    "bytes": 25553,
+    "sha256": "5cdb5e8d9d592af61971b79e7496c5db0b0c442ec613488d060e08edb5c82449",
+    "git_blob": "f33b32e4f32cc93eee3bdaeedac14b6786bc06b0"
+  },
+  "after": {
+    "bytes": 25753,
+    "sha256": "bb11eaee98231d90fa7e39ffdda9f79e766104cc8f1a3d50b3a0ffa274c5dd3c",
+    "git_blob": "d0efa881aa64e14722590b90d27268debdaf7ba2"
+  },
+  "exact_replacements": [
+    {
+      "before": "require(U(a,24)==group[\"tag\"]+2",
+      "after": "require(U(a,24)==group[\"tag\"]+1"
+    },
+    {
+      "before": "\"actual future Drop closes Scope without post-await forget\")",
+      "after": "\"actual future Drop issues one Scope-cancel action without post-await forget\")"
+    },
+    {
+      "before": "                            close=b\"HRSCQ001\"+struct.pack(\"<7Q\",7,U(b,112),U(b,120),0,0,0,0)\n                            require(extent==64 and b[start:start+extent]==close,\n                                \"actual terminal caller loan is its complete Scope-close request\")",
+      "after": "                            if group[\"phase\"]==2:\n                                close=b\"HRSCQ001\"+struct.pack(\"<7Q\",7,U(b,112),U(b,120),0,0,0,0)\n                            else:\n                                close=b\"HRSCQ001\"+struct.pack(\"<7Q\",8,U(b,112),0,2,0,0,0)\n                            require(extent==64 and b[start:start+extent]==close,\n                                \"complete actual Scope close or Scope-cancel loan for this lifecycle\")"
+    }
+  ],
+  "production": "7567502bf4e76b5975a689b988e9f96e1206462a",
+  "production_changed": false,
+  "domain_changed": false,
+  "native_or_original_replayed": false,
+  "sources": [
+    {
+      "local": "retained_caller.hepta",
+      "graph": "native/text_publication_call.hepta",
+      "bytes": 164278,
+      "sha256": "ce19868fbc642ce813678cb3bc62861ca8392422008d9e26023b9a8329119585",
+      "git_blob": "dcfbc7ee6069cdd8dea9d7151deb271f75dba99e"
+    },
+    {
+      "local": "retained_cancel_wrapper.hia",
+      "graph": "authoring/public_publication_async_v1/caller_cancel_wrapper.hia",
+      "bytes": 1701,
+      "sha256": "08ca5c5b5210f96ca3203ad233440051014d1d59d2c1b141c478d4463f4a90c0",
+      "git_blob": "0f0e175708915a7c98221c775977b42a6f38f21e"
+    },
+    {
+      "local": "retained_caller_composition.json",
+      "graph": "native/text_publication_call_composition.json",
+      "bytes": 16203,
+      "sha256": "308a56e45ff2446fd35ed45f30c0a54471f4c2a90a9eaff48ee17ea88e58a8a6",
+      "git_blob": "f605c8834127bd029ebc36c5db3efc39737594fa"
+    }
+  ],
+  "exact_functions": {
+    "f2": {
+      "bytes": 15975,
+      "sha256": "d3d1e53a9c5cdfcb6e4ef3d9259c2b4bc8ed40d97a8aae0af3661605cc6d5bc3",
+      "git_blob": "dad3acdd448f63d93ab111adf383d6f036dc895e"
+    },
+    "f4": {
+      "bytes": 1701,
+      "sha256": "08ca5c5b5210f96ca3203ad233440051014d1d59d2c1b141c478d4463f4a90c0",
+      "git_blob": "0f0e175708915a7c98221c775977b42a6f38f21e"
+    },
+    "f5": {
+      "bytes": 1456,
+      "sha256": "18fc0c7e3cf9f9a8daff139312e670a191bf2e4efcf00262cf5c1f479afb3141",
+      "git_blob": "a77c8e6cc170df270c6e04f0eec36208f2d1e73a"
+    },
+    "f6": {
+      "bytes": 4692,
+      "sha256": "90be29e31462cf525f1d73f4b1a1e589aeeb3a71983d96f1d5b34080523b50f6",
+      "git_blob": "8ad5b20099104b0563893f545c92217f801aacec"
+    },
+    "f12": {
+      "bytes": 2042,
+      "sha256": "8ac09f6a6853e452085d5ed901aebed084b05ecede7a8c10dbe85532ce59bab5",
+      "git_blob": "2163153cecff646e19cf0dd07ed1d833ca1ee6f7"
+    },
+    "f13": {
+      "bytes": 3617,
+      "sha256": "b5e7c696d77915f0e44bbfa00442d6ef2413a04cd922e4b9edc3d6ad52985504",
+      "git_blob": "8f17df44d88205093088fe4472e8cf0f5704c24c"
+    }
+  },
+  "source_path": [
+    {
+      "function": "f4",
+      "blocks": [
+        "b0",
+        "b1",
+        "b3"
+      ],
+      "meaning": "Only actual body child2 CANCELLED with zero extent and active Scope reaches cancellation; w200=0, w216=2, then f5 mode5."
+    },
+    {
+      "function": "f5",
+      "blocks": [
+        "b2",
+        "b3"
+      ],
+      "meaning": "Mode5 prepares phase105 and calls the existing Scope request writer f6."
+    },
+    {
+      "function": "f6",
+      "blocks": [
+        "b4",
+        "b7",
+        "b9",
+        "b15"
+      ],
+      "meaning": "Complete zero-filled 64-byte HRSCQ001 uses opcode8 for w216=2; Scope token remains w112, lease=0, reason=2; exactly one f12 child0 action."
+    },
+    {
+      "function": "f12",
+      "blocks": [
+        "b0",
+        "b2"
+      ],
+      "meaning": "Reject exhausted u64 generation; otherwise one +1 increment stored in w16 and w264; actual action phase5 and child0."
+    },
+    {
+      "function": "f2",
+      "blocks": [
+        "b43",
+        "b44",
+        "b46",
+        "b48",
+        "b50",
+        "b52",
+        "b55"
+      ],
+      "meaning": "Validate the complete Scope ACK; clear w416 and w128 then finish with kind2 and extent0."
+    },
+    {
+      "function": "f13",
+      "blocks": [
+        "b0",
+        "b1",
+        "b4",
+        "b5",
+        "b8"
+      ],
+      "meaning": "Require closed Scope/no continuation. Kind2 plus empty extent returns actual CANCELLED after clearing phase; no new action or generation increment."
+    }
+  ],
+  "normal_completion_unchanged": {
+    "generation_delta": 4,
+    "scope_opcode": 7,
+    "cache_forget_required": true
+  },
+  "direct_future_drop": {
+    "generation_delta": 1,
+    "scope_opcode": 8,
+    "scope_lease": 0,
+    "reason": 2,
+    "cache_forget": false,
+    "result_extent": 0
+  },
+  "prior_reader": {
+    "source": "ca5db82dc85e90f91782160cdd781c4967b12e67",
+    "run": 44142042884,
+    "incorrect_assertion": "actual future Drop closes Scope without post-await forget",
+    "previous_generation_delta": 2,
+    "previous_scope_opcode": 7,
+    "preserved": true
+  },
+  "source_only_at_freeze": true,
+  "full_sdk": false
+}
