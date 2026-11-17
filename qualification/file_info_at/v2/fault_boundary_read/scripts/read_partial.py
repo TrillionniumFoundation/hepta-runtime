@@ -30,12 +30,12 @@ def journal(path,receipt,role):
                 digest.update(h);digest.update(raw);size+=hs+count;events+=1
                 event=U(h,8)
                 if hs==128:
-                    if event in(2,5)and len(raw)>=16:phase[magic]=U(raw,8)
+                    if event==11 and len(raw)>=16:phase[magic]=U(raw,8)
                     if event==8:
                         require(magic not in pending and len(raw)>=64,"one pending actual native effect")
                         pending[magic]=(raw,phase.get(magic))
-                    if event==9:
-                        require(magic in pending and len(raw)>=96,"complete actual native effect reply")
+                    if event==9 and magic in pending:
+                        require(len(raw)>=96,"complete actual native effect reply")
                         req,ph=pending.pop(magic);effects.append(dict(owner=magic.decode(),phase=ph,operation=U(req,24),
                             fd=U(req,32),raw_return=I(U(raw,24)),request_hex=req.hex(),reply_hex=raw.hex()))
     require(not pending,"no unreturned effect at captured process end")

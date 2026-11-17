@@ -2,7 +2,7 @@ name: Read complete partial file-info captures without replay
 on:
   workflow_dispatch:
   push:
-    branches: [hia-info-read67-fault-boundary-6780-20261117]
+    branches: [hia-info-read67-fault-boundary-r2-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -20,7 +20,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PYTHONDONTWRITEBYTECODE: '1'
       INFO_SOURCE: ${{ github.workspace }}/runtime/qualification/file_info_at/v2/fault_boundary_read
-      INFO_MANIFEST: fccdfc9c616b04d715c91c698295cacfce70e8169c3a01e1ae0b8a74b6868539
+      INFO_MANIFEST: d9b2219ac012afe1efcc70deef6caee2cc1dc724ac7f85f877be7f4808d8381f
       INFO_GROUP: ${{ matrix.group }}
     steps:
       - name: Checkout frozen pure readers and complete original source
