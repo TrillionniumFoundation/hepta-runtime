@@ -1,0 +1,13 @@
+# Qualified private multi-file body
+
+The exact HIA production is `ae1cf0bf13295a9fcec7c9279a70c7edf5e0caf3`, under `qualification/multi_read_body/v1/codec_reserved_native_build`. Its 53-function controller and syscall custodian are unchanged across the actual comparisons and the independent read. `HANDOFF.json` binds the full scope, source, process, archive and control evidence.
+
+The frozen filesystem domain completed 84 inputs in 27 groups, with 89 original and 89 native invocations. Observed native execution contains 4,220 HIA calls, 2,627 OS effects, 8 process-lifetime orphan transfers and 4,203,416,259 full-buffer bytes. Three inputs run without observers. All 27 successful qualification archives contain 101,557 logical files and 1,431,380,759 logical bytes; the independent uploaded read verified every original archive, every successful recovery archive, saved controls, relocated copies and complete buffers. It passed 297 fresh read guards over 252,237 entries, with zero application or physical-control replay.
+
+The first capture kept five passing groups and 22 reader-only failures caused by the missing parent-close padding word. A narrow reader successor reused those original captures. Two later HTTP 503 fetch failures were retained and completed by a fetch-only continuation. The complete original and successor ZIP/TAR bindings are separate files; none of these failures is relabelled as a passing original run.
+
+`INSTALL_ROWS.json` has exactly ten unique runtime rows. The historical 30-function structured-error image belongs to qualification fixture command 13 and is excluded from those rows. Keep the final repository formatter34. The callable returns complete nested `HBRDS001` or `HUTFD001` error frames; any new public or stdio carrier must qualify its actual projection. The body uses one shared process-orphan pool and two held parent contexts. It does not call binary_read_body; its regular/open/read/confirmation loops have their own frozen ownership proof.
+
+This is a private body qualification. Original named operator-host validation, Remote policy, actual SSH transport, the original transport deadline and SDK public response projection remain required. Python explicit-operation observation is retained, but this evidence does not claim a complete CPython FileIO internal syscall stream or every possible filesystem mutation schedule. No public handler, main branch or old implementation was replaced by this handoff.
+
+Use `SOURCE_ROWS.json` for the complete 72-file native rebuild, 19-file input author, 139-file actual capture, 38-file pure recovery and 52-file independent reader. Source documents containing u64 values remain their original bytes. All new final documents were fully read back from Git before publication.
