@@ -1,0 +1,479 @@
+{
+  "schema": "hepta.audit-retention.qualified-private-policy-handoff.v1",
+  "status": "PRIVATE_POLICY_QUALIFIED",
+  "target": {
+    "repository": "TrillionniumFoundation/hepta-runtime",
+    "commit": "d3d75c30719db966b004756f610007a7c723729e",
+    "file": "src/mcp/runtime/request_audit.rs",
+    "file_bytes": 68414,
+    "file_sha256": "b5189f2923153ffa83d0b45a7cdf89873b0f17ebbe6ec1b174c05bab291d73da",
+    "functions": [
+      "archived_copy_matches",
+      "retain_before_begin",
+      "retain_for_batch"
+    ],
+    "git_blob": "984668cfdfcee0a7eb00de14e02086f5ad90bcc0"
+  },
+  "source": {
+    "commit": "0b1eeba1c4de5ffc46f9b0b8d641e0dbf0919d48",
+    "tree": "d7b5eae22588d7ff3f1ca411f58fe46a465222d7",
+    "prefix": "tests/hia_native/audit_retention",
+    "files": 35,
+    "source_manifest_sha256": "916899c7c2b5f82172fe47dafaa786dc5f4ceb3e0e0ef37a4b94633c29ab59ab"
+  },
+  "compiler": {
+    "repository": "TrillionniumFoundation/Hepta",
+    "commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+    "b1_b2_b3_equal": true,
+    "bytes": 673413,
+    "sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
+    "compiler_source_files": 1080
+  },
+  "dependency": {
+    "audit_json_source": "15f560cf20834b5a24844e0eb7e699dcc6dd81ec",
+    "audit_json_handoff": "7e7d6ea01e792b142f38eb13d2c8e087d2172047",
+    "native_helpers": [
+      10,
+      42,
+      43,
+      44
+    ],
+    "relocated_closure_inverse_proved": true
+  },
+  "native": {
+    "path": "native/audit_retention.hepta",
+    "blob": "b323d45a74b3dd2f358a3a8abae205f23e3fb5f4",
+    "bytes": 81449,
+    "sha256": "a5f9ddae8e88da4944252eee371f9ff55213ac2ba704c8cbed2a8ebc30adc809",
+    "functions": 21,
+    "blocks": 373,
+    "operations": 1359,
+    "composition_blob": "d42e93c549aa8312ac74c7b5ccbeb74510c0c507",
+    "image": {
+      "bytes": 113898,
+      "sha256": "8c04c41f028e63df37f60964308659c664928680d83ea72d54e269a9b015ed44"
+    },
+    "entry": "f0(readbuf request, mutbuf response, mutbuf workspace) -> u32",
+    "runtime_host_semantic_fallback": false
+  },
+  "semantic": {
+    "cases": 257,
+    "context_switches": 1805,
+    "effects": 1805,
+    "independent_contexts": 257,
+    "journal": {
+      "bytes": 16392154,
+      "sha256": "d22030022c63d581b235a066c2298fc65cab92d2a1effa30eecb9418585b2450"
+    },
+    "logical_physical_bytes": 273667890,
+    "native_calls": 2106,
+    "native_stdout": {
+      "bytes": 16627496,
+      "sha256": "77ebdb147ef5beb91b2fd1d0de2630cd33daa3d152d3d378979c88d65efaa04e"
+    },
+    "original_stdout": {
+      "bytes": 16627496,
+      "sha256": "77ebdb147ef5beb91b2fd1d0de2630cd33daa3d152d3d378979c88d65efaa04e"
+    },
+    "policy_calls": 2062,
+    "protocol_refusal_cases": [
+      {
+        "case": 4,
+        "name": "magic",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "truncated",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "operation",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "frame-length",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "record-count",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "pending-count",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "owner-offset",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "reserved",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "record-kind",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "record-state",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "record-presence",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "record-reserved",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "record-string-offset",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "record-utf8",
+        "result": 4294967295,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "output-capacity",
+        "result": 4294967294,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "workspace-capacity",
+        "result": 4294967294,
+        "step": 0
+      },
+      {
+        "case": 4,
+        "name": "sequence",
+        "result": 4294967295,
+        "step": 1
+      },
+      {
+        "case": 4,
+        "name": "effect-kind",
+        "result": 4294967295,
+        "step": 1
+      },
+      {
+        "case": 4,
+        "name": "effect-status",
+        "result": 4294967295,
+        "step": 1
+      },
+      {
+        "case": 4,
+        "name": "effect-error",
+        "result": 4294967295,
+        "step": 1
+      },
+      {
+        "case": 4,
+        "name": "effect-reserved",
+        "result": 4294967295,
+        "step": 1
+      },
+      {
+        "case": 4,
+        "name": "effect-length",
+        "result": 4294967295,
+        "step": 1
+      },
+      {
+        "case": 4,
+        "name": "reply-truncated",
+        "result": 4294967295,
+        "step": 1
+      },
+      {
+        "case": 4,
+        "name": "output-capacity",
+        "result": 4294967294,
+        "step": 1
+      },
+      {
+        "case": 4,
+        "name": "workspace-header-capacity",
+        "result": 4294967294,
+        "step": 1
+      },
+      {
+        "case": 4,
+        "name": "sequence",
+        "result": 4294967295,
+        "step": 2
+      },
+      {
+        "case": 4,
+        "name": "effect-kind",
+        "result": 4294967295,
+        "step": 2
+      },
+      {
+        "case": 4,
+        "name": "effect-status",
+        "result": 4294967295,
+        "step": 2
+      },
+      {
+        "case": 4,
+        "name": "effect-error",
+        "result": 4294967295,
+        "step": 2
+      },
+      {
+        "case": 4,
+        "name": "effect-reserved",
+        "result": 4294967295,
+        "step": 2
+      },
+      {
+        "case": 4,
+        "name": "effect-length",
+        "result": 4294967295,
+        "step": 2
+      },
+      {
+        "case": 4,
+        "name": "reply-truncated",
+        "result": 4294967295,
+        "step": 2
+      },
+      {
+        "case": 4,
+        "name": "output-capacity",
+        "result": 4294967294,
+        "step": 2
+      },
+      {
+        "case": 4,
+        "name": "workspace-header-capacity",
+        "result": 4294967294,
+        "step": 2
+      },
+      {
+        "case": 4,
+        "name": "sequence",
+        "result": 4294967295,
+        "step": 3
+      },
+      {
+        "case": 4,
+        "name": "effect-kind",
+        "result": 4294967295,
+        "step": 3
+      },
+      {
+        "case": 4,
+        "name": "effect-status",
+        "result": 4294967295,
+        "step": 3
+      },
+      {
+        "case": 4,
+        "name": "effect-error",
+        "result": 4294967295,
+        "step": 3
+      },
+      {
+        "case": 4,
+        "name": "effect-reserved",
+        "result": 4294967295,
+        "step": 3
+      },
+      {
+        "case": 4,
+        "name": "effect-length",
+        "result": 4294967295,
+        "step": 3
+      },
+      {
+        "case": 4,
+        "name": "reply-truncated",
+        "result": 4294967295,
+        "step": 3
+      },
+      {
+        "case": 4,
+        "name": "output-capacity",
+        "result": 4294967294,
+        "step": 3
+      },
+      {
+        "case": 4,
+        "name": "workspace-header-capacity",
+        "result": 4294967294,
+        "step": 3
+      },
+      {
+        "case": 4,
+        "name": "after-completion",
+        "result": 4294967295,
+        "step": 3
+      }
+    ],
+    "protocol_refusals": 44,
+    "results": {
+      "error": 11,
+      "false": 134,
+      "true": 112
+    }
+  },
+  "controls": {
+    "guard_proofs": 16,
+    "guards_per_proof": 12,
+    "native_or_rust_executions": 0,
+    "post_refusal_admissions": 2,
+    "reader_writes": 0,
+    "refusals": 12,
+    "relocations": 2,
+    "status": "PASS"
+  },
+  "original_producer": {
+    "commit": "0b1eeba1c4de5ffc46f9b0b8d641e0dbf0919d48",
+    "run": 44006563929,
+    "job": 133783230193,
+    "status": "FAIL",
+    "completed_semantic_and_build_processes": 9,
+    "original_native_full_stdout_equal": true,
+    "retained_failure": "Unchanged read-only guard detected a lazy protocol import probing an absent pyc during the first inert reader. All nine original producer processes and the complete semantic capture had succeeded.",
+    "artifact_id": 14294034370,
+    "zip": {
+      "bytes": 29673879,
+      "sha256": "b3a09f922287a21bb88a8fea3b68e6d670dbe41e0b57844fa202d0354b98251b"
+    },
+    "tar": {
+      "bytes": 30300805,
+      "sha256": "abc0ae8f293423fe33274c98c85f359e538838b1919407287ff81dcf028401e8"
+    },
+    "logical_files": 1708,
+    "logical_bytes": 156872580
+  },
+  "recovery": {
+    "commit": "b4fd176843283c232c4439292c369d8a14dd6723",
+    "tree": "554bf51af44499d942a5cf12c9238bcc24670d9f",
+    "run": 44008336779,
+    "job": 133788989122,
+    "status": "SUCCESS",
+    "source_manifest_sha256": "44ef9d5c8f9d480fa635dfaf86f35d4089a1ffce12007e87712ebaea573137ad",
+    "change": "Preload unchanged protocol definitions before unchanged read-only guard. Original semantic source, results, and original FAIL record preserved.",
+    "semantic_reexecutions": 0,
+    "reader_writes": 0,
+    "guard_proofs": 18,
+    "guard_probes": 216,
+    "read_seconds": 1.673635571,
+    "controls_seconds": 52.681237217,
+    "independent_seconds": 48.012959735
+  },
+  "complete_archive": {
+    "artifact_id": 14295103418,
+    "run": 44008336779,
+    "zip": {
+      "bytes": 158983699,
+      "sha256": "39d6c4e998a3090ed8bab1a2ebfc405b1d764f7129a1604e57b0bf0082903653"
+    },
+    "tar": {
+      "bytes": 159598654,
+      "sha256": "ce714b6b4f38a09e4b4fb5f6a19ee21f9ec551bc577d9850872fef829b37cd5b"
+    },
+    "zip_members": 8,
+    "tar_members": 1669,
+    "logical_files": 28450,
+    "logical_bytes": 2708119686,
+    "unique_objects": 1668,
+    "unique_bytes": 316978903,
+    "nested_original_full_bytes_and_modes_preserved": true
+  },
+  "independent_archive_read": {
+    "commit": "9d07e21905fdfe55599395d219853837d4e1f0db",
+    "tree": "6745a59b3bd40f138990aff7cd3c53091e7b7ddb",
+    "prefix": "qualification/audit_retention/archive_reader_v1",
+    "run": 44009531711,
+    "job": 133792909181,
+    "status": "SUCCESS",
+    "source_manifest_sha256": "780ace4b9302d1576957a1ff7043b0c74bb5e54aaf71ac939b2aac57802bb21a",
+    "read_seconds": 4.3754816340000104,
+    "budget_seconds": 180,
+    "semantic_reexecutions": 0,
+    "reader_writes": 0,
+    "guard_probes": 12,
+    "proof_artifact": {
+      "id": 14296341088,
+      "bytes": 20789,
+      "sha256": "f5b6764df11346d6f69a58abd4ba6f57f88992cf40eb87368068b0a7a03aab37"
+    }
+  },
+  "qualification": {
+    "private_policy": true,
+    "actual_filesystem": false,
+    "store_lock_composition": false,
+    "actual_activity_archive_remove_callers": false,
+    "public_handler": false,
+    "full_sdk": false,
+    "production_activation": false,
+    "whole_runtime_replaced": false,
+    "old_stack_removal_qualified": false
+  },
+  "invariants": [
+    "Input vector order is preserved; no sorting.",
+    "Owner count >=128 is resolved before global count >=512.",
+    "Pending and foreign-owner short circuits retain target effect ordering.",
+    "Activity errors and remove errors preserve opaque caller-owned error tokens; archive-read errors make a candidate ineligible.",
+    "Archive comparison uses owner, tool, complete u128 accepted time, state and elapsed wildcard rules; request_id binding remains owned by the archive reader.",
+    "Each successful removal restarts scanning; subsequent eligibility calls are repeated, never cached.",
+    "Successful prior removals survive false/error completion; a failed removal leaves the selected logical record in place.",
+    "The actor owns a full immutable copy of initialization input and exclusive continuation workspace.",
+    "Native invalid/capacity refusals preserve complete mutable buffers; unused suffix bytes remain unchanged."
+  ],
+  "execution_rules": {
+    "local_rust_executions": 0,
+    "local_hia_executions": 0,
+    "ordinary_process_seconds": 60,
+    "build_fetch_vendor_seconds": 900,
+    "inert_reader_seconds": 180,
+    "job_minutes": 15,
+    "unknown_replayed": false
+  },
+  "local_pending_resolution": {
+    "status": "FAIL",
+    "error": "Failed to write /tmp/hia-audit-retention-6780-v1/recovery/bounded_stage.py",
+    "seconds": 626.6,
+    "native_or_rust_execution": false,
+    "replayed": false
+  },
+  "cleanup": {
+    "local_expanded_duplicates_deleted": false,
+    "ci_deduplicated_staging_objects_removed_only_after_complete_byte_mode_set_equality": true,
+    "complete_retained_archive_local_download_pending_environment_recovery": true
+  }
+}
