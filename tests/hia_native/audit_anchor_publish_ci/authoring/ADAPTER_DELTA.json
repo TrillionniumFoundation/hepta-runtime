@@ -1,0 +1,156 @@
+{
+  "all_entropy_policy_in_hia": true,
+  "changes": [
+    {
+      "after": "audit_anchor_publish_callable",
+      "before": "audit_pinned_anchor_callable",
+      "count": 21
+    },
+    {
+      "after": "for the anchor-publication HIA owner.",
+      "before": "for the pinned-anchor HIA owner.",
+      "count": 1
+    },
+    {
+      "after": "0x3130584355504148",
+      "before": "0x313058434e504148",
+      "count": 3
+    },
+    {
+      "after": "0x3130515255504148",
+      "before": "0x313051524e504148",
+      "count": 1
+    },
+    {
+      "after": "0x3130535255504148",
+      "before": "0x313053524e504148",
+      "count": 1
+    },
+    {
+      "after": "0x314b434155504148",
+      "before": "0x314b43414e504148",
+      "count": 1
+    },
+    {
+      "after": "0x3130535755504148",
+      "before": "0x313053574e504148",
+      "count": 1
+    },
+    {
+      "after": "cmpq $21,40(%r12)",
+      "before": "cmpq $18,40(%r12)",
+      "count": 1
+    },
+    {
+      "after": "cmp $160,%ecx",
+      "before": "cmp $136,%ecx",
+      "count": 2
+    },
+    {
+      "after": "cmpq $0,160(%r15)",
+      "before": "cmpq $0,136(%r15)",
+      "count": 1
+    },
+    {
+      "after": "cmpq $0,160(%rbx)",
+      "before": "cmpq $0,136(%rbx)",
+      "count": 1
+    },
+    {
+      "after": "add $168,%rdx",
+      "before": "add $144,%rdx",
+      "count": 1
+    },
+    {
+      "after": "mov $21,%ecx\n    rep movsq",
+      "before": "mov $18,%ecx\n    rep movsq",
+      "count": 1
+    },
+    {
+      "after": "movq $21,40(%r12)",
+      "before": "movq $18,40(%r12)",
+      "count": 1
+    },
+    {
+      "after": ".Ljson:\n    cmpq $4,160(%r12)",
+      "before": ".Ljson:\n    cmpq $2,160(%r12)",
+      "count": 1
+    },
+    {
+      "after": ".Lfilesystem:\n    mov 160(%r12),%rax\n    cmp $1,%rax\n    je .Lanchor_fs_allowed\n    cmp $4,%rax\n    je .Lanchor_fs_allowed\n    cmp $5,%rax\n    je .Lanchor_fs_allowed\n    cmp $6,%rax\n    je .Lanchor_fs_allowed\n    cmp $7,%rax\n    je .Lanchor_fs_allowed\n    cmp $8,%rax\n    je .Lanchor_fs_allowed\n    cmp $9,%rax\n    je .Lanchor_fs_allowed\n    cmp $17,%rax\n    je .Lanchor_fs_allowed\n    cmp $18,%rax\n    je .Lanchor_fs_allowed\n    cmp $19,%rax\n    jne .Lfailure\n",
+      "before": ".Lfilesystem:\n    mov 160(%r12),%rax\n    cmp $1,%rax\n    je .Lanchor_fs_allowed\n    cmp $2,%rax\n    je .Lanchor_fs_allowed\n    cmp $3,%rax\n    je .Lanchor_fs_allowed\n    cmp $4,%rax\n    je .Lanchor_fs_allowed\n    cmp $7,%rax\n    je .Lanchor_fs_allowed\n    cmp $15,%rax\n    je .Lanchor_fs_allowed\n    cmp $16,%rax\n    jne .Lfailure\n",
+      "count": 1
+    },
+    {
+      "after": "    cmp $17,%rax\n    je .Lfs_ready\n    cmp $18,%rax\n    je .Lfs_names\n    mov 40(%r14),%rdi",
+      "before": "    cmp $3,%rax\n    je .Lfs_ready\n    mov 40(%r14),%rdi",
+      "count": 1
+    },
+    {
+      "after": ".Lfs_shape:\n    cmpq $19,160(%r12)\n    je .Lpublish_poll_prepare\n    cmpq $15,160(%r12)",
+      "before": ".Lfs_shape:\n    cmpq $15,160(%r12)",
+      "count": 1
+    },
+    {
+      "after": ".Lpublish_poll_prepare:\n    cmpq $1,48(%r14)\n    jne .Lfailure\n    cmpq $-1,56(%r14)\n    jne .Lfailure\n    cmpq $0,72(%r14)\n    jne .Lfailure\n    cmpq $0,88(%r14)\n    jne .Lfailure\n    mov 192(%r12),%rax\n    mov 16(%rax),%eax\n    mov %eax,STAT_BUF(%r12)\n    movl $1,STAT_BUF+4(%r12)\n    movq $8,120(%r12)\n    jmp .Lfs_ready\n.Lanchor_named_prepare:",
+      "before": ".Lanchor_named_prepare:",
+      "count": 1
+    },
+    {
+      "after": "    mov 160(%r12),%rax\n    cmp $17,%rax\n    je .Lpublish_getrandom\n    cmp $18,%rax\n    je .Lpublish_open_absolute\n    cmp $19,%rax\n    je .Lpublish_poll\n    cmp $15,%rax",
+      "before": "    mov 160(%r12),%rax\n    cmp $15,%rax",
+      "count": 1
+    },
+    {
+      "after": ".Lpublish_getrandom:\n    cmpq $32,40(%r14)\n    ja .Lfailure\n    cmpq $0,48(%r14)\n    jne .Lfailure\n    cmpq $0,56(%r14)\n    jne .Lfailure\n    cmpq $0,72(%r14)\n    jne .Lfailure\n    cmpq $0,88(%r14)\n    jne .Lfailure\n    lea ACK_BUF+128(%r12),%rdi\n    mov 40(%r14),%rsi\n    xor %edx,%edx\n    LIBCALL 17,0\n    jmp .Lfs_return\n.Lpublish_open_absolute:\n    cmpq $524288,40(%r14)\n    jne .Lfailure\n    cmpq $0,48(%r14)\n    jne .Lfailure\n    cmpq $0,56(%r14)\n    jne .Lfailure\n    lea SCRATCH(%r12),%rdi\n    mov 40(%r14),%esi\n    xor %edx,%edx\n    LIBCALL 18,1\n    jmp .Lfs_return\n.Lpublish_poll:\n    lea STAT_BUF(%r12),%rdi\n    mov $1,%esi\n    mov $-1,%edx\n    LIBCALL 19,1\n    jmp .Lfs_return\n.Lfs_open:",
+      "before": ".Lfs_open:",
+      "count": 1
+    },
+    {
+      "after": "    mov 160(%r12),%rcx\n    cmp $17,%rcx\n    je .Lpublish_random_value\n    cmp $18,%rcx\n    je .Lfs_new_file\n    cmp $19,%rcx\n    je .Lfs_value\n    cmp $1,%rcx",
+      "before": "    mov 160(%r12),%rcx\n    cmp $1,%rcx",
+      "count": 1
+    },
+    {
+      "after": ".Lpublish_random_value:\n    cmp 40(%r14),%rax\n    ja .Lfailure\n    mov %rax,ACK_BUF+56(%r12)\n    jmp .Lfs_payload\n.Lfs_read_value:",
+      "before": ".Lfs_read_value:",
+      "count": 1
+    },
+    {
+      "after": "    cmpq $2,OWNER_WORK+40(%r12)\n    ja .Lzero\n    jne .Lanchor_caps_scan\n    mov OWNER_WORK+144(%r12),%r9\n    test %r9,%r9\n    jz .Lanchor_caps_scan\n    cmp $1,%r9\n    jbe .Lzero",
+      "before": "    cmpq $1,OWNER_WORK+40(%r12)\n    ja .Lzero\n    jne .Lanchor_caps_scan\n    mov OWNER_WORK+120(%r12),%r9\n    cmp $1,%r9\n    jbe .Lzero",
+      "count": 1
+    },
+    {
+      "after": "    .zero @OWNER_BYTES@",
+      "before": "    .zero 154352",
+      "count": 1
+    },
+    {
+      "after": "    mov $318,%edi\n    lea ACK_BUF+128(%r12),%rsi\n    mov 40(%r14),%rdx\n    xor %ecx,%ecx\n    LIBCALL 17,0",
+      "before": "    lea ACK_BUF+128(%r12),%rdi\n    mov 40(%r14),%rsi\n    xor %edx,%edx\n    LIBCALL 17,0",
+      "count": 1
+    }
+  ],
+  "new_mechanical_libc_boundaries": [
+    "syscall(SYS_getrandom=318)",
+    "open",
+    "poll"
+  ],
+  "original_control_and_borrow_flow_preserved": true,
+  "preimage": {
+    "bytes": 25881,
+    "git_blob": "2541ad2d7fb52db69990234b77d08f551ac09020",
+    "mode": "100644",
+    "sha256": "31cc702480632e55b2d11e0bde34e4627dc3179c0f88cf4f7f614f1d980e595c"
+  },
+  "preimage_path": "imports/audit_pinned_anchor_callable.S",
+  "result": {
+    "bytes": 27572,
+    "git_blob": "7143b3d03bd5c43f608d57adc805f2e6bc7e2094",
+    "mode": "100644",
+    "sha256": "5daab0765f9e4f3dc869d6a17396cc38a789fe7e710c41a4a508e48908362ace"
+  },
+  "schema": "hepta.audit-anchor-publish.native-adapter-delta.v1",
+  "semantic_execution": false
+}

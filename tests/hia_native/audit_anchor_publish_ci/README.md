@@ -1,0 +1,11 @@
+# Exact private archive-anchor publication producer
+
+This isolated producer consumes the exact prepared owner source from 5cfd50554a16746c8cd7693e7f6350f3a1871384 and its six complete generated files. It does not alter the closed PinnedAnchor package.
+
+The complete frozen input corpus has99 cases /137 publication attempts in9 explicit kernel environments. Both observed and observation-free native cohorts execute every case, with fresh current-target Rust references. Each service case has one native context and one separate Rust process for its full sequence, preserving fallback-descriptor reuse inside that service. Normal, ENOSYS/EPERM fallback, real entropy EIO, fsync EIO, link EACCES and unlink EACCES are selected by owned seccomp filters outside original functions. No effect callback or ACK is faked.
+
+Every replay group retains its original60-second process limit, build900 and fetch/vendor180. The job is15minutes. Actual filesystem and syscall evidence, full input/output/workspaces and outer native context, all streams and exits are retained. Export rereads every complete byte and mode, even for deduplicated files. The parent removes only the exact fixture tree after child exit and retains full final snapshots before retirement.
+
+This first producer checkpoint deliberately reports PRODUCERS_PASS_READBACK_PENDING on successful capture. Strong semantic readers, direct owner/protocol controls, physical mutation controls, relocation and uploaded-artifact reopening are separate pending source checkpoints. A successful producer is not full qualification. In particular namespace_version, archive-open, HOT_CACHE, begin/finish/public routing and global entropy-cache concurrency remain false.
+
+The raw random bytes and actual random temporary names necessarily differ between independent original/native executions. Future strict comparison must bind each actual name to its complete captured entropy bytes and only then compare its operation-relative role; it may not ignore unbound names or shorten files. All original target function/type bytes remain unchanged. Crate archives and vendor sources are retained in full for31 exact target-lock packages; implementation binding remains a mandatory reader check.
