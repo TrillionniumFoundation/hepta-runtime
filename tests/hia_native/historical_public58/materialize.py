@@ -20,9 +20,9 @@ def read(root,name):
     return path.read_bytes()
 def check(source):
     raw=read(source,(PREFIX/"PROFILE.json").as_posix());profile=json.loads(raw)
-    assert profile["schema"]=="hepta.historical-public58.source-profile.v4"
+    assert profile["schema"]=="hepta.historical-public58.source-profile.v5"
     assert profile["historical_images"]==58 and profile["current_default_images"]==111
-    assert len(profile["current_graph_files"])==390 and len(profile["restore"])==119
+    assert len(profile["current_graph_files"])==390 and len(profile["restore"])==120
     assert len(profile["remove_current_public_only"])==247
     assert len(profile["current_authority_profile_files"])==6
     assert profile["retained_global_batch_input_paths"]==["native/batch_plan_input_performance.json",
@@ -30,7 +30,14 @@ def check(source):
     assert not set(profile["retained_global_batch_input_paths"]).intersection(profile["remove_current_public_only"])
     assert SHA(read(source,"native/batch_plan_input_sources.json"))==profile["global_batch_input_source_profile_sha256"]
     assert not set(profile["current_graph_files"]).intersection(profile["current_authority_profile_files"])
-    bound={**profile["current_graph_files"],**profile["current_authority_profile_files"]}
+    assert len(profile["current_workflow_files"])==4
+    workflow=".github/workflows/hia-local-text-body-native.yml"
+    assert profile["historical_workflow_restore"]=={workflow:profile["restore"][workflow]}
+    assert profile["historical_workflow_commit"]=="208ff61db1da78aadfeb8d7913af7ddf4b59d461"
+    body=json.loads(read(source,"tests/hia_native/local_text_body/source_files.json"))
+    assert {key:profile["restore"][workflow][key] for key in ("bytes","sha256")}==body["files"][workflow]
+    bound={**profile["current_graph_files"],**profile["current_authority_profile_files"],
+        **profile["current_workflow_files"]}
     for name,expected in bound.items():assert pin(read(source,name))==expected,name
     assert len(profile["historical_authority_restore"])==7
     for name,expected in profile["historical_authority_restore"].items():assert profile["restore"][name]==expected
@@ -81,7 +88,7 @@ def main():
     source=a.source.resolve(strict=True);profile,profile_sha=check(source)
     if a.check_only:
         print(json.dumps(dict(status="CURRENT111_AND_HISTORICAL58_AUTHORITY_SOURCE_IDENTITIES_PASS",
-            current_graph_files=390,current_authority_profile_files=6,historical_files=119,profile_sha256=profile_sha,
+            current_graph_files=390,current_authority_profile_files=6,current_workflow_files=4,historical_files=120,profile_sha256=profile_sha,
             default_current_images=111,historical_images=58,native_or_rust_executed=False),sort_keys=True));return
     assert a.output is not None;output=a.output.absolute()
     assert not output.exists() and not output.is_relative_to(source)

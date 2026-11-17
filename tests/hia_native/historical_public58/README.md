@@ -5,15 +5,21 @@ preserves the older 58-image public fixture and the original authority profile
 used by its retained component pipeline. Current authority has a separate
 current-SDK comparison and evidence reader.
 
-`source/` contains 119 exact old files: the original 112 graph/LocalRead inputs
+`source/` contains 120 exact old files: the original 112 graph/LocalRead inputs
 from `f31b7645eaf9b0b41979851d46a16e1e450e1a4b`, plus seven authority files whose
 bytes are unchanged in main `e7ecd543a300c33404b00a80cfb9ab4e98053cf1`.
+A separately pinned Local body workflow from installed source
+`208ff61db1da78aadfeb8d7913af7ddf4b59d461` retains the exact bytes required
+by the unchanged body `source_files.json`. The active main workflows keep their
+current `runtime_support` checkout paths. Only the materialized historical view
+receives this old workflow document.
+
 Those seven restore the old root, profile, packer, provenance and three pin
 consumers, keeping the original receipt bound to its actual source and images.
 
 `PROFILE.json` records every size, SHA-256 and Git blob. Before creating a source
 view, the materializer checks 390 current graph files and six extra authority
-profile files. It restores 119 old inputs and excludes 247 current-public-only
+profile files, plus the four current workflow identities. It restores 120 old inputs and excludes 247 current-public-only
 files. The shared Batch input performance proof and its two exact authoring
 inputs remain in the historical source view; the global Batch qualifier still
 binds all 26 source inputs, including the five dependencies restored here. The v22 `vendor` preservation remains intact. The complete packed-worker `runtime_support` input tree is validated, copied and explicitly excluded with the other current-only files; no packed support byte is silently trusted.
