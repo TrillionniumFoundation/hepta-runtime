@@ -1,0 +1,70 @@
+name: Independently join complete historical aggregate proof
+on:
+  push:
+    branches: [hia-history-aggregate-readback-6780-20261117]
+    paths: ['.github/workflows/hia-history-aggregate-proof.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen independent proof source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/history_aggregate_recovery/aggregate-proof-v1
+      - name: Verify complete proof reader source
+        run: |
+          mkdir -p "$RUNNER_TEMP/aggregate-proof-result/logs" "$RUNNER_TEMP/aggregate-proof-input"
+          echo "9ddbb523d8922946d22b220eb6cb09564c7ee2b55c8a052ebefc1ad7372d986c  qualification/history_aggregate_recovery/aggregate-proof-v1/SOURCE_MANIFEST.json" | sha256sum --check --strict
+          timeout --signal=KILL 60 python3 -I -S -B - qualification/history_aggregate_recovery/aggregate-proof-v1 <<'PY'
+          import hashlib,json,sys
+          from pathlib import Path
+          root=Path(sys.argv[1]);m=json.loads((root/"SOURCE_MANIFEST.json").read_bytes())
+          assert {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}==set(m["files"])|{"SOURCE_MANIFEST.json"}
+          for name,row in m["files"].items():
+              raw=(root/name).read_bytes()
+              assert len(raw)==row["bytes"] and hashlib.sha256(raw).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==row["git_blob"]
+              compile(raw,str(root/name),"exec")
+          print("FROZEN_PROOF_READER_SOURCE_PASS")
+          PY
+      - name: Download exact full V10 failure proof and original index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14298019630 > "$RUNNER_TEMP/aggregate-proof-result/v10-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14298019630/zip > "$RUNNER_TEMP/aggregate-proof-input/v10.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14276342887 > "$RUNNER_TEMP/aggregate-proof-result/index-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14276342887/zip > "$RUNNER_TEMP/aggregate-proof-input/index.zip"
+      - name: Read all proof ZIP gzip TAR source and original index bytes
+        run: |
+          timeout --signal=KILL 900 python3 -I -S -B qualification/history_aggregate_recovery/aggregate-proof-v1/read_proof_archive_v2.py --zip "$RUNNER_TEMP/aggregate-proof-input/v10.zip" --zip-bytes 60667950 --zip-sha256 92f1a5e72db1e982b2b237084b4423aaa1204f045e5050960626f54ef5533798 --source-manifest-sha256 ef304f1000a49279bf1f51c8088ee27220e145c6564c020a2abd3116e7ea3b32 --output "$RUNNER_TEMP/aggregate-v10-complete" > "$RUNNER_TEMP/aggregate-proof-result/logs/archive.stdout" 2> "$RUNNER_TEMP/aggregate-proof-result/logs/archive.stderr"
+          timeout --signal=KILL 900 python3 -I -S -B qualification/history_aggregate_recovery/aggregate-proof-v1/read_original_index.py --zip "$RUNNER_TEMP/aggregate-proof-input/index.zip" --output "$RUNNER_TEMP/aggregate-original-index" > "$RUNNER_TEMP/aggregate-proof-result/logs/index.stdout" 2> "$RUNNER_TEMP/aggregate-proof-result/logs/index.stderr"
+          cp "$RUNNER_TEMP/aggregate-v10-complete/COMPLETE_READBACK.json" "$RUNNER_TEMP/aggregate-proof-result/COMPLETE_ARCHIVE_READBACK.json"
+          gzip -c "$RUNNER_TEMP/aggregate-v10-complete/COMPLETE_MEMBER_PINS.json" > "$RUNNER_TEMP/aggregate-proof-result/COMPLETE_MEMBER_PINS.json.gz"
+      - name: Independently join all actual 405 checks 81 recipes 87 images and complete index under readonly guard
+        run: |
+          timeout --signal=KILL 180 python3 -I -S -B qualification/history_aggregate_recovery/aggregate-proof-v1/verify_aggregate.py --readback "$RUNNER_TEMP/aggregate-v10-complete" --original-report "$RUNNER_TEMP/aggregate-original-index/original-result.json" --original-index "$RUNNER_TEMP/aggregate-proof-input/index.zip" --output "$RUNNER_TEMP/aggregate-proof-result/guarded" > "$RUNNER_TEMP/aggregate-proof-result/logs/reader.stdout" 2> "$RUNNER_TEMP/aggregate-proof-result/logs/reader.stderr"
+      - name: Preserve all diagnostics and frozen proof code
+        if: always()
+        run: |
+          cp -a qualification/history_aggregate_recovery/aggregate-proof-v1 "$RUNNER_TEMP/aggregate-proof-result/source"
+          for stream in archive.stdout archive.stderr index.stdout index.stderr reader.stdout reader.stderr; do
+            if test -f "$RUNNER_TEMP/aggregate-proof-result/logs/$stream"; then cat "$RUNNER_TEMP/aggregate-proof-result/logs/$stream"; fi
+          done
+      - name: Retain entire independent aggregate verification
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history-aggregate-independent-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aggregate-proof-result/
+          compression-level: 6
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
