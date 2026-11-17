@@ -1,0 +1,102 @@
+name: Actual current publisher asynchronous original lifecycle
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publisher-async-domain-6780-v1-20261117']
+    paths: ['tests/hia_native/text_publication_async_domain_ci/**', '.github/workflows/hia-publisher-async-domain-v1.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PA_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_async_domain_ci/source" "PA_CAPTURE=$RUNNER_TEMP/publisher-async-domain" "PA_EXPORT=$RUNNER_TEMP/publisher-async-domain-export" "PA_DRIVER=$RUNNER_TEMP/publisher-async-domain-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact lifecycle source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/text_publication_async_domain_ci/source
+      - name: Complete source and input-only domain admission
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$PA_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = d7f8b8a2f00eed741332a8e386a4fae74825c188969dd22d3bf5370e3528f795
+          python3 -I -S -B "$PA_SOURCE/recipe/entry.py" source
+      - name: Complete actual original30 and physical reader controls
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$PA_SOURCE/recipe/entry.py" capture --output "$PA_CAPTURE" > "$PA_DRIVER.stdout" 2> "$PA_DRIVER.stderr"
+          pa_status=$?
+          cat "$PA_DRIVER.stderr"
+          tail -c 16384 "$PA_DRIVER.stdout"
+          exit "$pa_status"
+      - name: Complete immutable original-domain reread
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PA_SOURCE/recipe/entry.py" read --capture "$PA_CAPTURE" --output "$PA_CAPTURE-readonly.json" >> "$PA_DRIVER.stdout" 2>> "$PA_DRIVER.stderr"
+          pa_status=$?
+          cat "$PA_DRIVER.stderr"
+          tail -c 16384 "$PA_DRIVER.stdout"
+          exit "$pa_status"
+      - name: Export every source and evidence byte including failures
+        if: always()
+        run: |
+          python3 -I -S -B "$PA_SOURCE/recipe/archive.py" pack --source "$PA_SOURCE" --capture "$PA_CAPTURE" --output "$PA_EXPORT" --driver-prefix "$PA_DRIVER"
+      - name: Upload complete original lifecycle archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-async-domain-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PA_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
+  independent-uploaded-read:
+    needs: capture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set independent runtime paths
+        run: |
+          printf '%s\n' "PA_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_async_domain_ci/source" "PA_READ_WORK=$RUNNER_TEMP/publisher-async-uploaded" "PA_READ_OUTPUT=$RUNNER_TEMP/publisher-async-proof" "PA_READ_DRIVER=$RUNNER_TEMP/publisher-async-read-driver" "PA_READ_EXPORT=$RUNNER_TEMP/publisher-async-read-export" >> "$GITHUB_ENV"
+      - name: Checkout the same exact frozen reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/text_publication_async_domain_ci/source
+      - name: Verify actual uploaded full archive without application execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PA_SOURCE/recipe/read_uploaded.py" --run "${{ github.run_id }}" --head "${{ github.sha }}" --artifact-name "publisher-async-domain-${{ github.sha }}-${{ github.run_attempt }}" --work "$PA_READ_WORK" --output "$PA_READ_OUTPUT" > "$PA_READ_DRIVER.stdout" 2> "$PA_READ_DRIVER.stderr"
+          pa_status=$?
+          cat "$PA_READ_DRIVER.stderr"
+          tail -c 16384 "$PA_READ_DRIVER.stdout"
+          exit "$pa_status"
+      - name: Export complete independent proof and failure logs
+        if: always()
+        run: |
+          python3 -I -S -B "$PA_SOURCE/recipe/archive.py" pack --source "$PA_SOURCE" --capture "$PA_READ_OUTPUT" --output "$PA_READ_EXPORT" --driver-prefix "$PA_READ_DRIVER"
+      - name: Upload complete independent proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-async-uploaded-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PA_READ_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
