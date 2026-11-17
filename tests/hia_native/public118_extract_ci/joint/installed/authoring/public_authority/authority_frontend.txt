@@ -1,0 +1,100 @@
+def select_tool(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    put(w, 192, 0)
+    fill_range(w, 1024, 208, 0)
+    return prepare(s, o, w, 13)
+
+def prepare(s:readbuf, o:mutbuf, w:mutbuf, phase:u64) -> u32:
+    if phase == 13:
+        put(w, 8, 113)
+        if reserve(w, 0, 24) == 0:
+            return pending_grow(o, w)
+        if reserve(w, 1, 256) == 0:
+            return pending_grow(o, w)
+        at = region(w, 0)
+        put(w, at, CONFIG_QUERY)
+        put(w, at + 8, 3)
+        put(w, at + 16, 0)
+        return child(w, 6, 24, 13)
+    if phase == 14:
+        put(w, 8, 114)
+        if reserve(w, 0, 64) == 0:
+            return pending_grow(o, w)
+        if reserve(w, 1, 256) == 0:
+            return pending_grow(o, w)
+        authority_request(w, region(w, 0))
+        return child(w, 12, 64, 14)
+    return retained_authority_prepare(s, o, w, phase)
+
+def after_authority(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64, phase:u64) -> u32:
+    if phase == 13:
+        return after_config_presence(s, o, w, code, size)
+    if phase == 14:
+        return after_owner_projection(s, o, w, code, size)
+    return INVALID
+
+def after_config_presence(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    if code != size or size < 32:
+        return INVALID
+    at = region(w, 1)
+    if get(w, at) != CONFIG_RESULT:
+        return INVALID
+    count = get(w, at + 24)
+    if count != size - 32:
+        return INVALID
+    status = get(w, at + 8)
+    if status == 0:
+        if count != 32 or get(w, at + 16) != 0:
+            return INVALID
+        return prepare(s, o, w, 14)
+    if status == 1:
+        if count == CONFIG_ABSENT_SIZE and get(w, at + 16) == 9:
+            if config_absent(w, at + 32):
+                return retained_authority_select(s, o, w)
+    return authority_unavailable(s, o, w)
+
+def after_owner_projection(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    if code != size:
+        return INVALID
+    if size != 8 and size != 168:
+        return INVALID
+    at = region(w, 1)
+    i = 0
+    while i < size:
+        high = authority_nibble(byte(w, at + i))
+        low = authority_nibble(byte(w, at + i + 1))
+        if high > 15 or low > 15:
+            return INVALID
+        store(w, 1024 + (i >> 1), high * 16 + low)
+        i = i + 2
+    status = byte(w, 1024) + byte(w, 1025) * 256 + byte(w, 1026) * 65536 + byte(w, 1027) * 16777216
+    if status != 0:
+        if size != 8:
+            return INVALID
+        return authority_unavailable(s, o, w)
+    if size != 168:
+        return INVALID
+    if get(w, 1028) != OWNER_RESULT:
+        return INVALID
+    if get(w, 1036) != 0:
+        return INVALID
+    i = 0
+    while i < 64:
+        if authority_nibble(byte(w, 1044 + i)) > 15:
+            return INVALID
+        i = i + 1
+    copy_within(w, 1152, 1028, 80)
+    put(w, 192, 80)
+    return retained_authority_select(s, o, w)
+
+def authority_nibble(value:u64) -> u64:
+    if value >= 48 and value <= 57:
+        return value - 48
+    if value >= 97 and value <= 102:
+        return value - 87
+    return 16
+
+def authority_unavailable(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if reserve(w, 6, AUTHORITY_ERROR_SIZE) == 0:
+        return pending_grow(o, w)
+    authority_error(w, region(w, 6))
+    return render(s, o, w, 2)

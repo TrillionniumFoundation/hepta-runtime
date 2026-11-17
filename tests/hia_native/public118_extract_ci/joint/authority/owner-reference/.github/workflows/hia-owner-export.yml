@@ -1,0 +1,61 @@
+name: HIA current session owner export qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - hia-owner-export-qualification-6780-20261116
+
+permissions:
+  contents: read
+
+jobs:
+  session_owner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONHASHSEED: '0'
+      RUSTUP_TOOLCHAIN: '1.95.0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: pinned-Hepta
+          persist-credentials: false
+      - name: Install the fixed original toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --no-self-update
+      - name: Check exact source, current target and dependency slices
+        run: python -I -S -B tests/hia_native/caller_owner_export/qualify.py --phase source --source-root "$GITHUB_WORKSPACE"
+      - name: Fresh native graph, unchanged original and complete readers
+        run: |
+          umask 077
+          python -I -S -B tests/hia_native/caller_owner_export/qualify.py \
+            --phase all --source-root "$GITHUB_WORKSPACE" \
+            --hepta "$GITHUB_WORKSPACE/pinned-Hepta" \
+            --output "$RUNNER_TEMP/owner-export-evidence"
+      - name: Verify without writes or native execution
+        run: |
+          python -I -S -B tests/hia_native/caller_owner_export/qualify.py \
+            --phase verify --source-root "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/owner-export-evidence"
+      - name: Preserve every successful or failed evidence file
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/owner-export-evidence" ]; then
+            tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/owner-export-evidence.tar.gz" owner-export-evidence
+            sha256sum "$RUNNER_TEMP/owner-export-evidence.tar.gz" > "$RUNNER_TEMP/owner-export-evidence.tar.gz.sha256"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owner-export-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/owner-export-evidence.tar.gz
+            ${{ runner.temp }}/owner-export-evidence.tar.gz.sha256
+          compression-level: 0
+          if-no-files-found: error

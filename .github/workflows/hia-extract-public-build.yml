@@ -1,0 +1,80 @@
+name: Actual public118 extract native build and complete physical readback
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_extract_ci/**', '.github/workflows/hia-extract-public-build.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  PACKAGE_SHA256: 'de5206f4566cffd483dd1df0e40e172e2892237369cfb84f44e2d47d7ecc4071'
+  RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set paths from the actual runner environment
+        run: |
+          printf '%s\n' "P118_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public118_extract_ci" "P118_RUN=$RUNNER_TEMP/public118-build" "P118_EXPORT=$RUNNER_TEMP/public118-build-export" "P118_DRIVER=$RUNNER_TEMP/public118-build-driver" >> "$GITHUB_ENV"
+      - name: Checkout the exact candidate default entry and complete source package
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            runtime_support
+            tests/hia_native
+      - name: Checkout the exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify exact candidate and all source bytes before execution
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
+          python3 -I -S -B "$P118_PACKAGE/ci/source_check.py" --package "$P118_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --installed-source "$GITHUB_WORKSPACE/runtime"
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+      - name: Check complete export of ordinary retained hard links
+        run: |
+          python3 -I -S -B "$P118_PACKAGE/ci/archive_controls.py" --archive-source "$P118_PACKAGE/ci/archive.py" --output "$RUNNER_TEMP/public118-archive-controls"
+      - name: Preserve complete archive controls
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public118-archive-controls-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public118-archive-controls/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+      - name: Install fixed native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+      - name: Execute the complete build domain under unchanged inner deadlines
+        run: |
+          python3 -I -S -B "$P118_PACKAGE/ci/run_build.py" --package "$P118_PACKAGE" --installed-source "$GITHUB_WORKSPACE/runtime" --hepta "$GITHUB_WORKSPACE/compiler" --output "$P118_RUN" --manifest-sha256 "$PACKAGE_SHA256" > "$P118_DRIVER.stdout" 2> "$P118_DRIVER.stderr"
+      - name: Export and reread every success or failure capture byte
+        if: always()
+        run: |
+          python3 -I -S -B "$P118_PACKAGE/ci/archive.py" pack --capture "$P118_RUN" --output "$P118_EXPORT" --package "$P118_PACKAGE" --manifest-sha256 "$PACKAGE_SHA256" --label build --driver-prefix "$P118_DRIVER"
+      - name: Upload complete build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public118-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.P118_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
