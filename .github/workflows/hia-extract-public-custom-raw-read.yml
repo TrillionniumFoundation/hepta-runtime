@@ -1,0 +1,54 @@
+name: Independent typed CustomRequest 108 raw process complete archive read
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_custom_raw_read_ci/**', '.github/workflows/hia-extract-public-custom-raw-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  raw-domain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {domain: eof-legacy, artifact: 14300800821}
+          - {domain: stdio-legacy, artifact: 14299009839}
+          - {domain: stdio-modern, artifact: 14300586017}
+          - {domain: eof-modern, artifact: 14300835624}
+          - {domain: protocol-modern, artifact: 14301115043}
+          - {domain: protocol-legacy, artifact: 14300012960}
+    steps:
+      - name: Checkout frozen complete archive readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_custom_raw_read_ci
+      - name: Download the same complete terminal raw capture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/extract-custom-raw-read-input"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}' > "$RUNNER_TEMP/extract-custom-raw-read-input/artifact.json"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}/zip' > "$RUNNER_TEMP/extract-custom-raw-read-input/complete.zip"
+      - name: Reopen all streams and state; preserve every actual failure without execution
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_custom_raw_read_ci/run.py" --input "$RUNNER_TEMP/extract-custom-raw-read-input/complete.zip" --output "$RUNNER_TEMP/extract-raw-read" --domain '${{ matrix.domain }}' --profile '42774646a34b57c5deb95bf0422e0dffb4b9df589b1d49ce798d1894b52b2077'
+      - name: Upload complete independent reader evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-raw-complete-read-${{ matrix.domain }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/extract-raw-read/proof
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
