@@ -173,8 +173,8 @@ def process(folder,case,plan,side,binary,fixture):
     need(traces["final"][-1]["sequence"]==len(seen_controls),"final actual controller sequence")
     return {"stdout":streams["stdout"],"stderr":streams["stderr"],"exit_code":p["exit_code"],"tail":p["trailing_stdout"],"milestones":milestones,"trace":traces}
 
-def read(folder,side,binary,selected):
-    need(type(selected) is int and 0<=selected<4,"selected complete actual case")
+def read(folder,side,binary,case_index_selected):
+    need(type(case_index_selected) is int and 0<=case_index_selected<4,"case_index_selected complete actual case")
     folder=Path(folder);report=doc(folder/"CAPTURE.json")
     need(report["status"]=="COMPLETE_ACTUAL_CONTENTION_DOMAIN_CAPTURED" and report["side"]==side and report["lane_seconds"]==180 and report["per_exchange_seconds"]==60 and 0<=report["elapsed_seconds"]<180 and report["original_old_domains_replayed"] is False,"complete actual lane")
     plan=wait_domain.domain(report["domain"],Path(report["fixture"]));need(doc(folder/"DOMAIN.json")==plan,"exact whole frozen input domain")
@@ -182,7 +182,7 @@ def read(folder,side,binary,selected):
     need(len(report["cases"])==len(plan["cases"])==4,"all four lane cases")
     result=[]
     for i,item in enumerate(plan["cases"]):
-        if i!=selected:continue
+        if i!=case_index_selected:continue
         case=folder/("%03d"%i);row=doc(case/"CASE.json")
         need(report["cases"][i]=={"index":i,"name":item["name"],"case":pin((case/"CASE.json").read_bytes())} and row["input"]==item and row["name"]==item["name"] and row["index"]==i and row["status"]=="ACTUAL_PROCESS_EOF_AND_RUNTIME_DROP_CAPTURED","complete case identity")
         used=set();snapshots=[row["initial"]]+[s["snapshot"] for s in row["steps"] if "snapshot" in s]+[row["final"]]

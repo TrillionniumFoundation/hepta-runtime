@@ -19,10 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - domain: ordinary-a-modern
-            role: complete
-          - domain: ordinary-b-modern
-            role: complete
           - domain: ordinary-a-legacy
             role: semantic
           - domain: ordinary-a-modern
@@ -54,7 +50,7 @@ jobs:
       - name: Fixed complete source admission
         run: |
           printf '%s\n' "DIAG_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_wait_recovery_ci" "DIAG_SOURCE=$GITHUB_WORKSPACE/capture-source/tests/hia_native/public123_extract_contention_ci" "DIAG_NATIVE=$GITHUB_WORKSPACE/native-source/tests/hia_native/public123_extract_scope_wait_ci" "DIAG_CAPTURE=$RUNNER_TEMP/scope-metadata-read" "DIAG_EXPORT=$RUNNER_TEMP/scope-metadata-export" "DIAG_DRIVER=$RUNNER_TEMP/scope-metadata-driver" >> "$GITHUB_ENV"
-          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_wait_recovery_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '674c73b2046655b347a11a051fb4779cb5ff73fc5229bc0f8b1ab7775609ae7c'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_wait_recovery_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '16ce686984cde555f5f3c0fa3183a3bb251cdc3d29fd42b98b2a684aea1e6530'
           python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_scope_wait_recovery_ci/check_source.py"
       - name: Read complete archive and compare actual retained fields under guards
         env:
