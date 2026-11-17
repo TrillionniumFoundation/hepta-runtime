@@ -1,0 +1,9 @@
+# Strict Base64 string decode
+
+The entry borrows immutable input and an output arena. Workspace bytes are never touched. Input is HRCODEC1 (eight ASCII bytes), command u64 4 at 8, zero at 16, followed by the complete valid UTF-8 typed string at 24. Invalid framing or invalid UTF-8 returns 0xffffffff without any output or workspace mutation. Capacity returns 0xfffffffe with the same unchanged-buffer requirement.
+
+A complete result returns its entire byte extent, at least 64. Header HBRDS001 has kind at 8, zero sequence at 16, class at 24, zero errno at 32, literal length at 40, zero filename kind at 48, and payload length at 56. Success kind 0 keeps class/literal words zero and carries every decoded byte. Error kind 3 uses class 1 for ValueError or class 15 for binascii.Error's exact public type name Error, with its complete original literal message. Code 15 is a new private literal class; the older path-error formatter's fourteen-class contract does not implicitly accept it. The future writing owner must compose its literal prefix in HIA or use an explicitly qualified formatter extension.
+
+The typed string is checked for non-ASCII characters before any base64 alphabet or padding decision, matching CPython's wrapper. Strict binascii ordering preserves leading padding, excess bytes after a completed pad, alphabet rejection before discontinuous-pad rejection, all incomplete lengths, and accepted nonzero unused pad bits. No output byte is emitted until the entire result kind and length have been admitted. Output tail and all workspace bytes stay unchanged. The decoder performs no filesystem or OS action.
+
+Input extent is less than the existing HIA 4294901760-byte limit. This is the reachable Rust/JSON String domain; arbitrary Python objects and lone-surrogate Python strings are not input capabilities of this leaf. Caller chunk limits remain with the writing/upload owner, after decoding exactly as in the original.
