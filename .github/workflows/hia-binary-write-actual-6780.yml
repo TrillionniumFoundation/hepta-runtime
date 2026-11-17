@@ -1,0 +1,83 @@
+name: Qualify full HIA locked binary write against actual original
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-write-actual-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  WRITE_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_write_body/v1/actual
+  WRITE_MANIFEST: 2c68c8cc301bc3ff596a9545b0cf13146cd2abff68e838f8c43cf336937f61f1
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout complete frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_write_body/v1/actual
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Verify all source and actual interpreter without applications
+        run: |
+          python3 -I -S -B "$WRITE_SOURCE/scripts/gate.py" source \
+            --work "$RUNNER_TEMP/write-source" \
+            --source-manifest-sha256 "$WRITE_MANIFEST"
+      - name: Preserve source-only result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-write-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/write-source
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+  actual:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34]
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout exact admitted source and inputs
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_write_body/v1/actual
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Capture each frozen original and native application once
+        run: |
+          python3 -I -S -B "$WRITE_SOURCE/scripts/gate.py" run \
+            --work "$RUNNER_TEMP/write-actual-${{ matrix.group }}" \
+            --group "${{ matrix.group }}" \
+            --source-manifest-sha256 "$WRITE_MANIFEST"
+      - name: Archive all successful failed and unknown evidence
+        if: always()
+        run: |
+          python3 -I -S -B "$WRITE_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/write-actual-${{ matrix.group }}" \
+            --output "$RUNNER_TEMP/write-actual-export-${{ matrix.group }}" \
+            --source-manifest-sha256 "$WRITE_MANIFEST"
+      - name: Upload complete immutable group evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-write-actual-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/write-actual-export-${{ matrix.group }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
