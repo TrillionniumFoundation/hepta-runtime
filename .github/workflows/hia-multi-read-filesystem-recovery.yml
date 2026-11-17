@@ -1,7 +1,7 @@
-name: Recover complete retained multi-read filesystem captures
+name: Recover two retained filesystem archives after terminal HTTP 503
 on:
   push:
-    branches: [hia-multi-read-filesystem-recovery-6780-20261117]
+    branches: [hia-multi-read-filesystem-recovery-fetch2-6780-20261117]
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        group: ["sixteen","ordinary-b","kinds-b","policy","ceilings-a","utf8-files","ordinary-a","kinds-a","ceilings-b","ceilings-c","mutate-read-a","mutate-confirm","ownership-a","mutate-read-b","late-mutation","orphan-two","eof","fault-a","fault-b","limits","controls","shm"]
+        group: ["ownership-a","late-mutation"]
     env:
       LC_ALL: C.UTF-8
       PYTHONDONTWRITEBYTECODE: '1'
