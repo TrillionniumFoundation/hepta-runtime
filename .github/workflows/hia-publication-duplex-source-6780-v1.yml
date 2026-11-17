@@ -1,0 +1,48 @@
+name: Publication real two-session fixture source gate
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-duplex-source-6780-v1-20261117']
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PI_PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/publication_duplex_source_v1" "PI_RUN=$RUNNER_TEMP/publication-duplex-source" "PI_DRIVER=$RUNNER_TEMP/publication-duplex-driver" "PI_EXPORT=$RUNNER_TEMP/publication-duplex-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/publication_duplex_source_v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: baseline
+          ref: f8857cbd18b3dedb38718f68822c072053b03233
+          persist-credentials: false
+          sparse-checkout: |
+            authoring
+            native
+            scripts
+            runtime_support
+            tests/hia_native
+      - name: Exact source inverse and actual two-session native boundary
+        run: |
+          python3 -I -S -B "$PI_PACKAGE/source/check.py" --source "$GITHUB_WORKSPACE/baseline" --output "$PI_RUN" > "$PI_DRIVER.stdout" 2> "$PI_DRIVER.stderr"
+          cat "$PI_DRIVER.stdout"
+      - name: Preserve all new source and actual disassembly
+        if: always()
+        run: |
+          python3 -I -S -B "$PI_PACKAGE/exporter/archive.py" pack --source "$PI_PACKAGE" --capture "$PI_RUN" --output "$PI_EXPORT" --driver-prefix "$PI_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; p=pathlib.Path(os.environ["PI_DRIVER"]+".stderr"); print(p.read_text() if p.exists() else "")'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-duplex-source-${{ github.sha }}
+          path: ${{ env.PI_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
