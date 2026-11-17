@@ -471,6 +471,8 @@ pump_detach_frontend_admitted:
     call pump_scope_detach
     mov rdi,rbp
     call pump_trace_detached
+    mov rdi,rbp
+    call pump_publication_release_scope_loan
     PM_RETURN
 
 pump_restore_frontend:

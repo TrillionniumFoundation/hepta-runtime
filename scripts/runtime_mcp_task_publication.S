@@ -175,6 +175,106 @@ pp_detach_copy:
 pp_detach_done:
     PM_RETURN
 
+/* Retire the completed caller's temporary Scope68 alias after its full
+ * detached observation, while the owning Scope6 still exists. The HIA caller
+ * has already consumed its reply and closed the Scope. This alias owns no
+ * mapping; a later request may legitimately retire that closed Scope6 pair.
+ * Pending callers retain their unchanged descriptor/continuation ownership. */
+pump_publication_release_scope_loan:
+    PM_SAVE
+    mov rbp,rdi
+    cmp qword ptr [rbp+PN_P_CONTEXT],0
+    je pp_loan_done
+    cmp qword ptr [rbp+PN_P_ACTIVE],1
+    je pp_loan_done
+    cmp qword ptr [rbp+PN_P_ACTIVE],0
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_OWNERSHIP],3
+    jne public_span_fail
+    mov rax,[rbp+PN_S_OWNERSHIP]
+    or rax,[rbp+PN_S_VIEW]
+    jnz public_span_fail
+    cmp qword ptr [rbp+PN_P_WORKMAP],PP_OWNED
+    jne public_span_fail
+    cmp qword ptr [rbp+PN_P_OUTMAP],PP_OWNED
+    jne public_span_fail
+    lea rbx,[rbp+PN_P_DESCRIPTORS+4*64]
+    lea rdi,[rbp+PN_P_CONTINUATIONS+4*64]
+    xor eax,eax
+    mov ecx,8
+    repe scasq
+    jne public_span_fail
+    cmp qword ptr [rbx],0
+    jne public_span_fail
+    cmp qword ptr [rbx+8],0
+    jne pp_loan_present
+    lea rdi,[rbx+8]
+    mov ecx,7
+    repe scasq
+    jne public_span_fail
+    jmp pp_loan_done
+pp_loan_present:
+    mov r13,[r15+16]
+    test r13,r13
+    jz public_span_fail
+    cmp qword ptr [r13+32],0
+    jne public_span_fail
+    mov r13,[r13+8]
+    add r13,6*64
+    call pump_scope_admit_row_for_loan
+    mov rax,[r13+8]
+    cmp [rbx+8],rax
+    jne public_span_fail
+    mov rdx,0x3130545343535248 /* HRSCST01 */
+    cmp [rax],rdx
+    jne public_span_fail
+    cmp qword ptr [rax+8],1
+    jne public_span_fail
+    mov rdx,[rax+24]
+    or rdx,[rax+64]
+    jnz public_span_fail
+    mov rax,[r13+16]
+    cmp [rbx+16],rax
+    jne public_span_fail
+    cmp qword ptr [rbx+24],0
+    jne public_span_fail
+    mov rax,[r13+24]
+    cmp [rbx+32],rax
+    jne public_span_fail
+    cmp qword ptr [rbx+40],96
+    jne public_span_fail
+    cmp qword ptr [r13+32],96
+    jb public_span_fail
+    mov rax,[rbx+48]
+    mov edx,eax
+    cmp rax,rdx
+    jne public_span_fail
+    cmp eax,0xffff0000
+    jae pp_loan_error
+    cmp eax,96
+    jne public_span_fail
+    cmp qword ptr [rbx+56],96
+    jne public_span_fail
+    jmp pp_loan_clear
+pp_loan_error:
+    cmp qword ptr [rbx+56],0
+    jne public_span_fail
+pp_loan_clear:
+    lea rdi,[rbx+8]
+    xor eax,eax
+    mov ecx,7
+    rep stosq
+pp_loan_done:
+    PM_RETURN
+
+/* Preserve the existing Scope-row admission with its actual row in rbx. */
+pump_scope_admit_row_for_loan:
+    push rbx
+    mov rbx,r13
+    call pump_scope_admit_row
+    pop rbx
+    ret
+
 /* Only settled, already copied aliases may be cleared for restoration. */
 pump_publication_clear_idle:
     PM_SAVE
@@ -481,6 +581,16 @@ pp_retire_slot:
     mov rax,[r14]
     or rax,[r14+8]
     jnz public_span_fail
+    cmp ebx,4
+    jne pp_retire_owned_or_context
+    /* No stale Scope borrow may survive its completed detach boundary. */
+    lea rdi,[r13+8]
+    xor eax,eax
+    mov ecx,7
+    repe scasq
+    jne public_span_fail
+    jmp pp_retire_advance
+pp_retire_owned_or_context:
     cmp ebx,3
     jae pp_retire_advance
     mov rdi,[r13+8]

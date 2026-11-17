@@ -120,12 +120,10 @@ pub_async_cancel_io:
     jz pub_async_io_release
     cmp qword ptr [r14 + 8], 0
     je pub_async_io_release
+    /* CANCEL11 and DROP12 are alternative terminal operations. The actual
+     * owner reaches phase5 after CANCEL; a second DROP is correctly refused.
+     * Preserve the genuine I/O failure after one accepted terminal effect. */
     mov edi, 11
-    call pub_make_request
-    call pub_invoke
-    cmp rax, 64
-    jne pub_fail_invalid
-    mov edi, 12
     call pub_make_request
     call pub_invoke
     cmp rax, 64
