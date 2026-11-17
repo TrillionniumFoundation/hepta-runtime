@@ -1,0 +1,76 @@
+{
+  "actual_cache_probe_counts": {
+    "/home/runner/work/_temp/hia-runtime-native/filesystem-parity/original/__pycache__/cases.cpython-312.pyc": 2,
+    "/home/runner/work/_temp/hia-runtime-native/filesystem-parity/original/build/verified-source/__pycache__/verify_sources.cpython-312.pyc": 2,
+    "/home/runner/work/_temp/hia-runtime-native/filesystem-public/reference-source/__pycache__/cases.cpython-312.pyc": 5,
+    "/home/runner/work/_temp/hia-runtime-native/filesystem-public/reference-source/oracle/__pycache__/verify_sources.cpython-312.pyc": 1
+  },
+  "artifact": {
+    "bytes": 29038592,
+    "id": 14296507699,
+    "sha256": "e3db3588454f3f3aaa906c18007f45ffcc8499ba2113c79967f55b312793fad8"
+  },
+  "capture_delta": [],
+  "complete_readback": {
+    "aggregate_recovery_pass": false,
+    "decoded_tar": {
+      "bytes": 95385600,
+      "sha256": "3d3ca12f0f40dd2f720c6570f4e07037202f7b6d7a1054684bc4593441d5f6d5"
+    },
+    "elapsed_ns": 1075876064,
+    "files": 2920,
+    "inner_archive": {
+      "bytes": 28190351,
+      "sha256": "c5ea4cf89a7b55533fb6196e473f61c34918d1bf98c0d17aab1da61fcb38878b"
+    },
+    "input_zip_unchanged": true,
+    "logical_bytes": 89819975,
+    "members": 3123,
+    "native_or_rust_executions": 0,
+    "original_aggregate_failure_reclassified_as_pass": false,
+    "reader_source": {
+      "bytes": 8185,
+      "sha256": "c13bf4a488f6c61131ee7dfa015b9b80cd4df932020c4c19b84a7d7e9635123f"
+    },
+    "schema": "hepta.history.recovery-independent-archive-readback.v2",
+    "status": "COMPLETE_ARCHIVE_BYTES_AND_GIT_SOURCES_PASS",
+    "tar_terminator_bytes": 9728,
+    "zip": {
+      "bytes": 29038592,
+      "sha256": "e3db3588454f3f3aaa906c18007f45ffcc8499ba2113c79967f55b312793fad8"
+    }
+  },
+  "conclusion": "FAILURE",
+  "diagnostics": {
+    "bytes": 68478,
+    "sha256": "491c894fcfb6bc25359a096bfeb668f54f5a723454115703ee4cc21a872d75e5"
+  },
+  "exact_failure": "The unchanged original aggregate reader completed its input checks, but importlib had probed four absent retained-source .pyc paths ten times. The fixed guard refused those undeclared reads and its final denial-count check correctly rejected the internally caught PermissionErrors.",
+  "independent": {
+    "artifact": {
+      "bytes": 29981100,
+      "id": 14296637646,
+      "sha256": "324b7f9634ff63b1e314ab29e51c6c7b339a0aef4fa55e48d5dcaa571646de94"
+    },
+    "head": "66702db0fedc1cbbd5dfe54073cc952fcb74dfb6",
+    "job": 133799799611,
+    "run": 44011644152,
+    "status": "SUCCESS"
+  },
+  "job_id": 133788913403,
+  "new_hia_or_rust_executions": 0,
+  "next_step": "Admit only these four absent cache paths, each bound to complete frozen original and retained Python source bytes. Keep the original loaders and guard unchanged; require all four paths absent before and after. Existing bytecode, aliases, other paths, writes, process execution and native mapping remain refused.",
+  "original_failure_reclassified_as_pass": false,
+  "readback_status_upgraded": false,
+  "reader_stderr": {
+    "bytes": 1079,
+    "sha256": "b2cbd31577031685b55f4b5c0f1c3ccde14a7a1704d5dff09499a5f94ba8e00c"
+  },
+  "retained_schema_pairs": 1,
+  "run_id": 44008313374,
+  "schema": "hepta.history.recovery-failure-review.v1",
+  "source": "d343406a1f4e8d69eac7e2945fd1db7dc72ba700",
+  "source_reconstructions": 3,
+  "static_code_admissions": 69,
+  "status": "PRESERVED_FAILURE_COMPLETE_ARCHIVE_READBACK"
+}
