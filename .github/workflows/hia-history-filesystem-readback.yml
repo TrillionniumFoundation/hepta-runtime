@@ -1,0 +1,67 @@
+name: Independently read completed historical filesystem controls
+on:
+  push:
+    branches: [hia-history-aggregate-readback-6780-20261117]
+    paths: ['.github/workflows/hia-history-filesystem-readback.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen independent reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/history_aggregate_recovery/filesystem-readback-v1
+      - name: Verify reader source and syntax
+        run: |
+          mkdir -p "$RUNNER_TEMP/filesystem-independent-result/logs"
+          echo "06adbb3fba9aa64272d94733a77a0a26a2a171c6df6ac35364f6f1c50d3b74a4  qualification/history_aggregate_recovery/filesystem-readback-v1/SOURCE_MANIFEST.json" | sha256sum --check --strict
+          timeout --signal=KILL 60 python3 -I -S -B - qualification/history_aggregate_recovery/filesystem-readback-v1 <<'PY'
+          import hashlib,json,sys
+          from pathlib import Path
+          root=Path(sys.argv[1]);m=json.loads((root/"SOURCE_MANIFEST.json").read_bytes())
+          assert {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}==set(m["files"])|{"SOURCE_MANIFEST.json"}
+          for name,row in m["files"].items():
+              raw=(root/name).read_bytes()
+              assert len(raw)==row["bytes"] and hashlib.sha256(raw).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==row["git_blob"]
+              compile(raw,str(root/name),"exec")
+          print("COMPLETE_FROZEN_READER_SOURCE_PASS")
+          PY
+      - name: Download exact completed continuation artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14300315992 > "$RUNNER_TEMP/filesystem-independent-result/artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14300315992/zip > "$RUNNER_TEMP/filesystem-input.zip"
+      - name: Read complete ZIP gzip TAR and every logical byte and source
+        run: |
+          timeout --signal=KILL 900 python3 -I -S -B qualification/history_aggregate_recovery/filesystem-readback-v1/read_continuation_archive.py --kind filesystem --zip "$RUNNER_TEMP/filesystem-input.zip" --zip-bytes 210134590 --zip-sha256 fa523a6a9fcf2420253dd186754669fbb973160b585aee8ae38d06013eecb9cb --source-manifest-sha256 e855b02db15994d3bd015d33e246f993e249bb992baa72f9041d2785a19b9421 --output "$RUNNER_TEMP/filesystem-independent-input" > "$RUNNER_TEMP/filesystem-independent-result/logs/archive.stdout" 2> "$RUNNER_TEMP/filesystem-independent-result/logs/archive.stderr"
+          cp "$RUNNER_TEMP/filesystem-independent-input/COMPLETE_READBACK.json" "$RUNNER_TEMP/filesystem-independent-result/COMPLETE_ARCHIVE_READBACK.json"
+          gzip -c "$RUNNER_TEMP/filesystem-independent-input/COMPLETE_MEMBER_PINS.json" > "$RUNNER_TEMP/filesystem-independent-result/COMPLETE_MEMBER_PINS.json.gz"
+      - name: Independent complete source controls process and readonly verification
+        run: |
+          timeout --signal=KILL 180 python3 -I -S -B qualification/history_aggregate_recovery/filesystem-readback-v1/verify_filesystem.py --readback "$RUNNER_TEMP/filesystem-independent-input" --output "$RUNNER_TEMP/filesystem-independent-result/guarded" > "$RUNNER_TEMP/filesystem-independent-result/logs/reader.stdout" 2> "$RUNNER_TEMP/filesystem-independent-result/logs/reader.stderr"
+      - name: Preserve exact diagnostics and frozen readers
+        if: always()
+        run: |
+          cp -a qualification/history_aggregate_recovery/filesystem-readback-v1 "$RUNNER_TEMP/filesystem-independent-result/source"
+          for stream in archive.stdout archive.stderr reader.stdout reader.stderr; do
+            if test -f "$RUNNER_TEMP/filesystem-independent-result/logs/$stream"; then cat "$RUNNER_TEMP/filesystem-independent-result/logs/$stream"; fi
+          done
+      - name: Retain complete independent verification result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history-filesystem-independent-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/filesystem-independent-result/
+          compression-level: 6
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
