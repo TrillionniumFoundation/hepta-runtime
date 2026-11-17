@@ -1,0 +1,65 @@
+name: Repair HIA lifetime packer within fixed compiler limits
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-lifetime-packer-repair-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  author-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: tests/hia_native/audit_lifetime
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify fixed source identities and author without native execution
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os,sys
+          root=Path(os.environ['GITHUB_WORKSPACE'])
+          source=root/'runtime/tests/hia_native/audit_lifetime'
+          checkpoint=json.loads((source/'CALLABLE_CHECKPOINT.json').read_bytes())
+          for name,expected in checkpoint['files'].items():
+              raw=(source/name).read_bytes()
+              observed=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+              assert observed==expected, (name,observed,expected)
+          sys.path.insert(0,str(source))
+          from process import Recorder
+          records=Recorder(source,Path(os.environ['RUNNER_TEMP'])/'audit-lifetime-callable-author-outer')
+          try:
+              raw,row=records.run('author-source',[sys.executable,'-I','-B',source/'authoring/author_lifetime_callable.py','--root',source,'--hepta',root/'compiler','--output',Path(os.environ['RUNNER_TEMP'])/'audit-lifetime-callable-author-output'],timeout=60)
+          finally:
+              for path in sorted(records.directory.glob('*.stderr')):
+                  print('AUTHOR_STDERR '+path.name)
+                  print(path.read_text(),end='')
+              print((records.directory/'processes.json').read_text(),end='')
+          print(raw.decode(),end='')
+          print(json.dumps({'outer_process':row,'native_or_hia_execution':0},sort_keys=True))
+          PY
+      - name: Retain generated source and complete authoring process
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-lifetime-callable-source-${{ github.sha }}
+          path: |
+            ${{ github.workspace }}/runtime/tests/hia_native/audit_lifetime
+            ${{ runner.temp }}/audit-lifetime-callable-author-output
+            ${{ runner.temp }}/audit-lifetime-callable-author-outer
+          if-no-files-found: error
+          retention-days: 14

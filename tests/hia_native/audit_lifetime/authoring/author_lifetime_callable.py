@@ -68,12 +68,30 @@ def main():
         return 4294967294
 """
     positions=[i for i in range(len(code)) if not (offsets["refs"]<=i<offsets["refs"]+refs or offsets["sync"]<=i<offsets["sync"]+1635)]
+    stores=[]
+    trace=[]
+    cursor=0
+    while cursor<len(positions):
+        at=positions[cursor]
+        if positions[cursor:cursor+8]==list(range(at,at+8)):
+            value=int.from_bytes(code[at:at+8],'little')
+            stores.append(('word',at,value))
+            trace.extend((at+index,byte) for index,byte in enumerate(value.to_bytes(8,'little')))
+            cursor+=8
+        else:
+            stores.append(('byte',at,code[at]))
+            trace.append((at,code[at]))
+            cursor+=1
+    assert trace==[(at,code[at]) for at in positions]
+    trace_bytes=b''.join(at.to_bytes(8,'little')+bytes([value]) for at,value in trace)
     chunks=[]
-    for at in range(0,len(positions),96):
+    for at in range(0,len(stores),96):
         name="emit_"+str(at)
         start+=f"    {name}(o)\n"
         body=f"def {name}(o:mutbuf) -> u64:\n"
-        body+="".join(f"    store(o,{i},{code[i]})\n" for i in positions[at:at+96])
+        for kind,offset,value in stores[at:at+96]:
+            body+=(f"    write_word(o,{offset},{value})\n" if kind=='word'
+                   else f"    store(o,{offset},{value})\n")
         chunks.append(body+"    return 0\n")
     start+=f"""    at=0
     while at<controller:
@@ -92,7 +110,12 @@ def main():
     read64="""def read64(s:readbuf,at:u64) -> u64:
     return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)|(byte(s,at+4)<<32)|(byte(s,at+5)<<40)|(byte(s,at+6)<<48)|(byte(s,at+7)<<56)
 """
-    hia,shape=render("\n".join([start,*chunks,read64]),"audit_lifetime_callable")
+    write_word="def write_word(o:mutbuf,at:u64,value:u64) -> u64:\n"
+    write_word+="".join(f"    store(o,at+{index},(value>>{index*8})&255)\n" for index in range(8))
+    write_word+="    return 0\n"
+    hia,shape=render("\n".join([start,*chunks,write_word,read64]),"audit_lifetime_callable")
+    from tools.hia_selfhost_limits import MAX_INSTRUCTIONS
+    assert shape['operations']<=MAX_INSTRUCTIONS,(shape['operations'],MAX_INSTRUCTIONS)
     native=root/"native"
     path=native/"audit_lifetime_callable.hepta"
     path.write_bytes(hia)
@@ -101,6 +124,10 @@ def main():
         author=pin(Path(__file__).read_bytes()),hia=pin(hia),shape=shape,
         template_instructions=pin(code),template_hex=code.hex(),offsets=offsets,
         emitted_positions=positions,reference_instructions=earlier["reference_instructions"],
+        fixed_emission=dict(ordered_byte_trace=pin(trace_bytes),fixed_bytes=len(positions),
+            word_stores=sum(kind=='word' for kind,_,_ in stores),
+            byte_stores=sum(kind=='byte' for kind,_,_ in stores),
+            exact_order_and_bytes_preserved=True,max_hia_instructions=MAX_INSTRUCTIONS),
         synchronization=dict(bytes=1635,sha256="b2a5f181d26382ab4c7d0759097b922eb4df1864636e0209b66db2e80f3c0ca9"),
         controller_source=earlier["controller"],commands=records,
         runtime_rust_required=False,runtime_python_required=False,observer_optional=True,
