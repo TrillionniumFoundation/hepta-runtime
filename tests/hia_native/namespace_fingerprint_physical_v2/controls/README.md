@@ -1,0 +1,7 @@
+# Namespace fingerprint: new private ABI controls
+
+This additive package reuses the exact completed native build and complete original Rust/native capture from `f5faf5d8b772d94ca877e4c89b10a542de7e9eaa`. It does not replay the 72 ordinary cases or rebuild/replay Rust. It executes new direct HIA and exported native admission domains, each in an owned 60-second process, then reads the whole retained semantic capture and every new buffer under the frozen 180-second read-only guard.
+
+Direct HIA checkpoints are selected from all ten actual original environment groups and all five continuation phases. Every mutation and complete before/after input, output and workspace is retained, including failed calls and exact checkpoint recovery. Native export controls use only owned memory, NULL, the actual sealed callable and actual libc capabilities. Each admission refusal preserves every byte; the same allocations then perform real non-directory error recovery and full disposal. The recovery context is compared in its entirety to the unchanged original-compared native-off case, with only the actual process pointers, libc table and borrowed root FD relocated.
+
+The first pure reader failure remains recorded in `reader/`. All original cases, compiler/image sources and deadlines remain fixed. These are private controls for fingerprint fallback only; ContentWatchSet, complete namespace_version, archive_store, HOT_CACHE, begin/finish and public handlers remain unqualified. Rehashed physical reader controls are a later gate and are not inferred from these ABI controls.
