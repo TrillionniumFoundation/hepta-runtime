@@ -38,7 +38,7 @@ jobs:
           gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}/zip' > "$RUNNER_TEMP/extract-custom-raw-read-input/complete.zip"
       - name: Reopen all streams and state; preserve every actual failure without execution
         run: |
-          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_mixed_request_read_ci/run.py" --input "$RUNNER_TEMP/extract-custom-raw-read-input/complete.zip" --output "$RUNNER_TEMP/extract-raw-read" --domain '${{ matrix.domain }}' --profile 'd1f5879183865d9829001598a8697d5d7d260af4feebb471893cc52f9dfb0a3c'
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_mixed_request_read_ci/run.py" --input "$RUNNER_TEMP/extract-custom-raw-read-input/complete.zip" --output "$RUNNER_TEMP/extract-raw-read" --domain '${{ matrix.domain }}' --profile 'c57d30bfbe46376a0d8868ec5c5725687f49062960e8a686873ae91c88dac78b'
       - name: Upload complete independent reader evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -1,0 +1,56 @@
+name: Independent complete mixed public118 eight operation domains retained read
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_mixed_public_read_ci/**', '.github/workflows/hia-extract-public-mixed-public-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  retained-domain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {domain: body-legacy, artifact: 14304643390}
+          - {domain: body-modern, artifact: 14305047958}
+          - {domain: context-legacy, artifact: 14305970314}
+          - {domain: context-modern, artifact: 14305381733}
+          - {domain: session-legacy, artifact: 14305895563}
+          - {domain: session-modern, artifact: 14305052260}
+          - {domain: typed-legacy, artifact: 14305241997}
+          - {domain: typed-modern, artifact: 14305850742}
+    steps:
+      - name: Checkout frozen complete archive readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_mixed_public_read_ci
+      - name: Download the same successful semantic capture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/extract-custom-public-read-input"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}' > "$RUNNER_TEMP/extract-custom-public-read-input/artifact.json"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}/zip' > "$RUNNER_TEMP/extract-custom-public-read-input/complete.zip"
+      - name: Reopen all input, output, state, filesystem and source bytes without execution
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_mixed_public_read_ci/run.py" --input "$RUNNER_TEMP/extract-custom-public-read-input/complete.zip" --output "$RUNNER_TEMP/extract-native-read" --domain '${{ matrix.domain }}' --profile '79d2b5c4e74fba068179549d883181a422584b6188b8676d4032c529de3f9ff2'
+      - name: Upload complete independent reader evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-native-complete-read-${{ matrix.domain }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/extract-native-read/proof
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
