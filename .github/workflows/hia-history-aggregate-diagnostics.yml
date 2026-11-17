@@ -1,4 +1,4 @@
-name: Inspect retained history recovery failure without execution
+name: Inspect complete V6 history recovery proof without replay
 on:
   push:
     branches: [hia-history-aggregate-diagnostics-6780-20261116]
@@ -17,28 +17,29 @@ jobs:
           path: observer
           ref: ${{ github.sha }}
           persist-credentials: false
-          sparse-checkout: qualification/history_aggregate_recovery/diagnostics-v1
-      - name: Download only the exact completed recovery artifact
+          sparse-checkout: qualification/history_aggregate_recovery/diagnostics-v2
+      - name: Download only the exact failed V6 recovery proof
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14281552031 > "$RUNNER_TEMP/recovery-artifact.json"
-          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14281552031/zip > "$RUNNER_TEMP/recovery-artifact.zip"
-      - name: Fully read archive and print exact failure streams
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14290847466 > "$RUNNER_TEMP/recovery-artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14290847466/zip > "$RUNNER_TEMP/recovery-artifact.zip"
+      - name: Fully read all ZIP TAR source and member bytes and print the rejection
         run: |
           timeout --signal=KILL 900 python3 -I -S -B \
-            observer/qualification/history_aggregate_recovery/diagnostics-v1/inspect_recovery.py \
+            observer/qualification/history_aggregate_recovery/diagnostics-v2/inspect_recovery.py \
             --zip "$RUNNER_TEMP/recovery-artifact.zip" \
             --metadata "$RUNNER_TEMP/recovery-artifact.json" \
             --output "$RUNNER_TEMP/history-recovery-diagnostics"
-      - name: Keep full source and complete diagnostic proof
+      - name: Preserve every readback proof and observer source
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: history-recovery-064b-complete-diagnostics
+          name: history-recovery-v6-complete-diagnostics
           path: |
             ${{ runner.temp }}/history-recovery-diagnostics/
             ${{ runner.temp }}/recovery-artifact.json
+            observer/qualification/history_aggregate_recovery/diagnostics-v2/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
