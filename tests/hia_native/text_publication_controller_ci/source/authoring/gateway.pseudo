@@ -41,7 +41,7 @@ def after_params(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
         return INVALID
     if reserve(w, 2, size) == 0:
         return pending_grow(o, w)
-    copy_within(w, region(w, 2), at, size)
+    copy_range(w, w, region(w, 2), at, size)
     put(w, 96, path)
     put(w, 104, 0)
     put(w, 232, size)

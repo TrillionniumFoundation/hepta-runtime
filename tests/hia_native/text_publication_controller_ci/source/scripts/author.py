@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from authoring_support import compile_delta, substitute
+import source_support
 
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 CANON = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
@@ -114,8 +114,12 @@ def produce(root, output, hepta, name, template, comp_path, alias_key, pseudo, m
         if n not in aliases:
             additions[n] = "f" + str(next_index)
             next_index += 1
-    concrete = substitute(pseudo, COMMON)
-    raw, after, retained = compile_delta(hepta, seed, aliases, concrete, replacements, additions)
+    api = source_support.tools(hepta)
+    raw, actual_names, compile_proof = source_support.compile_delta(api, seed, aliases, pseudo, COMMON, "runtime_" + name)
+    require(actual_names == {**aliases, **additions}, "actual author function map differs")
+    after = {f["name"]: f for f in assemble_program(raw).as_dict()["functions"]}
+    retained = compile_proof["retained_exact_functions"]
+    concrete = ast.unparse(ast.Module(body=source_support.parsed_nodes(pseudo, COMMON), type_ignores=[])) + "\n"
     source_path = output / "native" / (name + ".hepta")
     source_path.write_bytes(raw)
     (output / "authoring" / (name + ".expanded.py.txt")).write_text(concrete)

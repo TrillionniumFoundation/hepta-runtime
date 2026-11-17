@@ -176,7 +176,7 @@ def after_path(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
         return INVALID
     if reserve(w, 2, size) == 0:
         return pending_grow(o, w)
-    copy_within(w, region(w, 2), at, size)
+    copy_range(w, w, region(w, 2), at, size)
     put(w, 136, size)
     put(w, 424, 2)
     return prepare(s, o, w, 2)
@@ -195,7 +195,7 @@ def prepare_local_policy(o: mutbuf, w: mutbuf) -> u32:
     put(w, at, LOCAL_POLICY_REQUEST)
     put(w, at + 8, 1)
     put(w, at + 16, count)
-    copy_within(w, at + 24, source + 96, count)
+    copy_range(w, w, at + 24, source + 96, count)
     return child(w, 4, size, 2)
 
 def after_local_policy(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
@@ -239,7 +239,7 @@ def prepare_publication(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
     put(w, at + 40, content)
     put(w, at + 48, expected)
     put(w, at + 56, path + content + expected)
-    copy_within(w, at + 64, source + 96, path)
+    copy_range(w, w, at + 64, source + 96, path)
     copy_range(w, s, at + 64 + path, 176 + load(s, 72), content + expected)
     return child(w, 2, size, 3)
 
@@ -260,7 +260,7 @@ def after_publication(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) ->
         i = i + 8
     if reserve(w, 4, count) == 0:
         return pending_grow(o, w)
-    copy_within(w, region(w, 4), at + 64, count)
+    copy_range(w, w, region(w, 4), at + 64, count)
     put(w, 200, count)
     put(w, 216, choose(kind == 0, 0, 1))
     if kind == 3:
@@ -282,7 +282,7 @@ def prepare_cache_key(o: mutbuf, w: mutbuf) -> u32:
     put(w, at, KEY_REQUEST)
     put(w, at + 8, 1)
     put(w, at + 16, count)
-    copy_within(w, at + 64, region(w, 2), count)
+    copy_range(w, w, at + 64, region(w, 2), count)
     return child(w, 5, size, 3)
 
 def after_cache_key(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
@@ -294,7 +294,7 @@ def after_cache_key(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u
     count = size - 32
     if reserve(w, 6, count) == 0:
         return pending_grow(o, w)
-    copy_within(w, region(w, 6), at + 32, count)
+    copy_range(w, w, region(w, 6), at + 32, count)
     put(w, 448, count)
     put(w, 440, 2)
     return prepare(s, o, w, 3)
@@ -319,7 +319,7 @@ def prepare_forget(o: mutbuf, w: mutbuf) -> u32:
     put(w, at + 72, 3)
     put(w, at + 80, 1)
     put(w, at + 88, count)
-    copy_within(w, at + 112, region(w, 6), count)
+    copy_range(w, w, at + 112, region(w, 6), count)
     return child(w, 0, size, 3)
 
 def after_forget(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
