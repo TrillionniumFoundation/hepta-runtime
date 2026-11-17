@@ -1,0 +1,11 @@
+# Extended private engine ownership layout
+
+The first 64 work ownership bits stay at engine offset 64; the first 64 output bits stay at offset 72. Existing fixed slots, `HRGENG02`, every header field, and continuation records at `512 + 64 * slot` retain their meaning. Existing slot 15/24 adapters and slot 18 detach/restore operations remain byte exact.
+
+For a frozen graph with N descriptors, its descriptor table starts at `max(8192, align_up(512 + 64*N, 4096))`. Each descriptor remains 64 bytes, reached through the existing engine offset 8 pointer. High work bits immediately follow the complete descriptor table; high output bits immediately follow high work bits. Each high array contains `8 * max(0, ceil(N/64)-1)` bytes. The engine extent is page aligned and at least 16384 bytes. The existing separately protected 4096-byte guard page follows it. Every range is checked to be disjoint and representable by the fixed native addressing mode before assembly.
+
+For a variable slot index below 64, the six unchanged ownership operations use the original low word. At 64 or above they use the selected high array. A high memory operand base is `array - 8`, so x86's full memory bit index maps slot 64 to the first high word. The work and output spans never share storage. The old low words remain authoritative for fixed-slot consumers; they are not mirrored or interpreted as pointers.
+
+A clear bit means a borrowed mapping. Successful unmapping clears the matching descriptor pointer/capacity and bit. An unmap error preserves all three for retry. Previous successful retirements remain retired. The continuation admission checks, authority-release ordering, pending frontend ownership transfer and actual allocator/guard behavior retain their existing source logic.
+
+This private qualification executes the actual complete frozen engine and exact fixed-slot consumers with the actual frozen allocator. A tiny separately compiled HIA fixture only copies the caller's 64-byte test frame; unused application capabilities trap. Authority and optional trace callbacks are explicit inert fixture boundaries, so this qualification does not replace their existing independent composition proofs. No Rust execution or public handler claim follows from these tests.
