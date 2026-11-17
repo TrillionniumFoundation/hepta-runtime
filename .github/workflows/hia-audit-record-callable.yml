@@ -2,7 +2,7 @@ name: Qualify native audit record callable
 on:
   workflow_dispatch:
   push:
-    branches: [hia-audit-record-callable-qualification-v2b-6780-20261117]
+    branches: [hia-audit-record-callable-qualification-v3-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
       - name: Admit complete frozen source and exact compiler checkout
         run: |
-          export AUDIT_CALLABLE_ROOT="$RUNNER_TEMP/audit-record-callable-v2"
+          export AUDIT_CALLABLE_ROOT="$RUNNER_TEMP/audit-record-callable-v3"
           printf 'AUDIT_CALLABLE_ROOT=%s\n' "$AUDIT_CALLABLE_ROOT" >> "$GITHUB_ENV"
           test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
@@ -43,7 +43,7 @@ jobs:
           shutil.copytree(original,source)
           (base/"admission").mkdir()
           raw=(source/"SOURCE.json").read_bytes()
-          assert hashlib.sha256(raw).hexdigest()=="16ab2119292c4e978376d9c3110c86277786ce700a82574b63a18fa844218d29"
+          assert hashlib.sha256(raw).hexdigest()=="f7a18ccac088bb820a2df262b4f5b700f11a2e6ee0f2f307f2ada4fa89f90d4b"
           manifest=json.loads(raw)
           assert {p.relative_to(source).as_posix() for p in source.rglob("*") if p.is_file()}==set(manifest["files"])|{"SOURCE.json"}
           for name,pin in manifest["files"].items():
@@ -114,8 +114,8 @@ jobs:
         with:
           name: audit-record-callable-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/audit-record-callable-v2/audit-record-callable.tar.gz
-            ${{ runner.temp }}/audit-record-callable-v2/audit-record-callable.tar.gz.json
+            ${{ runner.temp }}/audit-record-callable-v3/audit-record-callable.tar.gz
+            ${{ runner.temp }}/audit-record-callable-v3/audit-record-callable.tar.gz.json
           if-no-files-found: error
           include-hidden-files: true
           compression-level: 0

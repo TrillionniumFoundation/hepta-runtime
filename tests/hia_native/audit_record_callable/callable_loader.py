@@ -23,7 +23,8 @@ class DlInfo(C.Structure):
 
 
 def libc_bindings():
-    library = C.CDLL(None)
+    # Bind the actual libc object, not symbols interposed by the embedding executable.
+    library = C.CDLL("libc.so.6")
     lookup = library.dladdr
     lookup.argtypes = [C.c_void_p, C.POINTER(DlInfo)]
     lookup.restype = C.c_int
