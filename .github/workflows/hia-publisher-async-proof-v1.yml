@@ -1,0 +1,49 @@
+name: Immutable publisher async original30 proof read
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publisher-async-proof-6780-v1-20261117']
+    paths: ['qualification/text_publication_async_reference_v1/read_proof.py', '.github/workflows/hia-publisher-async-proof-v1.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Runtime paths
+        run: |
+          printf '%s\n' "PA_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/text_publication_async_reference_v1" "PA_OUTPUT=$RUNNER_TEMP/publisher-async-proof-read" "PA_DRIVER=$RUNNER_TEMP/publisher-async-proof-reader" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/text_publication_async_reference_v1
+      - name: Full uploaded proof byte verification and retained observations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$PA_SOURCE/read_proof.py" | cut -d' ' -f1)" = e4a11dd31247bb163a11e12d0f7c7c57687f0dd952fa085b2e2ff098fc862e58
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PA_SOURCE/read_proof.py" --output "$PA_OUTPUT" > "$PA_DRIVER.stdout" 2> "$PA_DRIVER.stderr"
+          pa_status=$?
+          cat "$PA_DRIVER.stderr"
+          cat "$PA_DRIVER.stdout"
+          exit "$pa_status"
+      - name: Upload exact proof bytes, observations and any reader failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-async-proof-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.PA_OUTPUT }}
+            ${{ env.PA_DRIVER }}.stdout
+            ${{ env.PA_DRIVER }}.stderr
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
