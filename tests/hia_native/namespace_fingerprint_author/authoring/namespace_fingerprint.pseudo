@@ -1,0 +1,243 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<8:
+        return INVALID
+    if read64(s,0)==REQUEST:
+        if length(s)!=64 or read64(s,8)!=1 or read64(s,16)==0 or read64(s,24)==0:
+            return INVALID
+        at=32
+        while at<64:
+            if read64(s,at)!=0:
+                return INVALID
+            at=at+8
+        if length(o)<128 or length(w)<16384:
+            return CAPACITY
+        if get(w,2048)==WORKSPACE:
+            if stable(w)==0 or read64(s,16)<=get(w,2064):
+                return INVALID
+        fill_range(w,2048,256,0)
+        put(w,2048,WORKSPACE)
+        put(w,2056,1)
+        put(w,2064,read64(s,16))
+        put(w,2072,read64(s,24))
+        return issue(o,w,1,read64(s,24),589824,1)
+    if read64(s,0)!=ACK:
+        return INVALID
+    if length(o)<128 or length(w)<16384:
+        return CAPACITY
+    if ack_valid(s,w)==0:
+        return INVALID
+    put(w,2128,read64(s,32))
+    put(w,2136,read64(s,40))
+    put(w,2144,read64(s,48))
+    put(w,2152,read64(s,56))
+    copy_read(s,96,w,8192,read64(s,56))
+    put(w,2112,0)
+    return resume(o,w)
+
+def stable(w:mutbuf) -> u64:
+    if header_shape(w)==0:
+        return 0
+    if get(w,2056)!=2 or get(w,2064)==0 or get(w,2072)==0:
+        return 0
+    if get(w,2088)!=0 or get(w,2096)!=0 or get(w,2104)!=0 or get(w,2112)!=0:
+        return 0
+    if get(w,2160)>1 or get(w,2168)>1:
+        return 0
+    if get(w,2160)==0 and get(w,2168)!=1:
+        return 0
+    if get(w,2160)==1 and get(w,2168)!=0:
+        return 0
+    return 1
+
+def ack_valid(s:readbuf,w:mutbuf) -> u64:
+    if length(s)<96 or length(s)>4192 or read64(s,64)!=length(s) or read64(s,56)!=length(s)-96:
+        return 0
+    if header_shape(w)==0 or get(w,2056)!=1:
+        return 0
+    if get(w,2080)==0 or get(w,2080)>=18446744073709551614:
+        return 0
+    if read64(s,8)!=get(w,2064) or read64(s,16)!=get(w,2080) or read64(s,24)!=get(w,2112):
+        return 0
+    if get(w,2088)!=get(w,2112) or get(w,2112)<1 or get(w,2112)>5:
+        return 0
+    if read64(s,72)!=0 or read64(s,80)!=0 or read64(s,88)!=0:
+        return 0
+    phase=get(w,2088)
+    status=read64(s,32)
+    error=read64(s,40)
+    value=read64(s,48)
+    size=read64(s,56)
+    if status>2 or error>4095:
+        return 0
+    if phase<5:
+        if get(w,2160)!=0 or get(w,2168)!=0 or get(w,2120)!=0:
+            return 0
+    else:
+        if get(w,2160)==0 and (get(w,2168)!=1 or get(w,2120)!=0):
+            return 0
+        if get(w,2160)==1 and (get(w,2168)!=0 or get(w,2120)==0):
+            return 0
+    if phase==1:
+        if get(w,2096)!=0 or get(w,2104)!=0:
+            return 0
+    else:
+        if phase==2 or phase==4:
+            if get(w,2096)==0 or get(w,2096)==get(w,2072) or get(w,2104)!=0:
+                return 0
+        else:
+            if get(w,2096)!=0 or get(w,2104)==0 or get(w,2104)==get(w,2072):
+                return 0
+    if phase==4 or phase==5:
+        if status>1 or size!=0 or value!=0:
+            return 0
+        if status==1 and error==0:
+            return 0
+        return 1
+    if status==1:
+        if error==0 or size!=0 or value!=0:
+            return 0
+        return 1
+    if error!=0:
+        return 0
+    if phase==1 or phase==2:
+        if status!=0 or size!=0 or value==0 or value==get(w,2072) or value==get(w,2096):
+            return 0
+        return 1
+    if status==2:
+        if size!=0 or value!=0:
+            return 0
+        return 1
+    if status!=0 or value!=size or size<20 or size>4096:
+        return 0
+    if byte(s,112)+(byte(s,113)<<8)!=size:
+        return 0
+    at=115
+    while at<length(s):
+        if byte(s,at)==0:
+            return 1
+        at=at+1
+    return 0
+
+def resume(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,2088)
+    status=get(w,2128)
+    if phase==1:
+        if status==1:
+            put(w,2120,get(w,2136))
+            put(w,2160,1)
+            return complete(o,w)
+        put(w,2096,get(w,2144))
+        return issue(o,w,2,get(w,2096),0,2)
+    if phase==2:
+        if status==1:
+            return issue(o,w,4,get(w,2096),0,4)
+        put(w,2104,get(w,2144))
+        put(w,2096,0)
+        sha_init(w)
+        return issue(o,w,3,get(w,2104),0,3)
+    if phase==3:
+        if status==1:
+            put(w,2120,get(w,2136))
+            put(w,2160,1)
+            return issue(o,w,5,get(w,2104),0,5)
+        if status==2:
+            sha_finish(w)
+            digest(w)
+            put(w,2168,1)
+            return issue(o,w,5,get(w,2104),0,5)
+        hash_entry(w)
+        return issue(o,w,3,get(w,2104),0,3)
+    if phase==4:
+        put(w,2096,0)
+        put(w,2120,get(w,2136))
+        put(w,2160,1)
+        return complete(o,w)
+    if phase==5:
+        put(w,2104,0)
+        return complete(o,w)
+    return INVALID
+
+def hash_entry(w:mutbuf) -> u64:
+    size=get(w,2152)
+    at=19
+    while at<size and byte(w,8192+at)!=0:
+        at=at+1
+    name=at-19
+    if name==1 and byte(w,8211)==46:
+        return 0
+    if name==2 and byte(w,8211)==46 and byte(w,8212)==46:
+        return 0
+    put(w,12288,name)
+    sha_update(w,12288,8)
+    sha_update(w,8211,name)
+    sha_update(w,8192,8)
+    sha_update(w,8210,1)
+    return 0
+
+def digest(w:mutbuf) -> u64:
+    at=0
+    while at<8:
+        v=get(w,1024+at*8)
+        store(w,2304+at*4,v>>24)
+        store(w,2305+at*4,v>>16)
+        store(w,2306+at*4,v>>8)
+        store(w,2307+at*4,v)
+        at=at+1
+    return 0
+
+def issue(o:mutbuf,w:mutbuf,op:u64,a:u64,b:u64,phase:u64) -> u64:
+    put(w,2080,get(w,2080)+1)
+    put(w,2088,phase)
+    put(w,2112,op)
+    fill_range(o,0,128,0)
+    put(o,0,RESPONSE)
+    put(o,8,2)
+    put(o,16,get(w,2080))
+    put(o,24,get(w,2064))
+    put(o,32,op)
+    put(o,40,a)
+    put(o,48,b)
+    return 128
+
+def complete(o:mutbuf,w:mutbuf) -> u64:
+    put(w,2056,2)
+    put(w,2088,0)
+    put(w,2112,0)
+    fill_range(o,0,128,0)
+    put(o,0,RESPONSE)
+    put(o,8,get(w,2160))
+    put(o,16,get(w,2080))
+    put(o,24,get(w,2064))
+    put(o,32,1)
+    if get(w,2160)==1:
+        put(o,80,1)
+        put(o,88,get(w,2120))
+    else:
+        at=0
+        while at<32:
+            store(o,96+at,byte(w,2304+at))
+            at=at+1
+    return 128
+
+def copy_read(s:readbuf,at:u64,w:mutbuf,to:u64,size:u64) -> u64:
+    index=0
+    while index<size:
+        store(w,to+index,byte(s,at+index))
+        index=index+1
+    return 0
+
+def header_shape(w:mutbuf) -> u64:
+    if get(w,2048)!=WORKSPACE or get(w,2064)==0 or get(w,2072)==0:
+        return 0
+    if get(w,2080)==0 or get(w,2080)>=18446744073709551614:
+        return 0
+    if get(w,2160)>1 or get(w,2168)>1 or get(w,2120)>4095:
+        return 0
+    if get(w,2128)>2 or get(w,2136)>4095 or get(w,2152)>4096:
+        return 0
+    at=2176
+    while at<2304:
+        if get(w,at)!=0:
+            return 0
+        at=at+8
+    return 1
