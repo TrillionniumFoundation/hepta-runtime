@@ -1,0 +1,30 @@
+impl OctofsServer {
+    fn sdk_publish(&self, context: RequestContext<RoleServer>, params: Parameters<TextFileWriteParams>)
+        -> std::pin::Pin<Box<dyn std::future::Future<Output=Result<String, String>> + Send + '_>> {
+        Box::pin(self.text_file_write(context, params))
+    }
+    fn sdk_text(&self, context: RequestContext<RoleServer>, params: Parameters<TextEditorParams>)
+        -> std::pin::Pin<Box<dyn std::future::Future<Output=Result<String, String>> + Send + '_>> {
+        Box::pin(self.text_editor(context, params))
+    }
+}
+impl ServerHandler for OctofsServer {
+    fn get_info(&self) -> ServerConfig { OriginalInfo::get_info(self) }
+    async fn list_tools(&self, request: Option<PaginatedRequestParams>, context: RequestContext<RoleServer>)
+        -> Result<ListToolsResult, ErrorData> {
+        let mut result = OriginalList::list_tools(self, request, context).await?;
+        result.tools.retain(|tool| INSTALLED_TOOLS.contains(&tool.name.as_ref()));
+        Ok(result)
+    }
+    async fn call_tool(&self, request: CallToolRequestParams, context: RequestContext<RoleServer>)
+        -> Result<CallToolResponse, ErrorData> {
+        match request.name.as_ref() {
+            "text_file_write" => ToolCallContext::new(self, request, context)
+                .invoke::<_, AsyncMethodAdapter<(RequestContext<RoleServer>, Parameters<TextFileWriteParams>), Result<String, String>>>(Self::sdk_publish).await,
+            "text_editor" => ToolCallContext::new(self, request, context)
+                .invoke::<_, AsyncMethodAdapter<(RequestContext<RoleServer>, Parameters<TextEditorParams>), Result<String, String>>>(Self::sdk_text).await,
+            _ => Err(ErrorData::invalid_params("tool outside the declared reference domain", None)),
+        }
+    }
+}
+

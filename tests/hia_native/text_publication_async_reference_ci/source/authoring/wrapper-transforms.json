@@ -1,0 +1,18 @@
+{
+  "schema": "hepta.runtime.publisher.async.wrapper-transforms.v1",
+  "transformations": [
+    {
+      "before": "impl OctofsServer {\n    fn sdk_publish",
+      "after": "mod async_observer;\n\nimpl OctofsServer {\n    fn sdk_publish"
+    },
+    {
+      "before": "        Box::pin(self.text_file_write(context, params))",
+      "after": "        Box::pin(async move {\n            let mut observation = async_observer::FutureObservation::new(&params.0.path);\n            let result = self.text_file_write(context, params).await;\n            observation.completed(result.is_ok());\n            result\n        })"
+    },
+    {
+      "before": "fn main() -> Result<()> {\n    let executor",
+      "after": "fn main() -> Result<()> {\n    if std::env::args().nth(1).as_deref() == Some(\"--async-fixture\") {\n        return async_observer::main();\n    }\n    let executor"
+    }
+  ],
+  "scope": "Observer outside unchanged original handler; no task scheduling, cancellation, or SDK code replaced."
+}
