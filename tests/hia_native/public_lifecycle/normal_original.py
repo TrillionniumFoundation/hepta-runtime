@@ -5,6 +5,7 @@
 from pathlib import Path
 import gzip
 import json
+import os
 import sys
 import time
 import traceback
@@ -12,7 +13,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT/'scripts'), str(Path(__file__).resolve().parent)]
 from public_lifecycle_registry import encoded, require
-from public_lifecycle_retained import FOLDER, pin, obj, admit
+from public_lifecycle_retained import FOLDER, pin, obj, admit, write_new
 from normal_runner import run, retire_fixture
 from normal_evidence import verify_capture
 
@@ -40,6 +41,17 @@ def execute(admission, expected, invocation, manifest, original, output, *, defe
         actual_paired_filesystem_comparison=True, fault_injection=False,
         syscall_interception=False, external_host_operations=0,
         production_activated=False, whole_runtime_replaced=False)
+    # The source-owned parent may start the disjoint lifecycle consumer only
+    # after this full native admission has finished. Its temporary fixtures
+    # live inside a different retained branch, so the barrier also prevents
+    # a full native inventory from observing the other consumer's live state.
+    ready = dict(schema='hepta.public-lifecycle.original-capture-ready.v1',
+        pid=os.getpid(), process_group=os.getpgrp(), output=str(output),
+        admission=pin(admission), invocation=invocation, manifest=pin(manifest),
+        original_binary=pin(original), complete_native_admission=True,
+        native_processes=0)
+    write_new(output/'native-admission-ready.json', ready)
+    report['capture_owner'] = ready
     started = time.monotonic()
     def save():
         report['elapsed_seconds'] = time.monotonic()-started
@@ -91,6 +103,16 @@ def verify(folder, original, admission, expected, invocation, manifest, *, captu
         for p in (folder, original, admission, manifest))
     before = admit(admission, expected, invocation, ROOT, manifest)
     report = obj(folder/'result.json')
+    ready = obj(folder/'native-admission-ready.json')
+    require(type(ready.get('pid')) is int and ready['pid'] > 0
+        and type(ready.get('process_group')) is int and ready['process_group'] > 0
+        and ready == dict(schema='hepta.public-lifecycle.original-capture-ready.v1',
+            pid=ready['pid'], process_group=ready['process_group'], output=str(folder),
+            admission=pin(admission), invocation=invocation, manifest=pin(manifest),
+            original_binary=pin(original), complete_native_admission=True,
+            native_processes=0)
+        and report['capture_owner'] == ready,
+        'original capture admission barrier differs')
     require(report['schema'] == 'hepta.public-lifecycle.retained-normal.v1'
         and report['status'] == ('CAPTURED_NOT_QUALIFIED' if captured else 'PASS')
         and report['admission'] == pin(admission) and report['invocation'] == invocation

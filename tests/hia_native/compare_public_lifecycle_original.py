@@ -80,6 +80,91 @@ def main():
         if timed:os.killpg(os.getpgrp(),signal.SIGKILL)
         require(error is None and code==0,'actual reference command failed: '+name)
         return out,err
+    def run_captures(normal_command,lifecycle_command):
+        # Both consumers use the same immutable ELF but disjoint retained
+        # common directories. The normal consumer first completes its full
+        # cross-domain native admission; only then may the lifecycle consumer
+        # create a temporary live fixture. Parent verification waits for both.
+        # Direct files preserve all actual output even if the outer group is
+        # killed. There are no new native runtime executions in this helper.
+        jobs=[]
+        def launch(name,command):
+            command=list(map(str,command));started=time.monotonic()
+            row=dict(name=name,command=command,cwd=str(root),pid=None,
+                exit_code=None,timed_out=False,start_error=None,timeout_seconds=120,
+                elapsed_seconds=0,stdout_bytes=0,stdout_sha256=sha(b''),
+                stderr_bytes=0,stderr_sha256=sha(b''))
+            report['processes'].append(row)
+            job=dict(row=row,started=started,process=None,done=False)
+            jobs.append(job)
+            try:
+                with (output/(name+'.stdout')).open('xb') as stdout, \
+                     (output/(name+'.stderr')).open('xb') as stderr:
+                    job['process']=subprocess.Popen(command,cwd=root,env=env,
+                        stdout=stdout,stderr=stderr)
+                row['pid']=job['process'].pid
+            except OSError as error:
+                row['start_error']=repr(error)
+                abort('original capture launch failed: '+name)
+            save()
+            return job
+        def record(job):
+            row=job['row'];process=job['process']
+            row['elapsed_seconds']=time.monotonic()-job['started']
+            row['exit_code']=None if process is None else process.poll()
+            for suffix in ('stdout','stderr'):
+                path=output/(row['name']+'.'+suffix)
+                raw=regular(path) if path.exists() else b''
+                row[suffix+'_bytes'],row[suffix+'_sha256']=len(raw),sha(raw)
+            save()
+        def abort(reason):
+            for job in jobs:record(job)
+            report.update(status='FAIL',error=reason);save()
+            # The entry check requires this process to lead the owned group.
+            os.killpg(os.getpgrp(),signal.SIGKILL)
+            raise RuntimeError(reason)
+        normal=launch('normal-pairs',normal_command)
+        ready_path=output/'paired/native-admission-ready.json'
+        while True:
+            if time.monotonic()-normal['started']>=120:
+                normal['row']['timed_out']=True
+                abort('owned original capture deadline before native-admission barrier')
+            ready=None
+            if ready_path.exists():
+                try:ready=json.loads(regular(ready_path))
+                except json.JSONDecodeError:pass
+            if ready is not None:
+                expected=dict(schema='hepta.public-lifecycle.original-capture-ready.v1',
+                    pid=normal['row']['pid'],process_group=os.getpgrp(),output=str(output/'paired'),
+                    admission=pin(admission),invocation=args.native_invocation,manifest=pin(manifest),
+                    original_binary=pin(binary),complete_native_admission=True,native_processes=0)
+                if ready!=expected:abort('source-owned original admission barrier differs')
+                break
+            if normal['process'].poll() is not None:
+                abort('original capture exited without its complete native-admission barrier')
+            time.sleep(0.01)
+        report['capture_scheduling']=dict(
+            schema='hepta.public-lifecycle.independent-consumers.v1',
+            admission_ready_file='paired/native-admission-ready.json',
+            admission_ready=pin(ready_path),normal_pid=normal['row']['pid'],
+            native_admission_completed_before_lifecycle=True,
+            normal_live_before_lifecycle=normal['process'].poll() is None,
+            parent_verification_after_both=True,native_processes=0)
+        lifecycle=launch('lifecycle-pairs',lifecycle_command)
+        report['capture_scheduling']['lifecycle_pid']=lifecycle['row']['pid'];save()
+        while not all(job['done']for job in jobs):
+            for job in jobs:
+                if job['done']:continue
+                if job['process'].poll() is not None:
+                    record(job);job['done']=True
+                elif time.monotonic()-job['started']>=120:
+                    job['row']['timed_out']=True
+                    abort('owned original capture deadline: '+job['row']['name'])
+            if not all(job['done']for job in jobs):time.sleep(0.01)
+        require(all(job['row']['exit_code']==0 for job in jobs),
+            'actual original capture command failed')
+        return tuple((regular(output/(job['row']['name']+'.stdout')),
+                      regular(output/(job['row']['name']+'.stderr')))for job in jobs)
     save()
     try:
         report['prepared']=prepare(root,project)
@@ -101,21 +186,22 @@ def main():
         report['original_binary']=dict(origin=str(origin),path=str(binary),bytes=len(raw),sha256=sha(raw))
         report['registry_after']=registry(metadata,lock,original_lock,output/'registry')
         require(report['registry_after']==report['registry_before'],'actual registry sources changed during build')
-        command=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/normal_original.py',
+        normal_command=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/normal_original.py',
             '--admission',admission,'--admission-sha256',args.native_admission_sha256,
             '--invocation',args.native_invocation,'--build',manifest,
             '--original',binary,'--output',output/'paired','--defer-final-admission']
-        out,err=run('normal-pairs',command,root,120)
+        lifecycle_command=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/lifecycle_suite.py',
+            '--binary',binary,'--retained',admission.parent/LIFECYCLE,'--native-binary',native,
+            '--output',output/'lifecycle','--defer-final-admission']
+        normal_streams,lifecycle_streams=run_captures(normal_command,lifecycle_command)
+        out,err=normal_streams
         paired=retained_pair_evidence(output/'paired',binary,admission,args.native_admission_sha256,
             args.native_invocation,manifest,captured=True)
         require(not err and json.loads(out)==dict(status='CAPTURED_NOT_QUALIFIED',native_processes=0,
             retained_native_processes=64,original_processes=64,requests_per_implementation=359),
             'actual complete paired capture summary differs')
         report.update(original_processes=64,requests_per_implementation=359);save()
-        command=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/lifecycle_suite.py',
-            '--binary',binary,'--retained',admission.parent/LIFECYCLE,'--native-binary',native,
-            '--output',output/'lifecycle','--defer-final-admission']
-        out,err=run('lifecycle-pairs',command,root,120)
+        out,err=lifecycle_streams
         finite=retained_lifecycle_evidence(output/'lifecycle',binary,side='original',
             retained=admission.parent/LIFECYCLE,native_binary=native,captured=True)
         require(not err and json.loads(out)==dict(status='CAPTURED_NOT_QUALIFIED',native_processes=0,original_processes=22,

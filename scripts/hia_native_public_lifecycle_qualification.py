@@ -344,6 +344,23 @@ def verify_original(root,folder,manifest):
         require(type(row['pid'])is int and row['pid']>0,'actual reference PID absent')
         if name=='rustc-version':require(not err and b'release: 1.95.0\n'in out,'actual Rust version changed')
         if name in ('cargo-metadata','normal-pairs','lifecycle-pairs','retained-native-controls'):require(not err,'unexpected original stdout framing')
+    normal_row=next(row for row in original['processes']if row['name']=='normal-pairs')
+    lifecycle_row=next(row for row in original['processes']if row['name']=='lifecycle-pairs')
+    ready_path=folder/'paired/native-admission-ready.json'
+    require(object_at(ready_path)==dict(schema='hepta.public-lifecycle.original-capture-ready.v1',
+        pid=normal_row['pid'],process_group=original['owner']['pgid'],output=str(folder/'paired'),
+        admission=pin(admission),invocation=original['native_invocation'],manifest=pin(manifest),
+        original_binary=pin(binary),complete_native_admission=True,native_processes=0),
+        'actual original consumer native-admission barrier differs')
+    scheduling=original['capture_scheduling']
+    require(type(scheduling.get('normal_live_before_lifecycle'))is bool and scheduling==dict(
+        schema='hepta.public-lifecycle.independent-consumers.v1',
+        admission_ready_file='paired/native-admission-ready.json',admission_ready=pin(ready_path),
+        normal_pid=normal_row['pid'],lifecycle_pid=lifecycle_row['pid'],
+        native_admission_completed_before_lifecycle=True,
+        normal_live_before_lifecycle=scheduling['normal_live_before_lifecycle'],
+        parent_verification_after_both=True,native_processes=0),
+        'original consumer supervision or ownership changed')
     expected_tools={original['cargo'],original['rustc'],original['rustfmt']}
     require(set(original['tool_sha256'])==expected_tools,'original tool domain changed')
     for path,digest in original['tool_sha256'].items():
