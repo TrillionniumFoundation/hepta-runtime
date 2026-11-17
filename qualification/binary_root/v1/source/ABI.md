@@ -1,0 +1,13 @@
+# Native installed binary root operation 9
+
+The private query remains HRCFGQ01. The 24-byte header contains the magic at 0, operation 9 at 8 and exact payload length at 16. Its body reuses the operation 8 path-query layout: explicit-user flag at 24, explicit-port flag at 32, write flag at 40, host byte length at 48 and path byte length at 56, followed by host bytes at 64 and then path bytes. Operation 9 requires both override flags zero, write zero or one, exact length arithmetic and valid UTF-8. Embedded NUL is not newly filtered by this query.
+
+The owner is the existing installed configuration owner with its original footer kind 1. Malformed request frames return 0xffffffff. A result buffer shorter than the inherited 32-byte admission header returns 0xfffffffe. HGRWS002 and return 0xffffffd0 request exact workspace/output growth under the existing owner ABI. The u32 publication ceiling remains unchanged.
+
+A completed result consists of HRCFGM01, a u64 status at 8 (0 root, 1 original error), zero at 16 and exact UTF-8 payload byte length at 24. Payload begins at 32. The returned u32 is the complete result extent, not a header-only value. Output bytes beyond the admitted extent remain unchanged.
+
+The query first requires installed configuration. It looks up the original configured name without SSH alias fallback, requires operator mode, performs the unchanged operation 8 alias/path policy with no explicit user/port, then selects a matching read or write prefix from the originally named host. Prefix membership is raw path equality or raw prefix plus a slash after trimming trailing slashes. Selection uses the greatest original UTF-8 prefix byte length; equal lengths retain the last match. The payload preserves the original prefix bytes.
+
+The private ELF transport accepts operation 9 on selector 11 and sets only the existing query footer kind. It owns buffers, grows capacities and relays the actual native return. It does not decide configuration presence, host identity, execution mode, path membership or root selection.
+
+The qualification-only journal uses inherited descriptor 198. Each pre/post record has a 64-byte HBRJQ001 header: magic, native call sequence, phase (0 before / 1 after), return code (zero before), complete input length, complete output capacity, complete workspace capacity and selector 11. Complete input, output and workspace bytes follow in that order. Sequence starts at one per actual process. Growth retains prior complete output bytes, zeroes newly mapped capacity and preserves the installed workspace. The observer is private fixture instrumentation and is not a production logging interface.
