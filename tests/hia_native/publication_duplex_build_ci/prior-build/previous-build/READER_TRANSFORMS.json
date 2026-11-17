@@ -1,0 +1,90 @@
+{
+  "schema": "hepta.runtime.publication-worker.build-reader-transforms.v1",
+  "source": "7656f8146e4993691b6678e761263778acdbf063",
+  "edits": [
+    {
+      "before": "\"\"\"Strict complete read of mechanical Scope successor, all115 retained images and both entries.\"\"\"",
+      "after": "\"\"\"Strict full source, 116 actual compile receipts and three linked/packed public worker entries.\"\"\""
+    },
+    {
+      "before": "import read_graph,patch_source,wait_native_fixture",
+      "after": "import read_graph,dynamic_builder\nfrom async_build_common import source_files,FRESH,PRODUCTION"
+    },
+    {
+      "before": "def verify(retained,previous,output):\n    retained=Path(retained).resolve(strict=True);previous=Path(previous).resolve(strict=True);output=Path(output).resolve(strict=True)\n    graph=output/\"source\";native=retained/\"capture/native-build\"\n    read_graph.source(retained);source_rows=patch_source.source(graph)\n    source_proof=patch_source.prove(previous,graph)\n    require(doc(output/\"SOURCE_PROOF.json\")==source_proof,\"complete mechanical inverse and retained HIA source proof\")\n    builder,port_reader,custody,qualifier,literal_fields,result_keys=read_graph.prepare(retained)\n    require(raw(graph/\"scripts/public_nine_build.py\")==raw(retained/\"capture/composition/source/scripts/public_nine_build.py\"),\"retained actual builder unchanged\")",
+      "after": "def verify(retained,output):\n    retained=Path(retained).resolve(strict=True);output=Path(output).resolve(strict=True)\n    graph=output/\"source\";native=retained/\"capture/native-build\"\n    read_graph.source(retained);source_rows=source_files(graph)\n    old_builder,port_reader,custody,qualifier,_,_=read_graph.prepare(retained)\n    builder,literal_fields,result_keys=dynamic_builder.load(graph)\n    require(set(FRESH)=={\"mcp\",\"publisher_call\",\"extract_gateway\",\"publisher_worker\"},\"exact newly compiled source set\")\n    require(all(raw(graph/path)==raw(retained/\"capture/composition/source\"/path)\n        for path in (\"scripts/hia_native_build.py\",\"scripts/hia_native_loader.py\",\n          \"scripts/hia_native_runtime_mcp_adapter.py\",\"scripts/runtime_mcp_publication_async.py\",\n          \"scripts/text_editor_create_private_pack.py\")),\"retained implementation helper bytes\")"
+    },
+    {
+      "before": "require(report[\"status\"]==\"RETAINED115_SCOPE_SUCCESSOR123_BUILD_PASS\" and report[\"fresh_direct_hia_compiles\"]==0 and report[\"verified_reused_direct_hia_members\"]==115,\"all115 direct owners reverified without recompilation\")",
+      "after": "require(report[\"status\"]==\"ACTUAL_PUBLICATION_WORKER124_BUILD_PASS\" and report[\"fresh_direct_hia_compiles\"]==4 and report[\"verified_reused_direct_hia_members\"]==112,\"four actual new compiles and112 exact retained owners\")"
+    },
+    {
+      "before": "require(report[\"application_semantics_executed\"]==0 and set(report[\"roles\"])=={\"public\",\"fixture\"},\"build-only roles and scope\")",
+      "after": "require(report[\"application_semantics_executed\"]==0 and set(report[\"roles\"])=={\"public\",\"publisher\",\"filesystem\"},\"build-only roles and scope\")"
+    },
+    {
+      "before": "origin_output=Path(origin[\"output\"]);origin_retained=Path(origin[\"retained\"]);origin_previous=Path(origin[\"input_successor\"])",
+      "after": "origin_output=Path(origin[\"output\"]);origin_retained=Path(origin[\"retained\"])"
+    },
+    {
+      "before": "require(origin[\"source_commit\"]==doc(HERE/\"PRODUCTION_ROWS.json\")[\"commit\"] and origin[\"source_binding\"]==pin(graph/\"native/runtime_mcp_sources.json\"),\"frozen production successor origin\")",
+      "after": "require(origin[\"source_commit\"]==PRODUCTION and origin[\"source_binding\"]==pin(graph/\"native/runtime_mcp_sources.json\"),\"frozen production successor origin\")"
+    },
+    {
+      "before": "        is_new=name==\"extract_gateway\"\n        module=\"policy-public-extract-gateway\" if is_new else \"publication-public-\"+name.replace(\"_\",\"-\")\n        folder=previous/\"build-public/modules\"/module if is_new else native/\"build-public/modules\"/module\n        origin_folder=origin_previous/\"build-public/modules\"/module if is_new else origin_retained/\"capture/native-build/build-public/modules\"/module",
+      "after": "        is_new=name in FRESH\n        module=(\"async-public-\" if is_new else \"publication-public-\")+name.replace(\"_\",\"-\")\n        folder=output/\"build-public/modules\"/module if is_new else native/\"build-public/modules\"/module\n        origin_folder=origin_output/\"build-public/modules\"/module if is_new else origin_retained/\"capture/native-build/build-public/modules\"/module"
+    },
+    {
+      "before": "require(len(fresh)==115,\"all115 actual direct receipts\")",
+      "after": "require(len(fresh)==116 and sum(name in FRESH for name in fresh)==4,\"all116 actual direct receipts\")"
+    },
+    {
+      "before": "ordered=list(dict.fromkeys([*extra.values(),*fresh]));require(len(ordered)==116 and ordered[-5:]==builder.FENCE,\"all116 actual containers\")",
+      "after": "ordered=list(dict.fromkeys([*extra.values(),*fresh]));require(len(ordered)==117 and ordered[-5:]==builder.FENCE,\"all117 actual containers\")"
+    },
+    {
+      "before": "configuration.update(text_publication_body=\"publisher_body\",text_publication_codec=\"rf_sha\",text_publication_errno=\"publisher_errno\")",
+      "after": "configuration.update(text_publication_body=\"publisher_body\",text_publication_codec=\"rf_sha\",text_publication_errno=\"publisher_errno\",publication_worker_pool=\"publisher_worker\")"
+    },
+    {
+      "before": "    fixture_before,fixture_bytes,fixture_proof=wait_native_fixture.source(graph,builder)\n    require(doc(output/\"FIXTURE_SOURCE.json\")==fixture_proof and raw(output/\"before.S\")==fixture_before and raw(output/\"fixture.S\")==fixture_bytes,\"complete private fixture source/inverse\")\n    for label in (\"production\",\"fixture\"):\n        role=\"public\" if label==\"production\" else \"fixture\"\n        directory=output/(\"build-\"+role);folder=directory/(\"scope-\"+role)\n        original_directory=origin_output/(\"build-\"+role)\n        original_folder=original_directory/(\"scope-\"+role)",
+      "after": "    for label,role in ((\"production\",\"public\"),(\"observed\",\"publisher\"),(\"instances\",\"filesystem\")):\n        directory=output/(\"build-\"+role);folder=directory/(\"async-\"+role)\n        original_directory=origin_output/(\"build-\"+role)\n        original_folder=original_directory/(\"async-\"+role)"
+    },
+    {
+      "before": "require(m[\"members\"] == [x[\"row\"] for x in fresh.values()], \"graph exact member/source/reuse set differs: \" + label)",
+      "after": "require(m[\"members\"] == [dict(x[\"row\"],fresh_compile=(role==\"public\" and name in FRESH)) for name,x in fresh.items()], \"graph exact member/source/reuse set differs: \" + label)"
+    },
+    {
+      "before": "require(m[\"physical_images\"] == 116 and m[\"runtime_hia_images\"] == 123",
+      "after": "require(m[\"physical_images\"] == 117 and m[\"runtime_hia_images\"] == 124"
+    },
+    {
+      "before": "private, traced = label in (\"trace\", \"fixture\"), label in (\"trace\", \"fixture\")",
+      "after": "private, traced = label==\"observed\", label==\"observed\"\n        require(m[\"private_publication_trace\"] is private and m[\"publication_worker_observer_fd\"]==(6 if private else None),\"fixed FD6 publication observation\")"
+    },
+    {
+      "before": "        module_names = {\"wide-elf-linker\", \"wide-image-pack\"}\n        require({p.name for p in (directory/\"modules\").iterdir()} == module_names,",
+      "after": "        module_names = {\"wide-elf-linker\", \"wide-image-pack\"}\n        if role==\"public\":module_names|={\"async-public-\"+name.replace(\"_\",\"-\") for name in FRESH}\n        require({p.name for p in (directory/\"modules\").iterdir()} == module_names,"
+    },
+    {
+      "before": "assembly = fixture_bytes if label==\"fixture\" else builder.adapter_source(graph, private_fixture=instance, private_pump_fixture=private, private_pump_trace=traced).encode()",
+      "after": "assembly = builder.adapter_source(graph, private_fixture=instance, private_pump_fixture=private, private_pump_trace=traced,private_publication_trace=private).encode()"
+    },
+    {
+      "before": "\"runtime_hia_images\":123, \"direct_fresh_members\":0,\n            \"reverified_retained_direct_members\":115,",
+      "after": "\"runtime_hia_images\":124, \"direct_fresh_members\":4 if role==\"public\" else 0,\n            \"reverified_retained_direct_members\":112 if role==\"public\" else 116,"
+    },
+    {
+      "before": "\"fixed_journal_fd\":3 if private else None, \"fixed_host_trace_fd\":4 if traced else None,",
+      "after": "\"fixed_journal_fd\":3 if private else None, \"fixed_host_trace_fd\":4 if traced else None,\n            \"fixed_publication_trace_fd\":6 if private else None,"
+    },
+    {
+      "before": "require(patch_source.source(graph)==source_rows,\"source unchanged during full read\")",
+      "after": "require(source_files(graph)==source_rows,\"source unchanged during full read\")"
+    },
+    {
+      "before": "return {\"status\":\"COMPLETE_REQUEST_OWNED_SCOPE_GRAPH_READ_PASS\",\"runtime_hia_images\":123,\"fresh_direct\":0,\"reverified_reused_direct\":115,\"packed_hia_images\":8,\"physical_images\":116,\"descriptor_slots\":69,\"entries\":entries,\"source_binding\":pin(graph/\"native/runtime_mcp_sources.json\"),\"source_files\":486,\"complete_compile_receipts\":True,\"complete_pack_buffers\":True,\"actual_application_semantics_qualified\":False,\"native_or_rust_executed\":False}",
+      "after": "return {\"status\":\"COMPLETE_ACTUAL_PUBLICATION_WORKER124_BUILD_READ_PASS\",\"runtime_hia_images\":124,\"fresh_direct\":4,\"reverified_reused_direct\":112,\"packed_hia_images\":8,\"physical_images\":117,\"descriptor_slots\":69,\"entries\":entries,\"source_binding\":pin(graph/\"native/runtime_mcp_sources.json\"),\"source_files\":521,\"complete_compile_receipts\":True,\"complete_pack_buffers\":True,\"actual_application_semantics_qualified\":False,\"native_or_rust_executed\":False}"
+    }
+  ]
+}

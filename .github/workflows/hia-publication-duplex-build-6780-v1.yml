@@ -1,0 +1,98 @@
+name: Actual publication two-session runtime and native fixture
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-duplex-build-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+      digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Set runner paths
+        run: |
+          printf '%s\n' "PB_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_duplex_build_ci" "PB_RUN=$RUNNER_TEMP/publication-public-build" "PB_DOWNLOADS=$RUNNER_TEMP/publication-retained-downloads" "PB_DRIVER=$RUNNER_TEMP/publication-duplex-build-driver" "PB_EXPORT=$RUNNER_TEMP/publication-duplex-build-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: production
+          ref: f8857cbd18b3dedb38718f68822c072053b03233
+          persist-credentials: false
+          sparse-checkout: |
+            authoring
+            native
+            scripts
+            runtime_support
+            tests/hia_native
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Complete frozen recipe and reader transform
+        run: python3 -I -S -B "$PB_SOURCE/current/check_source.py"
+      - name: Reverify all116 owners and actually relink four graph entries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PB_SOURCE/current/build.py" --source "$GITHUB_WORKSPACE/production" --output "$PB_RUN" --downloads "$PB_DOWNLOADS" --hepta "$GITHUB_WORKSPACE/compiler" > "$PB_DRIVER.stdout" 2> "$PB_DRIVER.stderr"
+          cat "$PB_DRIVER.stdout"
+      - name: Retain complete success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PB_SOURCE/current/archive.py" pack --source "$PB_SOURCE" --capture "$PB_RUN" --output "$PB_EXPORT" --driver-prefix "$PB_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; p=pathlib.Path(os.environ["PB_DRIVER"]+".stderr"); print(p.read_text() if p.exists() else "")'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: upload
+        if: always()
+        with:
+          name: publication-duplex-build-${{ github.sha }}
+          path: ${{ env.PB_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+  uploaded:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runner paths
+        run: |
+          printf '%s\n' "PB_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_duplex_build_ci" "PB_READ=$RUNNER_TEMP/publication-public-uploaded" "PB_PROOF=$RUNNER_TEMP/publication-public-proof" "PB_DRIVER=$RUNNER_TEMP/publication-public-read-driver" "PB_EXPORT=$RUNNER_TEMP/publication-public-read-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_ci
+      - name: Whole uploaded archive and guarded complete graph read
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PB_SOURCE/current/read_uploaded_entry.py" --artifact '${{ needs.build.outputs.artifact }}' --digest '${{ needs.build.outputs.digest }}' --head '${{ github.sha }}' --output "$PB_READ" > "$PB_DRIVER.stdout" 2> "$PB_DRIVER.stderr"
+          cat "$PB_DRIVER.stdout"
+      - name: Retain complete independent proof or failure
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PB_READ"]); p=pathlib.Path(os.environ["PB_PROOF"]); p.mkdir(); [(shutil.copyfile(r/n,p/n)) for n in ("READ.json","ARCHIVE.json","FILES.json","READ_ONLY.json","SUMMARY.json") if (r/n).exists()]; x=r.parent/(r.name+"-IDENTITY.json"); shutil.copyfile(x,p/"IDENTITY.json") if x.exists() else None'
+          python3 -I -S -B "$PB_SOURCE/current/archive.py" pack --source "$PB_SOURCE" --capture "$PB_PROOF" --output "$PB_EXPORT" --driver-prefix "$PB_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; p=pathlib.Path(os.environ["PB_DRIVER"]+".stderr"); print(p.read_text() if p.exists() else "")'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-duplex-build-independent-${{ github.sha }}
+          path: ${{ env.PB_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

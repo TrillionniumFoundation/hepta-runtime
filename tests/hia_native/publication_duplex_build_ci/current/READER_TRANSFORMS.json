@@ -1,0 +1,42 @@
+{
+  "source": {
+    "bytes": 21062,
+    "sha256": "aea0ac435f0a345d48499f748ec719dffba543e11b156e92716ef38762433eaf",
+    "git_blob": "0479418d0f224304ef72d8fb166b5239d27db5d4"
+  },
+  "edits": [
+    {
+      "before": "import read_graph,dynamic_builder",
+      "after": "import read_graph,dynamic_builder,duplex_boundary"
+    },
+    {
+      "before": "\"ACTUAL_PUBLICATION_WORKER124_IMMEDIATE_BUILD_PASS\"",
+      "after": "\"ACTUAL_PUBLICATION124_TWO_SESSION_BUILD_PASS\""
+    },
+    {
+      "before": "set(report[\"roles\"])=={\"public\",\"publisher\",\"filesystem\"}",
+      "after": "set(report[\"roles\"])=={\"public\",\"publisher\",\"filesystem\",\"duplex\"}"
+    },
+    {
+      "before": "for label,role in ((\"production\",\"public\"),(\"observed\",\"publisher\"),(\"instances\",\"filesystem\")):",
+      "after": "for label,role in ((\"production\",\"public\"),(\"observed\",\"publisher\"),(\"instances\",\"filesystem\"),(\"duplex\",\"duplex\")):"
+    },
+    {
+      "before": "private, traced = label==\"observed\", label==\"observed\"",
+      "after": "private, traced = label in (\"observed\",\"duplex\"), label in (\"observed\",\"duplex\")"
+    },
+    {
+      "before": "assembly = builder.adapter_source(graph, private_fixture=instance, private_pump_fixture=private, private_pump_trace=traced,private_publication_trace=private).encode()",
+      "after": "assembly_text = builder.adapter_source(graph, private_fixture=instance, private_pump_fixture=private, private_pump_trace=traced,private_publication_trace=private)\n        if label==\"duplex\":\n            require(doc(output/\"DUPLEX.json\")==duplex_boundary.evidence(),\"complete private fixture source and ABI\")\n            assembly_text=duplex_boundary.compose(assembly_text)\n        assembly=assembly_text.encode()"
+    },
+    {
+      "before": "\"COMPLETE_ACTUAL_PUBLICATION_WORKER124_IMMEDIATE_BUILD_READ_PASS\"",
+      "after": "\"COMPLETE_ACTUAL_PUBLICATION124_TWO_SESSION_BUILD_READ_PASS\""
+    },
+    {
+      "before": "\"source_files\":525",
+      "after": "\"source_files\":530"
+    }
+  ],
+  "application_executed": false
+}
