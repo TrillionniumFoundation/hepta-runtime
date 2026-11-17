@@ -1,0 +1,41 @@
+name: Audit pinned anchor failed archive inspection
+on:
+  push:
+    branches: [hia-audit-pinned-anchor-inspection-v1-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Retrieve exact original failure ZIP without semantic replay
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14324122923/zip > "$RUNNER_TEMP/original-failure.zip"
+      - name: Read every ZIP and TAR byte and expose retained refusal
+        run: |
+          timeout --signal=KILL 180 python3 -I -B tests/hia_native/audit_pinned_anchor_inspection_v1/inspect_failure.py --archive "$RUNNER_TEMP/original-failure.zip" --output "$RUNNER_TEMP/inspection" > "$RUNNER_TEMP/inspection.stdout" 2> "$RUNNER_TEMP/inspection.stderr"
+          cat "$RUNNER_TEMP/inspection.stdout"
+      - name: Show retained diagnostic on inspection failure
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/inspection.stderr"; then cat "$RUNNER_TEMP/inspection.stderr"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: audit-pinned-anchor-inspection-v1
+          path: |
+            ${{ runner.temp }}/inspection
+            ${{ runner.temp }}/inspection.stdout
+            ${{ runner.temp }}/inspection.stderr
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 1
