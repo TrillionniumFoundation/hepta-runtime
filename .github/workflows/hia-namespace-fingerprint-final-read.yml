@@ -1,0 +1,55 @@
+name: Independent complete namespace fingerprint read
+on:
+  push:
+    branches: [hia-namespace-fingerprint-final-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_fingerprint_final_read
+      - name: Verify exact independent source and compile only Python
+        run: |
+          mkdir "$RUNNER_TEMP/fingerprint-final"
+          cp -a tests/hia_native/namespace_fingerprint_final_read "$RUNNER_TEMP/fingerprint-final/source"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["RUNNER_TEMP"])/"fingerprint-final/source";raw=(r/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="c5ccf951ede038ee9b57d0537b628bd3b5ddf8d91c0ac2d8eca6048d4b433b8b"
+          for p,pin in json.loads(raw)["files"].items():
+              b=(r/p).read_bytes();assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==pin["git_blob"]
+              if p.endswith(".py"):compile(b,str(r/p),"exec")
+          PY
+      - name: Download exact successful complete uploaded artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14346947934/zip > "$RUNNER_TEMP/fingerprint-final/original.zip"
+      - name: Read every uploaded ZIP TAR logical byte mode and Git source
+        run: |
+          timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-final/source/restore.py" --archive "$RUNNER_TEMP/fingerprint-final/original.zip" --output "$RUNNER_TEMP/fingerprint-final/restored" --pins "$RUNNER_TEMP/fingerprint-final/source/PINS.json"
+          mkdir "$RUNNER_TEMP/fingerprint-final/restoration-proof"
+          cp "$RUNNER_TEMP/fingerprint-final/restored/RESTORE.json" "$RUNNER_TEMP/fingerprint-final/restored/artifact-manifest.json" "$RUNNER_TEMP/fingerprint-final/restored/exporter.json" "$RUNNER_TEMP/fingerprint-final/restoration-proof/"
+      - name: Independently guard every semantic, control and prior-proof byte
+        run: python3 -I -B "$RUNNER_TEMP/fingerprint-final/source/run_final.py" --restored "$RUNNER_TEMP/fingerprint-final/restored" --output "$RUNNER_TEMP/fingerprint-final/output"
+      - name: Preserve all originals failures and independent proof
+        if: always()
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-final/source/export.py" --workspace "$RUNNER_TEMP/fingerprint-final" --archive "$RUNNER_TEMP/fingerprint-final/fingerprint-final-read.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-fingerprint-final-read
+          path: |
+            ${{ runner.temp }}/fingerprint-final/fingerprint-final-read.tar.gz
+            ${{ runner.temp }}/fingerprint-final/fingerprint-final-read.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
