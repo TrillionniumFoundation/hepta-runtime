@@ -18,9 +18,9 @@ remaining owners individually. The native profile's passing component tests
 do not qualify removal of those owners or production activation.
 
 The [selected public lifecycle](native/public_lifecycle_abi.md) additionally
-connects three configuration routes to the actual audit and result owners in an
-explicit serial stdio profile. Its fixed graph reuses existing canonical module
-paths and includes normal business-error recovery. It remains a separate
+connects nine tool routes to actual authority, audit, retained result and Async
+owners in an explicitly selected stdio profile. Its fixed graph reuses canonical
+module paths and includes ordinary producer, cancellation and EOF domains. It remains a separate
 qualification profile; all 125 production handlers and 10 owner categories are
 still recorded as `not_ported`.
 

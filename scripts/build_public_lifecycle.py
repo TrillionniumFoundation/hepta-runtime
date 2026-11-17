@@ -2,7 +2,7 @@
 # Copyright 2026 Muvon Un Limited
 # Copyright 2026 TrillionniumFoundation
 # SPDX-License-Identifier: Apache-2.0
-"""Build the selected public graph and verify both bounded HIA pack outputs."""
+"""Build the selected graph and verify all four bounded HIA pack outputs."""
 from pathlib import Path
 import argparse
 import json
@@ -101,15 +101,16 @@ def build(root, hepta, destination):
         require(builder.identity['commit'] == COMPILER and builder.compiler_sha256 == COMPILER_IMAGE,
                 'actual compiler identity changed')
         images = {}
-        for role in [*profile['image_order'], 'packer']:
-            row = profile['packer'] if role == 'packer' else profile['modules'][role]
+        selected = [(role, profile['modules'][role], False) for role in profile['image_order']]
+        selected += [('packer_' + str(row['part']), row, True) for row in profile['packers']]
+        for role, row, is_packer in selected:
             path = builder.compile('public-lifecycle-' + role, root / row['source'],
                                    standalone=None, buffer_profile=row['buffer_profile'])
             raw = regular(path)
             meta = json.loads(raw)
             image = regular(path.parent / meta['image'])
             require(sha(image) == row['image_sha256'], 'fresh image differs: ' + role)
-            if role != 'packer':
+            if not is_packer:
                 require(len(image) == row['image_bytes'], 'fresh image size differs')
                 images[role] = image
                 report['semantic_compiles'] += 1
@@ -118,31 +119,36 @@ def build(root, hepta, destination):
             report['modules'][role] = dict(path=str(path.relative_to(destination)), sha256=sha(raw))
         order = profile['image_order']
         sizes = [len(images[n]) for n in order]
-        contract = profile['segment_contract']
-        require(sizes == contract['complete_image_sizes'], 'fixed size table changed')
-        split = contract['split_index']
-        pm = report['modules']['packer']
         outputs, records = [], []
-        with NativeModule(destination / pm['path'], manifest_sha256=pm['sha256']) as module:
-            for stage, selected in enumerate((order[:split], order[split:])):
-                frame = b'HRISEG01' + struct.pack('<Q',stage) + struct.pack('<'+'Q'*len(order),*sizes)
-                frame += b''.join(images[n] for n in selected)
-                capacity = contract['output_bytes'][stage]
-                require(len(frame) <= 8388608 and capacity <= 8388608, 'original pack limit exceeded')
-                (destination / ('pack-' + str(stage) + '.input')).write_bytes(frame)
-                code, output, workspace = module.invoke_raw(frame, output_capacity=capacity,
-                    workspace_capacity=profile['packer_workspace_bytes'], output_fill=0xa5, workspace_fill=0x5a)
-                want = profile['pack_stages'][stage]
-                row = dict(stage=stage, result_u64=code, input_bytes=len(frame), input_sha256=sha(frame),
-                           output_bytes=len(output), output_sha256=sha(output), workspace_bytes=len(workspace),
-                           workspace_sha256=sha(workspace))
-                require(all(row[k] == want[k] for k in row), 'complete pack output/workspace differs')
-                (destination / ('pack-' + str(stage) + '.output')).write_bytes(output)
-                (destination / ('pack-' + str(stage) + '.workspace')).write_bytes(workspace)
-                (destination / ('pack-' + str(stage) + '.json')).write_bytes(encoded(row))
-                report['pack_invocations'] += 1
-                outputs.append(output)
-                records.append(row)
+        for packer in profile['packers']:
+            part, contract = packer['part'], packer['contract']
+            require(sizes == contract['complete_image_sizes'], 'fixed size table changed')
+            require(contract['input_magic'] == 'HRISEG03' and contract['input_header_bytes'] == 24 + 8*len(order),
+                    'fixed pack input contract changed')
+            pm = report['modules']['packer_' + str(part)]
+            with NativeModule(destination / pm['path'], manifest_sha256=pm['sha256']) as module:
+                for stage, (first, last) in enumerate(contract['ranges']):
+                    frame = b'HRISEG03' + struct.pack('<QQ', part, stage)
+                    frame += struct.pack('<'+'Q'*len(order), *sizes)
+                    frame += b''.join(images[n] for n in order[first:last])
+                    capacity = contract['output_bytes'][stage]
+                    require(len(frame) == contract['input_bytes'][stage] and len(frame) <= 8388608
+                            and capacity <= 8388608, 'original pack limit exceeded')
+                    name = f'pack-p{part}-s{stage}'
+                    (destination / (name + '.input')).write_bytes(frame)
+                    code, output, workspace = module.invoke_raw(frame, output_capacity=capacity,
+                        workspace_capacity=packer['workspace_bytes'], output_fill=0xa5, workspace_fill=0x5a)
+                    row = dict(part=part, stage=stage, artifact_prefix=name, image_range=[first, last],
+                        result_u64=code, input_bytes=len(frame), input_sha256=sha(frame),
+                        output_bytes=len(output), output_sha256=sha(output), workspace_bytes=len(workspace),
+                        workspace_sha256=sha(workspace))
+                    require(row == profile['pack_stages'][len(records)], 'complete pack output/workspace differs')
+                    for suffix, raw in (('output', output), ('workspace', workspace)):
+                        (destination / (name + '.' + suffix)).write_bytes(raw)
+                    (destination / (name + '.json')).write_bytes(encoded(row))
+                    report['pack_invocations'] += 1
+                    outputs.append(output)
+                    records.append(row)
         size = len(prefix) + sum(sizes)
         expected = bytearray(prefix)
         struct.pack_into('<QQ', expected,96,size,size)
@@ -180,4 +186,4 @@ if __name__ == '__main__':
     parser.add_argument('--build-root', required=True, type=Path)
     args = parser.parse_args()
     result = build(ROOT, args.hepta, args.build_root)
-    print(json.dumps({'build':str(result),'images':71,'packer_compiles':1,'pack_invocations':2},sort_keys=True))
+    print(json.dumps({'build':str(result),'images':111,'packer_compiles':2,'pack_invocations':4},sort_keys=True))

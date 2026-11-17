@@ -148,8 +148,11 @@ tk_intent_result_metadata_call:
     mov r15d, 106
     mov eax, 64
     ret
-tk_intent_metadata_address:
-    lea rdx, [rip + cache_word]
+tk_intent_provider_cache_load:
+    lea rax, [rip + intent]
+    cmp rdi, rax
+    jne fatal
+    mov rax, [rip + cache_word]
     ret
 tk_intent_config_drop:
     jmp ex_intent_config_drop

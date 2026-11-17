@@ -1,8 +1,8 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-// Actual execution-only outer lifecycle. Other registry routes and ResultIntent
-// are outside this qualification; source methods remain available for source checks.
+//! Actual public Read routes, outer call_tool and shared audit/result/Async owners.
+//! Index activation, group commit and Async producers are outside this reference.
 pub mod mcp;
 pub mod utils;
 use mcp::runtime;
@@ -174,6 +174,18 @@ pub(super) const TOOLS: &[&str] = &[
 	"hia_rollback",
 ];
 }
+fn route_request_status(service: &Reference,
+    params: Parameters<runtime::request_results::RequestStatusParams>,
+    context: RequestContext<RoleServer>)
+    -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, String>> + Send + '_>> {
+    Box::pin(service.request_status(params, context))
+}
+fn route_request_result(service: &Reference,
+    params: Parameters<runtime::request_results::RequestResultParams>,
+    context: RequestContext<RoleServer>)
+    -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, String>> + Send + '_>> {
+    Box::pin(service.request_result(params, context))
+}
 fn route_host_list(
 	service: &Reference,
 	params: Parameters<runtime::inspect::HostListParams>,
@@ -292,8 +304,102 @@ impl Reference {
 	) -> Result<String, String> {
 		runtime::execution::admit_shadow_intent(params).map_err(|error| error.to_string())
 	}
+	async fn request_status(
+		&self,
+		Parameters(params): Parameters<runtime::request_results::RequestStatusParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		let async_observation =
+			runtime::request_async::observation(scope.owner(), &params.request_id)
+				.await
+				.map_err(|error| error.to_string())?;
+		let request_id = params.request_id.clone();
+		let text = match runtime::request_results::request_status(scope.owner(), params).await {
+			Ok(text) => text,
+			Err(error) => {
+				let absent_at_first_observation = async_observation
+					.as_ref()
+					.and_then(|observation| observation.get("audit_metadata_available"))
+					== Some(&serde_json::Value::Bool(false));
+				if !absent_at_first_observation
+					|| runtime::request_audit::optional_observation(scope.owner(), &request_id)
+						.await
+						.map_err(|error| error.to_string())?
+						.is_some()
+				{
+					return Err(error.to_string());
+				}
+				serde_json::json!({
+					"request_id": request_id, "dispatch_state": "unknown", "result_state": "unavailable",
+					"inner_receipt_available": false, "automatic_retry": false,
+					"metadata_lookup_does_not_prove_delivery_or_business_success": true
+				})
+				.to_string()
+			}
+		};
+		let mut value: serde_json::Value =
+			serde_json::from_str(&text).map_err(|_| "request status unavailable".to_string())?;
+		if let Some(observation) = async_observation {
+			if let (Some(object), Some(extra)) = (value.as_object_mut(), observation.as_object()) {
+				object.extend(extra.clone());
+			}
+		}
+		scope
+			.annotate(value.to_string(), false)
+			.map_err(|error| error.to_string())
+	}
+	async fn request_result(
+		&self,
+		Parameters(params): Parameters<runtime::request_results::RequestResultParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		runtime::request_async::observation(scope.owner(), &params.request_id)
+			.await
+			.map_err(|error| error.to_string())?;
+		runtime::request_results::request_result(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+
+	async fn host_health(
+		&self,
+		Parameters(params): Parameters<runtime::health::HostHealthParams>,
+	) -> Result<String, String> {
+		runtime::health::host_health(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
 	fn tool_router() -> ToolRouter<Self> {
 		ToolRouter::new()
+.with_route(ToolRoute::new(Tool::new("request_start","Admit one background request from the explicit host_list, host_health or effective_config typed whitelist. Requires a private idempotency key: identical retries under the same verified HTTP credential or native stdio session return the original server-generated inner request_id without redispatch; changed arguments or policy refuse reuse. Durable private key hashes precede admission and effects. Independent requests have no runtime active-count ceiling; durable key history is never silently evicted or rebound. Response acknowledges admission, not dispatch completion or transport delivery. Use request_status/request_result for the inner id. A controller restart makes unfinished work unknown; no request is automatically replayed or resumed. Users sharing a private credential share this scope; no authenticated ChatGPT caller isolation. No arbitrary tools, commands, addresses or process ids.",Arc::new(Default::default()))
+.with_title("Start Idempotent Owned Read Request")
+.with_input_schema::<runtime::request_async::RequestStartParams>()
+.with_annotations(ToolAnnotations::from_raw(None,Some(false),Some(false),Some(false),Some(false))),route_request_start))
+.with_route(ToolRoute::new(Tool::new("request_cancel","Request cancellation of this controller's own background Rust future using the exact request_start inner request_id and the same verified private credential or native stdio session. Current policy must still authorize the immutable key binding. Never accepts an OS pid, command or arbitrary tool. Cancellation does not kill arbitrary processes or prove remote work stopped; effects started before cancellation may continue. Result settlement cannot be cancelled and late cancellation never discards a retained original result. Missing futures after controller restart remain unknown and are never recreated or replayed.",Arc::new(Default::default()))
+.with_title("Cancel Owned Read Request Future")
+.with_input_schema::<runtime::request_async::RequestCancelParams>()
+.with_annotations(ToolAnnotations::from_raw(None,Some(false),Some(false),Some(true),Some(false))),route_request_cancel))
+.with_route(ToolRoute::new(Tool::new("request_history","Read bounded redacted dispatch metadata owned by the verified private HTTP operator credential; the same credential resumes its retained metadata after reconnect or controller restart. All users sharing that credential share this scope; this is not authenticated ChatGPT caller isolation. Stdio remains native-session-only. Independent retained-record cursors; server request identity, canonical tool name, timing and observed status only. Unknown effects must never be replayed automatically. Records prove neither delivery nor business success. Transport-invalid requests and facade-local refusals are outside native dispatch history.",Arc::new(Default::default()))
+.with_title("Read Credential or Native Session Request History")
+.with_input_schema::<runtime::request_audit::RequestHistoryParams>()
+.with_annotations(ToolAnnotations::from_raw(None,Some(true),Some(false),Some(true),Some(false))),route_request_history))
+.with_route(ToolRoute::new(Tool::new("request_status","Read dispatch and bounded original-result retention state by an exact server-generated request id owned by the verified private HTTP credential or this stdio native session. Never accepts caller-selected owner. Retention currently supports only host_list, host_health and effective_config validated DTO results; other tools, history and result lookup are metadata-only. Configuration changes revoke retained-result access. Unknown, unavailable or overflow does not prove an effect failed; never replay automatically. Does not prove delivery, business completion, ChatGPT caller isolation or early-return asynchronous execution.",Arc::new(Default::default()))
+.with_title("Read Owned Request Status")
+.with_input_schema::<runtime::request_results::RequestStatusParams>()
+.with_annotations(ToolAnnotations::from_raw(None,Some(true),Some(false),Some(true),Some(false))),route_request_status))
+.with_route(ToolRoute::new(Tool::new("request_result","Page immutable serialized original native CallToolResult bytes using an exact server-generated owned request id and independent byte offset. At most 16384 bytes per page, base64 plus full SHA256; at most 64 KiB retained per result. Only validated host_list, host_health and effective_config DTO successes are retained; arbitrary output, errors, request parameters and credentials are not stored. Original boundary includes the server request identity before retention acknowledgement and transport-version normalization. The same verified private HTTP credential may resume after restart only while the complete current policy binding is unchanged; stdio remains native-session-only. Unknown, overflow, expired or unretained results are refused without replay. Not universal DC get_tool_result equivalence, early-return async start, business completion or authenticated ChatGPT caller isolation.",Arc::new(Default::default()))
+.with_title("Read Bounded Original Request Result")
+.with_input_schema::<runtime::request_results::RequestResultParams>()
+.with_annotations(ToolAnnotations::from_raw(None,Some(true),Some(false),Some(true),Some(false))),route_request_result))
 .with_route(ToolRoute::new(Tool::new("host_list","List configured runtime host names and their capability flags. SSH destinations and credentials are never accepted from tool input.",Arc::new(Default::default()))
 .with_title("Host List")
 .with_input_schema::<runtime::inspect::HostListParams>()
@@ -306,6 +412,9 @@ impl Reference {
 .with_title("Execution Shadow Admission")
 .with_input_schema::<runtime::execution::ShadowExecutionIntentParams>()
 .with_annotations(ToolAnnotations::from_raw(None,Some(true),Some(false),Some(true),Some(false))),route_execution_shadow_admit))
+.with_route(ToolRoute::new(Tool::new("host_health","Measure authenticated SSH reachability and command roundtrip latency for one configured host alias, including authentication and remote startup. Uses a fixed bounded read-only challenge and a 10-second deadline. No caller-supplied network destinations or commands; failures are redacted. This is not ICMP ping or pure network RTT.",Arc::new(Default::default()))
+.with_title("Configured Host Health").with_input_schema::<runtime::health::HostHealthParams>()
+.with_annotations(ToolAnnotations::from_raw(None,Some(true),Some(false),Some(true),Some(false))),route_host_health))
 	}
 }
 impl ServerHandler for Reference {
@@ -605,6 +714,8 @@ fn main() {
 			{
 				let _ = service.waiting().await;
 			}
+			runtime::request_async::freeze_admission();
+			runtime::request_async::shutdown().await;
 		});
 }
 
@@ -616,4 +727,75 @@ impl Reference {
 				.ok()
 				.map(Arc::new),
  } }
+}
+
+fn route_host_health(
+	service: &Reference,
+	params: Parameters<runtime::health::HostHealthParams>,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, String>> + Send + '_>> {
+	Box::pin(service.host_health(params))
+}
+
+fn route_request_history(service: &Reference, params: Parameters<runtime::request_audit::RequestHistoryParams>, context: RequestContext<RoleServer>) -> std::pin::Pin<Box<dyn std::future::Future<Output=Result<String,String>> + Send + '_>> { Box::pin(service.request_history(params,context)) }
+impl Reference {
+	async fn request_history(
+		&self,
+		Parameters(params): Parameters<runtime::request_audit::RequestHistoryParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_audit::history(scope.owner(), params)
+			.await
+			.and_then(|result| scope.annotate(result, false))
+			.map_err(|error| error.to_string())
+	}
+
+
+}
+
+fn route_request_start(service:&Reference,params:Parameters<runtime::request_async::RequestStartParams>,context:RequestContext<RoleServer>)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<String,String>>+Send+'_>>{Box::pin(service.request_start(params,context))}
+impl Reference {
+	async fn request_start(
+		&self,
+		Parameters(params): Parameters<runtime::request_async::RequestStartParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_async::start(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
+	}
+
+}
+
+fn route_request_cancel(service:&Reference,params:Parameters<runtime::request_async::RequestCancelParams>,context:RequestContext<RoleServer>)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<String,String>>+Send+'_>>{Box::pin(service.request_cancel(params,context))}
+impl Reference {
+	async fn request_cancel(
+		&self,
+		Parameters(params): Parameters<runtime::request_async::RequestCancelParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_async::cancel(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
+	}
+
 }

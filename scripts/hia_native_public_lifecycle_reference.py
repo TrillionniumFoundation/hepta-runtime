@@ -12,10 +12,10 @@ from public_lifecycle_registry import encoded, regular, require, sha
 def inputs(root):
     root = Path(root)
     index = json.loads(regular(root / 'tests/hia_native/public_lifecycle/reference.json'))
-    require(index['schema'] == 'hepta.public-lifecycle.original-project.v1'
-            and index['bin'] == 'hia-public-eligible-original'
-            and len(index['files']) == 38 and len(index['original_blocks']) == 274
-            and index['locked_packages'] == 138
+    require(index['schema'] == 'hepta.public-lifecycle.original-project.v2'
+            and index['bin'] == 'hia-public-async-original'
+            and len(index['files']) == 42 and len(index['original_blocks']) == 315
+            and index['locked_packages'] == 140
             and index['all_actual_original_functions_unchanged'] is True
             and all(index[k] is False for k in ('async_cancellation_qualified',
                                               'production_activated', 'whole_runtime_replaced')),
@@ -39,7 +39,7 @@ def inputs(root):
                 and fragment == target[row['target_offset']:row['target_offset'] + row['bytes']],
                 'complete original function block differs')
     lock = tomllib.loads(files['Cargo.lock'].decode())
-    require(sum('checksum' in p for p in lock['package']) == 138, 'locked package domain changed')
+    require(sum('checksum' in p for p in lock['package']) == 140, 'locked package domain changed')
     return index, files
 
 
@@ -51,10 +51,10 @@ def prepare(root, project):
         path = project / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(raw)
-    receipt = dict(schema='hepta.public-lifecycle.original-project.v1',
+    receipt = dict(schema='hepta.public-lifecycle.original-project.v2',
                    index_sha256=sha(regular(Path(root) / 'tests/hia_native/public_lifecycle/reference.json')),
                    files={k:dict(bytes=len(v), sha256=sha(v)) for k,v in files.items()},
-                   original_blocks=274, locked_packages=138,
+                   original_blocks=315, locked_packages=140,
                    actual_outer_call_tool_included=True, original_index_present_branch_qualified=False)
     (project / 'reference-inputs.json').write_bytes(encoded(receipt))
     check(root, project)
@@ -75,9 +75,9 @@ def check(root, project):
     for name, raw in expected.items():
         require(regular(project / name) == raw, 'materialized original changed: ' + name)
     receipt = json.loads(regular(project / 'reference-inputs.json'))
-    require(receipt == dict(schema='hepta.public-lifecycle.original-project.v1',
+    require(receipt == dict(schema='hepta.public-lifecycle.original-project.v2',
         index_sha256=sha(regular(Path(root) / 'tests/hia_native/public_lifecycle/reference.json')),
         files={k:dict(bytes=len(v), sha256=sha(v)) for k,v in expected.items()},
-        original_blocks=274, locked_packages=138, actual_outer_call_tool_included=True,
+        original_blocks=315, locked_packages=140, actual_outer_call_tool_included=True,
         original_index_present_branch_qualified=False), 'original project receipt differs')
     return receipt

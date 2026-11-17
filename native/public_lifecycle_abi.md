@@ -1,119 +1,156 @@
-# Serial public lifecycle graph
+# Selected public lifecycle graph
 
-This selected graph implements the serial stdio lifecycle used by
-`host_list`, `effective_config`, and `execution_shadow_admit`. It is a callable
-qualification graph. The production registry remains unchanged: all 125
-production handlers and all 10 owner categories remain `not_ported`.
-Production activation, complete runtime replacement, and old-stack removal are
-false. A component count is not a count of migrated production handlers.
+The selected stdio graph exposes nine original tool names: `host_list`,
+`effective_config`, `execution_shadow_admit`, `host_health`, `request_status`,
+`request_result`, `request_history`, `request_start`, and `request_cancel`.
+Its finite public qualification includes actual SDK parsing, authority, audit,
+retention, asynchronous producer work, ordinary effect-fence waits, public
+cancellation and EOF. It does not activate the production registry. All 125
+production handlers and all 10 owner categories remain `not_ported`;
+production activation, whole-runtime replacement and old-stack removal are
+false. Module and case counts are not production migration counts.
 
-## Selected sources and fixed boundary
+## Canonical source and build boundary
 
-`public_lifecycle_graph.json` selects 71 distinct HIA images for 86 fixed roles.
-Forty images reuse existing canonical files. Thirty-one required images and one
-HIA packer have one selected file each in `native/`; private historical source
-trees and duplicate dependency directories are not part of this import.
-The graph records every source/image identity and each fixed address or size
-slot. The native prefix is assembled from `public_lifecycle_adapter.S` and its
-single `public_lifecycle_metadata.S` include. HIA performs all business policy;
-the prefix owns fixed allocation, invocation, continuation custody, descriptors,
-and transport. Two bounded HIA pack calls construct the complete executable;
-neither call exceeds the existing 8 MiB input/output limits.
+`public_lifecycle_graph.json` selects 111 distinct HIA images for 128 fixed
+roles and 135 address/size patches. Each selected image has one source path in
+`native/`. Sixty-eight selected source files are byte-identical to existing
+canonical sources. The former public mapper and packer are replaced, rather
+than retained as alternate versions. Private stage directories, duplicated
+dependency trees, compiled images and historical captures remain outside this
+repository in the verified archive identified by `public_lifecycle_evidence.json`.
 
-The public transport accepts JSON-RPC lines through stdio. Only the three tool
-names above are within this qualification. Installed configuration comes from
-trusted startup arguments, and caller authority comes from the native session
-owner. Tool arguments cannot supply an owner, policy binding, installed config,
-or private capability. Repeated initialization remains part of the fixed SDK
-projection. Canonical JSON-RPC ID and protocol version stay with the dispatcher.
+The fixed boundary is `scripts/public_lifecycle_adapter.S` with one include,
+`scripts/public_lifecycle_metadata.S`. Expanding that include must produce the
+exact qualified assembly SHA. HIA makes business and lifecycle decisions;
+fixed assembly provides allocation, actual syscalls, descriptor and reference
+custody, fixed child invocation, and transport.
 
-The internal typed response seam retains complete `CallToolResult`/`ErrorData`
-bodies. `HRPCTYP1` is the trusted child response; `HRPCRES1` carries the completed
-dispatcher response. The private response type is preserved until final SDK
-wire normalization. A complete result with `isError=true` remains Complete.
+Two HIA prefix packers produce four complete, checked fragments. Every input
+starts with `HRISEG03`, little-endian u64 part and stage, and the complete 111
+image-size table. Part 0 emits prefix bytes `[0, 94208)` without images. Part 1
+emits the remainder of the 190,282-byte prefix followed by image ranges
+`[0, 43)`, `[43, 90)`, and `[90, 111)`. The full prefix size determines every
+image address, including addresses stored in the first fragment. No fixed
+patch crosses a fragment boundary. Each call retains the original 8 MiB input
+and output limit; compiler operation and function limits are unchanged.
+The builder verifies every input, output and workspace, then compares the
+concatenated ELF against an independent reconstruction of every prefix patch
+and all 111 images. A successful build does not itself claim runtime qualification.
 
-## Effect and ownership order
+Installed configuration comes from trusted startup arguments. Session identity,
+owner authority, root capabilities, policy binding and private handles cannot
+be supplied through tool arguments. Canonical JSON-RPC ID and protocol version
+remain owned by the SDK dispatcher. The internal typed result seams preserve
+`HRPCTYP1` and `HRPCRES1`; a Complete result with `isError=true` remains Complete.
+Top-level arguments are a JSON object, so a `$serde_json::private::RawValue` key
+there remains an ordinary map key. Nested SDK Values retain the locked Value
+parser's behavior.
 
-The outer caller resolves and binds authority before request admission. It
-creates the actual audit Ticket, admits a ResultIntent for the two eligible
-tools, invokes the tool, attaches request identity, applies the final wire
-budget, classifies completion, finishes the actual audit Ticket, completes or
-drops the Intent, and attaches the retention acknowledgement. Cancellation is
-observed at the original two separate decision points. This serial qualification
-does not prove concurrent cancellation or a general asynchronous scheduler.
+## Shared ownership and request order
 
-An early ResultIntent business error preserves the original error result and
-its audit identity/acknowledgement. Cleanup drops the Intent and conversion
-owner, allowing the next request in the same process. EOF retires remaining
-Tickets in their fixed service order before shared owners and configuration.
+The original outer `call_tool` ordering remains intact: resolve authority,
+perform any early Async target observation, begin the actual audit Ticket,
+admit an Intent when eligible, invoke the handler, attach request identity,
+reserve final wire space, inspect cancellation, finish the Ticket and attach
+the acknowledgement. Read handlers retain their separate inner authority
+resolution and Async observation. The two observations are not interchangeable.
+History is a metadata observer and does not create its own outer Ticket.
 
-The repair is one fixed assembly operand:
-`mov edi, OFFSET FLAT:tk_CV_BYTES`. Its prior forward `.equ` operand was decoded
-as a memory load. The explicit immediate supplies the allocation size when an
-early error first needs the metadata conversion workspace. Existing cleanup
-logic and all 71 semantic images are unchanged. The direct bridge regression
-uses explicit synthetic child results and is reported separately from actual
-ResultIntent execution.
+`request_start` and `request_cancel` use private mapper routes 10 and 11,
+dispatcher child 6 and mapper child 14. Both remain ineligible for an outer
+ResultIntent while retaining their own outer request identity. Start performs
+the original second authority resolution and effect-owner admission before
+calling the shared start engine. A started producer has its own Binding,
+Registry Slot, Ticket and private Intent. Its request ID is distinct from the
+outer Start/Read/Cancel request IDs. Reusing an idempotency key returns the
+original producer identity without dispatching another producer.
 
-## Reproducible qualification and retained history
+Pool callback role 16 owns the fence acquisition's persistent permit escrow.
+The caller and worker hold separate references; successful take transfers the
+permit only after the worker reference has retired. Dropping the caller
+releases only its own reference. The final reference performs the actual
+permit drop and resource destruction. Existing pool callback roles 11–15 keep
+their original Ticket/Intent/start resource duties.
 
-The native normal suite executes 64 processes and 359 requests, checks every
-complete wire response against retained original bytes, and validates complete
-live filesystem snapshots. The original recipe performs a fresh Rust 1.95
-locked build of the selected 38-file reference, checks 274 unchanged original
-blocks and all 138 locked crate archives and installed source members, then
-executes 64 new original processes with 359 requests against this invocation's
-complete native captures. The original recipe starts no new native processes.
-It binds the retained 64-process/359-request native domain to the current source,
-images, fixture corpus, completed native phase and external CI seal. Both
-implementations use the same fixture pathname in sequence. Complete
-request/response streams, snapshots, process exit records, and typed retained
-payload bytes are reconstructed and compared before and after the replay.
+Public SDK cancellation sets the public token and suppresses its response; it
+does not impersonate a producer Registry cancellation or immediately destroy
+the pending handler. EOF has its own five-second grace and actual runtime-drop
+path. Runtime teardown releases Read and Metadata caller guards, joins the
+shared blocking pool, checks the Ticket service gate, then retires Intent and
+Ticket globals. This ordering allows detached ResultComplete callbacks to
+finish before their resource owners disappear.
 
-Fifteen data-only rejection controls check the native admission and its complete
-streams, then require full restoration and repeat admission. These controls do
-not execute either implementation. The 180-second recipe deadline and all
-native and original cases remain unchanged. The two earlier CI timeouts remain
-failures in the external evidence archive.
+The metadata allocation repair remains an explicit
+`mov edi, OFFSET FLAT:tk_CV_BYTES`. Ordinary early ResultIntent errors can
+return their original response and allow a following request. The direct
+bridge unit exercises the selected allocation/drop body with an explicit
+synthetic child, separately from actual public service qualification.
 
-Two cases use an ordinary pre-existing application file at the results-directory
-pathname. They require the original business error, remove that owned fixture,
-and require subsequent legal calls to succeed in the same process. This suite
-does not intercept syscalls, inject kernel failures, or contact remote hosts.
-No historical execution is counted as a fresh execution.
+## Executable qualification gates
 
-Before projecting nondeterministic fields, each snapshot checks real directory
-identities and complete anchor hashes; bounds clock values by observations; and
-requires raw request ID, owner, tool, and accepted time to agree across audit
-and retained records. Payload Base64, length, SHA, and complete pre-ack typed
-serialization are checked. These are identity-consistency checks, not an
-independent entropy-source qualification. Completed fixtures are retired only
-after all captured bytes and metadata have been verified.
+The portable native gate retains the earlier 64-process, 359-request normal
+corpus for the original three routes, including two ordinary file-conflict
+recovery cases. A separate finite nine-tool suite contains 22 service processes
+and 348 SDK requests: two complete preflight/protocol cases, fourteen ordinary
+producer and business-refusal cases, and six Pending/cancel/EOF cases. Together
+these gates run 86 native processes and 707 requests. These are test-domain
+sizes; results are reported only after the current source has actually run.
 
-The prior repair handoff SHA is
-`4ed453bbe3a3c795a1359912bef0334549e2e3aaabb4bedd14c646499734410c`.
-Its complete remote archive SHA is
-`1dc8739b7e91dfb0981cb1e4cb350a4e20345643c00d77bc62aa5fdf87be13e8`.
-The separate local complete-capture archive SHA is
-`30a4a706d0b58e8b0d9de291e7727bc8ac1e41c835764e2d989066272693f3cf`.
-Those archives retain old failures and actual repair observations outside the
-repository. Their 64 paired processes/359 requests per side are historical
-evidence for this repair, not a replacement for the portable gates.
+The Rust-only consumer freshly builds the selected 42-file original reference
+with Rust 1.95, verifies 315 unchanged original blocks and all 140 locked
+packages, then executes the same 86 original processes against the current
+invocation's native captures. It starts **zero new native processes**. The
+retained native build, source, cases, complete process captures and external
+workflow seal are bound before replay and rechecked afterward. Shard,
+aggregate-pipeline and explicitly owned local invocations remain separate
+validated contexts. Conflicting workflow ownership is rejected.
 
-## Remaining integration work
+The nine-tool checks reconstruct every request/reply byte, filesystem snapshot,
+audit copy, Binding, Outcome and retained typed result. Inner producer identity
+and outer request identities are independently joined before normalization.
+Key/request/policy hashes, directory and shard identities, anchor hashes,
+complete Base64 payloads, page offsets and payload hashes are checked. Dynamic
+timestamps are normalized only after single-side identity equality and observed
+time bounds succeed. This is not independent entropy-source qualification.
 
-This graph does not activate production routes, HTTP, unrestricted concurrent
-owners, async cancellation, active Index publication, the remaining handlers,
-or whole-runtime replacement. `OwnerScope::annotate` is not supplied by the
-Authority subtree. Public Read and Async owners require their own final shared
-state and lifecycle integration. Public Read must retain its outer pre-typed
-Async observation and its separate handler observation; direct invocation of
-the result store is not an equivalent public reference.
+After each owned service has exited, the checker compares every remaining
+fixture entry and byte with its complete EOF/fence capture and finishes semantic
+reconstruction before removing the temporary fixture. The retirement receipt
+binds the checker source, actual PID, complete streams and snapshot hashes.
+Later admission requires both this exact receipt and absence of the retired
+trees. Captured device/inode identities still participate in all original
+identity and anchor checks; restored artifact files may have new inodes.
+Twenty-seven data-only controls cover copied captures and rejection of changed
+live bytes, snapshots, streams, ownership, source pins and retirement state.
 
-The repository still contains older independently qualified modules needed by
-existing graphs. Final convergence requires selecting the production call
-graph, repacking every dependent image against the selected modules, replacing
-every registry/CI reference, proving the complete public behavior, and only then
-removing superseded sources. Existing qualification records must not be relabeled
-after a dependency change. Historical sources/evidence belong in verified
-external archives; they must not be copied back as parallel stage trees.
+The Pending cases hold an ordinary lock belonging to their own fixture and
+observe the owned child's PID/TID, wait channel and matching lock inode. They
+retain unrelated replies while Start waits, distinguish cancelled response
+suppression from EOF, and keep the lock held beyond the actual EOF grace. No
+syscall interception, injected kernel failure or third-party host operation is
+used. Seventeen data-only projection controls reject damaged Pending evidence.
+Sixteen admission controls reject changed provenance and both complete stream
+domains, restore all bytes, and repeat admission. Process deadlines remain
+180 seconds and workflow job deadlines remain 15 minutes.
+
+## Frozen evidence and remaining work
+
+The external nine-tool handoff records 22 actual Original/native process pairs,
+348 SDK requests per side and 11 producer starts per side. Its independent
+340,999,033-byte archive contains 14,041 regular files with 1,309,334,272 raw
+bytes and a full byte/metadata/link verification. It retains failed attempts,
+including the corrected Pending checker failure. Unobserved duplicate Cargo
+intermediates are explicitly excluded; all selected source, compiler, binary,
+actual stream and process evidence is retained. This historical evidence does
+not replace the current portable gates.
+
+Unrestricted parallel handlers, the full Tokio executor and blocking pool,
+active Archive Index publication, HTTP sockets/sessions, all other production
+handlers and complete startup/shutdown ownership remain unqualified. New
+scheduler, database or HTTP components must be integrated and qualified against
+this graph before its closure flags change. Older independent repository
+profiles still have separate source-bound gates; removing them requires a
+selected production owner graph and complete replacement evidence. They are
+not counted as completed migrations and must not be imported again as stage
+trees during final consolidation.

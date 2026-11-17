@@ -7,6 +7,8 @@
 
 # Same borrowed query ABI as the former leaf projection. This drives continuation.
 ex_config_projection:
+    jmp pf_config_query
+pf_config_owned:
     push rbx
     push rbp
     push r12
@@ -27,7 +29,7 @@ ex_config_projection:
     jne fatal
     cmp qword ptr [rdi + 8], 1
     jb fatal
-    cmp qword ptr [rdi + 8], 12
+    cmp qword ptr [rdi + 8], 13
     ja fatal
     mov [r15 + 832], rdi
     mov [r15 + 840], rsi
@@ -89,8 +91,63 @@ ex_intent_config_call:
     pop rbx
     ret
 
-# IG remains alive here. Transfer the unique cache word before backend retirement.
-# Config is borrowed; its actual EOF destruction belongs to the public root.
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Stable public Config metadata provider; no shared arena pointer across IO.
+ex_public_file_metadata:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 136
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, [r15 + EX_CONFIG_IG]
+    xor ebx, ebx
+    test r14, r14
+    jnz ex_public_file_metadata_shared
+    mov rbx, rsp
+    mov rdi, rbx
+    xor eax, eax
+    mov ecx, 16
+    rep stosq
+    mov rax, 0x3130474954495248
+    mov [rbx], rax
+    mov rax, [r15 + EX_META_LOCAL]
+    cmp rax, 2
+    ja fatal
+    mov [rbx + 96], rax
+    mov r14, rbx
+    jmp ex_public_file_metadata_call
+ex_public_file_metadata_shared:
+    cmp [r14 + 128], r15
+    jne fatal
+ex_public_file_metadata_call:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    call tk_intent_file_metadata
+    test rbx, rbx
+    jz ex_public_file_metadata_done
+    mov rcx, [rbx + 96]
+    cmp rcx, 2
+    ja fatal
+    mov [r15 + EX_META_LOCAL], rcx
+ex_public_file_metadata_done:
+    add rsp, 136
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# The IG and SG remain alive. All Read workers joined before this callback.
+# Config is borrowed; its destruction remains with the public root.
 ex_intent_config_drop:
     push rbx
     push r12
@@ -103,10 +160,8 @@ ex_intent_config_drop:
     jne tk_intent_contract_failure
     cmp qword ptr [rbx + 784], 0
     jne tk_intent_contract_failure
-    call tk_intent_metadata_address
-    cmp [rbx + EX_META_ADDRESS], rdx
-    jne tk_intent_contract_failure
-    mov rax, [rdx]
+    mov rdi, r12
+    call tk_intent_provider_cache_load
     cmp rax, 2
     ja tk_intent_contract_failure
     mov [rbx + EX_META_LOCAL], rax
@@ -121,29 +176,51 @@ ex_intent_config_drop_done:
     pop rbx
     ret
 
-# Called after the fixed Ticket root was constructed, before any request.
+# Bind the original Config and its startup cache before admitting any request.
+# Exactly one IG and one Read boundary share the existing Ticket service.
 ex_bind_intent:
     push rbx
+    push r12
+    sub rsp, 8
     mov rdi, [rbx + 16]
     call tk_intent_global_create
     test rax, rax
     jz fatal
-    cmp qword ptr [rax + 128], 0
+    mov r12, rax
+    cmp qword ptr [r12 + 128], 0
     jne fatal
     cmp qword ptr [r15 + EX_CONFIG_IG], 0
     jne fatal
-    mov [rax + 128], r15
-    mov [r15 + EX_CONFIG_IG], rax
-    mov rdi, rax
-    call tk_intent_metadata_address
-    cmp qword ptr [rdx], 0
-    jne fatal
-    mov rax, [r15 + EX_META_LOCAL]
-    cmp rax, 2
+    mov [r12 + 128], r15
+    mov [r15 + EX_CONFIG_IG], r12
+    mov rdi, r12
+    call tk_intent_provider_cache_load
+    test rax, rax
+    jnz fatal
+    mov rsi, [r15 + EX_META_LOCAL]
+    cmp rsi, 2
     ja fatal
-    mov [rdx], rax
-    mov [r15 + EX_META_ADDRESS], rdx
+    mov rdi, r12
+    call tk_intent_provider_cache_publish
+    test rax, rax
+    jnz fatal
+    mov [r15 + EX_META_ADDRESS], r12
     mov qword ptr [r15 + EX_META_LOCAL], 0
+    mov rdi, [rbx + 16]
+    call tk_read_boundary_create
+    test rax, rax
+    jz fatal
+    mov rdi, [rbx + 16]
+    mov rsi, r12
+    call tk_async_global_create
+    test rax, rax
+    jz fatal
+    mov rdi, [rbx + 16]
+    call tk_metadata_boundary_create
+    test rax, rax
+    jz fatal
+    add rsp, 8
+    pop r12
     pop rbx
     ret
 
@@ -155,10 +232,17 @@ ex_map_intent:
     mov rcx, rdx
     mov rdx, rsi
     mov rsi, rdi
+    mov rdi, [r15 + PIC_ROOT_SLOT]
+    test rdi, rdi
+    jz pic_map_intent_canonical
+    call intent_caller_call
+    jmp pic_map_intent_done
+pic_map_intent_canonical:
     mov rdi, [r15 + EX_CONFIG_IG]
     test rdi, rdi
     jz fatal
     call tk_intent_owner_call
+pic_map_intent_done:
     cmp eax, 80
     jne fatal
     jmp ex_mapper_ack
@@ -173,6 +257,8 @@ ex_map_metadata:
 
 # request, bytes, reply, capacity. The DTO and metadata calls are serial.
 ex_metadata_call:
+    jmp pic_public_metadata
+pf_metadata_owned:
     push rbx
     push rbp
     push r12

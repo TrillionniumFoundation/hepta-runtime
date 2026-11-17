@@ -17,27 +17,31 @@ deletion of the original runtime remain incomplete.
 ## Selected public call lifecycle
 
 The [public lifecycle graph](public_lifecycle_abi.md) composes the existing
-`host_list`, `effective_config` and `execution_shadow_admit` routes with the
-trusted session owner, installed configuration, actual audit Ticket, retained
-result Intent, typed response metadata and final wire rendering. It is an
-explicitly selected serial stdio profile. The 71 semantic images have one source
-path each in [the fixed graph](public_lifecycle_graph.json); 40 existing sources
-are reused and 31 selected semantic sources are added. One further HIA module
-packs the executable in two bounded calls. Historical dependency directories,
+`host_list`, `effective_config`, `execution_shadow_admit`, `host_health`,
+`request_status`, `request_result`, `request_history`, `request_start` and
+`request_cancel` routes with trusted session authority, installed configuration,
+actual audit Tickets, retained result Intents and shared Async producers. The
+111 semantic images have one source path each in
+[the fixed graph](public_lifecycle_graph.json); 68 selected sources are reused
+byte-for-byte. Two HIA packers produce four bounded output fragments.
+Historical dependency directories,
 intermediate variants and executable evidence are not copied into this tree.
 
 The metadata bridge now loads its conversion workspace size as an immediate
 constant. An early ResultIntent business error can therefore return its original
 response, retire its owner and allow the next request to continue. The frozen
 repair comparison covers 64 native/original process pairs and 359 requests per
-side, including two ordinary file-conflict recovery cases. A separate direct
+side, including two ordinary file-conflict recovery cases. The new independently
+sealed nine-tool domain adds 22 pairs, 348 requests per side and 11 actual
+producer starts per side, with ordinary fence Pending/cancel/EOF cases. A separate direct
 bridge unit checks the error return and subsequent successful calls. This scope
 uses ordinary local files and normal requests; it does not add syscall
 interception, fault injection or external-host tests.
 
-The portable gate builds all 71 semantic images and the packer, executes two
-native suites, then freshly compiles one Rust 1.95 reference with 274 unchanged
-original blocks and 138 locked packages. Its paired replay compares complete
+The portable gate builds all 111 semantic images and both packers, executes three
+native suites, then freshly compiles one Rust 1.95 reference with 315 unchanged
+original blocks and 140 locked packages. Its paired replay starts no new native
+processes and compares complete
 wire responses and filesystem records, including the original outer `call_tool`
 ordering. The new native partition and original group retain the 180-second
 process and 15-minute job limits. A completed focused run is separate from the

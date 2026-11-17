@@ -6,6 +6,93 @@
  */
 .intel_syntax noprefix
 .section .text
+.equ ASD_STOPPING, 152
+.equ ASD_ADMISSION, 160
+.equ ASD_LIFECYCLE, 168
+.equ ASD_WORK, 65536
+.equ ASD_INPUT, 65536
+.equ ASD_OUTPUT, 65792
+.equ ASD_ACTION, 66048
+.equ ASD_WAITER, 66240
+.equ ASD_TIMER, 66248
+.equ ASD_SEQUENCE, 66256
+.equ ASD_KIND, 66264
+.equ ASD_INPUT_BYTES, 66272
+.equ ASD_TIMESPEC, 66304
+.equ ASD_EXPIRATIONS, 66336
+.equ ASD_CONTEXT, 69632
+.equ ST_E_MAGIC, 0x3130574354535248
+.equ ST_E_REFS, 8
+.equ ST_E_SERVICE, 16
+.equ ST_E_ROLE, 24
+.equ ST_E_RESOURCE, 32
+.equ ST_E_IG, 40
+.equ ST_E_RECORD, 48
+.equ ST_AP_PENDING, 152
+.equ ST_APR_ESCROW, 176
+.equ ST_CALL_WAITER, 160
+.equ ST_CALL_DROP, 168
+.equ ST_CALL_ESCROW, 176
+.equ ST_CALL_TICKET, 184
+.equ ST_CALL_INTENT, 192
+.equ ST_CALL_TASK, 200
+.equ ST_CALL_MODE, 208
+.equ ST_CALL_ACTION, 256
+.equ ST_CALL_CLOCK_SEQUENCE, 352
+.equ ST_CALL_CLOCK_INPUT, 8192
+.equ ST_CALL_CLOCK_REPLY, 8320
+.equ ST_CALL_CLOCK_WORK, 8448
+.equ ST_CALL_BUNDLE, 9600
+.equ ST_CALL_ESCROW_META, 9640
+.equ ST_CALL_ESCROW_DESCRIPTOR, 9680
+.equ ST_CALL_DROP_FRAME, 9728
+.equ tk_ASY_G_STOPPING, 152
+.equ FPC_MAGIC, 0x3130544350465248
+.equ FPC_BYTES, 4096
+.equ FPC_ROOT, 8
+.equ FPC_TASK, 16
+.equ FPC_OWNER, 24
+.equ FPC_GENERATION, 32
+.equ FPC_ROLE, 40
+.equ FPC_SEQUENCE, 48
+.equ FPC_OUTPUT, 56
+.equ FPC_CAPACITY, 64
+.equ FPC_INPUT, 72
+.equ FPC_LENGTH, 80
+.equ FPC_STATE, 88
+.equ FPC_TRANSFERRED, 104
+.equ FPC_RAW_LENGTH, 112
+.equ FPC_DROPPED, 120
+.equ FPC_META, 128
+.equ FPC_TOKEN, 192
+.equ FPC_AP_PENDING, 144
+.equ FPC_APR_RESOURCE, 160
+.equ FPC_APR_KIND, 168
+.equ FPC_TICKET_GATE, 24712
+.equ PI_G_COUNT, 56
+.equ PI_G_GENERATION, 64
+.equ PI_G_STOPPING, 72
+.equ PI_G_UNSPAWNED, 80
+.equ PI_T_KIND, 128
+.equ PI_T_GENERATION, 136
+.equ PI_T_INPUT, 144
+.equ PI_T_INPUT_LEN, 152
+.equ PI_T_INPUT_BYTES, 160
+.equ PI_T_OWNED, 168
+.equ PI_T_SLOT, 176
+.equ PI_T_TICKET, 184
+.equ PI_T_INTENT, 192
+.equ PI_T_WAIT, 200
+.equ PI_T_CALLER, 208
+.equ PI_T_POLL, 216
+.equ PI_T_DROP, 224
+.equ PI_T_WAKE, 232
+.equ PI_T_RESULT, 240
+.equ PI_T_SHUTDOWN, 248
+.equ PI_T_CONTEXT, 256
+.equ PI_T_CONTEXT_BYTES, 264
+.equ PI_T_HEALTH, 336
+.equ PI_ROOT_HEALTH, 4072
 .equ ROOT_INPUT_CAP, 16777216
 .equ ROOT_OUTPUT_CAP, 134217728
 .equ ROOT_WCAP, 268435456
@@ -140,6 +227,23 @@ config_bytes:
 
 /* Framing is fixed; the two HIA owners make all public protocol decisions. */
 frame_next:
+    jmp pf_loop
+pf_serial_frame_next:
+    mov rdi, r15
+    call ap_deadline
+    test eax, eax
+    jz ph_frame_live
+    mov rdi, r15
+    call public_async_abandon
+    jmp config_eof
+ph_frame_live:
+    mov rdi, r15
+    call public_async_next
+    test eax, eax
+    jnz mcp_resume
+    mov rax, [r15 + AP_SLOT]
+    cmp qword ptr [rax + 80], 0
+    jne config_eof
     mov rcx, [r15 + 816]
     test rcx, rcx
     jz frame_scan
@@ -283,6 +387,35 @@ invoke_connection:
     je direct_response
     cmp rdx, 5
     ja fatal
+    cmp rdx, 2
+    je ph_admit_current
+    cmp rdx, 3
+    je ph_notify_current
+    jmp mcp_resume
+ph_admit_current:
+    mov rdi, r15
+    mov rsi, rbx
+    mov rdx, [r15 + 904]
+    xor ecx, ecx
+    call public_async_admit
+    jmp mcp_resume
+ph_notify_current:
+    mov rcx, [rbx + 80]
+    mov r8, [rbx + 88]
+    cmp rcx, 256
+    jb fatal
+    cmp rcx, [r15 + 904]
+    ja fatal
+    mov rax, [r15 + 904]
+    sub rax, rcx
+    cmp r8, rax
+    ja fatal
+    add rcx, rbx
+    mov rdi, [r15 + AP_SLOT]
+    mov esi, 2
+    xor edx, edx
+    xor r9d, r9d
+    call ap_pool_call
     jmp mcp_resume
 direct_response:
     mov rdx, [rbx + 64]
@@ -306,6 +439,8 @@ config_eof_original:
     jmp owner_resume
 
 owner_resume:
+    cmp qword ptr [r15 + PF_PARENT_SLOT], 0
+    jne pf_private_owner
     mov qword ptr [r15 + 80], 0
     lea r13, [r15 + INPUT]
     lea r12, [r15 + OUTPUT]
@@ -425,6 +560,14 @@ ex_mcp_untyped:
     mov rdx, rax
     lea rsi, [r15 + OUTPUT]
 public_write:
+    push rsi
+    push rdx
+    mov rdi, r15
+    call public_async_response
+    pop rdx
+    pop rsi
+    test eax, eax
+    jz public_written
     test rdx, rdx
     jz public_written
     mov edi, 1
@@ -438,6 +581,8 @@ public_write:
     test eax, eax
     jnz fatal
 public_written:
+    cmp qword ptr [r15 + PF_PARENT_SLOT], 0
+    jne pf_written
     cmp qword ptr [r15 + 912], 0
     jne config_eof
     jmp frame_next
@@ -533,6 +678,8 @@ mcp_call_dispatch:
     mov rax, [rdx + 16]
     cmp qword ptr [rdx + 56], 100667392
     jne fatal
+    cmp rax, 7
+    je pr_mcp_read_call
     cmp rax, 6
     je mcp_execution_call
     test rax, rax
@@ -576,7 +723,16 @@ mcp_execution_call:
     cmp qword ptr [r13 + 8], 1
     jb fatal
     cmp qword ptr [r13 + 8], 3
-    ja fatal
+    jbe ph_route_allowed
+    cmp qword ptr [r13 + 8], 6
+    je ph_route_allowed
+    cmp qword ptr [r13 + 8], 7
+    je ph_route_allowed
+    cmp qword ptr [r13 + 8], 10
+    je ph_route_allowed
+    cmp qword ptr [r13 + 8], 11
+    jne fatal
+ph_route_allowed:
     mov rax, rsi
     sub rax, 24
     cmp [r13 + 16], rax
@@ -1084,10 +1240,7 @@ effect_stat_fd:
     call lookup
     mov rdi, rdx
     lea rsi, [r14 + STAT]
-    mov rdx, [r15 + EX_META_ADDRESS]
-    test rdx, rdx
-    jz fatal
-    call tk_intent_file_metadata
+    call ex_public_file_metadata
     jmp acknowledge
 effect_uid:
     call zero_span
@@ -1533,6 +1686,8 @@ ex_allocate:
     ret
 
 ex_initialize:
+    mov rdi, r15
+    call public_async_initialize
     cmp qword ptr [r15 + EX_CONTROL_SLOT], 0
     jne fatal
     mov edi, EX_MAP_BYTES
@@ -1635,7 +1790,11 @@ ex_begin:
     or rax, [rbx + 184]
     jnz fatal
     mov qword ptr [rbx + 128], 1
-    mov qword ptr [rbx + 152], 0
+    push rsi
+    mov rdi, r15
+    call public_async_cancelled
+    pop rsi
+    mov [rbx + 152], rax
     mov qword ptr [rbx + 88], 0
     mov [rbx + 72], r13
     mov [rbx + 80], rsi
@@ -1754,8 +1913,6 @@ ex_mapper_child:
     jmp ex_outer_resume
 
 ex_mapper_action:
-    cmp qword ptr [rbx + 88], 1
-    jne fatal
     lea r14, [rbx + EX_MAP_WORK + 256]
     mov rax, 0x3130304145435248
     cmp [r14], rax
@@ -1785,6 +1942,10 @@ ex_mapper_action:
     lea rdx, [rbx + EX_MAP_WORK + EX_M_REPLY]
     mov ecx, EX_CAP
     mov rax, [r14 + 16]
+    cmp rax, 8
+    je pr_mapper_initial_getter
+    cmp qword ptr [rbx + 88], 1
+    jne fatal
     cmp rax, 1
     je ex_map_config
     cmp rax, 2
@@ -1799,7 +1960,23 @@ ex_mapper_action:
     je ex_map_intent
     cmp rax, 7
     je ex_map_metadata
+    cmp rax, 9
+    je pr_map_async
+    cmp rax, 10
+    je pr_map_handler
+    cmp rax, 11
+    je ex_map_health_params
+    cmp rax, 12
+    je ex_map_health
+    cmp rax, 13
+    je pm_map_handler
+    cmp rax, 14
+    je ps_map_handler
     jmp fatal
+pr_mapper_initial_getter:
+    cmp qword ptr [rbx + 88], 0
+    jne fatal
+    jmp pr_map_getter
 ex_map_config:
     cmp rsi, 24
     jne fatal
@@ -1865,11 +2042,12 @@ ex_map_execution:
 ex_map_cancellation:
     cmp rsi, 16
     jne fatal
-    mov rax, 0x3130535443435248
-    mov [rdx], rax
-    mov rax, [rbx + 152]
-    cmp rax, 1
-    ja fatal
+    push rdx
+    mov rdi, r15
+    call public_async_cancelled
+    pop rdx
+    mov rcx, 0x3130535443435248
+    mov [rdx], rcx
     mov [rdx + 8], rax
     mov eax, 16
     jmp ex_mapper_ack
@@ -1931,6 +2109,10 @@ ex_wire:
     jmp public_write
 
 ex_shutdown:
+    mov rdi, r15
+    call internal_task_drain
+    mov rdi, r15
+    call pf_destroy
     mov rbx, [r15 + EX_CONTROL_SLOT]
     test rbx, rbx
     jz ex_shutdown_done
@@ -1949,6 +2131,12 @@ ex_shutdown:
     jnz fatal
     mov qword ptr [rbx + 16], 0
 ex_shutdown_authority:
+    mov rdi, r15
+    call ps_destroy
+    mov rdi, r15
+    call pm_destroy
+    mov rdi, r15
+    call pr_destroy
     mov rax, [rbx + 8]
     test rax, rax
     jz fatal
@@ -1987,6 +2175,9 @@ ex_shutdown_mapping:
     test rax, rax
     jnz fatal
 ex_shutdown_done:
+    call ph_cleanup
+    mov rdi, r15
+    call public_async_shutdown
     jmp config_eof_original
 public_authority_fatal:
     mov r15, [r15]
@@ -2610,6 +2801,82 @@ au_authority_image_8:
 # SPDX-License-Identifier: Apache-2.0
 # Fixed service transport. CLI roots are retained raw strings, never opened here.
 .intel_syntax noprefix
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Trusted private contexts; ordinary frames never select function pointers.
+.equ tk_ASY_ROOT_SLOT, 24648
+.equ tk_ASY_ROOT_NAMESPACE_GATE, 24656
+.equ tk_ASY_ROOT_CONFIG_GATE, 24664
+.equ tk_ASY_GLOBAL_BYTES, 4096
+.equ tk_ASY_G_SERVICE, 8
+.equ tk_ASY_G_STORE, 16
+.equ tk_ASY_G_ROOT_LOCK, 24
+.equ tk_ASY_G_REGISTRY_LOCK, 32
+.equ tk_ASY_G_CACHE_LOCK, 40
+.equ tk_ASY_G_ROOT_ARENA, 48
+.equ tk_ASY_G_REGISTRY_ARENA, 64
+.equ tk_ASY_G_CACHE_ARENA, 80
+.equ tk_ASY_G_CALLS, 96
+.equ tk_ASY_G_PLAN, 256
+.equ tk_ASY_PLAN_SERVICE, 0
+.equ tk_ASY_PLAN_GLOBAL, 8
+.equ tk_ASY_PLAN_CONFIG, 16
+.equ tk_ASY_PLAN_POLICY, 24
+.equ tk_ASY_PLAN_CONFIG_CONTEXT, 32
+.equ tk_ASY_PLAN_AUDIT, 40
+.equ tk_ASY_PLAN_NAMESPACE, 48
+.equ tk_ASY_CALL_BYTES, 83886080
+.equ tk_ASY_CALL_INPUT_LEN, 64
+.equ tk_ASY_CALL_OUTPUT, 72
+.equ tk_ASY_CALL_OUTPUT_CAP, 80
+.equ tk_ASY_CALL_SEQUENCE, 88
+.equ tk_ASY_CALL_JOURNAL_SEQUENCE, 96
+.equ tk_ASY_CALL_STORE_HELD, 104
+.equ tk_ASY_CALL_CODE, 112
+.equ tk_ASY_CALL_OPERATION, 120
+.equ tk_ASY_CALL_TMP, 512
+.equ tk_ASY_CALL_NS_REPLY, 1024
+.equ tk_ASY_CALL_IO, 65536
+.equ tk_ASY_CALL_WORK, 262144
+.equ tk_ASY_CALL_WORK_BYTES, 41943040
+.equ tk_ASY_CALL_JOURNAL, 44040192
+.equ tk_ASY_JOURNAL_BYTES, 25165824
+.equ tk_ASY_CALL_INPUT, 71303168
+.equ tk_ASY_CALL_INPUT_CAP, 8388608
+.equ tk_ASY_CALL_OUTPUT_AT, 79691776
+.equ tk_ASY_CALL_OUTPUT_CAPACITY, 2097152
+.equ tk_ASY_ACTION, 256
+.equ tk_ASY_CONTROLLER_REQUEST, 11534336
+.equ tk_ASY_CONTROLLER_REPLY, 32505856
+.equ tk_ASY_CONTROLLER_REQUEST_CAP, 10485760
+.equ tk_ASY_CONTROLLER_REPLY_CAP, 2097152
+.equ tk_ASY_JOURNAL_REQUEST, 14680064
+.equ tk_ASY_JOURNAL_REPLY, 18874368
+.equ tk_ASY_JOURNAL_REQUEST_CAP, 1056832
+.equ tk_ASY_JOURNAL_REPLY_CAP, 1048640
+.equ tk_ASY_CALL_ERROR_WORK, 32768
+.equ tk_ASY_EFFECT, 0xfffffff0
+.equ tk_ASY_GROW, 0xffffffef
+.macro tk_asy_prologue
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 72
+.endm
+.macro tk_asy_epilogue
+    add rsp, 72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.endm
+
 .section .text
 .equ tk_GLOBAL_LOCK, 4096
 .equ tk_GLOBAL_ACTIVITY, 8192
@@ -2641,16 +2908,67 @@ au_authority_image_8:
 .equ tk_ROOT_COUNT, 32768
 .equ tk_ROOT_PATHS, 32776
 .equ tk_MAX_PUBLIC_INPUT, 8388608
-.equ tk_SERVICE_IO_BYTES, 8396800
+.equ tk_SERVICE_IO_BYTES, 8458240
 .equ tk_SERVICE_OUTPUT, 8392704
 .equ tk_S_ACTION, 256
 .equ tk_S_REQUEST, 4096
 .equ tk_S_REPLY, 12288
 
-# Copyright 2026 Muvon Un Limited
-# SPDX-License-Identifier: Apache-2.0
-# Fixed callable form of the qualified dynamic Ticket service.
-# Root pathname is borrowed from one immutable installed-config allocation.
+# Fixed custody offsets belong only to the shared StorageGlobal page.
+.equ tk_CU_FD_GATE, 128
+.equ tk_CU_REG_GATE, 136
+.equ tk_CU_NS_GATE, 144
+.equ tk_CU_RELEASE_WORK, 4096
+.equ tk_CU_RELEASE_MAP, 8192
+
+.macro tk_CU_SG_ENTER reg, offset
+    push r11
+    lea r11, [\reg + \offset]
+    call tk_cu_gate_enter
+    pop r11
+.endm
+.macro tk_CU_SG_LEAVE reg, offset
+    push r11
+    lea r11, [\reg + \offset]
+    call tk_cu_gate_leave
+    pop r11
+.endm
+.macro tk_CU_BK_ENTER offset
+    push r11
+    mov r11, [r15 + 4000]
+    mov r11, [r11 + tk_tb_I_GLOBAL]
+    mov r11, [r11 + tk_tb_G_SG]
+    lea r11, [r11 + \offset]
+    call tk_cu_gate_enter
+    pop r11
+.endm
+.macro tk_CU_BK_LEAVE offset
+    push r11
+    mov r11, [r15 + 4000]
+    mov r11, [r11 + tk_tb_I_GLOBAL]
+    mov r11, [r11 + tk_tb_G_SG]
+    lea r11, [r11 + \offset]
+    call tk_cu_gate_leave
+    pop r11
+.endm
+
+.macro tk_CU_DIR_ENTER
+    push r11
+    mov r11, [r15 + 4000]
+    lea r11, [r11 + tk_CU_FD_GATE]
+    call tk_cu_gate_enter
+    pop r11
+.endm
+.macro tk_CU_DIR_LEAVE
+    push r11
+    mov r11, [r15 + 4000]
+    lea r11, [r11 + tk_CU_FD_GATE]
+    call tk_cu_gate_leave
+    pop r11
+.endm
+
+
+# Public callable transport; no private stream loop.
 tk_service_create:
     push rbx
     push rbp
@@ -2734,6 +3052,8 @@ tk_service_create:
 
 # root, inner HRATWQ01 bytes, byte count, result, result capacity.
 tk_service_call:
+    jmp fpc_ticket_service_serialized
+fpc_ticket_service_unlocked:
     push rbx
     push rbp
     push r12
@@ -2805,6 +3125,15 @@ tk_service_drop:
     mov r15, rdi
     cmp [r15], r15
     jne tk_contract_fail
+    mov rdi, [r15 + tk_METADATA_ROOT_SLOT]
+    call tk_metadata_boundary_before_eof
+    mov rdi, [r15 + tk_READ_ROOT_SLOT]
+    call tk_read_boundary_before_eof
+    # Caller guards are gone; detached closures still retain Service children.
+    mov rdi, r15
+    call paj_shared_destroy
+    cmp qword ptr [r15 + FPC_TICKET_GATE], 0
+    jne tk_contract_fail
     mov rdi, r15
     mov esi, 1
     call tk_intent_global_drop
@@ -2827,10 +3156,24 @@ tk_service_drop:
     mov rdx, [rax + 16]
     or rdx, [rax + 24]
     jnz tk_contract_fail
+    mov rdi, [r15 + tk_METADATA_ROOT_SLOT]
+    call tk_metadata_boundary_drain
+    mov rdi, [r15 + tk_READ_ROOT_SLOT]
+    call tk_read_boundary_drain
+    mov rdi, [r15 + tk_ASY_ROOT_SLOT]
+    call tk_async_global_destroy
     mov rdi, r15
     xor esi, esi
     call tk_intent_global_drop
     call tk_service_shutdown
+    mov rdi, [r15 + tk_METADATA_ROOT_SLOT]
+    call tk_metadata_boundary_finish
+    test eax, eax
+    jnz tk_contract_fail
+    mov rdi, [r15 + tk_READ_ROOT_SLOT]
+    call tk_read_boundary_finish
+    test eax, eax
+    jnz tk_contract_fail
     mov rdi, [r15 + tk_GLOBAL_LOCK + 8]
     mov rsi, [r15 + tk_GLOBAL_LOCK + 16]
     add rsi, 4095
@@ -3423,7 +3766,12 @@ tk_ts_have_global:
     mov [r15 + 8], r13
     mov rax, [rsp + 16]
     mov [r15 + 16], rax
-    mov rcx, [rax + 40]
+    call tk_ticket_directory_create
+    mov [r15 + 80], rax
+    mov rdx, [r15 + 16]
+    mov [rax + 4000], rdx
+    tk_CU_SG_ENTER rdx, tk_CU_FD_GATE
+    mov rcx, [rdx + 40]
     mov [r15 + 24], rcx
     test rcx, rcx
     jz tk_ts_link_head
@@ -3431,10 +3779,9 @@ tk_ts_have_global:
     jne tk_contract_fail
     mov [rcx + 32], r15
 tk_ts_link_head:
-    mov [rax + 40], r15
+    mov [rdx + 40], r15
     mov [r13 + 248], r15
-    call tk_ticket_directory_create
-    mov [r15 + 80], rax
+    tk_CU_SG_LEAVE rdx, tk_CU_FD_GATE
 tk_ts_have_context:
     mov rax, 0x3130435354415248
     cmp [r15], rax
@@ -3450,9 +3797,24 @@ tk_ts_have_context:
     mov rax, [r13]
     cmp [rdx + 8], rax
     jne tk_contract_fail
+    mov qword ptr [r15 + 144], 0
+    cmp qword ptr [r14 + 16], 122
+    jne tk_cu_storage_normal_admit
+    mov rax, [r14 + 24]
+    cmp rax, 1
+    je tk_cu_storage_cleanup_admit
+    cmp rax, 2
+    jne tk_contract_fail
+tk_cu_storage_cleanup_admit:
+    cmp rbx, 8
+    jne tk_contract_fail
+    mov [r15 + 144], rax
+    jmp tk_cu_storage_admit_done
+tk_cu_storage_normal_admit:
     cmp qword ptr [rdx + 56], 0
     jne tk_contract_fail
     mov qword ptr [rdx + 56], 1
+tk_cu_storage_admit_done:
     mov qword ptr [r15 + 64], 1
     mov rax, [rsp]
     mov [r15 + 40], rax
@@ -3593,18 +3955,32 @@ tk_ts_resume:
     mov rcx, [r14 + 40]
     lea r8, [r12 + tk_TS_REPLY]
     mov r9, [r15 + 80]
+    cmp qword ptr [r15 + 144], 0
+    je tk_cu_storage_normal_child
+    cmp qword ptr [r15 + 144], 2
+    jne tk_contract_fail
+    call tk_cu_archive_release
+    jmp tk_ts_ack
+tk_cu_storage_normal_child:
     call tk_ticket_backend_call
     jmp tk_ts_ack
 tk_ts_hot_directory:
+    cmp qword ptr [r15 + 144], 2
+    je tk_contract_fail
     mov rdi, [r15 + 80]
     jmp tk_ts_directory_invoke
 tk_ts_base_directory:
+    cmp qword ptr [r15 + 144], 0
+    jne tk_contract_fail
     mov rbx, [r15 + 16]
     mov rdi, [rbx + 24]
     test rdi, rdi
     jnz tk_ts_directory_invoke
     call tk_ticket_directory_create
+    mov [rax + 4000], rbx
+    tk_CU_SG_ENTER rbx, tk_CU_FD_GATE
     mov [rbx + 24], rax
+    tk_CU_SG_LEAVE rbx, tk_CU_FD_GATE
     mov rdi, rax
 tk_ts_directory_invoke:
     lea rsi, [r12 + tk_TS_REQUEST]
@@ -3613,6 +3989,8 @@ tk_ts_directory_invoke:
     call tk_ticket_directory_call
     jmp tk_ts_ack
 tk_ts_raw_write:
+    cmp qword ptr [r15 + 144], 0
+    jne tk_contract_fail
     mov rbx, [r15 + 16]
     mov rax, [rbx + 32]
     test rax, rax
@@ -3672,9 +4050,13 @@ tk_ts_result:
     mov qword ptr [r15 + 104], 0
     mov qword ptr [r15 + 64], 0
     mov rdx, [r15 + 16]
+    cmp qword ptr [r15 + 144], 0
+    jne tk_cu_storage_cleanup_completed
     cmp qword ptr [rdx + 56], 1
     jne tk_contract_fail
     mov qword ptr [rdx + 56], 0
+tk_cu_storage_cleanup_completed:
+    mov qword ptr [r15 + 144], 0
     mov eax, ebx
     add rsp, 24
     pop r15
@@ -3704,29 +4086,12 @@ tk_ticket_storage_retire:
     or rax, [rbx + tk_TS_WORK + 80]
     or rax, [rbx + tk_TS_WORK + 88]
     or rax, [rbx + tk_TS_WORK + 96]
-    or rax, [r12 + 56]
+    or rax, [rbx + 144]
     jnz tk_contract_fail
-    mov rdi, [rbx + 80]
+    mov rdi, rbx
+    call tk_cu_unlink_storage
+    mov rdi, rax
     call tk_ticket_directory_drop
-    mov qword ptr [rbx + 80], 0
-    mov rax, [rbx + 24]
-    mov rdx, [rbx + 32]
-    test rax, rax
-    jz tk_ts_unlink_previous
-    cmp [rax + 32], rbx
-    jne tk_contract_fail
-    mov [rax + 32], rdx
-tk_ts_unlink_previous:
-    test rdx, rdx
-    jz tk_ts_unlink_head
-    cmp [rdx + 24], rbx
-    jne tk_contract_fail
-    mov [rdx + 24], rax
-    jmp tk_ts_unlinked
-tk_ts_unlink_head:
-    cmp [r12 + 40], rbx
-    jne tk_contract_fail
-    mov [r12 + 40], rax
 tk_ts_unlinked:
     mov qword ptr [r13 + 248], 0
     mov rdi, rbx
@@ -3938,7 +4303,9 @@ tk_td_open_syscall:
     syscall
     test rax, rax
     js tk_td_effect_error
+    tk_CU_DIR_ENTER
     mov [r15 + rbx*8 + 120], rax
+    tk_CU_DIR_LEAVE
     mov [r14 + 72], rbx
     jmp tk_td_acknowledge
 tk_td_stat_effect:
@@ -3989,11 +4356,11 @@ tk_td_sync_effect:
 tk_td_close_effect:
     call tk_td_zero_span
     call tk_td_live_slot
-    mov qword ptr [r15 + rcx*8 + 120], -1
-    mov eax, 3
-    syscall
+    lea rdi, [r15 + rcx*8 + 120]
+    call tk_cu_directory_retire_slot
     jmp tk_td_acknowledge
 tk_td_transfer_effect:
+    tk_CU_DIR_ENTER
     call tk_td_live_slot
     cmp rcx, 2
     ja tk_contract_fail
@@ -4007,6 +4374,7 @@ tk_td_transfer_effect:
     mov [r15 + 144], rdi
     mov qword ptr [r15 + rcx*8 + 120], -1
     mov qword ptr [r14 + 72], 3
+    tk_CU_DIR_LEAVE
     jmp tk_td_acknowledge
 tk_td_effect_error:
     neg rax
@@ -5213,6 +5581,7 @@ tk_tb_registry_entry_protect:
     test rax, rax
     jnz tk_tb_global_io_fail
 tk_tb_registry_resume:
+    tk_CU_BK_ENTER tk_CU_REG_GATE
     mov r12, [r15 + tk_tb_G_WORK]
     lea rdi, [r15 + tk_tb_G_INPUT]
     mov rsi, [r15 + 16]
@@ -5221,6 +5590,7 @@ tk_tb_registry_resume:
     mov r8, r12
     mov r9, [r15 + tk_tb_G_WORK_BYTES]
     call qword ptr [rip + tk_ticket_backend_registry_image]
+    tk_CU_BK_LEAVE tk_CU_REG_GATE
     mov ecx, eax
     cmp rax, rcx
     jne tk_tb_global_contract_fail
@@ -5325,6 +5695,7 @@ tk_tb_registry_root_capability:
     js tk_tb_global_contract_fail
     ret
 tk_tb_registry_find_instance:
+    tk_CU_BK_ENTER tk_CU_FD_GATE
     mov r8, [r15 + tk_tb_G_INSTANCES]
 tk_tb_registry_find_next:
     test r8, r8
@@ -5336,6 +5707,7 @@ tk_tb_registry_find_next:
     mov r8, [r8 + tk_tb_I_NEXT]
     jmp tk_tb_registry_find_next
 tk_tb_registry_found_instance:
+    tk_CU_BK_LEAVE tk_CU_FD_GATE
     ret
 tk_tb_registry_create:
     call tk_tb_registry_zero_spans
@@ -5396,6 +5768,7 @@ tk_tb_registry_create:
     syscall
     test rax, rax
     jnz tk_tb_global_io_fail
+    tk_CU_BK_ENTER tk_CU_FD_GATE
     mov rax, [r15 + tk_tb_G_INSTANCES]
     mov [r13 + tk_tb_I_NEXT], rax
     test rax, rax
@@ -5403,6 +5776,7 @@ tk_tb_registry_create:
     mov [rax + tk_tb_I_PREVIOUS], r13
 tk_tb_registry_install_head:
     mov [r15 + tk_tb_G_INSTANCES], r13
+    tk_CU_BK_LEAVE tk_CU_FD_GATE
     mov [r15 + tk_tb_G_GENERATION], rbp
     mov [r14 + 72], rbp
     jmp tk_tb_registry_ack
@@ -5436,66 +5810,9 @@ tk_tb_registry_invocation_root_ready:
     jmp tk_tb_registry_ack
 tk_tb_registry_destroy:
     call tk_tb_registry_zero_spans
-    mov rcx, [r14 + 24]
-    call tk_tb_registry_find_instance
-    mov rax, [r8 + tk_tb_R_OWNER + 8]
-    or rax, [r8 + tk_tb_R_OWNER + 80]
-    or rax, [r8 + tk_tb_R_OWNER + 88]
-    or rax, [r8 + tk_tb_R_OWNER + 96]
-    or rax, [r8 + tk_tb_R_OWNER + 104]
-    or rax, [r8 + tk_tb_R_OWNER + 112]
-    or rax, [r8 + tk_tb_R_OWNER + 128]
-    or rax, [r8 + tk_tb_R_OWNER + 136]
-    or rax, [r8 + tk_tb_R_OWNER + 144]
-    or rax, [r8 + tk_tb_R_OWNER + 440]
-    jnz tk_tb_global_contract_fail
-    lea rdi, [r8 + tk_tb_ROOT_FDS + 8]
-    mov ecx, 266
-    call tk_tb_registry_assert_closed
-    lea rdi, [r8 + tk_tb_L_BASE + 128]
-    mov ecx, 5
-    call tk_tb_registry_assert_closed
-    lea rdi, [r8 + tk_tb_L_BASE + 2097152 + 128]
-    mov ecx, 2
-    call tk_tb_registry_assert_closed
-    lea rdi, [r8 + tk_tb_M_BASE + 128]
-    mov ecx, 6
-    call tk_tb_registry_assert_closed
-    lea rdi, [r8 + tk_tb_W_BASE + 128]
-    mov ecx, 5
-    call tk_tb_registry_assert_closed
-    lea rdi, [r8 + tk_tb_W_BASE + 18874368 + 128]
-    mov ecx, 6
-    call tk_tb_registry_assert_closed
-    lea rdi, [r8 + tk_tb_A_BASE + 128]
-    mov ecx, 7
-    call tk_tb_registry_assert_closed
-    mov qword ptr [r8 + tk_tb_ROOT_FDS], -1
-    mov rax, [r8 + tk_tb_I_PREVIOUS]
-    mov rdx, [r8 + tk_tb_I_NEXT]
-    test rax, rax
-    jz tk_tb_registry_remove_head
-    cmp [rax + tk_tb_I_NEXT], r8
-    jne tk_tb_global_contract_fail
-    mov [rax + tk_tb_I_NEXT], rdx
-    jmp tk_tb_registry_remove_following
-tk_tb_registry_remove_head:
-    cmp [r15 + tk_tb_G_INSTANCES], r8
-    jne tk_tb_global_contract_fail
-    mov [r15 + tk_tb_G_INSTANCES], rdx
-tk_tb_registry_remove_following:
-    test rdx, rdx
-    jz tk_tb_registry_unmap_instance
-    cmp [rdx + tk_tb_I_PREVIOUS], r8
-    jne tk_tb_global_contract_fail
-    mov [rdx + tk_tb_I_PREVIOUS], rax
-tk_tb_registry_unmap_instance:
-    mov rdi, r8
-    mov esi, tk_tb_MAP_BYTES
-    mov eax, 11
-    syscall
-    test rax, rax
-    jnz tk_tb_global_io_fail
+    mov rdi, r15
+    mov rsi, [r14 + 24]
+    call tk_cu_destroy_instance
     jmp tk_tb_registry_ack
 tk_tb_registry_assert_closed:
     cmp qword ptr [rdi], -1
@@ -5505,6 +5822,7 @@ tk_tb_registry_assert_closed:
     jnz tk_tb_registry_assert_closed
     ret
 tk_tb_registry_grow:
+    tk_CU_BK_ENTER tk_CU_REG_GATE
     mov rax, [r14 + 24]
     or rax, [r14 + 32]
     or rax, [r14 + 48]
@@ -5554,6 +5872,7 @@ tk_tb_registry_grow:
     test rax, rax
     jnz tk_tb_global_io_fail
     mov [r14 + 72], r13
+    tk_CU_BK_LEAVE tk_CU_REG_GATE
     jmp tk_tb_registry_ack
 
 tk_tb_registry_inner_entry:
@@ -5836,7 +6155,9 @@ tk_tb_root_issue_open:
     syscall
     test rax, rax
     js tk_tb_root_error
+    tk_CU_BK_ENTER tk_CU_FD_GATE
     mov [r15 + tk_tb_ROOT_FDS + rbx*8], rax
+    tk_CU_BK_LEAVE tk_CU_FD_GATE
     mov rax, rbx
     jmp tk_tb_root_value
 tk_tb_root_scan_open:
@@ -5969,7 +6290,9 @@ tk_tb_root_duplicate_do:
     syscall
     test rax, rax
     js tk_tb_root_error
+    tk_CU_BK_ENTER tk_CU_FD_GATE
     mov [r15 + tk_tb_ROOT_FDS + rbx*8], rax
+    tk_CU_BK_LEAVE tk_CU_FD_GATE
     mov rax, rbx
     jmp tk_tb_root_value
 tk_tb_root_mkdir:
@@ -6020,12 +6343,13 @@ tk_tb_root_close:
     je tk_tb_global_contract_fail
     cmp byte ptr [r12 + rcx + 56320], 0
     jne tk_tb_global_contract_fail
-    mov qword ptr [r15 + tk_tb_ROOT_FDS + rcx*8], -1
+    lea rdi, [r15 + tk_tb_ROOT_FDS + rcx*8]
+    xor esi, esi
     cmp rcx, 1
-    jne tk_tb_root_close_alias_retired
-    mov qword ptr [r15 + tk_tb_ROOT_FDS], -1
-tk_tb_root_close_alias_retired:
-    call tk_tb_shared_close
+    jne tk_cu_root_close_alias_ready
+    lea rsi, [r15 + tk_tb_ROOT_FDS]
+tk_cu_root_close_alias_ready:
+    call tk_cu_retire_owned_slot
     jmp tk_tb_root_zero
 tk_tb_root_flags:
     call tk_tb_root_zero_span
@@ -6462,11 +6786,11 @@ tk_tb_cleanup_all_descriptors:
 tk_tb_cleanup_table:
     test r13, r13
     jz tk_tb_cleanup_table_done
-    mov rdi, [rbx]
-    mov qword ptr [rbx], -1
-    test rdi, rdi
-    js tk_tb_cleanup_table_next
-    call tk_tb_shared_close
+    cmp qword ptr [rbx], 0
+    jl tk_tb_cleanup_table_next
+    mov rdi, rbx
+    xor esi, esi
+    call tk_cu_retire_owned_slot
 tk_tb_cleanup_table_next:
     add rbx, 8
     dec r13
@@ -6538,7 +6862,9 @@ tk_tb_legacy_release:
     mov rax, [r15 + 4000]
     cmp byte ptr [rax + tk_tb_R_OWNER + 56322], 0
     jne tk_tb_global_contract_fail
+    tk_CU_BK_ENTER tk_CU_FD_GATE
     mov qword ptr [rax + tk_tb_ROOT_FDS + 16], -1
+    tk_CU_BK_LEAVE tk_CU_FD_GATE
 tk_tb_legacy_enter:
     jmp tk_tb_l_main_resume
 .equ tk_tb_l_MAIN_INPUT, 4096
@@ -6793,8 +7119,9 @@ tk_tb_l_main_legacy_close:
     jne tk_tb_global_contract_fail
 tk_tb_l_main_close_live:
     call tk_tb_l_main_slot_live
-    mov qword ptr [r15 + rcx*8 + 128], -1
-    call tk_tb_shared_close
+    lea rdi, [r15 + rcx*8 + 128]
+    xor esi, esi
+    call tk_cu_retire_owned_slot
     jmp tk_tb_l_main_zero
 tk_tb_l_main_metadata_live:
     mov rcx, [r14 + 24]
@@ -7058,7 +7385,9 @@ tk_tb_l_main_result_live:
 tk_tb_l_main_result_header:
     mov rax, [r15 + 4000]
     mov rdx, [r15 + 136]
+    tk_CU_BK_ENTER tk_CU_FD_GATE
     mov [rax + tk_tb_ROOT_FDS + 16], rdx
+    tk_CU_BK_LEAVE tk_CU_FD_GATE
     mov qword ptr [r15 + 128], -1
     mov qword ptr [r15 + tk_tb_l_ANCHOR_BASE + 128], -1
     mov eax, [r15 + 32]
@@ -7475,12 +7804,21 @@ tk_tb_l_a_slots_ok:
     ret
 
 tk_tb_shared_namespace_entry:
+    cmp rsi, 32
+    jne tk_cu_namespace_normal
+    cmp qword ptr [rdi + 8], 7
+    je tk_cu_namespace_release_entry
+tk_cu_namespace_normal:
+    jmp tk_async_existing_namespace_entry
+tk_async_existing_namespace_owned:
     mov rax, [r15 + 4000]
     mov rax, [rax + tk_tb_I_GLOBAL]
     mov rax, [rax + tk_tb_G_NAMESPACE]
     mov qword ptr [rax + 4008], -1
     jmp tk_tb_shared_namespace_borrow_ready
 tk_tb_borrowed_hot_namespace_entry:
+    jmp tk_async_existing_hot_namespace_entry
+tk_async_existing_hot_namespace_owned:
     cmp rsi, 32
     jne tk_tb_global_contract_fail
     cmp qword ptr [rdi + 8], 1
@@ -7614,6 +7952,7 @@ tk_tb_ns_enter:
 .equ tk_tb_ns_EVENTS, 65536
 .equ tk_tb_ns_DIRENTS, 131072
 tk_tb_ns_resume_namespace:
+    tk_CU_BK_ENTER tk_CU_NS_GATE
     lea rdi, [r15 + tk_tb_ns_INPUT]
     mov rsi, [r15 + 24]
     lea rdx, [r15 + tk_tb_ns_OUTPUT]
@@ -7621,6 +7960,7 @@ tk_tb_ns_resume_namespace:
     mov r8, r12
     mov r9d, 8388608
     call qword ptr [rip + tk_ticket_backend_namespace_image]
+    tk_CU_BK_LEAVE tk_CU_NS_GATE
     mov ecx, eax
     cmp rax, rcx
     jne tk_tb_global_contract_fail
@@ -8114,15 +8454,9 @@ tk_tb_ns_close_borrow_effect:
     cmp qword ptr [r15 + rcx*8 + tk_tb_ns_FDS], -1
     je tk_tb_ns_acknowledge
 tk_tb_ns_close_slot:
-    mov rdi, [r15 + rcx*8 + tk_tb_ns_FDS]
-    test rdi, rdi
-    js tk_tb_global_contract_fail
-    mov qword ptr [r15 + rcx*8 + tk_tb_ns_FDS], -1
-    call tk_tb_ns_raw_descriptor_referenced
-    test eax, eax
-    jnz tk_tb_ns_acknowledge
-    mov eax, 3
-    syscall
+    lea rdi, [r15 + rcx*8 + tk_tb_ns_FDS]
+    xor esi, esi
+    call tk_cu_retire_owned_slot
     jmp tk_tb_ns_zero_effect
 tk_tb_ns_raw_descriptor_referenced:
     jmp tk_tb_shared_referenced
@@ -8146,7 +8480,9 @@ tk_tb_ns_retain_borrow_effect:
     mov rax, [r15 + rax*8 + tk_tb_ns_FDS]
     test rax, rax
     js tk_tb_global_contract_fail
+    tk_CU_BK_ENTER tk_CU_FD_GATE
     mov [r15 + rcx*8 + tk_tb_ns_FDS], rax
+    tk_CU_BK_LEAVE tk_CU_FD_GATE
     mov [r14 + 72], rcx
     jmp tk_tb_ns_acknowledge
 tk_tb_ns_close_set_event_effect:
@@ -8166,7 +8502,9 @@ tk_tb_ns_install_descriptor:
     jae tk_tb_global_contract_fail
     cmp qword ptr [r15 + rcx*8 + tk_tb_ns_FDS], -1
     jne tk_tb_global_contract_fail
+    tk_CU_BK_ENTER tk_CU_FD_GATE
     mov [r15 + rcx*8 + tk_tb_ns_FDS], rax
+    tk_CU_BK_LEAVE tk_CU_FD_GATE
     mov [r14 + 72], rcx
     jmp tk_tb_ns_acknowledge
 tk_tb_ns_zero_effect:
@@ -10843,6 +11181,7 @@ tk_tb_raw_record_write_entry:
     mov [rsp], rdi
     mov [rsp + 8], rdx
     mov [rsp + 16], rsi
+    tk_CU_BK_ENTER tk_CU_REG_GATE
     mov r13, [r15 + 4000]
     cmp [r13 + tk_tb_I_GLOBAL], r13
     jne tk_tb_global_contract_fail
@@ -10920,6 +11259,7 @@ tk_tb_rw_directory_found:
     cmp qword ptr [r15 + 128], -1
     jne tk_tb_global_contract_fail
     mov [r15 + 128], rbx
+    tk_CU_BK_LEAVE tk_CU_REG_GATE
     lea rdi, [r15 + 4096]
     mov esi, 1048576
     mov edx, 3
@@ -11747,6 +12087,7 @@ tk_tb_cold_capability_refusal:
 
 /* Lookup is bounded by the HIA-owned arena; no failed lookup changes state. */
 tk_tb_cold_live_lease:
+    tk_CU_BK_ENTER tk_CU_REG_GATE
     push r13
     mov r13, [r15 + 4000]
     mov r11, [r13 + tk_tb_G_WORK]
@@ -11788,10 +12129,12 @@ tk_tb_cold_lease_found:
     je tk_tb_global_contract_fail
     mov eax, 1
     pop r13
+    tk_CU_BK_LEAVE tk_CU_REG_GATE
     ret
 tk_tb_cold_lease_missing:
     xor eax, eax
     pop r13
+    tk_CU_BK_LEAVE tk_CU_REG_GATE
     ret
 
 tk_tb_cold_resume:
@@ -13822,6 +14165,7 @@ tk_tb_backend_hot_borrow:
     push rbp
     sub rsp, 8
     mov rbx, [r15 + tk_tb_G_SG]
+    tk_CU_SG_ENTER rbx, tk_CU_FD_GATE
     mov rbp, [r15 + tk_tb_G_DIRECTORY]
     test rbp, rbp
     jz tk_tb_global_contract_fail
@@ -13849,6 +14193,7 @@ tk_tb_backend_hot_found:
     test rax, rax
     js tk_tb_global_contract_fail
     mov [r15 + tk_tb_G_HOT_FDS], rax
+    tk_CU_SG_LEAVE rbx, tk_CU_FD_GATE
     add rsp, 8
     pop rbp
     pop rbx
@@ -13931,6 +14276,8 @@ tk_ticket_backend_call:
     je tk_tb_backend_read
     cmp rax, 8
     je tk_tb_backend_stamp
+    cmp rax, 11
+    je tk_hh_backend_entries
     jmp tk_tb_global_contract_fail
 
 tk_tb_backend_archive:
@@ -15878,7 +16225,7 @@ tk_read_loop:
     cmp rax, -4
     je tk_read_loop
     test rax, rax
-    js tk_io_fail
+    js tk_read_transport_io_fail
     jz tk_read_eof
     xor r14d, r14d
     add rsi, rax
@@ -15889,7 +16236,7 @@ tk_read_done:
     ret
 tk_read_eof:
     test r14, r14
-    jz tk_io_fail
+    jz tk_read_transport_io_fail
     xor eax, eax
     ret
 tk_write_exact:
@@ -15902,7 +16249,7 @@ tk_write_loop:
     cmp rax, -4
     je tk_write_loop
     test rax, rax
-    jle tk_io_fail
+    jle tk_read_transport_io_fail
     add rsi, rax
     sub rdx, rax
     jnz tk_write_loop
@@ -16163,7 +16510,10 @@ tk_ov_base_directory:
     test rdi, rdi
     jnz tk_ov_directory
     call tk_ticket_directory_create
+    mov [rax + 4000], rbx
+    tk_CU_SG_ENTER rbx, tk_CU_FD_GATE
     mov [rbx + 24], rax
+    tk_CU_SG_LEAVE rbx, tk_CU_FD_GATE
     mov rdi, rax
 tk_ov_directory:
     lea rsi, [rbp + 4096]
@@ -16350,6 +16700,10 @@ tk_ov_global_ready:
     jne tk_contract_fail
     mov qword ptr [rbx + 56], 1
     mov [r12 + 16], rbx
+    call tk_ticket_directory_create
+    mov [rax + 4000], rbx
+    mov [r12 + 80], rax
+    tk_CU_SG_ENTER rbx, tk_CU_FD_GATE
     mov rax, [rbx + 40]
     mov [r12 + 24], rax
     test rax, rax
@@ -16359,8 +16713,7 @@ tk_ov_global_ready:
     mov [rax + 32], r12
 tk_ov_link_head:
     mov [rbx + 40], r12
-    call tk_ticket_directory_create
-    mov [r12 + 80], rax
+    tk_CU_SG_LEAVE rbx, tk_CU_FD_GATE
 tk_ov_storage_exists:
     mov rax, 0x3130475354415248
     cmp [rbx], rax
@@ -16385,27 +16738,10 @@ tk_ov_storage_unlink:
     jz tk_ov_unlink_done
     cmp qword ptr [rbx + 56], 1
     jne tk_contract_fail
-    mov rdi, [r12 + 80]
+    mov rdi, r12
+    call tk_cu_unlink_storage
+    mov rdi, rax
     call tk_ticket_directory_drop
-    mov qword ptr [r12 + 80], 0
-    mov rax, [r12 + 24]
-    mov rdx, [r12 + 32]
-    test rax, rax
-    jz tk_ov_unlink_previous
-    cmp [rax + 32], r12
-    jne tk_contract_fail
-    mov [rax + 32], rdx
-tk_ov_unlink_previous:
-    test rdx, rdx
-    jz tk_ov_unlink_head
-    cmp [rdx + 24], r12
-    jne tk_contract_fail
-    mov [rdx + 24], rax
-    jmp tk_ov_unlinked
-tk_ov_unlink_head:
-    cmp [rbx + 40], r12
-    jne tk_contract_fail
-    mov [rbx + 40], rax
 tk_ov_unlinked:
     mov qword ptr [rbx + 56], 0
     mov qword ptr [r12 + 16], 0
@@ -16442,6 +16778,671 @@ tk_observation_service_regular:
 
 .balign 8
 tk_audit_observation_image:
+    .quad 0
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Gate helpers preserve every input register and flags. No filesystem syscall
+# occurs while these gates are held; arena mmap/copy is the only allocation gate.
+tk_cu_gate_enter:
+    pushfq
+    push rax
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    sub rsp, 8
+    mov rdi, r11
+    call tk_mutex_lock
+    add rsp, 8
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rax
+    popfq
+    ret
+tk_cu_gate_leave:
+    pushfq
+    push rax
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    sub rsp, 8
+    mov rdi, r11
+    call tk_mutex_unlock
+    add rsp, 8
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rax
+    popfq
+    ret
+
+# r15 is any existing backend-owned context. rdi is a validated owning slot;
+# rsi is zero or its borrowed alias, which is never an additional Arc owner.
+# The caller's private state already retired its logical slot. Claim the actual
+# last close under the owning-table gate, then leave before the close syscall.
+tk_cu_retire_owned_slot:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov rbx, rdi
+    mov rbp, rsi
+    mov rax, [r15 + 4000]
+    mov r13, [rax + tk_tb_I_GLOBAL]
+    cmp [r13 + tk_tb_I_GLOBAL], r13
+    jne tk_contract_fail
+    mov r12, [r13 + tk_tb_G_SG]
+    tk_CU_SG_ENTER r12, tk_CU_FD_GATE
+    mov r14, [rbx]
+    test r14, r14
+    js tk_contract_fail
+    mov qword ptr [rbx], -1
+    test rbp, rbp
+    jz tk_cu_retire_alias_done
+    cmp [rbp], r14
+    jne tk_contract_fail
+    mov qword ptr [rbp], -1
+tk_cu_retire_alias_done:
+    mov r15, r13
+    mov rdi, r14
+    call tk_tb_shared_referenced
+    mov ebx, eax
+    tk_CU_SG_LEAVE r12, tk_CU_FD_GATE
+    test ebx, ebx
+    jnz tk_cu_retire_deferred
+    mov rdi, r14
+    mov eax, 3
+    syscall
+    jmp tk_cu_retire_return
+tk_cu_retire_deferred:
+    xor eax, eax
+tk_cu_retire_return:
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# Exact Registry instance retirement; token lifetime is owned by the HIA
+# terminal release, independent of the normal Registry's pending action buffer.
+# rdi=actual backend, rsi=immutable Inner token. All true owning slots are empty.
+tk_cu_destroy_instance:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r15, rdi
+    mov rcx, rsi
+    call tk_tb_registry_find_instance
+    mov rbx, r8
+    mov r12, [r15 + tk_tb_G_SG]
+    tk_CU_SG_ENTER r12, tk_CU_FD_GATE
+    cmp [rbx + tk_tb_I_GLOBAL], r15
+    jne tk_contract_fail
+    mov rax, [rbx + tk_tb_R_OWNER + 8]
+    or rax, [rbx + tk_tb_R_OWNER + 80]
+    or rax, [rbx + tk_tb_R_OWNER + 88]
+    or rax, [rbx + tk_tb_R_OWNER + 96]
+    or rax, [rbx + tk_tb_R_OWNER + 104]
+    or rax, [rbx + tk_tb_R_OWNER + 112]
+    or rax, [rbx + tk_tb_R_OWNER + 128]
+    or rax, [rbx + tk_tb_R_OWNER + 136]
+    or rax, [rbx + tk_tb_R_OWNER + 144]
+    or rax, [rbx + tk_tb_R_OWNER + 440]
+    jnz tk_contract_fail
+    lea rdi, [rbx + tk_tb_ROOT_FDS + 8]
+    mov ecx, 266
+    call tk_tb_registry_assert_closed
+    lea rdi, [rbx + tk_tb_L_BASE + 128]
+    mov ecx, 5
+    call tk_tb_registry_assert_closed
+    lea rdi, [rbx + tk_tb_L_BASE + 2097152 + 128]
+    mov ecx, 2
+    call tk_tb_registry_assert_closed
+    lea rdi, [rbx + tk_tb_M_BASE + 128]
+    mov ecx, 6
+    call tk_tb_registry_assert_closed
+    lea rdi, [rbx + tk_tb_W_BASE + 128]
+    mov ecx, 5
+    call tk_tb_registry_assert_closed
+    lea rdi, [rbx + tk_tb_W_BASE + 18874368 + 128]
+    mov ecx, 6
+    call tk_tb_registry_assert_closed
+    lea rdi, [rbx + tk_tb_A_BASE + 128]
+    mov ecx, 7
+    call tk_tb_registry_assert_closed
+    mov qword ptr [rbx + tk_tb_ROOT_FDS], -1
+    mov rax, [rbx + tk_tb_I_PREVIOUS]
+    mov rdx, [rbx + tk_tb_I_NEXT]
+    test rax, rax
+    jz tk_cu_destroy_head
+    cmp [rax + tk_tb_I_NEXT], rbx
+    jne tk_contract_fail
+    mov [rax + tk_tb_I_NEXT], rdx
+    jmp tk_cu_destroy_next
+tk_cu_destroy_head:
+    cmp [r15 + tk_tb_G_INSTANCES], rbx
+    jne tk_contract_fail
+    mov [r15 + tk_tb_G_INSTANCES], rdx
+tk_cu_destroy_next:
+    test rdx, rdx
+    jz tk_cu_destroy_detached
+    cmp [rdx + tk_tb_I_PREVIOUS], rbx
+    jne tk_contract_fail
+    mov [rdx + tk_tb_I_PREVIOUS], rax
+tk_cu_destroy_detached:
+    mov qword ptr [rbx + tk_tb_I_NEXT], 0
+    mov qword ptr [rbx + tk_tb_I_PREVIOUS], 0
+    tk_CU_SG_LEAVE r12, tk_CU_FD_GATE
+    mov rdi, rbx
+    mov esi, tk_tb_MAP_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# Callable shared provider cache. The gate protects the movable Registry arena
+# address, not the metadata syscall. Publishing is an actual provider transition;
+# unchanged copied fields (especially destructor replies) never call publish.
+tk_audit_metadata_cache_load:
+    push r12
+    mov r12, rdi
+    tk_CU_SG_ENTER r12, tk_CU_REG_GATE
+    mov rax, [r12 + 16]
+    test rax, rax
+    jz tk_contract_fail
+    mov rax, [rax + tk_tb_G_WORK]
+    mov rax, [rax + 80]
+    cmp rax, 2
+    ja tk_contract_fail
+    tk_CU_SG_LEAVE r12, tk_CU_REG_GATE
+    pop r12
+    ret
+tk_audit_metadata_cache_publish:
+    push r12
+    mov r12, rdi
+    cmp rsi, 2
+    ja tk_contract_fail
+    tk_CU_SG_ENTER r12, tk_CU_REG_GATE
+    mov rax, [r12 + 16]
+    test rax, rax
+    jz tk_contract_fail
+    mov rax, [rax + tk_tb_G_WORK]
+    mov [rax + 80], rsi
+    tk_CU_SG_LEAVE r12, tk_CU_REG_GATE
+    pop r12
+    xor eax, eax
+    ret
+
+# Unlink a fully disposed Storage node before its Directory/context is unmapped.
+# rdi=node; returns the now-private Directory mapping (or zero).
+tk_cu_unlink_storage:
+    push rbx
+    push r12
+    push r13
+    mov rbx, rdi
+    mov r12, [rbx + 16]
+    test r12, r12
+    jz tk_contract_fail
+    tk_CU_SG_ENTER r12, tk_CU_FD_GATE
+    mov r13, [rbx + 80]
+    test r13, r13
+    jz tk_cu_unlink_directory_checked
+    cmp qword ptr [r13 + 128], -1
+    jne tk_contract_fail
+    cmp qword ptr [r13 + 136], -1
+    jne tk_contract_fail
+    cmp qword ptr [r13 + 144], -1
+    jne tk_contract_fail
+    mov rax, [r13 + 48]
+    or rax, [r13 + tk_td_IO_WORK + 8]
+    or rax, [r13 + tk_td_IO_WORK + 64]
+    or rax, [r13 + tk_td_IO_WORK + 72]
+    jnz tk_contract_fail
+tk_cu_unlink_directory_checked:
+    mov rax, [rbx + 24]
+    mov rdx, [rbx + 32]
+    test rax, rax
+    jz tk_cu_unlink_previous
+    cmp [rax + 32], rbx
+    jne tk_contract_fail
+    mov [rax + 32], rdx
+tk_cu_unlink_previous:
+    test rdx, rdx
+    jz tk_cu_unlink_head
+    cmp [rdx + 24], rbx
+    jne tk_contract_fail
+    mov [rdx + 24], rax
+    jmp tk_cu_unlink_detached
+tk_cu_unlink_head:
+    cmp [r12 + 40], rbx
+    jne tk_contract_fail
+    mov [r12 + 40], rax
+tk_cu_unlink_detached:
+    mov qword ptr [rbx + 80], 0
+    mov qword ptr [rbx + 24], 0
+    mov qword ptr [rbx + 32], 0
+    tk_CU_SG_LEAVE r12, tk_CU_FD_GATE
+    mov rax, r13
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+# A Directory owns its File directly; Arc owners use distinct duplicated FDs.
+# Retire its owning slot atomically with the census, then perform exactly one
+# original close outside the short gate. FD 0 remains a valid descriptor.
+tk_cu_directory_retire_slot:
+    push rbx
+    push r12
+    push r13
+    mov rbx, rdi
+    mov r12, [r15 + 4000]
+    test r12, r12
+    jz tk_contract_fail
+    tk_CU_SG_ENTER r12, tk_CU_FD_GATE
+    mov r13, [rbx]
+    test r13, r13
+    js tk_contract_fail
+    mov qword ptr [rbx], -1
+    tk_CU_SG_LEAVE r12, tk_CU_FD_GATE
+    mov rdi, r13
+    mov eax, 3
+    syscall
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# One private continuation per destructor. No normal Registry/Namespace request
+# buffer, parent pointer, sequence, or pending action is borrowed by this path.
+# rdi=StorageGlobal, rsi=1 Registry lease / 2 ContentWatchSet, rdx=token,
+# rcx=caller-owned reply (64 / 72 bytes).
+tk_cu_release_run:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 56
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    mov qword ptr [rsp + 32], 0
+    mov rax, 0x3130475354415248
+    cmp [rdi], rax
+    jne tk_contract_fail
+    cmp rsi, 1
+    je tk_cu_release_admitted
+    cmp rsi, 2
+    jne tk_contract_fail
+tk_cu_release_admitted:
+    test rdx, rdx
+    jz tk_contract_fail
+    mov edi, tk_CU_RELEASE_MAP
+    call tk_allocate_guarded
+    mov rbp, rax
+    mov rbx, [rsp]
+    mov r13, [rsp + 8]
+    mov r15, [rbx + 16]
+    test r15, r15
+    jz tk_contract_fail
+    cmp [r15 + tk_tb_G_SG], rbx
+    jne tk_contract_fail
+    cmp [r15 + tk_tb_I_GLOBAL], r15
+    jne tk_contract_fail
+    mov [rbp], rbx
+    mov [rbp + 8], r13
+    mov rax, [rsp + 16]
+    mov [rbp + 16], rax
+    mov rax, [rsp + 24]
+    mov [rbp + 24], rax
+    mov rax, [r15 + tk_tb_G_NAMESPACE]
+    mov [rbp + 32], rax
+    mov [rbp + 48], r15
+    mov rax, 0x3130515243415248
+    mov [rbp + 64], rax
+    mov [rbp + 72], r13
+    mov rax, [rbp + 16]
+    mov [rbp + 80], rax
+    mov rdi, rbp
+    mov esi, 4096
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    lea r12, [rbp + tk_CU_RELEASE_WORK]
+tk_cu_release_resume:
+    cmp r13, 1
+    jne tk_cu_release_namespace_step
+    tk_CU_SG_ENTER rbx, tk_CU_REG_GATE
+    mov rdx, [r15 + tk_tb_G_WORK]
+    mov rcx, [r15 + tk_tb_G_WORK_BYTES]
+    lea rdi, [rbp + 64]
+    mov esi, 64
+    mov r8, r12
+    mov r9d, tk_CU_RELEASE_WORK
+    call qword ptr [rip + tk_audit_custody_release_image]
+    tk_CU_SG_LEAVE rbx, tk_CU_REG_GATE
+    jmp tk_cu_release_core_return
+tk_cu_release_namespace_step:
+    tk_CU_SG_ENTER rbx, tk_CU_NS_GATE
+    mov rdx, [rbp + 32]
+    test rdx, rdx
+    jz tk_contract_fail
+    add rdx, 1048576
+    mov ecx, 8388608
+    lea rdi, [rbp + 64]
+    mov esi, 64
+    mov r8, r12
+    mov r9d, tk_CU_RELEASE_WORK
+    call qword ptr [rip + tk_audit_custody_release_image]
+    tk_CU_SG_LEAVE rbx, tk_CU_NS_GATE
+tk_cu_release_core_return:
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_contract_fail
+    cmp eax, 64
+    je tk_cu_release_complete
+    cmp eax, 0xfffffff0
+    jne tk_contract_fail
+    lea r14, [r12 + 256]
+    mov rax, 0x3130584643415248
+    cmp [r14], rax
+    jne tk_contract_fail
+    mov rax, [rsp + 32]
+    inc rax
+    jz tk_contract_fail
+    cmp [r14 + 8], rax
+    jne tk_contract_fail
+    cmp [r12 + 16], rax
+    jne tk_contract_fail
+    mov [rsp + 32], rax
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz tk_contract_fail
+    lea rdi, [r14 + 16]
+    lea rsi, [r12 + 352]
+    mov ecx, 6
+    repe cmpsq
+    jne tk_contract_fail
+    cmp r13, 2
+    je tk_cu_release_close_effect
+    cmp qword ptr [r14 + 24], 0
+    je tk_contract_fail
+    mov rax, [r14 + 24]
+    cmp [r12 + 40], rax
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 16], 1
+    je tk_cu_release_inner_effect
+    cmp qword ptr [r14 + 16], 2
+    jne tk_contract_fail
+    cmp qword ptr [r12 + 8], 2
+    jne tk_contract_fail
+    mov rax, [r14 + 32]
+    or rax, [r14 + 40]
+    or rax, [r14 + 48]
+    or rax, [r14 + 56]
+    jnz tk_contract_fail
+    mov rdi, r15
+    mov rsi, [r14 + 24]
+    call tk_cu_destroy_instance
+    xor eax, eax
+    jmp tk_cu_release_ack_value
+tk_cu_release_inner_effect:
+    cmp qword ptr [r12 + 8], 1
+    jne tk_contract_fail
+    mov rax, [r12 + 48]
+    test rax, rax
+    jz tk_contract_fail
+    cmp rax, [r15 + tk_tb_G_ROOT_COUNT]
+    ja tk_contract_fail
+    cmp [r14 + 32], rax
+    jne tk_contract_fail
+    mov rax, [r12 + 56]
+    test rax, rax
+    jz tk_contract_fail
+    cmp [r14 + 40], rax
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 48], 1024
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 56], 64
+    jne tk_contract_fail
+    mov rcx, [r14 + 24]
+    call tk_tb_registry_find_instance
+    cmp qword ptr [r8 + tk_tb_R_OWNER + 8], 0
+    jne tk_contract_fail
+    mov r9, [r8 + tk_tb_ROOT_FDS + 8]
+    test r9, r9
+    js tk_contract_fail
+    lea rdi, [r12 + 1024]
+    mov esi, 64
+    lea rdx, [r12 + 1152]
+    call tk_tb_registry_inner_entry
+    cmp rax, 64
+    jne tk_contract_fail
+    jmp tk_cu_release_ack_value
+tk_cu_release_close_effect:
+    cmp qword ptr [r12 + 8], 3
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 16], 3
+    jne tk_contract_fail
+    mov rax, [r14 + 48]
+    or rax, [r14 + 56]
+    jnz tk_contract_fail
+    mov rax, [r12 + 64]
+    cmp rax, 128
+    jae tk_contract_fail
+    imul rcx, rax, 16640
+    add rcx, 2097152
+    cmp [r12 + 72], rcx
+    jne tk_contract_fail
+    cmp [r14 + 32], rcx
+    jne tk_contract_fail
+    mov rcx, [r12 + 88]
+    cmp rcx, [r12 + 80]
+    ja tk_contract_fail
+    cmp [r14 + 40], rcx
+    jne tk_contract_fail
+    test rcx, rcx
+    jnz tk_cu_release_pin_close
+    add rax, 262
+    cmp [r14 + 24], rax
+    jne tk_contract_fail
+    jmp tk_cu_release_slot_valid
+tk_cu_release_pin_close:
+    imul rax, rax, 258
+    add rax, 770
+    mov rcx, [r14 + 24]
+    cmp rcx, rax
+    jb tk_contract_fail
+    add rax, 258
+    cmp rcx, rax
+    jae tk_contract_fail
+tk_cu_release_slot_valid:
+    mov rax, [rbp + 32]
+    mov rcx, [r14 + 24]
+    lea rdi, [rax + 16384 + rcx*8]
+    xor esi, esi
+    call tk_cu_retire_owned_slot
+    test rax, rax
+    jns tk_cu_release_close_ok
+    cmp rax, -4095
+    jb tk_contract_fail
+    neg rax
+    mov [r14 + 80], rax
+    xor eax, eax
+tk_cu_release_close_ok:
+    test rax, rax
+    jnz tk_contract_fail
+tk_cu_release_ack_value:
+    mov [r14 + 72], rax
+    mov rax, [r14 + 8]
+    mov [r14 + 64], rax
+    jmp tk_cu_release_resume
+tk_cu_release_complete:
+    cmp qword ptr [r12 + 8], 0
+    jne tk_contract_fail
+    cmp qword ptr [r12 + 120], 1
+    jne tk_contract_fail
+    mov rdi, [rbp + 24]
+    lea rsi, [r12 + 512]
+    mov ecx, 8
+    rep movsq
+    mov qword ptr [rsp + 40], 64
+    cmp r13, 2
+    je tk_cu_release_namespace_reply
+    mov rdi, [rbp + 24]
+    mov rax, 0x313030524f415248
+    mov [rdi], rax
+    jmp tk_cu_release_retire
+tk_cu_release_namespace_reply:
+    mov rdi, rbx
+    call tk_audit_metadata_cache_load
+    mov rdi, [rbp + 24]
+    mov [rdi + 64], rax
+    mov qword ptr [rsp + 40], 72
+tk_cu_release_retire:
+    mov rdi, rbp
+    mov esi, tk_CU_RELEASE_MAP + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    mov rax, [rsp + 40]
+    add rsp, 56
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# Same fixed arguments as tk_ticket_backend_call, admitted only for the mapper's
+# cleanup flags=2 action. This does not acquire the backend's normal pending IO.
+tk_cu_archive_release:
+    mov rax, 0x3130475354415248
+    cmp [rdi], rax
+    jne tk_contract_fail
+    mov rax, 0x3130415354415248
+    cmp [rsi], rax
+    jne tk_contract_fail
+    cmp qword ptr [rsi + 8], 0
+    je tk_contract_fail
+    cmp qword ptr [rsi + 16], 3
+    jne tk_contract_fail
+    cmp qword ptr [rsi + 32], 4096
+    jne tk_contract_fail
+    cmp qword ptr [rsi + 40], 64
+    jne tk_contract_fail
+    cmp qword ptr [rsi + 48], 2101248
+    jne tk_contract_fail
+    cmp qword ptr [rsi + 56], 270000
+    jne tk_contract_fail
+    mov rax, [rsi + 64]
+    or rax, [rsi + 72]
+    or rax, [rsi + 80]
+    or rax, [rsi + 88]
+    jnz tk_contract_fail
+    lea rax, [rsi + 3840]
+    cmp rax, rdx
+    jne tk_contract_fail
+    lea rax, [rsi + 2100992]
+    cmp rax, r8
+    jne tk_contract_fail
+    cmp rcx, 64
+    jne tk_contract_fail
+    mov rax, 0x313030514f415248
+    cmp [rdx], rax
+    jne tk_contract_fail
+    cmp qword ptr [rdx + 8], 2
+    jne tk_contract_fail
+    mov rax, [rdx + 16]
+    test rax, rax
+    jz tk_contract_fail
+    cmp [rsi + 24], rax
+    jne tk_contract_fail
+    mov rcx, [rdx + 24]
+    or rcx, [rdx + 32]
+    or rcx, [rdx + 40]
+    or rcx, [rdx + 48]
+    or rcx, [rdx + 56]
+    jnz tk_contract_fail
+    mov rdx, rax
+    mov esi, 1
+    mov rcx, r8
+    jmp tk_cu_release_run
+
+# Called before modifying the shared Namespace's parent or input buffer.
+# rdi=input HNSVQ001/op7, rsi=32, rdx=caller reply; r15=owned Inner context.
+tk_cu_namespace_release_entry:
+    cmp rsi, 32
+    jne tk_contract_fail
+    mov rax, 0x3130305156534e48
+    cmp [rdi], rax
+    jne tk_contract_fail
+    cmp qword ptr [rdi + 8], 7
+    jne tk_contract_fail
+    # Frozen qualified HNSVQ001 word 24 carries the provider cache (0..2).
+    # A destructor validates it but never republishes this copied value.
+    cmp qword ptr [rdi + 24], 2
+    ja tk_contract_fail
+    mov rcx, rdx
+    mov rdx, [rdi + 16]
+    mov rax, [r15 + 4000]
+    mov rax, [rax + tk_tb_I_GLOBAL]
+    mov rdi, [rax + tk_tb_G_SG]
+    mov esi, 2
+    jmp tk_cu_release_run
+
+
+.balign 8
+tk_audit_custody_release_image:
     .quad 0
 
 # Copyright 2026 Muvon Un Limited
@@ -16543,18 +17544,7 @@ tk_intent_prepare_tag_ok:
     syscall
     test rax, rax
     jnz tk_intent_resource_failure
-    # Parsed anchor cache is shared; child continuation/sequence stays local.
-    mov rbx, [r15 + tk_IP_GLOBAL]
-    mov rax, [rbx + tk_IG_CACHE_COUNT]
-    cmp rax, 16
-    ja tk_intent_contract_failure
-    mov [r15 + 0xa00060], rax
-    mov rax, [rbx + tk_IG_CACHE_HEAD]
-    mov [r15 + 0xa00068], rax
-    lea rsi, [rbx + tk_IG_CACHE]
-    lea rdi, [r15 + 0xa40000]
-    mov ecx, tk_IG_CACHE_BYTES / 8
-    rep movsq
+    # Cache synchronization occurs only at the original two HIA cache phases.
     jmp tk_intent_prepare_dispatch
 tk_intent_prepare_complete:
     mov edx, eax
@@ -16572,17 +17562,6 @@ tk_intent_prepare_copy_result:
     mov ecx, 8
     rep movsq
 tk_intent_prepare_publish_cache:
-    mov rbx, [r15 + tk_IP_GLOBAL]
-    mov rax, [r15 + 0xa00060]
-    cmp rax, 16
-    ja tk_intent_contract_failure
-    mov [rbx + tk_IG_CACHE_COUNT], rax
-    mov rax, [r15 + 0xa00068]
-    mov [rbx + tk_IG_CACHE_HEAD], rax
-    lea rdi, [rbx + tk_IG_CACHE]
-    lea rsi, [r15 + 0xa40000]
-    mov ecx, tk_IG_CACHE_BYTES / 8
-    rep movsq
     cmp qword ptr [r15 + 0xb8], 0
     jne tk_intent_contract_failure
     mov qword ptr [r15 + tk_IP_REPLY], 0
@@ -16643,28 +17622,26 @@ tk_intent_prepare_store_drop:
     jnz tk_intent_contract_failure
     mov qword ptr [r15 + 0xb8], 0
     jmp tk_intent_prepare_ack
-# rdi=IG -> rdx=current shared metadata cache, never retained across calls.
+# rdi=owned IG/LC -> rdx=same stable context; never an arena pointer.
+# The callee obtains the current shared metadata word only under its short gate.
 tk_intent_metadata_address:
-    mov rax, [rdi + tk_IG_SERVICE]
-    test rax, rax
-    jz tk_intent_metadata_local
-    mov rax, [rax + 24576]
-    test rax, rax
-    jz tk_intent_contract_failure
-    cmp qword ptr [rax + 56], 0
-    jne tk_intent_contract_failure
-    mov rax, [rax + 16]
-    test rax, rax
-    jz tk_intent_contract_failure
-    cmp qword ptr [rax + 56], 88
-    jb tk_intent_contract_failure
-    mov rdx, [rax + 48]
-    test rdx, rdx
-    jz tk_intent_contract_failure
-    add rdx, 80
+    mov rax, 0x3130474350495248
+    cmp [rdi], rax
+    jne pic_metadata_address_regular
+    sub rsp, 8
+    call pic_shared_owner
+    mov rdx, rax
+    add rsp, 8
     ret
-tk_intent_metadata_local:
-    lea rdx, [rdi + tk_IG_META_LOCAL]
+pic_metadata_address_regular:
+    mov rax, 0x3130474954495248
+    cmp [rdi], rax
+    je tk_intent_metadata_context_checked
+    mov rax, 0x31305854434c5248
+    cmp [rdi], rax
+    jne tk_intent_contract_failure
+tk_intent_metadata_context_checked:
+    mov rdx, rdi
     ret
 # rdi=IG. Record IO never owns its caller's directory descriptor.
 tk_intent_record_create:
@@ -16787,7 +17764,9 @@ tk_intent_record_metadata:
 
 # Copyright 2026 Muvon Un Limited
 # SPDX-License-Identifier: Apache-2.0
-# rdi checked FD, rsi stat64[144], rdx shared original metadata-cache u64*.
+# rdi checked FD, rsi stat64[144], rdx stable owned IG/LC context.
+# Every original provider cache access uses the shared Registry short gate;
+# no movable arena address or gate is retained across a filesystem syscall.
 # Derived from the frozen Spool statx/glibc/std provider, now full stat64.
 # Returns 0 or negative errno; no metadata retry and no business validation.
 tk_intent_file_metadata:
@@ -16801,7 +17780,8 @@ tk_intent_file_metadata:
     mov r12, rdi
     mov r13, rsi
     mov r14, rdx
-    mov rax, [r14]
+    mov rdi, r14
+    call tk_intent_provider_cache_load
     cmp rax, 2
     ja tk_intent_contract_failure
     je tk_intent_meta_fstat
@@ -16824,9 +17804,12 @@ tk_intent_meta_statx_result:
     jns tk_intent_contract_failure
     cmp rax, -4095
     jb tk_intent_contract_failure
-    cmp qword ptr [r14], 1
-    je tk_intent_meta_return
     mov [rsp + 256], rax
+    mov rdi, r14
+    call tk_intent_provider_cache_load
+    cmp rax, 1
+    mov rax, [rsp + 256]
+    je tk_intent_meta_return
     xor edi, edi
     xor esi, esi
     xor edx, edx
@@ -16847,7 +17830,9 @@ tk_intent_meta_statx_result:
 tk_intent_meta_probe_result:
     cmp rax, -14
     jne tk_intent_meta_unavailable
-    mov qword ptr [r14], 1
+    mov rdi, r14
+    mov esi, 1
+    call tk_intent_provider_cache_publish
     mov rax, [rsp + 256]
     jmp tk_intent_meta_return
 tk_intent_meta_impossible_null:
@@ -16855,7 +17840,9 @@ tk_intent_meta_impossible_null:
     mov [rax], rax
     ud2
 tk_intent_meta_unavailable:
-    mov qword ptr [r14], 2
+    mov rdi, r14
+    mov esi, 2
+    call tk_intent_provider_cache_publish
 tk_intent_meta_fstat:
     mov rdi, r13
     xor eax, eax
@@ -16882,7 +17869,9 @@ tk_intent_meta_fallback:
     syscall
     test rax, rax
     jnz tk_intent_meta_statx_result
-    mov qword ptr [r14], 1
+    mov rdi, r14
+    mov esi, 1
+    call tk_intent_provider_cache_publish
     # stat64 -> glibc statx -> Rust stat64 narrows these fields.
     mov eax, [r13 + 16]
     mov [r13 + 16], rax
@@ -16899,7 +17888,9 @@ tk_intent_meta_fallback:
     xor eax, eax
     jmp tk_intent_meta_return
 tk_intent_meta_statx_success:
-    mov qword ptr [r14], 1
+    mov rdi, r14
+    mov esi, 1
+    call tk_intent_provider_cache_publish
     mov rdi, r13
     xor eax, eax
     mov ecx, 18
@@ -16964,6 +17955,36 @@ tk_intent_device_number:
     or rcx, rdx
     or rax, rcx
     ret
+# Stable IG/LC input, SG remains live until all workers are joined.
+# Both actual cache loads and all four actual transitions retain original order.
+# This is never a snapshot-writeback API. The gates contain no metadata IO.
+tk_intent_provider_cache_load:
+    mov rax, [rdi + tk_IG_SERVICE]
+    test rax, rax
+    jz tk_intent_provider_load_local
+    mov rdi, [rax + 24576]
+    test rdi, rdi
+    jz tk_intent_contract_failure
+    jmp tk_audit_metadata_cache_load
+tk_intent_provider_load_local:
+    mov rax, [rdi + tk_IG_META_LOCAL]
+    cmp rax, 2
+    ja tk_intent_contract_failure
+    ret
+tk_intent_provider_cache_publish:
+    cmp rsi, 2
+    ja tk_intent_contract_failure
+    mov rax, [rdi + tk_IG_SERVICE]
+    test rax, rax
+    jz tk_intent_provider_publish_local
+    mov rdi, [rax + 24576]
+    test rdi, rdi
+    jz tk_intent_contract_failure
+    jmp tk_audit_metadata_cache_publish
+tk_intent_provider_publish_local:
+    mov [rdi + tk_IG_META_LOCAL], rsi
+    xor eax, eax
+    ret
 tk_intent_sync_all:
     mov eax, 74
     syscall
@@ -16972,6 +17993,119 @@ tk_intent_sync_all:
     ret
 tk_intent_empty:
     .byte 0
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Two independent original ANCHOR_CACHE critical sections.
+# All filesystem, hash child and typed JSON child execution remains outside.
+# The unchanged metadata HIA owns lookup, digest comparison, FIFO and projection.
+.equ tk_IG_ANCHOR_CACHE_GATE, 176
+
+# Same six-register borrowed-buffer ABI as the unchanged metadata image.
+# r15 is the fixed private Prepare carrier, r8 its metadata workspace.
+tk_intent_metadata_cache_entry:
+    cmp r9, 4194304
+    jne tk_intent_contract_failure
+    lea rax, [r15 + 0xa00000]
+    cmp r8, rax
+    jne tk_intent_contract_failure
+    cmp qword ptr [r15 + tk_IP_BUSY], 1
+    jne tk_intent_contract_failure
+    cmp qword ptr [r8 + 48], 1
+    jne tk_intent_metadata_cache_passthrough
+    mov rax, [r8 + 8]
+    cmp rax, 6
+    je tk_intent_metadata_cache_locked
+    cmp rax, 7
+    je tk_intent_metadata_cache_locked
+tk_intent_metadata_cache_passthrough:
+    jmp tk_intent_image_result_metadata
+
+tk_intent_metadata_cache_locked:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 72
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    mov [rsp + 32], r8
+    mov [rsp + 40], r9
+    mov [rsp + 56], rax
+    mov r12, r8
+    mov rbx, [r15 + tk_IP_GLOBAL]
+    mov rax, 0x31305854434c5248
+    cmp [rbx], rax
+    jne tk_intent_metadata_cache_root
+    mov rbx, [rbx + tk_LC_PARENT]
+tk_intent_metadata_cache_root:
+    mov rax, 0x3130474350495248
+    cmp [rbx], rax
+    jne pic_metadata_cache_regular
+    mov rdi, rbx
+    call pic_shared_owner
+    mov rbx, rax
+pic_metadata_cache_regular:
+    mov rax, 0x3130474954495248
+    cmp [rbx], rax
+    jne tk_intent_contract_failure
+    lea rdi, [rbx + tk_IG_ANCHOR_CACHE_GATE]
+    call tk_rlk_mutex_lock
+    mov rax, [rbx + tk_IG_CACHE_COUNT]
+    cmp rax, 16
+    ja tk_intent_contract_failure
+    mov [r12 + 96], rax
+    mov rax, [rbx + tk_IG_CACHE_HEAD]
+    cmp rax, 16
+    jae tk_intent_contract_failure
+    mov [r12 + 104], rax
+    lea rsi, [rbx + tk_IG_CACHE]
+    lea rdi, [r12 + 262144]
+    mov ecx, tk_IG_CACHE_BYTES / 8
+    rep movsq
+    mov rdi, [rsp]
+    mov rsi, [rsp + 8]
+    mov rdx, [rsp + 16]
+    mov rcx, [rsp + 24]
+    mov r8, [rsp + 32]
+    mov r9, [rsp + 40]
+    call tk_intent_image_result_metadata
+    mov [rsp + 48], rax
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_intent_contract_failure
+    cmp qword ptr [rsp + 56], 7
+    jne tk_intent_metadata_cache_unlock
+    # The second original lock deliberately does not repeat the first lookup.
+    # Refresh above gives cache_insert the current FIFO even after duplicate misses.
+    mov rax, [r12 + 96]
+    cmp rax, 16
+    ja tk_intent_contract_failure
+    mov [rbx + tk_IG_CACHE_COUNT], rax
+    mov rax, [r12 + 104]
+    cmp rax, 16
+    jae tk_intent_contract_failure
+    mov [rbx + tk_IG_CACHE_HEAD], rax
+    lea rsi, [r12 + 262144]
+    lea rdi, [rbx + tk_IG_CACHE]
+    mov ecx, tk_IG_CACHE_BYTES / 8
+    rep movsq
+tk_intent_metadata_cache_unlock:
+    lea rdi, [rbx + tk_IG_ANCHOR_CACHE_GATE]
+    call tk_rlk_mutex_unlock
+    mov rax, [rsp + 48]
+    add rsp, 72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
 
 # Retained prefix: c6d755bc8adca58987f6b4dde48feb264bf546ad2aa1c629a4b6090e5b3dd7d1
 tk_intent_prepare_prefix:
@@ -17014,7 +18148,7 @@ tk_intent_prepare_prefix:
     .byte 0x40,0x0,0x49,0x8d,0x97,0x0,0x0,0x42,0x0,0x49,0x83,0x7f,0x28,0x0,0x74,0x19,0x49,0x83,0x7f,0x28,0x1,0xf,0x85,0xdd
     .byte 0x13,0x0,0x0,0x49,0x8d,0xbf,0x0,0x0,0x80,0x0,0x49,0x8d,0x97,0x0,0x0,0x82,0x0,0x4d,0x8d,0xa7,0x0,0x0,0xa0,0x0
     .byte 0xbe,0x18,0x0,0x0,0x0,0xb9,0x0,0x0,0x4,0x0,0x4d,0x89,0xe0,0x41,0xb9,0x0,0x0,0x40,0x0,0xe8
-    .long tk_intent_image_result_metadata - . - 4
+    .long tk_intent_metadata_cache_entry - . - 4
     .byte 0x83,0xf8,0xf0,0x74,0x46,0x49,0x83,0x7c,0x24,0x8,0x0,0xf,0x85,0x9f,0x13,0x0,0x0,0x49,0x83,0xbf,0xb0,0x0,0x0,0x0
     .byte 0xff,0xf,0x85,0x91,0x13,0x0,0x0,0x49,0x8b,0x4f,0x28,0x49,0x89,0x4f,0x20,0x4d,0x8d,0xa7,0x0,0x0,0x20,0x0,0x48,0x85
     .byte 0xc9,0x74,0x7,0x4d,0x8d,0xa7,0x0,0x0,0x60,0x0,0x4d,0x8d,0xb4,0x24,0x0,0x1,0x0,0x0,0x49,0x89,0x46,0x48,0xe9,0xf3
@@ -18191,6 +19325,8 @@ tk_intent_global_drop:
     jz tk_intent_global_drop_done
     cmp [r13 + tk_IG_SERVICE], r12
     jne tk_intent_contract_failure
+    mov rdi, r13
+    call pic_global_quiescent
     cmp qword ptr [r13 + 80], 0
     jne tk_intent_contract_failure
     mov rbx, [r13 + 56]
@@ -18223,6 +19359,8 @@ tk_intent_global_drop_empty:
     je tk_intent_global_drop_done
     cmp qword ptr [rsp], 0
     jne tk_intent_contract_failure
+    mov rdi, r13
+    call tk_lookup_drop_all
     mov rdi, [r13 + 24]
     call tk_intent_prepare_cleanup
     mov qword ptr [r13 + 24], 0
@@ -18983,7 +20121,68 @@ tk_intent_config_seal_input:
 # rdi=IG, rsi=request, rdx=length, rcx=reply, r8=reply capacity.
 # There is no frame-accessible installation or reinitialization route.
 tk_intent_config_call:
+    jmp pic_config_call
+tk_async_existing_config_owned:
     jmp ex_intent_config_call
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, [r12 + tk_IG_CONFIG]
+    test r15, r15
+    jz tk_intent_contract_failure
+    cmp [r15 + tk_CFG_IG], r12
+    jne tk_intent_contract_failure
+    cmp qword ptr [r15 + tk_CFG_BUSY], 0
+    jne tk_intent_contract_failure
+    cmp rdx, 24
+    jb tk_intent_contract_failure
+    cmp rdx, tk_icfg_ROOT_INPUT_CAP
+    ja tk_intent_contract_failure
+    cmp r8, 32
+    jb tk_intent_contract_failure
+    cmp r8, tk_icfg_ROOT_OUTPUT_CAP
+    ja tk_intent_contract_failure
+    mov rax, 0x3130514746435248
+    cmp [rsi], rax
+    jne tk_intent_contract_failure
+    cmp qword ptr [rsi + 8], 1
+    jb tk_intent_contract_failure
+    cmp qword ptr [rsi + 8], 12
+    ja tk_intent_contract_failure
+    mov [r15 + tk_CFG_REPLY], rcx
+    mov [r15 + tk_CFG_CAPACITY], r8
+    mov qword ptr [r15 + tk_CFG_BUSY], 1
+    lea rdi, [r15 + tk_icfg_INPUT]
+    mov esi, tk_icfg_ROOT_INPUT_CAP
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+    lea rdi, [r15 + tk_icfg_INPUT]
+    mov rsi, r13
+    mov rcx, r14
+    rep movsb
+    mov [r15 + 24], r14
+    call tk_intent_config_seal_input
+    lea rax, [r15 + tk_icfg_ROOT_WORK + tk_icfg_FOOTER]
+    mov qword ptr [rax + 120], 1
+    call tk_intent_config_run
+    mov [r15 + tk_CFG_CODE], rax
+    mov rcx, rax
+    lea rsi, [r15 + tk_icfg_OUTPUT]
+    mov rdi, [r15 + tk_CFG_REPLY]
+    rep movsb
+    mov qword ptr [r15 + tk_CFG_BUSY], 0
+    mov qword ptr [r15 + tk_CFG_REPLY], 0
+    mov rax, [r15 + tk_CFG_CODE]
 tk_intent_config_return:
     add rsp, 8
     pop r15
@@ -18997,6 +20196,42 @@ tk_intent_config_return:
 # rdi=IG; all synchronous private queries have returned.
 tk_intent_config_drop:
     jmp ex_intent_config_drop
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r12, rdi
+    mov r15, [r12 + tk_IG_CONFIG]
+    test r15, r15
+    jz tk_intent_config_drop_absent
+    cmp [r15 + tk_CFG_IG], r12
+    jne tk_intent_contract_failure
+    cmp qword ptr [r15 + tk_CFG_BUSY], 0
+    jne tk_intent_contract_failure
+    mov qword ptr [r15 + tk_CFG_BUSY], 1
+    mov qword ptr [r15 + tk_CFG_CAPACITY], tk_icfg_ROOT_OUTPUT_CAP
+    mov qword ptr [r15 + 24], 0
+    lea rax, [r15 + tk_icfg_ROOT_WORK + tk_icfg_FOOTER]
+    mov qword ptr [rax + 120], 2
+    call tk_intent_config_run
+    test eax, eax
+    jnz tk_intent_contract_failure
+    cmp qword ptr [r15], 0
+    jne tk_intent_contract_failure
+    mov r12, [r15 + tk_CFG_IG]
+    mov qword ptr [r12 + tk_IG_CONFIG], 0
+    mov rdi, r15
+    mov esi, tk_icfg_MAP_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+tk_intent_config_drop_absent:
+    xor eax, eax
+    jmp tk_intent_config_return
 
 tk_intent_config_run:
     sub rsp, 8
@@ -19492,7 +20727,7 @@ tk_icfg_effect_stat_fd:
     mov [rsp], rdx
     mov rdi, [r15 + tk_CFG_IG]
     call tk_intent_metadata_address
-    # The checked shared-cache address is returned in RDX, not RAX.
+    # RDX holds the stable owned context; provider cache access is short-gated.
     mov rdi, [rsp]
     add rsp, 16
     lea rsi, [r14 + tk_icfg_STAT]
@@ -19881,6 +21116,2590 @@ tk_icfg_regex_set_workspace:
 
 tk_icfg_fatal:
     jmp tk_intent_contract_failure
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Independent Lookup workspaces; the parsed anchor cache uses two short gates.
+.equ tk_LC_PARENT, 136
+.equ tk_LC_NEXT, 144
+.equ tk_LC_PREV, 152
+.equ tk_IG_LOOKUP_HEAD, 144
+.equ tk_IG_LOOKUP_DEFAULT, 160
+.equ tk_LC_WORK, 2097152
+.equ tk_LC_WORK_BYTES, 16777216
+.equ tk_LC_INPUT, 18874368
+.equ tk_LC_INPUT_CAP, 2097152
+.equ tk_LC_BYTES, 20971520
+.equ tk_LC_REPLY, 4096
+.equ tk_LC_OUTPUT, 1048576
+.equ tk_LC_ACTION_COPY, 1024
+.equ tk_LC_CHILD_REQUEST, 3145728
+.equ tk_LC_CHILD_REPLY, 5242880
+.equ tk_LC_CAP, 262144
+
+# rdi=existing IG -> rax=new private LC. Creation/drop require joined callers.
+tk_result_lookup_context_create:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov rax, 0x3130474954495248
+    cmp [r12], rax
+    jne tk_intent_contract_failure
+    cmp qword ptr [r12 + tk_IG_LOCKS], 0
+    je tk_intent_contract_failure
+    mov edi, 131072
+    call tk_allocate_guarded
+    mov r13, rax
+    mov rdx, 0x31305854434c5248
+    mov [r13], rdx
+    mov [r13 + tk_LC_PARENT], r12
+    mov rax, [r12 + tk_IG_SERVICE]
+    mov [r13 + tk_IG_SERVICE], rax
+    mov rax, [r12 + tk_IG_LOCKS]
+    mov [r13 + tk_IG_LOCKS], rax
+    mov rdi, r13
+    call tk_intent_prepare_create
+    mov [r13 + 24], rax
+    mov rdi, r13
+    call tk_intent_record_create
+    mov [r13 + 40], rax
+    mov edi, tk_LC_BYTES
+    call tk_allocate_guarded
+    mov [r13 + 56], rax
+    mov [rax + 8], r13
+    mov rdx, 0x3130574d434c5248
+    mov [rax], rdx
+    mov rax, [r12 + tk_IG_LOOKUP_HEAD]
+    mov [r13 + tk_LC_NEXT], rax
+    test rax, rax
+    jz tk_lookup_context_first
+    mov [rax + tk_LC_PREV], r13
+tk_lookup_context_first:
+    mov [r12 + tk_IG_LOOKUP_HEAD], r13
+    mov rax, r13
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+# rdi=LC,rsi=request,rdx=len,rcx=reply,r8=capacity -> eax=complete bytes/private refusal.
+tk_result_lookup_call:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r12, rdi
+    mov rbx, rsi
+    mov r13, rdx
+    mov rax, 0x31305854434c5248
+    cmp [r12], rax
+    jne tk_intent_contract_failure
+    cmp r8, tk_LC_CAP
+    jb tk_lookup_owner_capacity
+    cmp rdx, tk_LC_INPUT_CAP
+    ja tk_lookup_owner_invalid
+    mov r15, [r12 + 56]
+    cmp [r15 + 8], r12
+    jne tk_intent_contract_failure
+    cmp qword ptr [r12 + 80], 0
+    jne tk_intent_contract_failure
+    cmp qword ptr [r15 + 32], 0
+    jne tk_intent_contract_failure
+    mov [r15 + 16], rdx
+    mov [r15 + 24], rcx
+    mov qword ptr [r15 + 32], 1
+    mov qword ptr [r12 + 80], 1
+    lea rdi, [r15 + tk_LC_INPUT]
+    mov esi, tk_LC_INPUT_CAP
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+    lea rdi, [r15 + tk_LC_INPUT]
+    mov rsi, rbx
+    mov rcx, r13
+    rep movsb
+    lea rdi, [r15 + tk_LC_INPUT]
+    mov esi, tk_LC_INPUT_CAP
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+    lea rbp, [r15 + tk_LC_WORK]
+
+
+tk_lookup_owner_resume:
+    lea rdi, [r15 + tk_LC_INPUT]
+    mov rsi, [r15 + 16]
+    lea rdx, [r15 + tk_LC_REPLY]
+    mov ecx, tk_LC_CAP
+    mov r8, rbp
+    mov r9d, tk_LC_WORK_BYTES
+    call tk_intent_image_lookup
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_intent_contract_failure
+    cmp eax, 0xfffffff0
+    jne tk_lookup_owner_result
+    lea r14, [rbp + 4096]
+    mov rax, 0x313041554c525248
+    cmp [r14], rax
+    jne tk_intent_contract_failure
+    mov rax, [r15 + 40]
+    inc rax
+    jz tk_intent_contract_failure
+    cmp [r14 + 8], rax
+    jne tk_intent_contract_failure
+    cmp [rbp + 16], rax
+    jne tk_intent_contract_failure
+    mov [r15 + 40], rax
+    cmp qword ptr [r14 + 32], tk_LC_CHILD_REQUEST
+    jne tk_intent_contract_failure
+    cmp qword ptr [r14 + 48], tk_LC_CHILD_REPLY
+    jne tk_intent_contract_failure
+    cmp qword ptr [r14 + 56], tk_LC_CAP
+    jne tk_intent_contract_failure
+    mov rcx, [r14 + 40]
+    cmp rcx, 48
+    jb tk_intent_contract_failure
+    cmp rcx, 1048576
+    ja tk_intent_contract_failure
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz tk_intent_contract_failure
+    mov rsi, r14
+    lea rdi, [r15 + tk_LC_ACTION_COPY]
+    mov ecx, 12
+    rep movsq
+    lea r13, [rbp + tk_LC_CHILD_REQUEST]
+    mov rax, [r14 + 16]
+    cmp rax, 1
+    je tk_lookup_child_lock
+    cmp rax, 2
+    je tk_lookup_child_directory
+    cmp rax, 4
+    je tk_lookup_child_archive
+    cmp rax, 5
+    je tk_lookup_child_record
+    jmp tk_intent_contract_failure
+
+tk_lookup_child_directory:
+    mov rax, [r14 + 24]
+    test rax, rax
+    jz tk_lookup_child_directory_valid
+    cmp rax, 2
+    jne tk_intent_contract_failure
+tk_lookup_child_directory_valid:
+    cmp qword ptr [r13 + 8], 4
+    je tk_lookup_child_directory_drop
+    mov rdi, [r12 + tk_IG_SERVICE]
+    lea rsi, [r13 + 48]
+    mov rdx, [r13 + 32]
+    mov rax, [r14 + 40]
+    sub rax, 48
+    jc tk_intent_contract_failure
+    cmp rax, rdx
+    jne tk_intent_contract_failure
+    call tk_intent_root_cap
+    test rax, rax
+    jz tk_intent_contract_failure
+tk_lookup_child_directory_drop:
+    mov rdi, [r12 + 24]
+    mov esi, 4
+    cmp qword ptr [r14 + 24], 2
+    jne tk_lookup_child_directory_call
+    mov esi, 5
+tk_lookup_child_directory_call:
+    mov rdx, r13
+    mov rcx, [r14 + 40]
+    lea r8, [rbp + tk_LC_CHILD_REPLY]
+    call tk_lookup_prepare_call
+    jmp tk_lookup_child_complete
+
+tk_lookup_child_archive:
+    cmp qword ptr [r14 + 24], 0
+    jne tk_intent_contract_failure
+    mov rdi, [r12 + 24]
+    xor esi, esi
+    mov rdx, r13
+    mov rcx, [r14 + 40]
+    lea r8, [rbp + tk_LC_CHILD_REPLY]
+    call tk_lookup_prepare_call
+    jmp tk_lookup_child_complete
+
+tk_lookup_child_complete:
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_intent_contract_failure
+    cmp eax, tk_LC_CAP
+    ja tk_intent_contract_failure
+    mov ebx, eax
+    mov rsi, r14
+    lea rdi, [r15 + tk_LC_ACTION_COPY]
+    mov ecx, 8
+    repe cmpsq
+    jne tk_intent_contract_failure
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz tk_intent_contract_failure
+    mov [r14 + 72], rbx
+    mov rax, [r14 + 8]
+    mov [r14 + 64], rax
+    jmp tk_lookup_owner_resume
+
+
+tk_lookup_owner_result:
+    mov ebx, eax
+    cmp eax, tk_LC_CAP
+    ja tk_lookup_owner_refusal
+    cmp eax, 64
+    jb tk_intent_contract_failure
+    cmp qword ptr [rbp + 8], 0
+    jne tk_intent_contract_failure
+    cmp qword ptr [rbp + 24], 0
+    jne tk_intent_contract_failure
+    cmp qword ptr [rbp + 112], 0
+    jne tk_intent_contract_failure
+    cmp qword ptr [r15 + 112], 0
+    jne tk_intent_contract_failure
+    lea rdi, [rbp + 120]
+    xor eax, eax
+    mov ecx, 6
+    repe scasq
+    jne tk_intent_contract_failure
+    mov rax, 0x313052554c525248
+    cmp [r15 + tk_LC_REPLY], rax
+    jne tk_intent_contract_failure
+    mov rax, [r15 + tk_LC_REPLY + 48]
+    add rax, [r15 + tk_LC_REPLY + 56]
+    jc tk_intent_contract_failure
+    add rax, 64
+    jc tk_intent_contract_failure
+    cmp rax, rbx
+    jne tk_intent_contract_failure
+    lea rsi, [r15 + tk_LC_REPLY]
+    mov rdi, [r15 + 24]
+    mov rcx, rbx
+    rep movsb
+    jmp tk_lookup_owner_retire
+tk_lookup_owner_refusal:
+    cmp eax, 0xfffffffe
+    jb tk_intent_contract_failure
+    cmp qword ptr [r15 + 112], 0
+    jne tk_intent_contract_failure
+    cmp qword ptr [rbp + 8], 0
+    jne tk_intent_contract_failure
+tk_lookup_owner_retire:
+    mov qword ptr [r15 + 24], 0
+    mov qword ptr [r15 + 32], 0
+    mov qword ptr [r12 + 80], 0
+    mov eax, ebx
+    jmp tk_lookup_owner_done
+tk_lookup_owner_capacity:
+    mov eax, 0xfffffffe
+    jmp tk_lookup_owner_done
+tk_lookup_owner_invalid:
+    mov eax, 0xffffffff
+tk_lookup_owner_done:
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# The private Prepare carrier reaches only the two shared cache critical sections.
+# No whole Intent busy flag is consulted after a record guard wakes this Lookup.
+tk_lookup_prepare_call:
+    jmp tk_intent_prepare_call
+
+# rdi=LC. There must be no running worker or caller borrowing this context.
+tk_result_lookup_context_drop:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov rax, 0x31305854434c5248
+    cmp [r12], rax
+    jne tk_intent_contract_failure
+    cmp qword ptr [r12 + 80], 0
+    jne tk_intent_contract_failure
+    mov rbx, [r12 + 56]
+    cmp [rbx + 8], r12
+    jne tk_intent_contract_failure
+    cmp qword ptr [rbx + 32], 0
+    jne tk_intent_contract_failure
+    cmp qword ptr [rbx + 112], 0
+    jne tk_intent_contract_failure
+    mov rdi, [r12 + 24]
+    call tk_intent_prepare_cleanup
+    mov qword ptr [r12 + 24], 0
+    mov rdi, [r12 + 40]
+    cmp qword ptr [rdi + 128], -1
+    jne tk_intent_contract_failure
+    cmp qword ptr [rdi + 136], -1
+    jne tk_intent_contract_failure
+    cmp qword ptr [rdi + 144], -1
+    jne tk_intent_contract_failure
+    mov qword ptr [r12 + 40], 0
+    mov esi, tk_IR_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+    mov rdi, rbx
+    mov esi, tk_LC_BYTES + 4096
+    mov qword ptr [r12 + 56], 0
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+    mov r13, [r12 + tk_LC_PARENT]
+    mov rax, [r12 + tk_LC_NEXT]
+    mov rdx, [r12 + tk_LC_PREV]
+    test rdx, rdx
+    jz tk_lookup_drop_head
+    cmp [rdx + tk_LC_NEXT], r12
+    jne tk_intent_contract_failure
+    mov [rdx + tk_LC_NEXT], rax
+    jmp tk_lookup_drop_next
+tk_lookup_drop_head:
+    cmp [r13 + tk_IG_LOOKUP_HEAD], r12
+    jne tk_intent_contract_failure
+    mov [r13 + tk_IG_LOOKUP_HEAD], rax
+tk_lookup_drop_next:
+    test rax, rax
+    jz tk_lookup_drop_default
+    cmp [rax + tk_LC_PREV], r12
+    jne tk_intent_contract_failure
+    mov [rax + tk_LC_PREV], rdx
+tk_lookup_drop_default:
+    cmp [r13 + tk_IG_LOOKUP_DEFAULT], r12
+    jne tk_lookup_drop_mapping
+    mov qword ptr [r13 + tk_IG_LOOKUP_DEFAULT], 0
+tk_lookup_drop_mapping:
+    mov qword ptr [r12], 0
+    mov rdi, r12
+    mov esi, 135168
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+    xor eax, eax
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+# rdi=IG; the serial carrier has joined all users before this final release.
+tk_lookup_drop_all:
+    push rbx
+    mov rbx, rdi
+tk_lookup_drop_all_next:
+    mov rdi, [rbx + tk_IG_LOOKUP_HEAD]
+    test rdi, rdi
+    jz tk_lookup_drop_all_done
+    call tk_result_lookup_context_drop
+    jmp tk_lookup_drop_all_next
+tk_lookup_drop_all_done:
+    cmp qword ptr [rbx + tk_IG_LOOKUP_DEFAULT], 0
+    jne tk_intent_contract_failure
+    pop rbx
+    ret
+
+tk_lookup_service_frame:
+    mov rsi, [r15 + tk_SERVICE_IO]
+    add rsi, 32
+    mov rdx, [r15 + 1088]
+    cmp rdx, 8
+    jb tk_intent_service_frame
+    mov rax, 0x313051554c525248
+    cmp [rsi], rax
+    jne tk_intent_service_frame
+    mov rbx, [r15 + tk_INTENT_GLOBAL_SLOT]
+    test rbx, rbx
+    jz tk_intent_contract_failure
+    mov rdi, [rbx + tk_IG_LOOKUP_DEFAULT]
+    test rdi, rdi
+    jnz tk_lookup_service_ready
+    mov rdi, rbx
+    call tk_result_lookup_context_create
+    mov [rbx + tk_IG_LOOKUP_DEFAULT], rax
+    mov rdi, rax
+tk_lookup_service_ready:
+    mov rsi, [r15 + tk_SERVICE_IO]
+    add rsi, 32
+    mov rdx, [r15 + 1088]
+    mov rcx, [rdi + 56]
+    add rcx, tk_LC_OUTPUT
+    mov r8d, tk_LC_CAP
+    call tk_result_lookup_call
+    mov [r15 + 1096], eax
+    lea rsi, [r15 + 1096]
+    mov edx, 4
+    call tk_write_exact
+    mov edx, [r15 + 1096]
+    cmp edx, tk_LC_CAP
+    ja tk_service_next
+    mov rax, [r15 + tk_INTENT_GLOBAL_SLOT]
+    mov rax, [rax + tk_IG_LOOKUP_DEFAULT]
+    mov rsi, [rax + 56]
+    add rsi, tk_LC_OUTPUT
+    call tk_write_exact
+    jmp tk_service_next
+
+tk_lookup_child_lock:
+    cmp qword ptr [r14 + 24], 0
+    jne tk_intent_contract_failure
+    mov rax, 0x313030514c525248
+    cmp [r13], rax
+    jne tk_intent_contract_failure
+    mov rax, [r13 + 8]
+    cmp rax, 1
+    je tk_lookup_child_lock_acquire
+    cmp rax, 2
+    jne tk_intent_contract_failure
+    cmp qword ptr [r14 + 40], 64
+    jne tk_intent_contract_failure
+    cmp qword ptr [r15 + 112], 1
+    jne tk_intent_contract_failure
+    mov rax, [r13 + 16]
+    cmp [r12 + 1024 + 88], rax
+    jne tk_intent_contract_failure
+    lea rdi, [r12 + 1024]
+    call tk_result_locks_drop
+    test eax, eax
+    jnz tk_intent_contract_failure
+    mov qword ptr [r15 + 112], 0
+    jmp tk_lookup_child_lock_reply
+tk_lookup_child_lock_acquire:
+    cmp qword ptr [r14 + 40], 128
+    jne tk_intent_contract_failure
+    cmp qword ptr [r13 + 32], 64
+    jne tk_intent_contract_failure
+    cmp qword ptr [r15 + 112], 0
+    jne tk_intent_contract_failure
+    lea rdi, [r12 + 1024]
+    xor eax, eax
+    mov ecx, 64
+    rep stosq
+    mov rdi, [r12 + tk_IG_LOCKS]
+    lea rsi, [r12 + 1024]
+    lea rdx, [r13 + 64]
+    mov ecx, 64
+    call tk_result_locks_record_lock
+    test eax, eax
+    jz tk_lookup_child_lock_held
+    cmp eax, 2
+    jne tk_intent_contract_failure
+    jmp tk_lookup_child_lock_reply
+tk_lookup_child_lock_held:
+    mov qword ptr [r15 + 112], 1
+tk_lookup_child_lock_reply:
+    lea rsi, [r12 + 1024 + 256]
+    lea rdi, [rbp + tk_LC_CHILD_REPLY]
+    mov ecx, 8
+    rep movsq
+    cmp qword ptr [r15 + 112], 0
+    jne tk_lookup_child_lock_done
+    lea rdi, [r12 + 1024]
+    xor eax, eax
+    mov ecx, 64
+    rep stosq
+tk_lookup_child_lock_done:
+    mov eax, 64
+    jmp tk_lookup_child_complete
+
+tk_lookup_child_record:
+    mov rax, [r14 + 24]
+    cmp rax, 1
+    ja tk_intent_contract_failure
+    mov rbx, [r12 + 24]
+    test rax, rax
+    jnz tk_lookup_child_record_shard
+    cmp qword ptr [rbx + 0x1400048], 0
+    je tk_intent_contract_failure
+    mov rsi, [rbx + 208]
+    jmp tk_lookup_child_record_call
+tk_lookup_child_record_shard:
+    cmp qword ptr [rbx + 0x200088], 0
+    je tk_intent_contract_failure
+    mov rsi, [rbx + 160]
+tk_lookup_child_record_call:
+    mov rdi, [r12 + 40]
+    mov rdx, r13
+    mov rcx, [r14 + 40]
+    lea r8, [rbp + tk_LC_CHILD_REPLY]
+    call tk_intent_record_call
+    jmp tk_lookup_child_complete
+
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Private composed Read owner. Root and caller bytes never escape this process.
+.equ tk_READ_ROOT_SLOT, 24640
+.equ tk_RB_SERVICE, 8
+.equ tk_RB_IG, 16
+.equ tk_RB_WORKERS, 24
+.equ tk_RB_CALLER, 32
+.equ tk_RB_STATUS, 40
+.equ tk_RB_RESULT, 48
+.equ tk_RB_EXIT, 56
+.equ tk_RB_SP, 64
+.equ tk_RB_FRAMES, 72
+.equ tk_RB_POLLS, 80
+.equ tk_RB_CANCELS, 88
+.equ tk_RB_EOF_CANCELS, 96
+.equ tk_RB_REFUSALS, 104
+.equ tk_RB_COMPLETIONS, 112
+.equ tk_RB_LAST_OP, 120
+.equ tk_RB_LAST_CODE, 128
+.equ tk_RB_STORE_HELD, 136
+.equ tk_RB_STORE_ACQUIRE, 144
+.equ tk_RB_STORE_RELEASE, 152
+.equ tk_RB_RETIRED, 160
+.equ tk_RB_CALLBACKS, 168
+.equ tk_RB_DROPS, 176
+.equ tk_RB_GENERATION, 184
+.equ tk_RB_CLOSING, 192
+.equ tk_RB_OUTPUT_LEN, 200
+.equ tk_RB_OUT_KIND, 208
+.equ tk_RB_ERRNO, 216
+.equ tk_RB_TEXTLEN, 224
+.equ tk_RB_OUT_PTR, 232
+.equ tk_RB_RECORD_HELD, 240
+.equ tk_RB_RECORD_ACQUIRE, 248
+.equ tk_RB_RECORD_RELEASE, 256
+.equ tk_RB_RECORD_GUARD, 40960
+.equ tk_RB_LEAF_INPUT, 512
+.equ tk_RB_LEAF_OUTPUT, 640
+.equ tk_RB_FOOTER, 1024
+.equ tk_RB_CONTEXT, 4096
+.equ tk_RB_OUTPUT, 131072
+.equ tk_RB_BYTES, 262144
+.equ tk_RC_ROOT, 8
+.equ tk_RC_LENGTH, 16
+.equ tk_RC_CALLER, 24
+.equ tk_RC_PENDING, 32
+.equ tk_RC_SEQUENCE, 40
+.equ tk_RC_ERRNO, 48
+.equ tk_RC_CODE, 56
+.equ tk_RC_PAGE_SEQUENCE, 64
+.equ tk_RC_TOKEN, 128
+.equ tk_RC_META, 160
+.equ tk_RC_SNAPSHOT, 192
+.equ tk_RC_ACTION_COPY, 512
+.equ tk_RC_PAGE_ACTION_COPY, 608
+.equ tk_RC_POLLFD, 720
+.equ tk_RC_EVENT_COUNT, 736
+.equ tk_RC_INPUT, 4096
+.equ tk_RC_INPUT_CAPACITY, 8388672
+.equ tk_RC_INPUT_MAPPING, 8392704
+.equ tk_RC_WORK, 12582912
+.equ tk_RC_WORK_BYTES, 67108864
+.equ tk_RC_PAGE_WORK, 83886080
+.equ tk_RC_PAGE_WORK_BYTES, 8388608
+.equ tk_RC_ERROR_WORK, 92274688
+.equ tk_RC_CODEC_WORK, 92307456
+.equ tk_RC_OUTPUT, 94371840
+.equ tk_RC_RECEIVER, 96468992
+.equ tk_RC_RECEIVER_CAPACITY, 2097280
+.equ tk_RC_BYTES, 100663296
+.equ tk_READ_OUTPUT_CAPACITY, 65568
+.equ tk_READ_ACTION, 4096
+.equ tk_READ_CHILD_REQUEST, 33554432
+.equ tk_READ_CHILD_REPLY, 58720256
+.equ tk_READ_CHILD_CAPACITY, 2097152
+.equ tk_READ_PAGE_REQUEST, 4194304
+.equ tk_READ_PAGE_REPLY, 5242880
+.equ tk_READ_EFFECT, 0xfffffff0
+.equ tk_READ_PENDING, 0xfffffff8
+.equ tk_READ_INVALID, 0xffffffff
+.equ tk_READ_STATE_REFUSAL, 0xfffffffd
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+.intel_syntax noprefix
+.section .text
+.equ tk_RDW_R_LOCK, 0
+.equ tk_RDW_R_HEAD, 8
+.equ tk_RDW_R_COUNT, 16
+.equ tk_RDW_R_OWNER, 24
+.equ tk_RDW_R_RETIRED, 32
+.equ tk_RDW_R_CALLBACKS, 40
+.equ tk_RDW_R_CALLBACK_DROPS, 48
+.equ tk_RDW_R_EVENTFD, 56
+.equ tk_RDW_R_POLICY, 256
+.equ tk_RDW_R_REQUEST, 512
+.equ tk_RDW_R_SNAPSHOT, 640
+.equ tk_RDW_R_MAP, 4096
+.equ tk_RDW_W_MAGIC, 0
+.equ tk_RDW_W_NEXT, 8
+.equ tk_RDW_W_ROOT, 16
+.equ tk_RDW_W_JOB, 24
+.equ tk_RDW_W_CALLER, 32
+.equ tk_RDW_W_KIND, 40
+.equ tk_RDW_W_SEQUENCE, 48
+.equ tk_RDW_W_INPUT, 56
+.equ tk_RDW_W_LENGTH, 64
+.equ tk_RDW_W_INPUT_MAP, 72
+.equ tk_RDW_W_OUTPUT, 80
+.equ tk_RDW_W_TID, 96
+.equ tk_RDW_W_ACTUAL_TID, 104
+.equ tk_RDW_W_READY, 112
+.equ tk_RDW_W_AUX, 120
+.equ tk_RDW_W_NOTIFY_WORD, 128
+.equ tk_RDW_W_POLICY, 256
+.equ tk_RDW_W_REQUEST, 512
+.equ tk_RDW_W_SNAPSHOT, 640
+.equ tk_RDW_W_CALLBACK_WORK, 1024
+.equ tk_RDW_W_TEST_START, 2048
+.equ tk_RDW_W_TEST_RUN, 2052
+.equ tk_RDW_W_TEST_EXIT, 2056
+.equ tk_RDW_W_TEST_ENTERED, 2064
+.equ tk_RDW_W_TEST_COMPLETED, 2072
+.equ tk_RDW_W_STACK_GUARD, 4096
+.equ tk_RDW_W_STACK_START, 8192
+.equ tk_RDW_W_STACK_END, 1056768
+.equ tk_RDW_W_MAP, 1060864
+.equ tk_RDW_W_MAGIC_VALUE, 0x3130574357525248
+.equ tk_RDW_OUTPUT_CAPACITY, 2097152
+.equ tk_RDW_OUTPUT_MAP, 2105344
+.equ tk_RDW_INVALID, 0xffffffff
+.equ tk_RDW_CAPACITY, 0xfffffffe
+.equ tk_RDW_STATE_ERROR, 0xfffffff9
+.equ tk_RDW_PENDING, 0xfffffff8
+.macro tk_rdw_prologue
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+.endm
+.macro tk_rdw_epilogue
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+# The root gate protects each HIA entry and registry mutation, never callback IO.
+# r13=root, r14=node; rdi=operation, rsi=A, rdx=B. All other request fields derive from owned metadata.
+tk_rdw_policy_node:
+    sub rsp, 8
+    mov rax, 0x3130515457525248
+    mov [r14 + tk_RDW_W_REQUEST], rax
+    mov [r14 + tk_RDW_W_REQUEST + 8], rdi
+    mov rax, [r14 + tk_RDW_W_JOB]
+    mov [r14 + tk_RDW_W_REQUEST + 16], rax
+    mov rax, [r14 + tk_RDW_W_CALLER]
+    mov [r14 + tk_RDW_W_REQUEST + 24], rax
+    mov rax, [r14 + tk_RDW_W_KIND]
+    mov [r14 + tk_RDW_W_REQUEST + 32], rax
+    mov rax, [r14 + tk_RDW_W_SEQUENCE]
+    mov [r14 + tk_RDW_W_REQUEST + 40], rax
+    mov [r14 + tk_RDW_W_REQUEST + 48], rsi
+    mov [r14 + tk_RDW_W_REQUEST + 56], rdx
+    mov qword ptr [r14 + tk_RDW_W_REQUEST + 64], 0
+    mov qword ptr [r14 + tk_RDW_W_REQUEST + 72], 0
+    lea rdi, [r14 + tk_RDW_W_REQUEST]
+    mov esi, 80
+    lea rdx, [r14 + tk_RDW_W_SNAPSHOT]
+    mov ecx, 128
+    lea r8, [r14 + tk_RDW_W_POLICY]
+    mov r9d, 256
+    call tk_rdw_policy_native
+    add rsp, 8
+    ret
+tk_rdw_policy_global:
+    sub rsp, 8
+    mov rax, 0x3130514757525248
+    mov [r13 + tk_RDW_R_REQUEST], rax
+    mov [r13 + tk_RDW_R_REQUEST + 8], rdi
+    lea rdi, [r13 + tk_RDW_R_REQUEST]
+    mov esi, 16
+    lea rdx, [r13 + tk_RDW_R_SNAPSHOT]
+    mov ecx, 128
+    lea r8, [r13 + tk_RDW_R_POLICY]
+    mov r9d, 256
+    call tk_rdw_policy_native
+    add rsp, 8
+    ret
+tk_rdw_policy_native:
+    sub rsp, 8
+    .byte 0xe8
+tk_read_worker_policy_displacement:
+    .long tk_intent_image_read_worker_policy - . - 4
+    mov ecx, eax
+    cmp rax, rcx
+    jne tk_rdw_fatal_contract
+    add rsp, 8
+    ret
+tk_rdw_lock:
+    lea rdi, [r13 + tk_RDW_R_LOCK]
+    jmp tk_rdw_mutex_lock
+tk_rdw_unlock:
+    lea rdi, [r13 + tk_RDW_R_LOCK]
+    jmp tk_rdw_mutex_unlock
+tk_rdw_policy_simple:
+    xor esi, esi
+    xor edx, edx
+    jmp tk_rdw_policy_node
+tk_rdw_policy_checked:
+    sub rsp, 8
+    call tk_rdw_policy_simple
+    cmp eax, 128
+    jne tk_rdw_fatal_contract
+    add rsp, 8
+    ret
+tk_rdw_copy_snapshot:
+    lea rsi, [r14 + tk_RDW_W_SNAPSHOT]
+    mov ecx, 16
+    rep movsq
+    ret
+# Root gate held. The list count bounds every traversal.
+tk_rdw_find:
+    mov rax, [r13 + tk_RDW_R_HEAD]
+    mov rcx, [r13 + tk_RDW_R_COUNT]
+tk_rdw_find_next:
+    test rax, rax
+    jz tk_rdw_find_return
+    test rcx, rcx
+    jz tk_rdw_fatal_contract
+    dec rcx
+    mov rdx, tk_RDW_W_MAGIC_VALUE
+    cmp [rax + tk_RDW_W_MAGIC], rdx
+    jne tk_rdw_fatal_contract
+    cmp [rax + tk_RDW_W_JOB], rdi
+    je tk_rdw_find_return
+    mov rax, [rax + tk_RDW_W_NEXT]
+    jmp tk_rdw_find_next
+tk_rdw_find_return:
+    ret
+
+# Fixed Linux x86_64 mechanics; no policy interpretation or host-language callback.
+tk_rdw_map:
+    xor edi, edi
+    mov edx, 3
+    mov r10d, 34
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae tk_rdw_fatal_resource
+    ret
+tk_rdw_guard_page:
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_rdw_fatal_resource
+    ret
+tk_rdw_unmap:
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_rdw_fatal_contract
+    ret
+# Kernel CHILD_CLEARTID uses the shared/non-private futex key.
+tk_rdw_join:
+    lea rdi, [r14 + tk_RDW_W_TID]
+tk_rdw_join_next:
+    mov edx, [rdi]
+    test edx, edx
+    jz tk_rdw_join_done
+    xor esi, esi
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je tk_rdw_join_next
+    cmp rax, -11
+    je tk_rdw_join_next
+    test rax, rax
+    js tk_rdw_fatal_contract
+    jmp tk_rdw_join_next
+tk_rdw_join_done:
+    mfence
+    ret
+tk_rdw_mutex_lock:
+    xor eax, eax
+    mov edx, 1
+    lock cmpxchg dword ptr [rdi], edx
+    jz tk_rdw_mutex_acquired
+tk_rdw_mutex_contended:
+    mov eax, 2
+    xchg eax, dword ptr [rdi]
+    test eax, eax
+    jz tk_rdw_mutex_acquired
+    mov edx, 2
+    sub rsp, 8
+    call tk_rdw_wait_value
+    add rsp, 8
+    jmp tk_rdw_mutex_contended
+tk_rdw_mutex_acquired:
+    ret
+tk_rdw_mutex_unlock:
+    xor eax, eax
+    xchg eax, dword ptr [rdi]
+    cmp eax, 2
+    jne tk_rdw_mutex_unlocked
+    mov esi, 129
+    mov edx, 1
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+tk_rdw_mutex_unlocked:
+    ret
+tk_rdw_wait_value:
+    cmp dword ptr [rdi], edx
+    jne tk_rdw_wait_done
+    mov esi, 137
+    xor r10d, r10d
+    xor r8d, r8d
+    mov r9d, -1
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je tk_rdw_wait_value
+    cmp rax, -11
+    je tk_rdw_wait_done
+    test rax, rax
+    js tk_rdw_fatal_contract
+tk_rdw_wait_done:
+    ret
+tk_rdw_wait_zero:
+    cmp dword ptr [rdi], 0
+    jne tk_rdw_zero_done
+    xor edx, edx
+    sub rsp, 8
+    call tk_rdw_wait_value
+    add rsp, 8
+    jmp tk_rdw_wait_zero
+tk_rdw_zero_done:
+    ret
+tk_rdw_wake_all:
+    mov esi, 129
+    mov edx, 0x7fffffff
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    js tk_rdw_fatal_contract
+    ret
+tk_rdw_fatal_resource:
+    mov edi, 74
+    jmp tk_rdw_fatal_exit
+tk_rdw_fatal_contract:
+    mov edi, 71
+tk_rdw_fatal_exit:
+    mov eax, 231
+    syscall
+    ud2
+
+# Level-triggered eventfd notification: only an already complete task reaches here.
+# A full nonblocking counter is already readable; no long IO or root gate is held.
+tk_rdw_notify_receiver:
+    mov qword ptr [r14 + tk_RDW_W_NOTIFY_WORD], 1
+tk_rdw_notify_again:
+    mov rdi, [r13 + tk_RDW_R_EVENTFD]
+    lea rsi, [r14 + tk_RDW_W_NOTIFY_WORD]
+    mov edx, 8
+    mov eax, 1
+    syscall
+    cmp rax, -4
+    je tk_rdw_notify_again
+    cmp rax, -11
+    je tk_rdw_notify_done
+    cmp rax, 8
+    jne tk_rdw_fatal_contract
+tk_rdw_notify_done:
+    ret
+# The embedding owner registers this descriptor with its real reactor.
+tk_read_worker_notification_fd:
+    mov rax, [rdi + tk_RDW_R_EVENTFD]
+    ret
+
+# SysV callable owner. API calls are serialized by the embedding owner; workers use only the short root gate.
+# create(rdi=shared backend owner) -> rax=root; resources fail closed in this bounded profile.
+tk_read_worker_create:
+    tk_rdw_prologue
+    mov r12, rdi
+    mov esi, tk_RDW_R_MAP
+    call tk_rdw_map
+    mov r13, rax
+    mov [r13 + tk_RDW_R_OWNER], r12
+    xor edi, edi
+    mov esi, 0x80800
+    mov eax, 290
+    syscall
+    cmp rax, -4095
+    jae tk_rdw_fatal_resource
+    mov [r13 + tk_RDW_R_EVENTFD], rax
+    mov rax, r13
+    tk_rdw_epilogue
+
+# generation(root, output128) -> u32; the full nonwrapping generation is output+16.
+tk_read_worker_generation:
+    tk_rdw_prologue
+    mov r13, rdi
+    mov r12, rsi
+    call tk_rdw_lock
+    xor edi, edi
+    call tk_rdw_policy_global
+    mov ebx, eax
+    cmp eax, 128
+    jne tk_rdw_generation_unlock
+    mov rdi, r12
+    lea rsi, [r13 + tk_RDW_R_SNAPSHOT]
+    mov ecx, 16
+    rep movsq
+tk_rdw_generation_unlock:
+    call tk_rdw_unlock
+    mov eax, ebx
+    tk_rdw_epilogue
+
+# submit(root, meta24[caller,kind,sequence], immutable input, input_len, output128).
+# The receiver owns a token, never the task allocations. IDs originate in the HIA allocator.
+tk_read_worker_submit:
+    tk_rdw_prologue
+    mov r13, rdi
+    mov r12, rsi
+    mov r15, rdx
+    mov rbx, rcx
+    mov [rsp], r8
+    call tk_rdw_lock
+    xor edi, edi
+    call tk_rdw_policy_global
+    cmp eax, 128
+    jne tk_rdw_submit_generation_error
+    mov rbp, [r13 + tk_RDW_R_SNAPSHOT + 16]
+    call tk_rdw_unlock
+    mov esi, tk_RDW_W_MAP
+    call tk_rdw_map
+    mov r14, rax
+    mov rax, tk_RDW_W_MAGIC_VALUE
+    mov [r14 + tk_RDW_W_MAGIC], rax
+    mov [r14 + tk_RDW_W_ROOT], r13
+    mov [r14 + tk_RDW_W_JOB], rbp
+    mov rax, [r12]
+    mov [r14 + tk_RDW_W_CALLER], rax
+    mov rax, [r12 + 8]
+    mov [r14 + tk_RDW_W_KIND], rax
+    mov rax, [r12 + 16]
+    mov [r14 + tk_RDW_W_SEQUENCE], rax
+    mov [r14 + tk_RDW_W_LENGTH], rbx
+    mov edi, 1
+    mov rsi, rbx
+    mov edx, tk_RDW_OUTPUT_CAPACITY
+    call tk_rdw_policy_node
+    cmp eax, 128
+    jne tk_rdw_submit_admission_error
+    lea rdi, [r14 + tk_RDW_W_STACK_GUARD]
+    call tk_rdw_guard_page
+    lea rdi, [r14 + tk_RDW_W_STACK_END]
+    call tk_rdw_guard_page
+    mov rsi, rbx
+    add rsi, 4095
+    and rsi, -4096
+    add rsi, 8192
+    mov [r14 + tk_RDW_W_INPUT_MAP], rsi
+    call tk_rdw_map
+    lea rax, [rax + 4096]
+    mov [r14 + tk_RDW_W_INPUT], rax
+    lea rdi, [rax - 4096]
+    call tk_rdw_guard_page
+    mov rdi, [r14 + tk_RDW_W_INPUT]
+    mov rax, [r14 + tk_RDW_W_INPUT_MAP]
+    lea rdi, [rdi + rax - 8192]
+    call tk_rdw_guard_page
+    mov rdi, [r14 + tk_RDW_W_INPUT]
+    mov rsi, r15
+    mov rcx, rbx
+    rep movsb
+    mov rdi, [r14 + tk_RDW_W_INPUT]
+    mov rsi, [r14 + tk_RDW_W_INPUT_MAP]
+    sub rsi, 8192
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_rdw_fatal_resource
+    mov esi, tk_RDW_OUTPUT_MAP
+    call tk_rdw_map
+    lea rax, [rax + 4096]
+    mov [r14 + tk_RDW_W_OUTPUT], rax
+    lea rdi, [rax - 4096]
+    call tk_rdw_guard_page
+    mov rdi, [r14 + tk_RDW_W_OUTPUT]
+    add rdi, tk_RDW_OUTPUT_CAPACITY
+    call tk_rdw_guard_page
+    call tk_read_worker_callback_create
+    lea rsi, [r14 + tk_RDW_W_STACK_END - 16]
+    mov [rsi], r14
+    mov edi, 0x350f00
+    lea rdx, [r14 + tk_RDW_W_TID]
+    mov r10, rdx
+    xor r8d, r8d
+    mov eax, 56
+    syscall
+    test rax, rax
+    jz tk_rdw_child
+    cmp rax, -4095
+    jae tk_rdw_fatal_resource
+    mov [r14 + tk_RDW_W_ACTUAL_TID], rax
+    call tk_rdw_lock
+    mov rax, [r13 + tk_RDW_R_HEAD]
+    mov [r14 + tk_RDW_W_NEXT], rax
+    mov [r13 + tk_RDW_R_HEAD], r14
+    add qword ptr [r13 + tk_RDW_R_COUNT], 1
+    mov edi, 2
+    call tk_rdw_policy_checked
+    mov rdi, [rsp]
+    call tk_rdw_copy_snapshot
+    call tk_rdw_unlock
+    mov dword ptr [r14 + tk_RDW_W_READY], 1
+    lea rdi, [r14 + tk_RDW_W_READY]
+    call tk_rdw_wake_all
+    mov eax, 128
+    tk_rdw_epilogue
+tk_rdw_submit_generation_error:
+    mov ebx, eax
+    call tk_rdw_unlock
+    mov eax, ebx
+    tk_rdw_epilogue
+tk_rdw_submit_admission_error:
+    mov ebx, eax
+    mov rdi, r14
+    mov esi, tk_RDW_W_MAP
+    call tk_rdw_unmap
+    mov eax, ebx
+    tk_rdw_epilogue
+tk_rdw_child:
+    pop r14
+    sub rsp, 8
+    call tk_rdw_thread
+    jmp tk_rdw_fatal_contract
+
+tk_rdw_thread:
+    sub rsp, 8
+    mov r13, [r14 + tk_RDW_W_ROOT]
+    lea rdi, [r14 + tk_RDW_W_READY]
+    call tk_rdw_wait_zero
+    call tk_read_worker_before_begin
+    call tk_rdw_lock
+    mov edi, 3
+    call tk_rdw_policy_checked
+    mov r12, [r14 + tk_RDW_W_SNAPSHOT + 104]
+    call tk_rdw_unlock
+    cmp r12, 5
+    je tk_rdw_thread_completed
+    cmp r12, 4
+    jne tk_rdw_fatal_contract
+    call tk_read_worker_callback
+    mov ebx, eax
+    mov rdi, [r14 + tk_RDW_W_OUTPUT]
+    mov esi, tk_RDW_OUTPUT_CAPACITY
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_rdw_fatal_resource
+    call tk_rdw_lock
+    mov edi, 4
+    mov esi, ebx
+    xor edx, edx
+    cmp ebx, tk_RDW_OUTPUT_CAPACITY
+    ja tk_rdw_completion_args
+    mov edx, ebx
+tk_rdw_completion_args:
+    call tk_rdw_policy_node
+    cmp eax, 128
+    jne tk_rdw_fatal_contract
+    call tk_rdw_unlock
+tk_rdw_thread_completed:
+    call tk_rdw_notify_receiver
+    call tk_read_worker_after_complete
+    xor edi, edi
+    mov eax, 60
+    syscall
+    ud2
+
+# External token fields are admitted by HIA, never repaired from registry metadata.
+tk_rdw_policy_external:
+    sub rsp, 8
+    mov rax, 0x3130515457525248
+    mov [r14 + tk_RDW_W_REQUEST], rax
+    mov [r14 + tk_RDW_W_REQUEST + 8], rdi
+    lea rdi, [r14 + tk_RDW_W_REQUEST + 16]
+    mov rsi, r12
+    mov ecx, 4
+    rep movsq
+    xor eax, eax
+    mov ecx, 4
+    rep stosq
+    lea rdi, [r14 + tk_RDW_W_REQUEST]
+    mov esi, 80
+    lea rdx, [r14 + tk_RDW_W_SNAPSHOT]
+    mov ecx, 128
+    lea r8, [r14 + tk_RDW_W_POLICY]
+    mov r9d, 256
+    call tk_rdw_policy_native
+    add rsp, 8
+    ret
+
+# event(root, token32[job,caller,kind,sequence], op, output, capacity).
+# Only poll(5), take(6), detach(7), inspect(11) are exposed.
+# A take returns the 128-byte HIA receipt followed by the immutable task reply.
+tk_read_worker_event:
+    tk_rdw_prologue
+    mov r13, rdi
+    mov r12, rsi
+    mov rbp, rdx
+    mov r15, rcx
+    mov rbx, r8
+    cmp rbx, 128
+    jb tk_rdw_event_capacity_early
+    cmp rbp, 5
+    je tk_rdw_event_admit
+    cmp rbp, 6
+    je tk_rdw_event_admit
+    cmp rbp, 7
+    je tk_rdw_event_admit
+    cmp rbp, 11
+    jne tk_rdw_event_invalid_early
+tk_rdw_event_admit:
+    call tk_rdw_lock
+    mov rdi, [r12]
+    call tk_rdw_find
+    test rax, rax
+    jz tk_rdw_event_absent
+    mov r14, rax
+    mov rdi, rbp
+    cmp rbp, 6
+    jne tk_rdw_event_execute
+    mov edi, 5
+tk_rdw_event_execute:
+    call tk_rdw_policy_external
+    cmp eax, 128
+    jne tk_rdw_event_error
+    cmp rbp, 6
+    jne tk_rdw_event_snapshot
+    mov rax, [r14 + tk_RDW_W_SNAPSHOT + 104]
+    cmp rax, 1
+    je tk_rdw_take_ready
+    cmp rax, 7
+    jne tk_rdw_event_pending
+tk_rdw_take_ready:
+    mov rax, [r14 + tk_RDW_W_SNAPSHOT + 72]
+    add rax, 128
+    cmp rbx, rax
+    jb tk_rdw_event_capacity
+    mov edi, 6
+    call tk_rdw_policy_external
+    cmp eax, 128
+    jne tk_rdw_fatal_contract
+    mov rdi, r15
+    call tk_rdw_copy_snapshot
+    mov rsi, [r14 + tk_RDW_W_OUTPUT]
+    mov rcx, [r14 + tk_RDW_W_SNAPSHOT + 72]
+    mov rbx, rcx
+    add rbx, 128
+    rep movsb
+    jmp tk_rdw_event_unlock
+tk_rdw_event_snapshot:
+    mov rdi, r15
+    call tk_rdw_copy_snapshot
+    mov ebx, 128
+    jmp tk_rdw_event_unlock
+tk_rdw_event_pending:
+    mov eax, tk_RDW_PENDING
+    jmp tk_rdw_event_error
+tk_rdw_event_capacity:
+    mov eax, tk_RDW_CAPACITY
+    jmp tk_rdw_event_error
+tk_rdw_event_absent:
+    mov eax, tk_RDW_STATE_ERROR
+tk_rdw_event_error:
+    mov ebx, eax
+tk_rdw_event_unlock:
+    call tk_rdw_unlock
+    mov eax, ebx
+    tk_rdw_epilogue
+tk_rdw_event_invalid_early:
+    mov eax, tk_RDW_INVALID
+    tk_rdw_epilogue
+tk_rdw_event_capacity_early:
+    mov eax, tk_RDW_CAPACITY
+    tk_rdw_epilogue
+
+# The caller holds the gate and r15 points to the link owning r14.
+tk_rdw_retire_locked:
+    sub rsp, 8
+    cmp dword ptr [r14 + tk_RDW_W_TID], 0
+    jne tk_rdw_fatal_contract
+    mfence
+    mov edi, 8
+    call tk_rdw_policy_checked
+    mov edi, 9
+    call tk_rdw_policy_checked
+    cmp qword ptr [r14 + tk_RDW_W_SNAPSHOT + 104], 3
+    jne tk_rdw_fatal_contract
+    mov rax, [r14 + tk_RDW_W_NEXT]
+    mov [r15], rax
+    sub qword ptr [r13 + tk_RDW_R_COUNT], 1
+    add qword ptr [r13 + tk_RDW_R_RETIRED], 1
+    add rsp, 8
+    ret
+# Never called before actual kernel quiescence and policy retirement.
+tk_rdw_dispose:
+    sub rsp, 8
+    call tk_read_worker_callback_drop
+    mov rdi, [r14 + tk_RDW_W_INPUT]
+    sub rdi, 4096
+    mov rsi, [r14 + tk_RDW_W_INPUT_MAP]
+    call tk_rdw_unmap
+    mov rdi, [r14 + tk_RDW_W_OUTPUT]
+    sub rdi, 4096
+    mov esi, tk_RDW_OUTPUT_MAP
+    call tk_rdw_unmap
+    mov qword ptr [r14 + tk_RDW_W_MAGIC], 0
+    mov rdi, r14
+    mov esi, tk_RDW_W_MAP
+    call tk_rdw_unmap
+    xor r14d, r14d
+    add rsp, 8
+    ret
+
+# reap(root) -> number retired. Never waits for a running or exiting worker.
+tk_read_worker_reap:
+    tk_rdw_prologue
+    mov r13, rdi
+    xor ebx, ebx
+tk_rdw_reap_restart:
+    call tk_rdw_lock
+    lea r15, [r13 + tk_RDW_R_HEAD]
+    mov rbp, [r13 + tk_RDW_R_COUNT]
+tk_rdw_reap_next:
+    mov r14, [r15]
+    test r14, r14
+    jz tk_rdw_reap_finish
+    test rbp, rbp
+    jz tk_rdw_fatal_contract
+    dec rbp
+    cmp dword ptr [r14 + tk_RDW_W_TID], 0
+    jne tk_rdw_reap_skip
+    mov edi, 11
+    call tk_rdw_policy_checked
+    cmp qword ptr [r14 + tk_RDW_W_SNAPSHOT + 8], 4
+    jne tk_rdw_fatal_contract
+    cmp qword ptr [r14 + tk_RDW_W_SNAPSHOT + 48], 1
+    je tk_rdw_reap_skip
+    call tk_rdw_retire_locked
+    call tk_rdw_unlock
+    call tk_rdw_dispose
+    inc ebx
+    jmp tk_rdw_reap_restart
+tk_rdw_reap_skip:
+    lea r15, [r14 + tk_RDW_W_NEXT]
+    jmp tk_rdw_reap_next
+tk_rdw_reap_finish:
+    call tk_rdw_unlock
+    mov eax, ebx
+    tk_rdw_epilogue
+
+# close_admission(root): close the HIA allocator; cancel queued nonmandatory jobs,
+# detach receivers, leave running work untouched. No long callback runs under this gate.
+tk_read_worker_close_admission:
+    tk_rdw_prologue
+    mov r13, rdi
+    call tk_rdw_lock
+    mov edi, 1
+    call tk_rdw_policy_global
+    cmp eax, 128
+    jne tk_rdw_fatal_contract
+    mov r14, [r13 + tk_RDW_R_HEAD]
+    mov r12, [r13 + tk_RDW_R_COUNT]
+tk_rdw_close_next:
+    test r14, r14
+    jz tk_rdw_close_done
+    test r12, r12
+    jz tk_rdw_fatal_contract
+    dec r12
+    mov edi, 10
+    call tk_rdw_policy_checked
+    cmp qword ptr [r14 + tk_RDW_W_SNAPSHOT + 48], 1
+    jne tk_rdw_close_skip_detach
+    mov edi, 7
+    call tk_rdw_policy_checked
+tk_rdw_close_skip_detach:
+    mov r14, [r14 + tk_RDW_W_NEXT]
+    jmp tk_rdw_close_next
+tk_rdw_close_done:
+    call tk_rdw_unlock
+    xor eax, eax
+    tk_rdw_epilogue
+
+# drain(root) requires closed admission. The owner keeps backend globals alive until this returns.
+tk_read_worker_drain:
+    tk_rdw_prologue
+    mov r13, rdi
+    call tk_rdw_lock
+    mov edi, 2
+    call tk_rdw_policy_global
+    cmp eax, 128
+    jne tk_rdw_fatal_contract
+    cmp qword ptr [r13 + tk_RDW_R_SNAPSHOT + 96], 1
+    jne tk_rdw_drain_not_closed
+    call tk_rdw_unlock
+tk_rdw_drain_next:
+    call tk_rdw_lock
+    mov r14, [r13 + tk_RDW_R_HEAD]
+    test r14, r14
+    jz tk_rdw_drain_done
+    call tk_rdw_unlock
+    call tk_rdw_join
+    call tk_rdw_lock
+    lea r15, [r13 + tk_RDW_R_HEAD]
+    cmp [r15], r14
+    jne tk_rdw_fatal_contract
+    call tk_rdw_retire_locked
+    call tk_rdw_unlock
+    call tk_rdw_dispose
+    jmp tk_rdw_drain_next
+tk_rdw_drain_done:
+    cmp qword ptr [r13 + tk_RDW_R_COUNT], 0
+    jne tk_rdw_fatal_contract
+    call tk_rdw_unlock
+    xor eax, eax
+    tk_rdw_epilogue
+tk_rdw_drain_not_closed:
+    call tk_rdw_unlock
+    mov eax, tk_RDW_STATE_ERROR
+    tk_rdw_epilogue
+
+# destroy(root) requires prior close and full actual drain; it does not own the shared backend.
+tk_read_worker_destroy:
+    tk_rdw_prologue
+    mov r13, rdi
+    call tk_rdw_lock
+    mov edi, 2
+    call tk_rdw_policy_global
+    cmp eax, 128
+    jne tk_rdw_fatal_contract
+    cmp qword ptr [r13 + tk_RDW_R_SNAPSHOT + 96], 1
+    jne tk_rdw_destroy_busy
+    cmp qword ptr [r13 + tk_RDW_R_COUNT], 0
+    jne tk_rdw_destroy_busy
+    cmp qword ptr [r13 + tk_RDW_R_HEAD], 0
+    jne tk_rdw_fatal_contract
+    call tk_rdw_unlock
+    mov rdi, [r13 + tk_RDW_R_EVENTFD]
+    mov qword ptr [r13 + tk_RDW_R_EVENTFD], -1
+    mov eax, 3
+    syscall
+    test rax, rax
+    jnz tk_rdw_fatal_contract
+    mov rdi, r13
+    mov esi, tk_RDW_R_MAP
+    call tk_rdw_unmap
+    xor eax, eax
+    tk_rdw_epilogue
+tk_rdw_destroy_busy:
+    call tk_rdw_unlock
+    mov eax, tk_RDW_STATE_ERROR
+    tk_rdw_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed actual callbacks. Creation and final drop run on the serialized embedding owner.
+tk_read_worker_callback_create:
+    sub rsp, 8
+    cmp qword ptr [r14 + tk_RDW_W_KIND], 2
+    je tk_read_actual_create_observation
+    cmp qword ptr [r14 + tk_RDW_W_KIND], 3
+    jne tk_rdw_fatal_contract
+    mov rdi, [r13 + tk_RDW_R_OWNER]
+    call tk_result_lookup_context_create
+    test rax, rax
+    jz tk_rdw_fatal_contract
+    mov [r14 + tk_RDW_W_AUX], rax
+    add rsp, 8
+    ret
+tk_read_actual_create_observation:
+    cmp qword ptr [r14 + tk_RDW_W_AUX], 0
+    jne tk_rdw_fatal_contract
+    add rsp, 8
+    ret
+
+tk_read_worker_callback_drop:
+    sub rsp, 8
+    cmp dword ptr [r14 + tk_RDW_W_TID], 0
+    jne tk_rdw_fatal_contract
+    cmp qword ptr [r14 + tk_RDW_W_POLICY + 8], 5
+    jne tk_rdw_fatal_contract
+    cmp qword ptr [r14 + tk_RDW_W_KIND], 2
+    je tk_read_actual_drop_observation
+    cmp qword ptr [r14 + tk_RDW_W_KIND], 3
+    jne tk_rdw_fatal_contract
+    mov rdi, [r14 + tk_RDW_W_AUX]
+    test rdi, rdi
+    jz tk_rdw_fatal_contract
+    call tk_result_lookup_context_drop
+    mov qword ptr [r14 + tk_RDW_W_AUX], 0
+tk_read_actual_drop_observation:
+    cmp qword ptr [r14 + tk_RDW_W_AUX], 0
+    jne tk_rdw_fatal_contract
+    lock add qword ptr [r13 + tk_RDW_R_CALLBACK_DROPS], 1
+    add rsp, 8
+    ret
+
+tk_read_worker_before_begin:
+tk_read_worker_after_complete:
+    ret
+
+# Each callback receives only the thread node's immutable input and owned output.
+# No pointer to the cancellable Read caller is retained.
+tk_read_worker_callback:
+    tk_rdw_prologue
+    lock add qword ptr [r13 + tk_RDW_R_CALLBACKS], 1
+    cmp qword ptr [r14 + tk_RDW_W_KIND], 3
+    je tk_read_actual_lookup
+    cmp qword ptr [r14 + tk_RDW_W_KIND], 2
+    jne tk_rdw_fatal_contract
+    cmp qword ptr [r14 + tk_RDW_W_AUX], 0
+    jne tk_rdw_fatal_contract
+    mov rdi, [r14 + tk_RDW_W_INPUT]
+    mov rsi, [r14 + tk_RDW_W_LENGTH]
+    mov rdx, [r14 + tk_RDW_W_OUTPUT]
+    mov ecx, tk_RDW_OUTPUT_CAPACITY
+    lea r8, [r14 + tk_RDW_W_CALLBACK_WORK]
+    xor r9d, r9d
+    call tk_intent_image_read_gate
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_rdw_fatal_contract
+    cmp eax, tk_RDW_OUTPUT_CAPACITY
+    ja tk_read_actual_callback_done
+    mov r12, [r14 + tk_RDW_W_OUTPUT]
+    cmp eax, 8
+    jb tk_rdw_fatal_contract
+    mov rdx, 0x313052564f415248
+    cmp [r12], rdx
+    je tk_read_actual_gate_refused
+    mov rdx, 0x31304e454f415248
+    cmp [r12], rdx
+    jne tk_rdw_fatal_contract
+    cmp rax, [r14 + tk_RDW_W_LENGTH]
+    jne tk_rdw_fatal_contract
+    mov r12, [r14 + tk_RDW_W_INPUT]
+    mov rbx, [r13 + tk_RDW_R_OWNER]
+    mov rdi, [rbx + tk_IG_SERVICE]
+    lea rsi, [r12 + 32]
+    mov rdx, [r12 + 8]
+    call tk_intent_root_cap
+    cmp rax, 1
+    jne tk_rdw_fatal_contract
+    mov rdi, [rbx + tk_IG_SERVICE]
+    mov esi, 1
+    mov rax, [r12 + 8]
+    lea rdx, [r12 + rax + 32]
+    mov rcx, [r12 + 16]
+    cmp rcx, 224
+    jne tk_rdw_fatal_contract
+    mov r8, [r14 + tk_RDW_W_OUTPUT]
+    mov r9d, tk_RDW_OUTPUT_CAPACITY
+    call tk_audit_observation_call
+    jmp tk_read_actual_callback_done
+tk_read_actual_gate_refused:
+    cmp eax, 128
+    jne tk_rdw_fatal_contract
+    jmp tk_read_actual_callback_done
+tk_read_actual_lookup:
+    mov rdi, [r14 + tk_RDW_W_AUX]
+    test rdi, rdi
+    jz tk_rdw_fatal_contract
+    mov rsi, [r14 + tk_RDW_W_INPUT]
+    mov rdx, [r14 + tk_RDW_W_LENGTH]
+    mov rcx, [r14 + tk_RDW_W_OUTPUT]
+    mov r8d, tk_RDW_OUTPUT_CAPACITY
+    call tk_result_lookup_call
+tk_read_actual_callback_done:
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_rdw_fatal_contract
+    tk_rdw_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# create(service root) -> root. Same Config, ResultLocks, and Audit storage owners.
+tk_read_boundary_create:
+    tk_rdw_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_READ_ROOT_SLOT], 0
+    jne tk_contract_fail
+    mov edi, tk_RB_BYTES
+    call tk_allocate_guarded
+    mov r13, rax
+    mov rax, 0x3130425252525248
+    mov [r13], rax
+    mov [r13 + tk_RB_SERVICE], r12
+    mov rax, [r12 + tk_INTENT_GLOBAL_SLOT]
+    test rax, rax
+    jz tk_contract_fail
+    mov [r13 + tk_RB_IG], rax
+    mov [r12 + tk_READ_ROOT_SLOT], r13
+    mov [r13 + tk_RB_CONTEXT], r12
+    lea rdx, [r12 + tk_GLOBAL_LOCK]
+    mov [r13 + tk_RB_CONTEXT + tk_LOCK_CONTEXT + 64], rdx
+    mov rdi, rax
+    call tk_read_worker_create
+    mov [r13 + tk_RB_WORKERS], rax
+    mov rax, r13
+    tk_rdw_epilogue
+
+# create(root, raw carrier, length, typed operation1/2) -> pointer; zero means INVALID.
+# First HIA entry validates the complete typed input before any child runs.
+tk_read_caller_create:
+    tk_rdw_prologue
+    mov r13, rdi
+    mov r14, rsi
+    mov r15, rdx
+    mov rbx, rcx
+    cmp r15, 64
+    jb tk_read_caller_create_invalid
+    cmp r15, tk_RC_INPUT_CAPACITY
+    ja tk_read_caller_create_invalid
+    mov edi, tk_RC_BYTES
+    call tk_allocate_guarded
+    mov r12, rax
+    mov rax, 0x3130435252525248
+    mov [r12], rax
+    mov [r12 + tk_RC_ROOT], r13
+    mov [r12 + tk_RC_LENGTH], r15
+    lea rdi, [r12 + tk_RC_INPUT]
+    mov rsi, r14
+    mov rcx, r15
+    rep movsb
+    mov [r12 + tk_RC_INPUT + 8], rbx
+    lea rdi, [r12 + tk_RC_INPUT]
+    mov esi, tk_RC_INPUT_MAPPING
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    lea rbp, [r12 + tk_RC_WORK]
+    call tk_read_caller_entry
+    cmp eax, tk_READ_EFFECT
+    je tk_read_caller_created
+    cmp eax, tk_READ_INVALID
+    jne tk_contract_fail
+    mov rdi, r12
+    call tk_read_caller_unmap
+tk_read_caller_create_invalid:
+    xor eax, eax
+    tk_rdw_epilogue
+tk_read_caller_created:
+    mov rax, r12
+    tk_rdw_epilogue
+
+# r12=caller, rbp=Read workspace; no parent request copy can be edited by a child.
+tk_read_caller_entry:
+    sub rsp, 8
+    lea rdi, [r12 + tk_RC_INPUT]
+    mov rsi, [r12 + tk_RC_LENGTH]
+    lea rdx, [r12 + tk_RC_OUTPUT]
+    mov ecx, tk_READ_OUTPUT_CAPACITY
+    mov r8, rbp
+    mov r9d, tk_RC_WORK_BYTES
+    call tk_intent_image_read
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_contract_fail
+    mov [r12 + tk_RC_CODE], rax
+    add rsp, 8
+    ret
+
+# assign a never-reused caller generation after carrier and live-caller admission.
+tk_read_caller_register:
+    tk_rdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_RC_ROOT]
+    cmp qword ptr [r13 + tk_RB_CALLER], 0
+    jne tk_contract_fail
+    mov rdi, [r13 + tk_RB_WORKERS]
+    lea rsi, [r12 + tk_RC_SNAPSHOT]
+    call tk_read_worker_generation
+    cmp eax, 128
+    jne tk_contract_fail
+    mov rax, [r12 + tk_RC_SNAPSHOT + 16]
+    test rax, rax
+    jz tk_contract_fail
+    mov [r12 + tk_RC_CALLER], rax
+    mov [r13 + tk_RB_CALLER], r12
+    tk_rdw_epilogue
+
+# Drive until actual worker Pending or a complete HIA response.
+tk_read_caller_drive:
+    tk_rdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_RC_ROOT]
+    cmp [r13 + tk_RB_CALLER], r12
+    jne tk_contract_fail
+    lea rbp, [r12 + tk_RC_WORK]
+    lea r14, [rbp + tk_READ_ACTION]
+    cmp qword ptr [r12 + tk_RC_PENDING], 0
+    jne tk_read_caller_take
+tk_read_caller_drive_code:
+    mov rax, [r12 + tk_RC_CODE]
+    cmp eax, tk_READ_EFFECT
+    jne tk_read_caller_drive_done
+    mov rax, 0x3130414452525248
+    cmp [r14], rax
+    jne tk_contract_fail
+    mov rax, [r12 + tk_RC_SEQUENCE]
+    inc rax
+    jz tk_contract_fail
+    cmp [r14 + 8], rax
+    jne tk_contract_fail
+    mov [r12 + tk_RC_SEQUENCE], rax
+    cmp qword ptr [r14 + 24], 0
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 32], tk_READ_CHILD_REQUEST
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 48], tk_READ_CHILD_REPLY
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 56], tk_READ_CHILD_CAPACITY
+    jne tk_contract_fail
+    mov rax, [r14 + 40]
+    test rax, rax
+    jz tk_contract_fail
+    cmp rax, 10485760
+    ja tk_contract_fail
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz tk_contract_fail
+    lea rdi, [r12 + tk_RC_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 12
+    rep movsq
+    mov rax, [r14 + 16]
+    cmp rax, 1
+    je tk_read_caller_config
+    cmp rax, 2
+    je tk_read_caller_submit
+    cmp rax, 3
+    je tk_read_caller_submit
+    cmp rax, 4
+    je tk_read_caller_pages
+    cmp rax, 5
+    je tk_read_caller_error
+    jmp tk_contract_fail
+tk_read_caller_config:
+    mov rdi, [r13 + tk_RB_IG]
+    lea rsi, [rbp + tk_READ_CHILD_REQUEST]
+    mov rdx, [r14 + 40]
+    lea rcx, [rbp + tk_READ_CHILD_REPLY]
+    mov r8d, tk_READ_CHILD_CAPACITY
+    call tk_intent_config_call
+    mov ebx, eax
+    jmp tk_read_caller_ack
+tk_read_caller_pages:
+    mov rdi, r12
+    lea rsi, [rbp + tk_READ_CHILD_REQUEST]
+    mov rdx, [r14 + 40]
+    lea rcx, [rbp + tk_READ_CHILD_REPLY]
+    call tk_read_pages_call
+    mov ebx, eax
+    jmp tk_read_caller_ack
+tk_read_caller_error:
+    cmp qword ptr [r14 + 40], 48
+    jne tk_contract_fail
+    mov rax, [rbp + tk_READ_CHILD_REQUEST + 24]
+    mov [r12 + tk_RC_ERRNO], rax
+    lea rdi, [rbp + tk_READ_CHILD_REQUEST]
+    mov esi, 48
+    lea rdx, [rbp + tk_READ_CHILD_REPLY]
+    mov ecx, tk_READ_CHILD_CAPACITY
+    lea r8, [r12 + tk_RC_ERROR_WORK]
+    mov r9d, 32768
+    call tk_intent_image_read_error
+    mov ebx, eax
+    jmp tk_read_caller_ack
+tk_read_caller_submit:
+    mov [r12 + tk_RC_META + 8], rax
+    mov rax, [r12 + tk_RC_CALLER]
+    mov [r12 + tk_RC_META], rax
+    mov rax, [r14 + 8]
+    mov [r12 + tk_RC_META + 16], rax
+    mov rdi, [r13 + tk_RB_WORKERS]
+    lea rsi, [r12 + tk_RC_META]
+    lea rdx, [rbp + tk_READ_CHILD_REQUEST]
+    mov rcx, [r14 + 40]
+    lea r8, [r12 + tk_RC_SNAPSHOT]
+    call tk_read_worker_submit
+    cmp eax, 128
+    jne tk_contract_fail
+    lea rdi, [r12 + tk_RC_TOKEN]
+    lea rsi, [r12 + tk_RC_SNAPSHOT + 16]
+    mov ecx, 4
+    rep movsq
+    mov qword ptr [r12 + tk_RC_PENDING], 1
+tk_read_caller_take:
+    mov rdi, [r13 + tk_RB_WORKERS]
+    lea rsi, [r12 + tk_RC_TOKEN]
+    mov edx, 6
+    lea rcx, [r12 + tk_RC_RECEIVER]
+    mov r8d, tk_RC_RECEIVER_CAPACITY
+    call tk_read_worker_event
+    cmp eax, tk_READ_PENDING
+    je tk_read_caller_drive_done
+    cmp eax, 128
+    jb tk_contract_fail
+    cmp eax, tk_RC_RECEIVER_CAPACITY
+    ja tk_contract_fail
+    mov rbx, rax
+    mov rax, 0x3130525457525248
+    cmp [r12 + tk_RC_RECEIVER], rax
+    jne tk_contract_fail
+    lea rdi, [r12 + tk_RC_TOKEN]
+    lea rsi, [r12 + tk_RC_RECEIVER + 16]
+    mov ecx, 4
+    repe cmpsq
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_RC_RECEIVER + 48], 3
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_RC_RECEIVER + 96], 0
+    jne tk_contract_fail
+    mov rax, [r12 + tk_RC_RECEIVER + 72]
+    add rax, 128
+    cmp rax, rbx
+    jne tk_contract_fail
+    mov rbx, [r12 + tk_RC_RECEIVER + 64]
+    mov edx, ebx
+    cmp rbx, rdx
+    jne tk_contract_fail
+    lea rsi, [r12 + tk_RC_RECEIVER + 128]
+    lea rdi, [rbp + tk_READ_CHILD_REPLY]
+    mov rcx, [r12 + tk_RC_RECEIVER + 72]
+    cmp rcx, tk_READ_CHILD_CAPACITY
+    ja tk_contract_fail
+    rep movsb
+    mov qword ptr [r12 + tk_RC_PENDING], 0
+tk_read_caller_ack:
+    mov eax, ebx
+    cmp eax, tk_READ_CHILD_CAPACITY
+    jbe tk_read_caller_ack_code
+    cmp eax, tk_READ_EFFECT
+    jb tk_contract_fail
+tk_read_caller_ack_code:
+    lea rdi, [r12 + tk_RC_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 8
+    repe cmpsq
+    jne tk_contract_fail
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz tk_contract_fail
+    mov [r14 + 72], rbx
+    mov rax, [r14 + 8]
+    mov [r14 + 64], rax
+    call tk_read_caller_entry
+    jmp tk_read_caller_drive_code
+tk_read_caller_drive_done:
+    tk_rdw_epilogue
+
+# Await uses the real eventfd; a stale wake only causes another exact HIA poll.
+tk_read_caller_await:
+    tk_rdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_RC_ROOT]
+tk_read_caller_await_drive:
+    mov rdi, r12
+    call tk_read_caller_drive
+    cmp eax, tk_READ_PENDING
+    jne tk_read_caller_await_done
+    mov rdi, [r13 + tk_RB_WORKERS]
+    call tk_read_worker_notification_fd
+    cmp rax, 0x7fffffff
+    ja tk_contract_fail
+    mov [r12 + tk_RC_POLLFD], eax
+    mov dword ptr [r12 + tk_RC_POLLFD + 4], 1
+tk_read_caller_await_poll:
+    lea rdi, [r12 + tk_RC_POLLFD]
+    mov esi, 1
+    mov edx, -1
+    mov eax, 7
+    syscall
+    cmp rax, -4
+    je tk_read_caller_await_poll
+    cmp rax, 1
+    jne tk_io_fail
+    test word ptr [r12 + tk_RC_POLLFD + 6], 1
+    jz tk_contract_fail
+tk_read_caller_await_read:
+    mov edi, [r12 + tk_RC_POLLFD]
+    lea rsi, [r12 + tk_RC_EVENT_COUNT]
+    mov edx, 8
+    xor eax, eax
+    syscall
+    cmp rax, -4
+    je tk_read_caller_await_read
+    cmp rax, -11
+    je tk_read_caller_await_drive
+    cmp rax, 8
+    jne tk_io_fail
+    jmp tk_read_caller_await_drive
+tk_read_caller_await_done:
+    tk_rdw_epilogue
+
+# Drop is receiver retirement only. The submitted node has no caller pointers.
+tk_read_caller_drop:
+    tk_rdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_RC_ROOT]
+    cmp [r13 + tk_RB_CALLER], r12
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_RC_PENDING], 0
+    je tk_read_caller_drop_unmap
+    mov rdi, [r13 + tk_RB_WORKERS]
+    lea rsi, [r12 + tk_RC_TOKEN]
+    mov edx, 7
+    lea rcx, [r12 + tk_RC_SNAPSHOT]
+    mov r8d, 128
+    call tk_read_worker_event
+    cmp eax, 128
+    jne tk_contract_fail
+    mov qword ptr [r12 + tk_RC_PENDING], 0
+tk_read_caller_drop_unmap:
+    mov qword ptr [r13 + tk_RB_CALLER], 0
+    mov rdi, r12
+    call tk_read_caller_unmap
+    tk_rdw_epilogue
+tk_read_caller_unmap:
+    mov esi, tk_RC_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    ret
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Synchronous Pages continuation with the original pure HIA Codec.
+# rdi=caller,rsi=immutable request,rdx=length,rcx=output >=65568.
+tk_read_pages_call:
+    tk_rdw_prologue
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    lea rbp, [r12 + tk_RC_PAGE_WORK]
+tk_read_pages_resume:
+    mov rdi, r13
+    mov rsi, r14
+    mov rdx, r15
+    mov ecx, tk_READ_OUTPUT_CAPACITY
+    mov r8, rbp
+    mov r9d, tk_RC_PAGE_WORK_BYTES
+    call tk_intent_image_read_pages
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_contract_fail
+    cmp eax, tk_READ_EFFECT
+    jne tk_read_pages_done
+    mov rax, 0x3130414750525248
+    cmp [rbp + 4096], rax
+    jne tk_contract_fail
+    mov rax, [r12 + tk_RC_PAGE_SEQUENCE]
+    inc rax
+    jz tk_contract_fail
+    cmp [rbp + 4104], rax
+    jne tk_contract_fail
+    mov [r12 + tk_RC_PAGE_SEQUENCE], rax
+    cmp qword ptr [rbp + 4112], 1
+    jne tk_contract_fail
+    cmp qword ptr [rbp + 4120], 0
+    jne tk_contract_fail
+    cmp qword ptr [rbp + 4128], tk_READ_PAGE_REQUEST
+    jne tk_contract_fail
+    cmp qword ptr [rbp + 4144], tk_READ_PAGE_REPLY
+    jne tk_contract_fail
+    cmp qword ptr [rbp + 4152], 65536
+    jne tk_contract_fail
+    mov rax, [rbp + 4136]
+    cmp rax, 24
+    jb tk_contract_fail
+    cmp rax, 1048576
+    ja tk_contract_fail
+    mov rax, [rbp + 4160]
+    or rax, [rbp + 4168]
+    or rax, [rbp + 4176]
+    or rax, [rbp + 4184]
+    jnz tk_contract_fail
+    lea rdi, [r12 + tk_RC_PAGE_ACTION_COPY]
+    lea rsi, [rbp + 4096]
+    mov ecx, 12
+    rep movsq
+    lea rdi, [rbp + tk_READ_PAGE_REQUEST]
+    mov rsi, [rbp + 4136]
+    lea rdx, [rbp + tk_READ_PAGE_REPLY]
+    mov ecx, 65536
+    lea r8, [r12 + tk_RC_CODEC_WORK]
+    mov r9d, 1184
+    call tk_intent_image_binary_codec
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_contract_fail
+    mov rbx, rax
+    lea rdi, [r12 + tk_RC_PAGE_ACTION_COPY]
+    lea rsi, [rbp + 4096]
+    mov ecx, 8
+    repe cmpsq
+    jne tk_contract_fail
+    mov rax, [rbp + 4160]
+    or rax, [rbp + 4168]
+    or rax, [rbp + 4176]
+    or rax, [rbp + 4184]
+    jnz tk_contract_fail
+    mov [rbp + 4168], rbx
+    mov rax, [rbp + 4104]
+    mov [rbp + 4160], rax
+    jmp tk_read_pages_resume
+tk_read_pages_done:
+    tk_rdw_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Qualification only: retain the actual Audit STORE guard across private frames.
+# The owner uses the same Leaves, FIFO lock, and guard token as Observation.
+# rdi=RB,rsi=wire,rdx=len -> code; response is RB_OUTPUT.
+tk_read_store_gate_carrier:
+    tk_rdw_prologue
+    mov r12, rdi
+    cmp rdx, 32
+    jne tk_read_store_gate_invalid
+    mov rax, 0x3130514742525248
+    cmp [rsi], rax
+    jne tk_read_store_gate_invalid
+    mov rax, [rsi + 16]
+    or rax, [rsi + 24]
+    jnz tk_read_store_gate_invalid
+    mov rbx, [rsi + 8]
+    cmp rbx, 1
+    je tk_read_store_gate_hold
+    cmp rbx, 2
+    je tk_read_store_gate_release_frame
+    cmp rbx, 3
+    jne tk_read_store_gate_invalid
+    jmp tk_read_store_gate_response
+tk_read_store_gate_hold:
+    cmp qword ptr [r12 + tk_RB_STORE_HELD], 0
+    jne tk_read_store_gate_state
+    mov rdi, r12
+    call tk_read_store_guard_acquire
+    jmp tk_read_store_gate_response
+tk_read_store_gate_release_frame:
+    cmp qword ptr [r12 + tk_RB_STORE_HELD], 0
+    je tk_read_store_gate_state
+    mov rdi, r12
+    call tk_read_store_guard_release
+tk_read_store_gate_response:
+    lea rdi, [r12 + tk_RB_OUTPUT]
+    mov rax, 0x3130524742525248
+    mov [rdi], rax
+    mov [rdi + 8], rbx
+    xor eax, eax
+    cmp qword ptr [r12 + tk_RB_STORE_HELD], 0
+    setne al
+    mov [rdi + 16], rax
+    mov rax, [r12 + tk_RB_STORE_ACQUIRE]
+    mov [rdi + 24], rax
+    mov rax, [r12 + tk_RB_STORE_RELEASE]
+    mov [rdi + 32], rax
+    mov qword ptr [rdi + 40], 0
+    mov eax, 48
+    tk_rdw_epilogue
+tk_read_store_gate_invalid:
+    mov eax, tk_READ_INVALID
+    tk_rdw_epilogue
+tk_read_store_gate_state:
+    mov eax, tk_READ_STATE_REFUSAL
+    tk_rdw_epilogue
+
+tk_read_store_guard_acquire:
+    tk_rdw_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_RB_STORE_HELD], 0
+    jne tk_contract_fail
+    lea rdi, [r12 + tk_RB_LEAF_INPUT]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    mov rax, 0x3130514c54415248
+    mov [r12 + tk_RB_LEAF_INPUT], rax
+    mov qword ptr [r12 + tk_RB_LEAF_INPUT + 8], 100
+    lea rdi, [r12 + tk_RB_LEAF_INPUT]
+    mov esi, 48
+    lea rdx, [r12 + tk_RB_LEAF_OUTPUT]
+    lea rcx, [r12 + tk_RB_CONTEXT]
+    call tk_leaf_call
+    cmp eax, 48
+    jne tk_contract_fail
+    call tk_read_store_reply_check
+    mov rax, [r12 + tk_RB_LEAF_OUTPUT + 32]
+    test rax, rax
+    jz tk_contract_fail
+    cmp [r12 + tk_RB_CONTEXT + tk_LEAF_WORK + 64], rax
+    jne tk_contract_fail
+    mov [r12 + tk_RB_STORE_HELD], rax
+    add qword ptr [r12 + tk_RB_STORE_ACQUIRE], 1
+    jc tk_contract_fail
+    tk_rdw_epilogue
+
+tk_read_store_guard_release:
+    tk_rdw_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_RB_STORE_HELD], 0
+    je tk_contract_fail
+    lea rdi, [r12 + tk_RB_LEAF_INPUT]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    mov rax, 0x3130514c54415248
+    mov [r12 + tk_RB_LEAF_INPUT], rax
+    mov qword ptr [r12 + tk_RB_LEAF_INPUT + 8], 122
+    mov qword ptr [r12 + tk_RB_LEAF_INPUT + 16], 5
+    mov qword ptr [r12 + tk_RB_LEAF_INPUT + 24], 8
+    mov rax, [r12 + tk_RB_STORE_HELD]
+    mov [r12 + tk_RB_LEAF_INPUT + 48], rax
+    lea rdi, [r12 + tk_RB_LEAF_INPUT]
+    mov esi, 56
+    lea rdx, [r12 + tk_RB_LEAF_OUTPUT]
+    lea rcx, [r12 + tk_RB_CONTEXT]
+    call tk_leaf_call
+    cmp eax, 48
+    jne tk_contract_fail
+    call tk_read_store_reply_check
+    mov rax, [r12 + tk_RB_LEAF_OUTPUT + 32]
+    or rax, [r12 + tk_RB_CONTEXT + tk_LEAF_WORK + 64]
+    jnz tk_contract_fail
+    mov qword ptr [r12 + tk_RB_STORE_HELD], 0
+    add qword ptr [r12 + tk_RB_STORE_RELEASE], 1
+    jc tk_contract_fail
+    tk_rdw_epilogue
+tk_read_store_reply_check:
+    mov rax, 0x3130304343415248
+    cmp [r12 + tk_RB_LEAF_OUTPUT], rax
+    jne tk_contract_fail
+    mov rax, [r12 + tk_RB_LEAF_OUTPUT + 8]
+    or rax, [r12 + tk_RB_LEAF_OUTPUT + 16]
+    or rax, [r12 + tk_RB_LEAF_OUTPUT + 24]
+    or rax, [r12 + tk_RB_LEAF_OUTPUT + 40]
+    jnz tk_contract_fail
+    ret
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Qualification only. Own an actual RecordGuard from the shared result lock set.
+# A live ResultIntent itself does not retain this guard between calls.
+# rdi=RB,rsi=wire,rdx=len -> code; response is RB_OUTPUT.
+tk_read_record_gate_carrier:
+    tk_rdw_prologue
+    mov r12, rdi
+    cmp rdx, 32
+    jb tk_read_record_gate_invalid
+    mov rax, 0x3130514752525248
+    cmp [rsi], rax
+    jne tk_read_record_gate_invalid
+    cmp qword ptr [rsi + 24], 0
+    jne tk_read_record_gate_invalid
+    mov rbx, [rsi + 8]
+    cmp rbx, 1
+    je tk_read_record_gate_hold_frame
+    cmp rdx, 32
+    jne tk_read_record_gate_invalid
+    cmp qword ptr [rsi + 16], 0
+    jne tk_read_record_gate_invalid
+    cmp rbx, 2
+    je tk_read_record_gate_release_frame
+    cmp rbx, 3
+    je tk_read_record_gate_response
+    cmp rbx, 4
+    jne tk_read_record_gate_invalid
+    jmp tk_read_record_gate_wait_region
+tk_read_record_gate_hold_frame:
+    cmp rdx, 96
+    jne tk_read_record_gate_invalid
+    cmp qword ptr [rsi + 16], 64
+    jne tk_read_record_gate_invalid
+    lea r13, [rsi + 32]
+    xor ecx, ecx
+tk_read_record_gate_hex:
+    movzx eax, byte ptr [r13 + rcx]
+    cmp al, '0'
+    jb tk_read_record_gate_invalid
+    cmp al, '9'
+    jbe tk_read_record_gate_hex_next
+    cmp al, 'a'
+    jb tk_read_record_gate_invalid
+    cmp al, 'f'
+    ja tk_read_record_gate_invalid
+tk_read_record_gate_hex_next:
+    inc rcx
+    cmp rcx, 64
+    jb tk_read_record_gate_hex
+    cmp qword ptr [r12 + tk_RB_RECORD_HELD], 0
+    jne tk_read_record_gate_state
+    mov rdi, [r12 + tk_RB_IG]
+    mov rdi, [rdi + tk_IG_LOCKS]
+    lea rsi, [r12 + tk_RB_RECORD_GUARD]
+    mov rdx, r13
+    mov ecx, 64
+    call tk_result_locks_record_lock
+    test eax, eax
+    jnz tk_read_record_gate_lock_failed
+    mov qword ptr [r12 + tk_RB_RECORD_HELD], 1
+    add qword ptr [r12 + tk_RB_RECORD_ACQUIRE], 1
+    jc tk_contract_fail
+    jmp tk_read_record_gate_response
+tk_read_record_gate_lock_failed:
+    # Failed lock calls have retired their own immutable input. Reuse only zero.
+    lea rdi, [r12 + tk_RB_RECORD_GUARD]
+    xor eax, eax
+    mov ecx, 64
+    rep stosq
+    mov eax, 0xfffffffc
+    tk_rdw_epilogue
+tk_read_record_gate_release_frame:
+    cmp qword ptr [r12 + tk_RB_RECORD_HELD], 0
+    je tk_read_record_gate_state
+    mov rdi, r12
+    call tk_read_record_guard_release
+tk_read_record_gate_response:
+    lea rdi, [r12 + tk_RB_OUTPUT]
+    mov rax, 0x3130524752525248
+    mov [rdi], rax
+    mov [rdi + 8], rbx
+    mov rax, [r12 + tk_RB_RECORD_HELD]
+    mov [rdi + 16], rax
+    mov rax, [r12 + tk_RB_RECORD_ACQUIRE]
+    mov [rdi + 24], rax
+    mov rax, [r12 + tk_RB_RECORD_RELEASE]
+    mov [rdi + 32], rax
+    mov qword ptr [rdi + 40], 0
+    mov eax, 48
+    tk_rdw_epilogue
+# Qualification-only opaque wait region. No process memory is read by supervisor.
+tk_read_record_gate_wait_region:
+    cmp qword ptr [r12 + tk_RB_RECORD_HELD], 1
+    jne tk_read_record_gate_state
+    lea rdi, [r12 + tk_RB_OUTPUT]
+    mov rax, 0x31304d4752525248
+    mov [rdi], rax
+    mov qword ptr [rdi + 8], 4
+    mov rax, [r12 + tk_RB_IG]
+    mov rax, [rax + tk_IG_LOCKS]
+    lea rax, [rax + tk_rlk_G_CHANGED]
+    mov [rdi + 16], rax
+    mov qword ptr [rdi + 24], 4
+    mov qword ptr [rdi + 32], 1
+    mov qword ptr [rdi + 40], 0
+    mov eax, 48
+    tk_rdw_epilogue
+tk_read_record_gate_invalid:
+    mov eax, tk_READ_INVALID
+    tk_rdw_epilogue
+tk_read_record_gate_state:
+    mov eax, tk_READ_STATE_REFUSAL
+    tk_rdw_epilogue
+
+# The lifetime owner calls this before shared ResultLocks are closed.
+tk_read_record_guard_release:
+    tk_rdw_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_RB_RECORD_HELD], 1
+    jne tk_contract_fail
+    lea rdi, [r12 + tk_RB_RECORD_GUARD]
+    call tk_result_locks_drop
+    test eax, eax
+    jnz tk_contract_fail
+    lea rdi, [r12 + tk_RB_RECORD_GUARD]
+    xor eax, eax
+    mov ecx, 64
+    rep stosq
+    mov qword ptr [r12 + tk_RB_RECORD_HELD], 0
+    add qword ptr [r12 + tk_RB_RECORD_RELEASE], 1
+    jc tk_contract_fail
+    tk_rdw_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Framed qualification carrier only; production JSON routing is a separate owner.
+tk_read_service_frame:
+    mov rsi, [r15 + tk_SERVICE_IO]
+    add rsi, 32
+    mov rdx, [r15 + 1088]
+    cmp rdx, 8
+    jb tk_lookup_service_frame
+    mov rax, 0x3130514452525248
+    cmp [rsi], rax
+    je tk_read_service_public
+    mov rax, 0x3130514742525248
+    cmp [rsi], rax
+    je tk_read_service_store_gate
+    mov rax, 0x3130514752525248
+    cmp [rsi], rax
+    jne tk_lookup_service_frame
+    mov rdi, [r15 + tk_READ_ROOT_SLOT]
+    call tk_read_record_gate_carrier
+    jmp tk_read_service_emit
+tk_read_service_store_gate:
+    mov rdi, [r15 + tk_READ_ROOT_SLOT]
+    call tk_read_store_gate_carrier
+    jmp tk_read_service_emit
+tk_read_service_public:
+    mov rdi, [r15 + tk_READ_ROOT_SLOT]
+    call tk_read_qualification_call
+tk_read_service_emit:
+    mov [r15 + 1096], eax
+    lea rsi, [r15 + 1096]
+    mov edx, 4
+    call tk_write_exact
+    mov edx, [r15 + 1096]
+    cmp edx, 65600
+    ja tk_service_next
+    mov rsi, [r15 + tk_READ_ROOT_SLOT]
+    add rsi, tk_RB_OUTPUT
+    call tk_write_exact
+    jmp tk_service_next
+
+# rdi=RB,rsi=input,rdx=length -> u32. Full String/type checks run in actual Read HIA.
+tk_read_qualification_call:
+    tk_rdw_prologue
+    mov r13, rdi
+    mov r14, rsi
+    mov rbx, rdx
+    add qword ptr [r13 + tk_RB_FRAMES], 1
+    jc tk_contract_fail
+    mov qword ptr [r13 + tk_RB_ERRNO], 0
+    mov qword ptr [r13 + tk_RB_TEXTLEN], 0
+    cmp rbx, 64
+    jb tk_read_qualification_invalid
+    cmp rbx, tk_RC_INPUT_CAPACITY
+    ja tk_read_qualification_invalid
+    mov rax, [r14 + 8]
+    mov [r13 + tk_RB_LAST_OP], rax
+    cmp rax, 1
+    jb tk_read_qualification_invalid
+    cmp rax, 7
+    ja tk_read_qualification_invalid
+    cmp rax, 5
+    jb tk_read_qualification_new
+    cmp rbx, 64
+    jne tk_read_qualification_invalid
+    lea rdi, [r14 + 16]
+    xor eax, eax
+    mov ecx, 6
+    repe scasq
+    jne tk_read_qualification_invalid
+    mov rax, [r13 + tk_RB_LAST_OP]
+    cmp rax, 7
+    je tk_read_qualification_inspect
+    mov r12, [r13 + tk_RB_CALLER]
+    test r12, r12
+    jz tk_read_qualification_state
+    cmp rax, 6
+    je tk_read_qualification_cancel
+    jmp tk_read_qualification_poll
+tk_read_qualification_new:
+    mov rcx, rax
+    cmp rcx, 2
+    jbe tk_read_qualification_typed
+    sub rcx, 2
+tk_read_qualification_typed:
+    mov rdi, r13
+    mov rsi, r14
+    mov rdx, rbx
+    call tk_read_caller_create
+    test rax, rax
+    jz tk_read_qualification_invalid
+    mov r12, rax
+    cmp qword ptr [r13 + tk_RB_CALLER], 0
+    je tk_read_qualification_admit
+    mov rdi, r12
+    call tk_read_caller_unmap
+    jmp tk_read_qualification_state
+tk_read_qualification_admit:
+    mov rdi, r12
+    call tk_read_caller_register
+    cmp qword ptr [r12 + tk_RC_INPUT + 8], 1
+    jne tk_read_qualification_result_count
+    add qword ptr [r13 + tk_RB_STATUS], 1
+    jc tk_contract_fail
+    jmp tk_read_qualification_mode
+tk_read_qualification_result_count:
+    add qword ptr [r13 + tk_RB_RESULT], 1
+    jc tk_contract_fail
+tk_read_qualification_mode:
+    cmp qword ptr [r13 + tk_RB_LAST_OP], 2
+    ja tk_read_qualification_poll
+    mov rdi, r12
+    call tk_read_caller_await
+    jmp tk_read_qualification_outcome
+tk_read_qualification_poll:
+    add qword ptr [r13 + tk_RB_POLLS], 1
+    jc tk_contract_fail
+    mov rdi, r12
+    call tk_read_caller_drive
+tk_read_qualification_outcome:
+    cmp eax, tk_READ_PENDING
+    je tk_read_qualification_pending
+    cmp eax, tk_READ_OUTPUT_CAPACITY
+    ja tk_read_qualification_internal
+    cmp eax, 32
+    jb tk_contract_fail
+    mov edx, eax
+    mov rax, 0x3130524452525248
+    cmp [r12 + tk_RC_OUTPUT], rax
+    jne tk_contract_fail
+    mov rax, [r12 + tk_RC_OUTPUT + 8]
+    cmp rax, 1
+    ja tk_contract_fail
+    mov [r13 + tk_RB_OUT_KIND], rax
+    test rax, rax
+    jz tk_read_qualification_success_errno
+    mov rax, [r12 + tk_RC_ERRNO]
+    mov [r13 + tk_RB_ERRNO], rax
+tk_read_qualification_success_errno:
+    mov rax, [r12 + tk_RC_OUTPUT + 16]
+    add rax, 32
+    cmp rax, rdx
+    jne tk_contract_fail
+    sub rax, 32
+    mov [r13 + tk_RB_TEXTLEN], rax
+    lea rdi, [r13 + tk_RB_OUTPUT + 64]
+    lea rsi, [r12 + tk_RC_OUTPUT + 32]
+    mov rcx, rax
+    rep movsb
+    add qword ptr [r13 + tk_RB_COMPLETIONS], 1
+    jc tk_contract_fail
+    mov rdi, r12
+    call tk_read_caller_drop
+    jmp tk_read_qualification_reply
+tk_read_qualification_internal:
+    cmp eax, tk_READ_EFFECT
+    jb tk_contract_fail
+    mov [r13 + tk_RB_LAST_CODE], rax
+    mov rdi, r12
+    call tk_read_caller_drop
+    add qword ptr [r13 + tk_RB_REFUSALS], 1
+    jc tk_contract_fail
+    mov rax, [r13 + tk_RB_LAST_CODE]
+    tk_rdw_epilogue
+tk_read_qualification_pending:
+    mov qword ptr [r13 + tk_RB_OUT_KIND], 2
+    jmp tk_read_qualification_reply
+tk_read_qualification_cancel:
+    mov rdi, r12
+    call tk_read_caller_drop
+    add qword ptr [r13 + tk_RB_CANCELS], 1
+    jc tk_contract_fail
+    mov qword ptr [r13 + tk_RB_OUT_KIND], 3
+    jmp tk_read_qualification_reply
+tk_read_qualification_inspect:
+    mov qword ptr [r13 + tk_RB_OUT_KIND], 4
+tk_read_qualification_reply:
+    lea rdi, [r13 + tk_RB_OUTPUT]
+    mov rax, 0x31304f4452525248
+    mov [rdi], rax
+    mov rax, [r13 + tk_RB_LAST_OP]
+    mov [rdi + 8], rax
+    mov rax, [r13 + tk_RB_OUT_KIND]
+    mov [rdi + 16], rax
+    mov rax, [r13 + tk_RB_ERRNO]
+    mov [rdi + 24], rax
+    mov rax, [r13 + tk_RB_TEXTLEN]
+    mov [rdi + 32], rax
+    xor eax, eax
+    cmp qword ptr [r13 + tk_RB_CALLER], 0
+    setne al
+    mov [rdi + 40], rax
+    mov rax, [r13 + tk_RB_STATUS]
+    mov [rdi + 48], rax
+    mov rax, [r13 + tk_RB_RESULT]
+    mov [rdi + 56], rax
+    mov rax, [r13 + tk_RB_TEXTLEN]
+    add rax, 64
+    tk_rdw_epilogue
+tk_read_qualification_invalid:
+    add qword ptr [r13 + tk_RB_REFUSALS], 1
+    jc tk_contract_fail
+    mov eax, tk_READ_INVALID
+    tk_rdw_epilogue
+tk_read_qualification_state:
+    add qword ptr [r13 + tk_RB_REFUSALS], 1
+    jc tk_contract_fail
+    mov eax, tk_READ_STATE_REFUSAL
+    tk_rdw_epilogue
+
+# Only framed input/output failures use this path. Restore the owner stack and
+# perform the same caller/guard/Intent/Ticket/worker/backend lifetime order as EOF.
+tk_read_transport_io_fail:
+    mov rax, [r15 + tk_READ_ROOT_SLOT]
+    test rax, rax
+    jz tk_io_fail
+    cmp qword ptr [rax + tk_RB_CLOSING], 0
+    jne tk_io_fail
+    mov qword ptr [rax + tk_RB_EXIT], 1
+    mov rsp, [rax + tk_RB_SP]
+    jmp tk_service_eof
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Before Intent/Ticket EOF: drop the receiver, then the actual Record and STORE guards.
+tk_read_boundary_before_eof:
+    tk_rdw_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_RB_CLOSING], 0
+    jne tk_contract_fail
+    mov qword ptr [r12 + tk_RB_CLOSING], 1
+    mov rdi, [r12 + tk_RB_CALLER]
+    test rdi, rdi
+    jz tk_read_boundary_no_caller
+    call tk_read_caller_drop
+    add qword ptr [r12 + tk_RB_EOF_CANCELS], 1
+    jc tk_contract_fail
+tk_read_boundary_no_caller:
+    cmp qword ptr [r12 + tk_RB_RECORD_HELD], 0
+    je tk_read_boundary_no_record_gate
+    mov rdi, r12
+    call tk_read_record_guard_release
+tk_read_boundary_no_record_gate:
+    cmp qword ptr [r12 + tk_RB_STORE_HELD], 0
+    je tk_read_boundary_no_gate
+    mov rdi, r12
+    call tk_read_store_guard_release
+tk_read_boundary_no_gate:
+    lea rdi, [r12 + tk_RB_CONTEXT]
+    call tk_leaf_retire
+    tk_rdw_epilogue
+
+# Called only after the original Intent and Ticket owners have released their fields.
+# Their global backend remains alive while every real kernel thread is joined.
+tk_read_boundary_drain:
+    tk_rdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_RB_WORKERS]
+    cmp qword ptr [r12 + tk_RB_CLOSING], 1
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_RB_CALLER], 0
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_RB_STORE_HELD], 0
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_RB_RECORD_HELD], 0
+    jne tk_contract_fail
+    mov rdi, r13
+    call tk_read_worker_close_admission
+    test eax, eax
+    jnz tk_contract_fail
+    mov rdi, r13
+    call tk_read_worker_drain
+    test eax, eax
+    jnz tk_contract_fail
+    cmp qword ptr [r13 + tk_RDW_R_COUNT], 0
+    jne tk_contract_fail
+    cmp qword ptr [r13 + tk_RDW_R_HEAD], 0
+    jne tk_contract_fail
+    mov rax, [r13 + tk_RDW_R_RETIRED]
+    cmp [r13 + tk_RDW_R_CALLBACK_DROPS], rax
+    jne tk_contract_fail
+    mov [r12 + tk_RB_RETIRED], rax
+    mov [r12 + tk_RB_DROPS], rax
+    mov rax, [r13 + tk_RDW_R_CALLBACKS]
+    mov [r12 + tk_RB_CALLBACKS], rax
+    mov rax, [r13 + tk_RDW_R_POLICY + 8]
+    mov [r12 + tk_RB_GENERATION], rax
+    mov rdi, r13
+    call tk_read_worker_destroy
+    test eax, eax
+    jnz tk_contract_fail
+    mov qword ptr [r12 + tk_RB_WORKERS], 0
+    tk_rdw_epilogue
+
+# Qualification terminal custody receipt, after the existing backend shutdown.
+# Fixed 160B HRRWBD02: exit,frames,status,result,polls,cancel,eof,refusal,complete,
+# store-acquire,store-release,retired,callbacks,drops,generation,
+# record-acquire,record-release,record-held(0),reserved(0). No user payload.
+tk_read_boundary_finish:
+    tk_rdw_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_RB_WORKERS], 0
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_RB_CALLER], 0
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_RB_STORE_HELD], 0
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_RB_RECORD_HELD], 0
+    jne tk_contract_fail
+    mov rax, [r12 + tk_RB_STORE_ACQUIRE]
+    cmp [r12 + tk_RB_STORE_RELEASE], rax
+    jne tk_contract_fail
+    mov rax, [r12 + tk_RB_RECORD_ACQUIRE]
+    cmp [r12 + tk_RB_RECORD_RELEASE], rax
+    jne tk_contract_fail
+    mov rbx, [r12 + tk_RB_EXIT]
+tk_read_boundary_finish_free:
+    mov rax, [r12 + tk_RB_SERVICE]
+    mov qword ptr [rax + tk_READ_ROOT_SLOT], 0
+    mov rdi, r12
+    mov esi, tk_RB_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    mov eax, ebx
+    tk_rdw_epilogue
 
 .intel_syntax noprefix
 .section .text
@@ -20572,6 +24391,24 @@ tk_intent_image_config_regex_match:
 tk_intent_image_config_regex_controller:
     jmp qword ptr [rip + tk_intent_image_slot_config_regex_controller]
 
+tk_intent_image_lookup:
+    jmp qword ptr [rip + tk_intent_image_slot_lookup]
+
+tk_intent_image_read:
+    jmp qword ptr [rip + tk_intent_image_slot_read]
+
+tk_intent_image_read_error:
+    jmp qword ptr [rip + tk_intent_image_slot_read_error]
+
+tk_intent_image_read_gate:
+    jmp qword ptr [rip + tk_intent_image_slot_read_gate]
+
+tk_intent_image_read_pages:
+    jmp qword ptr [rip + tk_intent_image_slot_read_pages]
+
+tk_intent_image_read_worker_policy:
+    jmp qword ptr [rip + tk_intent_image_slot_read_worker_policy]
+
 .balign 8
 tk_intent_image_slot_result_locks:
     .quad 0
@@ -20625,6 +24462,2206 @@ tk_intent_image_slot_config_regex_match:
     .quad 0
 tk_intent_image_slot_config_regex_controller:
     .quad 0
+tk_intent_image_slot_lookup:
+    .quad 0
+tk_intent_image_slot_read:
+    .quad 0
+tk_intent_image_slot_read_error:
+    .quad 0
+tk_intent_image_slot_read_gate:
+    .quad 0
+tk_intent_image_slot_read_pages:
+    .quad 0
+tk_intent_image_slot_read_worker_policy:
+    .quad 0
+
+.equ tk_AIO_CONTEXT, 65536
+.equ tk_AIO_ARENA_BYTES, 16777216
+.equ tk_AIO_WORK_BYTES, 6291456
+.equ tk_AIO_INPUT_AT, 6291456
+.equ tk_AIO_INPUT_CAP, 2097152
+.equ tk_AIO_OUTPUT_AT, 8388608
+.equ tk_AIO_OUTPUT_CAP, 2097152
+.equ tk_AIO_TYPED_WORK_AT, 10485760
+.equ tk_AIO_TYPED_WORK_CAP, 2097152
+.equ tk_AIO_TYPED_OUT_AT, 12582912
+.equ tk_AIO_TYPED_OUT_CAP, 65536
+.equ tk_AIO_PATH_A_AT, 13631488
+.equ tk_AIO_PATH_B_AT, 14684160
+.equ tk_AIO_PATH_CAP, 1048577
+.equ tk_AIO_FDS, 512
+.equ tk_AIO_FD_COUNT, 128
+.equ tk_AIO_ACTION, 256
+.equ tk_AIO_REQUEST, 1114112
+.equ tk_AIO_REPLY, 3342336
+.equ tk_AIO_REPLY_CAP, 1048640
+.equ tk_AIO_IO_FN, 80
+.equ tk_AIO_TYPED_FN, 88
+.equ tk_AIO_ARENA, 40
+.equ tk_AIO_SERVICE, 0
+.equ tk_AIO_META_LOCAL, 24
+.equ tk_AIO_BUSY, 8
+.equ tk_AIO_GENERATION, 16
+.equ tk_AIO_LIVE, 32
+.equ tk_AIO_SEQ, 112
+.equ tk_AIO_COOKIE, 120
+.equ tk_AIO_EFFECT, 0xfffffff0
+.equ tk_AIO_STATE, 0xfffffff9
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Distinct original collection mutexes; no movable arena escapes its short gate.
+tk_async_allocate:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov rbx, rdi
+    test rbx, 4095
+    jnz tk_async_contract_failure
+    test rbx, rbx
+    jz tk_async_contract_failure
+    mov rsi, rbx
+    add rsi, 4096
+    jc tk_async_contract_failure
+    xor edi, edi
+    mov edx, 3
+    mov r10d, 34
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae tk_async_contract_failure
+    mov r12, rax
+    lea rdi, [rax + rbx]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    mov rax, r12
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+
+# rdi=existing shared Audit service root, rsi=existing Config/Intent IG.
+tk_async_global_create:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r13, rsi
+    cmp qword ptr [r12 + tk_ASY_ROOT_SLOT], 0
+    jne tk_async_contract_failure
+    mov edi, tk_ASY_GLOBAL_BYTES
+    call tk_async_allocate
+    mov rbx, rax
+    movabs rax, 0x3130474359534148
+    mov [rbx], rax
+    mov [rbx + tk_ASY_G_SERVICE], r12
+    lea r14, [rbx + tk_ASY_G_ROOT_ARENA]
+    mov ebp, 3
+tk_async_global_create_arena:
+    mov edi, 4096
+    call tk_async_allocate
+    mov [r14], rax
+    mov qword ptr [r14 + 8], 4096
+    add r14, 16
+    dec ebp
+    jnz tk_async_global_create_arena
+    mov [rbx + tk_ASY_G_PLAN + tk_ASY_PLAN_SERVICE], r12
+    mov [rbx + tk_ASY_G_PLAN + tk_ASY_PLAN_GLOBAL], rbx
+    lea rax, [rip + tk_async_config_root_callback]
+    mov [rbx + tk_ASY_G_PLAN + tk_ASY_PLAN_CONFIG], rax
+    lea rax, [rip + tk_async_policy_callback]
+    mov [rbx + tk_ASY_G_PLAN + tk_ASY_PLAN_POLICY], rax
+    mov [rbx + tk_ASY_G_PLAN + tk_ASY_PLAN_CONFIG_CONTEXT], r13
+    lea rax, [rip + tk_async_audit_callback]
+    mov [rbx + tk_ASY_G_PLAN + tk_ASY_PLAN_AUDIT], rax
+    lea rax, [rip + tk_async_namespace_callback]
+    mov [rbx + tk_ASY_G_PLAN + tk_ASY_PLAN_NAMESPACE], rax
+    mov [r12 + tk_ASY_ROOT_SLOT], rbx
+    mov rax, rbx
+    tk_asy_epilogue
+
+# All caller/worker invocations must have drained before global retirement.
+tk_async_global_destroy:
+    tk_asy_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + ASD_LIFECYCLE], 1
+    je tk_async_contract_failure
+    cmp qword ptr [r12 + tk_ASY_G_CALLS], 0
+    jne tk_async_contract_failure
+    mov rdi, [r12 + tk_ASY_G_SERVICE]
+    call async_admission_destroy_manager
+    test rax, rax
+    jnz tk_async_contract_failure
+    lea rbx, [r12 + tk_ASY_G_STORE]
+    mov ecx, 4
+tk_async_global_destroy_gates:
+    cmp qword ptr [rbx], 0
+    jne tk_async_contract_failure
+    add rbx, 8
+    dec ecx
+    jnz tk_async_global_destroy_gates
+    lea rbx, [r12 + tk_ASY_G_ROOT_ARENA]
+    mov ebp, 3
+tk_async_global_destroy_arena:
+    mov rdi, [rbx]
+    mov rsi, [rbx + 8]
+    mov qword ptr [rbx], 0
+    mov qword ptr [rbx + 8], 0
+    add rsi, 4096
+    jc tk_async_contract_failure
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    add rbx, 16
+    dec ebp
+    jnz tk_async_global_destroy_arena
+    mov rax, [r12 + tk_ASY_G_SERVICE]
+    cmp qword ptr [rax + tk_ASY_ROOT_NAMESPACE_GATE], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [rax + tk_ASY_ROOT_CONFIG_GATE], 0
+    jne tk_async_contract_failure
+    cmp [rax + tk_ASY_ROOT_SLOT], r12
+    jne tk_async_contract_failure
+    mov qword ptr [rax + tk_ASY_ROOT_SLOT], 0
+    cmp qword ptr [r12 + tk_ASY_G_LEASE_FD], 0
+    jne tk_async_global_destroy_process_lease
+    mov rdi, r12
+    mov esi, tk_ASY_GLOBAL_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    tk_asy_epilogue
+
+# rdi=global,rsi=HRASSQ01,rdx=length,rcx=output,r8=capacity.
+tk_async_state_call:
+    tk_asy_prologue
+    sub rsp, 128
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov rbp, r8
+    cmp r14, 64
+    jb tk_async_contract_failure
+    movabs rax, 0x3130515353415248
+    cmp [r13], rax
+    jne tk_async_contract_failure
+    mov rax, [r13 + 16]
+    cmp rax, 1
+    jb tk_async_contract_failure
+    cmp rax, 3
+    ja tk_async_contract_failure
+    lea rdi, [r12 + rax*8 + 16]
+    mov [rsp + 8], rdi
+    dec rax
+    shl rax, 4
+    lea rbx, [r12 + rax + tk_ASY_G_ROOT_ARENA]
+    call tk_mutex_lock
+    cmp qword ptr [r13 + 16], 2
+    jne tk_async_state_slot_snapshot_ready
+    cmp qword ptr [r13 + 8], 9
+    jne tk_async_state_slot_snapshot_ready
+    cmp r14, 128
+    jne tk_async_contract_failure
+    cmp qword ptr [r13 + 32], 0
+    jne tk_async_contract_failure
+    lea rdi, [rsp + 64]
+    mov rsi, r13
+    mov ecx, 16
+    rep movsq
+    lea r13, [rsp + 64]
+    # Read actual STOPPING after acquiring the actual original Registry mutex.
+    mov rax, [r12 + tk_ASY_G_STOPPING]
+    mov [r13 + 32], rax
+tk_async_state_slot_snapshot_ready:
+tk_async_state_invoke:
+    mov rdi, r13
+    mov rsi, r14
+    mov rdx, r15
+    mov rcx, rbp
+    mov r8, [rbx]
+    mov r9, [rbx + 8]
+    call tk_async_image_state
+    cmp eax, tk_ASY_GROW
+    je tk_async_state_grow
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    cmp eax, 64
+    jne tk_async_contract_failure
+    mov [rsp], rax
+    mov rdi, [rsp + 8]
+    call tk_mutex_unlock
+    mov rax, [rsp]
+    add rsp, 128
+    tk_asy_epilogue
+tk_async_state_grow:
+    mov rax, [rbx]
+    mov rax, [rax + 40]
+    cmp rax, [rbx + 8]
+    jbe tk_async_contract_failure
+    mov rdi, [rbx + 8]
+    add rdi, rdi
+    jc tk_async_contract_failure
+    cmp rdi, rax
+    cmovb rdi, rax
+    add rdi, 4095
+    jc tk_async_contract_failure
+    and rdi, -4096
+    mov [rsp + 16], rdi
+    call tk_async_allocate
+    mov [rsp + 24], rax
+    mov rdi, rax
+    mov rsi, [rbx]
+    mov rcx, [rbx + 8]
+    rep movsb
+    mov rdi, [rbx]
+    mov rsi, [rbx + 8]
+    mov rax, [rsp + 24]
+    mov [rbx], rax
+    mov rax, [rsp + 16]
+    mov [rbx + 8], rax
+    add rsi, 4096
+    jc tk_async_contract_failure
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    jmp tk_async_state_invoke
+
+# rdi: fresh private 64 KiB context, rsi: borrowed shared Audit service root
+# rdx: exact IO HIA image, rcx: exact typed HIA image.
+tk_async_io_init:
+    cmp qword ptr [rdi + tk_AIO_COOKIE], 0
+    jne tk_async_contract_failure
+    push rbx
+    mov rbx, rdi
+    mov [rbx + tk_AIO_SERVICE], rsi
+    mov [rbx + tk_AIO_IO_FN], rdx
+    mov [rbx + tk_AIO_TYPED_FN], rcx
+    xor edi, edi
+    mov esi, tk_AIO_ARENA_BYTES
+    mov edx, 3
+    mov r10d, 34
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae tk_async_io_init_failed
+    mov [rbx + tk_AIO_ARENA], rax
+    movabs rax, 0x314354584f495341
+    mov [rbx + tk_AIO_COOKIE], rax
+    xor eax, eax
+tk_async_io_init_failed:
+    pop rbx
+    ret
+
+# rdi ctx, rsi immutable internal request, rdx size, rcx output, r8 capacity.
+# Only the private per-invocation context is busy across IO; never a global IO gate.
+tk_async_io_call:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 24
+    mov r12, rdi
+    movabs rax, 0x314354584f495341
+    cmp [r12 + tk_AIO_COOKIE], rax
+    jne tk_async_contract_failure
+    xor eax, eax
+    mov r9d, 1
+    lock cmpxchg [r12 + tk_AIO_BUSY], r9
+    jne tk_async_contract_failure
+    mov rbx, rdx
+    mov r14, rcx
+    mov r15, r8
+    cmp rbx, 1056768
+    ja tk_async_contract_failure
+    mov r13, [r12 + tk_AIO_ARENA]
+    lea rdi, [r13 + tk_AIO_INPUT_AT]
+    mov rcx, rbx
+    rep movsb
+    lea rdi, [r13 + tk_AIO_INPUT_AT]
+    mov esi, tk_AIO_INPUT_CAP
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+tk_async_io_invoke:
+    lea rdi, [r13 + tk_AIO_INPUT_AT]
+    mov rsi, rbx
+    mov rdx, r14
+    mov rcx, r15
+    mov r8, r13
+    mov r9d, tk_AIO_WORK_BYTES
+    call [r12 + tk_AIO_IO_FN]
+    cmp eax, tk_AIO_EFFECT
+    je tk_async_io_pending
+    mov [rsp], eax
+    cmp eax, 0xfffffff8
+    je tk_async_contract_failure
+    cmp eax, tk_AIO_STATE
+    je tk_async_contract_failure
+    lea rdi, [r13 + tk_AIO_INPUT_AT]
+    mov esi, tk_AIO_INPUT_CAP
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    mov qword ptr [r12 + tk_AIO_BUSY], 0
+    mov eax, [rsp]
+    add rsp, 24
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+tk_async_io_pending:
+    lea rbp, [r13 + tk_AIO_ACTION]
+    movabs rax, 0x3130414953415248
+    cmp [rbp], rax
+    jne tk_async_contract_failure
+    mov rax, [r12 + tk_AIO_SEQ]
+    inc rax
+    jz tk_async_contract_failure
+    cmp [rbp + 8], rax
+    jne tk_async_contract_failure
+    mov [r12 + tk_AIO_SEQ], rax
+    cmp qword ptr [rbp + 24], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 32], tk_AIO_REQUEST
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 48], tk_AIO_REPLY
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 56], tk_AIO_REPLY_CAP
+    jne tk_async_contract_failure
+    mov rax, [rbp + 64]
+    or rax, [rbp + 72]
+    or rax, [rbp + 80]
+    or rax, [rbp + 88]
+    jnz tk_async_contract_failure
+    mov rdx, [rbp + 40]
+    cmp rdx, 64
+    jb tk_async_contract_failure
+    cmp rdx, 1056832
+    ja tk_async_contract_failure
+    lea rsi, [r13 + tk_AIO_REQUEST]
+    mov rax, [rsi + 8]
+    cmp [rbp + 16], rax
+    jne tk_async_contract_failure
+    mov rdi, r12
+    lea rcx, [r13 + tk_AIO_REPLY]
+    call tk_async_io_effect
+    mov [rbp + 72], rax
+    mov rax, [rbp + 8]
+    mov [rbp + 64], rax
+    jmp tk_async_io_invoke
+
+tk_async_io_destroy:
+    push rbx
+    push r12
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_AIO_BUSY], 0
+    jne tk_async_contract_failure
+    xor ebx, ebx
+tk_async_io_destroy_loop:
+    cmp ebx, tk_AIO_FD_COUNT
+    je tk_async_io_destroy_map
+    mov rax, rbx
+    shl rax, 5
+    lea rdx, [r12 + rax + tk_AIO_FDS]
+    mov rdi, [rdx + 8]
+    test rdi, rdi
+    jz tk_async_io_destroy_next
+    mov r9, [rdx + 16]
+    mov qword ptr [rdx], 0
+    mov qword ptr [rdx + 8], 0
+    mov qword ptr [rdx + 16], 0
+    mov qword ptr [rdx + 24], 0
+    test r9, r9
+    jnz tk_async_io_destroy_next
+    dec rdi
+    mov eax, 3
+    syscall
+tk_async_io_destroy_next:
+    inc ebx
+    jmp tk_async_io_destroy_loop
+tk_async_io_destroy_map:
+    mov rdi, [r12 + tk_AIO_ARENA]
+    mov qword ptr [r12 + tk_AIO_ARENA], 0
+    mov qword ptr [r12 + tk_AIO_COOKIE], 0
+    mov qword ptr [r12 + tk_AIO_LIVE], 0
+    test rdi, rdi
+    jz tk_async_io_destroy_return
+    mov esi, tk_AIO_ARENA_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+tk_async_io_destroy_return:
+    pop r12
+    pop rbx
+    ret
+
+# Owned token -> checked descriptor. FD zero is valid and stored as fd+1.
+tk_async_io_fd:
+    mov eax, esi
+    and eax, 65535
+    test eax, eax
+    jz tk_async_contract_failure
+    cmp eax, tk_AIO_FD_COUNT
+    ja tk_async_contract_failure
+    dec eax
+    shl rax, 5
+    lea rdx, [rdi + rax + tk_AIO_FDS]
+    cmp [rdx], rsi
+    jne tk_async_contract_failure
+    mov rax, [rdx + 8]
+    test rax, rax
+    jz tk_async_contract_failure
+    dec rax
+    ret
+
+# Register only an actual just-opened descriptor in this context.
+tk_async_io_register:
+    mov r8, [rdi + tk_AIO_GENERATION]
+    mov r9, r8
+    shr r9, 48
+    test r9, r9
+    jnz tk_async_contract_failure
+    inc r8
+    mov r9, r8
+    shr r9, 48
+    test r9, r9
+    jnz tk_async_contract_failure
+    xor ecx, ecx
+tk_async_io_register_loop:
+    cmp ecx, tk_AIO_FD_COUNT
+    je tk_async_io_register_full
+    mov rax, rcx
+    shl rax, 5
+    lea rdx, [rdi + rax + tk_AIO_FDS]
+    cmp qword ptr [rdx + 8], 0
+    je tk_async_io_register_found
+    inc ecx
+    jmp tk_async_io_register_loop
+tk_async_io_register_found:
+    mov qword ptr [rdx + 16], 0
+    mov qword ptr [rdx + 24], 0
+    mov [rdi + tk_AIO_GENERATION], r8
+    shl r8, 16
+    inc rcx
+    or r8, rcx
+    inc rsi
+    mov [rdx + 8], rsi
+    mov [rdx], r8
+    inc qword ptr [rdi + tk_AIO_LIVE]
+    mov rax, r8
+    ret
+tk_async_io_register_full:
+    mov rdi, rsi
+    mov eax, 3
+    syscall
+    jmp tk_async_contract_failure
+
+tk_async_contract_failure:
+    mov edi, 70
+    mov eax, 231
+    syscall
+    ud2
+
+# rdi private IO context, rsi complete fixed request, rdx request bytes,
+# rcx reply region. No request-supplied syscall number, pointer, or OS FD.
+tk_async_io_effect:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 24
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rcx
+    mov r15, [r12 + tk_AIO_ARENA]
+    movabs rax, 0x3151454953415248
+    cmp [r13], rax
+    jne tk_async_contract_failure
+    mov rax, [r13 + 32]
+    add rax, 64
+    jc tk_async_contract_failure
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    mov rax, [r13 + 40]
+    or rax, [r13 + 48]
+    or rax, [r13 + 56]
+    jnz tk_async_contract_failure
+    mov rdi, r14
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, 0x3152454953415248
+    mov [r14], rax
+    mov rbp, [r13 + 8]
+    cmp rbp, 1
+    je tk_async_effect_open
+    cmp rbp, 20
+    je tk_async_effect_typed
+    cmp rbp, 4
+    je tk_async_effect_euid
+    mov rdi, r12
+    mov rsi, [r13 + 16]
+    call tk_async_io_fd
+    mov rbx, rax
+    cmp rbp, 2
+    je tk_async_effect_close
+    cmp rbp, 3
+    je tk_async_effect_metadata
+    cmp rbp, 5
+    je tk_async_effect_read
+    cmp rbp, 6
+    je tk_async_effect_mkdir
+    cmp rbp, 7
+    je tk_async_effect_sync
+    cmp rbp, 8
+    je tk_async_effect_flock
+    cmp rbp, 9
+    je tk_async_effect_write
+    cmp rbp, 10
+    je tk_async_effect_link
+    cmp rbp, 11
+    je tk_async_effect_unlink
+    cmp rbp, 13
+    je tk_async_effect_dup
+    cmp rbp, 14
+    je tk_async_effect_getdents
+    jmp tk_async_contract_failure
+
+tk_async_effect_errno:
+    cmp rax, -4095
+    jb tk_async_contract_failure
+    neg rax
+    mov [r14 + 16], rax
+    mov qword ptr [r14 + 8], 1
+tk_async_effect_empty:
+    mov eax, 64
+tk_async_effect_return:
+    add rsp, 24
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# rsi bytes, rcx count, rdi destination with checked AIO_PATH_CAP.
+tk_async_effect_cstring:
+    cmp rcx, tk_AIO_PATH_CAP - 1
+    ja tk_async_contract_failure
+    test rcx, rcx
+    jz tk_async_effect_cstring_end
+tk_async_effect_cstring_loop:
+    lodsb
+    test al, al
+    jz tk_async_contract_failure
+    stosb
+    dec rcx
+    jnz tk_async_effect_cstring_loop
+tk_async_effect_cstring_end:
+    mov byte ptr [rdi], 0
+    ret
+
+tk_async_effect_open:
+    mov rbp, [r13 + 24]
+    cmp rbp, 6
+    ja tk_async_contract_failure
+    cmp rbp, 0
+    je tk_async_effect_open_absolute
+    cmp rbp, 6
+    je tk_async_effect_open_absolute
+    mov rdi, r12
+    mov rsi, [r13 + 16]
+    call tk_async_io_fd
+    mov rbx, rax
+    jmp tk_async_effect_open_path
+tk_async_effect_open_absolute:
+    cmp qword ptr [r13 + 16], 0
+    jne tk_async_contract_failure
+    mov rbx, -100
+    test rbp, rbp
+    jnz tk_async_effect_open_random
+    cmp qword ptr [r13 + 32], 1
+    jne tk_async_contract_failure
+    cmp byte ptr [r13 + 64], 47
+    jne tk_async_contract_failure
+    jmp tk_async_effect_open_path
+tk_async_effect_open_random:
+    cmp qword ptr [r13 + 32], 12
+    jne tk_async_contract_failure
+    movabs rax, 0x6172752f7665642f
+    cmp [r13 + 64], rax
+    jne tk_async_contract_failure
+    cmp dword ptr [r13 + 72], 0x6d6f646e
+    jne tk_async_contract_failure
+tk_async_effect_open_path:
+    lea rdi, [r15 + tk_AIO_PATH_A_AT]
+    lea rsi, [r13 + 64]
+    mov rcx, [r13 + 32]
+    call tk_async_effect_cstring
+    lea rax, [rip + tk_async_open_profiles]
+    mov edx, [rax + rbp * 4]
+    mov rdi, rbx
+    lea rsi, [r15 + tk_AIO_PATH_A_AT]
+    mov r10d, 384
+    mov eax, 257
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    mov rdi, r12
+    mov rsi, rax
+    call tk_async_io_register
+    mov [r14 + 24], rax
+    jmp tk_async_effect_empty
+tk_async_open_profiles:
+    .long 524288, 720896, 657408, 657410, 655553, 655554, 524288
+
+tk_async_effect_close:
+    cmp qword ptr [r13 + 24], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [r13 + 32], 0
+    jne tk_async_contract_failure
+    # tk_async_io_fd leaves this descriptor's owned table slot in rdx.
+    mov r9, [rdx + 16]
+    mov qword ptr [rdx], 0
+    mov qword ptr [rdx + 8], 0
+    mov qword ptr [rdx + 16], 0
+    mov qword ptr [rdx + 24], 0
+    dec qword ptr [r12 + tk_AIO_LIVE]
+    test r9, r9
+    jnz tk_async_effect_empty
+    mov rdi, rbx
+    mov eax, 3
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    jnz tk_async_contract_failure
+    jmp tk_async_effect_empty
+tk_async_effect_metadata:
+    cmp qword ptr [r13 + 24], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [r13 + 32], 0
+    jne tk_async_contract_failure
+    mov rdi, rbx
+    lea rsi, [r14 + 64]
+    mov rdx, r12
+    call tk_async_file_metadata
+    test rax, rax
+    js tk_async_effect_errno
+    jnz tk_async_contract_failure
+    mov qword ptr [r14 + 32], 144
+    mov eax, 208
+    jmp tk_async_effect_return
+tk_async_effect_euid:
+    mov rax, [r13 + 16]
+    or rax, [r13 + 24]
+    or rax, [r13 + 32]
+    jnz tk_async_contract_failure
+    mov eax, 107
+    syscall
+    mov [r14 + 24], rax
+    jmp tk_async_effect_empty
+tk_async_effect_read:
+    cmp qword ptr [r13 + 32], 0
+    jne tk_async_contract_failure
+    mov rdx, [r13 + 24]
+    test rdx, rdx
+    jz tk_async_contract_failure
+    cmp rdx, 4097
+    ja tk_async_contract_failure
+    mov rdi, rbx
+    lea rsi, [r14 + 64]
+    xor eax, eax
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    cmp rax, [r13 + 24]
+    ja tk_async_contract_failure
+    mov [r14 + 32], rax
+    add rax, 64
+    jmp tk_async_effect_return
+tk_async_effect_getdents:
+    cmp qword ptr [r13 + 32], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [r13 + 24], 1048576
+    jne tk_async_contract_failure
+    mov rdi, rbx
+    lea rsi, [r14 + 64]
+    mov edx, 1048576
+    mov eax, 217
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    cmp rax, 1048576
+    ja tk_async_contract_failure
+    mov [r14 + 32], rax
+    add rax, 64
+    jmp tk_async_effect_return
+
+tk_async_effect_mkdir:
+    cmp qword ptr [r13 + 24], 0
+    jne tk_async_contract_failure
+    lea rdi, [r15 + tk_AIO_PATH_A_AT]
+    lea rsi, [r13 + 64]
+    mov rcx, [r13 + 32]
+    call tk_async_effect_cstring
+    mov rdi, rbx
+    lea rsi, [r15 + tk_AIO_PATH_A_AT]
+    mov edx, 448
+    mov eax, 258
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    jnz tk_async_contract_failure
+    jmp tk_async_effect_empty
+tk_async_effect_sync:
+    mov rax, [r13 + 24]
+    or rax, [r13 + 32]
+    jnz tk_async_contract_failure
+    mov rdi, rbx
+    mov eax, 74
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    jnz tk_async_contract_failure
+    jmp tk_async_effect_empty
+tk_async_effect_flock:
+    cmp qword ptr [r13 + 32], 0
+    jne tk_async_contract_failure
+    mov rsi, [r13 + 24]
+    cmp rsi, 6
+    je tk_async_effect_flock_call
+    cmp rsi, 8
+    jne tk_async_contract_failure
+tk_async_effect_flock_call:
+    mov rdi, rbx
+    mov eax, 73
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    jnz tk_async_contract_failure
+    jmp tk_async_effect_empty
+tk_async_effect_write:
+    cmp qword ptr [r13 + 24], 0
+    jne tk_async_contract_failure
+    mov rdx, [r13 + 32]
+    cmp rdx, 4096
+    ja tk_async_contract_failure
+    test rdx, rdx
+    jz tk_async_contract_failure
+    mov rdi, rbx
+    lea rsi, [r13 + 64]
+    mov eax, 1
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    cmp rax, [r13 + 32]
+    ja tk_async_contract_failure
+    mov [r14 + 24], rax
+    jmp tk_async_effect_empty
+tk_async_effect_link:
+    cmp qword ptr [r13 + 24], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [r13 + 32], 89
+    jb tk_async_contract_failure
+    cmp qword ptr [r13 + 64], 73
+    jne tk_async_contract_failure
+    mov rax, [r13 + 72]
+    cmp rax, 4096
+    ja tk_async_contract_failure
+    add rax, 89
+    cmp rax, [r13 + 32]
+    jne tk_async_contract_failure
+    lea rdi, [r15 + tk_AIO_PATH_A_AT]
+    lea rsi, [r13 + 80]
+    mov ecx, 73
+    call tk_async_effect_cstring
+    lea rdi, [r15 + tk_AIO_PATH_B_AT]
+    lea rsi, [r13 + 153]
+    mov rcx, [r13 + 72]
+    call tk_async_effect_cstring
+    mov rdi, rbx
+    lea rsi, [r15 + tk_AIO_PATH_A_AT]
+    mov rdx, rbx
+    lea r10, [r15 + tk_AIO_PATH_B_AT]
+    xor r8d, r8d
+    mov eax, 265
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    jnz tk_async_contract_failure
+    jmp tk_async_effect_empty
+tk_async_effect_unlink:
+    cmp qword ptr [r13 + 24], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [r13 + 32], 73
+    jne tk_async_contract_failure
+    lea rdi, [r15 + tk_AIO_PATH_A_AT]
+    lea rsi, [r13 + 64]
+    mov ecx, 73
+    call tk_async_effect_cstring
+    mov rdi, rbx
+    lea rsi, [r15 + tk_AIO_PATH_A_AT]
+    xor edx, edx
+    mov eax, 263
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    jnz tk_async_contract_failure
+    jmp tk_async_effect_empty
+tk_async_effect_dup:
+    mov rax, [r13 + 24]
+    or rax, [r13 + 32]
+    jnz tk_async_contract_failure
+    mov rdi, rbx
+    mov eax, 32
+    syscall
+    test rax, rax
+    js tk_async_effect_errno
+    mov rdi, r12
+    mov rsi, rax
+    call tk_async_io_register
+    mov [r14 + 24], rax
+    jmp tk_async_effect_empty
+tk_async_effect_typed:
+    mov rax, [r13 + 16]
+    or rax, [r13 + 24]
+    jnz tk_async_contract_failure
+    mov rsi, [r13 + 32]
+    cmp rsi, 24
+    jb tk_async_contract_failure
+    cmp rsi, 4120
+    ja tk_async_contract_failure
+    lea rdi, [r13 + 64]
+    lea rdx, [r15 + tk_AIO_TYPED_OUT_AT]
+    mov ecx, tk_AIO_TYPED_OUT_CAP
+    lea r8, [r15 + tk_AIO_TYPED_WORK_AT]
+    mov r9d, tk_AIO_TYPED_WORK_CAP
+    call [r12 + tk_AIO_TYPED_FN]
+    cmp eax, 256
+    jb tk_async_contract_failure
+    cmp eax, tk_AIO_TYPED_OUT_CAP
+    ja tk_async_contract_failure
+    mov [r14 + 32], rax
+    mov rbx, rax
+    lea rdi, [r14 + 64]
+    lea rsi, [r15 + tk_AIO_TYPED_OUT_AT]
+    mov rcx, rax
+    rep movsb
+    lea rax, [rbx + 64]
+    jmp tk_async_effect_return
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# rdi checked FD, rsi stat64[144], rdx stable owned IG/LC context.
+# Every original provider cache access uses the shared Registry short gate;
+# no movable arena address or gate is retained across a filesystem syscall.
+# Derived from the frozen Spool statx/glibc/std provider, now full stat64.
+# Returns 0 or negative errno; no metadata retry and no business validation.
+tk_async_file_metadata:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 280
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov rdi, r14
+    call tk_async_provider_cache_load
+    cmp rax, 2
+    ja tk_async_contract_failure
+    je tk_async_meta_fstat
+    mov rdi, rsp
+    xor eax, eax
+    mov ecx, 32
+    rep stosq
+    mov rdi, r12
+    lea rsi, [rip + tk_async_empty]
+    mov edx, 4096
+    mov r10d, 4095
+    mov r8, rsp
+    mov eax, 332
+    syscall
+    cmp rax, -38
+    je tk_async_meta_fallback
+tk_async_meta_statx_result:
+    test rax, rax
+    jz tk_async_meta_statx_success
+    jns tk_async_contract_failure
+    cmp rax, -4095
+    jb tk_async_contract_failure
+    mov [rsp + 256], rax
+    mov rdi, r14
+    call tk_async_provider_cache_load
+    cmp rax, 1
+    mov rax, [rsp + 256]
+    je tk_async_meta_return
+    xor edi, edi
+    xor esi, esi
+    xor edx, edx
+    mov r10d, 4095
+    xor r8d, r8d
+    mov eax, 332
+    syscall
+    cmp rax, -38
+    jne tk_async_meta_probe_result
+    xor edi, edi
+    xor esi, esi
+    mov rdx, rsp
+    xor r10d, r10d
+    mov eax, 262
+    syscall
+    test rax, rax
+    jz tk_async_meta_impossible_null
+tk_async_meta_probe_result:
+    cmp rax, -14
+    jne tk_async_meta_unavailable
+    mov rdi, r14
+    mov esi, 1
+    call tk_async_provider_cache_publish
+    mov rax, [rsp + 256]
+    jmp tk_async_meta_return
+tk_async_meta_impossible_null:
+    xor eax, eax
+    mov [rax], rax
+    ud2
+tk_async_meta_unavailable:
+    mov rdi, r14
+    mov esi, 2
+    call tk_async_provider_cache_publish
+tk_async_meta_fstat:
+    mov rdi, r13
+    xor eax, eax
+    mov ecx, 18
+    rep stosq
+    mov rdi, r12
+    mov rsi, r13
+    mov eax, 5
+    syscall
+    test rax, rax
+    js tk_async_meta_return
+    jnz tk_async_contract_failure
+    jmp tk_async_meta_return
+tk_async_meta_fallback:
+    mov rdi, r13
+    xor eax, eax
+    mov ecx, 18
+    rep stosq
+    mov rdi, r12
+    lea rsi, [rip + tk_async_empty]
+    mov rdx, r13
+    mov r10d, 4096
+    mov eax, 262
+    syscall
+    test rax, rax
+    jnz tk_async_meta_statx_result
+    mov rdi, r14
+    mov esi, 1
+    call tk_async_provider_cache_publish
+    # stat64 -> glibc statx -> Rust stat64 narrows these fields.
+    mov eax, [r13 + 16]
+    mov [r13 + 16], rax
+    movzx eax, word ptr [r13 + 24]
+    mov [r13 + 24], eax
+    mov eax, [r13 + 56]
+    mov [r13 + 56], rax
+    mov eax, [r13 + 80]
+    mov [r13 + 80], rax
+    mov eax, [r13 + 96]
+    mov [r13 + 96], rax
+    mov eax, [r13 + 112]
+    mov [r13 + 112], rax
+    xor eax, eax
+    jmp tk_async_meta_return
+tk_async_meta_statx_success:
+    mov rdi, r14
+    mov esi, 1
+    call tk_async_provider_cache_publish
+    mov rdi, r13
+    xor eax, eax
+    mov ecx, 18
+    rep stosq
+    mov eax, [rsp + 136]
+    mov edx, [rsp + 140]
+    call tk_async_device_number
+    mov [r13], rax
+    mov rax, [rsp + 32]
+    mov [r13 + 8], rax
+    mov eax, [rsp + 16]
+    mov [r13 + 16], rax
+    movzx eax, word ptr [rsp + 28]
+    mov [r13 + 24], eax
+    mov eax, [rsp + 20]
+    mov [r13 + 28], eax
+    mov eax, [rsp + 24]
+    mov [r13 + 32], eax
+    mov eax, [rsp + 128]
+    mov edx, [rsp + 132]
+    call tk_async_device_number
+    mov [r13 + 40], rax
+    mov rax, [rsp + 40]
+    mov [r13 + 48], rax
+    mov eax, [rsp + 4]
+    mov [r13 + 56], rax
+    mov rax, [rsp + 48]
+    mov [r13 + 64], rax
+    mov rax, [rsp + 64]
+    mov [r13 + 72], rax
+    mov eax, [rsp + 72]
+    mov [r13 + 80], rax
+    mov rax, [rsp + 112]
+    mov [r13 + 88], rax
+    mov eax, [rsp + 120]
+    mov [r13 + 96], rax
+    mov rax, [rsp + 96]
+    mov [r13 + 104], rax
+    mov eax, [rsp + 104]
+    mov [r13 + 112], rax
+    xor eax, eax
+tk_async_meta_return:
+    add rsp, 280
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+tk_async_device_number:
+    mov ecx, eax
+    and ecx, 0xfffff000
+    shl rcx, 32
+    and eax, 4095
+    shl rax, 8
+    or rcx, rax
+    mov eax, edx
+    and edx, 0xffffff00
+    shl rdx, 12
+    and eax, 255
+    or rcx, rdx
+    or rax, rcx
+    ret
+# Stable IG/LC input, SG remains live until all workers are joined.
+# Both actual cache loads and all four actual transitions retain original order.
+# This is never a snapshot-writeback API. The gates contain no metadata IO.
+tk_async_provider_cache_load:
+    mov rax, [rdi + tk_AIO_SERVICE]
+    test rax, rax
+    jz tk_async_provider_load_local
+    mov rdi, [rax + 24576]
+    test rdi, rdi
+    jz tk_async_contract_failure
+    jmp tk_audit_metadata_cache_load
+tk_async_provider_load_local:
+    mov rax, [rdi + tk_AIO_META_LOCAL]
+    cmp rax, 2
+    ja tk_async_contract_failure
+    ret
+tk_async_provider_cache_publish:
+    cmp rsi, 2
+    ja tk_async_contract_failure
+    mov rax, [rdi + tk_AIO_SERVICE]
+    test rax, rax
+    jz tk_async_provider_publish_local
+    mov rdi, [rax + 24576]
+    test rdi, rdi
+    jz tk_async_contract_failure
+    jmp tk_audit_metadata_cache_publish
+tk_async_provider_publish_local:
+    mov [rdi + tk_AIO_META_LOCAL], rsi
+    xor eax, eax
+    ret
+tk_async_sync_all:
+    mov eax, 74
+    syscall
+    cmp rax, -4
+    je tk_async_sync_all
+    ret
+tk_async_empty:
+    .byte 0
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# The immutable 64-byte trusted plan is never selected by a public frame.
+# rdi=plan, rsi=input, rdx=length, rcx=output, r8=capacity -> u32.
+tk_async_observation_call:
+    cmp rdx, tk_ASY_CALL_INPUT_CAP
+    ja tk_async_call_invalid
+    cmp r8, 65536
+    jb tk_async_call_capacity
+    tk_asy_prologue
+    mov [rsp], rcx
+    mov [rsp + 8], r8
+    mov r13, rdi
+    mov r14, rsi
+    mov rbx, rdx
+    call tk_async_call_create
+    mov r12, rax
+    mov [r12 + tk_ASY_CALL_INPUT_LEN], rbx
+    mov rax, [rsp]
+    mov [r12 + tk_ASY_CALL_OUTPUT], rax
+    mov rax, [rsp + 8]
+    mov [r12 + tk_ASY_CALL_OUTPUT_CAP], rax
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov rsi, r14
+    mov rcx, rbx
+    rep movsb
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov esi, tk_ASY_CALL_INPUT_CAP
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    lea r13, [r12 + tk_ASY_CALL_WORK]
+tk_async_controller_invoke:
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov rsi, [r12 + tk_ASY_CALL_INPUT_LEN]
+    lea rdx, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    mov ecx, 65536
+    mov r8, r13
+    mov r9d, tk_ASY_CALL_WORK_BYTES
+    call tk_async_image_controller
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    cmp eax, tk_ASY_EFFECT
+    je tk_async_controller_pending
+    mov [r12 + tk_ASY_CALL_CODE], rax
+    cmp eax, 65536
+    jbe tk_async_controller_publish
+    cmp eax, 0xffffffff
+    je tk_async_controller_retire
+    cmp eax, 0xfffffffe
+    je tk_async_controller_retire
+    jmp tk_async_contract_failure
+tk_async_controller_pending:
+    lea rbp, [r13 + tk_ASY_ACTION]
+    movabs rax, 0x3130415354415248
+    cmp [rbp], rax
+    jne tk_async_contract_failure
+    mov rax, [r12 + tk_ASY_CALL_SEQUENCE]
+    inc rax
+    jz tk_async_contract_failure
+    cmp [rbp + 8], rax
+    jne tk_async_contract_failure
+    mov [r12 + tk_ASY_CALL_SEQUENCE], rax
+    cmp qword ptr [rbp + 24], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 32], tk_ASY_CONTROLLER_REQUEST
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 48], tk_ASY_CONTROLLER_REPLY
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 56], tk_ASY_CONTROLLER_REPLY_CAP
+    jne tk_async_contract_failure
+    mov rax, [rbp + 64]
+    or rax, [rbp + 72]
+    or rax, [rbp + 80]
+    or rax, [rbp + 88]
+    jnz tk_async_contract_failure
+    mov rdx, [rbp + 40]
+    cmp rdx, 32
+    jb tk_async_contract_failure
+    cmp rdx, tk_ASY_CONTROLLER_REQUEST_CAP
+    ja tk_async_contract_failure
+    lea rsi, [r13 + tk_ASY_CONTROLLER_REQUEST]
+    mov rax, [rsi + 8]
+    cmp [rbp + 16], rax
+    jne tk_async_contract_failure
+    lea rcx, [r13 + tk_ASY_CONTROLLER_REPLY]
+    mov r8d, tk_ASY_CONTROLLER_REPLY_CAP
+    mov rdi, r12
+    cmp rax, 1
+    je tk_async_controller_config
+    cmp rax, 2
+    je tk_async_controller_policy
+    cmp rax, 3
+    je tk_async_controller_journal
+    cmp rax, 4
+    je tk_async_controller_audit
+    cmp rax, 5
+    je tk_async_controller_registry
+    cmp rax, 6
+    jne tk_async_contract_failure
+tk_async_controller_journal:
+    call tk_async_journal_call
+    jmp tk_async_controller_ack
+tk_async_controller_config:
+    call [r12 + tk_ASY_PLAN_CONFIG]
+    jmp tk_async_controller_ack
+tk_async_controller_policy:
+    call [r12 + tk_ASY_PLAN_POLICY]
+    jmp tk_async_controller_ack
+tk_async_controller_audit:
+    call [r12 + tk_ASY_PLAN_AUDIT]
+    jmp tk_async_controller_ack
+tk_async_controller_registry:
+    call tk_async_registry_callback
+tk_async_controller_ack:
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    cmp eax, tk_ASY_CONTROLLER_REPLY_CAP
+    ja tk_async_contract_failure
+    mov [rbp + 72], rax
+    mov rax, [rbp + 8]
+    mov [rbp + 64], rax
+    jmp tk_async_controller_invoke
+tk_async_controller_publish:
+    mov rcx, rax
+    mov rdi, [r12 + tk_ASY_CALL_OUTPUT]
+    lea rsi, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    rep movsb
+tk_async_controller_retire:
+    mov rax, [r12 + tk_ASY_CALL_CODE]
+    mov [rsp + 16], rax
+    mov rdi, r12
+    call tk_async_call_retire
+    mov rax, [rsp + 16]
+    tk_asy_epilogue
+tk_async_call_invalid:
+    mov eax, 0xffffffff
+    ret
+tk_async_call_capacity:
+    mov eax, 0xfffffffe
+    ret
+
+# A complete new private invocation. Shared globals are borrowed until drain.
+tk_async_call_create:
+    tk_asy_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + 56], 0
+    jne tk_async_contract_failure
+    mov r13, [r12 + tk_ASY_PLAN_SERVICE]
+    test r13, r13
+    jz tk_async_contract_failure
+    cmp [r13], r13
+    jne tk_async_contract_failure
+    mov r14, [r12 + tk_ASY_PLAN_GLOBAL]
+    cmp [r13 + tk_ASY_ROOT_SLOT], r14
+    jne tk_async_contract_failure
+    cmp [r14 + tk_ASY_G_SERVICE], r13
+    jne tk_async_contract_failure
+    lea rdi, [r14 + tk_ASY_G_PLAN]
+    mov rsi, r12
+    mov ecx, 8
+    repe cmpsq
+    jne tk_async_contract_failure
+    lock inc qword ptr [r14 + tk_ASY_G_CALLS]
+    jz tk_async_contract_failure
+    mov edi, tk_ASY_CALL_BYTES
+    call tk_async_allocate
+    mov rbx, rax
+    mov rdi, rax
+    mov rsi, r12
+    mov ecx, 8
+    rep movsq
+    lea rdi, [rbx + tk_ASY_CALL_IO]
+    mov rsi, r13
+    lea rdx, [rip + tk_async_image_io]
+    lea rcx, [rip + tk_async_image_typed]
+    call tk_async_io_init
+    test rax, rax
+    jnz tk_async_contract_failure
+    mov rax, rbx
+    tk_asy_epilogue
+tk_async_call_retire:
+    tk_asy_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_ASY_CALL_STORE_HELD], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [r12 + tk_ASY_CALL_REGISTRY_HELD], 0
+    jne tk_async_contract_failure
+    mov r13, [r12 + tk_ASY_PLAN_GLOBAL]
+    lea rdi, [r12 + tk_ASY_CALL_IO]
+    call tk_async_io_destroy
+    lock dec qword ptr [r13 + tk_ASY_G_CALLS]
+    js tk_async_contract_failure
+    mov rdi, r12
+    mov esi, tk_ASY_CALL_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    tk_asy_epilogue
+
+# Trusted handler reuse: only a fresh Config query or a fresh Audit optional call.
+# Same public signature as tk_async_observation_call; accepts HRASYCQ1 kind1/4.
+tk_async_child_call:
+    cmp rdx, 32
+    jb tk_async_call_invalid
+    cmp qword ptr [rsi + 8], 3
+    je tk_producer_journal_call
+    cmp qword ptr [rsi + 8], 6
+    je tk_producer_journal_call
+    cmp qword ptr [rsi + 8], 7
+    je tk_producer_journal_call
+    cmp qword ptr [rsi + 8], 8
+    je tk_producer_journal_call
+    cmp qword ptr [rsi + 8], 9
+    je tk_producer_journal_call
+    cmp qword ptr [rsi + 8], 10
+    je tk_producer_journal_call
+    cmp rdx, 32
+    jb tk_async_call_invalid
+    cmp rdx, tk_ASY_CALL_INPUT_CAP
+    ja tk_async_call_invalid
+    cmp r8, 65536
+    jb tk_async_call_capacity
+    tk_asy_prologue
+    mov r13, rdi
+    mov r14, rsi
+    mov rbx, rdx
+    mov [rsp], rcx
+    mov [rsp + 8], r8
+    mov rax, [r14 + 8]
+    cmp rax, 1
+    je tk_async_child_create
+    cmp rax, 4
+    jne tk_async_child_invalid
+tk_async_child_create:
+    call tk_async_call_create
+    mov r12, rax
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov rsi, r14
+    mov rcx, rbx
+    rep movsb
+    mov rdi, r12
+    lea rsi, [r12 + tk_ASY_CALL_INPUT]
+    mov rdx, rbx
+    lea rcx, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    mov r8d, 65536
+    cmp qword ptr [rsi + 8], 1
+    jne tk_async_child_audit
+    call [r12 + tk_ASY_PLAN_CONFIG]
+    jmp tk_async_child_publish
+tk_async_child_audit:
+    call [r12 + tk_ASY_PLAN_AUDIT]
+tk_async_child_publish:
+    cmp rax, 65536
+    ja tk_async_contract_failure
+    mov [rsp + 16], rax
+    mov rcx, rax
+    lea rsi, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    mov rdi, [rsp]
+    rep movsb
+    mov rdi, r12
+    call tk_async_call_retire
+    mov rax, [rsp + 16]
+    tk_asy_epilogue
+tk_async_child_invalid:
+    mov eax, 0xffffffff
+    tk_asy_epilogue
+
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# rdi=private invocation, rsi=immutable child3/6 input, rdx=len,
+# rcx=output, r8=capacity. The original Async STORE mutex spans journal IO.
+tk_async_journal_call:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r14, rsi
+    mov rbx, rdx
+    mov r15, rcx
+    mov [rsp + 8], r8
+    lea r13, [r12 + tk_ASY_CALL_JOURNAL]
+    cmp rbx, tk_ASY_CONTROLLER_REQUEST_CAP
+    ja tk_async_contract_failure
+tk_async_journal_invoke:
+    mov rdi, r14
+    mov rsi, rbx
+    mov rdx, r15
+    mov rcx, [rsp + 8]
+    mov r8, r13
+    mov r9d, tk_ASY_JOURNAL_BYTES
+    call tk_async_image_journal
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    cmp eax, tk_ASY_EFFECT
+    je tk_async_journal_pending
+    cmp eax, 0xfffffff8
+    je tk_async_contract_failure
+    cmp eax, 0xfffffff9
+    je tk_async_contract_failure
+    cmp qword ptr [r12 + tk_ASY_CALL_STORE_HELD], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [r12 + tk_ASY_CALL_REGISTRY_HELD], 0
+    jne tk_async_contract_failure
+    tk_asy_epilogue
+tk_async_journal_pending:
+    lea rbp, [r13 + tk_ASY_ACTION]
+    movabs rax, 0x3130414a53415248
+    cmp [rbp], rax
+    jne tk_async_contract_failure
+    mov rax, [r12 + tk_ASY_CALL_JOURNAL_SEQUENCE]
+    inc rax
+    jz tk_async_contract_failure
+    cmp [rbp + 8], rax
+    jne tk_async_contract_failure
+    mov [r12 + tk_ASY_CALL_JOURNAL_SEQUENCE], rax
+    cmp qword ptr [rbp + 24], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 32], tk_ASY_JOURNAL_REQUEST
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 48], tk_ASY_JOURNAL_REPLY
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 56], tk_ASY_JOURNAL_REPLY_CAP
+    jne tk_async_contract_failure
+    mov rax, [rbp + 64]
+    or rax, [rbp + 72]
+    or rax, [rbp + 80]
+    or rax, [rbp + 88]
+    jnz tk_async_contract_failure
+    mov rdx, [rbp + 40]
+    cmp rdx, 16
+    jb tk_async_contract_failure
+    cmp rdx, tk_ASY_JOURNAL_REQUEST_CAP
+    ja tk_async_contract_failure
+    lea rsi, [r13 + tk_ASY_JOURNAL_REQUEST]
+    lea rcx, [r13 + tk_ASY_JOURNAL_REPLY]
+    mov r8d, tk_ASY_JOURNAL_REPLY_CAP
+    mov rax, [rbp + 16]
+    cmp rax, 1
+    je tk_async_journal_io
+    cmp rax, 2
+    je tk_async_journal_root_pins
+    cmp rax, 3
+    je tk_async_journal_cache
+    cmp rax, 4
+    je tk_async_journal_namespace
+    cmp rax, 5
+    je tk_async_journal_store_enter
+    cmp rax, 6
+    je tk_async_journal_errno
+    cmp rax, 7
+    je tk_async_journal_store_leave
+    cmp rax, 8
+    je tk_async_journal_lease
+    jmp tk_async_contract_failure
+tk_async_journal_io:
+    cmp rdx, 64
+    jb tk_async_contract_failure
+    lea rdi, [r12 + tk_ASY_CALL_IO]
+    call tk_async_io_call
+    jmp tk_async_journal_ack
+tk_async_journal_root_pins:
+    cmp rdx, 64
+    jb tk_async_contract_failure
+    cmp qword ptr [rsi + 16], 1
+    jne tk_async_contract_failure
+    jmp tk_async_journal_state
+tk_async_journal_cache:
+    cmp rdx, 64
+    jb tk_async_contract_failure
+    cmp qword ptr [rsi + 16], 3
+    jne tk_async_contract_failure
+tk_async_journal_state:
+    mov rdi, [r12 + tk_ASY_PLAN_GLOBAL]
+    call tk_async_state_call
+    jmp tk_async_journal_ack
+tk_async_journal_namespace:
+    cmp rdx, 32
+    jne tk_async_contract_failure
+    mov rdi, r12
+    call [r12 + tk_ASY_PLAN_NAMESPACE]
+    jmp tk_async_journal_ack
+tk_async_journal_store_enter:
+    mov edx, 1
+    call tk_async_journal_gate_query
+    cmp qword ptr [r12 + tk_ASY_CALL_STORE_HELD], 0
+    jne tk_async_contract_failure
+    mov rdi, [r12 + tk_ASY_PLAN_GLOBAL]
+    add rdi, tk_ASY_G_STORE
+    call tk_mutex_lock
+    mov qword ptr [r12 + tk_ASY_CALL_STORE_HELD], 1
+    jmp tk_async_journal_gate_reply
+tk_async_journal_store_leave:
+    mov edx, 2
+    call tk_async_journal_gate_query
+    cmp qword ptr [r12 + tk_ASY_CALL_STORE_HELD], 1
+    jne tk_async_contract_failure
+    mov qword ptr [r12 + tk_ASY_CALL_STORE_HELD], 0
+    mov rdi, [r12 + tk_ASY_PLAN_GLOBAL]
+    add rdi, tk_ASY_G_STORE
+    call tk_mutex_unlock
+tk_async_journal_gate_reply:
+    movabs rax, 0x3130524753415248
+    mov [r13 + tk_ASY_JOURNAL_REPLY], rax
+    mov qword ptr [r13 + tk_ASY_JOURNAL_REPLY + 8], 0
+    mov eax, 16
+    jmp tk_async_journal_ack
+tk_async_journal_gate_query:
+    cmp qword ptr [rbp + 40], 16
+    jne tk_async_contract_failure
+    movabs rax, 0x3130514753415248
+    cmp [r13 + tk_ASY_JOURNAL_REQUEST], rax
+    jne tk_async_contract_failure
+    cmp [r13 + tk_ASY_JOURNAL_REQUEST + 8], rdx
+    jne tk_async_contract_failure
+    ret
+tk_async_journal_errno:
+    cmp rdx, 16
+    jne tk_async_contract_failure
+    mov rdi, rsi
+    mov rsi, rdx
+    mov rdx, rcx
+    mov ecx, 4096
+    lea r8, [r12 + tk_ASY_CALL_ERROR_WORK]
+    mov r9d, 32768
+    call tk_async_errno_call
+tk_async_journal_ack:
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    cmp eax, tk_ASY_JOURNAL_REPLY_CAP
+    ja tk_async_contract_failure
+    mov [rbp + 72], rax
+    mov rax, [rbp + 8]
+    mov [rbp + 64], rax
+    jmp tk_async_journal_invoke
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Child wrappers admit fixed internal frames, then invoke the original native owners.
+# rsi=input, rdx=complete length, rax=fixed kind. Returns r9=root length,
+# r10=payload pointer, r11=payload length. No public value is a callback address.
+tk_async_child_query:
+    cmp rdx, 32
+    jb tk_async_contract_failure
+    cmp rdx, tk_ASY_CONTROLLER_REQUEST_CAP
+    ja tk_async_contract_failure
+    cmp [rsi + 8], rax
+    jne tk_async_contract_failure
+    movabs r8, 0x3151435953415248
+    cmp [rsi], r8
+    jne tk_async_contract_failure
+    mov r9, [rsi + 16]
+    cmp r9, 1048576
+    ja tk_async_contract_failure
+    mov r11, rdx
+    sub r11, 32
+    cmp r9, r11
+    ja tk_async_contract_failure
+    sub r11, r9
+    cmp [rsi + 24], r11
+    jne tk_async_contract_failure
+    lea r10, [rsi + r9 + 32]
+    ret
+tk_async_child_header:
+    movabs rax, 0x3150435953415248
+    mov [rdi], rax
+    mov [rdi + 8], rsi
+    mov [rdi + 16], rdx
+    mov qword ptr [rdi + 24], 0
+    ret
+
+tk_async_config_root_callback:
+    mov eax, 1
+    jmp tk_async_config_callback
+tk_async_policy_callback:
+    mov eax, 2
+tk_async_config_callback:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov rbp, r8
+    mov ebx, eax
+    call tk_async_child_query
+    or r9, r11
+    jnz tk_async_contract_failure
+    cmp rbp, 65536
+    jb tk_async_contract_failure
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    movabs rax, 0x3130514746435248
+    mov [rdi], rax
+    mov eax, 6
+    cmp ebx, 1
+    je tk_async_config_operation_ready
+    mov eax, 12
+tk_async_config_operation_ready:
+    mov [rdi + 8], rax
+    mov qword ptr [rdi + 16], 0
+    mov rsi, rdi
+    mov rdi, [r12 + tk_ASY_PLAN_CONFIG_CONTEXT]
+    mov edx, 24
+    mov rcx, r15
+    mov r8, rbp
+    call tk_intent_config_call
+    cmp rax, 32
+    jb tk_async_contract_failure
+    cmp rax, rbp
+    ja tk_async_contract_failure
+    mov [rsp], rax
+    sub rax, 32
+    cmp [r15 + 24], rax
+    jne tk_async_contract_failure
+    movabs rdx, 0x31304d4746435248
+    cmp [r15], rdx
+    jne tk_async_contract_failure
+    mov rsi, [r15 + 8]
+    test rsi, rsi
+    jnz tk_async_config_original_error
+    cmp qword ptr [r15 + 16], 0
+    jne tk_async_contract_failure
+    cmp ebx, 2
+    je tk_async_config_policy_result
+    cmp rax, 1048576
+    ja tk_async_contract_failure
+    jmp tk_async_config_publish
+tk_async_config_policy_result:
+    cmp rax, 64
+    jne tk_async_contract_failure
+    jmp tk_async_config_publish
+tk_async_config_original_error:
+    cmp rsi, 1
+    jne tk_async_contract_failure
+    test rax, rax
+    jz tk_async_contract_failure
+    cmp rax, 32768
+    ja tk_async_contract_failure
+tk_async_config_publish:
+    mov rdi, r15
+    mov rdx, rax
+    call tk_async_child_header
+    mov rax, [rsp]
+    tk_asy_epilogue
+
+tk_async_registry_callback:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r13, rsi
+    mov r15, rcx
+    mov rbp, r8
+    mov eax, 5
+    call tk_async_child_query
+    test r9, r9
+    jnz tk_async_contract_failure
+    cmp r11, 352
+    jne tk_async_contract_failure
+    cmp rbp, 40
+    jb tk_async_contract_failure
+    mov r14, r10
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, 0x3130515353415248
+    mov [r12 + tk_ASY_CALL_TMP], rax
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 8], 2
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 16], 2
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 24], 352
+    lea rdi, [r12 + tk_ASY_CALL_TMP + 64]
+    mov rsi, r14
+    mov ecx, 352
+    rep movsb
+    mov rdi, [r12 + tk_ASY_PLAN_GLOBAL]
+    lea rsi, [r12 + tk_ASY_CALL_TMP]
+    mov edx, 416
+    lea rcx, [r12 + tk_ASY_CALL_NS_REPLY]
+    mov r8d, 64
+    call tk_async_state_call
+    cmp eax, 64
+    jne tk_async_contract_failure
+    movabs rax, 0x3130525353415248
+    cmp [r12 + tk_ASY_CALL_NS_REPLY], rax
+    jne tk_async_contract_failure
+    cmp qword ptr [r12 + tk_ASY_CALL_NS_REPLY + 8], 0
+    jne tk_async_registry_changed
+    mov rax, [r12 + tk_ASY_CALL_NS_REPLY + 16]
+    cmp rax, 3
+    ja tk_async_contract_failure
+    mov [r15 + 32], rax
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 8
+    call tk_async_child_header
+    mov eax, 40
+    tk_asy_epilogue
+tk_async_registry_changed:
+    cmp qword ptr [r12 + tk_ASY_CALL_NS_REPLY + 8], 2
+    jne tk_async_contract_failure
+    cmp rbp, 59
+    jb tk_async_contract_failure
+    lea rsi, [rip + tk_async_live_identity_error]
+    lea rdi, [r15 + 32]
+    mov ecx, 27
+    rep movsb
+    mov rdi, r15
+    mov esi, 1
+    mov edx, 27
+    call tk_async_child_header
+    mov eax, 59
+    tk_asy_epilogue
+
+tk_async_audit_callback:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r13, rsi
+    mov r15, rcx
+    mov rbp, r8
+    mov eax, 4
+    call tk_async_child_query
+    cmp r11, 128
+    jne tk_async_contract_failure
+    cmp rbp, 65536
+    jb tk_async_contract_failure
+    mov r14, r10
+    mov rdi, [r12 + tk_ASY_PLAN_SERVICE]
+    lea rsi, [r13 + 32]
+    mov rdx, r9
+    call tk_intent_root_cap
+    test rax, rax
+    jz tk_async_contract_failure
+    mov rbx, rax
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    xor eax, eax
+    mov ecx, 12
+    rep stosq
+    movabs rax, 0x313051564f415248
+    mov [r12 + tk_ASY_CALL_TMP], rax
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 8], 1
+    mov [r12 + tk_ASY_CALL_TMP + 16], rbx
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 24], 64
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 32], 64
+    lea rdi, [r12 + tk_ASY_CALL_TMP + 96]
+    mov rsi, r14
+    mov ecx, 128
+    rep movsb
+    mov rdi, [r12 + tk_ASY_PLAN_SERVICE]
+    mov rsi, rbx
+    lea rdx, [r12 + tk_ASY_CALL_TMP]
+    mov ecx, 224
+    lea r8, [r15 + 32]
+    mov r9d, 320
+    call tk_audit_observation_call
+    cmp rax, 128
+    jb tk_async_contract_failure
+    cmp rax, 320
+    ja tk_async_contract_failure
+    mov [rsp], rax
+    movabs rdx, 0x313052564f415248
+    cmp [r15 + 32], rdx
+    jne tk_async_contract_failure
+    cmp qword ptr [r15 + 40], 1
+    jne tk_async_contract_failure
+    cmp qword ptr [r15 + 48], 0
+    jne tk_async_audit_original_error
+    cmp qword ptr [r15 + 56], 0
+    jne tk_async_contract_failure
+    mov rdi, r15
+    xor esi, esi
+    mov rdx, [rsp]
+    call tk_async_child_header
+    mov rax, [rsp]
+    add rax, 32
+    tk_asy_epilogue
+tk_async_audit_original_error:
+    cmp qword ptr [rsp], 128
+    jne tk_async_contract_failure
+    mov rbx, [r15 + 48]
+    mov r14, [r15 + 56]
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    xor eax, eax
+    mov ecx, 6
+    rep stosq
+    movabs rax, 0x3130515245525248
+    mov [r12 + tk_ASY_CALL_TMP], rax
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 8], 1
+    mov [r12 + tk_ASY_CALL_TMP + 16], rbx
+    mov [r12 + tk_ASY_CALL_TMP + 24], r14
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    mov esi, 48
+    lea rdx, [r15 + 32]
+    mov ecx, 32768
+    lea r8, [r12 + tk_ASY_CALL_ERROR_WORK]
+    mov r9d, 32768
+    call tk_intent_image_read_error
+    test rax, rax
+    jz tk_async_contract_failure
+    cmp rax, 32768
+    ja tk_async_contract_failure
+    mov [rsp], rax
+    mov rdi, r15
+    mov esi, 1
+    mov rdx, rax
+    call tk_async_child_header
+    mov rax, [rsp]
+    add rax, 32
+    tk_asy_epilogue
+
+tk_async_live_identity_error:
+    .ascii "async live identity changed"
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Fixed envelope conversion to the existing HIA Read error renderer.
+# No native text table: the HIA owner formats the complete original OS error.
+tk_async_errno_call:
+    cmp rsi, 16
+    jne tk_async_contract_failure
+    cmp rcx, 4096
+    jb tk_async_contract_failure
+    cmp r9, 32768
+    jb tk_async_contract_failure
+    movabs rax, 0x3130515245444d48
+    cmp [rdi], rax
+    jne tk_async_contract_failure
+    mov rax, [rdi + 8]
+    test rax, rax
+    jz tk_async_contract_failure
+    cmp rax, 4095
+    ja tk_async_contract_failure
+    tk_asy_prologue
+    mov r12, rax
+    mov r13, rdx
+    mov r14, rcx
+    mov r15, r8
+    mov rbp, r9
+    mov rdi, rsp
+    xor eax, eax
+    mov ecx, 6
+    rep stosq
+    movabs rax, 0x3130515245525248
+    mov [rsp], rax
+    mov qword ptr [rsp + 8], 1
+    mov qword ptr [rsp + 16], 23
+    mov [rsp + 24], r12
+    mov rdi, rsp
+    mov esi, 48
+    lea rdx, [r13 + 24]
+    mov rcx, r14
+    sub rcx, 24
+    mov r8, r15
+    mov r9, rbp
+    call tk_intent_image_read_error
+    test rax, rax
+    jz tk_async_contract_failure
+    mov rdx, r14
+    sub rdx, 24
+    cmp rax, rdx
+    ja tk_async_contract_failure
+    mov [r13 + 16], rax
+    mov [r13 + 8], r12
+    movabs rdx, 0x3130525245444d48
+    mov [r13], rdx
+    add rax, 24
+    tk_asy_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# One existing Namespace owner, including its original 128-watch state.
+# A normal-operation reservation protects that carrier's pending buffers. The
+# independent private ContentWatchSet destructor still uses the old short gate.
+# This is a Namespace-local reservation, never an Audit or whole-backend IO lock.
+tk_async_namespace_callback:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r13, rcx
+    mov r14, r8
+    cmp rdx, 32
+    jne tk_async_contract_failure
+    movabs rax, 0x3130564e53415248
+    cmp [rsi], rax
+    jne tk_async_contract_failure
+    cmp qword ptr [rsi + 16], 1
+    jne tk_async_contract_failure
+    cmp qword ptr [rsi + 24], 0
+    jne tk_async_contract_failure
+    cmp r14, 65536
+    jb tk_async_contract_failure
+    mov rsi, [rsi + 8]
+    lea rdi, [r12 + tk_ASY_CALL_IO]
+    call tk_async_io_fd
+    mov rbx, rax
+    mov rax, [r12 + tk_ASY_PLAN_SERVICE]
+    lea rdi, [rax + tk_ASY_ROOT_NAMESPACE_GATE]
+    mov [rsp + 8], rdi
+    call tk_mutex_lock
+    mov rax, [r12 + tk_ASY_PLAN_SERVICE]
+    mov rbp, [rax + tk_STORAGE_GLOBAL]
+    test rbp, rbp
+    jz tk_async_contract_failure
+    mov rax, [rbp + 16]
+    test rax, rax
+    jz tk_async_contract_failure
+    cmp [rax + tk_tb_I_GLOBAL], rax
+    jne tk_async_contract_failure
+    mov [r12 + 4000], rax
+    mov r15, [rax + tk_tb_G_NAMESPACE]
+    test r15, r15
+    jz tk_async_contract_failure
+    mov [r15 + 4008], rbx
+    mov rdi, rbp
+    call tk_audit_metadata_cache_load
+    mov [r12 + tk_ASY_CALL_TMP + 24], rax
+    movabs rax, 0x3130305156534e48
+    mov [r12 + tk_ASY_CALL_TMP], rax
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 8], 1
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 16], 0
+    mov r15, r12
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    mov esi, 32
+    lea rdx, [r12 + tk_ASY_CALL_NS_REPLY]
+    call tk_tb_shared_namespace_borrow_ready
+    cmp eax, 72
+    jne tk_async_contract_failure
+    mov rdi, rbp
+    mov rsi, [r12 + tk_ASY_CALL_NS_REPLY + 64]
+    call tk_audit_metadata_cache_publish
+    mov rdi, [rsp + 8]
+    call tk_mutex_unlock
+    mov qword ptr [r12 + 4000], 0
+    lea r15, [r12 + tk_ASY_CALL_NS_REPLY]
+    movabs rax, 0x3130305256534e48
+    cmp [r15], rax
+    jne tk_async_contract_failure
+    mov rax, [r15 + 8]
+    cmp rax, 1
+    je tk_async_namespace_watch
+    cmp rax, 2
+    je tk_async_namespace_fingerprint
+    test rax, rax
+    jnz tk_async_contract_failure
+    cmp qword ptr [r15 + 16], 23
+    jne tk_async_contract_failure
+    mov rbx, [r15 + 24]
+    test rbx, rbx
+    jz tk_async_contract_failure
+    cmp rbx, 4095
+    ja tk_async_contract_failure
+    movabs rax, 0x3130515245444d48
+    mov [r12 + tk_ASY_CALL_TMP], rax
+    mov [r12 + tk_ASY_CALL_TMP + 8], rbx
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    mov esi, 16
+    lea rdx, [r13 + 40]
+    mov ecx, 4096
+    lea r8, [r12 + tk_ASY_CALL_ERROR_WORK]
+    mov r9d, 32768
+    call tk_async_errno_call
+    cmp rax, 24
+    jbe tk_async_contract_failure
+    cmp rax, 4096
+    ja tk_async_contract_failure
+    movabs rdx, 0x3130525245444d48
+    cmp [r13 + 40], rdx
+    jne tk_async_contract_failure
+    cmp [r13 + 48], rbx
+    jne tk_async_contract_failure
+    sub rax, 24
+    cmp [r13 + 56], rax
+    jne tk_async_contract_failure
+    mov [rsp], rax
+    mov rdi, r13
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, 0x3130524e53415248
+    mov [r13], rax
+    mov qword ptr [r13 + 8], 1
+    mov rax, [rsp]
+    mov [r13 + 16], rax
+    add rax, 64
+    tk_asy_epilogue
+tk_async_namespace_watch:
+    mov rdi, r13
+    xor eax, eax
+    mov ecx, 13
+    rep stosq
+    mov qword ptr [r13 + 64], 1
+    mov rax, [r15 + 16]
+    mov [r13 + 72], rax
+    mov rax, [r15 + 24]
+    mov [r13 + 80], rax
+    jmp tk_async_namespace_success
+tk_async_namespace_fingerprint:
+    mov rdi, r13
+    xor eax, eax
+    mov ecx, 9
+    rep stosq
+    mov qword ptr [r13 + 64], 2
+    lea rsi, [r15 + 32]
+    lea rdi, [r13 + 72]
+    mov ecx, 4
+    rep movsq
+tk_async_namespace_success:
+    movabs rax, 0x3130524e53415248
+    mov [r13], rax
+    mov qword ptr [r13 + 16], 40
+    mov eax, 104
+    tk_asy_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# These component-local reservations guard fixed shared continuation buffers.
+# They do not replace the independent original Async STORE or Audit STORE locks.
+tk_async_namespace_reserve:
+    push r11
+    mov r11, [r15 + 4000]
+    mov r11, [r11 + tk_tb_I_GLOBAL]
+    mov r11, [r11 + tk_tb_G_SG]
+    mov r11, [r11 + 8]
+    lea r11, [r11 + tk_ASY_ROOT_NAMESPACE_GATE]
+    call tk_cu_gate_enter
+    pop r11
+    ret
+tk_async_namespace_unreserve:
+    push r11
+    mov r11, [r15 + 4000]
+    mov r11, [r11 + tk_tb_I_GLOBAL]
+    mov r11, [r11 + tk_tb_G_SG]
+    mov r11, [r11 + 8]
+    lea r11, [r11 + tk_ASY_ROOT_NAMESPACE_GATE]
+    call tk_cu_gate_leave
+    pop r11
+    ret
+tk_async_existing_namespace_entry:
+    sub rsp, 8
+    call tk_async_namespace_reserve
+    call tk_async_existing_namespace_owned
+    call tk_async_namespace_unreserve
+    add rsp, 8
+    ret
+tk_async_existing_hot_namespace_entry:
+    sub rsp, 8
+    call tk_async_namespace_reserve
+    call tk_async_existing_hot_namespace_owned
+    call tk_async_namespace_unreserve
+    add rsp, 8
+    ret
+
+# Config's immutable installed state and first policy binding remain shared.
+# Every query completes before this independent continuation reservation exits.
+tk_async_existing_config_call:
+    push r12
+    sub rsp, 16
+    mov [rsp], r11
+    mov r12, rdi
+    mov r11, [r12 + tk_IG_SERVICE]
+    lea r11, [r11 + tk_ASY_ROOT_CONFIG_GATE]
+    call tk_cu_gate_enter
+    mov r11, [rsp]
+    call tk_async_existing_config_owned
+    mov [rsp], r11
+    mov r11, [r12 + tk_IG_SERVICE]
+    lea r11, [r11 + tk_ASY_ROOT_CONFIG_GATE]
+    call tk_cu_gate_leave
+    mov r11, [rsp]
+    add rsp, 16
+    pop r12
+    ret
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Internal qualification framing only. This is not a public SDK dispatcher.
+tk_async_service_frame:
+    mov rsi, [r15 + tk_SERVICE_IO]
+    add rsi, 32
+    mov rdx, [r15 + 1088]
+    cmp rdx, 8
+    jb tk_read_service_frame
+    movabs rax, 0x3130515953415248
+    cmp [rsi], rax
+    je tk_async_service_observation
+    movabs rax, 0x3151435953415248
+    cmp [rsi], rax
+    je tk_async_service_child
+    movabs rax, 0x3130515353415248
+    cmp [rsi], rax
+    je tk_async_service_state
+    jmp tk_read_service_frame
+tk_async_service_observation:
+    mov rdi, [r15 + tk_ASY_ROOT_SLOT]
+    add rdi, tk_ASY_G_PLAN
+    mov rcx, [r15 + tk_SERVICE_IO]
+    add rcx, tk_SERVICE_OUTPUT
+    mov r8d, 65536
+    call tk_async_observation_call
+    jmp tk_async_service_emit
+tk_async_service_child:
+    mov rdi, [r15 + tk_ASY_ROOT_SLOT]
+    add rdi, tk_ASY_G_PLAN
+    mov rcx, [r15 + tk_SERVICE_IO]
+    add rcx, tk_SERVICE_OUTPUT
+    mov r8d, 65536
+    call tk_async_child_call
+    jmp tk_async_service_emit
+tk_async_service_state:
+    # Explicit trusted qualification seam. It starts no job and grants no tool.
+    mov rdi, [r15 + tk_ASY_ROOT_SLOT]
+    mov rcx, [r15 + tk_SERVICE_IO]
+    add rcx, tk_SERVICE_OUTPUT
+    mov r8d, 64
+    call tk_async_state_call
+tk_async_service_emit:
+    mov [r15 + 1096], eax
+    lea rsi, [r15 + 1096]
+    mov edx, 4
+    call tk_write_exact
+    mov edx, [r15 + 1096]
+    cmp edx, 65536
+    ja tk_service_next
+    mov rsi, [r15 + tk_SERVICE_IO]
+    add rsi, tk_SERVICE_OUTPUT
+    call tk_write_exact
+    jmp tk_service_next
+
+tk_async_image_controller:
+    jmp qword ptr [rip + tk_async_image_slot_controller]
+
+tk_async_image_state:
+    jmp qword ptr [rip + tk_async_image_slot_state]
+
+tk_async_image_typed:
+    jmp qword ptr [rip + tk_async_image_slot_typed]
+
+tk_async_image_io:
+    jmp qword ptr [rip + tk_async_image_slot_io]
+
+tk_async_image_journal:
+    jmp qword ptr [rip + tk_async_image_slot_journal]
+
+.balign 8
+tk_async_image_slot_controller:
+    .quad 0
+tk_async_image_slot_state:
+    .quad 0
+tk_async_image_slot_typed:
+    .quad 0
+tk_async_image_slot_io:
+    .quad 0
+tk_async_image_slot_journal:
+    .quad 0
 
 .balign 8
 pub_image_owner:
@@ -20667,4 +26704,16544 @@ ex_image_mapper:
     .quad 0
 ex_image_wire:
     .quad 0
+
+pr_mcp_read_call:
+    cmp qword ptr [rdx + 32], 33554432
+    jne fatal
+    mov rsi, [rdx + 40]
+    cmp rsi, 24
+    jb fatal
+    cmp rsi, 8388632
+    ja fatal
+    lea r13, [r15 + MCP_WORK + 33554432]
+    mov rax, 0x3130514552525848
+    cmp [r13], rax
+    jne fatal
+    cmp qword ptr [r13 + 8], 1
+    jb fatal
+    cmp qword ptr [r13 + 8], 2
+    ja fatal
+    mov rax, rsi
+    sub rax, 24
+    cmp [r13 + 16], rax
+    jne fatal
+    mov [r15 + 880], rsi
+    jmp ex_begin
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# One private public-Read handler context. The installed Config and shared
+# Authority/SG/IG/Read/Async owners remain owned by their existing roots.
+.equ PR_ROOT_SLOT, 3080
+.equ PR_ACTIVE, 8
+.equ PR_LENGTH, 16
+.equ PR_TARGET, 24
+.equ PR_CAPACITY, 32
+.equ PR_SEQUENCE, 40
+.equ PR_CALLER, 48
+.equ PR_RESULT, 56
+.equ PR_PURE_BUSY, 64
+.equ PR_ACTION_COPY, 256
+.equ PR_INPUT, 4096
+.equ PR_INPUT_CAPACITY, 8388632
+.equ PR_INPUT_MAPPING, 8392704
+.equ PR_OUTPUT, 8396800
+.equ PR_WORK, 75505664
+.equ PR_PURE, 343941120
+.equ PR_BYTES, 612376576
+.equ PR_WORK_BYTES, 268435456
+.equ PR_CAP, 67108864
+.equ PR_ACTION, 256
+.equ PR_CHILD_INPUT, 67108864
+.equ PR_CHILD_OUTPUT, 134217728
+
+.macro pr_prologue
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 72
+.endm
+.macro pr_epilogue
+    add rsp, 72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+# context(public root) -> stable private mapping. No effect-owner replacement.
+pr_context:
+    pr_prologue
+    mov r12, rdi
+    mov rax, [r12 + PR_ROOT_SLOT]
+    test rax, rax
+    jnz pr_context_existing
+    mov edi, PR_BYTES
+    call tk_allocate_guarded
+    mov [rax], r12
+    mov [r12 + PR_ROOT_SLOT], rax
+pr_context_existing:
+    cmp [rax], r12
+    jne fatal
+    pr_epilogue
+
+# rax is one fixed image selected by native branches; source/result spans are
+# the immutable mapper/handler-owned spans. Pure components have no callbacks.
+pr_pure:
+    pr_prologue
+    mov r12, rax
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    cmp rsi, PR_CAP
+    ja fatal
+    cmp rcx, PR_CAP
+    ja fatal
+    mov rdi, r15
+    call pr_context
+    mov r13, rax
+    cmp qword ptr [r13 + PR_PURE_BUSY], 0
+    jne fatal
+    mov qword ptr [r13 + PR_PURE_BUSY], 1
+    mov rdi, [rsp]
+    mov rsi, [rsp + 8]
+    mov rdx, [rsp + 16]
+    mov rcx, [rsp + 24]
+    lea r8, [r13 + PR_PURE]
+    mov r9d, PR_WORK_BYTES
+    call r12
+    mov edx, eax
+    cmp rax, rdx
+    jne fatal
+    cmp eax, 0xfffffff0
+    je fatal
+    cmp eax, PR_CAP
+    jbe pr_pure_done
+    cmp eax, 0xfffffff0
+    jb fatal
+pr_pure_done:
+    mov qword ptr [r13 + PR_PURE_BUSY], 0
+    pr_epilogue
+
+pr_early_getter:
+    mov rax, [rip + pr_image_getter]
+    jmp pr_pure
+
+# Exact second resolve, on the same bound Authority owner as outer call_tool.
+pr_authority:
+    pr_prologue
+    cmp rsi, 16
+    jne fatal
+    cmp rcx, 96
+    jb fatal
+    mov r14, rdx
+    mov rax, [r15 + EX_CONTROL_SLOT]
+    test rax, rax
+    jz fatal
+    mov r13, [rax + 8]
+    test r13, r13
+    jz fatal
+    mov rsi, rdi
+    lea rdi, [r13 + 65536]
+    mov ecx, 16
+    rep movsb
+    push r15
+    sub rsp, 8
+    mov r15, r13
+    lea rdi, [r15 + 65536]
+    mov esi, 16
+    lea rdx, [r15 + 9437184]
+    mov ecx, 96
+    call au_authority_request
+    add rsp, 8
+    pop r15
+    cmp eax, 32
+    jb fatal
+    cmp eax, 96
+    ja fatal
+    mov ebx, eax
+    lea rsi, [r13 + 9437184]
+    mov rdi, r14
+    mov ecx, eax
+    rep movsb
+    mov eax, ebx
+    pr_epilogue
+
+# Direct fixed Async callable; it owns every temporary directory/record lease.
+# Config/Audit fallback enters only those two declared callbacks.
+pr_async:
+    xor r9d, r9d
+    jmp pr_async_common
+pr_async_child:
+    mov r9d, 1
+pr_async_common:
+    pr_prologue
+    mov [rsp], r9
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov rbp, rcx
+    mov rax, [r15 + EX_CONTROL_SLOT]
+    test rax, rax
+    jz fatal
+    mov rax, [rax + 16]
+    test rax, rax
+    jz fatal
+    mov rdi, [rax + tk_ASY_ROOT_SLOT]
+    test rdi, rdi
+    jz fatal
+    add rdi, tk_ASY_G_PLAN
+    mov rsi, r12
+    mov rdx, r13
+    mov rcx, r14
+    mov r8, rbp
+    cmp qword ptr [rsp], 0
+    jne pr_async_fixed_child
+    call paj_tk_async_observation_call
+    cmp eax, 0xfffffff2
+    je paj_runtime_abandoned
+    jmp pr_async_return
+pr_async_fixed_child:
+    call tk_async_child_call
+pr_async_return:
+    mov edx, eax
+    cmp rax, rdx
+    jne fatal
+    pr_epilogue
+
+# Real Read caller. This ordinary-path composition waits for its worker;
+# SDK notification intake will attach through the independently qualified pump.
+# No synthetic Pending completion or caller Drop is performed on notification.
+pr_read:
+    pr_prologue
+    mov [rsp], rdx
+    mov [rsp + 8], rcx
+    mov r14, rdi
+    mov rbp, rsi
+    mov rdi, r15
+    call pr_context
+    mov r12, rax
+    cmp qword ptr [r12 + PR_ACTIVE], 1
+    jne fatal
+    cmp qword ptr [r12 + PR_CALLER], 0
+    jne fatal
+    cmp rbp, 64
+    jb fatal
+    mov rax, [r15 + EX_CONTROL_SLOT]
+    mov rax, [rax + 16]
+    test rax, rax
+    jz fatal
+    mov rdi, [rax + tk_READ_ROOT_SLOT]
+    test rdi, rdi
+    jz fatal
+    mov rsi, r14
+    mov rdx, rbp
+    mov rcx, [r14 + 8]
+    cmp rcx, 1
+    jb fatal
+    cmp rcx, 2
+    ja fatal
+    call tk_read_caller_create
+    test rax, rax
+    jz pr_read_invalid
+    mov r13, rax
+    mov [r12 + PR_CALLER], rax
+    mov rdi, r13
+    call tk_read_caller_register
+    mov rdi, r15
+    mov rsi, r12
+    lea rdx, [rip + pr_read_poll]
+    lea rcx, [rip + pr_read_drop]
+    mov r8, -1
+    call public_async_await
+    cmp eax, 0xfffffff2
+    je pr_read_runtime_aborted
+    mov ebx, eax
+    cmp eax, tk_READ_OUTPUT_CAPACITY
+    ja pr_read_code
+    cmp rax, [rsp + 8]
+    ja fatal
+    lea rsi, [r13 + tk_RC_OUTPUT]
+    mov rdi, [rsp]
+    mov ecx, eax
+    rep movsb
+    jmp pr_read_retire
+pr_read_code:
+    cmp eax, 0xfffffff0
+    jb fatal
+    cmp eax, tk_READ_EFFECT
+    je fatal
+    cmp eax, tk_READ_PENDING
+    je fatal
+pr_read_retire:
+    mov rdi, r13
+    call tk_read_caller_drop
+    mov qword ptr [r12 + PR_CALLER], 0
+    mov eax, ebx
+    pr_epilogue
+pr_read_invalid:
+    mov eax, 0xffffffff
+    pr_epilogue
+
+# Pump-compatible fixed poll/drop hooks. Notification cancellation never calls
+# the Drop hook; only actual enclosing Future/runtime retirement may do so.
+pr_read_poll:
+    pr_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + PR_ACTIVE], 1
+    jne fatal
+    mov rdi, [r12 + PR_CALLER]
+    test rdi, rdi
+    jz fatal
+    call tk_read_caller_drive
+    mov edx, 0xfffffff8
+    cmp rax, rdx
+    jne pr_read_poll_return
+    mov eax, 0xfffffff1
+pr_read_poll_return:
+    pr_epilogue
+pr_read_drop:
+    pr_prologue
+    mov r12, rdi
+    mov rdi, [r12 + PR_CALLER]
+    test rdi, rdi
+    jz pr_read_drop_done
+    call tk_read_caller_drop
+    mov qword ptr [r12 + PR_CALLER], 0
+pr_read_drop_done:
+    xor eax, eax
+    pr_epilogue
+
+# Called after service worker drain and before public root retirement.
+pr_destroy:
+    pr_prologue
+    mov r12, rdi
+    mov rdi, [r12 + PR_ROOT_SLOT]
+    test rdi, rdi
+    jz pr_destroy_done
+    cmp [rdi], r12
+    jne fatal
+    mov rax, [rdi + PR_ACTIVE]
+    or rax, [rdi + PR_PURE_BUSY]
+    or rax, [rdi + PR_CALLER]
+    jnz fatal
+    mov qword ptr [r12 + PR_ROOT_SLOT], 0
+    mov esi, PR_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz fatal
+pr_destroy_done:
+    xor eax, eax
+    pr_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# handler(input, length, output, capacity), with the real public root in r15.
+pr_handler:
+    pr_prologue
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    cmp rsi, 24
+    jb fatal
+    cmp rsi, PR_INPUT_CAPACITY
+    ja fatal
+    cmp rcx, 32
+    jb fatal
+    cmp rcx, PR_CAP
+    ja fatal
+    mov rdi, r15
+    call pr_context
+    mov r12, rax
+    cmp qword ptr [r12 + PR_ACTIVE], 0
+    jne fatal
+    cmp qword ptr [r12 + PR_CALLER], 0
+    jne fatal
+    mov qword ptr [r12 + PR_ACTIVE], 1
+    mov rax, [rsp + 8]
+    mov [r12 + PR_LENGTH], rax
+    mov rax, [rsp + 16]
+    mov [r12 + PR_TARGET], rax
+    mov rax, [rsp + 24]
+    mov [r12 + PR_CAPACITY], rax
+    lea rdi, [r12 + PR_INPUT]
+    mov rsi, [rsp]
+    mov rcx, [rsp + 8]
+    rep movsb
+    lea rdi, [r12 + PR_INPUT]
+    mov esi, PR_INPUT_MAPPING
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz fatal
+    lea rbp, [r12 + PR_WORK]
+pr_handler_resume:
+    lea rdi, [r12 + PR_INPUT]
+    mov rsi, [r12 + PR_LENGTH]
+    lea rdx, [r12 + PR_OUTPUT]
+    mov rcx, [r12 + PR_CAPACITY]
+    mov r8, rbp
+    mov r9d, PR_WORK_BYTES
+    call qword ptr [rip + pr_image_handler]
+    mov edx, eax
+    cmp rax, rdx
+    jne fatal
+    cmp eax, 0xfffffff0
+    je pr_handler_action
+    mov [r12 + PR_RESULT], rax
+    cmp eax, PR_CAP
+    jbe pr_handler_completed
+    cmp eax, 0xfffffff0
+    jb fatal
+    jmp pr_handler_terminal
+pr_handler_completed:
+    cmp rax, [r12 + PR_CAPACITY]
+    ja fatal
+    lea rsi, [r12 + PR_OUTPUT]
+    mov rdi, [r12 + PR_TARGET]
+    mov rcx, rax
+    rep movsb
+pr_handler_terminal:
+    cmp qword ptr [r12 + PR_CALLER], 0
+    jne fatal
+    cmp qword ptr [r12 + PR_PURE_BUSY], 0
+    jne fatal
+    lea rdi, [r12 + PR_INPUT]
+    mov esi, PR_INPUT_MAPPING
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz fatal
+    mov qword ptr [r12 + PR_ACTIVE], 0
+    mov qword ptr [r12 + PR_TARGET], 0
+    mov qword ptr [r12 + PR_CAPACITY], 0
+    mov rax, [r12 + PR_RESULT]
+    pr_epilogue
+
+pr_handler_action:
+    lea r14, [rbp + PR_ACTION]
+    mov rax, 0x3130304148525248
+    cmp [r14], rax
+    jne fatal
+    mov rax, [r12 + PR_SEQUENCE]
+    inc rax
+    jz fatal
+    cmp [r14 + 8], rax
+    jne fatal
+    mov [r12 + PR_SEQUENCE], rax
+    cmp qword ptr [r14 + 24], 0
+    jne fatal
+    cmp qword ptr [r14 + 32], PR_CHILD_INPUT
+    jne fatal
+    cmp qword ptr [r14 + 48], PR_CHILD_OUTPUT
+    jne fatal
+    cmp qword ptr [r14 + 56], PR_CAP
+    jne fatal
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz fatal
+    mov rax, [r14 + 40]
+    cmp rax, PR_CAP
+    ja fatal
+    lea rdi, [r12 + PR_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 12
+    rep movsq
+    lea rdi, [rbp + PR_CHILD_INPUT]
+    mov rsi, [r14 + 40]
+    lea rdx, [rbp + PR_CHILD_OUTPUT]
+    mov ecx, PR_CAP
+    mov rax, [r14 + 16]
+    cmp rax, 1
+    je pr_handler_params
+    cmp rax, 2
+    je pr_handler_authority
+    cmp rax, 3
+    je pr_handler_async
+    cmp rax, 4
+    je pr_handler_read
+    cmp rax, 5
+    je pr_handler_fallback
+    cmp rax, 6
+    je pr_handler_fallback
+    cmp rax, 7
+    je pr_handler_status
+    cmp rax, 8
+    je pr_handler_value
+    cmp rax, 9
+    je pr_handler_error
+    cmp rax, 10
+    je pr_handler_scope
+    jmp fatal
+pr_handler_params:
+    mov rax, [rip + pr_image_params]
+    call pr_pure
+    jmp pr_handler_ack
+pr_handler_authority:
+    call pr_authority
+    jmp pr_handler_ack
+pr_handler_async:
+    call pr_async
+    jmp pr_handler_ack
+pr_handler_read:
+    call pr_read
+    jmp pr_handler_ack
+pr_handler_fallback:
+    call pr_async_child
+    jmp pr_handler_ack
+pr_handler_status:
+    mov rax, [rip + pr_image_status]
+    call pr_pure
+    jmp pr_handler_ack
+pr_handler_value:
+    mov rax, [rip + pr_image_value]
+    call pr_pure
+    jmp pr_handler_ack
+pr_handler_error:
+    mov rax, [rip + pr_image_error]
+    call pr_pure
+    jmp pr_handler_ack
+pr_handler_scope:
+    mov rax, [rip + pr_image_scope]
+    call pr_pure
+pr_handler_ack:
+    mov ebx, eax
+    cmp rax, rbx
+    jne fatal
+    cmp eax, PR_CAP
+    jbe pr_handler_ack_valid
+    cmp eax, 0xfffffff0
+    jb fatal
+    cmp eax, 0xfffffff0
+    je fatal
+pr_handler_ack_valid:
+    lea rdi, [r12 + PR_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 12
+    repe cmpsq
+    jne fatal
+    mov [r14 + 72], rbx
+    mov rax, [r12 + PR_SEQUENCE]
+    mov [r14 + 64], rax
+    jmp pr_handler_resume
+
+# Fixed mapper extensions, all requests and completions remain mapper-owned.
+pr_map_getter:
+    call pr_early_getter
+    jmp ex_mapper_ack
+pr_map_async:
+    call pr_async
+    jmp ex_mapper_ack
+pr_map_handler:
+    call pr_handler
+    jmp ex_mapper_ack
+
+.balign 8
+pr_image_getter: .quad 0
+pr_image_handler: .quad 0
+pr_image_params: .quad 0
+pr_image_status: .quad 0
+pr_image_value: .quad 0
+pr_image_error: .quad 0
+pr_image_scope: .quad 0
+
+pr_read_runtime_aborted:
+    cmp qword ptr [r12 + PR_ACTIVE], 1
+    jne ap_contract
+    mov rax, [r12 + PR_CALLER]
+    or rax, [r12 + PR_PURE_BUSY]
+    jnz ap_contract
+    lea rdi, [r12 + PR_INPUT]
+    mov esi, PR_INPUT_MAPPING
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + PR_ACTIVE], 0
+    mov qword ptr [r12 + PR_TARGET], 0
+    mov qword ptr [r12 + PR_CAPACITY], 0
+    jmp ph_runtime_aborted
+
+/* Fixed SDK admission custody. No public frame contains native pointers. */
+.equ AP_SLOT, 4000
+.equ AP_INPUT, 4096
+.equ AP_OUTPUT, 67117056
+.equ AP_POOL, 67121152
+.equ AP_MESSAGE, 335556608
+.equ AP_PROJECTION, 343949312
+.equ AP_ADMISSION, 411062272
+.equ AP_PARSER, 545280000
+.equ AP_GUARD, 813715456
+.equ AP_BYTES, 813719552
+.equ AP_NODE_HEADER, 4096
+
+public_async_initialize:
+    push rbx
+    mov rbx, rdi
+    cmp qword ptr [rbx + AP_SLOT], 0
+    jne ap_contract
+    mov edi, AP_BYTES
+    call ex_allocate
+    mov [rbx + AP_SLOT], rax
+    mov rdx, 0x3130544e59534150
+    mov [rax], rdx
+    mov [rax + 8], rbx
+    lea rdi, [rax + AP_GUARD]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+    xor eax, eax
+    pop rbx
+    ret
+
+# P, operation, token, projection pointer, projection bytes, timespec or 0.
+ap_pool_call:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov rbx, rdi
+    mov rbp, rsi
+    mov r12, rdx
+    mov r13, rcx
+    mov r14, r8
+    mov r15, r9
+    cmp r14, 67108864
+    ja ap_contract
+    lea rdi, [rbx + AP_INPUT]
+    mov rax, 0x313051504d505248
+    mov [rdi], rax
+    mov [rdi + 8], rbp
+    mov [rdi + 16], r12
+    mov [rdi + 24], r14
+    mov qword ptr [rdi + 32], 0
+    mov qword ptr [rdi + 40], 0
+    test r15, r15
+    jz ap_pool_time_ready
+    mov rax, [r15]
+    mov [rdi + 32], rax
+    mov rax, [r15 + 8]
+    mov [rdi + 40], rax
+ap_pool_time_ready:
+    add rdi, 48
+    mov rsi, r13
+    mov rcx, r14
+    rep movsb
+    lea rdi, [rbx + AP_INPUT]
+    lea rsi, [r14 + 48]
+    lea rdx, [rbx + AP_OUTPUT]
+    mov ecx, 64
+    call pf_pool_workspace
+    mov r9d, 268435456
+    call qword ptr [rip + ap_image_pool]
+    cmp rax, 64
+    jne ap_contract
+    mov rdx, 0x313052504d505248
+    cmp [rbx + AP_OUTPUT], rdx
+    jne ap_contract
+    cmp [rbx + AP_OUTPUT + 8], rbp
+    jne ap_contract
+    mov eax, 64
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+public_async_cancelled:
+    push rbx
+    mov rbx, [rdi + AP_SLOT]
+    test rbx, rbx
+    jz ap_contract
+    cmp [rbx + 8], rdi
+    jne ap_contract
+    mov rax, [rbx + 32]
+    test rax, rax
+    jz ap_contract
+    mov rdx, [rax + 16]
+    mov rdi, rbx
+    mov esi, 3
+    xor ecx, ecx
+    xor r8d, r8d
+    xor r9d, r9d
+    call ap_pool_call
+    mov rax, [rbx + AP_OUTPUT + 24]
+    cmp rax, 1
+    ja ap_contract
+    pop rbx
+    ret
+
+ap_node_unmap:
+    mov rax, 0x3130444e59534150
+    cmp [rdi], rax
+    jne ap_contract
+    mov qword ptr [rdi], 0
+    mov rsi, [rdi + 32]
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    ret
+
+ap_contract:
+    mov edi, 70
+    mov eax, 231
+    syscall
+    ud2
+
+ap_image_pool:
+    .quad 0
+
+# root, complete admission, bytes, 0 = current / 1 = queue.
+public_async_admit:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r15, rdi
+    mov r12, rsi
+    mov r13, rdx
+    mov r14, rcx
+    mov rbx, [r15 + AP_SLOT]
+    test rbx, rbx
+    jz ap_contract
+    cmp [rbx + 8], r15
+    jne ap_contract
+    cmp r14, 1
+    ja ap_contract
+    cmp r13, 256
+    jb ap_contract
+    cmp r13, 134217728
+    ja ap_contract
+    mov rax, 0x313030534e435248
+    cmp [r12], rax
+    jne ap_contract
+    cmp qword ptr [r12 + 8], 2
+    jne ap_contract
+    cmp qword ptr [r12 + 16], 1
+    ja ap_contract
+    mov rcx, [r12 + 80]
+    mov r8, [r12 + 88]
+    cmp rcx, 256
+    jb ap_contract
+    cmp rcx, r13
+    ja ap_contract
+    mov rax, r13
+    sub rax, rcx
+    cmp r8, rax
+    ja ap_contract
+    add rcx, r12
+    mov rdi, rbx
+    mov esi, 1
+    xor edx, edx
+    xor r9d, r9d
+    call ap_pool_call
+    lea rdi, [r13 + 8191]
+    and rdi, -4096
+    mov rbp, rdi
+    call ex_allocate
+    mov [rsp], rax
+    mov rdx, 0x3130444e59534150
+    mov [rax], rdx
+    mov qword ptr [rax + 8], 0
+    mov rdx, [rbx + AP_OUTPUT + 16]
+    test rdx, rdx
+    jz ap_contract
+    mov [rax + 16], rdx
+    mov [rax + 24], r13
+    mov [rax + 32], rbp
+    lea rdi, [rax + AP_NODE_HEADER]
+    mov rsi, r12
+    mov rcx, r13
+    rep movsb
+    mov rdi, [rsp]
+    add rdi, AP_NODE_HEADER
+    mov rsi, rbp
+    sub rsi, AP_NODE_HEADER
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rax, [rsp]
+    test r14, r14
+    jnz ap_admit_queued
+    cmp qword ptr [rbx + 32], 0
+    jne ap_contract
+    cmp qword ptr [rbx + 16], 0
+    jne ap_contract
+    mov [rbx + 32], rax
+    jmp ap_admit_done
+ap_admit_queued:
+    mov rdx, [rbx + 24]
+    test rdx, rdx
+    jz ap_admit_queue_empty
+    cmp qword ptr [rdx + 8], 0
+    jne ap_contract
+    mov [rdx + 8], rax
+    jmp ap_admit_queue_tail
+ap_admit_queue_empty:
+    cmp qword ptr [rbx + 16], 0
+    jne ap_contract
+    mov [rbx + 16], rax
+ap_admit_queue_tail:
+    mov [rbx + 24], rax
+ap_admit_done:
+    mov rax, [rax + 16]
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+public_async_next:
+    push rbx
+    push r12
+    push r15
+    mov r15, rdi
+    mov rbx, [r15 + AP_SLOT]
+    test rbx, rbx
+    jz ap_contract
+    cmp qword ptr [rbx + 32], 0
+    jne ap_contract
+    mov r12, [rbx + 16]
+    test r12, r12
+    jz ap_next_empty
+    mov rax, [r12 + 8]
+    mov [rbx + 16], rax
+    test rax, rax
+    jnz ap_next_linked
+    mov qword ptr [rbx + 24], 0
+ap_next_linked:
+    mov qword ptr [r12 + 8], 0
+    mov [rbx + 32], r12
+    mov edi, ADMISSION
+    add rdi, r15
+    lea rsi, [r12 + AP_NODE_HEADER]
+    mov rcx, [r12 + 24]
+    cmp rcx, 134217728
+    ja ap_contract
+    mov [r15 + 904], rcx
+    mov rax, [rsi + 16]
+    mov [r15 + 912], rax
+    rep movsb
+    mov eax, 1
+    jmp ap_next_return
+ap_next_empty:
+    xor eax, eax
+ap_next_return:
+    pop r15
+    pop r12
+    pop rbx
+    ret
+
+public_async_response:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov rbx, [rdi + AP_SLOT]
+    test rbx, rbx
+    jz ap_contract
+    cmp [rbx + 8], rdi
+    jne ap_contract
+    mov r12, [rbx + 32]
+    test r12, r12
+    jz ap_response_direct
+    cmp qword ptr [rbx + 72], 0
+    jne ap_contract
+    mov rdx, [r12 + 16]
+    mov rdi, rbx
+    mov esi, 4
+    xor ecx, ecx
+    xor r8d, r8d
+    xor r9d, r9d
+    call ap_pool_call
+    mov rax, [rbx + AP_OUTPUT + 40]
+    cmp rax, 1
+    ja ap_contract
+    mov [rbx + 96], rax
+    mov qword ptr [rbx + 32], 0
+    mov rdi, r12
+    call ap_node_unmap
+    mov rax, [rbx + 96]
+    jmp ap_response_return
+ap_response_direct:
+    mov eax, 1
+ap_response_return:
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+
+# Only entered after the actual callback Future has been retired.
+public_async_abandon:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov rbx, [rdi + AP_SLOT]
+    cmp qword ptr [rbx + 80], 1
+    jne ap_contract
+    cmp qword ptr [rbx + 72], 0
+    jne ap_contract
+    mov r12, [rbx + 32]
+    test r12, r12
+    jz ap_abandon_queue
+    mov qword ptr [rbx + 32], 0
+    jmp ap_abandon_node
+ap_abandon_queue:
+    mov r12, [rbx + 16]
+    test r12, r12
+    jz ap_abandon_done
+    mov rax, [r12 + 8]
+    mov [rbx + 16], rax
+ap_abandon_node:
+    mov rdi, rbx
+    mov esi, 7
+    mov rdx, [r12 + 16]
+    xor ecx, ecx
+    xor r8d, r8d
+    xor r9d, r9d
+    call ap_pool_call
+    mov rdi, r12
+    call ap_node_unmap
+    jmp ap_abandon_queue
+ap_abandon_done:
+    mov qword ptr [rbx + 24], 0
+    xor eax, eax
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+
+public_async_shutdown:
+    push rbx
+    mov rbx, rdi
+    mov rdi, [rbx + AP_SLOT]
+    test rdi, rdi
+    jz ap_shutdown_done
+    mov rax, [rdi + 16]
+    or rax, [rdi + 24]
+    or rax, [rdi + 32]
+    or rax, [rdi + 72]
+    or rax, [rdi + AP_POOL + 8]
+    jnz ap_contract
+    mov qword ptr [rbx + AP_SLOT], 0
+    mov qword ptr [rdi], 0
+    mov esi, AP_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+ap_shutdown_done:
+    xor eax, eax
+    pop rbx
+    ret
+
+# root -> 0 incomplete, 1 complete line (rsi/rdx), 2 actual EOF.
+# The active request's admission and HIA state are in separate mappings.
+ap_scan_frame:
+    mov r8, rdi
+ap_scan_again:
+    mov rcx, [r8 + 816]
+    test rcx, rcx
+    jz ap_scan_start
+    mov rdx, [r8 + 800]
+    cmp rcx, rdx
+    ja ap_contract
+    sub rdx, rcx
+    lea rdi, [r8 + INPUT]
+    lea rsi, [rdi + rcx]
+    mov rcx, rdx
+    rep movsb
+    mov [r8 + 800], rdx
+    mov qword ptr [r8 + 808], 0
+    mov qword ptr [r8 + 816], 0
+ap_scan_start:
+    mov rcx, [r8 + 808]
+    mov rdx, [r8 + 800]
+    lea rsi, [r8 + INPUT]
+ap_scan_byte:
+    cmp rcx, rdx
+    jae ap_scan_incomplete
+    cmp byte ptr [rsi + rcx], 10
+    je ap_scan_found
+    inc rcx
+    jmp ap_scan_byte
+ap_scan_found:
+    lea rax, [rcx + 1]
+    mov [r8 + 816], rax
+    jmp ap_scan_line
+ap_scan_incomplete:
+    mov [r8 + 808], rcx
+    cmp qword ptr [r8 + 824], 0
+    je ap_scan_empty
+    test rdx, rdx
+    jz ap_scan_eof
+    mov [r8 + 816], rdx
+    mov rcx, rdx
+ap_scan_line:
+    test rcx, rcx
+    jz ap_scan_again
+    cmp byte ptr [rsi + rcx - 1], 13
+    jne ap_scan_ready
+    dec rcx
+ap_scan_ready:
+    test rcx, rcx
+    jz ap_scan_again
+    cmp rcx, 8388608
+    ja ap_contract
+    mov rdx, rcx
+    mov eax, 1
+    ret
+ap_scan_empty:
+    xor eax, eax
+    ret
+ap_scan_eof:
+    mov eax, 2
+    ret
+
+# Called only after poll observes readiness on the owned stdin descriptor.
+ap_read_available:
+    mov r8, rdi
+    cmp qword ptr [r8 + 824], 0
+    jne ap_read_done
+    mov rdx, [r8 + 800]
+    cmp rdx, 8388610
+    jae ap_contract
+    mov ecx, 8388610
+    sub rcx, rdx
+    cmp rcx, 65536
+    jbe ap_read_count
+    mov ecx, 65536
+ap_read_count:
+    lea rsi, [r8 + INPUT]
+    add rsi, rdx
+    mov rdx, rcx
+    xor edi, edi
+    xor eax, eax
+    syscall
+    cmp rax, -4
+    je ap_read_done
+    cmp rax, -11
+    je ap_read_done
+    cmp rax, -4095
+    jae ap_contract
+    test rax, rax
+    jz ap_read_eof
+    add [r8 + 800], rax
+    ret
+ap_read_eof:
+    mov qword ptr [r8 + 824], 1
+ap_read_done:
+    xor eax, eax
+    ret
+
+public_async_eof:
+    push rbx
+    mov rbx, [rdi + AP_SLOT]
+    cmp qword ptr [rbx + 80], 0
+    jne ap_eof_done
+    mov edi, 1
+    lea rsi, [rbx + 112]
+    mov eax, 228
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rdi, rbx
+    mov esi, 5
+    mov edx, 1
+    xor ecx, ecx
+    xor r8d, r8d
+    lea r9, [rbx + 112]
+    call ap_pool_call
+    mov qword ptr [rbx + 80], 1
+ap_eof_done:
+    xor eax, eax
+    pop rbx
+    ret
+
+ap_deadline:
+    push rbx
+    mov rbx, [rdi + AP_SLOT]
+    cmp qword ptr [rbx + 80], 0
+    je ap_deadline_open
+    mov edi, 1
+    lea rsi, [rbx + 112]
+    mov eax, 228
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rdi, rbx
+    mov esi, 6
+    xor edx, edx
+    xor ecx, ecx
+    xor r8d, r8d
+    lea r9, [rbx + 112]
+    call ap_pool_call
+    mov rax, [rbx + AP_OUTPUT + 56]
+    cmp rax, 1
+    ja ap_contract
+    pop rbx
+    ret
+ap_deadline_open:
+    xor eax, eax
+    pop rbx
+    ret
+
+# root, raw line, raw length. The active ADMISSION/MCP workspace is untouched.
+ap_parse_line:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r15, rdi
+    mov rbx, [r15 + AP_SLOT]
+    mov r12, rdx
+    cmp r12, 8388608
+    ja ap_contract
+    lea rdi, [rbx + AP_MESSAGE + 24]
+    mov rcx, r12
+    rep movsb
+    lea rdi, [rbx + AP_MESSAGE]
+    mov rax, 0x313030514a435248
+    mov [rdi], rax
+    mov qword ptr [rdi + 8], 1
+    mov [rdi + 16], r12
+    lea rsi, [r12 + 24]
+    lea rdx, [rbx + AP_PROJECTION + 24]
+    mov ecx, 67108864
+    lea r8, [rbx + AP_PARSER]
+    mov r9d, ROOT_WCAP
+    call qword ptr [rip + pub_image_message]
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, 256
+    jb ap_contract
+    cmp eax, 67108864
+    ja ap_contract
+    lea rdi, [rbx + AP_PROJECTION]
+    mov rdx, 0x313030514e435248
+    mov [rdi], rdx
+    mov qword ptr [rdi + 8], 1
+    mov [rdi + 16], rax
+    lea rsi, [rax + 24]
+    jmp ap_connection
+
+ap_parse_eof:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r15, rdi
+    mov rbx, [r15 + AP_SLOT]
+    cmp qword ptr [rbx + 80], 0
+    jne ap_parse_done
+    lea rdi, [rbx + AP_PROJECTION]
+    mov rax, 0x313030514e435248
+    mov [rdi], rax
+    mov qword ptr [rdi + 8], 2
+    mov qword ptr [rdi + 16], 0
+    mov esi, 24
+ap_connection:
+    lea rdx, [rbx + AP_ADMISSION]
+    mov ecx, 134217728
+    mov r8d, CONNECTION_WORK
+    add r8, r15
+    mov r9d, ROOT_WCAP
+    call qword ptr [rip + pub_image_connection]
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, 256
+    jb ap_contract
+    cmp eax, 134217728
+    ja ap_contract
+    mov r12, rax
+    lea r13, [rbx + AP_ADMISSION]
+    mov rax, 0x313030534e435248
+    cmp [r13], rax
+    jne ap_contract
+    cmp qword ptr [r13 + 16], 1
+    ja ap_contract
+    mov rax, [r13 + 8]
+    cmp rax, 6
+    ja ap_contract
+    test rax, rax
+    jz ap_parse_done
+    cmp rax, 1
+    je ap_parse_direct
+    cmp rax, 2
+    je ap_parse_admit
+    cmp rax, 3
+    je ap_parse_notification
+    cmp rax, 6
+    je ap_parse_closed
+    # This service sends no MCP peer requests. Responses have no registered waiter.
+    jmp ap_parse_done
+ap_parse_admit:
+    mov rdi, r15
+    mov rsi, r13
+    mov rdx, r12
+    mov ecx, 1
+    call public_async_admit
+    jmp ap_parse_done
+ap_parse_notification:
+    mov rcx, [r13 + 80]
+    mov r8, [r13 + 88]
+    cmp rcx, 256
+    jb ap_contract
+    cmp rcx, r12
+    ja ap_contract
+    mov rax, r12
+    sub rax, rcx
+    cmp r8, rax
+    ja ap_contract
+    add rcx, r13
+    mov rdi, rbx
+    mov esi, 2
+    xor edx, edx
+    xor r9d, r9d
+    call ap_pool_call
+    jmp ap_parse_done
+ap_parse_direct:
+    mov rdx, [r13 + 64]
+    mov rcx, [r13 + 72]
+    cmp rdx, 256
+    jb ap_contract
+    cmp rdx, r12
+    ja ap_contract
+    mov rax, r12
+    sub rax, rdx
+    cmp rcx, rax
+    ja ap_contract
+    lea rsi, [r13 + rdx]
+    mov rdx, rcx
+    mov edi, 1
+    call write_exact
+    test eax, eax
+    jnz ap_contract
+    lea rsi, [rip + newline]
+    mov edi, 1
+    mov edx, 1
+    call write_exact
+    test eax, eax
+    jnz ap_contract
+    cmp qword ptr [r13 + 16], 0
+    je ap_parse_done
+ap_parse_closed:
+    mov rdi, r15
+    call public_async_eof
+ap_parse_done:
+    xor eax, eax
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# root, caller context, fixed poll callback, fixed runtime-drop callback, wake FD.
+# Poll owns its reply until the caller copies it after this routine returns.
+public_async_await:
+    jmp pit_await_dispatch
+pit_public_async_await:
+    cmp qword ptr [rdi + PF_PARENT_SLOT], 0
+    jne pf_await
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r15, rdi
+    mov rbx, [r15 + AP_SLOT]
+    test rbx, rbx
+    jz ap_contract
+    cmp [rbx + 8], r15
+    jne ap_contract
+    cmp qword ptr [rbx + 32], 0
+    je ap_contract
+    cmp qword ptr [rbx + 72], 0
+    jne ap_contract
+    test rsi, rsi
+    jz ap_contract
+    test rdx, rdx
+    jz ap_contract
+    test rcx, rcx
+    jz ap_contract
+    cmp r8, -1
+    je ap_await_fd_ready
+    cmp r8, 2147483647
+    ja ap_contract
+ap_await_fd_ready:
+    mov [rbx + 40], rsi
+    mov [rbx + 48], rdx
+    mov [rbx + 56], rcx
+    mov [rbx + 64], r8
+    mov qword ptr [rbx + 72], 1
+ap_await_poll:
+    mov rdi, [rbx + 40]
+    call qword ptr [rbx + 48]
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, 0xfffffff1
+    je ap_await_pending
+    cmp rax, ROOT_OUTPUT_CAP
+    ja ap_contract
+    mov [rbx + 88], rax
+    jmp ap_await_return
+ap_await_pending:
+    mov rdi, r15
+    call ap_deadline
+    test eax, eax
+    jnz ap_await_runtime_drop
+    cmp qword ptr [rbx + 80], 0
+    jne ap_await_wait
+    mov rdi, r15
+    call ap_scan_frame
+    cmp eax, 1
+    je ap_await_line
+    cmp eax, 2
+    je ap_await_eof
+    test eax, eax
+    jnz ap_contract
+ap_await_wait:
+    mov eax, -1
+    cmp qword ptr [rbx + 80], 0
+    jne ap_await_stdin_ready
+    xor eax, eax
+ap_await_stdin_ready:
+    mov [rbx + 128], eax
+    mov dword ptr [rbx + 132], 1
+    mov rax, [rbx + 64]
+    mov [rbx + 136], eax
+    mov dword ptr [rbx + 140], 1
+    lea rdi, [rbx + 128]
+    mov esi, 2
+    mov edx, 1
+    mov eax, 7
+    syscall
+    cmp rax, -4
+    je ap_await_poll
+    cmp rax, -4095
+    jae ap_contract
+    test word ptr [rbx + 134], 32
+    jnz ap_contract
+    test word ptr [rbx + 142], 32
+    jnz ap_contract
+    cmp qword ptr [rbx + 80], 0
+    jne ap_await_poll
+    test word ptr [rbx + 134], 25
+    jz ap_await_poll
+    mov rdi, r15
+    call ap_read_available
+    jmp ap_await_poll
+ap_await_line:
+    mov rdi, r15
+    call ap_parse_line
+    jmp ap_await_poll
+ap_await_eof:
+    mov rdi, r15
+    call ap_parse_eof
+    jmp ap_await_poll
+ap_await_runtime_drop:
+    mov rdi, [rbx + 40]
+    call qword ptr [rbx + 56]
+    test rax, rax
+    jnz ap_contract
+    mov dword ptr [rbx + 88], 0xfffffff2
+    mov dword ptr [rbx + 92], 0
+ap_await_return:
+    mov qword ptr [rbx + 40], 0
+    mov qword ptr [rbx + 48], 0
+    mov qword ptr [rbx + 56], 0
+    mov qword ptr [rbx + 64], 0
+    mov qword ptr [rbx + 72], 0
+    mov rax, [rbx + 88]
+    mov qword ptr [rbx + 88], 0
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+/* Trusted HostHealth children of the public mapper. No public frame carries a pointer. */
+.equ PH_PARAMS_BYTES, 268439552
+.equ PH_PARAMS_GUARD, 268435456
+.equ PH_PARAMS_SLOT, 256
+.equ PH_FUTURE_SLOT, 264
+
+ex_map_health_params:
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    mov r12, [r15 + AP_SLOT]
+    test r12, r12
+    jz ap_contract
+    mov rax, [r12 + PH_PARAMS_SLOT]
+    test rax, rax
+    jnz ph_params_ready
+    mov edi, PH_PARAMS_BYTES
+    call ex_allocate
+    mov [r12 + PH_PARAMS_SLOT], rax
+    lea rdi, [rax + PH_PARAMS_GUARD]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+ph_params_ready:
+    mov r8, [r12 + PH_PARAMS_SLOT]
+    mov r9d, 268435456
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    call qword ptr [rip + ph_image_params]
+    jmp ex_mapper_ack
+
+ex_map_health:
+    cmp rsi, 64
+    jb ap_contract
+    cmp rsi, 8388672
+    ja ap_contract
+    mov rax, 0x3130305148485248
+    cmp [rdi], rax
+    jne ap_contract
+    cmp qword ptr [rdi + 8], 7
+    jne ap_contract
+    mov rax, [rdi + 16]
+    or rax, [rdi + 24]
+    or rax, [rdi + 32]
+    or rax, [rdi + 40]
+    or rax, [rdi + 56]
+    jnz ap_contract
+    sub rsi, 64
+    cmp [rdi + 48], rsi
+    jne ap_contract
+    mov r12, [r15 + AP_SLOT]
+    test r12, r12
+    jz ap_contract
+    cmp qword ptr [r12 + PH_FUTURE_SLOT], 0
+    jne ap_contract
+    mov rax, [r12 + 32]
+    test rax, rax
+    jz ap_contract
+    mov rcx, [rax + 16]
+    mov rdx, rsi
+    lea rsi, [rdi + 64]
+    mov rdi, r15
+    mov r8, [r15 + 648]
+    call health_future_create
+    mov [r12 + PH_FUTURE_SLOT], rax
+    mov rdi, r15
+    mov rsi, rax
+    lea rdx, [rip + health_future_poll]
+    lea rcx, [rip + ph_health_runtime_drop]
+    mov r8, -1
+    call public_async_await
+    cmp eax, 0xfffffff2
+    je ph_runtime_aborted
+    cmp eax, 64
+    jb ap_contract
+    cmp eax, 4096
+    ja ap_contract
+    mov r13, rax
+    mov r12, [r15 + AP_SLOT]
+    mov rbp, [r12 + PH_FUTURE_SLOT]
+    test rbp, rbp
+    jz ap_contract
+    mov rbx, [r15 + EX_CONTROL_SLOT]
+    lea rdi, [rbx + EX_MAP_WORK + EX_M_REPLY]
+    lea rsi, [rbp + H_OUTPUT]
+    mov rcx, r13
+    rep movsb
+    mov qword ptr [r12 + PH_FUTURE_SLOT], 0
+    mov rdi, rbp
+    call health_future_destroy
+    mov rax, r13
+    jmp ex_mapper_ack
+
+/* Only the actual service/runtime exit path calls this callback. An SDK
+ * notification only cancels the independently held SDK token. */
+ph_health_runtime_drop:
+    push rbx
+    push r12
+    sub rsp, 24
+    mov rbx, rdi
+    mov rax, [rbx + H_CFG]
+    mov r12, [rax + AP_SLOT]
+    cmp [r12 + PH_FUTURE_SLOT], rbx
+    jne ap_contract
+    call health_future_cancel
+ph_health_reap:
+    mov rdi, rbx
+    call health_future_reap
+    cmp eax, 1
+    je ph_health_retire
+    test eax, eax
+    jnz ap_contract
+    mov qword ptr [rsp], 0
+    mov qword ptr [rsp + 8], 1000000
+    mov rdi, rsp
+    xor esi, esi
+    mov eax, 35
+    syscall
+    cmp rax, -4
+    je ph_health_reap
+    test rax, rax
+    jnz ap_contract
+    jmp ph_health_reap
+ph_health_retire:
+    mov qword ptr [r12 + PH_FUTURE_SLOT], 0
+    mov rdi, rbx
+    call health_future_destroy
+    xor eax, eax
+    add rsp, 24
+    pop r12
+    pop rbx
+    ret
+
+ph_runtime_aborted:
+    mov rbx, [r15 + EX_CONTROL_SLOT]
+    cmp qword ptr [rbx + 128], 1
+    jne ap_contract
+    cmp qword ptr [rbx + 136], 0
+    jne ap_contract
+    mov rax, [r15 + AP_SLOT]
+    cmp qword ptr [rax + PH_FUTURE_SLOT], 0
+    jne ap_contract
+    mov qword ptr [rbx + 128], 0
+    mov rdi, r15
+    call public_async_abandon
+    cmp qword ptr [r15 + PF_PARENT_SLOT], 0
+    jne pf_task_finished
+    jmp ex_shutdown
+
+ph_cleanup:
+    push rbx
+    mov rbx, [r15 + AP_SLOT]
+    test rbx, rbx
+    jz ph_cleanup_done
+    cmp qword ptr [rbx + PH_FUTURE_SLOT], 0
+    jne ap_contract
+    mov rdi, [rbx + PH_PARAMS_SLOT]
+    test rdi, rdi
+    jz ph_cleanup_done
+    mov qword ptr [rbx + PH_PARAMS_SLOT], 0
+    mov esi, PH_PARAMS_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+ph_cleanup_done:
+    xor eax, eax
+    pop rbx
+    ret
+
+af_contract:
+    jmp ap_contract
+
+ph_image_params:
+    .quad 0
+ph_image_handler:
+    .quad 0
+ph_image_core:
+    .quad 0
+ph_image_number:
+    .quad 0
+ph_image_probe:
+    .quad 0
+
+.equ H_TOKEN, 152
+.equ H_NEXT, 160
+.equ H_STATUS, 168
+.equ H_POLL_KIND, 176
+.equ H_INPUT, 4096
+.equ H_INPUT_PAGES, 8392704
+.equ H_OUTPUT, 8396800
+.equ H_WORK, 8400896
+.equ H_WORK_CAP, 67108864
+.equ H_CORE_WORK, 75509760
+.equ H_NUMBER_WORK, 75517952
+.equ H_GUARD, 343953408
+.equ H_MAP, 343957504
+.equ H_CFG, 8
+.equ H_ENV, 16
+.equ H_PROBE, 24
+.equ H_INPUT_SIZE, 32
+.equ H_REPLY_SIZE, 40
+.equ H_SEQ, 48
+.equ H_REQ, 80
+.equ H_REQ_SIZE, 88
+.equ H_REPLY, 96
+.equ H_CAP, 104
+.equ H_CHILD, 112
+.equ H_CLOCK, 128
+.equ H_CORE_SEQ, 144
+.equ H_ACK_COPY, 256
+
+/* Trusted callbacks, one owner thread. create does not poll the Rust-equivalent
+ * future. Input is copied into a sealed private mapping before return. */
+health_future_create:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push r8
+    mov rbx, rdi
+    mov r12, rsi
+    mov r13, rdx
+    mov r14, rcx
+    cmp r13, 8388608
+    ja af_contract_from_create
+    test r14, r14
+    jz af_contract_from_create
+    xor edi, edi
+    mov esi, H_MAP
+    mov edx, 3
+    mov r10d, 34
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae af_contract_from_create
+    mov r15, rax
+    mov rax, 0x3130564348485248
+    mov [r15], rax
+    mov [r15 + H_CFG], rbx
+    mov rax, [rsp]
+    mov [r15 + H_ENV], rax
+    mov [r15 + H_TOKEN], r14
+    lea rax, [r13 + 64]
+    mov [r15 + H_INPUT_SIZE], rax
+    lea rdi, [r15 + H_INPUT]
+    mov rax, 0x3130305148485248
+    mov [rdi], rax
+    mov qword ptr [rdi + 8], 7
+    mov [rdi + 48], r13
+    add rdi, 64
+    mov rsi, r12
+    mov rcx, r13
+    rep movsb
+    lea rdi, [r15 + H_INPUT]
+    mov esi, H_INPUT_PAGES
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz health_bad
+    lea rdi, [r15 + H_GUARD]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz health_bad
+    mov rdi, r15
+    call health_probe_create
+    mov [r15 + H_PROBE], rax
+    mov rax, r15
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+af_contract_from_create:
+    mov r15, rbx
+    jmp af_contract
+health_future_poll:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r15, rdi
+    mov rax, 0x3130564348485248
+    cmp [r15], rax
+    jne health_bad
+    cmp qword ptr [r15 + H_STATUS], 1
+    ja health_bad
+    mov qword ptr [r15 + H_STATUS], 1
+    cmp qword ptr [r15 + H_POLL_KIND], 1
+    je health_probe_resume
+    cmp qword ptr [r15 + H_POLL_KIND], 0
+    jne health_bad
+    jmp health_invoke
+health_pending:
+    mov qword ptr [r15 + H_POLL_KIND], 1
+    mov eax, 0xfffffff1
+health_poll_return:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+health_future_cancel:
+    push rbx
+    mov rbx, rdi
+    mov rax, 0x3130564348485248
+    cmp [rbx], rax
+    jne af_contract
+    cmp qword ptr [rbx + H_STATUS], 3
+    je health_cancel_done
+    cmp qword ptr [rbx + H_STATUS], 2
+    ja af_contract
+    mov qword ptr [rbx + H_STATUS], 3
+    mov rdi, [rbx + H_PROBE]
+    call health_probe_cancel
+health_cancel_done:
+    xor eax, eax
+    pop rbx
+    ret
+health_future_reap:
+    cmp qword ptr [rdi + H_STATUS], 3
+    jne af_contract
+    mov rdi, [rdi + H_PROBE]
+    jmp health_probe_reap
+health_future_destroy:
+    push rbx
+    mov rbx, rdi
+    mov rax, [rbx + H_STATUS]
+    cmp eax, 2
+    je health_destroy_status
+    cmp eax, 3
+    jne af_contract
+health_destroy_status:
+    mov rdi, [rbx + H_PROBE]
+    cmp qword ptr [rdi + hp_G_PID], 0
+    jne af_contract
+    mov qword ptr [rbx], 0
+    mov qword ptr [rbx + H_PROBE], 0
+    call health_probe_destroy
+    mov rdi, rbx
+    mov esi, H_MAP
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz af_contract
+    pop rbx
+    ret
+
+health_invoke:
+    lea rdi, [r15 + H_INPUT]
+    mov rsi, [r15 + H_INPUT_SIZE]
+    lea rdx, [r15 + H_OUTPUT]
+    mov ecx, 4096
+    lea r8, [r15 + H_WORK]
+    mov r9d, H_WORK_CAP
+    call qword ptr [rip + ph_image_handler]
+    mov edx, eax
+    cmp rax, rdx
+    jne health_bad
+    cmp eax, 0xfffffff0
+    je health_effect
+    cmp eax, 64
+    jb health_bad
+    cmp eax, 4096
+    ja health_bad
+    mov [r15 + H_REPLY_SIZE], rax
+    mov qword ptr [r15 + H_STATUS], 2
+    jmp health_poll_return
+health_effect:
+    lea r14, [r15 + H_WORK + 256]
+    mov rax, 0x3130304148485248
+    cmp [r14], rax
+    jne health_bad
+    mov rax, [r15 + H_SEQ]
+    inc rax
+    jz health_bad
+    cmp [r14 + 8], rax
+    jne health_bad
+    mov [r15 + H_SEQ], rax
+    xor ecx, ecx
+health_ack_zero:
+    cmp qword ptr [r14 + 56 + rcx * 8], 0
+    jne health_bad
+    inc ecx
+    cmp ecx, 5
+    jne health_ack_zero
+    lea rdi, [r15 + H_ACK_COPY]
+    mov rsi, r14
+    mov ecx, 7
+    rep movsq
+    mov rax, [r14 + 24]
+    cmp rax, 8400896
+    jne health_bad
+    lea rax, [r15 + H_WORK + 8400896]
+    mov [r15 + H_REQ], rax
+    mov rax, [r14 + 32]
+    cmp rax, 8388672
+    ja health_bad
+    mov [r15 + H_REQ_SIZE], rax
+    mov rax, [r14 + 40]
+    mov rcx, [r14 + 48]
+    cmp rax, H_WORK_CAP
+    ja health_bad
+    mov rdx, H_WORK_CAP
+    sub rdx, rax
+    cmp rcx, rdx
+    ja health_bad
+    add rax, r15
+    add rax, H_WORK
+    mov [r15 + H_REPLY], rax
+    mov [r15 + H_CAP], rcx
+    mov rax, [r14 + 16]
+    mov [r15 + H_CHILD], rax
+    cmp rax, 1
+    je health_config
+    cmp qword ptr [r14 + 40], 33574912
+    jne health_bad
+    cmp rax, 2
+    je health_clock
+    cmp rax, 3
+    je health_probe
+    cmp rax, 4
+    je health_core
+    jmp health_bad
+health_config:
+    cmp qword ptr [r14 + 40], 16793600
+    jne health_bad
+    cmp qword ptr [r14 + 48], 16777216
+    jne health_bad
+    cmp qword ptr [r15 + H_WORK + 8], 1
+    jne health_bad
+    mov rdi, [r15 + H_REQ]
+    mov rsi, [r15 + H_REQ_SIZE]
+    mov rdx, [r15 + H_REPLY]
+    mov rcx, [r15 + H_CAP]
+    push r15
+    mov r15, [r15 + H_CFG]
+    call ex_config_projection
+    pop r15
+    jmp health_ack
+health_clock:
+    cmp qword ptr [r15 + H_REQ_SIZE], 0
+    jne health_bad
+    cmp qword ptr [r15 + H_CAP], 16
+    jne health_bad
+    mov rax, [r15 + H_WORK + 8]
+    cmp rax, 2
+    je health_clock_phase
+    cmp rax, 4
+    jne health_bad
+health_clock_phase:
+    mov edi, 1
+    mov rsi, [r15 + H_REPLY]
+    mov eax, 228
+    syscall
+    test rax, rax
+    jnz health_bad
+    mov eax, 16
+    jmp health_ack
+health_probe:
+    cmp qword ptr [r15 + H_POLL_KIND], 0
+    jne health_bad
+    cmp qword ptr [r15 + H_WORK + 8], 3
+    jne health_bad
+    cmp qword ptr [r15 + H_REQ_SIZE], 64
+    jne health_bad
+    cmp qword ptr [r15 + H_CAP], 64
+    jne health_bad
+    mov rdi, [r15 + H_PROBE]
+    mov rsi, [r15 + H_REQ]
+    mov rdx, [r15 + H_WORK + 88]
+    cmp rdx, 16793664
+    jb health_bad
+    cmp rdx, 16793792
+    ja health_bad
+    mov rax, [r15 + H_WORK + 16793600 + 48]
+    cmp rax, 128
+    ja health_bad
+    add rax, 16793664
+    cmp rax, rdx
+    jne health_bad
+    mov rcx, [r15 + H_WORK + 80]
+    cmp rcx, [r15 + H_WORK + 16793600 + 56]
+    jne health_bad
+    cmp qword ptr [r15 + H_WORK + 16793600 + 8], 0
+    jne health_bad
+    cmp qword ptr [r15 + H_WORK + 16793600 + 16], 0
+    jne health_bad
+    test rcx, rcx
+    jz health_bad
+    cmp rcx, 8388608
+    ja health_bad
+    add rdx, r15
+    add rdx, H_WORK
+    mov r8, [r15 + H_ENV]
+    call health_probe_run
+    jmp health_probe_result
+health_probe_resume:
+    cmp qword ptr [r15 + H_WORK + 8], 3
+    jne health_bad
+    mov rdi, [r15 + H_PROBE]
+    call health_probe_continue
+health_probe_result:
+    cmp eax, 0xfffffff1
+    je health_pending
+    mov qword ptr [r15 + H_POLL_KIND], 0
+    cmp eax, 64
+    jne health_bad
+    mov rsi, [r15 + H_PROBE]
+    lea rsi, [rsi + hp_OUTPUT]
+    mov rdi, [r15 + H_REPLY]
+    mov ecx, 8
+    rep movsq
+    mov eax, 64
+    jmp health_ack
+health_core:
+    cmp qword ptr [r15 + H_WORK + 8], 5
+    jne health_bad
+    cmp qword ptr [r15 + H_REQ_SIZE], 64
+    jb health_bad
+    cmp qword ptr [r15 + H_REQ_SIZE], 192
+    ja health_bad
+    cmp qword ptr [r15 + H_CAP], 4096
+    jne health_bad
+health_core_invoke:
+    mov rdi, [r15 + H_REQ]
+    mov rsi, [r15 + H_REQ_SIZE]
+    mov rdx, [r15 + H_REPLY]
+    mov ecx, 4096
+    lea r8, [r15 + H_CORE_WORK]
+    mov r9d, 8192
+    call qword ptr [rip + ph_image_core]
+    mov edx, eax
+    cmp rax, rdx
+    jne health_bad
+    cmp eax, 0xfffffff0
+    jne health_ack
+    lea r14, [r15 + H_CORE_WORK + 256]
+    mov rax, 0x3130414348485248
+    cmp [r14], rax
+    jne health_bad
+    mov rax, [r15 + H_CORE_SEQ]
+    inc rax
+    jz health_bad
+    cmp [r14 + 8], rax
+    jne health_bad
+    mov [r15 + H_CORE_SEQ], rax
+    cmp qword ptr [r14 + 16], 1
+    jne health_bad
+    cmp qword ptr [r14 + 24], 512
+    jne health_bad
+    cmp qword ptr [r14 + 32], 32
+    jne health_bad
+    cmp qword ptr [r14 + 40], 544
+    jne health_bad
+    cmp qword ptr [r14 + 48], 64
+    jne health_bad
+    mov rcx, [r14 + 56]
+    or rcx, [r14 + 64]
+    or rcx, [r14 + 72]
+    or rcx, [r14 + 80]
+    or rcx, [r14 + 88]
+    jnz health_bad
+    lea rdi, [r15 + H_CORE_WORK + 512]
+    mov esi, 32
+    lea rdx, [r15 + H_CORE_WORK + 544]
+    mov ecx, 64
+    lea r8, [r15 + H_NUMBER_WORK]
+    mov r9d, 268435456
+    call qword ptr [rip + ph_image_number]
+    mov edx, eax
+    cmp rax, rdx
+    jne health_bad
+    cmp eax, 64
+    ja health_bad
+    mov [r14 + 64], rax
+    mov [r14 + 72], rax
+    mov rax, [r15 + H_CORE_SEQ]
+    mov [r14 + 56], rax
+    jmp health_core_invoke
+health_ack:
+    cmp rax, [r15 + H_CAP]
+    ja health_bad
+    mov [r15 + H_REPLY_SIZE], rax
+    lea rsi, [r15 + H_WORK + 256]
+    lea rdi, [r15 + H_ACK_COPY]
+    mov ecx, 7
+    repe cmpsq
+    jne health_bad
+    lea r14, [r15 + H_WORK + 256]
+    mov rax, [r15 + H_SEQ]
+    mov [r14 + 56], rax
+    mov rax, [r15 + H_REPLY_SIZE]
+    mov [r14 + 64], rax
+    mov [r14 + 72], rax
+    jmp health_invoke
+
+health_bad:
+    mov r15, [r15 + H_CFG]
+    jmp af_contract
+
+.equ HP_YIELD, 912
+.equ HP_RESUME, 920
+.equ HP_CANCELED, 928
+.equ hp_FRAME, 4096
+.equ hp_OUTPUT, 8192
+.equ hp_WORK, 12288
+.equ hp_MAP_BYTES, 24576
+.equ hp_G_FIXTURE, 16
+.equ hp_G_PID, 24
+.equ hp_G_STATUS, 32
+.equ hp_G_REAPED, 40
+.equ hp_G_OUT, 48
+.equ hp_G_NULL_IN, 56
+.equ hp_G_NULL_ERR, 64
+.equ hp_G_CHILD_OUT, 72
+.equ hp_G_ERR_IN, 80
+.equ hp_G_ERR_OUT, 88
+.equ hp_G_ERROR, 96
+.equ hp_G_ENV, 104
+.equ hp_G_SIZE, 112
+.equ hp_G_CODE, 120
+.equ hp_G_PIPE, 128
+.equ hp_G_WAIT_STATUS, 152
+.equ hp_G_SEQUENCE, 160
+.equ hp_G_POLL, 176
+.equ hp_G_TIME, 192
+.equ hp_G_EXEC_ERROR, 208
+.equ hp_G_ERROR_COUNT, 216
+.equ hp_G_SNAPSHOT, 256
+.equ hp_G_ARGS, 512
+.equ hp_G_SIGNAL, 768
+.equ HP_TARGET, 832
+.equ HP_TARGET_LEN, 840
+.equ HP_PATH, 848
+.equ HP_PATH_LIMIT, 856
+.equ HP_ALLOCATION, 864
+.equ HP_ALLOC_BYTES, 872
+.equ HP_PATH_END, 880
+.equ HP_PATH_NEXT, 888
+.equ HP_PATH_ERROR, 896
+.equ HP_PARENT, 904
+.equ HP_PATH_BUFFER, 20480
+health_probe_create:
+    push rbx
+    push r12
+    mov rbx, rdi
+    xor edi, edi
+    mov esi, 28672
+    mov edx, 3
+    mov r10d, 34
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae health_bad
+    mov r12, rax
+    mov [r12 + HP_PARENT], rbx
+    lea rdi, [r12 + hp_G_OUT]
+    mov ecx, 6
+    mov rax, -1
+    rep stosq
+    mov rax, 0x3158544350485248
+    mov [r12 + hp_WORK + 160], rax
+    mov qword ptr [r12 + hp_WORK + 168], 0
+    mov qword ptr [r12 + hp_WORK + 176], 10000
+    mov qword ptr [r12 + hp_WORK + 184], 1
+    lea rdi, [r12 + 16384]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz health_bad
+    mov rax, r12
+    pop r12
+    pop rbx
+    ret
+/* Fixed parent only: rdi context, rsi immutable probe frame, rdx configured
+ * target bytes, rcx target size, r8 original process envp. */
+health_probe_run:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r15, rdi
+    mov r12, rsi
+    mov r13, rdx
+    mov rbx, rcx
+    mov [r15 + hp_G_ENV], r8
+    cmp qword ptr [r15 + hp_G_PID], 0
+    jne hp_bad
+    cmp qword ptr [r15 + hp_G_OUT], -1
+    jne hp_bad
+    cmp qword ptr [r15 + HP_ALLOCATION], 0
+    jne hp_bad
+    test rbx, rbx
+    jz hp_bad
+    cmp rbx, 8388608
+    ja hp_bad
+    lea rsi, [rbx + 4096]
+    and rsi, -4096
+    mov [r15 + HP_ALLOC_BYTES], rsi
+    xor edi, edi
+    mov edx, 3
+    mov r10d, 34
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae hp_bad
+    mov [r15 + HP_ALLOCATION], rax
+    mov [r15 + HP_TARGET], rax
+    mov [r15 + HP_TARGET_LEN], rbx
+    mov rdi, rax
+    mov rsi, r13
+    mov rcx, rbx
+    rep movsb
+    mov byte ptr [rdi], 0
+    mov rdi, [r15 + HP_ALLOCATION]
+    mov rsi, [r15 + HP_ALLOC_BYTES]
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz hp_bad
+    call hp_prepare_path
+    lea rdi, [r15 + hp_FRAME]
+    mov esi, 4096
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz hp_bad
+    lea rdi, [r15 + hp_FRAME]
+    mov rsi, r12
+    mov ecx, 8
+    rep movsq
+    lea rdi, [r15 + hp_FRAME]
+    mov esi, 4096
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz hp_bad
+    mov qword ptr [r15 + hp_G_REAPED], 0
+    mov qword ptr [r15 + hp_G_STATUS], 0
+    jmp hp_invoke
+health_probe_continue:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r15, rdi
+    cmp qword ptr [r15 + HP_CANCELED], 0
+    jne hp_bad
+    cmp qword ptr [r15 + HP_ALLOCATION], 0
+    je hp_bad
+    cmp qword ptr [r15 + HP_RESUME], 1
+    je hp_cleanup_wait_again
+    cmp qword ptr [r15 + HP_RESUME], 0
+    jne hp_bad
+    jmp hp_invoke
+hp_cleanup_wait_again:
+    lea r14, [r15 + hp_WORK + 256]
+    lea rsi, [r15 + hp_G_SNAPSHOT]
+    mov rdi, r14
+    mov ecx, 10
+    repe cmpsq
+    jne hp_bad
+    cmp qword ptr [r14 + 80], 0
+    jne hp_bad
+    cmp qword ptr [r15 + hp_WORK + 8], 10
+    jne hp_bad
+    mov edx, 1
+    jmp hp_wait_common
+hp_yield:
+    mov eax, 0xfffffff1
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+hp_return:
+    mov rdi, [r15 + HP_ALLOCATION]
+    mov rsi, [r15 + HP_ALLOC_BYTES]
+    mov qword ptr [r15 + HP_ALLOCATION], 0
+    mov qword ptr [r15 + HP_TARGET], 0
+    mov qword ptr [r15 + HP_TARGET_LEN], 0
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz hp_bad
+    mov eax, 64
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+health_probe_destroy:
+    push rbx
+    push r15
+    mov r15, rdi
+    call hp_terminate_child
+    mov ebx, hp_G_OUT
+hp_destroy_slots:
+    lea rdi, [r15 + rbx]
+    call hp_close_slot
+    add ebx, 8
+    cmp ebx, hp_G_ERR_OUT + 8
+    jne hp_destroy_slots
+    mov rdi, [r15 + HP_ALLOCATION]
+    test rdi, rdi
+    jz hp_destroy_mapping
+    mov rsi, [r15 + HP_ALLOC_BYTES]
+    mov qword ptr [r15 + HP_ALLOCATION], 0
+    mov qword ptr [r15 + HP_TARGET], 0
+    mov eax, 11
+    syscall
+hp_destroy_mapping:
+    mov rdi, r15
+    mov esi, 28672
+    mov eax, 11
+    syscall
+    pop r15
+    pop rbx
+    ret
+
+hp_invoke:
+    lea rdi, [r15 + hp_FRAME]
+    mov esi, 64
+    lea rdx, [r15 + hp_OUTPUT]
+    mov ecx, 64
+    lea r8, [r15 + hp_WORK]
+    mov r9d, 4096
+    call qword ptr [rip + ph_image_probe]
+    mov edx, eax
+    cmp rax, rdx
+    jne hp_bad
+    mov edx, 0xfffffff0
+    cmp eax, edx
+    je hp_effect
+    cmp eax, 64
+    jne hp_bad
+    cmp qword ptr [r15 + hp_G_PID], 0
+    jne hp_bad
+    cmp qword ptr [r15 + hp_G_OUT], -1
+    jne hp_bad
+    jmp hp_return
+hp_effect:
+    lea r14, [r15 + hp_WORK + 256]
+    mov rax, 0x3130304150485248
+    cmp [r14], rax
+    jne hp_bad
+    mov rax, [r15 + hp_G_SEQUENCE]
+    inc rax
+    jz hp_bad
+    cmp [r14 + 8], rax
+    jne hp_bad
+    mov [r15 + hp_G_SEQUENCE], rax
+    mov rax, [r14 + 32]
+    or rax, [r14 + 56]
+    or rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    or rax, [r14 + 96]
+    or rax, [r14 + 104]
+    or rax, [r14 + 112]
+    or rax, [r14 + 120]
+    jnz hp_bad
+    lea rdi, [r15 + hp_G_SNAPSHOT]
+    mov rsi, r14
+    mov ecx, 10
+    rep movsq
+    mov rax, [r14 + 16]
+    cmp rax, 1
+    je hp_effect_spawn
+    cmp rax, 2
+    je hp_effect_clock
+    cmp rax, 3
+    je hp_effect_read
+    cmp rax, 4
+    je hp_effect_wait_poll
+    cmp rax, 5
+    je hp_effect_poll
+    cmp rax, 6
+    je hp_effect_close
+    cmp rax, 7
+    je hp_effect_kill
+    cmp rax, 8
+    je hp_effect_wait_block
+    jmp hp_bad
+hp_zero_arguments:
+    mov rax, [r14 + 24]
+    or rax, [r14 + 40]
+    or rax, [r14 + 48]
+    jnz hp_bad
+    ret
+hp_effect_clock:
+    call hp_zero_arguments
+    mov rax, [r15 + hp_WORK + 8]
+    cmp eax, 2
+    je hp_clock_phase_ok
+    cmp eax, 6
+    jne hp_bad
+hp_clock_phase_ok:
+    mov edi, 1
+    lea rsi, [r15 + hp_G_TIME]
+    mov eax, 228
+    syscall
+    xor edx, edx
+    test rax, rax
+    jnz hp_acknowledge
+    mov rax, [r15 + hp_G_TIME]
+    mov rdx, [r15 + hp_G_TIME + 8]
+    jmp hp_acknowledge
+hp_effect_read:
+    cmp qword ptr [r15 + hp_WORK + 8], 3
+    jne hp_bad
+    cmp qword ptr [r14 + 24], 0
+    jne hp_bad
+    mov rax, [r15 + hp_WORK + 56]
+    cmp rax, 257
+    jae hp_bad
+    mov rdx, 257
+    sub rdx, rax
+    cmp [r14 + 48], rdx
+    jne hp_bad
+    add rax, 512
+    cmp [r14 + 40], rax
+    jne hp_bad
+    mov rdi, [r15 + hp_G_OUT]
+    test rdi, rdi
+    js hp_bad
+    lea rsi, [r15 + hp_WORK + rax]
+    xor eax, eax
+    syscall
+    xor edx, edx
+    jmp hp_acknowledge
+hp_effect_close:
+    call hp_zero_arguments
+    mov rax, [r15 + hp_WORK + 8]
+    cmp eax, 4
+    je hp_close_phase_ok
+    cmp eax, 8
+    jne hp_bad
+hp_close_phase_ok:
+    cmp qword ptr [r15 + hp_G_OUT], -1
+    je hp_bad
+    lea rdi, [r15 + hp_G_OUT]
+    call hp_close_slot
+    xor edx, edx
+    jmp hp_acknowledge
+hp_effect_wait_poll:
+    call hp_zero_arguments
+    cmp qword ptr [r15 + hp_WORK + 8], 5
+    jne hp_bad
+    mov edx, 1
+    jmp hp_wait_common
+hp_effect_wait_block:
+    call hp_zero_arguments
+    cmp qword ptr [r15 + hp_WORK + 8], 10
+    jne hp_bad
+    mov qword ptr [r15 + HP_RESUME], 1
+    mov edx, 1
+hp_wait_common:
+    cmp qword ptr [r15 + hp_G_REAPED], 1
+    je hp_wait_cached
+    mov rdi, [r15 + hp_G_PID]
+    test rdi, rdi
+    jle hp_bad
+    lea rsi, [r15 + hp_G_WAIT_STATUS]
+    xor r10d, r10d
+    mov eax, 61
+    syscall
+    test rax, rax
+    jle hp_wait_zero_or_error
+    cmp rax, [r15 + hp_G_PID]
+    jne hp_bad
+    mov qword ptr [r15 + hp_G_PID], 0
+    mov qword ptr [r15 + hp_G_REAPED], 1
+    mov eax, [r15 + hp_G_WAIT_STATUS]
+    mov [r15 + hp_G_STATUS], rax
+hp_wait_cached:
+    mov qword ptr [r15 + HP_RESUME], 0
+    mov eax, 1
+    mov rdx, [r15 + hp_G_STATUS]
+    jmp hp_acknowledge
+hp_wait_zero_or_error:
+    test rax, rax
+    jnz hp_wait_error_ready
+    cmp qword ptr [r15 + HP_RESUME], 1
+    je hp_yield
+hp_wait_error_ready:
+    mov qword ptr [r15 + HP_RESUME], 0
+    xor edx, edx
+    jmp hp_acknowledge
+
+hp_effect_poll:
+    cmp qword ptr [r15 + hp_WORK + 8], 7
+    jne hp_bad
+    mov rax, [r14 + 40]
+    or rax, [r14 + 48]
+    jnz hp_bad
+    mov rdx, [r14 + 24]
+    test rdx, rdx
+    jz hp_bad
+    cmp rdx, 10
+    ja hp_bad
+    xor esi, esi
+    mov rax, [r15 + hp_G_OUT]
+    test rax, rax
+    js hp_poll_without_stdout
+    mov [r15 + hp_G_POLL], eax
+    mov dword ptr [r15 + hp_G_POLL + 4], 1
+    mov esi, 1
+hp_poll_without_stdout:
+    lea rdi, [r15 + hp_G_POLL]
+    xor edx, edx
+    mov eax, 7
+    syscall
+    test rax, rax
+    jnz hp_poll_ready
+    mov qword ptr [r15 + HP_YIELD], 1
+hp_poll_ready:
+    xor edx, edx
+    jmp hp_acknowledge
+hp_effect_kill:
+    call hp_zero_arguments
+    cmp qword ptr [r15 + hp_WORK + 8], 9
+    jne hp_bad
+    mov rdi, [r15 + hp_G_PID]
+    test rdi, rdi
+    jz hp_kill_already_reaped
+    js hp_bad
+    mov esi, 9
+    mov eax, 62
+    syscall
+    xor edx, edx
+    jmp hp_acknowledge
+hp_kill_already_reaped:
+    cmp qword ptr [r15 + hp_G_REAPED], 1
+    jne hp_bad
+    xor eax, eax
+    xor edx, edx
+    jmp hp_acknowledge
+hp_acknowledge:
+    mov rbx, rax
+    mov rbp, rdx
+    lea rsi, [r15 + hp_G_SNAPSHOT]
+    mov rdi, r14
+    mov ecx, 10
+    repe cmpsq
+    jne hp_bad
+    test rbx, rbx
+    js hp_acknowledge_error
+    mov [r14 + 96], rbx
+    mov [r14 + 104], rbp
+    jmp hp_acknowledge_sequence
+hp_acknowledge_error:
+    cmp rbx, -4095
+    jb hp_bad
+    test rbp, rbp
+    jnz hp_bad
+    neg rbx
+    mov [r14 + 88], rbx
+hp_acknowledge_sequence:
+    mov rax, [r14 + 8]
+    mov [r14 + 80], rax
+    cmp qword ptr [r15 + HP_YIELD], 0
+    je hp_invoke
+    mov qword ptr [r15 + HP_YIELD], 0
+    jmp hp_yield
+
+hp_effect_spawn:
+    call hp_zero_arguments
+    cmp qword ptr [r15 + hp_WORK + 8], 1
+    jne hp_bad
+    cmp qword ptr [r15 + hp_G_PID], 0
+    jne hp_bad
+    mov ebx, hp_G_OUT
+hp_spawn_empty_slots:
+    cmp qword ptr [r15 + rbx], -1
+    jne hp_bad
+    add ebx, 8
+    cmp ebx, hp_G_ERR_OUT + 8
+    jne hp_spawn_empty_slots
+    mov edi, -100
+    lea rsi, [rip + hp_null_path]
+    mov edx, 0x80000
+    xor r10d, r10d
+    mov eax, 257
+    syscall
+    test rax, rax
+    js hp_spawn_error
+    mov [r15 + hp_G_NULL_IN], rax
+    lea rdi, [r15 + hp_G_PIPE]
+    mov esi, 0x80000
+    mov eax, 293
+    syscall
+    test rax, rax
+    jnz hp_spawn_error
+    mov eax, [r15 + hp_G_PIPE]
+    mov [r15 + hp_G_OUT], rax
+    mov eax, [r15 + hp_G_PIPE + 4]
+    mov [r15 + hp_G_CHILD_OUT], rax
+    mov edi, -100
+    lea rsi, [rip + hp_null_path]
+    mov edx, 0x80001
+    xor r10d, r10d
+    mov eax, 257
+    syscall
+    test rax, rax
+    js hp_spawn_error
+    mov [r15 + hp_G_NULL_ERR], rax
+    lea rdi, [r15 + hp_G_PIPE]
+    mov esi, 0x80000
+    mov eax, 293
+    syscall
+    test rax, rax
+    jnz hp_spawn_error
+    mov eax, [r15 + hp_G_PIPE]
+    mov [r15 + hp_G_ERR_IN], rax
+    mov eax, [r15 + hp_G_PIPE + 4]
+    mov [r15 + hp_G_ERR_OUT], rax
+    # Declared migration behavior: complete the nonblocking setup before fork.
+    # Failure produces no child; the original Tokio adapter sets it after spawn.
+    mov rdi, [r15 + hp_G_OUT]
+    mov esi, 3
+    xor edx, edx
+    mov eax, 72
+    syscall
+    test rax, rax
+    js hp_spawn_error
+    mov rdx, rax
+    or edx, 0x800
+    mov esi, 4
+    mov eax, 72
+    syscall
+    test rax, rax
+    js hp_spawn_error
+    mov eax, 57
+    syscall
+    cmp rax, -4095
+    jae hp_spawn_error
+    test rax, rax
+    jz hp_child_start
+    mov [r15 + hp_G_PID], rax
+    lea rdi, [r15 + hp_G_NULL_IN]
+    call hp_close_slot
+    lea rdi, [r15 + hp_G_NULL_ERR]
+    call hp_close_slot
+    lea rdi, [r15 + hp_G_CHILD_OUT]
+    call hp_close_slot
+    lea rdi, [r15 + hp_G_ERR_OUT]
+    call hp_close_slot
+    mov qword ptr [r15 + hp_G_ERROR_COUNT], 0
+hp_spawn_handshake:
+    mov rdi, [r15 + hp_G_ERR_IN]
+    lea rsi, [r15 + hp_G_EXEC_ERROR]
+    mov rdx, [r15 + hp_G_ERROR_COUNT]
+    add rsi, rdx
+    neg rdx
+    add rdx, 8
+    xor eax, eax
+    syscall
+    cmp rax, -4
+    je hp_spawn_handshake
+    test rax, rax
+    js hp_spawn_child_error
+    jz hp_spawn_handshake_eof
+    add [r15 + hp_G_ERROR_COUNT], rax
+    cmp qword ptr [r15 + hp_G_ERROR_COUNT], 8
+    jb hp_spawn_handshake
+    jne hp_bad
+    mov rax, [r15 + hp_G_EXEC_ERROR]
+    test rax, rax
+    jz hp_bad
+    cmp rax, 4095
+    ja hp_bad
+    neg rax
+    jmp hp_spawn_child_error
+hp_spawn_handshake_eof:
+    cmp qword ptr [r15 + hp_G_ERROR_COUNT], 0
+    jne hp_bad
+    lea rdi, [r15 + hp_G_ERR_IN]
+    call hp_close_slot
+    mov eax, 1
+    xor edx, edx
+    jmp hp_acknowledge
+hp_spawn_child_error:
+    mov [r15 + hp_G_ERROR], rax
+    call hp_terminate_child
+    mov rax, [r15 + hp_G_ERROR]
+hp_spawn_error:
+    mov [r15 + hp_G_ERROR], rax
+    mov ebx, hp_G_OUT
+hp_spawn_close_slots:
+    lea rdi, [r15 + rbx]
+    call hp_close_slot
+    add ebx, 8
+    cmp ebx, hp_G_ERR_OUT + 8
+    jne hp_spawn_close_slots
+    mov rax, [r15 + hp_G_ERROR]
+    xor edx, edx
+    jmp hp_acknowledge
+
+hp_child_start:
+    mov rdi, [r15 + hp_G_NULL_IN]
+    xor esi, esi
+    call hp_child_dup
+    mov rdi, [r15 + hp_G_CHILD_OUT]
+    mov esi, 1
+    call hp_child_dup
+    mov rdi, [r15 + hp_G_NULL_ERR]
+    mov esi, 2
+    call hp_child_dup
+    lea rdi, [r15 + hp_G_SIGNAL]
+    xor eax, eax
+    mov ecx, 4
+    rep stosq
+    mov edi, 13
+    lea rsi, [r15 + hp_G_SIGNAL]
+    xor edx, edx
+    mov r10d, 8
+    mov eax, 13
+    syscall
+    test rax, rax
+    js hp_child_error
+    jmp hp_child_search
+hp_child_error:
+    neg rax
+    mov [r15 + hp_G_EXEC_ERROR], rax
+    mov rdi, [r15 + hp_G_ERR_OUT]
+    lea rsi, [r15 + hp_G_EXEC_ERROR]
+    mov edx, 8
+hp_child_error_write:
+    mov eax, 1
+    syscall
+    cmp rax, -4
+    je hp_child_error_write
+    mov edi, 1
+    mov eax, 60
+    syscall
+    ud2
+hp_child_dup:
+    cmp rdi, 3
+    jb hp_child_bad_descriptor
+hp_child_dup_again:
+    mov eax, 33
+    syscall
+    cmp rax, -4
+    je hp_child_dup_again
+    test rax, rax
+    js hp_child_error
+    ret
+hp_child_bad_descriptor:
+    mov rax, -9
+    jmp hp_child_error
+
+hp_close_slot:
+    mov rax, [rdi]
+    mov qword ptr [rdi], -1
+    test rax, rax
+    js hp_close_slot_empty
+    mov rdi, rax
+    mov eax, 3
+    syscall
+    ret
+hp_close_slot_empty:
+    xor eax, eax
+    ret
+hp_terminate_child:
+    mov rdi, [r15 + hp_G_PID]
+    test rdi, rdi
+    jz hp_terminate_done
+    js hp_bare_bad
+    mov esi, 9
+    mov eax, 62
+    syscall
+hp_terminate_wait:
+    mov rdi, [r15 + hp_G_PID]
+    lea rsi, [r15 + hp_G_WAIT_STATUS]
+    xor edx, edx
+    xor r10d, r10d
+    mov eax, 61
+    syscall
+    cmp rax, -4
+    je hp_terminate_wait
+    cmp rax, [r15 + hp_G_PID]
+    je hp_terminate_reaped
+    cmp rax, -10
+    jne hp_bare_bad
+hp_terminate_reaped:
+    mov qword ptr [r15 + hp_G_PID], 0
+    mov qword ptr [r15 + hp_G_REAPED], 1
+    mov eax, [r15 + hp_G_WAIT_STATUS]
+    mov [r15 + hp_G_STATUS], rax
+hp_terminate_done:
+    ret
+hp_read_exact:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13, rsi
+    mov rbx, rdx
+    xor r8d, r8d
+hp_read_again:
+    mov rdi, r12
+    lea rsi, [r13 + r8]
+    mov rdx, rbx
+    sub rdx, r8
+    jz hp_read_complete
+    xor eax, eax
+    syscall
+    cmp rax, -4
+    je hp_read_again
+    test rax, rax
+    js hp_read_failed
+    jz hp_read_eof
+    add r8, rax
+    cmp r8, rbx
+    ja hp_read_failed
+    jmp hp_read_again
+hp_read_eof:
+    mov eax, 1
+    test r8, r8
+    jz hp_read_return
+hp_read_failed:
+    mov eax, 2
+    jmp hp_read_return
+hp_read_complete:
+    xor eax, eax
+hp_read_return:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+hp_write_exact:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13, rsi
+    mov rbx, rdx
+    xor r8d, r8d
+hp_write_again:
+    mov rdi, r12
+    lea rsi, [r13 + r8]
+    mov rdx, rbx
+    sub rdx, r8
+    jz hp_write_complete
+    mov eax, 1
+    syscall
+    cmp rax, -4
+    je hp_write_again
+    test rax, rax
+    jle hp_write_failed
+    add r8, rax
+    cmp r8, rbx
+    ja hp_write_failed
+    jmp hp_write_again
+hp_write_failed:
+    mov eax, 1
+    jmp hp_write_return
+hp_write_complete:
+    xor eax, eax
+hp_write_return:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+hp_string_equal:
+    mov al, [rdi]
+    cmp al, [rsi]
+    jne hp_string_different
+    test al, al
+    jz hp_string_same
+    inc rdi
+    inc rsi
+    jmp hp_string_equal
+hp_string_same:
+    mov eax, 1
+    ret
+hp_string_different:
+    xor eax, eax
+    ret
+
+hp_prepare_path:
+    mov r8, [r15 + hp_G_ENV]
+hp_path_environment:
+    mov rsi, [r8]
+    test rsi, rsi
+    jz hp_path_default
+    cmp byte ptr [rsi], 80
+    jne hp_path_environment_next
+    cmp byte ptr [rsi + 1], 65
+    jne hp_path_environment_next
+    cmp byte ptr [rsi + 2], 84
+    jne hp_path_environment_next
+    cmp byte ptr [rsi + 3], 72
+    jne hp_path_environment_next
+    cmp byte ptr [rsi + 4], 61
+    jne hp_path_environment_next
+    add rsi, 5
+    jmp hp_path_found
+hp_path_environment_next:
+    add r8, 8
+    jmp hp_path_environment
+hp_path_default:
+    lea rsi, [rip + hp_default_path]
+hp_path_found:
+    mov [r15 + HP_PATH], rsi
+    xor eax, eax
+hp_path_length:
+    cmp eax, 4095
+    je hp_path_length_done
+    cmp byte ptr [rsi + rax], 0
+    je hp_path_length_done
+    inc eax
+    jmp hp_path_length
+hp_path_length_done:
+    inc eax
+    mov [r15 + HP_PATH_LIMIT], rax
+    ret
+/* Fixed name ssh, exact configured target, fixed original 20 arguments.
+ * Linux GNU posix_spawnp uses __execvpex: ENOEXEC is not shell-expanded. */
+hp_child_search:
+    lea rdi, [r15 + hp_G_ARGS]
+    lea rsi, [rip + hp_ssh_offsets]
+    xor ebx, ebx
+hp_child_argv:
+    movsxd rax, dword ptr [rsi + rbx * 4]
+    add rax, rsi
+    cmp ebx, 19
+    jne hp_child_argv_selected
+    mov rax, [r15 + HP_TARGET]
+hp_child_argv_selected:
+    mov [rdi + rbx * 8], rax
+    inc ebx
+    cmp ebx, 21
+    jne hp_child_argv
+    mov qword ptr [rdi + 168], 0
+    mov rax, [r15 + HP_PATH]
+    mov [r15 + HP_PATH_NEXT], rax
+    mov qword ptr [r15 + HP_PATH_ERROR], 2
+hp_exec_next:
+    mov rsi, [r15 + HP_PATH_NEXT]
+    mov rbx, rsi
+hp_exec_component_end:
+    mov al, [rbx]
+    test al, al
+    jz hp_exec_component_ready
+    cmp al, 58
+    je hp_exec_component_ready
+    inc rbx
+    jmp hp_exec_component_end
+hp_exec_component_ready:
+    mov [r15 + HP_PATH_END], rbx
+    mov rcx, rbx
+    sub rcx, rsi
+    cmp rcx, [r15 + HP_PATH_LIMIT]
+    jae hp_exec_component_large
+    lea rdi, [r15 + HP_PATH_BUFFER]
+    test rcx, rcx
+    jz hp_exec_copy_name
+    rep movsb
+    mov byte ptr [rdi], 47
+    inc rdi
+hp_exec_copy_name:
+    mov dword ptr [rdi], 0x00687373
+    lea rdi, [r15 + HP_PATH_BUFFER]
+    lea rsi, [r15 + hp_G_ARGS]
+    mov rdx, [r15 + hp_G_ENV]
+    mov eax, 59
+    syscall
+    cmp rax, -13
+    jne hp_exec_other_error
+    mov qword ptr [r15 + HP_PATH_ERROR], 13
+    jmp hp_exec_continue
+hp_exec_other_error:
+    cmp rax, -2
+    je hp_exec_continue
+    cmp rax, -116
+    je hp_exec_continue
+    cmp rax, -20
+    je hp_exec_continue
+    cmp rax, -19
+    je hp_exec_continue
+    cmp rax, -110
+    jne hp_child_error
+hp_exec_continue:
+    mov rbx, [r15 + HP_PATH_END]
+    cmp byte ptr [rbx], 0
+    je hp_exec_exhausted
+    inc rbx
+    mov [r15 + HP_PATH_NEXT], rbx
+    jmp hp_exec_next
+hp_exec_component_large:
+    cmp byte ptr [rbx], 0
+    je hp_exec_exhausted
+    mov [r15 + HP_PATH_NEXT], rbx
+    jmp hp_exec_next
+hp_exec_exhausted:
+    mov rax, [r15 + HP_PATH_ERROR]
+    neg rax
+    jmp hp_child_error
+hp_default_path:
+    .asciz "/bin:/usr/bin"
+
+hp_ssh_offsets:
+    .long hp_ssh_arg_0 - hp_ssh_offsets
+    .long hp_ssh_arg_1 - hp_ssh_offsets
+    .long hp_ssh_arg_2 - hp_ssh_offsets
+    .long hp_ssh_arg_3 - hp_ssh_offsets
+    .long hp_ssh_arg_4 - hp_ssh_offsets
+    .long hp_ssh_arg_5 - hp_ssh_offsets
+    .long hp_ssh_arg_6 - hp_ssh_offsets
+    .long hp_ssh_arg_7 - hp_ssh_offsets
+    .long hp_ssh_arg_8 - hp_ssh_offsets
+    .long hp_ssh_arg_9 - hp_ssh_offsets
+    .long hp_ssh_arg_10 - hp_ssh_offsets
+    .long hp_ssh_arg_11 - hp_ssh_offsets
+    .long hp_ssh_arg_12 - hp_ssh_offsets
+    .long hp_ssh_arg_13 - hp_ssh_offsets
+    .long hp_ssh_arg_14 - hp_ssh_offsets
+    .long hp_ssh_arg_15 - hp_ssh_offsets
+    .long hp_ssh_arg_16 - hp_ssh_offsets
+    .long hp_ssh_arg_17 - hp_ssh_offsets
+    .long hp_ssh_arg_18 - hp_ssh_offsets
+    .long hp_ssh_arg_19 - hp_ssh_offsets
+    .long hp_ssh_arg_20 - hp_ssh_offsets
+hp_ssh_arg_0:
+    .byte 115,115,104,0
+hp_ssh_arg_1:
+    .byte 45,84,0
+hp_ssh_arg_2:
+    .byte 45,111,0
+hp_ssh_arg_3:
+    .byte 66,97,116,99,104,77,111,100,101,61,121,101,115,0
+hp_ssh_arg_4:
+    .byte 45,111,0
+hp_ssh_arg_5:
+    .byte 67,111,110,110,101,99,116,84,105,109,101,111,117,116,61,56,0
+hp_ssh_arg_6:
+    .byte 45,111,0
+hp_ssh_arg_7:
+    .byte 83,116,114,105,99,116,72,111,115,116,75,101,121,67,104,101,99,107,105,110,103,61,121,101,115,0
+hp_ssh_arg_8:
+    .byte 45,111,0
+hp_ssh_arg_9:
+    .byte 70,111,114,119,97,114,100,65,103,101,110,116,61,110,111,0
+hp_ssh_arg_10:
+    .byte 45,111,0
+hp_ssh_arg_11:
+    .byte 67,108,101,97,114,65,108,108,70,111,114,119,97,114,100,105,110,103,115,61,121,101,115,0
+hp_ssh_arg_12:
+    .byte 45,111,0
+hp_ssh_arg_13:
+    .byte 80,101,114,109,105,116,76,111,99,97,108,67,111,109,109,97,110,100,61,110,111,0
+hp_ssh_arg_14:
+    .byte 45,111,0
+hp_ssh_arg_15:
+    .byte 82,101,109,111,116,101,67,111,109,109,97,110,100,61,110,111,110,101,0
+hp_ssh_arg_16:
+    .byte 45,111,0
+hp_ssh_arg_17:
+    .byte 82,101,113,117,101,115,116,84,84,89,61,110,111,0
+hp_ssh_arg_18:
+    .byte 45,45,0
+hp_ssh_arg_19:
+    .byte 0
+hp_ssh_arg_20:
+    .byte 112,114,105,110,116,102,32,39,104,101,112,116,97,45,104,111,115,116,45,104,101,97,108,116,104,45,118,49,92,110,39,0
+
+hp_null_path:
+    .asciz "/dev/null"
+hp_bad:
+    mov r15, [r15 + HP_PARENT]
+    jmp health_bad
+hp_bare_bad:
+    jmp bare_fatal
+
+/* Drop only starts cleanup. Retire the owning context after reap returns 1. */
+health_probe_cancel:
+    push rbx
+    push r15
+    mov r15, rdi
+    cmp qword ptr [r15 + HP_CANCELED], 1
+    je hp_cancel_return
+    mov qword ptr [r15 + HP_CANCELED], 1
+    mov ebx, hp_G_OUT
+hp_cancel_slots:
+    lea rdi, [r15 + rbx]
+    call hp_close_slot
+    add ebx, 8
+    cmp ebx, hp_G_ERR_OUT + 8
+    jne hp_cancel_slots
+    mov rdi, [r15 + hp_G_PID]
+    test rdi, rdi
+    jz hp_cancel_return
+    js hp_bad
+    mov esi, 9
+    mov eax, 62
+    syscall
+hp_cancel_return:
+    xor eax, eax
+    pop r15
+    pop rbx
+    ret
+health_probe_reap:
+    push r15
+    mov r15, rdi
+    cmp qword ptr [r15 + HP_CANCELED], 1
+    jne hp_bad
+    mov rdi, [r15 + hp_G_PID]
+    test rdi, rdi
+    jz hp_reap_done
+    js hp_bad
+    lea rsi, [r15 + hp_G_WAIT_STATUS]
+    mov edx, 1
+    xor r10d, r10d
+    mov eax, 61
+    syscall
+    cmp rax, -4
+    je hp_reap_pending
+    test rax, rax
+    jz hp_reap_pending
+    js hp_bad
+    cmp rax, [r15 + hp_G_PID]
+    jne hp_bad
+    mov qword ptr [r15 + hp_G_PID], 0
+    mov qword ptr [r15 + hp_G_REAPED], 1
+    mov eax, [r15 + hp_G_WAIT_STATUS]
+    mov [r15 + hp_G_STATUS], rax
+hp_reap_done:
+    mov eax, 1
+    pop r15
+    ret
+hp_reap_pending:
+    xor eax, eax
+    pop r15
+    ret
+
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Audit History fixed byte/lease boundary; all pagination, JSON, errors and drop choices run in HIA.
+.equ tk_HH_INPUT, 4096
+.equ tk_HH_INPUT_CAP, 9437184
+.equ tk_HH_OUTPUT, 9441280
+.equ tk_HH_WORK, 9510912
+.equ tk_HH_WORK_BYTES, 16777216
+.equ tk_HH_MAP_BYTES, 26288128
+
+# SysV: root, trusted rootcap, query, length, reply, capacity -> u32.
+tk_audit_history_call:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 104
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    mov [rsp + 32], r8
+    mov [rsp + 40], r9
+    cmp r9, 65568
+    jb tk_hh_capacity
+    cmp rcx, 96
+    jb tk_hh_invalid
+    cmp rcx, 8388608
+    ja tk_hh_invalid
+    test rdi, rdi
+    jz tk_contract_fail
+    cmp [rdi], rdi
+    jne tk_contract_fail
+    test rsi, rsi
+    jz tk_hh_invalid
+    cmp rsi, [rdi + tk_ROOT_COUNT]
+    ja tk_hh_invalid
+    cmp [rdx + 16], rsi
+    jne tk_hh_invalid
+    mov rax, 0x3130515348415248
+    cmp [rdx], rax
+    jne tk_hh_invalid
+    mov r15, rdi
+    mov rax, rsi
+    dec rax
+    shl rax, 4
+    mov rbx, [r15 + tk_ROOT_PATHS + rax]
+    mov rbp, [r15 + tk_ROOT_PATHS + rax + 8]
+    cmp rbp, 1048528
+    ja tk_hh_capacity
+    mov [rsp + 64], rbx
+    mov [rsp + 72], rbp
+    mov edi, tk_CONTEXT_BYTES
+    call tk_allocate_guarded
+    mov r13, rax
+    mov [rsp + 48], rax
+    mov [rax], r15
+    lea rdx, [r15 + tk_GLOBAL_LOCK]
+    mov [rax + tk_LOCK_CONTEXT + 64], rdx
+    mov edi, tk_HH_MAP_BYTES
+    call tk_allocate_guarded
+    mov r12, rax
+    mov [rsp + 56], rax
+    mov rdx, 0x3130435354415248
+    mov [r12], rdx
+    mov [r12 + 8], r13
+    mov [r13 + 248], r12
+    lea rdi, [r12 + tk_HH_INPUT]
+    mov rax, 0x31304e4548415248
+    mov [rdi], rax
+    mov rax, [rsp + 72]
+    mov [rdi + 8], rax
+    mov rax, [rsp + 24]
+    mov [rdi + 16], rax
+    mov qword ptr [rdi + 24], 0
+    add rdi, 32
+    mov rsi, [rsp + 64]
+    mov rcx, [rsp + 72]
+    rep movsb
+    mov rsi, [rsp + 16]
+    mov rcx, [rsp + 24]
+    rep movsb
+    mov rax, [rsp + 24]
+    add rax, [rsp + 72]
+    add rax, 32
+    cmp rax, 9437168
+    ja tk_contract_fail
+    mov [r12 + 48], rax
+    lea rdi, [r12 + tk_HH_INPUT]
+    mov esi, tk_HH_INPUT_CAP
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    lea rbp, [r12 + tk_HH_WORK]
+tk_hh_resume:
+    lea rdi, [r12 + tk_HH_INPUT]
+    mov rsi, [r12 + 48]
+    lea rdx, [r12 + tk_HH_OUTPUT]
+    mov ecx, 65568
+    mov r8, rbp
+    mov r9d, tk_HH_WORK_BYTES
+    call qword ptr [rip + tk_audit_history_image]
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_contract_fail
+    cmp eax, 0xfffffff0
+    jne tk_hh_result
+    lea r14, [rbp + 256]
+    mov rax, 0x3130415354415248
+    cmp [r14], rax
+    jne tk_contract_fail
+    mov rax, [r12 + 56]
+    inc rax
+    jz tk_contract_fail
+    cmp [r14 + 8], rax
+    jne tk_contract_fail
+    cmp [rbp + 16], rax
+    jne tk_contract_fail
+    mov [r12 + 56], rax
+    cmp qword ptr [r14 + 32], 4096
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 48], 2101248
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 56], 270000
+    jne tk_contract_fail
+    mov rcx, [r14 + 40]
+    cmp rcx, 16
+    jb tk_contract_fail
+    cmp rcx, 1048576
+    ja tk_contract_fail
+    lea rsi, [rbp + 4096]
+    lea rdi, [rbp + 1052672]
+    repe cmpsb
+    jne tk_contract_fail
+    lea rsi, [r14 + 16]
+    lea rdi, [rbp + 384]
+    mov ecx, 6
+    repe cmpsq
+    jne tk_contract_fail
+    mov rsi, rbp
+    lea rdi, [rbp + 512]
+    mov ecx, 30
+    repe cmpsq
+    jne tk_contract_fail
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz tk_contract_fail
+    mov rax, [r14 + 16]
+    cmp rax, 9
+    je tk_hh_lock
+    cmp rax, 10
+    je tk_hh_activity
+    cmp rax, 1
+    je tk_hh_storage
+    cmp rax, 11
+    jne tk_contract_fail
+tk_hh_storage:
+    call tk_hh_storage_admit
+    cmp qword ptr [r14 + 16], 1
+    je tk_hh_hot_directory
+    mov rdi, [r12 + 16]
+    mov rsi, r14
+    lea rdx, [rbp + 4096]
+    mov rcx, [r14 + 40]
+    lea r8, [rbp + 2101248]
+    mov r9, [r12 + 80]
+    call tk_ticket_backend_call
+    jmp tk_hh_ack
+tk_hh_hot_directory:
+    mov rdi, [r12 + 80]
+    lea rsi, [rbp + 4096]
+    mov rdx, [r14 + 40]
+    lea rcx, [rbp + 2101248]
+    call tk_ticket_directory_call
+    jmp tk_hh_ack
+tk_hh_lock:
+    cmp qword ptr [r14 + 40], 64
+    jne tk_contract_fail
+    lea rdi, [rbp + 4096]
+    mov rax, 0x313030434c415248
+    cmp [rdi], rax
+    jne tk_contract_fail
+    mov rax, [r14 + 8]
+    cmp [rdi + 8], rax
+    jne tk_contract_fail
+    mov rax, [rdi + 16]
+    or rax, [rdi + 32]
+    or rax, [rdi + 40]
+    or rax, [rdi + 48]
+    or rax, [rdi + 56]
+    jnz tk_contract_fail
+    cmp qword ptr [rbp + 8], 10
+    je tk_hh_lock_acquire
+    cmp qword ptr [rbp + 8], 83
+    jne tk_contract_fail
+    mov rax, [rbp + 208]
+    cmp rax, 1
+    ja tk_contract_fail
+    add rax, 4
+    cmp [rdi + 24], rax
+    jne tk_contract_fail
+    mov rax, [rbp + 64]
+    test rax, rax
+    jz tk_contract_fail
+    cmp [r13 + tk_LOCK_CONTEXT + 152], rax
+    jne tk_contract_fail
+    cmp [r14 + 24], rax
+    jne tk_contract_fail
+    cmp qword ptr [r13 + tk_LOCK_CONTEXT + 208], 1
+    jne tk_contract_fail
+    # Retire this descriptor registration while its actual store guard is held.
+    call tk_hh_storage_unlink
+    jmp tk_hh_lock_invoke
+tk_hh_lock_acquire:
+    cmp qword ptr [rdi + 24], 1
+    jne tk_contract_fail
+    mov rax, [r14 + 24]
+    or rax, [rbp + 64]
+    or rax, [r13 + tk_LOCK_CONTEXT + 152]
+    or rax, [r13 + tk_LOCK_CONTEXT + 208]
+    jnz tk_contract_fail
+tk_hh_lock_invoke:
+    lea rsi, [rbp + 4096]
+    lea rdi, [r13 + tk_LOCK_CONTEXT + 256]
+    mov ecx, 8
+    rep movsq
+    lea rdi, [r13 + tk_LOCK_CONTEXT]
+    call tk_lock_run_command
+    lea rsi, [r13 + tk_LOCK_CONTEXT + 640]
+    lea rdi, [rbp + 2101248]
+    mov ecx, 10
+    rep movsq
+    mov rax, [r13 + tk_LOCK_CONTEXT + 152]
+    mov [rbp + 2101248 + 80], rax
+    mov eax, 88
+    jmp tk_hh_ack
+tk_hh_activity:
+    cmp qword ptr [rbp + 8], 40
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 40], 128
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 24], 0
+    jne tk_contract_fail
+    lea rdi, [rbp + 4096]
+    mov esi, 128
+    lea rdx, [rbp + 2101248]
+    mov rcx, r13
+    call tk_activity_lookup
+tk_hh_ack:
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_contract_fail
+    cmp eax, 270000
+    ja tk_contract_fail
+    mov [r14 + 72], rax
+    mov rax, [r14 + 8]
+    mov [r14 + 64], rax
+    jmp tk_hh_resume
+tk_hh_result:
+    mov [rsp + 80], eax
+    mov rax, [rbp + 8]
+    or rax, [rbp + 64]
+    or rax, [rbp + 80]
+    or rax, [rbp + 88]
+    or rax, [rbp + 96]
+    or rax, [r12 + 16]
+    or rax, [r12 + 24]
+    or rax, [r12 + 32]
+    or rax, [r12 + 80]
+    jnz tk_contract_fail
+    mov rax, [r13 + tk_LEAF_WORK + 64]
+    or rax, [r13 + tk_LEAF_WORK + 72]
+    or rax, [r13 + tk_LEAF_WORK + 88]
+    or rax, [r13 + tk_LEAF_WORK + 104]
+    or rax, [r13 + tk_LOCK_CONTEXT + 152]
+    or rax, [r13 + tk_LOCK_CONTEXT + 208]
+    jnz tk_contract_fail
+    mov eax, [rsp + 80]
+    cmp eax, 65568
+    jbe tk_hh_copy_result
+    cmp eax, 0xffffffff
+    je tk_hh_retire
+    cmp eax, 0xfffffffe
+    je tk_hh_retire
+    cmp eax, 0xfffffff9
+    jne tk_contract_fail
+    jmp tk_hh_retire
+tk_hh_copy_result:
+    cmp eax, 32
+    jb tk_contract_fail
+    mov ecx, eax
+    mov rdi, [rsp + 32]
+    lea rsi, [r12 + tk_HH_OUTPUT]
+    rep movsb
+tk_hh_retire:
+    mov qword ptr [r13 + 248], 0
+    mov rdi, r12
+    mov esi, tk_HH_MAP_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    mov rdi, r13
+    mov esi, tk_CONTEXT_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    mov eax, [rsp + 80]
+    jmp tk_hh_done
+tk_hh_invalid:
+    mov eax, 0xffffffff
+    jmp tk_hh_done
+tk_hh_capacity:
+    mov eax, 0xfffffffe
+tk_hh_done:
+    add rsp, 104
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# Called only after the same actual exclusive guard has been acquired.
+tk_hh_storage_admit:
+    push rbx
+    sub rsp, 16
+    cmp qword ptr [r13 + tk_LOCK_CONTEXT + 208], 1
+    jne tk_contract_fail
+    mov rax, [r13 + tk_LOCK_CONTEXT + 152]
+    test rax, rax
+    jz tk_contract_fail
+    cmp [rbp + 64], rax
+    jne tk_contract_fail
+    mov rbx, [r12 + 16]
+    test rbx, rbx
+    jnz tk_hh_storage_exists
+    cmp qword ptr [r14 + 16], 1
+    jne tk_contract_fail
+    cmp qword ptr [rbp + 8], 20
+    jne tk_contract_fail
+    mov rbx, [r15 + tk_STORAGE_GLOBAL]
+    test rbx, rbx
+    jnz tk_hh_global_ready
+    mov edi, 4096
+    call tk_allocate_guarded
+    mov rbx, rax
+    mov rdx, 0x3130475354415248
+    mov [rbx], rdx
+    mov [rbx + 8], r15
+    mov [r15 + tk_STORAGE_GLOBAL], rbx
+    mov rdi, rbx
+    call tk_ticket_backend_create
+    test rax, rax
+    jz tk_contract_fail
+    mov [rbx + 16], rax
+tk_hh_global_ready:
+    mov rax, 0x3130475354415248
+    cmp [rbx], rax
+    jne tk_contract_fail
+    cmp [rbx + 8], r15
+    jne tk_contract_fail
+    cmp qword ptr [rbx + 56], 0
+    jne tk_contract_fail
+    mov qword ptr [rbx + 56], 1
+    mov [r12 + 16], rbx
+    call tk_ticket_directory_create
+    mov [rax + 4000], rbx
+    mov [r12 + 80], rax
+    tk_CU_SG_ENTER rbx, tk_CU_FD_GATE
+    mov rax, [rbx + 40]
+    mov [r12 + 24], rax
+    test rax, rax
+    jz tk_hh_link_head
+    cmp qword ptr [rax + 32], 0
+    jne tk_contract_fail
+    mov [rax + 32], r12
+tk_hh_link_head:
+    mov [rbx + 40], r12
+    tk_CU_SG_LEAVE rbx, tk_CU_FD_GATE
+tk_hh_storage_exists:
+    mov rax, 0x3130475354415248
+    cmp [rbx], rax
+    jne tk_contract_fail
+    cmp [rbx + 8], r15
+    jne tk_contract_fail
+    cmp qword ptr [rbx + 56], 1
+    jne tk_contract_fail
+    add rsp, 16
+    pop rbx
+    ret
+
+tk_hh_storage_unlink:
+    push rbx
+    sub rsp, 16
+    mov rax, [rbp + 80]
+    or rax, [rbp + 88]
+    or rax, [rbp + 96]
+    jnz tk_contract_fail
+    mov rbx, [r12 + 16]
+    test rbx, rbx
+    jz tk_hh_unlink_done
+    cmp qword ptr [rbx + 56], 1
+    jne tk_contract_fail
+    mov rdi, r12
+    call tk_cu_unlink_storage
+    mov rdi, rax
+    call tk_ticket_directory_drop
+tk_hh_unlinked:
+    mov qword ptr [rbx + 56], 0
+    mov qword ptr [r12 + 16], 0
+    mov qword ptr [r12 + 24], 0
+    mov qword ptr [r12 + 32], 0
+tk_hh_unlink_done:
+    add rsp, 16
+    pop rbx
+    ret
+
+
+# New fixed port for the existing actual Entries HIA and descriptor effects.
+# Reuses the complete existing backend admission, shared busy state and FD census.
+tk_hh_backend_entries:
+    call tk_tb_backend_hot_borrow
+    mov rcx, rax
+    mov rdi, [r15 + tk_tb_G_REQUEST]
+    mov rsi, [r15 + tk_tb_G_LENGTH]
+    cmp rsi, 16
+    jne tk_tb_global_contract_fail
+    mov rdx, [r15 + tk_tb_G_REPLY]
+    call tk_tb_cold_entries_entry
+    jmp tk_tb_backend_return
+
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+.intel_syntax noprefix
+.section .text
+.equ tk_MDW_R_LOCK, 0
+.equ tk_MDW_R_HEAD, 8
+.equ tk_MDW_R_COUNT, 16
+.equ tk_MDW_R_OWNER, 24
+.equ tk_MDW_R_RETIRED, 32
+.equ tk_MDW_R_CALLBACKS, 40
+.equ tk_MDW_R_CALLBACK_DROPS, 48
+.equ tk_MDW_R_EVENTFD, 56
+.equ tk_MDW_R_POLICY, 256
+.equ tk_MDW_R_REQUEST, 512
+.equ tk_MDW_R_SNAPSHOT, 640
+.equ tk_MDW_R_MAP, 4096
+.equ tk_MDW_W_MAGIC, 0
+.equ tk_MDW_W_NEXT, 8
+.equ tk_MDW_W_ROOT, 16
+.equ tk_MDW_W_JOB, 24
+.equ tk_MDW_W_CALLER, 32
+.equ tk_MDW_W_KIND, 40
+.equ tk_MDW_W_SEQUENCE, 48
+.equ tk_MDW_W_INPUT, 56
+.equ tk_MDW_W_LENGTH, 64
+.equ tk_MDW_W_INPUT_MAP, 72
+.equ tk_MDW_W_OUTPUT, 80
+.equ tk_MDW_W_TID, 96
+.equ tk_MDW_W_ACTUAL_TID, 104
+.equ tk_MDW_W_READY, 112
+.equ tk_MDW_W_AUX, 120
+.equ tk_MDW_W_NOTIFY_WORD, 128
+.equ tk_MDW_W_POLICY, 256
+.equ tk_MDW_W_REQUEST, 512
+.equ tk_MDW_W_SNAPSHOT, 640
+.equ tk_MDW_W_CALLBACK_WORK, 1024
+.equ tk_MDW_W_TEST_START, 2048
+.equ tk_MDW_W_TEST_RUN, 2052
+.equ tk_MDW_W_TEST_EXIT, 2056
+.equ tk_MDW_W_TEST_ENTERED, 2064
+.equ tk_MDW_W_TEST_COMPLETED, 2072
+.equ tk_MDW_W_STACK_GUARD, 4096
+.equ tk_MDW_W_STACK_START, 8192
+.equ tk_MDW_W_STACK_END, 1056768
+.equ tk_MDW_W_MAP, 1060864
+.equ tk_MDW_W_MAGIC_VALUE, 0x3130574357525248
+.equ tk_MDW_OUTPUT_CAPACITY, 2097152
+.equ tk_MDW_OUTPUT_MAP, 2105344
+.equ tk_MDW_INVALID, 0xffffffff
+.equ tk_MDW_CAPACITY, 0xfffffffe
+.equ tk_MDW_STATE_ERROR, 0xfffffff9
+.equ tk_MDW_PENDING, 0xfffffff8
+.macro tk_mdw_prologue
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+.endm
+.macro tk_mdw_epilogue
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+# The root gate protects each HIA entry and registry mutation, never callback IO.
+# r13=root, r14=node; rdi=operation, rsi=A, rdx=B. All other request fields derive from owned metadata.
+tk_mdw_policy_node:
+    sub rsp, 8
+    mov rax, 0x3130515457525248
+    mov [r14 + tk_MDW_W_REQUEST], rax
+    mov [r14 + tk_MDW_W_REQUEST + 8], rdi
+    mov rax, [r14 + tk_MDW_W_JOB]
+    mov [r14 + tk_MDW_W_REQUEST + 16], rax
+    mov rax, [r14 + tk_MDW_W_CALLER]
+    mov [r14 + tk_MDW_W_REQUEST + 24], rax
+    mov rax, [r14 + tk_MDW_W_KIND]
+    mov [r14 + tk_MDW_W_REQUEST + 32], rax
+    mov rax, [r14 + tk_MDW_W_SEQUENCE]
+    mov [r14 + tk_MDW_W_REQUEST + 40], rax
+    mov [r14 + tk_MDW_W_REQUEST + 48], rsi
+    mov [r14 + tk_MDW_W_REQUEST + 56], rdx
+    mov qword ptr [r14 + tk_MDW_W_REQUEST + 64], 0
+    mov qword ptr [r14 + tk_MDW_W_REQUEST + 72], 0
+    lea rdi, [r14 + tk_MDW_W_REQUEST]
+    mov esi, 80
+    lea rdx, [r14 + tk_MDW_W_SNAPSHOT]
+    mov ecx, 128
+    lea r8, [r14 + tk_MDW_W_POLICY]
+    mov r9d, 256
+    call tk_mdw_policy_native
+    add rsp, 8
+    ret
+tk_mdw_policy_global:
+    sub rsp, 8
+    mov rax, 0x3130514757525248
+    mov [r13 + tk_MDW_R_REQUEST], rax
+    mov [r13 + tk_MDW_R_REQUEST + 8], rdi
+    lea rdi, [r13 + tk_MDW_R_REQUEST]
+    mov esi, 16
+    lea rdx, [r13 + tk_MDW_R_SNAPSHOT]
+    mov ecx, 128
+    lea r8, [r13 + tk_MDW_R_POLICY]
+    mov r9d, 256
+    call tk_mdw_policy_native
+    add rsp, 8
+    ret
+tk_mdw_policy_native:
+    sub rsp, 8
+    .byte 0xe8
+tk_metadata_worker_policy_displacement:
+    .long tk_intent_image_read_worker_policy - . - 4
+    mov ecx, eax
+    cmp rax, rcx
+    jne tk_mdw_fatal_contract
+    add rsp, 8
+    ret
+tk_mdw_lock:
+    lea rdi, [r13 + tk_MDW_R_LOCK]
+    jmp tk_mdw_mutex_lock
+tk_mdw_unlock:
+    lea rdi, [r13 + tk_MDW_R_LOCK]
+    jmp tk_mdw_mutex_unlock
+tk_mdw_policy_simple:
+    xor esi, esi
+    xor edx, edx
+    jmp tk_mdw_policy_node
+tk_mdw_policy_checked:
+    sub rsp, 8
+    call tk_mdw_policy_simple
+    cmp eax, 128
+    jne tk_mdw_fatal_contract
+    add rsp, 8
+    ret
+tk_mdw_copy_snapshot:
+    lea rsi, [r14 + tk_MDW_W_SNAPSHOT]
+    mov ecx, 16
+    rep movsq
+    ret
+# Root gate held. The list count bounds every traversal.
+tk_mdw_find:
+    mov rax, [r13 + tk_MDW_R_HEAD]
+    mov rcx, [r13 + tk_MDW_R_COUNT]
+tk_mdw_find_next:
+    test rax, rax
+    jz tk_mdw_find_return
+    test rcx, rcx
+    jz tk_mdw_fatal_contract
+    dec rcx
+    mov rdx, tk_MDW_W_MAGIC_VALUE
+    cmp [rax + tk_MDW_W_MAGIC], rdx
+    jne tk_mdw_fatal_contract
+    cmp [rax + tk_MDW_W_JOB], rdi
+    je tk_mdw_find_return
+    mov rax, [rax + tk_MDW_W_NEXT]
+    jmp tk_mdw_find_next
+tk_mdw_find_return:
+    ret
+
+# Fixed Linux x86_64 mechanics; no policy interpretation or host-language callback.
+tk_mdw_map:
+    xor edi, edi
+    mov edx, 3
+    mov r10d, 34
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae tk_mdw_fatal_resource
+    ret
+tk_mdw_guard_page:
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_mdw_fatal_resource
+    ret
+tk_mdw_unmap:
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_mdw_fatal_contract
+    ret
+# Kernel CHILD_CLEARTID uses the shared/non-private futex key.
+tk_mdw_join:
+    lea rdi, [r14 + tk_MDW_W_TID]
+tk_mdw_join_next:
+    mov edx, [rdi]
+    test edx, edx
+    jz tk_mdw_join_done
+    xor esi, esi
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je tk_mdw_join_next
+    cmp rax, -11
+    je tk_mdw_join_next
+    test rax, rax
+    js tk_mdw_fatal_contract
+    jmp tk_mdw_join_next
+tk_mdw_join_done:
+    mfence
+    ret
+tk_mdw_mutex_lock:
+    xor eax, eax
+    mov edx, 1
+    lock cmpxchg dword ptr [rdi], edx
+    jz tk_mdw_mutex_acquired
+tk_mdw_mutex_contended:
+    mov eax, 2
+    xchg eax, dword ptr [rdi]
+    test eax, eax
+    jz tk_mdw_mutex_acquired
+    mov edx, 2
+    sub rsp, 8
+    call tk_mdw_wait_value
+    add rsp, 8
+    jmp tk_mdw_mutex_contended
+tk_mdw_mutex_acquired:
+    ret
+tk_mdw_mutex_unlock:
+    xor eax, eax
+    xchg eax, dword ptr [rdi]
+    cmp eax, 2
+    jne tk_mdw_mutex_unlocked
+    mov esi, 129
+    mov edx, 1
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+tk_mdw_mutex_unlocked:
+    ret
+tk_mdw_wait_value:
+    cmp dword ptr [rdi], edx
+    jne tk_mdw_wait_done
+    mov esi, 137
+    xor r10d, r10d
+    xor r8d, r8d
+    mov r9d, -1
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je tk_mdw_wait_value
+    cmp rax, -11
+    je tk_mdw_wait_done
+    test rax, rax
+    js tk_mdw_fatal_contract
+tk_mdw_wait_done:
+    ret
+tk_mdw_wait_zero:
+    cmp dword ptr [rdi], 0
+    jne tk_mdw_zero_done
+    xor edx, edx
+    sub rsp, 8
+    call tk_mdw_wait_value
+    add rsp, 8
+    jmp tk_mdw_wait_zero
+tk_mdw_zero_done:
+    ret
+tk_mdw_wake_all:
+    mov esi, 129
+    mov edx, 0x7fffffff
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    js tk_mdw_fatal_contract
+    ret
+tk_mdw_fatal_resource:
+    mov edi, 74
+    jmp tk_mdw_fatal_exit
+tk_mdw_fatal_contract:
+    mov edi, 71
+tk_mdw_fatal_exit:
+    mov eax, 231
+    syscall
+    ud2
+
+# Level-triggered eventfd notification: only an already complete task reaches here.
+# A full nonblocking counter is already readable; no long IO or root gate is held.
+tk_mdw_notify_receiver:
+    mov qword ptr [r14 + tk_MDW_W_NOTIFY_WORD], 1
+tk_mdw_notify_again:
+    mov rdi, [r13 + tk_MDW_R_EVENTFD]
+    lea rsi, [r14 + tk_MDW_W_NOTIFY_WORD]
+    mov edx, 8
+    mov eax, 1
+    syscall
+    cmp rax, -4
+    je tk_mdw_notify_again
+    cmp rax, -11
+    je tk_mdw_notify_done
+    cmp rax, 8
+    jne tk_mdw_fatal_contract
+tk_mdw_notify_done:
+    ret
+# The embedding owner registers this descriptor with its real reactor.
+tk_metadata_worker_notification_fd:
+    mov rax, [rdi + tk_MDW_R_EVENTFD]
+    ret
+
+# SysV callable owner. API calls are serialized by the embedding owner; workers use only the short root gate.
+# create(rdi=shared backend owner) -> rax=root; resources fail closed in this bounded profile.
+tk_metadata_worker_create:
+    tk_mdw_prologue
+    mov r12, rdi
+    mov esi, tk_MDW_R_MAP
+    call tk_mdw_map
+    mov r13, rax
+    mov [r13 + tk_MDW_R_OWNER], r12
+    xor edi, edi
+    mov esi, 0x80800
+    mov eax, 290
+    syscall
+    cmp rax, -4095
+    jae tk_mdw_fatal_resource
+    mov [r13 + tk_MDW_R_EVENTFD], rax
+    mov rax, r13
+    tk_mdw_epilogue
+
+# generation(root, output128) -> u32; the full nonwrapping generation is output+16.
+tk_metadata_worker_generation:
+    tk_mdw_prologue
+    mov r13, rdi
+    mov r12, rsi
+    call tk_mdw_lock
+    xor edi, edi
+    call tk_mdw_policy_global
+    mov ebx, eax
+    cmp eax, 128
+    jne tk_mdw_generation_unlock
+    mov rdi, r12
+    lea rsi, [r13 + tk_MDW_R_SNAPSHOT]
+    mov ecx, 16
+    rep movsq
+tk_mdw_generation_unlock:
+    call tk_mdw_unlock
+    mov eax, ebx
+    tk_mdw_epilogue
+
+# submit(root, meta24[caller,kind,sequence], immutable input, input_len, output128).
+# The receiver owns a token, never the task allocations. IDs originate in the HIA allocator.
+tk_metadata_worker_submit:
+    tk_mdw_prologue
+    mov r13, rdi
+    mov r12, rsi
+    mov r15, rdx
+    mov rbx, rcx
+    mov [rsp], r8
+    call tk_mdw_lock
+    xor edi, edi
+    call tk_mdw_policy_global
+    cmp eax, 128
+    jne tk_mdw_submit_generation_error
+    mov rbp, [r13 + tk_MDW_R_SNAPSHOT + 16]
+    call tk_mdw_unlock
+    mov esi, tk_MDW_W_MAP
+    call tk_mdw_map
+    mov r14, rax
+    mov rax, tk_MDW_W_MAGIC_VALUE
+    mov [r14 + tk_MDW_W_MAGIC], rax
+    mov [r14 + tk_MDW_W_ROOT], r13
+    mov [r14 + tk_MDW_W_JOB], rbp
+    mov rax, [r12]
+    mov [r14 + tk_MDW_W_CALLER], rax
+    mov rax, [r12 + 8]
+    mov [r14 + tk_MDW_W_KIND], rax
+    mov rax, [r12 + 16]
+    mov [r14 + tk_MDW_W_SEQUENCE], rax
+    mov [r14 + tk_MDW_W_LENGTH], rbx
+    mov edi, 1
+    mov rsi, rbx
+    mov edx, tk_MDW_OUTPUT_CAPACITY
+    call tk_mdw_policy_node
+    cmp eax, 128
+    jne tk_mdw_submit_admission_error
+    lea rdi, [r14 + tk_MDW_W_STACK_GUARD]
+    call tk_mdw_guard_page
+    lea rdi, [r14 + tk_MDW_W_STACK_END]
+    call tk_mdw_guard_page
+    mov rsi, rbx
+    add rsi, 4095
+    and rsi, -4096
+    add rsi, 8192
+    mov [r14 + tk_MDW_W_INPUT_MAP], rsi
+    call tk_mdw_map
+    lea rax, [rax + 4096]
+    mov [r14 + tk_MDW_W_INPUT], rax
+    lea rdi, [rax - 4096]
+    call tk_mdw_guard_page
+    mov rdi, [r14 + tk_MDW_W_INPUT]
+    mov rax, [r14 + tk_MDW_W_INPUT_MAP]
+    lea rdi, [rdi + rax - 8192]
+    call tk_mdw_guard_page
+    mov rdi, [r14 + tk_MDW_W_INPUT]
+    mov rsi, r15
+    mov rcx, rbx
+    rep movsb
+    mov rdi, [r14 + tk_MDW_W_INPUT]
+    mov rsi, [r14 + tk_MDW_W_INPUT_MAP]
+    sub rsi, 8192
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_mdw_fatal_resource
+    mov esi, tk_MDW_OUTPUT_MAP
+    call tk_mdw_map
+    lea rax, [rax + 4096]
+    mov [r14 + tk_MDW_W_OUTPUT], rax
+    lea rdi, [rax - 4096]
+    call tk_mdw_guard_page
+    mov rdi, [r14 + tk_MDW_W_OUTPUT]
+    add rdi, tk_MDW_OUTPUT_CAPACITY
+    call tk_mdw_guard_page
+    call tk_metadata_worker_callback_create
+    lea rsi, [r14 + tk_MDW_W_STACK_END - 16]
+    mov [rsi], r14
+    mov edi, 0x350f00
+    lea rdx, [r14 + tk_MDW_W_TID]
+    mov r10, rdx
+    xor r8d, r8d
+    mov eax, 56
+    syscall
+    test rax, rax
+    jz tk_mdw_child
+    cmp rax, -4095
+    jae tk_mdw_fatal_resource
+    mov [r14 + tk_MDW_W_ACTUAL_TID], rax
+    call tk_mdw_lock
+    mov rax, [r13 + tk_MDW_R_HEAD]
+    mov [r14 + tk_MDW_W_NEXT], rax
+    mov [r13 + tk_MDW_R_HEAD], r14
+    add qword ptr [r13 + tk_MDW_R_COUNT], 1
+    mov edi, 2
+    call tk_mdw_policy_checked
+    mov rdi, [rsp]
+    call tk_mdw_copy_snapshot
+    call tk_mdw_unlock
+    mov dword ptr [r14 + tk_MDW_W_READY], 1
+    lea rdi, [r14 + tk_MDW_W_READY]
+    call tk_mdw_wake_all
+    mov eax, 128
+    tk_mdw_epilogue
+tk_mdw_submit_generation_error:
+    mov ebx, eax
+    call tk_mdw_unlock
+    mov eax, ebx
+    tk_mdw_epilogue
+tk_mdw_submit_admission_error:
+    mov ebx, eax
+    mov rdi, r14
+    mov esi, tk_MDW_W_MAP
+    call tk_mdw_unmap
+    mov eax, ebx
+    tk_mdw_epilogue
+tk_mdw_child:
+    pop r14
+    sub rsp, 8
+    call tk_mdw_thread
+    jmp tk_mdw_fatal_contract
+
+tk_mdw_thread:
+    sub rsp, 8
+    mov r13, [r14 + tk_MDW_W_ROOT]
+    lea rdi, [r14 + tk_MDW_W_READY]
+    call tk_mdw_wait_zero
+    call tk_metadata_worker_before_begin
+    call tk_mdw_lock
+    mov edi, 3
+    call tk_mdw_policy_checked
+    mov r12, [r14 + tk_MDW_W_SNAPSHOT + 104]
+    call tk_mdw_unlock
+    cmp r12, 5
+    je tk_mdw_thread_completed
+    cmp r12, 4
+    jne tk_mdw_fatal_contract
+    call tk_metadata_worker_callback
+    mov ebx, eax
+    mov rdi, [r14 + tk_MDW_W_OUTPUT]
+    mov esi, tk_MDW_OUTPUT_CAPACITY
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_mdw_fatal_resource
+    call tk_mdw_lock
+    mov edi, 4
+    mov esi, ebx
+    xor edx, edx
+    cmp ebx, tk_MDW_OUTPUT_CAPACITY
+    ja tk_mdw_completion_args
+    mov edx, ebx
+tk_mdw_completion_args:
+    call tk_mdw_policy_node
+    cmp eax, 128
+    jne tk_mdw_fatal_contract
+    call tk_mdw_unlock
+tk_mdw_thread_completed:
+    call tk_mdw_notify_receiver
+    call tk_metadata_worker_after_complete
+    xor edi, edi
+    mov eax, 60
+    syscall
+    ud2
+
+# External token fields are admitted by HIA, never repaired from registry metadata.
+tk_mdw_policy_external:
+    sub rsp, 8
+    mov rax, 0x3130515457525248
+    mov [r14 + tk_MDW_W_REQUEST], rax
+    mov [r14 + tk_MDW_W_REQUEST + 8], rdi
+    lea rdi, [r14 + tk_MDW_W_REQUEST + 16]
+    mov rsi, r12
+    mov ecx, 4
+    rep movsq
+    xor eax, eax
+    mov ecx, 4
+    rep stosq
+    lea rdi, [r14 + tk_MDW_W_REQUEST]
+    mov esi, 80
+    lea rdx, [r14 + tk_MDW_W_SNAPSHOT]
+    mov ecx, 128
+    lea r8, [r14 + tk_MDW_W_POLICY]
+    mov r9d, 256
+    call tk_mdw_policy_native
+    add rsp, 8
+    ret
+
+# event(root, token32[job,caller,kind,sequence], op, output, capacity).
+# Only poll(5), take(6), detach(7), inspect(11) are exposed.
+# A take returns the 128-byte HIA receipt followed by the immutable task reply.
+tk_metadata_worker_event:
+    tk_mdw_prologue
+    mov r13, rdi
+    mov r12, rsi
+    mov rbp, rdx
+    mov r15, rcx
+    mov rbx, r8
+    cmp rbx, 128
+    jb tk_mdw_event_capacity_early
+    cmp rbp, 5
+    je tk_mdw_event_admit
+    cmp rbp, 6
+    je tk_mdw_event_admit
+    cmp rbp, 7
+    je tk_mdw_event_admit
+    cmp rbp, 11
+    jne tk_mdw_event_invalid_early
+tk_mdw_event_admit:
+    call tk_mdw_lock
+    mov rdi, [r12]
+    call tk_mdw_find
+    test rax, rax
+    jz tk_mdw_event_absent
+    mov r14, rax
+    mov rdi, rbp
+    cmp rbp, 6
+    jne tk_mdw_event_execute
+    mov edi, 5
+tk_mdw_event_execute:
+    call tk_mdw_policy_external
+    cmp eax, 128
+    jne tk_mdw_event_error
+    cmp rbp, 6
+    jne tk_mdw_event_snapshot
+    mov rax, [r14 + tk_MDW_W_SNAPSHOT + 104]
+    cmp rax, 1
+    je tk_mdw_take_ready
+    cmp rax, 7
+    jne tk_mdw_event_pending
+tk_mdw_take_ready:
+    mov rax, [r14 + tk_MDW_W_SNAPSHOT + 72]
+    add rax, 128
+    cmp rbx, rax
+    jb tk_mdw_event_capacity
+    mov edi, 6
+    call tk_mdw_policy_external
+    cmp eax, 128
+    jne tk_mdw_fatal_contract
+    mov rdi, r15
+    call tk_mdw_copy_snapshot
+    mov rsi, [r14 + tk_MDW_W_OUTPUT]
+    mov rcx, [r14 + tk_MDW_W_SNAPSHOT + 72]
+    mov rbx, rcx
+    add rbx, 128
+    rep movsb
+    jmp tk_mdw_event_unlock
+tk_mdw_event_snapshot:
+    mov rdi, r15
+    call tk_mdw_copy_snapshot
+    mov ebx, 128
+    jmp tk_mdw_event_unlock
+tk_mdw_event_pending:
+    mov eax, tk_MDW_PENDING
+    jmp tk_mdw_event_error
+tk_mdw_event_capacity:
+    mov eax, tk_MDW_CAPACITY
+    jmp tk_mdw_event_error
+tk_mdw_event_absent:
+    mov eax, tk_MDW_STATE_ERROR
+tk_mdw_event_error:
+    mov ebx, eax
+tk_mdw_event_unlock:
+    call tk_mdw_unlock
+    mov eax, ebx
+    tk_mdw_epilogue
+tk_mdw_event_invalid_early:
+    mov eax, tk_MDW_INVALID
+    tk_mdw_epilogue
+tk_mdw_event_capacity_early:
+    mov eax, tk_MDW_CAPACITY
+    tk_mdw_epilogue
+
+# The caller holds the gate and r15 points to the link owning r14.
+tk_mdw_retire_locked:
+    sub rsp, 8
+    cmp dword ptr [r14 + tk_MDW_W_TID], 0
+    jne tk_mdw_fatal_contract
+    mfence
+    mov edi, 8
+    call tk_mdw_policy_checked
+    mov edi, 9
+    call tk_mdw_policy_checked
+    cmp qword ptr [r14 + tk_MDW_W_SNAPSHOT + 104], 3
+    jne tk_mdw_fatal_contract
+    mov rax, [r14 + tk_MDW_W_NEXT]
+    mov [r15], rax
+    sub qword ptr [r13 + tk_MDW_R_COUNT], 1
+    add qword ptr [r13 + tk_MDW_R_RETIRED], 1
+    add rsp, 8
+    ret
+# Never called before actual kernel quiescence and policy retirement.
+tk_mdw_dispose:
+    sub rsp, 8
+    call tk_metadata_worker_callback_drop
+    mov rdi, [r14 + tk_MDW_W_INPUT]
+    sub rdi, 4096
+    mov rsi, [r14 + tk_MDW_W_INPUT_MAP]
+    call tk_mdw_unmap
+    mov rdi, [r14 + tk_MDW_W_OUTPUT]
+    sub rdi, 4096
+    mov esi, tk_MDW_OUTPUT_MAP
+    call tk_mdw_unmap
+    mov qword ptr [r14 + tk_MDW_W_MAGIC], 0
+    mov rdi, r14
+    mov esi, tk_MDW_W_MAP
+    call tk_mdw_unmap
+    xor r14d, r14d
+    add rsp, 8
+    ret
+
+# reap(root) -> number retired. Never waits for a running or exiting worker.
+tk_metadata_worker_reap:
+    tk_mdw_prologue
+    mov r13, rdi
+    xor ebx, ebx
+tk_mdw_reap_restart:
+    call tk_mdw_lock
+    lea r15, [r13 + tk_MDW_R_HEAD]
+    mov rbp, [r13 + tk_MDW_R_COUNT]
+tk_mdw_reap_next:
+    mov r14, [r15]
+    test r14, r14
+    jz tk_mdw_reap_finish
+    test rbp, rbp
+    jz tk_mdw_fatal_contract
+    dec rbp
+    cmp dword ptr [r14 + tk_MDW_W_TID], 0
+    jne tk_mdw_reap_skip
+    mov edi, 11
+    call tk_mdw_policy_checked
+    cmp qword ptr [r14 + tk_MDW_W_SNAPSHOT + 8], 4
+    jne tk_mdw_fatal_contract
+    cmp qword ptr [r14 + tk_MDW_W_SNAPSHOT + 48], 1
+    je tk_mdw_reap_skip
+    call tk_mdw_retire_locked
+    call tk_mdw_unlock
+    call tk_mdw_dispose
+    inc ebx
+    jmp tk_mdw_reap_restart
+tk_mdw_reap_skip:
+    lea r15, [r14 + tk_MDW_W_NEXT]
+    jmp tk_mdw_reap_next
+tk_mdw_reap_finish:
+    call tk_mdw_unlock
+    mov eax, ebx
+    tk_mdw_epilogue
+
+# close_admission(root): close the HIA allocator; cancel queued nonmandatory jobs,
+# detach receivers, leave running work untouched. No long callback runs under this gate.
+tk_metadata_worker_close_admission:
+    tk_mdw_prologue
+    mov r13, rdi
+    call tk_mdw_lock
+    mov edi, 1
+    call tk_mdw_policy_global
+    cmp eax, 128
+    jne tk_mdw_fatal_contract
+    mov r14, [r13 + tk_MDW_R_HEAD]
+    mov r12, [r13 + tk_MDW_R_COUNT]
+tk_mdw_close_next:
+    test r14, r14
+    jz tk_mdw_close_done
+    test r12, r12
+    jz tk_mdw_fatal_contract
+    dec r12
+    mov edi, 10
+    call tk_mdw_policy_checked
+    cmp qword ptr [r14 + tk_MDW_W_SNAPSHOT + 48], 1
+    jne tk_mdw_close_skip_detach
+    mov edi, 7
+    call tk_mdw_policy_checked
+tk_mdw_close_skip_detach:
+    mov r14, [r14 + tk_MDW_W_NEXT]
+    jmp tk_mdw_close_next
+tk_mdw_close_done:
+    call tk_mdw_unlock
+    xor eax, eax
+    tk_mdw_epilogue
+
+# drain(root) requires closed admission. The owner keeps backend globals alive until this returns.
+tk_metadata_worker_drain:
+    tk_mdw_prologue
+    mov r13, rdi
+    call tk_mdw_lock
+    mov edi, 2
+    call tk_mdw_policy_global
+    cmp eax, 128
+    jne tk_mdw_fatal_contract
+    cmp qword ptr [r13 + tk_MDW_R_SNAPSHOT + 96], 1
+    jne tk_mdw_drain_not_closed
+    call tk_mdw_unlock
+tk_mdw_drain_next:
+    call tk_mdw_lock
+    mov r14, [r13 + tk_MDW_R_HEAD]
+    test r14, r14
+    jz tk_mdw_drain_done
+    call tk_mdw_unlock
+    call tk_mdw_join
+    call tk_mdw_lock
+    lea r15, [r13 + tk_MDW_R_HEAD]
+    cmp [r15], r14
+    jne tk_mdw_fatal_contract
+    call tk_mdw_retire_locked
+    call tk_mdw_unlock
+    call tk_mdw_dispose
+    jmp tk_mdw_drain_next
+tk_mdw_drain_done:
+    cmp qword ptr [r13 + tk_MDW_R_COUNT], 0
+    jne tk_mdw_fatal_contract
+    call tk_mdw_unlock
+    xor eax, eax
+    tk_mdw_epilogue
+tk_mdw_drain_not_closed:
+    call tk_mdw_unlock
+    mov eax, tk_MDW_STATE_ERROR
+    tk_mdw_epilogue
+
+# destroy(root) requires prior close and full actual drain; it does not own the shared backend.
+tk_metadata_worker_destroy:
+    tk_mdw_prologue
+    mov r13, rdi
+    call tk_mdw_lock
+    mov edi, 2
+    call tk_mdw_policy_global
+    cmp eax, 128
+    jne tk_mdw_fatal_contract
+    cmp qword ptr [r13 + tk_MDW_R_SNAPSHOT + 96], 1
+    jne tk_mdw_destroy_busy
+    cmp qword ptr [r13 + tk_MDW_R_COUNT], 0
+    jne tk_mdw_destroy_busy
+    cmp qword ptr [r13 + tk_MDW_R_HEAD], 0
+    jne tk_mdw_fatal_contract
+    call tk_mdw_unlock
+    mov rdi, [r13 + tk_MDW_R_EVENTFD]
+    mov qword ptr [r13 + tk_MDW_R_EVENTFD], -1
+    mov eax, 3
+    syscall
+    test rax, rax
+    jnz tk_mdw_fatal_contract
+    mov rdi, r13
+    mov esi, tk_MDW_R_MAP
+    call tk_mdw_unmap
+    xor eax, eax
+    tk_mdw_epilogue
+tk_mdw_destroy_busy:
+    call tk_mdw_unlock
+    mov eax, tk_MDW_STATE_ERROR
+    tk_mdw_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed actual callbacks. Creation and final drop run on the serialized embedding owner.
+# Actual History callbacks. The kernel worker owns all bytes and retains no caller pointer.
+tk_metadata_worker_callback_create:
+    cmp qword ptr [r14 + tk_MDW_W_KIND], 2
+    jne tk_mdw_fatal_contract
+    cmp qword ptr [r14 + tk_MDW_W_AUX], 0
+    jne tk_mdw_fatal_contract
+    ret
+tk_metadata_worker_callback_drop:
+    cmp dword ptr [r14 + tk_MDW_W_TID], 0
+    jne tk_mdw_fatal_contract
+    cmp qword ptr [r14 + tk_MDW_W_POLICY + 8], 5
+    jne tk_mdw_fatal_contract
+    cmp qword ptr [r14 + tk_MDW_W_KIND], 2
+    jne tk_mdw_fatal_contract
+    cmp qword ptr [r14 + tk_MDW_W_AUX], 0
+    jne tk_mdw_fatal_contract
+    lock add qword ptr [r13 + tk_MDW_R_CALLBACK_DROPS], 1
+    ret
+tk_metadata_worker_before_begin:
+tk_metadata_worker_after_complete:
+    ret
+
+tk_metadata_worker_callback:
+    tk_mdw_prologue
+    lock add qword ptr [r13 + tk_MDW_R_CALLBACKS], 1
+    cmp qword ptr [r14 + tk_MDW_W_KIND], 2
+    jne tk_mdw_fatal_contract
+    cmp qword ptr [r14 + tk_MDW_W_AUX], 0
+    jne tk_mdw_fatal_contract
+    mov rdi, [r14 + tk_MDW_W_INPUT]
+    mov rsi, [r14 + tk_MDW_W_LENGTH]
+    mov rdx, [r14 + tk_MDW_W_OUTPUT]
+    mov ecx, tk_MDW_OUTPUT_CAPACITY
+    lea r8, [r14 + tk_MDW_W_CALLBACK_WORK]
+    xor r9d, r9d
+    call qword ptr [rip + tk_metadata_history_gate_image]
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_mdw_fatal_contract
+    cmp eax, tk_MDW_OUTPUT_CAPACITY
+    ja tk_metadata_actual_done
+    cmp eax, 32
+    jb tk_mdw_fatal_contract
+    mov r12, [r14 + tk_MDW_W_OUTPUT]
+    mov rdx, 0x31304d4746435248
+    cmp [r12], rdx
+    je tk_metadata_actual_done
+    mov rdx, 0x3130464548415248
+    cmp [r12], rdx
+    jne tk_mdw_fatal_contract
+    cmp qword ptr [r12 + 24], 0
+    jne tk_mdw_fatal_contract
+    mov rbx, [r12 + 8]
+    cmp rbx, 1048528
+    ja tk_mdw_fatal_contract
+    mov rcx, [r12 + 16]
+    cmp rcx, 96
+    jb tk_mdw_fatal_contract
+    cmp rcx, 224
+    ja tk_mdw_fatal_contract
+    lea rdx, [rbx + rcx + 32]
+    cmp rax, rdx
+    jne tk_mdw_fatal_contract
+    mov r15, [r13 + tk_MDW_R_OWNER]
+    mov rdi, [r15 + tk_MG_SERVICE]
+    lea rsi, [r12 + 32]
+    mov rdx, rbx
+    call tk_intent_root_cap
+    test rax, rax
+    jz tk_mdw_fatal_contract
+    mov rbp, rax
+    lea rdi, [r14 + tk_MDW_W_CALLBACK_WORK]
+    lea rsi, [r12 + rbx + 32]
+    mov rcx, [r12 + 16]
+    mov rbx, rcx
+    rep movsb
+    mov [r14 + tk_MDW_W_CALLBACK_WORK + 16], rbp
+    mov rdi, [r15 + tk_MG_SERVICE]
+    mov rsi, rbp
+    lea rdx, [r14 + tk_MDW_W_CALLBACK_WORK]
+    mov rcx, rbx
+    mov r8, [r14 + tk_MDW_W_OUTPUT]
+    mov r9d, tk_MDW_OUTPUT_CAPACITY
+    call tk_audit_history_call
+tk_metadata_actual_done:
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_mdw_fatal_contract
+    tk_mdw_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed immutable byte ownership. HIA owns validation, errors, and child actions.
+.equ tk_METADATA_ROOT_SLOT, 24672
+.equ tk_MG_SERVICE, 8
+.equ tk_MG_IG, 16
+.equ tk_MG_WORKERS, 24
+.equ tk_MG_HEAD, 32
+.equ tk_MG_COUNT, 40
+.equ tk_MG_CLOSING, 48
+.equ tk_MG_FRAMES, 56
+.equ tk_MG_POLLS, 64
+.equ tk_MG_CANCELS, 72
+.equ tk_MG_EOF_CANCELS, 80
+.equ tk_MG_REFUSALS, 88
+.equ tk_MG_COMPLETIONS, 96
+.equ tk_MG_CALLERS, 104
+.equ tk_MG_RETIRED, 112
+.equ tk_MG_CALLBACKS, 120
+.equ tk_MG_DROPS, 128
+.equ tk_MG_GENERATION, 136
+.equ tk_MG_LAST_OP, 144
+.equ tk_MG_LAST_HANDLE, 152
+.equ tk_MG_LAST_CODE, 160
+.equ tk_MG_LAST_SIZE, 168
+.equ tk_MG_FOOTER, 1024
+.equ tk_MG_OUTPUT, 131072
+.equ tk_MG_BYTES, 262144
+.equ tk_MC_ROOT, 8
+.equ tk_MC_LENGTH, 16
+.equ tk_MC_CALLER, 24
+.equ tk_MC_PENDING, 32
+.equ tk_MC_SEQUENCE, 40
+.equ tk_MC_CODE, 56
+.equ tk_MC_NEXT, 64
+.equ tk_MC_PREV, 72
+.equ tk_MC_COMPLETED, 80
+.equ tk_MC_TOKEN, 128
+.equ tk_MC_META, 160
+.equ tk_MC_SNAPSHOT, 192
+.equ tk_MC_ACTION_COPY, 512
+.equ tk_MC_POLLFD, 720
+.equ tk_MC_EVENT_COUNT, 736
+.equ tk_MC_INPUT, 4096
+.equ tk_MC_INPUT_CAPACITY, 8388768
+.equ tk_MC_INPUT_MAPPING, 8392704
+.equ tk_MC_WORK, 12582912
+.equ tk_MC_WORK_BYTES, 33554432
+.equ tk_MC_OUTPUT, 46137344
+.equ tk_MC_RECEIVER, 48234496
+.equ tk_MC_RECEIVER_CAPACITY, 2097280
+.equ tk_MC_BYTES, 52428800
+.equ tk_META_OUTPUT_CAPACITY, 65568
+.equ tk_META_ACTION, 256
+.equ tk_META_CHILD_REQUEST, 12582912
+.equ tk_META_CHILD_REPLY, 23068672
+.equ tk_META_CHILD_CAPACITY, 2097152
+.equ tk_META_EFFECT, 0xfffffff0
+.equ tk_META_PENDING, 0xfffffff8
+.equ tk_META_INVALID, 0xffffffff
+.equ tk_META_STATE_REFUSAL, 0xfffffffd
+# Create one metadata owner over the already-live shared backend.
+tk_metadata_boundary_create:
+    tk_mdw_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_METADATA_ROOT_SLOT], 0
+    jne tk_contract_fail
+    mov edi, tk_MG_BYTES
+    call tk_allocate_guarded
+    mov r13, rax
+    mov rax, 0x3130424c47524d48
+    mov [r13], rax
+    mov [r13 + tk_MG_SERVICE], r12
+    mov rax, [r12 + tk_INTENT_GLOBAL_SLOT]
+    test rax, rax
+    jz tk_contract_fail
+    mov [r13 + tk_MG_IG], rax
+    mov [r12 + tk_METADATA_ROOT_SLOT], r13
+    mov rdi, r13
+    call tk_metadata_worker_create
+    mov [r13 + tk_MG_WORKERS], rax
+    mov rax, r13
+    tk_mdw_epilogue
+
+# Resolve an opaque generation only within this owner's live caller list.
+tk_metadata_caller_find:
+    mov rax, [rdi + tk_MG_HEAD]
+    mov rcx, [rdi + tk_MG_COUNT]
+tk_metadata_caller_find_next:
+    test rax, rax
+    jz tk_metadata_caller_find_done
+    test rcx, rcx
+    jz tk_contract_fail
+    dec rcx
+    cmp [rax + tk_MC_ROOT], rdi
+    jne tk_contract_fail
+    cmp [rax + tk_MC_CALLER], rsi
+    je tk_metadata_caller_find_done
+    mov rax, [rax + tk_MC_NEXT]
+    jmp tk_metadata_caller_find_next
+tk_metadata_caller_find_done:
+    ret
+
+# Synchronous callable: G, immutable HMTARQ01, length, reply, capacity -> u32.
+# Event-loop consumers retain the create/register/drive/drop methods instead.
+tk_metadata_history_runtime_call:
+    tk_mdw_prologue
+    mov r13, [rdi + tk_METADATA_ROOT_SLOT]
+    mov r14, rcx
+    mov r15, r8
+    cmp r15, tk_META_OUTPUT_CAPACITY
+    jb tk_metadata_history_runtime_capacity
+    test r13, r13
+    jz tk_contract_fail
+    cmp qword ptr [r13 + tk_MG_CLOSING], 0
+    jne tk_metadata_history_runtime_state
+    mov rdi, r13
+    call tk_metadata_caller_create
+    test rax, rax
+    jz tk_metadata_history_runtime_invalid
+    mov r12, rax
+    mov rdi, r12
+    call tk_metadata_caller_register
+    mov rdi, r12
+    call tk_metadata_caller_await
+    mov ebx, eax
+    cmp eax, tk_META_OUTPUT_CAPACITY
+    ja tk_metadata_history_runtime_drop
+    cmp eax, 32
+    jb tk_contract_fail
+    mov rdi, r14
+    lea rsi, [r12 + tk_MC_OUTPUT]
+    mov ecx, eax
+    rep movsb
+tk_metadata_history_runtime_drop:
+    mov rdi, r12
+    call tk_metadata_caller_drop
+    mov eax, ebx
+    tk_mdw_epilogue
+tk_metadata_history_runtime_capacity:
+    mov eax, 0xfffffffe
+    tk_mdw_epilogue
+tk_metadata_history_runtime_invalid:
+    mov eax, tk_META_INVALID
+    tk_mdw_epilogue
+tk_metadata_history_runtime_state:
+    mov eax, tk_META_STATE_REFUSAL
+    tk_mdw_epilogue
+
+# Retire cancellable receivers before guards, tickets, and backend fields.
+tk_metadata_boundary_before_eof:
+    tk_mdw_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + tk_MG_CLOSING], 0
+    jne tk_contract_fail
+    mov qword ptr [r12 + tk_MG_CLOSING], 1
+tk_metadata_boundary_drop_next:
+    mov rdi, [r12 + tk_MG_HEAD]
+    test rdi, rdi
+    jz tk_metadata_boundary_no_callers
+    call tk_metadata_caller_drop
+    add qword ptr [r12 + tk_MG_EOF_CANCELS], 1
+    jc tk_contract_fail
+    jmp tk_metadata_boundary_drop_next
+tk_metadata_boundary_no_callers:
+    cmp qword ptr [r12 + tk_MG_COUNT], 0
+    jne tk_contract_fail
+    tk_mdw_epilogue
+
+# The shared Ticket and Intent owners have retired; globals still own all leases.
+tk_metadata_boundary_drain:
+    tk_mdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_MG_WORKERS]
+    cmp qword ptr [r12 + tk_MG_CLOSING], 1
+    jne tk_contract_fail
+    mov rax, [r12 + tk_MG_COUNT]
+    or rax, [r12 + tk_MG_HEAD]
+    jnz tk_contract_fail
+    mov rdi, r13
+    call tk_metadata_worker_close_admission
+    test eax, eax
+    jnz tk_contract_fail
+    mov rdi, r13
+    call tk_metadata_worker_drain
+    test eax, eax
+    jnz tk_contract_fail
+    mov rax, [r13 + tk_MDW_R_COUNT]
+    or rax, [r13 + tk_MDW_R_HEAD]
+    jnz tk_contract_fail
+    mov rax, [r13 + tk_MDW_R_RETIRED]
+    cmp [r13 + tk_MDW_R_CALLBACK_DROPS], rax
+    jne tk_contract_fail
+    mov [r12 + tk_MG_RETIRED], rax
+    mov [r12 + tk_MG_DROPS], rax
+    mov rax, [r13 + tk_MDW_R_CALLBACKS]
+    mov [r12 + tk_MG_CALLBACKS], rax
+    mov rax, [r13 + tk_MDW_R_POLICY + 8]
+    mov [r12 + tk_MG_GENERATION], rax
+    mov rdi, r13
+    call tk_metadata_worker_destroy
+    test eax, eax
+    jnz tk_contract_fail
+    mov qword ptr [r12 + tk_MG_WORKERS], 0
+    tk_mdw_epilogue
+
+# Fixed terminal custody receipt; no user payload and no synthetic completion.
+# 128B HMRWBD01: closing,frames,callers,polls,cancel,eof,refusal,complete,
+# retired,callbacks,drops,generation,live-callers(0),live-workers(0),reserved(0).
+tk_metadata_boundary_finish:
+    tk_mdw_prologue
+    mov r12, rdi
+    mov rax, [r12 + tk_MG_HEAD]
+    or rax, [r12 + tk_MG_COUNT]
+    or rax, [r12 + tk_MG_WORKERS]
+    jnz tk_contract_fail
+    cmp qword ptr [r12 + tk_MG_CLOSING], 1
+    jne tk_contract_fail
+    mov rax, [r12 + tk_MG_SERVICE]
+    mov qword ptr [rax + tk_METADATA_ROOT_SLOT], 0
+    mov rdi, r12
+    mov esi, tk_MG_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    xor eax, eax
+    tk_mdw_epilogue
+
+tk_metadata_caller_create:
+    tk_mdw_prologue
+    mov r13, rdi
+    mov r14, rsi
+    mov r15, rdx
+    cmp r15, 96
+    jb tk_metadata_caller_create_invalid
+    cmp r15, tk_MC_INPUT_CAPACITY
+    ja tk_metadata_caller_create_invalid
+    mov edi, tk_MC_BYTES
+    call tk_allocate_guarded
+    mov r12, rax
+    mov rax, 0x31304c4c41434d48
+    mov [r12], rax
+    mov [r12 + tk_MC_ROOT], r13
+    mov [r12 + tk_MC_LENGTH], r15
+    lea rdi, [r12 + tk_MC_INPUT]
+    mov rsi, r14
+    mov rcx, r15
+    rep movsb
+    lea rdi, [r12 + tk_MC_INPUT]
+    mov esi, tk_MC_INPUT_MAPPING
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    lea rbp, [r12 + tk_MC_WORK]
+    call tk_metadata_caller_entry
+    cmp eax, tk_META_EFFECT
+    je tk_metadata_caller_created
+    cmp eax, tk_META_INVALID
+    jne tk_contract_fail
+    mov rdi, r12
+    call tk_metadata_caller_unmap
+tk_metadata_caller_create_invalid:
+    xor eax, eax
+    tk_mdw_epilogue
+tk_metadata_caller_created:
+    mov rax, r12
+    tk_mdw_epilogue
+
+# r12=caller, rbp=History runtime workspace; no parent request copy can be edited by a child.
+tk_metadata_caller_entry:
+    sub rsp, 8
+    lea rdi, [r12 + tk_MC_INPUT]
+    mov rsi, [r12 + tk_MC_LENGTH]
+    lea rdx, [r12 + tk_MC_OUTPUT]
+    mov ecx, tk_META_OUTPUT_CAPACITY
+    mov r8, rbp
+    mov r9d, tk_MC_WORK_BYTES
+    call qword ptr [rip + tk_metadata_history_caller_image]
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_contract_fail
+    mov [r12 + tk_MC_CODE], rax
+    add rsp, 8
+    ret
+
+# assign a never-reused caller generation after carrier and live-caller admission.
+tk_metadata_caller_register:
+    tk_mdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_MC_ROOT]
+    cmp qword ptr [r13 + tk_MG_CLOSING], 0
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_MC_CALLER], 0
+    jne tk_contract_fail
+    mov rdi, [r13 + tk_MG_WORKERS]
+    lea rsi, [r12 + tk_MC_SNAPSHOT]
+    call tk_metadata_worker_generation
+    cmp eax, 128
+    jne tk_contract_fail
+    mov rax, [r12 + tk_MC_SNAPSHOT + 16]
+    test rax, rax
+    jz tk_contract_fail
+    mov [r12 + tk_MC_CALLER], rax
+    mov rax, [r13 + tk_MG_HEAD]
+    mov [r12 + tk_MC_NEXT], rax
+    test rax, rax
+    jz tk_metadata_caller_link_head
+    cmp qword ptr [rax + tk_MC_PREV], 0
+    jne tk_contract_fail
+    mov [rax + tk_MC_PREV], r12
+tk_metadata_caller_link_head:
+    mov [r13 + tk_MG_HEAD], r12
+    add qword ptr [r13 + tk_MG_COUNT], 1
+    jc tk_contract_fail
+    add qword ptr [r13 + tk_MG_CALLERS], 1
+    jc tk_contract_fail
+    tk_mdw_epilogue
+
+tk_metadata_caller_live:
+    mov rax, 0x31304c4c41434d48
+    cmp [r12], rax
+    jne tk_contract_fail
+    cmp [r12 + tk_MC_ROOT], r13
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_MC_CALLER], 0
+    je tk_contract_fail
+    cmp qword ptr [r13 + tk_MG_COUNT], 0
+    je tk_contract_fail
+    ret
+
+# Drive until actual worker Pending or a complete HIA response.
+tk_metadata_caller_drive:
+    tk_mdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_MC_ROOT]
+    call tk_metadata_caller_live
+    lea rbp, [r12 + tk_MC_WORK]
+    lea r14, [rbp + tk_META_ACTION]
+    cmp qword ptr [r12 + tk_MC_PENDING], 0
+    jne tk_metadata_caller_take
+tk_metadata_caller_drive_code:
+    mov rax, [r12 + tk_MC_CODE]
+    cmp eax, tk_META_EFFECT
+    jne tk_metadata_caller_drive_done
+    mov rax, 0x3130304148524d48
+    cmp [r14], rax
+    jne tk_contract_fail
+    mov rax, [r12 + tk_MC_SEQUENCE]
+    inc rax
+    jz tk_contract_fail
+    cmp [r14 + 8], rax
+    jne tk_contract_fail
+    mov [r12 + tk_MC_SEQUENCE], rax
+    cmp qword ptr [r14 + 24], 0
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 32], tk_META_CHILD_REQUEST
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 48], tk_META_CHILD_REPLY
+    jne tk_contract_fail
+    cmp qword ptr [r14 + 56], tk_META_CHILD_CAPACITY
+    jne tk_contract_fail
+    mov rax, [r14 + 40]
+    test rax, rax
+    jz tk_contract_fail
+    cmp rax, 9437264
+    ja tk_contract_fail
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz tk_contract_fail
+    lea rdi, [r12 + tk_MC_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 12
+    rep movsq
+    mov rax, [r14 + 16]
+    cmp rax, 1
+    je tk_metadata_caller_config
+    cmp rax, 2
+    je tk_metadata_caller_submit
+    jmp tk_contract_fail
+tk_metadata_caller_config:
+    mov rdi, [r13 + tk_MG_IG]
+    lea rsi, [rbp + tk_META_CHILD_REQUEST]
+    mov rdx, [r14 + 40]
+    lea rcx, [rbp + tk_META_CHILD_REPLY]
+    mov r8d, tk_META_CHILD_CAPACITY
+    call tk_intent_config_call
+    mov ebx, eax
+    jmp tk_metadata_caller_ack
+tk_metadata_caller_submit:
+    mov [r12 + tk_MC_META + 8], rax
+    mov rax, [r12 + tk_MC_CALLER]
+    mov [r12 + tk_MC_META], rax
+    mov rax, [r14 + 8]
+    mov [r12 + tk_MC_META + 16], rax
+    mov rdi, [r13 + tk_MG_WORKERS]
+    lea rsi, [r12 + tk_MC_META]
+    lea rdx, [rbp + tk_META_CHILD_REQUEST]
+    mov rcx, [r14 + 40]
+    lea r8, [r12 + tk_MC_SNAPSHOT]
+    call tk_metadata_worker_submit
+    cmp eax, 128
+    jne tk_contract_fail
+    lea rdi, [r12 + tk_MC_TOKEN]
+    lea rsi, [r12 + tk_MC_SNAPSHOT + 16]
+    mov ecx, 4
+    rep movsq
+    mov qword ptr [r12 + tk_MC_PENDING], 1
+tk_metadata_caller_take:
+    mov rdi, [r13 + tk_MG_WORKERS]
+    lea rsi, [r12 + tk_MC_TOKEN]
+    mov edx, 6
+    lea rcx, [r12 + tk_MC_RECEIVER]
+    mov r8d, tk_MC_RECEIVER_CAPACITY
+    call tk_metadata_worker_event
+    cmp eax, tk_META_PENDING
+    je tk_metadata_caller_drive_done
+    cmp eax, 128
+    jb tk_contract_fail
+    cmp eax, tk_MC_RECEIVER_CAPACITY
+    ja tk_contract_fail
+    mov rbx, rax
+    mov rax, 0x3130525457525248
+    cmp [r12 + tk_MC_RECEIVER], rax
+    jne tk_contract_fail
+    lea rdi, [r12 + tk_MC_TOKEN]
+    lea rsi, [r12 + tk_MC_RECEIVER + 16]
+    mov ecx, 4
+    repe cmpsq
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_MC_RECEIVER + 48], 3
+    jne tk_contract_fail
+    cmp qword ptr [r12 + tk_MC_RECEIVER + 96], 0
+    jne tk_contract_fail
+    mov rax, [r12 + tk_MC_RECEIVER + 72]
+    add rax, 128
+    cmp rax, rbx
+    jne tk_contract_fail
+    mov rbx, [r12 + tk_MC_RECEIVER + 64]
+    mov edx, ebx
+    cmp rbx, rdx
+    jne tk_contract_fail
+    lea rsi, [r12 + tk_MC_RECEIVER + 128]
+    lea rdi, [rbp + tk_META_CHILD_REPLY]
+    mov rcx, [r12 + tk_MC_RECEIVER + 72]
+    cmp rcx, tk_META_CHILD_CAPACITY
+    ja tk_contract_fail
+    rep movsb
+    mov qword ptr [r12 + tk_MC_PENDING], 0
+tk_metadata_caller_ack:
+    mov eax, ebx
+    cmp eax, tk_META_CHILD_CAPACITY
+    jbe tk_metadata_caller_ack_code
+    cmp eax, tk_META_EFFECT
+    jb tk_contract_fail
+tk_metadata_caller_ack_code:
+    lea rdi, [r12 + tk_MC_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 8
+    repe cmpsq
+    jne tk_contract_fail
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz tk_contract_fail
+    mov [r14 + 72], rbx
+    mov rax, [r14 + 8]
+    mov [r14 + 64], rax
+    call tk_metadata_caller_entry
+    jmp tk_metadata_caller_drive_code
+tk_metadata_caller_drive_done:
+    cmp eax, tk_META_OUTPUT_CAPACITY
+    ja tk_metadata_caller_drive_return
+    cmp eax, 32
+    jb tk_contract_fail
+    cmp qword ptr [r12 + tk_MC_COMPLETED], 0
+    jne tk_metadata_caller_drive_return
+    mov qword ptr [r12 + tk_MC_COMPLETED], 1
+    add qword ptr [r13 + tk_MG_COMPLETIONS], 1
+    jc tk_contract_fail
+tk_metadata_caller_drive_return:
+    tk_mdw_epilogue
+
+# Await uses the real eventfd; a stale wake only causes another exact HIA poll.
+tk_metadata_caller_await:
+    tk_mdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_MC_ROOT]
+tk_metadata_caller_await_drive:
+    mov rdi, r12
+    call tk_metadata_caller_drive
+    cmp eax, tk_META_PENDING
+    jne tk_metadata_caller_await_done
+    mov rdi, [r13 + tk_MG_WORKERS]
+    call tk_metadata_worker_notification_fd
+    cmp rax, 0x7fffffff
+    ja tk_contract_fail
+    mov [r12 + tk_MC_POLLFD], eax
+    mov dword ptr [r12 + tk_MC_POLLFD + 4], 1
+tk_metadata_caller_await_poll:
+    lea rdi, [r12 + tk_MC_POLLFD]
+    mov esi, 1
+    mov edx, -1
+    mov eax, 7
+    syscall
+    cmp rax, -4
+    je tk_metadata_caller_await_poll
+    cmp rax, 1
+    jne tk_io_fail
+    test word ptr [r12 + tk_MC_POLLFD + 6], 1
+    jz tk_contract_fail
+tk_metadata_caller_await_read:
+    mov edi, [r12 + tk_MC_POLLFD]
+    lea rsi, [r12 + tk_MC_EVENT_COUNT]
+    mov edx, 8
+    xor eax, eax
+    syscall
+    cmp rax, -4
+    je tk_metadata_caller_await_read
+    cmp rax, -11
+    je tk_metadata_caller_await_drive
+    cmp rax, 8
+    jne tk_io_fail
+    jmp tk_metadata_caller_await_drive
+tk_metadata_caller_await_done:
+    tk_mdw_epilogue
+
+# Drop is receiver retirement only. The submitted node has no caller pointers.
+tk_metadata_caller_drop:
+    tk_mdw_prologue
+    mov r12, rdi
+    mov r13, [r12 + tk_MC_ROOT]
+    call tk_metadata_caller_live
+    cmp qword ptr [r12 + tk_MC_PENDING], 0
+    je tk_metadata_caller_drop_unlink
+    mov rdi, [r13 + tk_MG_WORKERS]
+    lea rsi, [r12 + tk_MC_TOKEN]
+    mov edx, 7
+    lea rcx, [r12 + tk_MC_SNAPSHOT]
+    mov r8d, 128
+    call tk_metadata_worker_event
+    cmp eax, 128
+    jne tk_contract_fail
+    mov qword ptr [r12 + tk_MC_PENDING], 0
+tk_metadata_caller_drop_unlink:
+    mov rax, [r12 + tk_MC_PREV]
+    mov rdx, [r12 + tk_MC_NEXT]
+    test rax, rax
+    jz tk_metadata_caller_drop_head
+    cmp [rax + tk_MC_NEXT], r12
+    jne tk_contract_fail
+    mov [rax + tk_MC_NEXT], rdx
+    jmp tk_metadata_caller_drop_next
+tk_metadata_caller_drop_head:
+    cmp [r13 + tk_MG_HEAD], r12
+    jne tk_contract_fail
+    mov [r13 + tk_MG_HEAD], rdx
+tk_metadata_caller_drop_next:
+    test rdx, rdx
+    jz tk_metadata_caller_drop_count
+    cmp [rdx + tk_MC_PREV], r12
+    jne tk_contract_fail
+    mov [rdx + tk_MC_PREV], rax
+tk_metadata_caller_drop_count:
+    sub qword ptr [r13 + tk_MG_COUNT], 1
+    jc tk_contract_fail
+    mov rdi, r12
+    call tk_metadata_caller_unmap
+    tk_mdw_epilogue
+tk_metadata_caller_unmap:
+    mov esi, tk_MC_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_io_fail
+    ret
+
+
+.balign 8
+tk_audit_history_image: .quad 0
+tk_metadata_history_caller_image: .quad 0
+tk_metadata_history_gate_image: .quad 0
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# One private public-Read handler context. The installed Config and shared
+# Authority/SG/IG/Read/Async owners remain owned by their existing roots.
+.equ PM_ROOT_SLOT, 3088
+.equ PM_ACTIVE, 8
+.equ PM_LENGTH, 16
+.equ PM_TARGET, 24
+.equ PM_CAPACITY, 32
+.equ PM_SEQUENCE, 40
+.equ PM_CALLER, 48
+.equ PM_RESULT, 56
+.equ PM_PURE_BUSY, 64
+.equ PM_ACTION_COPY, 256
+.equ PM_INPUT, 4096
+.equ PM_INPUT_CAPACITY, 8388632
+.equ PM_INPUT_MAPPING, 8392704
+.equ PM_OUTPUT, 8396800
+.equ PM_WORK, 75505664
+.equ PM_PURE, 343941120
+.equ PM_BYTES, 612376576
+.equ PM_WORK_BYTES, 268435456
+.equ PM_CAP, 67108864
+.equ PM_ACTION, 256
+.equ PM_CHILD_INPUT, 67108864
+.equ PM_CHILD_OUTPUT, 134217728
+
+.macro pm_prologue
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 72
+.endm
+.macro pm_epilogue
+    add rsp, 72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+# context(public root) -> stable private mapping. No effect-owner replacement.
+pm_context:
+    pm_prologue
+    mov r12, rdi
+    mov rax, [r12 + PM_ROOT_SLOT]
+    test rax, rax
+    jnz pm_context_existing
+    mov edi, PM_BYTES
+    call tk_allocate_guarded
+    mov [rax], r12
+    mov [r12 + PM_ROOT_SLOT], rax
+pm_context_existing:
+    cmp [rax], r12
+    jne fatal
+    pm_epilogue
+
+# rax is one fixed image selected by native branches; source/result spans are
+# the immutable mapper/handler-owned spans. Pure components have no callbacks.
+pm_pure:
+    pm_prologue
+    mov r12, rax
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    cmp rsi, PM_CAP
+    ja fatal
+    cmp rcx, PM_CAP
+    ja fatal
+    mov rdi, r15
+    call pm_context
+    mov r13, rax
+    cmp qword ptr [r13 + PM_PURE_BUSY], 0
+    jne fatal
+    mov qword ptr [r13 + PM_PURE_BUSY], 1
+    mov rdi, [rsp]
+    mov rsi, [rsp + 8]
+    mov rdx, [rsp + 16]
+    mov rcx, [rsp + 24]
+    lea r8, [r13 + PM_PURE]
+    mov r9d, PM_WORK_BYTES
+    call r12
+    mov edx, eax
+    cmp rax, rdx
+    jne fatal
+    cmp eax, 0xfffffff0
+    je fatal
+    cmp eax, PM_CAP
+    jbe pm_pure_done
+    cmp eax, 0xfffffff0
+    jb fatal
+pm_pure_done:
+    mov qword ptr [r13 + PM_PURE_BUSY], 0
+    pm_epilogue
+
+# Called after service worker drain and before public root retirement.
+pm_destroy:
+    pm_prologue
+    mov r12, rdi
+    mov rdi, [r12 + PM_ROOT_SLOT]
+    test rdi, rdi
+    jz pm_destroy_done
+    cmp [rdi], r12
+    jne fatal
+    mov rax, [rdi + PM_ACTIVE]
+    or rax, [rdi + PM_PURE_BUSY]
+    or rax, [rdi + PM_CALLER]
+    jnz fatal
+    mov qword ptr [r12 + PM_ROOT_SLOT], 0
+    mov esi, PM_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz fatal
+pm_destroy_done:
+    xor eax, eax
+    pm_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# handler(input, length, output, capacity), with the real public root in r15.
+pm_handler:
+    pm_prologue
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    cmp rsi, 24
+    jb fatal
+    cmp rsi, PM_INPUT_CAPACITY
+    ja fatal
+    cmp rcx, 32
+    jb fatal
+    cmp rcx, PM_CAP
+    ja fatal
+    mov rdi, r15
+    call pm_context
+    mov r12, rax
+    cmp qword ptr [r12 + PM_ACTIVE], 0
+    jne fatal
+    cmp qword ptr [r12 + PM_CALLER], 0
+    jne fatal
+    mov qword ptr [r12 + PM_ACTIVE], 1
+    mov rax, [rsp + 8]
+    mov [r12 + PM_LENGTH], rax
+    mov rax, [rsp + 16]
+    mov [r12 + PM_TARGET], rax
+    mov rax, [rsp + 24]
+    mov [r12 + PM_CAPACITY], rax
+    lea rdi, [r12 + PM_INPUT]
+    mov rsi, [rsp]
+    mov rcx, [rsp + 8]
+    rep movsb
+    lea rdi, [r12 + PM_INPUT]
+    mov esi, PM_INPUT_MAPPING
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz fatal
+    lea rbp, [r12 + PM_WORK]
+pm_handler_resume:
+    lea rdi, [r12 + PM_INPUT]
+    mov rsi, [r12 + PM_LENGTH]
+    lea rdx, [r12 + PM_OUTPUT]
+    mov rcx, [r12 + PM_CAPACITY]
+    mov r8, rbp
+    mov r9d, PM_WORK_BYTES
+    call qword ptr [rip + pm_image_handler]
+    mov edx, eax
+    cmp rax, rdx
+    jne fatal
+    cmp eax, 0xfffffff0
+    je pm_handler_action
+    mov [r12 + PM_RESULT], rax
+    cmp eax, PM_CAP
+    jbe pm_handler_completed
+    cmp eax, 0xfffffff0
+    jb fatal
+    jmp pm_handler_terminal
+pm_handler_completed:
+    cmp rax, [r12 + PM_CAPACITY]
+    ja fatal
+    lea rsi, [r12 + PM_OUTPUT]
+    mov rdi, [r12 + PM_TARGET]
+    mov rcx, rax
+    rep movsb
+pm_handler_terminal:
+    cmp qword ptr [r12 + PM_CALLER], 0
+    jne fatal
+    cmp qword ptr [r12 + PM_PURE_BUSY], 0
+    jne fatal
+    lea rdi, [r12 + PM_INPUT]
+    mov esi, PM_INPUT_MAPPING
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz fatal
+    mov qword ptr [r12 + PM_ACTIVE], 0
+    mov qword ptr [r12 + PM_TARGET], 0
+    mov qword ptr [r12 + PM_CAPACITY], 0
+    mov rax, [r12 + PM_RESULT]
+    pm_epilogue
+
+pm_handler_action:
+    lea r14, [rbp + PM_ACTION]
+    mov rax, 0x3130304148544d48
+    cmp [r14], rax
+    jne fatal
+    mov rax, [r12 + PM_SEQUENCE]
+    inc rax
+    jz fatal
+    cmp [r14 + 8], rax
+    jne fatal
+    mov [r12 + PM_SEQUENCE], rax
+    cmp qword ptr [r14 + 24], 0
+    jne fatal
+    cmp qword ptr [r14 + 32], PM_CHILD_INPUT
+    jne fatal
+    cmp qword ptr [r14 + 48], PM_CHILD_OUTPUT
+    jne fatal
+    cmp qword ptr [r14 + 56], PM_CAP
+    jne fatal
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz fatal
+    mov rax, [r14 + 40]
+    cmp rax, PM_CAP
+    ja fatal
+    lea rdi, [r12 + PM_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 12
+    rep movsq
+    lea rdi, [rbp + PM_CHILD_INPUT]
+    mov rsi, [r14 + 40]
+    lea rdx, [rbp + PM_CHILD_OUTPUT]
+    mov ecx, PM_CAP
+    mov rax, [r14 + 16]
+    cmp rax, 1
+    je pm_handler_params
+    cmp rax, 2
+    je pm_handler_authority
+    cmp rax, 3
+    je pm_handler_history
+    cmp rax, 6
+    je pm_handler_value
+    cmp rax, 7
+    je pm_handler_error
+    cmp rax, 8
+    je pm_handler_scope
+    jmp fatal
+pm_handler_params:
+    mov rax, [rip + pm_image_params]
+    call pm_pure
+    jmp pm_handler_ack
+pm_handler_authority:
+    call pr_authority
+    jmp pm_handler_ack
+pm_handler_history:
+    call pm_history
+    jmp pm_handler_ack
+pm_handler_value:
+    mov rax, [rip + pr_image_value]
+    call pm_pure
+    jmp pm_handler_ack
+pm_handler_error:
+    mov rax, [rip + pr_image_error]
+    call pm_pure
+    jmp pm_handler_ack
+pm_handler_scope:
+    mov rax, [rip + pr_image_scope]
+    call pm_pure
+pm_handler_ack:
+    mov ebx, eax
+    cmp rax, rbx
+    jne fatal
+    cmp eax, PM_CAP
+    jbe pm_handler_ack_valid
+    cmp eax, 0xfffffff0
+    jb fatal
+    cmp eax, 0xfffffff0
+    je fatal
+pm_handler_ack_valid:
+    lea rdi, [r12 + PM_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 12
+    repe cmpsq
+    jne fatal
+    mov [r14 + 72], rbx
+    mov rax, [r12 + PM_SEQUENCE]
+    mov [r14 + 64], rax
+    jmp pm_handler_resume
+
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed public caller custody. Metadata semantics remain in the pinned HIA images.
+pm_history:
+    pm_prologue
+    mov [rsp], rdx
+    mov [rsp + 8], rcx
+    mov r14, rdi
+    mov rbp, rsi
+    mov rdi, r15
+    call pm_context
+    mov r12, rax
+    cmp qword ptr [r12 + PM_ACTIVE], 1
+    jne fatal
+    cmp qword ptr [r12 + PM_CALLER], 0
+    jne fatal
+    mov rax, [r15 + EX_CONTROL_SLOT]
+    test rax, rax
+    jz fatal
+    mov rax, [rax + 16]
+    test rax, rax
+    jz fatal
+    mov rax, [rax + tk_METADATA_ROOT_SLOT]
+    test rax, rax
+    jz fatal
+    mov [rsp + 16], rax
+    mov rdi, [rax + tk_MG_WORKERS]
+    call tk_metadata_worker_reap
+    mov rdi, [rsp + 16]
+    mov rsi, r14
+    mov rdx, rbp
+    call tk_metadata_caller_create
+    test rax, rax
+    jz fatal
+    mov r13, rax
+    mov [r12 + PM_CALLER], rax
+    mov rdi, r13
+    call tk_metadata_caller_register
+    mov rdi, r15
+    mov rsi, r12
+    lea rdx, [rip + pm_history_poll]
+    lea rcx, [rip + pm_history_drop]
+    mov r8, -1
+    call public_async_await
+    cmp eax, 0xfffffff2
+    je pm_history_runtime_aborted
+    cmp eax, 32
+    jb fatal
+    cmp eax, tk_META_OUTPUT_CAPACITY
+    ja fatal
+    cmp rax, [rsp + 8]
+    ja fatal
+    mov ebx, eax
+    lea rsi, [r13 + tk_MC_OUTPUT]
+    mov rdi, [rsp]
+    mov ecx, eax
+    rep movsb
+    mov rdi, r13
+    call tk_metadata_caller_drop
+    mov qword ptr [r12 + PM_CALLER], 0
+    mov rax, [rsp + 16]
+    mov rdi, [rax + tk_MG_WORKERS]
+    call tk_metadata_worker_reap
+    mov eax, ebx
+    pm_epilogue
+
+pm_history_poll:
+    pm_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + PM_ACTIVE], 1
+    jne fatal
+    mov rdi, [r12 + PM_CALLER]
+    test rdi, rdi
+    jz fatal
+    call tk_metadata_caller_drive
+    mov edx, tk_META_PENDING
+    cmp rax, rdx
+    jne pm_history_poll_return
+    mov eax, 0xfffffff1
+pm_history_poll_return:
+    pm_epilogue
+
+# SDK notification cancellation does not invoke this hook. The actual enclosing
+# runtime retirement drops this receiver while its independent worker stays owned.
+pm_history_drop:
+    pm_prologue
+    mov r12, rdi
+    mov rdi, [r12 + PM_CALLER]
+    test rdi, rdi
+    jz pm_history_drop_done
+    call tk_metadata_caller_drop
+    mov qword ptr [r12 + PM_CALLER], 0
+pm_history_drop_done:
+    xor eax, eax
+    pm_epilogue
+
+pm_history_runtime_aborted:
+    cmp qword ptr [r12 + PM_ACTIVE], 1
+    jne ap_contract
+    mov rax, [r12 + PM_CALLER]
+    or rax, [r12 + PM_PURE_BUSY]
+    jnz ap_contract
+    lea rdi, [r12 + PM_INPUT]
+    mov esi, PM_INPUT_MAPPING
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + PM_ACTIVE], 0
+    mov qword ptr [r12 + PM_TARGET], 0
+    mov qword ptr [r12 + PM_CAPACITY], 0
+    jmp ph_runtime_aborted
+
+pm_map_handler:
+    call pm_handler
+    jmp ex_mapper_ack
+
+.balign 8
+pm_image_params: .quad 0
+pm_image_handler: .quad 0
+
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed request custody; SDK decisions remain in the frozen HIA pool.
+.equ PF_GLOBAL_SLOT, 4040
+.equ PF_PARENT_SLOT, 4048
+.equ PF_TASK_SLOT, 4056
+.equ PF_GLOBAL_BYTES, 4096
+.equ PF_TASK_BYTES, 4096
+.equ PF_STACK_BYTES, 262144
+.equ PF_G_HEAD, 16
+.equ PF_G_TAIL, 24
+.equ PF_G_CURRENT, 32
+.equ PF_G_COUNT, 40
+.equ PF_G_EXPIRED, 48
+.equ PF_G_SWITCH, 128
+.equ PF_G_POLL, 256
+.equ PF_T_ROOT, 8
+.equ PF_T_GLOBAL, 16
+.equ PF_T_NEXT, 24
+.equ PF_T_PREV, 32
+.equ PF_T_STATE, 40
+.equ PF_T_STACK, 48
+.equ PF_T_TOKEN, 56
+.equ PF_T_SWITCH, 64
+.macro pf_prologue
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 72
+.endm
+.macro pf_epilogue
+    add rsp, 72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.endm
+
+# SysV caller-saved registers never need preservation across this call.
+pf_switch:
+    mov [rdi], rbx
+    mov [rdi + 8], rbp
+    mov [rdi + 16], r12
+    mov [rdi + 24], r13
+    mov [rdi + 32], r14
+    mov [rdi + 40], r15
+    mov [rdi + 48], rsp
+    mov rax, rsi
+    mov rbx, [rax]
+    mov rbp, [rax + 8]
+    mov r12, [rax + 16]
+    mov r13, [rax + 24]
+    mov r14, [rax + 32]
+    mov r15, [rax + 40]
+    mov rsp, [rax + 48]
+    ret
+
+pf_global:
+    push rbx
+    mov rbx, rdi
+    cmp qword ptr [rbx + PF_PARENT_SLOT], 0
+    jne ap_contract
+    mov rax, [rbx + PF_GLOBAL_SLOT]
+    test rax, rax
+    jnz pf_global_existing
+    mov edi, PF_GLOBAL_BYTES
+    call tk_allocate_guarded
+    mov rdx, 0x313047544b445350
+    mov [rax], rdx
+    mov [rax + 8], rbx
+    mov [rbx + PF_GLOBAL_SLOT], rax
+pf_global_existing:
+    cmp [rax + 8], rbx
+    jne ap_contract
+    pop rbx
+    ret
+
+# Pending yields only the stack; child resources and the HIA token remain live.
+pf_suspend:
+    sub rsp, 8
+    mov rax, [r15 + PF_TASK_SLOT]
+    test rax, rax
+    jz ap_contract
+    cmp [rax + PF_T_ROOT], r15
+    jne ap_contract
+    cmp qword ptr [rax + PF_T_STATE], 1
+    jne ap_contract
+    mov rdx, [rax + PF_T_GLOBAL]
+    cmp [rdx + PF_G_CURRENT], rax
+    jne ap_contract
+    lea rdi, [rax + PF_T_SWITCH]
+    lea rsi, [rdx + PF_G_SWITCH]
+    call pf_switch
+    add rsp, 8
+    ret
+
+pf_task_entry:
+    mov rax, [r15 + PF_TASK_SLOT]
+    test rax, rax
+    jz ap_contract
+    cmp [rax + PF_T_ROOT], r15
+    jne ap_contract
+    cmp qword ptr [rax + PF_T_STATE], 1
+    jne ap_contract
+    jmp mcp_resume
+
+# Jump after output or real Future retirement; never free the current stack.
+pf_task_finished:
+    mov rax, [r15 + PF_TASK_SLOT]
+    test rax, rax
+    jz ap_contract
+    cmp [rax + PF_T_ROOT], r15
+    jne ap_contract
+    cmp qword ptr [rax + PF_T_STATE], 1
+    jne ap_contract
+    mov rdx, [rax + PF_T_GLOBAL]
+    cmp [rdx + PF_G_CURRENT], rax
+    jne ap_contract
+    mov qword ptr [rax + PF_T_STATE], 2
+    lea rdi, [rax + PF_T_SWITCH]
+    lea rsi, [rdx + PF_G_SWITCH]
+    call pf_switch
+    jmp ap_contract
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Canonical root with one transferred AP current node -> private native task.
+pf_create_task:
+    pf_prologue
+    mov r15, rdi
+    mov r12, [r15 + PF_GLOBAL_SLOT]
+    test r12, r12
+    jz ap_contract
+    mov rax, [r15 + AP_SLOT]
+    mov r13, [rax + 32]
+    test r13, r13
+    jz ap_contract
+    cmp qword ptr [r13 + 8], 0
+    jne ap_contract
+    mov edi, PF_TASK_BYTES
+    call tk_allocate_guarded
+    mov r14, rax
+    mov rdx, 0x313054544b445350
+    mov [r14], rdx
+    mov [r14 + PF_T_GLOBAL], r12
+    mov rdx, [r13 + 16]
+    mov [r14 + PF_T_TOKEN], rdx
+    mov qword ptr [r14 + PF_T_STATE], 1
+    mov edi, MAP_BYTES
+    call ex_allocate
+    mov rbp, rax
+    mov [r14 + PF_T_ROOT], rbp
+    mov [rbp + PF_GLOBAL_SLOT], r12
+    mov [rbp + PF_PARENT_SLOT], r15
+    mov [rbp + PF_TASK_SLOT], r14
+    mov rax, [r15 + 640]
+    mov [rbp + 640], rax
+    mov rax, [r15 + 648]
+    mov [rbp + 648], rax
+    lea rdi, [rbp + 704]
+    lea rsi, [r15 + 704]
+    mov ecx, 10
+    rep movsq
+    mov rax, [r15 + EX_CONFIG_IG]
+    mov [rbp + EX_CONFIG_IG], rax
+    mov rax, [r15 + EX_META_ADDRESS]
+    mov [rbp + EX_META_ADDRESS], rax
+    mov edi, EX_MAP_BYTES
+    call ex_allocate
+    mov [rbp + EX_CONTROL_SLOT], rax
+    mov rbx, rax
+    mov rdi, rax
+    mov rsi, [r15 + EX_CONTROL_SLOT]
+    test rsi, rsi
+    jz ap_contract
+    mov ecx, 7
+    rep movsq
+    mov [rbx], rbp
+    mov rsi, [r15 + EX_CONTROL_SLOT]
+    mov rax, [rsi + 176]
+    mov [rbx + 176], rax
+    mov rdi, rbp
+    call public_async_initialize
+    mov rax, [rbp + AP_SLOT]
+    mov [rax + 32], r13
+    mov rax, [r15 + AP_SLOT]
+    cmp [rax + 32], r13
+    jne ap_contract
+    mov qword ptr [rax + 32], 0
+    mov edi, ADMISSION
+    add rdi, rbp
+    lea rsi, [r13 + AP_NODE_HEADER]
+    mov rcx, [r13 + 24]
+    cmp rcx, 256
+    jb ap_contract
+    cmp rcx, ROOT_OUTPUT_CAP
+    ja ap_contract
+    mov [rbp + 904], rcx
+    mov rax, [rsi + 16]
+    cmp rax, 1
+    ja ap_contract
+    mov [rbp + 912], rax
+    rep movsb
+    mov edi, PF_STACK_BYTES
+    call tk_allocate_guarded
+    mov [r14 + PF_T_STACK], rax
+    mov rdi, rax
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rax, [r14 + PF_T_STACK]
+    add rax, PF_STACK_BYTES - 8
+    lea rdx, [rip + pf_task_entry]
+    mov [rax], rdx
+    mov [r14 + PF_T_SWITCH + 48], rax
+    mov [r14 + PF_T_SWITCH + 40], rbp
+    mov rax, [r12 + PF_G_TAIL]
+    mov [r14 + PF_T_PREV], rax
+    test rax, rax
+    jz pf_create_first
+    cmp qword ptr [rax + PF_T_NEXT], 0
+    jne ap_contract
+    mov [rax + PF_T_NEXT], r14
+    jmp pf_create_linked
+pf_create_first:
+    cmp qword ptr [r12 + PF_G_HEAD], 0
+    jne ap_contract
+    mov [r12 + PF_G_HEAD], r14
+pf_create_linked:
+    mov [r12 + PF_G_TAIL], r14
+    add qword ptr [r12 + PF_G_COUNT], 1
+    jc ap_contract
+    mov rax, r14
+    pf_epilogue
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Only the canonical scheduler stack retires a finished private task.
+pf_retire_task:
+    cmp qword ptr [rdi + PI_T_KIND], 1
+    je internal_task_retire
+    pf_prologue
+    mov r14, rdi
+    cmp qword ptr [r14 + PF_T_STATE], 2
+    jne ap_contract
+    mov r12, [r14 + PF_T_GLOBAL]
+    cmp qword ptr [r12 + PF_G_CURRENT], 0
+    jne ap_contract
+    mov r15, [r14 + PF_T_ROOT]
+    cmp [r15 + PF_TASK_SLOT], r14
+    jne ap_contract
+    mov r13, [r15 + PF_PARENT_SLOT]
+    cmp [r12 + 8], r13
+    jne ap_contract
+    mov rbx, [r15 + EX_CONTROL_SLOT]
+    cmp [rbx], r15
+    jne ap_contract
+    mov rax, [rbx + 128]
+    or rax, [rbx + 136]
+    or rax, [rbx + 184]
+    or rax, [r15]
+    jnz ap_contract
+    mov rdx, [r13 + EX_CONTROL_SLOT]
+    mov rax, [rbx + 8]
+    cmp [rdx + 8], rax
+    jne ap_contract
+    mov rax, [rbx + 16]
+    cmp [rdx + 16], rax
+    jne ap_contract
+    mov rdi, r15
+    call ps_destroy
+    mov rdi, r15
+    call pm_destroy
+    mov rdi, r15
+    call pr_destroy
+    call ph_cleanup
+    mov rdi, r15
+    call public_async_shutdown
+    mov qword ptr [r15 + EX_CONTROL_SLOT], 0
+    mov rdi, rbx
+    mov esi, EX_MAP_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rdi, r15
+    mov esi, MAP_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov r15, r13
+    mov rdi, [r14 + PF_T_STACK]
+    mov esi, PF_STACK_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rax, [r14 + PF_T_PREV]
+    mov rdx, [r14 + PF_T_NEXT]
+    test rax, rax
+    jz pf_retire_head
+    cmp [rax + PF_T_NEXT], r14
+    jne ap_contract
+    mov [rax + PF_T_NEXT], rdx
+    jmp pf_retire_next
+pf_retire_head:
+    cmp [r12 + PF_G_HEAD], r14
+    jne ap_contract
+    mov [r12 + PF_G_HEAD], rdx
+pf_retire_next:
+    test rdx, rdx
+    jz pf_retire_tail
+    cmp [rdx + PF_T_PREV], r14
+    jne ap_contract
+    mov [rdx + PF_T_PREV], rax
+    jmp pf_retire_count
+pf_retire_tail:
+    cmp [r12 + PF_G_TAIL], r14
+    jne ap_contract
+    mov [r12 + PF_G_TAIL], rax
+pf_retire_count:
+    sub qword ptr [r12 + PF_G_COUNT], 1
+    jc ap_contract
+    mov qword ptr [r14], 0
+    mov rdi, r14
+    mov esi, PF_TASK_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    xor eax, eax
+    pf_epilogue
+
+# Called only after every task stack has retired, before shared owner teardown.
+pf_destroy:
+    push rbx
+    mov rbx, rdi
+    cmp qword ptr [rbx + PF_PARENT_SLOT], 0
+    jne ap_contract
+    mov rdi, [rbx + PF_GLOBAL_SLOT]
+    test rdi, rdi
+    jz pf_destroy_done
+    mov rax, [rdi + PF_G_HEAD]
+    or rax, [rdi + PF_G_TAIL]
+    or rax, [rdi + PF_G_CURRENT]
+    or rax, [rdi + PF_G_COUNT]
+    or rax, [rdi + PI_G_COUNT]
+    or rax, [rdi + PI_G_UNSPAWNED]
+    jnz ap_contract
+    mov qword ptr [rbx + PF_GLOBAL_SLOT], 0
+    mov esi, PF_GLOBAL_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+pf_destroy_done:
+    xor eax, eax
+    pop rbx
+    ret
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# root, caller, fixed poll, fixed runtime Drop, optional wake descriptor.
+pf_await:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r15, rdi
+    mov rbx, [r15 + AP_SLOT]
+    test rbx, rbx
+    jz ap_contract
+    cmp [rbx + 8], r15
+    jne ap_contract
+    cmp qword ptr [rbx + 32], 0
+    je ap_contract
+    cmp qword ptr [rbx + 72], 0
+    jne ap_contract
+    test rsi, rsi
+    jz ap_contract
+    test rdx, rdx
+    jz ap_contract
+    test rcx, rcx
+    jz ap_contract
+    cmp r8, -1
+    je pf_await_fd_ready
+    cmp r8, 2147483647
+    ja ap_contract
+pf_await_fd_ready:
+    mov [rbx + 40], rsi
+    mov [rbx + 48], rdx
+    mov [rbx + 56], rcx
+    mov [rbx + 64], r8
+    mov qword ptr [rbx + 72], 1
+pf_await_poll:
+    mov rdi, [rbx + 40]
+    call qword ptr [rbx + 48]
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, 0xfffffff1
+    je pf_await_pending
+    cmp rax, ROOT_OUTPUT_CAP
+    ja ap_contract
+    mov [rbx + 88], rax
+    jmp pf_await_return
+pf_await_pending:
+    mov rax, [r15 + PF_GLOBAL_SLOT]
+    cmp qword ptr [rax + PF_G_EXPIRED], 0
+    jne pf_await_drop
+    call pf_suspend
+    jmp pf_await_poll
+pf_await_drop:
+    mov qword ptr [rbx + 80], 1
+    mov rdi, [rbx + 40]
+    call qword ptr [rbx + 56]
+    test rax, rax
+    jnz ap_contract
+    mov dword ptr [rbx + 88], 0xfffffff2
+    mov dword ptr [rbx + 92], 0
+pf_await_return:
+    mov qword ptr [rbx + 40], 0
+    mov qword ptr [rbx + 48], 0
+    mov qword ptr [rbx + 56], 0
+    mov qword ptr [rbx + 64], 0
+    mov qword ptr [rbx + 72], 0
+    mov rax, [rbx + 88]
+    mov qword ptr [rbx + 88], 0
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# Private Config queries borrow the one installed owner through the exact
+# shared IG reservation. Worker callbacks already enter that reservation.
+pf_config_query:
+    push r15
+    mov rax, [r15 + PF_PARENT_SLOT]
+    test rax, rax
+    jz pf_config_query_owned
+    mov r15, rax
+    cmp qword ptr [r15 + EX_CONFIG_IG], 0
+    je pf_config_query_owned
+    mov r8, rcx
+    mov rcx, rdx
+    mov rdx, rsi
+    mov rsi, rdi
+    mov rdi, [r15 + EX_CONFIG_IG]
+    call tk_intent_config_call
+    pop r15
+    ret
+pf_config_query_owned:
+    call pf_config_owned
+    pop r15
+    ret
+
+# The native DTO staging belongs to the same IG; its synchronous call never
+# yields. Preserve its original canonical-root identity check.
+pf_metadata_query:
+    push r15
+    mov rax, [r15 + PF_PARENT_SLOT]
+    test rax, rax
+    jz pf_metadata_query_owned
+    mov r15, rax
+pf_metadata_query_owned:
+    call pf_metadata_owned
+    pop r15
+    ret
+
+# The private MCP continuation still consumes the actual shared Config reply.
+pf_private_owner:
+    cmp qword ptr [r15 + 784], 1
+    je pf_private_owner_valid
+    cmp qword ptr [r15 + 784], 2
+    jne ap_contract
+pf_private_owner_valid:
+    mov rdi, [r15 + 832]
+    mov rsi, [r15 + 840]
+    mov rdx, [r15 + 848]
+    mov rcx, [r15 + 856]
+    call pf_config_query
+    jmp mcp_owner_completed
+
+# The HIA cancellation map is canonical, even though input/output custody is
+# private per request. This helper is used only immediately before HIA entry.
+pf_pool_workspace:
+    mov r8, [rbx + 8]
+    mov r8, [r8 + PF_PARENT_SLOT]
+    test r8, r8
+    jz pf_pool_workspace_local
+    mov r8, [r8 + AP_SLOT]
+    test r8, r8
+    jz ap_contract
+    add r8, AP_POOL
+    ret
+pf_pool_workspace_local:
+    lea r8, [rbx + AP_POOL]
+    ret
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# One complete round; callbacks execute on their own guarded continuations.
+pf_drive_round:
+    pf_prologue
+    mov r15, rdi
+    mov r12, [r15 + PF_GLOBAL_SLOT]
+    mov r13, [r12 + PF_G_HEAD]
+pf_round_next:
+    test r13, r13
+    jz pf_round_done
+    mov r14, [r13 + PF_T_NEXT]
+    cmp [r13 + PF_T_GLOBAL], r12
+    jne ap_contract
+    cmp qword ptr [r13 + PI_T_KIND], 1
+    jne pit_round_public
+    cmp qword ptr [r13 + PF_T_STATE], 0
+    je pf_round_advance
+    cmp qword ptr [r13 + PF_T_STATE], 3
+    je pf_round_retire
+pit_round_public:
+    cmp qword ptr [r13 + PF_T_STATE], 1
+    jne ap_contract
+    cmp qword ptr [r12 + PF_G_CURRENT], 0
+    jne ap_contract
+    mov [r12 + PF_G_CURRENT], r13
+    lea rdi, [r12 + PF_G_SWITCH]
+    lea rsi, [r13 + PF_T_SWITCH]
+    call pf_switch
+    cmp [r12 + PF_G_CURRENT], r13
+    jne ap_contract
+    mov qword ptr [r12 + PF_G_CURRENT], 0
+    cmp qword ptr [r13 + PF_T_STATE], 2
+    je pf_round_retire
+    cmp qword ptr [r13 + PF_T_STATE], 1
+    jne ap_contract
+    cmp qword ptr [r13 + PI_T_KIND], 1
+    jne pit_round_public_wait
+    mov rax, [r13 + PI_T_WAIT]
+    sub rax, 1
+    cmp rax, 1
+    ja ap_contract
+    jmp pf_round_advance
+pit_round_public_wait:
+    mov rax, [r13 + PF_T_ROOT]
+    mov rax, [rax + AP_SLOT]
+    cmp qword ptr [rax + 72], 1
+    jne ap_contract
+    jmp pf_round_advance
+pf_round_retire:
+    mov rdi, r13
+    call pf_retire_task
+pf_round_advance:
+    mov r13, r14
+    jmp pf_round_next
+pf_round_done:
+    xor eax, eax
+    pf_epilogue
+
+# The canonical input parser and HIA connection/pool owners are never copied.
+# This is a cooperative fixed poll loop, not a claim of Tokio scheduler identity.
+pf_loop:
+    mov rdi, r15
+    call pf_global
+pf_loop_again:
+    mov r12, [r15 + PF_GLOBAL_SLOT]
+    mov rdi, r15
+    call ap_deadline
+    cmp eax, 1
+    ja ap_contract
+    mov [r12 + PF_G_EXPIRED], rax
+    test eax, eax
+    jz pf_loop_drive
+    mov rdi, r15
+    call public_async_abandon
+pf_loop_drive:
+    mov rdi, r15
+    call pf_drive_round
+    mov rdi, r15
+    call public_async_next
+    test eax, eax
+    jz pf_loop_scan
+    cmp qword ptr [r12 + PF_G_EXPIRED], 0
+    jne ap_contract
+    mov rdi, r15
+    call pf_create_task
+    jmp pf_loop_again
+pf_loop_scan:
+    mov rbx, [r15 + AP_SLOT]
+    cmp qword ptr [rbx + 80], 0
+    jne pf_loop_eof
+    mov rdi, r15
+    call ap_scan_frame
+    cmp eax, 1
+    je pf_loop_line
+    cmp eax, 2
+    je pf_loop_input_eof
+    test eax, eax
+    jnz ap_contract
+    jmp pf_loop_wait
+pf_loop_line:
+    mov rdi, r15
+    call ap_parse_line
+    jmp pf_loop_again
+pf_loop_input_eof:
+    mov rdi, r15
+    call ap_parse_eof
+    jmp pf_loop_again
+pf_loop_eof:
+    mov rax, [r12 + PF_G_COUNT]
+    sub rax, [r12 + PI_G_COUNT]
+    jc ap_contract
+    test rax, rax
+    jnz pf_loop_wait
+    mov rdi, r15
+    call internal_task_drain
+    cmp qword ptr [r12 + PF_G_COUNT], 0
+    jne ap_contract
+    mov rax, [rbx + 16]
+    or rax, [rbx + 24]
+    or rax, [rbx + 32]
+    jnz ap_contract
+    jmp ex_shutdown
+pf_loop_wait:
+    mov eax, -1
+    cmp qword ptr [rbx + 80], 0
+    jne pf_loop_poll_fd
+    xor eax, eax
+pf_loop_poll_fd:
+    mov [r12 + PF_G_POLL], eax
+    mov dword ptr [r12 + PF_G_POLL + 4], 1
+    mov edx, -1
+    cmp qword ptr [r12 + PF_G_COUNT], 0
+    je pf_loop_poll
+    mov edx, 1
+pf_loop_poll:
+    lea rdi, [r12 + PF_G_POLL]
+    mov esi, 1
+    mov eax, 7
+    syscall
+    cmp rax, -4
+    je pf_loop_again
+    cmp rax, -4095
+    jae ap_contract
+    test word ptr [r12 + PF_G_POLL + 6], 32
+    jnz ap_contract
+    cmp qword ptr [rbx + 80], 0
+    jne pf_loop_again
+    test word ptr [r12 + PF_G_POLL + 6], 25
+    jz pf_loop_again
+    mov rdi, r15
+    call ap_read_available
+    jmp pf_loop_again
+
+# Output completion occurs on its private task stack. A transport-close flag
+# is forwarded to the one HIA EOF owner before this context retires.
+pf_written:
+    cmp qword ptr [r15 + 912], 0
+    je pf_written_done
+    mov rdi, [r15 + PF_PARENT_SLOT]
+    call public_async_eof
+pf_written_done:
+    jmp pf_task_finished
+
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Trusted internal journal invocation; no business policy or synthetic response.
+# Same plan/input/output ABI as async_child_call. HIA validates the entire frame.
+tk_producer_journal_call:
+    cmp rdx, tk_ASY_CALL_INPUT_CAP
+    ja tk_async_call_invalid
+    cmp r8, 65536
+    jb tk_async_call_capacity
+    tk_asy_prologue
+    mov [rsp], rcx
+    mov [rsp + 8], r8
+    mov r13, rdi
+    mov r14, rsi
+    mov rbx, rdx
+    call tk_async_call_create
+    mov r12, rax
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov rsi, r14
+    mov rcx, rbx
+    rep movsb
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov esi, tk_ASY_CALL_INPUT_CAP
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    mov rdi, r12
+    lea rsi, [r12 + tk_ASY_CALL_INPUT]
+    mov rdx, rbx
+    lea rcx, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    mov r8d, 65536
+    call tk_async_journal_call
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    mov [rsp + 16], rax
+    cmp rax, 65536
+    jbe tk_producer_journal_publish
+    cmp eax, 0xffffffff
+    je tk_producer_journal_retire
+    cmp eax, 0xfffffffe
+    je tk_producer_journal_retire
+    jmp tk_async_contract_failure
+tk_producer_journal_publish:
+    mov rcx, rax
+    mov rdi, [rsp]
+    lea rsi, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    rep movsb
+tk_producer_journal_retire:
+    mov rdi, r12
+    call tk_async_call_retire
+    mov rax, [rsp + 16]
+    tk_asy_epilogue
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed descriptor custody and the existing Registry mutex. Policy remains HIA.
+.equ tk_ASY_CALL_REGISTRY_HELD, 128
+.equ tk_ASY_G_LEASE_FD, 112
+.equ tk_ASY_G_LEASE_ROOT, 120
+.equ tk_ASY_G_LEASE_LENGTH, 128
+.equ tk_ASY_G_LEASE_BYTES, 136
+.equ tk_ASY_G_LEASE_RETIRED, 144
+
+tk_async_journal_lease:
+    cmp rdx, 64
+    jb tk_async_contract_failure
+    mov rdi, r12
+    call tk_async_lease_control
+    jmp tk_async_journal_ack
+
+# rdi private call, rsi HIA lease query, rdx bytes, rcx output, r8 capacity.
+# This boundary never compares paths, metadata, or business eligibility.
+tk_async_lease_control:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, [r12 + tk_ASY_PLAN_GLOBAL]
+    mov r15, rcx
+    mov rbx, rdx
+    cmp rbx, 64
+    jb tk_async_contract_failure
+    cmp r8, tk_ASY_JOURNAL_REPLY_CAP
+    jb tk_async_contract_failure
+    movabs rax, 0x3130514c53415248
+    cmp [r13], rax
+    jne tk_async_contract_failure
+    mov rbp, [r13 + 8]
+    mov rax, [r13 + 24]
+    cmp rax, 1048576
+    ja tk_async_contract_failure
+    add rax, 64
+    cmp rax, rbx
+    jne tk_async_contract_failure
+    mov rax, [r13 + 32]
+    or rax, [r13 + 40]
+    or rax, [r13 + 48]
+    or rax, [r13 + 56]
+    jnz tk_async_contract_failure
+    mov rdi, r15
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, 0x3130524c53415248
+    mov [r15], rax
+    cmp rbp, 2
+    je tk_async_lease_commit
+    mov rax, [r13 + 16]
+    or rax, [r13 + 24]
+    jnz tk_async_contract_failure
+    cmp rbp, 1
+    je tk_async_lease_snapshot
+    cmp rbp, 3
+    je tk_async_lease_unlock
+    jmp tk_async_contract_failure
+tk_async_lease_snapshot:
+    cmp qword ptr [r12 + tk_ASY_CALL_REGISTRY_HELD], 0
+    jne tk_async_contract_failure
+    lea rdi, [r14 + tk_ASY_G_REGISTRY_LOCK]
+    call tk_mutex_lock
+    mov qword ptr [r12 + tk_ASY_CALL_REGISTRY_HELD], 1
+    cmp qword ptr [r14 + tk_ASY_G_LEASE_FD], 0
+    je tk_async_lease_empty
+    cmp qword ptr [r14 + tk_ASY_G_LEASE_ROOT], 0
+    je tk_async_contract_failure
+    mov rbp, [r14 + tk_ASY_G_LEASE_LENGTH]
+    test rbp, rbp
+    jz tk_async_contract_failure
+    cmp rbp, 1048576
+    ja tk_async_contract_failure
+    lea rdi, [r12 + tk_ASY_CALL_IO]
+    cmp qword ptr [rdi + tk_AIO_BUSY], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [rdi + tk_AIO_LIVE], tk_AIO_FD_COUNT
+    jae tk_async_contract_failure
+    mov rsi, [r14 + tk_ASY_G_LEASE_FD]
+    dec rsi
+    # No dup syscall: a checked borrowed slot aliases the actual held File.
+    call tk_async_io_register
+    mov qword ptr [rdx + 16], 1
+    mov qword ptr [r15 + 16], 1
+    mov [r15 + 24], rax
+    mov [r15 + 32], rbp
+    lea rdi, [r15 + 64]
+    mov rsi, [r14 + tk_ASY_G_LEASE_ROOT]
+    mov rcx, rbp
+    rep movsb
+    lea rax, [rbp + 64]
+    tk_asy_epilogue
+tk_async_lease_commit:
+    cmp qword ptr [r12 + tk_ASY_CALL_REGISTRY_HELD], 1
+    jne tk_async_contract_failure
+    cmp qword ptr [r14 + tk_ASY_G_LEASE_FD], 0
+    jne tk_async_contract_failure
+    mov rbp, [r13 + 24]
+    test rbp, rbp
+    jz tk_async_contract_failure
+    lea rdi, [r12 + tk_ASY_CALL_IO]
+    mov rsi, [r13 + 16]
+    call tk_async_io_fd
+    cmp qword ptr [rdx + 16], 0
+    jne tk_async_contract_failure
+    lea rdi, [rbp + 4095]
+    and rdi, -4096
+    mov [rsp + 16], rdi
+    call tk_async_allocate
+    mov [rsp + 8], rax
+    mov rdi, rax
+    lea rsi, [r13 + 64]
+    mov rcx, rbp
+    rep movsb
+    mov rdi, [rsp + 8]
+    mov rsi, [rsp + 16]
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    lea rdi, [r12 + tk_ASY_CALL_IO]
+    mov rsi, [r13 + 16]
+    call tk_async_io_fd
+    cmp qword ptr [rdx + 16], 0
+    jne tk_async_contract_failure
+    mov qword ptr [rdx], 0
+    mov qword ptr [rdx + 8], 0
+    mov qword ptr [rdx + 16], 0
+    mov qword ptr [rdx + 24], 0
+    dec qword ptr [r12 + tk_ASY_CALL_IO + tk_AIO_LIVE]
+    js tk_async_contract_failure
+    inc rax
+    mov [r14 + tk_ASY_G_LEASE_FD], rax
+    mov rax, [rsp + 8]
+    mov [r14 + tk_ASY_G_LEASE_ROOT], rax
+    mov [r14 + tk_ASY_G_LEASE_LENGTH], rbp
+    mov rax, [rsp + 16]
+    mov [r14 + tk_ASY_G_LEASE_BYTES], rax
+    jmp tk_async_lease_empty
+tk_async_lease_unlock:
+    cmp qword ptr [r12 + tk_ASY_CALL_REGISTRY_HELD], 1
+    jne tk_async_contract_failure
+    mov qword ptr [r12 + tk_ASY_CALL_REGISTRY_HELD], 0
+    lea rdi, [r14 + tk_ASY_G_REGISTRY_LOCK]
+    call tk_mutex_unlock
+tk_async_lease_empty:
+    mov eax, 64
+    tk_asy_epilogue
+
+# Original REGISTRY is a OnceLock static without an explicit Drop.
+# After all calls drain and the service plan is retired, its sole lease FD and
+# immutable root allocation remain process-owned until the ordinary exit_group.
+# No premature flock unlock/close and no additional descriptor are introduced.
+tk_async_global_destroy_process_lease:
+    mov qword ptr [r12 + tk_ASY_G_LEASE_RETIRED], 1
+    tk_asy_epilogue
+
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# One owner borrows the existing ServiceRoot until native pool destruction.
+.equ pajp_AP_MAGIC, 0x3130544350415248
+.equ pajp_AP_ROLE_MAGIC, 0x3130524350415248
+.equ pajp_AP_SERVICE, 8
+.equ pajp_AP_POOL, 16
+.equ pajp_AP_STATE, 24
+.equ pajp_AP_CALLERS, 32
+.equ pajp_AP_CREATED, 40
+.equ pajp_AP_STARTED, 48
+.equ pajp_AP_COMPLETED, 56
+.equ pajp_AP_INPUT_DROPS, 64
+.equ pajp_AP_OUTPUT_DROPS, 72
+.equ pajp_AP_RETIRED, 80
+.equ pajp_AP_LIVE, 88
+.equ pajp_AP_ACTIVE, 96
+.equ pajp_AP_MAX_ACTIVE, 104
+.equ pajp_AP_ORDINAL, 112
+.equ pajp_AP_RECORDS, 120
+.equ pajp_AP_GUARD, 136
+.equ pajp_AP_SCRATCH, 512
+.equ pajp_AP_ROOT_SLOT, 24704
+.equ pajp_AP_OUTPUT_CAP, 65728
+.equ pajp_APR_NEXT, 8
+.equ pajp_APR_OWNER, 16
+.equ pajp_APR_TASK, 24
+.equ pajp_APR_CALLER, 32
+.equ pajp_APR_ROLE, 40
+.equ pajp_APR_SEQUENCE, 48
+.equ pajp_APR_ID, 56
+.equ pajp_APR_INPUT_DROP, 64
+.equ pajp_APR_OUTPUT_DROP, 72
+.equ pajp_APR_RETIRED, 80
+.equ pajp_APR_STARTED, 88
+.equ pajp_APR_COMPLETED, 96
+.equ pajp_APR_TID, 104
+.equ pajp_APR_CODE, 112
+.equ pajp_APR_LENGTH, 120
+.equ pajp_APR_INPUT_BYTES, 128
+.equ pajp_APR_START_ORDER, 136
+.equ pajp_APR_COMPLETE_ORDER, 144
+.equ pajp_APR_END, 152
+.equ pajp_AP_GUARD_BYTES, 1060864
+.equ pajp_AP_GUARD_STACK, 1056768
+
+.macro pajp_ap_enter
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+.endm
+.macro pajp_ap_leave
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+pajp_ap_check:
+    mov rax, pajp_AP_MAGIC
+    cmp [rdi], rax
+    jne tk_async_contract_failure
+    mov rax, [rdi + pajp_AP_SERVICE]
+    cmp [rax], rax
+    jne tk_async_contract_failure
+    ret
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+.intel_syntax noprefix
+.section .text
+.equ hbp_BP_MAGIC, 0x3130524750425248
+.equ hbp_BT_MAGIC, 0x3130544350425248
+.equ hbp_BW_MAGIC, 0x3130574350425248
+.equ hbp_B_REQ_MAGIC, 0x3130305150425248
+.equ hbp_B_ROOT, 4096
+.equ hbp_B_GATE, 8
+.equ hbp_B_COND, 16
+.equ hbp_B_EVENT, 24
+.equ hbp_B_WORK, 32
+.equ hbp_B_CAP, 40
+.equ hbp_B_TASKS, 48
+.equ hbp_B_WORKERS, 56
+.equ hbp_B_CALLER, 64
+.equ hbp_B_NEXTSEQ, 72
+.equ hbp_B_START_GATE, 80
+.equ hbp_B_TASK_COUNT, 88
+.equ hbp_B_WORKER_COUNT, 96
+.equ hbp_B_CREATED, 104
+.equ hbp_B_STARTED, 112
+.equ hbp_B_COMPLETED, 120
+.equ hbp_B_FUTURE_DROPS, 128
+.equ hbp_B_OUTPUT_DROPS, 136
+.equ hbp_B_JOINED, 144
+.equ hbp_B_GROWS, 152
+.equ hbp_B_LOG_GATE, 160
+.equ hbp_B_LOG, 168
+.equ hbp_B_LOG_CAP, 176
+.equ hbp_B_LOG_COUNT, 184
+.equ hbp_B_MAIN_REQ, 512
+.equ hbp_B_MAIN_REPLY, 640
+.equ hbp_B_EVENT_WORD, 848
+.equ hbp_T_ROOT, 24
+.equ hbp_T_ID, 32
+.equ hbp_T_CALLER, 40
+.equ hbp_T_ROLE, 48
+.equ hbp_T_SEQUENCE, 56
+.equ hbp_T_MANDATORY, 64
+.equ hbp_T_INPUT, 72
+.equ hbp_T_LENGTH, 80
+.equ hbp_T_OUTPUT, 96
+.equ hbp_T_OUTCAP, 104
+.equ hbp_T_GATE, 128
+.equ hbp_T_FUTURE_DEAD, 136
+.equ hbp_T_OUTPUT_DEAD, 144
+.equ hbp_T_OUTCOME, 152
+.equ hbp_T_RESULT_LEN, 160
+.equ hbp_T_REFS, 168
+.equ hbp_T_RETIRED, 176
+.equ hbp_T_RECEIVER, 184
+.equ hbp_T_VALUE, 192
+.equ hbp_T_MODE, 200
+.equ hbp_T_WORKER, 208
+.equ hbp_W_ROOT, 24
+.equ hbp_W_ID, 32
+.equ hbp_W_TID, 40
+.equ hbp_W_ACTUAL_TID, 48
+.equ hbp_W_CURRENT, 56
+.equ hbp_W_EXITING, 64
+.equ hbp_W_POLICY_GONE, 72
+.equ hbp_W_START, 80
+.equ hbp_W_REQUEST, 128
+.equ hbp_W_REPLY, 256
+.equ hbp_W_TIME, 448
+.equ hbp_W_COND_VALUE, 464
+.equ hbp_W_JOIN_PREVIOUS, 472
+.equ hbp_W_STACK_TOP, 1056768
+.equ hbp_W_MAP, 1060864
+.macro hbp_bp_enter
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+.endm
+.macro hbp_bp_leave
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+hbp_bp_map:
+    xor edi, edi
+    mov edx, 3
+    mov r10d, 34
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae hbp_bp_resource
+    ret
+hbp_bp_unmap:
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz hbp_bp_contract
+    ret
+hbp_bp_lock:
+    lea rdi, [r13 + hbp_B_GATE]
+    jmp hbp_bp_mutex_lock
+hbp_bp_unlock:
+    lea rdi, [r13 + hbp_B_GATE]
+    jmp hbp_bp_mutex_unlock
+hbp_bp_mutex_lock:
+    xor eax, eax
+    mov edx, 1
+    lock cmpxchg dword ptr [rdi], edx
+    jz hbp_bp_mutex_done
+hbp_bp_mutex_contended:
+    mov eax, 2
+    xchg eax, dword ptr [rdi]
+    test eax, eax
+    jz hbp_bp_mutex_done
+    mov edx, 2
+    mov esi, 128
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je hbp_bp_mutex_contended
+    cmp rax, -11
+    je hbp_bp_mutex_contended
+    test rax, rax
+    js hbp_bp_contract
+    jmp hbp_bp_mutex_contended
+hbp_bp_mutex_done:
+    ret
+hbp_bp_mutex_unlock:
+    xor eax, eax
+    xchg eax, dword ptr [rdi]
+    test eax, eax
+    jz hbp_bp_contract
+    cmp eax, 2
+    jne hbp_bp_mutex_done
+    mov edx, 1
+    jmp hbp_bp_wake
+hbp_bp_wake_all:
+    mov edx, 0x7fffffff
+hbp_bp_wake:
+    mov esi, 129
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    js hbp_bp_contract
+    ret
+hbp_bp_wait_nonzero:
+    cmp dword ptr [rdi], 0
+    jne hbp_bp_wait_done
+    mov esi, 128
+    xor edx, edx
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je hbp_bp_wait_nonzero
+    cmp rax, -11
+    je hbp_bp_wait_nonzero
+    test rax, rax
+    js hbp_bp_contract
+    jmp hbp_bp_wait_nonzero
+hbp_bp_wait_done:
+    mfence
+    ret
+# rdi is a real CHILD_CLEARTID address; use the shared kernel futex key.
+hbp_bp_join_tid:
+    mov edx, [rdi]
+    test edx, edx
+    jz hbp_bp_wait_done
+    xor esi, esi
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je hbp_bp_join_tid
+    cmp rax, -11
+    je hbp_bp_join_tid
+    test rax, rax
+    js hbp_bp_contract
+    jmp hbp_bp_join_tid
+
+# Call only under the short pool mutex. No pointer into WORK escapes this call.
+# rdi=request128, rsi=reply192. CAPACITY causes actual arena growth and retry.
+hbp_bp_policy:
+    push rbx
+    push r12
+    push r15
+    mov r12, rdi
+    mov r15, rsi
+hbp_bp_policy_retry:
+    mov rdi, r12
+    mov esi, 128
+    mov rdx, r15
+    mov ecx, 192
+    mov r8, [r13 + hbp_B_WORK]
+    mov r9, [r13 + hbp_B_CAP]
+    .byte 0xe8
+hbp_bp_policy_call_displacement:
+    .long paj_image_pool - . - 4
+    mov edx, eax
+    cmp rax, rdx
+    jne hbp_bp_contract
+    cmp eax, 192
+    je hbp_bp_policy_return
+    cmp eax, 0xfffffffe
+    jne hbp_bp_contract
+    mov rbx, [r13 + hbp_B_CAP]
+    lea rsi, [rbx + rbx]
+    cmp rsi, rbx
+    jbe hbp_bp_resource
+    call hbp_bp_map
+    push rax
+    mov rdi, rax
+    mov rsi, [r13 + hbp_B_WORK]
+    mov rcx, rbx
+    rep movsb
+    mov rdi, [r13 + hbp_B_WORK]
+    mov rsi, rbx
+    call hbp_bp_unmap
+    pop rax
+    mov [r13 + hbp_B_WORK], rax
+    add rbx, rbx
+    mov [r13 + hbp_B_CAP], rbx
+    add qword ptr [r13 + hbp_B_GROWS], 1
+    jmp hbp_bp_policy_retry
+hbp_bp_policy_return:
+    pop r15
+    pop r12
+    pop rbx
+    ret
+# rdi=request, rsi=op; initializes every request byte before filling fields.
+hbp_bp_request:
+    mov r10, rdi
+    mov r11, rsi
+    xor eax, eax
+    mov ecx, 16
+    rep stosq
+    mov rax, hbp_B_REQ_MAGIC
+    mov [r10], rax
+    mov [r10 + 8], r11
+    mov rdi, r10
+    ret
+hbp_bp_main_policy:
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    jmp hbp_bp_policy
+hbp_bp_worker_policy:
+    lea rdi, [r14 + hbp_W_REQUEST]
+    lea rsi, [r14 + hbp_W_REPLY]
+    jmp hbp_bp_policy
+
+# Actual lifecycle log. Independent short gate, no callback or pool operation
+# runs while it is held. rdi=kind,rsi=sequence,rdx=worker,rcx=A,r8=B,r9=C.
+hbp_bp_log:
+    hbp_bp_enter
+    sub rsp, 48
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    mov [rsp + 32], r8
+    mov [rsp + 40], r9
+    lea rdi, [r13 + hbp_B_LOG_GATE]
+    call hbp_bp_mutex_lock
+    mov rbx, [r13 + hbp_B_LOG_COUNT]
+    mov rax, rbx
+    shl rax, 6
+    cmp rax, [r13 + hbp_B_LOG_CAP]
+    jb hbp_bp_log_room
+    mov rsi, [r13 + hbp_B_LOG_CAP]
+    add rsi, rsi
+    call hbp_bp_map
+    mov r12, rax
+    mov rdi, rax
+    mov rsi, [r13 + hbp_B_LOG]
+    mov rcx, [r13 + hbp_B_LOG_CAP]
+    rep movsb
+    mov rdi, [r13 + hbp_B_LOG]
+    mov rsi, [r13 + hbp_B_LOG_CAP]
+    call hbp_bp_unmap
+    mov [r13 + hbp_B_LOG], r12
+    shl qword ptr [r13 + hbp_B_LOG_CAP], 1
+hbp_bp_log_room:
+    mov rax, rbx
+    shl rax, 6
+    add rax, [r13 + hbp_B_LOG]
+    inc rbx
+    mov [rax], rbx
+    mov [r13 + hbp_B_LOG_COUNT], rbx
+    mov rdi, rax
+    add rdi, 8
+    mov rsi, rsp
+    mov ecx, 6
+    rep movsq
+    mov r12, rdi
+    mov eax, 186
+    syscall
+    mov [r12], rax
+    lea rdi, [r13 + hbp_B_LOG_GATE]
+    call hbp_bp_mutex_unlock
+    add rsp, 48
+    hbp_bp_leave
+
+hbp_bp_notify:
+    mov qword ptr [r13 + hbp_B_EVENT_WORD], 1
+    mov rdi, [r13 + hbp_B_EVENT]
+    lea rsi, [r13 + hbp_B_EVENT_WORD]
+    mov edx, 8
+    mov eax, 1
+    syscall
+    cmp rax, -4
+    je hbp_bp_notify
+    cmp rax, -11
+    je hbp_bp_notify_done
+    cmp rax, 8
+    jne hbp_bp_contract
+hbp_bp_notify_done:
+    ret
+hbp_bp_resource:
+    mov edi, 74
+    jmp hbp_bp_fatal
+hbp_bp_contract:
+    mov edi, 71
+hbp_bp_fatal:
+    mov eax, 231
+    syscall
+    ud2
+
+.equ hbp_B_INPUT_MAX, 256
+
+.equ hbp_B_OUTPUT_MAX, 264
+
+.equ hbp_B_BACKEND, 272
+
+.equ hbp_B_CALLERS, 280
+
+.equ hbp_B_CALLER_COUNT, 288
+
+.equ hbp_B_CONFIG, 320
+
+.equ hbp_BC_MAGIC, 3544406863128973896
+
+.equ hbp_C_ID, 24
+
+.equ hbp_C_STATE, 32
+
+.equ hbp_C_ROOT, 40
+
+.equ hbp_C_TASKS, 48
+
+.equ hbp_C_SEQUENCE, 56
+
+.equ hbp_T_INPUT_MAP, 88
+
+.equ hbp_T_OUTPUT_MAP, 112
+
+.equ hbp_T_ROLE_CONTEXT, 216
+
+.equ hbp_T_CODE, 224
+
+.equ hbp_T_CALLER_NODE, 232
+
+.equ hbp_T_PUBLISHED, 248
+
+# SPDX-License-Identifier: Apache-2.0
+# All list operations require hbp_B_GATE. Native contexts are stable mappings;
+# pointers into the movable HIA arena are never retained here.
+# rsi=sequence -> rax=task, no borrowed pointer escapes without hbp_T_REFS.
+hbp_bp_find_sequence:
+    mov rax, [r13 + hbp_B_TASKS]
+    mov rcx, [r13 + hbp_B_TASK_COUNT]
+hbp_bp_find_sequence_next:
+    test rax, rax
+    jz hbp_bp_find_return
+    test rcx, rcx
+    jz hbp_bp_contract
+    dec rcx
+    mov rdx, hbp_BT_MAGIC
+    cmp [rax], rdx
+    jne hbp_bp_contract
+    cmp [rax + hbp_T_SEQUENCE], rsi
+    je hbp_bp_find_return
+    mov rax, [rax + 8]
+    jmp hbp_bp_find_sequence_next
+hbp_bp_find_id:
+    mov rax, [r13 + hbp_B_TASKS]
+    mov rcx, [r13 + hbp_B_TASK_COUNT]
+hbp_bp_find_id_next:
+    test rax, rax
+    jz hbp_bp_find_return
+    test rcx, rcx
+    jz hbp_bp_contract
+    dec rcx
+    cmp [rax + hbp_T_ID], rsi
+    je hbp_bp_find_return
+    mov rax, [rax + 8]
+    jmp hbp_bp_find_id_next
+hbp_bp_find_worker:
+    mov rax, [r13 + hbp_B_WORKERS]
+    mov rcx, [r13 + hbp_B_WORKER_COUNT]
+hbp_bp_find_worker_next:
+    test rax, rax
+    jz hbp_bp_find_return
+    test rcx, rcx
+    jz hbp_bp_contract
+    dec rcx
+    mov rdx, hbp_BW_MAGIC
+    cmp [rax], rdx
+    jne hbp_bp_contract
+    cmp [rax + hbp_W_ID], rsi
+    je hbp_bp_find_return
+    mov rax, [rax + 8]
+    jmp hbp_bp_find_worker_next
+hbp_bp_find_return:
+    ret
+
+# rbx=task, rdi=request. HIA full token includes private generation/caller/role/seq.
+hbp_bp_task_token:
+    mov rax, [rbx + hbp_T_ID]
+    mov [rdi + 16], rax
+    mov rax, [rbx + hbp_T_CALLER]
+    mov [rdi + 24], rax
+    mov rax, [rbx + hbp_T_ROLE]
+    mov [rdi + 32], rax
+    mov rax, [rbx + hbp_T_SEQUENCE]
+    mov [rdi + 40], rax
+    ret
+
+# The fixed fixture owns only private bytes. This destructor is real and is
+# invoked on every success/cancellation; it never enters the callback body.
+hbp_bp_future_drop:
+    push r12
+    xor eax, eax
+    mov edx, 1
+    lock cmpxchg qword ptr [rbx + hbp_T_FUTURE_DEAD], rdx
+    jne hbp_bp_contract
+    mov rdi, r13
+    mov rsi, rbx
+    call blocking_callback_input_drop
+    mov rdi, [rbx + hbp_T_INPUT]
+    test rdi, rdi
+    jz hbp_bp_contract
+    mov qword ptr [rbx + hbp_T_INPUT], 0
+    mov rsi, [rbx + hbp_T_INPUT_MAP]
+    mov qword ptr [rbx + hbp_T_INPUT_MAP], 0
+    call hbp_bp_unmap
+    lock add qword ptr [r13 + hbp_B_FUTURE_DROPS], 1
+    mov edi, 2
+    mov rsi, [rbx + hbp_T_SEQUENCE]
+    mov rdx, [rbx + hbp_T_WORKER]
+    xor ecx, ecx
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+    pop r12
+    ret
+# Caller or worker has a native context reference, independent of HIA receiver.
+hbp_bp_output_drop:
+    push r12
+    cmp qword ptr [rbx + hbp_T_OUTCOME], 1
+    jne hbp_bp_output_none
+    xor eax, eax
+    mov edx, 1
+    lock cmpxchg qword ptr [rbx + hbp_T_OUTPUT_DEAD], rdx
+    jne hbp_bp_output_none
+    mov rdi, r13
+    mov rsi, rbx
+    call blocking_callback_output_drop
+    lock add qword ptr [r13 + hbp_B_OUTPUT_DROPS], 1
+    mov edi, 3
+    mov rsi, [rbx + hbp_T_SEQUENCE]
+    mov rdx, [rbx + hbp_T_WORKER]
+    mov rcx, [rbx + hbp_T_VALUE]
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+hbp_bp_output_none:
+    pop r12
+    ret
+
+# Gate held; mark policy retirement using a caller-private request/reply pair.
+# rdi=request128,rsi=reply192,rbx=task. Context survives outstanding native pins.
+hbp_bp_retire_task:
+    push r12
+    push r15
+    sub rsp, 8
+    mov r12, rdi
+    mov r15, rsi
+    cmp qword ptr [rbx + hbp_T_RETIRED], 0
+    jne hbp_bp_contract
+    mov esi, 11
+    call hbp_bp_request
+    call hbp_bp_task_token
+    mov rsi, r15
+    call hbp_bp_policy
+    mov qword ptr [rbx + hbp_T_RETIRED], 1
+    add rsp, 8
+    pop r15
+    pop r12
+    ret
+# Gate held; one native pin released after all possible outside-gate readers.
+hbp_bp_unpin_task:
+    cmp qword ptr [rbx + hbp_T_REFS], 0
+    je hbp_bp_contract
+    sub qword ptr [rbx + hbp_T_REFS], 1
+hbp_bp_maybe_free_task:
+    cmp qword ptr [rbx + hbp_T_RETIRED], 1
+    jne hbp_bp_task_kept
+    cmp qword ptr [rbx + hbp_T_REFS], 0
+    jne hbp_bp_task_kept
+    push r12
+    cmp qword ptr [rbx + hbp_T_FUTURE_DEAD], 1
+    jne hbp_bp_contract
+    cmp qword ptr [rbx + hbp_T_INPUT], 0
+    jne hbp_bp_contract
+    cmp qword ptr [rbx + hbp_T_OUTCOME], 1
+    jne hbp_bp_free_output_ready
+    cmp qword ptr [rbx + hbp_T_OUTPUT_DEAD], 1
+    jne hbp_bp_contract
+hbp_bp_free_output_ready:
+    mov rax, [rbx + 8]
+    mov rdx, [rbx + 16]
+    test rdx, rdx
+    jz hbp_bp_free_task_head
+    mov [rdx + 8], rax
+    jmp hbp_bp_free_task_next
+hbp_bp_free_task_head:
+    cmp [r13 + hbp_B_TASKS], rbx
+    jne hbp_bp_contract
+    mov [r13 + hbp_B_TASKS], rax
+hbp_bp_free_task_next:
+    test rax, rax
+    jz hbp_bp_free_task_unlinked
+    mov [rax + 16], rdx
+hbp_bp_free_task_unlinked:
+    sub qword ptr [r13 + hbp_B_TASK_COUNT], 1
+    mov edi, 11
+    mov rsi, [rbx + hbp_T_SEQUENCE]
+    mov rdx, [rbx + hbp_T_WORKER]
+    xor ecx, ecx
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+    mov rdi, r13
+    mov rsi, rbx
+    call blocking_callback_retire
+    mov qword ptr [rbx + hbp_T_ROLE_CONTEXT], 0
+    mov rdi, [rbx + hbp_T_CALLER_NODE]
+    cmp qword ptr [rdi + hbp_C_TASKS], 0
+    je hbp_bp_contract
+    dec qword ptr [rdi + hbp_C_TASKS]
+    mov qword ptr [rbx + hbp_T_CALLER_NODE], 0
+    call hbp_bp_maybe_free_caller
+    mov rdi, [rbx + hbp_T_OUTPUT]
+    mov qword ptr [rbx + hbp_T_OUTPUT], 0
+    mov rsi, [rbx + hbp_T_OUTPUT_MAP]
+    mov qword ptr [rbx + hbp_T_OUTPUT_MAP], 0
+    call hbp_bp_unmap
+    mov rdi, rbx
+    mov esi, 4096
+    call hbp_bp_unmap
+    xor ebx, ebx
+    pop r12
+hbp_bp_task_kept:
+    ret
+
+hbp_bp_callback:
+    push r12
+    lock add qword ptr [r13 + hbp_B_STARTED], 1
+    mov edi, 1
+    mov rsi, [rbx + hbp_T_SEQUENCE]
+    mov rdx, [r14 + hbp_W_ID]
+    mov rcx, [rbx + hbp_T_MODE]
+    mov r8, [rbx + hbp_T_VALUE]
+    mov r9, [rbx + hbp_T_CALLER]
+    call hbp_bp_log
+    mov rdi, r13
+    mov rsi, rbx
+    call blocking_callback_run
+    mov rax, [rbx + hbp_T_RESULT_LEN]
+    cmp rax, [rbx + hbp_T_OUTCAP]
+    ja hbp_bp_contract
+    cmp qword ptr [rbx + hbp_T_OUTCOME], 1
+    je hbp_bp_callback_valid
+    cmp qword ptr [rbx + hbp_T_OUTCOME], 3
+    jne hbp_bp_contract
+    or rax, [rbx + hbp_T_CODE]
+    jnz hbp_bp_contract
+hbp_bp_callback_valid:
+    mov rax, [rbx + hbp_T_CODE]
+    mov edx, eax
+    cmp rax, rdx
+    jne hbp_bp_contract
+    call hbp_bp_future_drop
+    pop r12
+    ret
+hbp_bp_cancel_callback:
+    push r12
+    mov qword ptr [rbx + hbp_T_OUTCOME], 2
+    mov qword ptr [rbx + hbp_T_RESULT_LEN], 0
+    call hbp_bp_future_drop
+    pop r12
+    ret
+
+# SPDX-License-Identifier: Apache-2.0
+# rdi=cap,rsi=keepalive ns,rdx=qualification on-thread-start gate0/1.
+blocking_pool_create:
+    hbp_bp_enter
+    mov rbx, rdi
+    mov r12, rsi
+    mov rax, 0x3130464350425248
+    cmp [rbx], rax
+    jne hbp_bp_contract
+    mov rax, [rbx + 40]
+    or rax, [rbx + 48]
+    or rax, [rbx + 56]
+    jnz hbp_bp_contract
+    mov eax, 0xffffff3f
+    cmp [rbx + 32], rax
+    ja hbp_bp_contract
+    xor r15d, r15d
+    mov esi, hbp_B_ROOT
+    call hbp_bp_map
+    mov r13, rax
+    mov rdx, hbp_BP_MAGIC
+    mov [r13], rdx
+    mov [r13 + hbp_B_START_GATE], r15
+    mov [r13 + hbp_B_BACKEND], r12
+    mov rax, [rbx + 24]
+    mov [r13 + hbp_B_INPUT_MAX], rax
+    mov rax, [rbx + 32]
+    mov [r13 + hbp_B_OUTPUT_MAX], rax
+    lea rdi, [r13 + hbp_B_CONFIG]
+    mov rsi, rbx
+    mov ecx, 8
+    rep movsq
+    mov qword ptr [r13 + hbp_B_EVENT], -1
+    mov esi, 8192
+    call hbp_bp_map
+    mov [r13 + hbp_B_WORK], rax
+    mov qword ptr [r13 + hbp_B_CAP], 8192
+    mov esi, 4096
+    call hbp_bp_map
+    mov [r13 + hbp_B_LOG], rax
+    mov qword ptr [r13 + hbp_B_LOG_CAP], 4096
+    xor edi, edi
+    mov esi, 0x80800
+    mov eax, 290
+    syscall
+    test rax, rax
+    js hbp_bp_resource
+    mov [r13 + hbp_B_EVENT], rax
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 1
+    call hbp_bp_request
+    mov rax, [rbx + 8]
+    mov [rdi + 48], rax
+    mov rax, [rbx + 16]
+    mov [rdi + 56], rax
+    mov rax, [rbx + 24]
+    mov [rdi + 64], rax
+    mov rax, [rbx + 32]
+    mov [rdi + 72], rax
+    call hbp_bp_main_policy
+    mov rax, r13
+    hbp_bp_leave
+
+hbp_bp_shutdown:
+    hbp_bp_enter
+    mov r13, rdi
+    mov r15, rsi
+    call hbp_bp_lock
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 10
+    call hbp_bp_request
+    call hbp_bp_main_policy
+    mov rdi, r15
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    mov ecx, 24
+    rep movsq
+    add dword ptr [r13 + hbp_B_COND], 1
+    lea rdi, [r13 + hbp_B_COND]
+    call hbp_bp_wake_all
+    call hbp_bp_unlock
+    mov eax, 192
+    hbp_bp_leave
+
+hbp_bp_release_starters:
+    hbp_bp_enter
+    mov r13, rdi
+    call hbp_bp_lock
+    mov r12, [r13 + hbp_B_WORKERS]
+hbp_bp_release_starter_loop:
+    test r12, r12
+    jz hbp_bp_release_starter_done
+    mov dword ptr [r12 + hbp_W_START], 1
+    lea rdi, [r12 + hbp_W_START]
+    call hbp_bp_wake_all
+    mov r12, [r12 + 8]
+    jmp hbp_bp_release_starter_loop
+hbp_bp_release_starter_done:
+    mov qword ptr [r13 + hbp_B_START_GATE], 0
+    call hbp_bp_unlock
+    xor eax, eax
+    hbp_bp_leave
+
+hbp_bp_release:
+    hbp_bp_enter
+    mov r13, rdi
+    mov r12, rsi
+    call hbp_bp_lock
+    mov rsi, r12
+    call hbp_bp_find_sequence
+    test rax, rax
+    jz hbp_bp_contract
+    mov rbx, rax
+    cmp qword ptr [rbx + hbp_T_MODE], 1
+    jne hbp_bp_contract
+    mov dword ptr [rbx + hbp_T_GATE], 1
+    lea rdi, [rbx + hbp_T_GATE]
+    call hbp_bp_wake_all
+    call hbp_bp_unlock
+    xor eax, eax
+    hbp_bp_leave
+
+# RDI pool, RSI metadata40, RDX input, RCX bytes, R8 reply192.
+blocking_pool_submit:
+    hbp_bp_enter
+    sub rsp, 32
+    mov r13, rdi
+    mov r12, rsi
+    mov r15, r8
+    mov [rsp], rdx
+    mov [rsp + 8], rcx
+    mov rax, hbp_BP_MAGIC
+    cmp [r13], rax
+    jne hbp_bp_contract
+    cmp rcx, [r13 + hbp_B_INPUT_MAX]
+    ja hbp_bp_submit_invalid
+    mov rax, [r12 + 32]
+    cmp rax, [r13 + hbp_B_OUTPUT_MAX]
+    ja hbp_bp_submit_invalid
+    cmp qword ptr [r12 + 16], 0
+    je hbp_bp_submit_invalid
+    cmp qword ptr [r12 + 24], 1
+    ja hbp_bp_submit_invalid
+    mov rdi, [r12 + 8]
+    mov rsi, [rsp]
+    mov rdx, [rsp + 8]
+    mov rcx, [r12 + 32]
+    mov r8, [r13 + hbp_B_BACKEND]
+    mov r9, [r12 + 16]
+    call blocking_callback_validate
+    test eax, eax
+    jnz hbp_bp_submit_invalid
+    call hbp_bp_lock
+    mov rsi, [r12]
+    call hbp_bp_find_caller
+    test rax, rax
+    jz hbp_bp_submit_invalid_locked
+    cmp qword ptr [rax + hbp_C_STATE], 1
+    jne hbp_bp_submit_invalid_locked
+    mov rdx, [r12 + 16]
+    cmp rdx, [rax + hbp_C_SEQUENCE]
+    jbe hbp_bp_submit_invalid_locked
+    mov [rsp + 16], rax
+    call hbp_bp_unlock
+    mov esi, 4096
+    call hbp_bp_map
+    mov rbx, rax
+    mov rax, hbp_BT_MAGIC
+    mov [rbx], rax
+    mov [rbx + hbp_T_ROOT], r13
+    mov qword ptr [rbx + hbp_T_REFS], 1
+    mov rax, [r12]
+    mov [rbx + hbp_T_CALLER], rax
+    mov rax, [r12 + 8]
+    mov [rbx + hbp_T_ROLE], rax
+    mov rax, [r12 + 16]
+    mov [rbx + hbp_T_SEQUENCE], rax
+    mov rax, [r12 + 24]
+    mov [rbx + hbp_T_MANDATORY], rax
+    mov rax, [r12 + 32]
+    mov [rbx + hbp_T_OUTCAP], rax
+    mov rax, [rsp + 8]
+    mov [rbx + hbp_T_LENGTH], rax
+    lea rsi, [rax + 4095]
+    and rsi, -4096
+    mov eax, 4096
+    test rsi, rsi
+    cmovz rsi, rax
+    mov [rbx + hbp_T_INPUT_MAP], rsi
+    call hbp_bp_map
+    mov [rbx + hbp_T_INPUT], rax
+    mov rdi, rax
+    mov rsi, [rsp]
+    mov rcx, [rsp + 8]
+    rep movsb
+    mov rdi, [rbx + hbp_T_INPUT]
+    mov rsi, [rbx + hbp_T_INPUT_MAP]
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+    mov rsi, [rbx + hbp_T_OUTCAP]
+    add rsi, 4095
+    and rsi, -4096
+    mov eax, 4096
+    test rsi, rsi
+    cmovz rsi, rax
+    mov [rbx + hbp_T_OUTPUT_MAP], rsi
+    call hbp_bp_map
+    mov [rbx + hbp_T_OUTPUT], rax
+    mov rdi, r13
+    mov rsi, rbx
+    call blocking_callback_create
+    mov [rbx + hbp_T_ROLE_CONTEXT], rax
+    call hbp_bp_lock
+    mov rax, [rsp + 16]
+    cmp qword ptr [rax + hbp_C_STATE], 1
+    jne hbp_bp_contract
+    mov [rbx + hbp_T_CALLER_NODE], rax
+    inc qword ptr [rax + hbp_C_TASKS]
+    mov rdx, [rbx + hbp_T_SEQUENCE]
+    mov [rax + hbp_C_SEQUENCE], rdx
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 2
+    call hbp_bp_request
+    mov rax, [rbx + hbp_T_ROLE]
+    mov [rdi + 32], rax
+    mov rax, [rbx + hbp_T_MANDATORY]
+    mov [rdi + 40], rax
+    mov rax, [rbx + hbp_T_CALLER]
+    mov [rdi + 48], rax
+    mov rax, [rbx + hbp_T_SEQUENCE]
+    mov [rdi + 56], rax
+    mov rax, [rbx + hbp_T_LENGTH]
+    mov [rdi + 64], rax
+    mov rax, [rbx + hbp_T_OUTCAP]
+    mov [rdi + 72], rax
+    call hbp_bp_main_policy
+    mov rax, [r13 + hbp_B_MAIN_REPLY + 24]
+    test rax, rax
+    jz hbp_bp_contract
+    mov [rbx + hbp_T_ID], rax
+    mov rax, [r13 + hbp_B_MAIN_REPLY + 96]
+    mov [rbx + hbp_T_RECEIVER], rax
+    mov rax, [r13 + hbp_B_TASKS]
+    mov [rbx + 8], rax
+    test rax, rax
+    jz hbp_bp_submit_link
+    mov [rax + 16], rbx
+hbp_bp_submit_link:
+    mov [r13 + hbp_B_TASKS], rbx
+    add qword ptr [r13 + hbp_B_TASK_COUNT], 1
+    mov edi, 10
+    mov rsi, [rbx + hbp_T_SEQUENCE]
+    xor edx, edx
+    mov rcx, [rbx + hbp_T_ID]
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+    mov rax, [r13 + hbp_B_MAIN_REPLY + 16]
+    cmp rax, 1
+    je hbp_bp_submit_spawn
+    cmp rax, 2
+    je hbp_bp_submit_notify
+    cmp rax, 5
+    je hbp_bp_submit_cancel
+    test rax, rax
+    jnz hbp_bp_contract
+    jmp hbp_bp_submit_copy
+hbp_bp_submit_spawn:
+    call hbp_bp_spawn
+    mov rax, [r13 + hbp_B_MAIN_REPLY + 96]
+    mov [rbx + hbp_T_RECEIVER], rax
+    jmp hbp_bp_submit_copy
+hbp_bp_submit_notify:
+    add dword ptr [r13 + hbp_B_COND], 1
+    lea rdi, [r13 + hbp_B_COND]
+    mov edx, 1
+    call hbp_bp_wake
+    jmp hbp_bp_submit_copy
+hbp_bp_submit_cancel:
+    # This exact cancellation occurs under the original shared pool mutex.
+    mov rdi, r15
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    mov ecx, 24
+    rep movsq
+    mov r12, [r13 + hbp_B_MAIN_REPLY + 168]
+    call hbp_bp_cancel_callback
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 5
+    call hbp_bp_request
+    mov rax, [rbx + hbp_T_ID]
+    mov [rdi + 16], rax
+    mov rax, [rbx + hbp_T_ROLE]
+    mov [rdi + 32], rax
+    mov rax, [rbx + hbp_T_SEQUENCE]
+    mov [rdi + 40], rax
+    mov qword ptr [rdi + 48], 2
+    mov rax, [rbx + hbp_T_CALLER]
+    mov [rdi + 72], rax
+    mov [rdi + 80], r12
+    call hbp_bp_main_policy
+    mov qword ptr [rbx + hbp_T_PUBLISHED], 1
+    lock add qword ptr [r13 + hbp_B_COMPLETED], 1
+    call hbp_bp_notify
+    cmp qword ptr [r13 + hbp_B_MAIN_REPLY + 8], 4
+    jne hbp_bp_submit_release
+    mov qword ptr [rbx + hbp_T_RECEIVER], 2
+    mov rdi, r15
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    mov ecx, 24
+    rep movsq
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    call hbp_bp_retire_task
+    jmp hbp_bp_submit_release
+hbp_bp_submit_copy:
+    mov rdi, r15
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    mov ecx, 24
+    rep movsq
+hbp_bp_submit_release:
+    call hbp_bp_unpin_task
+    call hbp_bp_unlock
+    mov eax, 192
+    add rsp, 32
+    hbp_bp_leave
+
+hbp_bp_submit_invalid_locked:
+    call hbp_bp_unlock
+hbp_bp_submit_invalid:
+    mov eax, 0xffffffff
+    add rsp, 32
+    hbp_bp_leave
+
+# hbp_B_GATE remains held across real clone and the exact HIA completion receipt.
+hbp_bp_spawn:
+    push r12
+    push r14
+    sub rsp, 24
+    mov rax, [r13 + hbp_B_MAIN_REPLY + 32]
+    mov [rsp], rax
+    mov rax, [r13 + hbp_B_MAIN_REPLY + 168]
+    mov [rsp + 8], rax
+    mov esi, hbp_W_MAP
+    call hbp_bp_map
+    mov r14, rax
+    mov rdx, hbp_BW_MAGIC
+    mov [r14], rdx
+    mov [r14 + hbp_W_ROOT], r13
+    mov rax, [rsp]
+    mov [r14 + hbp_W_ID], rax
+    mov rax, [r13 + hbp_B_START_GATE]
+    xor eax, 1
+    mov [r14 + hbp_W_START], rax
+    call hbp_bp_fixture_allocate_alt
+    lea rdi, [r14 + 4096]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+    lea rdi, [r14 + hbp_W_STACK_TOP]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+    lea rsi, [r14 + hbp_W_STACK_TOP - 16]
+    mov [rsi], r14
+    mov edi, 0x350f00
+    lea rdx, [r14 + hbp_W_TID]
+    mov r10, rdx
+    xor r8d, r8d
+    mov eax, 56
+    syscall
+    test rax, rax
+    jz hbp_bp_child
+    cmp rax, -4095
+    jae hbp_bp_spawn_failed
+    mov [r14 + hbp_W_ACTUAL_TID], rax
+    mov r12, rax
+    mov rax, [r13 + hbp_B_WORKERS]
+    mov [r14 + 8], rax
+    test rax, rax
+    jz hbp_bp_spawn_link
+    mov [rax + 16], r14
+hbp_bp_spawn_link:
+    mov [r13 + hbp_B_WORKERS], r14
+    add qword ptr [r13 + hbp_B_WORKER_COUNT], 1
+    add qword ptr [r13 + hbp_B_CREATED], 1
+    xor r14d, r14d
+    jmp hbp_bp_spawn_receipt
+hbp_bp_spawn_failed:
+    neg rax
+    mov r12, rax
+    push rbx
+    mov rbx, r14
+    call hbp_bp_fixture_free_alt
+    pop rbx
+    mov rdi, r14
+    mov esi, hbp_W_MAP
+    call hbp_bp_unmap
+    mov r14, r12
+    xor r12d, r12d
+hbp_bp_spawn_receipt:
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 3
+    call hbp_bp_request
+    mov rax, [rbx + hbp_T_ID]
+    mov [rdi + 16], rax
+    mov rax, [rsp]
+    mov [rdi + 24], rax
+    mov [rdi + 48], r14
+    mov [rdi + 56], r12
+    mov rax, [rsp + 8]
+    mov [rdi + 64], rax
+    call hbp_bp_main_policy
+    mov edi, 8
+    mov rsi, [rbx + hbp_T_SEQUENCE]
+    mov rdx, [rsp]
+    mov rcx, r14
+    mov r8, r12
+    xor r9d, r9d
+    call hbp_bp_log
+    add rsp, 24
+    pop r14
+    pop r12
+    ret
+
+# SPDX-License-Identifier: Apache-2.0
+# rdi=pool,rsi=sequence,edx=HIA receiver op6..9,rcx=reply200.
+# This qualification facade resolves sequence to a private full HIA token.
+blocking_pool_event:
+    hbp_bp_enter
+    sub rsp, 16
+    mov r13, rdi
+    mov r12, rsi
+    mov r14d, edx
+    mov r15, rcx
+    mov [rsp], r8
+    cmp r8, 192
+    jb hbp_bp_event_capacity
+    cmp r14d, 6
+    jb hbp_bp_event_invalid
+    cmp r14d, 9
+    ja hbp_bp_event_invalid
+    call hbp_bp_lock
+    mov rsi, [r12]
+    call hbp_bp_find_id
+    test rax, rax
+    jz hbp_bp_event_invalid_locked
+    mov rbx, rax
+    cmp qword ptr [rbx + hbp_T_RETIRED], 0
+    jne hbp_bp_event_invalid_locked
+    cmp qword ptr [rbx + hbp_T_RECEIVER], 1
+    jne hbp_bp_event_invalid_locked
+    mov rax, [r12 + 8]
+    cmp [rbx + hbp_T_CALLER], rax
+    jne hbp_bp_event_invalid_locked
+    mov rax, [r12 + 16]
+    cmp [rbx + hbp_T_ROLE], rax
+    jne hbp_bp_event_invalid_locked
+    mov rax, [r12 + 24]
+    cmp [rbx + hbp_T_SEQUENCE], rax
+    jne hbp_bp_event_invalid_locked
+    cmp r14d, 9
+    jne hbp_bp_event_span_ready
+    cmp qword ptr [rbx + hbp_T_PUBLISHED], 1
+    jne hbp_bp_event_span_ready
+    mov rax, [rbx + hbp_T_RESULT_LEN]
+    add rax, 192
+    cmp [rsp], rax
+    jb hbp_bp_event_capacity_locked
+hbp_bp_event_span_ready:
+    add qword ptr [rbx + hbp_T_REFS], 1
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov rsi, r14
+    call hbp_bp_request
+    call hbp_bp_task_token
+    cmp r14, 9
+    jne hbp_bp_event_ready
+    mov rax, [rsp]
+    mov [rdi + 48], rax
+hbp_bp_event_ready:
+    call hbp_bp_main_policy
+    mov rax, [r13 + hbp_B_MAIN_REPLY + 96]
+    mov [rbx + hbp_T_RECEIVER], rax
+    mov rdi, r15
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    mov ecx, 24
+    rep movsq
+    mov r12d, 192
+    cmp qword ptr [r15 + 16], 12
+    jne hbp_bp_event_no_copy
+    mov rcx, [r15 + 80]
+    cmp rcx, [rbx + hbp_T_OUTCAP]
+    ja hbp_bp_contract
+    add r12, rcx
+    mov rsi, [rbx + hbp_T_OUTPUT]
+    lea rdi, [r15 + 192]
+    rep movsb
+hbp_bp_event_no_copy:
+    cmp qword ptr [r15 + 88], 5
+    jne hbp_bp_event_not_retired
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    call hbp_bp_retire_task
+hbp_bp_event_not_retired:
+    call hbp_bp_unlock
+    cmp r14, 6
+    je hbp_bp_event_detached
+    cmp r14, 9
+    jne hbp_bp_event_after_drop
+    cmp qword ptr [r15 + 16], 12
+    jne hbp_bp_event_after_drop
+    call hbp_bp_output_drop
+    jmp hbp_bp_event_after_drop
+hbp_bp_event_detached:
+    cmp qword ptr [r15 + 88], 4
+    jb hbp_bp_event_after_drop
+    call hbp_bp_output_drop
+hbp_bp_event_after_drop:
+    call hbp_bp_lock
+    call hbp_bp_unpin_task
+    call hbp_bp_unlock
+    mov rax, r12
+    add rsp, 16
+    hbp_bp_leave
+
+hbp_bp_event_invalid_locked:
+    call hbp_bp_unlock
+hbp_bp_event_invalid:
+    mov eax, 0xffffffff
+    add rsp, 16
+    hbp_bp_leave
+hbp_bp_event_capacity_locked:
+    call hbp_bp_unlock
+hbp_bp_event_capacity:
+    mov eax, 0xfffffffe
+    add rsp, 16
+    hbp_bp_leave
+
+hbp_bp_inspect:
+    hbp_bp_enter
+    mov r13, rdi
+    mov r15, rsi
+    call hbp_bp_lock
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 13
+    call hbp_bp_request
+    call hbp_bp_main_policy
+    mov rdi, r15
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    mov ecx, 24
+    rep movsq
+    call hbp_bp_unlock
+    mov eax, 192
+    hbp_bp_leave
+
+# rdi=pool,rsi=zero-based event offset,rdx=count<=1024,rcx=output.
+hbp_bp_read_log:
+    hbp_bp_enter
+    mov r13, rdi
+    mov r12, rsi
+    mov r14, rdx
+    mov r15, rcx
+    cmp r14, 1024
+    ja hbp_bp_contract
+    lea rdi, [r13 + hbp_B_LOG_GATE]
+    call hbp_bp_mutex_lock
+    mov rbx, [r13 + hbp_B_LOG_COUNT]
+    cmp r12, rbx
+    ja hbp_bp_contract
+    sub rbx, r12
+    cmp r14, rbx
+    cmova r14, rbx
+    mov rsi, r12
+    shl rsi, 6
+    add rsi, [r13 + hbp_B_LOG]
+    mov rdi, r15
+    mov rcx, r14
+    shl rcx, 6
+    rep movsb
+    lea rdi, [r13 + hbp_B_LOG_GATE]
+    call hbp_bp_mutex_unlock
+    mov rax, r14
+    shl rax, 6
+    hbp_bp_leave
+
+# SPDX-License-Identifier: Apache-2.0
+hbp_bp_child:
+    mov r14, [rsp]
+    and rsp, -16
+    mov r13, [r14 + hbp_W_ROOT]
+    call hbp_bp_fixture_worker_signals
+    mov edi, 4
+    xor esi, esi
+    mov rdx, [r14 + hbp_W_ID]
+    xor ecx, ecx
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+    lea rdi, [r14 + hbp_W_START]
+    call hbp_bp_wait_nonzero
+    mov r12d, 1
+    xor r15d, r15d
+    call hbp_bp_lock
+hbp_bp_worker_step:
+    lea rdi, [r14 + hbp_W_REQUEST]
+    mov esi, 4
+    call hbp_bp_request
+    mov rax, [r14 + hbp_W_ID]
+    mov [rdi + 24], rax
+    mov [rdi + 48], r12
+    mov [rdi + 56], r15
+    call hbp_bp_worker_policy
+    mov rbx, [r14 + hbp_W_CURRENT]
+    test rbx, rbx
+    jz hbp_bp_worker_dispatch
+    mov qword ptr [r14 + hbp_W_CURRENT], 0
+    cmp qword ptr [r14 + hbp_W_REPLY + 16], 10
+    jne hbp_bp_worker_unpin_previous
+    mov rax, [rbx + hbp_T_ID]
+    cmp [r14 + hbp_W_REPLY + 24], rax
+    jne hbp_bp_contract
+    lea rdi, [r14 + hbp_W_REQUEST]
+    lea rsi, [r14 + hbp_W_REPLY]
+    call hbp_bp_retire_task
+    call hbp_bp_unpin_task
+    mov r12d, 1
+    xor r15d, r15d
+    jmp hbp_bp_worker_step
+hbp_bp_worker_unpin_previous:
+    call hbp_bp_unpin_task
+hbp_bp_worker_dispatch:
+    mov rax, [r14 + hbp_W_REPLY + 16]
+    cmp rax, 3
+    je hbp_bp_worker_wait
+    cmp rax, 6
+    je hbp_bp_worker_exit
+    cmp rax, 4
+    je hbp_bp_worker_claim
+    cmp rax, 5
+    jne hbp_bp_contract
+hbp_bp_worker_claim:
+    mov r12, rax
+    mov rsi, [r14 + hbp_W_REPLY + 24]
+    call hbp_bp_find_id
+    test rax, rax
+    jz hbp_bp_contract
+    mov rbx, rax
+    cmp qword ptr [rbx + hbp_T_RETIRED], 0
+    jne hbp_bp_contract
+    add qword ptr [rbx + hbp_T_REFS], 1
+    mov [r14 + hbp_W_CURRENT], rbx
+    mov rax, [r14 + hbp_W_ID]
+    mov [rbx + hbp_T_WORKER], rax
+    call hbp_bp_unlock
+    cmp r12, 5
+    je hbp_bp_worker_cancel
+    call hbp_bp_callback
+    jmp hbp_bp_worker_completed
+hbp_bp_worker_cancel:
+    call hbp_bp_cancel_callback
+hbp_bp_worker_completed:
+    call hbp_bp_lock
+    lea rdi, [r14 + hbp_W_REQUEST]
+    mov esi, 5
+    call hbp_bp_request
+    mov rax, [rbx + hbp_T_ID]
+    mov [rdi + 16], rax
+    mov rax, [r14 + hbp_W_ID]
+    mov [rdi + 24], rax
+    mov rax, [rbx + hbp_T_ROLE]
+    mov [rdi + 32], rax
+    mov rax, [rbx + hbp_T_SEQUENCE]
+    mov [rdi + 40], rax
+    mov rax, [rbx + hbp_T_OUTCOME]
+    mov [rdi + 48], rax
+    mov rax, [rbx + hbp_T_CODE]
+    mov [rdi + 56], rax
+    mov rax, [rbx + hbp_T_RESULT_LEN]
+    mov [rdi + 64], rax
+    mov rax, [rbx + hbp_T_CALLER]
+    mov [rdi + 72], rax
+    call hbp_bp_worker_policy
+    mov qword ptr [rbx + hbp_T_PUBLISHED], 1
+    mov rax, [r14 + hbp_W_REPLY + 96]
+    mov [rbx + hbp_T_RECEIVER], rax
+    lock add qword ptr [r13 + hbp_B_COMPLETED], 1
+    call hbp_bp_unlock
+    mov edi, 13
+    mov rsi, [rbx + hbp_T_SEQUENCE]
+    mov rdx, [r14 + hbp_W_ID]
+    mov rcx, [rbx + hbp_T_OUTCOME]
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+    cmp qword ptr [r14 + hbp_W_REPLY + 96], 1
+    je hbp_bp_worker_has_receiver
+    call hbp_bp_output_drop
+hbp_bp_worker_has_receiver:
+    call hbp_bp_notify
+    mov r12d, 1
+    xor r15d, r15d
+    call hbp_bp_lock
+    jmp hbp_bp_worker_step
+
+hbp_bp_worker_wait:
+    mov eax, [r13 + hbp_B_COND]
+    mov [r14 + hbp_W_COND_VALUE], eax
+    mov edi, 6
+    xor esi, esi
+    mov rdx, [r14 + hbp_W_ID]
+    mov ecx, [r14 + hbp_W_COND_VALUE]
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+    call hbp_bp_unlock
+    mov edi, 1
+    lea rsi, [r14 + hbp_W_TIME]
+    mov eax, 228
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+    mov rax, [r14 + hbp_W_REPLY + 176]
+    xor edx, edx
+    mov ecx, 1000000000
+    div rcx
+    add [r14 + hbp_W_TIME], rax
+    add rdx, [r14 + hbp_W_TIME + 8]
+    cmp rdx, 1000000000
+    jb hbp_bp_worker_deadline_ready
+    sub rdx, 1000000000
+    add qword ptr [r14 + hbp_W_TIME], 1
+hbp_bp_worker_deadline_ready:
+    mov [r14 + hbp_W_TIME + 8], rdx
+    mov qword ptr [r14 + 488], 0
+hbp_bp_worker_futex:
+    mov qword ptr [r14 + 480], 0
+    mov eax, [r14 + hbp_W_COND_VALUE]
+    cmp [r13 + hbp_B_COND], eax
+    jne hbp_bp_worker_wait_skipped
+    lea rdi, [r13 + hbp_B_COND]
+    mov esi, 137
+    mov edx, [r14 + hbp_W_COND_VALUE]
+    lea r10, [r14 + hbp_W_TIME]
+    xor r8d, r8d
+    mov r9d, -1
+    mov qword ptr [r14 + 480], 1
+    add qword ptr [r14 + 488], 1
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je hbp_bp_worker_futex
+    xor r15d, r15d
+    cmp rax, -110
+    sete r15b
+    test rax, rax
+    jz hbp_bp_worker_woke
+    cmp rax, -11
+    je hbp_bp_worker_woke
+    jmp hbp_bp_worker_woke
+hbp_bp_worker_wait_skipped:
+    xor eax, eax
+    xor r15d, r15d
+hbp_bp_worker_woke:
+    neg rax
+    mov rcx, rax
+    mov edi, 7
+    xor esi, esi
+    mov rdx, [r14 + hbp_W_ID]
+    mov r8, [r14 + 480]
+    mov r9, [r14 + 488]
+    call hbp_bp_log
+    mov r12d, 2
+    call hbp_bp_lock
+    jmp hbp_bp_worker_step
+
+hbp_bp_worker_exit:
+    mov qword ptr [r14 + hbp_W_EXITING], 1
+    mov rsi, [r14 + hbp_W_REPLY + 176]
+    mov [r14 + hbp_W_JOIN_PREVIOUS], rsi
+    test rsi, rsi
+    jz hbp_bp_worker_no_previous
+    call hbp_bp_find_worker
+    test rax, rax
+    jz hbp_bp_contract
+    mov r12, rax
+    add qword ptr [r12 + 88], 1
+    call hbp_bp_unlock
+    lea rdi, [r12 + hbp_W_TID]
+    call hbp_bp_join_tid
+    call hbp_bp_lock
+    lea rdi, [r14 + hbp_W_REQUEST]
+    mov esi, 14
+    call hbp_bp_request
+    mov rax, [r12 + hbp_W_ID]
+    mov [rdi + 16], rax
+    mov rax, [r14 + hbp_W_ID]
+    mov [rdi + 24], rax
+    mov rax, [r12 + hbp_W_ACTUAL_TID]
+    mov [rdi + 48], rax
+    call hbp_bp_worker_policy
+    mov qword ptr [r14 + hbp_W_JOIN_PREVIOUS], 0
+    mov qword ptr [r12 + hbp_W_POLICY_GONE], 1
+    mov rdi, r12
+    call hbp_bp_unpin_worker
+hbp_bp_worker_no_previous:
+    call hbp_bp_unlock
+    mov edi, 5
+    xor esi, esi
+    mov rdx, [r14 + hbp_W_ID]
+    xor ecx, ecx
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+    call hbp_bp_notify
+    xor edi, edi
+    mov eax, 60
+    syscall
+    ud2
+
+# SPDX-License-Identifier: Apache-2.0
+# Gate held; no stack/TLS mapping is freed before actual clear-TID acquire.
+hbp_bp_unpin_worker:
+    push rbx
+    mov rbx, rdi
+    cmp qword ptr [rbx + 88], 0
+    je hbp_bp_contract
+    sub qword ptr [rbx + 88], 1
+    cmp qword ptr [rbx + 88], 0
+    jne hbp_bp_worker_kept
+    cmp qword ptr [rbx + hbp_W_POLICY_GONE], 1
+    jne hbp_bp_worker_kept
+    cmp dword ptr [rbx + hbp_W_TID], 0
+    jne hbp_bp_contract
+    mfence
+    cmp qword ptr [rbx + hbp_W_CURRENT], 0
+    jne hbp_bp_contract
+    cmp qword ptr [rbx + hbp_W_JOIN_PREVIOUS], 0
+    jne hbp_bp_contract
+    cmp qword ptr [rbx + hbp_W_EXITING], 1
+    jne hbp_bp_contract
+    mov rax, [rbx + 8]
+    mov rdx, [rbx + 16]
+    test rdx, rdx
+    jz hbp_bp_free_worker_head
+    mov [rdx + 8], rax
+    jmp hbp_bp_free_worker_next
+hbp_bp_free_worker_head:
+    cmp [r13 + hbp_B_WORKERS], rbx
+    jne hbp_bp_contract
+    mov [r13 + hbp_B_WORKERS], rax
+hbp_bp_free_worker_next:
+    test rax, rax
+    jz hbp_bp_free_worker_unlinked
+    mov [rax + 16], rdx
+hbp_bp_free_worker_unlinked:
+    sub qword ptr [r13 + hbp_B_WORKER_COUNT], 1
+    add qword ptr [r13 + hbp_B_JOINED], 1
+    mov edi, 12
+    xor esi, esi
+    mov rdx, [rbx + hbp_W_ID]
+    mov rcx, [rbx + hbp_W_ACTUAL_TID]
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+    call hbp_bp_fixture_free_alt
+    mov rdi, rbx
+    mov esi, hbp_W_MAP
+    call hbp_bp_unmap
+hbp_bp_worker_kept:
+    pop rbx
+    ret
+
+# Actual runtime shutdown wait. Results may still be held by JoinHandles.
+# Select main-thread joins by increasing worker generation, matching BTreeMap.
+hbp_bp_drain:
+    hbp_bp_enter
+    mov r13, rdi
+    call hbp_bp_lock
+    mov rax, [r13 + hbp_B_WORK]
+    cmp qword ptr [rax + 32], 1
+    jne hbp_bp_contract
+    call hbp_bp_unlock
+hbp_bp_drain_again:
+    call hbp_bp_lock
+    mov rax, [r13 + hbp_B_WORKERS]
+    xor r12d, r12d
+    mov rdx, -1
+    mov rcx, [r13 + hbp_B_WORKER_COUNT]
+hbp_bp_drain_select:
+    test rax, rax
+    jz hbp_bp_drain_selected
+    test rcx, rcx
+    jz hbp_bp_contract
+    dec rcx
+    cmp qword ptr [rax + 96], 0
+    jne hbp_bp_drain_select_next
+    cmp [rax + hbp_W_ID], rdx
+    jae hbp_bp_drain_select_next
+    mov r12, rax
+    mov rdx, [rax + hbp_W_ID]
+hbp_bp_drain_select_next:
+    mov rax, [rax + 8]
+    jmp hbp_bp_drain_select
+hbp_bp_drain_selected:
+    test r12, r12
+    jz hbp_bp_drain_finished
+    add qword ptr [r12 + 88], 1
+    call hbp_bp_unlock
+    lea rdi, [r12 + hbp_W_TID]
+    call hbp_bp_join_tid
+    call hbp_bp_lock
+    cmp qword ptr [r12 + hbp_W_POLICY_GONE], 1
+    je hbp_bp_drain_already_retired
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 12
+    call hbp_bp_request
+    mov rax, [r12 + hbp_W_ID]
+    mov [rdi + 24], rax
+    mov rax, [r12 + hbp_W_ACTUAL_TID]
+    mov [rdi + 48], rax
+    call hbp_bp_main_policy
+    cmp qword ptr [r13 + hbp_B_MAIN_REPLY + 8], 0
+    jne hbp_bp_drain_already_retired
+    mov qword ptr [r12 + hbp_W_POLICY_GONE], 1
+hbp_bp_drain_already_retired:
+    mov qword ptr [r12 + 96], 1
+    mov rdi, r12
+    call hbp_bp_unpin_worker
+    call hbp_bp_unlock
+    jmp hbp_bp_drain_again
+hbp_bp_drain_finished:
+    cmp qword ptr [r13 + hbp_B_WORKER_COUNT], 0
+    jne hbp_bp_contract
+    call hbp_bp_unlock
+    xor eax, eax
+    hbp_bp_leave
+
+hbp_bp_destroy:
+    hbp_bp_enter
+    mov r13, rdi
+    call hbp_bp_lock
+    cmp qword ptr [r13 + hbp_B_CALLER_COUNT], 0
+    jne hbp_bp_contract
+    cmp qword ptr [r13 + hbp_B_CALLERS], 0
+    jne hbp_bp_contract
+    cmp qword ptr [r13 + hbp_B_WORKER_COUNT], 0
+    jne hbp_bp_contract
+    cmp qword ptr [r13 + hbp_B_TASK_COUNT], 0
+    jne hbp_bp_contract
+    cmp qword ptr [r13 + hbp_B_WORKERS], 0
+    jne hbp_bp_contract
+    cmp qword ptr [r13 + hbp_B_TASKS], 0
+    jne hbp_bp_contract
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 16
+    call hbp_bp_request
+    call hbp_bp_main_policy
+    cmp qword ptr [r13 + hbp_B_MAIN_REPLY + 8], 0
+    jne hbp_bp_contract
+    mov qword ptr [r13], 0
+    call hbp_bp_unlock
+    mov rdi, [r13 + hbp_B_EVENT]
+    mov qword ptr [r13 + hbp_B_EVENT], -1
+    mov eax, 3
+    syscall
+    test rax, rax
+    jnz hbp_bp_contract
+    mov rdi, [r13 + hbp_B_WORK]
+    mov rsi, [r13 + hbp_B_CAP]
+    call hbp_bp_unmap
+    mov rdi, [r13 + hbp_B_LOG]
+    mov rsi, [r13 + hbp_B_LOG_CAP]
+    call hbp_bp_unmap
+    mov rdi, r13
+    mov esi, hbp_B_ROOT
+    call hbp_bp_unmap
+    xor eax, eax
+    hbp_bp_leave
+
+# SPDX-License-Identifier: Apache-2.0
+# Called only after the last embedding spawner/caller owner has been dropped,
+# actual workers have joined, and all receivers have detached/taken results.
+# This models Shared.queue dropping UnownedTask; it is not JoinError delivery.
+hbp_bp_finalize_shared:
+    hbp_bp_enter
+    mov r13, rdi
+hbp_bp_finalize_next:
+    call hbp_bp_lock
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 17
+    call hbp_bp_request
+    call hbp_bp_main_policy
+    cmp qword ptr [r13 + hbp_B_MAIN_REPLY + 16], 0
+    je hbp_bp_finalize_done
+    cmp qword ptr [r13 + hbp_B_MAIN_REPLY + 16], 13
+    jne hbp_bp_contract
+    mov rsi, [r13 + hbp_B_MAIN_REPLY + 24]
+    call hbp_bp_find_id
+    test rax, rax
+    jz hbp_bp_contract
+    mov rbx, rax
+    cmp qword ptr [rbx + hbp_T_RECEIVER], 2
+    jne hbp_bp_contract
+    cmp qword ptr [rbx + hbp_T_WORKER], 0
+    jne hbp_bp_contract
+    add qword ptr [rbx + hbp_T_REFS], 1
+    mov r12, [r13 + hbp_B_MAIN_REPLY + 168]
+    call hbp_bp_unlock
+    call hbp_bp_future_drop
+    mov qword ptr [rbx + hbp_T_OUTCOME], 4
+    mov qword ptr [rbx + hbp_T_RESULT_LEN], 0
+    call hbp_bp_lock
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 18
+    call hbp_bp_request
+    call hbp_bp_task_token
+    mov [rdi + 48], r12
+    call hbp_bp_main_policy
+    cmp qword ptr [r13 + hbp_B_MAIN_REPLY + 16], 10
+    jne hbp_bp_contract
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    call hbp_bp_retire_task
+    call hbp_bp_unpin_task
+    call hbp_bp_unlock
+    jmp hbp_bp_finalize_next
+hbp_bp_finalize_done:
+    call hbp_bp_unlock
+    xor eax, eax
+    hbp_bp_leave
+
+# SPDX-License-Identifier: Apache-2.0
+# The qualification carrier owns this SIGILL handler. General callback roles do
+# not acquire an arbitrary language-unwind implementation from this fixture.
+.equ hbp_B_FIXTURE_TRAP, 192
+.equ hbp_W_PANIC_SEEN, 496
+.equ hbp_W_ALT_MAP, 504
+.equ hbp_W_ALT_DESC, 512
+.equ hbp_W_UNBLOCK, 552
+
+hbp_bp_fixture_trap_install:
+    push rbx
+    mov rbx, rdi
+    mov edi, 4
+    xor esi, esi
+    lea rdx, [rbx + 32]
+    mov r10d, 8
+    mov eax, 13
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+    cmp qword ptr [rbx + 32], 1
+    ja hbp_bp_contract
+    lea rax, [rip + hbp_bp_fixture_sigill]
+    mov [rbx], rax
+    mov qword ptr [rbx + 8], 0x0c000004
+    lea rax, [rip + hbp_bp_fixture_sigreturn]
+    mov [rbx + 16], rax
+    mov qword ptr [rbx + 24], 0
+    mov edi, 4
+    mov rsi, rbx
+    xor edx, edx
+    mov r10d, 8
+    mov eax, 13
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+    pop rbx
+    ret
+hbp_bp_fixture_trap_restore:
+    lea rsi, [rdi + 32]
+    mov edi, 4
+    xor edx, edx
+    mov r10d, 8
+    mov eax, 13
+    syscall
+    test rax, rax
+    jnz hbp_bp_contract
+    ret
+hbp_bp_fixture_sigreturn:
+    mov eax, 15
+    syscall
+    ud2
+hbp_bp_fixture_sigill:
+    cmp edi, 4
+    jne hbp_bp_contract
+    cmp dword ptr [rsi + 8], 2
+    jne hbp_bp_contract
+    lea rax, [rip + hbp_bp_callback_panic_instruction]
+    cmp [rdx + 168], rax
+    jne hbp_bp_contract
+    mov r8, [rdx + 80]
+    mov r9, [rdx + 88]
+    mov r10, [rdx + 128]
+    mov rax, hbp_BP_MAGIC
+    cmp [r8], rax
+    jne hbp_bp_contract
+    mov rax, hbp_BW_MAGIC
+    cmp [r9], rax
+    jne hbp_bp_contract
+    cmp [r9 + hbp_W_ROOT], r8
+    jne hbp_bp_contract
+    cmp [r9 + hbp_W_CURRENT], r10
+    jne hbp_bp_contract
+    mov rax, hbp_BT_MAGIC
+    cmp [r10], rax
+    jne hbp_bp_contract
+    cmp [r10 + hbp_T_ROOT], r8
+    jne hbp_bp_contract
+    cmp qword ptr [r10 + hbp_T_MODE], 3
+    jne hbp_bp_contract
+    cmp qword ptr [r10 + hbp_T_FUTURE_DEAD], 0
+    jne hbp_bp_contract
+    cmp qword ptr [r9 + hbp_W_PANIC_SEEN], 0
+    jne hbp_bp_contract
+    mov rcx, [rdx + 160]
+    lea rax, [r9 + 8192]
+    cmp rcx, rax
+    jb hbp_bp_contract
+    lea rax, [r9 + hbp_W_STACK_TOP]
+    cmp rcx, rax
+    jae hbp_bp_contract
+    mov eax, 186
+    syscall
+    cmp [r9 + hbp_W_ACTUAL_TID], rax
+    jne hbp_bp_contract
+    mov qword ptr [r9 + hbp_W_PANIC_SEEN], 1
+    lea rax, [rip + hbp_bp_callback_panic_resume]
+    mov [rdx + 168], rax
+    ret
+
+hbp_bp_fixture_allocate_alt:
+    cmp qword ptr [r13 + hbp_B_FIXTURE_TRAP], 0
+    je hbp_bp_fixture_alt_return
+    mov esi, 73728
+    call hbp_bp_map
+    mov [r14 + hbp_W_ALT_MAP], rax
+    mov rdi, rax
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+    mov rdi, [r14 + hbp_W_ALT_MAP]
+    add rdi, 69632
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+hbp_bp_fixture_alt_return:
+    ret
+hbp_bp_fixture_worker_signals:
+    cmp qword ptr [r13 + hbp_B_FIXTURE_TRAP], 0
+    je hbp_bp_fixture_alt_return
+    mov rax, [r14 + hbp_W_ALT_MAP]
+    test rax, rax
+    jz hbp_bp_contract
+    add rax, 4096
+    mov [r14 + hbp_W_ALT_DESC], rax
+    mov qword ptr [r14 + hbp_W_ALT_DESC + 8], 0
+    mov qword ptr [r14 + hbp_W_ALT_DESC + 16], 65536
+    lea rdi, [r14 + hbp_W_ALT_DESC]
+    xor esi, esi
+    mov eax, 131
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+    mov qword ptr [r14 + hbp_W_UNBLOCK], 8
+    mov edi, 1
+    lea rsi, [r14 + hbp_W_UNBLOCK]
+    xor edx, edx
+    mov r10d, 8
+    mov eax, 14
+    syscall
+    test rax, rax
+    jnz hbp_bp_resource
+    ret
+hbp_bp_fixture_free_alt:
+    mov rdi, [rbx + hbp_W_ALT_MAP]
+    test rdi, rdi
+    jz hbp_bp_fixture_alt_return
+    mov qword ptr [rbx + hbp_W_ALT_MAP], 0
+    mov esi, 73728
+    jmp hbp_bp_unmap
+
+# A real owned UD2 is recovered only at this one fixed site. The saved callback
+# stack is resumed and its actual owned input destructor runs before completion.
+hbp_bp_callback_panic_entry:
+    mov qword ptr [r14 + hbp_W_PANIC_SEEN], 0
+hbp_bp_callback_panic_instruction:
+    ud2
+hbp_bp_callback_panic_resume:
+    cmp qword ptr [r14 + hbp_W_PANIC_SEEN], 1
+    jne hbp_bp_contract
+    mov qword ptr [rbx + hbp_T_OUTCOME], 3
+    mov qword ptr [rbx + hbp_T_RESULT_LEN], 0
+    mov edi, 15
+    mov rsi, [rbx + hbp_T_SEQUENCE]
+    mov rdx, [r14 + hbp_W_ID]
+    xor ecx, ecx
+    xor r8d, r8d
+    xor r9d, r9d
+    call hbp_bp_log
+    pop r12
+    ret
+
+# SPDX-License-Identifier: Apache-2.0
+# Native caller custody; generations come only from actual HIA op15.
+blocking_pool_generation:
+    hbp_bp_enter
+    mov r13, rdi
+    mov r15, rsi
+    call hbp_bp_lock
+    mov rax, [r13 + hbp_B_WORK]
+    cmp qword ptr [rax + 32], 0
+    jne hbp_bp_generation_closed
+    mov esi, 4096
+    call hbp_bp_map
+    mov rbx, rax
+    lea rdi, [r13 + hbp_B_MAIN_REQ]
+    mov esi, 15
+    call hbp_bp_request
+    call hbp_bp_main_policy
+    mov rax, hbp_BC_MAGIC
+    mov [rbx], rax
+    mov [rbx + hbp_C_ROOT], r13
+    mov rax, [r13 + hbp_B_MAIN_REPLY + 176]
+    test rax, rax
+    jz hbp_bp_contract
+    mov [rbx + hbp_C_ID], rax
+    mov qword ptr [rbx + hbp_C_STATE], 1
+    mov rax, [r13 + hbp_B_CALLERS]
+    mov [rbx + 8], rax
+    test rax, rax
+    jz hbp_bp_generation_link
+    mov [rax + 16], rbx
+hbp_bp_generation_link:
+    mov [r13 + hbp_B_CALLERS], rbx
+    inc qword ptr [r13 + hbp_B_CALLER_COUNT]
+    mov rdi, r15
+    lea rsi, [r13 + hbp_B_MAIN_REPLY]
+    mov ecx, 24
+    rep movsq
+    call hbp_bp_unlock
+    mov eax, 192
+    hbp_bp_leave
+hbp_bp_generation_closed:
+    call hbp_bp_unlock
+    mov eax, 0xffffffff
+    hbp_bp_leave
+hbp_bp_find_caller:
+    mov rax, [r13 + hbp_B_CALLERS]
+    mov rcx, [r13 + hbp_B_CALLER_COUNT]
+hbp_bp_find_caller_loop:
+    test rax, rax
+    jz hbp_bp_find_caller_return
+    test rcx, rcx
+    jz hbp_bp_contract
+    dec rcx
+    mov rdx, hbp_BC_MAGIC
+    cmp [rax], rdx
+    jne hbp_bp_contract
+    cmp [rax + hbp_C_ROOT], r13
+    jne hbp_bp_contract
+    cmp [rax + hbp_C_ID], rsi
+    je hbp_bp_find_caller_return
+    mov rax, [rax + 8]
+    jmp hbp_bp_find_caller_loop
+hbp_bp_find_caller_return:
+    ret
+# RDI caller; pool gate held. State2 pins it during detach traversal.
+hbp_bp_maybe_free_caller:
+    cmp qword ptr [rdi + hbp_C_STATE], 0
+    jne hbp_bp_caller_kept
+    cmp qword ptr [rdi + hbp_C_TASKS], 0
+    jne hbp_bp_caller_kept
+    mov rax, [rdi + 8]
+    mov rdx, [rdi + 16]
+    test rdx, rdx
+    jz hbp_bp_caller_free_head
+    mov [rdx + 8], rax
+    jmp hbp_bp_caller_free_next
+hbp_bp_caller_free_head:
+    cmp [r13 + hbp_B_CALLERS], rdi
+    jne hbp_bp_contract
+    mov [r13 + hbp_B_CALLERS], rax
+hbp_bp_caller_free_next:
+    test rax, rax
+    jz hbp_bp_caller_free_ready
+    mov [rax + 16], rdx
+hbp_bp_caller_free_ready:
+    dec qword ptr [r13 + hbp_B_CALLER_COUNT]
+    mov qword ptr [rdi], 0
+    mov esi, 4096
+    jmp hbp_bp_unmap
+hbp_bp_caller_kept:
+    ret
+
+blocking_pool_drop_caller:
+    hbp_bp_enter
+    sub rsp, 224
+    mov r13, rdi
+    mov r12, rsi
+    call hbp_bp_lock
+    mov rsi, r12
+    call hbp_bp_find_caller
+    test rax, rax
+    jz hbp_bp_drop_caller_invalid
+    cmp qword ptr [rax + hbp_C_STATE], 1
+    jne hbp_bp_drop_caller_invalid
+    mov r15, rax
+    mov qword ptr [r15 + hbp_C_STATE], 2
+hbp_bp_drop_caller_again:
+    mov rbx, [r13 + hbp_B_TASKS]
+    mov r14, [r13 + hbp_B_TASK_COUNT]
+hbp_bp_drop_caller_scan:
+    test rbx, rbx
+    jz hbp_bp_drop_caller_done
+    test r14, r14
+    jz hbp_bp_contract
+    dec r14
+    cmp [rbx + hbp_T_CALLER], r12
+    jne hbp_bp_drop_caller_next
+    cmp qword ptr [rbx + hbp_T_RECEIVER], 1
+    jne hbp_bp_drop_caller_next
+    mov rax, [rbx + hbp_T_ID]
+    mov [rsp], rax
+    mov [rsp + 8], r12
+    mov rax, [rbx + hbp_T_ROLE]
+    mov [rsp + 16], rax
+    mov rax, [rbx + hbp_T_SEQUENCE]
+    mov [rsp + 24], rax
+    call hbp_bp_unlock
+    mov rdi, r13
+    mov rsi, rsp
+    mov edx, 6
+    lea rcx, [rsp + 32]
+    mov r8d, 192
+    call blocking_pool_event
+    cmp eax, 192
+    jne hbp_bp_contract
+    call hbp_bp_lock
+    jmp hbp_bp_drop_caller_again
+hbp_bp_drop_caller_next:
+    mov rbx, [rbx + 8]
+    jmp hbp_bp_drop_caller_scan
+hbp_bp_drop_caller_done:
+    mov qword ptr [r15 + hbp_C_STATE], 0
+    mov rdi, r15
+    call hbp_bp_maybe_free_caller
+    call hbp_bp_unlock
+    xor eax, eax
+    add rsp, 224
+    hbp_bp_leave
+hbp_bp_drop_caller_invalid:
+    call hbp_bp_unlock
+    mov eax, 0xffffffff
+    add rsp, 224
+    hbp_bp_leave
+
+hbp_bp_detach_all:
+    hbp_bp_enter
+    mov r13, rdi
+hbp_bp_detach_all_again:
+    call hbp_bp_lock
+    mov rax, [r13 + hbp_B_CALLERS]
+    mov rcx, [r13 + hbp_B_CALLER_COUNT]
+hbp_bp_detach_all_scan:
+    test rax, rax
+    jz hbp_bp_detach_all_done
+    test rcx, rcx
+    jz hbp_bp_contract
+    dec rcx
+    cmp qword ptr [rax + hbp_C_STATE], 1
+    je hbp_bp_detach_all_one
+    mov rax, [rax + 8]
+    jmp hbp_bp_detach_all_scan
+hbp_bp_detach_all_one:
+    mov r12, [rax + hbp_C_ID]
+    call hbp_bp_unlock
+    mov rdi, r13
+    mov rsi, r12
+    call blocking_pool_drop_caller
+    test eax, eax
+    jnz hbp_bp_contract
+    jmp hbp_bp_detach_all_again
+hbp_bp_detach_all_done:
+    call hbp_bp_unlock
+    xor eax, eax
+    hbp_bp_leave
+
+blocking_pool_notification_fd:
+    mov rax, hbp_BP_MAGIC
+    cmp [rdi], rax
+    jne hbp_bp_contract
+    mov rax, [rdi + hbp_B_EVENT]
+    ret
+blocking_pool_begin_shutdown:
+    jmp hbp_bp_shutdown
+blocking_pool_drain:
+    jmp hbp_bp_drain
+blocking_pool_destroy:
+    hbp_bp_enter
+    mov r13, rdi
+    call hbp_bp_lock
+    mov rax, [r13 + hbp_B_CALLERS]
+    mov rcx, [r13 + hbp_B_CALLER_COUNT]
+hbp_bp_destroy_callers:
+    test rax, rax
+    jz hbp_bp_destroy_callers_ready
+    test rcx, rcx
+    jz hbp_bp_contract
+    dec rcx
+    cmp qword ptr [rax + hbp_C_STATE], 0
+    jne hbp_bp_contract
+    mov rax, [rax + 8]
+    jmp hbp_bp_destroy_callers
+hbp_bp_destroy_callers_ready:
+    call hbp_bp_unlock
+    mov rdi, r13
+    call hbp_bp_finalize_shared
+    mov rdi, r13
+    call hbp_bp_destroy
+    xor eax, eax
+    hbp_bp_leave
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# Fixed roles are the exact journal child kinds. Public frames carry no address.
+# validate(role,input,len,outcap,borrowed AP,sequence): read-only admission.
+blocking_callback_validate:
+    cmp rdi, 16
+    je public_fence_callback_validate
+    cmp rdi, 4
+    je pajp_ap_validate_kind
+    cmp rdi, 13
+    jb start_validate_parent
+    cmp rdi, 15
+    jbe start_callback_validate
+start_validate_parent:
+    cmp rdi, 11
+    je fpc_callback_validate
+    cmp rdi, 12
+    je fpc_callback_validate
+    cmp rdi, 3
+    je pajp_ap_validate_kind
+    cmp rdi, 6
+    jb pajp_ap_invalid
+    cmp rdi, 10
+    ja pajp_ap_invalid
+pajp_ap_validate_kind:
+    cmp rdx, 32
+    jb pajp_ap_invalid
+    cmp rdx, 8388608
+    ja pajp_ap_invalid
+    cmp rcx, 65536
+    jne pajp_ap_invalid
+    mov rax, pajp_AP_MAGIC
+    cmp [r8], rax
+    jne pajp_ap_invalid
+    cmp qword ptr [r8 + pajp_AP_STATE], 2
+    ja pajp_ap_invalid
+    movabs rax, 0x3151435953415248
+    cmp [rsi], rax
+    jne pajp_ap_invalid
+    cmp [rsi + 8], rdi
+    jne pajp_ap_invalid
+    sub rdx, 32
+    mov rax, [rsi + 16]
+    cmp rax, 1048576
+    ja pajp_ap_invalid
+    cmp rax, rdx
+    ja pajp_ap_invalid
+    sub rdx, rax
+    cmp [rsi + 24], rdx
+    jne pajp_ap_invalid
+    test r9, r9
+    jz pajp_ap_invalid
+    xor eax, eax
+    ret
+pajp_ap_invalid:
+    mov eax, 0xffffffff
+    ret
+
+# Callback records retain lifecycle telemetry until this finite owner is dropped.
+# They are not task borrows and never retain a pointer to a retired task.
+blocking_callback_create:
+    pajp_ap_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, [r12 + 272]
+    mov rdi, r14
+    call pajp_ap_check
+    mov edi, 4096
+    call tk_async_allocate
+    mov r15, rax
+    mov rdx, pajp_AP_ROLE_MAGIC
+    mov [r15], rdx
+    mov [r15 + pajp_APR_OWNER], r14
+    mov [r15 + pajp_APR_TASK], r13
+    mov rax, [r13 + 40]
+    mov [r15 + pajp_APR_CALLER], rax
+    mov rax, [r13 + 48]
+    mov [r15 + pajp_APR_ROLE], rax
+    mov rax, [r13 + 56]
+    mov [r15 + pajp_APR_SEQUENCE], rax
+    mov rax, [r13 + 80]
+    mov [r15 + pajp_APR_INPUT_BYTES], rax
+    mov rdi, r14
+    mov rsi, r15
+    mov rdx, r13
+    call fpc_callback_created
+    mov rax, [r14 + pajp_AP_RECORDS]
+    mov [r15 + pajp_APR_NEXT], rax
+    mov [r14 + pajp_AP_RECORDS], r15
+    lock inc qword ptr [r14 + pajp_AP_CREATED]
+    lock inc qword ptr [r14 + pajp_AP_LIVE]
+    mov rax, r15
+    pajp_ap_leave
+
+pajp_ap_role_context:
+    mov rax, [rsi + 216]
+    mov rdx, pajp_AP_ROLE_MAGIC
+    cmp [rax], rdx
+    jne tk_async_contract_failure
+    cmp [rax + pajp_APR_TASK], rsi
+    jne tk_async_contract_failure
+    mov rdx, [rdi + 272]
+    cmp [rax + pajp_APR_OWNER], rdx
+    jne tk_async_contract_failure
+    ret
+
+blocking_callback_run:
+    pajp_ap_enter
+    mov r12, rdi
+    mov r13, rsi
+    call pajp_ap_role_context
+    mov r15, rax
+    mov r14, rdx
+    cmp qword ptr [r15 + pajp_APR_STARTED], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [r15 + pajp_APR_INPUT_DROP], 0
+    jne tk_async_contract_failure
+    mov rax, [r13 + 32]
+    test rax, rax
+    jz tk_async_contract_failure
+    mov [r15 + pajp_APR_ID], rax
+    mov eax, 186
+    syscall
+    test rax, rax
+    jle tk_async_contract_failure
+    mov [r15 + pajp_APR_TID], rax
+    mov eax, 1
+    lock xadd qword ptr [r14 + pajp_AP_ORDINAL], rax
+    inc rax
+    mov [r15 + pajp_APR_START_ORDER], rax
+    lock inc qword ptr [r14 + pajp_AP_STARTED]
+    mov eax, 1
+    lock xadd qword ptr [r14 + pajp_AP_ACTIVE], rax
+    lea rdx, [rax + 1]
+    mov rax, [r14 + pajp_AP_MAX_ACTIVE]
+pajp_ap_active_max:
+    cmp rax, rdx
+    jae pajp_ap_active_ready
+    lock cmpxchg qword ptr [r14 + pajp_AP_MAX_ACTIVE], rdx
+    jne pajp_ap_active_max
+pajp_ap_active_ready:
+    mov qword ptr [r15 + pajp_APR_STARTED], 1
+    mov rdi, r15
+    mov rsi, r13
+    call fpc_callback_invoke
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    mov [r13 + 224], rax
+    mov [r15 + pajp_APR_CODE], rax
+    cmp rax, [r13 + 104]
+    jbe pajp_ap_callback_length
+    cmp eax, 0xffffffff
+    je pajp_ap_callback_refusal
+    cmp eax, 0xfffffffe
+    jne tk_async_contract_failure
+pajp_ap_callback_refusal:
+    xor eax, eax
+pajp_ap_callback_length:
+    mov [r13 + 160], rax
+    mov [r15 + pajp_APR_LENGTH], rax
+    mov qword ptr [r13 + 152], 1
+    mov eax, 1
+    lock xadd qword ptr [r14 + pajp_AP_ORDINAL], rax
+    inc rax
+    mov [r15 + pajp_APR_COMPLETE_ORDER], rax
+    lock inc qword ptr [r14 + pajp_AP_COMPLETED]
+    lock dec qword ptr [r14 + pajp_AP_ACTIVE]
+    js tk_async_contract_failure
+    mov qword ptr [r15 + pajp_APR_COMPLETED], 1
+    xor eax, eax
+    pajp_ap_leave
+
+blocking_callback_input_drop:
+    push rdi
+    push rsi
+    sub rsp, 8
+    call fpc_callback_drop_inputs
+    add rsp, 8
+    pop rsi
+    pop rdi
+    call pajp_ap_role_context
+    cmp qword ptr [rax + pajp_APR_INPUT_DROP], 0
+    jne tk_async_contract_failure
+    mov rcx, [rsi + 32]
+    mov [rax + pajp_APR_ID], rcx
+    mov qword ptr [rax + pajp_APR_INPUT_DROP], 1
+    lock inc qword ptr [rdx + pajp_AP_INPUT_DROPS]
+    ret
+blocking_callback_output_drop:
+    mov rax, [rsi + 48]
+    cmp rax, 13
+    jb start_output_parent
+    cmp rax, 16
+    ja start_output_parent
+    push rdi
+    push rsi
+    sub rsp, 8
+    call start_callback_output_drop
+    add rsp, 8
+    pop rsi
+    pop rdi
+start_output_parent:
+    call pajp_ap_role_context
+    cmp qword ptr [rax + pajp_APR_INPUT_DROP], 1
+    jne tk_async_contract_failure
+    cmp qword ptr [rax + pajp_APR_OUTPUT_DROP], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [rax + pajp_APR_COMPLETED], 1
+    jne tk_async_contract_failure
+    mov qword ptr [rax + pajp_APR_OUTPUT_DROP], 1
+    lock inc qword ptr [rdx + pajp_AP_OUTPUT_DROPS]
+    ret
+blocking_callback_retire:
+    call pajp_ap_role_context
+    cmp qword ptr [rax + ST_APR_ESCROW], 0
+    jne ap_contract
+    cmp qword ptr [rax + FPC_APR_RESOURCE], 0
+    jne ap_contract
+    cmp qword ptr [rax + pajp_APR_INPUT_DROP], 1
+    jne tk_async_contract_failure
+    cmp qword ptr [rax + pajp_APR_RETIRED], 0
+    jne tk_async_contract_failure
+    mov rcx, [rax + pajp_APR_COMPLETED]
+    cmp [rax + pajp_APR_OUTPUT_DROP], rcx
+    jne tk_async_contract_failure
+    mov qword ptr [rax + pajp_APR_TASK], 0
+    mov qword ptr [rax + pajp_APR_RETIRED], 1
+    lock dec qword ptr [rdx + pajp_AP_LIVE]
+    js tk_async_contract_failure
+    lock inc qword ptr [rdx + pajp_AP_RETIRED]
+    ret
+
+# Copyright 2026 Muvon Un Limited
+# SPDX-License-Identifier: Apache-2.0
+# The embedding owner serializes these entries; only callbacks run concurrently.
+# create(config64, existing ServiceRoot) -> independent AsyncPool owner.
+async_journal_pool_create:
+    pajp_ap_enter
+    mov r12, rdi
+    mov r13, rsi
+    cmp [r13], r13
+    jne tk_async_contract_failure
+    mov rax, [r13 + tk_ASY_ROOT_SLOT]
+    test rax, rax
+    jz tk_async_contract_failure
+    cmp [rax + tk_ASY_G_SERVICE], r13
+    jne tk_async_contract_failure
+    cmp qword ptr [r12 + 24], 10485760
+    jne tk_async_contract_failure
+    cmp qword ptr [r12 + 32], 65536
+    jne tk_async_contract_failure
+    mov edi, 4096
+    call tk_async_allocate
+    mov r14, rax
+    mov rdx, pajp_AP_MAGIC
+    mov [r14], rdx
+    mov [r14 + pajp_AP_SERVICE], r13
+    mov qword ptr [r14 + pajp_AP_STATE], 1
+    mov rdi, r12
+    mov rsi, r14
+    call blocking_pool_create
+    mov [r14 + pajp_AP_POOL], rax
+    mov rax, r14
+    pajp_ap_leave
+
+# generation(AP, reply192) -> generic pool result; retain only caller ownership.
+async_journal_pool_generation:
+    pajp_ap_enter
+    mov r12, rdi
+    mov r13, rsi
+    call pajp_ap_check
+    cmp qword ptr [r12 + pajp_AP_STATE], 1
+    jne pajp_ap_generation_invalid
+    mov rdi, [r12 + pajp_AP_POOL]
+    mov rsi, r13
+    call blocking_pool_generation
+    cmp eax, 192
+    jne pajp_ap_generation_done
+    mov edi, 4096
+    call tk_async_allocate
+    mov rdx, [r12 + pajp_AP_CALLERS]
+    mov [rax], rdx
+    mov rdx, [r13 + 176]
+    test rdx, rdx
+    jz tk_async_contract_failure
+    mov [rax + 8], rdx
+    mov qword ptr [rax + 16], 1
+    mov [r12 + pajp_AP_CALLERS], rax
+    mov eax, 192
+pajp_ap_generation_done:
+    pajp_ap_leave
+pajp_ap_generation_invalid:
+    mov eax, 0xffffffff
+    pajp_ap_leave
+
+# submit/event have the generic callable register contract with AP as arg1.
+async_journal_pool_submit:
+    mov rax, pajp_AP_MAGIC
+    cmp [rdi], rax
+    jne tk_async_contract_failure
+    cmp qword ptr [rdi + pajp_AP_STATE], 2
+    ja pajp_ap_invalid
+    cmp qword ptr [rsi + 24], 0
+    jne pajp_ap_invalid
+    mov rdi, [rdi + pajp_AP_POOL]
+    jmp blocking_pool_submit
+async_journal_pool_event:
+    mov rax, pajp_AP_MAGIC
+    cmp [rdi], rax
+    jne tk_async_contract_failure
+    cmp qword ptr [rdi + pajp_AP_STATE], 3
+    ja pajp_ap_invalid
+    mov rdi, [rdi + pajp_AP_POOL]
+    jmp blocking_pool_event
+
+# drop_caller(AP,generation), no runtime shutdown and no I/O cancellation.
+async_journal_pool_drop_caller:
+    pajp_ap_enter
+    mov r12, rdi
+    mov r13, rsi
+    call pajp_ap_check
+    cmp qword ptr [r12 + pajp_AP_STATE], 3
+    ja pajp_ap_drop_caller_invalid
+    mov r14, [r12 + pajp_AP_CALLERS]
+pajp_ap_drop_caller_find:
+    test r14, r14
+    jz pajp_ap_drop_caller_invalid
+    cmp [r14 + 8], r13
+    je pajp_ap_drop_caller_found
+    mov r14, [r14]
+    jmp pajp_ap_drop_caller_find
+pajp_ap_drop_caller_found:
+    cmp qword ptr [r14 + 16], 1
+    jne pajp_ap_drop_caller_invalid
+    mov rdi, [r12 + pajp_AP_POOL]
+    mov rsi, r13
+    call blocking_pool_drop_caller
+    test eax, eax
+    jnz tk_async_contract_failure
+    mov qword ptr [r14 + 16], 0
+    xor eax, eax
+    pajp_ap_leave
+pajp_ap_drop_caller_invalid:
+    mov eax, 0xffffffff
+    pajp_ap_leave
+
+# shutdown(AP,reply192). Existing generations may still take/cancel/detach.
+async_journal_pool_begin_shutdown:
+    pajp_ap_enter
+    mov r12, rdi
+    mov r13, rsi
+    call pajp_ap_check
+    cmp qword ptr [r12 + pajp_AP_STATE], 1
+    jne pajp_ap_shutdown_invalid
+    mov rdi, [r12 + pajp_AP_POOL]
+    mov rsi, r13
+    call blocking_pool_begin_shutdown
+    cmp eax, 192
+    jne tk_async_contract_failure
+    mov qword ptr [r12 + pajp_AP_STATE], 2
+    pajp_ap_leave
+pajp_ap_shutdown_invalid:
+    mov eax, 0xffffffff
+    pajp_ap_leave
+
+async_journal_pool_drain:
+    pajp_ap_enter
+    mov r12, rdi
+    call pajp_ap_check
+    cmp qword ptr [r12 + pajp_AP_STATE], 2
+    jne pajp_ap_drain_invalid
+    mov rdi, [r12 + pajp_AP_POOL]
+    call blocking_pool_drain
+    test eax, eax
+    jnz tk_async_contract_failure
+    mov qword ptr [r12 + pajp_AP_STATE], 3
+    xor eax, eax
+    pajp_ap_leave
+pajp_ap_drain_invalid:
+    mov eax, 0xffffffff
+    pajp_ap_leave
+
+# close(AP): detach all receiver owners, shutdown, real join, final Shared Drop.
+# AP remains alive for final lifecycle evidence; destroy then releases its bytes.
+async_journal_pool_close:
+    pajp_ap_enter
+    mov r12, rdi
+    call pajp_ap_check
+    cmp qword ptr [r12 + ST_AP_PENDING], 0
+    jne ap_contract
+    cmp qword ptr [r12 + FPC_AP_PENDING], 0
+    jne ap_contract
+    cmp qword ptr [r12 + pajp_AP_STATE], 4
+    je pajp_ap_close_done
+    mov r13, [r12 + pajp_AP_CALLERS]
+pajp_ap_close_callers:
+    test r13, r13
+    jz pajp_ap_close_shutdown
+    cmp qword ptr [r13 + 16], 1
+    jne pajp_ap_close_next_caller
+    mov rdi, r12
+    mov rsi, [r13 + 8]
+    call async_journal_pool_drop_caller
+    test eax, eax
+    jnz tk_async_contract_failure
+pajp_ap_close_next_caller:
+    mov r13, [r13]
+    jmp pajp_ap_close_callers
+pajp_ap_close_shutdown:
+    cmp qword ptr [r12 + pajp_AP_STATE], 1
+    jne pajp_ap_close_guard
+    mov rdi, r12
+    lea rsi, [r12 + pajp_AP_SCRATCH]
+    call async_journal_pool_begin_shutdown
+    cmp eax, 192
+    jne tk_async_contract_failure
+pajp_ap_close_guard:
+    # This actor exists only in the qualification carrier. Normal callers have 0.
+    mov rdi, r12
+    call pajp_ap_guard_release
+    test eax, eax
+    jnz tk_async_contract_failure
+    cmp qword ptr [r12 + pajp_AP_STATE], 2
+    jne pajp_ap_close_destroy_pool
+    mov rdi, r12
+    call async_journal_pool_drain
+    test eax, eax
+    jnz tk_async_contract_failure
+pajp_ap_close_destroy_pool:
+    cmp qword ptr [r12 + pajp_AP_STATE], 3
+    jne tk_async_contract_failure
+    mov rdi, [r12 + pajp_AP_POOL]
+    call blocking_pool_destroy
+    test eax, eax
+    jnz tk_async_contract_failure
+    mov qword ptr [r12 + pajp_AP_POOL], 0
+    mov qword ptr [r12 + pajp_AP_STATE], 4
+    mov rax, [r12 + pajp_AP_CREATED]
+    cmp [r12 + pajp_AP_INPUT_DROPS], rax
+    jne tk_async_contract_failure
+    cmp [r12 + pajp_AP_RETIRED], rax
+    jne tk_async_contract_failure
+    mov rax, [r12 + pajp_AP_COMPLETED]
+    cmp [r12 + pajp_AP_OUTPUT_DROPS], rax
+    jne tk_async_contract_failure
+    mov rax, [r12 + pajp_AP_LIVE]
+    or rax, [r12 + pajp_AP_ACTIVE]
+    jnz tk_async_contract_failure
+pajp_ap_close_done:
+    xor eax, eax
+    pajp_ap_leave
+
+# destroy only the independent pool owner; borrowed Async/service remain live.
+async_journal_pool_destroy:
+    pajp_ap_enter
+    mov r12, rdi
+    call async_journal_pool_close
+    mov r13, [r12 + pajp_AP_CALLERS]
+pajp_ap_destroy_callers:
+    test r13, r13
+    jz pajp_ap_destroy_records_start
+    mov r14, [r13]
+    cmp qword ptr [r13 + 16], 0
+    jne tk_async_contract_failure
+    mov rdi, r13
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    mov r13, r14
+    jmp pajp_ap_destroy_callers
+pajp_ap_destroy_records_start:
+    mov r13, [r12 + pajp_AP_RECORDS]
+pajp_ap_destroy_records:
+    test r13, r13
+    jz pajp_ap_destroy_owner
+    cmp qword ptr [r13 + pajp_APR_RETIRED], 1
+    jne tk_async_contract_failure
+    cmp qword ptr [r13 + pajp_APR_TASK], 0
+    jne tk_async_contract_failure
+    mov r14, [r13 + pajp_APR_NEXT]
+    mov rdi, r13
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    mov r13, r14
+    jmp pajp_ap_destroy_records
+pajp_ap_destroy_owner:
+    mov qword ptr [r12], 0
+    mov rdi, r12
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    xor eax, eax
+    pajp_ap_leave
+
+# SPDX-License-Identifier: Apache-2.0
+# Qualification actor only: an ordinary owned thread holds the actual Async
+# STORE mutex. No syscall interception, signal trap, or invented errno is used.
+pajp_ap_guard_hold:
+    pajp_ap_enter
+    mov r12, rdi
+    call pajp_ap_check
+    cmp qword ptr [r12 + pajp_AP_STATE], 1
+    jne pajp_ap_guard_invalid
+    cmp qword ptr [r12 + pajp_AP_GUARD], 0
+    jne pajp_ap_guard_invalid
+    mov edi, pajp_AP_GUARD_BYTES
+    call tk_async_allocate
+    mov r13, rax
+    mov [r13], r12
+    mov rax, [r12 + pajp_AP_SERVICE]
+    mov rax, [rax + tk_ASY_ROOT_SLOT]
+    add rax, tk_ASY_G_STORE
+    mov [r13 + 48], rax
+    lea rdi, [r13 + 4096]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    lea rdi, [r13 + pajp_AP_GUARD_STACK]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    lea rsi, [r13 + pajp_AP_GUARD_STACK - 16]
+    mov [rsi], r13
+    mov edi, 0x350f00
+    lea rdx, [r13 + 8]
+    mov r10, rdx
+    xor r8d, r8d
+    mov eax, 56
+    syscall
+    test rax, rax
+    jz pajp_ap_guard_child
+    cmp rax, -4095
+    jae tk_async_contract_failure
+    mov [r13 + 16], rax
+    mov [r12 + pajp_AP_GUARD], r13
+    lea rdi, [r13 + 24]
+    call hbp_bp_wait_nonzero
+    mov rax, [r13 + 16]
+    pajp_ap_leave
+pajp_ap_guard_invalid:
+    mov eax, 0xffffffff
+    pajp_ap_leave
+pajp_ap_guard_child:
+    pop r12
+    and rsp, -16
+    mov rdi, [r12 + 48]
+    call tk_mutex_lock
+    mov qword ptr [r12 + 24], 1
+    lea rdi, [r12 + 24]
+    mov edx, 1
+    call hbp_bp_wake
+    lea rdi, [r12 + 32]
+    call hbp_bp_wait_nonzero
+    mov rdi, [r12 + 48]
+    call tk_mutex_unlock
+    mov qword ptr [r12 + 40], 1
+    xor edi, edi
+    mov eax, 60
+    syscall
+    ud2
+pajp_ap_guard_release:
+    pajp_ap_enter
+    mov r12, rdi
+    mov r13, [r12 + pajp_AP_GUARD]
+    test r13, r13
+    jz pajp_ap_guard_released
+    cmp qword ptr [r13 + 24], 1
+    jne tk_async_contract_failure
+    mov qword ptr [r13 + 32], 1
+    lea rdi, [r13 + 32]
+    mov edx, 1
+    call hbp_bp_wake
+    lea rdi, [r13 + 8]
+    call hbp_bp_join_tid
+    cmp qword ptr [r13 + 40], 1
+    jne tk_async_contract_failure
+    mov qword ptr [r12 + pajp_AP_GUARD], 0
+    mov rdi, r13
+    mov esi, pajp_AP_GUARD_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+pajp_ap_guard_released:
+    xor eax, eax
+    pajp_ap_leave
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed owned-receiver adapter. The pool HIA remains the queue/receiver owner.
+.equ PBA_MAGIC, 0x3130545741505348
+.equ PBA_BYTES, 4096
+.equ PBA_ROOT, 8
+.equ PBA_OWNER, 16
+.equ PBA_STATE, 24
+.equ PBA_OUTPUT, 32
+.equ PBA_CAPACITY, 40
+.equ PBA_TOKEN, 64
+.equ PBA_REPLY, 128
+.equ PBA_RESULT, 320
+.equ PBA_HEADER, 192
+.equ PBA_MAXIMUM, 65728
+.equ PBA_PENDING, 0xfffffff1
+.equ PBA_ABANDONED, 0xfffffff2
+.macro pba_enter
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 24
+.endm
+.macro pba_leave
+    add rsp, 24
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.endm
+
+# root, existing AsyncPool, immutable full token32, output, capacity.
+# The caller generation is borrowed, not dropped by this one receiver.
+# Return complete HRBPR001 + payload, or the distinct runtime-abandon marker.
+public_async_pool_await:
+    cmp r8, PBA_MAXIMUM
+    jb pba_capacity
+    test rdi, rdi
+    jz pba_invalid
+    test rsi, rsi
+    jz pba_invalid
+    test rdx, rdx
+    jz pba_invalid
+    test rcx, rcx
+    jz pba_invalid
+    mov rax, rcx
+    add rax, PBA_MAXIMUM
+    jc pba_invalid
+    mov rax, [rdx]
+    test rax, rax
+    jz pba_invalid
+    cmp qword ptr [rdx + 8], 0
+    je pba_invalid
+    cmp qword ptr [rdx + 24], 0
+    je pba_invalid
+    mov rax, [rdx + 16]
+    cmp rax, 16
+    je pba_admitted
+    cmp rax, 3
+    je pba_admitted
+    cmp rax, 6
+    jb pba_invalid
+    cmp rax, 12
+    ja pba_invalid
+pba_admitted:
+    pba_enter
+    mov r15, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov rbp, rcx
+    mov edi, PBA_BYTES
+    call tk_allocate_guarded
+    mov r12, rax
+    mov rdx, PBA_MAGIC
+    mov [r12], rdx
+    mov [r12 + PBA_ROOT], r15
+    mov [r12 + PBA_OWNER], r13
+    mov [r12 + PBA_OUTPUT], rbp
+    mov qword ptr [r12 + PBA_CAPACITY], PBA_MAXIMUM
+    lea rdi, [r12 + PBA_TOKEN]
+    mov rsi, r14
+    mov ecx, 4
+    rep movsq
+    # Probe before transferring the receiver into SDK await. Invalid tokens
+    # leave the caller's output untouched and never enter the pump.
+    mov rdi, r12
+    call pba_poll
+    mov [r12 + PBA_RESULT], rax
+    cmp eax, PBA_PENDING
+    jne pba_return
+    mov rdi, [r13 + 16]
+    call blocking_pool_notification_fd
+    mov r8, rax
+    mov rdi, r15
+    mov rsi, r12
+    lea rdx, [rip + pba_poll]
+    lea rcx, [rip + pba_drop]
+    call public_async_await
+    mov [r12 + PBA_RESULT], rax
+    cmp eax, PBA_ABANDONED
+    je pba_abandoned
+    cmp qword ptr [r12 + PBA_STATE], 2
+    jne ap_contract
+    jmp pba_return
+pba_abandoned:
+    cmp qword ptr [r12 + PBA_STATE], 3
+    jne ap_contract
+pba_return:
+    mov rbx, [r12 + PBA_RESULT]
+    mov rax, [r12 + PBA_STATE]
+    cmp rax, 2
+    je pba_retire
+    cmp rax, 3
+    je pba_retire
+    cmp rax, 4
+    jne ap_contract
+pba_retire:
+    mov qword ptr [r12], 0
+    mov rdi, r12
+    mov esi, PBA_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rax, rbx
+    pba_leave
+pba_invalid:
+    mov eax, 0xffffffff
+    ret
+pba_capacity:
+    mov eax, 0xfffffffe
+    ret
+
+# r12=context, r13=actual reply. Validate identity before any projection.
+pba_reply_identity:
+    mov rax, 0x3130305250425248
+    cmp [r13], rax
+    jne ap_contract
+    mov rax, [r12 + PBA_TOKEN]
+    cmp [r13 + 24], rax
+    jne ap_contract
+    mov rax, [r12 + PBA_TOKEN + 8]
+    cmp [r13 + 40], rax
+    jne ap_contract
+    mov rax, [r12 + PBA_TOKEN + 16]
+    cmp [r13 + 48], rax
+    jne ap_contract
+    mov rax, [r12 + PBA_TOKEN + 24]
+    cmp [r13 + 56], rax
+    jne ap_contract
+    cmp qword ptr [r13 + 64], 0
+    jne ap_contract
+    ret
+
+# A fixed poll consumes only an actual completed pool result. No native Task
+# pointer is kept; take copies all bytes before the pool may retire its context.
+pba_poll:
+    pba_enter
+    mov r12, rdi
+    mov rax, PBA_MAGIC
+    cmp [r12], rax
+    jne ap_contract
+    cmp qword ptr [r12 + PBA_STATE], 1
+    ja ap_contract
+    mov rdi, [r12 + PBA_OWNER]
+    lea rsi, [r12 + PBA_TOKEN]
+    mov edx, 8
+    lea rcx, [r12 + PBA_REPLY]
+    mov r8d, PBA_HEADER
+    call async_journal_pool_event
+    cmp eax, 0xffffffff
+    je pba_poll_invalid
+    cmp rax, PBA_HEADER
+    jne ap_contract
+    lea r13, [r12 + PBA_REPLY]
+    call pba_reply_identity
+    cmp qword ptr [r13 + 96], 1
+    jne ap_contract
+    cmp qword ptr [r13 + 8], 1
+    je pba_poll_pending
+    cmp qword ptr [r13 + 8], 0
+    jne ap_contract
+    cmp qword ptr [r13 + 16], 9
+    jne ap_contract
+    cmp qword ptr [r13 + 88], 4
+    jne ap_contract
+    mov rdi, [r12 + PBA_OWNER]
+    lea rsi, [r12 + PBA_TOKEN]
+    mov edx, 9
+    mov rcx, [r12 + PBA_OUTPUT]
+    mov r8, [r12 + PBA_CAPACITY]
+    call async_journal_pool_event
+    cmp rax, PBA_HEADER
+    jb ap_contract
+    cmp rax, PBA_MAXIMUM
+    ja ap_contract
+    mov r14, rax
+    mov r13, [r12 + PBA_OUTPUT]
+    call pba_reply_identity
+    mov rax, [r13 + 8]
+    or rax, [r13 + 176]
+    jnz ap_contract
+    cmp qword ptr [r13 + 16], 12
+    jne ap_contract
+    cmp qword ptr [r13 + 96], 3
+    jne ap_contract
+    mov rax, [r13 + 88]
+    cmp rax, 4
+    jb ap_contract
+    cmp rax, 5
+    ja ap_contract
+    mov rax, [r13 + 104]
+    cmp rax, 1
+    jb ap_contract
+    cmp rax, 3
+    ja ap_contract
+    mov eax, dword ptr [r13 + 184]
+    cmp [r13 + 184], rax
+    jne ap_contract
+    mov rax, [r13 + 80]
+    add rax, PBA_HEADER
+    jc ap_contract
+    cmp rax, r14
+    jne ap_contract
+    mov qword ptr [r12 + PBA_STATE], 2
+    pba_leave
+pba_poll_pending:
+    cmp qword ptr [r13 + 16], 0
+    jne ap_contract
+    mov rax, [r13 + 88]
+    cmp rax, 1
+    jb ap_contract
+    cmp rax, 3
+    ja ap_contract
+    mov qword ptr [r12 + PBA_STATE], 1
+    mov eax, PBA_PENDING
+    pba_leave
+pba_poll_invalid:
+    cmp qword ptr [r12 + PBA_STATE], 0
+    jne ap_contract
+    mov qword ptr [r12 + PBA_STATE], 4
+    mov eax, 0xffffffff
+    pba_leave
+
+# Only actual enclosing-Future/runtime Drop reaches this hook. Notification
+# cancellation never calls it. Op6 detaches; it neither aborts nor shuts down.
+pba_drop:
+    pba_enter
+    mov r12, rdi
+    mov rax, PBA_MAGIC
+    cmp [r12], rax
+    jne ap_contract
+    cmp qword ptr [r12 + PBA_STATE], 1
+    jne ap_contract
+    mov rdi, [r12 + PBA_OWNER]
+    lea rsi, [r12 + PBA_TOKEN]
+    mov edx, 6
+    lea rcx, [r12 + PBA_REPLY]
+    mov r8d, PBA_HEADER
+    call async_journal_pool_event
+    cmp rax, PBA_HEADER
+    jne ap_contract
+    lea r13, [r12 + PBA_REPLY]
+    call pba_reply_identity
+    cmp qword ptr [r13 + 8], 0
+    jne ap_contract
+    cmp qword ptr [r13 + 96], 2
+    jne ap_contract
+    mov rax, [r13 + 16]
+    test rax, rax
+    jz pba_drop_done
+    cmp rax, 10
+    jne ap_contract
+pba_drop_done:
+    mov qword ptr [r12 + PBA_STATE], 3
+    xor eax, eax
+    pba_leave
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# root, AsyncPool, metadata40, immutable input, length, output descriptor16.
+# Descriptor is output pointer and capacity. Generations belong to the caller.
+public_async_pool_submit_await:
+    test r9, r9
+    jz pba_invalid
+    cmp qword ptr [r9 + 8], PBA_MAXIMUM
+    jb pba_capacity
+    cmp qword ptr [r9], 0
+    je pba_invalid
+    pba_enter
+    mov r15, rdi
+    mov r13, rsi
+    mov r12, rdx
+    mov r14, rcx
+    mov rbp, r8
+    mov rbx, [r9]
+    mov rax, [r9 + 8]
+    mov [rsp], rax
+    mov rdi, r13
+    mov rsi, r12
+    mov rdx, r14
+    mov rcx, rbp
+    mov r8, rbx
+    call async_journal_pool_submit
+    cmp eax, 0xffffffff
+    je pbas_return
+    cmp rax, PBA_HEADER
+    jne ap_contract
+    mov rax, 0x3130305250425248
+    cmp [rbx], rax
+    jne ap_contract
+    cmp qword ptr [rbx + 24], 0
+    je ap_contract
+    mov rax, [r12]
+    cmp [rbx + 40], rax
+    jne ap_contract
+    mov rax, [r12 + 8]
+    cmp [rbx + 48], rax
+    jne ap_contract
+    mov rax, [r12 + 16]
+    cmp [rbx + 56], rax
+    jne ap_contract
+    cmp qword ptr [rbx + 64], 0
+    jne ap_contract
+    cmp [rbx + 72], rbp
+    jne ap_contract
+    mov rax, [rbx + 8]
+    cmp rax, 3
+    je pbas_no_receiver
+    cmp rax, 4
+    je pbas_no_receiver
+    test rax, rax
+    jz pbas_receiver
+    cmp rax, 2
+    jne ap_contract
+pbas_receiver:
+    cmp qword ptr [rbx + 96], 1
+    jne ap_contract
+    # The submitted receipt has non-contiguous identity words. Copy the four
+    # token words to this private stack before any output is overwritten.
+    sub rsp, 32
+    mov rax, [rbx + 24]
+    mov [rsp], rax
+    mov rax, [rbx + 40]
+    mov [rsp + 8], rax
+    mov rax, [rbx + 48]
+    mov [rsp + 16], rax
+    mov rax, [rbx + 56]
+    mov [rsp + 24], rax
+    mov rdi, r15
+    mov rsi, r13
+    mov rdx, rsp
+    mov rcx, rbx
+    mov r8, [rsp + 32]
+    call public_async_pool_await
+    add rsp, 32
+    cmp eax, 0xffffffff
+    je ap_contract
+    cmp eax, 0xfffffffe
+    je ap_contract
+    jmp pbas_return
+pbas_no_receiver:
+    cmp qword ptr [rbx + 96], 2
+    jne ap_contract
+    mov eax, PBA_HEADER
+pbas_return:
+    pba_leave
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# One existing service owns this fixed Async pool. Public API calls occur on the
+# cooperative scheduler thread; actual journal callbacks run on pool workers.
+.equ PAJ_ROOT_SLOT, 24704
+.equ PAJ_CALL_GENERATION, 136
+.equ PAJ_CALL_OWNER, 144
+.equ PAJ_CALL_PUBLIC_ROOT, 152
+.equ PAJ_CALL_META, 2048
+.equ PAJ_CALL_DESCRIPTOR, 2096
+
+# Public root -> borrowed AsyncPool; never creates another ServiceRoot.
+paj_shared_owner:
+    push rbx
+    mov rax, [rdi + EX_CONTROL_SLOT]
+    test rax, rax
+    jz ap_contract
+    mov rbx, [rax + 16]
+    test rbx, rbx
+    jz ap_contract
+    cmp [rbx], rbx
+    jne ap_contract
+    mov rax, [rbx + PAJ_ROOT_SLOT]
+    test rax, rax
+    jnz paj_shared_return
+    lea rdi, [rip + paj_pool_config]
+    mov rsi, rbx
+    call async_journal_pool_create
+    test rax, rax
+    jz ap_contract
+    mov [rbx + PAJ_ROOT_SLOT], rax
+paj_shared_return:
+    pop rbx
+    ret
+
+# Public stacks have retired; Async and its backend are still alive.
+paj_shared_destroy:
+    push rbx
+    mov rbx, rdi
+    mov rdi, [rbx + PAJ_ROOT_SLOT]
+    test rdi, rdi
+    jz paj_shared_destroyed
+    call async_journal_pool_destroy
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [rbx + PAJ_ROOT_SLOT], 0
+paj_shared_destroyed:
+    xor eax, eax
+    pop rbx
+    ret
+
+# RDI private Async invocation; detach only its own caller generation.
+paj_drop_generation:
+    push rbx
+    mov rbx, rdi
+    mov rsi, [rbx + PAJ_CALL_GENERATION]
+    test rsi, rsi
+    jz paj_generation_dropped
+    mov rdi, [rbx + PAJ_CALL_OWNER]
+    test rdi, rdi
+    jz ap_contract
+    call async_journal_pool_drop_caller
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [rbx + PAJ_CALL_GENERATION], 0
+    mov qword ptr [rbx + PAJ_CALL_OWNER], 0
+paj_generation_dropped:
+    xor eax, eax
+    pop rbx
+    ret
+
+# Same fixed ABI as tk_async_journal_call. The public private invocation is
+# independent of the immutable task's actual worker invocation.
+paj_journal_child:
+    pba_enter
+    mov r12, rdi
+    mov r14, rsi
+    mov rbp, rdx
+    mov [rsp], rcx
+    mov [rsp + 8], r8
+    mov r13, [r12 + PAJ_CALL_OWNER]
+    test r13, r13
+    jnz paj_child_owner_ready
+    mov rdi, [r12 + PAJ_CALL_PUBLIC_ROOT]
+    call paj_shared_owner
+    mov r13, rax
+    mov [r12 + PAJ_CALL_OWNER], rax
+    mov rdi, r13
+    lea rsi, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    call async_journal_pool_generation
+    cmp rax, PBA_HEADER
+    jne ap_contract
+    mov rax, [r12 + tk_ASY_CALL_OUTPUT_AT + 176]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + PAJ_CALL_GENERATION], rax
+paj_child_owner_ready:
+    mov rax, [r12 + PAJ_CALL_GENERATION]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + PAJ_CALL_META], rax
+    mov rax, [r14 + 8]
+    mov [r12 + PAJ_CALL_META + 8], rax
+    mov rax, [r12 + tk_ASY_CALL_SEQUENCE]
+    mov [r12 + PAJ_CALL_META + 16], rax
+    mov qword ptr [r12 + PAJ_CALL_META + 24], 0
+    mov qword ptr [r12 + PAJ_CALL_META + 32], 65536
+    lea rax, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    mov [r12 + PAJ_CALL_DESCRIPTOR], rax
+    mov qword ptr [r12 + PAJ_CALL_DESCRIPTOR + 8], PBA_MAXIMUM
+    mov rdi, [r12 + PAJ_CALL_PUBLIC_ROOT]
+    mov rsi, r13
+    lea rdx, [r12 + PAJ_CALL_META]
+    mov rcx, r14
+    mov r8, rbp
+    lea r9, [r12 + PAJ_CALL_DESCRIPTOR]
+    call public_async_pool_submit_await
+    cmp eax, PBA_ABANDONED
+    je paj_child_return
+    cmp rax, PBA_HEADER
+    jb ap_contract
+    cmp rax, PBA_MAXIMUM
+    ja ap_contract
+    lea r13, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    cmp qword ptr [r13 + 8], 0
+    jne ap_contract
+    cmp qword ptr [r13 + 16], 12
+    jne ap_contract
+    # This first public composition qualifies ordinary application returns.
+    # Generic await retains all JoinOutcomes; the old observation HIA has no
+    # arbitrary blocking JoinError renderer, which remains an explicit gap.
+    cmp qword ptr [r13 + 104], 1
+    jne ap_contract
+    mov rbx, [r13 + 184]
+    cmp rbx, 65536
+    ja paj_child_refusal
+    cmp [r13 + 80], rbx
+    jne ap_contract
+    cmp [rsp + 8], rbx
+    jb ap_contract
+    lea rsi, [r13 + PBA_HEADER]
+    mov rdi, [rsp]
+    mov rcx, rbx
+    rep movsb
+    mov rax, rbx
+    jmp paj_child_return
+paj_child_refusal:
+    cmp qword ptr [r13 + 80], 0
+    jne ap_contract
+    cmp ebx, 0xffffffff
+    je paj_child_refusal_ready
+    cmp ebx, 0xfffffffe
+    jne ap_contract
+paj_child_refusal_ready:
+    mov eax, ebx
+paj_child_return:
+    pba_leave
+
+# The Async invocation and receiver have retired. Never acknowledge its pending
+# HIA action after actual Drop; retire the enclosing public continuation too.
+paj_runtime_abandoned:
+    mov r12, [r15 + PR_ROOT_SLOT]
+    test r12, r12
+    jz ph_runtime_aborted
+    cmp qword ptr [r12 + PR_ACTIVE], 0
+    je ph_runtime_aborted
+    cmp qword ptr [r12 + PR_ACTIVE], 1
+    jne ap_contract
+    mov rax, [r12 + PR_CALLER]
+    or rax, [r12 + PR_PURE_BUSY]
+    jnz ap_contract
+    lea rdi, [r12 + PR_INPUT]
+    mov esi, PR_INPUT_MAPPING
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + PR_ACTIVE], 0
+    mov qword ptr [r12 + PR_TARGET], 0
+    mov qword ptr [r12 + PR_CAPACITY], 0
+    jmp ph_runtime_aborted
+
+.balign 8
+# Finite qualification setting, not production512 saturation evidence.
+paj_pool_config:
+    .quad 0x3130464350425248, 2, 60000000000, 10485760, 65536, 0, 0, 0
+
+paj_tk_async_observation_call:
+    cmp rdx, tk_ASY_CALL_INPUT_CAP
+    ja tk_async_call_invalid
+    cmp r8, 65536
+    jb tk_async_call_capacity
+    tk_asy_prologue
+    mov [rsp], rcx
+    mov [rsp + 8], r8
+    mov r13, rdi
+    mov r14, rsi
+    mov rbx, rdx
+    call tk_async_call_create
+    mov r12, rax
+    mov [r12 + PAJ_CALL_PUBLIC_ROOT], r15
+    mov [r12 + tk_ASY_CALL_INPUT_LEN], rbx
+    mov rax, [rsp]
+    mov [r12 + tk_ASY_CALL_OUTPUT], rax
+    mov rax, [rsp + 8]
+    mov [r12 + tk_ASY_CALL_OUTPUT_CAP], rax
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov rsi, r14
+    mov rcx, rbx
+    rep movsb
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov esi, tk_ASY_CALL_INPUT_CAP
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz tk_async_contract_failure
+    lea r13, [r12 + tk_ASY_CALL_WORK]
+paj_tk_async_controller_invoke:
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov rsi, [r12 + tk_ASY_CALL_INPUT_LEN]
+    lea rdx, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    mov ecx, 65536
+    mov r8, r13
+    mov r9d, tk_ASY_CALL_WORK_BYTES
+    call tk_async_image_controller
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    cmp eax, tk_ASY_EFFECT
+    je paj_tk_async_controller_pending
+    mov [r12 + tk_ASY_CALL_CODE], rax
+    cmp eax, 65536
+    jbe paj_tk_async_controller_publish
+    cmp eax, 0xffffffff
+    je paj_tk_async_controller_retire
+    cmp eax, 0xfffffffe
+    je paj_tk_async_controller_retire
+    jmp tk_async_contract_failure
+paj_tk_async_controller_pending:
+    lea rbp, [r13 + tk_ASY_ACTION]
+    movabs rax, 0x3130415354415248
+    cmp [rbp], rax
+    jne tk_async_contract_failure
+    mov rax, [r12 + tk_ASY_CALL_SEQUENCE]
+    inc rax
+    jz tk_async_contract_failure
+    cmp [rbp + 8], rax
+    jne tk_async_contract_failure
+    mov [r12 + tk_ASY_CALL_SEQUENCE], rax
+    cmp qword ptr [rbp + 24], 0
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 32], tk_ASY_CONTROLLER_REQUEST
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 48], tk_ASY_CONTROLLER_REPLY
+    jne tk_async_contract_failure
+    cmp qword ptr [rbp + 56], tk_ASY_CONTROLLER_REPLY_CAP
+    jne tk_async_contract_failure
+    mov rax, [rbp + 64]
+    or rax, [rbp + 72]
+    or rax, [rbp + 80]
+    or rax, [rbp + 88]
+    jnz tk_async_contract_failure
+    mov rdx, [rbp + 40]
+    cmp rdx, 32
+    jb tk_async_contract_failure
+    cmp rdx, tk_ASY_CONTROLLER_REQUEST_CAP
+    ja tk_async_contract_failure
+    lea rsi, [r13 + tk_ASY_CONTROLLER_REQUEST]
+    mov rax, [rsi + 8]
+    cmp [rbp + 16], rax
+    jne tk_async_contract_failure
+    lea rcx, [r13 + tk_ASY_CONTROLLER_REPLY]
+    mov r8d, tk_ASY_CONTROLLER_REPLY_CAP
+    mov rdi, r12
+    cmp rax, 1
+    je paj_tk_async_controller_config
+    cmp rax, 2
+    je paj_tk_async_controller_policy
+    cmp rax, 3
+    je paj_tk_async_controller_journal
+    cmp rax, 4
+    je paj_tk_async_controller_audit
+    cmp rax, 5
+    je paj_tk_async_controller_registry
+    cmp rax, 6
+    jne tk_async_contract_failure
+paj_tk_async_controller_journal:
+    call paj_journal_child
+    cmp eax, PBA_ABANDONED
+    jne paj_tk_async_controller_ack
+    mov [r12 + tk_ASY_CALL_CODE], rax
+    jmp paj_tk_async_controller_retire
+paj_tk_async_controller_config:
+    call [r12 + tk_ASY_PLAN_CONFIG]
+    jmp paj_tk_async_controller_ack
+paj_tk_async_controller_policy:
+    call [r12 + tk_ASY_PLAN_POLICY]
+    jmp paj_tk_async_controller_ack
+paj_tk_async_controller_audit:
+    call [r12 + tk_ASY_PLAN_AUDIT]
+    jmp paj_tk_async_controller_ack
+paj_tk_async_controller_registry:
+    call tk_async_registry_callback
+paj_tk_async_controller_ack:
+    mov edx, eax
+    cmp rax, rdx
+    jne tk_async_contract_failure
+    cmp eax, tk_ASY_CONTROLLER_REPLY_CAP
+    ja tk_async_contract_failure
+    mov [rbp + 72], rax
+    mov rax, [rbp + 8]
+    mov [rbp + 64], rax
+    jmp paj_tk_async_controller_invoke
+paj_tk_async_controller_publish:
+    mov rcx, rax
+    mov rdi, [r12 + tk_ASY_CALL_OUTPUT]
+    lea rsi, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    rep movsb
+paj_tk_async_controller_retire:
+    mov rdi, r12
+    call paj_drop_generation
+    mov rax, [r12 + tk_ASY_CALL_CODE]
+    mov [rsp + 16], rax
+    mov rdi, r12
+    call tk_async_call_retire
+    mov rax, [rsp + 16]
+    tk_asy_epilogue
+
+paj_image_pool:
+    jmp qword ptr [rip + paj_image_pool_slot]
+.balign 8
+paj_image_pool_slot:
+    .quad 0
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Per-producer native custody. No new HIA policy or filesystem operation.
+.equ PIC_BYTES, 131072
+.equ PIC_PARENT, 184
+.equ PIC_HEAD, 192
+.equ PIC_COUNT, 200
+.equ PIC_NEXT, 208
+.equ PIC_PREV, 216
+.equ PIC_GENERATION, 224
+.equ PIC_NEXT_GENERATION, 232
+.equ PIC_STATE, 240
+.equ PIC_TASK, 248
+.equ PIC_GATE, 256
+.equ PIC_ROOT_SLOT, 4064
+
+# Canonical IG -> private Intent caller. The shared owner remains borrowed.
+intent_caller_create:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov rax, 0x3130474954495248
+    cmp [r12], rax
+    jne tk_intent_contract_failure
+    cmp qword ptr [r12 + PIC_PARENT], 0
+    jne tk_intent_contract_failure
+    mov rax, [r12 + tk_IG_SERVICE]
+    test rax, rax
+    jz tk_intent_contract_failure
+    cmp [rax + tk_INTENT_GLOBAL_SLOT], r12
+    jne tk_intent_contract_failure
+    cmp qword ptr [r12 + tk_IG_LOCKS], 0
+    je tk_intent_contract_failure
+    mov edi, PIC_BYTES
+    call tk_allocate_guarded
+    mov r13, rax
+    mov rdx, 0x3130474350495248
+    mov [r13], rdx
+    mov [r13 + PIC_PARENT], r12
+    mov rax, [r12 + tk_IG_SERVICE]
+    mov [r13 + tk_IG_SERVICE], rax
+    mov rax, [r12 + tk_IG_LOCKS]
+    mov [r13 + tk_IG_LOCKS], rax
+    mov rdi, r13
+    call tk_intent_prepare_create
+    mov [r13 + 24], rax
+    mov rdi, r13
+    call tk_intent_prepare_create
+    mov [r13 + 32], rax
+    mov rdi, r13
+    call tk_intent_record_create
+    mov [r13 + 40], rax
+    mov edi, tk_IC_BYTES
+    call tk_allocate_guarded
+    mov [r13 + 56], rax
+    mov [rax + 8], r13
+    mov rdx, 0x3130434954495248
+    mov [rax], rdx
+    lea rdi, [r12 + PIC_GATE]
+    call tk_rlk_mutex_lock
+    mov rax, [r12 + PIC_NEXT_GENERATION]
+    inc rax
+    jz tk_intent_contract_failure
+    mov [r12 + PIC_NEXT_GENERATION], rax
+    mov [r13 + PIC_GENERATION], rax
+    mov qword ptr [r13 + PIC_STATE], 1
+    mov rax, [r12 + PIC_HEAD]
+    mov [r13 + PIC_NEXT], rax
+    test rax, rax
+    jz pic_create_first
+    cmp [rax + PIC_PARENT], r12
+    jne tk_intent_contract_failure
+    cmp qword ptr [rax + PIC_PREV], 0
+    jne tk_intent_contract_failure
+    mov [rax + PIC_PREV], r13
+pic_create_first:
+    mov [r12 + PIC_HEAD], r13
+    add qword ptr [r12 + PIC_COUNT], 1
+    jc tk_intent_contract_failure
+    lea rdi, [r12 + PIC_GATE]
+    call tk_rlk_mutex_unlock
+    mov rax, r13
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+# Private caller -> same live canonical IG, preserving the argument registers.
+pic_shared_owner:
+    mov rax, 0x3130474350495248
+    cmp [rdi], rax
+    jne tk_intent_contract_failure
+    mov rax, [rdi + PIC_PARENT]
+    test rax, rax
+    jz tk_intent_contract_failure
+    mov r10, 0x3130474954495248
+    cmp [rax], r10
+    jne tk_intent_contract_failure
+    mov r10, [rdi + tk_IG_SERVICE]
+    cmp [rax + tk_IG_SERVICE], r10
+    jne tk_intent_contract_failure
+    cmp [r10 + tk_INTENT_GLOBAL_SLOT], rax
+    jne tk_intent_contract_failure
+    mov r10, [rdi + tk_IG_LOCKS]
+    cmp [rax + tk_IG_LOCKS], r10
+    jne tk_intent_contract_failure
+    cmp qword ptr [rdi + PIC_GENERATION], 0
+    je tk_intent_contract_failure
+    cmp qword ptr [rdi + PIC_STATE], 1
+    jb tk_intent_contract_failure
+    cmp qword ptr [rdi + PIC_STATE], 2
+    ja tk_intent_contract_failure
+    ret
+
+# Caller, exact HRIQ input, input length, output80 -> unchanged owner return code.
+intent_caller_call:
+    sub rsp, 8
+    call pic_shared_owner
+    call tk_intent_owner_call
+    add rsp, 8
+    ret
+
+# Caller, metadata request, length, output, capacity -> actual metadata owner.
+# Its continuation state and both pure workspaces belong to this private caller.
+intent_caller_metadata:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    sub rsp, 16
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov rbp, rcx
+    mov [rsp], r8
+    call pic_shared_owner
+    mov rbx, [r12 + 48]
+    test rbx, rbx
+    jnz pic_metadata_existing
+    mov edi, OFFSET FLAT:tk_CV_BYTES
+    call tk_allocate_guarded
+    mov rbx, rax
+    mov [r12 + 48], rbx
+    mov [rbx + 8], r12
+pic_metadata_existing:
+    cmp [rbx + 8], r12
+    jne tk_intent_contract_failure
+    mov rax, [rbx + 32]
+    or rax, [rbx + 56]
+    or rax, [rbx + 144]
+    jnz tk_intent_contract_failure
+    mov rdi, rbx
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, rbp
+    mov r8, [rsp]
+    call tk_intent_result_metadata_call
+    add rsp, 16
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# Same five-register Config ABI; only a private caller redirects to its parent.
+pic_config_call:
+    mov rax, 0x3130474350495248
+    cmp [rdi], rax
+    jne tk_async_existing_config_call
+    sub rsp, 8
+    call pic_shared_owner
+    mov rdi, rax
+    add rsp, 8
+    jmp tk_async_existing_config_call
+
+# Caller and trusted internal task address: one successful ownership transfer.
+intent_caller_transfer:
+    push rbx
+    mov rbx, rsi
+    test rbx, rbx
+    jz tk_intent_contract_failure
+    call pic_shared_owner
+    cmp qword ptr [rdi + PIC_STATE], 1
+    jne tk_intent_contract_failure
+    cmp qword ptr [rdi + PIC_TASK], 0
+    jne tk_intent_contract_failure
+    mov [rdi + PIC_TASK], rbx
+    mov qword ptr [rdi + PIC_STATE], 2
+    xor eax, eax
+    pop rbx
+    ret
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# The caller's real Intent Drop and private carriers retire before shared owners.
+
+# Unspawned start owns this caller; it must not have transferred it to a task.
+intent_caller_drop:
+    xor esi, esi
+    jmp pic_drop
+
+# Task-owned caller, exact trusted task address.
+intent_caller_drop_owned:
+    test rsi, rsi
+    jz tk_intent_contract_failure
+pic_drop:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    mov r13, rdi
+    mov r14, rsi
+    call pic_shared_owner
+    mov r12, rax
+    test r14, r14
+    jz pic_drop_start_owned
+    cmp qword ptr [r13 + PIC_STATE], 2
+    jne tk_intent_contract_failure
+    cmp [r13 + PIC_TASK], r14
+    jne tk_intent_contract_failure
+    jmp pic_drop_custody
+pic_drop_start_owned:
+    cmp qword ptr [r13 + PIC_STATE], 1
+    jne tk_intent_contract_failure
+    cmp qword ptr [r13 + PIC_TASK], 0
+    jne tk_intent_contract_failure
+pic_drop_custody:
+    cmp qword ptr [r13 + 80], 0
+    jne tk_intent_contract_failure
+    mov rax, [r13 + 128]
+    or rax, [r13 + 144]
+    or rax, [r13 + 160]
+    or rax, [r13 + 64]
+    or rax, [r13 + 72]
+    or rax, [r13 + 176]
+    jnz tk_intent_contract_failure
+    mov rbx, [r13 + 56]
+    cmp [rbx + 8], r13
+    jne tk_intent_contract_failure
+    mov rax, [rbx + 112]
+    or rax, [rbx + 32]
+    jnz tk_intent_contract_failure
+    cmp qword ptr [rbx + 104], 0
+    je pic_drop_fields
+    cmp qword ptr [rbx + 104], 1
+    jne tk_intent_contract_failure
+    lea rdi, [rbx + 65536]
+    xor eax, eax
+    mov ecx, 12
+    rep stosq
+    mov rax, 0x3130305149525248
+    mov [rbx + 65536], rax
+    mov qword ptr [rbx + 65544], 3
+    mov rdi, r13
+    lea rsi, [rbx + 65536]
+    mov edx, 96
+    lea rcx, [rbx + 65792]
+    call tk_intent_owner_call
+    cmp eax, 80
+    jne tk_intent_contract_failure
+    mov rax, [rbx + 65800]
+    or rax, [rbx + 65816]
+    or rax, [rbx + 104]
+    jnz tk_intent_contract_failure
+pic_drop_fields:
+    mov rdi, [r13 + 24]
+    call tk_intent_prepare_cleanup
+    mov qword ptr [r13 + 24], 0
+    mov rdi, [r13 + 32]
+    call tk_intent_prepare_cleanup
+    mov qword ptr [r13 + 32], 0
+    mov rdi, [r13 + 40]
+    cmp qword ptr [rdi + tk_IP_BUSY], 0
+    jne tk_intent_contract_failure
+    cmp qword ptr [rdi + 128], -1
+    jne tk_intent_contract_failure
+    cmp qword ptr [rdi + 136], -1
+    jne tk_intent_contract_failure
+    cmp qword ptr [rdi + 144], -1
+    jne tk_intent_contract_failure
+    mov qword ptr [r13 + 40], 0
+    mov esi, tk_IR_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+    mov rdi, [r13 + 48]
+    test rdi, rdi
+    jz pic_drop_context
+    cmp [rdi + 8], r13
+    jne tk_intent_contract_failure
+    mov rax, [rdi + 32]
+    or rax, [rdi + 56]
+    or rax, [rdi + 144]
+    jnz tk_intent_contract_failure
+    mov qword ptr [r13 + 48], 0
+    mov esi, tk_CV_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+pic_drop_context:
+    mov rdi, rbx
+    mov esi, tk_IC_BYTES + 4096
+    mov qword ptr [r13 + 56], 0
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+    lea rdi, [r12 + PIC_GATE]
+    call tk_rlk_mutex_lock
+    mov rbx, [r13 + PIC_PREV]
+    mov rbp, [r13 + PIC_NEXT]
+    test rbx, rbx
+    jz pic_drop_head
+    cmp [rbx + PIC_NEXT], r13
+    jne tk_intent_contract_failure
+    mov [rbx + PIC_NEXT], rbp
+    jmp pic_drop_next
+pic_drop_head:
+    cmp [r12 + PIC_HEAD], r13
+    jne tk_intent_contract_failure
+    mov [r12 + PIC_HEAD], rbp
+pic_drop_next:
+    test rbp, rbp
+    jz pic_drop_count
+    cmp [rbp + PIC_PREV], r13
+    jne tk_intent_contract_failure
+    mov [rbp + PIC_PREV], rbx
+pic_drop_count:
+    sub qword ptr [r12 + PIC_COUNT], 1
+    jc tk_intent_contract_failure
+    mov qword ptr [r13 + PIC_STATE], 3
+    lea rdi, [r12 + PIC_GATE]
+    call tk_rlk_mutex_unlock
+    mov qword ptr [r13 + PIC_PARENT], 0
+    mov qword ptr [r13 + tk_IG_LOCKS], 0
+    mov qword ptr [r13 + PIC_TASK], 0
+    mov qword ptr [r13], 0
+    mov rdi, r13
+    mov esi, PIC_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz tk_intent_resource_failure
+    xor eax, eax
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# Called after every ordinary caller, task and worker has retired.
+pic_global_quiescent:
+    mov rax, [rdi + PIC_HEAD]
+    or rax, [rdi + PIC_COUNT]
+    or rax, [rdi + PIC_GATE]
+    or rax, [rdi + PIC_PARENT]
+    jnz tk_intent_contract_failure
+    xor eax, eax
+    ret
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Optional private producer root. Canonical/public-request callers retain their path.
+pic_public_metadata:
+    cmp qword ptr [r15 + PIC_ROOT_SLOT], 0
+    je pf_metadata_query
+    mov r8, rcx
+    mov rcx, rdx
+    mov rdx, rsi
+    mov rsi, rdi
+    mov rdi, [r15 + PIC_ROOT_SLOT]
+    jmp intent_caller_metadata
+
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed coroutine custody. Producer semantics remain in a separately bound HIA owner.
+
+# Task -> its canonical scheduler. Called only on this task's stack.
+pit_running:
+    mov rax, 0x313054544b445350
+    cmp [rdi], rax
+    jne ap_contract
+    cmp qword ptr [rdi + PI_T_KIND], 1
+    jne ap_contract
+    cmp qword ptr [rdi + PF_T_STATE], 1
+    jne ap_contract
+    mov rax, [rdi + PF_T_GLOBAL]
+    cmp [rax + PF_G_CURRENT], rdi
+    jne ap_contract
+    mov r10, [rdi + PF_T_ROOT]
+    cmp [r10 + PF_TASK_SLOT], rdi
+    jne ap_contract
+    cmp qword ptr [r10 + AP_SLOT], 0
+    jne ap_contract
+    ret
+
+# Entry is a fixed build-time symbol, never an input-supplied function address.
+# task, immutable input, length, private PublicRoot, private HIA context, capacity.
+pit_task_entry:
+    mov rdi, [r15 + PF_TASK_SLOT]
+    call pit_running
+    mov rbx, rdi
+    mov rsi, [rbx + PI_T_INPUT]
+    mov rdx, [rbx + PI_T_INPUT_LEN]
+    mov rcx, r15
+    mov r8, [rbx + PI_T_CONTEXT]
+    mov r9, [rbx + PI_T_CONTEXT_BYTES]
+    call producer_future_run
+    test rax, rax
+    jnz ap_contract
+    cmp qword ptr [rbx + PI_T_OWNED], 0
+    jne ap_contract
+    mov rax, [rbx + PI_T_SLOT]
+    or rax, [rbx + PI_T_TICKET]
+    or rax, [rbx + PI_T_INTENT]
+    or rax, [rbx + PI_T_WAIT]
+    or rax, [rbx + PI_T_HEALTH]
+    or rax, [r15 + PIC_ROOT_SLOT]
+    jnz ap_contract
+    jmp pf_task_finished
+
+# One cooperative yield with a distinct real runtime-Drop result.
+internal_task_yield_once:
+    push rbx
+    mov rbx, rdi
+    call pit_running
+    cmp qword ptr [rbx + PI_T_WAIT], 0
+    jne ap_contract
+    mov qword ptr [rbx + PI_T_WAIT], 2
+    call pf_suspend
+    cmp qword ptr [rbx + PI_T_WAIT], 2
+    jne ap_contract
+    mov qword ptr [rbx + PI_T_WAIT], 0
+    xor eax, eax
+    cmp qword ptr [rbx + PI_T_SHUTDOWN], 0
+    je pit_yield_done
+    mov eax, 0xfffffff2
+pit_yield_done:
+    pop rbx
+    ret
+
+# Native cleanup may need several actual waitpid(WNOHANG) polls.
+# No business ACK or Registry cancellation is fabricated by this yield.
+pit_cleanup_yield:
+    push rbx
+    mov rbx, rdi
+    call pit_running
+    cmp qword ptr [rbx + PI_T_WAIT], 1
+    jne ap_contract
+    call pf_suspend
+    pop rbx
+    ret
+
+# HIA has completed the actual Slot/Ticket child operation before this custody ACK.
+# RDI task, RSI subset of bits 1=Slot, 2=Ticket. Intent has its own real Drop entry.
+internal_task_resources_consumed:
+    push rbx
+    mov rbx, rsi
+    test rbx, rbx
+    jz ap_contract
+    cmp rbx, 3
+    ja ap_contract
+    call pit_running
+    mov rax, [rdi + PI_T_OWNED]
+    mov r10, rax
+    and r10, rbx
+    cmp r10, rbx
+    jne ap_contract
+    xor rax, rbx
+    mov [rdi + PI_T_OWNED], rax
+    test rbx, 1
+    jz pit_consumed_ticket
+    mov qword ptr [rdi + PI_T_SLOT], 0
+pit_consumed_ticket:
+    test rbx, 2
+    jz pit_consumed_done
+    mov qword ptr [rdi + PI_T_TICKET], 0
+pit_consumed_done:
+    xor eax, eax
+    pop rbx
+    ret
+
+# Drop only the actual private caller owned by this task, in HIA-selected order.
+internal_task_drop_intent:
+    push rbx
+    mov rbx, rdi
+    call pit_running
+    test qword ptr [rbx + PI_T_OWNED], 4
+    jz ap_contract
+    mov rdi, [rbx + PI_T_INTENT]
+    test rdi, rdi
+    jz ap_contract
+    mov rax, [rbx + PF_T_ROOT]
+    cmp [rax + PIC_ROOT_SLOT], rdi
+    jne ap_contract
+    mov rsi, rbx
+    call intent_caller_drop_owned
+    test rax, rax
+    jnz ap_contract
+    mov rax, [rbx + PF_T_ROOT]
+    mov qword ptr [rax + PIC_ROOT_SLOT], 0
+    mov qword ptr [rbx + PI_T_INTENT], 0
+    and qword ptr [rbx + PI_T_OWNED], -5
+    xor eax, eax
+    pop rbx
+    ret
+
+# Actual runtime shutdown, after the external SDK callers have retired.
+# Private Registry cancellation remains a separate HIA effect.
+internal_tasks_begin_shutdown:
+    push rbx
+    mov rbx, rdi
+    cmp qword ptr [rbx + PF_PARENT_SLOT], 0
+    jne ap_contract
+    mov rax, [rbx + PF_GLOBAL_SLOT]
+    test rax, rax
+    jz pit_shutdown_absent
+    cmp qword ptr [rax + PF_G_CURRENT], 0
+    jne ap_contract
+    cmp qword ptr [rax + PI_G_UNSPAWNED], 0
+    jne ap_contract
+    mov qword ptr [rax + PI_G_STOPPING], 1
+    mov rdx, [rax + PF_G_HEAD]
+pit_shutdown_next:
+    test rdx, rdx
+    jz pit_shutdown_absent
+    cmp qword ptr [rdx + PI_T_KIND], 1
+    jne pit_shutdown_advance
+    cmp qword ptr [rdx + PF_T_STATE], 3
+    je pit_shutdown_advance
+    cmp qword ptr [rdx + PF_T_STATE], 1
+    jne ap_contract
+    mov qword ptr [rdx + PI_T_SHUTDOWN], 1
+pit_shutdown_advance:
+    mov rdx, [rdx + PF_T_NEXT]
+    jmp pit_shutdown_next
+pit_shutdown_absent:
+    xor eax, eax
+    pop rbx
+    ret
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# root, immutable input, length, bundle32, fixed HIA context bytes.
+# Bundle: Slot opaque, Ticket handle, private Intent caller, ownership bits 1|2|4.
+internal_task_create:
+    pf_prologue
+    mov r15, rdi
+    cmp qword ptr [r15 + PF_PARENT_SLOT], 0
+    jne ap_contract
+    mov [rsp], rsi
+    mov [rsp + 8], rdx
+    mov [rsp + 16], rcx
+    mov [rsp + 24], r8
+    test rsi, rsi
+    jz ap_contract
+    test rdx, rdx
+    jz ap_contract
+    cmp rdx, 8388608
+    ja ap_contract
+    mov rax, rsi
+    add rax, rdx
+    jc ap_contract
+    test rcx, rcx
+    jz ap_contract
+    mov rax, [rcx + 24]
+    cmp rax, 7
+    ja ap_contract
+    mov r9, [rcx]
+    test rax, 1
+    jnz pit_create_slot_owned
+    test r9, r9
+    jnz ap_contract
+    jmp pit_create_ticket_check
+pit_create_slot_owned:
+    test r9, r9
+    jz ap_contract
+pit_create_ticket_check:
+    mov r9, [rcx + 8]
+    test rax, 2
+    jnz pit_create_ticket_owned
+    test r9, r9
+    jnz ap_contract
+    jmp pit_create_intent_check
+pit_create_ticket_owned:
+    test r9, r9
+    jz ap_contract
+pit_create_intent_check:
+    mov r9, [rcx + 16]
+    test rax, 4
+    jnz pit_create_intent_owned
+    test r9, r9
+    jnz ap_contract
+    jmp pit_create_capacity
+pit_create_intent_owned:
+    test r9, r9
+    jz ap_contract
+    mov rdi, r9
+    call pic_shared_owner
+    cmp [r15 + EX_CONFIG_IG], rax
+    jne ap_contract
+    cmp qword ptr [rdi + PIC_STATE], 1
+    jne ap_contract
+    cmp qword ptr [rdi + PIC_TASK], 0
+    jne ap_contract
+pit_create_capacity:
+    mov r8, [rsp + 24]
+    cmp r8, 4096
+    jb ap_contract
+    cmp r8, 268435456
+    ja ap_contract
+    test r8, 4095
+    jnz ap_contract
+    mov rdi, r15
+    call pf_global
+    mov r12, rax
+    cmp qword ptr [r12 + PI_G_STOPPING], 0
+    jne pit_create_closed
+    mov edi, PF_TASK_BYTES
+    call tk_allocate_guarded
+    mov r14, rax
+    mov rdx, 0x313054544b445350
+    mov [r14], rdx
+    mov qword ptr [r14 + PI_T_KIND], 1
+    mov [r14 + PF_T_GLOBAL], r12
+    mov rax, [r12 + PI_G_GENERATION]
+    inc rax
+    jz ap_contract
+    mov [r12 + PI_G_GENERATION], rax
+    mov [r14 + PI_T_GENERATION], rax
+    mov rbx, [rsp + 16]
+    mov rax, [rbx]
+    mov [r14 + PI_T_SLOT], rax
+    mov rax, [rbx + 8]
+    mov [r14 + PI_T_TICKET], rax
+    mov rax, [rbx + 16]
+    mov [r14 + PI_T_INTENT], rax
+    mov rax, [rbx + 24]
+    mov [r14 + PI_T_OWNED], rax
+    mov rdi, [rsp + 8]
+    add rdi, 4095
+    and rdi, -4096
+    mov [r14 + PI_T_INPUT_BYTES], rdi
+    call tk_allocate_guarded
+    mov [r14 + PI_T_INPUT], rax
+    mov rdi, rax
+    mov rsi, [rsp]
+    mov rcx, [rsp + 8]
+    mov [r14 + PI_T_INPUT_LEN], rcx
+    rep movsb
+    mov rdi, [r14 + PI_T_INPUT]
+    mov rsi, [r14 + PI_T_INPUT_BYTES]
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rdi, [rsp + 24]
+    mov [r14 + PI_T_CONTEXT_BYTES], rdi
+    call tk_allocate_guarded
+    mov [r14 + PI_T_CONTEXT], rax
+    mov edi, MAP_BYTES
+    call ex_allocate
+    mov rbp, rax
+    mov [r14 + PF_T_ROOT], rbp
+    mov [rbp + PF_GLOBAL_SLOT], r12
+    mov [rbp + PF_PARENT_SLOT], r15
+    mov [rbp + PF_TASK_SLOT], r14
+    mov rax, [r14 + PI_T_INTENT]
+    mov [rbp + PIC_ROOT_SLOT], rax
+    lea rax, [r14 + PI_T_HEALTH]
+    mov [rbp + PI_ROOT_HEALTH], rax
+    mov rax, [r15 + 640]
+    mov [rbp + 640], rax
+    mov rax, [r15 + 648]
+    mov [rbp + 648], rax
+    lea rdi, [rbp + 704]
+    lea rsi, [r15 + 704]
+    mov ecx, 10
+    rep movsq
+    mov rax, [r15 + EX_CONFIG_IG]
+    mov [rbp + EX_CONFIG_IG], rax
+    mov rax, [r15 + EX_META_ADDRESS]
+    mov [rbp + EX_META_ADDRESS], rax
+    mov edi, EX_MAP_BYTES
+    call ex_allocate
+    mov [rbp + EX_CONTROL_SLOT], rax
+    mov rbx, rax
+    mov rdi, rax
+    mov rsi, [r15 + EX_CONTROL_SLOT]
+    test rsi, rsi
+    jz ap_contract
+    mov ecx, 7
+    rep movsq
+    mov [rbx], rbp
+    mov rsi, [r15 + EX_CONTROL_SLOT]
+    mov rax, [rsi + 176]
+    mov [rbx + 176], rax
+    # No AP mapping, SDK node, public request ID or cancellation token is created.
+    cmp qword ptr [rbp + AP_SLOT], 0
+    jne ap_contract
+    mov edi, PF_STACK_BYTES
+    call tk_allocate_guarded
+    mov [r14 + PF_T_STACK], rax
+    mov rdi, rax
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rax, [r14 + PF_T_STACK]
+    add rax, PF_STACK_BYTES - 8
+    lea rdx, [rip + pit_task_entry]
+    mov [rax], rdx
+    mov [r14 + PF_T_SWITCH + 48], rax
+    mov [r14 + PF_T_SWITCH + 40], rbp
+    mov rax, [r12 + PF_G_TAIL]
+    mov [r14 + PF_T_PREV], rax
+    test rax, rax
+    jz pit_create_first
+    cmp qword ptr [rax + PF_T_NEXT], 0
+    jne ap_contract
+    mov [rax + PF_T_NEXT], r14
+    jmp pit_create_linked
+pit_create_first:
+    cmp qword ptr [r12 + PF_G_HEAD], 0
+    jne ap_contract
+    mov [r12 + PF_G_HEAD], r14
+pit_create_linked:
+    mov [r12 + PF_G_TAIL], r14
+    add qword ptr [r12 + PF_G_COUNT], 1
+    jc ap_contract
+    add qword ptr [r12 + PI_G_COUNT], 1
+    jc ap_contract
+    add qword ptr [r12 + PI_G_UNSPAWNED], 1
+    jc ap_contract
+    mov rax, r14
+    pf_epilogue
+pit_create_closed:
+    xor eax, eax
+    pf_epilogue
+
+# 0 = success and transfer; 1 = runtime stopping, no transfer.
+internal_task_spawn:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov rbx, rdi
+    mov rax, 0x313054544b445350
+    cmp [rbx], rax
+    jne ap_contract
+    cmp qword ptr [rbx + PI_T_KIND], 1
+    jne ap_contract
+    cmp qword ptr [rbx + PF_T_STATE], 0
+    jne ap_contract
+    mov r12, [rbx + PF_T_GLOBAL]
+    cmp qword ptr [r12 + PI_G_STOPPING], 0
+    jne pit_spawn_closed
+    mov rdi, [rbx + PI_T_INTENT]
+    test rdi, rdi
+    jz pit_spawn_transferred
+    mov rsi, rbx
+    call intent_caller_transfer
+    test rax, rax
+    jnz ap_contract
+pit_spawn_transferred:
+    mov qword ptr [rbx + PF_T_STATE], 1
+    sub qword ptr [r12 + PI_G_UNSPAWNED], 1
+    jc ap_contract
+    xor eax, eax
+    jmp pit_spawn_done
+pit_spawn_closed:
+    mov eax, 1
+pit_spawn_done:
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Internal await has no SDK node, cancellation-map entry or transport response.
+internal_task_await:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r15, rdi
+    mov rbx, [r15 + PF_TASK_SLOT]
+    test rbx, rbx
+    jz ap_contract
+    mov rdi, rbx
+    call pit_running
+    cmp [rbx + PF_T_ROOT], r15
+    jne ap_contract
+    cmp qword ptr [rbx + PI_T_WAIT], 0
+    jne ap_contract
+    test rsi, rsi
+    jz ap_contract
+    test rdx, rdx
+    jz ap_contract
+    test rcx, rcx
+    jz ap_contract
+    cmp r8, -1
+    je pit_await_fd
+    cmp r8, 2147483647
+    ja ap_contract
+pit_await_fd:
+    mov [rbx + PI_T_CALLER], rsi
+    mov [rbx + PI_T_POLL], rdx
+    mov [rbx + PI_T_DROP], rcx
+    mov [rbx + PI_T_WAKE], r8
+    mov qword ptr [rbx + PI_T_WAIT], 1
+pit_await_poll:
+    cmp qword ptr [rbx + PI_T_SHUTDOWN], 0
+    jne pit_await_drop
+    mov rdi, [rbx + PI_T_CALLER]
+    call qword ptr [rbx + PI_T_POLL]
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, 0xfffffff1
+    je pit_await_pending
+    cmp rax, ROOT_OUTPUT_CAP
+    ja ap_contract
+    mov [rbx + PI_T_RESULT], rax
+    jmp pit_await_return
+pit_await_pending:
+    call pf_suspend
+    jmp pit_await_poll
+pit_await_drop:
+    mov rdi, [rbx + PI_T_CALLER]
+    call qword ptr [rbx + PI_T_DROP]
+    test rax, rax
+    jnz ap_contract
+    mov dword ptr [rbx + PI_T_RESULT], 0xfffffff2
+    mov dword ptr [rbx + PI_T_RESULT + 4], 0
+pit_await_return:
+    mov qword ptr [rbx + PI_T_CALLER], 0
+    mov qword ptr [rbx + PI_T_POLL], 0
+    mov qword ptr [rbx + PI_T_DROP], 0
+    mov qword ptr [rbx + PI_T_WAKE], 0
+    mov qword ptr [rbx + PI_T_WAIT], 0
+    mov rax, [rbx + PI_T_RESULT]
+    mov qword ptr [rbx + PI_T_RESULT], 0
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+# Exact entry dispatch based on native custody, not on a public message field.
+pit_await_dispatch:
+    mov rax, [rdi + PF_TASK_SLOT]
+    test rax, rax
+    jz pit_await_public
+    cmp qword ptr [rax + PI_T_KIND], 1
+    je internal_task_await
+pit_await_public:
+    jmp pit_public_async_await
+
+# Canonical scheduler stack only. SDK grace has finished before this call.
+# Shared blocking owners are destroyed only after this returns.
+internal_task_drain:
+    jmp asd_internal_task_drain
+asd_runtime_task_drain:
+    push rbx
+    push r12
+    sub rsp, 24
+    mov rbx, rdi
+    cmp qword ptr [rbx + PF_PARENT_SLOT], 0
+    jne ap_contract
+    mov r12, [rbx + PF_GLOBAL_SLOT]
+    test r12, r12
+    jz pit_drain_done
+    cmp qword ptr [r12 + PF_G_CURRENT], 0
+    jne ap_contract
+    mov rax, [r12 + PF_G_COUNT]
+    cmp [r12 + PI_G_COUNT], rax
+    jne ap_contract
+    call internal_tasks_begin_shutdown
+pit_drain_next:
+    cmp qword ptr [r12 + PI_G_COUNT], 0
+    je pit_drain_done
+    mov rdi, rbx
+    call pf_drive_round
+    cmp qword ptr [r12 + PI_G_COUNT], 0
+    je pit_drain_done
+    mov qword ptr [rsp], 0
+    mov qword ptr [rsp + 8], 1000000
+    mov rdi, rsp
+    xor esi, esi
+    mov eax, 35
+    syscall
+    cmp rax, -4
+    je pit_drain_next
+    test rax, rax
+    jnz ap_contract
+    jmp pit_drain_next
+pit_drain_done:
+    xor eax, eax
+    add rsp, 24
+    pop r12
+    pop rbx
+    ret
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Discard never owns Slot/Ticket/Intent. Native buffers retire on the scheduler stack.
+internal_task_discard:
+    mov rax, 0x313054544b445350
+    cmp [rdi], rax
+    jne ap_contract
+    cmp qword ptr [rdi + PI_T_KIND], 1
+    jne ap_contract
+    cmp qword ptr [rdi + PF_T_STATE], 0
+    jne ap_contract
+    mov rax, [rdi + PF_T_GLOBAL]
+    cmp [rax + PF_G_CURRENT], rdi
+    je ap_contract
+    sub qword ptr [rax + PI_G_UNSPAWNED], 1
+    jc ap_contract
+    mov rax, [rdi + PF_T_ROOT]
+    mov qword ptr [rax + PIC_ROOT_SLOT], 0
+    mov qword ptr [rdi + PI_T_OWNED], 0
+    mov qword ptr [rdi + PI_T_SLOT], 0
+    mov qword ptr [rdi + PI_T_TICKET], 0
+    mov qword ptr [rdi + PI_T_INTENT], 0
+    mov qword ptr [rdi + PF_T_STATE], 3
+    xor eax, eax
+    ret
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed Health Future callback for an internal task; no SDK/AP node is fabricated.
+# root, complete HRHHQ001 child request, length, output, capacity.
+internal_health_call:
+    pf_prologue
+    mov r15, rdi
+    mov rbx, [r15 + PF_TASK_SLOT]
+    mov [rsp], rsi
+    mov [rsp + 8], rdx
+    mov [rsp + 16], rcx
+    mov [rsp + 24], r8
+    mov rdi, rbx
+    call pit_running
+    cmp [rbx + PF_T_ROOT], r15
+    jne ap_contract
+    lea rax, [rbx + PI_T_HEALTH]
+    cmp [r15 + PI_ROOT_HEALTH], rax
+    jne ap_contract
+    cmp qword ptr [rbx + PI_T_HEALTH], 0
+    jne ap_contract
+    mov rdi, [rsp]
+    mov rsi, [rsp + 8]
+    cmp rsi, 64
+    jb ap_contract
+    cmp rsi, 8388672
+    ja ap_contract
+    mov rax, rdi
+    add rax, rsi
+    jc ap_contract
+    mov rax, 0x3130305148485248
+    cmp [rdi], rax
+    jne ap_contract
+    cmp qword ptr [rdi + 8], 7
+    jne ap_contract
+    mov rax, [rdi + 16]
+    or rax, [rdi + 24]
+    or rax, [rdi + 32]
+    or rax, [rdi + 40]
+    or rax, [rdi + 56]
+    jnz ap_contract
+    sub rsi, 64
+    cmp [rdi + 48], rsi
+    jne ap_contract
+    cmp qword ptr [rsp + 24], 4096
+    jb ap_contract
+    mov rax, [rsp + 16]
+    test rax, rax
+    jz ap_contract
+    add rax, [rsp + 24]
+    jc ap_contract
+    mov rcx, [rbx + PI_T_GENERATION]
+    mov rdx, rsi
+    lea rsi, [rdi + 64]
+    mov rdi, r15
+    mov r8, [r15 + 648]
+    call health_future_create
+    mov [rbx + PI_T_HEALTH], rax
+    mov rdi, r15
+    mov rsi, rax
+    lea rdx, [rip + health_future_poll]
+    lea rcx, [rip + pit_health_runtime_drop]
+    mov r8, -1
+    call internal_task_await
+    cmp eax, 0xfffffff2
+    je pit_health_abandoned
+    cmp eax, 64
+    jb ap_contract
+    cmp eax, 4096
+    ja ap_contract
+    cmp rax, [rsp + 24]
+    ja ap_contract
+    mov r13, rax
+    mov r12, [rbx + PI_T_HEALTH]
+    test r12, r12
+    jz ap_contract
+    mov rdi, [rsp + 16]
+    lea rsi, [r12 + H_OUTPUT]
+    mov rcx, r13
+    rep movsb
+    mov qword ptr [rbx + PI_T_HEALTH], 0
+    mov rdi, r12
+    call health_future_destroy
+    mov rax, r13
+    pf_epilogue
+pit_health_abandoned:
+    cmp qword ptr [rbx + PI_T_HEALTH], 0
+    jne ap_contract
+    mov eax, 0xfffffff2
+    pf_epilogue
+
+# This callback is selected only by actual internal runtime shutdown.
+# Inner producer cancellation remains an independent HIA decision.
+pit_health_runtime_drop:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov rbx, rdi
+    mov rax, [rbx + H_CFG]
+    mov r12, [rax + PF_TASK_SLOT]
+    cmp [r12 + PI_T_HEALTH], rbx
+    jne ap_contract
+    call health_future_cancel
+pit_health_reap:
+    mov rdi, rbx
+    call health_future_reap
+    cmp eax, 1
+    je pit_health_retire
+    test eax, eax
+    jnz ap_contract
+    mov rdi, r12
+    call pit_cleanup_yield
+    jmp pit_health_reap
+pit_health_retire:
+    mov qword ptr [r12 + PI_T_HEALTH], 0
+    mov rdi, rbx
+    call health_future_destroy
+    xor eax, eax
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+
+# Fixed create-only Future effect; HIA performs selection between polls.
+internal_health_begin:
+    pf_prologue
+    mov r15, rdi
+    mov rbx, [r15 + PF_TASK_SLOT]
+    mov [rsp], rsi
+    mov [rsp + 8], rdx
+    mov [rsp + 16], rcx
+    mov [rsp + 24], r8
+    mov rdi, rbx
+    call pit_running
+    cmp [rbx + PF_T_ROOT], r15
+    jne ap_contract
+    lea rax, [rbx + PI_T_HEALTH]
+    cmp [r15 + PI_ROOT_HEALTH], rax
+    jne ap_contract
+    cmp qword ptr [rbx + PI_T_HEALTH], 0
+    jne ap_contract
+    mov rdi, [rsp]
+    mov rsi, [rsp + 8]
+    cmp rsi, 64
+    jb ap_contract
+    cmp rsi, 8388672
+    ja ap_contract
+    mov rax, rdi
+    add rax, rsi
+    jc ap_contract
+    mov rax, 0x3130305148485248
+    cmp [rdi], rax
+    jne ap_contract
+    cmp qword ptr [rdi + 8], 7
+    jne ap_contract
+    mov rax, [rdi + 16]
+    or rax, [rdi + 24]
+    or rax, [rdi + 32]
+    or rax, [rdi + 40]
+    or rax, [rdi + 56]
+    jnz ap_contract
+    sub rsi, 64
+    cmp [rdi + 48], rsi
+    jne ap_contract
+    mov rcx, [rbx + PI_T_GENERATION]
+    mov rdx, rsi
+    lea rsi, [rdi + 64]
+    mov rdi, r15
+    mov r8, [r15 + 648]
+    call health_future_create
+    mov [rbx + PI_T_HEALTH], rax
+    xor eax, eax
+    pf_epilogue
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# root, output, capacity -> Pending or exact terminal bytes.
+# One poll only. HIA chooses cancellation/timeout/yield between polls.
+internal_health_poll:
+    pf_prologue
+    mov r15, rdi
+    mov [rsp], rsi
+    mov [rsp + 8], rdx
+    test rsi, rsi
+    jz ap_contract
+    cmp rdx, 4096
+    jb ap_contract
+    mov rax, rsi
+    add rax, rdx
+    jc ap_contract
+    mov rbx, [r15 + PF_TASK_SLOT]
+    mov rdi, rbx
+    call pit_running
+    cmp [rbx + PF_T_ROOT], r15
+    jne ap_contract
+    cmp qword ptr [rbx + PI_T_WAIT], 0
+    jne ap_contract
+    mov r12, [rbx + PI_T_HEALTH]
+    test r12, r12
+    jz ap_contract
+    mov rdi, r12
+    call health_future_poll
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, 0xfffffff1
+    je pit_health_step_done
+    cmp eax, 64
+    jb ap_contract
+    cmp eax, 4096
+    ja ap_contract
+    cmp rax, [rsp + 8]
+    ja ap_contract
+    mov r13, rax
+    mov rdi, [rsp]
+    lea rsi, [r12 + H_OUTPUT]
+    mov rcx, r13
+    rep movsb
+    mov qword ptr [rbx + PI_T_HEALTH], 0
+    mov rdi, r12
+    call health_future_destroy
+    mov rax, r13
+pit_health_step_done:
+    pf_epilogue
+
+# HIA-selected actual Future Drop. This does not alter the Registry or SDK token.
+internal_health_drop:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov rbx, rdi
+    mov r12, [rbx + PF_TASK_SLOT]
+    mov rdi, r12
+    call pit_running
+    cmp [r12 + PF_T_ROOT], rbx
+    jne ap_contract
+    cmp qword ptr [r12 + PI_T_WAIT], 0
+    jne ap_contract
+    mov rdi, [r12 + PI_T_HEALTH]
+    test rdi, rdi
+    jz ap_contract
+    mov qword ptr [r12 + PI_T_WAIT], 1
+    call pit_health_runtime_drop
+    test rax, rax
+    jnz ap_contract
+    cmp qword ptr [r12 + PI_T_WAIT], 1
+    jne ap_contract
+    mov qword ptr [r12 + PI_T_WAIT], 0
+    xor eax, eax
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+
+internal_task_retire:
+    pf_prologue
+    mov r14, rdi
+    cmp qword ptr [r14 + PI_T_KIND], 1
+    jne ap_contract
+    cmp qword ptr [r14 + PF_T_STATE], 2
+    je pit_retire_state_ready
+    cmp qword ptr [r14 + PF_T_STATE], 3
+    jne ap_contract
+pit_retire_state_ready:
+    mov rax, [r14 + PI_T_OWNED]
+    or rax, [r14 + PI_T_SLOT]
+    or rax, [r14 + PI_T_TICKET]
+    or rax, [r14 + PI_T_INTENT]
+    or rax, [r14 + PI_T_WAIT]
+    or rax, [r14 + PI_T_HEALTH]
+    jnz ap_contract
+    mov r12, [r14 + PF_T_GLOBAL]
+    cmp qword ptr [r12 + PF_G_CURRENT], 0
+    jne ap_contract
+    mov r15, [r14 + PF_T_ROOT]
+    cmp [r15 + PF_TASK_SLOT], r14
+    jne ap_contract
+    mov r13, [r15 + PF_PARENT_SLOT]
+    cmp [r12 + 8], r13
+    jne ap_contract
+    mov rbx, [r15 + EX_CONTROL_SLOT]
+    cmp [rbx], r15
+    jne ap_contract
+    mov rax, [rbx + 128]
+    or rax, [rbx + 136]
+    or rax, [rbx + 184]
+    or rax, [r15]
+    jnz ap_contract
+    mov rdx, [r13 + EX_CONTROL_SLOT]
+    mov rax, [rbx + 8]
+    cmp [rdx + 8], rax
+    jne ap_contract
+    mov rax, [rbx + 16]
+    cmp [rdx + 16], rax
+    jne ap_contract
+    mov rdi, r15
+    call ps_destroy
+    mov rdi, r15
+    call pm_destroy
+    mov rdi, r15
+    call pr_destroy
+    mov rax, [r15 + AP_SLOT]
+    or rax, [r15 + PIC_ROOT_SLOT]
+    jnz ap_contract
+    lea rax, [r14 + PI_T_HEALTH]
+    cmp [r15 + PI_ROOT_HEALTH], rax
+    jne ap_contract
+    mov qword ptr [r15 + PI_ROOT_HEALTH], 0
+    mov qword ptr [r15 + EX_CONTROL_SLOT], 0
+    mov rdi, rbx
+    mov esi, EX_MAP_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rdi, r15
+    mov esi, MAP_BYTES
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov r15, r13
+    mov rdi, [r14 + PI_T_INPUT]
+    mov rsi, [r14 + PI_T_INPUT_BYTES]
+    add rsi, 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rdi, [r14 + PI_T_CONTEXT]
+    mov rsi, [r14 + PI_T_CONTEXT_BYTES]
+    add rsi, 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rdi, [r14 + PF_T_STACK]
+    mov esi, PF_STACK_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rax, [r14 + PF_T_PREV]
+    mov rdx, [r14 + PF_T_NEXT]
+    test rax, rax
+    jz pit_pf_retire_head
+    cmp [rax + PF_T_NEXT], r14
+    jne ap_contract
+    mov [rax + PF_T_NEXT], rdx
+    jmp pit_pf_retire_next
+pit_pf_retire_head:
+    cmp [r12 + PF_G_HEAD], r14
+    jne ap_contract
+    mov [r12 + PF_G_HEAD], rdx
+pit_pf_retire_next:
+    test rdx, rdx
+    jz pit_pf_retire_tail
+    cmp [rdx + PF_T_PREV], r14
+    jne ap_contract
+    mov [rdx + PF_T_PREV], rax
+    jmp pit_pf_retire_count
+pit_pf_retire_tail:
+    cmp [r12 + PF_G_TAIL], r14
+    jne ap_contract
+    mov [r12 + PF_G_TAIL], rax
+pit_pf_retire_count:
+    sub qword ptr [r12 + PF_G_COUNT], 1
+    jc ap_contract
+    sub qword ptr [r12 + PI_G_COUNT], 1
+    jc ap_contract
+    mov qword ptr [r14], 0
+    mov rdi, r14
+    mov esi, PF_TASK_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    xor eax, eax
+    pf_epilogue
+
+
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed ABI custody and routing; all producer policy remains HIA.
+# Shared blocking-pool transfer is an explicit unqualified next layer.
+.equ PFR_CONTEXT_BYTES, 268435456
+.equ PFR_INPUT_CAP, 2097152
+.equ PFR_OUTPUT_CAP, 8388672
+.equ PFR_OUTPUT_MAP, 8392704
+.equ PFR_REQUEST, 67174400
+.equ PFR_REQUEST_COPY, 83951616
+.equ PFR_REPLY, 134283264
+.equ PFR_CHILD_CAP, 10485760
+
+# task, immutable input, input length, private root, private context, capacity.
+producer_future_run:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 1048
+    mov rbx, rdi
+    mov r15, rcx
+    mov r12, r8
+    mov [rsp], rsi
+    mov [rsp + 8], rdx
+    mov [rsp + 16], r9
+    mov qword ptr [rsp + 24], 0
+    mov qword ptr [rsp + 56], 0
+    mov qword ptr [rsp + 400], 0
+    mov qword ptr [rsp + 408], 0
+    call pit_running
+    cmp [rbx + PF_T_ROOT], r15
+    jne ap_contract
+    cmp [rbx + PI_T_CONTEXT], r12
+    jne ap_contract
+    cmp qword ptr [rsp + 16], PFR_CONTEXT_BYTES
+    jne ap_contract
+    cmp qword ptr [rbx + PI_T_CONTEXT_BYTES], PFR_CONTEXT_BYTES
+    jne ap_contract
+    mov rax, [rsp]
+    cmp [rbx + PI_T_INPUT], rax
+    jne ap_contract
+    mov rdx, [rsp + 8]
+    cmp [rbx + PI_T_INPUT_LEN], rdx
+    jne ap_contract
+    cmp rdx, 416
+    jb ap_contract
+    cmp rdx, PFR_INPUT_CAP
+    ja ap_contract
+    mov rdx, 0x31304e4950595341
+    cmp [rax], rdx
+    jne ap_contract
+    cmp qword ptr [rax + 8], 1
+    jne ap_contract
+    mov rdx, [rax + 32]
+    test rdx, rdx
+    jz ap_contract
+    cmp [rbx + PI_T_TICKET], rdx
+    jne ap_contract
+    cmp qword ptr [rbx + PI_T_OWNED], 7
+    jne ap_contract
+    cmp qword ptr [rbx + PI_T_SLOT], 0
+    je ap_contract
+    mov rdx, [rbx + PI_T_INTENT]
+    test rdx, rdx
+    jz ap_contract
+    cmp [r15 + PIC_ROOT_SLOT], rdx
+    jne ap_contract
+    cmp qword ptr [r15 + PF_PARENT_SLOT], 0
+    je ap_contract
+    mov edi, PFR_OUTPUT_MAP
+    call tk_allocate_guarded
+    mov r13, rax
+    lea r14, [r12 + 256]
+pfr_invoke:
+    mov rdi, [rsp]
+    mov rsi, [rsp + 8]
+    mov rdx, r13
+    mov ecx, PFR_OUTPUT_CAP
+    mov r8, r12
+    mov r9d, PFR_CONTEXT_BYTES
+    call producer_future_image
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, 0xfffffff0
+    je pfr_effect
+    cmp eax, 64
+    jne ap_contract
+    mov rdx, 0x3130525546595341
+    cmp [r13], rdx
+    jne ap_contract
+    cmp qword ptr [rsp + 56], 0
+    jne ap_contract
+    mov rax, [rbx + PI_T_OWNED]
+    or rax, [rbx + PI_T_SLOT]
+    or rax, [rbx + PI_T_TICKET]
+    or rax, [rbx + PI_T_INTENT]
+    or rax, [rbx + PI_T_WAIT]
+    or rax, [rbx + PI_T_HEALTH]
+    or rax, [r15 + PIC_ROOT_SLOT]
+    jnz ap_contract
+    lea rdi, [rsp + 400]
+    call producer_pool_drop_generation
+    test rax, rax
+    jnz ap_contract
+    mov rdi, r13
+    mov esi, PFR_OUTPUT_MAP + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    xor eax, eax
+    add rsp, 1048
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+pfr_effect:
+    mov rax, 0x3130415546595341
+    cmp [r14], rax
+    jne ap_contract
+    mov rax, [rsp + 24]
+    inc rax
+    jz ap_contract
+    cmp [r14 + 8], rax
+    jne ap_contract
+    mov [rsp + 24], rax
+    cmp qword ptr [r14 + 24], 0
+    jne ap_contract
+    cmp qword ptr [r14 + 32], PFR_REQUEST
+    jne ap_contract
+    cmp qword ptr [r14 + 48], PFR_REPLY
+    jne ap_contract
+    cmp qword ptr [r14 + 56], PFR_CHILD_CAP
+    jne ap_contract
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz ap_contract
+    mov rcx, [r14 + 40]
+    test rcx, rcx
+    jz ap_contract
+    cmp rcx, PFR_CHILD_CAP
+    ja ap_contract
+    lea rsi, [r12 + PFR_REQUEST]
+    lea rdi, [r12 + PFR_REQUEST_COPY]
+    repe cmpsb
+    jne ap_contract
+    mov rsi, r14
+    lea rdi, [rsp + 64]
+    mov ecx, 12
+    rep movsq
+    lea rsi, [r12 + PFR_REQUEST]
+    mov rdx, [r14 + 40]
+    lea rcx, [r12 + PFR_REPLY]
+    mov r8d, PFR_CHILD_CAP
+    mov rax, [r14 + 16]
+    cmp rax, 1
+    je pfr_yield
+    cmp rax, 2
+    je pfr_registry
+    cmp rax, 3
+    je pfr_clock
+    cmp rax, 4
+    je pfr_config
+    cmp rax, 5
+    je pfr_health
+    cmp rax, 7
+    je pfr_metadata
+    cmp rax, 8
+    je pfr_intent
+    cmp rax, 9
+    je pfr_ticket
+    cmp rax, 10
+    je pfr_journal
+    cmp rax, 11
+    je pfr_custody
+    jmp ap_contract
+
+
+# Cooperative scheduling result only; HIA owns cancellation policy.
+pfr_yield:
+    cmp rdx, 16
+    jne ap_contract
+    mov rax, 0x3130514c59545546
+    cmp [rsi], rax
+    jne ap_contract
+    cmp qword ptr [rsi + 8], 1
+    jne ap_contract
+    mov rdi, rbx
+    call internal_task_yield_once
+    xor edx, edx
+    test rax, rax
+    jz pfr_yield_ready
+    mov ecx, 0xfffffff2
+    cmp rax, rcx
+    jne ap_contract
+    mov edx, 1
+pfr_yield_ready:
+    lea rcx, [r12 + PFR_REPLY]
+    mov rax, 0x3130524c59545546
+    mov [rcx], rax
+    mov [rcx + 8], rdx
+    mov eax, 16
+    jmp pfr_ack
+
+# Registry tokens and Slot owner bytes are bound to this immutable input.
+pfr_registry:
+    cmp rdx, 64
+    jb ap_contract
+    mov rax, 0x3130515353415248
+    cmp [rsi], rax
+    jne ap_contract
+    cmp qword ptr [rsi + 16], 2
+    jne ap_contract
+    mov rax, [rsi + 8]
+    mov [rsp + 40], rax
+    cmp rax, 4
+    je pfr_registry_token
+    cmp rax, 12
+    je pfr_registry_token
+    cmp rax, 14
+    je pfr_registry_identity
+    cmp rax, 10
+    jne ap_contract
+    test qword ptr [rsp + 56], 1
+    jnz ap_contract
+    test qword ptr [rbx + PI_T_OWNED], 1
+    jz ap_contract
+    mov rax, [rsp]
+    add rax, 160
+    jmp pfr_registry_bytes
+pfr_registry_identity:
+    mov rax, [rsp]
+    add rax, 96
+pfr_registry_bytes:
+    cmp rdx, 128
+    jne ap_contract
+    cmp qword ptr [rsi + 24], 64
+    jne ap_contract
+    lea rdi, [rsi + 64]
+    mov rsi, rax
+    mov ecx, 64
+    repe cmpsb
+    jne ap_contract
+    jmp pfr_registry_call
+pfr_registry_token:
+    cmp rdx, 64
+    jne ap_contract
+    mov rax, [rsp]
+    mov rax, [rax + 40]
+    test rax, rax
+    jz ap_contract
+    cmp [rsi + 32], rax
+    jne ap_contract
+pfr_registry_call:
+    mov rdi, r15
+    call pfr_shared_async
+    mov rdi, rax
+    lea rsi, [r12 + PFR_REQUEST]
+    mov rdx, [r14 + 40]
+    lea rcx, [r12 + PFR_REPLY]
+    mov r8d, PFR_CHILD_CAP
+    call tk_async_state_call
+    cmp rax, 64
+    jne ap_contract
+    cmp qword ptr [rsp + 40], 10
+    jne pfr_ack
+    cmp qword ptr [r12 + PFR_REPLY + 8], 0
+    jne pfr_ack
+    or qword ptr [rsp + 56], 1
+    jmp pfr_ack
+
+# Raw CLOCK_MONOTONIC syscall result and timespec; HIA decides deadlines.
+pfr_clock:
+    cmp rdx, 16
+    jne ap_contract
+    mov rax, 0x3130514c43545546
+    cmp [rsi], rax
+    jne ap_contract
+    cmp qword ptr [rsi + 8], 1
+    jne ap_contract
+    mov qword ptr [rsp + 352], 0
+    mov qword ptr [rsp + 360], 0
+    mov edi, 1
+    lea rsi, [rsp + 352]
+    mov eax, 228
+    syscall
+    lea rcx, [r12 + PFR_REPLY]
+    mov [rcx + 8], rax
+    mov rax, 0x3130524c43545546
+    mov [rcx], rax
+    mov rax, [rsp + 352]
+    mov [rcx + 16], rax
+    mov rax, [rsp + 360]
+    mov [rcx + 24], rax
+    mov eax, 32
+    jmp pfr_ack
+
+pfr_config:
+    mov rdi, rsi
+    mov rsi, rdx
+    mov rdx, rcx
+    mov rcx, r8
+    call ex_config_projection
+    jmp pfr_ack
+
+# Existing Health ABI, copied from the HIA request without host-name policy.
+pfr_health:
+    cmp rdx, 24
+    jb ap_contract
+    mov rax, 0x3130514c48545546
+    cmp [rsi], rax
+    jne ap_contract
+    mov rax, [rsi + 8]
+    cmp rax, 1
+    je pfr_health_begin
+    cmp rdx, 24
+    jne ap_contract
+    cmp qword ptr [rsi + 16], 0
+    jne ap_contract
+    cmp rax, 2
+    je pfr_health_poll
+    cmp rax, 3
+    jne ap_contract
+    mov rdi, r15
+    call internal_health_drop
+    test rax, rax
+    jnz ap_contract
+    mov ebp, 2
+    xor edx, edx
+    jmp pfr_health_header
+pfr_health_begin:
+    mov rbp, [rsi + 16]
+    test rbp, rbp
+    jz ap_contract
+    cmp rbp, 128
+    ja ap_contract
+    lea rax, [rbp + 24]
+    cmp rax, rdx
+    jne ap_contract
+    lea rdi, [rsp + 160]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    mov rax, 0x3130305148485248
+    mov [rsp + 160], rax
+    mov qword ptr [rsp + 168], 7
+    mov [rsp + 208], rbp
+    lea rdi, [rsp + 224]
+    lea rsi, [r12 + PFR_REQUEST + 24]
+    mov rcx, rbp
+    rep movsb
+    mov rdi, r15
+    lea rsi, [rsp + 160]
+    lea rdx, [rbp + 64]
+    call internal_health_begin
+    test rax, rax
+    jnz ap_contract
+pfr_health_poll:
+    mov rdi, r15
+    lea rsi, [r12 + PFR_REPLY + 32]
+    mov edx, PFR_CHILD_CAP - 32
+    call internal_health_poll
+    mov edx, 0xfffffff1
+    cmp rax, rdx
+    je pfr_health_pending
+    cmp rax, 64
+    jb ap_contract
+    cmp rax, 4096
+    ja ap_contract
+    mov rdx, rax
+    mov ebp, 1
+    jmp pfr_health_header
+pfr_health_pending:
+    xor ebp, ebp
+    xor edx, edx
+pfr_health_header:
+    lea rcx, [r12 + PFR_REPLY]
+    mov rax, 0x3130524c48545546
+    mov [rcx], rax
+    mov [rcx + 8], rbp
+    mov [rcx + 16], rdx
+    mov qword ptr [rcx + 24], 0
+    lea rax, [rdx + 32]
+    jmp pfr_ack
+
+
+pfr_metadata:
+    test qword ptr [rbx + PI_T_OWNED], 4
+    jz ap_contract
+    mov rdi, [r15 + PIC_ROOT_SLOT]
+    test rdi, rdi
+    jz ap_contract
+    call intent_caller_metadata
+    jmp pfr_ack
+
+pfr_intent:
+    test qword ptr [rbx + PI_T_OWNED], 4
+    jz ap_contract
+    cmp qword ptr [r15 + PIC_ROOT_SLOT], 0
+    je ap_contract
+    mov edx, 12
+    jmp pfr_pool
+
+# Actual service wrapper bytes, including original errors, are returned to HIA.
+pfr_ticket:
+    cmp rdx, 128
+    jne ap_contract
+    mov rax, 0x3130515754415248
+    cmp [rsi], rax
+    jne ap_contract
+    test qword ptr [rsp + 56], 2
+    jnz ap_contract
+    test qword ptr [rbx + PI_T_OWNED], 2
+    jz ap_contract
+    mov rax, [rbx + PI_T_TICKET]
+    test rax, rax
+    jz ap_contract
+    cmp [rsi + 16], rax
+    jne ap_contract
+    cmp qword ptr [rsi + 24], 96
+    jne ap_contract
+    mov rax, 0x3130305154415248
+    cmp [rsi + 32], rax
+    jne ap_contract
+    mov rax, [rsi + 40]
+    cmp rax, 4
+    je pfr_ticket_pool
+    cmp rax, 5
+    jne ap_contract
+pfr_ticket_call:
+    mov rdi, [r15 + EX_CONTROL_SLOT]
+    test rdi, rdi
+    jz ap_contract
+    mov rdi, [rdi + 16]
+    test rdi, rdi
+    jz ap_contract
+    call tk_service_call
+    cmp rax, 96
+    jne pfr_ack
+    mov rdx, 0x3130525754415248
+    cmp [r12 + PFR_REPLY], rdx
+    jne ap_contract
+    cmp qword ptr [r12 + PFR_REPLY + 8], 0
+    jne pfr_ack
+    cmp qword ptr [r12 + PFR_REPLY + 16], 64
+    jne ap_contract
+    cmp qword ptr [r12 + PFR_REPLY + 24], 64
+    jne ap_contract
+    mov rdx, 0x3130305254415248
+    cmp [r12 + PFR_REPLY + 32], rdx
+    jne ap_contract
+    mov rdx, [r12 + PFR_REPLY + 64]
+    or rdx, [r12 + PFR_REPLY + 72]
+    or rdx, [r12 + PFR_REPLY + 80]
+    or rdx, [r12 + PFR_REPLY + 88]
+    jnz ap_contract
+    or qword ptr [rsp + 56], 2
+    jmp pfr_ack
+
+# Actual journal carrier; asynchronous pool ownership is a separate layer.
+pfr_journal:
+    mov edx, 9
+    jmp pfr_pool
+pfr_ticket_pool:
+    mov edx, 11
+pfr_pool:
+    lea rax, [r12 + PFR_REPLY]
+    mov [rsp + 416], rax
+    mov qword ptr [rsp + 424], PFR_CHILD_CAP
+    mov rax, [r14 + 8]
+    mov [rsp + 432], rax
+    lea rax, [rsp + 400]
+    mov [rsp + 440], rax
+    mov rdi, r15
+    mov rsi, rbx
+    lea rcx, [r12 + PFR_REQUEST]
+    mov r8, [r14 + 40]
+    lea r9, [rsp + 416]
+    call producer_pool_call
+    jmp pfr_ack
+
+# Resource custody can clear only after this invocation performed the real child.
+pfr_custody:
+    cmp rdx, 24
+    jne ap_contract
+    mov rax, 0x3130515943545546
+    cmp [rsi], rax
+    jne ap_contract
+    mov rax, [rsi + 8]
+    mov [rsp + 40], rax
+    cmp rax, 1
+    je pfr_custody_consumed
+    cmp rax, 2
+    jne ap_contract
+    cmp qword ptr [rsi + 16], 4
+    jne ap_contract
+    mov rdi, rbx
+    call internal_task_drop_intent
+    test rax, rax
+    jnz ap_contract
+    mov ebp, 4
+    jmp pfr_custody_header
+pfr_custody_consumed:
+    mov rbp, [rsi + 16]
+    test rbp, rbp
+    jz ap_contract
+    cmp rbp, 3
+    ja ap_contract
+    mov rax, [rsp + 56]
+    and rax, rbp
+    cmp rax, rbp
+    jne ap_contract
+    mov rdi, rbx
+    mov rsi, rbp
+    call internal_task_resources_consumed
+    test rax, rax
+    jnz ap_contract
+    xor [rsp + 56], rbp
+pfr_custody_header:
+    lea rcx, [r12 + PFR_REPLY]
+    mov rax, 0x3130525943545546
+    mov [rcx], rax
+    mov rax, [rsp + 40]
+    mov [rcx + 8], rax
+    mov [rcx + 16], rbp
+    mov eax, 24
+
+pfr_ack:
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp rax, PFR_CHILD_CAP
+    ja ap_contract
+    mov [rsp + 48], rax
+    mov rsi, r14
+    lea rdi, [rsp + 64]
+    mov ecx, 12
+    repe cmpsq
+    jne ap_contract
+    mov rcx, [r14 + 40]
+    lea rsi, [r12 + PFR_REQUEST]
+    lea rdi, [r12 + PFR_REQUEST_COPY]
+    repe cmpsb
+    jne ap_contract
+    mov rax, [rsp + 48]
+    mov [r14 + 72], rax
+    mov rax, [rsp + 24]
+    mov [r14 + 64], rax
+    jmp pfr_invoke
+
+# Fixed identity checks for the existing service and shared Async owner.
+pfr_shared_async:
+    mov rax, [rdi + EX_CONTROL_SLOT]
+    test rax, rax
+    jz ap_contract
+    cmp [rax], rdi
+    jne ap_contract
+    mov rax, [rax + 16]
+    test rax, rax
+    jz ap_contract
+    cmp [rax], rax
+    jne ap_contract
+    mov r10, [rdi + EX_CONFIG_IG]
+    test r10, r10
+    jz ap_contract
+    cmp [r10 + tk_IG_SERVICE], rax
+    jne ap_contract
+    mov r10, [rax + tk_ASY_ROOT_SLOT]
+    test r10, r10
+    jz ap_contract
+    cmp [r10 + tk_ASY_G_SERVICE], rax
+    jne ap_contract
+    mov rax, r10
+    ret
+
+producer_future_image:
+    jmp qword ptr [rip + producer_future_image_slot]
+.balign 8
+producer_future_image_slot:
+    .quad 0
+
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed caller/receiver custody. HIA interprets every completion outcome.
+
+.macro fpc_enter
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 24
+.endm
+.macro fpc_leave
+    add rsp, 24
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.endm
+
+# root, task, fixed role, input, length, descriptor32.
+# descriptor: output pointer/capacity, HIA sequence, private two-word state.
+# State owns one caller generation; its accepted closures own their resources.
+producer_pool_call:
+    fpc_enter
+    mov r15, rdi
+    mov r14, rsi
+    mov r13, rdx
+    mov rbp, rcx
+    mov rbx, r8
+    mov [rsp], r9
+    test r9, r9
+    jz ap_contract
+    cmp qword ptr [r9], 0
+    je ap_contract
+    cmp qword ptr [r9 + 8], 65760
+    jb ap_contract
+    cmp qword ptr [r9 + 16], 0
+    je ap_contract
+    cmp qword ptr [r9 + 24], 0
+    je ap_contract
+    cmp r13, 9
+    je fpc_role_valid
+    cmp r13, 11
+    je fpc_role_valid
+    cmp r13, 12
+    jne ap_contract
+fpc_role_valid:
+    mov rdi, r14
+    call pit_running
+    cmp [r14 + PF_T_ROOT], r15
+    jne ap_contract
+    cmp rbx, 10485760
+    ja ap_contract
+    mov edi, FPC_BYTES
+    call tk_allocate_guarded
+    mov r12, rax
+    mov rax, FPC_MAGIC
+    mov [r12], rax
+    mov [r12 + FPC_ROOT], r15
+    mov [r12 + FPC_TASK], r14
+    mov [r12 + FPC_ROLE], r13
+    mov [r12 + FPC_INPUT], rbp
+    mov [r12 + FPC_LENGTH], rbx
+    mov rax, [rsp]
+    mov rdx, [rax]
+    mov [r12 + FPC_OUTPUT], rdx
+    mov rdx, [rax + 8]
+    mov [r12 + FPC_CAPACITY], rdx
+    mov rdx, [rax + 16]
+    mov [r12 + FPC_SEQUENCE], rdx
+    mov rdx, [rax + 24]
+    mov [r12 + FPC_STATE], rdx
+    mov rdi, r15
+    call paj_shared_owner
+    mov r13, rax
+    mov [r12 + FPC_OWNER], rax
+    cmp qword ptr [r13 + FPC_AP_PENDING], 0
+    jne ap_contract
+    mov rbp, [r12 + FPC_STATE]
+    cmp qword ptr [rbp], 0
+    jne fpc_existing_generation
+    cmp qword ptr [rbp + 8], 0
+    jne ap_contract
+    mov rdi, r13
+    mov rsi, [r12 + FPC_OUTPUT]
+    add rsi, 32
+    call async_journal_pool_generation
+    cmp rax, 192
+    jne ap_contract
+    mov rax, [r12 + FPC_OUTPUT]
+    mov rdx, 0x3130305250425248
+    cmp [rax + 32], rdx
+    jne ap_contract
+    cmp qword ptr [rax + 40], 0
+    jne ap_contract
+    cmp qword ptr [rax + 48], 11
+    jne ap_contract
+    mov rax, [rax + 208]
+    test rax, rax
+    jz ap_contract
+    mov [rbp], r13
+    mov [rbp + 8], rax
+fpc_existing_generation:
+    cmp [rbp], r13
+    jne ap_contract
+    mov rax, [rbp + 8]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + FPC_GENERATION], rax
+    mov [r12 + FPC_META], rax
+    mov rax, [r12 + FPC_ROLE]
+    mov [r12 + FPC_META + 8], rax
+    mov rdx, [r12 + FPC_SEQUENCE]
+    mov [r12 + FPC_META + 16], rdx
+    mov qword ptr [r12 + FPC_META + 24], 0
+    mov qword ptr [r12 + FPC_META + 32], 65536
+    cmp rax, 9
+    je fpc_submit
+    # Borrow valid only during synchronous submit/create, before a worker runs.
+    mov [r13 + FPC_AP_PENDING], r12
+fpc_submit:
+    mov rdi, r13
+    lea rsi, [r12 + FPC_META]
+    mov rdx, [r12 + FPC_INPUT]
+    mov rcx, [r12 + FPC_LENGTH]
+    mov r8, [r12 + FPC_OUTPUT]
+    add r8, 32
+    call async_journal_pool_submit
+    cmp rax, 192
+    jne ap_contract
+    cmp qword ptr [r13 + FPC_AP_PENDING], 0
+    jne ap_contract
+    xor edx, edx
+    cmp qword ptr [r12 + FPC_ROLE], 9
+    je fpc_transfer_checked
+    mov edx, 2
+    cmp qword ptr [r12 + FPC_ROLE], 11
+    je fpc_transfer_checked
+    mov edx, 4
+fpc_transfer_checked:
+    cmp [r12 + FPC_TRANSFERRED], rdx
+    jne ap_contract
+    mov r14, [r12 + FPC_OUTPUT]
+    add r14, 32
+    mov rax, 0x3130305250425248
+    cmp [r14], rax
+    jne ap_contract
+    cmp qword ptr [r14 + 24], 0
+    je ap_contract
+    mov rax, [r12 + FPC_GENERATION]
+    cmp [r14 + 40], rax
+    jne ap_contract
+    mov rax, [r12 + FPC_ROLE]
+    cmp [r14 + 48], rax
+    jne ap_contract
+    mov rax, [r12 + FPC_SEQUENCE]
+    cmp [r14 + 56], rax
+    jne ap_contract
+    cmp qword ptr [r14 + 64], 0
+    jne ap_contract
+    mov rax, [r12 + FPC_LENGTH]
+    cmp [r14 + 72], rax
+    jne ap_contract
+    mov rax, [r14 + 8]
+    cmp rax, 3
+    je fpc_no_receiver
+    cmp rax, 4
+    je fpc_no_receiver
+    test rax, rax
+    jz fpc_receiver
+    cmp rax, 2
+    jne ap_contract
+fpc_receiver:
+    cmp qword ptr [r14 + 96], 1
+    jne ap_contract
+    mov rax, [r14 + 24]
+    mov [r12 + FPC_TOKEN], rax
+    mov rax, [r14 + 40]
+    mov [r12 + FPC_TOKEN + 8], rax
+    mov rax, [r14 + 48]
+    mov [r12 + FPC_TOKEN + 16], rax
+    mov rax, [r14 + 56]
+    mov [r12 + FPC_TOKEN + 24], rax
+    mov rdi, [r12 + FPC_ROOT]
+    mov rsi, r13
+    lea rdx, [r12 + FPC_TOKEN]
+    mov rcx, r14
+    mov r8d, 65728
+    call public_async_pool_await
+    cmp eax, 0xfffffff2
+    je fpc_actual_drop
+    cmp rax, 192
+    jb ap_contract
+    cmp rax, 65728
+    ja ap_contract
+    mov [r12 + FPC_RAW_LENGTH], rax
+    jmp fpc_publish
+fpc_no_receiver:
+    cmp qword ptr [r14 + 96], 2
+    jne ap_contract
+    mov qword ptr [r12 + FPC_RAW_LENGTH], 192
+    jmp fpc_publish
+fpc_actual_drop:
+    mov qword ptr [r12 + FPC_DROPPED], 1
+fpc_publish:
+    mov r14, [r12 + FPC_OUTPUT]
+    mov rax, 0x3130305250545546
+    mov [r14], rax
+    mov rax, [r12 + FPC_TRANSFERRED]
+    mov [r14 + 8], rax
+    mov rax, [r12 + FPC_DROPPED]
+    mov [r14 + 16], rax
+    mov rax, [r12 + FPC_RAW_LENGTH]
+    mov [r14 + 24], rax
+    add rax, 32
+    mov [rsp + 8], rax
+    cmp qword ptr [r13 + FPC_AP_PENDING], 0
+    jne ap_contract
+    mov qword ptr [r12], 0
+    mov rdi, r12
+    mov esi, FPC_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rax, [rsp + 8]
+    fpc_leave
+
+# Private generation state only. Accepted detached jobs retain their own owner.
+producer_pool_drop_generation:
+    push rbx
+    mov rbx, rdi
+    mov rdi, [rbx]
+    test rdi, rdi
+    jnz fpc_drop_generation
+    cmp qword ptr [rbx + 8], 0
+    jne ap_contract
+    xor eax, eax
+    pop rbx
+    ret
+
+# Existing Ticket HIA and ServiceIO are a single shared mutable owner.
+# Cover input copy, actual drive and output copy with the same native mutex.
+fpc_ticket_service_serialized:
+    fpc_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov rbx, r8
+    cmp [r12], r12
+    jne ap_contract
+    lea rdi, [r12 + FPC_TICKET_GATE]
+    call tk_mutex_lock
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    mov r8, rbx
+    call fpc_ticket_service_unlocked
+    mov [rsp], rax
+    lea rdi, [r12 + FPC_TICKET_GATE]
+    call tk_mutex_unlock
+    mov rax, [rsp]
+    fpc_leave
+fpc_drop_generation:
+    mov rsi, [rbx + 8]
+    test rsi, rsi
+    jz ap_contract
+    call async_journal_pool_drop_caller
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [rbx], 0
+    mov qword ptr [rbx + 8], 0
+    xor eax, eax
+    pop rbx
+    ret
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed registry extension. The input never carries a native address.
+# Pool validate arguments are unchanged; AP's temporary borrow is private.
+fpc_callback_validate:
+    cmp rdi, 11
+    je fpc_validate_base
+    cmp rdi, 12
+    jne pajp_ap_invalid
+fpc_validate_base:
+    cmp rcx, 65536
+    jne pajp_ap_invalid
+    mov rax, pajp_AP_MAGIC
+    cmp [r8], rax
+    jne pajp_ap_invalid
+    cmp qword ptr [r8 + pajp_AP_STATE], 2
+    ja pajp_ap_invalid
+    mov r10, [r8 + FPC_AP_PENDING]
+    test r10, r10
+    jz pajp_ap_invalid
+    mov rax, FPC_MAGIC
+    cmp [r10], rax
+    jne pajp_ap_invalid
+    cmp [r10 + FPC_OWNER], r8
+    jne pajp_ap_invalid
+    cmp [r10 + FPC_ROLE], rdi
+    jne pajp_ap_invalid
+    cmp [r10 + FPC_INPUT], rsi
+    jne pajp_ap_invalid
+    cmp [r10 + FPC_LENGTH], rdx
+    jne pajp_ap_invalid
+    cmp [r10 + FPC_SEQUENCE], r9
+    jne pajp_ap_invalid
+    test r9, r9
+    jz pajp_ap_invalid
+    cmp qword ptr [r10 + FPC_TRANSFERRED], 0
+    jne pajp_ap_invalid
+    mov r11, [r10 + FPC_TASK]
+    test r11, r11
+    jz pajp_ap_invalid
+    mov rax, [r10 + FPC_ROOT]
+    cmp [r11 + PF_T_ROOT], rax
+    jne pajp_ap_invalid
+    cmp [rax + PF_TASK_SLOT], r11
+    jne pajp_ap_invalid
+    cmp rdi, 12
+    je fpc_validate_intent
+    cmp rdx, 128
+    jne pajp_ap_invalid
+    mov rax, 0x3130515754415248
+    cmp [rsi], rax
+    jne pajp_ap_invalid
+    cmp qword ptr [rsi + 8], 1
+    jne pajp_ap_invalid
+    cmp qword ptr [rsi + 24], 96
+    jne pajp_ap_invalid
+    mov rax, 0x3130305154415248
+    cmp [rsi + 32], rax
+    jne pajp_ap_invalid
+    cmp qword ptr [rsi + 40], 4
+    jne pajp_ap_invalid
+    cmp qword ptr [rsi + 56], 2
+    ja pajp_ap_invalid
+    mov rax, [rsi + 48]
+    or rax, [rsi + 64]
+    or rax, [rsi + 72]
+    or rax, [rsi + 80]
+    or rax, [rsi + 88]
+    or rax, [rsi + 96]
+    or rax, [rsi + 104]
+    or rax, [rsi + 112]
+    or rax, [rsi + 120]
+    jnz pajp_ap_invalid
+    test qword ptr [r11 + PI_T_OWNED], 2
+    jz pajp_ap_invalid
+    mov rax, [r11 + PI_T_TICKET]
+    test rax, rax
+    jz pajp_ap_invalid
+    cmp [rsi + 16], rax
+    jne pajp_ap_invalid
+    xor eax, eax
+    ret
+fpc_validate_intent:
+    cmp rdx, 96
+    jb pajp_ap_invalid
+    cmp rdx, 8388704
+    ja pajp_ap_invalid
+    mov rax, 0x3130305149525248
+    cmp [rsi], rax
+    jne pajp_ap_invalid
+    cmp qword ptr [rsi + 8], 2
+    jne pajp_ap_invalid
+    mov rax, [rsi + 16]
+    or rax, [rsi + 24]
+    or rax, [rsi + 32]
+    or rax, [rsi + 40]
+    or rax, [rsi + 48]
+    or rax, [rsi + 56]
+    or rax, [rsi + 64]
+    or rax, [rsi + 88]
+    jnz pajp_ap_invalid
+    cmp qword ptr [rsi + 72], 1
+    ja pajp_ap_invalid
+    mov rax, [rsi + 80]
+    add rax, 96
+    jc pajp_ap_invalid
+    cmp rax, rdx
+    jne pajp_ap_invalid
+    cmp qword ptr [rsi + 72], 0
+    jne fpc_validate_intent_owner
+    cmp qword ptr [rsi + 80], 0
+    jne pajp_ap_invalid
+fpc_validate_intent_owner:
+    test qword ptr [r11 + PI_T_OWNED], 4
+    jz pajp_ap_invalid
+    mov rax, [r11 + PI_T_INTENT]
+    test rax, rax
+    jz pajp_ap_invalid
+    cmp qword ptr [rax + PIC_STATE], 2
+    jne pajp_ap_invalid
+    cmp [rax + PIC_TASK], r11
+    jne pajp_ap_invalid
+    mov r10, [r10 + FPC_ROOT]
+    cmp [r10 + PIC_ROOT_SLOT], rax
+    jne pajp_ap_invalid
+    xor eax, eax
+    ret
+
+# AP, persistent callback record, newly created generic pool task.
+# The generic pool already copied/sealed input and cannot run the worker yet.
+fpc_callback_created:
+    mov rax, [rsi + pajp_APR_ROLE]
+    cmp rax, 16
+    je start_callback_created
+    cmp rax, 13
+    jb start_created_parent
+    cmp rax, 15
+    jbe start_callback_created
+start_created_parent:
+    fpc_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov rax, [r13 + pajp_APR_ROLE]
+    cmp rax, 11
+    je fpc_created_resource
+    cmp rax, 12
+    je fpc_created_resource
+    cmp qword ptr [r12 + FPC_AP_PENDING], 0
+    jne ap_contract
+    jmp fpc_created_done
+fpc_created_resource:
+    mov r15, [r12 + FPC_AP_PENDING]
+    test r15, r15
+    jz ap_contract
+    mov rdx, FPC_MAGIC
+    cmp [r15], rdx
+    jne ap_contract
+    cmp [r15 + FPC_OWNER], r12
+    jne ap_contract
+    cmp [r15 + FPC_ROLE], rax
+    jne ap_contract
+    cmp [r13 + pajp_APR_TASK], r14
+    jne ap_contract
+    mov rax, [r13 + pajp_APR_CALLER]
+    cmp [r15 + FPC_GENERATION], rax
+    jne ap_contract
+    mov rax, [r13 + pajp_APR_SEQUENCE]
+    cmp [r15 + FPC_SEQUENCE], rax
+    jne ap_contract
+    mov rax, [r13 + pajp_APR_INPUT_BYTES]
+    cmp [r15 + FPC_LENGTH], rax
+    jne ap_contract
+    mov rbx, [r15 + FPC_TASK]
+    mov rbp, [r15 + FPC_ROOT]
+    mov rdi, rbx
+    call pit_running
+    cmp [rbx + PF_T_ROOT], rbp
+    jne ap_contract
+    cmp qword ptr [r15 + FPC_TRANSFERRED], 0
+    jne ap_contract
+    cmp qword ptr [r13 + FPC_APR_RESOURCE], 0
+    jne ap_contract
+    cmp qword ptr [r13 + FPC_APR_KIND], 0
+    jne ap_contract
+    cmp qword ptr [r13 + pajp_APR_ROLE], 12
+    je fpc_created_intent
+    test qword ptr [rbx + PI_T_OWNED], 2
+    jz ap_contract
+    mov rax, [rbx + PI_T_TICKET]
+    test rax, rax
+    jz ap_contract
+    mov rdx, [r14 + 72]
+    cmp [rdx + 16], rax
+    jne ap_contract
+    mov [r13 + FPC_APR_RESOURCE], rax
+    mov qword ptr [r13 + FPC_APR_KIND], 2
+    mov qword ptr [r15 + FPC_TRANSFERRED], 2
+    mov qword ptr [rbx + PI_T_TICKET], 0
+    and qword ptr [rbx + PI_T_OWNED], -3
+    jmp fpc_created_clear
+fpc_created_intent:
+    test qword ptr [rbx + PI_T_OWNED], 4
+    jz ap_contract
+    mov rax, [rbx + PI_T_INTENT]
+    test rax, rax
+    jz ap_contract
+    cmp [rbp + PIC_ROOT_SLOT], rax
+    jne ap_contract
+    cmp qword ptr [rax + PIC_STATE], 2
+    jne ap_contract
+    cmp [rax + PIC_TASK], rbx
+    jne ap_contract
+    # Same existing owned-caller destructor now verifies this durable record.
+    mov [rax + PIC_TASK], r13
+    mov [r13 + FPC_APR_RESOURCE], rax
+    mov qword ptr [r13 + FPC_APR_KIND], 4
+    mov qword ptr [r15 + FPC_TRANSFERRED], 4
+    mov qword ptr [rbp + PIC_ROOT_SLOT], 0
+    mov qword ptr [rbx + PI_T_INTENT], 0
+    and qword ptr [rbx + PI_T_OWNED], -5
+fpc_created_clear:
+    mov qword ptr [r12 + FPC_AP_PENDING], 0
+fpc_created_done:
+    xor eax, eax
+    fpc_leave
+
+# Persistent record, generic pool task. No InternalTask or task-stack borrow.
+fpc_callback_invoke:
+    mov rax, [rdi + pajp_APR_ROLE]
+    cmp rax, 16
+    je public_fence_callback_invoke
+    cmp rax, 13
+    jb start_invoke_parent
+    cmp rax, 15
+    jbe start_callback_invoke
+start_invoke_parent:
+    fpc_enter
+    mov r12, rdi
+    mov r13, rsi
+    cmp [r12 + pajp_APR_TASK], r13
+    jne ap_contract
+    mov r14, [r12 + pajp_APR_OWNER]
+    mov rax, [r12 + pajp_APR_ROLE]
+    cmp rax, 11
+    je fpc_invoke_ticket
+    cmp rax, 12
+    je fpc_invoke_intent
+    mov rdi, [r14 + pajp_AP_SERVICE]
+    mov rdi, [rdi + tk_ASY_ROOT_SLOT]
+    add rdi, tk_ASY_G_PLAN
+    mov rsi, [r13 + 72]
+    mov rdx, [r13 + 80]
+    mov rcx, [r13 + 96]
+    mov r8, [r13 + 104]
+    call tk_async_child_call
+    fpc_leave
+fpc_invoke_ticket:
+    cmp qword ptr [r12 + FPC_APR_KIND], 2
+    jne ap_contract
+    mov rsi, [r13 + 72]
+    mov rax, [r12 + FPC_APR_RESOURCE]
+    test rax, rax
+    jz ap_contract
+    cmp [rsi + 16], rax
+    jne ap_contract
+    mov rdi, [r14 + pajp_AP_SERVICE]
+    mov rdx, [r13 + 80]
+    mov rcx, [r13 + 96]
+    mov r8, [r13 + 104]
+    call tk_service_call
+    cmp rax, 96
+    jne fpc_invoke_return
+    mov rdi, [r13 + 96]
+    call fpc_ticket_consumed
+    mov qword ptr [r12 + FPC_APR_RESOURCE], 0
+    mov eax, 96
+    fpc_leave
+fpc_invoke_intent:
+    cmp qword ptr [r12 + FPC_APR_KIND], 4
+    jne ap_contract
+    mov rdi, [r12 + FPC_APR_RESOURCE]
+    test rdi, rdi
+    jz ap_contract
+    cmp [rdi + PIC_TASK], r12
+    jne ap_contract
+    mov rsi, [r13 + 72]
+    mov rdx, [r13 + 80]
+    mov rcx, [r13 + 96]
+    call intent_caller_call
+    cmp rax, 80
+    jne fpc_invoke_return
+    mov rdi, [r13 + 96]
+    mov rax, 0x3130305249525248
+    cmp [rdi], rax
+    jne ap_contract
+    mov rax, [rdi + 24]
+    or rax, [rdi + 56]
+    or rax, [rdi + 64]
+    or rax, [rdi + 72]
+    jnz ap_contract
+    mov rdi, [r12 + FPC_APR_RESOURCE]
+    mov rsi, r12
+    call intent_caller_drop_owned
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + FPC_APR_RESOURCE], 0
+    mov eax, 80
+fpc_invoke_return:
+    fpc_leave
+
+# Actual callback input Drop, including cancellation before first execution.
+fpc_callback_drop_inputs:
+    mov rax, [rsi + 48]
+    cmp rax, 16
+    je start_callback_input_drop
+    cmp rax, 13
+    jb start_inputs_parent
+    cmp rax, 15
+    jbe start_callback_input_drop
+start_inputs_parent:
+    fpc_enter
+    call pajp_ap_role_context
+    mov r12, rax
+    mov rax, [r12 + FPC_APR_RESOURCE]
+    test rax, rax
+    jz fpc_inputs_done
+    cmp qword ptr [r12 + FPC_APR_KIND], 2
+    je fpc_inputs_ticket
+    cmp qword ptr [r12 + FPC_APR_KIND], 4
+    jne ap_contract
+    mov rdi, rax
+    mov rsi, r12
+    call intent_caller_drop_owned
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + FPC_APR_RESOURCE], 0
+    jmp fpc_inputs_done
+fpc_inputs_ticket:
+    mov rdi, r12
+    call fpc_ticket_drop
+    test rax, rax
+    jnz ap_contract
+fpc_inputs_done:
+    xor eax, eax
+    fpc_leave
+
+# Validate the actual consuming Ticket envelope, never classify its error.
+fpc_ticket_consumed:
+    mov rax, 0x3130525754415248
+    cmp [rdi], rax
+    jne ap_contract
+    cmp qword ptr [rdi + 8], 0
+    jne ap_contract
+    cmp qword ptr [rdi + 16], 64
+    jne ap_contract
+    cmp qword ptr [rdi + 24], 64
+    jne ap_contract
+    mov rax, 0x3130305254415248
+    cmp [rdi + 32], rax
+    jne ap_contract
+    mov rax, [rdi + 64]
+    or rax, [rdi + 72]
+    or rax, [rdi + 80]
+    or rax, [rdi + 88]
+    jnz ap_contract
+    xor eax, eax
+    ret
+
+# Record-owned RequestTicket destructor. It is distinct from finish policy.
+fpc_ticket_drop:
+    push rbx
+    push r12
+    push r13
+    sub rsp, 768
+    mov r12, rdi
+    cmp qword ptr [r12 + FPC_APR_KIND], 2
+    jne ap_contract
+    mov rbx, [r12 + FPC_APR_RESOURCE]
+    test rbx, rbx
+    jz ap_contract
+    mov r13, [r12 + pajp_APR_OWNER]
+    mov rdi, rsp
+    xor eax, eax
+    mov ecx, 16
+    rep stosq
+    mov rax, 0x3130515754415248
+    mov [rsp], rax
+    mov qword ptr [rsp + 8], 1
+    mov [rsp + 16], rbx
+    mov qword ptr [rsp + 24], 96
+    mov rax, 0x3130305154415248
+    mov [rsp + 32], rax
+    mov qword ptr [rsp + 40], 5
+    mov rdi, [r13 + pajp_AP_SERVICE]
+    mov rsi, rsp
+    mov edx, 128
+    lea rcx, [rsp + 128]
+    mov r8d, 608
+    call tk_service_call
+    cmp rax, 96
+    jne ap_contract
+    lea rdi, [rsp + 128]
+    call fpc_ticket_consumed
+    mov qword ptr [r12 + FPC_APR_RESOURCE], 0
+    xor eax, eax
+    add rsp, 768
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# A receiver and a registered blocking closure each own one escrow reference.
+# No worker retains a start invocation, scheduler stack, or public request root.
+
+# Receiver initializes one reference before synchronous pool submission.
+start_escrow_create:
+    fpc_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov edi, 4096
+    call tk_allocate_guarded
+    mov rbx, rax
+    movabs rax, ST_E_MAGIC
+    mov [rbx], rax
+    mov qword ptr [rbx + ST_E_REFS], 1
+    mov [rbx + ST_E_SERVICE], r12
+    mov [rbx + ST_E_ROLE], r13
+    mov [rbx + ST_E_IG], r14
+    mov rax, rbx
+    fpc_leave
+
+# Either owner retires its reference. The last reference performs real Drop.
+start_escrow_release:
+    fpc_enter
+    mov r12, rdi
+    movabs rax, ST_E_MAGIC
+    cmp [r12], rax
+    jne ap_contract
+    lock dec qword ptr [r12 + ST_E_REFS]
+    js ap_contract
+    jnz start_escrow_release_return
+    mov rdi, [r12 + ST_E_RESOURCE]
+    test rdi, rdi
+    jz start_escrow_unmap
+    cmp qword ptr [r12 + ST_E_ROLE], 16
+    je public_fence_escrow_drop
+    cmp qword ptr [r12 + ST_E_ROLE], 14
+    je start_escrow_intent_drop
+    cmp qword ptr [r12 + ST_E_ROLE], 13
+    je start_escrow_ticket_drop
+    cmp qword ptr [r12 + ST_E_ROLE], 15
+    jne ap_contract
+start_escrow_ticket_drop:
+    mov rsi, rdi
+    mov rdi, [r12 + ST_E_SERVICE]
+    call start_ticket_drop_handle
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + ST_E_RESOURCE], 0
+    jmp start_escrow_unmap
+start_escrow_intent_drop:
+    call intent_caller_drop
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + ST_E_RESOURCE], 0
+start_escrow_unmap:
+    mov qword ptr [r12], 0
+    mov rdi, r12
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+start_escrow_release_return:
+    xor eax, eax
+    fpc_leave
+
+# ServiceRoot and real live Ticket handle. Drop is synchronous and consuming.
+start_ticket_drop_handle:
+    fpc_enter
+    sub rsp, 768
+    mov r12, rdi
+    mov r13, rsi
+    test r13, r13
+    jz ap_contract
+    mov rdi, rsp
+    xor eax, eax
+    mov ecx, 16
+    rep stosq
+    movabs rax, 0x3130515754415248
+    mov [rsp], rax
+    mov qword ptr [rsp + 8], 1
+    mov [rsp + 16], r13
+    mov qword ptr [rsp + 24], 96
+    movabs rax, 0x3130305154415248
+    mov [rsp + 32], rax
+    mov qword ptr [rsp + 40], 5
+    mov rdi, r12
+    mov rsi, rsp
+    mov edx, 128
+    lea rcx, [rsp + 128]
+    mov r8d, 608
+    call tk_service_call
+    cmp eax, 96
+    jne ap_contract
+    lea rdi, [rsp + 128]
+    call fpc_ticket_consumed
+    add rsp, 768
+    xor eax, eax
+    fpc_leave
+
+# Fixed roles 13/14/15 require an owner-created escrow, never an input pointer.
+start_callback_validate:
+    cmp rdi, 13
+    jb pajp_ap_invalid
+    cmp rdi, 15
+    ja pajp_ap_invalid
+    cmp rcx, 65536
+    jne pajp_ap_invalid
+    cmp rdx, 32
+    jb pajp_ap_invalid
+    cmp rdx, 10485760
+    ja pajp_ap_invalid
+    movabs rax, pajp_AP_MAGIC
+    cmp [r8], rax
+    jne pajp_ap_invalid
+    mov r10, [r8 + ST_AP_PENDING]
+    test r10, r10
+    jz pajp_ap_invalid
+    movabs rax, ST_E_MAGIC
+    cmp [r10], rax
+    jne pajp_ap_invalid
+    cmp [r10 + ST_E_ROLE], rdi
+    jne pajp_ap_invalid
+    cmp qword ptr [r10 + ST_E_REFS], 1
+    jne pajp_ap_invalid
+    cmp qword ptr [r10 + ST_E_RECORD], 0
+    jne pajp_ap_invalid
+    mov rax, [r8 + pajp_AP_SERVICE]
+    cmp [r10 + ST_E_SERVICE], rax
+    jne pajp_ap_invalid
+    movabs rax, 0x3151435953415248
+    cmp [rsi], rax
+    jne pajp_ap_invalid
+    mov eax, 19
+    cmp rdi, 14
+    jne start_validate_kind
+    mov eax, 20
+start_validate_kind:
+    cmp [rsi + 8], rax
+    jne pajp_ap_invalid
+    mov r11, [rsi + 16]
+    cmp r11, 1048576
+    ja pajp_ap_invalid
+    mov rax, rdx
+    sub rax, 32
+    cmp r11, rax
+    ja pajp_ap_invalid
+    sub rax, r11
+    cmp [rsi + 24], rax
+    jne pajp_ap_invalid
+    test r9, r9
+    jz pajp_ap_invalid
+    xor eax, eax
+    ret
+
+# Called synchronously after input copy/seal and before worker publication.
+start_callback_created:
+    fpc_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, [r12 + ST_AP_PENDING]
+    test r15, r15
+    jz ap_contract
+    movabs rax, ST_E_MAGIC
+    cmp [r15], rax
+    jne ap_contract
+    mov rax, [r13 + pajp_APR_ROLE]
+    cmp [r15 + ST_E_ROLE], rax
+    jne ap_contract
+    cmp [r13 + pajp_APR_TASK], r14
+    jne ap_contract
+    cmp qword ptr [r15 + ST_E_REFS], 1
+    jne ap_contract
+    lock inc qword ptr [r15 + ST_E_REFS]
+    mov [r15 + ST_E_RECORD], r13
+    mov [r13 + ST_APR_ESCROW], r15
+    mov qword ptr [r12 + ST_AP_PENDING], 0
+    xor eax, eax
+    fpc_leave
+
+# The actual worker uses its copied input and durable escrow only.
+start_callback_invoke:
+    fpc_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, [r12 + ST_APR_ESCROW]
+    test r14, r14
+    jz ap_contract
+    movabs rax, ST_E_MAGIC
+    cmp [r14], rax
+    jne ap_contract
+    cmp [r14 + ST_E_RECORD], r12
+    jne ap_contract
+    mov rsi, [r13 + 72]
+    mov rdx, [r13 + 80]
+    mov eax, 19
+    cmp qword ptr [r14 + ST_E_ROLE], 14
+    jne start_invoke_query
+    mov eax, 20
+start_invoke_query:
+    call tk_async_child_query
+    mov rbp, r10
+    mov rbx, r11
+    cmp qword ptr [r14 + ST_E_ROLE], 14
+    je start_invoke_intent
+    cmp rbx, 128
+    jb ap_contract
+    cmp rbx, 608
+    ja ap_contract
+    mov rax, [rbp + 24]
+    add rax, 32
+    cmp rax, rbx
+    jne ap_contract
+    lea rdi, [r14 + 256]
+    mov rsi, rbp
+    mov rcx, rbx
+    rep movsb
+    cmp qword ptr [r14 + ST_E_ROLE], 15
+    je start_invoke_finish
+    cmp qword ptr [r14 + ST_E_RESOURCE], 0
+    jne ap_contract
+    cmp qword ptr [rbp + 16], 0
+    jne ap_contract
+    cmp qword ptr [rbp + 40], 2
+    jne ap_contract
+    mov rdi, [r14 + ST_E_SERVICE]
+    mov rsi, [r13 + 72]
+    mov rdx, [rsi + 16]
+    add rsi, 32
+    call tk_intent_root_cap
+    test rax, rax
+    jz ap_contract
+    mov [r14 + 304], rax
+    jmp start_invoke_ticket_call
+start_invoke_finish:
+    test r9, r9
+    jnz ap_contract
+    cmp rbx, 128
+    jne ap_contract
+    cmp qword ptr [rbp + 40], 4
+    jne ap_contract
+    mov rax, [r14 + ST_E_RESOURCE]
+    test rax, rax
+    jz ap_contract
+    cmp [rbp + 16], rax
+    jne ap_contract
+start_invoke_ticket_call:
+    mov rdi, [r14 + ST_E_SERVICE]
+    lea rsi, [r14 + 256]
+    mov rdx, rbx
+    mov rcx, [r13 + 96]
+    mov r8, [r13 + 104]
+    call tk_service_call
+    mov [rsp], rax
+    cmp rax, 96
+    jb ap_contract
+    cmp rax, 608
+    ja ap_contract
+    mov rdi, [r13 + 96]
+    cmp qword ptr [r14 + ST_E_ROLE], 15
+    je start_invoke_finished
+    mov rax, [rdi + 8]
+    mov [r14 + ST_E_RESOURCE], rax
+    mov rax, [rsp]
+    fpc_leave
+start_invoke_finished:
+    cmp qword ptr [rsp], 96
+    jne ap_contract
+    call fpc_ticket_consumed
+    mov qword ptr [r14 + ST_E_RESOURCE], 0
+    mov eax, 96
+    fpc_leave
+start_invoke_intent:
+    test r9, r9
+    jnz ap_contract
+    cmp rbx, 96
+    jb ap_contract
+    cmp qword ptr [rbp + 8], 1
+    jne ap_contract
+    cmp qword ptr [r14 + ST_E_RESOURCE], 0
+    jne ap_contract
+    mov rdi, [r14 + ST_E_IG]
+    call intent_caller_create
+    test rax, rax
+    jz ap_contract
+    mov [r14 + ST_E_RESOURCE], rax
+    mov rdi, rax
+    mov rsi, rbp
+    mov rdx, rbx
+    mov rcx, [r13 + 96]
+    call intent_caller_call
+    cmp rax, 80
+    jne ap_contract
+    fpc_leave
+
+# Queued tasks have no output destructor. Started tasks retain escrow to output.
+start_callback_input_drop:
+    fpc_enter
+    call pajp_ap_role_context
+    cmp qword ptr [rax + pajp_APR_STARTED], 0
+    jne start_input_drop_done
+    mov r12, rax
+    mov rdi, [r12 + ST_APR_ESCROW]
+    test rdi, rdi
+    jz ap_contract
+    mov qword ptr [r12 + ST_APR_ESCROW], 0
+    call start_escrow_release
+start_input_drop_done:
+    xor eax, eax
+    fpc_leave
+start_callback_output_drop:
+    fpc_enter
+    call pajp_ap_role_context
+    mov r12, rax
+    mov rdi, [r12 + ST_APR_ESCROW]
+    test rdi, rdi
+    jz ap_contract
+    mov qword ptr [r12 + ST_APR_ESCROW], 0
+    call start_escrow_release
+    xor eax, eax
+    fpc_leave
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# One lifetime-only service per canonical server. AsyncGlobal+160 owns manager;
+# +168 belongs exclusively to shutdown. Request bytes never contain pointers.
+.equ ASAM_MANAGER_MAGIC, 0x3130474d44415348
+.equ ASAM_WAITER_MAGIC, 0x3130545744415348
+.equ ASAM_QUERY_MAGIC, 0x313030514d415248
+.equ ASAM_REPLY_MAGIC, 0x313030524d415248
+.macro asam_enter
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 24
+.endm
+.macro asam_leave
+    add rsp, 24
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+.macro asam_request base, operation
+    lea rdi, [\base + 128]
+    xor eax, eax
+    mov ecx, 12
+    cld
+    rep stosq
+    movabs rax, ASAM_QUERY_MAGIC
+    mov [\base + 128], rax
+    mov qword ptr [\base + 136], \operation
+    mov qword ptr [\base + 144], 1
+.endm
+.macro asam_call base
+    mov rdi, [r13 + 16]
+    lea rsi, [\base + 128]
+    mov edx, 96
+    lea rcx, [\base + 256]
+    mov r8d, 160
+    call admission_call
+    cmp eax, 160
+    jne asam_fatal
+    movabs rax, ASAM_REPLY_MAGIC
+    cmp [\base + 256], rax
+    jne asam_fatal
+    mov rax, [\base + 136]
+    cmp [\base + 264], rax
+    jne asam_fatal
+    cmp qword ptr [\base + 280], 1
+    jne asam_fatal
+.endm
+
+# rdi = existing Audit ServiceRoot. Lazy once-only initialization, not user API.
+async_admission_manager:
+    asam_enter
+    mov r12, rdi
+    cmp [r12], r12
+    jne asam_fatal
+    mov r14, [r12 + 24648]
+    test r14, r14
+    jz asam_fatal
+    cmp [r14 + 8], r12
+    jne asam_fatal
+asam_manager_retry:
+    xor eax, eax
+    mov edx, 1
+    lock cmpxchg qword ptr [r14 + 160], rdx
+    je asam_manager_new
+    cmp rax, 1
+    je asam_manager_wait
+    cmp rax, 4095
+    jbe asam_fatal
+    mov r13, rax
+    movabs rdx, ASAM_MANAGER_MAGIC
+    cmp [r13], rdx
+    jne asam_fatal
+    cmp [r13 + 8], r12
+    jne asam_fatal
+    mov rax, r13
+    asam_leave
+asam_manager_wait:
+    lea rdi, [r14 + 160]
+    mov esi, 128
+    mov edx, 1
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    jz asam_manager_retry
+    cmp rax, -4
+    je asam_manager_retry
+    cmp rax, -11
+    je asam_manager_retry
+    jmp asam_fatal
+asam_manager_new:
+    call asam_allocate
+    mov r13, rax
+    mov [r13 + 8], r12
+    mov edi, 1
+    call admission_create
+    test rax, rax
+    jz asam_fatal
+    mov [r13 + 16], rax
+    asam_request r13, 2
+    asam_call r13
+    cmp qword ptr [r13 + 272], 0
+    jne asam_fatal
+    cmp qword ptr [r13 + 312], 1
+    jne asam_fatal
+    mov rax, [r13 + 304]
+    test rax, rax
+    jz asam_fatal
+    mov [r13 + 32], rax
+    movabs rax, ASAM_MANAGER_MAGIC
+    mov [r13], rax
+    mov [r14 + 160], r13
+    lea rdi, [r14 + 160]
+    mov esi, 129
+    mov edx, 0x7fffffff
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    js asam_fatal
+    mov rax, r13
+    asam_leave
+
+# Caller owns returned mapping until drop_waiter; construction does not poll.
+async_admission_create_waiter:
+    asam_enter
+    mov r14, rdi
+    call async_admission_manager
+    mov r13, rax
+    call asam_allocate
+    mov r12, rax
+    mov [r12 + 8], r13
+    mov [r12 + 16], r14
+    mov qword ptr [r12 + 80], -1
+    xor edi, edi
+    mov esi, 0x80800
+    mov eax, 290
+    syscall
+    test rax, rax
+    js asam_fatal
+    mov [r12 + 80], rax
+    lea rdi, [r13 + 64]
+    call asam_lock
+    asam_request r12, 3
+    asam_call r12
+    cmp qword ptr [r12 + 272], 0
+    jne asam_fatal
+    cmp qword ptr [r12 + 312], 2
+    jne asam_fatal
+    mov rax, [r12 + 304]
+    test rax, rax
+    jz asam_fatal
+    mov [r12 + 24], rax
+    mov [r12 + 48], rax
+    asam_request r12, 4
+    mov rax, [r13 + 32]
+    mov [r12 + 152], rax
+    mov rax, [r12 + 24]
+    mov [r12 + 160], rax
+    asam_call r12
+    cmp qword ptr [r12 + 272], 0
+    jne asam_fatal
+    cmp qword ptr [r12 + 312], 3
+    jne asam_fatal
+    mov rax, [r12 + 304]
+    test rax, rax
+    jz asam_fatal
+    mov [r12 + 32], rax
+    movabs rax, ASAM_WAITER_MAGIC
+    mov [r12], rax
+    mov rax, [r13 + 48]
+    mov [r12 + 64], rax
+    test rax, rax
+    jz asam_create_link
+    mov [rax + 72], r12
+asam_create_link:
+    mov [r13 + 48], r12
+    inc qword ptr [r13 + 56]
+    jz asam_fatal
+    lea rdi, [r13 + 64]
+    call asam_unlock
+    mov rax, r12
+    asam_leave
+
+# eax 0 = owns Guard; FFFFFFF1 = Pending. Private fd is drained here.
+async_admission_poll_waiter:
+    asam_enter
+    mov r12, rdi
+    call asam_validate
+    mov r13, [r12 + 8]
+    lea rdi, [r13 + 64]
+    call asam_lock
+    mov rdi, [r12 + 80]
+    call asam_drain_fd
+    cmp qword ptr [r12 + 56], 2
+    je asam_poll_ready
+    cmp qword ptr [r12 + 56], 1
+    ja asam_fatal
+    asam_request r12, 5
+    mov rax, [r13 + 32]
+    mov [r12 + 152], rax
+    mov rax, [r12 + 24]
+    mov [r12 + 160], rax
+    mov rax, [r12 + 32]
+    mov [r12 + 168], rax
+    mov rax, [r12 + 48]
+    mov [r12 + 176], rax
+    asam_call r12
+    cmp qword ptr [r12 + 272], 1
+    je asam_poll_pending
+    cmp qword ptr [r12 + 272], 0
+    jne asam_fatal
+    cmp qword ptr [r12 + 312], 4
+    jne asam_fatal
+    mov rax, [r12 + 304]
+    test rax, rax
+    jz asam_fatal
+    mov [r12 + 40], rax
+    mov qword ptr [r12 + 56], 2
+asam_poll_ready:
+    xor ebx, ebx
+    jmp asam_poll_publish
+asam_poll_pending:
+    cmp qword ptr [r12 + 312], 3
+    jne asam_fatal
+    mov rax, [r12 + 32]
+    cmp [r12 + 304], rax
+    jne asam_fatal
+    mov qword ptr [r12 + 56], 1
+    mov ebx, 0xfffffff1
+asam_poll_publish:
+    mov rdi, r13
+    call asam_pump_wakes
+    lea rdi, [r13 + 64]
+    call asam_unlock
+    mov eax, ebx
+    asam_leave
+
+async_admission_notification_fd:
+    push rbx
+    mov rbx, rdi
+    call asam_validate
+    mov rax, [rbx + 80]
+    test rax, rax
+    js asam_fatal
+    pop rbx
+    ret
+
+# Drop exactly this invocation, including assigned Future or acquired Guard.
+async_admission_drop_waiter:
+    asam_enter
+    mov r12, rdi
+    call asam_validate
+    mov r13, [r12 + 8]
+    lea rdi, [r13 + 64]
+    call asam_lock
+    asam_request r12, 8
+    mov rax, [r12 + 24]
+    mov [r12 + 160], rax
+    asam_call r12
+    cmp qword ptr [r12 + 272], 0
+    jne asam_fatal
+    mov rax, [r12 + 64]
+    mov rdx, [r12 + 72]
+    test rdx, rdx
+    jz asam_drop_head
+    cmp [rdx + 64], r12
+    jne asam_fatal
+    mov [rdx + 64], rax
+    jmp asam_drop_back
+asam_drop_head:
+    cmp [r13 + 48], r12
+    jne asam_fatal
+    mov [r13 + 48], rax
+asam_drop_back:
+    test rax, rax
+    jz asam_drop_unlinked
+    cmp [rax + 72], r12
+    jne asam_fatal
+    mov [rax + 72], rdx
+asam_drop_unlinked:
+    dec qword ptr [r13 + 56]
+    js asam_fatal
+    mov qword ptr [r12], 0
+    mov rdi, r13
+    call asam_pump_wakes
+    lea rdi, [r13 + 64]
+    call asam_unlock
+    mov rdi, [r12 + 80]
+    mov qword ptr [r12 + 80], -1
+    mov eax, 3
+    syscall
+    mov rdi, r12
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz asam_fatal
+    xor eax, eax
+    asam_leave
+
+# Manager short gate is already held. Forward each real HIA wake to its exact
+# live Future's private eventfd. A caller consuming its fd cannot hide a peer wake.
+asam_pump_wakes:
+    asam_enter
+    mov r13, rdi
+asam_pump_next:
+    asam_request r13, 9
+    asam_call r13
+    cmp qword ptr [r13 + 272], 2
+    je asam_pump_done
+    cmp qword ptr [r13 + 272], 0
+    jne asam_fatal
+    cmp qword ptr [r13 + 312], 3
+    jne asam_fatal
+    mov rax, [r13 + 32]
+    cmp [r13 + 288], rax
+    jne asam_fatal
+    mov r12, [r13 + 48]
+    mov r14, [r13 + 56]
+asam_pump_find:
+    test r12, r12
+    jz asam_fatal
+    test r14, r14
+    jz asam_fatal
+    dec r14
+    mov rdi, r12
+    call asam_validate
+    mov rax, [r13 + 296]
+    cmp [r12 + 24], rax
+    jne asam_pump_advance
+    mov rax, [r13 + 304]
+    cmp [r12 + 32], rax
+    jne asam_fatal
+    mov rax, [r13 + 328]
+    cmp [r12 + 48], rax
+    jne asam_fatal
+    mov qword ptr [rsp], 1
+asam_pump_signal:
+    mov rdi, [r12 + 80]
+    mov rsi, rsp
+    mov edx, 8
+    mov eax, 1
+    syscall
+    cmp rax, 8
+    je asam_pump_next
+    cmp rax, -11
+    je asam_pump_next
+    cmp rax, -4
+    je asam_pump_signal
+    jmp asam_fatal
+asam_pump_advance:
+    mov r12, [r12 + 64]
+    jmp asam_pump_find
+asam_pump_done:
+    mov rdi, [r13 + 16]
+    call admission_notification_fd
+    mov rdi, rax
+    call asam_drain_fd
+    asam_leave
+
+# Only canonical owner after all start/shutdown waiters have retired and all
+# users stopped. A retired slot remains 2, prohibiting generation reuse.
+async_admission_destroy_manager:
+    asam_enter
+    mov r12, rdi
+    cmp [r12], r12
+    jne asam_fatal
+    mov r14, [r12 + 24648]
+    test r14, r14
+    jz asam_fatal
+    mov r13, [r14 + 160]
+    test r13, r13
+    jz asam_destroy_absent
+    cmp r13, 4095
+    jbe asam_fatal
+    movabs rax, ASAM_MANAGER_MAGIC
+    cmp [r13], rax
+    jne asam_fatal
+    lea rdi, [r13 + 64]
+    call asam_lock
+    cmp qword ptr [r13 + 48], 0
+    jne asam_fatal
+    cmp qword ptr [r13 + 56], 0
+    jne asam_fatal
+    asam_request r13, 10
+    mov rax, [r13 + 32]
+    mov [r13 + 152], rax
+    asam_call r13
+    asam_request r13, 12
+    asam_call r13
+    mov qword ptr [r14 + 160], 2
+    mov qword ptr [r13], 0
+    mov rdi, [r13 + 16]
+    call admission_destroy
+    test eax, eax
+    jnz asam_fatal
+    mov rdi, r13
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz asam_fatal
+asam_destroy_absent:
+    xor eax, eax
+    asam_leave
+
+asam_validate:
+    test rdi, rdi
+    jz asam_fatal
+    movabs rax, ASAM_WAITER_MAGIC
+    cmp [rdi], rax
+    jne asam_fatal
+    mov rdx, [rdi + 8]
+    movabs rax, ASAM_MANAGER_MAGIC
+    cmp [rdx], rax
+    jne asam_fatal
+    mov rax, [rdi + 16]
+    cmp [rdx + 8], rax
+    jne asam_fatal
+    ret
+asam_allocate:
+    push rbx
+    xor edi, edi
+    mov esi, 8192
+    mov edx, 3
+    mov r10d, 0x22
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae asam_fatal
+    mov rbx, rax
+    lea rdi, [rax + 4096]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz asam_fatal
+    mov rax, rbx
+    pop rbx
+    ret
+asam_drain_fd:
+    push rbx
+    sub rsp, 16
+    mov rbx, rdi
+asam_drain_again:
+    mov rdi, rbx
+    mov rsi, rsp
+    mov edx, 8
+    xor eax, eax
+    syscall
+    cmp rax, 8
+    je asam_drain_again
+    cmp rax, -4
+    je asam_drain_again
+    cmp rax, -11
+    jne asam_fatal
+    add rsp, 16
+    pop rbx
+    ret
+asam_lock:
+    mov r8, rdi
+asam_lock_again:
+    xor eax, eax
+    mov edx, 1
+    lock cmpxchg dword ptr [r8], edx
+    je asam_lock_done
+    mov rdi, r8
+    mov esi, 128
+    mov edx, 1
+    xor r10d, r10d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    jz asam_lock_again
+    cmp rax, -4
+    je asam_lock_again
+    cmp rax, -11
+    je asam_lock_again
+    jmp asam_fatal
+asam_lock_done:
+    ret
+asam_unlock:
+    xor eax, eax
+    xchg dword ptr [rdi], eax
+    cmp eax, 1
+    jne asam_fatal
+    mov esi, 129
+    mov edx, 1
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    js asam_fatal
+    ret
+asam_fatal:
+    mov edi, 70
+    mov eax, 231
+    syscall
+    ud2
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Start context, await context, poll, actual Drop callback, borrowed fd.
+# Mode 0 participates in the existing SDK coroutine. Mode 1 is an explicitly
+# synchronous qualification caller driving the same real background coroutines.
+start_await:
+    cmp qword ptr [rdi + ST_CALL_MODE], 0
+    jne start_owned_await
+    mov rdi, [rdi + PAJ_CALL_PUBLIC_ROOT]
+    jmp public_async_await
+start_owned_await:
+    cmp qword ptr [rdi + ST_CALL_MODE], 1
+    jne ap_contract
+    fpc_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov [rsp], r8d
+    mov dword ptr [rsp + 4], 1
+start_owned_poll:
+    mov rdi, r13
+    call r14
+    cmp eax, 0xfffffff1
+    jne start_owned_return
+    mov rdi, [r12 + PAJ_CALL_PUBLIC_ROOT]
+    cmp qword ptr [rdi + PF_PARENT_SLOT], 0
+    jne ap_contract
+    cmp qword ptr [rdi + PF_GLOBAL_SLOT], 0
+    je start_owned_wait
+    call pf_drive_round
+start_owned_wait:
+    mov rdi, rsp
+    mov esi, 1
+    mov edx, 1
+    mov eax, 7
+    syscall
+    cmp rax, -4
+    je start_owned_poll
+    cmp rax, -4095
+    jae ap_contract
+    test word ptr [rsp + 6], 32
+    jnz ap_contract
+    jmp start_owned_poll
+start_owned_return:
+    fpc_leave
+
+# Start context, AsyncPool, token32, output, capacity. Uses the unchanged fixed
+# pba_poll/take and pba_drop helpers; only the enclosing await owner is different.
+start_pool_wait:
+    fpc_enter
+    mov r15, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov rbp, rcx
+    cmp r8, 65728
+    jb ap_contract
+    mov edi, PBA_BYTES
+    call tk_allocate_guarded
+    mov r12, rax
+    movabs rax, PBA_MAGIC
+    mov [r12], rax
+    mov rax, [r15 + PAJ_CALL_PUBLIC_ROOT]
+    mov [r12 + PBA_ROOT], rax
+    mov [r12 + PBA_OWNER], r13
+    mov [r12 + PBA_OUTPUT], rbp
+    mov qword ptr [r12 + PBA_CAPACITY], 65728
+    lea rdi, [r12 + PBA_TOKEN]
+    mov rsi, r14
+    mov ecx, 4
+    rep movsq
+    mov rdi, [r13 + pajp_AP_POOL]
+    call blocking_pool_notification_fd
+    mov r8, rax
+    mov rdi, r15
+    mov rsi, r12
+    lea rdx, [rip + pba_poll]
+    lea rcx, [rip + pba_drop]
+    call start_await
+    mov rbx, rax
+    cmp eax, 0xfffffff2
+    je start_pool_wait_dropped
+    cmp qword ptr [r12 + PBA_STATE], 2
+    jne ap_contract
+    jmp start_pool_wait_retire
+start_pool_wait_dropped:
+    cmp qword ptr [r12 + PBA_STATE], 3
+    jne ap_contract
+start_pool_wait_retire:
+    mov qword ptr [r12], 0
+    mov rdi, r12
+    mov esi, PBA_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov rax, rbx
+    fpc_leave
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Fixed child transport. All branching business policy stays in the start HIA.
+start_admission_child:
+    fpc_enter
+    mov r12, rdi
+    mov r15, rcx
+    mov eax, 15
+    call tk_async_child_query
+    test r9, r9
+    jnz ap_contract
+    cmp r11, 16
+    jne ap_contract
+    cmp qword ptr [r10 + 8], 0
+    jne ap_contract
+    cmp qword ptr [r10], 2
+    je start_admission_release
+    cmp qword ptr [r10], 1
+    jne ap_contract
+    cmp qword ptr [r12 + ST_CALL_WAITER], 0
+    jne ap_contract
+    mov rdi, [r12 + tk_ASY_PLAN_SERVICE]
+    call async_admission_create_waiter
+    test rax, rax
+    jz ap_contract
+    mov [r12 + ST_CALL_WAITER], rax
+    mov rdi, rax
+    call async_admission_notification_fd
+    mov r8, rax
+    mov rdi, r12
+    mov rsi, r12
+    lea rdx, [rip + start_admission_poll]
+    lea rcx, [rip + start_admission_drop]
+    call start_await
+    cmp eax, 0xfffffff2
+    je start_admission_return
+    test rax, rax
+    jnz ap_contract
+    mov eax, 1
+    jmp start_admission_reply
+start_admission_release:
+    cmp qword ptr [r12 + ST_CALL_WAITER], 0
+    je ap_contract
+    mov rdi, r12
+    call start_admission_drop
+    test rax, rax
+    jnz ap_contract
+start_admission_reply:
+    mov [r15 + 32], rax
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 8
+    call tk_async_child_header
+    mov eax, 40
+start_admission_return:
+    fpc_leave
+start_admission_poll:
+    mov rdi, [rdi + ST_CALL_WAITER]
+    test rdi, rdi
+    jz ap_contract
+    jmp async_admission_poll_waiter
+start_admission_drop:
+    mov rax, [rdi + ST_CALL_WAITER]
+    mov qword ptr [rdi + ST_CALL_WAITER], 0
+    test rax, rax
+    jz ap_contract
+    mov rdi, rax
+    jmp async_admission_drop_waiter
+
+# Start invocation -> exactly its existing shared-pool caller generation.
+start_pool_owner:
+    fpc_enter
+    mov r12, rdi
+    mov r13, [r12 + PAJ_CALL_OWNER]
+    test r13, r13
+    jnz start_pool_owner_ready
+    mov rdi, [r12 + PAJ_CALL_PUBLIC_ROOT]
+    call paj_shared_owner
+    mov r13, rax
+    mov [r12 + PAJ_CALL_OWNER], rax
+    mov rdi, rax
+    lea rsi, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    call async_journal_pool_generation
+    cmp rax, 192
+    jne ap_contract
+    mov rax, [r12 + tk_ASY_CALL_OUTPUT_AT + 176]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + PAJ_CALL_GENERATION], rax
+start_pool_owner_ready:
+    mov rax, r13
+    fpc_leave
+
+# Same child signature, plus r9 fixed role13/14/15. Source has no native pointer.
+start_resource_pool_child:
+    fpc_enter
+    mov r12, rdi
+    mov r14, rsi
+    mov rbx, rdx
+    mov r15, rcx
+    mov rbp, r9
+    cmp r8, 65536
+    jb ap_contract
+    cmp qword ptr [r12 + ST_CALL_ESCROW], 0
+    jne ap_contract
+    call start_pool_owner
+    mov [rsp], rax
+    mov rdi, [r12 + tk_ASY_PLAN_SERVICE]
+    mov rsi, rbp
+    mov rdx, [r12 + PAJ_CALL_PUBLIC_ROOT]
+    mov rdx, [rdx + EX_CONFIG_IG]
+    call start_escrow_create
+    mov r13, rax
+    mov [r12 + ST_CALL_ESCROW], rax
+    cmp rbp, 15
+    jne start_resource_created
+    mov rax, [r12 + ST_CALL_TICKET]
+    test rax, rax
+    jz ap_contract
+    mov [r13 + ST_E_RESOURCE], rax
+    mov qword ptr [r12 + ST_CALL_TICKET], 0
+start_resource_created:
+    mov rax, [rsp]
+    cmp qword ptr [rax + ST_AP_PENDING], 0
+    jne ap_contract
+    mov [rax + ST_AP_PENDING], r13
+    mov rax, [r12 + PAJ_CALL_GENERATION]
+    mov [r12 + ST_CALL_ESCROW_META], rax
+    mov [r12 + ST_CALL_ESCROW_META + 8], rbp
+    mov rax, [r12 + tk_ASY_CALL_SEQUENCE]
+    mov [r12 + ST_CALL_ESCROW_META + 16], rax
+    mov qword ptr [r12 + ST_CALL_ESCROW_META + 24], 0
+    mov qword ptr [r12 + ST_CALL_ESCROW_META + 32], 65536
+    lea rax, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    mov [r12 + ST_CALL_ESCROW_DESCRIPTOR], rax
+    mov qword ptr [r12 + ST_CALL_ESCROW_DESCRIPTOR + 8], 65728
+    mov rdi, r12
+    mov rsi, [rsp]
+    lea rdx, [r12 + ST_CALL_ESCROW_META]
+    mov rcx, r14
+    mov r8, rbx
+    lea r9, [r12 + ST_CALL_ESCROW_DESCRIPTOR]
+    call start_pool_submit_await
+    mov rdx, [rsp]
+    cmp qword ptr [rdx + ST_AP_PENDING], 0
+    jne ap_contract
+    cmp eax, 0xfffffff2
+    je start_resource_abandoned
+    cmp rax, 192
+    jb ap_contract
+    cmp rax, 65728
+    ja ap_contract
+    lea r14, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    cmp qword ptr [r14 + 8], 0
+    jne ap_contract
+    cmp qword ptr [r14 + 16], 12
+    jne ap_contract
+    cmp qword ptr [r14 + 104], 1
+    jne ap_contract
+    mov rbx, [r14 + 184]
+    cmp [r14 + 80], rbx
+    jne ap_contract
+    cmp rbx, 65536
+    ja ap_contract
+    cmp qword ptr [r13 + ST_E_REFS], 1
+    jne ap_contract
+    cmp rbp, 15
+    je start_resource_copy
+    cmp rbp, 14
+    je start_resource_claim_intent
+    cmp rbp, 13
+    jne ap_contract
+    mov rax, [r13 + ST_E_RESOURCE]
+    cmp [r14 + 200], rax
+    jne ap_contract
+    cmp qword ptr [r12 + ST_CALL_TICKET], 0
+    jne ap_contract
+    mov [r12 + ST_CALL_TICKET], rax
+    mov qword ptr [r13 + ST_E_RESOURCE], 0
+    jmp start_resource_copy
+start_resource_claim_intent:
+    cmp rbx, 80
+    jne ap_contract
+    cmp qword ptr [r14 + 216], 0
+    je start_resource_copy
+    cmp qword ptr [r14 + 216], 1
+    jne ap_contract
+    cmp qword ptr [r12 + ST_CALL_INTENT], 0
+    jne ap_contract
+    mov rax, [r13 + ST_E_RESOURCE]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + ST_CALL_INTENT], rax
+    mov qword ptr [r13 + ST_E_RESOURCE], 0
+start_resource_copy:
+    mov rdi, r15
+    xor esi, esi
+    mov rdx, rbx
+    call tk_async_child_header
+    lea rdi, [r15 + 32]
+    lea rsi, [r14 + 192]
+    mov rcx, rbx
+    rep movsb
+    add rbx, 32
+    jmp start_resource_release
+start_resource_abandoned:
+    mov ebx, 0xfffffff2
+start_resource_release:
+    mov qword ptr [r12 + ST_CALL_ESCROW], 0
+    mov rdi, r13
+    call start_escrow_release
+    mov rax, rbx
+    fpc_leave
+
+start_ticket_child:
+    mov r9d, 13
+    cmp qword ptr [rsi + 16], 1048576
+    ja ap_contract
+    mov rax, [rsi + 16]
+    add rax, rsi
+    cmp qword ptr [rax + 72], 2
+    je start_resource_pool_child
+    mov r9d, 15
+    cmp qword ptr [rax + 72], 4
+    je start_resource_pool_child
+    cmp qword ptr [rax + 72], 5
+    jne ap_contract
+    fpc_enter
+    mov r12, rdi
+    mov r15, rcx
+    mov eax, 19
+    call tk_async_child_query
+    test r9, r9
+    jnz ap_contract
+    cmp r11, 128
+    jne ap_contract
+    mov rax, [r10 + 16]
+    test rax, rax
+    jz ap_contract
+    cmp [r12 + ST_CALL_TICKET], rax
+    jne ap_contract
+    mov rdi, [r12 + tk_ASY_PLAN_SERVICE]
+    mov rsi, r10
+    mov rdx, r11
+    lea rcx, [r15 + 32]
+    mov r8d, 608
+    call tk_service_call
+    cmp eax, 96
+    jne ap_contract
+    lea rdi, [r15 + 32]
+    call fpc_ticket_consumed
+    mov qword ptr [r12 + ST_CALL_TICKET], 0
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 96
+    call tk_async_child_header
+    mov eax, 128
+    fpc_leave
+
+start_intent_child:
+    cmp qword ptr [rsi + 16], 0
+    jne ap_contract
+    mov r9d, 14
+    cmp qword ptr [rsi + 40], 1
+    je start_resource_pool_child
+    cmp qword ptr [rsi + 40], 3
+    jne ap_contract
+    fpc_enter
+    mov r12, rdi
+    mov r15, rcx
+    mov eax, 20
+    call tk_async_child_query
+    cmp r11, 96
+    jne ap_contract
+    mov rdi, [r12 + ST_CALL_INTENT]
+    test rdi, rdi
+    jz ap_contract
+    mov rsi, r10
+    mov rdx, r11
+    lea rcx, [r15 + 32]
+    call intent_caller_call
+    cmp eax, 80
+    jne ap_contract
+    mov rdi, [r12 + ST_CALL_INTENT]
+    call intent_caller_drop
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + ST_CALL_INTENT], 0
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 80
+    call tk_async_child_header
+    mov eax, 112
+    fpc_leave
+
+start_registry_child:
+    fpc_enter
+    mov r12, rdi
+    mov r15, rcx
+    mov eax, 21
+    call tk_async_child_query
+    test r9, r9
+    jnz ap_contract
+    mov rdi, [r12 + tk_ASY_PLAN_GLOBAL]
+    mov rsi, r10
+    mov rdx, r11
+    lea rcx, [r15 + 32]
+    mov r8d, 64
+    call tk_async_state_call
+    cmp eax, 64
+    jne ap_contract
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 64
+    call tk_async_child_header
+    mov eax, 96
+    fpc_leave
+
+start_task_child:
+    fpc_enter
+    mov r12, rdi
+    mov r15, rcx
+    mov eax, 22
+    call tk_async_child_query
+    test r9, r9
+    jnz ap_contract
+    cmp r11, 24
+    jb ap_contract
+    mov r14, r10
+    mov rbx, [r14]
+    cmp rbx, 1
+    je start_task_create
+    cmp r11, 24
+    jne ap_contract
+    cmp qword ptr [r14 + 16], 0
+    jne ap_contract
+    mov rbp, [r12 + ST_CALL_TASK]
+    test rbp, rbp
+    jz ap_contract
+    cmp [r14 + 8], rbp
+    jne ap_contract
+    mov rdi, rbp
+    cmp rbx, 3
+    je start_task_discard
+    cmp rbx, 2
+    jne ap_contract
+    call internal_task_spawn
+    cmp eax, 1
+    ja ap_contract
+    test rax, rax
+    jnz start_task_publish
+    mov qword ptr [r12 + ST_CALL_TASK], 0
+    mov qword ptr [r12 + ST_CALL_TICKET], 0
+    mov qword ptr [r12 + ST_CALL_INTENT], 0
+    jmp start_task_publish
+start_task_discard:
+    call internal_task_discard
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + ST_CALL_TASK], 0
+    jmp start_task_publish
+start_task_create:
+    cmp qword ptr [r12 + ST_CALL_TASK], 0
+    jne ap_contract
+    cmp qword ptr [r14 + 8], 0
+    jne ap_contract
+    mov rdx, [r14 + 16]
+    lea rax, [rdx + 24]
+    cmp rax, r11
+    jne ap_contract
+    cmp rdx, 416
+    jb ap_contract
+    mov rax, [r12 + ST_CALL_TICKET]
+    test rax, rax
+    jz ap_contract
+    cmp [r14 + 56], rax
+    jne ap_contract
+    mov qword ptr [r12 + ST_CALL_BUNDLE], 1
+    mov [r12 + ST_CALL_BUNDLE + 8], rax
+    mov rax, [r12 + ST_CALL_INTENT]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + ST_CALL_BUNDLE + 16], rax
+    mov qword ptr [r12 + ST_CALL_BUNDLE + 24], 7
+    mov rdi, [r12 + PAJ_CALL_PUBLIC_ROOT]
+    cmp qword ptr [rdi + PF_PARENT_SLOT], 0
+    je start_task_canonical
+    mov rdi, [rdi + PF_PARENT_SLOT]
+    cmp qword ptr [rdi + PF_PARENT_SLOT], 0
+    jne ap_contract
+start_task_canonical:
+    lea rsi, [r14 + 24]
+    lea rcx, [r12 + ST_CALL_BUNDLE]
+    mov r8d, 268435456
+    call internal_task_create
+    mov rbp, rax
+    mov [r12 + ST_CALL_TASK], rax
+    xor eax, eax
+    test rbp, rbp
+    setz al
+start_task_publish:
+    mov [r15 + 32], rbx
+    mov [r15 + 40], rbp
+    mov [r15 + 48], rax
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 24
+    call tk_async_child_header
+    mov eax, 56
+    fpc_leave
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Reuse the private IO carrier with the narrowly derived next_id HIA image.
+start_random_child:
+    fpc_enter
+    mov r12, rdi
+    mov r15, rcx
+    mov eax, 17
+    call tk_async_child_query
+    or r9, r11
+    jnz ap_contract
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, 0x3130514953415248
+    mov [r12 + tk_ASY_CALL_TMP], rax
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 8], 16
+    lea rdi, [r12 + tk_ASY_CALL_IO]
+    lea rsi, [r12 + tk_ASY_CALL_TMP]
+    mov edx, 64
+    lea rcx, [r12 + tk_ASY_CALL_TMP + 128]
+    mov r8d, 128
+    call tk_async_io_call
+    cmp rax, 64
+    jb ap_contract
+    cmp rax, 128
+    ja ap_contract
+    lea r13, [r12 + tk_ASY_CALL_TMP + 128]
+    movabs rdx, 0x3130524953415248
+    cmp [r13], rdx
+    jne ap_contract
+    mov rdx, [r13 + 32]
+    add rdx, 64
+    cmp rdx, rax
+    jne ap_contract
+    mov rdx, [r13 + 24]
+    or rdx, [r13 + 40]
+    or rdx, [r13 + 48]
+    or rdx, [r13 + 56]
+    jnz ap_contract
+    cmp qword ptr [r13 + 8], 0
+    jne start_random_failed
+    cmp qword ptr [r13 + 16], 0
+    jne ap_contract
+    cmp qword ptr [r13 + 32], 64
+    jne ap_contract
+    xor ebp, ebp
+    mov ebx, 64
+    lea r14, [r13 + 64]
+    jmp start_random_copy
+start_random_failed:
+    mov ebp, 1
+    cmp qword ptr [r13 + 8], 11
+    je start_random_eof
+    cmp qword ptr [r13 + 8], 1
+    jne ap_contract
+    cmp qword ptr [r13 + 32], 0
+    jne ap_contract
+    movabs rax, 0x3130515245444d48
+    mov [r12 + tk_ASY_CALL_TMP], rax
+    mov rax, [r13 + 16]
+    mov [r12 + tk_ASY_CALL_TMP + 8], rax
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    mov esi, 16
+    lea rdx, [r12 + 4096]
+    mov ecx, 4096
+    lea r8, [r12 + tk_ASY_CALL_ERROR_WORK]
+    mov r9d, 32768
+    call tk_async_errno_call
+    cmp rax, 24
+    jb ap_contract
+    cmp rax, 4096
+    ja ap_contract
+    mov rbx, [r12 + 4112]
+    lea rdx, [rbx + 24]
+    cmp rdx, rax
+    jne ap_contract
+    lea r14, [r12 + 4120]
+    jmp start_random_copy
+start_random_eof:
+    cmp qword ptr [r13 + 16], 0
+    jne ap_contract
+    cmp qword ptr [r13 + 32], 27
+    jne ap_contract
+    mov ebx, 27
+    lea r14, [r13 + 64]
+start_random_copy:
+    lea rdi, [r15 + 32]
+    mov rsi, r14
+    mov rcx, rbx
+    rep movsb
+    mov rdi, r15
+    mov rsi, rbp
+    mov rdx, rbx
+    call tk_async_child_header
+    lea rax, [rbx + 32]
+    fpc_leave
+
+# Existing wall-clock HIA, with an independent request/state/sequence per start.
+# The fixed clock syscall and action checks mirror the frozen Ticket adapter.
+start_wall_child:
+    fpc_enter
+    mov r12, rdi
+    mov r15, rcx
+    mov eax, 18
+    call tk_async_child_query
+    or r9, r11
+    jnz ap_contract
+    lea rdi, [r12 + ST_CALL_CLOCK_INPUT]
+    xor eax, eax
+    mov ecx, 4
+    rep stosq
+    movabs rax, 0x3130514c43415248
+    mov [r12 + ST_CALL_CLOCK_INPUT], rax
+    mov qword ptr [r12 + ST_CALL_CLOCK_INPUT + 8], 1
+    lea r13, [r12 + ST_CALL_CLOCK_WORK]
+start_wall_invoke:
+    lea rdi, [r12 + ST_CALL_CLOCK_INPUT]
+    mov esi, 32
+    lea rdx, [r12 + ST_CALL_CLOCK_REPLY]
+    mov ecx, 128
+    mov r8, r13
+    mov r9d, 1024
+    call qword ptr [rip + tk_image_table + 48]
+    cmp eax, 0xfffffff0
+    jne start_wall_result
+    cmp qword ptr [r13 + 8], 1
+    jne ap_contract
+    lea r14, [r13 + 256]
+    movabs rax, 0x3130414c43415248
+    cmp [r14], rax
+    jne ap_contract
+    mov rax, [r12 + ST_CALL_CLOCK_SEQUENCE]
+    inc rax
+    jz ap_contract
+    cmp [r14 + 8], rax
+    jne ap_contract
+    cmp [r13 + 16], rax
+    jne ap_contract
+    mov [r12 + ST_CALL_CLOCK_SEQUENCE], rax
+    cmp qword ptr [r14 + 16], 1
+    jne ap_contract
+    cmp qword ptr [r14 + 24], 0
+    jne ap_contract
+    cmp qword ptr [r14 + 32], 512
+    jne ap_contract
+    cmp qword ptr [r14 + 40], 16
+    jne ap_contract
+    mov rax, [r14 + 48]
+    or rax, [r14 + 56]
+    or rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz ap_contract
+    xor edi, edi
+    lea rsi, [r13 + 512]
+    mov eax, 228
+    syscall
+    test rax, rax
+    jz start_wall_ack
+    cmp rax, -4095
+    jb ap_contract
+    neg rax
+    mov [r14 + 72], rax
+start_wall_ack:
+    mov rax, [r14 + 8]
+    mov [r14 + 80], rax
+    mov qword ptr [r14 + 88], 1
+    jmp start_wall_invoke
+start_wall_result:
+    cmp rax, 72
+    jne ap_contract
+    movabs rax, 0x3130304343415248
+    cmp [r12 + ST_CALL_CLOCK_REPLY], rax
+    jne ap_contract
+    lea rsi, [r12 + ST_CALL_CLOCK_REPLY + 48]
+    lea rdi, [r15 + 32]
+    mov ecx, 3
+    rep movsq
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 24
+    call tk_async_child_header
+    mov eax, 56
+    fpc_leave
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Public root, immutable HRASYQ01/op3..7, len, reply, capacity, trusted await mode.
+# The unchanged HIA validates every full operation-specific frame.
+# All six callee-saved registers are preserved. Each invocation owns one context.
+async_controller_call:
+async_start_call:
+    cmp rdx, 48
+    jb tk_async_call_invalid
+    cmp rdx, tk_ASY_CALL_INPUT_CAP
+    ja tk_async_call_invalid
+    cmp r8, 65536
+    jb tk_async_call_capacity
+    cmp r9, 1
+    ja tk_async_call_invalid
+    movabs rax, 0x3130515953415248
+    cmp [rsi], rax
+    jne tk_async_call_invalid
+    mov rax, [rsi + 8]
+    cmp rax, 3
+    jb tk_async_call_invalid
+    cmp rax, 7
+    ja tk_async_call_invalid
+    cmp rax, 3
+    je start_controller_frame_ready
+    cmp rax, 4
+    jne start_controller_frame_not_receipt
+    cmp rdx, 400
+    jne tk_async_call_invalid
+    jmp start_controller_frame_ready
+start_controller_frame_not_receipt:
+    cmp rax, 5
+    jne start_controller_frame_prepare
+    cmp rdx, 48
+    jne tk_async_call_invalid
+    jmp start_controller_frame_ready
+start_controller_frame_prepare:
+    cmp rdx, 64
+    jb tk_async_call_invalid
+start_controller_frame_ready:
+    tk_asy_prologue
+    mov [rsp], rcx
+    mov [rsp + 8], r8
+    mov [rsp + 24], r9
+    mov r15, rdi
+    mov r14, rsi
+    mov rbx, rdx
+    mov rax, [r15 + EX_CONTROL_SLOT]
+    test rax, rax
+    jz ap_contract
+    mov rdi, [rax + 16]
+    cmp [rdi], rdi
+    jne ap_contract
+    mov rdi, [rdi + tk_ASY_ROOT_SLOT]
+    test rdi, rdi
+    jz ap_contract
+    add rdi, tk_ASY_G_PLAN
+    call tk_async_call_create
+    mov r12, rax
+    mov [r12 + PAJ_CALL_PUBLIC_ROOT], r15
+    mov [r12 + tk_ASY_CALL_INPUT_LEN], rbx
+    mov rax, [rsp]
+    mov [r12 + tk_ASY_CALL_OUTPUT], rax
+    mov rax, [rsp + 8]
+    mov [r12 + tk_ASY_CALL_OUTPUT_CAP], rax
+    mov rax, [rsp + 24]
+    mov [r12 + ST_CALL_MODE], rax
+    lea rax, [rip + async_start_next_id_image]
+    mov [r12 + tk_ASY_CALL_IO + tk_AIO_IO_FN], rax
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov rsi, r14
+    mov rcx, rbx
+    rep movsb
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov esi, tk_ASY_CALL_INPUT_CAP
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz ap_contract
+    lea r13, [r12 + tk_ASY_CALL_WORK]
+start_controller_invoke:
+    lea rdi, [r12 + tk_ASY_CALL_INPUT]
+    mov rsi, [r12 + tk_ASY_CALL_INPUT_LEN]
+start_controller_entry:
+    lea rdx, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    mov ecx, 65536
+    mov r8, r13
+    mov r9d, tk_ASY_CALL_WORK_BYTES
+    call async_start_image
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, tk_ASY_EFFECT
+    je start_controller_pending
+    mov [r12 + tk_ASY_CALL_CODE], rax
+    cmp eax, 65536
+    jbe start_controller_publish
+    cmp eax, 0xffffffff
+    je start_controller_retire
+    cmp eax, 0xfffffffe
+    je start_controller_retire
+    jmp ap_contract
+start_controller_pending:
+    lea rbp, [r13 + tk_ASY_ACTION]
+    movabs rax, 0x3130415354415248
+    cmp [rbp], rax
+    jne ap_contract
+    mov rax, [r12 + tk_ASY_CALL_SEQUENCE]
+    inc rax
+    jz ap_contract
+    cmp [rbp + 8], rax
+    jne ap_contract
+    mov [r12 + tk_ASY_CALL_SEQUENCE], rax
+    cmp qword ptr [rbp + 24], 0
+    jne ap_contract
+    cmp qword ptr [rbp + 32], tk_ASY_CONTROLLER_REQUEST
+    jne ap_contract
+    cmp qword ptr [rbp + 48], tk_ASY_CONTROLLER_REPLY
+    jne ap_contract
+    cmp qword ptr [rbp + 56], tk_ASY_CONTROLLER_REPLY_CAP
+    jne ap_contract
+    mov rax, [rbp + 64]
+    or rax, [rbp + 72]
+    or rax, [rbp + 80]
+    or rax, [rbp + 88]
+    jnz ap_contract
+    lea rdi, [r12 + ST_CALL_ACTION]
+    mov rsi, rbp
+    mov ecx, 12
+    rep movsq
+    mov rdx, [rbp + 40]
+    cmp rdx, 32
+    jb ap_contract
+    cmp rdx, tk_ASY_CONTROLLER_REQUEST_CAP
+    ja ap_contract
+    lea rsi, [r13 + tk_ASY_CONTROLLER_REQUEST]
+    mov rax, [rsi + 8]
+    cmp [rbp + 16], rax
+    jne ap_contract
+    lea rcx, [r13 + tk_ASY_CONTROLLER_REPLY]
+    mov r8d, tk_ASY_CONTROLLER_REPLY_CAP
+    mov rdi, r12
+    cmp rax, 1
+    je start_controller_config
+    cmp rax, 2
+    je start_controller_policy
+    cmp rax, 3
+    je start_controller_journal
+    cmp rax, 4
+    je start_controller_journal
+    cmp rax, 5
+    je start_controller_registry
+    cmp rax, 10
+    jbe start_controller_journal
+    cmp rax, 11
+    je start_controller_cancel
+    cmp rax, 12
+    je start_controller_atomic
+    cmp rax, 13
+    je start_controller_host
+    cmp rax, 14
+    je start_controller_codec
+    cmp rax, 15
+    je start_controller_admission
+    cmp rax, 16
+    je start_controller_slot
+    cmp rax, 17
+    je start_controller_random
+    cmp rax, 18
+    je start_controller_wall
+    cmp rax, 19
+    je start_controller_ticket
+    cmp rax, 20
+    je start_controller_intent
+    cmp rax, 21
+    je start_controller_active
+    cmp rax, 22
+    jne ap_contract
+    call start_task_child
+    jmp start_controller_ack
+start_controller_config:
+    call [r12 + tk_ASY_PLAN_CONFIG]
+    jmp start_controller_ack
+start_controller_policy:
+    call [r12 + tk_ASY_PLAN_POLICY]
+    jmp start_controller_ack
+start_controller_registry:
+    call tk_async_registry_callback
+    jmp start_controller_ack
+start_controller_journal:
+    call start_journal_child
+    jmp start_controller_ack
+start_controller_cancel:
+    call start_fixed_cancel_callback
+    jmp start_controller_ack
+start_controller_atomic:
+    call start_fixed_atomic_callback
+    jmp start_controller_ack
+start_controller_host:
+    call start_fixed_prepare_host_callback
+    jmp start_controller_ack
+start_controller_codec:
+    call start_fixed_prepare_codec_callback
+    jmp start_controller_ack
+start_controller_admission:
+    call start_admission_child
+    jmp start_controller_ack
+start_controller_slot:
+    call start_fixed_slot_callback
+    jmp start_controller_ack
+start_controller_random:
+    call start_random_child
+    jmp start_controller_ack
+start_controller_wall:
+    call start_wall_child
+    jmp start_controller_ack
+start_controller_ticket:
+    call start_ticket_child
+    jmp start_controller_ack
+start_controller_intent:
+    call start_intent_child
+    jmp start_controller_ack
+start_controller_active:
+    call start_registry_child
+start_controller_ack:
+    mov [rsp + 40], rax
+    mov rdi, rbp
+    lea rsi, [r12 + ST_CALL_ACTION]
+    mov ecx, 12
+    repe cmpsq
+    jne ap_contract
+    mov rax, [rsp + 40]
+    cmp eax, 0xfffffff2
+    je start_controller_abandoned
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, tk_ASY_CONTROLLER_REPLY_CAP
+    ja ap_contract
+    mov [rbp + 72], rax
+    mov rax, [rbp + 8]
+    mov [rbp + 64], rax
+    jmp start_controller_invoke
+start_controller_abandoned:
+    cmp qword ptr [r12 + ST_CALL_DROP], 0
+    jne ap_contract
+    mov qword ptr [r12 + ST_CALL_DROP], 1
+    cmp qword ptr [r12 + tk_ASY_CALL_INPUT + 8], 7
+    jne start_controller_retire
+    movabs rax, 0x31504f5453595341
+    mov [r12 + ST_CALL_DROP_FRAME], rax
+    mov rax, [r12 + tk_ASY_CALL_SEQUENCE]
+    mov [r12 + ST_CALL_DROP_FRAME + 8], rax
+    lea rdi, [r12 + ST_CALL_DROP_FRAME]
+    mov esi, 16
+    jmp start_controller_entry
+start_controller_publish:
+    cmp qword ptr [r12 + ST_CALL_DROP], 0
+    jne start_controller_retire
+    mov rcx, rax
+    mov rdi, [r12 + tk_ASY_CALL_OUTPUT]
+    lea rsi, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    rep movsb
+start_controller_retire:
+    mov rax, [r12 + ST_CALL_WAITER]
+    or rax, [r12 + ST_CALL_ESCROW]
+    or rax, [r12 + ST_CALL_TICKET]
+    or rax, [r12 + ST_CALL_INTENT]
+    or rax, [r12 + ST_CALL_TASK]
+    jnz ap_contract
+    mov rdi, r12
+    call paj_drop_generation
+    mov rax, [r12 + tk_ASY_CALL_CODE]
+    cmp qword ptr [r12 + ST_CALL_DROP], 0
+    je start_controller_code_ready
+    mov eax, 0xfffffff2
+start_controller_code_ready:
+    mov [rsp + 16], rax
+    mov rdi, r12
+    call tk_async_call_retire
+    mov rax, [rsp + 16]
+    tk_asy_epilogue
+
+async_start_image:
+    jmp qword ptr [rip + async_start_image_slot]
+async_start_next_id_image:
+    jmp qword ptr [rip + async_start_next_id_image_slot]
+.balign 8
+async_start_image_slot:
+    .quad 0
+async_start_next_id_image_slot:
+    .quad 0
+
+start_fixed_prepare_host_callback:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r15, rcx
+    mov rbp, r8
+    mov eax, 13
+    call tk_async_child_query
+    test r9, r9
+    jnz ap_contract
+    cmp r11, 24
+    jb ap_contract
+    cmp rbp, 65536
+    jb ap_contract
+    movabs rax, 0x3130514746435248
+    cmp [r10], rax
+    jne ap_contract
+    cmp qword ptr [r10 + 8], 4
+    jne ap_contract
+    mov rax, r11
+    sub rax, 24
+    cmp [r10 + 16], rax
+    jne ap_contract
+    mov rdi, [r12 + tk_ASY_PLAN_CONFIG_CONTEXT]
+    mov rsi, r10
+    mov rdx, r11
+    mov rcx, r15
+    mov r8, rbp
+    call tk_intent_config_call
+    cmp rax, 32
+    jb ap_contract
+    cmp rax, rbp
+    ja ap_contract
+    mov [rsp], rax
+    sub rax, 32
+    cmp [r15 + 24], rax
+    jne ap_contract
+    movabs rdx, 0x31304d4746435248
+    cmp [r15], rdx
+    jne ap_contract
+    mov rsi, [r15 + 8]
+    cmp rsi, 1
+    ja ap_contract
+    test rsi, rsi
+    jnz start_fixed_prepare_host_publish
+    cmp qword ptr [r15 + 16], 0
+    jne ap_contract
+start_fixed_prepare_host_publish:
+    mov rdi, r15
+    mov rdx, rax
+    call tk_async_child_header
+    mov rax, [rsp]
+    tk_asy_epilogue
+
+start_fixed_prepare_codec_callback:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r15, rcx
+    mov rbp, r8
+    mov eax, 14
+    call tk_async_child_query
+    test r9, r9
+    jnz ap_contract
+    cmp r11, 24
+    jb ap_contract
+    cmp rbp, 160
+    jb ap_contract
+    movabs rax, 0x314345444f435248
+    cmp [r10], rax
+    jne ap_contract
+    mov rdi, r10
+    mov rsi, r11
+    lea rdx, [r15 + 32]
+    mov rcx, rbp
+    sub rcx, 32
+    lea r8, [r12 + tk_ASY_CALL_ERROR_WORK]
+    mov r9d, 32768
+    call tk_intent_image_binary_codec
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    mov rcx, rbp
+    sub rcx, 32
+    cmp rax, rcx
+    ja ap_contract
+    lea rcx, [rax + 32]
+    mov [rsp], rcx
+    mov rdi, r15
+    xor esi, esi
+    mov rdx, rax
+    call tk_async_child_header
+    mov rax, [rsp]
+    tk_asy_epilogue
+
+
+start_fixed_cancel_callback:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r13, rsi
+    mov r15, rcx
+    mov rbp, r8
+    mov eax, 11
+    call tk_async_child_query
+    test r9, r9
+    jnz ap_contract
+    cmp r11, 352
+    jne ap_contract
+    cmp rbp, 56
+    jb ap_contract
+    mov r14, r10
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, 0x3130515353415248
+    mov [r12 + tk_ASY_CALL_TMP], rax
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 8], 11
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 16], 2
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 24], 352
+    lea rdi, [r12 + tk_ASY_CALL_TMP + 64]
+    mov rsi, r14
+    mov ecx, 352
+    rep movsb
+    mov rdi, [r12 + tk_ASY_PLAN_GLOBAL]
+    lea rsi, [r12 + tk_ASY_CALL_TMP]
+    mov edx, 416
+    lea rcx, [r12 + tk_ASY_CALL_NS_REPLY]
+    mov r8d, 64
+    call tk_async_state_call
+    cmp eax, 64
+    jne ap_contract
+    movabs rax, 0x3130525353415248
+    cmp [r12 + tk_ASY_CALL_NS_REPLY], rax
+    jne ap_contract
+    lea rdi, [r15 + 32]
+    lea rsi, [r12 + tk_ASY_CALL_NS_REPLY + 8]
+    mov ecx, 3
+    rep movsq
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 24
+    call tk_async_child_header
+    mov eax, 56
+    tk_asy_epilogue
+
+start_fixed_atomic_callback:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r15, rcx
+    mov rbp, r8
+    mov eax, 12
+    call tk_async_child_query
+    test r9, r9
+    jnz ap_contract
+    cmp r11, 16
+    jne ap_contract
+    cmp rbp, 40
+    jb ap_contract
+    mov r13, [r12 + tk_ASY_PLAN_GLOBAL]
+    mov rax, [r10]
+    cmp rax, 2
+    je start_fixed_atomic_write
+    cmp rax, 1
+    jne ap_contract
+    cmp qword ptr [r10 + 8], 0
+    jne ap_contract
+    # x86-64 ordinary atomic word load supplies Acquire ordering.
+    mov rax, [r13 + tk_ASY_G_STOPPING]
+    jmp start_fixed_atomic_reply
+start_fixed_atomic_write:
+    mov rax, [r10 + 8]
+    cmp rax, 1
+    ja ap_contract
+    # The value is emitted by HIA; this is the Release store transport.
+    mov [r13 + tk_ASY_G_STOPPING], rax
+start_fixed_atomic_reply:
+    cmp rax, 1
+    ja ap_contract
+    mov [r15 + 32], rax
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 8
+    call tk_async_child_header
+    mov eax, 40
+    tk_asy_epilogue
+
+start_fixed_slot_callback:
+    tk_asy_prologue
+    mov r12, rdi
+    mov r15, rcx
+    mov rbp, r8
+    mov eax, 16
+    call tk_async_child_query
+    test r9, r9
+    jnz ap_contract
+    cmp r11, 72
+    jne ap_contract
+    cmp rbp, 96
+    jb ap_contract
+    mov r14, r10
+    mov rax, [r14]
+    cmp rax, 9
+    je start_fixed_slot_shape
+    cmp rax, 10
+    jne ap_contract
+start_fixed_slot_shape:
+    mov rbx, rax
+    lea rdi, [r12 + tk_ASY_CALL_TMP]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, 0x3130515353415248
+    mov [r12 + tk_ASY_CALL_TMP], rax
+    mov [r12 + tk_ASY_CALL_TMP + 8], rbx
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 16], 2
+    mov qword ptr [r12 + tk_ASY_CALL_TMP + 24], 64
+    lea rdi, [r12 + tk_ASY_CALL_TMP + 64]
+    lea rsi, [r14 + 8]
+    mov ecx, 64
+    rep movsb
+    mov rdi, [r12 + tk_ASY_PLAN_GLOBAL]
+    lea rsi, [r12 + tk_ASY_CALL_TMP]
+    mov edx, 128
+    lea rcx, [r15 + 32]
+    mov r8d, 64
+    call tk_async_state_call
+    cmp eax, 64
+    jne ap_contract
+    mov rdi, r15
+    xor esi, esi
+    mov edx, 64
+    call tk_async_child_header
+    mov eax, 96
+    tk_asy_epilogue
+
+
+start_pool_submit_await:
+    test r9, r9
+    jz pba_invalid
+    cmp qword ptr [r9 + 8], PBA_MAXIMUM
+    jb pba_capacity
+    cmp qword ptr [r9], 0
+    je pba_invalid
+    pba_enter
+    mov r15, rdi
+    mov r13, rsi
+    mov r12, rdx
+    mov r14, rcx
+    mov rbp, r8
+    mov rbx, [r9]
+    mov rax, [r9 + 8]
+    mov [rsp], rax
+    mov rdi, r13
+    mov rsi, r12
+    mov rdx, r14
+    mov rcx, rbp
+    mov r8, rbx
+    call async_journal_pool_submit
+    cmp eax, 0xffffffff
+    je stsub_return
+    cmp rax, PBA_HEADER
+    jne ap_contract
+    mov rax, 0x3130305250425248
+    cmp [rbx], rax
+    jne ap_contract
+    cmp qword ptr [rbx + 24], 0
+    je ap_contract
+    mov rax, [r12]
+    cmp [rbx + 40], rax
+    jne ap_contract
+    mov rax, [r12 + 8]
+    cmp [rbx + 48], rax
+    jne ap_contract
+    mov rax, [r12 + 16]
+    cmp [rbx + 56], rax
+    jne ap_contract
+    cmp qword ptr [rbx + 64], 0
+    jne ap_contract
+    cmp [rbx + 72], rbp
+    jne ap_contract
+    mov rax, [rbx + 8]
+    cmp rax, 3
+    je stsub_no_receiver
+    cmp rax, 4
+    je stsub_no_receiver
+    test rax, rax
+    jz stsub_receiver
+    cmp rax, 2
+    jne ap_contract
+stsub_receiver:
+    cmp qword ptr [rbx + 96], 1
+    jne ap_contract
+    # The submitted receipt has non-contiguous identity words. Copy the four
+    # token words to this private stack before any output is overwritten.
+    sub rsp, 32
+    mov rax, [rbx + 24]
+    mov [rsp], rax
+    mov rax, [rbx + 40]
+    mov [rsp + 8], rax
+    mov rax, [rbx + 48]
+    mov [rsp + 16], rax
+    mov rax, [rbx + 56]
+    mov [rsp + 24], rax
+    mov rdi, r15
+    mov rsi, r13
+    mov rdx, rsp
+    mov rcx, rbx
+    mov r8, [rsp + 32]
+    call start_pool_wait
+    add rsp, 32
+    cmp eax, 0xffffffff
+    je ap_contract
+    cmp eax, 0xfffffffe
+    je ap_contract
+    jmp stsub_return
+stsub_no_receiver:
+    cmp qword ptr [rbx + 96], 2
+    jne ap_contract
+    mov eax, PBA_HEADER
+stsub_return:
+    pba_leave
+
+
+start_journal_child:
+    pba_enter
+    mov r12, rdi
+    mov r14, rsi
+    mov rbp, rdx
+    mov [rsp], rcx
+    mov [rsp + 8], r8
+    mov r13, [r12 + PAJ_CALL_OWNER]
+    test r13, r13
+    jnz stjournal_owner_ready
+    mov rdi, [r12 + PAJ_CALL_PUBLIC_ROOT]
+    call paj_shared_owner
+    mov r13, rax
+    mov [r12 + PAJ_CALL_OWNER], rax
+    mov rdi, r13
+    lea rsi, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    call async_journal_pool_generation
+    cmp rax, PBA_HEADER
+    jne ap_contract
+    mov rax, [r12 + tk_ASY_CALL_OUTPUT_AT + 176]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + PAJ_CALL_GENERATION], rax
+stjournal_owner_ready:
+    mov rax, [r12 + PAJ_CALL_GENERATION]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + PAJ_CALL_META], rax
+    mov rax, [r14 + 8]
+    mov [r12 + PAJ_CALL_META + 8], rax
+    mov rax, [r12 + tk_ASY_CALL_SEQUENCE]
+    mov [r12 + PAJ_CALL_META + 16], rax
+    mov qword ptr [r12 + PAJ_CALL_META + 24], 0
+    mov qword ptr [r12 + PAJ_CALL_META + 32], 65536
+    lea rax, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    mov [r12 + PAJ_CALL_DESCRIPTOR], rax
+    mov qword ptr [r12 + PAJ_CALL_DESCRIPTOR + 8], PBA_MAXIMUM
+    mov rdi, r12
+    mov rsi, r13
+    lea rdx, [r12 + PAJ_CALL_META]
+    mov rcx, r14
+    mov r8, rbp
+    lea r9, [r12 + PAJ_CALL_DESCRIPTOR]
+    call start_pool_submit_await
+    cmp eax, PBA_ABANDONED
+    je stjournal_return
+    cmp rax, PBA_HEADER
+    jb ap_contract
+    cmp rax, PBA_MAXIMUM
+    ja ap_contract
+    lea r13, [r12 + tk_ASY_CALL_OUTPUT_AT]
+    cmp qword ptr [r13 + 8], 0
+    jne ap_contract
+    cmp qword ptr [r13 + 16], 12
+    jne ap_contract
+    # This first public composition qualifies ordinary application returns.
+    # Generic await retains all JoinOutcomes; the old observation HIA has no
+    # arbitrary blocking JoinError renderer, which remains an explicit gap.
+    cmp qword ptr [r13 + 104], 1
+    jne ap_contract
+    mov rbx, [r13 + 184]
+    cmp rbx, 65536
+    ja stjournal_refusal
+    cmp [r13 + 80], rbx
+    jne ap_contract
+    cmp [rsp + 8], rbx
+    jb ap_contract
+    lea rsi, [r13 + PBA_HEADER]
+    mov rdi, [rsp]
+    mov rcx, rbx
+    rep movsb
+    mov rax, rbx
+    jmp stjournal_return
+stjournal_refusal:
+    cmp qword ptr [r13 + 80], 0
+    jne ap_contract
+    cmp ebx, 0xffffffff
+    je stjournal_refusal_ready
+    cmp ebx, 0xfffffffe
+    jne ap_contract
+stjournal_refusal_ready:
+    mov eax, ebx
+stjournal_return:
+    pba_leave
+
+
+# One shared admission service. All symbols are local for relocation-free embedding.
+.equ AM_CONTEXT_MAGIC, 0x313030434d415248
+.equ AM_REQUEST_MAGIC, 0x313030514d415248
+.equ AM_INITIAL_ARENA, 8192
+.equ AM_MAX_ARENA, 33554432
+
+# admission_create(rdi=trusted nonzero, never-reused service serial) -> rax=context or 0.
+# The embedding owner retains this context until every caller/guard is retired.
+admission_create:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    test rdi, rdi
+    jz am_create_fail
+    mov r13, rdi
+    xor edi, edi
+    mov esi, 8192
+    mov edx, 3
+    mov r10d, 0x22
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae am_create_fail
+    mov r12, rax
+    mov qword ptr [r12+32], -1
+    lea rdi, [r12+4096]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz am_create_free_context
+    xor edi, edi
+    mov esi, AM_INITIAL_ARENA
+    mov edx, 3
+    mov r10d, 0x22
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae am_create_free_context
+    mov [r12+16], rax
+    mov qword ptr [r12+24], AM_INITIAL_ARENA
+    xor edi, edi
+    mov esi, 0x80800
+    mov eax, 290
+    syscall
+    test rax, rax
+    js am_create_free_arena
+    mov [r12+32], rax
+    mov [r12+8], r13
+    movabs rax, AM_REQUEST_MAGIC
+    mov [r12+128], rax
+    mov qword ptr [r12+136], 1
+    mov [r12+144], r13
+    lea rdi, [r12+128]
+    mov esi, 96
+    lea rdx, [r12+256]
+    mov ecx, 160
+    mov r8, [r12+16]
+    mov r9, [r12+24]
+    call admission_invoke
+    cmp rax, 160
+    jne am_fatal
+    movabs rax, AM_CONTEXT_MAGIC
+    mov [r12], rax
+    mov rax, r12
+    jmp am_create_return
+am_create_free_arena:
+    mov rdi, [r12+16]
+    mov rsi, [r12+24]
+    mov eax, 11
+    syscall
+am_create_free_context:
+    mov rdi, r12
+    mov esi, 8192
+    mov eax, 11
+    syscall
+am_create_fail:
+    xor eax, eax
+am_create_return:
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+# admission_call(ctx, immutable request, request_bytes, reply, reply_capacity)
+# -> eax=160 or an unchanged HIA/private rejection. Short gate contains HIA state,
+# arena relocation and nonblocking notification only. No semantic waiting here.
+admission_call:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 104
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rcx
+    mov r15, r8
+    cmp r8, 160
+    jb am_call_capacity
+    cmp rdx, 96
+    jne am_call_invalid
+    test r12, r12
+    jz am_call_invalid
+    movabs rax, AM_CONTEXT_MAGIC
+    cmp [r12], rax
+    jne am_call_invalid
+    mov rdi, rsp
+    mov rsi, r13
+    mov ecx, 12
+    cld
+    rep movsq
+    mov rdi, r12
+    call am_gate_lock
+am_call_retry:
+    mov rdi, rsp
+    mov esi, 96
+    mov rdx, r14
+    mov rcx, r15
+    mov r8, [r12+16]
+    mov r9, [r12+24]
+    call admission_invoke
+    mov edx, eax
+    cmp rax, rdx
+    jne am_fatal
+    mov ebx, eax
+    cmp eax, 0xfffffffe
+    jne am_call_finish
+    mov r13, [r12+24]
+    cmp r13, AM_MAX_ARENA
+    jae am_call_finish
+    lea rbp, [r13+r13]
+    cmp rbp, AM_MAX_ARENA
+    ja am_fatal
+    xor edi, edi
+    mov rsi, rbp
+    mov edx, 3
+    mov r10d, 0x22
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae am_call_finish
+    mov rdx, rax
+    mov rdi, rax
+    mov rsi, [r12+16]
+    mov rcx, r13
+    shr rcx, 3
+    cld
+    rep movsq
+    mov rdi, [r12+16]
+    mov [r12+16], rdx
+    mov [r12+24], rbp
+    mov rsi, r13
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz am_fatal
+    jmp am_call_retry
+am_call_finish:
+    cmp ebx, 160
+    jne am_call_unlock
+    mov rax, [r12+16]
+    cmp qword ptr [rax+88], 0
+    je am_call_unlock
+    mov qword ptr [rsp+96], 1
+    mov rdi, [r12+32]
+    lea rsi, [rsp+96]
+    mov edx, 8
+    mov eax, 1
+    syscall
+    cmp rax, 8
+    je am_call_unlock
+    cmp rax, -11
+    je am_call_unlock
+    cmp rax, -4
+    je am_call_finish
+    jmp am_fatal
+am_call_unlock:
+    mov rdi, r12
+    call am_gate_unlock
+    mov eax, ebx
+    jmp am_call_return
+am_call_capacity:
+    mov eax, 0xfffffffe
+    jmp am_call_return
+am_call_invalid:
+    mov eax, 0xffffffff
+am_call_return:
+    add rsp, 104
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+# Borrowed readiness fd; caller must remove epoll/poll registration before destroy.
+admission_notification_fd:
+    movabs rax, AM_CONTEXT_MAGIC
+    cmp [rdi], rax
+    jne am_fatal
+    mov rax, [rdi+32]
+    ret
+
+# Only after op12 succeeds and all API callers have stopped/joined.
+# Failed precondition returns STATE and changes no state. No invented Mutex::close.
+admission_destroy:
+    push rbx
+    mov rbx, rdi
+    movabs rax, AM_CONTEXT_MAGIC
+    cmp [rbx], rax
+    jne am_destroy_invalid
+    call am_gate_lock
+    mov rax, [rbx+16]
+    cmp qword ptr [rax+96], 1
+    jne am_destroy_busy
+    mov qword ptr [rbx], 0
+    mov rdi, [rbx+32]
+    mov qword ptr [rbx+32], -1
+    mov eax, 3
+    syscall
+    mov rdi, [rbx+16]
+    mov rsi, [rbx+24]
+    mov qword ptr [rbx+16], 0
+    mov qword ptr [rbx+24], 0
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz am_fatal
+    mov rdi, rbx
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz am_fatal
+    xor eax, eax
+    pop rbx
+    ret
+am_destroy_busy:
+    mov rdi, rbx
+    call am_gate_unlock
+    mov eax, 0xfffffffd
+    pop rbx
+    ret
+am_destroy_invalid:
+    mov eax, 0xffffffff
+    pop rbx
+    ret
+
+am_gate_lock:
+    lea r8, [rdi+40]
+am_gate_again:
+    xor eax, eax
+    mov edx, 1
+    lock cmpxchg dword ptr [r8], edx
+    je am_gate_locked
+    mov rdi, r8
+    mov esi, 128
+    mov edx, 1
+    xor r10d, r10d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je am_gate_again
+    cmp rax, -11
+    je am_gate_again
+    test rax, rax
+    jnz am_fatal
+    jmp am_gate_again
+am_gate_locked:
+    ret
+
+am_gate_unlock:
+    add rdi, 40
+    xor eax, eax
+    xchg dword ptr [rdi], eax
+    cmp eax, 1
+    jne am_fatal
+    mov esi, 129
+    mov edx, 1
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    js am_fatal
+    ret
+
+admission_invoke:
+    jmp qword ptr [rip + async_start_admission_image_slot]
+.balign 8
+async_start_admission_image_slot:
+    .quad 0
+
+am_fatal:
+    mov edi, 70
+    mov eax, 231
+    syscall
+    ud2
+
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Canonical scheduler custody for the independent HIA shutdown continuation.
+
+.macro asd_enter
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 24
+.endm
+.macro asd_leave
+    add rsp, 24
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.endm
+
+# Complete business shutdown before the separate actual runtime Drop.
+asd_internal_task_drain:
+    push rbx
+    mov rbx, rdi
+    call async_shutdown_run
+    test rax, rax
+    jnz ap_contract
+    mov rdi, rbx
+    pop rbx
+    jmp asd_runtime_task_drain
+
+# Canonical PublicRoot. No public request or callback pointer selects this call.
+async_shutdown_run:
+    asd_enter
+    mov rbx, rdi
+    cmp qword ptr [rbx + PF_PARENT_SLOT], 0
+    jne ap_contract
+    mov rax, [rbx + EX_CONTROL_SLOT]
+    test rax, rax
+    jz asd_absent
+    cmp [rax], rbx
+    jne ap_contract
+    mov r14, [rax + 16]
+    test r14, r14
+    jz asd_absent
+    cmp [r14], r14
+    jne ap_contract
+    mov r15, [r14 + tk_ASY_ROOT_SLOT]
+    test r15, r15
+    jz asd_absent
+    cmp [r15 + tk_ASY_G_SERVICE], r14
+    jne ap_contract
+    cmp qword ptr [r15 + ASD_LIFECYCLE], 2
+    je asd_absent
+    cmp qword ptr [r15 + ASD_LIFECYCLE], 0
+    jne ap_contract
+    mov qword ptr [r15 + ASD_LIFECYCLE], 1
+    mov edi, ASD_CONTEXT
+    call tk_allocate_guarded
+    mov r12, rax
+    mov qword ptr [r12 + ASD_TIMER], -1
+    mov qword ptr [r12 + ASD_INPUT_BYTES], 64
+    mov rax, 0x3130514453595341
+    mov [r12 + ASD_INPUT], rax
+    mov qword ptr [r12 + ASD_INPUT + 8], 1
+asd_invoke:
+    lea rdi, [r12 + ASD_INPUT]
+    mov rsi, [r12 + ASD_INPUT_BYTES]
+    lea rdx, [r12 + ASD_OUTPUT]
+    mov ecx, 128
+    mov r8, r12
+    mov r9d, ASD_WORK
+    call async_shutdown_image
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, 0xfffffff0
+    je asd_effect
+    cmp rax, 64
+    jne ap_contract
+    mov rax, 0x3130524453595341
+    cmp [r12 + ASD_OUTPUT], rax
+    jne ap_contract
+    mov rax, [r12 + ASD_SEQUENCE]
+    cmp [r12 + ASD_OUTPUT + 8], rax
+    jne ap_contract
+    cmp qword ptr [r12 + ASD_OUTPUT + 16], 1
+    jne ap_contract
+    cmp qword ptr [r12 + ASD_OUTPUT + 24], 0
+    jne ap_contract
+    cmp qword ptr [r12 + ASD_WAITER], 0
+    jne ap_contract
+    cmp qword ptr [r12 + ASD_TIMER], -1
+    jne ap_contract
+    cmp qword ptr [r15 + ASD_STOPPING], 1
+    jne ap_contract
+    mov qword ptr [r15 + ASD_LIFECYCLE], 2
+    mov rdi, r12
+    mov esi, ASD_CONTEXT + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz ap_contract
+asd_absent:
+    xor eax, eax
+    asd_leave
+asd_effect:
+    mov rax, 0x3143414453595341
+    cmp [r12 + ASD_OUTPUT], rax
+    jne ap_contract
+    mov rax, [r12 + ASD_SEQUENCE]
+    add rax, 1
+    jc ap_contract
+    cmp [r12 + ASD_OUTPUT + 8], rax
+    jne ap_contract
+    mov [r12 + ASD_SEQUENCE], rax
+    cmp qword ptr [r12 + ASD_OUTPUT + 24], 64
+    ja ap_contract
+    mov rax, [r12 + ASD_OUTPUT + 40]
+    or rax, [r12 + ASD_OUTPUT + 48]
+    or rax, [r12 + ASD_OUTPUT + 56]
+    jnz ap_contract
+    lea rdi, [r12 + ASD_ACTION]
+    lea rsi, [r12 + ASD_OUTPUT]
+    mov ecx, 16
+    rep movsq
+    mov rax, [r12 + ASD_ACTION + 16]
+    mov [r12 + ASD_KIND], rax
+    cmp rax, 1
+    je asd_atomic
+    cmp rax, 2
+    je asd_guard
+    cmp rax, 3
+    je asd_registry
+    cmp rax, 4
+    je asd_timer
+    cmp rax, 5
+    je asd_guard_drop
+    jmp ap_contract
+asd_atomic:
+    cmp qword ptr [r12 + ASD_ACTION + 24], 16
+    jne ap_contract
+    cmp qword ptr [r12 + ASD_ACTION + 64], 2
+    jne ap_contract
+    mov rax, [r12 + ASD_ACTION + 72]
+    cmp rax, 1
+    ja ap_contract
+    # Aligned x86-64 Release store; the HIA action supplies its value.
+    mov [r15 + ASD_STOPPING], rax
+    mov [r12 + ASD_INPUT + 72], rax
+    mov rax, 0x31304b4153595341
+    mov [r12 + ASD_INPUT + 64], rax
+    mov eax, 16
+    jmp asd_ack
+asd_guard:
+    cmp qword ptr [r12 + ASD_ACTION + 24], 0
+    jne ap_contract
+    cmp qword ptr [r12 + ASD_WAITER], 0
+    jne ap_contract
+    mov rdi, r14
+    call async_admission_create_waiter
+    test rax, rax
+    jz ap_contract
+    mov [r12 + ASD_WAITER], rax
+asd_guard_poll:
+    mov rdi, [r12 + ASD_WAITER]
+    call async_admission_poll_waiter
+    test rax, rax
+    jz asd_guard_ready
+    mov edx, 0xfffffff1
+    cmp rax, rdx
+    jne ap_contract
+    mov rdi, [r12 + ASD_WAITER]
+    call async_admission_notification_fd
+    mov rsi, rax
+    mov rdi, rbx
+    call asd_scheduler_step
+    jmp asd_guard_poll
+asd_guard_ready:
+    mov rax, 0x3130524753595341
+    mov [r12 + ASD_INPUT + 64], rax
+    mov qword ptr [r12 + ASD_INPUT + 72], 1
+    mov eax, 16
+    jmp asd_ack
+asd_registry:
+    cmp qword ptr [r12 + ASD_ACTION + 24], 64
+    jne ap_contract
+    mov rdi, r15
+    lea rsi, [r12 + ASD_ACTION + 64]
+    mov edx, 64
+    lea rcx, [r12 + ASD_INPUT + 64]
+    mov r8d, 64
+    call tk_async_state_call
+    cmp rax, 64
+    jne ap_contract
+    jmp asd_ack
+asd_timer:
+    cmp qword ptr [r12 + ASD_ACTION + 24], 16
+    jne ap_contract
+    cmp qword ptr [r12 + ASD_TIMER], -1
+    jne ap_contract
+    mov rax, [r12 + ASD_ACTION + 72]
+    cmp rax, 1000000000
+    jae ap_contract
+    mov edi, 1
+    mov esi, 526336
+    mov eax, 283
+    syscall
+    cmp rax, -4095
+    jae ap_contract
+    mov [r12 + ASD_TIMER], rax
+    mov qword ptr [r12 + ASD_TIMESPEC], 0
+    mov qword ptr [r12 + ASD_TIMESPEC + 8], 0
+    mov rax, [r12 + ASD_ACTION + 64]
+    mov [r12 + ASD_TIMESPEC + 16], rax
+    mov rax, [r12 + ASD_ACTION + 72]
+    mov [r12 + ASD_TIMESPEC + 24], rax
+    mov rdi, [r12 + ASD_TIMER]
+    xor esi, esi
+    lea rdx, [r12 + ASD_TIMESPEC]
+    xor r10d, r10d
+    mov eax, 286
+    syscall
+    test rax, rax
+    jnz ap_contract
+asd_timer_read:
+    mov rdi, [r12 + ASD_TIMER]
+    lea rsi, [r12 + ASD_EXPIRATIONS]
+    mov edx, 8
+    xor eax, eax
+    syscall
+    cmp rax, -4
+    je asd_timer_read
+    cmp rax, -11
+    je asd_timer_pending
+    cmp rax, 8
+    jne ap_contract
+    mov rdi, [r12 + ASD_TIMER]
+    mov eax, 3
+    syscall
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + ASD_TIMER], -1
+    mov rax, 0x31304d5453595341
+    mov [r12 + ASD_INPUT + 64], rax
+    mov rax, [r12 + ASD_EXPIRATIONS]
+    mov [r12 + ASD_INPUT + 72], rax
+    mov eax, 16
+    jmp asd_ack
+asd_timer_pending:
+    mov rdi, rbx
+    mov rsi, [r12 + ASD_TIMER]
+    call asd_scheduler_step
+    jmp asd_timer_read
+asd_guard_drop:
+    cmp qword ptr [r12 + ASD_ACTION + 24], 0
+    jne ap_contract
+    mov rdi, [r12 + ASD_WAITER]
+    test rdi, rdi
+    jz ap_contract
+    call async_admission_drop_waiter
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + ASD_WAITER], 0
+    mov rax, 0x3130524753595341
+    mov [r12 + ASD_INPUT + 64], rax
+    mov qword ptr [r12 + ASD_INPUT + 72], 0
+    mov eax, 16
+asd_ack:
+    cmp rax, 64
+    ja ap_contract
+    mov rbp, rax
+    add rax, 64
+    mov [r12 + ASD_INPUT_BYTES], rax
+    lea rdi, [r12 + ASD_INPUT]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    mov rax, 0x3130514453595341
+    mov [r12 + ASD_INPUT], rax
+    mov qword ptr [r12 + ASD_INPUT + 8], 2
+    mov rax, [r12 + ASD_SEQUENCE]
+    mov [r12 + ASD_INPUT + 16], rax
+    mov rax, [r12 + ASD_KIND]
+    mov [r12 + ASD_INPUT + 24], rax
+    mov [r12 + ASD_INPUT + 32], rbp
+    jmp asd_invoke
+
+# One existing PF scheduling round then a real poll on the borrowed wake fd.
+# The one-millisecond scheduler quantum matches the existing canonical loop.
+asd_scheduler_step:
+    asd_enter
+    mov r12, rdi
+    mov r13, rsi
+    cmp r13, 2147483647
+    ja ap_contract
+    mov r14, [r12 + PF_GLOBAL_SLOT]
+    test r14, r14
+    jz asd_scheduler_poll
+    cmp [r14 + 8], r12
+    jne ap_contract
+    cmp qword ptr [r14 + PF_G_CURRENT], 0
+    jne ap_contract
+    mov rdi, r12
+    call pf_drive_round
+asd_scheduler_poll:
+    mov [rsp], r13d
+    mov dword ptr [rsp + 4], 1
+    mov edx, -1
+    test r14, r14
+    jz asd_scheduler_wait
+    cmp qword ptr [r14 + PF_G_COUNT], 0
+    je asd_scheduler_wait
+    mov edx, 1
+asd_scheduler_wait:
+    mov rdi, rsp
+    mov esi, 1
+    mov eax, 7
+    syscall
+    cmp rax, -4
+    je asd_scheduler_done
+    cmp rax, 1
+    ja ap_contract
+    test word ptr [rsp + 6], 56
+    jnz ap_contract
+asd_scheduler_done:
+    xor eax, eax
+    asd_leave
+
+async_shutdown_image:
+    jmp qword ptr [rip + async_shutdown_image_slot]
+.balign 8
+async_shutdown_image_slot:
+    .quad 0
+
+
+# BEGIN PUBLIC ASYNC BRIDGE V1
+.equ PS_ESCROW, 96
+.equ PS_PERMIT, 104
+.equ PS_POOL, 112
+.equ PS_GENERATION, 120
+.equ PS_META, 512
+.equ PS_DESCRIPTOR, 560
+.equ PS_ENV_INFO, 768
+.equ PS_ROOT_SLOT, 3096
+.equ PS_ACTIVE, 8
+.equ PS_LENGTH, 16
+.equ PS_TARGET, 24
+.equ PS_CAPACITY, 32
+.equ PS_SEQUENCE, 40
+.equ PS_CALLER, 48
+.equ PS_RESULT, 56
+.equ PS_PURE_BUSY, 64
+.equ PS_ACTION_COPY, 256
+.equ PS_INPUT, 4096
+.equ PS_INPUT_CAPACITY, 8388632
+.equ PS_INPUT_MAPPING, 8392704
+.equ PS_OUTPUT, 8396800
+.equ PS_WORK, 75505664
+.equ PS_PURE, 343941120
+.equ PS_BYTES, 612376576
+.equ PS_WORK_BYTES, 268435456
+.equ PS_CAP, 67108864
+.equ PS_ACTION, 256
+.equ PS_CHILD_INPUT, 67108864
+.equ PS_CHILD_OUTPUT, 134217728
+
+.macro ps_prologue
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 72
+.endm
+.macro ps_epilogue
+    add rsp, 72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+# context(public root) -> stable private mapping. No effect-owner replacement.
+ps_context:
+    ps_prologue
+    mov r12, rdi
+    mov rax, [r12 + PS_ROOT_SLOT]
+    test rax, rax
+    jnz ps_context_existing
+    mov edi, PS_BYTES
+    call tk_allocate_guarded
+    mov [rax], r12
+    mov [r12 + PS_ROOT_SLOT], rax
+ps_context_existing:
+    cmp [rax], r12
+    jne fatal
+    ps_epilogue
+
+# rax is one fixed image selected by native branches; source/result spans are
+# the immutable mapper/handler-owned spans. Pure components have no callbacks.
+ps_pure:
+    ps_prologue
+    mov r12, rax
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    cmp rsi, PS_CAP
+    ja fatal
+    cmp rcx, PS_CAP
+    ja fatal
+    mov rdi, r15
+    call ps_context
+    mov r13, rax
+    cmp qword ptr [r13 + PS_PURE_BUSY], 0
+    jne fatal
+    mov qword ptr [r13 + PS_PURE_BUSY], 1
+    mov rdi, [rsp]
+    mov rsi, [rsp + 8]
+    mov rdx, [rsp + 16]
+    mov rcx, [rsp + 24]
+    lea r8, [r13 + PS_PURE]
+    mov r9d, PS_WORK_BYTES
+    call r12
+    mov edx, eax
+    cmp rax, rdx
+    jne fatal
+    cmp eax, 0xfffffff0
+    je fatal
+    cmp eax, PS_CAP
+    jbe ps_pure_done
+    cmp eax, 0xfffffff0
+    jb fatal
+ps_pure_done:
+    mov qword ptr [r13 + PS_PURE_BUSY], 0
+    ps_epilogue
+
+ps_destroy:
+    ps_prologue
+    mov r12, rdi
+    mov rdi, [r12 + PS_ROOT_SLOT]
+    test rdi, rdi
+    jz ps_destroy_done
+    cmp [rdi], r12
+    jne fatal
+    mov rax, [rdi + PS_ACTIVE]
+    or rax, [rdi + PS_PURE_BUSY]
+    or rax, [rdi + PS_CALLER]
+    or rax, [rdi + PS_ESCROW]
+    or rax, [rdi + PS_PERMIT]
+    or rax, [rdi + PS_POOL]
+    or rax, [rdi + PS_GENERATION]
+    jnz fatal
+    mov qword ptr [r12 + PS_ROOT_SLOT], 0
+    mov esi, PS_BYTES + 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz fatal
+ps_destroy_done:
+    xor eax, eax
+    ps_epilogue
+
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# handler(input, length, output, capacity), with the real public root in r15.
+ps_handler:
+    ps_prologue
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    cmp rsi, 24
+    jb fatal
+    cmp rsi, PS_INPUT_CAPACITY
+    ja fatal
+    cmp rcx, 32
+    jb fatal
+    cmp rcx, PS_CAP
+    ja fatal
+    mov rdi, r15
+    call ps_context
+    mov r12, rax
+    cmp qword ptr [r12 + PS_ACTIVE], 0
+    jne fatal
+    cmp qword ptr [r12 + PS_CALLER], 0
+    jne fatal
+    mov qword ptr [r12 + PS_ACTIVE], 1
+    mov rax, [rsp + 8]
+    mov [r12 + PS_LENGTH], rax
+    mov rax, [rsp + 16]
+    mov [r12 + PS_TARGET], rax
+    mov rax, [rsp + 24]
+    mov [r12 + PS_CAPACITY], rax
+    lea rdi, [r12 + PS_INPUT]
+    mov rsi, [rsp]
+    mov rcx, [rsp + 8]
+    rep movsb
+    lea rdi, [r12 + PS_INPUT]
+    mov esi, PS_INPUT_MAPPING
+    mov edx, 1
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz fatal
+    lea rbp, [r12 + PS_WORK]
+ps_handler_resume:
+    lea rdi, [r12 + PS_INPUT]
+    mov rsi, [r12 + PS_LENGTH]
+    lea rdx, [r12 + PS_OUTPUT]
+    mov rcx, [r12 + PS_CAPACITY]
+    mov r8, rbp
+    mov r9d, PS_WORK_BYTES
+    call qword ptr [rip + ps_image_handler]
+    mov edx, eax
+    cmp rax, rdx
+    jne fatal
+    cmp eax, 0xfffffff0
+    je ps_handler_action
+    mov [r12 + PS_RESULT], rax
+    cmp eax, PS_CAP
+    jbe ps_handler_completed
+    cmp eax, 0xfffffff0
+    jb fatal
+    jmp ps_handler_terminal
+ps_handler_completed:
+    cmp rax, [r12 + PS_CAPACITY]
+    ja fatal
+    lea rsi, [r12 + PS_OUTPUT]
+    mov rdi, [r12 + PS_TARGET]
+    mov rcx, rax
+    rep movsb
+ps_handler_terminal:
+    mov rdi, r12
+    call ps_cleanup_resources
+    cmp qword ptr [r12 + PS_CALLER], 0
+    jne fatal
+    cmp qword ptr [r12 + PS_PURE_BUSY], 0
+    jne fatal
+    lea rdi, [r12 + PS_INPUT]
+    mov esi, PS_INPUT_MAPPING
+    mov edx, 3
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz fatal
+    mov qword ptr [r12 + PS_ACTIVE], 0
+    mov qword ptr [r12 + PS_TARGET], 0
+    mov qword ptr [r12 + PS_CAPACITY], 0
+    mov rax, [r12 + PS_RESULT]
+    ps_epilogue
+
+ps_handler_action:
+    lea r14, [rbp + PS_ACTION]
+    mov rax, 0x3130414853415248
+    cmp [r14], rax
+    jne fatal
+    mov rax, [r12 + PS_SEQUENCE]
+    inc rax
+    jz fatal
+    cmp [r14 + 8], rax
+    jne fatal
+    mov [r12 + PS_SEQUENCE], rax
+    cmp qword ptr [r14 + 24], 0
+    jne fatal
+    cmp qword ptr [r14 + 32], PS_CHILD_INPUT
+    jne fatal
+    cmp qword ptr [r14 + 48], PS_CHILD_OUTPUT
+    jne fatal
+    cmp qword ptr [r14 + 56], PS_CAP
+    jne fatal
+    mov rax, [r14 + 64]
+    or rax, [r14 + 72]
+    or rax, [r14 + 80]
+    or rax, [r14 + 88]
+    jnz fatal
+    mov rax, [r14 + 40]
+    cmp rax, PS_CAP
+    ja fatal
+    lea rdi, [r12 + PS_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 12
+    rep movsq
+    lea rdi, [rbp + PS_CHILD_INPUT]
+    mov rsi, [r14 + 40]
+    lea rdx, [rbp + PS_CHILD_OUTPUT]
+    mov ecx, PS_CAP
+    mov rax, [r14 + 16]
+    cmp rax, 1
+    je ps_handler_params
+    cmp rax, 2
+    je ps_handler_environment
+    cmp rax, 3
+    je ps_handler_config
+    cmp rax, 4
+    je ps_handler_fence
+    cmp rax, 5
+    je ps_handler_authority
+    cmp rax, 6
+    je ps_handler_start
+    cmp rax, 7
+    je ps_handler_cancel
+    cmp rax, 8
+    je ps_handler_value
+    cmp rax, 9
+    je ps_handler_scope
+    jmp fatal
+ps_handler_params:
+    mov rax, [rip + ps_image_params]
+    call ps_pure
+    jmp ps_handler_ack
+ps_handler_environment:
+    call ps_environment
+    jmp ps_handler_ack
+ps_handler_config:
+    call pr_async_child
+    jmp ps_handler_ack
+ps_handler_fence:
+    call ps_fence
+    jmp ps_handler_ack
+ps_handler_authority:
+    call pr_authority
+    jmp ps_handler_ack
+ps_handler_start:
+    call public_async_start_raw
+    jmp ps_handler_ack
+ps_handler_cancel:
+    call public_async_cancel_raw
+    jmp ps_handler_ack
+ps_handler_value:
+    mov rax, [rip + pr_image_value]
+    call ps_pure
+    jmp ps_handler_ack
+ps_handler_scope:
+    mov rax, [rip + pr_image_scope]
+    call ps_pure
+ps_handler_ack:
+    cmp eax, 0xfffffff2
+    je ps_handler_abandoned
+    mov ebx, eax
+    cmp rax, rbx
+    jne fatal
+    cmp eax, PS_CAP
+    jbe ps_handler_ack_valid
+    cmp eax, 0xfffffff0
+    jb fatal
+    cmp eax, 0xfffffff0
+    je fatal
+ps_handler_ack_valid:
+    lea rdi, [r12 + PS_ACTION_COPY]
+    mov rsi, r14
+    mov ecx, 12
+    repe cmpsq
+    jne fatal
+    mov [r14 + 72], rbx
+    mov rax, [r12 + PS_SEQUENCE]
+    mov [r14 + 64], rax
+    jmp ps_handler_resume
+
+
+ps_handler_abandoned:
+    mov eax, 0xfffffff2
+    mov [r12 + PS_RESULT], rax
+    jmp ps_handler_terminal
+
+ps_map_handler:
+    # Mapper owns a larger output span; this fixed child uses its declared cap.
+    mov ecx, OFFSET FLAT:PS_CAP
+    call ps_handler
+    cmp eax, 0xfffffff2
+    je ph_runtime_aborted
+    jmp ex_mapper_ack
+
+.balign 8
+ps_image_handler: .quad 0
+ps_image_params: .quad 0
+ps_image_environment: .quad 0
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Read the same immutable process environment table that installed Config used.
+# Presence/bytes are captured afresh for each actual Start handler; the HIA
+# environment policy alone decides switch precedence and configured admission.
+ps_environment:
+    ps_prologue
+    cmp rsi, 16
+    jne ap_contract
+    movabs rax, 0x3130515043464548
+    cmp [rdi], rax
+    jne ap_contract
+    cmp qword ptr [rdi + 8], 1
+    jne ap_contract
+    cmp rcx, 64
+    jb ap_contract
+    mov r13, rdx
+    mov r14, rcx
+    mov rdi, r15
+    call ps_context
+    mov r12, rax
+    cmp qword ptr [r12 + PS_ACTIVE], 1
+    jne ap_contract
+    lea rdi, [r12 + PS_OUTPUT]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, 0x3130514e45464548
+    mov [r12 + PS_OUTPUT], rax
+    mov qword ptr [r12 + PS_OUTPUT + 8], 1
+    xor ebx, ebx
+    mov ebp, 64
+ps_environment_capture:
+    lea rdi, [rip + ps_env_fence_root]
+    test ebx, ebx
+    jz ps_environment_name
+    lea rdi, [rip + ps_env_fence_owner]
+    cmp ebx, 1
+    je ps_environment_name
+    lea rdi, [rip + ps_env_fence_required]
+ps_environment_name:
+    call find_environment
+    mov rcx, rbx
+    shl rcx, 4
+    mov [r12 + rcx + PS_ENV_INFO], rax
+    mov [r12 + rcx + PS_ENV_INFO + 8], rdx
+    test rax, rax
+    setne al
+    movzx eax, al
+    mov [r12 + rbx*8 + PS_OUTPUT + 16], rax
+    mov [r12 + rbx*8 + PS_OUTPUT + 40], rdx
+    add rbp, rdx
+    jc ap_contract
+    cmp rbp, 8388608
+    ja ap_contract
+    inc ebx
+    cmp ebx, 3
+    jb ps_environment_capture
+    lea rdi, [r12 + PS_OUTPUT + 64]
+    xor ebx, ebx
+ps_environment_copy:
+    mov rax, rbx
+    shl rax, 4
+    mov rsi, [r12 + rax + PS_ENV_INFO]
+    mov rcx, [r12 + rax + PS_ENV_INFO + 8]
+    rep movsb
+    inc ebx
+    cmp ebx, 3
+    jb ps_environment_copy
+    lea rdi, [r12 + PS_OUTPUT]
+    mov rsi, rbp
+    mov rdx, r13
+    mov rcx, r14
+    mov rax, [rip + ps_image_environment]
+    call ps_pure
+    ps_epilogue
+
+ps_env_fence_root:
+    .asciz "HEPTA_EFFECT_OWNER_FENCE_DIR"
+ps_env_fence_owner:
+    .asciz "HEPTA_EFFECT_OWNER_SELF"
+ps_env_fence_required:
+    .asciz "HEPTA_EFFECT_OWNER_FENCE_REQUIRED"
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Role 16 owns a real effect fence. The caller and callback each hold an escrow
+# reference. No worker retains a public Root, suspended stack, or handler buffer.
+public_fence_callback_validate:
+    cmp rdi, 16
+    jne pajp_ap_invalid
+    cmp rcx, 65536
+    jne pajp_ap_invalid
+    cmp rdx, 64
+    jb pajp_ap_invalid
+    cmp rdx, 8388608
+    ja pajp_ap_invalid
+    movabs rax, pajp_AP_MAGIC
+    cmp [r8], rax
+    jne pajp_ap_invalid
+    cmp qword ptr [r8 + pajp_AP_STATE], 2
+    ja pajp_ap_invalid
+    mov r10, [r8 + ST_AP_PENDING]
+    test r10, r10
+    jz pajp_ap_invalid
+    movabs rax, ST_E_MAGIC
+    cmp [r10], rax
+    jne pajp_ap_invalid
+    cmp qword ptr [r10 + ST_E_ROLE], 16
+    jne pajp_ap_invalid
+    cmp qword ptr [r10 + ST_E_REFS], 1
+    jne pajp_ap_invalid
+    mov rax, [r10 + ST_E_RECORD]
+    or rax, [r10 + ST_E_RESOURCE]
+    jnz pajp_ap_invalid
+    mov rax, [r8 + pajp_AP_SERVICE]
+    cmp [r10 + ST_E_SERVICE], rax
+    jne pajp_ap_invalid
+    mov r11, [r10 + ST_E_IG]
+    test r11, r11
+    jz pajp_ap_invalid
+    cmp [r11 + tk_IG_SERVICE], rax
+    jne pajp_ap_invalid
+    movabs rax, 0x3130474954495248
+    cmp [r11], rax
+    jne pajp_ap_invalid
+    movabs rax, 0x3130514341464548
+    cmp [rsi], rax
+    jne pajp_ap_invalid
+    cmp qword ptr [rsi + 8], 1
+    jne pajp_ap_invalid
+    mov rax, [rsi + 16]
+    or rax, [rsi + 48]
+    or rax, [rsi + 56]
+    jnz pajp_ap_invalid
+    mov rax, rdx
+    sub rax, 64
+    cmp [rsi + 24], rax
+    ja pajp_ap_invalid
+    sub rax, [rsi + 24]
+    cmp [rsi + 32], rax
+    ja pajp_ap_invalid
+    sub rax, [rsi + 32]
+    cmp [rsi + 40], rax
+    jne pajp_ap_invalid
+    test r9, r9
+    jz pajp_ap_invalid
+    xor eax, eax
+    ret
+
+# (durable callback record, pool Task). Generic pool owns both copied spans.
+public_fence_callback_invoke:
+    fpc_enter
+    mov r12, rdi
+    mov r13, rsi
+    cmp [r12 + pajp_APR_TASK], r13
+    jne ap_contract
+    cmp qword ptr [r12 + pajp_APR_ROLE], 16
+    jne ap_contract
+    mov r14, [r12 + ST_APR_ESCROW]
+    test r14, r14
+    jz ap_contract
+    movabs rax, ST_E_MAGIC
+    cmp [r14], rax
+    jne ap_contract
+    cmp [r14 + ST_E_RECORD], r12
+    jne ap_contract
+    cmp qword ptr [r14 + ST_E_ROLE], 16
+    jne ap_contract
+    cmp qword ptr [r14 + ST_E_RESOURCE], 0
+    jne ap_contract
+    call fence_owner_create
+    mov rbx, rax
+    mov [r14 + ST_E_RESOURCE], rax
+    # The canonical IG outlives every joined pool worker. It supplies the one
+    # process-wide File.metadata provider; it is not a movable arena address.
+    mov rdx, [r14 + ST_E_IG]
+    mov [rbx + 32], rdx
+    mov rdi, rbx
+    mov rsi, [r13 + 72]
+    mov rdx, [r13 + 80]
+    mov rcx, [r13 + 96]
+    mov r8, [r13 + 104]
+    call fence_owner_call
+    fpc_leave
+
+# Entered only by the existing final-reference destructor, with its fpc_enter
+# frame and r12=escrow intact. This also handles a detached receiver's permit.
+public_fence_escrow_drop:
+    mov rbx, rdi
+    call fence_owner_drop
+    test rax, rax
+    jnz ap_contract
+    mov rdi, rbx
+    call fence_owner_destroy
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + ST_E_RESOURCE], 0
+    jmp start_escrow_unmap
+
+# (input,len,output,capacity), r15=private public Root. The handler owns one
+# caller-generation, and its permit is held through second resolve/annotation.
+ps_fence:
+    ps_prologue
+    mov [rsp], rdi
+    mov [rsp + 8], rsi
+    mov [rsp + 16], rdx
+    mov [rsp + 24], rcx
+    cmp rcx, PBA_MAXIMUM
+    jb ap_contract
+    mov rdi, r15
+    call ps_context
+    mov r12, rax
+    cmp qword ptr [r12 + PS_ACTIVE], 1
+    jne ap_contract
+    mov rax, [r12 + PS_PERMIT]
+    or rax, [r12 + PS_ESCROW]
+    or rax, [r12 + PS_GENERATION]
+    or rax, [r12 + PS_POOL]
+    jnz ap_contract
+    mov rdi, r15
+    call paj_shared_owner
+    mov r13, rax
+    mov [r12 + PS_POOL], rax
+    mov rdi, r13
+    mov rsi, [rsp + 16]
+    call async_journal_pool_generation
+    cmp rax, PBA_HEADER
+    jne ap_contract
+    mov rax, [rsp + 16]
+    mov rax, [rax + 176]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + PS_GENERATION], rax
+    mov [r12 + PS_META], rax
+    mov qword ptr [r12 + PS_META + 8], 16
+    mov rax, [r12 + PS_SEQUENCE]
+    test rax, rax
+    jz ap_contract
+    mov [r12 + PS_META + 16], rax
+    mov qword ptr [r12 + PS_META + 24], 0
+    mov qword ptr [r12 + PS_META + 32], 65536
+    mov rax, [rsp + 16]
+    mov [r12 + PS_DESCRIPTOR], rax
+    mov qword ptr [r12 + PS_DESCRIPTOR + 8], PBA_MAXIMUM
+    cmp qword ptr [r13 + ST_AP_PENDING], 0
+    jne ap_contract
+    mov rdi, [r13 + pajp_AP_SERVICE]
+    mov esi, 16
+    mov rdx, [r15 + EX_CONFIG_IG]
+    call start_escrow_create
+    mov [r12 + PS_ESCROW], rax
+    mov [r13 + ST_AP_PENDING], rax
+    mov rdi, r15
+    mov rsi, r13
+    lea rdx, [r12 + PS_META]
+    mov rcx, [rsp]
+    mov r8, [rsp + 8]
+    lea r9, [r12 + PS_DESCRIPTOR]
+    call public_async_pool_submit_await
+    mov [rsp + 32], rax
+    # create() removes ST_AP_PENDING before a worker may be published. A
+    # non-admitted submission never gets to an await or to the HIA business ACK.
+    cmp qword ptr [r13 + ST_AP_PENDING], 0
+    jne ap_contract
+    mov r14, [r12 + PS_ESCROW]
+    test r14, r14
+    jz ap_contract
+    cmp eax, PBA_ABANDONED
+    je ps_fence_release_receiver
+    cmp rax, PBA_HEADER
+    jb ap_contract
+    cmp rax, PBA_MAXIMUM
+    ja ap_contract
+    mov rbx, [rsp + 16]
+    cmp qword ptr [rbx + 8], 0
+    jne ps_fence_release_receiver
+    cmp qword ptr [rbx + 16], 12
+    jne ap_contract
+    # Only a completed/taken result can hand its resource back. Output Drop
+    # already retired the worker's reference; the remaining reference is ours.
+    cmp qword ptr [r14 + ST_E_REFS], 1
+    jne ap_contract
+    mov rax, [r14 + ST_E_RESOURCE]
+    mov [r12 + PS_PERMIT], rax
+    mov qword ptr [r14 + ST_E_RESOURCE], 0
+ps_fence_release_receiver:
+    mov qword ptr [r12 + PS_ESCROW], 0
+    mov rdi, r14
+    call start_escrow_release
+    mov rax, [rsp + 32]
+    ps_epilogue
+
+# Called on every actual handler return/Drop, before its private mapping retires.
+# Public cancellation notifications never enter here while the handler awaits.
+ps_cleanup_resources:
+    ps_prologue
+    mov r12, rdi
+    cmp qword ptr [r12 + PS_ESCROW], 0
+    jne ap_contract
+    mov rbx, [r12 + PS_PERMIT]
+    test rbx, rbx
+    jz ps_cleanup_generation
+    mov rdi, rbx
+    call fence_owner_drop
+    test rax, rax
+    jnz ap_contract
+    mov rdi, rbx
+    call fence_owner_destroy
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + PS_PERMIT], 0
+ps_cleanup_generation:
+    mov rsi, [r12 + PS_GENERATION]
+    test rsi, rsi
+    jz ps_cleanup_empty
+    mov rdi, [r12 + PS_POOL]
+    test rdi, rdi
+    jz ap_contract
+    call async_journal_pool_drop_caller
+    test rax, rax
+    jnz ap_contract
+    mov qword ptr [r12 + PS_GENERATION], 0
+    mov qword ptr [r12 + PS_POOL], 0
+ps_cleanup_empty:
+    cmp qword ptr [r12 + PS_POOL], 0
+    jne ap_contract
+    xor eax, eax
+    ps_epilogue
+
+fence_io_fail:
+    jmp tk_io_fail
+fence_contract_fail:
+    jmp ap_contract
+
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+# Preparation-only fixed ABI adapters. No public route points here yet.
+# Required parent: the actual public PF scheduler and the shared start/controller
+# engine. This file does not implement start, cancellation policy, or shutdown.
+
+.macro pa_call_prologue
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 24
+.endm
+.macro pa_call_epilogue
+    add rsp, 24
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+# Internal handler ABI: (input, bytes, reply, capacity), with the private public
+# Root in r15. The HIA handler has already produced an owned typed frame using
+# the second Authority resolve. Input/output are fixed handler-owned spans.
+# Success/error HRASYR01 bytes are returned without changing either identity.
+public_async_start_raw:
+    pa_call_prologue
+    mov ebp, 7
+    jmp pa_call_validate
+
+public_async_cancel_raw:
+    pa_call_prologue
+    mov ebp, 3
+
+pa_call_validate:
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov [rsp], rcx
+    cmp rcx, 65536
+    jb ap_contract
+    cmp r13, 48
+    jb ap_contract
+    cmp r13, 8388608
+    ja ap_contract
+    movabs rax, 0x3130515953415248
+    cmp [r12], rax
+    jne ap_contract
+    cmp [r12 + 8], rbp
+    jne ap_contract
+    cmp ebp, 7
+    jne pa_call_private_root
+    cmp r13, 64
+    jb ap_contract
+pa_call_private_root:
+    # Only a live public task owns this call. A public notification never
+    # reaches the real Drop callback through this adapter.
+    cmp qword ptr [r15 + PF_PARENT_SLOT], 0
+    je ap_contract
+    mov rbx, [r15 + PF_TASK_SLOT]
+    test rbx, rbx
+    jz ap_contract
+    cmp [rbx + PF_T_ROOT], r15
+    jne ap_contract
+    cmp qword ptr [rbx + PF_T_STATE], 1
+    jne ap_contract
+    cmp qword ptr [rbx + PI_T_KIND], 0
+    jne ap_contract
+    mov rax, [rbx + PF_T_GLOBAL]
+    cmp [rax + PF_G_CURRENT], rbx
+    jne ap_contract
+    mov rdi, r15
+    mov rsi, r12
+    mov rdx, r13
+    mov rcx, r14
+    mov r8d, 65536
+    xor r9d, r9d
+    cmp ebp, 7
+    jne pa_call_cancel
+    call async_start_call
+    jmp pa_call_completed
+pa_call_cancel:
+    # A required same-engine export, not a second cancellation implementation.
+    # Composition must reject a parent lacking this qualified op3 entry.
+    call async_controller_call
+pa_call_completed:
+    mov edx, eax
+    cmp rax, rdx
+    jne ap_contract
+    cmp eax, 0xfffffff2
+    je pa_call_return
+    cmp eax, 0xffffffff
+    je pa_call_return
+    cmp eax, 0xfffffffe
+    je pa_call_return
+    cmp eax, 64
+    jb ap_contract
+    cmp eax, 65536
+    ja ap_contract
+pa_call_return:
+    # FFFFFFF2 must be handled by the enclosing handler's real Drop path.
+    # It is never a HIA child ACK, JSON-RPC error, or completed business reply.
+    pa_call_epilogue
+
+.intel_syntax noprefix
+.section .text
+.equ FX_WORK, 4096
+.equ FX_WORK_CAP, 16777216
+.equ FX_INPUT, 16781312
+.equ FX_INPUT_CAP, 8388608
+.equ FX_OUTPUT, 25169920
+.equ FX_OUTPUT_CAP, 65536
+.equ FX_TYPED, 25235456
+.equ FX_TYPED_CAP, 2097152
+.equ FX_ERROR, 27332608
+.equ FX_ERROR_CAP, 32768
+.equ FX_PATH, 27365376
+.equ FX_TOTAL, 35753984
+.equ FX_ACTION, 4096
+.equ FX_RESULT, 16384
+.equ FX_FDS, 256
+
+
+fence_owner_create:
+    xor edi, edi
+    mov esi, OFFSET FLAT:FX_TOTAL
+    mov edx, 3
+    mov r10d, 0x22
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae fence_io_fail
+    mov QWORD PTR [rax], OFFSET FLAT:FX_TOTAL
+    xor ecx, ecx
+.init_fds:
+    mov QWORD PTR [rax + FX_FDS + rcx * 8], -1
+    inc ecx
+    cmp ecx, 8
+    jb .init_fds
+    ret
+
+# Fixed context, immutable caller input, private workspace, complete response.
+fence_owner_call:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r15, rdi
+    mov r12, rsi
+    mov r13, rdx
+    mov r14, rcx
+    mov rbp, r8
+    cmp QWORD PTR [r15], OFFSET FLAT:FX_TOTAL
+    jne fence_contract_fail
+    cmp QWORD PTR [r15 + 8], 0
+    jne fence_contract_fail
+    cmp r13, OFFSET FLAT:FX_INPUT_CAP
+    ja fence_contract_fail
+    cmp rbp, OFFSET FLAT:FX_OUTPUT_CAP
+    jb fence_contract_fail
+    mov QWORD PTR [r15 + 8], 1
+.owner_drive:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, rbp
+    lea r8, [r15 + FX_WORK]
+    mov r9d, OFFSET FLAT:FX_WORK_CAP
+    mov rax, QWORD PTR [rip + fence_policy_image]
+    test rax, rax
+    je fence_contract_fail
+    call rax
+    mov edx, 0xfffffffd
+    cmp rax, rdx
+    jne .owner_terminal
+    call fence_effect
+    jmp .owner_drive
+.owner_terminal:
+    mov QWORD PTR [r15 + 8], 0
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+# Called only after the callback has returned or before it was started.
+fence_owner_drop:
+    push r15
+    sub rsp, 64
+    mov r15, rdi
+    cmp QWORD PTR [r15 + 8], 0
+    jne fence_contract_fail
+    mov rax, QWORD PTR [r15 + FX_WORK + 8]
+    test rax, rax
+    je .drop_empty
+    cmp rax, 2
+    jne fence_contract_fail
+    mov rdi, rsp
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    mov rax, 0x3130514341464548
+    mov QWORD PTR [rsp], rax
+    mov QWORD PTR [rsp + 8], 2
+    mov rax, QWORD PTR [r15 + FX_WORK + 16]
+    mov QWORD PTR [rsp + 16], rax
+    mov rdi, r15
+    mov rsi, rsp
+    mov edx, 64
+    lea rcx, [r15 + FX_OUTPUT]
+    mov r8d, OFFSET FLAT:FX_OUTPUT_CAP
+    call fence_owner_call
+    cmp eax, 64
+    jne fence_contract_fail
+.drop_empty:
+    cmp QWORD PTR [r15 + 24], 0
+    jne fence_contract_fail
+    add rsp, 64
+    pop r15
+    xor eax, eax
+    ret
+
+fence_owner_destroy:
+    cmp QWORD PTR [rdi], OFFSET FLAT:FX_TOTAL
+    jne fence_contract_fail
+    cmp QWORD PTR [rdi + 8], 0
+    jne fence_contract_fail
+    cmp QWORD PTR [rdi + 24], 0
+    jne fence_contract_fail
+    mov esi, OFFSET FLAT:FX_TOTAL
+    mov eax, 11
+    syscall
+    test rax, rax
+    jne fence_io_fail
+    ret
+
+fence_policy_image:
+    .quad 0
+fence_document_image:
+    .quad 0
+fence_errno_image:
+    .quad 0
+
+fence_effect:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    lea rbp, [r15 + FX_WORK]
+    lea rbx, [rbp + FX_ACTION]
+    lea r14, [rbp + FX_RESULT]
+    cmp QWORD PTR [rbp + 24], 1
+    jne fence_contract_fail
+    mov rax, 0x315443414f464548
+    cmp QWORD PTR [rbx], rax
+    jne fence_contract_fail
+    mov rax, QWORD PTR [rbp + 176]
+    cmp QWORD PTR [rbx + 8], rax
+    jne fence_contract_fail
+    cmp QWORD PTR [rbx + 56], OFFSET FLAT:FX_RESULT
+    jne fence_contract_fail
+    cmp QWORD PTR [rbx + 64], 8192
+    ja fence_contract_fail
+    mov rax, QWORD PTR [rbx + 40]
+    cmp rax, OFFSET FLAT:FX_WORK_CAP
+    ja fence_contract_fail
+    mov rcx, OFFSET FLAT:FX_WORK_CAP
+    sub rcx, rax
+    cmp QWORD PTR [rbx + 48], rcx
+    ja fence_contract_fail
+    mov rax, QWORD PTR [rbx + 16]
+    cmp rax, 1
+    je .fx_root
+    cmp rax, 2
+    je .fx_component
+    cmp rax, 3
+    je .fx_move
+    cmp rax, 4
+    je .fx_record
+    cmp rax, 5
+    je .fx_metadata
+    cmp rax, 6
+    je .fx_flock
+    cmp rax, 7
+    je .fx_read
+    cmp rax, 8
+    je .fx_close
+    cmp rax, 9
+    je .fx_uid
+    cmp rax, 10
+    je .fx_document
+    cmp rax, 11
+    je .fx_errno
+    jmp fence_contract_fail
+.fx_root:
+    cmp QWORD PTR [r15 + FX_FDS], -1
+    jne fence_contract_fail
+    mov edi, -100
+    lea rsi, [rip + fence_slash]
+    mov edx, 0x80000
+    xor r10d, r10d
+    mov eax, 257
+    syscall
+    cmp rax, -4095
+    jae .fx_os_error
+    xor edi, edi
+    mov rsi, rax
+    call fence_put_fd
+    jmp .fx_success
+.fx_component:
+    call fence_path
+    xor edi, edi
+    call fence_get_fd
+    mov rdi, rax
+    lea rsi, [r15 + FX_PATH]
+    mov edx, 0xb0000
+    xor r10d, r10d
+    mov eax, 257
+    syscall
+    cmp rax, -4095
+    jae .fx_os_error
+    mov r12, rax
+    xor edi, edi
+    call fence_take_fd
+    mov rdi, rax
+    mov eax, 3
+    syscall
+    xor edi, edi
+    mov rsi, r12
+    call fence_put_fd
+    jmp .fx_success
+.fx_move:
+    mov rdi, QWORD PTR [rbx + 24]
+    call fence_take_fd
+    mov rsi, rax
+    mov rdi, QWORD PTR [rbx + 32]
+    call fence_put_fd
+    jmp .fx_success
+.fx_record:
+    call fence_path
+    mov edi, 1
+    call fence_get_fd
+    mov rdi, rax
+    lea rsi, [r15 + FX_PATH]
+    mov edx, 0xa0800
+    cmp QWORD PTR [rbx + 32], 1
+    ja fence_contract_fail
+    jne .record_readonly
+    or edx, 2
+.record_readonly:
+    xor r10d, r10d
+    mov eax, 257
+    syscall
+    cmp rax, -4095
+    jae .fx_os_error
+    mov rsi, rax
+    mov rdi, QWORD PTR [rbx + 24]
+    call fence_put_fd
+    jmp .fx_success
+.fx_flock:
+    mov rdi, QWORD PTR [rbx + 24]
+    call fence_get_fd
+    mov rdi, rax
+    mov esi, 1
+    mov eax, 73
+    syscall
+    cmp rax, -4095
+    jae .fx_os_error
+    jmp .fx_success
+.fx_close:
+    mov rdi, QWORD PTR [rbx + 24]
+    call fence_take_fd
+    mov rdi, rax
+    mov eax, 3
+    syscall
+    jmp .fx_success
+.fx_read:
+    mov rdi, QWORD PTR [rbx + 24]
+    call fence_get_fd
+    mov rdi, rax
+    mov rsi, r14
+    mov rdx, QWORD PTR [rbx + 64]
+.read_retry:
+    xor eax, eax
+    syscall
+    cmp rax, -4
+    je .read_retry
+    cmp rax, -4095
+    jae .fx_os_error
+    mov rdx, rax
+    xor eax, eax
+    jmp .fx_ack
+.fx_uid:
+    mov eax, 107
+    syscall
+    mov QWORD PTR [r14], rax
+    mov edx, 8
+    xor eax, eax
+    jmp .fx_ack
+
+# Shared actual File.metadata provider via the canonical stable IG. Its existing
+# Registry short gates own all cache reads/transitions; filesystem IO is outside.
+.fx_metadata:
+    mov rdi, QWORD PTR [rbx + 24]
+    call fence_get_fd
+    mov rdi, rax
+    lea rsi, [r15 + 512]
+    mov rdx, [r15 + 32]
+    test rdx, rdx
+    jz fence_contract_fail
+    call tk_intent_file_metadata
+    cmp rax, -4095
+    jae .fx_os_error
+    mov rax, QWORD PTR [r15 + 512]
+    mov QWORD PTR [r14], rax
+    mov rax, QWORD PTR [r15 + 520]
+    mov QWORD PTR [r14 + 8], rax
+    mov rax, QWORD PTR [r15 + 560]
+    mov QWORD PTR [r14 + 16], rax
+    mov rax, QWORD PTR [r15 + 528]
+    mov QWORD PTR [r14 + 24], rax
+    mov eax, DWORD PTR [r15 + 536]
+    mov QWORD PTR [r14 + 32], rax
+    mov eax, DWORD PTR [r15 + 540]
+    mov QWORD PTR [r14 + 40], rax
+    mov rax, QWORD PTR [r15 + 600]
+    mov QWORD PTR [r14 + 48], rax
+    mov rax, QWORD PTR [r15 + 608]
+    mov QWORD PTR [r14 + 56], rax
+    mov rax, QWORD PTR [r15 + 616]
+    mov QWORD PTR [r14 + 64], rax
+    mov rax, QWORD PTR [r15 + 624]
+    mov QWORD PTR [r14 + 72], rax
+    mov edx, 80
+    xor eax, eax
+    jmp .fx_ack
+.fx_document:
+    mov rax, QWORD PTR [rip + fence_document_image]
+    lea r8, [r15 + FX_TYPED]
+    mov r9d, OFFSET FLAT:FX_TYPED_CAP
+    jmp .fx_pure
+.fx_errno:
+    mov rax, QWORD PTR [rip + fence_errno_image]
+    lea r8, [r15 + FX_ERROR]
+    mov r9d, OFFSET FLAT:FX_ERROR_CAP
+.fx_pure:
+    test rax, rax
+    je fence_contract_fail
+    mov rdi, QWORD PTR [rbx + 40]
+    add rdi, rbp
+    mov rsi, QWORD PTR [rbx + 48]
+    mov rdx, r14
+    mov rcx, QWORD PTR [rbx + 64]
+    call rax
+    cmp rax, QWORD PTR [rbx + 64]
+    ja fence_contract_fail
+    mov rdx, rax
+    xor eax, eax
+    jmp .fx_ack
+.fx_os_error:
+    neg rax
+    xor edx, edx
+    jmp .fx_ack
+.fx_success:
+    xor eax, eax
+    xor edx, edx
+.fx_ack:
+    mov QWORD PTR [rbx + 72], rax
+    mov QWORD PTR [rbx + 80], rdx
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+fence_get_fd:
+    cmp rdi, 8
+    jae fence_contract_fail
+    mov rax, QWORD PTR [r15 + FX_FDS + rdi * 8]
+    test rax, rax
+    js fence_contract_fail
+    bt QWORD PTR [r15 + 24], rdi
+    jnc fence_contract_fail
+    ret
+
+fence_take_fd:
+    cmp rdi, 8
+    jae fence_contract_fail
+    mov rax, QWORD PTR [r15 + FX_FDS + rdi * 8]
+    test rax, rax
+    js fence_contract_fail
+    bt QWORD PTR [r15 + 24], rdi
+    jnc fence_contract_fail
+    mov QWORD PTR [r15 + FX_FDS + rdi * 8], -1
+    btr QWORD PTR [r15 + 24], rdi
+    ret
+
+fence_put_fd:
+    cmp rdi, 8
+    jae fence_contract_fail
+    test rsi, rsi
+    js fence_contract_fail
+    cmp QWORD PTR [r15 + FX_FDS + rdi * 8], -1
+    jne fence_contract_fail
+    bt QWORD PTR [r15 + 24], rdi
+    jc fence_contract_fail
+    mov QWORD PTR [r15 + FX_FDS + rdi * 8], rsi
+    bts QWORD PTR [r15 + 24], rdi
+    ret
+
+fence_path:
+    mov rcx, QWORD PTR [rbx + 48]
+    cmp rcx, OFFSET FLAT:FX_INPUT_CAP
+    jae fence_contract_fail
+    mov rsi, QWORD PTR [rbx + 40]
+    add rsi, rbp
+    lea rdi, [r15 + FX_PATH]
+    rep movsb
+    mov BYTE PTR [rdi], 0
+    ret
+
+fence_slash:
+    .asciz "/"
+
+# END PUBLIC ASYNC BRIDGE V1
+
 images:

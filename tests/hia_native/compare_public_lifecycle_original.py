@@ -15,8 +15,9 @@ from public_lifecycle_registry import encoded, regular, require, sha, source_pin
 from hia_native_public_lifecycle_reference import prepare,check
 from hia_native_public_lifecycle_qualification import verify_build,normal_evidence,inventory
 from public_lifecycle_crates import REMOVED,registry
-from public_lifecycle_retained import admit, pin
+from public_lifecycle_retained import LIFECYCLE, admit, pin
 from normal_original import verify as retained_pair_evidence
+from lifecycle_suite import verify as retained_lifecycle_evidence
 
 
 def main():
@@ -44,9 +45,9 @@ def main():
     report=dict(schema='hepta.public-lifecycle.original-result.v2',status='RUNNING',sources=pins,
         build_sha256=sha(regular(manifest)),native_build_evidence=built,cargo=str(cargo),rustc=str(rustc),
         rustfmt=str(rustfmt),tool_sha256={str(p):sha(regular(p.resolve(strict=True)))for p in (cargo,rustc,rustfmt)},
-        processes=[],fresh_actual_cargo_build=False,original_blocks=274,locked_registry_dependencies=138,
+        processes=[],fresh_actual_cargo_build=False,original_blocks=315,locked_registry_dependencies=140,
         native_processes=0,original_processes=0,requests_per_implementation=0,
-        retained_native_processes=64,retained_native_requests=359,retained_native=retained,
+        retained_native_processes=86,retained_native_requests=707,retained_native=retained,
         native_admission=str(admission),native_admission_sha256=args.native_admission_sha256,
         native_invocation=args.native_invocation,
         actual_outer_call_tool_included=True,original_index_present_branch_qualified=False,
@@ -92,9 +93,9 @@ def main():
         lock=tomllib.loads(regular(project/'Cargo.lock').decode())
         original_lock=tomllib.loads(regular(root/'Cargo.lock').decode())
         report['registry_before']=registry(metadata,lock,original_lock,output/'registry')
-        run('cargo-build',[cargo,'build','--release','--locked','--bin','hia-public-eligible-original',*offline],project,120)
+        run('cargo-build',[cargo,'build','--release','--locked','--bin','hia-public-async-original',*offline],project,120)
         report['fresh_actual_cargo_build']=True
-        origin=target/'release/hia-public-eligible-original';raw=regular(origin)
+        origin=target/'release/hia-public-async-original';raw=regular(origin)
         binary=output/'original.elf';binary.write_bytes(raw);binary.chmod(0o500)
         require(regular(origin)==raw,'Cargo executable changed while retaining')
         report['original_binary']=dict(origin=str(origin),path=str(binary),bytes=len(raw),sha256=sha(raw))
@@ -108,6 +109,16 @@ def main():
         paired=retained_pair_evidence(output/'paired',binary,admission,args.native_admission_sha256,
             args.native_invocation,manifest)
         require(not err and json.loads(out)==paired,'actual complete paired summary differs')
+        report.update(original_processes=64,requests_per_implementation=359);save()
+        command=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/lifecycle_suite.py',
+            '--binary',binary,'--retained',admission.parent/LIFECYCLE,'--native-binary',native,
+            '--output',output/'lifecycle']
+        out,err=run('lifecycle-pairs',command,root,120)
+        finite=retained_lifecycle_evidence(output/'lifecycle',binary,side='original',
+            retained=admission.parent/LIFECYCLE,native_binary=native)
+        require(not err and json.loads(out)==dict(status='PASS',native_processes=0,original_processes=22,
+            requests_per_implementation=348,producer_starts_per_implementation=11),
+            'actual finite lifecycle paired summary differs')
         require(check(root,project)==report['prepared'] and source_pins(root)==pins
             and verify_build(root,manifest)==built and regular(binary)==raw and regular(origin)==raw,
             'reference or native source changed during replay')
@@ -119,22 +130,22 @@ def main():
             '--admission',admission,'--admission-sha256',args.native_admission_sha256,
             '--invocation',args.native_invocation,'--build',manifest,'--output',output/'controls']
         out,err=run('retained-native-controls',controls,root,30)
-        require(not err and json.loads(out)==dict(status='PASS',rejected_controls=15,
+        require(not err and json.loads(out)==dict(status='PASS',rejected_controls=16,
             complete_restoration=True,native_processes=0,original_processes=0),
             'retained native evidence controls failed')
         require(target.is_dir() and not target.is_symlink() and target.parent==output,
             'Cargo cache is not the owned disposable build directory')
         shutil.rmtree(target)
         report['cargo_cache_retired_after_binary_and_source_verification']=True
-        report.update(native_processes=0,original_processes=64,requests_per_implementation=359,
-            paired=paired,complete_wire_and_filesystem_equality=True,status='PASS')
+        report.update(native_processes=0,original_processes=86,requests_per_implementation=707,
+            paired=paired,lifecycle=finite,complete_wire_and_filesystem_equality=True,status='PASS')
     except BaseException as error:
         report.update(status='FAIL',error=repr(error));raise
     finally:
         # Cargo caches remain excluded. The actual binary, complete retained
         # crate archives, sources and replay streams are immutable evidence.
         artifacts={}
-        for branch in ('project','registry','paired','controls'):
+        for branch in ('project','registry','paired','lifecycle','controls'):
             if (output/branch).exists():
                 artifacts.update({branch+'/'+p:d for p,d in inventory(output/branch).items()})
         for path in output.iterdir():

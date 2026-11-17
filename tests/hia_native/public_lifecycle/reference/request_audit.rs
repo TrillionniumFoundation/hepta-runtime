@@ -2786,3 +2786,139 @@ pub async fn finish(ticket: RequestTicket, completion: AuditCompletion) -> Resul
 }
 #[path = "batch.rs"]
 mod batch;
+
+pub(crate) async fn observation(owner: &str, id: &str) -> Result<AuditObservation> {
+	let root = runtime_config()?.state_dir.clone();
+	let owner = owner.to_owned();
+	let id = id.to_owned();
+	tokio::task::spawn_blocking(move || observation_at(&root, &owner, &id))
+		.await
+		.map_err(|_| anyhow!("request unavailable to this scope"))?
+}
+
+pub(crate) async fn optional_observation(
+	owner: &str,
+	id: &str,
+) -> Result<Option<AuditObservation>> {
+	let root = runtime_config()?.state_dir.clone();
+	let owner = owner.to_owned();
+	let id = id.to_owned();
+	tokio::task::spawn_blocking(move || optional_observation_at(&root, &owner, &id))
+		.await
+		.map_err(|_| anyhow!("request unavailable to this scope"))?
+}
+
+use serde_json::{json, Value};
+
+
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RequestHistoryParams {
+	/// Last returned request id. Expired and other-owner cursors are refused.
+	#[serde(default)]
+	pub after_id: Option<String>,
+	/// At most 32 metadata records; default 32. No parameters or output are returned.
+	#[serde(default)]
+	pub limit: Option<u16>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UsageStatsParams {}
+
+
+
+const MAX_PAGE_BYTES: usize = 64 * 1024;
+
+
+fn wire_size(value: &Value) -> Result<usize> {
+	let text = serde_json::to_string(value)?;
+	let result = rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(text)]);
+	Ok(serde_json::to_vec(&result)?.len())
+}
+
+#[cfg(unix)]
+fn history_at(root: &Path, owner: &str, params: RequestHistoryParams) -> Result<String> {
+	if !valid_id(owner) {
+		bail!("request history unavailable to this session");
+	}
+	let limit = params.limit.unwrap_or(32) as usize;
+	if !(1..=32).contains(&limit) || params.after_id.as_deref().is_some_and(|id| !valid_id(id)) {
+		bail!("invalid request history page");
+	}
+	let _guard = store_lock()?;
+	let directory = open_store(root)?;
+	let retained = entries(&directory)?;
+	let records: Vec<_> = retained
+		.iter()
+		.filter(|record| record.owner == owner)
+		.collect();
+	let start = match params.after_id {
+		Some(id) => {
+			records
+				.iter()
+				.position(|record| record.request_id == id)
+				.ok_or_else(|| {
+					anyhow!("request history cursor expired or unavailable to this session")
+				})? + 1
+		}
+		None => 0,
+	};
+	let mut page = Vec::new();
+	for record in records.iter().skip(start).take(limit) {
+		let state =
+			if record.state == DurableState::Unknown && is_dispatch_active(&record.request_id)? {
+				"accepted"
+			} else {
+				match record.state {
+					DurableState::Unknown => "unknown",
+					DurableState::Completed => "completed",
+					DurableState::Failed => "failed",
+				}
+			};
+		page.push(json!({"request_id":record.request_id,"tool_name":record.tool_name,"state":state,"accepted_unix_ms":record.accepted_unix_ms,"elapsed_ms":record.elapsed_ms}));
+	}
+	let next = if start + page.len() < records.len() {
+		page.last().map(|row| row["request_id"].clone())
+	} else {
+		None
+	};
+	let output = json!({"requests":page,"next_after_id":next,"retention":{"global":MAX_GLOBAL,"per_session":MAX_OWNER},
+		"status_semantics":"native_request_dispatch_observation_not_side_effect_delivery_or_business_success",
+		"session_scope":"native_mcp_session_only","cross_session_resume":false,"history_is_live":true,
+		"automatic_operation_retry":false});
+	if wire_size(&output)? > MAX_PAGE_BYTES {
+		bail!("request history wire page limit exceeded");
+	}
+	Ok(serde_json::to_string(&output)?)
+}
+
+#[cfg(not(unix))]
+fn history_at(_root: &Path, _owner: &str, _params: RequestHistoryParams) -> Result<String> {
+	bail!("private request auditing requires Unix descriptor support")
+}
+
+pub async fn history(owner: &str, params: RequestHistoryParams) -> Result<String> {
+	let root = runtime_config()?.state_dir.clone();
+	let owner = owner.to_owned();
+	tokio::task::spawn_blocking(move || history_at(&root, &owner, params))
+		.await
+		.map_err(|_| anyhow!("request history unavailable to this session"))?
+		.map_err(|error| {
+			if error.to_string() == "request history cursor expired or unavailable to this session"
+			{
+				error
+			} else {
+				anyhow!("request history unavailable to this session or private metadata refused")
+			}
+		})
+}
+
+
+
+pub(crate) async fn begin_reserved(identity: RequestIdentity) -> Result<RequestTicket> {
+	let root = runtime_config()?.state_dir.clone();
+	tokio::task::spawn_blocking(move || begin_reserved_at(&root, identity))
+		.await
+		.map_err(|_| anyhow!("reserved request admission unavailable; never redispatch"))?
+}

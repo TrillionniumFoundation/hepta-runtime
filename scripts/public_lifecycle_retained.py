@@ -11,6 +11,7 @@ from public_lifecycle_registry import TESTS, encoded, regular, require, sha, sou
 ADMISSION = 'public-lifecycle-native-admission.json'
 PHASE = 'public-lifecycle-native-phase.json'
 FOLDER = 'public-lifecycle-native/normal'
+LIFECYCLE = 'public-lifecycle-native/lifecycle'
 MANIFEST = 'build/public-lifecycle/build.json'
 
 
@@ -45,6 +46,7 @@ def create_admission(root, output, report, completed):
     evidence = native_evidence(root, output, report, completed)
     require(evidence == report['public_lifecycle_evidence'], 'completed native evidence changed')
     check, _ = completed(output, report, TESTS[1])
+    lifecycle_check, _ = completed(output, report, TESTS[2])
     sources = source_pins(root)
     if 'original_shard' in report:
         binding = report['original_shard']
@@ -60,18 +62,19 @@ def create_admission(root, output, report, completed):
         invocation = 'aggregate:' + report['started_at']
         phase = dict(schema='hepta.public-lifecycle.actual-native-phase.v1', status='PASS',
             invocation=invocation, source_root=str(root), source_files=sources,
-            completed_checks=[check], native_evidence=evidence,
+            completed_checks=[check,lifecycle_check], native_evidence=evidence,
             new_native_executions=0, retained_completed_phase=True)
         write_new(output/PHASE, phase)
         context = dict(mode='owned-component-validation', invocation=invocation,
             phase_file=PHASE, phase=pin(output/PHASE))
     current_invocation(invocation)
-    captures = {FOLDER+'/'+name: digest for name, digest in inventory(output/FOLDER).items()}
+    captures = {branch+'/'+name:digest for branch in (FOLDER,LIFECYCLE)
+                for name,digest in inventory(output/branch).items()}
     admission = dict(schema='hepta.public-lifecycle.native-admission.v1',
         invocation=invocation, context=context, source_root=str(root), output_root=str(output),
-        sources=sources, manifest=pin(output/MANIFEST), native_process=check,
-        native_evidence=evidence, captures=captures, retained_native_processes=64,
-        retained_native_requests=359, native_processes_executed_by_original_recipe=0,
+        sources=sources, manifest=pin(output/MANIFEST), native_process=check,lifecycle_process=lifecycle_check,
+        native_evidence=evidence, captures=captures, retained_native_processes=86,
+        retained_native_requests=707, native_processes_executed_by_original_recipe=0,
         original_timeout_seconds=180)
     path = output/ADMISSION
     write_new(path, admission)
@@ -103,6 +106,7 @@ def context_evidence(admission, output):
         for name, digest in admission['sources'].items():
             require(snapshot['source_sha256'].get(name) == digest, 'source absent from native seal: '+name)
         required = {'original-native-report.json', MANIFEST, TESTS[1]+'.stdout', TESTS[1]+'.stderr'}
+        required.update((TESTS[2]+'.stdout',TESTS[2]+'.stderr'))
         required.update(admission['captures'])
         required.update(admission['native_evidence']['artifact_sha256'])
         for name in required:
@@ -113,6 +117,8 @@ def context_evidence(admission, output):
                 'sealed native domain changed')
         require([r for r in snapshot['checks'] if r.get('name') == TESTS[1]] == [admission['native_process']],
                 'sealed native process absent or duplicated')
+        require([r for r in snapshot['checks'] if r.get('name') == TESTS[2]] == [admission['lifecycle_process']],
+                'sealed lifecycle process absent or duplicated')
         return dict(mode=context['mode'], native_seal=pin(seal_path), native_report=pin(snapshot_path))
     require(context.get('mode') == 'owned-component-validation'
             and set(context) == {'mode','invocation','phase_file','phase'}
@@ -122,13 +128,13 @@ def context_evidence(admission, output):
     phase = obj(path)
     require(phase == dict(schema='hepta.public-lifecycle.actual-native-phase.v1', status='PASS',
         invocation=admission['invocation'], source_root=admission['source_root'], source_files=admission['sources'],
-        completed_checks=[admission['native_process']], native_evidence=admission['native_evidence'],
+        completed_checks=[admission['native_process'],admission['lifecycle_process']], native_evidence=admission['native_evidence'],
         new_native_executions=0, retained_completed_phase=True), 'native phase completion differs')
     return dict(mode=context['mode'], phase=pin(path))
 
 
 def admit(path, expected_sha256, invocation, root, manifest, *, execution=False):
-    from hia_native_public_lifecycle_qualification import verify_build, normal_evidence, inventory, test_commands
+    from hia_native_public_lifecycle_qualification import verify_build, normal_evidence, lifecycle_evidence, inventory, test_commands
     from hia_native_public_registry_qualification import completed
     path, root, manifest = (Path(p).resolve(strict=True) for p in (path, root, manifest))
     output = path.parent
@@ -138,13 +144,13 @@ def admit(path, expected_sha256, invocation, root, manifest, *, execution=False)
     require(sha(raw) == expected_sha256, 'external native admission digest differs')
     value = json.loads(raw)
     require(set(value) == {'schema','invocation','context','source_root','output_root','sources','manifest',
-        'native_process','native_evidence','captures','retained_native_processes','retained_native_requests',
+        'native_process','lifecycle_process','native_evidence','captures','retained_native_processes','retained_native_requests',
         'native_processes_executed_by_original_recipe','original_timeout_seconds'}, 'native admission shape differs')
     require(value['schema'] == 'hepta.public-lifecycle.native-admission.v1'
             and value['invocation'] == invocation and value['source_root'] == str(root)
             and value['output_root'] == str(output) and value['sources'] == source_pins(root)
-            and value['manifest'] == pin(manifest) and value['retained_native_processes'] == 64
-            and value['retained_native_requests'] == 359
+            and value['manifest'] == pin(manifest) and value['retained_native_processes'] == 86
+            and value['retained_native_requests'] == 707
             and value['native_processes_executed_by_original_recipe'] == 0
             and value['original_timeout_seconds'] == 180, 'native admission identity or domain differs')
     if execution:
@@ -157,23 +163,31 @@ def admit(path, expected_sha256, invocation, root, manifest, *, execution=False)
     out, err = completed(output, TESTS[1], row, command, root, 180, aggregate=True)
     require(not err and json.loads(out) == dict(status='PASS', native_processes=64,
         native_requests=359, original_processes=0), 'actual native completion stream differs')
-    captures = {FOLDER+'/'+name:digest for name,digest in inventory(output/FOLDER).items()}
+    row=value['lifecycle_process'];command=test_commands(root,output,{})[TESTS[2]]
+    require(row['name']==TESTS[2],'lifecycle process name differs')
+    out,err=completed(output,TESTS[2],row,command,root,180,aggregate=True)
+    require(not err and json.loads(out)==dict(status='PASS',native_processes=22,original_processes=0,
+        requests_per_implementation=348,producer_starts_per_implementation=11),
+        'actual lifecycle completion stream differs')
+    captures = {branch+'/'+name:digest for branch in (FOLDER,LIFECYCLE)
+                for name,digest in inventory(output/branch).items()}
     require(captures == value['captures'], 'complete native capture inventory changed')
     native = manifest.parent/built['executable']
     reconstructed = normal_evidence(root, output/FOLDER, native)
+    finite = lifecycle_evidence(root, output/LIFECYCLE, native)
     evidence = value['native_evidence']
-    require(evidence['sources'] == value['sources'] and evidence['native_processes'] == 64
-            and evidence['native_requests'] == 359 and evidence['original_processes'] == 0,
+    require(evidence['sources'] == value['sources'] and evidence['native_processes'] == 86
+            and evidence['native_requests'] == 707 and evidence['original_processes'] == 0,
             'native phase source or process domain changed')
     for name, digest in evidence['artifact_sha256'].items():
         relative = Path(name)
         require(not relative.is_absolute() and '..' not in relative.parts, 'unconfined native artifact')
         require(sha(regular(output/relative)) == digest, 'completed native artifact changed: '+name)
     native_result = obj(output/'public-lifecycle-native/result.json')
-    require(native_result['normal'] == reconstructed
+    require(native_result['normal'] == reconstructed and native_result['lifecycle']==finite
             and sha(regular(output/'public-lifecycle-native/result.json')) == evidence['native_result_sha256'],
             'complete native normal domain differs from its completed phase')
     return dict(admission=pin(path), invocation=invocation, context=context,
-        native_evidence=evidence, normal=reconstructed, captures=captures,
-        retained_native_processes=64, retained_native_requests=359,
+        native_evidence=evidence, normal=reconstructed, lifecycle=finite, captures=captures,
+        retained_native_processes=86, retained_native_requests=707,
         native_processes_executed_by_original_recipe=0, new_executions_in_admission=0)

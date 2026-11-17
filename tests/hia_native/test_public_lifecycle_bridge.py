@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from public_lifecycle_registry import graph
 import argparse, hashlib, json, re, shutil, subprocess, traceback
 
-FIXED = "a5bd9c31a51fdd773dc27dad8d5142adf3a13a7b7c50874eb5ccbebe07f08de0"
+FIXED = "0cf00c6e863813db8d2f38c38e90564f2b3bd27caeafad1a8d0c3f3491b10a41"
 H = lambda b: hashlib.sha256(b).hexdigest()
 ENC = lambda v: (json.dumps(v, sort_keys=True, indent=2) + "\n").encode()
 
@@ -25,6 +25,12 @@ def block(text, begin, end):
     stop = re.search(r"(?m)^" + re.escape(end), text[matches[0].end():])
     assert stop is not None, end
     return text[start:matches[0].end() + stop.start()]
+
+def metadata_body(source):
+    # Exercise the selected allocation/return body directly. The public PIC
+    # dispatch is covered by the complete service pairs, not this unit fixture.
+    assert source.count('ex_metadata_call:\n    jmp pic_public_metadata\npf_metadata_owned:\n') == 1
+    return 'ex_metadata_call:\n' + source[source.index('pf_metadata_owned:\n'):]
 
 def main():
     p = argparse.ArgumentParser()
@@ -67,8 +73,8 @@ def main():
         after = b"    mov edi, OFFSET FLAT:tk_CV_BYTES\n"
         assert fixed.count(after) == 1 and before not in fixed
         source, original = fixed.decode(), adapter.decode()
-        metadata = source[source.index("ex_metadata_call:\n"):]
-        config_drop = block(source, "ex_intent_config_drop:\n", "# Called after the fixed Ticket")
+        metadata = metadata_body(source)
+        config_drop = block(source, "ex_intent_config_drop:\n", "# Bind the original Config")
         allocation = block(original, "tk_allocate_guarded:\n", "tk_read_exact:\n")
         allocation = re.sub(r"\ballocate_guarded\b", "tk_allocate_guarded", allocation)
         allocation = re.sub(r"\btk_memory_fail\b", "fatal", allocation)

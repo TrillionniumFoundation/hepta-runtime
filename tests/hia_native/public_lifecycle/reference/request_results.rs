@@ -1464,3 +1464,122 @@ pub(crate) async fn complete(
 	trace::flush();
 	result
 }
+fn page(value: Value) -> Result<String> {
+	let text = serde_json::to_string(&value)?;
+	let wire = CallToolResult::success(vec![rmcp::model::ContentBlock::text(&text)]);
+	if serde_json::to_vec(&wire)?.len() > MAX_PAGE_BYTES {
+		bail!("request receipt page exceeds wire limit");
+	}
+	Ok(text)
+}
+#[cfg(unix)]
+fn lookup_at(root: &Path, identity: &RequestIdentity, binding: &str) -> Result<Option<Record>> {
+	let _guard = record_lock(&identity.request_id)?;
+	let directory = open_store(root)?;
+	let archive = open_archive_store(root, &directory, false)
+		.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?;
+	let legacy = optional_record(&directory, &identity.request_id)
+		.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?;
+	let archived = if let Some(archive) = &archive {
+		optional_record(&shard(archive, &identity.request_id)?, &identity.request_id)
+			.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?
+	} else {
+		None
+	};
+	if legacy.is_some() && archived.is_some() {
+		bail!("request result unavailable to this scope or current policy");
+	}
+	let Some(record) = legacy.or(archived) else {
+		return Ok(None);
+	};
+	if record.owner != identity.owner
+		|| record.tool_name != identity.tool_name
+		|| record.accepted_unix_ms != identity.accepted_unix_ms
+		|| record.policy_binding != binding
+	{
+		bail!("request result unavailable to this scope or current policy");
+	}
+	Ok(Some(record))
+}
+#[cfg(not(unix))]
+fn lookup_at(_root: &Path, _identity: &RequestIdentity, _binding: &str) -> Result<Option<Record>> {
+	bail!("private result retention requires Unix");
+}
+fn result_state(record: Option<&Record>, tool: &str) -> &'static str {
+	match record.map(|r| &r.state) {
+		Some(ResultState::Stored) => "stored",
+		Some(ResultState::Unknown) => "unknown",
+		Some(ResultState::Overflow) => "overflow",
+		Some(ResultState::RefusedDto) => "not_retained_dto",
+		Some(ResultState::NotCompleted) => "not_completed",
+		None if eligible(tool) => "not_retained_legacy_or_unavailable",
+		None => "not_retained_policy",
+	}
+}
+
+async fn run_result_read(
+	read: impl FnOnce() -> Result<Option<Record>> + Send + 'static,
+) -> Result<Option<Record>> {
+	tokio::task::spawn_blocking(move || {
+		// A dropped caller cannot stop a submitted blocking lookup. The closure
+		// owns the original I/O and per-record guard through actual completion.
+		read()
+	})
+	.await
+	.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?
+}
+
+pub async fn request_status(owner: &str, params: RequestStatusParams) -> Result<String> {
+	let observation = request_audit::observation(owner, &params.request_id).await?;
+	let identity = observation.identity;
+	let tool = identity.tool_name.clone();
+	let root = runtime_config()?.state_dir.clone();
+	let binding = policy_binding()?;
+	let record = run_result_read(move || lookup_at(&root, &identity, &binding)).await?;
+	page(
+		json!({"request_id":params.request_id,"tool_name":tool,"dispatch_state":observation.state,
+		"elapsed_ms":observation.elapsed_ms,"result_state":result_state(record.as_ref(),&tool),
+		"result_bytes":record.as_ref().and_then(|r|r.payload_bytes),
+		"retained_tools":["host_list","host_health","effective_config"],
+		"metadata_lookup_does_not_prove_delivery_or_business_success":true,
+		"automatic_retry":false,"early_return_async_start_supported":false}),
+	)
+}
+pub async fn request_result(owner: &str, params: RequestResultParams) -> Result<String> {
+	let limit = params.limit.unwrap_or(16384) as usize;
+	if !(1..=16384).contains(&limit) {
+		bail!("request result page limit must be 1..16384");
+	}
+	let observation = request_audit::observation(owner, &params.request_id).await?;
+	let identity = observation.identity;
+	let root = runtime_config()?.state_dir.clone();
+	let binding = policy_binding()?;
+	let record = run_result_read(move || lookup_at(&root, &identity, &binding))
+		.await?
+		.ok_or_else(|| anyhow!("original result was not retained; never replay automatically"))?;
+	if record.state != ResultState::Stored {
+		bail!("original result unavailable in retained state; never replay automatically");
+	}
+	let bytes = unbase64(
+		record
+			.payload_base64
+			.as_deref()
+			.ok_or_else(|| anyhow!("retained result refused"))?,
+	)?;
+	if record.payload_bytes != Some(bytes.len())
+		|| record.payload_sha256.as_deref() != Some(digest(&bytes).as_str())
+	{
+		bail!("retained result integrity refused");
+	}
+	let offset = params.offset.unwrap_or(0) as usize;
+	if offset > bytes.len() {
+		bail!("request result offset exceeds retained length");
+	}
+	let end = offset.saturating_add(limit).min(bytes.len());
+	page(
+		json!({"request_id":params.request_id,"offset":offset,"next_offset":end,"total_bytes":bytes.len(),
+		"eof":end==bytes.len(),"data_base64":base64(&bytes[offset..end]),"result_sha256":record.payload_sha256,
+		"format":"serialized_native_CallToolResult_with_request_identity_before_retention_ack_and_transport_normalization",
+		"immutable_snapshot":true,"automatic_retry":false,"delivery_proven":false}),
+	)
+}

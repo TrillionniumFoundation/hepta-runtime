@@ -80,7 +80,7 @@ def snapshot(state,requests,responses,bounds,provenance):
     obj=checked_json(raw);assert list(obj)==['request_id','owner','tool_name','accepted_unix_ms','policy_binding','state','payload_base64','payload_bytes','payload_sha256']
     ident=obj['request_id'];assert ident in inverse and p.name==ident+'.json' and p.parent.name==ident[:2]
     frame=inverse[ident];assert obj['owner']==provenance['owner'] and obj['tool_name']==requests[frame]['params']['name']
-    assert obj['tool_name'] in ('host_list','effective_config')
+    assert obj['tool_name'] in ('host_list','effective_config','host_health')
     bound=bounds[frame];assert bound['wall_before']//1000000<=obj['accepted_unix_ms']<=bound['wall_after']//1000000
     if obj['state']=='stored':
      payload=base64.b64decode(obj['payload_base64'],validate=True)

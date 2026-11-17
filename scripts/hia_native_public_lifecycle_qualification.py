@@ -49,7 +49,7 @@ def build_public_lifecycle(hepta,build_root,source_root):
         (build/('public-lifecycle-build.'+suffix)).write_bytes(raw)
     require(not timed and process.returncode==0 and not err and row['sources_after']==pins,
         'actual public lifecycle build failed')
-    require(json.loads(out)==dict(build=str(build/'build.json'),images=71,packer_compiles=1,pack_invocations=2),
+    require(json.loads(out)==dict(build=str(build/'build.json'),images=111,packer_compiles=2,pack_invocations=4),
         'actual build summary differs')
     verify_build(root,build/'build.json')
     return build/'build.json'
@@ -62,14 +62,15 @@ def verify_build(root,manifest):
     require(manifest.name=='build.json' and report['schema']=='hepta.public-lifecycle.build.v1'
         and report['status']=='BUILT_NOT_RUNTIME_QUALIFIED' and report['sources']==pins
         and report['compiler_commit']==COMPILER and report['compiler_sha256']==COMPILER_IMAGE
-        and report['semantic_compiles']==71 and report['packer_compiles']==1
-        and report['pack_invocations']==2 and report['actual_service_processes']==0
+        and report['semantic_compiles']==111 and report['packer_compiles']==2
+        and report['pack_invocations']==4 and report['actual_service_processes']==0
         and all(report[k]is False for k in ('production_activated','whole_runtime_replaced','full_cold_executed')),
         'selected build domain or source changed')
-    require(set(report['modules'])==set(profile['image_order'])|{'packer'},'compiled module domain differs')
+    require(set(report['modules'])==set(profile['image_order'])|{'packer_0','packer_1'},'compiled module domain differs')
     images={}
-    for role in [*profile['image_order'],'packer']:
-        row=profile['packer']if role=='packer'else profile['modules'][role]
+    selected=[(role,profile['modules'][role])for role in profile['image_order']]
+    selected += [('packer_'+str(row['part']),row)for row in profile['packers']]
+    for role,row in selected:
         _,images[role]=compile_evidence(root,build,row,report['modules'][role],artifacts)
     adapter=build/'adapter'
     expanded=regular(root/profile['adapter_source']).replace(
@@ -98,23 +99,27 @@ def verify_build(root,manifest):
     require(prefix[176:]==code and (len(prefix),sha(prefix))==
         (profile['prefix_bytes'],profile['prefix_sha256']),'complete fixed prefix changed')
     order=profile['image_order'];sizes=[len(images[n])for n in order]
-    require(sizes==profile['segment_contract']['complete_image_sizes'],'complete image sizes differ')
-    split=profile['segment_contract']['split_index'];parts=[]
-    for stage,selected in enumerate((order[:split],order[split:])):
-        frame=keep(build,artifacts,build/('pack-'+str(stage)+'.input'))
-        expected=b'HRISEG01'+struct.pack('<Q',stage)+struct.pack('<'+'Q'*len(order),*sizes)
-        expected+=b''.join(images[n]for n in selected)
-        require(frame==expected and len(frame)<=8388608,'complete pack input differs')
-        output=keep(build,artifacts,build/('pack-'+str(stage)+'.output'))
-        work=keep(build,artifacts,build/('pack-'+str(stage)+'.workspace'))
-        row=json.loads(keep(build,artifacts,build/('pack-'+str(stage)+'.json')))
-        derived=dict(stage=stage,result_u64=len(output),input_bytes=len(frame),input_sha256=sha(frame),
-            output_bytes=len(output),output_sha256=sha(output),workspace_bytes=len(work),workspace_sha256=sha(work))
-        require(row==derived==report['pack_stages'][stage]
-            and all(derived[k]==profile['pack_stages'][stage][k]for k in derived)
-            and len(output)<=8388608 and len(work)==profile['packer_workspace_bytes'],
-            'complete actual pack reply/workspace differs')
-        parts.append(output)
+    parts=[]
+    for packer in profile['packers']:
+        part,contract=packer['part'],packer['contract']
+        require(sizes==contract['complete_image_sizes'],'complete image sizes differ')
+        for stage,(first,last)in enumerate(contract['ranges']):
+            name=f'pack-p{part}-s{stage}'
+            frame=keep(build,artifacts,build/(name+'.input'))
+            expected=b'HRISEG03'+struct.pack('<QQ',part,stage)+struct.pack('<'+'Q'*len(order),*sizes)
+            expected+=b''.join(images[n]for n in order[first:last])
+            require(frame==expected and len(frame)==contract['input_bytes'][stage]<=8388608,
+                'complete pack input differs')
+            output=keep(build,artifacts,build/(name+'.output'))
+            work=keep(build,artifacts,build/(name+'.workspace'))
+            row=json.loads(keep(build,artifacts,build/(name+'.json')))
+            derived=dict(part=part,stage=stage,artifact_prefix=name,image_range=[first,last],
+                result_u64=len(output),input_bytes=len(frame),input_sha256=sha(frame),
+                output_bytes=len(output),output_sha256=sha(output),workspace_bytes=len(work),workspace_sha256=sha(work))
+            require(row==derived==report['pack_stages'][len(parts)]==profile['pack_stages'][len(parts)]
+                and len(output)==contract['output_bytes'][stage]<=8388608
+                and len(work)==packer['workspace_bytes'], 'complete actual pack reply/workspace differs')
+            parts.append(output)
     expected=bytearray(prefix);total=len(prefix)+sum(sizes)
     struct.pack_into('<QQ',expected,96,total,total);offsets={};at=len(prefix)
     for name,size in zip(order,sizes,strict=True):offsets[name]=at;at+=size
@@ -129,7 +134,7 @@ def verify_build(root,manifest):
             (profile['executable_bytes'],profile['executable_sha256']),'complete native executable differs')
     return dict(schema='hepta.public-lifecycle.build-evidence.v1',sources=pins,
         manifest_sha256=sha(regular(manifest)),executable=binary.name,elf_sha256=sha(actual),
-        artifact_sha256=artifacts,semantic_compiles=71,packer_compiles=1,pack_invocations=2,
+        artifact_sha256=artifacts,semantic_compiles=111,packer_compiles=2,pack_invocations=4,
         actual_service_processes=0,production_activated=False,whole_runtime_replaced=False)
 
 
@@ -146,7 +151,7 @@ def build_evidence(root,output,report):
         '--hepta',str(Path(report['compiler_checkout']).resolve(strict=True)),
         '--build-root',str(manifest.parent)]
     out,err=completed(manifest.parent,'public-lifecycle-build',receipt,command,root,180)
-    require(not err and json.loads(out)==dict(build=str(manifest),images=71,packer_compiles=1,pack_invocations=2)
+    require(not err and json.loads(out)==dict(build=str(manifest),images=111,packer_compiles=2,pack_invocations=4)
         and receipt['sources_before']==receipt['sources_after']==result['sources']
         and receipt['cleanup_seconds']==3 and receipt['outer_parent_death_cleanup_qualified']is False,
         'actual aggregate build completion changed')
@@ -162,13 +167,22 @@ def test_commands(root,output,report):
             '--output',str(output/'public-lifecycle-native/bridge')],
         TESTS[1]:[sys.executable,'-I','-B',str(root/'tests/hia_native'/TESTS[1]),
             '--build',str(output/'build/public-lifecycle/build.json'),
-            '--output',str(output/'public-lifecycle-native/normal')]}
+            '--output',str(output/'public-lifecycle-native/normal')],
+        TESTS[2]:[sys.executable,'-I','-B',str(root/'tests/hia_native'/TESTS[2]),
+            '--build',str(output/'build/public-lifecycle/build.json'),
+            '--output',str(output/'public-lifecycle-native/lifecycle')]}
 
 
 def normal_evidence(root,folder,native,original=None):
     sys.path.insert(0,str(Path(root)/'tests/hia_native/public_lifecycle'))
     from normal_evidence import verify
     return verify(folder,native,original)
+
+
+def lifecycle_evidence(root,folder,binary,**options):
+    sys.path.insert(0,str(Path(root)/'tests/hia_native/public_lifecycle'))
+    from lifecycle_suite import verify
+    return verify(folder,binary,**options)
 
 
 def bridge_evidence(root,folder):
@@ -195,8 +209,8 @@ def bridge_evidence(root,folder):
     allocation=re.sub(r'\ballocate_guarded\b','tk_allocate_guarded',allocation)
     allocation=re.sub(r'\btk_memory_fail\b','fatal',allocation)
     body=regular(root/'tests/hia_native/public_lifecycle/metadata_unit.S.in').decode()
-    pieces=dict(METADATA_CALL=source[source.index('ex_metadata_call:\n'):],
-        CONFIG_DROP=unit.block(source,'ex_intent_config_drop:\n','# Called after the fixed Ticket'),
+    pieces=dict(METADATA_CALL=unit.metadata_body(source),
+        CONFIG_DROP=unit.block(source,'ex_intent_config_drop:\n','# Bind the original Config'),
         ALLOCATION=allocation,CONVERSION_DROP=unit.block(adapter,'tk_intent_conversion_drop:\n','# The metadata annotator'))
     for key,piece in pieces.items():
         require(body.count('@'+key+'@')==1,'unit template marker differs')
@@ -237,17 +251,21 @@ def native_evidence(root,output,report,completed_test_summary,create=False):
         for suffix in ('stdout','stderr'):keep(output,artifacts,output/(name+'.'+suffix))
     direct=bridge_evidence(root,output/'public-lifecycle-native/bridge')
     normal=normal_evidence(root,output/'public-lifecycle-native/normal',binary)
+    lifecycle=lifecycle_evidence(root,output/'public-lifecycle-native/lifecycle',binary)
     require(json.loads(regular(output/(TESTS[0]+'.stdout')))=={k:direct[k]for k in
         ('status','direct_bridge_calls','real_guarded_allocations','actual_result_intent_calls','full_public_regression')},
         'direct unit summary changed')
     require(json.loads(regular(output/(TESTS[1]+'.stdout')))==dict(status='PASS',native_processes=64,
         native_requests=359,original_processes=0),'normal suite summary changed')
-    for branch in ('bridge','normal'):
+    require(json.loads(regular(output/(TESTS[2]+'.stdout')))==dict(status='PASS',native_processes=22,
+        original_processes=0,requests_per_implementation=348,producer_starts_per_implementation=11),
+        'finite lifecycle suite summary changed')
+    for branch in ('bridge','normal','lifecycle'):
         for name,digest in inventory(output/'public-lifecycle-native'/branch).items():
             artifacts['public-lifecycle-native/'+branch+'/'+name]=digest
     compatibility=dict(schema='hepta.public-lifecycle.native-result.v1',status='PASS',sources=built['sources'],
-        build_sha256=built['manifest_sha256'],records=records,normal=normal,direct_bridge_calls=3,
-        actual_native_processes=64,actual_native_requests=359,actual_original_processes=0,
+        build_sha256=built['manifest_sha256'],records=records,normal=normal,lifecycle=lifecycle,direct_bridge_calls=3,
+        actual_native_processes=86,actual_native_requests=707,actual_original_processes=0,
         production_activated=False,whole_runtime_replaced=False)
 
     path=output/'public-lifecycle-native/result.json';raw=encoded(compatibility)
@@ -256,7 +274,7 @@ def native_evidence(root,output,report,completed_test_summary,create=False):
     else:require(regular(path)==raw,'native aggregate result changed')
     keep(output,artifacts,path)
     return dict(schema='hepta.public-lifecycle.native-evidence.v1',sources=built['sources'],
-        artifact_sha256=artifacts,native_result_sha256=sha(raw),native_processes=64,native_requests=359,
+        artifact_sha256=artifacts,native_result_sha256=sha(raw),native_processes=86,native_requests=707,
         original_processes=0,direct_fixture_calls=3,new_executions_in_admission=0,
         production_activated=False,whole_runtime_replaced=False)
 
@@ -265,18 +283,19 @@ def verify_original(root,folder,manifest):
     import tomllib
     from public_lifecycle_crates import REMOVED,package_files
     from hia_native_public_lifecycle_reference import check
-    from public_lifecycle_retained import ADMISSION, admit, pin
+    from public_lifecycle_retained import ADMISSION, LIFECYCLE, admit, pin
     sys.path.insert(0,str(Path(root)/'tests/hia_native/public_lifecycle'))
     from normal_original import verify as retained_pair_evidence
+    from lifecycle_suite import verify as retained_lifecycle_evidence
     root,folder,manifest=Path(root).resolve(strict=True),Path(folder).resolve(strict=True),Path(manifest).resolve(strict=True)
     original=object_at(folder/'result.json');built=verify_build(root,manifest)
     require(original['schema']=='hepta.public-lifecycle.original-result.v2' and original['status']=='PASS'
         and original['sources']==source_pins(root) and original['native_build_evidence']==built
         and original['build_sha256']==sha(regular(manifest)) and original['fresh_actual_cargo_build']is True
-        and original['original_blocks']==274 and original['locked_registry_dependencies']==138
-        and original['native_processes']==0 and original['original_processes']==64
-        and original['retained_native_processes']==64 and original['retained_native_requests']==359
-        and original['requests_per_implementation']==359 and original['actual_outer_call_tool_included']is True
+        and original['original_blocks']==315 and original['locked_registry_dependencies']==140
+        and original['native_processes']==0 and original['original_processes']==86
+        and original['retained_native_processes']==86 and original['retained_native_requests']==707
+        and original['requests_per_implementation']==707 and original['actual_outer_call_tool_included']is True
         and original['complete_wire_and_filesystem_equality']is True
         and original['cargo_cache_retired_after_binary_and_source_verification']is True
         and original['external_host_operations']==0
@@ -294,7 +313,7 @@ def verify_original(root,folder,manifest):
         and type(env['offline'])is bool,'reference environment differs')
     require(not (folder/'target').exists(),'disposable Cargo cache survived complete reference')
     binary=folder/'original.elf';raw=regular(binary)
-    require(original['original_binary']==dict(origin=str(folder/'target/release/hia-public-eligible-original'),
+    require(original['original_binary']==dict(origin=str(folder/'target/release/hia-public-async-original'),
         path=str(binary),bytes=len(raw),sha256=sha(raw)) and stat.S_IMODE(binary.stat().st_mode)==0o500,
         'retained original executable differs')
     native=manifest.parent/built['executable']
@@ -307,11 +326,14 @@ def verify_original(root,folder,manifest):
     commands=[('rustc-version',[original['rustc'],'--version','--verbose'],root,10),
         ('cargo-fetch',[original['cargo'],'fetch','--locked',*offline],folder/'project',120),
         ('cargo-metadata',[original['cargo'],'metadata','--locked','--format-version','1',*offline],folder/'project',30),
-        ('cargo-build',[original['cargo'],'build','--release','--locked','--bin','hia-public-eligible-original',*offline],folder/'project',120),
+        ('cargo-build',[original['cargo'],'build','--release','--locked','--bin','hia-public-async-original',*offline],folder/'project',120),
         ('normal-pairs',[sys.executable,'-I','-B',str(root/'tests/hia_native/public_lifecycle/normal_original.py'),
             '--admission',str(admission),'--admission-sha256',original['native_admission_sha256'],
             '--invocation',original['native_invocation'],'--build',str(manifest),
             '--original',str(binary),'--output',str(folder/'paired')],root,120),
+        ('lifecycle-pairs',[sys.executable,'-I','-B',str(root/'tests/hia_native/public_lifecycle/lifecycle_suite.py'),
+            '--binary',str(binary),'--retained',str(admission.parent/LIFECYCLE),
+            '--native-binary',str(native),'--output',str(folder/'lifecycle')],root,120),
         ('retained-native-controls',[sys.executable,'-I','-B',str(root/'tests/hia_native/public_lifecycle/retained_controls.py'),
             '--admission',str(admission),'--admission-sha256',original['native_admission_sha256'],
             '--invocation',original['native_invocation'],'--build',str(manifest),
@@ -321,7 +343,7 @@ def verify_original(root,folder,manifest):
         out,err=completed(folder,name,row,command,cwd,timeout)
         require(type(row['pid'])is int and row['pid']>0,'actual reference PID absent')
         if name=='rustc-version':require(not err and b'release: 1.95.0\n'in out,'actual Rust version changed')
-        if name in ('cargo-metadata','normal-pairs','retained-native-controls'):require(not err,'unexpected original stdout framing')
+        if name in ('cargo-metadata','normal-pairs','lifecycle-pairs','retained-native-controls'):require(not err,'unexpected original stdout framing')
     expected_tools={original['cargo'],original['rustc'],original['rustfmt']}
     require(set(original['tool_sha256'])==expected_tools,'original tool domain changed')
     for path,digest in original['tool_sha256'].items():
@@ -331,7 +353,7 @@ def verify_original(root,folder,manifest):
     root_packages={(p['name'],p['version'],p['source']):p for p in root_lock['package']if 'checksum'in p}
     wanted={p['name']+'-'+p['version']:p for p in lock['package']if 'checksum'in p}
     before=original['registry_before']
-    require(before==original['registry_after'] and set(before)==set(wanted) and len(before)==138,
+    require(before==original['registry_after'] and set(before)==set(wanted) and len(before)==140,
         'actual registry source domain changed')
     metadata=object_at(folder/'cargo-metadata.stdout')
     selected={p['name']+'-'+p['version']:p for p in metadata['packages']if p.get('source')is not None}
@@ -358,27 +380,32 @@ def verify_original(root,folder,manifest):
         original['native_invocation'],manifest)
     require(original['paired']==paired and json.loads(regular(folder/'normal-pairs.stdout'))==paired,
         'complete actual pair evidence differs')
+    finite=retained_lifecycle_evidence(folder/'lifecycle',binary,side='original',
+        retained=admission.parent/LIFECYCLE,native_binary=native)
+    require(original['lifecycle']==finite and json.loads(regular(folder/'lifecycle-pairs.stdout'))==dict(
+        status='PASS',native_processes=0,original_processes=22,requests_per_implementation=348,
+        producer_starts_per_implementation=11),'complete finite lifecycle pair evidence differs')
     controls=object_at(folder/'controls/result.json')
     names=['invocation','context-invocation','source-root','output-root','native-count','request-count',
         'new-native-count','deadline','source-pin','manifest','completed-command','completed-exit',
-        'capture-inventory','extra-field','complete-native-stream']
-    expected_controls=[dict(name=name,rejected=True,recomputed_admission_digest=name!='complete-native-stream')for name in names]
+        'capture-inventory','extra-field','complete-native-stream','complete-lifecycle-stream']
+    expected_controls=[dict(name=name,rejected=True,recomputed_admission_digest=not name.startswith('complete-'))for name in names]
     require(controls==dict(schema='hepta.public-lifecycle.retained-controls.v1',status='PASS',
-        admission=pin(admission),invocation=original['native_invocation'],rejected_controls=15,
+        admission=pin(admission),invocation=original['native_invocation'],rejected_controls=16,
         controls=expected_controls,before=retained,after=retained,complete_restoration=True,
         native_processes=0,original_processes=0,syscall_interception=False,fault_injection=False)
         and json.loads(regular(folder/'retained-native-controls.stdout'))==dict(status='PASS',
-            rejected_controls=15,complete_restoration=True,native_processes=0,original_processes=0),
+            rejected_controls=16,complete_restoration=True,native_processes=0,original_processes=0),
         'complete data rejection controls changed')
     actual={}
-    for branch in ('project','registry','paired','controls'):
+    for branch in ('project','registry','paired','lifecycle','controls'):
         actual.update({branch+'/'+name:digest for name,digest in inventory(folder/branch).items()})
     for path in folder.iterdir():
         if path.is_file()and path.name!='result.json':actual[path.name]=sha(regular(path))
     require(actual==original['artifacts'],'complete immutable original artifacts changed')
     return dict(schema='hepta.public-lifecycle.original-admission.v1',status='PASS',sources=original['sources'],
-        artifacts=actual,original_builds=1,locked_registry_dependencies=138,original_blocks=274,
-        native_processes=0,retained_native_processes=64,original_processes=64,requests_per_implementation=359,
+        artifacts=actual,original_builds=1,locked_registry_dependencies=140,original_blocks=315,
+        native_processes=0,retained_native_processes=86,original_processes=86,requests_per_implementation=707,
         new_executions_in_admission=0,production_activated=False,whole_runtime_replaced=False)
 
 

@@ -1,11 +1,14 @@
 [package]
-name="hia-public-eligible-original"
+name="hia-public-read-original"
 version="0.1.0"
 edition="2021"
 publish=false
 [[bin]]
-name="hia-public-eligible-original"
+name="hia-public-async-original"
 path="mcp/oracle_mcp.rs"
+[[bin]]
+name="hia-async-read-original"
+path="mcp/oracle_async_read.rs"
 [dependencies]
 anyhow={default-features=true,features=[],version="=1.0.104"}
 axum={default-features=false,features=["http1","tokio"],version="=0.8.9"}
@@ -24,7 +27,8 @@ serde={default-features=true,features=["derive"],version="=1.0.229"}
 serde_json={default-features=true,features=["float_roundtrip","raw_value"],version="=1.0.151"}
 sha2={default-features=true,features=[],version="=0.11.0"}
 subtle={version="=2.6.1"}
-tokio={default-features=true,features=["io-std","io-util","macros","rt","time"],version="=1.53.1"}
+tokio={default-features=true,features=["io-std","io-util","macros","process","rt","time"],version="=1.53.1"}
+tokio-util={version="=0.7.19",features=[]}
 tower={features=["util"],version="=0.5.3"}
 tracing={default-features=true,features=["std"],version="=0.1.44"}
 zeroize={version="=1.9.0"}
@@ -32,3 +36,7 @@ zeroize={version="=1.9.0"}
 futures-channel={default-features=true,features=["sink"],version="=0.3.34"}
 futures-util={default-features=true,features=["channel","io","sink"],version="=0.3.34"}
 js-sys={default-features=false,features=["std"],version="=0.3.106"}
+
+[[bin]]
+name="hia-async-producer-journal-original"
+path="mcp/oracle_async_producer_journal.rs"
