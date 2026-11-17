@@ -1,6 +1,6 @@
 """Build the current fixed public HIA stdio executable from one source checkout.
 
-The default build includes 110 direct HIA members and the exact eight-member
+The default build includes 115 direct HIA members and the exact eight-member
 shared worker capability. It needs no existing worker or public binary. The
 previous 58/91/102 graph qualifications keep their explicit frozen source views.
 """
@@ -79,7 +79,7 @@ def main():
         require(SHA((args.bootstrap / "B3.image.bin").read_bytes()) == B3_SHA256, "Verified B3 bytes differ.")
     output.mkdir(parents=True)
     started = time.monotonic()
-    report = dict(schema="hepta.runtime.public118-task-batch-extract.build.v1", status="RUNNING",
+    report = dict(schema="hepta.runtime.public123-task-batch-extract-publication.build.v1", status="RUNNING",
         source_binding_sha256=source_identity["manifest_sha256"], rust_executed=False,
         actual_target_handshake_compared=False, full_async_runtime_qualified=False,
         full_sdk_qualified=False, independent_cold_qualified=False, production_activated=False,
@@ -92,10 +92,11 @@ def main():
 
     save()
     try:
-        require(len(MEMBERS) == 110 and len(EXTRA) == 64, "Fixed combined graph count changed.")
+        require(len(MEMBERS) == 115 and len(EXTRA) == 69, "Fixed combined graph count changed.")
         require(EXTRA[47:53] == ["batch_gateway", "batch_params", "batch_call", "batch_adapter", "batch_input", None]
                 and EXTRA[53:59] == ["target_shutdown", "current_get_info", "target_connection", None, None, "request_tasks"]
-                and EXTRA[59:] == ["extract_gateway", "extract_params", "extract_call", "extract_adapter", None],
+                and EXTRA[59:64] == ["extract_gateway", "extract_params", "extract_call", "extract_adapter", None]
+                and EXTRA[64:] == ["publisher_gateway", "publisher_params", "publisher_call", None, None],
                 "Fixed Batch/SDK descriptor bindings changed.")
         package = source / "runtime_support/bellman_port"
         require(SHA((package / "PACKAGE.json").read_bytes()) == PORT_PACKAGE_SHA256, "Fixed dependency package changed.")
@@ -118,14 +119,14 @@ def main():
             bellman_port_package=package, bellman_worker_build=output / "worker")
         raw = manifest.read_bytes()
         md = json.loads(raw)
-        require(md["physical_images"] == 111 and len(md["members"]) == 110 and md["runtime_hia_images"] == 118,
+        require(md["physical_images"] == 116 and len(md["members"]) == 115 and md["runtime_hia_images"] == 123,
                 "Combined physical or HIA count changed.")
         fresh = sum(row["fresh_compile"] is True for row in md["members"])
-        require(fresh == 110 - len(reuse), "Direct member compile/reuse count changed.")
+        require(fresh == 115 - len(reuse), "Direct member compile/reuse count changed.")
         binary = manifest.parent / md["elf"]
         require(SHA(binary.read_bytes()) == md["elf_sha256"], "Actual public binary identity changed.")
-        report.update(status="NATIVE_BUILD_PASS", physical_images=111, runtime_hia_images=118,
-            direct_hia_members=110, packed_hia_members=8, manifest=str(manifest),
+        report.update(status="NATIVE_BUILD_PASS", physical_images=116, runtime_hia_images=123,
+            direct_hia_members=115, packed_hia_members=8, manifest=str(manifest),
             manifest_sha256=SHA(raw), elf=str(binary), elf_bytes=binary.stat().st_size,
             elf_sha256=md["elf_sha256"], fresh_member_compiles=fresh, checked_reused_members=len(reuse),
             fresh_packed_member_compiles=8, bootstrap_reused=args.bootstrap is not None,
@@ -135,6 +136,8 @@ def main():
             serial_session_authority_integrated=True, authority_slot=56, batch_slots=[47,48,49,50,51,52],
             bellman_port_slot=57, sdk_request_registry_slot=58, task_event_pump_integrated=True,
             extract_slots=[59,60,61,62,63], extract_context_offset=456, extract_install_offset=464,
+            publication_slots=[64,65,66,67,68], publication_callable_context="descriptor67+8",
+            publication_scope_forget_slot=68, publication_full_async_qualified=False,
             extract_shared_hub_offset=400, extract_local_body_integrated=True,
             extract_public_handler_qualified=False, extract_full_async_qualified=False,
             extract_remote_qualified=False, extract_catalog_policy_qualified=False,
