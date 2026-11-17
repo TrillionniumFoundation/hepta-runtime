@@ -1,0 +1,53 @@
+name: Author mixed-opener and catalog-presence successor
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_mixed_opener_author_ci/**', '.github/workflows/hia-extract-public-mixed-author.yml']
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact new author
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: package
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_mixed_opener_author_ci
+      - name: Checkout the complete frozen 436 source baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: baseline
+          ref: d2bbc62d2d8b28dc07c1ed80992c734229cfe3d5
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_extract_repaired_ci/graph/source
+      - name: Checkout exact Hepta authoring AST support
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+          sparse-checkout: |
+            hepta
+            tools
+      - name: Author and reproduce the complete source without executing language semantics
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/package/tests/hia_native/public118_mixed_opener_author_ci/run.py" --baseline "$GITHUB_WORKSPACE/baseline/tests/hia_native/public118_extract_repaired_ci/graph/source" --hepta "$GITHUB_WORKSPACE/hepta" --output "$RUNNER_TEMP/mixed-opener-source" --profile '734f7e868e0458b805656214025956bfe281ce5f4886d22ede540354368bb0b3'
+      - name: Preserve complete source checkpoint and structural proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-mixed-opener-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mixed-opener-source
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
