@@ -1,0 +1,66 @@
+name: Inert recovery of completed HIA audit lifetime evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-lifetime-reader-recovery-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  lifetime-read-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      RECOVERY_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/audit_lifetime_read_recovery
+      RECOVERY_SHA: c7075d0f97931bc282891432d173dc205c865f7628ed0a258d8e9f0632b05301
+      RECOVERY_OUTPUT: ${{ runner.temp }}/audit-lifetime-recovery
+    steps:
+      - name: Checkout frozen recovery and unchanged producer source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: |
+            tests/hia_native/audit_lifetime
+            tests/hia_native/audit_lifetime_read_recovery
+          persist-credentials: false
+      - name: Verify exact source before reading evidence
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -B - <<'PY'
+          import os,sys
+          from pathlib import Path
+          root=Path(os.environ['RECOVERY_SOURCE'])
+          sys.path.insert(0,str(root))
+          import repair
+          assert repair.identity()==os.environ['RECOVERY_SHA']
+          for path in root.glob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          PY
+      - name: Restore and reread every original byte and mode
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -B "$RECOVERY_SOURCE/run_ci.py" restore --destination "$RECOVERY_OUTPUT" --source-manifest-sha256 "$RECOVERY_SHA"
+      - name: Read completed producer under the inert guard
+        run: python3 -I -B "$RECOVERY_SOURCE/run_ci.py" read --destination "$RECOVERY_OUTPUT" --source-manifest-sha256 "$RECOVERY_SHA"
+      - name: Exercise twelve physical refusals and four complete admissions
+        run: python3 -I -B "$RECOVERY_SOURCE/run_ci.py" controls --destination "$RECOVERY_OUTPUT" --source-manifest-sha256 "$RECOVERY_SHA"
+      - name: Independently read the complete producer and controls
+        run: python3 -I -B "$RECOVERY_SOURCE/run_ci.py" independent --destination "$RECOVERY_OUTPUT" --source-manifest-sha256 "$RECOVERY_SHA"
+      - name: Preserve all successful or failed evidence without replay
+        if: always()
+        run: |
+          mkdir -p "$RECOVERY_OUTPUT"
+          python3 -I -B "$RECOVERY_SOURCE/run_ci.py" export --destination "$RECOVERY_OUTPUT" --source-manifest-sha256 "$RECOVERY_SHA" > "$RUNNER_TEMP/audit-lifetime-recovery-export.stdout" 2> "$RUNNER_TEMP/audit-lifetime-recovery-export.stderr"
+      - name: Upload complete source and physical evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-lifetime-read-recovery-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/audit-lifetime-recovery.tar.gz
+            ${{ runner.temp }}/audit-lifetime-recovery.tar.gz.json
+            ${{ runner.temp }}/audit-lifetime-recovery-export.stdout
+            ${{ runner.temp }}/audit-lifetime-recovery-export.stderr
+          if-no-files-found: error
+          retention-days: 14
