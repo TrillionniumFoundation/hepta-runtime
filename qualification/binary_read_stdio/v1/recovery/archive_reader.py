@@ -158,7 +158,10 @@ def frozen(expected=None):
     return sha(raw),decode((ROOT/"BINDING.json").read_bytes())
 def context(work):
     base=work/"original/restored";source=base/"source";capture=base/"run/capture"
-    sys.path.insert(0,str(source/"scripts"))
+    # Definitions come from the separately frozen complete source copy. The
+    # uploaded source is fully byte/mode/set compared before admission; physical
+    # clones may only read their own evidence and these immutable reader sources.
+    sys.path.insert(0,str(ROOT/"qualified/scripts"))
     sys.path.insert(0,str(ROOT/"reader"))
     import common,read_all,reader_controls,readonly
     read_all.prepare(capture)
