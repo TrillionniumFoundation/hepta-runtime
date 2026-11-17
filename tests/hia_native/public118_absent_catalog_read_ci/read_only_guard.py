@@ -1,7 +1,8 @@
-"""Unchanged v4 read-only guard for the separately bound public authority reader."""
+"""Read-only guard admitting only descriptors opened from the fixed owned files."""
 from __future__ import annotations
 import builtins
 import ctypes
+import fcntl
 import hashlib
 import json
 import mmap
@@ -39,6 +40,19 @@ def guarded(operation, *, roots, foreign_path):
                for key, row in before.items() if key.startswith(str(index) + ":") and row["sha256"] is not None}
     active = [False]
     denied = []
+    descriptors = {}
+    original_open, original_close = os.open, os.close
+
+    def opened(path, flags, mode=0o777, *, dir_fd=None):
+        fd = original_open(path, flags, mode, dir_fd=dir_fd)
+        if active[0]:
+            info = os.fstat(fd)
+            descriptors[fd] = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_nlink)
+        return fd
+
+    def closed(fd):
+        descriptors.pop(fd, None)
+        return original_close(fd)
 
     def refuse(kind):
         denied.append(kind)
@@ -53,9 +67,18 @@ def guarded(operation, *, roots, foreign_path):
                 refuse("file-write")
             if type(flags) is int and flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND):
                 refuse("descriptor-write-open")
-            if not isinstance(path, (str, bytes, os.PathLike)):
+            if type(path) is int:
+                if path not in descriptors:
+                    refuse("foreign-file-descriptor")
+                info = os.fstat(path)
+                actual = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_nlink)
+                if actual != descriptors[path] or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    refuse("foreign-file-descriptor")
+                if fcntl.fcntl(path, fcntl.F_GETFL) & os.O_ACCMODE != os.O_RDONLY:
+                    refuse("descriptor-write-open")
+            elif not isinstance(path, (str, bytes, os.PathLike)):
                 refuse("foreign-file-descriptor")
-            if os.path.abspath(os.fsdecode(path)) not in allowed:
+            elif os.path.abspath(os.fsdecode(path)) not in allowed:
                 refuse("foreign-read")
         if event in {"os.remove", "os.rmdir", "os.rename", "os.mkdir", "os.chmod", "os.chown", "os.utime",
                      "os.link", "os.symlink", "os.truncate", "os.setxattr", "os.removexattr"}:
@@ -78,6 +101,7 @@ def guarded(operation, *, roots, foreign_path):
     attempts = [
         ("python-file-write", lambda: builtins.open(probe_file, "wb")),
         ("descriptor-open", lambda: os.open(probe_file, os.O_WRONLY)),
+        ("foreign-read-descriptor", lambda: os.fdopen(1, "rb", closefd=False)),
         ("descriptor-write", lambda: os.write(1, b"")),
         ("metadata-mode", lambda: os.chmod(probe_file, 0o600)),
         ("metadata-time", lambda: os.utime(probe_file, None)),
@@ -91,6 +115,7 @@ def guarded(operation, *, roots, foreign_path):
     try:
         for name in saved:
             setattr(os, name, refuse_descriptor)
+        os.open, os.close = opened, closed
         active[0] = True
         for name, action in attempts:
             start = len(denied)
@@ -106,6 +131,7 @@ def guarded(operation, *, roots, foreign_path):
         require(len(denied) == prior, "reader attempted a forbidden operation")
     finally:
         active[0] = False
+        os.open, os.close = original_open, original_close
         for name, method in saved.items():
             setattr(os, name, method)
     after = snapshot(roots)
