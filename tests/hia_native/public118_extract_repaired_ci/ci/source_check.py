@@ -7,8 +7,8 @@ from common import pin,require,verify
 import author_shape_admission
 import verify_adapters
 import extract_adapters
-BINDING="7ec284641736642d5ed4bcfa35cddf027c91e58d45af8e89f4655116ce034845"
-GRAPH_COMMIT="9d4d7aec41b1f519a507de9c3148443fc96ff272"
+BINDING="348e86674cb61cb4fa2f88466df70a010bfbbdb654f7289778e1f6e223e6f80d"
+GRAPH_COMMIT="58e1e21f4e3e8af93f0f49e15e652d71fa1b6b71"
 def git_blob(raw):
     return hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
 def installed_source(package,root):

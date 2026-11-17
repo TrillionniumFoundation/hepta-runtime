@@ -37,7 +37,10 @@ def combine(adapter,transport):
         '    mov qword ptr [r15 + 872], 0\n    cmp qword ptr [r15 + 912], 1\n    je runtime_execution_completed\nmcp_value_completed:\n')
     adapter=replace(adapter,"    mov qword ptr [r12 + PUB_SRC + 32], 3\n","    mov rax, [rbx + 56]\n    mov [r12 + PUB_SRC + 32], rax\n")
     adapter=replace(adapter,"    mov rsi, [rbx]\n    mov rcx, [rbx + 8]\n    mov edi, 13\n    call pub_import\n","    cmp qword ptr [rbx + 56], 3\n    jne pub_skip_trusted_prefix\n    mov rsi, [rbx]\n    mov rcx, [rbx + 8]\n    mov edi, 13\n    call pub_import\npub_skip_trusted_prefix:\n")
-    adapter=replace(adapter,'finish_ok:\n    xor ebp, ebp\n','finish_ok:\n    mov ebp, dword ptr [r15 + CG_PUBLIC_EOF_EXIT]\n')
+    eof_boundaries=transport.count('\npublic_span_connection_eof:\n')
+    if eof_boundaries not in (0,1):raise ValueError('duplicate actual G2 EOF boundary')
+    if eof_boundaries==1:
+        adapter=replace(adapter,'finish_ok:\n    xor ebp, ebp\n','finish_ok:\n    mov ebp, dword ptr [r15 + CG_PUBLIC_EOF_EXIT]\n')
     return adapter+'\n'+CALLABLE+'\n'+transport+'\n'+HELPERS
 
 CALLABLE=r'''

@@ -21,7 +21,7 @@ def verify(package):
     actual={r["path"]:{k:r[k] for k in ("bytes","sha256")} for r in rows}
     require(len(actual)==452 and actual==author["source_files"],"complete authored graph identity")
     require(author["baseline_source"]=="27342064731d701925bfd202cd97d33bdd27bcee"
-        and author["source_binding_sha256"]=="7ec284641736642d5ed4bcfa35cddf027c91e58d45af8e89f4655116ce034845"
+        and author["source_binding_sha256"]=="348e86674cb61cb4fa2f88466df70a010bfbbdb654f7289778e1f6e223e6f80d"
         and author["native_or_rust_executions"]==0,"mixed-opener catalog source provenance")
     author=json.loads((package/"source_origin/RETAINED_CUSTOM_AUTHOR.json").read_bytes())
     require(len(author["source_files"])==436,"retained complete typed-custom source")
