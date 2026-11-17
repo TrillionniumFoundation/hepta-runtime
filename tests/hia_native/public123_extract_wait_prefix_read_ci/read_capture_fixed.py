@@ -57,8 +57,8 @@ def trace(folder,item,side):
                     need(active in (0,1),"actual pending-node flag")
                     if active:
                         state,kind,ownership=obs.q(a,24)[0],obs.q(a,232)[0],obs.q(a,216)[0]
-                    need((kind==0 and state==0 and ownership==3) or (kind==5 and state==1 and ownership in (0,3)),"actual detach-before-registration or retained-pending trace stage")
-                    need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,"actual pending no-fabricated-output descriptor")
+                        need((kind==0 and state==0 and ownership==3) or (kind==5 and state==1 and ownership in (0,3)),"actual detach-before-registration or retained-pending trace stage")
+                        need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,"actual pending no-fabricated-output descriptor")
                         pending.append({"trace_sequence":seq,"node":node,"generation":generation,"host_generation":hostgen,"context":obs.q(a,1152)[0],"lease":obs.q(c,168)[0],"body_phase":obs.q(c,24)[0],"full_frame":pin(header+payload)})
                 elif event in (10,11,12):
                     need(an==64,"complete descriptor observation")

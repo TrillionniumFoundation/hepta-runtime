@@ -54,8 +54,8 @@
   "lane_pass": false,
   "application_executions": 0,
   "reader_stage_patch": {
-    "before": "                    need(obs.q(a,232)[0]==5 and obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")",
-    "after": "                    state,kind,ownership=obs.q(a,24)[0],obs.q(a,232)[0],obs.q(a,216)[0]\n                    need((kind==0 and state==0 and ownership==3) or (kind==5 and state==1 and ownership in (0,3)),\"actual detach-before-registration or retained-pending trace stage\")\n                    need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")",
+    "before": "\n                        need(obs.q(a,232)[0]==5 and obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")",
+    "after": "\n                        state,kind,ownership=obs.q(a,24)[0],obs.q(a,232)[0],obs.q(a,216)[0]\n                        need((kind==0 and state==0 and ownership==3) or (kind==5 and state==1 and ownership in (0,3)),\"actual detach-before-registration or retained-pending trace stage\")\n                        need(obs.q(a,88+48)[0]==0xffffffdf and obs.q(a,88+56)[0]==0,\"actual pending no-fabricated-output descriptor\")",
     "basis": "pump_detach_frontend emits event3/9 before pump_handle_frontend assigns PN_KIND5 and PN_STATE1; restore emits before the HIA turn with ownership0. Both stages still require actual raw WAIT and zero output extent."
   }
 }
