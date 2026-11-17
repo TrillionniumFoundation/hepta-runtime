@@ -1,0 +1,61 @@
+name: Public118 actual extract SDK and filesystem domains
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_extract_behavior_ci/**', '.github/workflows/hia-extract-public-behavior.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  public-domain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        domain: [typed-legacy, typed-modern, session-legacy, session-modern, context-legacy, context-modern, body-legacy, body-modern, catalog-legacy, catalog-modern]
+    steps:
+      - name: Checkout complete frozen inputs and readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_extract_behavior_ci
+      - name: Admit exact source and every input before execution
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_behavior_ci/source_check.py" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_behavior_ci" --profile 'c51befbb8212197f29662e61a813fec60e49c497a2deca8fb37c92b41c083588'
+      - name: Download the same qualified native and original build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/public118-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286335670 > "$RUNNER_TEMP/public118-input/native.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286335670/zip > "$RUNNER_TEMP/public118-input/native.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286891582 > "$RUNNER_TEMP/public118-input/original.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286891582/zip > "$RUNNER_TEMP/public118-input/original.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286667331 > "$RUNNER_TEMP/public118-input/native-proof.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14286667331/zip > "$RUNNER_TEMP/public118-input/native-proof.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14288241064 > "$RUNNER_TEMP/public118-input/original-proof.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14288241064/zip > "$RUNNER_TEMP/public118-input/original-proof.zip"
+      - name: Run both complete real public lanes and guarded comparison
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_behavior_ci/run.py" --input "$RUNNER_TEMP/public118-input" --output "$RUNNER_TEMP/public118-domain" --domain '${{ matrix.domain }}' --profile 'c51befbb8212197f29662e61a813fec60e49c497a2deca8fb37c92b41c083588' > "$RUNNER_TEMP/public118-domain-driver.stdout" 2> "$RUNNER_TEMP/public118-domain-driver.stderr"
+      - name: Retain every source and success or failure evidence byte
+        if: always()
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_behavior_ci/ci/archive.py" pack --capture "$RUNNER_TEMP/public118-domain" --output "$RUNNER_TEMP/public118-domain-export" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_behavior_ci" --manifest-sha256 'c51befbb8212197f29662e61a813fec60e49c497a2deca8fb37c92b41c083588' --label '${{ matrix.domain }}' --driver-prefix "$RUNNER_TEMP/public118-domain-driver"
+      - name: Upload complete public domain evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-public-domain-${{ matrix.domain }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public118-domain-export
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
