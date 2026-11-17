@@ -49,7 +49,7 @@ def counts(folder,process):
     return dict(processes=1,messages=len(incoming),requests=sum('id'in x for x in incoming),
         responses=len(outgoing),successful_starts=process.get('successful_starts',0))
 
-def reconstruct(spec,folder,binary,process,common):
+def reconstruct(spec,folder,binary,process,common,*,raw_capture=None):
     require(process['side']==folder.name and type(process.get('pid'))is int
         and process['pid']>0,'actual lifecycle process owner absent')
     if spec['domain']=='preflight':
@@ -59,7 +59,8 @@ def reconstruct(spec,folder,binary,process,common):
         answer=success_evidence.side(spec['case'],folder,binary,process,common=common)
         observations=json.loads(regular(folder/'scheduling-observations.json'))
     else:
-        answer,observations,_=pending_evidence.side(spec['case'],folder,binary,process,common=common)
+        answer,observations,raw=pending_evidence.side(spec['case'],folder,binary,process,common=common)
+        if raw_capture is not None:raw_capture['pending']=raw
     return answer,observations
 
 def _summary(report):
@@ -68,10 +69,15 @@ def _summary(report):
         requests_per_implementation=report['counts']['requests'],
         producer_starts_per_implementation=report['counts']['successful_starts'])
 
-def verify(folder,binary,*,side='native',retained=None,native_binary=None,captured=False):
+def verify(folder,binary,*,side='native',retained=None,native_binary=None,captured=False,
+           native_proof=None,projections=None):
+    from hia_native_public_lifecycle_qualification import inventory
+    from public_lifecycle_retained import directory_inventory
     folder,binary=Path(folder).resolve(strict=True),Path(binary).resolve(strict=True)
     report=object_at(folder/'result.json');plan=declared()
     require(not captured or side=='original','native evidence cannot defer final admission')
+    require(native_proof is None or side=='original','native proof reuse is only for original pairing')
+    require(projections is None or side=='native','only native verification collects native projections')
     require(report['schema']=='hepta.public-lifecycle.finite-captures.v1'
         and report['status']==('CAPTURED_NOT_QUALIFIED'if captured else'PASS')
         and report['side']==side and report['binary']==dict(path=str(binary),**pin(binary))
@@ -85,11 +91,19 @@ def verify(folder,binary,*,side='native',retained=None,native_binary=None,captur
     require(report['fixture_controls']==fixture_controls.EXPECTED,
         'fixture transport controls are incomplete')
     require(len({r['pid']for r in report['processes']})==22,'lifecycle process identifiers repeated')
-    before_native=None
+    before_native=None;native_projections={};native_inventory=None;native_identity=None;native_directories=None
     if side=='original':
         require(retained is not None and native_binary is not None,'original has no retained native owner')
         retained=Path(retained).resolve(strict=True)
-        before_native=verify(retained,native_binary)
+        native_inventory=inventory(retained)
+        native_directories=directory_inventory(retained)
+        native_identity=pin(Path(native_binary).resolve(strict=True))
+        if native_proof is None:
+            before_native=verify(retained,native_binary,projections=native_projections)
+        else:
+            from public_lifecycle_retained import NativeProof
+            require(type(native_proof)is NativeProof,'native lifecycle proof must be process-local')
+            before_native,native_projections=native_proof.lifecycle(ROOT,retained,native_binary)
         require(report['retained_native']==before_native and report['new_native_processes']==0,
             'original consumer changed the retained native domain')
     else:
@@ -102,7 +116,8 @@ def verify(folder,binary,*,side='native',retained=None,native_binary=None,captur
         require(object_at(casefolder/'case.json')==spec,'declared case changed')
         target=casefolder/side
         fixtures.admit(target,spec['domain'],process,require_retired=True)
-        answer,observations=reconstruct(spec,target,binary,process,common)
+        raw_capture={}
+        answer,observations=reconstruct(spec,target,binary,process,common,raw_capture=raw_capture)
         actual=counts(target,process)
         for key in total:total[key]+=actual[key]
         expected=dict(name=spec['name'],counts=actual,
@@ -110,17 +125,24 @@ def verify(folder,binary,*,side='native',retained=None,native_binary=None,captur
         require(completed==expected,'complete lifecycle projection differs')
         require(object_at(target/'stable-projection.json')==answer,'retained stable projection changed')
         if side=='original':
-            native_report=object_at(retained/'result.json')
-            native_answer,_=reconstruct(spec,retained/spec['name']/'native',Path(native_binary),
-                native_report['processes'][index],common)
+            native_answer,_=native_projections[spec['name']]
             require(answer==native_answer,'full stable original/native lifecycle difference: '+spec['name'])
         if spec['domain']=='pending'and spec['case']['protocol']==PROTOCOLS[0]:
-            _,_,raw=pending_evidence.side(spec['case'],target,binary,process,common=common)
+            raw=raw_capture['pending']
             control_rows += [dict(case=spec['name'],**x)for x in pending_evidence.controls(spec['case'],raw)]
+        if projections is not None:
+            require(spec['name']not in projections,'native projection is duplicated')
+            projections[spec['name']]=(answer,observations)
     require(total==COUNTS and len(control_rows)==17 and report['controls']==control_rows,
         'lifecycle complete domain or rejection controls changed')
-    require(before_native is None or verify(retained,native_binary)==before_native,
-        'retained native captures changed during original admission')
+    # Reconstruct each native stream once, then verify all retained bytes and
+    # the executable again. Identical input bytes retain the completed proof;
+    # a serialized summary is never accepted in place of reconstruction.
+    require(before_native is None or (inventory(retained)==native_inventory
+        and directory_inventory(retained)==native_directories
+        and pin(Path(native_binary).resolve(strict=True))==native_identity),
+        'retained native captures or binary changed during original admission')
+    require(source_pins(ROOT)==report['sources'],'lifecycle source changed during admission')
     return dict(schema='hepta.public-lifecycle.finite-evidence.v1',report=pin(folder/'result.json'),
         counts=total,controls=17,fixture_transport_controls=len(fixture_controls.EXPECTED),
         source_sha256=sha(encoded(report['sources'])),
@@ -137,7 +159,8 @@ def execute(binary,output,*,side='native',retained=None,native_binary=None,defer
     output.mkdir(mode=0o700,parents=True,exist_ok=False)
     plan=declared();sources=source_pins(ROOT);identity=dict(path=str(binary),**pin(binary))
     retained=Path(retained).resolve(strict=True)if retained is not None else None
-    retained_evidence=verify(retained,native_binary)if side=='original'else None
+    native_projections={}
+    retained_evidence=verify(retained,native_binary,projections=native_projections)if side=='original'else None
     require((side=='native')==(retained is None),'retained capture owner mismatch')
     report=dict(schema='hepta.public-lifecycle.finite-captures.v1',status='RUNNING',side=side,
         sources=sources,binary=identity,processes=[],completed=[],controls=[],fixture_controls=[],
@@ -186,11 +209,10 @@ def execute(binary,output,*,side='native',retained=None,native_binary=None,defer
                 success.run_side(spec['case'],folder,binary,side,update,retained_common=common_arg)
             else:
                 pending.run_case(spec['case'],folder,binary,side,update,retained_common=common_arg)
-            target=folder/side;answer,observations=reconstruct(spec,target,binary,process,common)
+            target=folder/side;raw_capture={}
+            answer,observations=reconstruct(spec,target,binary,process,common,raw_capture=raw_capture)
             if side=='original':
-                original_native=object_at(retained/'result.json')
-                native_answer,_=reconstruct(spec,retained/spec['name']/'native',Path(native_binary),
-                    original_native['processes'][index],common)
+                native_answer,_=native_projections[spec['name']]
                 require(answer==native_answer,'complete original/native lifecycle difference: '+spec['name'])
             actual=counts(target,process)
             for key in report['counts']:report['counts'][key]+=actual[key]
@@ -199,7 +221,7 @@ def execute(binary,output,*,side='native',retained=None,native_binary=None,defer
             report['completed'].append(dict(name=spec['name'],counts=actual,
                 projection_sha256=sha(encoded(answer)),observation_sha256=sha(encoded(observations))))
             if spec['domain']=='pending'and spec['case']['protocol']==PROTOCOLS[0]:
-                _,_,raw=pending_evidence.side(spec['case'],target,binary,process,common=common)
+                raw=raw_capture['pending']
                 report['controls'] += [dict(case=spec['name'],**x)for x in pending_evidence.controls(spec['case'],raw)]
             # The completed process, full wire and semantic snapshots have all
             # been checked above. Preserve those captures before retiring only

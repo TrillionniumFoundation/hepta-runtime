@@ -117,7 +117,7 @@ def verify_capture(folder, case, process, binary, paired, *, retained_common=Non
     return b''.join(wires),logical,eof,counts
 
 
-def verify(folder, native, original=None):
+def verify(folder, native, original=None, *, projections=None):
     folder=Path(folder).resolve(strict=True)
     report=json.loads((folder/'result.json').read_bytes())
     fixtures=json.loads(gzip.decompress(Path(__file__).with_name('normal.json.gz').read_bytes()))
@@ -147,5 +147,8 @@ def verify(folder, native, original=None):
         assert len(answers)==1 or answers[0]==answers[1]
         assert report['completed'][index]==dict(name=case['name'],requests=len(case['events']),
             normalized_wire_bytes=len(answers[0][0]),normalized_wire_sha256=q.H(answers[0][0]),**answers[0][3])
+        if projections is not None:
+            assert index not in projections
+            projections[index]=answers[0]
     return dict(report=pin(folder/'result.json'),native_processes=64,original_processes=expected_original,
                 requests_per_implementation=359,new_executions=0,full_raw_projections_reconstructed=True)

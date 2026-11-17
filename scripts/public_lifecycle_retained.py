@@ -15,6 +15,44 @@ LIFECYCLE = 'public-lifecycle-native/lifecycle'
 MANIFEST = 'build/public-lifecycle/build.json'
 
 
+class NativeProof:
+    """One process's complete native proof; never deserialized or trusted from disk.
+
+    Reuse still runs every source, build, completion, seal and capture byte check.
+    Only deterministic semantic reconstruction of those identical bytes is reused.
+    The default standalone admission always reconstructs the full native domain.
+    """
+    def __init__(self):
+        self._key = self._evidence = self._build = self._directories = None
+        self._normal = {}
+        self._lifecycle = {}
+
+    def checked(self):
+        require(self._key is not None, 'native proof has not completed admission')
+        path, digest, invocation, root, manifest = self._key
+        return admit(path, digest, invocation, root, manifest, proof=self)
+
+    def build(self):
+        require(self._evidence is not None, 'native build has no completed proof')
+        return self._build
+
+    def normal(self, index):
+        require(self._evidence is not None and set(self._normal) == set(range(64)),
+                'complete normal projections are not available')
+        return self._normal[index]
+
+    def lifecycle(self, root, folder, binary):
+        require(self._key is not None, 'native lifecycle has no completed proof')
+        path, _, _, source, manifest = self._key
+        require(Path(root).resolve(strict=True) == source
+            and Path(folder).resolve(strict=True) == path.parent/LIFECYCLE
+            and Path(binary).resolve(strict=True) == manifest.parent/self._build['executable'],
+            'native lifecycle proof belongs to another input')
+        evidence = self.checked()
+        require(len(self._lifecycle) == 22, 'complete lifecycle projections are not available')
+        return evidence['lifecycle'], self._lifecycle
+
+
 def pin(path):
     raw = regular(path)
     return dict(bytes=len(raw), sha256=sha(raw))
@@ -29,6 +67,34 @@ def obj(path):
 def write_new(path, value):
     with Path(path).open('xb') as stream:
         stream.write(encoded(value))
+
+
+def directory_inventory(folder):
+    """Bind empty directories too; file digests alone cannot prove retirement."""
+    folder = Path(folder).resolve(strict=True)
+    result = []
+    for path in sorted(folder.rglob('*')):
+        require(not path.is_symlink(), 'unexpected retained symlink')
+        if path.is_dir():result.append(path.relative_to(folder).as_posix())
+    return result
+
+
+def retired_native_paths(output):
+    for index in range(64):
+        case = output/FOLDER/('case-%03d'%index)
+        require(not os.path.lexists(case/'native/final-state')
+                and not os.path.lexists(case/'common/state'),
+                'normal native fixture was not retired')
+    plan = json.loads(regular(output/LIFECYCLE/'declared-cases.json'))
+    require(type(plan) is list and len(plan) == 22, 'native lifecycle plan changed')
+    for row in plan:
+        name = row['name']
+        require(type(name) is str and name not in ('', '.', '..') and '/' not in name,
+                'unconfined native lifecycle case')
+        case = output/LIFECYCLE/name
+        require(not os.path.lexists(case/'common/state')
+                and not any(p.name.startswith('final-') for p in (case/'native').iterdir()),
+                'lifecycle native fixture was not retired')
 
 
 def current_invocation(invocation):
@@ -133,10 +199,14 @@ def context_evidence(admission, output):
     return dict(mode=context['mode'], phase=pin(path))
 
 
-def admit(path, expected_sha256, invocation, root, manifest, *, execution=False):
+def admit(path, expected_sha256, invocation, root, manifest, *, execution=False, proof=None):
     from hia_native_public_lifecycle_qualification import verify_build, normal_evidence, lifecycle_evidence, inventory, test_commands
     from hia_native_public_registry_qualification import completed
     path, root, manifest = (Path(p).resolve(strict=True) for p in (path, root, manifest))
+    require(proof is None or type(proof) is NativeProof, 'native proof must be process-local')
+    key = (path, expected_sha256, invocation, root, manifest)
+    reused = proof is not None and proof._evidence is not None
+    require(not reused or proof._key == key, 'native proof identity changed')
     output = path.parent
     require(path.name == ADMISSION and manifest == output/MANIFEST,
             'native admission or manifest is outside the current output')
@@ -172,9 +242,23 @@ def admit(path, expected_sha256, invocation, root, manifest, *, execution=False)
     captures = {branch+'/'+name:digest for branch in (FOLDER,LIFECYCLE)
                 for name,digest in inventory(output/branch).items()}
     require(captures == value['captures'], 'complete native capture inventory changed')
+    directories = {branch:directory_inventory(output/branch) for branch in (FOLDER,LIFECYCLE)}
+    retired_native_paths(output)
+    require(not reused or directories == proof._directories,
+            'native directory topology changed after complete admission')
     native = manifest.parent/built['executable']
-    reconstructed = normal_evidence(root, output/FOLDER, native)
-    finite = lifecycle_evidence(root, output/LIFECYCLE, native)
+    normal_projections, lifecycle_projections = {}, {}
+    if reused:
+        # The complete inventory, current external seal and actual build above
+        # must match the proof that produced these process-local projections.
+        require(value['captures'] == proof._evidence['captures'] and built == proof._build,
+                'native proof bytes or build changed')
+        reconstructed, finite = proof._evidence['normal'], proof._evidence['lifecycle']
+    else:
+        reconstructed = normal_evidence(root, output/FOLDER, native,
+            projections=normal_projections if proof is not None else None)
+        finite = lifecycle_evidence(root, output/LIFECYCLE, native,
+            projections=lifecycle_projections if proof is not None else None)
     evidence = value['native_evidence']
     require(evidence['sources'] == value['sources'] and evidence['native_processes'] == 86
             and evidence['native_requests'] == 707 and evidence['original_processes'] == 0,
@@ -187,7 +271,18 @@ def admit(path, expected_sha256, invocation, root, manifest, *, execution=False)
     require(native_result['normal'] == reconstructed and native_result['lifecycle']==finite
             and sha(regular(output/'public-lifecycle-native/result.json')) == evidence['native_result_sha256'],
             'complete native normal domain differs from its completed phase')
-    return dict(admission=pin(path), invocation=invocation, context=context,
+    result = dict(admission=pin(path), invocation=invocation, context=context,
         native_evidence=evidence, normal=reconstructed, lifecycle=finite, captures=captures,
         retained_native_processes=86, retained_native_requests=707,
         native_processes_executed_by_original_recipe=0, new_executions_in_admission=0)
+    require({branch:directory_inventory(output/branch) for branch in (FOLDER,LIFECYCLE)} == directories,
+            'native directories changed during complete admission')
+    retired_native_paths(output)
+    if reused:
+        require(result == proof._evidence, 'completed native evidence changed')
+    elif proof is not None:
+        require(set(normal_projections) == set(range(64)) and len(lifecycle_projections) == 22,
+                'native reconstruction did not complete both domains')
+        proof._key, proof._evidence, proof._build, proof._directories = key, result, built, directories
+        proof._normal, proof._lifecycle = normal_projections, lifecycle_projections
+    return result

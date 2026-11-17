@@ -32227,6 +32227,9 @@ pf_global:
     mov [rax], rdx
     mov [rax + 8], rbx
     mov [rbx + PF_GLOBAL_SLOT], rax
+    mov rdi, rax
+    call scheduler_pf_initialize
+    mov rax, [rbx + PF_GLOBAL_SLOT]
 pf_global_existing:
     cmp [rax + 8], rbx
     jne ap_contract
@@ -32391,6 +32394,8 @@ pf_create_linked:
     mov [r12 + PF_G_TAIL], r14
     add qword ptr [r12 + PF_G_COUNT], 1
     jc ap_contract
+    mov rdi, r14
+    call scheduler_pf_register
     mov rax, r14
     pf_epilogue
 
@@ -32402,6 +32407,7 @@ pf_retire_task:
     je internal_task_retire
     pf_prologue
     mov r14, rdi
+    call scheduler_pf_retire
     cmp qword ptr [r14 + PF_T_STATE], 2
     jne ap_contract
     mov r12, [r14 + PF_T_GLOBAL]
@@ -32509,6 +32515,7 @@ pf_destroy:
     or rax, [rdi + PI_G_COUNT]
     or rax, [rdi + PI_G_UNSPAWNED]
     jnz ap_contract
+    call scheduler_pf_destroy
     mov qword ptr [rbx + PF_GLOBAL_SLOT], 0
     mov esi, PF_GLOBAL_BYTES + 4096
     mov eax, 11
@@ -32670,60 +32677,7 @@ pf_pool_workspace_local:
 # SPDX-License-Identifier: Apache-2.0
 # One complete round; callbacks execute on their own guarded continuations.
 pf_drive_round:
-    pf_prologue
-    mov r15, rdi
-    mov r12, [r15 + PF_GLOBAL_SLOT]
-    mov r13, [r12 + PF_G_HEAD]
-pf_round_next:
-    test r13, r13
-    jz pf_round_done
-    mov r14, [r13 + PF_T_NEXT]
-    cmp [r13 + PF_T_GLOBAL], r12
-    jne ap_contract
-    cmp qword ptr [r13 + PI_T_KIND], 1
-    jne pit_round_public
-    cmp qword ptr [r13 + PF_T_STATE], 0
-    je pf_round_advance
-    cmp qword ptr [r13 + PF_T_STATE], 3
-    je pf_round_retire
-pit_round_public:
-    cmp qword ptr [r13 + PF_T_STATE], 1
-    jne ap_contract
-    cmp qword ptr [r12 + PF_G_CURRENT], 0
-    jne ap_contract
-    mov [r12 + PF_G_CURRENT], r13
-    lea rdi, [r12 + PF_G_SWITCH]
-    lea rsi, [r13 + PF_T_SWITCH]
-    call pf_switch
-    cmp [r12 + PF_G_CURRENT], r13
-    jne ap_contract
-    mov qword ptr [r12 + PF_G_CURRENT], 0
-    cmp qword ptr [r13 + PF_T_STATE], 2
-    je pf_round_retire
-    cmp qword ptr [r13 + PF_T_STATE], 1
-    jne ap_contract
-    cmp qword ptr [r13 + PI_T_KIND], 1
-    jne pit_round_public_wait
-    mov rax, [r13 + PI_T_WAIT]
-    sub rax, 1
-    cmp rax, 1
-    ja ap_contract
-    jmp pf_round_advance
-pit_round_public_wait:
-    mov rax, [r13 + PF_T_ROOT]
-    mov rax, [rax + AP_SLOT]
-    cmp qword ptr [rax + 72], 1
-    jne ap_contract
-    jmp pf_round_advance
-pf_round_retire:
-    mov rdi, r13
-    call pf_retire_task
-pf_round_advance:
-    mov r13, r14
-    jmp pf_round_next
-pf_round_done:
-    xor eax, eax
-    pf_epilogue
+    jmp scheduler_pf_drive_round
 
 # The canonical input parser and HIA connection/pool owners are never copied.
 # This is a cooperative fixed poll loop, not a claim of Tokio scheduler identity.
@@ -36342,9 +36296,9 @@ paj_runtime_abandoned:
     jmp ph_runtime_aborted
 
 .balign 8
-# Finite qualification setting, not production512 saturation evidence.
+# Original ordinary blocking defaults; saturation remains independently unqualified.
 paj_pool_config:
-    .quad 0x3130464350425248, 2, 60000000000, 10485760, 65536, 0, 0, 0
+    .quad 0x3130464350425248, 512, 10000000000, 10485760, 65536, 0, 0, 0
 
 paj_tk_async_observation_call:
     cmp rdx, tk_ASY_CALL_INPUT_CAP
@@ -36931,6 +36885,8 @@ internal_task_yield_once:
     cmp qword ptr [rbx + PI_T_WAIT], 0
     jne ap_contract
     mov qword ptr [rbx + PI_T_WAIT], 2
+    mov rdi, rbx
+    call scheduler_pf_defer_task
     call pf_suspend
     cmp qword ptr [rbx + PI_T_WAIT], 2
     jne ap_contract
@@ -37035,6 +36991,14 @@ pit_shutdown_next:
     cmp qword ptr [rdx + PF_T_STATE], 1
     jne ap_contract
     mov qword ptr [rdx + PI_T_SHUTDOWN], 1
+    push rdx
+    sub rsp, 8
+    mov rdi, [rdx + SPF_T_WAKER]
+    xor esi, esi
+    xor edx, edx
+    call cooperative_scheduler_notify
+    add rsp, 8
+    pop rdx
 pit_shutdown_advance:
     mov rdx, [rdx + PF_T_NEXT]
     jmp pit_shutdown_next
@@ -37272,6 +37236,8 @@ pit_spawn_transferred:
     mov qword ptr [rbx + PF_T_STATE], 1
     sub qword ptr [r12 + PI_G_UNSPAWNED], 1
     jc ap_contract
+    mov rdi, rbx
+    call scheduler_pf_register
     xor eax, eax
     jmp pit_spawn_done
 pit_spawn_closed:
@@ -37698,6 +37664,7 @@ internal_health_drop:
 internal_task_retire:
     pf_prologue
     mov r14, rdi
+    call scheduler_pf_retire
     cmp qword ptr [r14 + PI_T_KIND], 1
     jne ap_contract
     cmp qword ptr [r14 + PF_T_STATE], 2
@@ -39678,6 +39645,8 @@ asam_poll_pending:
     cmp [r12 + 304], rax
     jne asam_fatal
     mov qword ptr [r12 + 56], 1
+    mov rdi, r12
+    call scheduler_admission_register
     mov ebx, 0xfffffff1
 asam_poll_publish:
     mov rdi, r13
@@ -39737,6 +39706,8 @@ asam_drop_unlinked:
     call asam_pump_wakes
     lea rdi, [r13 + 64]
     call asam_unlock
+    mov rdi, r12
+    call scheduler_admission_drop
     mov rdi, [r12 + 80]
     mov qword ptr [r12 + 80], -1
     mov eax, 3
@@ -39794,12 +39765,16 @@ asam_pump_signal:
     mov eax, 1
     syscall
     cmp rax, 8
-    je asam_pump_next
+    je asam_pump_scheduler_wake
     cmp rax, -11
-    je asam_pump_next
+    je asam_pump_scheduler_wake
     cmp rax, -4
     je asam_pump_signal
     jmp asam_fatal
+asam_pump_scheduler_wake:
+    mov rdi, r12
+    call scheduler_admission_wake
+    jmp asam_pump_next
 asam_pump_advance:
     mov r12, [r12 + 64]
     jmp asam_pump_find
@@ -40112,10 +40087,7 @@ start_admission_reply:
 start_admission_return:
     fpc_leave
 start_admission_poll:
-    mov rdi, [rdi + ST_CALL_WAITER]
-    test rdi, rdi
-    jz ap_contract
-    jmp async_admission_poll_waiter
+    jmp scheduler_start_admission_poll
 start_admission_drop:
     mov rax, [rdi + ST_CALL_WAITER]
     mov qword ptr [rdi + ST_CALL_WAITER], 0
@@ -43243,5 +43215,1726 @@ fence_slash:
     .asciz "/"
 
 # END PUBLIC ASYNC BRIDGE V1
+
+# Serialized scheduler-thread owner. Waker callbacks are fixed link-time symbols.
+.equ CDF_CONTEXT_MAGIC, 0x3130435446444348
+.equ CDF_REQUEST_MAGIC, 0x3130514644435248
+.equ CDF_REPLY_MAGIC, 0x3130524644435248
+.equ CDF_WORK_MAGIC, 0x3130574644435248
+.equ CDF_ACTION_MAGIC, 0x3130414644435248
+.equ CDF_COMPLETE_MAGIC, 0x31304f4344435248
+.macro cdf_enter
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 72
+.endm
+.macro cdf_leave
+    add rsp, 72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+# create(hook_owner, never-reused positive generation) -> context or zero.
+cooperative_defer_create:
+    cdf_enter
+    mov r14, rdi
+    mov r13, rsi
+    test r14, r14
+    jz cdf_create_failed
+    test r13, r13
+    jz cdf_create_failed
+    mov edi, 4096
+    call cdf_allocate
+    test rax, rax
+    jz cdf_create_failed
+    mov r12, rax
+    mov edi, 536
+    call cdf_allocate
+    test rax, rax
+    jz cdf_create_free
+    mov [r12 + 16], rax
+    mov qword ptr [r12 + 24], 536
+    mov [r12 + 8], r13
+    mov [r12 + 40], r14
+    mov eax, 186
+    syscall
+    test rax, rax
+    jle cdf_fatal
+    mov [r12 + 32], rax
+    movabs rax, CDF_CONTEXT_MAGIC
+    mov [r12], rax
+    mov rdi, rsp
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, CDF_REQUEST_MAGIC
+    mov [rsp], rax
+    mov [rsp + 16], r13
+    mov rdi, r12
+    mov rsi, rsp
+    mov edx, 64
+    lea rcx, [r12 + 128]
+    mov r8d, 64
+    call cooperative_defer_call
+    cmp rax, 64
+    jne cdf_fatal
+    mov rax, r12
+    cdf_leave
+cdf_create_free:
+    mov rdi, r12
+    mov esi, 4096
+    call cdf_unmap
+cdf_create_failed:
+    xor eax, eax
+    cdf_leave
+
+# call(context, borrowed request64, length, reply64, capacity) -> unchanged HIA code.
+# The callback owner is borrowed until destroy returns. Calls stay on creator TID.
+cooperative_defer_call:
+    cdf_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rcx
+    cmp r8, 64
+    jb cdf_call_capacity
+    cmp rdx, 64
+    jne cdf_call_invalid
+    test r12, r12
+    jz cdf_call_invalid
+    test r13, r13
+    jz cdf_call_invalid
+    test r14, r14
+    jz cdf_call_invalid
+    movabs rax, CDF_CONTEXT_MAGIC
+    cmp [r12], rax
+    jne cdf_call_invalid
+    mov eax, 186
+    syscall
+    cmp [r12 + 32], rax
+    jne cdf_call_invalid
+    cmp qword ptr [r12 + 48], 0
+    jne cdf_call_invalid
+    mov rax, [r13 + 16]
+    cmp rax, [r12 + 8]
+    jne cdf_call_invalid
+    mov rdi, rsp
+    mov rsi, r13
+    mov ecx, 8
+    cld
+    rep movsq
+    mov qword ptr [r12 + 48], 1
+cdf_call_again:
+    mov rdi, rsp
+    mov esi, 64
+    lea rdx, [r12 + 128]
+    mov ecx, 64
+    mov r8, [r12 + 16]
+    mov r9, [r12 + 24]
+    call cdf_invoke
+    add qword ptr [r12 + 56], 1
+    jc cdf_fatal
+    mov edx, eax
+    cmp rax, rdx
+    jne cdf_fatal
+    cmp eax, 0xfffffff0
+    je cdf_call_effect
+    cmp eax, 0xfffffffd
+    je cdf_call_grow
+    cmp eax, 64
+    je cdf_call_success
+    cmp eax, 0xffffffff
+    je cdf_call_return_code
+    cmp eax, 0xfffffffe
+    jne cdf_fatal
+cdf_call_return_code:
+    mov qword ptr [r12 + 48], 0
+    cdf_leave
+cdf_call_success:
+    movabs rax, CDF_REPLY_MAGIC
+    cmp [r12 + 128], rax
+    jne cdf_fatal
+    mov rax, [r12 + 136]
+    cmp rax, [r12 + 8]
+    jne cdf_fatal
+    mov rax, [r12 + 144]
+    cmp rax, [rsp + 8]
+    jne cdf_fatal
+    cmp qword ptr [r12 + 184], 0
+    jne cdf_fatal
+    mov rdi, r14
+    lea rsi, [r12 + 128]
+    mov ecx, 8
+    rep movsq
+    mov eax, 64
+    jmp cdf_call_return_code
+cdf_call_capacity:
+    mov eax, 0xfffffffe
+    cdf_leave
+cdf_call_invalid:
+    mov eax, 0xffffffff
+    cdf_leave
+
+cdf_call_effect:
+    mov r15, [r12 + 16]
+    movabs rax, CDF_ACTION_MAGIC
+    cmp [r15 + 256], rax
+    jne cdf_fatal
+    mov rax, [r15 + 264]
+    cmp rax, [r15 + 24]
+    jne cdf_fatal
+    mov rax, [r15 + 272]
+    cmp rax, [r12 + 8]
+    jne cdf_fatal
+    mov rax, [r15 + 280]
+    cmp rax, 1
+    jb cdf_fatal
+    cmp rax, 3
+    ja cdf_fatal
+    cmp qword ptr [r15 + 312], 0
+    jne cdf_fatal
+    lea rdi, [r15 + 128]
+    mov rsi, rsp
+    mov ecx, 8
+    repe cmpsq
+    jne cdf_fatal
+    lea rdi, [r12 + 192]
+    lea rsi, [r15 + 256]
+    mov ecx, 8
+    rep movsq
+    mov qword ptr [r12 + 256], 0
+    mov qword ptr [r12 + 264], 0
+    mov qword ptr [r12 + 272], 0
+    mov rdi, [r12 + 40]
+    mov rsi, [r12 + 224]
+    mov rdx, [r12 + 232]
+    mov rcx, [r12 + 240]
+    cmp qword ptr [r12 + 216], 1
+    je cdf_effect_clone
+    cmp qword ptr [r12 + 216], 2
+    je cdf_effect_wake
+    call cooperative_waker_drop
+    jmp cdf_effect_return
+cdf_effect_clone:
+    lea r8, [r12 + 256]
+    call cooperative_waker_clone
+    jmp cdf_effect_return
+cdf_effect_wake:
+    call cooperative_waker_wake
+cdf_effect_return:
+    test rax, rax
+    jnz cdf_fatal
+    add qword ptr [r12 + 72], 1
+    jc cdf_fatal
+    lea rdi, [r12 + 192]
+    lea rsi, [r15 + 256]
+    mov ecx, 8
+    repe cmpsq
+    jne cdf_fatal
+    lea rdi, [r15 + 320]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, CDF_COMPLETE_MAGIC
+    mov [r15 + 320], rax
+    mov rax, [r12 + 200]
+    mov [r15 + 328], rax
+    mov rax, [r12 + 8]
+    mov [r15 + 336], rax
+    mov rax, [r12 + 216]
+    mov [r15 + 344], rax
+    cmp rax, 1
+    jne cdf_call_again
+    cmp qword ptr [r12 + 264], 0
+    je cdf_fatal
+    cmp qword ptr [r12 + 272], 0
+    je cdf_fatal
+    lea rdi, [r15 + 352]
+    lea rsi, [r12 + 256]
+    mov ecx, 3
+    rep movsq
+    jmp cdf_call_again
+
+cdf_call_grow:
+    mov rbx, [r12 + 24]
+    lea rbp, [rbx + rbx]
+    mov edx, 0xffffffff
+    cmp rbp, rdx
+    jae cdf_fatal
+    mov r15, [r12 + 16]
+    mov rdi, rbp
+    call cdf_allocate
+    test rax, rax
+    jz cdf_fatal
+    mov [r12 + 16], rax
+    mov [r12 + 24], rbp
+    mov rdi, rax
+    mov rsi, r15
+    mov rcx, rbx
+    rep movsb
+    mov rdi, r15
+    mov rsi, rbx
+    call cdf_unmap
+    add qword ptr [r12 + 64], 1
+    jc cdf_fatal
+    jmp cdf_call_again
+
+# destroy requires the same owning thread, with all external callers stopped.
+# All remaining owned Wakers are dropped by the unchanged HIA before unmapping.
+cooperative_defer_destroy:
+    cdf_enter
+    mov r12, rdi
+    test r12, r12
+    jz cdf_call_invalid
+    movabs rax, CDF_CONTEXT_MAGIC
+    cmp [r12], rax
+    jne cdf_call_invalid
+    mov eax, 186
+    syscall
+    cmp [r12 + 32], rax
+    jne cdf_call_invalid
+    cmp qword ptr [r12 + 48], 0
+    jne cdf_call_invalid
+    mov rbx, [r12 + 16]
+    cmp qword ptr [rbx], 0
+    je cdf_destroy_closed
+    movabs rax, CDF_WORK_MAGIC
+    cmp [rbx], rax
+    jne cdf_fatal
+    mov rdi, rsp
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, CDF_REQUEST_MAGIC
+    mov [rsp], rax
+    mov qword ptr [rsp + 8], 4
+    mov rax, [r12 + 8]
+    mov [rsp + 16], rax
+    mov rdi, r12
+    mov rsi, rsp
+    mov edx, 64
+    lea rcx, [r12 + 128]
+    mov r8d, 64
+    call cooperative_defer_call
+    cmp rax, 64
+    jne cdf_fatal
+    mov rbx, [r12 + 16]
+cdf_destroy_closed:
+    mov rax, [rbx]
+    or rax, [rbx + 16]
+    or rax, [rbx + 32]
+    or rax, [rbx + 40]
+    jnz cdf_fatal
+    mov rax, [rbx + 8]
+    cmp rax, [r12 + 8]
+    jne cdf_fatal
+    mov qword ptr [r12], 0
+    mov rdi, rbx
+    mov rsi, [r12 + 24]
+    mov qword ptr [r12 + 16], 0
+    call cdf_unmap
+    mov rdi, r12
+    mov esi, 4096
+    call cdf_unmap
+    xor eax, eax
+    cdf_leave
+
+# Guarded anonymous mappings; no Rust/libc/Python dependency in these functions.
+cdf_allocate:
+    push rbx
+    push r12
+    push r13
+    lea r12, [rdi + 4095]
+    and r12, -4096
+    lea r13, [r12 + 4096]
+    xor edi, edi
+    mov rsi, r13
+    mov edx, 3
+    mov r10d, 0x22
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    cmp rax, -4095
+    jae cdf_allocate_failed
+    mov rbx, rax
+    lea rdi, [rbx + r12]
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    jnz cdf_allocate_release
+    mov rax, rbx
+    jmp cdf_allocate_done
+cdf_allocate_release:
+    mov rdi, rbx
+    mov rsi, r13
+    mov eax, 11
+    syscall
+cdf_allocate_failed:
+    xor eax, eax
+cdf_allocate_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+cdf_unmap:
+    add rsi, 4095
+    and rsi, -4096
+    add rsi, 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz cdf_fatal
+    ret
+cdf_invoke:
+    .byte 0x48, 0xb8
+scheduler_defer_image_slot:
+    .quad 0
+    call rax
+    ret
+cdf_fatal:
+    mov edi, 70
+    mov eax, 231
+    syscall
+    ud2
+
+# Exact borrowed HIA budget owner. This boundary only owns private memory.
+.equ CBG_MAGIC, 0x3130544342435248
+.equ CBG_REQUEST, 0x3130305142435248
+.equ CBG_REPLY, 0x3130305242435248
+.macro cbg_enter
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 72
+.endm
+.macro cbg_leave
+    add rsp, 72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+# create(positive generation) -> context or zero; no TLS replacement.
+cooperative_budget_create:
+    cbg_enter
+    mov r13, rdi
+    test r13, r13
+    jz cbg_create_failed
+    mov edi, 4096
+    call cdf_allocate
+    test rax, rax
+    jz cbg_create_failed
+    mov r12, rax
+    mov edi, 320
+    call cdf_allocate
+    test rax, rax
+    jz cbg_create_free
+    mov [r12 + 16], rax
+    mov qword ptr [r12 + 24], 320
+    mov [r12 + 8], r13
+    mov eax, 186
+    syscall
+    test rax, rax
+    jle cdf_fatal
+    mov [r12 + 32], rax
+    movabs rax, CBG_MAGIC
+    mov [r12], rax
+    mov rdi, rsp
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, CBG_REQUEST
+    mov [rsp], rax
+    mov [rsp + 16], r13
+    mov rdi, r12
+    mov rsi, rsp
+    mov edx, 64
+    lea rcx, [r12 + 192]
+    mov r8d, 80
+    call cooperative_budget_call
+    cmp rax, 80
+    jne cdf_fatal
+    mov rax, r12
+    cbg_leave
+cbg_create_free:
+    mov rdi, r12
+    mov esi, 4096
+    call cdf_unmap
+cbg_create_failed:
+    xor eax, eax
+    cbg_leave
+
+# call(context, request64, length, output80, capacity) -> HIA result.
+# Input is copied before entry; caller storage is never used as scratch.
+cooperative_budget_call:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rcx
+    cmp r8, 80
+    jb cbg_capacity
+    cmp rdx, 64
+    jne cbg_invalid
+    test r12, r12
+    jz cbg_invalid
+    test r13, r13
+    jz cbg_invalid
+    test r14, r14
+    jz cbg_invalid
+    movabs rax, CBG_MAGIC
+    cmp [r12], rax
+    jne cbg_invalid
+    mov eax, 186
+    syscall
+    cmp [r12 + 32], rax
+    jne cbg_invalid
+    cmp qword ptr [r12 + 40], 0
+    jne cbg_invalid
+    mov rax, [r13 + 16]
+    cmp rax, [r12 + 8]
+    jne cbg_invalid
+    mov rdi, rsp
+    mov rsi, r13
+    mov ecx, 8
+    cld
+    rep movsq
+    mov qword ptr [r12 + 40], 1
+cbg_again:
+    mov rdi, rsp
+    mov esi, 64
+    lea rdx, [r12 + 192]
+    mov ecx, 80
+    mov r8, [r12 + 16]
+    mov r9, [r12 + 24]
+    call cbg_invoke
+    add qword ptr [r12 + 48], 1
+    jc cdf_fatal
+    mov edx, eax
+    cmp rax, rdx
+    jne cdf_fatal
+    cmp eax, 0xfffffffd
+    je cbg_grow
+    cmp eax, 80
+    je cbg_success
+    cmp eax, 0xffffffff
+    je cbg_return
+    cmp eax, 0xfffffffe
+    jne cdf_fatal
+cbg_return:
+    mov qword ptr [r12 + 40], 0
+    cbg_leave
+cbg_success:
+    movabs rax, CBG_REPLY
+    cmp [r12 + 192], rax
+    jne cdf_fatal
+    cmp qword ptr [r12 + 200], 1
+    ja cdf_fatal
+    mov rax, [r12 + 208]
+    cmp rax, [r12 + 8]
+    jne cdf_fatal
+    mov rax, [r12 + 256]
+    or rax, [r12 + 264]
+    jnz cdf_fatal
+    mov rdi, r14
+    lea rsi, [r12 + 192]
+    mov ecx, 10
+    rep movsq
+    mov eax, 80
+    jmp cbg_return
+cbg_capacity:
+    mov eax, 0xfffffffe
+    cbg_leave
+cbg_invalid:
+    mov eax, 0xffffffff
+    cbg_leave
+cbg_grow:
+    mov r15, [r12 + 24]
+    cmp r15, 0x7fffffff
+    ja cdf_fatal
+    mov rdi, r15
+    shl rdi, 1
+    call cdf_allocate
+    test rax, rax
+    jz cdf_fatal
+    mov rbx, rax
+    mov rdi, rax
+    mov rsi, [r12 + 16]
+    mov rcx, r15
+    rep movsb
+    mov rdi, [r12 + 16]
+    mov rsi, r15
+    mov [r12 + 16], rbx
+    shl r15, 1
+    mov [r12 + 24], r15
+    call cdf_unmap
+    add qword ptr [r12 + 56], 1
+    jc cdf_fatal
+    jmp cbg_again
+
+# Requires all actual scopes and RestoreOnPending guards already dropped.
+cooperative_budget_destroy:
+    cbg_enter
+    mov r12, rdi
+    test r12, r12
+    jz cbg_destroy_invalid
+    movabs rax, CBG_MAGIC
+    cmp [r12], rax
+    jne cbg_destroy_invalid
+    mov eax, 186
+    syscall
+    cmp [r12 + 32], rax
+    jne cbg_destroy_invalid
+    cmp qword ptr [r12 + 40], 0
+    jne cbg_destroy_invalid
+    mov rdi, rsp
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, CBG_REQUEST
+    mov [rsp], rax
+    mov qword ptr [rsp + 8], 9
+    mov rax, [r12 + 8]
+    mov [rsp + 16], rax
+    mov rdi, r12
+    mov rsi, rsp
+    mov edx, 64
+    lea rcx, [r12 + 192]
+    mov r8d, 80
+    call cooperative_budget_call
+    cmp rax, 80
+    jne cbg_destroy_done
+    mov rdi, [r12 + 16]
+    mov rsi, [r12 + 24]
+    mov qword ptr [r12 + 16], 0
+    call cdf_unmap
+    mov qword ptr [r12], 0
+    mov rdi, r12
+    mov esi, 4096
+    call cdf_unmap
+    xor eax, eax
+cbg_destroy_done:
+    cbg_leave
+cbg_destroy_invalid:
+    mov eax, 0xffffffff
+    cbg_leave
+cbg_invoke:
+    .byte 0x48, 0xb8
+scheduler_budget_image_slot:
+    .quad 0
+    call rax
+    ret
+
+# One physical scheduler-thread execution context; no TLS replacement.
+.equ SCS_MAGIC, 0x3130544353435248
+.equ SCS_REQUEST, 0x3130305153435248
+.equ SCS_REPLY, 0x3130305253435248
+.equ SCS_CELL_MAGIC, 0x3130304b57535248
+.macro scs_request operation
+    lea rdi, [r12 + 128]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, SCS_REQUEST
+    mov [r12 + 128], rax
+    mov qword ptr [r12 + 136], \operation
+    mov rax, [r12 + 8]
+    mov [r12 + 144], rax
+.endm
+.macro scs_budget_request operation
+    lea rdi, [r12 + 288]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, CBG_REQUEST
+    mov [r12 + 288], rax
+    mov qword ptr [r12 + 296], \operation
+    mov rax, [r12 + 8]
+    mov [r12 + 304], rax
+.endm
+.macro scs_defer_request operation
+    lea rdi, [r12 + 432]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    movabs rax, CDF_REQUEST_MAGIC
+    mov [r12 + 432], rax
+    mov qword ptr [r12 + 440], \operation
+    mov rax, [r12 + 8]
+    mov [r12 + 448], rax
+.endm
+
+# create(generation, mode 1 current-thread / 2 one multi-thread local worker).
+cooperative_scheduler_create:
+    cbg_enter
+    mov r13, rdi
+    mov r14, rsi
+    test r13, r13
+    jz scs_create_failed
+    sub rsi, 1
+    cmp rsi, 1
+    ja scs_create_failed
+    mov edi, 4096
+    call cdf_allocate
+    test rax, rax
+    jz scs_create_failed
+    mov r12, rax
+    mov [r12 + 8], r13
+    mov [r12 + 112], r14
+    mov qword ptr [r12 + 104], -1
+    movabs rax, SCS_MAGIC
+    mov [r12], rax
+    mov eax, 186
+    syscall
+    test rax, rax
+    jle cdf_fatal
+    mov [r12 + 32], rax
+    mov edi, 576
+    call cdf_allocate
+    test rax, rax
+    jz cdf_fatal
+    mov [r12 + 16], rax
+    mov qword ptr [r12 + 24], 576
+    mov rdi, r13
+    call cooperative_budget_create
+    test rax, rax
+    jz cdf_fatal
+    mov [r12 + 48], rax
+    mov rdi, r12
+    mov rsi, r13
+    call cooperative_defer_create
+    test rax, rax
+    jz cdf_fatal
+    mov [r12 + 56], rax
+    xor edi, edi
+    mov esi, 0x80800
+    mov eax, 290
+    syscall
+    test rax, rax
+    js cdf_fatal
+    mov [r12 + 104], rax
+    scs_request 0
+    mov [r12 + 160], r14
+    call scs_policy
+    mov rax, r12
+    cbg_leave
+scs_create_failed:
+    xor eax, eax
+    cbg_leave
+
+scs_validate:
+    test rdi, rdi
+    jz cdf_fatal
+    movabs rax, SCS_MAGIC
+    cmp [rdi], rax
+    jne cdf_fatal
+    mov eax, 186
+    syscall
+    cmp rax, [rdi + 32]
+    jne cdf_fatal
+    ret
+
+# Internal exact frame; all policy runs stay on the creator thread.
+scs_policy:
+    cbg_enter
+    mov rdi, r12
+    call scs_validate
+    cmp qword ptr [r12 + 40], 0
+    jne cdf_fatal
+    mov qword ptr [r12 + 40], 1
+    mov rdi, rsp
+    lea rsi, [r12 + 128]
+    mov ecx, 8
+    rep movsq
+scs_policy_again:
+    mov rdi, rsp
+    mov esi, 64
+    lea rdx, [r12 + 192]
+    mov ecx, 96
+    mov r8, [r12 + 16]
+    mov r9, [r12 + 24]
+    call scs_invoke
+    add qword ptr [r12 + 120], 1
+    jc cdf_fatal
+    cmp eax, 0xfffffffd
+    je scs_policy_grow
+    cmp rax, 96
+    jne cdf_fatal
+    movabs rax, SCS_REPLY
+    cmp [r12 + 192], rax
+    jne cdf_fatal
+    mov rax, [r12 + 208]
+    cmp [r12 + 8], rax
+    jne cdf_fatal
+    mov qword ptr [r12 + 40], 0
+    mov eax, 96
+    cbg_leave
+scs_policy_grow:
+    mov r15, [r12 + 24]
+    cmp r15, 0x7fffffff
+    ja cdf_fatal
+    mov rdi, r15
+    shl rdi, 1
+    call cdf_allocate
+    test rax, rax
+    jz cdf_fatal
+    mov rbx, rax
+    mov rdi, rax
+    mov rsi, [r12 + 16]
+    mov rcx, r15
+    rep movsb
+    mov rdi, [r12 + 16]
+    mov rsi, r15
+    mov [r12 + 16], rbx
+    shl r15, 1
+    mov [r12 + 24], r15
+    call cdf_unmap
+    jmp scs_policy_again
+
+scs_budget:
+    sub rsp, 8
+    mov rdi, [r12 + 48]
+    lea rsi, [r12 + 288]
+    mov edx, 64
+    lea rcx, [r12 + 352]
+    mov r8d, 80
+    call cooperative_budget_call
+    cmp rax, 80
+    jne cdf_fatal
+    add rsp, 8
+    ret
+scs_defer:
+    sub rsp, 8
+    mov rdi, [r12 + 56]
+    lea rsi, [r12 + 432]
+    mov edx, 64
+    lea rcx, [r12 + 496]
+    mov r8d, 64
+    call cooperative_defer_call
+    cmp rax, 64
+    jne cdf_fatal
+    add rsp, 8
+    ret
+
+# register(context, borrowed task cookie, local wake bool) -> owned Waker cell.
+cooperative_scheduler_register:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    call scs_validate
+    test r13, r13
+    jz cdf_fatal
+    cmp r14, 1
+    ja cdf_fatal
+    mov edi, 4096
+    call cdf_allocate
+    test rax, rax
+    jz cdf_fatal
+    mov r15, rax
+    movabs rax, SCS_CELL_MAGIC
+    mov [r15], rax
+    mov [r15 + 8], r12
+    mov [r15 + 24], r13
+    mov qword ptr [r15 + 32], 1
+    mov rax, [r12 + 80]
+    mov [r15 + 48], rax
+    test rax, rax
+    jz scs_register_link
+    mov [rax + 40], r15
+scs_register_link:
+    mov [r12 + 80], r15
+    add qword ptr [r12 + 88], 1
+    jc cdf_fatal
+    scs_request 1
+    mov [r12 + 152], r15
+    mov [r12 + 160], r14
+    call scs_policy
+    cmp [r12 + 224], r15
+    jne cdf_fatal
+    mov rax, [r12 + 216]
+    test rax, rax
+    jz cdf_fatal
+    mov [r15 + 16], rax
+    mov rax, r15
+    cbg_leave
+
+# next(context) -> cell or zero; rdx = 0 selected, 1 idle, 2 batch end.
+# Repeated LIFO polls retain the same real Budget scope token.
+cooperative_scheduler_next:
+    cbg_enter
+    mov r12, rdi
+    call scs_validate
+    cmp qword ptr [r12 + 96], 0
+    jne cdf_fatal
+    cmp qword ptr [r12 + 64], 0
+    je scs_next_begin
+    scs_budget_request 7
+    call scs_budget
+    mov r13, [r12 + 384]
+    cmp r13, 1
+    ja cdf_fatal
+    scs_request 5
+    mov [r12 + 160], r13
+    jmp scs_next_policy
+scs_next_begin:
+    scs_request 3
+scs_next_policy:
+    call scs_policy
+    mov r13, [r12 + 200]
+    cmp r13, 2
+    ja cdf_fatal
+    mov r14, [r12 + 224]
+    cmp qword ptr [r12 + 232], 0
+    je scs_next_check_end
+    cmp qword ptr [r12 + 232], 1
+    jne cdf_fatal
+    cmp qword ptr [r12 + 64], 0
+    jne cdf_fatal
+    test r13, r13
+    jnz cdf_fatal
+    scs_budget_request 1
+    call scs_budget
+    mov rax, [r12 + 376]
+    test rax, rax
+    jz cdf_fatal
+    mov [r12 + 64], rax
+scs_next_check_end:
+    cmp qword ptr [r12 + 240], 0
+    je scs_next_selected
+    cmp qword ptr [r12 + 240], 1
+    jne cdf_fatal
+    cmp r13, 2
+    jne cdf_fatal
+    mov r15, [r12 + 64]
+    test r15, r15
+    jz cdf_fatal
+    scs_budget_request 3
+    mov [r12 + 312], r15
+    call scs_budget
+    mov qword ptr [r12 + 64], 0
+scs_next_selected:
+    test r13, r13
+    jnz scs_next_empty
+    test r14, r14
+    jz cdf_fatal
+    mov rdi, r14
+    call scs_cell_validate
+    cmp [r14 + 8], r12
+    jne cdf_fatal
+    cmp qword ptr [r14 + 56], 0
+    jne cdf_fatal
+    cmp qword ptr [r12 + 64], 0
+    je cdf_fatal
+    mov [r12 + 96], r14
+    mov rax, r14
+    xor edx, edx
+    cbg_leave
+scs_next_empty:
+    test r14, r14
+    jnz cdf_fatal
+    mov rdx, r13
+    xor eax, eax
+    cbg_leave
+
+# finish(context, current cell, actual callback Ready bool).
+cooperative_scheduler_finish:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    call scs_validate
+    mov rdi, r13
+    call scs_cell_validate
+    cmp r14, 1
+    ja cdf_fatal
+    cmp [r12 + 96], r13
+    jne cdf_fatal
+    cmp [r13 + 8], r12
+    jne cdf_fatal
+    scs_request 4
+    mov rax, [r13 + 16]
+    mov [r12 + 152], rax
+    mov [r12 + 160], r14
+    call scs_policy
+    mov qword ptr [r12 + 96], 0
+    xor eax, eax
+    cbg_leave
+
+# proceed(context,current cell) -> Restore guard, or zero Pending.
+# Pending registers the exact task Waker with the real Defer owner.
+cooperative_scheduler_proceed:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    call scs_validate
+    cmp [r12 + 96], r13
+    jne cdf_fatal
+    test r13, r13
+    jz cdf_fatal
+    scs_budget_request 4
+    mov [r12 + 328], r13
+    call scs_budget
+    cmp qword ptr [r12 + 360], 0
+    je scs_proceed_ready
+    cmp qword ptr [r12 + 360], 1
+    jne cdf_fatal
+    cmp [r12 + 408], r13
+    jne cdf_fatal
+    scs_defer_request 1
+    mov [r12 + 456], r13
+    lea rax, [rip + scheduler_waker_table]
+    mov [r12 + 464], rax
+    mov [r12 + 472], r13
+    call scs_defer
+    xor eax, eax
+    cbg_leave
+scs_proceed_ready:
+    mov rax, [r12 + 376]
+    test rax, rax
+    jz cdf_fatal
+    cbg_leave
+
+# Successful work marks progress before dropping its Restore guard.
+cooperative_scheduler_progress:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    call scs_validate
+    test r13, r13
+    jz cdf_fatal
+    scs_budget_request 5
+    mov [r12 + 312], r13
+    call scs_budget
+    scs_budget_request 6
+    mov [r12 + 312], r13
+    call scs_budget
+    xor eax, eax
+    cbg_leave
+cooperative_scheduler_restore:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    call scs_validate
+    test r13, r13
+    jz cdf_fatal
+    scs_budget_request 6
+    mov [r12 + 312], r13
+    call scs_budget
+    xor eax, eax
+    cbg_leave
+
+# Caller first performs the real driver park/yield. No synthetic park receipt.
+cooperative_scheduler_after_park:
+    cbg_enter
+    mov r12, rdi
+    call scs_validate
+    mov rax, [r12 + 64]
+    or rax, [r12 + 96]
+    jnz cdf_fatal
+    scs_defer_request 3
+    call scs_defer
+    xor eax, eax
+    cbg_leave
+
+# Retire only after actual task completion; cloned Wakers keep their own cell.
+cooperative_scheduler_retire:
+    cbg_enter
+    mov r13, rdi
+    call scs_cell_validate
+    mov r12, [r13 + 8]
+    mov rdi, r12
+    call scs_validate
+    cmp [r12 + 96], r13
+    je cdf_fatal
+    cmp qword ptr [r13 + 56], 0
+    jne cdf_fatal
+    scs_request 7
+    mov rax, [r13 + 16]
+    mov [r12 + 152], rax
+    call scs_policy
+    mov qword ptr [r13 + 24], 0
+    mov qword ptr [r13 + 56], 1
+    mov rdi, r13
+    call scs_cell_release
+    xor eax, eax
+    cbg_leave
+
+cooperative_scheduler_destroy:
+    cbg_enter
+    mov r12, rdi
+    call scs_validate
+    mov rax, [r12 + 64]
+    or rax, [r12 + 96]
+    jnz cdf_fatal
+    scs_request 8
+    call scs_policy
+    mov rdi, [r12 + 56]
+    call cooperative_defer_destroy
+    test rax, rax
+    jnz cdf_fatal
+    mov qword ptr [r12 + 56], 0
+    mov rax, [r12 + 80]
+    or rax, [r12 + 88]
+    jnz cdf_fatal
+    mov rdi, [r12 + 48]
+    call cooperative_budget_destroy
+    test rax, rax
+    jnz cdf_fatal
+    mov qword ptr [r12 + 48], 0
+    mov rdi, [r12 + 104]
+    mov qword ptr [r12 + 104], -1
+    mov eax, 3
+    syscall
+    mov rdi, [r12 + 16]
+    mov rsi, [r12 + 24]
+    mov qword ptr [r12 + 16], 0
+    call cdf_unmap
+    mov qword ptr [r12], 0
+    mov rdi, r12
+    mov esi, 4096
+    call cdf_unmap
+    xor eax, eax
+    cbg_leave
+scs_invoke:
+    .byte 0x48, 0xb8
+scheduler_scheduler_image_slot:
+    .quad 0
+    call rax
+    ret
+
+# Actual owned task Wakers. Cells remain live after their task stack retires.
+# This first callable is confined to its physical worker's creator thread.
+scs_cell_validate:
+    push rbx
+    mov rbx, rdi
+    test rbx, rbx
+    jz cdf_fatal
+    movabs rax, SCS_CELL_MAGIC
+    cmp [rbx], rax
+    jne cdf_fatal
+    cmp qword ptr [rbx + 32], 0
+    je cdf_fatal
+    mov rdi, [rbx + 8]
+    call scs_validate
+    mov rdi, rbx
+    pop rbx
+    ret
+
+cooperative_scheduler_retain:
+    sub rsp, 8
+    call scs_cell_validate
+    lock add qword ptr [rdi + 32], 1
+    jc cdf_fatal
+    mov rax, rdi
+    add rsp, 8
+    ret
+
+cooperative_scheduler_release:
+    jmp scs_cell_release
+scs_cell_release:
+    cbg_enter
+    mov r13, rdi
+    call scs_cell_validate
+    mov r12, [r13 + 8]
+    lock sub qword ptr [r13 + 32], 1
+    jc cdf_fatal
+    jnz scs_cell_release_done
+    cmp qword ptr [r13 + 56], 1
+    jne cdf_fatal
+    cmp qword ptr [r13 + 24], 0
+    jne cdf_fatal
+    mov rax, [r13 + 40]
+    mov rdx, [r13 + 48]
+    test rax, rax
+    jz scs_cell_release_head
+    cmp [rax + 48], r13
+    jne cdf_fatal
+    mov [rax + 48], rdx
+    jmp scs_cell_release_next
+scs_cell_release_head:
+    cmp [r12 + 80], r13
+    jne cdf_fatal
+    mov [r12 + 80], rdx
+scs_cell_release_next:
+    test rdx, rdx
+    jz scs_cell_release_count
+    cmp [rdx + 40], r13
+    jne cdf_fatal
+    mov [rdx + 40], rax
+scs_cell_release_count:
+    sub qword ptr [r12 + 88], 1
+    jc cdf_fatal
+    mov qword ptr [r13], 0
+    mov rdi, r13
+    mov esi, 4096
+    call cdf_unmap
+scs_cell_release_done:
+    xor eax, eax
+    cbg_leave
+
+# notify(cell, yield bool, local bool); state/queue decisions are all HIA.
+cooperative_scheduler_notify:
+    cbg_enter
+    mov r13, rdi
+    mov r14, rsi
+    mov r15, rdx
+    call scs_cell_validate
+    cmp r14, 1
+    ja cdf_fatal
+    cmp r15, 1
+    ja cdf_fatal
+    mov r12, [r13 + 8]
+    scs_request 2
+    mov rax, [r13 + 16]
+    mov [r12 + 152], rax
+    mov [r12 + 160], r14
+    mov [r12 + 168], r15
+    call scs_policy
+    cmp qword ptr [r12 + 232], 0
+    je scs_notify_done
+    cmp qword ptr [r12 + 232], 1
+    jne cdf_fatal
+    mov qword ptr [rsp], 1
+scs_notify_signal:
+    mov rdi, [r12 + 104]
+    mov rsi, rsp
+    mov edx, 8
+    mov eax, 1
+    syscall
+    cmp rax, -4
+    je scs_notify_signal
+    cmp rax, -11
+    je scs_notify_done
+    cmp rax, 8
+    jne cdf_fatal
+scs_notify_done:
+    xor eax, eax
+    cbg_leave
+
+# Defer uses fixed clone/wake/drop hooks, with real cell references.
+cooperative_waker_clone:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov rbx, r8
+    mov rdi, r13
+    call scs_cell_validate
+    cmp [r13 + 8], r12
+    jne cdf_fatal
+    cmp r15, r13
+    jne cdf_fatal
+    lea rax, [rip + scheduler_waker_table]
+    cmp r14, rax
+    jne cdf_fatal
+    test rbx, rbx
+    jz cdf_fatal
+    mov rdi, r13
+    call cooperative_scheduler_retain
+    mov [rbx], r13
+    mov [rbx + 8], r14
+    mov [rbx + 16], r13
+    add qword ptr [r12 + 568], 1
+    jc cdf_fatal
+    xor eax, eax
+    cbg_leave
+cooperative_waker_wake:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov rdi, r13
+    call scs_cell_validate
+    cmp [r13 + 8], r12
+    jne cdf_fatal
+    cmp r15, r13
+    jne cdf_fatal
+    lea rax, [rip + scheduler_waker_table]
+    cmp r14, rax
+    jne cdf_fatal
+    mov rdi, r13
+    xor esi, esi
+    mov edx, 1
+    call cooperative_scheduler_notify
+    add qword ptr [r12 + 576], 1
+    jc cdf_fatal
+    mov rdi, r13
+    call scs_cell_release
+    xor eax, eax
+    cbg_leave
+cooperative_waker_drop:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov rdi, r13
+    call scs_cell_validate
+    cmp [r13 + 8], r12
+    jne cdf_fatal
+    cmp r15, r13
+    jne cdf_fatal
+    lea rax, [rip + scheduler_waker_table]
+    cmp r14, rax
+    jne cdf_fatal
+    add qword ptr [r12 + 584], 1
+    jc cdf_fatal
+    mov rdi, r13
+    call scs_cell_release
+    xor eax, eax
+    cbg_leave
+.balign 8
+scheduler_waker_table:
+    .quad 0x3130545657435348
+
+# Local PF execution context. Queue, notification state and batch policy are HIA.
+# This candidate owns one physical worker; cross-worker stealing is not claimed.
+.equ SPF_G_CONTEXT, 88
+.equ SPF_T_WAKER, 512
+
+scheduler_pf_initialize:
+    push rbx
+    mov rbx, rdi
+    cmp qword ptr [rbx + SPF_G_CONTEXT], 0
+    jne ap_contract
+    mov edi, 1
+    mov esi, 2
+    call cooperative_scheduler_create
+    test rax, rax
+    jz ap_contract
+    mov [rbx + SPF_G_CONTEXT], rax
+    xor eax, eax
+    pop rbx
+    ret
+
+scheduler_pf_register:
+    push rbx
+    mov rbx, rdi
+    cmp qword ptr [rbx + SPF_T_WAKER], 0
+    jne ap_contract
+    cmp qword ptr [rbx + PF_T_STATE], 1
+    jne ap_contract
+    mov rax, [rbx + PF_T_GLOBAL]
+    xor edx, edx
+    cmp qword ptr [rax + PF_G_CURRENT], 0
+    setne dl
+    mov rdi, [rax + SPF_G_CONTEXT]
+    mov rsi, rbx
+    call cooperative_scheduler_register
+    test rax, rax
+    jz ap_contract
+    mov [rbx + SPF_T_WAKER], rax
+    xor eax, eax
+    pop rbx
+    ret
+
+scheduler_pf_retire:
+    push rbx
+    mov rbx, rdi
+    mov rdi, [rbx + SPF_T_WAKER]
+    test rdi, rdi
+    jz spf_retire_unspawned
+    cmp qword ptr [rbx + PF_T_STATE], 2
+    jne ap_contract
+    mov qword ptr [rbx + SPF_T_WAKER], 0
+    call cooperative_scheduler_retire
+    test rax, rax
+    jnz ap_contract
+    pop rbx
+    ret
+spf_retire_unspawned:
+    cmp qword ptr [rbx + PI_T_KIND], 1
+    jne ap_contract
+    cmp qword ptr [rbx + PF_T_STATE], 3
+    jne ap_contract
+    xor eax, eax
+    pop rbx
+    ret
+
+scheduler_pf_destroy:
+    push rbx
+    mov rbx, rdi
+    mov rdi, [rbx + SPF_G_CONTEXT]
+    test rdi, rdi
+    jz ap_contract
+    mov qword ptr [rbx + SPF_G_CONTEXT], 0
+    call cooperative_scheduler_destroy
+    test rax, rax
+    jnz ap_contract
+    mov rdi, rbx
+    pop rbx
+    ret
+
+# A completed physical fd readiness observation schedules its owning task.
+# Descriptor-less existing callback protocols retain their bounded poll fallback.
+# No business result or await completion is synthesized here.
+scheduler_pf_driver:
+    pf_prologue
+    mov r15, rdi
+    mov r12, [r15 + PF_GLOBAL_SLOT]
+    cmp [r12 + 8], r15
+    jne ap_contract
+    cmp qword ptr [r12 + PF_G_CURRENT], 0
+    jne ap_contract
+    mov r13, [r12 + PF_G_HEAD]
+    mov rax, [r12 + PF_G_COUNT]
+    mov [rsp + 16], rax
+spf_driver_next:
+    test r13, r13
+    jz spf_driver_complete
+    cmp qword ptr [rsp + 16], 0
+    je ap_contract
+    dec qword ptr [rsp + 16]
+    mov r14, [r13 + PF_T_NEXT]
+    cmp [r13 + PF_T_GLOBAL], r12
+    jne ap_contract
+    cmp qword ptr [r13 + PI_T_KIND], 1
+    jne spf_driver_public
+    cmp qword ptr [r13 + PF_T_STATE], 0
+    je spf_driver_advance
+    cmp qword ptr [r13 + PF_T_STATE], 3
+    je spf_driver_discard
+    cmp qword ptr [r13 + PF_T_STATE], 1
+    jne ap_contract
+    cmp qword ptr [r13 + PI_T_SHUTDOWN], 0
+    jne spf_driver_notify
+    cmp qword ptr [r13 + PI_T_WAIT], 2
+    je spf_driver_advance
+    cmp qword ptr [r13 + PI_T_WAIT], 1
+    jne ap_contract
+    mov rax, [r13 + PI_T_WAKE]
+    jmp spf_driver_descriptor
+spf_driver_public:
+    cmp qword ptr [r13 + PF_T_STATE], 1
+    jne ap_contract
+    cmp qword ptr [r12 + PF_G_EXPIRED], 0
+    jne spf_driver_notify
+    mov rax, [r13 + PF_T_ROOT]
+    mov rax, [rax + AP_SLOT]
+    test rax, rax
+    jz ap_contract
+    cmp qword ptr [rax + 72], 1
+    jne ap_contract
+    mov rax, [rax + 64]
+spf_driver_descriptor:
+    cmp rax, -1
+    je spf_driver_notify
+    cmp rax, 2147483647
+    ja ap_contract
+    mov [rsp], eax
+    mov dword ptr [rsp + 4], 1
+spf_driver_poll:
+    mov rdi, rsp
+    mov esi, 1
+    xor edx, edx
+    mov eax, 7
+    syscall
+    cmp rax, -4
+    je spf_driver_poll
+    cmp rax, 1
+    ja ap_contract
+    test word ptr [rsp + 6], 32
+    jnz ap_contract
+    test word ptr [rsp + 6], 25
+    jz spf_driver_advance
+spf_driver_notify:
+    mov rdi, [r13 + SPF_T_WAKER]
+    test rdi, rdi
+    jz ap_contract
+    xor esi, esi
+    xor edx, edx
+    call cooperative_scheduler_notify
+    jmp spf_driver_advance
+spf_driver_discard:
+    cmp qword ptr [r13 + SPF_T_WAKER], 0
+    jne ap_contract
+    mov rdi, r13
+    call pf_retire_task
+spf_driver_advance:
+    mov r13, r14
+    jmp spf_driver_next
+spf_driver_complete:
+    cmp qword ptr [rsp + 16], 0
+    jne ap_contract
+    mov rbx, [r12 + SPF_G_CONTEXT]
+    mov rax, [rbx + 104]
+    mov [rsp], eax
+    mov dword ptr [rsp + 4], 1
+spf_driver_event_poll:
+    mov rdi, rsp
+    mov esi, 1
+    xor edx, edx
+    mov eax, 7
+    syscall
+    cmp rax, -4
+    je spf_driver_event_poll
+    cmp rax, 1
+    ja ap_contract
+    test word ptr [rsp + 6], 56
+    jnz ap_contract
+    mov rdi, [rbx + 104]
+    call asam_drain_fd
+    mov rdi, rbx
+    call cooperative_scheduler_after_park
+    xor eax, eax
+    pf_epilogue
+
+# One outer task poll plus its real local LIFO batch. Budget enters only once.
+scheduler_pf_drive_round:
+    pf_prologue
+    mov r15, rdi
+    cmp qword ptr [r15 + PF_PARENT_SLOT], 0
+    jne ap_contract
+    mov r12, [r15 + PF_GLOBAL_SLOT]
+    test r12, r12
+    jz ap_contract
+    cmp [r12 + 8], r15
+    jne ap_contract
+    mov qword ptr [rsp], 0
+spf_drive_select:
+    mov rdi, [r12 + SPF_G_CONTEXT]
+    call cooperative_scheduler_next
+    test rax, rax
+    jnz spf_drive_selected
+    cmp rdx, 2
+    je spf_drive_done
+    cmp rdx, 1
+    jne ap_contract
+    cmp qword ptr [rsp], 0
+    jne spf_drive_done
+    mov qword ptr [rsp], 1
+    mov rdi, r15
+    call scheduler_pf_driver
+    jmp spf_drive_select
+spf_drive_selected:
+    mov rbx, rax
+    mov r13, [rbx + 24]
+    test r13, r13
+    jz ap_contract
+    cmp [r13 + SPF_T_WAKER], rbx
+    jne ap_contract
+    cmp [r13 + PF_T_GLOBAL], r12
+    jne ap_contract
+    cmp qword ptr [r13 + PF_T_STATE], 1
+    jne ap_contract
+    cmp qword ptr [r12 + PF_G_CURRENT], 0
+    jne ap_contract
+    mov [r12 + PF_G_CURRENT], r13
+    lea rdi, [r12 + PF_G_SWITCH]
+    lea rsi, [r13 + PF_T_SWITCH]
+    call pf_switch
+    cmp [r12 + PF_G_CURRENT], r13
+    jne ap_contract
+    mov qword ptr [r12 + PF_G_CURRENT], 0
+    xor edx, edx
+    cmp qword ptr [r13 + PF_T_STATE], 2
+    sete dl
+    mov r14, rdx
+    test rdx, rdx
+    jnz spf_drive_finish
+    cmp qword ptr [r13 + PF_T_STATE], 1
+    jne ap_contract
+    cmp qword ptr [r13 + PI_T_KIND], 1
+    jne spf_drive_public_pending
+    mov rax, [r13 + PI_T_WAIT]
+    sub rax, 1
+    cmp rax, 1
+    ja ap_contract
+    jmp spf_drive_finish
+spf_drive_public_pending:
+    mov rax, [r13 + PF_T_ROOT]
+    mov rax, [rax + AP_SLOT]
+    cmp qword ptr [rax + 72], 1
+    jne ap_contract
+spf_drive_finish:
+    mov rdi, [r12 + SPF_G_CONTEXT]
+    mov rsi, rbx
+    mov rdx, r14
+    call cooperative_scheduler_finish
+    test rax, rax
+    jnz ap_contract
+    test r14, r14
+    jz spf_drive_select
+    mov rdi, r13
+    call pf_retire_task
+    jmp spf_drive_select
+spf_drive_done:
+    xor eax, eax
+    pf_epilogue
+
+# An actual yield_now-equivalent registers the current owned Waker with Defer.
+scheduler_pf_defer_task:
+    push rbx
+    mov rbx, rdi
+    mov rax, [rbx + PF_T_GLOBAL]
+    cmp [rax + PF_G_CURRENT], rbx
+    jne ap_contract
+    mov rdi, [rax + SPF_G_CONTEXT]
+    mov rsi, [rbx + SPF_T_WAKER]
+    call cooperative_scheduler_defer_current
+    pop rbx
+    ret
+
+cooperative_scheduler_defer_current:
+    cbg_enter
+    mov r12, rdi
+    mov r13, rsi
+    call scs_validate
+    cmp [r12 + 96], r13
+    jne cdf_fatal
+    test r13, r13
+    jz cdf_fatal
+    scs_defer_request 1
+    mov [r12 + 456], r13
+    lea rax, [rip + scheduler_waker_table]
+    mov [r12 + 464], rax
+    mov [r12 + 472], r13
+    call scs_defer
+    xor eax, eax
+    cbg_leave
+
+# The Restore guard covers exactly one batch_semaphore Acquire::poll.
+# No budget scope is created here. It belongs to scheduler_pf_drive_round.
+.equ SAM_POLL_WAKER, 88
+.equ SAM_OWNED_WAKER, 96
+scheduler_start_admission_poll:
+    fpc_enter
+    mov r12, rdi
+    mov r13, [r12 + ST_CALL_WAITER]
+    test r13, r13
+    jz ap_contract
+    mov rax, [r12 + PAJ_CALL_PUBLIC_ROOT]
+    test rax, rax
+    jz ap_contract
+    mov r14, [rax + PF_TASK_SLOT]
+    test r14, r14
+    jz sam_poll_unscoped
+    mov rax, [r14 + PF_T_GLOBAL]
+    cmp [rax + PF_G_CURRENT], r14
+    jne ap_contract
+    mov r15, [rax + SPF_G_CONTEXT]
+    mov rdi, r15
+    mov rsi, [r14 + SPF_T_WAKER]
+    call cooperative_scheduler_proceed
+    test rax, rax
+    jz sam_poll_budget_pending
+    mov rbx, rax
+    cmp qword ptr [r13 + SAM_POLL_WAKER], 0
+    jne ap_contract
+    mov rax, [r14 + SPF_T_WAKER]
+    mov [r13 + SAM_POLL_WAKER], rax
+    mov rdi, r13
+    call async_admission_poll_waiter
+    mov rbp, rax
+    mov qword ptr [r13 + SAM_POLL_WAKER], 0
+    mov rdi, r15
+    mov rsi, rbx
+    cmp ebp, 0xfffffff1
+    je sam_poll_restore
+    test rbp, rbp
+    jnz ap_contract
+    call cooperative_scheduler_progress
+    jmp sam_poll_result
+sam_poll_restore:
+    call cooperative_scheduler_restore
+sam_poll_result:
+    test rax, rax
+    jnz ap_contract
+    mov rax, rbp
+    fpc_leave
+sam_poll_budget_pending:
+    mov eax, 0xfffffff1
+    fpc_leave
+sam_poll_unscoped:
+    # Existing synchronous qualification and canonical shutdown stay explicit.
+    # They do not pretend to have a PF outer task budget.
+    mov rdi, r13
+    call async_admission_poll_waiter
+    fpc_leave
+
+# Called while the original manager gate is held, after actual Acquire Pending.
+scheduler_admission_register:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov r12, rdi
+    mov rbx, [r12 + SAM_POLL_WAKER]
+    test rbx, rbx
+    jz sam_register_done
+    cmp [r12 + SAM_OWNED_WAKER], rbx
+    je sam_register_done
+    mov rdi, rbx
+    call cooperative_scheduler_retain
+    cmp rax, rbx
+    jne ap_contract
+    mov rdi, [r12 + SAM_OWNED_WAKER]
+    mov [r12 + SAM_OWNED_WAKER], rbx
+    test rdi, rdi
+    jz sam_register_done
+    call cooperative_scheduler_release
+sam_register_done:
+    xor eax, eax
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+
+# A genuine semaphore wake consumes the one stored clone; HIA schedules it.
+scheduler_admission_wake:
+    push rbx
+    mov rbx, [rdi + SAM_OWNED_WAKER]
+    mov qword ptr [rdi + SAM_OWNED_WAKER], 0
+    test rbx, rbx
+    jz sam_wake_done
+    mov rdi, rbx
+    xor esi, esi
+    xor edx, edx
+    # Canonical caller Drop is external; only an actual task poll is local.
+    mov rax, [rbx + 8]
+    cmp qword ptr [rax + 96], 0
+    setne dl
+    call cooperative_scheduler_notify
+    mov rdi, rbx
+    call cooperative_scheduler_release
+sam_wake_done:
+    xor eax, eax
+    pop rbx
+    ret
+
+# The actual Future Drop removed the waiter before dropping its Waker field.
+scheduler_admission_drop:
+    sub rsp, 8
+    cmp qword ptr [rdi + SAM_POLL_WAKER], 0
+    jne ap_contract
+    mov rax, [rdi + SAM_OWNED_WAKER]
+    mov qword ptr [rdi + SAM_OWNED_WAKER], 0
+    test rax, rax
+    jz sam_drop_done
+    mov rdi, rax
+    call cooperative_scheduler_release
+sam_drop_done:
+    xor eax, eax
+    add rsp, 8
+    ret
 
 images:

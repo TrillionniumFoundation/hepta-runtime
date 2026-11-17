@@ -49,7 +49,7 @@ def build_public_lifecycle(hepta,build_root,source_root):
         (build/('public-lifecycle-build.'+suffix)).write_bytes(raw)
     require(not timed and process.returncode==0 and not err and row['sources_after']==pins,
         'actual public lifecycle build failed')
-    require(json.loads(out)==dict(build=str(build/'build.json'),images=111,packer_compiles=2,pack_invocations=4),
+    require(json.loads(out)==dict(build=str(build/'build.json'),images=114,packer_compiles=2,pack_invocations=4),
         'actual build summary differs')
     verify_build(root,build/'build.json')
     return build/'build.json'
@@ -62,7 +62,7 @@ def verify_build(root,manifest):
     require(manifest.name=='build.json' and report['schema']=='hepta.public-lifecycle.build.v1'
         and report['status']=='BUILT_NOT_RUNTIME_QUALIFIED' and report['sources']==pins
         and report['compiler_commit']==COMPILER and report['compiler_sha256']==COMPILER_IMAGE
-        and report['semantic_compiles']==111 and report['packer_compiles']==2
+        and report['semantic_compiles']==114 and report['packer_compiles']==2
         and report['pack_invocations']==4 and report['actual_service_processes']==0
         and all(report[k]is False for k in ('production_activated','whole_runtime_replaced','full_cold_executed')),
         'selected build domain or source changed')
@@ -134,7 +134,7 @@ def verify_build(root,manifest):
             (profile['executable_bytes'],profile['executable_sha256']),'complete native executable differs')
     return dict(schema='hepta.public-lifecycle.build-evidence.v1',sources=pins,
         manifest_sha256=sha(regular(manifest)),executable=binary.name,elf_sha256=sha(actual),
-        artifact_sha256=artifacts,semantic_compiles=111,packer_compiles=2,pack_invocations=4,
+        artifact_sha256=artifacts,semantic_compiles=114,packer_compiles=2,pack_invocations=4,
         actual_service_processes=0,production_activated=False,whole_runtime_replaced=False)
 
 
@@ -151,7 +151,7 @@ def build_evidence(root,output,report):
         '--hepta',str(Path(report['compiler_checkout']).resolve(strict=True)),
         '--build-root',str(manifest.parent)]
     out,err=completed(manifest.parent,'public-lifecycle-build',receipt,command,root,180)
-    require(not err and json.loads(out)==dict(build=str(manifest),images=111,packer_compiles=2,pack_invocations=4)
+    require(not err and json.loads(out)==dict(build=str(manifest),images=114,packer_compiles=2,pack_invocations=4)
         and receipt['sources_before']==receipt['sources_after']==result['sources']
         and receipt['cleanup_seconds']==3 and receipt['outer_parent_death_cleanup_qualified']is False,
         'actual aggregate build completion changed')
@@ -173,10 +173,10 @@ def test_commands(root,output,report):
             '--output',str(output/'public-lifecycle-native/lifecycle')]}
 
 
-def normal_evidence(root,folder,native,original=None):
+def normal_evidence(root,folder,native,original=None,**options):
     sys.path.insert(0,str(Path(root)/'tests/hia_native/public_lifecycle'))
     from normal_evidence import verify
-    return verify(folder,native,original)
+    return verify(folder,native,original,**options)
 
 
 def lifecycle_evidence(root,folder,binary,**options):
@@ -409,12 +409,15 @@ def verify_original(root,folder,manifest):
         'new-native-count','deadline','source-pin','manifest','completed-command','completed-exit',
         'capture-inventory','extra-field','complete-native-stream','complete-lifecycle-stream']
     expected_controls=[dict(name=name,rejected=True,recomputed_admission_digest=not name.startswith('complete-'))for name in names]
+    directory_controls=[dict(name=name,portable_rejected=True,reused_rejected=True)for name in
+        ('normal-empty-final','normal-empty-state','lifecycle-empty-final','lifecycle-empty-state')]
     require(controls==dict(schema='hepta.public-lifecycle.retained-controls.v1',status='PASS',
         admission=pin(admission),invocation=original['native_invocation'],rejected_controls=16,
+        directory_controls=directory_controls,rejected_directory_controls=4,
         controls=expected_controls,before=retained,after=retained,complete_restoration=True,
         native_processes=0,original_processes=0,syscall_interception=False,fault_injection=False)
         and json.loads(regular(folder/'retained-native-controls.stdout'))==dict(status='PASS',
-            rejected_controls=16,complete_restoration=True,native_processes=0,original_processes=0),
+            rejected_controls=16,rejected_directory_controls=4,complete_restoration=True,native_processes=0,original_processes=0),
         'complete data rejection controls changed')
     actual={}
     for branch in ('project','registry','paired','lifecycle','controls'):

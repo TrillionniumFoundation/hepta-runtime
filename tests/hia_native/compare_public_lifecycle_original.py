@@ -15,7 +15,7 @@ from public_lifecycle_registry import encoded, regular, require, sha, source_pin
 from hia_native_public_lifecycle_reference import prepare,check
 from hia_native_public_lifecycle_qualification import verify_build,normal_evidence,inventory
 from public_lifecycle_crates import REMOVED,registry
-from public_lifecycle_retained import LIFECYCLE, admit, pin
+from public_lifecycle_retained import LIFECYCLE, admit, pin, NativeProof
 from normal_original import verify as retained_pair_evidence
 from lifecycle_suite import verify as retained_lifecycle_evidence
 
@@ -32,20 +32,24 @@ def main():
     root=args.repo.resolve(strict=True)
     require(root==ROOT and os.getpid()==os.getpgrp(),'reference requires the source-owned outer process group')
     output=args.output.resolve();output.mkdir(mode=0o700,parents=True,exist_ok=False)
-    manifest=args.build.resolve(strict=True);built=verify_build(root,manifest)
-    pins=source_pins(root);native=manifest.parent/built['executable']
+    begin=time.monotonic()
+    manifest=args.build.resolve(strict=True)
     admission=args.native_admission.resolve(strict=True)
-    retained=admit(admission,args.native_admission_sha256,args.native_invocation,root,manifest,execution=True)
+    native_proof=NativeProof()
+    retained=admit(admission,args.native_admission_sha256,args.native_invocation,root,manifest,
+        execution=True,proof=native_proof)
+    admitted_seconds=time.monotonic()-begin
+    built=native_proof.build();pins=source_pins(root);native=manifest.parent/built['executable']
     cargo,rustc,rustfmt=(p.absolute()for p in (args.cargo,args.rustc,args.rustfmt))
     project=output/'project';target=output/'target';temporary=output/'temporary';temporary.mkdir(mode=0o700)
     env={k:v for k,v in os.environ.items()if k not in REMOVED and not k.startswith('HIA_')}
     env.update(RUSTC=str(rustc),CARGO_TARGET_DIR=str(target),TMPDIR=str(temporary),
         CARGO_NET_OFFLINE='true'if args.offline else 'false')
-    begin=time.monotonic()
     report=dict(schema='hepta.public-lifecycle.original-result.v2',status='RUNNING',sources=pins,
         build_sha256=sha(regular(manifest)),native_build_evidence=built,cargo=str(cargo),rustc=str(rustc),
         rustfmt=str(rustfmt),tool_sha256={str(p):sha(regular(p.resolve(strict=True)))for p in (cargo,rustc,rustfmt)},
-        processes=[],fresh_actual_cargo_build=False,original_blocks=315,locked_registry_dependencies=140,
+        processes=[],verification_stages=[],native_admission_elapsed_seconds=admitted_seconds,
+        fresh_actual_cargo_build=False,original_blocks=315,locked_registry_dependencies=140,
         native_processes=0,original_processes=0,requests_per_implementation=0,
         retained_native_processes=86,retained_native_requests=707,retained_native=retained,
         native_admission=str(admission),native_admission_sha256=args.native_admission_sha256,
@@ -60,6 +64,16 @@ def main():
     def save():
         report['elapsed_seconds']=time.monotonic()-begin
         (output/'result.json').write_bytes(encoded(report))
+    def stage(name,operation):
+        started=time.monotonic()
+        row=dict(name=name,status='RUNNING',elapsed_seconds=0)
+        report['verification_stages'].append(row);save()
+        try:
+            result=operation();row['status']='PASS';return result
+        except BaseException:
+            row['status']='FAIL';raise
+        finally:
+            row['elapsed_seconds']=time.monotonic()-started;save()
     def run(name,command,cwd,timeout):
         command=list(map(str,command));started=time.monotonic();timed=False;error=None;pid=None
         try:
@@ -195,30 +209,35 @@ def main():
             '--output',output/'lifecycle','--defer-final-admission']
         normal_streams,lifecycle_streams=run_captures(normal_command,lifecycle_command)
         out,err=normal_streams
-        paired=retained_pair_evidence(output/'paired',binary,admission,args.native_admission_sha256,
-            args.native_invocation,manifest,captured=True)
+        paired=stage('normal-complete-reconstruction',lambda:retained_pair_evidence(
+            output/'paired',binary,admission,args.native_admission_sha256,
+            args.native_invocation,manifest,captured=True,native_proof=native_proof))
         require(not err and json.loads(out)==dict(status='CAPTURED_NOT_QUALIFIED',native_processes=0,
             retained_native_processes=64,original_processes=64,requests_per_implementation=359),
             'actual complete paired capture summary differs')
         report.update(original_processes=64,requests_per_implementation=359);save()
         out,err=lifecycle_streams
-        finite=retained_lifecycle_evidence(output/'lifecycle',binary,side='original',
-            retained=admission.parent/LIFECYCLE,native_binary=native,captured=True)
+        finite=stage('lifecycle-complete-reconstruction',lambda:retained_lifecycle_evidence(
+            output/'lifecycle',binary,side='original',retained=admission.parent/LIFECYCLE,
+            native_binary=native,captured=True,native_proof=native_proof))
         require(not err and json.loads(out)==dict(status='CAPTURED_NOT_QUALIFIED',native_processes=0,original_processes=22,
             requests_per_implementation=348,producer_starts_per_implementation=11),
             'actual finite lifecycle paired summary differs')
         require(check(root,project)==report['prepared'] and source_pins(root)==pins
-            and verify_build(root,manifest)==built and regular(binary)==raw and regular(origin)==raw,
+            and regular(binary)==raw and regular(origin)==raw,
             'reference or native source changed during replay')
         require(registry(metadata,lock,original_lock,output/'registry')==report['registry_before'],
             'actual installed registry changed during replay')
-        require(admit(admission,args.native_admission_sha256,args.native_invocation,root,manifest,execution=True)==retained,
+        require(stage('terminal-native-byte-and-build-admission',lambda:admit(
+            admission,args.native_admission_sha256,args.native_invocation,root,manifest,
+            execution=True,proof=native_proof))==retained,
             'current native capture or execution binding changed')
         controls=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/retained_controls.py',
             '--admission',admission,'--admission-sha256',args.native_admission_sha256,
             '--invocation',args.native_invocation,'--build',manifest,'--output',output/'controls']
         out,err=run('retained-native-controls',controls,root,30)
         require(not err and json.loads(out)==dict(status='PASS',rejected_controls=16,
+            rejected_directory_controls=4,
             complete_restoration=True,native_processes=0,original_processes=0),
             'retained native evidence controls failed')
         require(target.is_dir() and not target.is_symlink() and target.parent==output,

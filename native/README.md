@@ -21,10 +21,13 @@ The [public lifecycle graph](public_lifecycle_abi.md) composes the existing
 `request_status`, `request_result`, `request_history`, `request_start` and
 `request_cancel` routes with trusted session authority, installed configuration,
 actual audit Tickets, retained result Intents and shared Async producers. The
-111 semantic images have one source path each in
+114 semantic images have one source path each in
 [the fixed graph](public_lifecycle_graph.json); 68 selected sources are reused
 byte-for-byte. Two HIA packers produce four bounded output fragments.
-Historical dependency directories,
+The three added cooperative owners preserve the preceding 111 images and share
+one outer-poll/LIFO budget with real ADMISSION Waker custody. The scheduler
+uses one physical thread; complete executor and arbitrary concurrency remain
+unqualified. Historical dependency directories,
 intermediate variants and executable evidence are not copied into this tree.
 
 The metadata bridge now loads its conversion workspace size as an immediate
@@ -38,7 +41,7 @@ bridge unit checks the error return and subsequent successful calls. This scope
 uses ordinary local files and normal requests; it does not add syscall
 interception, fault injection or external-host tests.
 
-The portable gate builds all 111 semantic images and both packers, executes three
+The portable gate builds all 114 semantic images and both packers, executes three
 native suites, then freshly compiles one Rust 1.95 reference with 315 unchanged
 original blocks and 140 locked packages. Its paired replay starts no new native
 processes and compares complete

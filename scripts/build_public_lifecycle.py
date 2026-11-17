@@ -186,4 +186,4 @@ if __name__ == '__main__':
     parser.add_argument('--build-root', required=True, type=Path)
     args = parser.parse_args()
     result = build(ROOT, args.hepta, args.build_root)
-    print(json.dumps({'build':str(result),'images':111,'packer_compiles':2,'pack_invocations':4},sort_keys=True))
+    print(json.dumps({'build':str(result),'images':114,'packer_compiles':2,'pack_invocations':4},sort_keys=True))

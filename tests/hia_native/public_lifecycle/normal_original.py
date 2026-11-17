@@ -13,7 +13,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT/'scripts'), str(Path(__file__).resolve().parent)]
 from public_lifecycle_registry import encoded, require
-from public_lifecycle_retained import FOLDER, pin, obj, admit, write_new
+from public_lifecycle_retained import FOLDER, pin, obj, admit, write_new, NativeProof
 from normal_runner import run, retire_fixture
 from normal_evidence import verify_capture
 
@@ -29,7 +29,8 @@ def execute(admission, expected, invocation, manifest, original, output, *, defe
     admission, manifest, original = (Path(p).resolve(strict=True) for p in (admission, manifest, original))
     output = Path(output).absolute()
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
-    before = admit(admission, expected, invocation, ROOT, manifest, execution=True)
+    proof = NativeProof()
+    before = admit(admission, expected, invocation, ROOT, manifest, execution=True, proof=proof)
     native_folder = admission.parent/FOLDER
     native_report = obj(native_folder/'result.json')
     native = manifest.parent/obj(manifest)['executable']
@@ -61,7 +62,7 @@ def execute(admission, expected, invocation, manifest, original, output, *, defe
         for index, fixture in enumerate(fixtures()):
             case, name = fixture['case'], 'case-%03d'%index
             retained = native_folder/name
-            answer = verify_capture(retained/'native', case, native_report['processes'][index], native, False)
+            answer = proof.normal(index)
             require(answer[0].hex() == fixture['wire_hex'], 'native wire differs from the exact original corpus')
             directory = output/name
             directory.mkdir(mode=0o700)
@@ -78,7 +79,7 @@ def execute(admission, expected, invocation, manifest, original, output, *, defe
             report['completed'].append(native_report['completed'][index])
             save()
         if not defer_final_admission:
-            require(admit(admission, expected, invocation, ROOT, manifest, execution=True) == before,
+            require(admit(admission, expected, invocation, ROOT, manifest, execution=True, proof=proof) == before,
                     'native captures changed while original calls executed')
         require(pin(original) == report['original_binary'], 'actual original binary changed')
         require(report['original_processes'] == 64 and report['original_requests'] == 359,
@@ -98,10 +99,11 @@ def execute(admission, expected, invocation, manifest, original, output, *, defe
     return verify(output, original, admission, expected, invocation, manifest)
 
 
-def verify(folder, original, admission, expected, invocation, manifest, *, captured=False):
+def verify(folder, original, admission, expected, invocation, manifest, *, captured=False, native_proof=None):
     folder, original, admission, manifest = (Path(p).resolve(strict=True)
         for p in (folder, original, admission, manifest))
-    before = admit(admission, expected, invocation, ROOT, manifest)
+    proof = NativeProof() if native_proof is None else native_proof
+    before = admit(admission, expected, invocation, ROOT, manifest, proof=proof)
     report = obj(folder/'result.json')
     ready = obj(folder/'native-admission-ready.json')
     require(type(ready.get('pid')) is int and ready['pid'] > 0
@@ -133,11 +135,12 @@ def verify(folder, original, admission, expected, invocation, manifest, *, captu
         name, case = 'case-%03d'%index, fixture['case']
         require(obj(folder/name/'case.json') == case, 'original fixture changed')
         retained = native_folder/name
-        left = verify_capture(retained/'native', case, native_report['processes'][index], native, False)
+        left = proof.normal(index)
         right = verify_capture(folder/name/'original', case, report['processes'][index], original, True,
                                retained_common=retained/'common')
         require(left == right and left[0].hex() == fixture['wire_hex'], 'complete paired captures differ')
         require(report['completed'][index] == native_report['completed'][index], 'paired case completion changed')
+    require(proof.checked() == before, 'native bytes changed during paired admission')
     return dict(report=pin(folder/'result.json'), native_processes=0, retained_native_processes=64,
         original_processes=64, requests_per_implementation=359, new_executions_in_admission=0,
         full_raw_projections_reconstructed=True)

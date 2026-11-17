@@ -12,8 +12,8 @@ false. Module and case counts are not production migration counts.
 
 ## Canonical source and build boundary
 
-`public_lifecycle_graph.json` selects 111 distinct HIA images for 128 fixed
-roles and 135 address/size patches. Each selected image has one source path in
+`public_lifecycle_graph.json` selects 114 distinct HIA images for 131 fixed
+roles and 138 address/size patches. Each selected image has one source path in
 `native/`. Sixty-eight selected source files are byte-identical to existing
 canonical sources. The former public mapper and packer are replaced, rather
 than retained as alternate versions. Private stage directories, duplicated
@@ -27,16 +27,16 @@ fixed assembly provides allocation, actual syscalls, descriptor and reference
 custody, fixed child invocation, and transport.
 
 Two HIA prefix packers produce four complete, checked fragments. Every input
-starts with `HRISEG03`, little-endian u64 part and stage, and the complete 111
-image-size table. Part 0 emits prefix bytes `[0, 94208)` without images. Part 1
-emits the remainder of the 190,282-byte prefix followed by image ranges
-`[0, 43)`, `[43, 90)`, and `[90, 111)`. The full prefix size determines every
+starts with `HRISEG03`, little-endian u64 part and stage, and the complete 114
+image-size table. Part 0 emits prefix bytes `[0, 98304)` without images. Part 1
+emits the remainder of the 198,555-byte prefix followed by image ranges
+`[0, 43)`, `[43, 90)`, and `[90, 114)`. The full prefix size determines every
 image address, including addresses stored in the first fragment. No fixed
 patch crosses a fragment boundary. Each call retains the original 8 MiB input
 and output limit; compiler operation and function limits are unchanged.
 The builder verifies every input, output and workspace, then compares the
 concatenated ELF against an independent reconstruction of every prefix patch
-and all 111 images. A successful build does not itself claim runtime qualification.
+and all 114 images. A successful build does not itself claim runtime qualification.
 
 Installed configuration comes from trusted startup arguments. Session identity,
 owner authority, root capabilities, policy binding and private handles cannot
@@ -87,6 +87,25 @@ return their original response and allow a following request. The direct
 bridge unit exercises the selected allocation/drop body with an explicit
 synthetic child, separately from actual public service qualification.
 
+## Shared cooperative scheduler
+
+The graph preserves all 111 prior semantic images and adds the Budget, Defer
+and Scheduler owners. The fixed boundary uses one physical scheduler thread.
+An outer task poll and its local LIFO batch share the original 128-operation
+budget; an ADMISSION poll does not reset that budget. An inner Pending restores
+the permit that was tentatively consumed. Deferred wakeups retain and retire
+their actual task Waker references. Wakes outside a real current task enter the
+external queue rather than the current task's LIFO path.
+
+The scheduler context belongs to `PFGlobal+88`; each task's Waker is at
+`PFTask+512`. ADMISSION waiter offsets 88 and 96 hold the temporary and owned
+Waker references, respectively. These fields belong to distinct objects from
+the public handler context. The shared ADMISSION manager remains at
+`AsyncGlobal+160`, and the unique blocking pool remains at `ServiceRoot+24704`.
+The selected default pool limit is 512, with ten-second idle retirement. These
+constants do not establish saturation, unrestricted concurrent handlers, a
+complete Tokio executor, or budgets for every asynchronous primitive.
+
 ## Executable qualification gates
 
 The portable native gate retains the earlier 64-process, 359-request normal
@@ -136,18 +155,30 @@ domains, restore all bytes, and repeat admission. Process deadlines remain
 
 ## Frozen evidence and remaining work
 
-The external nine-tool handoff records 22 actual Original/native process pairs,
-348 SDK requests per side and 11 producer starts per side. Its independent
-340,999,033-byte archive contains 14,041 regular files with 1,309,334,272 raw
-bytes and a full byte/metadata/link verification. It retains failed attempts,
-including the corrected Pending checker failure. Unobserved duplicate Cargo
-intermediates are explicitly excluded; all selected source, compiler, binary,
-actual stream and process evidence is retained. This historical evidence does
-not replace the current portable gates.
+The external cooperative handoff records all 86 actual Original/native process
+pairs and 707 SDK requests per side on the 114-image graph. Its lifecycle subset
+contains 22 pairs, 348 requests and 11 producer starts per side. The independent
+179,069,971-byte archive contains 7,500 regular files with 1,035,751,049 raw bytes;
+all archive bytes, modes, ownership, timestamps and links were verified. It
+includes the full selected source and compilation/packing output, all 140 locked
+crate archives, complete paired streams and filesystem captures. Original Rust
+compilation is retained from the already qualified 315-block reference; the new
+114-image replay performed no fresh Rust build. The portable CI consumer still
+requires its own fresh build.
+
+The original native lifecycle's outer start RPC receipt was lost during an
+interruption. Its original durable terminal/read and complete owned child
+command, PID, process group and captured streams remain recorded; the task was
+not relaunched or assigned a fabricated start receipt. Earlier failures,
+including the Pending checker failure, remain in the separately pinned parent
+archive. Unobserved duplicate Cargo intermediates stay excluded. Toolchain
+installations and earlier independent component proof archives remain explicit
+external dependencies. This historical evidence does not replace the current
+portable gates.
 
 Unrestricted parallel handlers, the full Tokio executor and blocking pool,
 active Archive Index publication, HTTP sockets/sessions, all other production
-handlers and complete startup/shutdown ownership remain unqualified. New
+handlers and complete startup/shutdown ownership remain unqualified. Additional
 scheduler, database or HTTP components must be integrated and qualified against
 this graph before its closure flags change. Older independent repository
 profiles still have separate source-bound gates; removing them requires a

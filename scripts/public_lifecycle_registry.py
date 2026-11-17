@@ -8,7 +8,7 @@ import json
 
 COMPILER = 'd3e2c90173cf733e42b299d0c4274df4b593a12f'
 COMPILER_IMAGE = 'bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
-GRAPH_SHA = '8fa29fd5a0c185a687b2b3650eeb1496d7264d9a1c541f0dfb58dd7fecf5ffda'
+GRAPH_SHA = '696ade3be6e40dd004d6d1f283a34b882c74d16b38ef1749916659acbf81c165'
 TESTS = ('test_public_lifecycle_bridge.py', 'test_public_lifecycle_normal.py', 'test_public_lifecycle_async.py')
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 encoded = lambda value: (json.dumps(value, indent=2, sort_keys=True) + '\n').encode()
@@ -34,9 +34,9 @@ def graph(root):
             and value['compiler_commit'] == COMPILER and value['compiler_sha256'] == COMPILER_IMAGE,
             'public lifecycle compiler or schema changed')
     order = value['image_order']
-    require(len(order) == len(set(order)) == len(value['modules']) == 111,
+    require(len(order) == len(set(order)) == len(value['modules']) == 114,
             'public lifecycle image domain changed')
-    require(set(value['modules']) == set(order) and len(value['roles']) == 128
+    require(set(value['modules']) == set(order) and len(value['roles']) == 131
             and set(value['roles'].values()) == set(order), 'public role aliases changed')
     for role, row in value['modules'].items():
         path = Path(row['source'])
