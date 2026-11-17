@@ -83,7 +83,7 @@
   },
   "abi": {
     "create": "file_info_at_create(callback, callback_context, shared_process_orphan_pool)",
-    "invoke": "file_info_at_invoke_at(context, borrowed_parent_fd, complete_HINFQ001, packet_length)",
+    "invoke": "file_info_at_invoke(context, borrowed_parent_fd, complete_HINFQ001, packet_length)",
     "borrowed_fd_range": "0..2147483647",
     "caller_packet_fd_word": "offset32 must be zero; trusted native register injects the actual held parent",
     "release": "file_info_at_release(context)",
@@ -195,5 +195,10 @@
   ],
   "whole_runtime_replaced": false,
   "main_updated": false,
-  "main_head_last_known": "5a5a35b355b7b58a23da797acd0002a832fc919b"
+  "main_head_last_known": "5a5a35b355b7b58a23da797acd0002a832fc919b",
+  "documentation_correction": {
+    "previous_commit": "8a18ca30c7ed0cf78db23cb19286b9eec6234164",
+    "field": "abi.invoke",
+    "reason": "The actual exported symbol is file_info_at_invoke; the prior handoff incorrectly added an _at suffix. All production sources, captures and qualifications are unchanged."
+  }
 }
