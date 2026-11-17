@@ -68,10 +68,12 @@ def _summary(report):
         requests_per_implementation=report['counts']['requests'],
         producer_starts_per_implementation=report['counts']['successful_starts'])
 
-def verify(folder,binary,*,side='native',retained=None,native_binary=None):
+def verify(folder,binary,*,side='native',retained=None,native_binary=None,captured=False):
     folder,binary=Path(folder).resolve(strict=True),Path(binary).resolve(strict=True)
     report=object_at(folder/'result.json');plan=declared()
-    require(report['schema']=='hepta.public-lifecycle.finite-captures.v1'and report['status']=='PASS'
+    require(not captured or side=='original','native evidence cannot defer final admission')
+    require(report['schema']=='hepta.public-lifecycle.finite-captures.v1'
+        and report['status']==('CAPTURED_NOT_QUALIFIED'if captured else'PASS')
         and report['side']==side and report['binary']==dict(path=str(binary),**pin(binary))
         and report['sources']==source_pins(ROOT)and report['counts']==COUNTS
         and report['outer_timeout_seconds']==180 and report['response_timeout_seconds']==30
@@ -128,9 +130,10 @@ def verify(folder,binary,*,side='native',retained=None,native_binary=None):
         complete_raw_and_filesystem_reconstruction=True,new_executions_in_admission=0,
         production_activated=False,whole_runtime_replaced=False)
 
-def execute(binary,output,*,side='native',retained=None,native_binary=None):
+def execute(binary,output,*,side='native',retained=None,native_binary=None,defer_final_admission=False):
     binary=Path(binary).resolve(strict=True);output=Path(output).resolve()
     require(side in ('native','original'),'unknown implementation')
+    require(not defer_final_admission or side=='original','native execution cannot defer final admission')
     output.mkdir(mode=0o700,parents=True,exist_ok=False)
     plan=declared();sources=source_pins(ROOT);identity=dict(path=str(binary),**pin(binary))
     retained=Path(retained).resolve(strict=True)if retained is not None else None
@@ -206,9 +209,13 @@ def execute(binary,output,*,side='native',retained=None,native_binary=None):
         require(report['counts']==COUNTS and len(report['controls'])==17,'actual lifecycle domain incomplete')
         require(source_pins(ROOT)==sources and dict(path=str(binary),**pin(binary))==identity,
             'source or binary changed during lifecycle execution')
-        if side=='original':require(verify(retained,native_binary)==retained_evidence,'native captures changed during replay')
-        report['status']='PASS';save()
-        verify(output,binary,side=side,retained=retained,native_binary=native_binary)
+        if side=='original'and not defer_final_admission:
+            require(verify(retained,native_binary)==retained_evidence,'native captures changed during replay')
+        report['status']='CAPTURED_NOT_QUALIFIED'if defer_final_admission else'PASS';save()
+        # Deferred captures remain unqualified until the source-owned parent
+        # reconstructs every raw stream, filesystem snapshot and native pair.
+        if not defer_final_admission:
+            verify(output,binary,side=side,retained=retained,native_binary=native_binary)
     except BaseException as error:
         report.update(status='FAIL',error=repr(error),traceback=traceback.format_exc());save();raise
     return _summary(report)
@@ -220,9 +227,11 @@ if __name__=='__main__':
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--retained',type=Path)
     p.add_argument('--native-binary',type=Path)
+    p.add_argument('--defer-final-admission',action='store_true')
     a=p.parse_args()
     # The Rust recipe owns the supervised process group. This consumer and
     # every runtime child inherit it; the consumer is not its group leader.
     answer=execute(a.binary,a.output,side='original'if a.retained else'native',
-                   retained=a.retained,native_binary=a.native_binary)
+                   retained=a.retained,native_binary=a.native_binary,
+                   defer_final_admission=a.defer_final_admission)
     print(json.dumps(answer,sort_keys=True))

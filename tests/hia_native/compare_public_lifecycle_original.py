@@ -104,19 +104,21 @@ def main():
         command=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/normal_original.py',
             '--admission',admission,'--admission-sha256',args.native_admission_sha256,
             '--invocation',args.native_invocation,'--build',manifest,
-            '--original',binary,'--output',output/'paired']
+            '--original',binary,'--output',output/'paired','--defer-final-admission']
         out,err=run('normal-pairs',command,root,120)
         paired=retained_pair_evidence(output/'paired',binary,admission,args.native_admission_sha256,
-            args.native_invocation,manifest)
-        require(not err and json.loads(out)==paired,'actual complete paired summary differs')
+            args.native_invocation,manifest,captured=True)
+        require(not err and json.loads(out)==dict(status='CAPTURED_NOT_QUALIFIED',native_processes=0,
+            retained_native_processes=64,original_processes=64,requests_per_implementation=359),
+            'actual complete paired capture summary differs')
         report.update(original_processes=64,requests_per_implementation=359);save()
         command=[sys.executable,'-I','-B',root/'tests/hia_native/public_lifecycle/lifecycle_suite.py',
             '--binary',binary,'--retained',admission.parent/LIFECYCLE,'--native-binary',native,
-            '--output',output/'lifecycle']
+            '--output',output/'lifecycle','--defer-final-admission']
         out,err=run('lifecycle-pairs',command,root,120)
         finite=retained_lifecycle_evidence(output/'lifecycle',binary,side='original',
-            retained=admission.parent/LIFECYCLE,native_binary=native)
-        require(not err and json.loads(out)==dict(status='PASS',native_processes=0,original_processes=22,
+            retained=admission.parent/LIFECYCLE,native_binary=native,captured=True)
+        require(not err and json.loads(out)==dict(status='CAPTURED_NOT_QUALIFIED',native_processes=0,original_processes=22,
             requests_per_implementation=348,producer_starts_per_implementation=11),
             'actual finite lifecycle paired summary differs')
         require(check(root,project)==report['prepared'] and source_pins(root)==pins

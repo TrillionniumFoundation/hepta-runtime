@@ -330,10 +330,10 @@ def verify_original(root,folder,manifest):
         ('normal-pairs',[sys.executable,'-I','-B',str(root/'tests/hia_native/public_lifecycle/normal_original.py'),
             '--admission',str(admission),'--admission-sha256',original['native_admission_sha256'],
             '--invocation',original['native_invocation'],'--build',str(manifest),
-            '--original',str(binary),'--output',str(folder/'paired')],root,120),
+            '--original',str(binary),'--output',str(folder/'paired'),'--defer-final-admission'],root,120),
         ('lifecycle-pairs',[sys.executable,'-I','-B',str(root/'tests/hia_native/public_lifecycle/lifecycle_suite.py'),
             '--binary',str(binary),'--retained',str(admission.parent/LIFECYCLE),
-            '--native-binary',str(native),'--output',str(folder/'lifecycle')],root,120),
+            '--native-binary',str(native),'--output',str(folder/'lifecycle'),'--defer-final-admission'],root,120),
         ('retained-native-controls',[sys.executable,'-I','-B',str(root/'tests/hia_native/public_lifecycle/retained_controls.py'),
             '--admission',str(admission),'--admission-sha256',original['native_admission_sha256'],
             '--invocation',original['native_invocation'],'--build',str(manifest),
@@ -377,13 +377,15 @@ def verify_original(root,folder,manifest):
                 members=package_files(archive,name),actual_source=str(Path(source['manifest_path']).parent)),
             'complete locked crate/member evidence differs')
     paired=retained_pair_evidence(folder/'paired',binary,admission,original['native_admission_sha256'],
-        original['native_invocation'],manifest)
-    require(original['paired']==paired and json.loads(regular(folder/'normal-pairs.stdout'))==paired,
+        original['native_invocation'],manifest,captured=True)
+    require(original['paired']==paired and json.loads(regular(folder/'normal-pairs.stdout'))==dict(
+        status='CAPTURED_NOT_QUALIFIED',native_processes=0,retained_native_processes=64,
+        original_processes=64,requests_per_implementation=359),
         'complete actual pair evidence differs')
     finite=retained_lifecycle_evidence(folder/'lifecycle',binary,side='original',
-        retained=admission.parent/LIFECYCLE,native_binary=native)
+        retained=admission.parent/LIFECYCLE,native_binary=native,captured=True)
     require(original['lifecycle']==finite and json.loads(regular(folder/'lifecycle-pairs.stdout'))==dict(
-        status='PASS',native_processes=0,original_processes=22,requests_per_implementation=348,
+        status='CAPTURED_NOT_QUALIFIED',native_processes=0,original_processes=22,requests_per_implementation=348,
         producer_starts_per_implementation=11),'complete finite lifecycle pair evidence differs')
     controls=object_at(folder/'controls/result.json')
     names=['invocation','context-invocation','source-root','output-root','native-count','request-count',

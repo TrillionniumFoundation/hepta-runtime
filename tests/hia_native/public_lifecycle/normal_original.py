@@ -24,7 +24,7 @@ def fixtures():
     return values
 
 
-def execute(admission, expected, invocation, manifest, original, output):
+def execute(admission, expected, invocation, manifest, original, output, *, defer_final_admission=False):
     admission, manifest, original = (Path(p).resolve(strict=True) for p in (admission, manifest, original))
     output = Path(output).absolute()
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -65,24 +65,34 @@ def execute(admission, expected, invocation, manifest, original, output):
             report['original_requests'] += len(case['events'])
             report['completed'].append(native_report['completed'][index])
             save()
-        require(admit(admission, expected, invocation, ROOT, manifest, execution=True) == before,
-                'native captures changed while original calls executed')
+        if not defer_final_admission:
+            require(admit(admission, expected, invocation, ROOT, manifest, execution=True) == before,
+                    'native captures changed while original calls executed')
         require(pin(original) == report['original_binary'], 'actual original binary changed')
-        report['status'] = 'PASS'
+        require(report['original_processes'] == 64 and report['original_requests'] == 359,
+                'complete original capture domain changed')
+        report['status'] = 'CAPTURED_NOT_QUALIFIED' if defer_final_admission else 'PASS'
     except BaseException as error:
         report.update(status='FAIL', error=repr(error), traceback=traceback.format_exc())
         raise
     finally:
         save()
+    if defer_final_admission:
+        # The source-owned parent immediately performs the full verifier below.
+        # This child cannot publish qualified evidence in the deferred mode.
+        return dict(status='CAPTURED_NOT_QUALIFIED', native_processes=0,
+            retained_native_processes=64, original_processes=64,
+            requests_per_implementation=359)
     return verify(output, original, admission, expected, invocation, manifest)
 
 
-def verify(folder, original, admission, expected, invocation, manifest):
+def verify(folder, original, admission, expected, invocation, manifest, *, captured=False):
     folder, original, admission, manifest = (Path(p).resolve(strict=True)
         for p in (folder, original, admission, manifest))
     before = admit(admission, expected, invocation, ROOT, manifest)
     report = obj(folder/'result.json')
-    require(report['schema'] == 'hepta.public-lifecycle.retained-normal.v1' and report['status'] == 'PASS'
+    require(report['schema'] == 'hepta.public-lifecycle.retained-normal.v1'
+        and report['status'] == ('CAPTURED_NOT_QUALIFIED' if captured else 'PASS')
         and report['admission'] == pin(admission) and report['invocation'] == invocation
         and report['retained_native'] == before and report['native_processes'] == 0
         and report['retained_native_processes'] == report['original_processes'] == 64
@@ -118,5 +128,7 @@ if __name__ == '__main__':
         p.add_argument('--'+key, type=Path, required=True)
     p.add_argument('--admission-sha256', required=True)
     p.add_argument('--invocation', required=True)
+    p.add_argument('--defer-final-admission', action='store_true')
     a = p.parse_args()
-    print(json.dumps(execute(a.admission, a.admission_sha256, a.invocation, a.build, a.original, a.output), sort_keys=True))
+    print(json.dumps(execute(a.admission, a.admission_sha256, a.invocation, a.build, a.original, a.output,
+        defer_final_admission=a.defer_final_admission), sort_keys=True))
