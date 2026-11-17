@@ -1,0 +1,124 @@
+name: Public text publisher full wire and effects
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-public-domain-6780-v1-20261117']
+    paths: ['tests/hia_native/text_publication_public_domain_ci/**', '.github/workflows/hia-text-publication-public-domain-v1.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TP_PACKAGE=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_public_domain_ci/source" "TP_DEPS=$RUNNER_TEMP/publisher-dependencies" "TP_OUTPUT=$RUNNER_TEMP/publisher-dependency-proof" "TP_EXPORT=$RUNNER_TEMP/publisher-dependency-export" "TP_DRIVER=$RUNNER_TEMP/publisher-dependency-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact qualification source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/text_publication_public_domain_ci/source
+      - name: Verify all source and input-only domains
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$TP_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 1e8ebcb049b1cfe3b8a2d6d3869641a1049ab310daf57cb6ac794181e2b2fd9b
+          python3 -I -S -B "$TP_PACKAGE/recipe/check_source.py"
+      - name: Read complete fresh123 and actual SDK reference artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$TP_PACKAGE/recipe/dependencies.py" --output "$TP_DEPS" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+          tp_status=$?
+          cat "$TP_DRIVER.stderr"
+          cat "$TP_DRIVER.stdout"
+          exit "$tp_status"
+      - name: Retain full dependency indices and source bindings
+        run: python3 -I -S -B "$TP_PACKAGE/recipe/retain_dependency_evidence.py" --dependencies "$TP_DEPS" --output "$TP_OUTPUT"
+      - name: Archive complete source and dependency proof
+        if: always()
+        run: python3 -I -S -B "$TP_PACKAGE/recipe/archive.py" pack --source "$TP_PACKAGE" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload dependency proof and any failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-public-dependencies-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
+  public:
+    needs: dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        era: [legacy, modern]
+        lane:
+          - {mode: carrier, profile: configured}
+          - {mode: carrier, profile: absent}
+          - {mode: carrier, profile: denied}
+          - {mode: carrier, profile: fence_required}
+          - {mode: carrier, profile: capabilities}
+          - {mode: carrier, profile: body}
+          - {mode: carrier, profile: typed}
+          - {mode: carrier, profile: catalog}
+          - {mode: stdio, profile: configured}
+          - {mode: stdio, profile: absent}
+          - {mode: stdio, profile: denied}
+          - {mode: stdio, profile: fence_required}
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TP_PACKAGE=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_public_domain_ci/source" "TP_DEPS=$RUNNER_TEMP/publisher-dependencies" "TP_OUTPUT=$RUNNER_TEMP/publisher-public-capture" "TP_EXPORT=$RUNNER_TEMP/publisher-public-export" "TP_DRIVER=$RUNNER_TEMP/publisher-public-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/text_publication_public_domain_ci/source
+      - name: Verify frozen source and full inputs
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$TP_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 1e8ebcb049b1cfe3b8a2d6d3869641a1049ab310daf57cb6ac794181e2b2fd9b
+          python3 -I -S -B "$TP_PACKAGE/recipe/check_source.py"
+      - name: Verify every retained graph and original artifact byte
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -S -B "$TP_PACKAGE/recipe/dependencies.py" --output "$TP_DEPS"
+      - name: Capture both actual implementations with full effects
+        run: |
+          set +e
+          python3 -I -S -B "$TP_PACKAGE/recipe/capture_public.py" --dependencies "$TP_DEPS/DEPENDENCIES.json" --output "$TP_OUTPUT" --mode "${{ matrix.lane.mode }}" --profile "${{ matrix.lane.profile }}" --era "${{ matrix.era }}" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+          tp_status=$?
+          cat "$TP_DRIVER.stderr"
+          cat "$TP_DRIVER.stdout"
+          exit "$tp_status"
+      - name: Complete guarded wire and effect comparison
+        if: ${{ success() && !(matrix.lane.mode == 'carrier' && matrix.lane.profile == 'configured' && matrix.era == 'legacy') }}
+        run: python3 -I -S -B "$TP_PACKAGE/recipe/qualify_readonly.py" --capture "$TP_OUTPUT" >> "$TP_DRIVER.stdout" 2>> "$TP_DRIVER.stderr"
+      - name: Complete comparison and10 physical refusals and2 relocations
+        if: ${{ success() && matrix.lane.mode == 'carrier' && matrix.lane.profile == 'configured' && matrix.era == 'legacy' }}
+        run: python3 -I -S -B "$TP_PACKAGE/recipe/qualify_readonly.py" --capture "$TP_OUTPUT" --physical-controls >> "$TP_DRIVER.stdout" 2>> "$TP_DRIVER.stderr"
+      - name: Preserve complete source capture and any failure
+        if: always()
+        run: python3 -I -S -B "$TP_PACKAGE/recipe/archive.py" pack --source "$TP_PACKAGE" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload complete lane evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-public-${{ matrix.lane.mode }}-${{ matrix.lane.profile }}-${{ matrix.era }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
