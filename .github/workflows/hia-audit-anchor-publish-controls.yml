@@ -1,7 +1,7 @@
 name: Audit archive publisher admission controls
 on:
   push:
-    branches: [hia-audit-anchor-publish-controls-v1-6780-20261117]
+    branches: [hia-audit-anchor-publish-controls-v2-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -12,17 +12,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          sparse-checkout: tests/hia_native/audit_anchor_publish_controls_v1
+          sparse-checkout: tests/hia_native/audit_anchor_publish_controls_v2
       - name: Admit every frozen source before any new control
         run: |
           mkdir "$RUNNER_TEMP/publish-controls"
-          cp -a tests/hia_native/audit_anchor_publish_controls_v1 "$RUNNER_TEMP/publish-controls/source"
+          cp -a tests/hia_native/audit_anchor_publish_controls_v2 "$RUNNER_TEMP/publish-controls/source"
           python3 -I -B - <<'PY'
           import hashlib,json,os
           from pathlib import Path
           r=Path(os.environ["RUNNER_TEMP"])/"publish-controls/source"
           raw=(r/"SOURCE.json").read_bytes()
-          assert hashlib.sha256(raw).hexdigest()=="1e0a58c34eaae6dc894be48da7d9bd75ac290188c88170f11dde4cd7d1e5d62a"
+          assert hashlib.sha256(raw).hexdigest()=="febe3ccf961a1449536b73c51dddace7adaff69a55ed69c4fbb3639bb077f47b"
           for p,pin in json.loads(raw)["files"].items():
               b=(r/p).read_bytes()
               assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"]
@@ -43,14 +43,14 @@ jobs:
         run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-controls/source/run.py" --prior "$RUNNER_TEMP/publish-controls/restored/prior" --output "$RUNNER_TEMP/publish-controls/output" --phase verify
       - name: Preserve all complete or failed control bytes and original evidence
         if: always()
-        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-controls/source/export.py" --workspace "$RUNNER_TEMP/publish-controls" --archive "$RUNNER_TEMP/publish-controls/audit-publisher-controls-v1.tar.gz"
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-controls/source/export.py" --workspace "$RUNNER_TEMP/publish-controls" --archive "$RUNNER_TEMP/publish-controls/audit-publisher-controls-v2.tar.gz"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-anchor-publisher-controls-v1
+          name: audit-anchor-publisher-controls-v2
           path: |
-            ${{ runner.temp }}/publish-controls/audit-publisher-controls-v1.tar.gz
-            ${{ runner.temp }}/publish-controls/audit-publisher-controls-v1.tar.gz.json
+            ${{ runner.temp }}/publish-controls/audit-publisher-controls-v2.tar.gz
+            ${{ runner.temp }}/publish-controls/audit-publisher-controls-v2.tar.gz.json
           include-hidden-files: true
           if-no-files-found: error
           compression-level: 0
