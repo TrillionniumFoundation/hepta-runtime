@@ -1,0 +1,85 @@
+name: Capture remaining actual original WAIT references once
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public123_extract_wait_remaining_reference_ci/ORIGINAL_ONLY_ONCE.json']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        domain: [ordinary-a-modern, ordinary-b-legacy, ordinary-b-modern, eof-legacy, eof-modern]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: driver
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_wait_remaining_reference_ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: 61e3a24e8d01aed2c912873039882bd99b248436
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_contention_ci
+      - name: Freeze exact source and input-only lane
+        run: |
+          printf '%s\n' "WAIT_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_contention_ci" "WAIT_DRIVER_ROOT=$GITHUB_WORKSPACE/driver/tests/hia_native/public123_extract_wait_remaining_reference_ci" "WAIT_INPUTS=$RUNNER_TEMP/original-inputs" "WAIT_CAPTURE=$RUNNER_TEMP/original-capture" "WAIT_EXPORT=$RUNNER_TEMP/original-export" "WAIT_DRIVER=$RUNNER_TEMP/original-driver" >> "$GITHUB_ENV"
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = '61e3a24e8d01aed2c912873039882bd99b248436'
+          test "$(git -C "$GITHUB_WORKSPACE/driver" rev-parse HEAD)" = '${{ github.sha }}'
+          test "$(sha256sum "$GITHUB_WORKSPACE/driver/tests/hia_native/public123_extract_wait_remaining_reference_ci/original_remaining.py" | cut -d' ' -f1)" = '9f305994fae2c06dab9c402207e687c8cb5dc38a354773b80c5aa72ec6496a82'
+          test "$(sha256sum "$GITHUB_WORKSPACE/driver/tests/hia_native/public123_extract_wait_remaining_reference_ci/IDENTITY.json" | cut -d' ' -f1)" = 'de00f76b9485b16e0012cf40044896324456973b2ee16c4a1be8a7f59e57012e'
+      - name: Strict complete original build restoration with zero target execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$WAIT_DRIVER_ROOT/original_remaining.py" restore --source "$WAIT_SOURCE" --inputs "$WAIT_INPUTS" --output "$WAIT_CAPTURE" --domain ${{ matrix.domain }} > "$WAIT_DRIVER-restore.stdout" 2> "$WAIT_DRIVER-restore.stderr"
+          wait_status=$?
+          cat "$WAIT_DRIVER-restore.stderr"
+          test "$wait_status" -ne 0 || cat "$WAIT_DRIVER-restore.stdout"
+          exit "$wait_status"
+      - name: Execute only four new original scenarios and complete guarded reader
+        run: |
+          set +e
+          python3 -I -S -B "$WAIT_DRIVER_ROOT/original_remaining.py" capture --source "$WAIT_SOURCE" --inputs "$WAIT_INPUTS" --output "$WAIT_CAPTURE" --domain ${{ matrix.domain }} > "$WAIT_DRIVER.stdout" 2> "$WAIT_DRIVER.stderr"
+          wait_status=$?
+          cat "$WAIT_DRIVER.stderr"
+          test "$wait_status" -ne 0 || cat "$WAIT_DRIVER.stdout"
+          exit "$wait_status"
+      - name: Archive and read every retained success or failure byte
+        if: always()
+        run: |
+          mkdir -p "$WAIT_CAPTURE/dependency-logs"
+          if ! test -d "$WAIT_CAPTURE/recipe-extension"; then
+            cp -a "$WAIT_DRIVER_ROOT" "$WAIT_CAPTURE/recipe-extension"
+          fi
+          for wait_suffix in stdout stderr; do
+            if test -f "$WAIT_DRIVER-restore.$wait_suffix"; then
+              cp "$WAIT_DRIVER-restore.$wait_suffix" "$WAIT_CAPTURE/dependency-logs/restore.$wait_suffix"
+            fi
+          done
+          if ! test -f "$WAIT_CAPTURE/RUN.json" && test -d "$WAIT_INPUTS"; then
+            mv "$WAIT_INPUTS" "$WAIT_CAPTURE/dependency-failure"
+          fi
+          python3 -I -S -B "$WAIT_SOURCE/archive.py" pack --source "$WAIT_SOURCE" --capture "$WAIT_CAPTURE" --output "$WAIT_EXPORT" --driver-prefix "$WAIT_DRIVER"
+      - name: Retain complete new original reference
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-original-WAIT-${{ matrix.domain }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.WAIT_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
