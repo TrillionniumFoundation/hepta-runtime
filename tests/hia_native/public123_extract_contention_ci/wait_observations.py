@@ -137,7 +137,7 @@ def frame(raw,side):
         for _ in range(count):
             kind,owner,address,extent=q(body,at,4);at+=32
             need((kind,owner) not in rows and ((address==0 and extent==0) or (address>0 and 0<extent<=256<<20)) and extent<=len(body)-at,"complete fixed mapping span")
-            data=body[at:at+extent];at+=extent
+            data=bytes(body[at:at+extent]);at+=extent
             rows[(kind,owner)]={"address":address,"data":data}
             pins.append({"kind":kind,"owner":owner,"address":address,"bytes":extent,"sha256":hashlib.sha256(data).hexdigest()})
         need(at==len(body) and bool(flags)==bool(rows[(9,0)]["address"]),"all mapping bytes accounted")
