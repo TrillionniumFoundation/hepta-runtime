@@ -2,7 +2,7 @@ name: Qualify retained HIA binary read stdio evidence
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-read-stdio-recovery-fixed-6780-20261117]
+    branches: [hia-binary-read-stdio-recovery-proof-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -15,7 +15,7 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       GH_TOKEN: ${{ github.token }}
       BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_read_stdio/v1/recovery
-      BINARY_MANIFEST: 2fe499e84e81d3136ff3fc88eb9be31759f42402318f59cf15c527bb975fda7a
+      BINARY_MANIFEST: 602d428e51366253c6964456e128df11ba5ae6d2d256b470e2e3427d4eb9998e
     steps:
       - name: Checkout frozen independent uploaded reader
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

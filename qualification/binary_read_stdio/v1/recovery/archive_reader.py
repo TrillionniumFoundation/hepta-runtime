@@ -206,7 +206,7 @@ def complete(work,mode):
                 and proof["evidence"]=={k:v for k,v in result.items()if k!="physical_controls"},
                 "retained first read differs from full verification")
         return result
-    roots=[ROOT,work/"download",work/"original"]+([work/"controls"]if mode=="verify"else[])
+    roots=[ROOT,work/"download",work/"original"]+([work/"controls",work/"proof"]if mode=="verify"else[])
     return readonly.guarded(operation,roots=roots)
 if __name__=="__main__":
     p=argparse.ArgumentParser();p.add_argument("stage",choices=["fetch","restore","read","controls","verify"])
