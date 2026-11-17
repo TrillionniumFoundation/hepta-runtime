@@ -89,9 +89,9 @@ whole-context refusal atomicity is inferred.
 
 ## Execution and scope
 
-This revision is source-only until separately frozen CI assembles it, authors
-and freezes the HIA packer, compiles and packs the exact two semantic images,
-and executes full ordinary/refusal domains. Rust reference bytes and completed
+The native assembly and HIA packer source were produced by source-author CI
+44048463978. Runtime qualification remains pending a separately frozen CI that
+compiles, packs and executes the exact two semantic images and full domains. Rust reference bytes and completed
 original observations are reused only after their complete strict admission.
 No local Rust or HIA execution is authorized. Each new producer keeps its
 declared 60/180-second budget; CI jobs retain fifteen minutes. Old failures and

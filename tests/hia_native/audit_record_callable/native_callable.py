@@ -84,6 +84,7 @@ def run(build, output, fixture, observed):
     counts = dict(owner_calls=0, json_calls=0, filesystem_calls=0)
     try:
         machine = Callable(build / "callable/manifest.json", component)
+        loaded_image = dict(address=machine.module._address, bytes=machine.module._size)
         (output / "LIBC.bin").write_bytes(machine.libc_bytes)
         (output / "LIBC-BINDINGS.json").write_bytes(encoded(machine.bindings))
         (output / "PROCESS-MAPS.txt").write_bytes(Path("/proc/self/maps").read_bytes())
@@ -188,6 +189,8 @@ def run(build, output, fixture, observed):
     require(source() == identity, "source unchanged throughout the complete actual native cohort")
     report = dict(schema="hepta.audit-record-callable.native.v1", status="PASS",
         source_manifest_sha256=identity, cases=219, operations=459, observer_enabled=observed,
+        pid=os.getpid(), parent_pid=os.getppid(), pgid=os.getpgrp(), uid=os.geteuid(), gid=os.getegid(),
+        source_root=str(ROOT), output_root=str(output), build_root=str(build), loaded_image=loaded_image,
         context_count=219, outer_calls=len(outer.rows), counts=counts,
         observations=pin(read(output / "OBSERVATIONS.json")), contexts=pin(read(output / "CONTEXTS.json")),
         outer=pin(read(output / "OUTER.json")), outer_buffers=pin(read(output / "outer.bin.gz")),
