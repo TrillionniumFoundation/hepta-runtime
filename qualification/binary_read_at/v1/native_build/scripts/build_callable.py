@@ -89,7 +89,7 @@ def build(source,hepta,output):
         meta=decode(result.read_bytes())
         members[name]=dict(source_path=path,manifest=result.relative_to(output).as_posix(),
             identity=pin(result),source=pin(owned(source,path)),image=pin(result.parent/meta["image"]))
-    require(members["body"]["source"]["sha256"]=="3dbf1f5f46e9bc7e8a139714db1ff9588a95d1d9cc7d1dab1a8da03470a7fbd3"
+    require(members["body"]["source"]["sha256"]=="75719ec36492fd265fefc61f8a66cc6550657306e0b7cc91072df94681b5808d"
         and members["stat"]["source"]["sha256"]=="d5fedc22505bed6a6f8b12dffcfa699be46aeffb890d8a821710c05f0aaf3a3f"
         and members["codec"]["image"]["sha256"]=="469f2b555224499b2d9d3c95cc3d772f65fcbe6705fb79804f31fa7c473debe2",
         "frozen binary body/stat source or qualified codec image changed")

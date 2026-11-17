@@ -2,7 +2,7 @@ name: Build native borrowed-parent binary read callable
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-read-at-build-6780-20261117]
+    branches: [hia-binary-read-at-build-fixed-6780-20261117]
 permissions:
   contents: read
 jobs:
@@ -13,7 +13,7 @@ jobs:
       LC_ALL: C.UTF-8
       PYTHONDONTWRITEBYTECODE: '1'
       BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_read_at/v1/native_build
-      BINARY_MANIFEST: cdde5b2cf3226d33128cbba0f69928314d6393dbc2fffb1d758bcbbf1640b712
+      BINARY_MANIFEST: 9ae8ffaa986e930d75b71ea6c7665b4c17984a39c9529df19a39ded9c5b5e7dc
     steps:
       - name: Checkout frozen source author
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
