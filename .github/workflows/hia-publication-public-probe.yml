@@ -1,0 +1,84 @@
+name: Real public publication pending diagnostic
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-public-probe-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+      digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Set runner paths
+        run: |
+          printf '%s\n' "PP_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_public_probe_ci" "PP_RESTORE=$RUNNER_TEMP/publication-probe-build" "PP_RUN=$RUNNER_TEMP/publication-probe-capture" "PP_DRIVER=$RUNNER_TEMP/publication-probe-driver" "PP_EXPORT=$RUNNER_TEMP/publication-probe-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_public_probe_ci
+      - name: Complete immutable graph admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          mkdir "$PP_RUN"
+          python3 -I -S -B "$PP_SOURCE/prepare.py" --output "$PP_RESTORE" > "$PP_DRIVER.prepare.stdout" 2> "$PP_DRIVER.prepare.stderr"
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PP_RESTORE"]); p=pathlib.Path(os.environ["PP_RUN"])/"build-read"; p.mkdir(); [(shutil.copyfile(r/n,p/n)) for n in ("READ.json","ARCHIVE.json","FILES.json","READ_ONLY.json","SUMMARY.json")]'
+      - name: Real held worker, public ping, cancellation notification and EOF
+        run: |
+          python3 -I -S -B "$PP_SOURCE/probe.py" --restored "$PP_RESTORE" --output "$PP_RUN/probes" > "$PP_DRIVER.stdout" 2> "$PP_DRIVER.stderr"
+          cat "$PP_DRIVER.stdout"
+      - name: Preserve complete success or failure
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PP_RUN"]); r.mkdir(exist_ok=True); [(shutil.copyfile(p,r/p.name)) for p in r.parent.glob(pathlib.Path(os.environ["PP_DRIVER"]).name+".*") if p.is_file()]'
+          python3 -I -S -B "$PP_SOURCE/build-reference/archive.py" pack --source "$PP_SOURCE" --capture "$PP_RUN" --output "$PP_EXPORT" --driver-prefix "$PP_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; p=pathlib.Path(os.environ["PP_DRIVER"]+".stderr"); print(p.read_text() if p.exists() else ""); p=pathlib.Path(os.environ["PP_DRIVER"]+".prepare.stderr"); print(p.read_text() if p.exists() else "")'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: upload
+        if: always()
+        with:
+          name: publication-public-probe-${{ github.sha }}
+          path: ${{ env.PP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+  uploaded:
+    needs: probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runner paths
+        run: |
+          printf '%s\n' "PP_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_public_probe_ci" "PP_READ=$RUNNER_TEMP/publication-probe-read" "PP_PROOF=$RUNNER_TEMP/publication-probe-proof" "PP_DRIVER=$RUNNER_TEMP/publication-probe-read-driver" "PP_EXPORT=$RUNNER_TEMP/publication-probe-read-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_public_probe_ci
+      - name: Complete uploaded bytes without application replay
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$PP_SOURCE/read_probe.py" --artifact '${{ needs.probe.outputs.artifact }}' --digest '${{ needs.probe.outputs.digest }}' --head '${{ github.sha }}' --output "$PP_READ" > "$PP_DRIVER.stdout" 2> "$PP_DRIVER.stderr"
+          cat "$PP_DRIVER.stdout"
+      - name: Preserve complete independent proof or failure
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PP_READ"]); p=pathlib.Path(os.environ["PP_PROOF"]); p.mkdir(); [(shutil.copyfile(r/n,p/n)) for n in ("READ.json","ARCHIVE.json","FILES.json","READ_ONLY.json","SUMMARY.json") if (r/n).is_file()]'
+          python3 -I -S -B "$PP_SOURCE/build-reference/archive.py" pack --source "$PP_SOURCE" --capture "$PP_PROOF" --output "$PP_EXPORT" --driver-prefix "$PP_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; p=pathlib.Path(os.environ["PP_DRIVER"]+".stderr"); print(p.read_text() if p.exists() else "")'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-public-probe-independent-${{ github.sha }}
+          path: ${{ env.PP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
