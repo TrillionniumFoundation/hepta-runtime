@@ -173,7 +173,7 @@ fn main() -> Result<()> {
     });
     if stdio_mode {
         return executor.block_on(async {
-            let running = servers[0].clone().serve(tokio::io::stdio()).await?;
+            let running = servers[0].clone().serve(rmcp::transport::stdio()).await?;
             running.waiting().await?;
             Ok(())
         });

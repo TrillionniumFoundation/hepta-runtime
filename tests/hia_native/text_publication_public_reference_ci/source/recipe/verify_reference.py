@@ -4,7 +4,7 @@
 """Bind every compiled original byte and the complete actual SDK observer."""
 from pathlib import Path
 import argparse, hashlib, importlib.util, json
-EXPECTED_MANIFEST="21d8dff68ac76e41d78dc39f8dd53f4e74073c5cf5d9baf440f131669f11ae92"
+EXPECTED_MANIFEST="1a98670c0ff78ab55a0c1d907ab8dea63e275f726f6a5a779384816d84f8733e"
 TARGET="d3d75c30719db966b004756f610007a7c723729e"
 TREE="612e145513961556ac8844b5cc978f9b5175e4d4"
 def identity(raw):
@@ -40,6 +40,12 @@ def verify(reference,target_checkout=None):
     for name,pin in base["files"].items():
         if name!="src/main.rs":
             assert manifest["files"][name]==pin,name
+    origin=manifest["transport_constructor_origin"]
+    transport_source=(reference.parent/"retained/target-main.rs.txt").read_bytes()
+    assert identity(transport_source)=={k:origin[k] for k in ("bytes","sha256","git_blob")}
+    assert b"use rmcp::{transport::stdio, ServiceExt};" in transport_source
+    if target_checkout is not None:
+        assert (Path(target_checkout)/"src/main.rs").read_bytes()==transport_source
     raw_tools=(reference/"raw-catalog-input.json").read_bytes()
     assert identity(raw_tools)=={k:manifest["raw_catalog"][k] for k in ("bytes","sha256","git_blob")}
     tools=json.loads(raw_tools)

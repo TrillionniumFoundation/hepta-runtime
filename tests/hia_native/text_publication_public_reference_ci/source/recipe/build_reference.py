@@ -67,6 +67,9 @@ def execute(name, command):
     receipts.append(row)
     (OUT / 'processes.json').write_text(json.dumps(receipts, sort_keys=True, indent=2) + '\n')
     print(json.dumps({k:row[k] for k in ('name','exit_code','timed_out','elapsed_seconds')}), flush=True)
+    if timed or process.returncode != 0:
+        sys.stderr.buffer.write((OUT / (name + ".stderr")).read_bytes())
+        sys.stderr.buffer.flush()
     assert not timed and process.returncode == 0, row
     return (OUT / (name + '.stdout')).read_bytes()
 
