@@ -1,0 +1,35 @@
+--- a/tests/hia_native/filesystem_parity/qualify_pipeline.py
++++ b/tests/hia_native/filesystem_parity/qualify_pipeline.py
+@@ -78,13 +78,19 @@
+-        def guard(fn,*,metadata=False):
+-            def call(path,*pos,**kw):
+-                if isinstance(path,(str,bytes,os.PathLike)):
+-                    current=Path(os.path.abspath(os.fsdecode(path)))
+-                    current_copy=any(current==home or current.is_relative_to(home) for home in allowed)
+-                    # Path resolution observes ancestor metadata. It must never
+-                    # read a producer file or the other relocated copy.
+-                    traversal=metadata and any(home.is_relative_to(current) for home in allowed)
+-                    forbidden=any(current==home or current.is_relative_to(home) for home in blocked_now)
+-                    q.need(not forbidden or current_copy or traversal,
+-                           'relocated reader touched a producer path: '+str(current))
+-                return fn(path,*pos,**kw)
+-            return call
++        def guard(fn,*,metadata=False):
++            allowed_text=tuple(str(home) for home in allowed)
++            blocked_text=tuple(str(home) for home in blocked_now)
++            def within(value,home):
++                # normpath preserves exactly two leading POSIX slashes as a distinct
++                # anchor, just as pathlib.PosixPath does. Root "/" must not admit "//".
++                if value.startswith("//") != home.startswith("//"):
++                    return False
++                return value==home or value.startswith(home if home.endswith("/") else home+"/")
++            def call(path,*pos,**kw):
++                if isinstance(path,(str,bytes,os.PathLike)):
++                    current=os.path.abspath(os.fsdecode(path))
++                    current_copy=any(within(current,home) for home in allowed_text)
++                    traversal=metadata and any(within(home,current) for home in allowed_text)
++                    forbidden=any(within(current,home) for home in blocked_text)
++                    q.need(not forbidden or current_copy or traversal,
++                           'relocated reader touched a producer path: '+current)
++                return fn(path,*pos,**kw)
++            return call
