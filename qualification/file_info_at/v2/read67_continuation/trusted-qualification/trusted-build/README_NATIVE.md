@@ -1,0 +1,5 @@
+# File info with the qualified read67 shared pool and final formatter34
+
+This separate native build candidate preserves the complete original info40 HIA source and uses the final read67 orphan successor through its mandatory third create argument. It packs exactly six HIA images: info40, read67, metadata63, codec, stat and the sole formatter34. Existing historical author helper sources are provenance only. No info mode is added; read67 owns HBRDFD01 fingerprint mode2.
+
+The exact one-line production boundary edit and private fault-observer extension are reversible in REBIND_PROOF.json and checked by scripts/rebind_source.py. Native compilation remains fixed copied/reverified B3 in CI, with unchanged 900/180/60-second budgets and complete compiler/linker/packer buffers. Source-only/build-only success cannot replace actual composed EIO/orphan, complete filesystem, FD0, two-context, release/destroy and EOF evidence. The first fingerprint-child fstat fault is a new required domain; previous outer-info fault comparisons are retained and are not relabeled as child coverage.
