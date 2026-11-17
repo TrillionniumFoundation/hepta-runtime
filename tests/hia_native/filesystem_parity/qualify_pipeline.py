@@ -76,16 +76,22 @@ def main():
         original_origin=q.read_json(args.output/q.FOLDER/'original/captures-v1','SOURCE.json')
         blocked.extend(Path(value['cross_root']) for value in (origin,original_origin))
         def guard(fn,*,metadata=False):
+            allowed_text=tuple(str(home) for home in allowed)
+            blocked_text=tuple(str(home) for home in blocked_now)
+            def within(value,home):
+                # normpath preserves exactly two leading POSIX slashes as a distinct
+                # anchor, just as pathlib.PosixPath does. Root "/" must not admit "//".
+                if value.startswith("//") != home.startswith("//"):
+                    return False
+                return value==home or value.startswith(home if home.endswith("/") else home+"/")
             def call(path,*pos,**kw):
                 if isinstance(path,(str,bytes,os.PathLike)):
-                    current=Path(os.path.abspath(os.fsdecode(path)))
-                    current_copy=any(current==home or current.is_relative_to(home) for home in allowed)
-                    # Path resolution observes ancestor metadata. It must never
-                    # read a producer file or the other relocated copy.
-                    traversal=metadata and any(home.is_relative_to(current) for home in allowed)
-                    forbidden=any(current==home or current.is_relative_to(home) for home in blocked_now)
+                    current=os.path.abspath(os.fsdecode(path))
+                    current_copy=any(within(current,home) for home in allowed_text)
+                    traversal=metadata and any(within(home,current) for home in allowed_text)
+                    forbidden=any(within(current,home) for home in blocked_text)
                     q.need(not forbidden or current_copy or traversal,
-                           'relocated reader touched a producer path: '+str(current))
+                           'relocated reader touched a producer path: '+current)
                 return fn(path,*pos,**kw)
             return call
         for root,output in moved:
