@@ -1,0 +1,73 @@
+name: Read complete installed binary root evidence without replay
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-root-pure-recovery-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pure-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      BINARY_RECOVERY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_root/v1/pure_recovery
+      BINARY_RECOVERY_MANIFEST: f15e8e5cf084a7673d925244872ebfadd0ff918bd4c8c5529f06c1c6c156c8bf
+    steps:
+      - name: Checkout exact inert readers and frozen original artifact binding
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_root/v1/pure_recovery
+          persist-credentials: false
+      - name: Verify every recovery source byte before artifact access
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import os,sys
+          source=Path(os.environ["BINARY_RECOVERY_SOURCE"]);sys.path.insert(0,str(source/"scripts"))
+          import recover
+          recover.frozen(os.environ["BINARY_RECOVERY_MANIFEST"])
+          for path in source.rglob("*.py"):compile(path.read_bytes(),str(path),"exec")
+          PY
+      - name: Fetch the exact complete original artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$BINARY_RECOVERY_SOURCE/scripts/driver.py" fetch \
+            --work "$RUNNER_TEMP/binary-root-pure-recovery" --source-manifest-sha256 "$BINARY_RECOVERY_MANIFEST"
+      - name: Read all ZIP and TAR bytes and restore every logical file
+        run: |
+          python3 -I -S -B "$BINARY_RECOVERY_SOURCE/scripts/driver.py" unpack \
+            --work "$RUNNER_TEMP/binary-root-pure-recovery" --source-manifest-sha256 "$BINARY_RECOVERY_MANIFEST"
+      - name: Revalidate the complete original comparison in a guarded pure process
+        run: |
+          python3 -I -S -B "$BINARY_RECOVERY_SOURCE/scripts/driver.py" read \
+            --work "$RUNNER_TEMP/binary-root-pure-recovery" --source-manifest-sha256 "$BINARY_RECOVERY_MANIFEST"
+      - name: Execute all original physical reader controls and complete relocations
+        run: |
+          python3 -I -S -B "$BINARY_RECOVERY_SOURCE/scripts/driver.py" controls \
+            --work "$RUNNER_TEMP/binary-root-pure-recovery" --source-manifest-sha256 "$BINARY_RECOVERY_MANIFEST"
+      - name: Independently reread all original and physical-control evidence
+        run: |
+          python3 -I -S -B "$BINARY_RECOVERY_SOURCE/scripts/driver.py" verify \
+            --work "$RUNNER_TEMP/binary-root-pure-recovery" --source-manifest-sha256 "$BINARY_RECOVERY_MANIFEST"
+      - name: Preserve complete success or failure evidence without semantic replay
+        if: always()
+        run: |
+          python3 -I -S -B "$BINARY_RECOVERY_SOURCE/scripts/export_driver.py" \
+            --work "$RUNNER_TEMP/binary-root-pure-recovery" --output "$RUNNER_TEMP/binary-root-pure-recovery-export" \
+            --source-manifest-sha256 "$BINARY_RECOVERY_MANIFEST"
+      - name: Upload all original bytes and all recovered reader proofs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-root-pure-recovery-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-root-pure-recovery-export
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
