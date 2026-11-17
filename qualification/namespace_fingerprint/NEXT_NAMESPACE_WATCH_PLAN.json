@@ -1,0 +1,57 @@
+{
+  "budgets": {
+    "ci_minutes": 15,
+    "compiler": 900,
+    "process": 60,
+    "reader": 180
+  },
+  "local_hia": false,
+  "local_rust": false,
+  "main_mutation": false,
+  "requirements": [
+    "Watcher::new, serial, changed, drain_with_reader, version_with_reader and all original wrappers remain byte-exact in the Rust reference.",
+    "Actual inotify_init1/read/inotify_add_watch/inotify_rm_watch, real file metadata and clone/close boundaries; no fixture policy substitute in production.",
+    "HIA owns all serial/generation/dead/LRU/scope/error-selection/drain-budget policy. Mechanical bridge owns only real capability, memory, syscall, mutex/atomic and cleanup operations.",
+    "Exactly 64 read attempts and 16,384 processed events; Interrupted consumes an attempt, WouldBlock succeeds even on the last attempt; dense invalid tail is not processed after the event bound.",
+    "Directory event stream is parsed as full 16-byte inotify_event header plus event.len bytes, with exact source error precedence, full buffer and retained unused tail.",
+    "serial increments only on checked success below 2^63; overflow does not assign self.next. Every changed call consumes one serial even when no watch matches.",
+    "Version begins with drain. A drain error first calls changed(-1, IN_Q_OVERFLOW), which may override the error on serial exhaustion; partial successful state changes are retained.",
+    "Live identity hit removes then pushes the same watch to the LRU back, with no new pin/watch/id. A dead hit removes the watch, performs ignored rm_watch, then releases its old pin before creating a new pin.",
+    "shared_pin Some clones the actual existing Arc<File>, not its FD. None uses actual File::try_clone. Add-watch failure releases that new pin after capturing original errno.",
+    "After successful add_watch, serial failure drops the new pin but does not invent inotify_rm_watch; original code leaves that kernel watch until stream cleanup.",
+    "Eviction occurs only after new watch serial succeeds; old rm_watch errors are ignored, old pin is released, then the new Watch is appended.",
+    "Ordinary mask observes membership/self movement only; content adds MODIFY/CLOSE_WRITE/ATTRIB. Fingerprint fallback must not read payloads.",
+    "Global namespace mutex poison/init/version errors go through original version fallback; content mutex poison returns its exact error, new/version failure returns None and retries only when source does.",
+    "ContentWatchSet scope is 1..258 entries. Validate scope before NEXT fetch_update; consume set serial before inotify initialization, including later construction failure.",
+    "Set NEXT is a real shared atomic counter, Relaxed checked fetch_update below 2^63. Set high-bit identities never alias flat Watch ids.",
+    "Set construction uses real shared Arc pins for every directory, final drain, exact watch-count and dead checks; duplicate identities or incomplete scope return None with complete owned cleanup.",
+    "Set version uses one lock/drain for all members; any drain error or dead watch permanently sets invalid, and later calls return None without rearming.",
+    "Rust Watcher drop closes events before dropping the Watch deque's Arc pins. Native failure/disposal must preserve this order and never close caller-borrowed FDs.",
+    "Real same-tree original/native/off tests preserve actual event order and full raw records; source-owned drain callbacks are separate private protocol controls, not real-kernel evidence.",
+    "Namespace wrapper and store/cache/caller qualification stay false until actual composite invocation and independent complete evidence read pass."
+  ],
+  "reuse": {
+    "archive_publisher_qualification": "c99cc1c072091774c562ed349c19d9f5bc89b0e2",
+    "fingerprint_owner": {
+      "abi_controls": "71d087ba0d0fb2a085685c56b8c65aabb7c37a5f",
+      "flat_sha256": "0e4153a7f4e99b09139ec1ff2cfc1a26a6b5f6234159be38219e727215ac31b0",
+      "image_sha256": "acb440dc61696bdfefc297b5b2f12d9b58b4b374396184f9d986fc3fb0198b31",
+      "physical_controls_pending": true,
+      "producer": "f5faf5d8b772d94ca877e4c89b10a542de7e9eaa",
+      "reader": "5fdec03252acad58bdfd6426c1b67396ca880668",
+      "source_sha256": "273c0b8c8305140a1b83a89a6686a0567afb8e4dd7b7a0d82c0b1de15267e842"
+    }
+  },
+  "schema": "hepta.namespace-watch.implementation-plan.v1",
+  "scope": "Actual persistent Linux namespace and content-version implementation, then archive/cache callers",
+  "status": "SOURCE_PLAN_ONLY_NO_NEW_RUNTIME_EXECUTION",
+  "target": {
+    "bytes": 12833,
+    "git_blob": "4672d33a9ede7470a469f619da4dae91f89fcecd",
+    "mode": "100644",
+    "path": "src/mcp/runtime/namespace_version.rs",
+    "sha256": "7dd63c53bc1a85995a353bedc9643e7e4eb864cc7a5603dc331f0b4dd12576db"
+  },
+  "target_commit": "d3d75c30719db966b004756f610007a7c723729e",
+  "unknown_replay": false
+}

@@ -1,0 +1,446 @@
+Current runner version: '2.338.2'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {25676d9b-54ed-4b3e-8a18-6671a0b2018c}
+Region: centralus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+24.04.5
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-24.04
+Version: 20261111.370.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Actions: read
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+Complete job name: read
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  sparse-checkout: tests/hia_native/namespace_fingerprint_final_read
+  repository: TrillionniumFoundation/hepta-runtime
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+##[endgroup]
+Syncing repository: TrillionniumFoundation/hepta-runtime
+##[group]Getting Git version info
+Working directory is '/home/runner/work/hepta-runtime/hepta-runtime'
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME='/home/runner/work/_temp/d77eeaea-45b6-4bff-a10a-0ae33dd5cbdb' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+Deleting the contents of '/home/runner/work/hepta-runtime/hepta-runtime'
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/.git/
+[command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/hepta-runtime
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path /home/runner/work/_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin +3af689cb134a201717ed007fa70b819e2a66604c:refs/remotes/origin/hia-namespace-fingerprint-final-read-6780-20261117
+From https://github.com/TrillionniumFoundation/hepta-runtime
+ * [new ref]         3af689cb134a201717ed007fa70b819e2a66604c -> origin/hia-namespace-fingerprint-final-read-6780-20261117
+[command]/usr/bin/git branch --list --remote origin/hia-namespace-fingerprint-final-read-6780-20261117
+  origin/hia-namespace-fingerprint-final-read-6780-20261117
+[command]/usr/bin/git rev-parse refs/remotes/origin/hia-namespace-fingerprint-final-read-6780-20261117
+3af689cb134a201717ed007fa70b819e2a66604c
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+##[group]Setting up sparse checkout
+[command]/usr/bin/git sparse-checkout set tests/hia_native/namespace_fingerprint_final_read
+##[endgroup]
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B hia-namespace-fingerprint-final-read-6780-20261117 refs/remotes/origin/hia-namespace-fingerprint-final-read-6780-20261117
+Updating files:   0% (1/736)
+Updating files:   1% (8/736)
+Updating files:   2% (15/736)
+Updating files:   3% (23/736)
+Updating files:   4% (30/736)
+Updating files:   5% (37/736)
+Updating files:   6% (45/736)
+Updating files:   7% (52/736)
+Updating files:   8% (59/736)
+Updating files:   9% (67/736)
+Updating files:  10% (74/736)
+Updating files:  11% (81/736)
+Updating files:  12% (89/736)
+Updating files:  13% (96/736)
+Updating files:  14% (104/736)
+Updating files:  15% (111/736)
+Updating files:  16% (118/736)
+Updating files:  17% (126/736)
+Updating files:  18% (133/736)
+Updating files:  19% (140/736)
+Updating files:  20% (148/736)
+Updating files:  21% (155/736)
+Updating files:  22% (162/736)
+Updating files:  23% (170/736)
+Updating files:  24% (177/736)
+Updating files:  25% (184/736)
+Updating files:  26% (192/736)
+Updating files:  27% (199/736)
+Updating files:  28% (207/736)
+Updating files:  29% (214/736)
+Updating files:  30% (221/736)
+Updating files:  31% (229/736)
+Updating files:  32% (236/736)
+Updating files:  33% (243/736)
+Updating files:  34% (251/736)
+Updating files:  35% (258/736)
+Updating files:  36% (265/736)
+Updating files:  37% (273/736)
+Updating files:  38% (280/736)
+Updating files:  39% (288/736)
+Updating files:  40% (295/736)
+Updating files:  41% (302/736)
+Updating files:  42% (310/736)
+Updating files:  43% (317/736)
+Updating files:  44% (324/736)
+Updating files:  45% (332/736)
+Updating files:  46% (339/736)
+Updating files:  47% (346/736)
+Updating files:  48% (354/736)
+Updating files:  49% (361/736)
+Updating files:  50% (368/736)
+Updating files:  51% (376/736)
+Updating files:  52% (383/736)
+Updating files:  53% (391/736)
+Updating files:  54% (398/736)
+Updating files:  55% (405/736)
+Updating files:  56% (413/736)
+Updating files:  57% (420/736)
+Updating files:  58% (427/736)
+Updating files:  59% (435/736)
+Updating files:  60% (442/736)
+Updating files:  61% (449/736)
+Updating files:  62% (457/736)
+Updating files:  63% (464/736)
+Updating files:  64% (472/736)
+Updating files:  65% (479/736)
+Updating files:  66% (486/736)
+Updating files:  67% (494/736)
+Updating files:  68% (501/736)
+Updating files:  69% (508/736)
+Updating files:  70% (516/736)
+Updating files:  71% (523/736)
+Updating files:  72% (530/736)
+Updating files:  73% (538/736)
+Updating files:  74% (545/736)
+Updating files:  75% (552/736)
+Updating files:  76% (560/736)
+Updating files:  77% (567/736)
+Updating files:  78% (575/736)
+Updating files:  79% (582/736)
+Updating files:  80% (589/736)
+Updating files:  81% (597/736)
+Updating files:  82% (604/736)
+Updating files:  83% (611/736)
+Updating files:  84% (619/736)
+Updating files:  85% (626/736)
+Updating files:  86% (633/736)
+Updating files:  87% (641/736)
+Updating files:  88% (648/736)
+Updating files:  89% (656/736)
+Updating files:  90% (663/736)
+Updating files:  91% (670/736)
+Updating files:  92% (678/736)
+Updating files:  93% (685/736)
+Updating files:  94% (692/736)
+Updating files:  95% (700/736)
+Updating files:  96% (707/736)
+Updating files:  97% (714/736)
+Updating files:  98% (722/736)
+Updating files:  99% (729/736)
+Updating files: 100% (736/736)
+Updating files: 100% (736/736), done.
+Switched to a new branch 'hia-namespace-fingerprint-final-read-6780-20261117'
+branch 'hia-namespace-fingerprint-final-read-6780-20261117' set up to track 'origin/hia-namespace-fingerprint-final-read-6780-20261117'.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+3af689cb134a201717ed007fa70b819e2a66604c
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+/home/runner/work/_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-2fea678c\-173c\-4624\-b810\-bfd72553b66d\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-2fea678c\-173c\-4624\-b810\-bfd72553b66d\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-2fea678c\-173c\-4624\-b810\-bfd72553b66d\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-2fea678c\-173c\-4624\-b810\-bfd72553b66d\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config '/home/runner/work/_temp/git-credentials-2fea678c-173c-4624-b810-bfd72553b66d.config'
+##[endgroup]
+##[group]Run mkdir "$RUNNER_TEMP/fingerprint-final"
+[36;1mmkdir "$RUNNER_TEMP/fingerprint-final"[0m
+[36;1mcp -a tests/hia_native/namespace_fingerprint_final_read "$RUNNER_TEMP/fingerprint-final/source"[0m
+[36;1mpython3 -I -B - <<'PY'[0m
+[36;1mimport hashlib,json,os[0m
+[36;1mfrom pathlib import Path[0m
+[36;1mr=Path(os.environ["RUNNER_TEMP"])/"fingerprint-final/source";raw=(r/"SOURCE.json").read_bytes()[0m
+[36;1massert hashlib.sha256(raw).hexdigest()=="c5ccf951ede038ee9b57d0537b628bd3b5ddf8d91c0ac2d8eca6048d4b433b8b"[0m
+[36;1mfor p,pin in json.loads(raw)["files"].items():[0m
+[36;1m    b=(r/p).read_bytes();assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"][0m
+[36;1m    assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==pin["git_blob"][0m
+[36;1m    if p.endswith(".py"):compile(b,str(r/p),"exec")[0m
+[36;1mPY[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+##[group]Run gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14346947934/zip > "$RUNNER_TEMP/fingerprint-final/original.zip"
+[36;1mgh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14346947934/zip > "$RUNNER_TEMP/fingerprint-final/original.zip"[0m
+shell: /usr/bin/bash -e {0}
+env:
+  GH_TOKEN: ***
+##[endgroup]
+##[group]Run timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-final/source/restore.py" --archive "$RUNNER_TEMP/fingerprint-final/original.zip" --output "$RUNNER_TEMP/fingerprint-final/restored" --pins "$RUNNER_TEMP/fingerprint-final/source/PINS.json"
+[36;1mtimeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-final/source/restore.py" --archive "$RUNNER_TEMP/fingerprint-final/original.zip" --output "$RUNNER_TEMP/fingerprint-final/restored" --pins "$RUNNER_TEMP/fingerprint-final/source/PINS.json"[0m
+[36;1mmkdir "$RUNNER_TEMP/fingerprint-final/restoration-proof"[0m
+[36;1mcp "$RUNNER_TEMP/fingerprint-final/restored/RESTORE.json" "$RUNNER_TEMP/fingerprint-final/restored/artifact-manifest.json" "$RUNNER_TEMP/fingerprint-final/restored/exporter.json" "$RUNNER_TEMP/fingerprint-final/restoration-proof/"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "all_bytes_and_modes": true,
+  "all_git_source_members": true,
+  "logical_bytes": 5656166057,
+  "logical_files": 56040,
+  "native_executions": 0,
+  "rust_executions": 0,
+  "status": "FULL_UPLOADED_FINGERPRINT_ARCHIVE_READ_PASS",
+  "tar": {
+    "bytes": 81269980,
+    "sha256": "9c2b224207250c2e161f58cf15c155974ae3067651c2cb237b240b224250673b"
+  },
+  "unique_objects": 2805,
+  "zip": {
+    "bytes": 81270916,
+    "sha256": "c01eb95b755661b201298e724d6cbc5a8bff7245db628dc608b0044e32be7baf"
+  }
+}
+##[group]Run python3 -I -B "$RUNNER_TEMP/fingerprint-final/source/run_final.py" --restored "$RUNNER_TEMP/fingerprint-final/restored" --output "$RUNNER_TEMP/fingerprint-final/output"
+[36;1mpython3 -I -B "$RUNNER_TEMP/fingerprint-final/source/run_final.py" --restored "$RUNNER_TEMP/fingerprint-final/restored" --output "$RUNNER_TEMP/fingerprint-final/output"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "actual_role_processes": 30,
+  "archive_store_qualified": false,
+  "begin_finish_caller_qualified": false,
+  "exact_public_error_rendering_qualified": false,
+  "final_guard_probes": 12,
+  "hot_cache_qualified": false,
+  "independent_uploaded_read_pending": false,
+  "namespace_version_qualified": false,
+  "namespace_watch_qualified": false,
+  "native_or_rust_executions": 0,
+  "no_physical_control_replay": true,
+  "original_physical_guard_probes": 204,
+  "original_semantic_cases": 72,
+  "original_semantic_operations": 156,
+  "owner_checkpoints": 65,
+  "owner_control_calls": 4501,
+  "owner_refusals": 4241,
+  "owner_replays": 260,
+  "physical_admissions": 2,
+  "physical_refusals": 15,
+  "process": {
+    "argv": [
+      "/usr/bin/python3",
+      "-I",
+      "-B",
+      "/home/runner/work/_temp/fingerprint-final/source/verify_final.py",
+      "--restored",
+      "/home/runner/work/_temp/fingerprint-final/restored",
+      "--output",
+      "/home/runner/work/_temp/fingerprint-final/output"
+    ],
+    "completed": true,
+    "cwd": "/home/runner/work/_temp/fingerprint-final/source",
+    "elapsed_seconds": 109.19930108100002,
+    "exit_code": 0,
+    "name": "independent-fingerprint-final",
+    "parent_pid": 2254,
+    "pgid": 2255,
+    "pid": 2255,
+    "stderr": {
+      "bytes": 0,
+      "file": "independent-fingerprint-final.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stdin": null,
+    "stdout": {
+      "bytes": 34049,
+      "file": "independent-fingerprint-final.stdout",
+      "sha256": "7e96e7400d4b9907f7a92e9fa392fc67380a2bcda1b62003c0c94435703ef0f2"
+    },
+    "timed_out": false,
+    "timeout_seconds": 180
+  },
+  "public_handler_qualified": false,
+  "readback": {
+    "bytes": 46061332,
+    "sha256": "fa3bfe4d3cff99d54395e50517dfcb70e34671cbf443e6d89906bb98590a00ab"
+  },
+  "semantic_libc_calls": 4471,
+  "semantic_owner_calls": 4627,
+  "source_manifest_sha256": "c5ccf951ede038ee9b57d0537b628bd3b5ddf8d91c0ac2d8eca6048d4b433b8b",
+  "status": "PRIVATE_NAMESPACE_FINGERPRINT_INDEPENDENTLY_QUALIFIED",
+  "transport_calls": 348,
+  "transport_groups": 87,
+  "transport_recoveries": 87,
+  "transport_refusals": 87,
+  "unchanged_physical_entries": 65046,
+  "whole_runtime_replaced": false
+}
+##[group]Run timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-final/source/export.py" --workspace "$RUNNER_TEMP/fingerprint-final" --archive "$RUNNER_TEMP/fingerprint-final/fingerprint-final-read.tar.gz"
+[36;1mtimeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-final/source/export.py" --workspace "$RUNNER_TEMP/fingerprint-final" --archive "$RUNNER_TEMP/fingerprint-final/fingerprint-final-read.tar.gz"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "all_logical_files_reread": true,
+  "all_objects_and_modes_reread": true,
+  "bytes": 93311146,
+  "exporter_native_or_rust_executions": 0,
+  "exporter_original_rust_replay": 0,
+  "logical_bytes": 5720856816,
+  "logical_files": 56057,
+  "public_handler_qualified": false,
+  "schema": "hepta.namespace-fingerprint.final-read-archive-read.v1",
+  "sha256": "f4e80245682bcc5a07ac86e72aa5159b98ccf319960e23b8f88248f0e841037c",
+  "source_manifest_sha256": "c5ccf951ede038ee9b57d0537b628bd3b5ddf8d91c0ac2d8eca6048d4b433b8b",
+  "status": "PRIVATE_NAMESPACE_FINGERPRINT_INDEPENDENTLY_QUALIFIED",
+  "unique_objects": 2821
+}
+##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+with:
+  name: namespace-fingerprint-final-read
+  path: /home/runner/work/_temp/fingerprint-final/fingerprint-final-read.tar.gz
+/home/runner/work/_temp/fingerprint-final/fingerprint-final-read.tar.gz.json
+
+  include-hidden-files: true
+  if-no-files-found: error
+  compression-level: 0
+  retention-days: 30
+  overwrite: false
+##[endgroup]
+(node:2288) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Multiple search paths detected. Calculating the least common ancestor of all paths
+The least common ancestor is /home/runner/work/_temp/fingerprint-final. This will be the root directory of the artifact
+With the provided path, there will be 2 files uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:2288) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 8388608
+Uploaded bytes 16777216
+Uploaded bytes 25165824
+Uploaded bytes 33554432
+Uploaded bytes 41943040
+Uploaded bytes 50331648
+Uploaded bytes 58720256
+Uploaded bytes 67108864
+Uploaded bytes 75497472
+Uploaded bytes 83886080
+Uploaded bytes 92274688
+Uploaded bytes 93312094
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is f7de893c35f6ffdf3a5b5267eff72d32d26f5efe9336e933ff04f8057560ec78
+Finalizing artifact upload
+Artifact namespace-fingerprint-final-read.zip successfully finalized. Artifact ID 14347213382
+Artifact namespace-fingerprint-final-read has been successfully uploaded! Final size is 93312094 bytes. Artifact ID is 14347213382
+Artifact download URL: https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44126367086/artifacts/14347213382
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME='/home/runner/work/_temp/9e79e77b-aad1-460c-a6eb-b11e0a6aea3b' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes
+##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
