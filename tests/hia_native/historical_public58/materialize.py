@@ -8,7 +8,7 @@ from pathlib import Path
 import argparse,ast,hashlib,importlib.util,json,shutil,stat,sys
 sys.dont_write_bytecode=True
 PREFIX=Path("tests/hia_native/historical_public58")
-DIRECTORIES=("native","scripts","src","tests",".github","authoring","vendor")
+DIRECTORIES=("native","scripts","src","tests",".github","authoring","vendor","runtime_support")
 ROOT_FILES=("Cargo.toml","Cargo.lock","rustfmt.toml","README.md","AGENTS.md")
 SHA=lambda raw:hashlib.sha256(raw).hexdigest()
 def pin(raw):
@@ -20,10 +20,10 @@ def read(root,name):
     return path.read_bytes()
 def check(source):
     raw=read(source,(PREFIX/"PROFILE.json").as_posix());profile=json.loads(raw)
-    assert profile["schema"]=="hepta.historical-public58.source-profile.v3"
-    assert profile["historical_images"]==58 and profile["current_default_images"]==102
-    assert len(profile["current_graph_files"])==218 and len(profile["restore"])==119
-    assert len(profile["remove_current_public_only"])==75
+    assert profile["schema"]=="hepta.historical-public58.source-profile.v4"
+    assert profile["historical_images"]==58 and profile["current_default_images"]==111
+    assert len(profile["current_graph_files"])==390 and len(profile["restore"])==119
+    assert len(profile["remove_current_public_only"])==247
     assert len(profile["current_authority_profile_files"])==6
     assert profile["retained_global_batch_input_paths"]==["native/batch_plan_input_performance.json",
         "scripts/author_input_fixed.py","scripts/performance_baselines/batch_plan_input.hepta"]
@@ -65,14 +65,14 @@ def verify_materialized(root):
     assert receipt["status"]=="SOURCE_PROFILE_MATERIALIZED"
     assert receipt["output_source"]==str(root.resolve(strict=True))
     assert receipt["profile_sha256"]==SHA(profile_raw)
-    assert receipt["historical_public_images"]==58 and receipt["current_default_images"]==102
+    assert receipt["historical_public_images"]==58 and receipt["current_default_images"]==111
     assert receipt["restored_paths"]==sorted(profile["restore"])
     assert receipt["excluded_current_only_paths"]==profile["remove_current_public_only"]
     assert {name:pin(path.read_bytes()) for name,path in selected(root).items()}==receipt["files"]
     for name,identity in profile["restore"].items():assert pin(read(root,name))==identity,name
     for name in profile["remove_current_public_only"]:assert not (root/name).exists(),name
     return dict(status="HISTORICAL58_COMPLETE_SOURCE_PROFILE_VERIFIED",files=len(receipt["files"]),
-        profile_sha256=SHA(profile_raw),historical_images=58,current_default_images=102,
+        profile_sha256=SHA(profile_raw),historical_images=58,current_default_images=111,
         native_or_rust_executed=False,historical_pass_relabelled=False)
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -80,9 +80,9 @@ def main():
     p.add_argument("--check-only",action="store_true");a=p.parse_args()
     source=a.source.resolve(strict=True);profile,profile_sha=check(source)
     if a.check_only:
-        print(json.dumps(dict(status="CURRENT102_AND_HISTORICAL58_AUTHORITY_SOURCE_IDENTITIES_PASS",
-            current_graph_files=218,current_authority_profile_files=6,historical_files=119,profile_sha256=profile_sha,
-            default_current_images=102,historical_images=58,native_or_rust_executed=False),sort_keys=True));return
+        print(json.dumps(dict(status="CURRENT111_AND_HISTORICAL58_AUTHORITY_SOURCE_IDENTITIES_PASS",
+            current_graph_files=390,current_authority_profile_files=6,historical_files=119,profile_sha256=profile_sha,
+            default_current_images=111,historical_images=58,native_or_rust_executed=False),sort_keys=True));return
     assert a.output is not None;output=a.output.absolute()
     assert not output.exists() and not output.is_relative_to(source)
     original=selected(source);expected={name:pin(path.read_bytes()) for name,path in original.items()}
@@ -111,7 +111,7 @@ def main():
         input_source=str(source),output_source=str(output),profile_sha256=profile_sha,
         files=expected,restored_paths=sorted(profile["restore"]),excluded_current_only_paths=profile["remove_current_public_only"],
         all_other_qualification_bytes_preserved=True,default_main_source_unchanged=True,
-        historical_public_images=58,current_default_images=102,
+        historical_public_images=58,current_default_images=111,
         native_or_rust_executed=False,historical_pass_relabelled=False,full_sdk_qualified=False,
         production_activated=False,old_path_removed=False)
     # The receipt is outside the code inventory consumed by the old pipeline.
