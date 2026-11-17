@@ -344,6 +344,48 @@ fs_fixture_extract_history_setup:
     cmp [rbx], rax
     jne fs_fixture_failure
     add rbx, 128
+    /* A public process constructs this shared HIA owner before either Session.
+     * Fixture operation0 requests a fresh history. First use the same owner's
+     * finalize operation4, then forward the original initialize frame. Both
+     * replies and every state change are produced by the actual HIA owner. */
+    mov rdi, [r12 + 24]
+    mov rax, 0x3130515453494848
+    cmp [rdi], rax
+    jne fs_fixture_extract_history_direct
+    cmp qword ptr [rdi + 8], 0
+    jne fs_fixture_extract_history_direct
+    cmp qword ptr [r12 + 88], 64
+    jne fs_fixture_extract_history_direct
+    mov ecx, 16
+fs_fixture_extract_history_zero_fields:
+    cmp qword ptr [rdi + rcx], 0
+    jne fs_fixture_extract_history_direct
+    add rcx, 8
+    cmp rcx, 64
+    jb fs_fixture_extract_history_zero_fields
+    sub rsp, 64
+    mov rsi, rdi
+    mov rdi, rsp
+    mov ecx, 8
+    rep movsq
+    mov qword ptr [rsp + 8], 4
+    mov rdi, rsp
+    mov esi, 64
+    mov rdx, [rbx + 24]
+    mov rcx, [rbx + 32]
+    mov r8, [rbx + 8]
+    mov r9, [rbx + 16]
+    call qword ptr [rbx]
+    add rsp, 64
+    cmp rax, 64
+    jne fs_fixture_failure
+    mov rdx, [rbx + 24]
+    mov rax, 0x3130525453494848
+    cmp [rdx], rax
+    jne fs_fixture_failure
+    cmp qword ptr [rdx + 8], 0
+    jne fs_fixture_failure
+fs_fixture_extract_history_direct:
     mov rdi, [r12 + 24]
     mov rsi, [r12 + 88]
     mov rdx, [rbx + 24]

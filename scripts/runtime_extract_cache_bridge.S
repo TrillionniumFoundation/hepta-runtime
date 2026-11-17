@@ -3,7 +3,7 @@
 .global runtime_extract_cache
 /* Installed callback: control, complete cache request, length, result pair.
  * The current caller workspace and View scope/lease/cache are acquired here,
- * during the extract_lines cache Get/Set/Forget boundary. Workers receive no binding. */
+ * during the extract_lines cache Get/Set/Forget/InvalidateVariants boundary. Workers receive no binding. */
 runtime_extract_cache:
     push rbx
     push rbp
@@ -27,6 +27,8 @@ runtime_extract_cache:
     cmp qword ptr [rsi + 8], 2
     je rec_cache_operation
     cmp qword ptr [rsi + 8], 3
+    je rec_cache_operation
+    cmp qword ptr [rsi + 8], 7
     jne rec_cache_invalid
 rec_cache_operation:
     cmp qword ptr [rsi + 16], 1
