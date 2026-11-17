@@ -1,0 +1,14 @@
+{
+  "actual_exception": "ValueError: probe was refused outside the read-only guard",
+  "cause": "The outer fixture no-execution audit hook intercepted the guarded subprocess refusal probe before the original guard could record it. The attempted process was refused; no HIA or Rust executed.",
+  "control_source_git_blob": "c4470e34a941ffbf12ecf2b4deafc7989caccc5e",
+  "correction": "Suspend only the outer fixture hook during the unchanged complete guard, which retains all twelve actual refusal probes and its own no-execution audit. Restore the outer active flag in finally.",
+  "exit_code": 1,
+  "native_or_rust_executions": 0,
+  "original_recovery_evidence_used": false,
+  "prior_failure_reclassified_as_pass": false,
+  "schema": "hepta.history.library-controls-initial-failure.v1",
+  "source_manifest_git_blob": "2d2c43591d8b998cf95b5403912019261173701f",
+  "status": "FAIL",
+  "tool_chunk": "c6c47f"
+}

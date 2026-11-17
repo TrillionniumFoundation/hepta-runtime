@@ -1,0 +1,65 @@
+{
+  "artifact": {
+    "bytes": 28805438,
+    "id": 14290847466,
+    "sha256": "0628f7f4ffa8aae1859f78eafe6de6f27b9ad40007841822a26b2e517508440a"
+  },
+  "capture_deltas": [],
+  "completed_retained_schema_pairs": 1,
+  "completed_source_reconstructions": 3,
+  "completed_static_admissions": 69,
+  "conclusion": "FAILURE",
+  "correction": "Bind the exact two original allocator/interpreter paths through the original report, foreground manifest, retained whole library copies and unchanged builder source pins, and admit those exact current files to the complete before/after external snapshot. Do not rewrite paths, substitute captured bytes, load libraries, or change the original build reader's equality checks.",
+  "head": "25d60ce4af460293bda15ab0d1056c0b8c110311",
+  "independent_complete_archive_readback": {
+    "artifact": {
+      "bytes": 53547358,
+      "id": 14291231226,
+      "sha256": "34f91bd842ef69a0ed144ca2b534a832bdbf584fc89ae86533ccd319a0a6ace8"
+    },
+    "conclusion": "SUCCESS",
+    "full_archive": {
+      "aggregate_recovery_pass": false,
+      "decoded_tar": {
+        "bytes": 93634560,
+        "sha256": "751c3ffbf909294172bf90230e401e98a50bfc3a512d0de8201b1343b9e3625c"
+      },
+      "elapsed_ns": 994832196,
+      "files": 2914,
+      "inner_archive": {
+        "bytes": 27958562,
+        "sha256": "f59f5a28268649222be42516aeb52a5c509084c6bb599c1a6371caf734ec7ff6"
+      },
+      "input_zip_unchanged": true,
+      "logical_bytes": 88081210,
+      "members": 3117,
+      "native_or_rust_executions": 0,
+      "original_aggregate_failure_reclassified_as_pass": false,
+      "reader_source": {
+        "bytes": 8185,
+        "sha256": "c13bf4a488f6c61131ee7dfa015b9b80cd4df932020c4c19b84a7d7e9635123f"
+      },
+      "schema": "hepta.history.recovery-independent-archive-readback.v2",
+      "status": "COMPLETE_ARCHIVE_BYTES_AND_GIT_SOURCES_PASS",
+      "tar_terminator_bytes": 8192,
+      "zip": {
+        "bytes": 28805438,
+        "sha256": "0628f7f4ffa8aae1859f78eafe6de6f27b9ad40007841822a26b2e517508440a"
+      }
+    },
+    "head": "452e5066424b7a4e310095a36a9b6038dfa69921",
+    "job": 133756337537,
+    "run": 43998479190
+  },
+  "job": 133748696501,
+  "native_or_rust_executions": 0,
+  "original_aggregate_failure_reclassified_as_pass": false,
+  "precise_failure": "The unchanged shell foreground build reader attempted an actual read of its allocator library from the original absolute system path. That exact ordinary file was not in the observer's external-file snapshot, so the guard refused before reading it. No library-byte mismatch has been established.",
+  "reader_stderr": "Traceback (most recent call last):\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/observer/qualification/history_aggregate_recovery/readback-v6/read_recovered.py\", line 253, in <module>\n    if __name__==\"__main__\":main()\n                            ^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/observer/qualification/history_aggregate_recovery/readback-v6/read_recovered.py\", line 215, in main\n    proof=guard.guarded(operation,roots=[CAPTURE,SOURCE,COMPILER],\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/observer/qualification/history_aggregate_recovery/readback-v6/read_only_guard.py\", line 255, in guarded\n    result = operation()\n             ^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/observer/qualification/history_aggregate_recovery/readback-v6/read_recovered.py\", line 196, in operation\n    r.check_input_pins(CAPTURE,report)\n  File \"/home/runner/work/_temp/hia-historical-public58/scripts/compare_hia_runtime_rust.py\", line 336, in check_input_pins\n    if report.get(\"shell_foreground_evidence\") != shell_foreground_evidence(output, report):\n                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/hia-historical-public58/scripts/qualify_hia_runtime_native.py\", line 1447, in shell_foreground_evidence\n    state = _shell_test_module(SHELL_FOREGROUND_TESTS[0]).read_evidence(state_folder, native_manifest=manifest)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/hia-historical-public58/tests/hia_native/shell_foreground_controller.py\", line 492, in read_evidence\n    native,selected,metadata=admitted(native_manifest or report[\"native\"][\"manifest_path\"])\n                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/hia-historical-public58/tests/hia_native/shell_foreground_controller.py\", line 385, in admitted\n    reviewed=build.read_evidence(top,source_root=ROOT)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/hia-historical-public58/scripts/hia_native_shell_foreground_build.py\", line 695, in read_evidence\n    pin(Path(allocator[\"path\"])) == allocator[\"pin\"] == pin(folder / \"allocator-libc.so.6\") and\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/hia-historical-public58/scripts/hia_native_shell_process_build.py\", line 96, in pin\n    data = ordinary(path)\n           ^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/hia-historical-public58/scripts/hia_native_shell_process_build.py\", line 92, in ordinary\n    return path.read_bytes()\n           ^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1021, in read_bytes\n    with self.open(mode='rb') as f:\n         ^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1015, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/observer/qualification/history_aggregate_recovery/readback-v6/read_only_guard.py\", line 75, in _dispatch_audit\n    handler(event, args)\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/observer/qualification/history_aggregate_recovery/readback-v6/read_only_guard.py\", line 204, in audit\n    refuse(\"foreign-read\")\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/observer/qualification/history_aggregate_recovery/readback-v6/read_only_guard.py\", line 120, in refuse\n    raise PermissionError(\"history-aggregate read-only guard: \" + kind)\nPermissionError: history-aggregate read-only guard: foreign-read\n",
+  "retained_schema_violations": [],
+  "retained_source_files": 2877,
+  "run": 43996181744,
+  "schema": "hepta.history.aggregate-recovery-failure-review.v6",
+  "source_reconstruction_violations": [],
+  "tree": "b09cec7505685727c39b040cd18b54e7d125afb7"
+}
