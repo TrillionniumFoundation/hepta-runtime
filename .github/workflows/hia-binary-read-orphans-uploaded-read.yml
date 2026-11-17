@@ -1,0 +1,47 @@
+name: Independently read all uploaded read-orphan captures and recovery evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-read-orphans-uploaded-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [ordinary, first-path, first-at, second-path, second-at, last-path, last-at, descriptor, sharing, eof, refusals, unicode, observer-off]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      ORPHAN_SOURCE: ${{ github.workspace }}/qualification/binary_read_orphans/v1/recovery_uploaded_read
+      ORPHAN_MANIFEST: 712d90b0bc7200d4f7ae55c14282add22c7d82b66a7f73b23b1e22e285da776a
+      ORPHAN_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact full source-owned pure readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_read_orphans/v1/recovery_uploaded_read
+          persist-credentials: false
+      - name: Read all archive objects source buffers effects controls and guarded records
+        run: |
+          python3 -I -S -B "$ORPHAN_SOURCE/scripts/driver.py" read --work "$RUNNER_TEMP/read-orphan-recovery-independent" --group "$ORPHAN_GROUP" --source-manifest-sha256 "$ORPHAN_MANIFEST"
+      - name: Retain complete independent reader and all process streams
+        if: always()
+        run: |
+          python3 -I -S -B "$ORPHAN_SOURCE/scripts/driver.py" export --work "$RUNNER_TEMP/read-orphan-recovery-independent" --group "$ORPHAN_GROUP" --output "$RUNNER_TEMP/read-orphan-recovery-independent-export" --source-manifest-sha256 "$ORPHAN_MANIFEST"
+      - name: Upload complete independently bound proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: read-orphan-recovery-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/read-orphan-recovery-independent-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
