@@ -1,0 +1,51 @@
+name: Independently read the complete HIA entropy recovery archive
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-entropy-independent-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      ARCHIVE_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_entropy/v1/archive_reader
+      ARCHIVE_MANIFEST: 4acea4d8743e2c51fb2659fd342c771a0665eba7f062cacebb041f208ca2fa70
+    steps:
+      - name: Checkout frozen independent source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_entropy/v1/archive_reader
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Read every uploaded object and retained guard without executing applications
+        run: |
+          python3 -I -S -B "$ARCHIVE_SOURCE/archive_reader.py" run \
+            --input "$RUNNER_TEMP/binary-entropy-independent-input" \
+            --capture "$RUNNER_TEMP/binary-entropy-independent-proof" \
+            --source-manifest-sha256 "$ARCHIVE_MANIFEST"
+      - name: Retain independent complete proof bytes
+        if: always()
+        run: |
+          python3 -I -S -B "$ARCHIVE_SOURCE/archive_reader.py" export \
+            --input "$RUNNER_TEMP/binary-entropy-independent-input" \
+            --capture "$RUNNER_TEMP/binary-entropy-independent-proof" \
+            --output "$RUNNER_TEMP/binary-entropy-independent-export" \
+            --source-manifest-sha256 "$ARCHIVE_MANIFEST"
+      - name: Upload complete independent read proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-entropy-independent-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-entropy-independent-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
