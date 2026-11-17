@@ -1,0 +1,81 @@
+name: Recover native audit record callable evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-record-callable-reader-recovery-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_record_callable_recovery
+      - name: Admit exact frozen pure reader and preserve source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          export AUDIT_RECOVERY_ROOT="$RUNNER_TEMP/audit-record-callable-reader-recovery"
+          echo "AUDIT_RECOVERY_ROOT=$AUDIT_RECOVERY_ROOT" >> "$GITHUB_ENV"
+          mkdir -p "$AUDIT_RECOVERY_ROOT"
+          cp -a tests/hia_native/audit_record_callable_recovery "$AUDIT_RECOVERY_ROOT/recovery-source"
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,os,sys
+          root=Path(os.environ["AUDIT_RECOVERY_ROOT"])/"recovery-source"
+          raw=(root/"RECOVERY_SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="b479089342de443674adf91f4a1e31ac10551c951c852876dd89ef5ff1d34baf"
+          sys.path.insert(0,str(root))
+          from recovery_common import source
+          assert source()=="b479089342de443674adf91f4a1e31ac10551c951c852876dd89ef5ff1d34baf"
+          for path in root.rglob("*.py"):
+              compile(path.read_bytes(),str(path),"exec")
+          PY
+      - name: Read full failed ZIP and restore all 44786 unchanged files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14317448899/zip > "$AUDIT_RECOVERY_ROOT/failed.zip"
+          timeout --signal=KILL 180 python3 -I -B "$AUDIT_RECOVERY_ROOT/recovery-source/restore_capture.py" \
+            --archive "$AUDIT_RECOVERY_ROOT/failed.zip" \
+            --destination "$AUDIT_RECOVERY_ROOT/original" \
+            --report "$AUDIT_RECOVERY_ROOT/admission/ARCHIVE.json"
+      - name: Compare complete native pump and observer-off domain to retained original
+        run: |
+          python3 -I -B "$AUDIT_RECOVERY_ROOT/recovery-source/qualify.py" --phase semantic \
+            --original "$AUDIT_RECOVERY_ROOT/original" --output "$AUDIT_RECOVERY_ROOT/recovery"
+      - name: Preserve thirteen physical refusals and two complete independent relocations
+        run: |
+          python3 -I -B "$AUDIT_RECOVERY_ROOT/recovery-source/qualify.py" --phase controls \
+            --original "$AUDIT_RECOVERY_ROOT/original" --output "$AUDIT_RECOVERY_ROOT/recovery"
+      - name: Read all retained original and native evidence with full unchanged-byte guards
+        run: |
+          python3 -I -B "$AUDIT_RECOVERY_ROOT/recovery-source/qualify.py" --phase final \
+            --original "$AUDIT_RECOVERY_ROOT/original" --output "$AUDIT_RECOVERY_ROOT/recovery"
+      - name: Preserve entire original failure and every recovery byte
+        if: always()
+        run: |
+          if test -f "$AUDIT_RECOVERY_ROOT/admission/ORIGINAL_ARCHIVE_MANIFEST.json"; then
+            timeout --signal=KILL 180 python3 -I -B "$AUDIT_RECOVERY_ROOT/recovery-source/export_recovery.py" \
+              --workspace "$AUDIT_RECOVERY_ROOT" \
+              --archive "$AUDIT_RECOVERY_ROOT/audit-record-callable-recovery.tar.gz"
+          fi
+      - name: Upload complete preserved evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-callable-recovery-${{ github.sha }}
+          path: |
+            ${{ env.AUDIT_RECOVERY_ROOT }}/audit-record-callable-recovery.tar.gz
+            ${{ env.AUDIT_RECOVERY_ROOT }}/audit-record-callable-recovery.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
