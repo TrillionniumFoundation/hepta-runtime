@@ -1,0 +1,33 @@
+name: Read only inspection of completed audit record I/O evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-storage-readback-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_storage_recovery
+      - name: Retrieve the exact retained failure without semantic replay
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14307841184/zip -o "$RUNNER_TEMP/original-failure.zip"
+      - name: Independently reread all archive bytes and inspect the actual vendor omission
+        run: |
+          timeout 180s python3 -I -B tests/hia_native/audit_storage_recovery/restore.py --zip "$RUNNER_TEMP/original-failure.zip" --destination "$RUNNER_TEMP/audit-record-io-retained" --report "$RUNNER_TEMP/RESTORED.json"
+      - name: Preserve complete diagnosis
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-io-readonly-inspection-${{ github.sha }}
+          path: ${{ runner.temp }}/RESTORED.json
+          if-no-files-found: error
+          retention-days: 14
