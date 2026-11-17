@@ -228,7 +228,8 @@ impl Core {
 			context: UnsafeCell::new([0; 18]),
 		});
 		unsafe {
-			(*core.kernel.get())[8..].fill(0xa5a5a5a5a5a5a5a5);
+			let kernel = &mut *core.kernel.get();
+			kernel[8..].fill(0xa5a5a5a5a5a5a5a5);
 			let context = &mut *core.context.get();
 			context[2] = core.kernel.get() as u64;
 			context[3] = 64;
