@@ -1,0 +1,62 @@
+{
+  "schema": "hepta.runtime.public123.default-entry-rebinding.v1",
+  "old": {
+    "bytes": 8710,
+    "sha256": "00abefff1cf85011179459f564b5c581aab1b55ce4d02c041618a2f5da519152",
+    "git_blob": "050d4dcdb9a5c26a3b27bfbcf27dffd561c8289f"
+  },
+  "new": {
+    "bytes": 9011,
+    "sha256": "a2b356bd16d27d1b8bb5a6d6c2f6772fabd30000a31b43942dc6a61d199c62da",
+    "git_blob": "e214c0d10e01ce89cea3f00fb2f459e43e80c955"
+  },
+  "old_binding": {
+    "bytes": 110954,
+    "sha256": "63e5974cfd4d0569ff0443df78de9d433e673c1010e7c05104b8c21849912e2e",
+    "git_blob": "57e61e3afac3f1ea9cd6726105bdfb99481b6972"
+  },
+  "new_binding": {
+    "bytes": 110954,
+    "sha256": "a6a725929d989022a6e2a0eb653591b556c5cfee9bc6b599d215589f17e75be8",
+    "git_blob": "53f51b7617a5c0484c791fb20f49acc38283084d"
+  },
+  "exact_replacements": [
+    [
+      "The default build includes 110 direct HIA members",
+      "The default build includes 115 direct HIA members"
+    ],
+    [
+      "schema=\"hepta.runtime.public118-task-batch-extract.build.v1\"",
+      "schema=\"hepta.runtime.public123-task-batch-extract-publication.build.v1\""
+    ],
+    [
+      "require(len(MEMBERS) == 110 and len(EXTRA) == 64, \"Fixed combined graph count changed.\")",
+      "require(len(MEMBERS) == 115 and len(EXTRA) == 69, \"Fixed combined graph count changed.\")"
+    ],
+    [
+      "and EXTRA[59:] == [\"extract_gateway\", \"extract_params\", \"extract_call\", \"extract_adapter\", None],",
+      "and EXTRA[59:64] == [\"extract_gateway\", \"extract_params\", \"extract_call\", \"extract_adapter\", None]\n                and EXTRA[64:] == [\"publisher_gateway\", \"publisher_params\", \"publisher_call\", None, None],"
+    ],
+    [
+      "require(md[\"physical_images\"] == 111 and len(md[\"members\"]) == 110 and md[\"runtime_hia_images\"] == 118,",
+      "require(md[\"physical_images\"] == 116 and len(md[\"members\"]) == 115 and md[\"runtime_hia_images\"] == 123,"
+    ],
+    [
+      "require(fresh == 110 - len(reuse), \"Direct member compile/reuse count changed.\")",
+      "require(fresh == 115 - len(reuse), \"Direct member compile/reuse count changed.\")"
+    ],
+    [
+      "report.update(status=\"NATIVE_BUILD_PASS\", physical_images=111, runtime_hia_images=118,\n            direct_hia_members=110, packed_hia_members=8,",
+      "report.update(status=\"NATIVE_BUILD_PASS\", physical_images=116, runtime_hia_images=123,\n            direct_hia_members=115, packed_hia_members=8,"
+    ],
+    [
+      "extract_slots=[59,60,61,62,63], extract_context_offset=456, extract_install_offset=464,",
+      "extract_slots=[59,60,61,62,63], extract_context_offset=456, extract_install_offset=464,\n            publication_slots=[64,65,66,67,68], publication_callable_context=\"descriptor67+8\",\n            publication_scope_forget_slot=68, publication_full_async_qualified=False,"
+    ]
+  ],
+  "whole_wrapper_inverse": true,
+  "exact_raw_binding_replacement": true,
+  "hias_changed": 0,
+  "runtime_assembly_changed": 0,
+  "qualification_at_authoring": "SOURCE_ONLY"
+}
