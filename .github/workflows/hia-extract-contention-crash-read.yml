@@ -1,0 +1,41 @@
+name: Read actual native WAIT failure without execution
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public123_extract_wait_crash_read_ci/**', '.github/workflows/hia-extract-contention-crash-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/public123_extract_wait_crash_read_ci
+            tests/hia_native/public123_extract_contention_ci
+      - name: Pure complete archive read and failure inspection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_crash_read_ci/inspect.py" | cut -d' ' -f1)" = 'af91916aab7e75452054abb1e439756bbf87cb6b6fc78e74583a23db6b690c79'
+          test "$(sha256sum "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_crash_read_ci/IDENTITY.json" | cut -d' ' -f1)" = '96d8ed7c66e84d8f763175931f86838a0f8403e3c3ddb05a4c3197a32f4c3947'
+          python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_wait_crash_read_ci/inspect.py" --source "$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_contention_ci" --output "$RUNNER_TEMP/contention-crash-inspection"
+      - name: Retain complete original artifact and all pure reader results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: contention-crash-inspection-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/contention-crash-inspection/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
