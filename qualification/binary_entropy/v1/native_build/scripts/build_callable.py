@@ -57,6 +57,7 @@ def object_layout(raw):
             name,info,other,section,value,size=struct.unpack_from("<IBBHQQ",raw,p)
             if section==index:
                 key=names[name:names.index(0,name)].decode();symbols[key]=value
+                if key=="_start":require(info&15==2,"scalar entry must carry STT_FUNC")
     return raw[text[4]:text[4]+text[5]],symbols
 def process(output,name,argv):
     start=time.monotonic_ns();record=dict(argv=[str(x) for x in argv],limit_seconds=30,timed_out=False)

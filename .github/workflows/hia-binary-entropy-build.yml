@@ -2,7 +2,7 @@ name: Build process-lifetime HIA entropy and UUID4 boundary
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-entropy-build-6780-20261117]
+    branches: [hia-binary-entropy-build-fixed-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -15,7 +15,7 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       GH_TOKEN: ${{ github.token }}
       BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_entropy/v1/native_build
-      BINARY_MANIFEST: 5618174c57a37b7852e8bab8f54e8e0d1282daa1abd4f63f1f9047847b53cf5f
+      BINARY_MANIFEST: a594c84bafa2dbc7069dc151cdff5199106c94a3f0b58681c9124aae5ca5dda5
     steps:
       - name: Checkout fully frozen native source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
