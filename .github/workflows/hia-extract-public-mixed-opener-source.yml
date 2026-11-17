@@ -1,0 +1,45 @@
+name: Locked SDK mixed opener source and retained diagnostic recovery
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_mixed_opener_source_ci/**', '.github/workflows/hia-extract-public-mixed-opener-source.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  source-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_mixed_opener_source_ci
+      - name: Download the same complete diagnostic proofs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/mixed-opener-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14300656681 > "$RUNNER_TEMP/mixed-opener-input/modern.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14300656681/zip > "$RUNNER_TEMP/mixed-opener-input/modern.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14299339923 > "$RUNNER_TEMP/mixed-opener-input/legacy.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14299339923/zip > "$RUNNER_TEMP/mixed-opener-input/legacy.zip"
+      - name: Read only exact source and captured observations
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_mixed_opener_source_ci/run.py" --input "$RUNNER_TEMP/mixed-opener-input" --output "$RUNNER_TEMP/mixed-opener-output" --profile 'da398061616119b94dadea5a7d125d62cf6360d09ef893a0d00ac7531590775f'
+      - name: Preserve complete source and diagnostic bytes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public118-mixed-opener-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mixed-opener-output
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
