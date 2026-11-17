@@ -1,0 +1,58 @@
+
+def after_protocol(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    frame = region(w, 1)
+    if code == 192 and size >= 192:
+        if get(w, frame) == PROTOCOL_OUTPUT and get(w, frame + 144) == LIST_TAG:
+            return accept_current_list(s, o, w, size)
+    return retained_list_protocol(s, o, w, code, size)
+
+def accept_current_list(s:readbuf, o:mutbuf, w:mutbuf, size:u64) -> u32:
+    frame = region(w, 1)
+    if get(w, frame + 8) != 0 or get(w, frame + 16) != 3 or get(w, frame + 24) != 0:
+        return INVALID
+    if get(w, frame + 32) > 2 or get(w, frame + 40) != 3:
+        return INVALID
+    identifier = get(w, frame + 48)
+    metadata = get(w, frame + 56)
+    version = get(w, frame + 64)
+    available = size - 192
+    if identifier == 0 or identifier > available:
+        return INVALID
+    if metadata < 2 or metadata > available - identifier:
+        return INVALID
+    if version != available - identifier - metadata:
+        return INVALID
+    present = get(w, frame + 72)
+    meta_present = get(w, frame + 80)
+    modern = get(w, frame + 88)
+    if present > 1 or meta_present > 1 or modern > 1:
+        return INVALID
+    if present == 0:
+        if version != 0 or modern != 0 or get(w, frame + 120) != 0:
+            return INVALID
+    else:
+        if get(w, frame + 120) != 192 + identifier + metadata:
+            return INVALID
+    if get(w, frame + 104) != 192 + identifier or get(w, frame + 112) != metadata:
+        return INVALID
+    if get(w, frame + 128) != version or get(w, frame + 96) != 0 or get(w, frame + 136) != 0:
+        return INVALID
+    offset = 152
+    while offset < 192:
+        if get(w, frame + offset) != 0:
+            return INVALID
+        offset = offset + 8
+    if reserve(w, 2, size) == 0:
+        return pending_grow(o, w)
+    frame = region(w, 1)
+    copy_within(w, region(w, 2), frame, size)
+    wire_mode = 1
+    if modern == 1:
+        wire_mode = 2
+    put(w, 64, wire_mode)
+    put(w, 72, 3)
+    put(w, 80, 0)
+    put(w, 88, modern)
+    put(w, 96, 0)
+    put(w, 104, 0)
+    return catalog(s, o, w, 1, modern, 0)

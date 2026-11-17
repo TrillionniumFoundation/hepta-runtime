@@ -1,0 +1,24 @@
+[package]
+name = "hia-bellman-worker-reference"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "hia-bellman-worker-reference"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+anyhow = "=1.0.104"
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "tokio"] }
+libc = "=0.2.189"
+ring = "=0.17.14"
+rmcp = { version = "=3.9.0", features = ["server", "transport-io", "transport-streamable-http-server"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip", "raw_value"] }
+sha2 = "=0.11.0"
+subtle = "=2.6.1"
+tokio = { version = "=1.53.3", features = ["io-util", "rt", "macros"] }
+tower = { version = "=0.5.3", features = ["util"] }
+tracing = { version = "=0.1.44", default-features = false, features = ["std"] }
+zeroize = "=1.9.0"
