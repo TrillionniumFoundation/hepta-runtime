@@ -1,0 +1,45 @@
+{
+  "adapter_source": {
+    "bytes": 2105,
+    "git_blob": "2e1d8604c28109fa53731e6ce488651fbf20e9b8",
+    "sha256": "d78ca6b22f3f98ff5cf02488bd94d1957de6cad40a1fad35f00a162aded3a275"
+  },
+  "author_after": {
+    "bytes": 11882,
+    "git_blob": "4764c58bcfd0e84de57b22c3afc35314e04db036",
+    "sha256": "49f1fb0ff5e08a94b27d9a5c25894369181cc013421541c37a34916fa79bf40d"
+  },
+  "author_before": {
+    "bytes": 11053,
+    "git_blob": "918a8a65b162533ea0545f460722edfaf78ab8f6",
+    "sha256": "92ae732284c418010cc345d862198fac918c9e44f548ba376b09423073803265"
+  },
+  "full_public_stdio_qualified": false,
+  "insert_before": "    out['src/main.rs']=main.encode()",
+  "inserted_source": "    change('struct WireSession {','include!(\"stdio_bridge.rs\");\\n\\nstruct WireSession {')\n    change('    let fixture_sessions = if first_argument.as_deref() == Some(\"--fixture-single-session\") { 1 } else { 2 };','    let stdio_mode = first_argument.as_deref() == Some(\"--stdio\");\\n    let fixture_sessions = if stdio_mode || first_argument.as_deref() == Some(\"--fixture-single-session\") { 1 } else { 2 };')\n    change('    let mut sessions = executor.block_on(async {','    if stdio_mode { return run_actual_stdio(servers[0].clone(), executor); }\\n    let mut sessions = executor.block_on(async {')\n    out['src/stdio_bridge.rs']=(ROOT/'authoring/stdio_bridge.rs').read_bytes()\n",
+  "loader_correction": {
+    "after": "    old=importlib.util.module_from_spec(spec);exec(compile((ROOT/'retained/authoring/author_public_reference.py').read_bytes(),str(ROOT/'retained/authoring/author_public_reference.py'),'exec',dont_inherit=True),old.__dict__)",
+    "before": "    old=importlib.util.module_from_spec(spec);spec.loader.exec_module(old)"
+  },
+  "main_after": {
+    "bytes": 13921,
+    "git_blob": "53408d9258b62083b93c0a3c91350a66b382a0e2",
+    "sha256": "61a935aa240541bb8fa909e3e737233c21ce848ab5367693ca23b4d9d031cafc"
+  },
+  "main_before": {
+    "bytes": 13733,
+    "git_blob": "458a92c5b2939194faa29f3dbdcbcaeb301c2a7a",
+    "sha256": "ad2325cfad31234a4800a82714f3fd23c194e21cd39a91fe7894330a26fdce10"
+  },
+  "new_transport_mode": "--stdio",
+  "original_exact_spans": 13,
+  "parses_requests_or_results": false,
+  "preserved_original_items": 106,
+  "previous_build_replayed": false,
+  "previous_build_run": 43988628108,
+  "previous_source": "c61d58a998936e7b6c383a4eb22e97b7ef002886",
+  "raw_input_and_output_relay": true,
+  "response_count_assumptions": false,
+  "runtime_executed": false,
+  "schema": "hepta.actual-sdk-stdio-reference-extension.v1"
+}

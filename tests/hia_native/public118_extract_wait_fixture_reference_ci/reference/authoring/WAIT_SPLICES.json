@@ -1,0 +1,129 @@
+{
+  "extension": {
+    "actual_original_file_lock_acquire": true,
+    "baseline_source_commit": "eed44ba83628cf8d3223c9f54d62684eb0d4e5f5",
+    "baseline_source_proof": {
+      "bytes": 78698,
+      "git_blob": "1cf9a88355e349b2640522de1eb21749e374d7b8",
+      "sha256": "b3bf1569e97c6d303828f77b3ba5c0f92cf479f160a0c9438dca40769d06af04"
+    },
+    "explicit_mode": "--stdio-wait-fixture",
+    "fixed_control_fd": 5,
+    "fixed_final_observation_fd": 4,
+    "fixture_guards_outlive_actual_runtime_drop": true,
+    "full_async_qualified": false,
+    "main_splices": [
+      {
+        "after": "include!(\"stdio_bridge.rs\");\ninclude!(\"wait_fixture.rs\");\ninclude!(\"stdio_wait_bridge.rs\");",
+        "before": "include!(\"stdio_bridge.rs\");",
+        "count": 1
+      },
+      {
+        "after": "    let stdio_mode = first_argument.as_deref() == Some(\"--stdio\");\n    let wait_mode = first_argument.as_deref() == Some(\"--stdio-wait-fixture\");",
+        "before": "    let stdio_mode = first_argument.as_deref() == Some(\"--stdio\");",
+        "count": 1
+      },
+      {
+        "after": "let fixture_sessions = if stdio_mode || wait_mode ||",
+        "before": "let fixture_sessions = if stdio_mode ||",
+        "count": 1
+      },
+      {
+        "after": "    if stdio_mode { return run_actual_stdio(servers[0].clone(), executor); }\n    if wait_mode { return run_actual_wait_stdio(servers[0].clone(), executor); }",
+        "before": "    if stdio_mode { return run_actual_stdio(servers[0].clone(), executor); }",
+        "count": 1
+      }
+    ],
+    "new_sources": {
+      "src/main.rs": {
+        "bytes": 14157,
+        "git_blob": "513e96ba2a41c387e050f81ec8a990d3751516ba",
+        "sha256": "e96ee6f6686e5fa39920d3ae7b55a6f195513f6b7c127b5650b76bddf159ec72"
+      },
+      "src/stdio_wait_bridge.rs": {
+        "bytes": 4021,
+        "git_blob": "94f5ff100ca4e55c128622ba145b57aa134b4583",
+        "sha256": "08e594eb550a7bd8d8c62ba5ad8e8dc65de6a401fe5d37abe63eb354da7bac81"
+      },
+      "src/wait_fixture.rs": {
+        "bytes": 7203,
+        "git_blob": "b177201c60bacce1544bc81ff71a0a5a3bbbdf70",
+        "sha256": "52f4186aaf45399bf53cb2ea592902143636996da5bfd13199cceaa23b411aef"
+      }
+    },
+    "notification_cancel_behavior_unchanged": true,
+    "original_semantics_executed": 0,
+    "original_stdio_entry_unchanged": true,
+    "public_handlers_unchanged": true,
+    "public_wait_qualified": false,
+    "relay_splices": [
+      {
+        "after": "fn run_actual_wait_stdio(",
+        "before": "fn run_actual_stdio(",
+        "count": 1
+      },
+      {
+        "after": "fn run_actual_wait_stdio(server: OctofsServer, executor: tokio::runtime::Runtime) -> Result<()> {\n    use std::os::fd::FromRawFd;\n    wait_validate_capabilities()?;\n    let control = unsafe { std::os::unix::net::UnixStream::from_raw_fd(5) };\n    let stop_control = control.try_clone()?;\n    let (control_sender, control_receiver) = tokio::sync::mpsc::unbounded_channel();\n    let control_thread = std::thread::spawn(move || wait_control_thread(control,control_sender));\n    let guards: WaitGuards = Arc::new(std::sync::Mutex::new((0..4).map(|_|None).collect()));\n    let held = guards.clone();\n    let sequence = Arc::new(std::sync::atomic::AtomicU64::new(0));\n    let active_sequence = sequence.clone();\n    let observer = server.clone();\n",
+        "before": "fn run_actual_wait_stdio(server: OctofsServer, executor: tokio::runtime::Runtime) -> Result<()> {\n",
+        "count": 1
+      },
+      {
+        "after": "    let outcome = executor.block_on(async move {\n        // Only this new test task owns setup/observation commands. The\n        // following actual SDK and stdin/stdout relay blocks remain exact.\n        let _control_task = tokio::spawn(wait_controller(server.clone(),held,\n            control_receiver,active_sequence));\n",
+        "before": "    executor.block_on(async move {\n",
+        "count": 1
+      },
+      {
+        "after": "    });\n    // Runtime Drop destroys every pending real SDK handler future while the\n    // outer fixture guards still own their acquired mutex Arcs.\n    drop(executor);\n    let mut trace = unsafe { std::fs::File::from_raw_fd(4) };\n    let last = sequence.load(Ordering::SeqCst);\n    let snapshot = wait_snapshot(&observer,&guards,90,last)?;\n    trace.write_all(&wait_reply(last,90,0,90,&[],&snapshot))?;\n    trace.flush()?;\n    {\n        let mut held = guards.lock().map_err(|_| anyhow::anyhow!(\"fixture guard storage poisoned\"))?;\n        for guard in held.iter_mut() { drop(guard.take()); }\n    }\n    let snapshot = wait_snapshot(&observer,&guards,91,last)?;\n    trace.write_all(&wait_reply(last,91,0,91,&[],&snapshot))?;\n    trace.flush()?;\n    let _ = stop_control.shutdown(std::net::Shutdown::Both);\n    match control_thread.join() {\n        Ok(Ok(())) => {}\n        Ok(Err(error)) => return Err(error),\n        Err(_) => bail!(\"fixture control thread panicked\"),\n    }\n    outcome\n}\n",
+        "before": "    })\n}\n",
+        "count": 1
+      }
+    ],
+    "remote_qualified": false,
+    "retained_owned_mutex_guards": 4,
+    "schema": "hepta.runtime.extract-wait-reference-extension.v1"
+  },
+  "main": [
+    {
+      "after": "include!(\"stdio_bridge.rs\");\ninclude!(\"wait_fixture.rs\");\ninclude!(\"stdio_wait_bridge.rs\");",
+      "before": "include!(\"stdio_bridge.rs\");",
+      "count": 1
+    },
+    {
+      "after": "    let stdio_mode = first_argument.as_deref() == Some(\"--stdio\");\n    let wait_mode = first_argument.as_deref() == Some(\"--stdio-wait-fixture\");",
+      "before": "    let stdio_mode = first_argument.as_deref() == Some(\"--stdio\");",
+      "count": 1
+    },
+    {
+      "after": "let fixture_sessions = if stdio_mode || wait_mode ||",
+      "before": "let fixture_sessions = if stdio_mode ||",
+      "count": 1
+    },
+    {
+      "after": "    if stdio_mode { return run_actual_stdio(servers[0].clone(), executor); }\n    if wait_mode { return run_actual_wait_stdio(servers[0].clone(), executor); }",
+      "before": "    if stdio_mode { return run_actual_stdio(servers[0].clone(), executor); }",
+      "count": 1
+    }
+  ],
+  "relay": [
+    {
+      "after": "fn run_actual_wait_stdio(",
+      "before": "fn run_actual_stdio(",
+      "count": 1
+    },
+    {
+      "after": "fn run_actual_wait_stdio(server: OctofsServer, executor: tokio::runtime::Runtime) -> Result<()> {\n    use std::os::fd::FromRawFd;\n    wait_validate_capabilities()?;\n    let control = unsafe { std::os::unix::net::UnixStream::from_raw_fd(5) };\n    let stop_control = control.try_clone()?;\n    let (control_sender, control_receiver) = tokio::sync::mpsc::unbounded_channel();\n    let control_thread = std::thread::spawn(move || wait_control_thread(control,control_sender));\n    let guards: WaitGuards = Arc::new(std::sync::Mutex::new((0..4).map(|_|None).collect()));\n    let held = guards.clone();\n    let sequence = Arc::new(std::sync::atomic::AtomicU64::new(0));\n    let active_sequence = sequence.clone();\n    let observer = server.clone();\n",
+      "before": "fn run_actual_wait_stdio(server: OctofsServer, executor: tokio::runtime::Runtime) -> Result<()> {\n",
+      "count": 1
+    },
+    {
+      "after": "    let outcome = executor.block_on(async move {\n        // Only this new test task owns setup/observation commands. The\n        // following actual SDK and stdin/stdout relay blocks remain exact.\n        let _control_task = tokio::spawn(wait_controller(server.clone(),held,\n            control_receiver,active_sequence));\n",
+      "before": "    executor.block_on(async move {\n",
+      "count": 1
+    },
+    {
+      "after": "    });\n    // Runtime Drop destroys every pending real SDK handler future while the\n    // outer fixture guards still own their acquired mutex Arcs.\n    drop(executor);\n    let mut trace = unsafe { std::fs::File::from_raw_fd(4) };\n    let last = sequence.load(Ordering::SeqCst);\n    let snapshot = wait_snapshot(&observer,&guards,90,last)?;\n    trace.write_all(&wait_reply(last,90,0,90,&[],&snapshot))?;\n    trace.flush()?;\n    {\n        let mut held = guards.lock().map_err(|_| anyhow::anyhow!(\"fixture guard storage poisoned\"))?;\n        for guard in held.iter_mut() { drop(guard.take()); }\n    }\n    let snapshot = wait_snapshot(&observer,&guards,91,last)?;\n    trace.write_all(&wait_reply(last,91,0,91,&[],&snapshot))?;\n    trace.flush()?;\n    let _ = stop_control.shutdown(std::net::Shutdown::Both);\n    match control_thread.join() {\n        Ok(Ok(())) => {}\n        Ok(Err(error)) => return Err(error),\n        Err(_) => bail!(\"fixture control thread panicked\"),\n    }\n    outcome\n}\n",
+      "before": "    })\n}\n",
+      "count": 1
+    }
+  ]
+}
