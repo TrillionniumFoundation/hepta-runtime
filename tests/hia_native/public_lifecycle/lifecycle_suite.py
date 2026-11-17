@@ -166,6 +166,13 @@ def execute(binary,output,*,side='native',retained=None,native_binary=None):
                     process['messages']=len(value['sends'])
                     process['requests']=sum('id'in x['request']for x in value['sends'])
                     process['responses']=len(value['responses'])
+                elif spec['domain']=='success':
+                    # Complete frames and filesystem snapshots remain in the
+                    # per-process result and their independently checked files.
+                    # Do not rewrite those large captures in every progress
+                    # update of the aggregate report.
+                    process.update(copy.deepcopy({k:v for k,v in value.items()
+                        if k not in ('frames','boundaries','final')}))
                 else:process.update(copy.deepcopy(value))
                 save()
             common_arg=common if side=='original'else None
