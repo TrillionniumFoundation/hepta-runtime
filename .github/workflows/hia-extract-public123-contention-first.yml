@@ -1,0 +1,76 @@
+name: Actual public123 extract contention first lane
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public123_extract_contention_ci/RUN_ONCE.json']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  actual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set immutable source and separate evidence paths
+        run: |
+          printf '%s\n' "WAIT_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_contention_ci" "WAIT_INPUTS=$RUNNER_TEMP/contention-inputs" "WAIT_CAPTURE=$RUNNER_TEMP/contention-first-lane" "WAIT_EXPORT=$RUNNER_TEMP/contention-first-export" "WAIT_DRIVER=$RUNNER_TEMP/contention-first-driver" "WAIT_RESTORE=$RUNNER_TEMP/contention-first-restore" >> "$GITHUB_ENV"
+      - name: Checkout exact frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_contention_ci
+      - name: Verify all source bytes and all24 input-only scenarios
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = '${{ github.sha }}'
+          test "$(sha256sum "$WAIT_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 'b957436cad864d31ca88f83087802423ad0f619a6e9ac2f8e304f42dd4738ff3'
+          python3 -I -S -B "$WAIT_PACKAGE/check_source.py"
+      - name: Independently read complete shared graph, test carrier and actual original artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$WAIT_PACKAGE/restore_inputs.py" --output "$WAIT_INPUTS" > "$WAIT_RESTORE.stdout" 2> "$WAIT_RESTORE.stderr"
+          wait_status=$?
+          cat "$WAIT_RESTORE.stderr"
+          test "$wait_status" -ne 0 || cat "$WAIT_RESTORE.stdout"
+          exit "$wait_status"
+      - name: Execute only new ordinary-a-legacy actual original and native contention
+        run: |
+          set +e
+          python3 -I -S -B "$WAIT_PACKAGE/run.py" --inputs "$WAIT_INPUTS" --output "$WAIT_CAPTURE" --domain ordinary-a-legacy > "$WAIT_DRIVER.stdout" 2> "$WAIT_DRIVER.stderr"
+          wait_status=$?
+          cat "$WAIT_DRIVER.stderr"
+          test "$wait_status" -ne 0 || cat "$WAIT_DRIVER.stdout"
+          exit "$wait_status"
+      - name: Eight physical refusals and two complete relocated read-only comparisons
+        run: |
+          python3 -I -S -B "$WAIT_PACKAGE/controls.py" --capture "$WAIT_CAPTURE" --output "$WAIT_CAPTURE-reader-controls"
+      - name: Preserve complete success or failure and dependency-read records
+        if: always()
+        run: |
+          mkdir -p "$WAIT_CAPTURE/dependency-logs"
+          for wait_suffix in stdout stderr; do
+            if test -f "$WAIT_RESTORE.$wait_suffix"; then
+              cp "$WAIT_RESTORE.$wait_suffix" "$WAIT_CAPTURE/dependency-logs/restore.$wait_suffix"
+            fi
+          done
+          if ! test -f "$WAIT_CAPTURE/RUN.json" && test -d "$WAIT_INPUTS"; then
+            mv "$WAIT_INPUTS" "$WAIT_CAPTURE/dependency-failure"
+          fi
+          python3 -I -S -B "$WAIT_PACKAGE/archive.py" pack --source "$WAIT_PACKAGE" --capture "$WAIT_CAPTURE" --output "$WAIT_EXPORT" --driver-prefix "$WAIT_DRIVER"
+      - name: Upload complete actual pair including any failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public123-extract-contention-first-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.WAIT_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
