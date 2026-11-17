@@ -1,0 +1,67 @@
+name: Author and fresh-compile persistent namespace Watcher
+on:
+  push:
+    branches: [hia-namespace-watcher-source-v1-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_watcher_source_v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Admit the complete frozen author and source
+        run: |
+          export NAMESPACE_ROOT="$RUNNER_TEMP/namespace-watcher-source-v1"
+          printf 'NAMESPACE_ROOT=%s\n' "$NAMESPACE_ROOT" >> "$GITHUB_ENV"
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import hashlib,os,shutil
+          from pathlib import Path
+          root=Path(os.environ["NAMESPACE_ROOT"]);root.mkdir(exist_ok=False)
+          shutil.copytree("runtime/tests/hia_native/namespace_watcher_source_v1",root/"source")
+          assert hashlib.sha256((root/"source/SOURCE.json").read_bytes()).hexdigest()=="949cdb9120c8480405dd3220bde60e1397dada3130b2870e5e927d016ceb4939"
+          (root/"outer").mkdir()
+          PY
+          timeout --signal=KILL 60 python3 -I -B "$NAMESPACE_ROOT/source/source_check.py"
+      - name: Generate exact HIA and fresh B1 B2 B3 compile without owner execution
+        run: |
+          python3 -I -B "$NAMESPACE_ROOT/source/prepare.py" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$NAMESPACE_ROOT/run" > "$NAMESPACE_ROOT/outer/prepare.stdout" 2> "$NAMESPACE_ROOT/outer/prepare.stderr"
+          cat "$NAMESPACE_ROOT/outer/prepare.stdout"
+          cat "$NAMESPACE_ROOT/run/processes/author-owner.stdout"
+      - name: Preserve every complete source and build byte including failures
+        if: always()
+        run: |
+          if test -f "$NAMESPACE_ROOT/source/export.py"; then
+            timeout --signal=KILL 180 python3 -I -B "$NAMESPACE_ROOT/source/export.py" --workspace "$NAMESPACE_ROOT" \
+              --archive "$RUNNER_TEMP/namespace-watcher-source-v1.tar.gz"
+          fi
+          if test -f "$NAMESPACE_ROOT/outer/prepare.stderr"; then cat "$NAMESPACE_ROOT/outer/prepare.stderr"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-watcher-source-v1
+          path: |
+            ${{ runner.temp }}/namespace-watcher-source-v1.tar.gz
+            ${{ runner.temp }}/namespace-watcher-source-v1.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
