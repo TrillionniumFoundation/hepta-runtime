@@ -195,9 +195,9 @@ def number_end(w:mutbuf,at:u64,end:u64,maximum:u64) -> u64:
     value=0
     while at<end and byte(w,at)>=48 and byte(w,at)<=57:
         digit=byte(w,at)-48
-        if value>maximum/10:
+        if value>maximum//10:
             return MAXIMUM
-        if value==maximum/10 and digit>maximum%10:
+        if value==maximum//10 and digit>maximum%10:
             return MAXIMUM
         value=value*10+digit
         at=at+1
