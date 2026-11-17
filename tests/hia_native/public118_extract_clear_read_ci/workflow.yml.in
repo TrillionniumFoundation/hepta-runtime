@@ -1,0 +1,66 @@
+name: Caller clear public118 independent build and control read
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_extract_clear_read_ci/**', '.github/workflows/hia-extract-public-clear-read.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  retained-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen pure archive reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_extract_clear_read_ci
+      - name: Download the same complete successful build artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/public118-clear-build-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14297256599 > "$RUNNER_TEMP/public118-clear-build-input/artifact.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14297256599/zip > "$RUNNER_TEMP/public118-clear-build-input/complete.zip"
+      - name: Guard every original byte and split the unchanged ZIP
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_extract_clear_read_ci/run.py" --input "$RUNNER_TEMP/public118-clear-build-input/complete.zip" --output "$RUNNER_TEMP/public118-clear-build-read" --profile '@PROFILE@' > "$RUNNER_TEMP/public118-clear-build-read.stdout" 2> "$RUNNER_TEMP/public118-clear-build-read.stderr"
+      - name: Preserve complete reader and success or failure proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public118-clear-build-read-proof-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/public118-clear-build-read/proof
+            ${{ runner.temp }}/public118-clear-build-read.stdout
+            ${{ runner.temp }}/public118-clear-build-read.stderr
+            ${{ runner.temp }}/public118-clear-build-input/artifact.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Retain first exact ZIP part
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public118-clear-build-part0-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public118-clear-build-read/part-0
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 30
+      - name: Retain second exact ZIP part
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public118-clear-build-part1-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public118-clear-build-read/part-1
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 30
