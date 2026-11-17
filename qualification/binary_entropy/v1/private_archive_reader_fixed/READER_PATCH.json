@@ -1,0 +1,31 @@
+{
+  "schema": "hepta.runtime.binary-entropy.private-reader-json-roundtrip-patch.v1",
+  "original": {
+    "key": "entropyPrivateEvidenceReader",
+    "git_blob": "57a5ccc3221f6195df4d8b5eafea5f0fa7082484",
+    "bytes": 6730,
+    "sha256": "0c3d8daadc6d82904e73b542b12168ae2ebd04a817b7430daf84e1333a9fbe84"
+  },
+  "corrected": {
+    "key": "entropyPrivateEvidenceReaderFixed",
+    "git_blob": "500e37d1f162e2a66c12211f1b7c732c41522be0",
+    "bytes": 6772,
+    "sha256": "9202a5d8940ee315a18ed28f5f3322ff8d3d74ae5759123e4322db7ae9766900"
+  },
+  "changes": [
+    {
+      "before": "from evidence_common import decode,pin,require,source_evidence",
+      "after": "from evidence_common import decode,encoded,pin,require,source_evidence"
+    },
+    {
+      "before": "result=read_private.verify(source,capture);primary=",
+      "after": "result=decode(encoded(read_private.verify(source,capture)));primary="
+    },
+    {
+      "before": "actual=private_controls.verify_copy(working/\"source\",working/\"capture\",name)",
+      "after": "actual=decode(encoded(private_controls.verify_copy(working/\"source\",working/\"capture\",name)))"
+    }
+  ],
+  "scope": "Only canonical round-trip of complete fresh pure result dictionaries at JSON persistence boundaries; all source, buffers, protocol checks, failed comparison and actual applications retained unchanged.",
+  "new_application_calls": 0
+}
