@@ -1,0 +1,72 @@
+name: Private audit record I/O native and original qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-storage-qualification-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  complete:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_storage_core
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Install the fixed reference toolchain and owned syscall observer
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          sudo apt-get update
+          sudo apt-get install -y strace
+      - name: Complete frozen source admission
+        env:
+          EXPECTED_SOURCE: 35b5d7c107e0583ac3a25cdcabf5ec9f547fbb31840079c49b5486230b8281e6
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -B - <<'PY'
+          import os,sys
+          from pathlib import Path
+          root=Path('runtime/tests/hia_native/audit_storage_core').resolve()
+          sys.path.insert(0,str(root))
+          import common
+          assert common.source()==os.environ['EXPECTED_SOURCE']
+          for path in root.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          print('COMPLETE_SOURCE_ADMISSION_PASS',common.source())
+          PY
+      - name: Fresh two-owner build and complete native and unchanged original filesystem corpus
+        run: |
+          source="$GITHUB_WORKSPACE/runtime/tests/hia_native/audit_storage_core"
+          rustbin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -I -B "$source/run_capture.py" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$rustbin" --output "$RUNNER_TEMP/audit-record-io-run/semantic" --temporary "$RUNNER_TEMP/audit-record-io-build"
+      - name: Complete relocated-capable guarded semantic reader
+        run: |
+          python3 -I -B runtime/tests/hia_native/audit_storage_core/qualify.py --phase semantic --output "$RUNNER_TEMP/audit-record-io-run"
+      - name: Fourteen complete physical refusals and two independent admissions
+        run: |
+          python3 -I -B runtime/tests/hia_native/audit_storage_core/qualify.py --phase controls --output "$RUNNER_TEMP/audit-record-io-run"
+      - name: Independent guarded full reader including every retained physical control
+        run: |
+          python3 -I -B runtime/tests/hia_native/audit_storage_core/qualify.py --phase final --output "$RUNNER_TEMP/audit-record-io-run"
+      - name: Preserve complete source and all successful or failed evidence
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/audit-record-io-run"
+          python3 -I -B runtime/tests/hia_native/audit_storage_core/export.py --capture "$RUNNER_TEMP/audit-record-io-run" --archive "$RUNNER_TEMP/audit-record-io-complete.tar.gz"
+      - name: Upload complete artifact and its full-byte reread receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-io-complete-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/audit-record-io-complete.tar.gz
+            ${{ runner.temp }}/audit-record-io-complete.tar.gz.json
+          if-no-files-found: error
+          retention-days: 14

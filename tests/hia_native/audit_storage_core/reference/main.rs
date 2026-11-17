@@ -14,7 +14,11 @@ mod mcp {
 }
 
 fn main() -> Result<()> {
-	let root = PathBuf::from(std::env::args_os().nth(1).ok_or_else(|| anyhow!("fixture root required"))?);
+	let root = PathBuf::from(
+		std::env::args_os()
+			.nth(1)
+			.ok_or_else(|| anyhow!("fixture root required"))?,
+	);
 	let input = std::io::stdin();
 	let output = std::io::stdout();
 	let mut input = input.lock();
@@ -38,7 +42,10 @@ fn main() -> Result<()> {
 			current = None;
 			current = Some((case, File::open(root.join(format!("case-{case:04}")))?));
 		}
-		let file = &current.as_ref().ok_or_else(|| anyhow!("fixture directory"))?.1;
+		let file = &current
+			.as_ref()
+			.ok_or_else(|| anyhow!("fixture directory"))?
+			.1;
 		let generation = u64::from_le_bytes(frame[16..24].try_into()?);
 		eprintln!("AUDIT_ORIGINAL_BEGIN {case} {generation}");
 		let result = mcp::runtime::storage::run(file, &frame)?;

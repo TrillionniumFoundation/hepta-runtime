@@ -29,8 +29,14 @@ fn put(raw: &mut [u8], at: usize, value: u64) {
 fn text(raw: &[u8], at: u64, size: u64) -> Result<String> {
 	let at: usize = at.try_into()?;
 	let size: usize = size.try_into()?;
-	let end = at.checked_add(size).ok_or_else(|| anyhow!("fixture extent overflow"))?;
-	Ok(std::str::from_utf8(raw.get(at..end).ok_or_else(|| anyhow!("fixture text extent"))?)?.to_owned())
+	let end = at
+		.checked_add(size)
+		.ok_or_else(|| anyhow!("fixture extent overflow"))?;
+	Ok(std::str::from_utf8(
+		raw.get(at..end)
+			.ok_or_else(|| anyhow!("fixture text extent"))?,
+	)?
+	.to_owned())
 }
 
 fn decode_projection(raw: &[u8]) -> Result<Record> {
@@ -62,20 +68,28 @@ fn decode_projection(raw: &[u8]) -> Result<Record> {
 }
 
 fn encode_projection(record: &Record) -> Vec<u8> {
-	let mut raw = vec![0_u8; 128 + record.request_id.len() + record.owner.len() + record.tool_name.len()];
+	let mut raw =
+		vec![0_u8; 128 + record.request_id.len() + record.owner.len() + record.tool_name.len()];
 	raw[..8].copy_from_slice(b"HAJPR001");
 	put(&mut raw, 8, 1);
 	put(&mut raw, 16, u64::from(record.elapsed_ms.is_some()));
 	put(&mut raw, 24, record.accepted_unix_ms as u64);
 	put(&mut raw, 32, (record.accepted_unix_ms >> 64) as u64);
-	put(&mut raw, 40, match record.state {
-		DurableState::Unknown => 0,
-		DurableState::Completed => 1,
-		DurableState::Failed => 2,
-	});
+	put(
+		&mut raw,
+		40,
+		match record.state {
+			DurableState::Unknown => 0,
+			DurableState::Completed => 1,
+			DurableState::Failed => 2,
+		},
+	);
 	put(&mut raw, 48, record.elapsed_ms.unwrap_or(0));
 	let mut at = 128;
-	for (index, value) in [&record.request_id, &record.owner, &record.tool_name].iter().enumerate() {
+	for (index, value) in [&record.request_id, &record.owner, &record.tool_name]
+		.iter()
+		.enumerate()
+	{
 		put(&mut raw, 64 + index * 16, at as u64);
 		put(&mut raw, 72 + index * 16, value.len() as u64);
 		raw[at..at + value.len()].copy_from_slice(value.as_bytes());
@@ -118,7 +132,10 @@ fn error_projection(error: &anyhow::Error) -> Result<(u64, u64)> {
 }
 
 pub fn run(directory: &File, frame: &[u8]) -> Result<Vec<u8>> {
-	if frame.len() < 128 || &frame[..8] != b"HAIORQ01" || word(frame, 40)? != (frame.len() - 128) as u64 {
+	if frame.len() < 128
+		|| &frame[..8] != b"HAIORQ01"
+		|| word(frame, 40)? != (frame.len() - 128) as u64
+	{
 		bail!("fixture initial frame");
 	}
 	let op = word(frame, 8)?;
@@ -149,12 +166,15 @@ pub fn run(directory: &File, frame: &[u8]) -> Result<Vec<u8>> {
 			}
 		}
 		Err(error) => {
-			eprintln!("OBSERVED_ORIGINAL_ERROR {}", serde_json::json!({
-				"generation": word(frame, 16)?,
-				"display": error.to_string(),
-				"debug": format!("{error:#?}"),
-				"chain": error.chain().map(ToString::to_string).collect::<Vec<_>>(),
-			}));
+			eprintln!(
+				"OBSERVED_ORIGINAL_ERROR {}",
+				serde_json::json!({
+					"generation": word(frame, 16)?,
+					"display": error.to_string(),
+					"debug": format!("{error:#?}"),
+					"chain": error.chain().map(ToString::to_string).collect::<Vec<_>>(),
+				})
+			);
 			let (family, code) = error_projection(&error)?;
 			put(&mut out, 8, 1);
 			put(&mut out, 24, family);

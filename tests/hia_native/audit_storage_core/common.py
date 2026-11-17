@@ -59,6 +59,7 @@ def source(root=ROOT):
         require(pin(actual) == {key: expected[key] for key in ('bytes', 'sha256')}, 'complete source pin: ' + name)
         require(hashlib.sha1(b'blob ' + str(len(actual)).encode() + b'\0' + actual).hexdigest() ==
                 expected['git_blob'], 'source Git identity: ' + name)
+    require(set(files(root))==set(manifest['files'])|{'SOURCE.json'}, 'complete frozen source file set')
     return pin(raw)['sha256']
 
 
@@ -72,5 +73,5 @@ def files(root,exclude=()):
             require(stat.S_ISDIR((Path(folder)/name).lstat().st_mode),'ordinary retained directory')
         for name in names:
             path=Path(folder)/name;relative=path.relative_to(root).as_posix()
-            if relative not in exclude:result[relative]=pin(read(path))
+            if relative not in exclude:result[relative]=dict(**pin(read(path)),mode=stat.S_IMODE(path.lstat().st_mode))
     return result
