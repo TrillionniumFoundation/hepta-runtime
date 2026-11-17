@@ -1,0 +1,65 @@
+name: Public118 catalog existing configuration argument repair against retained originals
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-public-6780-20261116']
+    paths: ['tests/hia_native/public118_catalog_configuration_ci/**', '.github/workflows/hia-extract-public-catalog-configuration.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  LC_ALL: C.UTF-8
+jobs:
+  native-domain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {domain: catalog-legacy, artifact: 14289094292}
+          - {domain: catalog-modern, artifact: 14289758074}
+    steps:
+      - name: Checkout complete frozen inputs and readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public118_catalog_configuration_ci
+      - name: Admit every exact source and unchanged original input
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_catalog_configuration_ci/source_check.py" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_catalog_configuration_ci" --profile '3c79f8fb87a341c3b6fcad2284745fccca90306c8449d90494a3834b1781af5e'
+      - name: Download the fixed successful build and original domain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/public118-input"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14304028884 > "$RUNNER_TEMP/public118-input/native.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14304028884/zip > "$RUNNER_TEMP/public118-input/native.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14304826325 > "$RUNNER_TEMP/public118-input/native-proof.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14304826325/zip > "$RUNNER_TEMP/public118-input/native-proof.zip"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}' > "$RUNNER_TEMP/public118-input/prior.json"
+          gh api 'repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}/zip' > "$RUNNER_TEMP/public118-input/prior.zip"
+      - name: Capture only the complete new native lane and compare all originals
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_catalog_configuration_ci/run.py" --input "$RUNNER_TEMP/public118-input" --output "$RUNNER_TEMP/public118-domain" --domain '${{ matrix.domain }}' --profile '3c79f8fb87a341c3b6fcad2284745fccca90306c8449d90494a3834b1781af5e' > "$RUNNER_TEMP/public118-domain-driver.stdout" 2> "$RUNNER_TEMP/public118-domain-driver.stderr"
+      - name: Retain every original failure and new evidence byte
+        if: always()
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/source/tests/hia_native/public118_catalog_configuration_ci/ci/archive.py" pack --capture "$RUNNER_TEMP/public118-domain" --output "$RUNNER_TEMP/public118-domain-export" --package "$GITHUB_WORKSPACE/source/tests/hia_native/public118_catalog_configuration_ci" --manifest-sha256 '3c79f8fb87a341c3b6fcad2284745fccca90306c8449d90494a3834b1781af5e' --label '${{ matrix.domain }}' --driver-prefix "$RUNNER_TEMP/public118-domain-driver"
+      - name: Show complete terminal diagnostic
+        if: always()
+        run: |
+          python3 -I -S -B -c 'from pathlib import Path; import os; p=Path(os.environ["RUNNER_TEMP"]); print((p/"public118-domain-driver.stdout").read_text()); print((p/"public118-domain-driver.stderr").read_text())'
+      - name: Upload complete successor evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-public-configured-catalog-${{ matrix.domain }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public118-domain-export
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

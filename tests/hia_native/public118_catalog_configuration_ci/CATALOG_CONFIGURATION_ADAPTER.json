@@ -1,0 +1,20 @@
+{
+  "schema": "hepta.runtime.native-catalog-config-argv-adapter.v1",
+  "driver_before": {
+    "bytes": 11768,
+    "sha256": "a72ab4ec496e31e4e686516dd3b91b2089232030157f2300a3a096e21f868e2e"
+  },
+  "driver_after": {
+    "bytes": 11838,
+    "sha256": "6bebc031b5305d5b578e124cca0452205293e2db44ccf06e21f25f2df55c8db7"
+  },
+  "substitution": {
+    "before": "self.io=fixture_io.RecordedFixtureProcess(output,binary,cwd,strace='/usr/bin/strace',trace=False)",
+    "after": "self.io=fixture_io.RecordedFixtureProcess(output,binary,cwd,strace='/usr/bin/strace',trace=False,extra_argv=() if config is None else ('--runtime-config',str(config)))"
+  },
+  "original_provider_changed": false,
+  "input_plan_changed": false,
+  "expected_wire_added": false,
+  "production_source_changed": false,
+  "sole_runtime_change": "Forward the existing config pathname as --runtime-config FILE to the existing private binary startup."
+}
