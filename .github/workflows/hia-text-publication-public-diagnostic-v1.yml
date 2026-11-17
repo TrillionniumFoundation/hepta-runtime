@@ -1,0 +1,35 @@
+name: Public publisher retained artifact diagnostic
+on:
+  push:
+    branches: ['hia-text-publication-public-diagnostic-6780-v1-20261117']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/text_publication_public_diagnostic_v1" "OUTPUT=$RUNNER_TEMP/publisher-diagnostic-read" >> "$GITHUB_ENV"
+      - name: Checkout frozen pure reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/text_publication_public_diagnostic_v1
+      - name: Read every original artifact byte and retained stderr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -S -B "$PACKAGE/read.py" --output "$OUTPUT"
+      - name: Upload complete pure-read proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-publisher-diagnostic-${{ github.sha }}
+          path: ${{ env.OUTPUT }}
+          if-no-files-found: error
+          retention-days: 30
