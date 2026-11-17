@@ -1,0 +1,17 @@
+{
+  "schema": "hepta.runtime.single-changed-case.exact-reader-derivation.v1",
+  "before_sha256": "f15edb90195e56eff6dea4d2afb9b5ee60581e98946ec0725735fcebfcdafeae",
+  "after_sha256": "2b0e28970d83a402c370b584b305d6c6966be30f77c00d8b44aecf9552bc1af0",
+  "patches": [
+    {
+      "before": "def read(folder,side,binary):",
+      "after": "def read(folder,side,binary,selected):\n    need(type(selected) is int and 0<=selected<4,\"selected complete actual case\")"
+    },
+    {
+      "before": "    for i,item in enumerate(plan[\"cases\"]):\n        case=folder/(\"%03d\"%i);row=doc(case/\"CASE.json\")",
+      "after": "    for i,item in enumerate(plan[\"cases\"]):\n        if i!=selected:continue\n        case=folder/(\"%03d\"%i);row=doc(case/\"CASE.json\")"
+    }
+  ],
+  "meaning": "The same complete source-owned reader checks the physically changed case. Other cases remain byte-for-byte unchanged and are fully compared on retirement. The complete lane was already read under guards immediately before controls.",
+  "application_executions": 0
+}

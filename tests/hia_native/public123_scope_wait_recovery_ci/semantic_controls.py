@@ -45,8 +45,11 @@ def main():
     p=argparse.ArgumentParser();p.add_argument("--capture",type=Path,required=True);p.add_argument("--output",type=Path,required=True);a=p.parse_args()
     capture=a.capture.resolve(strict=True);output=a.output.absolute();assert not output.exists();output.mkdir(parents=True)
     inputs=doc(capture/"INPUTS_READY.json")
-    values=[original_reader.read(capture/side,side,{k:inputs[side][k] for k in ("bytes","sha256")}) for side in ("original","native")]
-    candidates=[i for i,(left,right) in enumerate(zip(*values,strict=True)) if left["metadata"]!=right["metadata"]]
+    candidates=[]
+    for i in range(4):
+        rows=[doc(capture/side/("%03d"%i)/"CASE.json") for side in ("original","native")]
+        metadata=[reader.structural_snapshots([x[1]["complete_metadata"] for x in reader.snapshots(row)]) for row in rows]
+        if metadata[0]!=metadata[1]:candidates.append(i)
     assert len(candidates)==1
     case_number=candidates[0];case_dir="%03d"%case_number
     actual=atomic_frames.inspect(capture/"native"/case_dir/"process")
@@ -93,13 +96,13 @@ def main():
         report=doc(working/"native/CAPTURE.json");report["cases"][case_number]["case"]=file_pin(working/relative)
         replace("native/CAPTURE.json",(json.dumps(report,sort_keys=True,indent=2)+"\n").encode())
         def verify():
-            pair=[reader.read(working/side,side,{k:inputs[side][k] for k in ("bytes","sha256")}) for side in ("original","native")]
+            pair=[reader.read_selected(working/side,side,{k:inputs[side][k] for k in ("bytes","sha256")},case_number) for side in ("original","native")]
             # The complete previous reader accepts every resealed physical
             # stream and state, then the added lifetime proof must reject.
             try:reader.compare(*pair)
             except ValueError as error:
                 assert message in str(error),(message,str(error))
-                return {"status":"RESEALED_LIFETIME_PRECONDITION_REJECTED","error":str(error),"original_complete_readers_passed":True}
+                return {"status":"RESEALED_LIFETIME_PRECONDITION_REJECTED","error":str(error),"changed_case_complete_readers_passed":True}
             raise AssertionError("proved-lifetime reader accepted corrupted physical state")
         proof=guard.guarded(verify,roots=[working,HERE,source],foreign_path=Path("/dev/null"))
         put(evidence/"READ.json",proof)

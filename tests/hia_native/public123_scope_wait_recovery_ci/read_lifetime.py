@@ -1,7 +1,7 @@
 """Strict pair reader with a proved native inode-allocation lifetime split."""
 from pathlib import Path
 import copy,hashlib,json,stat,struct
-import atomic_frames,read_capture_fixed as base
+import atomic_frames,read_capture_fixed as base,selected_capture
 from wait_observations import need
 from capture_common import structural_snapshots
 HERE=Path(__file__).resolve().parent
@@ -75,6 +75,12 @@ def prove_reallocation(left,right):
         if message.get("method")=="tools/call":
             need(message["params"]["name"]=="extract_lines","no other filesystem public handler in identity scenario")
             args=message["params"]["arguments"]
+            if args.get("from_path")==[]:
+                need(step is plan["steps"][0] and step["label"]=="modern-opener" and message.get("id")=="opener","only frozen invalid-type modern opener precedes the two valid arrivals")
+                replies=[json.loads(line) for line in right["stdout"].splitlines() if line]
+                rejected=[x for x in replies if x.get("id")=="opener"]
+                need(len(rejected)==1 and rejected[0].get("error",{}).get("code")==-32602 and "result" not in rejected[0],"actual SDK rejects the opener before filesystem execution")
+                continue
             need(args["append_path"]=="target" and args["append_line"]==-1,"same actual locked destination")
             calls.append(bytes.fromhex(step["wire_hex"]).rstrip(b"\n"))
     need(len(calls)==2,"two distinct actual request arrivals in one replacement interval")
@@ -159,3 +165,19 @@ def compare(original,native):
     result["original_numeric_identity_labels_preserved"]=True
     result["complete_unadjusted_metadata_preserved"]=True
     return result
+
+def read_selected(folder,side,binary,index):
+    recipe=doc(HERE/"SELECTED_READER_PATCHES.json")
+    raw=(HERE/"read_capture_fixed.py").read_bytes()
+    need(pin(raw)=={"bytes":len(raw),"sha256":recipe["before_sha256"]},"complete original selected-case reader preimage")
+    for patch in recipe["patches"]:
+        before=patch["before"].encode();after=patch["after"].encode()
+        need(raw.count(before)==1,"unique exact single-case reader derivation")
+        raw=raw.replace(before,after)
+    need(raw==(HERE/"selected_capture.py").read_bytes() and pin(raw)["sha256"]==recipe["after_sha256"],"full selected-reader source inverse")
+    values=selected_capture.read(folder,side,binary,index)
+    need(len(values)==1,"one full physically changed actual case")
+    report=doc(Path(folder)/"CAPTURE.json")
+    values[0]["_case_folder"]=str(Path(folder)/("%03d"%index))
+    values[0]["_fixture"]=report["fixture"]
+    return values

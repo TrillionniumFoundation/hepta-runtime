@@ -27,3 +27,5 @@ physical semantic controls reseal deliberately corrupted observed rename/FD
 bytes so that the lifetime preconditions themselves must reject. The
 production binary and all application inputs are unchanged. Each application
 budget remains 60/180 seconds, and each CI job remains 15 minutes.
+
+The fixed invalid-type modern opener is explicitly checked against its actual SDK -32602 reply before selecting the two valid arrivals. The first recovery (976e185f / 44077259261) retains its modern-prelude FAILs and the 180-second semantic-reader timeout. Its four completed full-reader roles remain PASS. The semantic controls now use a two-splice exact derivation of the original complete reader for the one changed case; every other captured file is still compared in full before retirement. The 180-second process deadline remains unchanged.
