@@ -1,0 +1,67 @@
+name: Current124 ordinary independent uploaded review
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication124-ordinary-upload-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - name: Set independent runtime paths
+        run: |
+          printf '%s\n' "OU_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/publication124_ordinary_upload_v1" "OU_ORDINARY=$GITHUB_WORKSPACE/ordinary/tests/hia_native/publication124_ordinary_ci" "OU_BUILD=$GITHUB_WORKSPACE/build-recipe/tests/hia_native/publication_duplex_build_v3" "OU_PUBLIC=$GITHUB_WORKSPACE/public-reader/tests/hia_native/publication_duplex_complete_read_v2" "OU_STAGE=$RUNNER_TEMP/ordinary-upload-inputs" "OU_CAPTURE=$RUNNER_TEMP/ordinary-upload-proof" "OU_EXPORT=$RUNNER_TEMP/ordinary-upload-export" "OU_DRIVER=$RUNNER_TEMP/ordinary-upload-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/publication124_ordinary_upload_v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: ordinary
+          ref: 274c4481b357820e6ae044a4fdd9bcd379a80de1
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication124_ordinary_ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: build-recipe
+          ref: f4a348f6661aec513ac63e1807ff697e81704b3e
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: public-reader
+          ref: 61066b30cb274d56b48e7dd24b33fa1aaede0c60
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_complete_read_v2
+      - name: Complete immutable source preflight
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,sys; r=pathlib.Path(os.environ["OU_ORDINARY"]); sys.path[:0]=[str(r/"recipe"),str(r)]; import check_current; print(check_current.check()); from common import source_evidence; p=pathlib.Path(os.environ["OU_SOURCE"]); print(source_evidence(p)); [compile(x.read_bytes(),str(x),"exec") for x in p.glob("*.py")]'
+      - name: Read complete uploaded graph and all six actual paired lanes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$OU_SOURCE/read.py" --source "$OU_ORDINARY" --build-recipe "$OU_BUILD" --public-reader "$OU_PUBLIC" --stage "$OU_STAGE" --output "$OU_CAPTURE" --shard "${{ matrix.shard }}" > "$OU_DRIVER.stdout" 2> "$OU_DRIVER.stderr"
+          cat "$OU_DRIVER.stdout"
+      - name: Preserve every pure proof and any failure
+        if: always()
+        run: |
+          python3 -I -S -B "$OU_ORDINARY/recipe/archive.py" pack --source "$OU_SOURCE" --capture "$OU_CAPTURE" --output "$OU_EXPORT" --driver-prefix "$OU_DRIVER"
+          if test -e "$OU_DRIVER.stderr"; then cat "$OU_DRIVER.stderr"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ordinary124-uploaded-${{ matrix.shard }}-${{ github.sha }}
+          path: ${{ env.OU_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
