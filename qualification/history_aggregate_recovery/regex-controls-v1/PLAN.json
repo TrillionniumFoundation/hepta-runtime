@@ -1,0 +1,53 @@
+{
+  "controls": {
+    "full_baseline_admissions": 6,
+    "negative_controls": 14,
+    "original_script": "tests/hia_native/check_regex_evidence.py",
+    "process": "Same existing execute wrapper, owned child PID/PGID, kill/wait before receipt, all stdout/stderr/audit bytes retained.",
+    "sha256": "0b259f75ff2ee54c802552ac1fc19e9f0de62b75c9b382276375acbde327c1ee",
+    "timeout_seconds": 180,
+    "unchanged_source": true
+  },
+  "global_flags_raised": false,
+  "native_or_rust_executions": 0,
+  "original": {
+    "artifact": 14274528318,
+    "head": "08ce7b6fdfda64aa382e3238a1547c5e379f156a",
+    "run": 43944061609,
+    "status": "FAILURE",
+    "tar": {
+      "bytes": 27227545600,
+      "sha256": "39018cbe9b4c829a55fb564b39d4ed5ad4963be5969c2e5a05ebc7302fa19a3d"
+    },
+    "zip": {
+      "bytes": 4386065194,
+      "sha256": "9bb775eccc8fdb92a0eaf5c38021373c76a71ea7430ff43dfdd3636c42bc19b4"
+    }
+  },
+  "original_failure_reclassified_as_pass": false,
+  "prior": {
+    "aggregate_v10": "Complete retained aggregate readback PASS, overall V10 still FAILURE due filesystem timeout.",
+    "filesystem_continuation": {
+      "artifact": 14300315992,
+      "head": "f651fddda7cf4255ab5c54f9bdee26b3c982da96",
+      "run": 44018587275,
+      "status": "SUCCESS"
+    },
+    "filesystem_independent": {
+      "artifact": 14300661666,
+      "head": "d705ba534d92b263188a8dbd201c4032babb08c2",
+      "run": 44019797104,
+      "status": "SUCCESS"
+    }
+  },
+  "restore": "Read and compare all 178275 original TAR headers and complete file bodies to the original index; restore only the exact union of these three seals plus the unchanged original failed result.json. No source or evidence hash is rebound.",
+  "schema": "hepta.history.regex-continuation-plan.v1",
+  "scope": "Only the configuration/regex pure evidence controls skipped by the original 08ce aggregate. No HIA, Rust, build, or completed control replay.",
+  "sealed_inputs": [
+    "config_evidence.artifact_sha256",
+    "original_rust_comparisons.runtime_config.configuration.artifact_sha256",
+    "original_rust_comparisons.runtime_config.regex.artifact_sha256"
+  ],
+  "source": "Exact unchanged complete 2877-file materialized historical source, recovered from full-read filesystem continuation artifact 14300315992.",
+  "source_guard": "Original wrapper rejects process/native-map/native-library events and binds its three live refusal probes; all complete input files and metadata observed before/after, only the nine original mutation-file timestamps may differ."
+}
