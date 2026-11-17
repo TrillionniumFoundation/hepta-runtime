@@ -2,7 +2,7 @@ name: Check frozen HIA strict Base64 source and input domain
 on:
   workflow_dispatch:
   push:
-    branches: [hia-binary-base64-check-6780-20261117]
+    branches: [hia-binary-base64-check-fixed-6780-20261117]
 permissions:
   contents: read
 jobs:
@@ -13,7 +13,7 @@ jobs:
       LC_ALL: C.UTF-8
       PYTHONDONTWRITEBYTECODE: '1'
       BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_base64_decode/v1/source
-      BINARY_MANIFEST: 918e9a92c07d7dcf863e61ba973fbe01caa062d75de752e877db8e25f60d99b3
+      BINARY_MANIFEST: 244b747ca05abd7af73f21d9e41b7eaa47a92d89b54208078b3ae27dcd15fb5b
     steps:
       - name: Checkout the frozen decoder and complete readers
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

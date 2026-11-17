@@ -6,10 +6,12 @@ from common import canonical,decode,pin,require,owned
 EXPECTED_PYTHON=dict(bytes=8020928,sha256="e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f")
 def current():
     require(sys.version_info[:3]==(3,12,3)and sys.platform=="linux","actual CPython 3.12.3 reference")
+    require(binascii.__spec__.origin=="built-in"and "binascii"in sys.builtin_module_names
+        and not hasattr(binascii,"__file__"),"binascii must be bound by the pinned interpreter binary")
     paths=dict(python=Path(sys.executable).resolve(strict=True),
-        base64=Path(base64.__file__).resolve(strict=True),binascii=Path(binascii.__file__).resolve(strict=True))
+        base64=Path(base64.__file__).resolve(strict=True))
     require(pin(paths["python"])==EXPECTED_PYTHON,"reference interpreter binary differs")
-    return dict(version=sys.version,platform=sys.platform,
+    return dict(version=sys.version,platform=sys.platform,binascii_builtin=True,
         files={name:dict(path=str(path),**pin(path),mode=path.stat().st_mode&0o777)for name,path in paths.items()})
 def prepare(capture):
     capture=Path(capture);value=current();out=capture/"reference-runtime";out.mkdir()
@@ -26,7 +28,7 @@ def verify(capture):
     require(value["platform"]=="linux"and value["version"].startswith("3.12.3 ")
         and {k:value["files"]["python"][k]for k in("bytes","sha256")}==EXPECTED_PYTHON,
         "retained actual interpreter identity")
-    require(set(value["files"])=={"python","base64","binascii"},"whole reference runtime member domain")
+    require(set(value["files"])=={"python","base64"}and value["binascii_builtin"]is True,"whole reference runtime member domain")
     for name,row in value["files"].items():
         path=owned(capture,"reference-runtime/"+name)
         require(pin(path)=={k:row[k]for k in("bytes","sha256")}
