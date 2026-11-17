@@ -571,6 +571,20 @@ lbb_pure_again:
     mov r8,[rbx+8]
     mov r9,[rbx+16]
     call qword ptr [rbx]
+.ifdef RUNTIME_LOCK_WAKE_HOOK
+    cmp r14,7
+    jne lbb_wake_observed
+    cmp rax,64
+    jne lbb_wake_observed
+    mov rdi,[r15+lbb_PUBLIC_CTX]
+    mov rdi,[rdi+80]
+    mov rsi,[rbx+24]
+    call runtime_lock_wake_record
+    test eax,eax
+    jnz lbb_contract
+    mov eax,64
+lbb_wake_observed:
+.endif
     mov edx,eax
     cmp rax,rdx
     jne lbb_contract
@@ -1170,6 +1184,14 @@ lbb_callable_drop_lease:
     jne lbb_callable_drop_bad
     cmp [r15+lbb_CLEAN_OUTPUT+24],rbx
     jne lbb_callable_drop_bad
+.ifdef RUNTIME_LOCK_WAKE_HOOK
+    mov rdi,[r15+lbb_PUBLIC_CTX]
+    mov rdi,[rdi+80]
+    lea rsi,[r15+lbb_CLEAN_OUTPUT]
+    call runtime_lock_wake_record
+    test eax,eax
+    jnz lbb_callable_drop_bad
+.endif
 lbb_callable_drop_done:
     xor eax,eax
     jmp lbb_callable_drop_return

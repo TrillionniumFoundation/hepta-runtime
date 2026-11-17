@@ -1,56 +1,36 @@
-# Historical public58 and authority source profile
+# Historical58 source view beside the 124 candidate
 
-The default service builds the current 111-component graph with nine catalog entries and additional Batch and Bellman routes. This directory
-preserves the older 58-image public fixture and the original authority profile
-used by its retained component pipeline. Current authority has a separate
-current-SDK comparison and evidence reader.
+This profile is the source-only successor for the prospective 124-component
+default graph. The active integration remains on its separately qualified
+111-component version until the candidate's remaining gates and root review
+finish. Component counts do not describe public-handler coverage.
 
-`source/` contains 120 exact old files: the original 112 graph/LocalRead inputs
-from `f31b7645eaf9b0b41979851d46a16e1e450e1a4b`, plus seven authority files whose
-bytes are unchanged in main `e7ecd543a300c33404b00a80cfb9ab4e98053cf1`.
-A separately pinned Local body workflow from installed source
-`208ff61db1da78aadfeb8d7913af7ddf4b59d461` retains the exact bytes required
-by the unchanged body `source_files.json`. The active main workflows keep their
-current `runtime_support` checkout paths. Only the materialized historical view
-receives this old workflow document.
+The materializer binds 536 current source files, six extra authority files
+and four unchanged current workflow identities before it writes an owned
+output directory. Its 120 old restored files are byte-for-byte unchanged
+from the preceding v5 profile. They retain the original 58 graph, LocalRead
+inputs, seven authority files and the exact old Local body workflow.
 
-Those seven restore the old root, profile, packer, provenance and three pin
-consumers, keeping the original receipt bound to its actual source and images.
+The source view excludes 392 current-only inputs: the preceding 247 paths and
+the 145 newly added production paths. native/directory_errno.hepta is newly
+used by the candidate but already existed on main, so it stays in the
+historical view. The three shared Batch performance inputs also remain.
+The complete packed-worker runtime_support tree is checked before exclusion.
 
-`PROFILE.json` records every size, SHA-256 and Git blob. Before creating a source
-view, the materializer checks 390 current graph files and six extra authority
-profile files, plus the four current workflow identities. It restores 120 old inputs and excludes 247 current-public-only
-files. The shared Batch input performance proof and its two exact authoring
-inputs remain in the historical source view; the global Batch qualifier still
-binds all 26 source inputs, including the five dependencies restored here. The v22 `vendor` preservation remains intact. The complete packed-worker `runtime_support` input tree is validated, copied and explicitly excluded with the other current-only files; no packed support byte is silently trusted.
+Use the current checkout to create a fresh historical source root:
 
-```sh
-python3 -I -B tests/hia_native/historical_public58/materialize.py \
-  --source "$PWD" --output /absolute/path/to/new-historical-public-profile
-```
+    python3 -I -B tests/hia_native/historical_public58/materialize.py \
+      --source "$PWD" --output /absolute/path/to/new-historical-source
 
-All retained native pipelines, original references and readers run from that
-explicit source directory. Unrelated source bytes, fixture retirement and
-archive fixes are preserved. The materializer checks complete input/output
-hashes and changes no input. Every old suite and deadline remains intact.
+The historical graph binding remains
+0b7730769d36a4851e2d56ab717f7ce07c27d43bb728290aa7b5b32d014e82f2.
+Old receipts, corpora, original references, deadlines and oversized-input
+profiles retain their original identities. The current workflows retain
+their runtime_support checkout paths; only this materialized view receives
+the old Local body workflow required by its exact source fingerprint.
 
-| Caller | Selected source |
-| --- | --- |
-| Retained public native/original pipelines | Exact old public58 graph, private fixture and complete old corpora |
-| Retained authority native/original pipeline | Restored old root/profile/packer and original receipt pins |
-| Current authority qualification | Current owner; 23 native groups, fresh 243 original rows and 16 integrated lifecycle rows |
-| User default native build | Main root; current111 API/CLI |
-| Current main qualification | 390 exact source files, nine fresh current qualification roles, actual default entry and complete public/Batch/Authority comparison |
-
-The current workflow also retains all 1,777 complete Batch rows and 28 stdio
-rows for each native and original provider. Both the frozen reference entry
-and the actual installed main entry must produce the same complete executable.
-The catalog remains the qualified nine-entry catalog; this change does not
-claim a ten-tool or eleven-tool catalog.
-
-The historical public reader still requires source-binding SHA-256
-`0b7730769d36a4851e2d56ab717f7ce07c27d43bb728290aa7b5b32d014e82f2`.
-Its oversized-input results retain the old transport profile. Current serial
-framing, current identity resolution and historical authority receipts have
-separate qualifications. Full SDK/136-handler, full async/cancellation,
-production activation and old-runtime-removal flags remain false.
+The candidate source gate executes only source validation/materialization
+and physical source-corruption controls. It does not run HIA, Rust or an
+application. The old 111 public qualification remains an old 111 proof.
+Current 124 default-command/ordinary/async evidence must close independently;
+full SDK, all 136 handlers and old-runtime removal remain unqualified.

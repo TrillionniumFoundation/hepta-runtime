@@ -13,7 +13,7 @@ fs_fixture_public_request:
     mov rdi, [r12 + 24]
     mov rsi, [r12 + 88]
     mov r8d, 18
-    call runtime_grow_owned
+    call runtime_publication_fixture_owned
     cmp rax, 64
     jne fs_fixture_failure
     mov rdx, [r15 + 8]

@@ -1,0 +1,48 @@
+name: Prospective 124 exact source installation
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-install124-source-6780-v1-20261117']
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set owned source and evidence paths
+        run: |
+          printf '%s\n' "PI_SOURCE=$GITHUB_WORKSPACE/candidate" "PI_RECIPE=$GITHUB_WORKSPACE/candidate/qualification/public124_source_install_v1" "PI_OUTPUT=$RUNNER_TEMP/public124-source-proof" "PI_EXPORT=$RUNNER_TEMP/public124-source-export" "PI_DRIVER=$RUNNER_TEMP/public124-source-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            runtime_support
+            src
+            vendor
+            tests/hia_native
+            tests/oracles
+            .github
+            qualification/public124_source_install_v1
+      - name: Verify exact current closure and actual historical source materialization
+        run: |
+          python3 -I -S -B "$PI_RECIPE/qualify_source.py" --source "$PI_SOURCE" --output "$PI_OUTPUT" > "$PI_DRIVER.stdout" 2> "$PI_DRIVER.stderr"
+          cat "$PI_DRIVER.stdout"
+      - name: Preserve complete source proof or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PI_RECIPE/archive.py" pack --source "$PI_RECIPE" --capture "$PI_OUTPUT" --output "$PI_EXPORT" --driver-prefix "$PI_DRIVER"
+          cat "$PI_DRIVER.stderr"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: public124-source-install-${{ github.sha }}
+          path: ${{ env.PI_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

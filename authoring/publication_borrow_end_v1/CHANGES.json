@@ -1,0 +1,91 @@
+{
+  "schema": "hepta.runtime.publication-borrow-end.changes.v1",
+  "base": "f8857cbd18b3dedb38718f68822c072053b03233",
+  "base_binding": {
+    "bytes": 125885,
+    "sha256": "e5011ab11209c22801302a100adedde92dea940bd32b56832823efeb8860d7da",
+    "git_blob": "5cee55b6eb7f85beff2ede071dce87c8be3c6b5a"
+  },
+  "edits": {
+    "scripts/runtime_mcp_publication_async.py": {
+      "before": {
+        "bytes": 4389,
+        "sha256": "9467df962e2b88ebe8af74aebee0ed96c6b88a9785a3c682f5624a4fa0717221",
+        "git_blob": "39024bad7a78fe0da5de532f746d362f39453848"
+      },
+      "after": {
+        "bytes": 4518,
+        "sha256": "9edd61f071080dd45ca591f3fe5cef3d21cca4ccdf4812c96d689a1c849ce16f",
+        "git_blob": "58919b799cd252a3c1d8f490eb405f02602934d4"
+      },
+      "edits": [
+        {
+          "before": "    mov edi, 11\n    call pub_make_request\n    call pub_invoke\n    cmp rax, 64\n    jne pub_fail_invalid\n    mov edi, 12\n    call pub_make_request\n    call pub_invoke\n    cmp rax, 64\n    jne pub_fail_invalid\n",
+          "after": "    /* CANCEL11 and DROP12 are alternative terminal operations. The actual\n     * owner reaches phase5 after CANCEL; a second DROP is correctly refused.\n     * Preserve the genuine I/O failure after one accepted terminal effect. */\n    mov edi, 11\n    call pub_make_request\n    call pub_invoke\n    cmp rax, 64\n    jne pub_fail_invalid\n"
+        }
+      ]
+    },
+    "scripts/runtime_mcp_task_publication.S": {
+      "before": {
+        "bytes": 14904,
+        "sha256": "5308aee616c8ee7ba1b3341ef551fd215eb75502485bd48b9f5bd2998f4cc1ab",
+        "git_blob": "4caa6b1f428e8110b5559bdaf69f4c889ff6075f"
+      },
+      "after": {
+        "bytes": 17822,
+        "sha256": "287f648ee8bebfc039e476cf84f91959ba411e9a093e8685236afc2b9e64ac61",
+        "git_blob": "497073f77d4b55e5e8daf26f76179071f367c513"
+      },
+      "edits": [
+        {
+          "before": "/* Only settled, already copied aliases may be cleared for restoration. */\n",
+          "after": "/* Retire the completed caller's temporary Scope68 alias after its full\n * detached observation, while the owning Scope6 still exists. The HIA caller\n * has already consumed its reply and closed the Scope. This alias owns no\n * mapping; a later request may legitimately retire that closed Scope6 pair.\n * Pending callers retain their unchanged descriptor/continuation ownership. */\npump_publication_release_scope_loan:\n    PM_SAVE\n    mov rbp,rdi\n    cmp qword ptr [rbp+PN_P_CONTEXT],0\n    je pp_loan_done\n    cmp qword ptr [rbp+PN_P_ACTIVE],1\n    je pp_loan_done\n    cmp qword ptr [rbp+PN_P_ACTIVE],0\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_OWNERSHIP],3\n    jne public_span_fail\n    mov rax,[rbp+PN_S_OWNERSHIP]\n    or rax,[rbp+PN_S_VIEW]\n    jnz public_span_fail\n    cmp qword ptr [rbp+PN_P_WORKMAP],PP_OWNED\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_P_OUTMAP],PP_OWNED\n    jne public_span_fail\n    lea rbx,[rbp+PN_P_DESCRIPTORS+4*64]\n    lea rdi,[rbp+PN_P_CONTINUATIONS+4*64]\n    xor eax,eax\n    mov ecx,8\n    repe scasq\n    jne public_span_fail\n    cmp qword ptr [rbx],0\n    jne public_span_fail\n    cmp qword ptr [rbx+8],0\n    jne pp_loan_present\n    lea rdi,[rbx+8]\n    mov ecx,7\n    repe scasq\n    jne public_span_fail\n    jmp pp_loan_done\npp_loan_present:\n    mov r13,[r15+16]\n    test r13,r13\n    jz public_span_fail\n    cmp qword ptr [r13+32],0\n    jne public_span_fail\n    mov r13,[r13+8]\n    add r13,6*64\n    call pump_scope_admit_row_for_loan\n    mov rax,[r13+8]\n    cmp [rbx+8],rax\n    jne public_span_fail\n    mov rdx,0x3130545343535248 /* HRSCST01 */\n    cmp [rax],rdx\n    jne public_span_fail\n    cmp qword ptr [rax+8],1\n    jne public_span_fail\n    mov rdx,[rax+24]\n    or rdx,[rax+64]\n    jnz public_span_fail\n    mov rax,[r13+16]\n    cmp [rbx+16],rax\n    jne public_span_fail\n    cmp qword ptr [rbx+24],0\n    jne public_span_fail\n    mov rax,[r13+24]\n    cmp [rbx+32],rax\n    jne public_span_fail\n    cmp qword ptr [rbx+40],96\n    jne public_span_fail\n    cmp qword ptr [r13+32],96\n    jb public_span_fail\n    mov rax,[rbx+48]\n    mov edx,eax\n    cmp rax,rdx\n    jne public_span_fail\n    cmp eax,0xffff0000\n    jae pp_loan_error\n    cmp eax,96\n    jne public_span_fail\n    cmp qword ptr [rbx+56],96\n    jne public_span_fail\n    jmp pp_loan_clear\npp_loan_error:\n    cmp qword ptr [rbx+56],0\n    jne public_span_fail\npp_loan_clear:\n    lea rdi,[rbx+8]\n    xor eax,eax\n    mov ecx,7\n    rep stosq\npp_loan_done:\n    PM_RETURN\n\n/* Preserve the existing Scope-row admission with its actual row in rbx. */\npump_scope_admit_row_for_loan:\n    push rbx\n    mov rbx,r13\n    call pump_scope_admit_row\n    pop rbx\n    ret\n\n/* Only settled, already copied aliases may be cleared for restoration. */\n"
+        },
+        {
+          "before": "    cmp ebx,3\n    jae pp_retire_advance\n    mov rdi,[r13+8]\n",
+          "after": "    cmp ebx,4\n    jne pp_retire_owned_or_context\n    /* No stale Scope borrow may survive its completed detach boundary. */\n    lea rdi,[r13+8]\n    xor eax,eax\n    mov ecx,7\n    repe scasq\n    jne public_span_fail\n    jmp pp_retire_advance\npp_retire_owned_or_context:\n    cmp ebx,3\n    jae pp_retire_advance\n    mov rdi,[r13+8]\n"
+        }
+      ]
+    },
+    "scripts/runtime_mcp_task_storage.S": {
+      "before": {
+        "bytes": 26124,
+        "sha256": "77e2b0dbf79458ea9042ace1a0b0017ba132762ddc250f2bdf51e7569b5771df",
+        "git_blob": "2245f1cea25b5bcdd07b2dfc1c5f41886c50a3fe"
+      },
+      "after": {
+        "bytes": 26185,
+        "sha256": "995a4f597e39a58be44ecf0b044b6c448d0a54fe096829fe8994da68ed12082c",
+        "git_blob": "327dbdcfe545844491c1968b9c177511c2f4b9b9"
+      },
+      "edits": [
+        {
+          "before": "    mov rdi,rbp\n    call pump_trace_detached\n    PM_RETURN\n",
+          "after": "    mov rdi,rbp\n    call pump_trace_detached\n    mov rdi,rbp\n    call pump_publication_release_scope_loan\n    PM_RETURN\n"
+        }
+      ]
+    }
+  },
+  "unchanged_hia_images": true,
+  "descriptor_slots": 69,
+  "low_high_ownership_unchanged": true,
+  "terminal_source": {
+    "path": "native/result_publication.hepta",
+    "bytes": 83668,
+    "sha256": "18953ed21ea1ff65266d562a552958f3d0c08857801bf95ca1779743fad0f0fd",
+    "git_blob": "6cb6fa1e7c443ad6bb86a1badfff4cc129fd29c2",
+    "blocks": [
+      "f0/b38",
+      "f0/b40",
+      "f0/b43",
+      "f0/b44",
+      "f0/b49"
+    ]
+  },
+  "scope_source": {
+    "path": "scripts/runtime_publication_scope_bridge.S",
+    "bytes": 5308,
+    "sha256": "76a3249b4f6c8288040694ba317d7ca74ce961494314d920666cc389b588a737",
+    "git_blob": "d36e9594281f93c2daeb95e20bc74afae0bb9dbd"
+  }
+}

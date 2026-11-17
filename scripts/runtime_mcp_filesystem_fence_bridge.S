@@ -322,8 +322,20 @@ fs_fence_native_result:
     mov [rbx + 56], rax
     jmp fs_fence_alias
 fs_fence_configure:
+    mov qword ptr [rsp + 32], 0
     cmp qword ptr [r14 + 208], 0
+    je fs_fence_configure_lookup
+    mov rax, [r14 + 208]
+    cmp [rdx + 8], rax
     jne fs_fence_invalid
+    cmp qword ptr [rax + RF_BUSY], 0
+    jne fs_fence_invalid
+    cmp qword ptr [rax + RF_G_FRAME], 0
+    jne fs_fence_invalid
+    cmp qword ptr [rax + RF_G_EOF], 0
+    jne fs_fence_invalid
+    mov qword ptr [rsp + 32], 1
+fs_fence_configure_lookup:
     mov r15, [rdx + 8]
     test r15, r15
     jz fs_fence_create_native
@@ -337,9 +349,14 @@ fs_fence_configure:
     mov rcx, r13
     repe cmpsb
     jne fs_fence_invalid
+    /* Same-session reborrow follows the full immutable config comparison.
+     * A separate session still owns exactly one additional native reference. */
+    cmp qword ptr [rsp + 32], 1
+    je fs_fence_same_session_borrow
     cmp qword ptr [r15 + RF_REFERENCES], -1
     je fs_fence_resource
     inc qword ptr [r15 + RF_REFERENCES]
+fs_fence_same_session_borrow:
     mov rax, [r15 + RF_NATIVE_CALLS]
     mov [rsp + 16], rax
     mov rax, [r15 + RF_NATIVE_EFFECTS]
