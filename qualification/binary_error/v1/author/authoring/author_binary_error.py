@@ -96,8 +96,10 @@ def main():
     assert sum(len(f["blocks"])for f in actual["functions"])<=limits["blocks_total"]==1536
     for f in actual["functions"]:
         assert len(f["blocks"])<=256 and max(len(b["params"])for b in f["blocks"])<=16,f["name"]
-        fragment=render_assembly(dict(schema="hepta.hia.program.v8",module="ssa_budget",functions=[f]))
-        assert len(set(re.findall(r"\bv[0-9]+\b",fragment)))<=limits["ssa_names_per_function"]==2048,f["name"]
+        # Inspect names in the already verified complete IR; a fragment with calls
+        # deliberately cannot be re-verified without its referenced functions.
+        fragment=json.dumps(f,sort_keys=True)
+        assert len(set(re.findall(r'"(v[0-9]+)"',fragment)))<=limits["ssa_names_per_function"]==2048,f["name"]
     data=dict(schema="hepta.runtime.binary-error.frozen-platform-data.v1",unicode_version=unicodedata.unidata_version,
         nonprintable_ranges=ranges,known_errno_messages=errors,errno_class_ids=classes,classes=CLASSES,
         data_bytes=len(pool),data_sha256=SHA(bytes(pool)),workspace_required=work_size,
