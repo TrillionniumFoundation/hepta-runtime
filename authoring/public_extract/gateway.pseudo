@@ -76,7 +76,7 @@ def prepare_policy(o: mutbuf, w: mutbuf, remote: bool) -> u32:
     write = choose(get(w, 136) == 1, 1, 0)
     if remote == False:
         put(w, at, LOCAL_POLICY)
-        put(w, at + 8, write)
+        put(w, at + 8, 1)
         put(w, at + 16, path)
         copy_range(w, w, at + 24, resolved + 96, path)
         return child(w, 6, size, 7)

@@ -1,0 +1,108 @@
+{
+  "schema": "hepta.runtime.extract.local-policy-operation-repair.v1",
+  "base_commit": "10ed63b232e54213522273997f25f1304ee87cdd",
+  "target_commit": "d3d75c30719db966b004756f610007a7c723729e",
+  "target_server_blob": "8167974425e01728432bffd5f0243087647061d6",
+  "local_policy_blob": "a07a64101c0355c7f0b6211d0e5b6920bd0cc614",
+  "local_policy_magic": "HRLPCQ02",
+  "local_policy_operation": 1,
+  "local_checks_source_and_append": true,
+  "remote_write_flag_unchanged": true,
+  "changed_function": "f14",
+  "changed_block": "b5",
+  "unchanged_functions": 36,
+  "unchanged_other_blocks": true,
+  "engine_and_frontend_unchanged": true,
+  "native_semantics_executed": false,
+  "public_wait_qualified": false,
+  "complete_source_files": 486,
+  "base_binding": {
+    "bytes": 110954,
+    "sha256": "a6a725929d989022a6e2a0eb653591b556c5cfee9bc6b599d215589f17e75be8"
+  },
+  "after_binding": {
+    "bytes": 111996,
+    "sha256": "18234f394c9db95c6c78e486867da614fd3353453698e9994207bf4426d4b814"
+  },
+  "source_patches": [
+    {
+      "path": "native/extract_gateway.hepta",
+      "before_text": "  v109:u64 = call(v82,v108,v92) {\"function\":\"f35\"}\n",
+      "after_text": "  v166:u64 = const() {\"value\":1}\n  v109:u64 = call(v82,v108,v166) {\"function\":\"f35\"}\n"
+    },
+    {
+      "path": "authoring/public_extract/gateway.pseudo",
+      "before_text": "        put(w, at + 8, write)\n",
+      "after_text": "        put(w, at + 8, 1)\n"
+    }
+  ],
+  "changed": [
+    {
+      "path": "native/extract_gateway.hepta",
+      "before": {
+        "bytes": 147405,
+        "sha256": "4bbc8fbc40e02540eb2b9475d5278d8268f263fdb47dbd018b7c7a90cc5beb6e",
+        "git_blob": "27e830047024412545188bf26bccf5eced3993bf"
+      },
+      "after": {
+        "bytes": 147439,
+        "sha256": "0ef9fb3fb78e03f695ddad302adff0cdcf24d2cef3c2ad3df3a5ae294265eb49"
+      }
+    },
+    {
+      "path": "authoring/public_extract/gateway.pseudo",
+      "before": {
+        "bytes": 4615,
+        "sha256": "c57ce5694ffbdb8c28b58a0ca1991d78dc87b3795301c56902075b88309966dd",
+        "git_blob": "080f6386dd284ce82e854bc966132a3e011f9f5f"
+      },
+      "after": {
+        "bytes": 4611,
+        "sha256": "d5bd7a9c7a9f891d37e928f58efe49575531cfe209a5d9c89d153528a9d214e8"
+      }
+    },
+    {
+      "path": "native/extract_gateway_composition.json",
+      "before": {
+        "bytes": 6762,
+        "sha256": "507d2c810bcb3a502cab2a14e6f4839b27079fe9028bd4e849a6a9b96ee81e16",
+        "git_blob": "08f0a0290d8287262e74d4dc1829512b101fd715"
+      },
+      "after": {
+        "bytes": 7541,
+        "sha256": "43f1017cb838a02b94ea1814de0208e336e468d40e71ed2375d292c0b3c3af0d"
+      }
+    },
+    {
+      "path": "native/runtime_mcp_sources.json",
+      "before": {
+        "bytes": 110954,
+        "sha256": "a6a725929d989022a6e2a0eb653591b556c5cfee9bc6b599d215589f17e75be8",
+        "git_blob": "53f51b7617a5c0484c791fb20f49acc38283084d"
+      },
+      "after": {
+        "bytes": 111996,
+        "sha256": "18234f394c9db95c6c78e486867da614fd3353453698e9994207bf4426d4b814"
+      }
+    }
+  ],
+  "retained_trace": {
+    "commit": "898cb8b639c6eaa6c93ffdd3598f67693055e442",
+    "run": 44058802027,
+    "job": 133954948501,
+    "actual_exit": 111,
+    "hia_calls": 249,
+    "failing_child": 7,
+    "failing_parent": 59,
+    "failing_phase": 7,
+    "pre_wait": true
+  },
+  "retained_original_wait": {
+    "commit": "7c3df2056b2a30b523fedda493fbf17f67bac444",
+    "run": 44059308537,
+    "job": 133956697666,
+    "cases": 24,
+    "original_reexecutions": 0
+  },
+  "remaining": "New candidate requires actual HIA compilation, actual public lifecycle comparisons and independent complete retained readers."
+}
