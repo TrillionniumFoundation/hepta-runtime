@@ -1,0 +1,64 @@
+name: Current text_file_write typed HIA and original declarations
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publisher-qualification-6780-20261117']
+    paths: ['tests/hia_native/text_file_write_ci/**', '.github/workflows/hia-text-publisher-typed.yml']
+permissions:
+  contents: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  SOURCE_MANIFEST_SHA256: '51585d1500258977faf5219e0e86326c993eb235b4b035fdd1f920083dc904cd'
+jobs:
+  current-typed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths in the first step
+        run: |
+          printf '%s\n' "TP_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/text_file_write_ci/source" "TP_RUN=$RUNNER_TEMP/text-publisher-typed" "TP_EXPORT=$RUNNER_TEMP/text-publisher-typed-export" "TP_DRIVER=$RUNNER_TEMP/text-publisher-typed-driver" >> "$GITHUB_ENV"
+      - name: Checkout the exact isolated source candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/text_file_write_ci/source
+      - name: Checkout the exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Admit complete source bytes and source-only syntax
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$TP_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = "$SOURCE_MANIFEST_SHA256"
+          python3 -I -S -B "$TP_SOURCE/scripts/run_ci.py" check --source "$TP_SOURCE"
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          command -v python3 git cc ld
+      - name: Install the exact original Rust compiler in CI
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          printf '%s\n' "RUSTUP_TOOLCHAIN=1.95.0" "TP_RUST_BIN=$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Fresh HIA and current types with full buffers and unchanged inner limits
+        run: |
+          python3 -I -S -B "$TP_SOURCE/scripts/run_ci.py" run --source "$TP_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$TP_RUST_BIN" --output "$TP_RUN" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+      - name: Export and completely reread success or failure bytes
+        if: always()
+        run: |
+          python3 -I -S -B "$TP_SOURCE/scripts/archive.py" pack --source "$TP_SOURCE" --capture "$TP_RUN" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload the complete retained evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publisher-typed-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
