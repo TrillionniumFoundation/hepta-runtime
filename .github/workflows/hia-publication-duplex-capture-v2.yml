@@ -1,0 +1,109 @@
+name: Actual remaining publication public lifecycles and retained first comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-duplex-capture-6780-v2-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  capture:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: legacy-remaining
+            first: 1
+            count: 10
+          - label: modern
+            first: 11
+            count: 11
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set exact runner paths
+        run: |
+          printf '%s\n' "PC_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_duplex_capture_v2" "PC_BUILD=$GITHUB_WORKSPACE/build-recipe/tests/hia_native/publication_duplex_build_ci" "PC_PREP=$RUNNER_TEMP/publication-duplex-prepared" "PC_CAPTURE=$RUNNER_TEMP/publication-duplex-observed" "PC_DRIVER=$RUNNER_TEMP/publication-duplex-driver" "PC_EXPORT=$RUNNER_TEMP/publication-duplex-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_capture_v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: build-recipe
+          ref: 9cfd7c1b517db83fc6b3500a86cca7ae949fadf6
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_ci
+      - name: Full source and uploaded graph/original admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PC_SOURCE/prepare.py" --build-recipe "$PC_BUILD" --output "$PC_PREP" > "$PC_DRIVER.prepare.stdout" 2> "$PC_DRIVER.prepare.stderr"
+          cat "$PC_DRIVER.prepare.stdout"
+      - name: Actual remaining unchanged two-session inputs
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PC_SOURCE/run.py" --prepared "$PC_PREP" --output "$PC_CAPTURE" --first '${{ matrix.first }}' --count '${{ matrix.count }}' > "$PC_DRIVER.stdout" 2> "$PC_DRIVER.stderr"
+          cat "$PC_DRIVER.stdout"
+      - name: Retain full new success or failure
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PC_CAPTURE"]); r.mkdir(exist_ok=True); p=r/"prepare-records"; p.mkdir(); s=pathlib.Path(os.environ["PC_PREP"]); [shutil.copy2(x,p/x.name) for x in s.glob("*") if x.is_file()]; [shutil.copy2(pathlib.Path(os.environ["PC_DRIVER"]+v),p/("driver"+v)) for v in (".prepare.stdout",".prepare.stderr") if pathlib.Path(os.environ["PC_DRIVER"]+v).exists()]'
+          python3 -I -S -B "$PC_SOURCE/archive.py" pack --source "$PC_SOURCE" --capture "$PC_CAPTURE" --output "$PC_EXPORT" --driver-prefix "$PC_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; [print(p.read_text()) for p in (pathlib.Path(os.environ["PC_DRIVER"]+".prepare.stderr"),pathlib.Path(os.environ["PC_DRIVER"]+".stderr")) if p.exists()]'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-duplex-capture-${{ matrix.label }}-${{ github.sha }}
+          path: ${{ env.PC_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+  read-first:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set exact runner paths
+        run: |
+          printf '%s\n' "PC_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_duplex_capture_v2" "PC_BUILD=$GITHUB_WORKSPACE/build-recipe/tests/hia_native/publication_duplex_build_ci" "PC_PREP=$RUNNER_TEMP/publication-duplex-prepared" "PC_CAPTURE=$RUNNER_TEMP/publication-duplex-first-read" "PC_DRIVER=$RUNNER_TEMP/publication-duplex-reader" "PC_EXPORT=$RUNNER_TEMP/publication-duplex-read-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_capture_v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: build-recipe
+          ref: 9cfd7c1b517db83fc6b3500a86cca7ae949fadf6
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_ci
+      - name: Full immutable graph and original admission without application execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PC_SOURCE/prepare.py" --build-recipe "$PC_BUILD" --output "$PC_PREP" > "$PC_DRIVER.prepare.stdout" 2> "$PC_DRIVER.prepare.stderr"
+      - name: Whole uploaded first capture and complete immutable paired reader
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PC_SOURCE/read_entry.py" --prepared "$PC_PREP" --build-recipe "$PC_BUILD" --output "$PC_CAPTURE" > "$PC_DRIVER.stdout" 2> "$PC_DRIVER.stderr"
+          cat "$PC_DRIVER.stdout"
+      - name: Retain complete pure proof or failure
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PC_CAPTURE"]); r.mkdir(exist_ok=True); p=r/"prepare-records"; p.mkdir(); s=pathlib.Path(os.environ["PC_PREP"]); [shutil.copy2(x,p/x.name) for x in s.glob("*") if x.is_file()]; [shutil.copy2(pathlib.Path(os.environ["PC_DRIVER"]+v),p/("driver"+v)) for v in (".prepare.stdout",".prepare.stderr") if pathlib.Path(os.environ["PC_DRIVER"]+v).exists()]'
+          python3 -I -S -B "$PC_SOURCE/archive.py" pack --source "$PC_SOURCE" --capture "$PC_CAPTURE" --output "$PC_EXPORT" --driver-prefix "$PC_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; [print(p.read_text()) for p in (pathlib.Path(os.environ["PC_DRIVER"]+".prepare.stderr"),pathlib.Path(os.environ["PC_DRIVER"]+".stderr")) if p.exists()]'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-duplex-first-read-${{ github.sha }}
+          path: ${{ env.PC_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
