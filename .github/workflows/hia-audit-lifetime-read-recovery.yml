@@ -14,7 +14,6 @@ jobs:
       LC_ALL: C.UTF-8
       RECOVERY_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/audit_lifetime_read_recovery
       RECOVERY_SHA: c7075d0f97931bc282891432d173dc205c865f7628ed0a258d8e9f0632b05301
-      RECOVERY_OUTPUT: ${{ runner.temp }}/audit-lifetime-recovery
     steps:
       - name: Checkout frozen recovery and unchanged producer source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -27,6 +26,7 @@ jobs:
           persist-credentials: false
       - name: Verify exact source before reading evidence
         run: |
+          printf 'RECOVERY_OUTPUT=%s\n' "$RUNNER_TEMP/audit-lifetime-recovery" >> "$GITHUB_ENV"
           test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
           python3 -I -B - <<'PY'
           import os,sys
