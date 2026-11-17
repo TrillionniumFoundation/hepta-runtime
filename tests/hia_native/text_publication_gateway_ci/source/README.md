@@ -19,3 +19,9 @@ The exact v1 invalid empty-host startup failure and native trace-reader rejectio
 All six unchanged domains execute again against the new exact graph. The previous absent capture is retained as historical evidence only; it is not substituted for this successor graph. The original reference binary and its41 unchanged sources remain the actual Rust1.95 build from CI44032621165, admitted by a complete uploaded archive read and exact source byte equality. The same actual original binary is executed for every new comparison.
 
 The private stderr reader now reads the frozen mixed stream:224-byte HRGTR002 engine observations and128-byte HRCNAK02 canonical syscall ACKs. Unknown tags, partial records and inconsistent ACK fields are rejected; neither record type is discarded. Descriptor68 is the fixed caller-owned Forget Scope loan and is not a new tool or public selector.
+
+## Reader v4 pure continuation
+
+CI44037633975 completed all191 native and191 original operations in all six profiles, but the reader rejected the first HFLKEYFX canonical-key syscall record. This revision keeps every execution source, original Rust source, input, process budget and capture byte unchanged. It recognizes the two additional exact128-byte frozen view effect records HFLKEYFX and HVRDACK1, with their actual argument/result/errno/ACK fields and fixed source pins. Unknown records remain rejected.
+
+The dedicated workflow reads the entire uploaded ZIP/TAR and every member before selecting the complete captured profiles for comparison. It executes no native or Rust program. The existing physical reader guard rejects11 mutation/execution/foreign-read operations and compares complete bytes and metadata before/after all six readers. This step does not by itself add the subsequent physical semantic-evidence mutation suite.
