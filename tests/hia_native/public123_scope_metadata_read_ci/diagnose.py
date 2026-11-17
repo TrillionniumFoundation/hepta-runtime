@@ -57,13 +57,17 @@ def inspect():
             case=json.loads((actual/side/("%03d"%i)/"CASE.json").read_bytes())
             snapshots=[case["initial"]]+[s["snapshot"] for s in case["steps"] if "snapshot" in s]+[case["final"]]
             raw.append({"side":side,"snapshots":[s["complete_metadata"] for s in snapshots]})
-        result.append({"case":i,"name":left["name"],"fields":fields,"final":final,"complete_raw_metadata":raw,"native_complete_scope_context_observations":len(right["trace"]["request_scope_mappings"])})
+        import atomic_frames
+        atomic=atomic_frames.inspect(actual/"native"/("%03d"%i)/"process") if i==3 else None
+        result.append({"atomic":atomic,"case":i,"name":left["name"],"fields":fields,"final":final,"complete_raw_metadata":raw,"native_complete_scope_context_observations":len(right["trace"]["request_scope_mappings"])})
     return {"status":"COMPLETE_RETAINED_PAIR_DIAGNOSTIC_READ","application_executions":0,"qualified":False,"cases":result}
 proof=guard.guarded(inspect,roots=[out,source,native,HERE],foreign_path=Path("/dev/null"))
 put(out/"READ_ONLY.json",proof)
 for row in proof["evidence"]["cases"]:
-    print("ACTUAL_COMPLETE_FIELD_COMPARISON",json.dumps({k:v for k,v in row.items() if k!="complete_raw_metadata"},sort_keys=True),flush=True)
+    print("ACTUAL_COMPLETE_FIELD_COMPARISON",json.dumps({k:v for k,v in row.items() if k not in ("complete_raw_metadata","atomic")},sort_keys=True),flush=True)
 for row in proof["evidence"]["cases"]:
     if row["case"]!=3:continue
     print("ACTUAL_RAW_METADATA_IDENTITY",json.dumps({"case":row["case"],"name":row["name"],"raw":row["complete_raw_metadata"]},sort_keys=True),flush=True)
+for row in proof["evidence"]["cases"]:
+    if row["atomic"] is not None:print("ACTUAL_ATOMIC_LIFETIME",json.dumps(row["atomic"],sort_keys=True),flush=True)
 put(out/"RESULT.json",{"status":proof["evidence"]["status"],"application_executions":0,"guard_probes":len(proof["probes"]),"qualified":False})
