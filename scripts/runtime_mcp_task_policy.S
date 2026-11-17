@@ -51,6 +51,14 @@ pump_accept:
     je pump_accept_frontend_returned
     cmp eax,0xffffffdf
     jne public_span_fail
+    mov rax,[r15+512+18*64+24]
+    cmp rax,59
+    je pump_accept_extract_wait
+    cmp rax,64
+    jne public_span_fail
+    mov qword ptr [rbp+PN_P_ACTIVE],1
+    jmp pump_accept_frontend_returned
+pump_accept_extract_wait:
     mov qword ptr [rbp+PN_X_ACTIVE],1
 pump_accept_frontend_returned:
     /* Copy the current G1 borrow before another public request replaces it. */
@@ -103,10 +111,17 @@ pump_accept_observed:
 pump_handle_frontend:
     PM_SAVE
     mov rbp,rdi
-    cmp qword ptr [rbp+PN_X_ACTIVE],0
-    je pump_handle_settled_frontend
+    call pump_waiting_kind
+    test eax,eax
+    jz pump_handle_settled_frontend
+    cmp eax,2
+    je pump_handle_publication_wait
     mov rdi,rbp
     call pump_extract_pending
+    jmp pump_frontend_done
+pump_handle_publication_wait:
+    mov rdi,rbp
+    call pump_publication_pending
     jmp pump_frontend_done
 pump_handle_settled_frontend:
     mov r13,[rbp+PN_DESCRIPTOR+32]

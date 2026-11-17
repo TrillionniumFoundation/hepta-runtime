@@ -40,11 +40,12 @@
     "reply": "f16",
     "request_grow": "f18",
     "reserve": "f17",
+    "retained_after_body": "f43",
     "valid_expectation": "f27",
     "valid_params": "f26",
     "valid_typed": "f1"
   },
-  "blocks": 588,
+  "blocks": 593,
   "call_graph": {
     "acyclic": true,
     "calls": {
@@ -410,17 +411,18 @@
     "f37": "dbd34e43d79be21b4942a1fa491d8c2fce00ccd9c7d9ca00ed58f43e3caf8a1c",
     "f38": "435e92445a04fb9e4a985a15d8dc683b2a6bffef78712f7cea6138879e3e01f8",
     "f39": "d82b234b30476e00dc7c860a54e63e2f299c4ea0ac248d298e909ca109a98a3b",
-    "f4": "b0113a4dfe5ba3b24e45506306f6f7fa203ceda9bd986affaffddbb4b9fd5cbd",
+    "f4": "a90a2d4c421f034a085b9cbf014dfd04e241fe05a3cb8f324d8422ad74604107",
     "f40": "e58640285f034c4523b78bc8e01a6b0f1b26d37600e04270d8aa89a7eff5c7d0",
     "f41": "2026068814f75d3d4c3dd7eb590acb08626da52654da316dcfbdf35079da9c33",
     "f42": "422db2dd7e79df09574b5b4d026c68b2b74e2fe765d2f9b78bd14927ea6fcd30",
+    "f43": "b4ea6a8e8dc93cf04a265ce6595ebdfa5810d30260e183f58c9cea701b6aaafb",
     "f5": "e7f9464d3502fd6db3980ffff25655cd9e5918a561569e966aa1e5114fbc7218",
     "f6": "c90d4877e9e952172b4ac6d76c95fa25150e1ad25bec9c01f5a6db53c178c480",
     "f7": "1f108babc74ec01e71e28feeaec5505e226f517161784d79097bff98c0c8cc2f",
     "f8": "803c8b3c9e71a29f0c8368b70d0e93572f225a35eae4c88a4e3f211e0fbcea88",
     "f9": "2a8814353793eaa5540a627757e1b1824d0ec179008555d98a33c9aed71c4e2f"
   },
-  "functions": 43,
+  "functions": 44,
   "key_length_offset": 448,
   "magic_inverse_ast_exact": true,
   "new_functions": {
@@ -444,7 +446,7 @@
   "no_context_from_public_input": true,
   "no_history_add": true,
   "old_stack_removed": false,
-  "operations": 2688,
+  "operations": 2722,
   "owner": "text_publication_call",
   "phase2_substate_offset": 424,
   "phase3_substate_offset": 440,
@@ -526,6 +528,111 @@
   ],
   "production_installed": false,
   "public_qualified": false,
+  "publication_async_extension": {
+    "await_edges": [
+      [
+        18,
+        64
+      ],
+      [
+        64,
+        66
+      ],
+      [
+        66,
+        67
+      ]
+    ],
+    "baseline": "320862f03902153b5c804d1b68142126a9c7a606",
+    "baseline_binding": {
+      "bytes": 114044,
+      "sha256": "a3c1aeb0bfa828cebadbc153d97baeaeb320523b550e5398f2bd182e69ea4c02"
+    },
+    "blocking_body_survives_caller_drop": true,
+    "caller_drop_skips_post_await_forget": true,
+    "cancel_code": 4294967287,
+    "cancel_order": [
+      "actual_worker_Drop",
+      "actual_Scope_op8",
+      "actual_fence_release",
+      "frontend_silent"
+    ],
+    "descriptors": [
+      64,
+      65,
+      66,
+      67,
+      68
+    ],
+    "full_sdk": false,
+    "native_worker_only_qualified": true,
+    "notification_cancel_drops_future": false,
+    "pending_node_span": [
+      1184,
+      1896
+    ],
+    "pool_limit": 512,
+    "preserved_fence_span": [
+      3584,
+      3744
+    ],
+    "preserved_scope_context_span": [
+      3744,
+      3888
+    ],
+    "process_pool_hub_offset": 216,
+    "public_async_qualified": false,
+    "relocation": {
+      "f4": "f43"
+    },
+    "retained_ast_functions": [
+      "f0",
+      "f1",
+      "f10",
+      "f11",
+      "f12",
+      "f13",
+      "f14",
+      "f15",
+      "f16",
+      "f17",
+      "f18",
+      "f19",
+      "f2",
+      "f20",
+      "f21",
+      "f22",
+      "f23",
+      "f24",
+      "f25",
+      "f26",
+      "f27",
+      "f28",
+      "f29",
+      "f3",
+      "f30",
+      "f31",
+      "f32",
+      "f33",
+      "f34",
+      "f35",
+      "f36",
+      "f37",
+      "f38",
+      "f39",
+      "f40",
+      "f41",
+      "f42",
+      "f5",
+      "f6",
+      "f7",
+      "f8",
+      "f9"
+    ],
+    "schema": "hepta.runtime.publication-async-source.v1",
+    "shared_lease7_cache8": true,
+    "worker_qualification": "840522dd42ff3332158f0cccad802425f3708a26"
+  },
   "retained_exact_functions": {
     "f0": "e67c11cd94abea5df4d2f02f26f75ea34dc0e74117bbcabb57adfe7299f91e6d",
     "f10": "ba66d5d1564cde624c34e1a9733377167890efa1148f2182257887639e0c6188",
@@ -552,8 +659,8 @@
   "schema": "hepta.runtime.text-publication-controller-author.v1",
   "scope_lifecycle_retained_exact": true,
   "source": {
-    "bytes": 162576,
-    "sha256": "9b172c7b36103a47731c1fba60c1af2404531a6dce44a88e01685b936e96cd9d"
+    "bytes": 164278,
+    "sha256": "ce19868fbc642ce813678cb3bc62861ca8392422008d9e26023b9a8329119585"
   },
   "success_order": [
     "actual_publication_callable",

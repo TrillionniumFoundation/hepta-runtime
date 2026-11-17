@@ -70,6 +70,15 @@
 .equ PN_X_INSTALLED,1160
 .equ PN_X_WORKMAP,1168
 .equ PN_X_OUTMAP,1176
+/* Publisher future rows64..68; fence/Scope tail starts at3584 unchanged. */
+.equ PN_P_ACTIVE,1184
+.equ PN_P_DESCRIPTORS,1216
+.equ PN_P_CONTINUATIONS,1536
+.equ PN_P_CONTEXT,1856
+.equ PN_P_WORKMAP,1864
+.equ PN_P_OUTMAP,1872
+.equ PN_P_TAG,1880
+.equ PN_P_JOB,1888
 /* Actual request-owned effect-fence controller; native context remains session-owned. */
 .equ PN_F_DESCRIPTOR,3584
 .equ PN_F_CONTINUATION,3648
@@ -102,6 +111,23 @@
 /* Validate inherited fixture capabilities at the raw process entry, before
  * configuration or any owner can open a different object on an absent FD. */
 pump_fixture_preflight:
+.if PM_FIXED_PUBLICATION_TRACE
+    mov edi,6
+    mov esi,1
+    mov eax,72
+    syscall
+    test rax,rax
+    js bare_fatal
+    mov edi,6
+    mov esi,3
+    mov eax,72
+    syscall
+    test rax,rax
+    js bare_fatal
+    and eax,3
+    test eax,eax
+    jz bare_fatal
+.endif
     mov edi,3
     mov esi,1
     mov eax,72
@@ -368,8 +394,9 @@ pump_detach_frontend:
     mov rbx,[r15+8]
     add rbx,18*64
     lea r14,[r15+512+18*64]
-    cmp qword ptr [rbp+PN_X_ACTIVE],0
-    jne pump_detach_extract_wait
+    call pump_waiting_kind
+    test eax,eax
+    jnz pump_detach_extract_wait
     mov rax,[r14]
     or rax,[r14+8]
     jnz public_span_fail
@@ -379,8 +406,9 @@ pump_detach_frontend:
     jb public_span_fail
     jmp pump_detach_frontend_admitted
 pump_detach_extract_wait:
-    cmp qword ptr [rbp+PN_X_ACTIVE],1
-    jne public_span_fail
+    call pump_waiting_kind
+    test eax,eax
+    jz public_span_fail
     cmp qword ptr [r14],1
     jne public_span_fail
     cmp qword ptr [r14+8],2
@@ -424,6 +452,8 @@ pump_detach_frontend_admitted:
     rep stosq
     mov rdi,rbp
     call pump_extract_detach
+    mov rdi,rbp
+    call pump_publication_detach
     mov rdi,rbp
     call pump_fence_detach
     mov rdi,rbp
@@ -480,6 +510,8 @@ pump_restore_frontend:
     mov rdi,rbp
     call pump_extract_restore
     mov rdi,rbp
+    call pump_publication_restore
+    mov rdi,rbp
     call pump_fence_restore
     mov rdi,rbp
     call pump_scope_restore
@@ -527,12 +559,15 @@ pump_retire_untracked:
     or rax,[rbp+PN_F_NATIVE]
     or rax,[rbp+PN_F_HUB]
     jnz public_span_fail
-    cmp qword ptr [rbp+PN_X_ACTIVE],0
-    jne public_span_fail
+    call pump_waiting_kind
+    test eax,eax
+    jnz public_span_fail
     mov rdi,rbp
     call pump_trace_retired
     mov rdi,rbp
     call pump_extract_retire
+    mov rdi,rbp
+    call pump_publication_retire
     lea rbx,[r12+PM_ALL]
 pump_unlink_node:
     mov rax,[rbx]
@@ -586,12 +621,10 @@ pump_scope_detach:
     mov rax,[rbp+PN_S_OWNERSHIP]
     or rax,[rbp+PN_S_VIEW]
     jnz public_span_fail
-    cmp qword ptr [rbp+PN_X_ACTIVE],0
-    je ps_detach_done
-    cmp qword ptr [rbp+PN_X_ACTIVE],1
-    jne public_span_fail
-    cmp qword ptr [rbp+PN_X_CONTEXT],0
-    je public_span_fail
+    call pump_waiting_kind
+    test eax,eax
+    jz ps_detach_done
+    call pump_waiting_context
     mov r13,[r15+16]
     test r13,r13
     jz public_span_fail
@@ -727,8 +760,9 @@ pump_scope_restore:
     je ps_restore_absent
     cmp qword ptr [rbp+PN_S_OWNERSHIP],3
     jne public_span_fail
-    cmp qword ptr [rbp+PN_X_ACTIVE],1
-    jne public_span_fail
+    call pump_waiting_kind
+    test eax,eax
+    jz public_span_fail
     mov r13,[rbp+PN_S_VIEW]
     test r13,r13
     jz public_span_fail
@@ -810,8 +844,9 @@ ps_restore_idle:
 ps_restore_absent:
     cmp qword ptr [rbp+PN_S_VIEW],0
     jne public_span_fail
-    cmp qword ptr [rbp+PN_X_ACTIVE],0
-    jne public_span_fail
+    call pump_waiting_kind
+    test eax,eax
+    jnz public_span_fail
 ps_restore_done:
     PM_RETURN
 pump_scope_unmap_idle:
@@ -860,10 +895,7 @@ pump_fence_detach:
     jne public_span_fail
     cmp qword ptr [r13+112],0
     je pf_detach_done
-    cmp qword ptr [rbp+PN_X_ACTIVE],1
-    jne public_span_fail
-    cmp qword ptr [rbp+PN_X_CONTEXT],0
-    je public_span_fail
+    call pump_waiting_context
     bt qword ptr [r15+64],27
     jnc public_span_fail
     bt qword ptr [r15+72],27
@@ -898,8 +930,9 @@ pump_fence_detach:
 pf_detach_absent:
     cmp qword ptr [r15+232],0
     jne public_span_fail
-    cmp qword ptr [rbp+PN_X_ACTIVE],0
-    jne public_span_fail
+    call pump_waiting_kind
+    test eax,eax
+    jnz public_span_fail
 pf_detach_done:
     PM_RETURN
 
@@ -986,8 +1019,9 @@ pump_fence_restore:
     jne public_span_fail
     cmp qword ptr [rbp+PN_F_INSTALLED],1
     jne public_span_fail
-    cmp qword ptr [rbp+PN_X_ACTIVE],1
-    jne public_span_fail
+    call pump_waiting_kind
+    test eax,eax
+    jz public_span_fail
     mov rax,[rbp+PN_F_NATIVE]
     cmp [r15+208],rax
     jne public_span_fail
@@ -1031,8 +1065,9 @@ pf_restore_absent:
     or rax,[rbp+PN_F_NATIVE]
     or rax,[rbp+PN_F_HUB]
     jnz public_span_fail
-    cmp qword ptr [rbp+PN_X_ACTIVE],0
-    jne public_span_fail
+    call pump_waiting_kind
+    test eax,eax
+    jnz public_span_fail
 pf_restore_done:
     PM_RETURN
 

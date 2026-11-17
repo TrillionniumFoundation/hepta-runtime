@@ -26,12 +26,14 @@ sha = lambda raw: hashlib.sha256(raw).hexdigest()
 BASE = 'scripts/config_mcp_grow_adapter.S'
 BOUNDARIES = [
     'scripts/text_publication_callable.S',
+    'scripts/publication_worker.S',
     'scripts/runtime_publication_body_bridge.S',
     'scripts/runtime_publication_install.S',
     'scripts/runtime_publication_scope_bridge.S',
     'scripts/runtime_extract_wait.S',
     'scripts/runtime_mcp_task_storage.S',
     'scripts/runtime_mcp_task_extract.S',
+    'scripts/runtime_mcp_task_publication.S',
     'scripts/runtime_mcp_task_trace.S',
     'scripts/runtime_mcp_task_policy.S',
     'scripts/runtime_mcp_task_worker.S',
@@ -66,7 +68,8 @@ BOUNDARIES = [
     'scripts/runtime_mcp_filesystem_fence_native.S',
     'scripts/runtime_mcp_filesystem_fence_bridge.S',
 ]
-FIXTURE_BOUNDARIES = ['scripts/runtime_mcp_filesystem_fixture.S',
+FIXTURE_BOUNDARIES = ['scripts/runtime_publication_fixture.S',
+                      'scripts/runtime_mcp_filesystem_fixture.S',
                       'scripts/runtime_text_body_observer.S',
                       'scripts/runtime_mcp_filesystem_observer.S',
                       'scripts/runtime_mcp_filesystem_front_fixture.S']
@@ -191,6 +194,7 @@ MEMBERS = [
     ('publisher_call', 'text_publication_call', 'history.v1'),
     ('publisher_body', 'text_file_publication', 'history.v1'),
     ('publisher_errno', 'directory_errno', 'history.v1'),
+    ('publisher_worker', 'publication_worker', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -309,17 +313,20 @@ def source_check(root: Path) -> dict:
 
 
 def adapter_source(root: Path, images=None, *, private_fixture=False,
-                   private_pump_fixture=False, private_pump_trace=False) -> str:
+                   private_pump_fixture=False, private_pump_trace=False,
+                   private_publication_trace=False) -> str:
     # images is accepted for older evidence-reader callers; this prefix embeds
     # no image bytes. All fixed addresses are filled by the executed HIA packer.
     if private_fixture:
-        if private_pump_fixture or private_pump_trace:
+        if private_pump_fixture or private_pump_trace or private_publication_trace:
             raise ValueError('private instance carrier cannot expose pump observation descriptors')
         transport = '\n'.join((root / name).read_text() for name in FIXTURE_BOUNDARIES)
         fixed = combine((root / BASE).read_text(), transport)
         carrier = [name for name in BOUNDARIES if not name.startswith('scripts/runtime_mcp_task_')]
         source = '\n'.join((root / name).read_text() for name in carrier) + '\n' + fixed
     else:
+        if private_publication_trace and not private_pump_trace:
+            raise ValueError('publisher observation requires the exact FD3/4 trace entry')
         if private_pump_trace and not private_pump_fixture:
             raise ValueError('fixed trace entry requires the fixed journal fixture')
         transport = (root / TRANSPORT).read_text()
@@ -331,7 +338,8 @@ def adapter_source(root: Path, images=None, *, private_fixture=False,
         source = ('.equ PM_FIXED_FIXTURE_FDS,' + str(int(private_pump_fixture)) + '\n'
                   + '.equ PM_FIXED_TRACE_FD,' + str(int(private_pump_trace)) + '\n'
                   + '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed)
-    source = '.equ RUNTIME_LOCK_WAKE_HOOK,1\n' + source
+    source = ('.equ PM_FIXED_PUBLICATION_TRACE,' + str(int(private_publication_trace)) + '\n'
+              + '.equ RUNTIME_LOCK_WAKE_HOOK,1\n' + source)
     for name in re.findall(r'^\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):
         if name == '_start':
             continue
@@ -368,6 +376,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
                       source_root: Path = ROOT, manifests: dict | None = None,
                       private_fixture: bool = False, private_pump_fixture: bool = False,
                       private_pump_trace: bool = False,
+                      private_publication_trace: bool = False,
                       bellman_port_build: Path,
                       bellman_port_package: Path, bellman_worker_build: Path) -> Path:
     root = source_root.resolve(strict=True)
@@ -409,7 +418,8 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
             raise ValueError('fixed authority source/image identity differs: ' + authority_name)
     assembly = adapter_source(root, private_fixture=private_fixture,
                               private_pump_fixture=private_pump_fixture,
-                              private_pump_trace=private_pump_trace)
+                              private_pump_trace=private_pump_trace,
+                              private_publication_trace=private_publication_trace)
     write_new(folder / 'combined.S', assembly.encode())
 
     def execute(out, label, command, timeout):
@@ -437,7 +447,8 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
     configuration.update({name: images[name] for name in FENCE})
     configuration.update(text_publication_body=images['publisher_body'],
                          text_publication_codec=images['rf_sha'],
-                         text_publication_errno=images['publisher_errno'])
+                         text_publication_errno=images['publisher_errno'],
+                         publication_worker_pool=images['publisher_worker'])
     extra = {slot: images[member] for slot, member in enumerate(EXTRA) if member is not None}
     extra[57] = images['bellman_port']
     view_images = {member: images[member] for member in VIEW}
@@ -446,7 +457,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 115
+    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 116
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -514,6 +525,16 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'publication_fixed_descriptors': [64,65,66,67,68],
               'publication_forget_capability': {'slot': 68, 'parent': 66, 'local': 6, 'scope_output_loan': 96},
               'publication_callable_context': 'descriptor67+8',
+              'publication_worker_hub_offset': 216,
+              'publication_actual_blocking_pool_limit': 512,
+              'publication_wait_chain_slots': [18,64,66,67],
+              'publication_wait_request_rows': [64,65,66,67,68],
+              'publication_pending_node_span': [1184,1896],
+              'publication_worker_source': 'native/publication_worker.hepta',
+              'publication_worker_source_qualified_independently': True,
+              'publication_public_async_qualified': False,
+              'publication_worker_observer_fd': 6 if private_publication_trace else None,
+              'private_publication_trace': private_publication_trace,
               'publication_borrow_retained_until_parent_delivery': True,
               'publication_gateway_caller_qualified': False,
               'publication_public_route_registered': True,
@@ -601,12 +622,14 @@ if __name__ == '__main__':
     parser.add_argument('--private-filesystem-fixture', action='store_true')
     parser.add_argument('--private-pump-fixture', action='store_true')
     parser.add_argument('--private-pump-trace', action='store_true')
+    parser.add_argument('--private-publication-trace', action='store_true')
     args = parser.parse_args()
     reused = json.loads(args.member_manifests_json.read_bytes()) if args.member_manifests_json else None
     print(build_runtime_mcp(args.hepta.resolve(), args.build.resolve(), name=args.name, manifests=reused,
                             private_fixture=args.private_filesystem_fixture,
                             private_pump_fixture=args.private_pump_fixture,
                             private_pump_trace=args.private_pump_trace,
+                            private_publication_trace=args.private_publication_trace,
                             bellman_port_build=args.bellman_port_build,
                             bellman_port_package=args.bellman_port_package,
                             bellman_worker_build=args.bellman_worker_build))

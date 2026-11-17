@@ -96,6 +96,7 @@ pump_handlers_retired:
     call pump_port_shutdown
     test rax,rax
     jnz public_span_fail
+    call pump_publication_close
     mov qword ptr [r12+PM_PHASE],4
 pump_reap_workers:
     call pump_service_worker
@@ -109,6 +110,16 @@ pump_reap_workers:
     jmp pump_reap_workers
 pump_port_retired:
     mov qword ptr [r12+PM_PORT],0
+    mov qword ptr [r12+PM_WAKE],-1
+pump_reap_publication:
+    call pump_publication_destroy
+    test eax,eax
+    jz pump_publication_retired
+    cmp eax,1
+    jne public_span_fail
+    call pump_wait
+    jmp pump_reap_publication
+pump_publication_retired:
     cmp qword ptr [r12+PM_JOURNAL_OWNED],0
     je pump_journal_closed
     mov rdi,[r12+PM_JOURNAL]

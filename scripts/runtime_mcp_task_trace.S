@@ -155,11 +155,10 @@ pump_trace_frontend:
     call pump_trace_clear_tail
     cmp qword ptr [rbp+PN_DESCRIPTOR+16],1408
     jb public_span_fail
+    call pump_waiting_kind
+    test eax,eax
+    jz pump_trace_settled_extent
     mov rax,[rbp+PN_DESCRIPTOR+56]
-    cmp qword ptr [rbp+PN_X_ACTIVE],0
-    je pump_trace_settled_extent
-    cmp qword ptr [rbp+PN_X_ACTIVE],1
-    jne public_span_fail
     test rax,rax
     jnz public_span_fail
     mov edx,0xffffffdf
@@ -167,6 +166,7 @@ pump_trace_frontend:
     jne public_span_fail
     jmp pump_trace_admitted_extent
 pump_trace_settled_extent:
+    mov rax,[rbp+PN_DESCRIPTOR+56]
     cmp rax,64
     jb public_span_fail
 pump_trace_admitted_extent:
@@ -184,6 +184,8 @@ pump_trace_admitted_extent:
     mov rdi,rbp
     mov rsi,r14
     call pump_trace_extract
+    mov rdi,rbp
+    call pump_trace_publication
 pump_trace_frontend_done:
     PM_RETURN
 
@@ -382,8 +384,9 @@ pxt_done:
 pump_trace_scope:
     PM_SAVE
     mov rbp,rdi
-    cmp qword ptr [rbp+PN_X_ACTIVE],1
-    jne pts_done
+    call pump_waiting_kind
+    test eax,eax
+    jz pts_done
     xor ebx,ebx
 pts_next:
     cmp qword ptr [rbp+PN_S_OWNERSHIP],3

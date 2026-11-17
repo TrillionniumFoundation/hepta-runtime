@@ -71,7 +71,7 @@ fs_fixture_create_session:
     mov rdi, [r12 + 24]
     mov rsi, [r12 + 40]
     mov r8d, 6
-    call runtime_grow_owned
+    call runtime_publication_fixture_owned
     cmp rax, 32
     jne fs_fixture_failure
     mov rdx, [r15 + 8]
@@ -163,7 +163,7 @@ fs_fixture_input_ready:
     mov rdi, [r12 + 24]
     mov rsi, [r12 + 88]
     mov r8, [r12 + 80]
-    call runtime_grow_owned
+    call runtime_publication_fixture_owned
     mov [r12 + 216], rax
     mov rbx, [r12 + 80]
     shl rbx, 6
@@ -235,6 +235,10 @@ fs_fixture_finish_session:
     inc r13d
     cmp r13d, 2
     jb fs_fixture_finish_session
+    mov rdi, [r12 + 56]
+    call runtime_publication_fixture_pool_finish
+    test rax, rax
+    jnz fs_fixture_failure
     mov rdi, [r12 + 56]
     call runtime_text_body_hub_destroy
     test rax, rax

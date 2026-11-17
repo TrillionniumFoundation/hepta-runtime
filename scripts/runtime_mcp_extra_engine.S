@@ -1535,6 +1535,8 @@ runtime_grow_resume_suspended:
     jne runtime_grow_bad_early
     cmp ebp, 63
     je runtime_grow_resume_extract_body
+    cmp ebp, 67
+    je runtime_grow_resume_publication_body
     cmp qword ptr [r12 + 8], 2
     jne runtime_grow_bad_early
     mov eax, RG_WAIT
@@ -1629,11 +1631,20 @@ runtime_grow_resume_extract_body:
     call runtime_extract_body_resume
     jmp runtime_grow_done
 
-/* This concrete future owns exactly the admitted extract chain. */
+runtime_grow_resume_publication_body:
+    cmp qword ptr [r12 + 8], 0
+    jne runtime_grow_bad_early
+    mov rdx, [rsp + 80]
+    call runtime_publication_body_resume
+    jmp runtime_grow_done
+
+/* Exact fixed edges of the two request-owned asynchronous chains. */
 runtime_grow_extract_chain:
     cmp edi, 18
     jne runtime_grow_extract_chain_59
     cmp esi, 59
+    je runtime_grow_extract_chain_ok
+    cmp esi, 64
     je runtime_grow_extract_chain_ok
     jmp runtime_grow_extract_chain_bad
 runtime_grow_extract_chain_59:
@@ -1650,8 +1661,20 @@ runtime_grow_extract_chain_61:
     jmp runtime_grow_extract_chain_bad
 runtime_grow_extract_chain_62:
     cmp edi, 62
-    jne runtime_grow_extract_chain_bad
+    jne runtime_grow_publication_chain_64
     cmp esi, 63
+    jne runtime_grow_extract_chain_bad
+    jmp runtime_grow_extract_chain_ok
+runtime_grow_publication_chain_64:
+    cmp edi, 64
+    jne runtime_grow_publication_chain_66
+    cmp esi, 66
+    jne runtime_grow_extract_chain_bad
+    jmp runtime_grow_extract_chain_ok
+runtime_grow_publication_chain_66:
+    cmp edi, 66
+    jne runtime_grow_extract_chain_bad
+    cmp esi, 67
     jne runtime_grow_extract_chain_bad
 runtime_grow_extract_chain_ok:
     xor eax, eax

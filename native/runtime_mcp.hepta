@@ -556,7 +556,10 @@ block b1(v10:readbuf,v11:mutbuf,v12:mutbuf,v13:u64,v14:u64)
   v23:u64 = call(v12,v22) {"function":"f31"}
   v24:u64 = const() {"value":15}
   v25:bool = compare.eq(v23,v24)
-  v26:bool = bool.and(v21,v25)
+  v900000:u64 = const() {"value":16}
+  v900001:bool = compare.eq(v23,v900000)
+  v900002:bool = bool.or(v25,v900001)
+  v26:bool = bool.and(v21,v900002)
   branch v26 b3(v11,v12) b4()
 block b2(v30:readbuf,v31:mutbuf,v32:mutbuf,v33:u64,v34:u64)
   v35:u32 = call(v30,v31,v32,v33,v34) {"function":"f93"}

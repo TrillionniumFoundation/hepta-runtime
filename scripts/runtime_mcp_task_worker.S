@@ -110,11 +110,19 @@ pump_resume_node:
     jne public_span_fail
     mov qword ptr [rbp+PN_FUTURE_DROPPED],1
 pump_resume_prepare:
-    cmp qword ptr [rbp+PN_X_ACTIVE],0
-    je pump_resume_bellman_prepare
+    call pump_waiting_kind
+    test eax,eax
+    jz pump_resume_bellman_prepare
+    cmp eax,2
+    je pump_resume_publication_prepare
     mov rdi,rbp
     mov rsi,r13
     call pump_resume_extract
+    PM_RETURN
+pump_resume_publication_prepare:
+    mov rdi,rbp
+    mov rsi,r13
+    call pump_resume_publication
     PM_RETURN
 pump_resume_bellman_prepare:
     mov rbx,[rbp+PN_DESCRIPTOR+8]
