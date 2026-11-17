@@ -1,0 +1,19 @@
+{
+  "stat_reader_source": "d906f5f3aacdfb114ba8c6b371193bb54b62da3e",
+  "run": 44112407302,
+  "job": 134141249743,
+  "failure": "complete native case set",
+  "all_previous_complete_wire_state_file_comparisons_reached": true,
+  "qualification": false,
+  "complete_tree_inspector": {
+    "source": "acded8a51cce3d49883e83c93b928dde02c6dec0",
+    "run": 44114785344,
+    "job": 134149778694,
+    "conclusion": "success",
+    "hia_executed": false,
+    "rust_executed": false
+  },
+  "before": "    require(set(p.name for p in n.iterdir())=={\"RESULT.json\",\"COMMANDS.json\",\"HOST.json\",\"FILESYSTEM.json\",\n        \"config.json\",\"buffers\",\"process\"},\"complete native case set\")\n",
+  "after": "    # These exact startup artifacts are produced by the admitted native\n    # configuration owner, not by a publication request. No extra path or\n    # nonempty lock/audit content is admitted.\n    startup=n/\"controller-state\"\n    require(startup.is_dir() and not startup.is_symlink()\n        and stat.S_IMODE(startup.stat().st_mode)==0o700,\"actual startup root\")\n    startup_expected={\"audit\":(\"directory\",0o700),\"jobs\":(\"directory\",0o700),\n        \"controller.lock\":(\"file\",0o600),\"controller.owner.lock\":(\"file\",0o600)}\n    require({p.relative_to(startup).as_posix() for p in startup.rglob(\"*\")}==set(startup_expected),\n        \"complete actual startup configuration artifacts\")\n    startup_rows=[]\n    for name,(kind,mode) in sorted(startup_expected.items()):\n        p=startup/name;x=p.lstat()\n        require(not p.is_symlink() and stat.S_IMODE(x.st_mode)==mode\n            and (stat.S_ISDIR(x.st_mode) if kind==\"directory\" else stat.S_ISREG(x.st_mode)),\n            \"startup artifact kind/mode\")\n        if kind==\"file\":require(x.st_nlink==1 and p.read_bytes()==b\"\",\"empty private startup lock\")\n        else:require(not list(p.iterdir()),\"empty startup directory\")\n        startup_rows.append(dict(path=name,kind=kind,mode=mode))\n    require(set(p.name for p in n.iterdir())=={\"RESULT.json\",\"COMMANDS.json\",\"HOST.json\",\"FILESYSTEM.json\",\n        \"config.json\",\"buffers\",\"process\",\"controller-state\"},\"complete native case set\")\n",
+  "remaining_case_and_stream_guards_unchanged": true
+}
