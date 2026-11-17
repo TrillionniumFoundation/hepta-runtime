@@ -20,5 +20,21 @@
     "before_pseudo_sha256": "2b616dc498dab94b6875a125e42bc5979885bc59199fe536c7a899a44fa2a4ce",
     "after_pseudo_sha256": "188bbaf558ad62cfb6e89c919be00c63ade04dc27c610f5259d477ac58add7c0"
   },
-  "source_application_replay": 0
+  "source_application_replay": 0,
+  "second_failure": {
+    "commit": "8ac26622e7148c40f3ef4a751bc1f101be386189",
+    "run": 44107465617,
+    "job": 134123616517,
+    "status": "FAIL",
+    "source_manifest_sha256": "89971efe1754207f1a3a84726e5e47401874c8dfc379f9c8afc99f3347c1108f",
+    "cause": "The fixed author DSL also omits FloorDiv and Mod; its existing decimal helper uses explicit bit arithmetic.",
+    "artifact": {
+      "id": 14337464884,
+      "bytes": 1617,
+      "sha256": "fc75bb4e61800660c83180ea228b7bc89f33d20ca346c5ff922e7213f5426e0d"
+    },
+    "native_applications": 0,
+    "rust_applications": 0
+  },
+  "final_change": "Canonical decimal parser uses the exact u64 prefix bound 1844674407370955161 and final digit 5, then checks requested maximum; no division or remainder operator remains."
 }
