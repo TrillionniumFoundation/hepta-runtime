@@ -2,7 +2,7 @@ name: Qualify native audit record callable
 on:
   workflow_dispatch:
   push:
-    branches: [hia-audit-record-callable-qualification-v2-6780-20261117]
+    branches: [hia-audit-record-callable-qualification-v2b-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -14,7 +14,6 @@ jobs:
       PYTHONDONTWRITEBYTECODE: "1"
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
-      AUDIT_CALLABLE_ROOT: ${{ runner.temp }}/audit-record-callable-v2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -29,6 +28,8 @@ jobs:
           persist-credentials: false
       - name: Admit complete frozen source and exact compiler checkout
         run: |
+          export AUDIT_CALLABLE_ROOT="$RUNNER_TEMP/audit-record-callable-v2"
+          printf 'AUDIT_CALLABLE_ROOT=%s\n' "$AUDIT_CALLABLE_ROOT" >> "$GITHUB_ENV"
           test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
           test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
