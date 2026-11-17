@@ -1,0 +1,95 @@
+name: Link request-owned Scope and task context from exact retained HIA
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-extract-scope-lifetime-6780-20261117']
+    paths: ['tests/hia_native/public123_extract_scope_lifetime_ci/**', '.github/workflows/hia-extract-scope-lifetime.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set fixed evidence locations
+        run: |
+          printf '%s\n' "SCOPE_PACKAGE=$GITHUB_WORKSPACE/runtime/tests/hia_native/public123_extract_scope_lifetime_ci" "SCOPE_CAPTURE=$RUNNER_TEMP/extract-scope-build" "SCOPE_INPUTS=$RUNNER_TEMP/extract-scope-inputs" "SCOPE_EXPORT=$RUNNER_TEMP/extract-scope-export" "SCOPE_DRIVER=$RUNNER_TEMP/extract-scope-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact frozen successor
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_scope_lifetime_ci
+      - name: Checkout original complete Local-repair build reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: build-source
+          ref: eceaaa36f5b92b64d83807f9d2605f744c652e80
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_local_policy_ci
+      - name: Checkout exact pure restoration entry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: native-source
+          ref: 42cccdc859b494d300f8756227b19c91009a0a72
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_wait_fixed_native_ci
+      - name: Checkout exact archive helpers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: capture-source
+          ref: 61e3a24e8d01aed2c912873039882bd99b248436
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/public123_extract_contention_ci
+      - name: Checkout exact compiler source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Complete source and syntax admission
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = '${{ github.sha }}'
+          test "$(sha256sum "$SCOPE_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 'ca2275e2489ef108aee94705ebcb9e9a29dbeb12db8a88b71992ff2765a1858c'
+          test "$(sha256sum "$GITHUB_WORKSPACE/native-source/tests/hia_native/public123_extract_wait_fixed_native_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '20a7176393a2f72c7e01b64aa54a82aa5a3df50831451fd5fa42b77202a61276'
+          python3 -I -S -B "$SCOPE_PACKAGE/check_source.py"
+      - name: Independently reread both complete retained graph captures without applications
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$GITHUB_WORKSPACE/native-source/tests/hia_native/public123_extract_wait_fixed_native_ci/restore_native.py" --build-source "$GITHUB_WORKSPACE/build-source/tests/hia_native/public123_extract_local_policy_ci" --capture-source "$GITHUB_WORKSPACE/capture-source/tests/hia_native/public123_extract_contention_ci" --output "$SCOPE_INPUTS" > "$SCOPE_DRIVER.stdout" 2> "$SCOPE_DRIVER.stderr"
+          scope_status=$?
+          cat "$SCOPE_DRIVER.stderr"
+          exit "$scope_status"
+      - name: Reverify all115 retained owners and link two fresh entries with the same actual B3
+        run: |
+          set +e
+          python3 -I -S -B "$SCOPE_PACKAGE/build.py" --output "$SCOPE_CAPTURE" --inputs "$SCOPE_INPUTS" --hepta "$GITHUB_WORKSPACE/compiler" >> "$SCOPE_DRIVER.stdout" 2>> "$SCOPE_DRIVER.stderr"
+          scope_status=$?
+          cat "$SCOPE_DRIVER.stderr"
+          test "$scope_status" -ne 0 || cat "$SCOPE_DRIVER.stdout"
+          exit "$scope_status"
+      - name: Six physical refusals and one whole relocation under unchanged read-only guards
+        run: |
+          python3 -I -S -B "$SCOPE_PACKAGE/controls.py" --retained "$SCOPE_INPUTS/shared/retained" --previous "$SCOPE_INPUTS/successor/capture" --fixture "$SCOPE_CAPTURE" --output "$SCOPE_CAPTURE-reader-controls"
+      - name: Preserve complete build and source on success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$SCOPE_PACKAGE/archive.py" pack --source "$SCOPE_PACKAGE" --capture "$SCOPE_CAPTURE" --output "$SCOPE_EXPORT" --driver-prefix "$SCOPE_DRIVER"
+      - name: Upload full evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: extract-scope-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.SCOPE_EXPORT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
