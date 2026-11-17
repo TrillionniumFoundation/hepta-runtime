@@ -1,0 +1,74 @@
+name: Qualify actual borrowed-file file_info and process orphan ownership
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-file-info-at-actual-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  frozen-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      INFO_SOURCE: ${{ github.workspace }}/qualification/file_info_at/v1/source
+      INFO_MANIFEST: 7461ea8ca2255d4eaa0480f7bfce712d3131a22f1241f46bbea25afc03983204
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v1/source
+          persist-credentials: false
+      - name: Bind all source and the complete fixed input domain before application calls
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/domain_author_driver.py" --output "$RUNNER_TEMP/info-complete-source" --manifest "$INFO_MANIFEST"
+      - name: Retain source-only gate
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: info-complete-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/info-complete-source
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+  actual-info:
+    needs: frozen-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [ordinary-a, content-boundaries, ordinary-b, attribute-boundaries, refusals-a, refusals-b, hash-race-a, hash-race-b, reopen-race, metadata-gap, metadata-race, large-a, large-b, descriptor, orphan-a, orphan-b, observer-off-a, observer-off-b]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      INFO_SOURCE: ${{ github.workspace }}/qualification/file_info_at/v1/source
+      INFO_MANIFEST: 7461ea8ca2255d4eaa0480f7bfce712d3131a22f1241f46bbea25afc03983204
+      INFO_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact source and complete trusted upstream build source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v1/source
+          persist-credentials: false
+      - name: Capture actual original and HIA once then perform complete guarded reads and controls
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/gate.py" qualify --work "$RUNNER_TEMP/info-actual" --group "$INFO_GROUP" --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Archive every actual application byte and complete source and controls
+        if: always()
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/gate.py" export --work "$RUNNER_TEMP/info-actual" --group "$INFO_GROUP" --output "$RUNNER_TEMP/info-actual-export" --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Upload complete original and native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: info-actual-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/info-actual-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
