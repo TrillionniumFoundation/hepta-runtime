@@ -11,7 +11,7 @@ def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
     if command==1:
         if valid_start(s)==0:
             return INVALID
-        needed=required(load(s,32),load(s,40),load(s,48))
+        needed=required(load(s,32),load(s,40),load(s,48),load(s,24),load(s,72))
         if needed>=LIMIT:
             return INVALID
         if length(w)<needed:
@@ -20,7 +20,7 @@ def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
             if get(w,8)!=99 and get(w,8)!=0:
                 return INVALID
         fill_range(w,0,4096,0)
-        layout(w,load(s,32),load(s,40),load(s,48))
+        layout(w,load(s,32),load(s,40),load(s,48),load(s,24),load(s,72))
         put(w,0,WORK_MAGIC)
         put(w,8,1)
         put(w,56,load(s,24))
@@ -45,7 +45,7 @@ def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
             return INVALID
         if load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
             return INVALID
-        if length(s)-96>1398104:
+        if length(s)-96>get(w,416):
             return INVALID
         sequence=load(s,16)
         if get(w,24)!=0:
@@ -106,10 +106,40 @@ def valid_start(s:readbuf) -> u64:
         return 0
     return 1
 
-def required(root:u64,path:u64,expected:u64) -> u64:
-    return 4096+root*2+path*10+expected+8388608
+def data_capacity(mode:u64,limit:u64) -> u64:
+    if mode==2:
+        return 1048576
+    if mode==3:
+        return 4097
+    if limit==0:
+        return 32768
+    if limit>1048576:
+        return 1048576
+    return limit
 
-def layout(w:mutbuf,root:u64,path:u64,expected:u64) -> u64:
+def encoded_capacity(mode:u64,count:u64) -> u64:
+    if mode==2:
+        return 0
+    return count*2+8
+
+def reply_capacity(mode:u64,count:u64) -> u64:
+    if mode==2:
+        return count
+    result=encoded_capacity(mode,count)
+    if result<144:
+        return 144
+    return result
+
+def required(root:u64,path:u64,expected:u64,mode:u64,limit:u64) -> u64:
+    count=data_capacity(mode,limit)
+    encoded=encoded_capacity(mode,count)
+    reply=reply_capacity(mode,count)
+    return root*2+path*10+expected+count*2+encoded*2+reply+8192
+
+def layout(w:mutbuf,root:u64,path:u64,expected:u64,mode:u64,limit:u64) -> u64:
+    count=data_capacity(mode,limit)
+    encoded=encoded_capacity(mode,count)
+    reply=reply_capacity(mode,count)
     at=4096+root
     put(w,304,at)
     at=at+path
@@ -124,15 +154,16 @@ def layout(w:mutbuf,root:u64,path:u64,expected:u64) -> u64:
     put(w,368,at)
     at=at+path+1
     put(w,376,at)
-    at=at+1048728
+    at=at+count+152
     put(w,344,at)
-    at=at+1048576
+    at=at+count
     put(w,352,at)
-    at=at+1398104
+    at=at+encoded
     put(w,392,at)
-    at=at+1398104
+    at=at+reply
     put(w,360,at)
-    put(w,384,required(root,path,expected))
+    put(w,384,required(root,path,expected,mode,limit))
+    put(w,416,reply)
     return 0
 
 def short_header(o:mutbuf,kind:u64,needed:u64) -> u32:
