@@ -1,0 +1,67 @@
+{
+  "schema": "hepta.runtime.read-orphans.downstream-impact.v1",
+  "new_production": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+  "create_old": "binary_read_body_create(callback, callback_context)",
+  "create_new": "binary_read_body_create(callback, callback_context, shared_process_pool)",
+  "pool": "c811 HPORP001; one per OS process; all contexts share; no close/dup/destroy for orphan records",
+  "rows": [
+    {
+      "consumer": "standalone binary read callable",
+      "status": "qualified in this handoff",
+      "actions": [
+        "Use new read67 HIA, new native bridge, and unchanged c811 pool primitive.",
+        "Supply same pool in rdx to all observed/off/reused/new contexts."
+      ]
+    },
+    {
+      "consumer": "file_info_at fingerprint child",
+      "existing_final": "bcb32bc51ccf3140cbf34b649bef25f003c9b4b4",
+      "status": "NOT_REBOUND",
+      "actions": [
+        "Replace the old read67 source/bridge and its build/source pins.",
+        "Pass file_info context's existing shared pool to the child's create third argument.",
+        "Add actual first-regular-fstat fault in the fingerprint child and verify original file_info cleanup and process-lifetime orphan.",
+        "Keep existing outer info regular-fstat qualification; it does not cover the fingerprint child's first regular-fstat path."
+      ]
+    },
+    {
+      "consumer": "binary_read stdio helper",
+      "existing_final": "69d54e3a21d8f3ca20bff6165b3547bc78afa9b3",
+      "status": "NOT_REBOUND",
+      "actions": [
+        "Rebind the new body and native bridge, add c811 shared pool lifecycle at startup and source/build manifests.",
+        "Capture actual first regular-fstat fault through complete original/native stdio and pre-exit descriptor behavior.",
+        "Preserve complete original ordinary wires and raw errors; prior 48 triples do not automatically qualify the changed constructor."
+      ]
+    },
+    {
+      "consumer": "parent_directory",
+      "existing_final": "a2f8c4ca2f1072465582d86f7a0550969acb7274",
+      "status": "UNCHANGED_INDEPENDENT_OWNER",
+      "reason": "Its selected path/walk/cleanup dependency graph does not include read f20/open_source; native constructor is independent."
+    },
+    {
+      "consumer": "publish_at",
+      "existing_final": "627e0d80f962962580977540a7defd73f561990f",
+      "status": "UNCHANGED_INDEPENDENT_OWNER",
+      "reason": "It has no read67 child; it uses the same unchanged c811 pool with its own qualified regular/open-source logic."
+    },
+    {
+      "consumer": "read_multiple_files",
+      "status": "NEXT_SEPARATE_BODY_OWNER",
+      "actions": [
+        "Reuse the qualified held-parent, codec/stat and c811 process pool primitives.",
+        "Implement original batch full-read, strict UTF8, second descriptor walk and complete serialized-result budget in an independent HIA owner.",
+        "Do not reinterpret the historical native-local/synthetic-IO multi-read controller as original configured Remote qualification."
+      ]
+    },
+    {
+      "consumer": "public/Remote gateway and installed graph",
+      "status": "NOT_REBOUND_OR_QUALIFIED",
+      "reason": "No default graph, routes, catalog, async policy, SSH or transport changes belong to this handoff."
+    }
+  ],
+  "previous_captures_retained": true,
+  "automatic_downstream_qualification": false,
+  "whole_runtime_replaced": false
+}
