@@ -37,7 +37,7 @@ Build and launch the actual default entry with an explicit verified bootstrap:
 
 ```sh
 python3 -I -B scripts/hia_native_runtime_mcp_build.py   --hepta /absolute/path/to/pinned/Hepta   --bootstrap /absolute/path/to/verified/bootstrap   --output /absolute/path/to/new-public-build
-/absolute/path/to/new-public-build/build/public-task-batch/runtime-mcp.elf
+/absolute/path/to/new-public-build/build/public-task-batch-extract/runtime-mcp.elf
 ```
 
 CI omits `--bootstrap` and freshly compiles all 124 components. The

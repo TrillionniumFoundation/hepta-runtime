@@ -29,7 +29,7 @@ its actual public ELF equals the application-qualified captured binary.
 
 The implementation entry remains
 `scripts/hia_native_runtime_mcp_build.py`. Its output is
-`build/public-task-batch/runtime-mcp.elf` beneath the selected output directory.
+`build/public-task-batch-extract/runtime-mcp.elf` beneath the selected output directory.
 The repository README gives the build and launch commands. CI omits
 `--bootstrap` and performs fresh compilation.
 
@@ -38,6 +38,7 @@ The repository README gives the build and launch commands. CI omits
 | Domain | Actual result and immutable provenance |
 |---|---|
 | Default build | [44161188882](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44161188882): 116 fresh direct plus eight fresh packed owners, zero reused members; independent uploaded read of 4,277 files / 449,874,363 bytes and eleven guard probes |
+| Final installed workflow | `f3e8b7cf` / [44171867663](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44171867663): actual default command, 116 fresh direct + eight packed, zero reuse; independent full uploaded read of 4,277 files / 449,883,312 bytes, 4,591 unchanged entries and eleven probes; zero target applications |
 | Ordinary publisher | [44166316581](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44166316581), source `274c4481`: 686 complete current-native comparisons, 574 carrier and 112 real stdio inputs across both protocol versions |
 | Uploaded ordinary evidence | [44168371179](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44168371179), source `7d35fd3f`: all twelve full archives, 9,052 files / 892,729,982 logical bytes, 9,748 unchanged physical entries and 264 fresh guard refusals |
 | Public publisher lifecycle | 22 actual SDK scenarios on the real two-session pump; complete join `61066b30` / [44128567875](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44128567875), followed by all four independent uploaded roles `8ccd9b8f` / [44131496162](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44131496162) |

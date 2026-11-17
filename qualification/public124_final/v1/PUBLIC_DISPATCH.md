@@ -1,6 +1,6 @@
 # Current 124 public dispatch and ownership seam
 
-The source closure in PRODUCTION_ROWS.json is the complete proposed installation.
+The source closure in SOURCE_ROWS.json is the complete proposed installation.
 The captured production input is 7567502bf4e76b5975a689b988e9f96e1206462a.
 The default-entry correction changes Python counts and its binding only.
 No handler is enabled by an image-count label.
