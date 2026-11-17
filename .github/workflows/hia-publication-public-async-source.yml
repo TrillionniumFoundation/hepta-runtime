@@ -2,7 +2,7 @@ name: Shared publication async exact source composition
 on:
   workflow_dispatch:
   push:
-    branches: ['hia-publication-public-async-source-6780-v2-20261117']
+    branches: ['hia-publication-public-async-source-6780-v3-20261117']
 permissions:
   contents: read
   actions: read
@@ -13,13 +13,13 @@ jobs:
     steps:
       - name: Set actual runner paths
         run: |
-          printf '%s\n' "PA_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/publication_async_source_v2" "PA_RUN=$RUNNER_TEMP/publication-async-source" "PA_DRIVER=$RUNNER_TEMP/publication-async-author" "PA_EXPORT=$RUNNER_TEMP/publication-async-source-export" >> "$GITHUB_ENV"
+          printf '%s\n' "PA_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/publication_async_source_v3" "PA_RUN=$RUNNER_TEMP/publication-async-source" "PA_DRIVER=$RUNNER_TEMP/publication-async-author" "PA_EXPORT=$RUNNER_TEMP/publication-async-source-export" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: candidate
           ref: ${{ github.sha }}
           persist-credentials: false
-          sparse-checkout: qualification/publication_async_source_v2
+          sparse-checkout: qualification/publication_async_source_v3
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: baseline
