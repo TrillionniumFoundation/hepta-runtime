@@ -1,137 +1,198 @@
-/* Fixed extract_lines callable: the existing process hub owns locks/history.
- * Engine+456 owns this callable context; owner 3/6 borrow the same hub rows.
- * Private WAIT is retained exactly; this attachment adds no waiter scheduler. */
+/* Extract callable attachment. The process hub owns shared locks/history.
+ * Engine+456 is transferred with its actual caller chain while lock WAIT
+ * suspends. Only an HIA-selected wake or actual future Drop resumes it. */
 .intel_syntax noprefix
 .section .text
 .global runtime_extract_body_owned
+.global runtime_extract_body_resume
 .global runtime_extract_body_release
+.global runtime_extract_body_release_context
 .global runtime_extract_body_hint
-/* Fixed native slot63, owned result retained until parent delivery completes. */
 runtime_extract_body_owned:
+    xor edx,edx
+    jmp rex_body_entry
+/* rdx 2=actual lock wake; 3=actual future destruction after transport close. */
+runtime_extract_body_resume:
+    cmp rdx,2
+    je rex_body_entry
+    cmp rdx,3
+    je rex_body_entry
+    mov eax,0xffffffff
+    ret
+rex_body_entry:
     push rbx
     push rbp
     push r12
     push r13
     push r14
-    sub rsp, 32
-    mov [rsp], rdi
-    mov [rsp + 8], rsi
-    mov rbx, [r15 + 8]
-    add rbx, 63*64
-    lea rbp, [r15 + 512 + 63*64]
-    cmp qword ptr [rbp], 0
+    sub rsp,32
+    mov [rsp],rdi
+    mov [rsp+8],rsi
+    mov [rsp+16],rdx
+    mov rbx,[r15+8]
+    add rbx,63*64
+    lea rbp,[r15+512+63*64]
+    cmp qword ptr [rbp+8],0
     jne rex_invalid
-    cmp qword ptr [rbp + 8], 0
+    test rdx,rdx
+    jnz rex_resume_admit
+    cmp qword ptr [rbp],0
     jne rex_invalid
-    mov qword ptr [rbp], 1
-    mov qword ptr [rbx + 48], 0
-    mov qword ptr [rbx + 56], 0
-    mov r14, [r15 + 400]
-    test r14, r14
+    mov qword ptr [rbp],1
+    mov qword ptr [rbx+48],0
+    mov qword ptr [rbx+56],0
+    mov r14,[r15+400]
+    test r14,r14
     jz rex_invalid_active
-    mov rax, 0x3142554842544c48
-    cmp [r14], rax
+    mov rax,0x3142554842544c48
+    cmp [r14],rax
     jne rex_invalid_active
-    mov r12, [r15 + 456]
-    test r12, r12
+    mov r12,[r15+456]
+    test r12,r12
     jnz rex_existing
-    mov edi, 4096
+    mov edi,4096
     call view_allocate
-    cmp rax, -4095
+    cmp rax,-4095
     jae rex_resource_active
-    mov r12, rax
-    mov [r15 + 456], rax
-    mov [r12 + 256 + 168], r15
+    mov r12,rax
+    mov [r15+456],rax
+    mov [r12+256+168],r15
     jmp rex_context_ready
 rex_existing:
-    cmp qword ptr [r12 + 152], 0
+    mov rdi,r12
+    call runtime_extract_wait_unlink
+    test eax,eax
+    jnz rex_invalid_active
+    cmp qword ptr [r12+152],0
     je rex_context_ready
-    mov rdi, r12
+    mov rdi,r12
     call local_extract_lines_release
-    test eax, eax
+    test eax,eax
     jnz rex_invalid_active
 rex_context_ready:
-    mov rdi, r12
-    xor eax, eax
-    mov ecx, 24
+    mov rdi,r12
+    xor eax,eax
+    mov ecx,24
     rep stosq
-    mov rax, 0x3130494354584548 /* HEXTCI01 */
-    mov [r12], rax
-    mov qword ptr [r12 + 8], 192
-    lea rax, [rip + runtime_extract_body_images]
-    mov [r12 + 16], rax
-    lea rax, [rip + runtime_extract_cache]
-    mov [r12 + 24], rax
-    lea rax, [r12 + 256]
-    mov [r12 + 32], rax
-    mov [r12 + 48], rax
-    lea rax, [rip + runtime_extract_body_hint]
-    mov [r12 + 40], rax
-    lea rax, [r14 + 64]
-    mov [r12 + 56], rax
-    lea rax, [r14 + 128]
-    mov [r12 + 64], rax
-    lea rax, [rip + runtime_text_body_shared_grow]
-    mov [r12 + 72], rax
-    mov [r12 + 80], r14
-    lea rax, [r14 + 8]
-    mov [r12 + 88], rax
-    mov rax, [r15 + 32]
-    mov [r12 + 96], rax
-    mov rdi, r12
-    mov rsi, [rsp]
-    mov rdx, [rsp + 8]
-    inc qword ptr [r15 + 128]
+    mov rax,0x3130494354584548
+    mov [r12],rax
+    mov qword ptr [r12+8],192
+    lea rax,[rip+runtime_extract_body_images]
+    mov [r12+16],rax
+    lea rax,[rip + runtime_extract_cache]
+    mov [r12+24],rax
+    lea rax,[r12+256]
+    mov [r12+32],rax
+    mov [r12+48],rax
+    lea rax,[rip + runtime_extract_body_hint]
+    mov [r12+40],rax
+    lea rax,[r14+64]
+    mov [r12+56],rax
+    lea rax,[r14+128]
+    mov [r12+64],rax
+    lea rax,[rip + runtime_text_body_shared_grow]
+    mov [r12+72],rax
+    mov [r12+80],r14
+    lea rax,[r14+8]
+    mov [r12+88],rax
+    mov rax,[r15+32]
+    mov [r12+96],rax
+    mov rdi,r12
+    mov rsi,[rsp]
+    mov rdx,[rsp+8]
+    inc qword ptr [r15+128]
     call local_extract_lines_run
-    mov edx, eax
-    cmp rax, rdx
+    jmp rex_actual_return
+rex_resume_admit:
+    cmp qword ptr [rbp],1
+    jne rex_invalid
+    mov eax,0xffffffdf
+    cmp [rbx+48],rax
+    jne rex_invalid
+    cmp qword ptr [rbx+56],0
+    jne rex_invalid
+    mov r12,[r15+456]
+    test r12,r12
+    jz rex_invalid
+    mov rax,[r15+400]
+    cmp [r12+80],rax
+    jne rex_invalid
+    cmp [r12+256+168],r15
+    jne rex_invalid
+    cmp qword ptr [r12+XW_LINKED],1
+    jne rex_invalid
+    cmp qword ptr [rsp+16],3
+    je rex_resume_drop
+    cmp qword ptr [r12+XW_READY],1
+    jne rex_invalid
+    mov qword ptr [r12+XW_READY],0
+    mov rdi,r12
+    inc qword ptr [r15+128]
+    call local_extract_lines_resume
+    jmp rex_actual_return
+rex_resume_drop:
+    mov rdi,r12
+    inc qword ptr [r15+128]
+    call local_extract_lines_cancel_wait
+rex_actual_return:
+    mov edx,eax
+    cmp rax,rdx
     jne rex_invalid_active
-    cmp [r12 + 128], rax
+    cmp [r12+128],rax
     jne rex_invalid_active
-    /* A scheduling WAIT remains distinct; this serial fixture has no waiter
-     * executor. Never spin, fabricate a wake, or release an undrained owner. */
-    cmp eax, 0xffffffdf
+    cmp eax,0xffffffdf
     je rex_undrained
-    cmp qword ptr [r12 + 136], 1
+    cmp qword ptr [r12+136],1
     jne rex_invalid_active
-    cmp qword ptr [r12 + 144], 1
+    cmp qword ptr [r12+144],1
     jne rex_invalid_active
-    cmp qword ptr [r12 + 160], 0
+    cmp qword ptr [r12+160],0
     jne rex_invalid_active
-    mov [rbx + 48], rax
-    mov rcx, [r12 + 112]
-    mov [rbx + 32], rcx
-    mov rcx, [r12 + 120]
-    mov [rbx + 40], rcx
-    mov [rbx + 56], rcx
-    cmp eax, 0xffff0000
+    mov [rsp+24],rax
+    mov rdi,r12
+    call runtime_extract_wait_unlink
+    test eax,eax
+    jnz rex_invalid_active
+    mov rax,[rsp+24]
+    mov [rbx+48],rax
+    mov rcx,[r12+112]
+    mov [rbx+32],rcx
+    mov rcx,[r12+120]
+    mov [rbx+40],rcx
+    mov [rbx+56],rcx
+    cmp eax,0xffff0000
     jae rex_private
-    cmp rax, rcx
+    cmp rax,rcx
     jne rex_invalid_active
     jmp rex_complete
 rex_private:
-    test rcx, rcx
+    test rcx,rcx
     jnz rex_invalid_active
     jmp rex_complete
 rex_resource_active:
-    mov eax, 0xfffffffc
+    mov eax,0xfffffffc
     jmp rex_error
 rex_invalid_active:
-    mov eax, 0xffffffff
+    mov eax,0xffffffff
 rex_error:
-    mov [rbx + 48], rax
-    mov qword ptr [rbx + 56], 0
+    mov [rbx+48],rax
+    mov qword ptr [rbx+56],0
 rex_complete:
-    mov qword ptr [rbp], 0
+    mov qword ptr [rbp],0
     jmp rex_done
 rex_undrained:
-    mov [rbx + 48], rax
-    mov qword ptr [rbx + 56], 0
+    mov rdi,r12
+    call runtime_extract_wait_link
+    test eax,eax
+    jnz rex_invalid_active
+    mov eax,0xffffffdf
+    mov [rbx+48],rax
+    mov qword ptr [rbx+56],0
     jmp rex_done
 rex_invalid:
-    mov eax, 0xffffffff
+    mov eax,0xffffffff
 rex_done:
-    add rsp, 32
+    add rsp,32
     pop r14
     pop r13
     pop r12
@@ -287,38 +348,59 @@ rexh_hint_done:
     ret
 
 runtime_extract_body_release:
+    sub rsp,8
+    mov rdi,[r15+456]
+    call runtime_extract_body_release_context
+    test eax,eax
+    jnz rexh_release_engine_done
+    mov qword ptr [r15+456],0
+rexh_release_engine_done:
+    add rsp,8
+    ret
+
+/* Release the exact detached node's context, never another engine borrow. */
+runtime_extract_body_release_context:
     push rbx
-    mov rbx, [r15 + 456]
-    test rbx, rbx
+    mov rbx,rdi
+    test rbx,rbx
     jz rexh_release_success
-    cmp qword ptr [rbx + 152], 0
+    mov rdi,rbx
+    call runtime_extract_wait_unlink
+    test eax,eax
+    jnz rexh_release_done
+    cmp qword ptr [rbx+XW_LINKED],0
+    jne rexh_release_invalid
+    cmp qword ptr [rbx+152],0
     je rexh_release_frame
-    mov rdi, rbx
+    mov rdi,rbx
     call local_extract_lines_release
-    test eax, eax
+    test eax,eax
     jnz rexh_release_done
 rexh_release_frame:
-    mov rdi, [rbx + 256 + 184]
-    test rdi, rdi
+    mov rdi,[rbx+256+184]
+    test rdi,rdi
     jz rexh_release_control
-    mov rsi, [rbx + 256 + 192]
-    add rsi, 4096
-    mov eax, 11
+    mov rsi,[rbx+256+192]
+    add rsi,4096
+    jc rexh_release_invalid
+    mov eax,11
     syscall
-    test rax, rax
+    test rax,rax
     jnz rexh_release_done
-    mov qword ptr [rbx + 256 + 184], 0
-    mov qword ptr [rbx + 256 + 192], 0
+    mov qword ptr [rbx+256+184],0
+    mov qword ptr [rbx+256+192],0
 rexh_release_control:
-    mov rdi, rbx
-    mov esi, 8192
-    mov eax, 11
+    mov rdi,rbx
+    mov esi,8192
+    mov eax,11
     syscall
-    test rax, rax
+    test rax,rax
     jnz rexh_release_done
-    mov qword ptr [r15 + 456], 0
 rexh_release_success:
-    xor eax, eax
+    xor eax,eax
+    jmp rexh_release_done
+rexh_release_invalid:
+    mov eax,0xffffffff
 rexh_release_done:
     pop rbx
     ret

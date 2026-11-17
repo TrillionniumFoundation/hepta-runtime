@@ -196,6 +196,7 @@ pump_clock:
 pump_tick:
     PM_SAVE
     call pump_service_worker
+    call pump_service_extract
     call pump_deliver_context_cancellation
     call pump_claim_responses
     call pump_send_progress

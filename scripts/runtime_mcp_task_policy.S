@@ -48,7 +48,11 @@ pump_accept:
     mov r8d,18
     call runtime_grow_owned
     cmp eax,64
+    je pump_accept_frontend_returned
+    cmp eax,0xffffffdf
     jne public_span_fail
+    mov qword ptr [rbp+PN_X_ACTIVE],1
+pump_accept_frontend_returned:
     /* Copy the current G1 borrow before another public request replaces it. */
     call pump_connection_mode
     mov rcx,rax
@@ -99,6 +103,12 @@ pump_accept_observed:
 pump_handle_frontend:
     PM_SAVE
     mov rbp,rdi
+    cmp qword ptr [rbp+PN_X_ACTIVE],0
+    je pump_handle_settled_frontend
+    mov rdi,rbp
+    call pump_extract_pending
+    jmp pump_frontend_done
+pump_handle_settled_frontend:
     mov r13,[rbp+PN_DESCRIPTOR+32]
     mov r14,[rbp+PN_DESCRIPTOR+56]
     mov rax,0x323052464d435248
@@ -293,7 +303,8 @@ pump_claim_done:
     PM_RETURN
 
 /* Notification cancellation delivers the context token only. The original
- * Bellman method ignores that token. Keep its future; never issue cmd3 here. */
+ * Bellman and extract methods ignore that token. Keep their actual futures;
+ * command3 belongs only to future destruction after transport close. */
 pump_deliver_context_cancellation:
     PM_SAVE
 pump_cancel_next:

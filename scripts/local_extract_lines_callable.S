@@ -511,6 +511,14 @@ lel_callable_drop_lease:
     jne lel_callable_drop_bad
     cmp [r15+lel_CLEAN_OUTPUT+24],rbx
     jne lel_callable_drop_bad
+.ifdef RUNTIME_LOCK_WAKE_HOOK
+    mov rdi,[r15+lel_PUBLIC_CTX]
+    mov rdi,[rdi+80]
+    lea rsi,[r15+lel_CLEAN_OUTPUT]
+    call runtime_lock_wake_record
+    test eax,eax
+    jnz lel_callable_drop_bad
+.endif
 lel_callable_drop_done:
     xor eax,eax
     jmp lel_callable_drop_return
@@ -845,6 +853,20 @@ lel_pure_again:
     mov r8,[rbx+8]
     mov r9,[rbx+16]
     call qword ptr [rbx]
+.ifdef RUNTIME_LOCK_WAKE_HOOK
+    cmp r14,3
+    jne lel_wake_observed
+    cmp rax,64
+    jne lel_wake_observed
+    mov rdi,[r15+lel_PUBLIC_CTX]
+    mov rdi,[rdi+80]
+    mov rsi,[rbx+24]
+    call runtime_lock_wake_record
+    test eax,eax
+    jnz lel_contract
+    mov eax,64
+lel_wake_observed:
+.endif
     mov edx,eax
     cmp rax,rdx
     jne lel_contract

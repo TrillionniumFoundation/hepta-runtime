@@ -25,7 +25,9 @@ from text_editor_create_private_pack import pack
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 BASE = 'scripts/config_mcp_grow_adapter.S'
 BOUNDARIES = [
+    'scripts/runtime_extract_wait.S',
     'scripts/runtime_mcp_task_storage.S',
+    'scripts/runtime_mcp_task_extract.S',
     'scripts/runtime_mcp_task_trace.S',
     'scripts/runtime_mcp_task_policy.S',
     'scripts/runtime_mcp_task_worker.S',
@@ -319,6 +321,7 @@ def adapter_source(root: Path, images=None, *, private_fixture=False,
         source = ('.equ PM_FIXED_FIXTURE_FDS,' + str(int(private_pump_fixture)) + '\n'
                   + '.equ PM_FIXED_TRACE_FD,' + str(int(private_pump_trace)) + '\n'
                   + '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed)
+    source = '.equ RUNTIME_LOCK_WAKE_HOOK,1\n' + source
     for name in re.findall(r'^\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):
         if name == '_start':
             continue
@@ -485,6 +488,11 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'extract_private_slots': [59,60,61,62,63],
               'extract_public_route_registered': True, 'extract_public_route_qualified': False,
               'extract_context_offset': 456, 'extract_install_offset': 464,
+              'extract_actual_lock_wait_retention': True,
+              'extract_wait_chain_slots': [18,59,61,62,63],
+              'extract_wait_uses_actual_hia_reserved_lease': True,
+              'extract_wait_future_drop_after_transport_close': True,
+              'extract_wait_source_registered_but_qualified': False,
               'extract_shared_hub_offset': 400, 'extract_body_image_count': 14,
               'extract_callable_scope_borrow_maximum': 1048672,
               'extract_local_body_only': True, 'extract_remote_qualified': False,

@@ -63,6 +63,13 @@
 .equ PN_SEND_PHASE,448
 .equ PN_WRITE_RESULT,456
 .equ PN_WRITE_KIND,464
+.equ PN_X_ACTIVE,480
+.equ PN_X_DESCRIPTORS,512
+.equ PN_X_CONTINUATIONS,832
+.equ PN_X_CONTEXT,1152
+.equ PN_X_INSTALLED,1160
+.equ PN_X_WORKMAP,1168
+.equ PN_X_OUTMAP,1176
 .macro PM_SAVE
     push rbp
     push rbx
@@ -348,6 +355,8 @@ pump_detach_frontend:
     mov rbx,[r15+8]
     add rbx,18*64
     lea r14,[r15+512+18*64]
+    cmp qword ptr [rbp+PN_X_ACTIVE],0
+    jne pump_detach_extract_wait
     mov rax,[r14]
     or rax,[r14+8]
     jnz public_span_fail
@@ -355,6 +364,23 @@ pump_detach_frontend:
     jne public_span_fail
     cmp qword ptr [rbx+56],64
     jb public_span_fail
+    jmp pump_detach_frontend_admitted
+pump_detach_extract_wait:
+    cmp qword ptr [rbp+PN_X_ACTIVE],1
+    jne public_span_fail
+    cmp qword ptr [r14],1
+    jne public_span_fail
+    cmp qword ptr [r14+8],2
+    jne public_span_fail
+    mov eax,0xffffffdf
+    cmp [rbx+48],rax
+    jne public_span_fail
+    cmp [r14+48],rax
+    jne public_span_fail
+    mov rax,[rbx+56]
+    or rax,[r14+56]
+    jnz public_span_fail
+pump_detach_frontend_admitted:
     lea rdi,[rbp+PN_DESCRIPTOR]
     mov rsi,rbx
     mov ecx,8
@@ -383,6 +409,8 @@ pump_detach_frontend:
     mov rdi,r14
     mov ecx,8
     rep stosq
+    mov rdi,rbp
+    call pump_extract_detach
     mov rdi,rbp
     call pump_trace_detached
     PM_RETURN
@@ -433,6 +461,8 @@ pump_restore_frontend:
     bts qword ptr [r15+72],18
     mov qword ptr [rbp+PN_OWNERSHIP],0
     mov rdi,rbp
+    call pump_extract_restore
+    mov rdi,rbp
     call pump_trace_restored
     PM_RETURN
 
@@ -468,8 +498,12 @@ pump_retire_node:
     cmp eax,8
     jne public_span_fail
 pump_retire_untracked:
+    cmp qword ptr [rbp+PN_X_ACTIVE],0
+    jne public_span_fail
     mov rdi,rbp
     call pump_trace_retired
+    mov rdi,rbp
+    call pump_extract_retire
     lea rbx,[r12+PM_ALL]
 pump_unlink_node:
     mov rax,[rbx]

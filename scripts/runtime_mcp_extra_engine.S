@@ -9,6 +9,7 @@
 .global runtime_grow_create
 .global runtime_grow_destroy
 .global runtime_grow_owned
+.global runtime_grow_suspended
 .global runtime_grow_target
 .equ RG_SLOTS, 64
 .equ RG_ENGINE, 16384
@@ -17,6 +18,7 @@
 .equ RG_CALL, 0xfffffff0
 .equ RG_GROW, 0xffffffd0
 .equ RG_DELIVERY, 0xffffffcd
+.equ RG_WAIT, 0xffffffdf
 
 /* rdi fixed image table, rsi existing config control or zero. */
 runtime_grow_create:
@@ -214,6 +216,19 @@ runtime_grow_destroy_done:
 /* r15 engine; rdi/rsi input borrow; r8 installed slot. Returns full u32.
  * Output remains owned by descriptor +32; full u64 length is descriptor +56. */
 runtime_grow_owned:
+    xor r9d, r9d
+    jmp runtime_grow_entry
+
+/* Only the host-owned retained future may enter this continuation. r9 is
+ * 2=actual lock wake, 3=actual future destruction after transport close. */
+runtime_grow_suspended:
+    cmp r9, 2
+    je runtime_grow_entry
+    cmp r9, 3
+    je runtime_grow_entry
+    mov eax, RG_INVALID
+    ret
+runtime_grow_entry:
     push rbp
     push rbx
     push r12
@@ -222,6 +237,7 @@ runtime_grow_owned:
     sub rsp, 96
     mov [rsp], rdi
     mov [rsp + 8], rsi
+    mov [rsp + 80], r9
     mov rbp, r8
     cmp rbp, RG_SLOTS
     jae runtime_grow_bad_early
@@ -233,6 +249,8 @@ runtime_grow_owned:
     mov rbx, [r15 + 8]
     add rbx, rax
     lea r12, [r15 + rax + 512]
+    cmp qword ptr [rsp + 80], 0
+    jne runtime_grow_resume_suspended
     cmp qword ptr [r12], 0
     jne runtime_grow_bad_early
     cmp qword ptr [r12 + 8], 0
@@ -1327,6 +1345,9 @@ runtime_grow_action_disjoint:
     mov rdi, r14
     add rdi, [r13 + 32]
     call runtime_grow_owned
+runtime_grow_child_returned:
+    cmp eax, RG_WAIT
+    je runtime_grow_suspend
     mov [r12 + 48], rax
     cmp eax, 0xffff0000
     jae runtime_grow_child_error
@@ -1394,6 +1415,152 @@ runtime_grow_complete_action:
     mov edi, 4
     call runtime_grow_trace
     jmp runtime_grow_resume
+
+/* Retain CALL sequence/input and every owned buffer while the child waits.
+ * No HIA completion or delivery marker is written until the child completes. */
+runtime_grow_suspend:
+    mov rdi, rbp
+    mov rsi, [r12 + 24]
+    call runtime_grow_extract_chain
+    test eax, eax
+    jnz runtime_grow_bad
+    mov eax, RG_WAIT
+    mov [r12 + 48], rax
+    mov qword ptr [r12 + 56], 0
+    mov qword ptr [r12 + 8], 2
+    mov [rbx + 48], rax
+    mov qword ptr [rbx + 56], 0
+    jmp runtime_grow_done
+
+runtime_grow_resume_suspended:
+    cmp qword ptr [r12], 1
+    jne runtime_grow_bad_early
+    cmp ebp, 63
+    je runtime_grow_resume_extract_body
+    cmp qword ptr [r12 + 8], 2
+    jne runtime_grow_bad_early
+    mov eax, RG_WAIT
+    cmp [rbx + 48], rax
+    jne runtime_grow_bad_early
+    cmp [r12 + 48], rax
+    jne runtime_grow_bad_early
+    mov rax, [rbx + 56]
+    or rax, [r12 + 56]
+    jnz runtime_grow_bad_early
+    mov rdi, rbp
+    mov rsi, [r12 + 24]
+    call runtime_grow_extract_chain
+    test eax, eax
+    jnz runtime_grow_bad_early
+    cmp qword ptr [rbx + 16], 4096
+    jb runtime_grow_bad_early
+    mov r14, [rbx + 8]
+    test r14, r14
+    jz runtime_grow_bad_early
+    lea r13, [r14 + 256]
+    lea rdx, [rip + runtime_grow_action_magics]
+    mov rax, [rdx + rbp * 8]
+    cmp [r13], rax
+    jne runtime_grow_bad_early
+    mov rax, [r12 + 16]
+    test rax, rax
+    jz runtime_grow_bad_early
+    cmp [rbx + 24], rax
+    jne runtime_grow_bad_early
+    cmp [r14 + 16], rax
+    jne runtime_grow_bad_early
+    cmp [r13 + 8], rax
+    jne runtime_grow_bad_early
+    mov rax, [r13 + 24]
+    or rax, [r13 + 64]
+    or rax, [r13 + 72]
+    or rax, [r13 + 80]
+    or rax, [r13 + 88]
+    or rax, [r13 + 96]
+    or rax, [r13 + 104]
+    jnz runtime_grow_bad_early
+    mov rax, [r12 + 32]
+    cmp [r13 + 32], rax
+    jne runtime_grow_bad_early
+    cmp rax, 4096
+    jb runtime_grow_bad_early
+    cmp rax, [rbx + 16]
+    ja runtime_grow_bad_early
+    mov rcx, [rbx + 16]
+    sub rcx, rax
+    mov rdx, [r12 + 40]
+    cmp [r13 + 40], rdx
+    jne runtime_grow_bad_early
+    cmp rdx, rcx
+    ja runtime_grow_bad_early
+    add rax, rdx
+    mov rdx, [r13 + 48]
+    cmp rdx, 4096
+    jb runtime_grow_bad_early
+    cmp rdx, [rbx + 16]
+    ja runtime_grow_bad_early
+    mov rcx, [rbx + 16]
+    sub rcx, rdx
+    cmp [r13 + 56], rcx
+    ja runtime_grow_bad_early
+    cmp qword ptr [r13 + 56], 32
+    jb runtime_grow_bad_early
+    add rdx, [r13 + 56]
+    cmp rdx, [r13 + 32]
+    jbe runtime_grow_resume_span_disjoint
+    cmp rax, [r13 + 48]
+    ja runtime_grow_bad_early
+runtime_grow_resume_span_disjoint:
+    mov rdi, rbp
+    mov rsi, [r13 + 16]
+    call runtime_grow_target
+    cmp [r12 + 24], rax
+    jne runtime_grow_bad_early
+    mov [rsp + 16], rax
+    mov rdi, r14
+    add rdi, [r12 + 32]
+    mov rsi, [r12 + 40]
+    mov r8, rax
+    mov r9, [rsp + 80]
+    call runtime_grow_suspended
+    jmp runtime_grow_child_returned
+runtime_grow_resume_extract_body:
+    cmp qword ptr [r12 + 8], 0
+    jne runtime_grow_bad_early
+    mov rdx, [rsp + 80]
+    call runtime_extract_body_resume
+    jmp runtime_grow_done
+
+/* This concrete future owns exactly the admitted extract chain. */
+runtime_grow_extract_chain:
+    cmp edi, 18
+    jne runtime_grow_extract_chain_59
+    cmp esi, 59
+    je runtime_grow_extract_chain_ok
+    jmp runtime_grow_extract_chain_bad
+runtime_grow_extract_chain_59:
+    cmp edi, 59
+    jne runtime_grow_extract_chain_61
+    cmp esi, 61
+    je runtime_grow_extract_chain_ok
+    jmp runtime_grow_extract_chain_bad
+runtime_grow_extract_chain_61:
+    cmp edi, 61
+    jne runtime_grow_extract_chain_62
+    cmp esi, 62
+    je runtime_grow_extract_chain_ok
+    jmp runtime_grow_extract_chain_bad
+runtime_grow_extract_chain_62:
+    cmp edi, 62
+    jne runtime_grow_extract_chain_bad
+    cmp esi, 63
+    jne runtime_grow_extract_chain_bad
+runtime_grow_extract_chain_ok:
+    xor eax, eax
+    ret
+runtime_grow_extract_chain_bad:
+    mov eax, RG_INVALID
+    ret
 
 runtime_grow_extract_body_dispatch:
     call runtime_extract_body_owned
