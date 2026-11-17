@@ -1,0 +1,36 @@
+name: Freeze multi-read filesystem input domain
+on:
+  push:
+    branches: [hia-multi-read-fs-inputs-6780-20261117]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  input-author:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout exact input author
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/multi_read_body/v1/filesystem_inputs
+          persist-credentials: false
+      - name: Verify exact source and author concrete inputs without applications
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(sha256sum runtime/qualification/multi_read_body/v1/filesystem_inputs/SOURCE_MANIFEST.json | cut -d ' ' -f 1)" = 86df7415d1356cdf02576367229df863146b69de826b27c9b61d73db8a62cbc3
+          python3 -I -S -B runtime/qualification/multi_read_body/v1/filesystem_inputs/scripts/freeze_inputs.py --output "$RUNNER_TEMP/multi-read-fs-inputs"
+      - name: Preserve complete input author records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: multi-read-fs-inputs-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/multi-read-fs-inputs
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
