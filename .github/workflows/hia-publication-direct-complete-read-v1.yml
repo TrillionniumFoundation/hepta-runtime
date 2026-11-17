@@ -1,0 +1,77 @@
+name: 'Complete retained eight direct Future Drop cases'
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-direct-complete-read-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [old22, old24, old28, new25, new26, new29]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set exact runner paths
+        run: |
+          printf '%s\n' "PD_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_direct_complete_read_v1" "PD_PUBLIC=$GITHUB_WORKSPACE/public-reader/tests/hia_native/publication_duplex_complete_read_v2" "PD_BUILD=$GITHUB_WORKSPACE/build-recipe/tests/hia_native/publication_duplex_build_v3" "PD_DIRECT=$GITHUB_WORKSPACE/direct-recipe/tests/hia_native/publication_direct_build_v3" "PD_PRODUCER=$GITHUB_WORKSPACE/capture-recipe/tests/hia_native/publication_direct_capture_v3" "PD_PREP=$RUNNER_TEMP/direct-complete-prepared" "PD_RETAINED=$RUNNER_TEMP/direct-complete-retained" "PD_CAPTURE=$RUNNER_TEMP/direct-complete-proof" "PD_DRIVER=$RUNNER_TEMP/direct-complete-driver" "PD_EXPORT=$RUNNER_TEMP/direct-complete-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_direct_complete_read_v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: build-recipe
+          ref: f4a348f6661aec513ac63e1807ff697e81704b3e
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: public-reader
+          ref: 61066b30cb274d56b48e7dd24b33fa1aaede0c60
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_complete_read_v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: direct-recipe
+          ref: 3a926ee9d7dd7b87d8154ce685c48fdc8e8764b6
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_direct_build_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: capture-recipe
+          ref: 555936953fe4f5953e1ffd2b414ccbfcf4cc92bd
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_direct_capture_v3
+      - name: Full source original and actual graph admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PD_SOURCE/prepare_direct.py" --capture-recipe "$PD_PRODUCER" --public-reader "$PD_PUBLIC" --build-recipe "$PD_BUILD" --direct-recipe "$PD_DIRECT" --output "$PD_PREP" > "$PD_DRIVER.prepare.stdout" 2> "$PD_DRIVER.prepare.stderr"
+          cat "$PD_DRIVER.prepare.stdout"
+      - name: Complete retained direct commands state file worker and Drop join
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PD_SOURCE/recover_direct.py" --prepared "$PD_PREP" --build-recipe "$PD_BUILD" --direct-recipe "$PD_DIRECT" --public-reader "$PD_PUBLIC" --retained "$PD_RETAINED" --output "$PD_CAPTURE" --role '${{ matrix.role }}' > "$PD_DRIVER.stdout" 2> "$PD_DRIVER.stderr"
+          cat "$PD_DRIVER.stdout"
+      - name: Retain complete success or failure without replay
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PD_CAPTURE"]); r.mkdir(exist_ok=True); p=r/"prepare-records"; p.mkdir(); s=pathlib.Path(os.environ["PD_PREP"]); [shutil.copy2(x,p/x.name) for x in s.glob("*") if x.is_file()]; [shutil.copy2(pathlib.Path(os.environ["PD_DRIVER"]+v),p/("driver"+v)) for v in (".prepare.stdout",".prepare.stderr") if pathlib.Path(os.environ["PD_DRIVER"]+v).exists()]'
+          python3 -I -S -B "$PD_SOURCE/archive.py" pack --source "$PD_SOURCE" --capture "$PD_CAPTURE" --output "$PD_EXPORT" --driver-prefix "$PD_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; [print(p.read_text()) for p in (pathlib.Path(os.environ["PD_DRIVER"]+".prepare.stderr"),pathlib.Path(os.environ["PD_DRIVER"]+".stderr")) if p.exists()]'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-direct-complete-read-v1-${{ matrix.role }}-${{ github.sha }}
+          path: ${{ env.PD_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
