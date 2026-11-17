@@ -1,0 +1,398 @@
+{
+  "schema": "hepta.runtime.binary-base64-decode.final-handoff.v1",
+  "status": "QUALIFIED_PRIVATE_STRICT_BASE64_DECODE",
+  "production": {
+    "commit": "aae2bff44f5a0e8703c1ebed323497b9a87084c5",
+    "tree": "8e56807a7043e948d63dad1445fea2e7a8daa869",
+    "prefix": "qualification/binary_base64_decode/v1/source",
+    "manifest_sha256": "244b747ca05abd7af73f21d9e41b7eaa47a92d89b54208078b3ae27dcd15fb5b",
+    "unique_install_rows": [
+      {
+        "path": "native/binary_base64_decode.hepta",
+        "mode": "100644",
+        "bytes": 85151,
+        "sha256": "408488daa38015a7ebdfcd1e49ff4b7276047a34776398ae0469c196fcdfbf74",
+        "git_blob": "de133d358f12c7ec7ee92b7e83eb56ee3dec93bf"
+      },
+      {
+        "path": "native/binary_base64_decode_composition.json",
+        "mode": "100644",
+        "bytes": 4338,
+        "sha256": "1f0daf1267d547135fa233e8ede0d9efee68002214318f5d70007af24dc3f7bc",
+        "git_blob": "ec41f046fcb2f1aa95aa39dd47e374274a000387"
+      }
+    ],
+    "functions": 19,
+    "instructions": 1971,
+    "blocks": 158,
+    "flat_image": {
+      "bytes": 77104,
+      "sha256": "525770d1fda0500a6b67d2a2e1c6b58b1bb17c9f931df4989988fe81d95a8af7"
+    },
+    "manifest": {
+      "bytes": 729,
+      "sha256": "79b938608b9b483354214fe44c67b2d37259c0b52a1de7648ca4c7c229522a90"
+    },
+    "runtime_image_only_hia": true,
+    "host_python_required": false,
+    "retained_utilities": [
+      "load",
+      "put",
+      "utf8"
+    ],
+    "retained_functions": 3,
+    "inverse_relocation_exact_ir": true
+  },
+  "target": {
+    "commit": "d3d75c30719db966b004756f610007a7c723729e",
+    "path": "src/mcp/runtime/binary_file.py",
+    "function": "base64.b64decode(q['data_base64'], validate=True)",
+    "callers": [
+      "write",
+      "upload_chunk"
+    ],
+    "cpython_source_reference": "python/cpython v3.12.3",
+    "actual_runtime": {
+      "binascii_builtin": true,
+      "files": {
+        "base64": {
+          "bytes": 20602,
+          "mode": 493,
+          "path": "/usr/lib/python3.12/base64.py",
+          "sha256": "65c70b5b6361c6f7a71ecc2df0f55315474b669221dd8d81d7c1ae8d56748ada"
+        },
+        "python": {
+          "bytes": 8020928,
+          "mode": 493,
+          "path": "/usr/bin/python3.12",
+          "sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f"
+        }
+      },
+      "platform": "linux",
+      "version": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]"
+    }
+  },
+  "abi": {
+    "request": "HRCODEC1",
+    "command": 4,
+    "request_header": 24,
+    "response": "HBRDS001",
+    "response_header": 64,
+    "result": "complete result extent, not only header extent",
+    "success_kind": 0,
+    "error_kind": 3,
+    "private_error_classes": {
+      "1": "ValueError",
+      "15": "Error"
+    },
+    "whole_workspace_unchanged": true,
+    "output_tail_unchanged": true,
+    "invalid": "0xffffffff, complete output/workspace unchanged",
+    "capacity": "0xfffffffe, complete output/workspace unchanged",
+    "reachable_input": "valid UTF-8 typed string; framing/invalid UTF-8 are private refusal inputs",
+    "caller_chunk_limit_applied": false,
+    "class_15_requires_explicit_hia_error_rendering": true
+  },
+  "source_author": {
+    "commit": "c8079775d44f02a99c059567033532325d9393d5",
+    "run": 44135442065,
+    "job": 134223587036,
+    "application_calls": 0
+  },
+  "source_preflight": {
+    "initial": {
+      "commit": "2261e04e605747b6bac78248dd122f90b12c2b43",
+      "run": 44138985628,
+      "job": 134236227765,
+      "status": "FAIL",
+      "application_calls": 0,
+      "reason": "binascii is built into the exact interpreter and has no __file__; full prior log retained"
+    },
+    "corrected": {
+      "commit": "8d709e4e0ebe1b225d5ace21e244f02b03d197a6",
+      "run": 44139274598,
+      "job": 134237267851,
+      "status": "PASS",
+      "source_hia_unchanged": true,
+      "result": {
+        "application_calls": 0,
+        "domain": {
+          "base64_decoder_executed": false,
+          "controls": 503,
+          "domain_sha256": "e8c4d359e1e7af0f26fd155a2da14fc1c6a904182eeb84f0f42568956c53a8ea",
+          "expected_semantics_generated": false,
+          "groups": 59,
+          "input_bytes": 11241976,
+          "input_sha256": "448743277308a4907104f63b2c34da98c60b5db8247ff5c52a99d67ac9da27a7",
+          "private_invalid": 228,
+          "private_reference": 275,
+          "semantic_cases": 11918
+        },
+        "runtime": {
+          "binascii_builtin": true,
+          "files": {
+            "base64": {
+              "bytes": 20602,
+              "mode": 493,
+              "path": "/usr/lib/python3.12/base64.py",
+              "sha256": "65c70b5b6361c6f7a71ecc2df0f55315474b669221dd8d81d7c1ae8d56748ada"
+            },
+            "python": {
+              "bytes": 8020928,
+              "mode": 493,
+              "path": "/usr/bin/python3.12",
+              "sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f"
+            }
+          },
+          "platform": "linux",
+          "version": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]"
+        },
+        "source": {
+          "files": 39,
+          "manifest": {
+            "bytes": 9807,
+            "sha256": "244b747ca05abd7af73f21d9e41b7eaa47a92d89b54208078b3ae27dcd15fb5b"
+          },
+          "scope": {
+            "actual_cpython_strict_string_reference": true,
+            "caller_chunk_limit_here": false,
+            "complete_decoded_bytes_and_exact_error_literals": true,
+            "filesystem_calls": false,
+            "host_decoder_python_required": false,
+            "non_ascii_precedes_base64": true,
+            "padding_unused_bits_preserved": true,
+            "private_base64_decode": true,
+            "public_routes": false,
+            "remote_transport": false,
+            "whole_runtime_replaced": false,
+            "workspace_unchanged": true,
+            "write_upload_integrated": false
+          },
+          "target": "d3d75c30719db966b004756f610007a7c723729e"
+        },
+        "status": "SOURCE_ONLY_PASS"
+      }
+    }
+  },
+  "qualification": {
+    "binding": {
+      "commit": "aae2bff44f5a0e8703c1ebed323497b9a87084c5",
+      "manifest_sha256": "244b747ca05abd7af73f21d9e41b7eaa47a92d89b54208078b3ae27dcd15fb5b",
+      "run": 44139541707,
+      "job": 134238232606,
+      "artifact": {
+        "id": 14354076497,
+        "bytes": 168143975,
+        "sha256": "f93a3ef328698d9e99b259434613d39bd7fed896b75bfe1af65c818d2b94081d"
+      },
+      "tar": {
+        "all_logical_files_and_directories_bound": true,
+        "all_object_bytes_and_modes_reread": true,
+        "archive": "evidence.tar.gz",
+        "bytes": 168139627,
+        "directories": 3135,
+        "gate_status": "PASS",
+        "logical_bytes": 5530392858,
+        "logical_files": 29511,
+        "mode": 420,
+        "no_new_application_execution_during_export": true,
+        "schema": "hepta.runtime.binary-base64-decode.complete-archive-read.v1",
+        "sha256": "b892e3e3c731b2817e4a63fa827dcd9e2c2af3292f70f4746c7fec56e390bbb8",
+        "unique_bytes": 445182188,
+        "unique_objects": 2136,
+        "whole_runtime_replaced": false
+      },
+      "source_files": 39,
+      "original_calls": 11918,
+      "native_calls": 12421,
+      "application_replay": false,
+      "schema": "hepta.runtime.binary-base64-decode.uploaded-read-binding.v1",
+      "tree": "8e56807a7043e948d63dad1445fea2e7a8daa869"
+    },
+    "status": "PASS",
+    "comparison": {
+      "controls": {
+        "calls": 503,
+        "capacity": 92,
+        "invalid": 228,
+        "raw_bytes": 403712,
+        "successes": 183
+      },
+      "decoded": 9010,
+      "error_messages": {
+        "Error: Discontinuous padding not allowed": 794,
+        "Error: Excess data after padding": 279,
+        "Error: Incorrect padding": 12,
+        "Error: Invalid base64-encoded string: number of data characters (1) cannot be 1 more than a multiple of 4": 17,
+        "Error: Invalid base64-encoded string: number of data characters (1000001) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (100001) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (10001) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (1001) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (101) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (13) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (4194301) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (5) cannot be 1 more than a multiple of 4": 8,
+        "Error: Invalid base64-encoded string: number of data characters (9) cannot be 1 more than a multiple of 4": 3,
+        "Error: Invalid base64-encoded string: number of data characters (97) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (997) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (9997) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (99997) cannot be 1 more than a multiple of 4": 1,
+        "Error: Invalid base64-encoded string: number of data characters (999997) cannot be 1 more than a multiple of 4": 1,
+        "Error: Leading padding not allowed": 1034,
+        "Error: Only base64 data is allowed": 528,
+        "ValueError: string argument should contain only ASCII characters": 221
+      },
+      "errors": 2908,
+      "groups": 59,
+      "native_cases": 11918,
+      "original_cases": 11918
+    },
+    "native_calls": 12421,
+    "native_full_buffer_bytes": 28193318,
+    "original_full_bytes": 15754704,
+    "producer_processes": 121,
+    "physical_controls": {
+      "controls": [
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "case-count",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "module-image",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "original-result",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "source-byte",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "output-tail",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "workspace-tail",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "wire-input",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "decoded-byte",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "error-class",
+          "rejected": true
+        },
+        {
+          "admitted": true,
+          "changed_files": 0,
+          "name": "relocated-one",
+          "rejected": false
+        },
+        {
+          "admitted": true,
+          "changed_files": 0,
+          "name": "relocated-two",
+          "rejected": false
+        }
+      ],
+      "full_variant_bytes_modes_directories_checked": true,
+      "status": "PHYSICAL_READER_CONTROLS_PASS"
+    },
+    "completed_application_replays": 0
+  },
+  "independent": {
+    "commit": "f1446e2c711a4af45bded45ce7e7cf6d44571dcb",
+    "tree": "771330b48ce4cf20177579c4786ffc6e64a39717",
+    "prefix": "qualification/binary_base64_decode/v1/archive_reader",
+    "source_manifest_sha256": "82cbc1bca94ea86b441d02ea95d1f351aaa8e93d1cecc2a2d18ff32d72310828",
+    "run": 44140077302,
+    "job": 134240157288,
+    "status": "PASS",
+    "artifact": {
+      "id": 14353058847,
+      "bytes": 5080709,
+      "sha256": "9323fa85e1556cbc38572fc6a5c4651d2177e51ae56290d07c387621412bd74f"
+    },
+    "tar": {
+      "all_logical_files_and_directories_bound": true,
+      "all_object_bytes_and_modes_reread": true,
+      "archive": "evidence.tar.gz",
+      "bytes": 5076289,
+      "directories": 15,
+      "gate_status": "PASS",
+      "logical_bytes": 23266923,
+      "logical_files": 56,
+      "mode": 420,
+      "no_new_application_execution_during_export": true,
+      "schema": "hepta.runtime.binary-base64-decode-uploaded-read.complete-archive-read.v1",
+      "sha256": "46a0d4f0d4bfe07d9ecef6f0a9398ad904066079a964156fb09ca5de1ee27c31",
+      "unique_bytes": 23261550,
+      "unique_objects": 51,
+      "whole_runtime_replaced": false
+    },
+    "read_seconds": 48.860447939,
+    "whole_original_files": 29511,
+    "whole_original_logical_bytes": 5530392858,
+    "unchanged_entries": 34857,
+    "guard_probes": 11,
+    "application_hia_executions": 0,
+    "physical_producer_replays": 0
+  },
+  "budgets": {
+    "application_seconds": 60,
+    "pure_seconds": 180,
+    "build_seconds": 900,
+    "workflow_minutes": 15
+  },
+  "scope": {
+    "actual_cpython_strict_string_reference": true,
+    "caller_chunk_limit_here": false,
+    "complete_decoded_bytes_and_exact_error_literals": true,
+    "filesystem_calls": false,
+    "host_decoder_python_required": false,
+    "non_ascii_precedes_base64": true,
+    "padding_unused_bits_preserved": true,
+    "private_base64_decode": true,
+    "public_routes": false,
+    "remote_transport": false,
+    "whole_runtime_replaced": false,
+    "workspace_unchanged": true,
+    "write_upload_integrated": false
+  },
+  "required_followups": [
+    "Integrate after expected-version checking in write, and before offset/size checking in upload_chunk exactly as the target orders them.",
+    "Keep the decoded 1 MiB caller bound outside this decoder.",
+    "Explicitly render binascii.Error's private class 15 in HIA; the older path-error32 leaf does not implicitly admit it.",
+    "Connect the writing/upload owners, lock lifetime, publication and public dispatch before removing legacy routes."
+  ],
+  "source_rows_file": "SOURCE_ROWS.json",
+  "qualification_artifacts_complete": true,
+  "public_route": false,
+  "default_runtime_graph_changed": false,
+  "old_stack_deleted": false
+}
