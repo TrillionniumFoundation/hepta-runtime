@@ -17,6 +17,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parent))
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from common import canonical,decode,require,sha,pin
 from buffer_store import Reader
+from read_private_trace import read as read_trace
 from input_domain import declaration,rows
 from helper_source import prepare
 from qualification_support import native_observations,observations
@@ -90,13 +91,7 @@ def read(capture):
         if role=="original":
             require(diagnostic==b"","original stderr differs")
         else:
-            # Frozen private fixture sets engine+80=stderr+1. Production leaves it zero.
-            # Each unchanged runtime_grow_trace writes exactly 224 bytes.
-            require(len(diagnostic)>0 and len(diagnostic)%224==0,"complete native private trace length")
-            for at in range(0,len(diagnostic),224):
-                frame=diagnostic[at:at+224]
-                require(frame[:8]==b"HRGTR002" and U(frame,8)>0 and U(frame,16)<68 and U(frame,24) in (1,2,3,4),
-                    "private graph diagnostic frame changed")
+            read_trace(diagnostic)
         with gzip.open(lane/"stdout.gz","rb") as stream:stdout=stream.read()
         require(process["full_stdout"]==dict(bytes=len(stdout),sha256=sha(stdout)),"full uncompressed process stdout differs")
         records=[decode(line) for line in (lane/"records.jsonl").read_bytes().splitlines()]

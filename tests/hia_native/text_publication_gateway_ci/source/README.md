@@ -13,3 +13,9 @@ This is a development gateway comparison, not complete public/async qualificatio
 ## v2 fixture/reader correction
 
 The exact v1 invalid empty-host startup failure and native trace-reader rejection remain archived. v2 supplies the same non-contacted registered host shape used by the established Text75 fixture, so the real configuration validator can admit the intended ordinary configured domain. It changes no HIA or original Rust bytes. It reuses the actual v1 fresh Rust build only after every source byte is equal. The already completed absent-config 26-case process capture is relocated byte-for-byte and reread without any HIA/Rust execution. Five other profiles were not reached before startup refusal and now execute with the corrected valid configuration. Native private stderr is fully retained and validated as exact 224-byte HRGTR002 records; original stderr remains empty. All 191 input rows and 180/60 limits are retained.
+
+## Caller v5 / graph v2 successor
+
+All six unchanged domains execute again against the new exact graph. The previous absent capture is retained as historical evidence only; it is not substituted for this successor graph. The original reference binary and its41 unchanged sources remain the actual Rust1.95 build from CI44032621165, admitted by a complete uploaded archive read and exact source byte equality. The same actual original binary is executed for every new comparison.
+
+The private stderr reader now reads the frozen mixed stream:224-byte HRGTR002 engine observations and128-byte HRCNAK02 canonical syscall ACKs. Unknown tags, partial records and inconsistent ACK fields are rejected; neither record type is discarded. Descriptor68 is the fixed caller-owned Forget Scope loan and is not a new tool or public selector.
