@@ -1,0 +1,14 @@
+fn new_id() -> Result<String> {
+	use ring::rand::SecureRandom;
+	let mut entropy = [0u8; 32];
+	ring::rand::SystemRandom::new()
+		.fill(&mut entropy)
+		.map_err(|_| anyhow!("request identity entropy unavailable"))?;
+	let alphabet = b"0123456789abcdef";
+	let mut text = String::with_capacity(64);
+	for byte in entropy {
+		text.push(alphabet[(byte >> 4) as usize] as char);
+		text.push(alphabet[(byte & 15) as usize] as char);
+	}
+	Ok(text)
+}
