@@ -1,0 +1,37 @@
+name: Prepare exact namespace reference feature lock
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-namespace-fingerprint-lock-v1-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/namespace_fingerprint_ci
+            tests/hia_native/namespace_fingerprint_lock_v1
+      - name: Install the exact already declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Resolve actual features without changing target package versions
+        run: |
+          python3 -I -B tests/hia_native/namespace_fingerprint_lock_v1/resolve_lock.py \
+            --source tests/hia_native/namespace_fingerprint_ci \
+            --rust-bin "$(rustup which --toolchain 1.95.0 rustc | xargs dirname)" \
+            --output "$RUNNER_TEMP/lock-preparation" --cargo-home "$RUNNER_TEMP/lock-cargo"
+      - name: Preserve actual lock, source and complete command streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: namespace-fingerprint-lock-${{ github.sha }}
+          path: ${{ runner.temp }}/lock-preparation
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
