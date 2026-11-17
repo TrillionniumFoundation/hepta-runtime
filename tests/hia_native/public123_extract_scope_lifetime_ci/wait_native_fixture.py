@@ -5,7 +5,7 @@ HERE=Path(__file__).resolve().parent
 SHA=lambda raw:hashlib.sha256(raw).hexdigest()
 def source(root,builder):
     root=Path(root).resolve(strict=True)
-    assert SHA((root/'native/runtime_mcp_sources.json').read_bytes())=='dc10afee4618c97ff65bbdc8f62979ee970e194d725ff1f18b85b11ed3a95588'
+    assert SHA((root/'native/runtime_mcp_sources.json').read_bytes())=='a3c1aeb0bfa828cebadbc153d97baeaeb320523b550e5398f2bd182e69ea4c02'
     before=builder.adapter_source(root,private_pump_fixture=True,private_pump_trace=True)
     assert '.equ PM_FIXED_FIXTURE_FDS,1\n' in before and '.equ PM_FIXED_TRACE_FD,1\n' in before
     current=before
@@ -30,7 +30,7 @@ def source(root,builder):
         restored=restored.replace(new,old,1)
     assert restored==before
     proof={'schema':'hepta.runtime.actual-extract-wait-private-carrier.v1',
-        'base_source_commit':'81fa9990d60d57e658709506d03a9c7daaf29a32',
+        'base_source_commit':'320862f03902153b5c804d1b68142126a9c7a606',
         'base_assembly':{'bytes':len(before.encode()),'sha256':SHA(before.encode())},
         'fixture_assembly':{'bytes':len(current.encode()),'sha256':SHA(current.encode())},
         'added_boundary':{'bytes':len(added.encode()),'sha256':SHA(added.encode())},

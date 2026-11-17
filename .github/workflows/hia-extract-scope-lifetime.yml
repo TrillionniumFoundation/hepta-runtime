@@ -57,7 +57,7 @@ jobs:
       - name: Complete source and syntax admission
         run: |
           test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = '${{ github.sha }}'
-          test "$(sha256sum "$SCOPE_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 'ca2275e2489ef108aee94705ebcb9e9a29dbeb12db8a88b71992ff2765a1858c'
+          test "$(sha256sum "$SCOPE_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '57357c02a013093692bcda6a03a4bb43e4ffc029dc7abe062e8cd6ee2fad11e7'
           test "$(sha256sum "$GITHUB_WORKSPACE/native-source/tests/hia_native/public123_extract_wait_fixed_native_ci/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = '20a7176393a2f72c7e01b64aa54a82aa5a3df50831451fd5fa42b77202a61276'
           python3 -I -S -B "$SCOPE_PACKAGE/check_source.py"
       - name: Independently reread both complete retained graph captures without applications
