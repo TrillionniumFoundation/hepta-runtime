@@ -1,4 +1,4 @@
-name: Typed CustomRequest public118 graph and complete build readback
+name: Mixed-opener public118 graph and complete build readback
 on:
   workflow_dispatch:
   push:
@@ -11,7 +11,7 @@ env:
   LC_ALL: C.UTF-8
   PYTHONDONTWRITEBYTECODE: '1'
   PYTHONHASHSEED: '0'
-  PACKAGE_SHA256: 'd1ec5df6b650b24cab69a9f1c3b349d675f3e7789f5322b5706c0c3817762a16'
+  PACKAGE_SHA256: '683963f5be2f86863c4cb7daf67e9d5902bc513f93e2e7cc417bb23dbaeefb6a'
   RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
   build:
@@ -32,7 +32,7 @@ jobs:
             scripts
             authoring
             runtime_support
-            tests/hia_native
+            tests/hia_native/public118_extract_repaired_ci
       - name: Checkout the exact Hepta compiler
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

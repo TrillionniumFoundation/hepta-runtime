@@ -1,0 +1,26 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s) >= 16:
+        if read(s, 0) == QUERY and read(s, 8) == 3:
+            return observed_eof(s, o, w)
+    return retained_entry(s, o, w)
+
+def observed_eof(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s) != 24 or read(s, 16) != 0:
+        return INVALID
+    if length(w) < 65536 or length(o) < 32:
+        return RESOURCE
+    if valid_state(w) == False:
+        return INVALID
+    unselected = get(w, 8) == 0
+    size = choose(unselected, EOF_SIZE, 0)
+    if length(o) < 32 + size:
+        return RESOURCE
+    put(o, 0, EOF_RESULT)
+    put(o, 8, choose(unselected, 1, 0))
+    put(o, 16, choose(unselected, 32, 0))
+    put(o, 24, size)
+    if unselected:
+        eof_literal(o, 32)
+    put(w, 0, STATE_MAGIC)
+    put(w, 8, 3)
+    return 32 + size

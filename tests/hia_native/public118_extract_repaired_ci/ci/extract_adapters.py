@@ -19,7 +19,12 @@ def verify(package):
     author=json.loads((package/"source_origin/AUTHOR.json").read_bytes())
     rows=json.loads((package/"INPUTS.json").read_bytes())["installed_graph_rows"]
     actual={r["path"]:{k:r[k] for k in ("bytes","sha256")} for r in rows}
-    require(len(actual)==436 and actual==author["source_files"],"complete authored graph identity")
+    require(len(actual)==452 and actual==author["source_files"],"complete authored graph identity")
+    require(author["baseline_source"]=="27342064731d701925bfd202cd97d33bdd27bcee"
+        and author["source_binding_sha256"]=="7ec284641736642d5ed4bcfa35cddf027c91e58d45af8e89f4655116ce034845"
+        and author["native_or_rust_executions"]==0,"mixed-opener catalog source provenance")
+    author=json.loads((package/"source_origin/RETAINED_CUSTOM_AUTHOR.json").read_bytes())
+    require(len(author["source_files"])==436,"retained complete typed-custom source")
     require(author["baseline_source"]=="9250e574640dc4a9050f6b7b42275ef9809317bd"
         and author["source_binding_sha256"]=="22c8c5a0fa49b852d9144356b335cccedc5b0b2b37e43bf027336ff5f8762b5f"
         and author["native_or_rust_executed"] is False,"typed CustomRequest source provenance")
@@ -35,4 +40,4 @@ def verify(package):
         and author["runtime_hia_images"]==118 and author["direct_hia_members"]==110
         and author["extract_slots"]==[59,60,61,62,63]
         and author["native_semantics_executed"] is False,"exact source-only extension provenance")
-    return {"status":"EXTRACT_BUILD_SOURCE_ADAPTERS_PASS","files":len(proof["files"]),"graph_files":436,"native_or_rust_executed":False}
+    return {"status":"EXTRACT_BUILD_SOURCE_ADAPTERS_PASS","files":len(proof["files"]),"graph_files":452,"native_or_rust_executed":False}
