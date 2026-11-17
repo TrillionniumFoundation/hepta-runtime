@@ -68,7 +68,10 @@ def generate(source,api,support,inputs,save):
     adapter=(source/'scripts/hia_native_runtime_mcp_adapter.py').read_text()
     anchor="    return adapter+'\\n'+CALLABLE+'\\n'+transport+'\\n'+HELPERS\n"
     assert adapter.count(anchor)==1
-    patch="    adapter=replace(adapter,'finish_ok:\\n    xor ebp, ebp\\n','finish_ok:\\n    mov ebp, dword ptr [r15 + CG_PUBLIC_EOF_EXIT]\\n')\n"
+    patch=("    eof_boundaries=transport.count('\\npublic_span_connection_eof:\\n')\n"
+           "    if eof_boundaries not in (0,1):raise ValueError('duplicate actual G2 EOF boundary')\n"
+           "    if eof_boundaries==1:\n"
+           "        adapter=replace(adapter,'finish_ok:\\n    xor ebp, ebp\\n','finish_ok:\\n    mov ebp, dword ptr [r15 + CG_PUBLIC_EOF_EXIT]\\n')\n")
     adapter=adapter.replace(anchor,patch+anchor,1)
     save('scripts/hia_native_runtime_mcp_adapter.py',adapter.encode())
     proof={'schema':'hepta.runtime.g2-observed-eof-source.v1','baseline':PIN(before),'source':PIN(after),
@@ -82,7 +85,8 @@ def generate(source,api,support,inputs,save):
         'pre_serve_metadata_and_unsupported_version_keep_receive_loop':True,
         'stderr_source_literal':ERROR.decode(),'stderr_literal':PIN(ERROR),'exit_field_config_context':920,
         'host_json_policy':False,'host_calls_fixed_g2_slot':55,'host_retains_config_teardown':True,
-        'old_stdout_write_helper_unchanged':True,'compiler':delta,'aliases':names,
+        'old_stdout_write_helper_unchanged':True,'private_filesystem_fixture_finish_unchanged':True,
+        'eof_exit_load_only_with_actual_g2_boundary':True,'compiler':delta,'aliases':names,
         'native_or_rust_executions':0,'full_sdk_qualified':False,'public_wait_qualified':False}
     save('native/sdk_connection_eof_composition.json',ENC(proof))
     return proof
