@@ -601,7 +601,7 @@ ppt_context:
     mov rdx,[r13+24]
     mov ecx,4096
     mov r8,r15
-    mov r9d,RG_ENGINE
+    mov r9d,OFFSET FLAT:RG_ENGINE
     call pump_trace_emit
     mov rdi,rbp
     call pump_trace_scope
