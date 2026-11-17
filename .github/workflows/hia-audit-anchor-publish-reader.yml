@@ -1,7 +1,7 @@
 name: Read complete audit publisher semantic evidence
 on:
   push:
-    branches: [hia-audit-anchor-publish-reader-v1-6780-20261117]
+    branches: [hia-audit-anchor-publish-reader-v2-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -12,17 +12,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          sparse-checkout: tests/hia_native/audit_anchor_publish_reader_v1
+          sparse-checkout: tests/hia_native/audit_anchor_publish_reader_v2
       - name: Freeze and admit the pure reader
         run: |
           mkdir "$RUNNER_TEMP/publish-reader"
-          cp -a tests/hia_native/audit_anchor_publish_reader_v1 "$RUNNER_TEMP/publish-reader/source"
+          cp -a tests/hia_native/audit_anchor_publish_reader_v2 "$RUNNER_TEMP/publish-reader/source"
           python3 -I -B - <<'PY'
           import hashlib,json,os
           from pathlib import Path
           r=Path(os.environ["RUNNER_TEMP"])/"publish-reader/source"
           raw=(r/"SOURCE.json").read_bytes()
-          assert hashlib.sha256(raw).hexdigest()=="8d29748b694f8287bd1eb0026d49da1ffd7aa77b9b72187be7826bcae3f848a9"
+          assert hashlib.sha256(raw).hexdigest()=="f5625860fbe71b2f5b38d9ec9244ba7cbbf522da35cb72c4f3fba9dc2c6adc68"
           for p,pin in json.loads(raw)["files"].items():
               b=(r/p).read_bytes();assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"]
               if p.endswith(".py"): compile(b,str(r/p),"exec")
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-anchor-publish-reader-v1
+          name: audit-anchor-publish-reader-v2
           path: |
             ${{ runner.temp }}/publish-reader/output
             ${{ runner.temp }}/publish-reader/source
