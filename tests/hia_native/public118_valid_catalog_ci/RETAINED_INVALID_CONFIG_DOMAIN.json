@@ -1,0 +1,64 @@
+{
+  "schema": "hepta.runtime.invalid-private-config-domain-retained.v1",
+  "source": "a38d3a5b670081b9e2046804fcf147456ec97cd9",
+  "run": 44033452696,
+  "source_profile": "3c79f8fb87a341c3b6fcad2284745fccca90306c8449d90494a3834b1781af5e",
+  "artifacts": [
+    {
+      "id": 14306860001,
+      "bytes": 156888867,
+      "sha256": "74fa2917e341d8431c68197dfa546e8d1c11ec939b083bf7c3808332f2fb8f78"
+    },
+    {
+      "id": 14305638760,
+      "bytes": 156905937,
+      "sha256": "58e4e6aaf87dfa7bfa0c70a73bce1b438ac8f414cbc7930d0ae9021ca2ad2513"
+    }
+  ],
+  "full_read": {
+    "source": "21d6e935509c16a50eda3e51f710b75c28acc45c",
+    "run": 44033844696,
+    "source_profile": "ae8b7258ce000d5bd1fd8a1a4e07e6bbc3c3e62990ac43a8dd6f014d439b7421",
+    "artifacts": [
+      {
+        "id": 14306725753,
+        "bytes": 676506,
+        "sha256": "f87e48ff2beefdee877f0ac8655a5896d57de207fbe1fccaa64e5f544adf2099"
+      },
+      {
+        "id": 14305783919,
+        "bytes": 676566,
+        "sha256": "7260bbb5db141b882d976c91612e547a169d678c97bf6d99e39e8a5932e7ca6e"
+      }
+    ]
+  },
+  "actual_outcomes": [
+    {
+      "domain": "catalog-legacy",
+      "exit_code": 78,
+      "complete_stderr": {
+        "bytes": 46,
+        "hex": "72756e74696d6520636f6e666967206d757374206465636c617265206174206c65617374206f6e6520686f73740a",
+        "sha256": "f0899718b857081a32e74d721a2b73b127ba3939f018286509b0f052b23d5c6c",
+        "utf8": "runtime config must declare at least one host\n"
+      },
+      "completed_cases": 0
+    },
+    {
+      "domain": "catalog-modern",
+      "exit_code": 78,
+      "complete_stderr": {
+        "bytes": 46,
+        "hex": "72756e74696d6520636f6e666967206d757374206465636c617265206174206c65617374206f6e6520686f73740a",
+        "sha256": "f0899718b857081a32e74d721a2b73b127ba3939f018286509b0f052b23d5c6c",
+        "utf8": "runtime config must declare at least one host\n"
+      },
+      "completed_cases": 0
+    }
+  ],
+  "original_reference_main_blob": "458a92c5b2939194faa29f3dbdcbcaeb301c2a7a",
+  "original_reference_configuration_blob": "e047c5343397a01f444f6b2786eafc77438bfd1b",
+  "conclusion": "The older fixture installs a serde RuntimeConfig directly through install_for_reference, omitting original CLI validation and state initialization. A no-host configuration is outside the real native startup domain and is correctly rejected. Retain this failed fixture comparison. The successor uses a newly frozen valid administrator configuration and executes a new original input domain; it does not replay or reclassify those old observations.",
+  "production_validation_relaxed": false,
+  "old_original_replayed": false
+}

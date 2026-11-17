@@ -1,0 +1,138 @@
+{
+  "added_compare_lane": "\ndef compare_lane(native_folder,original_folder,source_root,*,native_binary,original_binary,domain,original_source_root=None):\n    native_folder,original_folder=Path(native_folder),Path(original_folder)\n    if not domain.startswith(\"body-\"):\n        return compare(native_folder,original_folder,source_root,native_binary=native_binary,original_binary=original_binary,original_source_root=original_source_root)\n    lanes=[decode(regular(root/\"lane.json\")) for root in (native_folder,original_folder)]\n    for lane,role,root in zip(lanes,(\"native\",\"original\"),(native_folder,original_folder),strict=True):\n        require(lane[\"status\"]==\"PASS\" and lane[\"domain\"]==domain and lane[\"role\"]==role and lane[\"case_count\"]==153 and lane[\"operation_count\"]==175 and lane[\"outer_lane_deadline_seconds\"]==180 and number(lane[\"elapsed_seconds\"],180),\"complete 153-case body lane custody\")\n        require(len(lane[\"cases\"])==153,\"full body case set\")\n        for index,(record,spec) in enumerate(zip(lane[\"cases\"],cases.body_specs(),strict=True)):\n            require(record=={\"index\":index,\"name\":spec[\"name\"],\"operations\":len(spec[\"operations\"]),\"result\":PIN(regular(root/\"cases\"/f\"{index:03d}\"/\"result.json\"))},\"body ordinal/source/result binding\")\n    rows=[]\n    for index in range(153):\n        rows.append(compare(native_folder/\"cases\"/f\"{index:03d}\",original_folder/\"cases\"/f\"{index:03d}\",source_root,native_binary=native_binary,original_binary=original_binary,original_source_root=original_source_root))\n    require(sum(row[\"actual_rows_per_provider\"] for row in rows)==175,\"complete public body operation count\")\n    return {\"status\":\"PASS\",\"domain\":domain,\"actual_cases_per_provider\":153,\"actual_rows_per_provider\":175,\"actual_root_processes\":306,\"pairs\":rows,\"process_launches\":0,\"full_async_cancellation_qualified\":False,\"remote_sftp_qualified\":False,\"whole_runtime_replaced\":False}\n\n",
+  "after": {
+    "bytes": 35916,
+    "sha256": "bf9f14f8579c25f16e3fabd1c5ec0bc125bfc2a754391209ade5318995bf22ef",
+    "git_blob": "9ac36ab2648b9386116175afd69ff72749b0bd3e"
+  },
+  "before": {
+    "bytes": 28731,
+    "git_blob": "0f64add3d9e335d855751559bdf84b010c6ca576",
+    "sha256": "8797809b446cc83aef4a4c93a7825fa0414bbc55b5e0aceb0a2f18009d3a681c"
+  },
+  "inverse_full_bytes_equal": true,
+  "native_or_rust_executed": false,
+  "schema": "hepta.extract-public-reader-adapter.v1",
+  "substitutions": [
+    {
+      "after": "DRIVER_FILES = capture.DRIVER_FILES",
+      "before": "DRIVER_FILES = (\"qualify_public.py\", \"public_cases.py\", \"public_observations.py\",\n    \"capture/capture_common.py\", \"capture/capture_fixture.py\",\n    \"corpus/state_reference/native_observations.py\", \"corpus/state_reference/observations.py\")",
+      "count": 1
+    },
+    {
+      "after": "    def __init__(self, role, poison_labels=()):\n        self.role, self.pending, self.counts = role, bytearray(), {}\n        self.poison_labels=tuple(poison_labels)",
+      "before": "    def __init__(self, role):\n        self.role, self.pending, self.counts = role, bytearray(), {}",
+      "count": 1
+    },
+    {
+      "after": "            if self.poison_labels:self.pending.extend(raw)\n            else:require(raw == b\"\", \"original fixture wrote undeclared diagnostics\")\n            return",
+      "before": "            require(raw == b\"\", \"original fixture wrote undeclared diagnostics\")\n            return",
+      "count": 1
+    },
+    {
+      "after": "seq > 0 and slot < 64 and event in (1, 2, 3, 4)",
+      "before": "seq > 0 and slot < 56 and event in (1, 2, 3, 4)",
+      "count": 1
+    },
+    {
+      "after": "    def finish(self):\n        if self.role==\"original\" and self.poison_labels:\n            raw=bytes(self.pending)\n            for label in self.poison_labels:require(raw.count(label.encode())==1,\"complete declared poison diagnostic\")\n            require(raw.count(b\"panicked at \")==len(self.poison_labels) and b\"RUST_BACKTRACE\" in raw,\"actual caught poison diagnostic framing\")\n            self.counts[\"original_poison_diagnostic_bytes\"]=len(raw);self.pending.clear()\n        require(not self.pending, \"partial final actual private journal\")",
+      "before": "    def finish(self):\n        require(not self.pending, \"partial final actual private journal\")",
+      "count": 1
+    },
+    {
+      "after": "    shared=r[\"shared_binary_relative\"]\n    if shared is None:\n        raw=owner.file(tool[\"captured_file\"])\n    else:\n        require(owner.domain.startswith(\"body-\") and owner.folder.parent.name==\"cases\" and owner.folder.name==f'{r[\"case_index\"]:03d}' and shared==\"../../\"+tool[\"captured_file\"],\"fixed complete shared-binary location\")\n        raw=regular(owner.folder.parent.parent/tool[\"captured_file\"]);owner.artifacts[shared]=PIN(raw)\n    require(PIN(raw) == owner.binary, \"complete captured executable bytes\")",
+      "before": "    require(PIN(owner.file(tool[\"captured_file\"])) == owner.binary, \"complete captured executable bytes\")",
+      "count": 1
+    },
+    {
+      "after": "    argv = [tool[\"path\"], *([\"--fixture-single-session\"] if single_reference_session else [])]\n    config=r[\"runtime_config\"]\n    if config is not None:\n        require(owner.domain.startswith(\"catalog-\") and config[\"path\"]==str(Path(p[\"streams\"][\"stdin\"][\"path\"]).parent.parent/\"runtime-config.json\"),\"fixed original catalog config path\")\n        config_raw=owner.file(\"runtime-config.json\");require(PIN(config_raw)=={k:config[k] for k in (\"bytes\",\"sha256\")} and config_raw==common.canonical(owner.plan[\"runtime_config\"]),\"complete catalog policy input\")\n        if owner.role==\"original\":argv.append(config[\"path\"])",
+      "before": "    argv = [tool[\"path\"], *([\"--fixture-single-session\"] if single_reference_session else [])]",
+      "count": 1
+    },
+    {
+      "after": "        self.legacy = False\n        require(r[\"schema\"] == \"hepta.runtime.extract-public-complete-capture.v1\" and not allow_development_v1,\"complete current extract capture schema\")\n        self.plan=cases.plan(self.domain,Path(r[\"fixture\"]),r[\"case_index\"])\n        require(r[\"input_plan\"]==cases.serial(self.plan) and r[\"case_name\"]==self.plan[\"case_name\"],\"complete frozen input plan\")",
+      "before": "        self.legacy = r[\"schema\"] == \"hepta.runtime.batch-public-complete-capture.v1\"\n        require(r[\"schema\"] == \"hepta.runtime.batch-public-complete-capture.v2\" or\n            (allow_development_v1 and self.legacy), \"complete capture schema\")",
+      "count": 1
+    },
+    {
+      "after": "r[\"completed_cases\"] == r[\"case_count\"] == len(self.plan[\"rows\"])",
+      "before": "r[\"completed_cases\"] == r[\"case_count\"] == capture.DOMAINS[self.domain]",
+      "count": 1
+    },
+    {
+      "after": "(\"public_extract_qualified\", \"full_async_cancellation_qualified\", \"remote_sftp_qualified\", \"whole_runtime_replaced\")",
+      "before": "(\"public_batch_qualified\", \"full_async_cancellation_qualified\", \"remote_sftp_qualified\", \"whole_runtime_replaced\")",
+      "count": 1
+    },
+    {
+      "after": "        spec=self.plan[\"body_spec\"];labels=[]\n        if spec is not None:\n            if spec[\"cache_poison\"]:labels.append(\"test-only original Mutex poisoning event\")\n            if spec[\"history_poison\"]:labels.append(\"test-only original history Mutex poisoning\")\n        self.trace = Traces(self.role,labels)",
+      "before": "        self.trace = Traces(self.role)",
+      "count": 1
+    },
+    {
+      "after": "        self.rows = self.plan[\"rows\"]\n        self.actions(r[\"initial_actions\"],self.plan[\"actions\"])\n        filesystem(r[\"initial_filesystem\"],r[\"fixture\"],r[\"effective_uid\"])",
+      "before": "        self.rows = capture.case_rows(self.domain, Path(r[\"fixture\"]))",
+      "count": 1
+    },
+    {
+      "after": "            elif slot == 32:\n                require(head[\"native_return\"] == 32, \"actual cache setup return\")\n            elif slot==64:\n                require(head[\"native_return\"]==64 and len(body)==64 and body[:8]==b\"HHISTR01\",\"actual original shared-history fixture return\")",
+      "before": "            elif slot == 32:\n                require(head[\"native_return\"] == 32, \"actual cache setup return\")",
+      "count": 1
+    },
+    {
+      "after": "    def begin(self):\n        for item in self.plan[\"initial\"]:\n            raw,wanted,session=item[\"wire\"],item[\"response\"],item[\"session\"]\n            result=self.wire(session,raw,wanted)\n            self.initial.append({\"session\":session,\"input\":PIN(raw),\"exchange\":result[\"exchange\"],\"response\":PIN(result[\"wire\"])})\n            yield result[\"wire\"]\n        require(self.report[\"initial\"]==self.initial,\"complete actual initialization receipts\")\n        seeds=[]\n        for seed in self.plan[\"seeds\"]:\n            seq,body,_=self.exchange(seed[\"owner\"],seed[\"session\"],seed[\"wire\"],slot=32 if seed[\"owner\"]==\"cache\" else 64)\n            if seed[\"owner\"]==\"cache\":require(body==b\"HVCAR001\"+bytes(24),\"actual seed cache bytes\")\n            else:require(len(body)==64 and body[:8]==b\"HHISTR01\",\"actual seed history complete bytes\")\n            seeds.append({\"owner\":seed[\"owner\"],\"session\":seed[\"session\"],\"input\":PIN(seed[\"wire\"]),\"exchange\":seq,\"response\":PIN(body)})\n            yield body\n        require(seeds==self.report[\"initial_seeds\"],\"all initial actual owner seeds\")\n\n    def body_tree(self,full,tree):\n        if self.plan[\"body_spec\"] is None:\n            require(full is None,\"undeclared body-only full-file observation\");return None\n        require(type(full) is dict and set(full)=={\"nodes\",\"hardlink_groups\"},\"complete body snapshot fields\")\n        ordinary={n[\"relative_hex\"]:n for n in tree[0][\"nodes\"] if n[\"relative_hex\"]}\n        require([n[\"path_hex\"] for n in full[\"nodes\"]]==list(ordinary),\"complete body snapshot node set/order\")\n        groups={}\n        for node in full[\"nodes\"]:\n            base=ordinary[node[\"path_hex\"]]\n            require(all(node[k]==base[k] for k in (\"uid\",\"gid\",\"links\")) and node[\"mode\"]==stat.S_IMODE(base[\"mode\"]),\"full snapshot metadata\")\n            fields={\"path_hex\",\"uid\",\"gid\",\"links\",\"mode\",\"kind\"}\n            if stat.S_ISREG(base[\"mode\"]):\n                require(set(node)==fields|{\"content\"} and node[\"kind\"]==\"file\",\"complete full regular body file\")\n                row=node[\"content\"];require(set(row)=={\"path\",\"bytes\",\"sha256\"} and row[\"path\"]==row[\"sha256\"]+\".bin\",\"complete content-addressed full file\")\n                raw=self.file(\"blobs/\"+row[\"path\"]);require(PIN(raw)=={k:row[k] for k in (\"bytes\",\"sha256\")} and len(raw)==base[\"size\"],\"full unreadable/readable file extent\")\n                if \"content_hex\" in base:require(raw==hex_bytes(base[\"content_hex\"]),\"two actual file observations differ\")\n                groups.setdefault((base[\"device\"],base[\"inode\"]),[]).append(node[\"path_hex\"])\n            elif stat.S_ISDIR(base[\"mode\"]):require(set(node)==fields and node[\"kind\"]==\"directory\",\"full body directory\")\n            elif stat.S_ISLNK(base[\"mode\"]):require(set(node)==fields|{\"target_hex\"} and node[\"kind\"]==\"symlink\" and node[\"target_hex\"]==base[\"target_hex\"],\"full body symlink\")\n            else:require(False,\"nonregular body snapshot\")\n        require(full[\"hardlink_groups\"]==sorted(sorted(x) for x in groups.values() if len(x)>1),\"full body hardlink identity groups\")\n        return full\n\n",
+      "before": "    def begin(self):\n        for session in ((1,) if self.domain == \"typed-modern\" else (0, 1)):\n            for raw, wanted in ((cases.encode(cases.initialize(10 + session)) + b\"\\n\", True),\n                    (b'{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\\n', False)):\n                result = self.wire(session, raw, wanted)\n                self.initial.append({\"session\": session, \"input\": PIN(raw), \"exchange\": result[\"exchange\"],\n                    \"response\": PIN(result[\"wire\"])})\n                yield result[\"wire\"]\n        require(self.report[\"initial\"] == self.initial, \"all actual session initialization receipts\")\n\n",
+      "count": 1
+    },
+    {
+      "after": "\"after_actions\", \"recovery\", \"body_full_filesystem\"}",
+      "before": "\"after_actions\", \"recovery\"}",
+      "count": 1
+    },
+    {
+      "after": "            raw = cases.row_wire(row,index,self.plan[\"modern\"])",
+      "before": "            raw = cases.tool_wire(1000 + index, row[\"raw_arguments\"], name=row.get(\"tool\", \"batch_edit\"),\n                modern=self.domain == \"typed-modern\", metadata=row.get(\"metadata\"))",
+      "count": 1
+    },
+    {
+      "after": "            full=event[\"body_full_filesystem\"]\n            if self.plan[\"body_spec\"] is None:require(full is None,\"undeclared full body snapshot\")\n            else:\n                require(type(full) is list and len(full)==2,\"both complete body file observations\")\n                self.body_tree(full[0],snapshots[0]);self.body_tree(full[1],snapshots[1])\n            self.actual_rows += 1\n            yield {\"body_full_filesystem\":full,\"index\": index,",
+      "before": "            self.actual_rows += 1\n            yield {\"index\": index,",
+      "count": 1
+    },
+    {
+      "after": "        self.tree(self.report[\"final_filesystem\"])\n        self.body_tree(self.report[\"final_full_body_filesystem\"],self.report[\"final_filesystem\"])",
+      "before": "        self.tree(self.report[\"final_filesystem\"])",
+      "count": 1
+    },
+    {
+      "after": "\"public_extract_qualified\": False, \"whole_runtime_replaced\": False}",
+      "before": "\"public_batch_qualified\": False, \"whole_runtime_replaced\": False}",
+      "count": 1
+    },
+    {
+      "after": "and left.report[\"effective_uid\"] == right.report[\"effective_uid\"] and left.report[\"case_index\"]==right.report[\"case_index\"], \"actual paired lane/cwd/uid\")\n    require(common.structural_snapshots([left.report[\"initial_filesystem\"]])==common.structural_snapshots([right.report[\"initial_filesystem\"]]),\"complete initial filesystem input\")",
+      "before": "and left.report[\"effective_uid\"] == right.report[\"effective_uid\"], \"actual paired lane/cwd/uid\")",
+      "count": 1
+    },
+    {
+      "after": "            common.structural_snapshots([right.report[\"final_filesystem\"]]) and left.report[\"final_full_body_filesystem\"]==right.report[\"final_full_body_filesystem\"], \"actual final paired state/filesystem\")",
+      "before": "            common.structural_snapshots([right.report[\"final_filesystem\"]]), \"actual final paired state/filesystem\")",
+      "count": 1
+    },
+    {
+      "before": "        if owner.role==\"original\":argv.append(config[\"path\"])",
+      "after": "        if owner.role==\"original\":argv.append(config[\"path\"])\n        else:argv.extend([\"--runtime-config\",config[\"path\"]])",
+      "count": 1
+    },
+    {
+      "before": "def compare(native_folder, original_folder, source_root, *, native_binary, original_binary):",
+      "after": "def compare(native_folder, original_folder, source_root, *, native_binary, original_binary, original_source_root=None):",
+      "count": 1
+    },
+    {
+      "before": "    right = Capture(original_folder, source_root, expected_binary=original_binary)",
+      "after": "    right = Capture(original_folder, source_root if original_source_root is None else original_source_root, expected_binary=original_binary)",
+      "count": 1
+    }
+  ]
+}
