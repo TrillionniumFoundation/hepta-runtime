@@ -19,11 +19,22 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from hia_native_build import NativeBuild, json_bytes, write_new
 from hia_native_runtime_mcp_adapter import combine
+from runtime_mcp_publication_async import combine_async
 from text_editor_create_private_pack import pack
 
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 BASE = 'scripts/config_mcp_grow_adapter.S'
 BOUNDARIES = [
+    'scripts/runtime_mcp_task_storage.S',
+    'scripts/runtime_mcp_task_trace.S',
+    'scripts/runtime_mcp_task_policy.S',
+    'scripts/runtime_mcp_task_worker.S',
+    'scripts/runtime_mcp_task_send.S',
+    'scripts/runtime_mcp_task_teardown.S',
+    'scripts/runtime_batch_body_bridge.S',
+    'scripts/runtime_batch_cache_bridge.S',
+    'scripts/runtime_batch_install.S',
+    'scripts/local_batch_body_callable.S',
     'scripts/runtime_mcp_extra_engine.S',
     'scripts/runtime_mcp_authority_bridge.S',
     'scripts/runtime_text_install.S',
@@ -51,6 +62,7 @@ FIXTURE_BOUNDARIES = ['scripts/runtime_mcp_filesystem_fixture.S',
                       'scripts/runtime_mcp_filesystem_front_fixture.S']
 TRANSPORT = 'scripts/runtime_mcp_transport.S'
 HELPERS = ['scripts/hia_native_runtime_mcp_build.py',
+           'scripts/runtime_mcp_publication_async.py',
            'scripts/hia_native_runtime_mcp_adapter.py',
            'scripts/hia_native_runtime_mcp_pack.py',
            'scripts/public_nine_build.py',
@@ -145,6 +157,18 @@ MEMBERS = [
     ('authority_scope', 'operation_scope', 'standard'),
     ('authority_entropy', 'entropy_policy', 'standard'),
     ('authority_loader', 'authority_loader', 'standard'),
+    ('batch_body', 'batch_write', 'batch-write.v1'),
+    ('batch_lock', 'file_lock_service', 'batch-plan.v1'),
+    ('batch_plan', 'batch_plan', 'batch-plan.v1'),
+    ('batch_verify', 'line_verify', 'batch-plan.v1'),
+    ('batch_apply', 'batch_apply', 'batch-plan.v1'),
+    ('batch_render', 'batch_render', 'batch-write.v1'),
+    ('batch_input', 'batch_plan_input', 'history.v1'),
+    ('batch_params', 'batch_params', 'history.v1'),
+    ('batch_gateway', 'batch_gateway', 'history.v1'),
+    ('batch_call', 'batch_call', 'history.v1'),
+    ('batch_adapter', 'batch_body_adapter', 'history.v1'),
+    ('request_tasks', 'sdk_request_task_registry', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -160,7 +184,65 @@ CONFIG_SYMBOLS = ['owner', 'fs', 'json', 'validation', 'identity', 'mcp',
                   'execution', 'execution_json', 'execution_core', 'value',
                   'publication', 'regex_syntax', 'regex_unicode_data',
                   'regex_hir', 'regex_nfa', 'regex_match', 'regex_controller']
-EXTRA = ['catalog', 'admission', 'gateway', 'client', 'params', 'session_context', 'session_state', 'policy', 'canonical', 'path_source', 'wide_value', 'owner', None, 'workdir_gateway', 'workdir_params', 'workdir_io', 'workdir_render', 'view_error', 'mcp', 'protocol', 'execution', 'fs_gateway', 'fs_params', 'fs_caller', 'fs_io', 'fs_render', 'fs_guard', 'fs_fence', None, None, None, None, None, None, None, 'text_call', None, 'text_gateway', 'text_params', 'tb_adapter', None, None, 'target_message', 'target_request', 'target_bridge', 'historical_protocol', 'text_constructor', None, None, None, None, None, None, 'target_shutdown', 'current_get_info', 'target_connection', None]
+EXTRA = [
+    'catalog',
+    'admission',
+    'gateway',
+    'client',
+    'params',
+    'session_context',
+    'session_state',
+    'policy',
+    'canonical',
+    'path_source',
+    'wide_value',
+    'owner',
+    None,
+    'workdir_gateway',
+    'workdir_params',
+    'workdir_io',
+    'workdir_render',
+    'view_error',
+    'mcp',
+    'protocol',
+    'execution',
+    'fs_gateway',
+    'fs_params',
+    'fs_caller',
+    'fs_io',
+    'fs_render',
+    'fs_guard',
+    'fs_fence',
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    'text_call',
+    None,
+    'text_gateway',
+    'text_params',
+    'tb_adapter',
+    None,
+    None,
+    'target_message',
+    'target_request',
+    'target_bridge',
+    'historical_protocol',
+    'text_constructor',
+    'batch_gateway',
+    'batch_params',
+    'batch_call',
+    'batch_adapter',
+    'batch_input',
+    None,
+    'target_shutdown',
+    'current_get_info',
+    'target_connection',
+    None,
+]
 VIEW = ['view', 'read', 'read', 'read', 'endpoint', 'key', 'scope', 'lease',
         'cache', 'render', 'request_context', 'view_error', 'view_regex',
         'regex_syntax', 'regex_hir', 'regex_nfa', 'regex_match',
@@ -169,6 +251,9 @@ FALSE_FLAGS = ['complete_sdk_frontend', 'whole_view_replaced', 'whole_runtime_re
                'unconstrained_regex_resources_closed', 'full_http_dispatcher_replaced',
                'complete_original_tool_catalog', 'config_execution_capacity_closed',
                'fresh_cold_qualified']
+
+EXTRA.extend([None, 'request_tasks'])
+PORT_PACKAGE_SHA256 = '2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1'
 
 
 def source_check(root: Path) -> dict:
@@ -199,12 +284,29 @@ def source_check(root: Path) -> dict:
     return {'manifest_sha256': sha(raw), 'files': binding['sources']}
 
 
-def adapter_source(root: Path, images=None, *, private_fixture=False) -> str:
+def adapter_source(root: Path, images=None, *, private_fixture=False,
+                   private_pump_fixture=False, private_pump_trace=False) -> str:
     # images is accepted for older evidence-reader callers; this prefix embeds
     # no image bytes. All fixed addresses are filled by the executed HIA packer.
-    transport = '\n'.join((root / name).read_text() for name in FIXTURE_BOUNDARIES) if private_fixture else (root / TRANSPORT).read_text()
-    fixed = combine((root / BASE).read_text(), transport)
-    source = '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed
+    if private_fixture:
+        if private_pump_fixture or private_pump_trace:
+            raise ValueError('private instance carrier cannot expose pump observation descriptors')
+        transport = '\n'.join((root / name).read_text() for name in FIXTURE_BOUNDARIES)
+        fixed = combine((root / BASE).read_text(), transport)
+        carrier = [name for name in BOUNDARIES if not name.startswith('scripts/runtime_mcp_task_')]
+        source = '\n'.join((root / name).read_text() for name in carrier) + '\n' + fixed
+    else:
+        if private_pump_trace and not private_pump_fixture:
+            raise ValueError('fixed trace entry requires the fixed journal fixture')
+        transport = (root / TRANSPORT).read_text()
+        fixed = combine_async(combine((root / BASE).read_text(), transport))
+        if fixed.count('\n_start:\n') != 1:
+            raise ValueError('private fixture capability entry anchor differs')
+        fixed = fixed.replace('\n_start:\n',
+            '\n_start:\n.if PM_FIXED_FIXTURE_FDS\n    call pump_fixture_preflight\n.endif\n', 1)
+        source = ('.equ PM_FIXED_FIXTURE_FDS,' + str(int(private_pump_fixture)) + '\n'
+                  + '.equ PM_FIXED_TRACE_FD,' + str(int(private_pump_trace)) + '\n'
+                  + '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed)
     for name in re.findall(r'^\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):
         if name == '_start':
             continue
@@ -239,7 +341,10 @@ def checked_member(build, root, name, source, profile, manifest):
 
 def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
                       source_root: Path = ROOT, manifests: dict | None = None,
-                      private_fixture: bool = False) -> Path:
+                      private_fixture: bool = False, private_pump_fixture: bool = False,
+                      private_pump_trace: bool = False,
+                      bellman_port_build: Path,
+                      bellman_port_package: Path, bellman_worker_build: Path) -> Path:
     root = source_root.resolve(strict=True)
     binding = source_check(root)
     build = NativeBuild(hepta, output)
@@ -256,6 +361,19 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         row, images[member] = checked_member(build, root, member, source, profile, manifest)
         row['fresh_compile'] = not reused
         members.append(row)
+    package = bellman_port_package.resolve(strict=True)
+    port_build = bellman_port_build.resolve(strict=True)
+    worker_build = bellman_worker_build.resolve(strict=True)
+    sys.path.insert(0, str(package / 'recipe'))
+    from qualify_port import source_evidence
+    from port_build_evidence import verify_build as verify_port_build
+    port_sources = source_evidence(package, PORT_PACKAGE_SHA256)
+    port_evidence = verify_port_build(port_build, package / 'source', worker_build, package / 'worker-source')
+    images['bellman_port'] = port_build / 'bellman-port-packed.elf'
+    component = json.loads((root / 'native/bellman_port_component.json').read_bytes())
+    port_bytes = images['bellman_port'].read_bytes()
+    if component['executable'] != {'bytes': len(port_bytes), 'sha256': sha(port_bytes)}:
+        raise ValueError('fixed Bellman capability differs')
     authority_profile = json.loads((root / 'native/caller_owner_export_profile.json').read_bytes())
     authority_names = ['authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader']
     if len(authority_profile['members']) != 9:
@@ -264,7 +382,9 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         actual = next(row for row in members if row['name'] == authority_name)
         if any(actual[key] != expected[key] for key in ('source_sha256','image_sha256','image_bytes')):
             raise ValueError('fixed authority source/image identity differs: ' + authority_name)
-    assembly = adapter_source(root, private_fixture=private_fixture)
+    assembly = adapter_source(root, private_fixture=private_fixture,
+                              private_pump_fixture=private_pump_fixture,
+                              private_pump_trace=private_pump_trace)
     write_new(folder / 'combined.S', assembly.encode())
 
     def execute(out, label, command, timeout):
@@ -291,22 +411,24 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
     configuration = {symbol: images[member] for symbol, member in zip(CONFIG_SYMBOLS, CONFIG)}
     configuration.update({name: images[name] for name in FENCE})
     extra = {slot: images[member] for slot, member in enumerate(EXTRA) if member is not None}
+    extra[57] = images['bellman_port']
     view_images = {member: images[member] for member in VIEW}
     physical = {}
     for slot, image in extra.items():
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) or len(MEMBERS) != 91
+    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 103
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
                                     view_images, VIEW, execute, root,
                                     create_images=[images[n] for n in ('lc_spec','lc_read','lc_path','lc_mkdir','lc_write','key','cache')],
                                     body_images=[images[n] for n in ('tb_body','lc_read','key','tb_lock','tb_edit','tb_match','tb_history','tb_atomic','cache','tb_render','tb_unlink','view_error')],
-                                    authority_images=[images[n] for n in ('authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader')])
+                                    authority_images=[images[n] for n in ('authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader')],
+                                    batch_images=[images[n] for n in ('batch_body','batch_lock','key','tb_history','tb_atomic','cache','lc_read','tb_lock','tb_edit','batch_plan','endpoint','batch_verify','batch_apply','batch_render')])
     processes.extend(steps)
-    binary = folder / ('filesystem-fixture.elf' if private_fixture else 'runtime-mcp.elf')
+    binary = folder / ('filesystem-fixture.elf' if private_fixture else 'task-pump-fixture.elf' if private_pump_fixture else 'runtime-mcp.elf')
     write_new(binary, elf, 0o500)
     processes.append(execute(folder, 'readelf', ['readelf', '-lW', str(binary)], 30))
     headers = (folder / 'readelf.stdout').read_bytes()
@@ -321,18 +443,38 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         if any(old[key] != value for key, value in row.items()):
             raise ValueError('public member changed during link')
     manifest = folder / 'manifest.json'
-    result = {'schema': 'hepta.runtime.public-nine-build.v1', 'status': 'PASS',
+    result = {'schema': 'hepta.runtime.public-task-batch-build.v1', 'status': 'PASS',
               'members': members, 'physical_images': len(physical),
+              'runtime_hia_images': len(MEMBERS) + 8,
+              'packed_capabilities': {'57': {'sources': port_sources, 'build': port_evidence,
+                  'package': str(package), 'build_root': str(port_build),
+                  'worker_build_root': str(worker_build), 'runtime_hia_images': 8,
+                  'elf_bytes': len(port_bytes), 'elf_sha256': sha(port_bytes)}},
+              'task_registry_slot': 58, 'task_registry_operation15_integrated': not private_fixture,
+              'task_event_pump_integrated': not private_fixture, 'task_event_pump_qualified': False,
+              'private_task_pump_fixture': private_pump_fixture,
+              'fixed_journal_fd': 3 if private_pump_fixture else None,
+              'private_task_pump_trace': private_pump_trace,
+              'fixed_host_trace_fd': 4 if private_pump_trace else None,
+              'journal_fd_caller_owned': private_pump_fixture,
+              'ordinary_notification_drops_handler_future': False,
+              'async_eof_policy_owner': None if private_fixture else 58, 'historical_shutdown53_retained': True,
               'compiler_commit': build.identity['commit'], 'compiler_image_sha256': build.compiler_sha256,
               'source_root': str(root), 'build_root': str(output.resolve()), 'manifest_path': str(manifest.resolve()),
               'elf': binary.name, 'elf_sha256': sha(elf), 'elf_bytes': len(elf),
-              'source_binding': binding, 'boundary_sources': {path: binding['files'][path]['sha256'] for path in [BASE, *(FIXTURE_BOUNDARIES if private_fixture else [TRANSPORT]), *BOUNDARIES]},
+              'source_binding': binding, 'boundary_sources': {path: binding['files'][path]['sha256'] for path in [BASE, *(FIXTURE_BOUNDARIES if private_fixture else [TRANSPORT]), *(name for name in BOUNDARIES if not private_fixture or not name.startswith('scripts/runtime_mcp_task_'))]},
               'assembled_source_sha256': sha(assembly.encode()), 'object_sha256': sha((folder / 'bridge.o').read_bytes()),
               'link': link, 'pack': packed, 'boundary_processes': processes,
               'config_table': CONFIG, 'extra_table': EXTRA, 'view_table': VIEW, 'fence_table': FENCE,
               'private_instance_fixture': private_fixture, 'fixture_sessions': 2 if private_fixture else None,
               'fixture_pseudo_selectors': [33, 34, 41, 57, 58] if private_fixture else [],
               'authority_slot': 56, 'authority_context_offset': 432,
+              'batch_private_slots': [47,48,49,50,51,52],
+              'batch_public_route_registered': True, 'batch_public_route_qualified': False,
+              'batch_gateway_caller_qualified': False, 'batch_callable_scope_borrow_maximum': 1048672,
+              'advertised_catalog_tools': 9,
+              'candidate_extra_registered_tools': ['batch_edit', 'weight_bellman_plan'],
+              'combined_installed102_task_pump_qualified': False,
               'authority_fixed_local_members': ['authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader'],
               'authority_transport_mode': 'stdio', 'authority_public_http_qualified': False,
               'authority_projection_from_current_call': True, 'request_audit_integrated': False,
@@ -364,7 +506,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'target_response_owner_integrated': False,
               'target_text_constructor_integrated': True,
               'target_text_constructor_slot': 46,
-              'target_text_constructor_source_sha256': '3a4c9b40136e0c3dbf3b580e475447e94fb79913f93416a0ec906da6d294996d',
+              'target_text_constructor_source_sha256': '785315acd60821313e4683df67e0b83c59c572d798ad3849efaa3108a9e36d58',
               'target_get_info_integrated': True,
               'target_get_info_slot': 54,
               'target_get_info_source_sha256': 'e2c4829a305593938202a5bf00e6411c5f4ba095167ff6a0603882e32fc5c89c',
@@ -405,8 +547,18 @@ if __name__ == '__main__':
     parser.add_argument('--build', type=Path, required=True)
     parser.add_argument('--name', default='runtime-mcp')
     parser.add_argument('--member-manifests-json', type=Path)
+    parser.add_argument('--bellman-port-build', type=Path, required=True)
+    parser.add_argument('--bellman-port-package', type=Path, required=True)
+    parser.add_argument('--bellman-worker-build', type=Path, required=True)
     parser.add_argument('--private-filesystem-fixture', action='store_true')
+    parser.add_argument('--private-pump-fixture', action='store_true')
+    parser.add_argument('--private-pump-trace', action='store_true')
     args = parser.parse_args()
     reused = json.loads(args.member_manifests_json.read_bytes()) if args.member_manifests_json else None
     print(build_runtime_mcp(args.hepta.resolve(), args.build.resolve(), name=args.name, manifests=reused,
-                            private_fixture=args.private_filesystem_fixture))
+                            private_fixture=args.private_filesystem_fixture,
+                            private_pump_fixture=args.private_pump_fixture,
+                            private_pump_trace=args.private_pump_trace,
+                            bellman_port_build=args.bellman_port_build,
+                            bellman_port_package=args.bellman_port_package,
+                            bellman_worker_build=args.bellman_worker_build))

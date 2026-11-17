@@ -1,7 +1,8 @@
 {
   "actual_target_constructor_compared": false,
   "author_sha256": "322d5822a98cf5fb8278be73f36f284a526cb33cfaa226a80422acd6429486bb",
-  "blocks": 91,
+  "baseline_source_sha256": "3a4c9b40136e0c3dbf3b580e475447e94fb79913f93416a0ec906da6d294996d",
+  "blocks": 102,
   "constants": {
     "CAPACITY": 4294967294,
     "ERROR_SUFFIX_SIZE": 18,
@@ -24,15 +25,17 @@
     "get": "f6",
     "grow": "f1",
     "legacy_prefix": "f3",
+    "ordinary_eight": "f16",
     "put": "f7",
     "quote": "f14",
     "read64": "f8",
     "success_suffix": "f4",
     "utf8": "f15"
   },
-  "functions": 16,
+  "functions": 17,
   "import_changes": [
-    "direct function/call relocation only"
+    "direct function/call relocation only in original stage",
+    "private f14 adds bounded eight-byte ordinary ASCII branch; all original scalar blocks remain exact"
   ],
   "imports": {
     "native/serde_json.hepta": {
@@ -70,10 +73,49 @@
       "source_sha256": "a9dfe2fec3f35b2ef2bcfaec56229007c75301cccb06a96a36691dc361aa0bec"
     }
   },
+  "local_performance_derivation": {
+    "author_sha256": "aa45bb3d83f06ae3349b4679c4b8ef2725602bba2b30f17d47a93d8abb832130",
+    "baseline_sha256": "3a4c9b40136e0c3dbf3b580e475447e94fb79913f93416a0ec906da6d294996d",
+    "blocks": 102,
+    "dsl_sha256": "3f35671b9e0ea0d0e83d7b887e76741620f36f69c3de3e793d507c0cf0be71e7",
+    "entry_unchanged": true,
+    "functions": 17,
+    "native_executed": false,
+    "new_helper": "f16",
+    "ops": 533,
+    "output_and_workspace_behavior": "same cursor and bytes; same capacity/growth; no new state",
+    "quote_restoration": "remove b13/b14 and restore b1.then=b2; complete original f14 AST equal",
+    "scalar_quote_blocks_unchanged": true,
+    "schema": "hepta.text-result-constructor-ordinary-eight.v1",
+    "source_bytes": 30139,
+    "source_sha256": "785315acd60821313e4683df67e0b83c59c572d798ad3849efaa3108a9e36d58",
+    "unchanged_functions": [
+      "f0",
+      "f1",
+      "f2",
+      "f3",
+      "f4",
+      "f5",
+      "f6",
+      "f7",
+      "f8",
+      "f9",
+      "f10",
+      "f11",
+      "f12",
+      "f13",
+      "f15"
+    ],
+    "utf8_unchanged": true
+  },
   "public_publish_qualified": false,
   "schema": "hepta.runtime.text-result-constructor-source.v2",
-  "source_bytes": 27329,
-  "source_sha256": "3a4c9b40136e0c3dbf3b580e475447e94fb79913f93416a0ec906da6d294996d",
+  "source_bytes": 30139,
+  "source_reproduction_stages": [
+    "scripts/author_text_result_constructor.py",
+    "scripts/author_constructor_fast.py"
+  ],
+  "source_sha256": "785315acd60821313e4683df67e0b83c59c572d798ad3849efaa3108a9e36d58",
   "target_application_commit": "d3d75c30719db966b004756f610007a7c723729e",
   "target_rmcp": "3.9.0",
   "target_rmcp_commit": "5596a8a0bba2a1ec5519cc855cdadf23e4dcecdc",

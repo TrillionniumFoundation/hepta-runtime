@@ -624,6 +624,7 @@ def sources() -> dict:
         "hia_native_batch_edit_params_pipeline.py",
         "hia_native_batch_plan_input_build.py", "hia_native_batch_plan_input_qualification.py",
         "hia_native_batch_plan_input_pipeline.py",
+        "author_input_fixed.py", "performance_baselines/batch_plan_input.hepta",
         "hia_native_batch_apply_build.py", "hia_native_batch_apply_qualification.py",
         "hia_native_batch_diff_build.py", "hia_native_batch_diff_qualification.py",
         "hia_native_batch_diff_pipeline.py",

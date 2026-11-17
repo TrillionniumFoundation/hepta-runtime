@@ -2604,5 +2604,332 @@ class QualificationReportingTests(unittest.TestCase):
         group_kill.assert_called_once_with(12345, probe.signal.SIGKILL)
 
 
+class ShellProcessRetainedRegistryTests(unittest.TestCase):
+    """The aggregate must read sealed source bytes without producer caches."""
+
+    def setUp(self):
+        import importlib
+        import io
+        import tarfile
+        self.reference = importlib.import_module("hia_native_shell_process_reference")
+        self.folder = tempfile.TemporaryDirectory(prefix="hia-shell-registry-")
+        self.addCleanup(self.folder.cleanup)
+        self.root = Path(self.folder.name)
+        self.output = self.root / "captured"
+        self.output.mkdir()
+        self.producer = self.root / "producer"
+        self.label = "fixture-1.0.0"
+        self.source = self.producer / "registry/src/index" / self.label
+        self.source.mkdir(parents=True)
+        self.archive = self.producer / "registry/cache/index" / (self.label + ".crate")
+        self.archive.parent.mkdir(parents=True)
+        self.files = {"Cargo.toml": b'[package]\nname="fixture"\nversion="1.0.0"\n',
+                      "src/lib.rs": b"pub fn value() -> u32 { 7 }\n"}
+        def packed(extra=()):
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+                for name, raw, kind in [(self.label + "/" + key, value, "file")
+                                        for key, value in self.files.items()] + list(extra):
+                    member = tarfile.TarInfo(name)
+                    if kind == "symlink":
+                        member.type = tarfile.SYMTYPE
+                        member.linkname = "Cargo.toml"
+                        tar.addfile(member)
+                    elif kind == "hardlink":
+                        member.type = tarfile.LNKTYPE
+                        member.linkname = self.label + "/Cargo.toml"
+                        tar.addfile(member)
+                    elif kind == "fifo":
+                        member.type = tarfile.FIFOTYPE
+                        tar.addfile(member)
+                    else:
+                        member.size = len(raw)
+                        tar.addfile(member, io.BytesIO(raw))
+            return buffer.getvalue()
+        self.packed = packed
+        self.archive.write_bytes(packed())
+        for name, raw in self.files.items():
+            target = self.source / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+        (self.source / ".cargo-ok").write_bytes(b'{"v":1}')
+        package = {"name": "fixture", "version": "1.0.0", "source": "registry+fixture",
+                   "manifest_path": str(self.source / "Cargo.toml")}
+        self.metadata = {"packages": [package]}
+        self.provenance = {"registry_dependencies": [{key: package[key]
+            for key in ("name", "version", "source")} | {"checksum": self.reference.sha(self.archive.read_bytes())}]}
+        self.baseline = self.reference.registry_sources(self.metadata, self.provenance, self.output, True)
+        self.receipt = self.output / "registry-source-receipt.json"
+        self.write_receipt(self.baseline)
+
+    def write_receipt(self, value):
+        self.receipt.write_text(json.dumps(value, sort_keys=True, indent=2) + "\n")
+
+    def read_retained(self):
+        return self.reference.retained_registry_sources(self.metadata, self.provenance, self.output)
+
+    def test_live_before_after_scan_and_absent_producer_cache(self):
+        import shutil
+        self.assertEqual(self.reference.registry_sources(self.metadata, self.provenance, self.output, False),
+                         self.baseline)
+        (self.source / "src/lib.rs").write_bytes(b"changed original source")
+        with self.assertRaisesRegex(ValueError, "actual cached crate source changed"):
+            self.reference.registry_sources(self.metadata, self.provenance, self.output, False)
+        (self.source / "src/lib.rs").write_bytes(self.files["src/lib.rs"])
+        shutil.rmtree(self.producer)
+        with self.assertRaisesRegex(ValueError, "missing source"):
+            self.reference.registry_sources(self.metadata, self.provenance, self.output, False)
+        reads = []
+        original = self.reference.owned
+        def owned(root, relative):
+            actual = Path(root) / relative
+            self.assertTrue(actual.is_relative_to(self.output), "reader opened producer/foreign bytes")
+            reads.append(actual.relative_to(self.output).as_posix())
+            return original(root, relative)
+        before = {path.relative_to(self.output).as_posix(): path.read_bytes()
+                  for path in self.output.rglob("*") if path.is_file()}
+        with patch.object(self.reference, "owned", side_effect=owned), \
+             patch.object(self.reference.subprocess, "Popen", side_effect=AssertionError("reader executed a process")):
+            self.assertEqual(self.read_retained(), self.baseline)
+        self.assertEqual(set(reads), {"registry-source-receipt.json", "dependency-archives/fixture-1.0.0.crate"})
+        self.assertEqual(before, {path.relative_to(self.output).as_posix(): path.read_bytes()
+                                  for path in self.output.rglob("*") if path.is_file()})
+
+    def test_full_retained_receipt_and_bytes_refuse_rehashed_mutations(self):
+        import copy
+        mutations = [
+            ("source bytes", lambda r: r["packages"][0]["source_files"]["src/lib.rs"].update(sha256="0" * 64)),
+            ("source extent", lambda r: r["packages"][0]["source_files"]["src/lib.rs"].update(bytes=1)),
+            ("missing source", lambda r: r["packages"][0]["source_files"].pop("src/lib.rs")),
+            ("extra source", lambda r: r["packages"][0]["source_files"].update(extra={"bytes": 0, "sha256": "0" * 64})),
+            ("producer path", lambda r: r["packages"][0].update(source_path="/another/producer")),
+            ("archive path", lambda r: r["packages"][0].update(archive_cache_path="/another/cache")),
+            ("retained path", lambda r: r["packages"][0]["retained_archive"].update(path="../outside.crate")),
+            ("original checksum", lambda r: r["packages"][0].update(original_lock_checksum="0" * 64)),
+            ("generated marker", lambda r: r["packages"][0]["cargo_generated_files"][".cargo-ok"].update(sha256="0" * 64)),
+            ("missing generated marker", lambda r: r["packages"][0]["cargo_generated_files"].pop(".cargo-ok")),
+            ("unretained generated file", lambda r: r["packages"][0]["cargo_generated_files"].update({".cargo-checksum.json": {"bytes": 0, "sha256": "0" * 64}})),
+            ("summary count", lambda r: r.update(source_file_count=1)),
+            ("package count", lambda r: r.update(package_count=2)),
+            ("scope", lambda r: r.update(new_or_modified_registry_source_used=True)),
+            ("unknown field", lambda r: r["packages"][0].update(unregistered=True)),
+        ]
+        for label, mutate in mutations:
+            changed = copy.deepcopy(self.baseline)
+            mutate(changed)
+            self.write_receipt(changed)
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                self.read_retained()
+            self.write_receipt(self.baseline)
+        retained = self.output / "dependency-archives" / self.archive.name
+        raw = retained.read_bytes()
+        retained.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            self.read_retained()
+        retained.write_bytes(raw)
+        self.assertEqual(self.read_retained(), self.baseline)
+
+    def test_archive_inventory_refuses_unregistered_link_and_nonregular_sources(self):
+        import os
+        retained = self.output / "dependency-archives" / self.archive.name
+        raw = retained.read_bytes()
+        foreign = self.root / "unadmitted.crate"
+        foreign.write_bytes(raw)
+        for kind in ("symlink", "hardlink", "fifo", "missing"):
+            retained.unlink()
+            if kind == "symlink": retained.symlink_to(foreign)
+            if kind == "hardlink": os.link(foreign, retained)
+            if kind == "fifo": os.mkfifo(retained)
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                self.read_retained()
+            if kind != "missing": retained.unlink()
+            retained.write_bytes(raw)
+        extra = retained.parent / "unregistered.crate"
+        extra.write_bytes(raw)
+        with self.assertRaisesRegex(ValueError, "unregistered ordinary"):
+            self.read_retained()
+        extra.unlink()
+        self.assertEqual(self.read_retained(), self.baseline)
+
+    def test_archive_members_remain_exact_even_with_rehashed_outer_archive(self):
+        retained = self.output / "dependency-archives" / self.archive.name
+        baseline = retained.read_bytes()
+        cases = [(self.label + "/src/lib.rs", b"duplicate", "file"),
+                 (self.label + "/../outside", b"x", "file"),
+                 ("/" + self.label + "/outside", b"x", "file"),
+                 (self.label + "//outside", b"x", "file"),
+                 (self.label + "/./outside", b"x", "file"),
+                 ("other-1.0.0/outside", b"x", "file"),
+                 (self.label + "/link", b"", "symlink"),
+                 (self.label + "/link", b"", "hardlink"),
+                 (self.label + "/fifo", b"", "fifo")]
+        for member in cases:
+            changed = self.packed([member])
+            retained.write_bytes(changed)
+            self.provenance["registry_dependencies"][0]["checksum"] = self.reference.sha(changed)
+            with self.subTest(member=member), self.assertRaisesRegex(ValueError, "archive (path|contains|member)|duplicate retained"):
+                self.read_retained()
+        retained.write_bytes(baseline)
+        self.provenance["registry_dependencies"][0]["checksum"] = self.reference.sha(baseline)
+        self.assertEqual(self.read_retained(), self.baseline)
+
+
+
+
+import ast
+import copy
+import importlib.util
+import json
+from pathlib import Path
+import sys
+import types
+import unittest
+from unittest.mock import Mock, patch
+
+SHELL_OUTCOME_SOURCE = ROOT / "scripts/compare_hia_runtime_rust.py"
+
+
+def load_shell_outcome_functions():
+    tree = ast.parse(SHELL_OUTCOME_SOURCE.read_text())
+    names = ("shell_outcome_original_evidence", "shell_output_original_evidence",
+             "shell_foreground_original_evidence")
+    nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
+    if {node.name for node in nodes} != set(names):
+        raise AssertionError("complete aggregate reader functions not found")
+    module = ast.Module(body=[ast.ImportFrom(module="__future__",
+        names=[ast.alias(name="annotations")], level=0), *nodes], type_ignores=[])
+    ast.fix_missing_locations(module)
+    scope = {"json": json, "Path": Path, "ROOT": Path("/frozen/runtime")}
+    exec(compile(module, str(SHELL_OUTCOME_SOURCE), "exec"), scope)
+    return scope
+
+
+class ShellOutcomeJsonReceiptTests(unittest.TestCase):
+    def setUp(self):
+        self.ns = load_shell_outcome_functions()
+        self.output = Path("/frozen/capture")
+        self.rustc = Path("/frozen/toolchain/bin/rustc")
+        self.digest = "a" * 64
+        self.original = {"reference_build": {"report_sha256": self.digest}}
+        self.report = {"modules": {key: {"manifest": key + "/manifest.json"}
+            for key in ("shell_outcome", "shell_output_io", "shell_foreground")},
+            "original_rust_comparisons": {"shell_process": copy.deepcopy(self.original)}}
+        path = ROOT / "tests/hia_native/shell_outcome_cases.py"
+        spec = importlib.util.spec_from_file_location("frozen_outcome_cases", path)
+        cases = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cases)
+        self.counts = cases.counts()
+        self.outcome = {"comparison": {"counts": self.counts,
+            "requests": {"bytes": 123, "sha256": "b" * 64}},
+            "original_rust_compared": True,
+            "fresh_original_rust_build_qualified": True,
+            "reference_report_sha256": self.digest}
+        self.output_io = {"paired_real_io_cases": 6,
+            "original_rust_compared": True, "fresh_original_rust_build_qualified": True,
+            "native_phase_cases_added_by_reference": 0, "actual_native_process_wait": False,
+            "reference_report_sha256": self.digest,
+            "original_io": {"report": {"sha256": "c" * 64}}}
+        self.foreground = {"paired_real_foreground_cases": 6,
+            "original_rust_compared": True, "fresh_original_rust_build_qualified": True,
+            "actual_native_process_wait": True, "native_phase_cases_added_by_reference": 0,
+            "original_processes_added_by_comparison": 0,
+            "reference_report_sha256": self.digest, "original_io_report_sha256": "c" * 64}
+        self.readers = {name: Mock(return_value=value) for name, value in
+            (("outcome", self.outcome), ("output", self.output_io), ("foreground", self.foreground))}
+        self.modules = {"hia_native_shell_" + name + "_qualification":
+            types.SimpleNamespace(read_evidence=reader) for name, reader in self.readers.items()}
+        self.ns.update({
+            "shell_process_original_evidence": Mock(return_value=self.original),
+            "shell_completed_process": Mock(return_value={
+                "command": ["frozen-reference"], "exit_code": 0, "timeout_seconds": 300,
+                "stdout_sha256": "d" * 64, "stderr_sha256": "e" * 64}),
+            "shell_retained_files": Mock(return_value={"retained.bin": "f" * 64}),
+            "executable": lambda path: Path(path),
+        })
+        for kind in ("outcome", "output", "foreground"):
+            self.ns["shell_" + kind + "_original_command"] = Mock(return_value=["frozen-reference"])
+        self.module_patch = patch.dict(sys.modules, self.modules)
+        self.module_patch.start()
+        self.addCleanup(self.module_patch.stop)
+
+    def call(self, kind="outcome"):
+        return self.ns["shell_" + kind + "_original_evidence"](
+            self.output, self.report, self.rustc)
+
+    def checkpoint(self, value):
+        return json.loads(json.dumps(value, sort_keys=True, allow_nan=False))
+
+    def test_complete_real_domain_survives_json_checkpoint(self):
+        self.assertEqual(self.counts["semantic_cases"], 78083)
+        self.assertEqual(set(self.counts["operations"]), {1, 2, 3})
+        self.assertNotEqual(self.counts, self.checkpoint(self.counts))
+        actual = self.call()
+        self.assertEqual(actual, self.checkpoint(actual))
+        self.assertEqual(actual["comparison"], self.checkpoint(self.outcome))
+        self.assertEqual(actual["comparison"]["comparison"]["counts"]["operations"],
+                         {"1": 73865, "2": 504, "3": 3714})
+        self.assertFalse(actual["whole_runtime_replaced"])
+        self.assertFalse(actual["production_activated"])
+        self.assertEqual(self.readers["outcome"].call_count, 1)
+
+    def test_reloaded_outcome_is_accepted_by_both_dependent_readers(self):
+        self.report["original_rust_comparisons"]["shell_outcome"] = self.checkpoint(self.call())
+        output = self.call("output")
+        self.report["original_rust_comparisons"]["shell_output_io"] = self.checkpoint(output)
+        foreground = self.call("foreground")
+        self.assertTrue(foreground["original_rust_compared"])
+        self.assertEqual(self.readers["output"].call_count, 2)
+        self.assertEqual(self.readers["foreground"].call_count, 1)
+
+    def test_changed_checkpoint_fields_remain_refused(self):
+        original = self.checkpoint(self.call())
+        changes = (
+            lambda value: value["comparison"]["comparison"]["counts"]["operations"].update({"1": 73864}),
+            lambda value: value["comparison"]["comparison"]["counts"].update({"semantic_cases": 78082}),
+            lambda value: value["comparison"]["comparison"]["requests"].update({"sha256": "0" * 64}),
+            lambda value: value["retained_files_sha256"].update({"retained.bin": "0" * 64}),
+            lambda value: value["completed_process"].update({"stdout_sha256": "0" * 64}),
+            lambda value: value["completed_process"].update({"command": ["another-reference"]}),
+            lambda value: value.update({"production_activated": True}),
+            lambda value: value.pop("retained_files_sha256"),
+        )
+        for change in changes:
+            with self.subTest(change=change):
+                changed = copy.deepcopy(original)
+                change(changed)
+                self.report["original_rust_comparisons"]["shell_outcome"] = changed
+                with self.assertRaisesRegex(ValueError, "fresh process and complete outcome evidence"):
+                    self.call("output")
+        self.readers["output"].assert_not_called()
+        self.report["original_rust_comparisons"]["shell_outcome"] = original
+        self.assertTrue(self.call("output")["original_rust_compared"])
+
+    def test_strong_reader_rejection_is_preserved(self):
+        self.readers["outcome"].side_effect = ValueError("complete physical byte mismatch")
+        with self.assertRaisesRegex(ValueError, "complete physical byte mismatch"):
+            self.call()
+        self.ns["shell_retained_files"].assert_not_called()
+
+    def test_incomplete_domain_or_wrong_reference_is_refused(self):
+        for key, value in (("semantic_cases", 78082), ("reference", "0" * 64)):
+            with self.subTest(key=key):
+                changed = copy.deepcopy(self.outcome)
+                if key == "semantic_cases":
+                    changed["comparison"]["counts"]["semantic_cases"] = value
+                else:
+                    changed["reference_report_sha256"] = value
+                self.readers["outcome"].return_value = changed
+                with self.assertRaisesRegex(ValueError, "complete original outcome byte projection"):
+                    self.call()
+        self.ns["shell_retained_files"].assert_not_called()
+
+    def test_reference_binding_is_checked_before_outcome_reader(self):
+        self.report["original_rust_comparisons"]["shell_process"]["reference_build"]["report_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "complete fresh shell reference"):
+            self.call()
+        self.readers["outcome"].assert_not_called()
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

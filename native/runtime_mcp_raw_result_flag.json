@@ -1,0 +1,26 @@
+{
+  "accepted_is_error_values": [
+    0,
+    1
+  ],
+  "accepted_kind": 3,
+  "after_sha256": "5155e172a408cf2176a327b74f8b9216536f969440e45c418d2c951277b2a67f",
+  "all_hia_and_external_port_source_bytes_unchanged": true,
+  "author_sha256": "77d332008b1a356142142917fa94745a425e5406a8109c36fec3680e586872d3",
+  "before_sha256": "2e49122eaf5ba44bf4daf622cdb74f2a241d2e90ccfedb4440f7e8cd154890c0",
+  "before_source_binding_sha256": "91aa73a08d479e42eec83852bb341b5b59faa7b62c3a3ddbd634f1243a432fe3",
+  "body_length_must_remain_zero": true,
+  "complete_wire_is_copied_without_new_serialization": true,
+  "exact_reversible_change": {
+    "after": "pump_send_raw_arguments:\n    cmp qword ptr [r13+32],0\n    jne public_span_fail\n    /* Kind3 already contains the complete typed result wire, including its\n     * error flag. Admit either boolean; copy the existing wire unchanged. */\n    cmp qword ptr [r13+40],1\n    ja public_span_fail\n",
+    "before": "pump_send_raw_arguments:\n    cmp qword ptr [r13+32],0\n    jne public_span_fail\n    cmp qword ptr [r13+40],0\n    jne public_span_fail\n"
+  },
+  "fresh_ci_qualified": false,
+  "frontend_boolean_and_extent_checks_unchanged": true,
+  "full_async_qualified": false,
+  "full_public_qualified": false,
+  "kind_0_1_2_4_and_actual_send_ack_lifetimes_unchanged": true,
+  "new_source_executed": false,
+  "path": "scripts/runtime_mcp_task_send.S",
+  "schema": "hepta.runtime.task-pump.complete-result-error-flag.v1"
+}

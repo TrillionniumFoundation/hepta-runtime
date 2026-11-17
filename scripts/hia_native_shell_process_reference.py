@@ -518,6 +518,94 @@ def registry_sources(metadata, provenance, output, retain=False):
             "source_file_count":sum(len(p["source_files"]) for p in packages),
             "new_or_modified_registry_source_used":False}
 
+def retained_registry_sources(metadata, provenance, output):
+    """Read all captured original crate bytes without opening producer caches.
+
+    The live producer still compares its expanded registry tree to these exact
+    archives before and after the build. Its paths remain immutable provenance;
+    a later reader obtains every original source byte from the retained .crate.
+    The fixed Cargo 1.95 extraction marker is metadata, not compiled source.
+    Any other unretained generated marker is refused, never silently ignored.
+    """
+    captured=decode(read(output,"registry-source-receipt.json"))
+    require(type(captured) is dict and set(captured)=={
+        "schema","packages","package_count","source_file_count","new_or_modified_registry_source_used"},
+        "retained registry receipt fields differ")
+    require(captured["schema"]=="hepta.runtime.shell-process-registry-source-check.v1"
+            and captured["new_or_modified_registry_source_used"] is False,
+            "retained registry receipt scope differs")
+    expected={(p["name"],p["version"],p["source"]):p for p in provenance["registry_dependencies"]}
+    selected=[]
+    seen=set()
+    for package in sorted(metadata["packages"],key=lambda p:(p["name"],p["version"])):
+        key=(package["name"],package["version"],package.get("source"))
+        if key not in expected:
+            continue
+        require(key not in seen,"duplicate selected registry package")
+        seen.add(key)
+        selected.append((package,expected[key]))
+    require(seen==set(expected),"retained registry dependency closure incomplete")
+    require(type(captured["packages"]) is list and len(captured["packages"])==len(selected),
+            "retained registry package count differs")
+    archives=output/"dependency-archives"
+    ordinary_source_inventory(archives,[p["name"]+"-"+p["version"]+".crate" for p,_ in selected])
+    packages=[]
+    for (package,locked),claimed in zip(selected,captured["packages"]):
+        require(type(claimed) is dict and set(claimed)=={
+            "package","original_lock_checksum","source_path","archive_cache_path",
+            "retained_archive","source_files","cargo_generated_files",
+            "every_source_file_matches_original_archive"},"retained registry package fields differ")
+        label=package["name"]+"-"+package["version"]
+        manifest=Path(package["manifest_path"])
+        source=manifest.parent
+        require(manifest.is_absolute() and ".." not in manifest.parts
+                and manifest.name=="Cargo.toml" and source.name==label
+                and source.parent.parent.name=="src","unexpected captured Cargo registry source layout")
+        archive=source.parent.parent.parent/"cache"/source.parent.name/(label+".crate")
+        retained=archives/(label+".crate")
+        archive_raw=read(archives,label+".crate")
+        exact(sha(archive_raw),locked["checksum"],"retained original crate checksum differs")
+        files={}
+        members=set()
+        with tarfile.open(fileobj=io.BytesIO(archive_raw),mode="r:gz") as tar:
+            for member in tar:
+                name=member.name.removesuffix("/") if member.isdir() else member.name
+                parts=name.split("/")
+                require(name and not name.startswith("/") and "\\" not in name
+                        and all(part not in ("",".","..") for part in parts)
+                        and parts[0]==label,"retained registry archive path differs")
+                require(name not in members,"duplicate retained registry archive member")
+                members.add(name)
+                require(not member.issym() and not member.islnk(),"retained registry archive contains a link")
+                if member.isdir():
+                    continue
+                require(member.isfile() and len(parts)>1,"retained registry archive member is not an ordinary source")
+                relative="/".join(parts[1:])
+                stream=tar.extractfile(member)
+                require(stream is not None,"retained registry archive source unreadable")
+                raw=stream.read()
+                require(len(raw)==member.size,"retained registry archive source extent differs")
+                files[relative]=pin(raw)
+        require(files and "Cargo.toml" in files,"retained registry archive manifest missing")
+        generated=claimed["cargo_generated_files"]
+        require(type(generated) is dict and set(generated)== {".cargo-ok"},
+                "unretained Cargo generated source is not admitted")
+        generated={name:pin(b'{"v":1}') for name in generated}
+        row={"package":package_identity(package),"original_lock_checksum":locked["checksum"],
+             "source_path":str(source),"archive_cache_path":str(archive),
+             "retained_archive":{"path":str(retained.relative_to(output)),**pin(archive_raw)},
+             "source_files":files,"cargo_generated_files":generated,
+             "every_source_file_matches_original_archive":True}
+        exact(claimed,row,"retained original registry source record differs: "+label)
+        packages.append(row)
+    result={"schema":"hepta.runtime.shell-process-registry-source-check.v1",
+            "packages":packages,"package_count":len(packages),
+            "source_file_count":sum(len(p["source_files"]) for p in packages),
+            "new_or_modified_registry_source_used":False}
+    exact(captured,result,"retained registry summary differs")
+    return result
+
+
 def completed_process(output, label, row, command, cwd, timeout, input_relative=None):
     require(row.get("label")==label and row.get("passed") is True
             and type(row.get("exit_code")) is int and row["exit_code"]==0
@@ -545,7 +633,7 @@ def completed_process(output, label, row, command, cwd, timeout, input_relative=
     return row
 
 def read_evidence(runtime: Path, output: Path, rustc: Path | None = None, cargo: Path | None = None):
-    """Strong fresh-host reader; no CI-path relocation or absent-tool shortcut."""
+    """Strong captured-source reader; exact tools and invocation records remain required."""
     runtime=Path(runtime).absolute()
     output=Path(output).absolute()
     report=decode(read(output,"result.json"))
@@ -623,7 +711,7 @@ def read_evidence(runtime: Path, output: Path, rustc: Path | None = None, cargo:
     metadata=decode(read(output,"metadata.stdout"))
     exact(report["oracle_metadata"],metadata_check(metadata,provenance,crate,output/"target"),
           "oracle metadata feature/edge summary differs")
-    registry=registry_sources(metadata,provenance,output,False)
+    registry=retained_registry_sources(metadata,provenance,output)
     exact(report["registry_source_verification"],registry,"actual original dependency source differs")
     exact(decode(read(output,"registry-source-receipt.json")),registry,"separate dependency source receipt differs")
     require(report.get("registry_sources_unchanged_after_build") is True,"post-build dependency source check absent")

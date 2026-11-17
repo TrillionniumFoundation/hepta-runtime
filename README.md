@@ -2,58 +2,62 @@
 
 ## HIA native implementation
 
-The [HIA native profile](native/README.md) contains executable `.hepta` sources
-for byte-processing, text budgets, line endpoints, stale-ID verification and typed batch planning,
-editable text, view rendering and serial view-cache state, private serial crypto
-scopes with Linux entropy, startup token loading and serial caller authentication,
-a persistent MCP
-stdio protocol owner, and Linux ELF transport packers. The produced executables run without Python, Rust,
-libc, or a dynamic loader. A pinned Hepta compiler and explicit Python build
-and test drivers produce and verify those executables.
+The [HIA native profile](native/README.md) provides executable `.hepta` owners
+and Linux ELF transport packers. The resulting program runs without Python,
+Rust, libc, or a dynamic loader. A pinned Hepta compiler and explicit Python
+build and evidence readers produce and verify the executable.
 
-The default native build command produces the **91-image, nine-tool** stdio
-service: `host_list`, `effective_config`, `execution_shadow_admit`, `view`,
-`workdir`, `directory_create`, `file_move`, `directory_move` and `text_editor`.
-TextEditor reaches the actual shared Local Create/Replace/Delete/Undo graph.
-The current SDK connection owner handles initialization, normalized request IDs
-and per-request metadata before public dispatch. The fixed get_info owner,
-text-result constructor and serial transport/shutdown owners are integrated.
-Configured tool calls also enter the actual serial SessionOwner binding owner.
-Its private stdio owner comes from OS entropy and remains stable for the
-session; protocol metadata never supplies caller credentials. The caller
-projection is retained privately and is not yet connected to annotation or audit.
+The default native builder assembles **111 HIA components**: 103 directly linked
+owners and an eight-component shared worker capability in 104 physical containers.
+The installed catalog advertises nine tools: `host_list`, `effective_config`,
+`execution_shadow_admit`, `view`, `workdir`, `directory_create`, `file_move`,
+`directory_move` and `text_editor`. The graph also contains the actual Batch
+and Bellman call paths; advertising them through a configuration-aware catalog
+is a separately qualified successor. Component counts are not tool counts.
 
-Build and launch the same entry exercised by the current qualification:
+TextEditor uses shared Local Create/Replace/Delete/Undo owners. Current SDK
+connection, metadata admission, get_info, typed text construction, serial
+framing and shutdown are integrated. Configured calls enter the actual
+SessionOwner binding owner. Its private stdio identity comes from OS entropy;
+protocol peer information is not a caller credential. The request registry
+and shared Bellman worker are integrated, while complete asynchronous
+interleaving, cancellation and shutdown qualification remains open.
+
+Build and launch the actual default entry with an explicit verified bootstrap:
 
 ```sh
 python3 -I -B scripts/hia_native_runtime_mcp_build.py \
   --hepta /absolute/path/to/pinned/Hepta \
   --bootstrap /absolute/path/to/verified/bootstrap \
   --output /absolute/path/to/new-public-build
-/absolute/path/to/new-public-build/build/public-authority/runtime-mcp.elf
+/absolute/path/to/new-public-build/build/public-task-batch/runtime-mcp.elf
 ```
 
-[Current public qualification](native/runtime_mcp_current_qualification.md)
-records the exact fresh CI and the 54-session/324-response, public90 and serial
-framing24 domains. The historical 58-image eight-tool fixture has a dedicated
-[test source profile](tests/hia_native/historical_public58/README.md); its old
-wide-input and original-reference results retain that identity.
+CI omits `--bootstrap` and freshly compiles all 111 components. The
+[current public qualification](native/runtime_mcp_current_qualification.md)
+binds the 390 exact source files, actual default builder, nine CI roles,
+complete 1,394-record public wire domain, 1,777 private Batch cases and 28
+Batch stdio requests, Authority domains, 54-session handshake, public90 and
+transport24. Each CI role retains its 15-minute limit; public observer
+processes retain 180 seconds and each exchange retains 60 seconds.
 
-The production target has 136 registered tool handlers, including 11 added
-since the 125-handler historical comparison baseline. The existing production
-runtime still owns those handlers, durable processes, host authorization, SSH,
-HTTP, documents, REA and model workers. [The source coverage inventory](native/migration.json)
-and its [exact target snapshot](native/migration_target.json) record these
-remaining owners. The native profile's passing component tests do not qualify
-removal of those owners or production activation.
+The dedicated [historical 58-image source profile](tests/hia_native/historical_public58/README.md)
+preserves its original wide-input and SDK comparison evidence. Historical
+91- and 102-component profiles also retain their original source identities.
+The current default workflow uses the immutable qualified recipe and checks
+the actual candidate checkout before building it; it does not substitute a
+historical executable for the installed entry.
 
-The retained component registry declares 195 HIA sources, 87 component builds,
-225 native suites and 81 original Rust comparison recipes. Its explicit source
-profile preserves the historical public graph while keeping unrelated current
-component inputs. CI preserves all eleven native partitions and eight original
-comparison partitions. The current 91-image public graph has its own complete
-source binding and qualification job. These registry counts do not change the production qualification
-status recorded in the migration inventory.
+The production target has 136 registered tool handlers. The existing
+production runtime still owns the remaining filesystem, process, host, SSH,
+HTTP, document, REA and model-worker behavior. [The source coverage inventory](native/migration.json)
+and [exact target snapshot](native/migration_target.json) retain these gaps.
+Full SDK, full asynchronous runtime, full handler replacement, production
+activation and removal of the old runtime remain unqualified.
+
+The retained component registry and its eleven native partitions and eight
+original comparison partitions remain separately qualified. Their counts
+and passing results do not imply coverage of the current public graph.
 
 ## Concurrent execution
 

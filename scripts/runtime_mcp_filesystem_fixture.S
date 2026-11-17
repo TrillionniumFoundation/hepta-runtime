@@ -118,6 +118,11 @@ fs_fixture_next:
     je fs_fixture_authority_selector
     cmp qword ptr [r12 + 80], 58
     je fs_fixture_authority_selector
+    cmp qword ptr [r12 + 80], 47
+    jb fs_fixture_retained_selector
+    cmp qword ptr [r12 + 80], 52
+    jbe fs_fixture_authority_selector
+fs_fixture_retained_selector:
     cmp qword ptr [r12 + 80], 41
     ja fs_fixture_failure
 fs_fixture_authority_selector:
@@ -201,6 +206,9 @@ fs_fixture_finish:
     xor r13d, r13d
 fs_fixture_finish_session:
     mov r15, [r12 + r13 * 8]
+    call runtime_batch_body_release
+    test rax, rax
+    jnz fs_fixture_failure
     call runtime_text_body_release
     test rax, rax
     jnz fs_fixture_failure
@@ -255,7 +263,7 @@ fs_fixture_failure:
     jmp fatal
 .balign 8
 grow_fixture_images:
-    .zero 456 /* 57 fixed public-engine slots. */
+    .zero 472 /* 59 fixed public-engine slots; original private selectors are unchanged. */
 
 /* Private qualification observation. These actions never enter stdio JSON. */
 fs_fixture_authority_release:
