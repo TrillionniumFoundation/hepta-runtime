@@ -1,23 +1,37 @@
-# Current text_file_write publication body candidate
+# Current local text publication: private body qualification candidate
 
-The installed integration remains unchanged. This independent package implements
-the next private HIA body needed for the actual current text_file_write handler:
-create, replace, and append with the original held-directory publication order.
+This source candidate connects the HIA publication policy to actual fixed Linux
+effects and the existing exact HIA SHA-256 child. It does not register a public
+handler or substitute a fixture for configured-path authority.
 
-The source author derives all application error literals from the retained exact
-target file and emits the HIA program in CI. SHA operations are delegated to the
-retained binary_codec HIA owner. No oracle output is used as implementation text.
+The original reference preserves the complete target Linux publication module,
+validation prefix and complete success serialization from d3d75, with exact
+byte spans recorded in reference/ORIGIN.json. All eight original unit tests are
+kept verbatim. The observer calls this private synchronous boundary; it does
+not claim the original spawn_blocking lifetime, configured-path admission,
+caller fence, or successful delta::forget connection.
 
-The first gate generates and compiles the two HIA owners with the pinned Hepta
-compiler. It deliberately does not claim a Rust comparison or public handler
-qualification. The subsequent filesystem observer/reference gate will bind
-complete actual effects and results before this body is connected to the caller.
+The input-only domain in scripts/body_cases.py covers create, replace and append,
+ordinary filesystem refusals, source identity/digest policy, permissions, UTF-8
+and original size limits. Every normal operation compares full original/native
+result text and full observed file data, modes, xattrs, link relationships and
+directory entries. The sole result normalization is the seven-field version:
+each side must first match its own actual post-publication stat exactly.
 
-All source inputs are frozen by SOURCE_MANIFEST.json. Generated HIA, complete
-compiler input/output/receipts, and compiler dependency bytes are exported even
-if a gate fails. The exact 259-case typed owner at b6cc4eeee46fc7c8a6b09cdd77e180974752a8a7
-is retained separately and is not re-labelled as body qualification.
+Native records preserve every complete input, output-before, output-after,
+workspace-before and workspace-after. Their content-addressed blocks retain all
+bytes, including unchanged suffixes and growth extensions. Raw OS results,
+actual fd ownership, child SHA inputs/results and callback delivery order are
+also retained. Six physical evidence changes must be refused by the pure reader;
+the final reader forbids mutation, process execution and native code loading.
 
-No global slot is reserved by this package. Extract owns 59–63 and engine
-+456/+464. Public descriptors beyond 63 require the existing bitmap layout to
-be addressed before a new global handler can be registered.
+The branch is a candidate until CI and complete independent readback finish.
+No public registration, full SDK, task/concurrent lifecycle, 136-handler
+completion or old-stack removal is claimed. Existing typed qualification and
+the initial source-only/fresh body compilation evidence remain separate.
+
+CI limits: 60 seconds per exchange, 180 seconds per semantic process and complete
+reader/control boundary, 15 minutes for the job. Rust is 1.95.0. Cargo may prune
+the exact target package seed, but all retained registry versions/checksums and
+every extracted used crate file must match the target. The actual build and
+original tests then use the retained locked offline closure.
