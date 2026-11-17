@@ -1,0 +1,53 @@
+name: Read both retained publisher lifecycle failures without replay
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-duplex-fault-read-6780-v3-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set exact runtime paths
+        run: |
+          printf '%s\n' "PI_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/publication_duplex_fault_read_v3" "PI_RETAINED=$GITHUB_WORKSPACE/retained/tests/hia_native/publication_duplex_capture_v2" "PI_BUILD=$GITHUB_WORKSPACE/build-recipe/tests/hia_native/publication_duplex_build_ci" "PI_CAPTURE=$RUNNER_TEMP/publication-fault-read" "PI_EXPORT=$RUNNER_TEMP/publication-fault-read-export" "PI_DRIVER=$RUNNER_TEMP/publication-fault-read-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/publication_duplex_fault_read_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: retained
+          ref: ed8432414f661f5f2b3f5c612c0fd4267b1e66df
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_capture_v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: build-recipe
+          ref: 9cfd7c1b517db83fc6b3500a86cca7ae949fadf6
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_ci
+      - name: Read every uploaded archive byte and complete actual failure tails
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PI_SOURCE/inspect.py" --retained "$PI_RETAINED" --build-recipe "$PI_BUILD" --output "$PI_CAPTURE" > "$PI_DRIVER.stdout" 2> "$PI_DRIVER.stderr"
+          cat "$PI_DRIVER.stdout"
+      - name: Preserve complete pure diagnostic or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PI_RETAINED/archive.py" pack --source "$PI_SOURCE" --capture "$PI_CAPTURE" --output "$PI_EXPORT" --driver-prefix "$PI_DRIVER"
+          cat "$PI_DRIVER.stderr"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-retained-fault-read-${{ github.sha }}
+          path: ${{ env.PI_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
