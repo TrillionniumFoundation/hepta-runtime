@@ -1,0 +1,44 @@
+name: Independently read uploaded complete metadata native build
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-file-metadata-build-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  retained-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      METADATA_SOURCE: ${{ github.workspace }}/qualification/file_metadata/v1/build_uploaded_read
+      METADATA_MANIFEST: 816b9c53ad79f0ad753dfb9d295d88af003cd56b6acee3a9548e31c6f84647bf
+    steps:
+      - name: Checkout exact source-owned reader and complete trusted build source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_metadata/v1/build_uploaded_read
+          persist-credentials: false
+      - name: Read all uploaded archive bytes and seven retained guards without replay
+        run: |
+          python3 -I -S -B "$METADATA_SOURCE/scripts/driver.py" read \
+            --work "$RUNNER_TEMP/metadata-build-uploaded-read" --source-manifest-sha256 "$METADATA_MANIFEST"
+      - name: Archive the complete reader evidence and original immutable capture
+        if: always()
+        run: |
+          python3 -I -S -B "$METADATA_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/metadata-build-uploaded-read" --output "$RUNNER_TEMP/metadata-build-uploaded-read-export" \
+            --source-manifest-sha256 "$METADATA_MANIFEST"
+      - name: Upload complete independent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: metadata-build-uploaded-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/metadata-build-uploaded-read-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
