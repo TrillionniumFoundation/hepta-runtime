@@ -1,0 +1,97 @@
+name: Watcher complete semantic pure readback
+on:
+  push:
+    branches: [hia-namespace-watcher-semantic-reader-v4-6780-20261117]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Admit every frozen pure-reader source
+        shell: bash
+        run: |
+          set -euo pipefail
+          READER_ROOT="$RUNNER_TEMP/namespace-watcher-semantic-reader-v4"
+          printf 'READER_ROOT=%s\n' "$READER_ROOT" >> "$GITHUB_ENV"
+          mkdir "$READER_ROOT"
+          cp -a tests/hia_native/namespace_watcher_semantic_reader_v4 "$READER_ROOT/source"
+          mkdir "$READER_ROOT/diagnostics"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["RUNNER_TEMP"])/"namespace-watcher-semantic-reader-v4/source"
+          raw=(r/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="58c95ee37329f5ec5fdaaa9edb4f803a5308f6d06f7f282848a1d3bc3af7de02"
+          m=json.loads(raw)
+          assert {p.name for p in r.iterdir()}==set(m["files"])|{"SOURCE.json"}
+          for name,row in m["files"].items():
+              b=(r/name).read_bytes()
+              assert len(b)==row["bytes"] and hashlib.sha256(b).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==row["git_blob"]
+              if name.endswith(".py"):compile(b,str(r/name),"exec")
+          PY
+      - name: Read and restore all immutable completed producer bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14366409313/zip > "$READER_ROOT/input.zip"
+          timeout --signal=KILL 180 python3 -I -B "$READER_ROOT/source/restore.py" \
+            --archive "$READER_ROOT/input.zip" --output "$READER_ROOT/retained" \
+            --pins "$READER_ROOT/source/CAPTURE-PINS.json" \
+            > "$READER_ROOT/diagnostics/restoration.stdout" 2> "$READER_ROOT/diagnostics/restoration.stderr"
+          cp "$READER_ROOT/retained/RESTORE.json" "$READER_ROOT/diagnostics/RESTORE.json"
+          cp "$READER_ROOT/retained/artifact-manifest.json" "$READER_ROOT/diagnostics/artifact-manifest.json"
+      - name: Complete unchanged semantic domain and whole guarded reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B "$READER_ROOT/source/run_reader.py" \
+            --bundle "$READER_ROOT/retained/complete" --output "$READER_ROOT/reader" \
+            > "$READER_ROOT/diagnostics/reader.stdout" 2> "$READER_ROOT/diagnostics/reader.stderr"
+          cat "$READER_ROOT/diagnostics/reader.stdout"
+      - name: Preserve full independent pure diagnostic on reader rejection
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f "$READER_ROOT/retained/complete/run/CAPTURE.json"; then
+            timeout --signal=KILL 180 python3 -I -B "$READER_ROOT/source/diagnose.py" \
+              --bundle "$READER_ROOT/retained/complete" --output "$READER_ROOT/diagnostics/PURE-DIAGNOSTIC.json" \
+              > "$READER_ROOT/diagnostics/pure-diagnostic.stdout" 2> "$READER_ROOT/diagnostics/pure-diagnostic.stderr"
+            python3 -I -B -c 'import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps([{"group":x["group"],"exception":x.get("exception")} for x in d["groups"]],sort_keys=True))' "$READER_ROOT/diagnostics/PURE-DIAGNOSTIC.json"
+          fi
+      - name: Preserve exact actual failures and completed readback
+        if: always()
+        shell: bash
+        run: |
+          if test -d "$READER_ROOT/diagnostics"; then
+            for name in restoration reader pure-diagnostic; do
+              if test -f "$READER_ROOT/diagnostics/$name.stderr"; then cat "$READER_ROOT/diagnostics/$name.stderr"; fi
+            done
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-watcher-semantic-reader-v4
+          path: |
+            ${{ env.READER_ROOT }}/source
+            ${{ env.READER_ROOT }}/diagnostics
+            ${{ env.READER_ROOT }}/reader
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 30
