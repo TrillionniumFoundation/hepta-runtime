@@ -1,0 +1,104 @@
+name: Private actual publisher direct future boundary build
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-direct-build-6780-v3-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+      digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Set runner paths
+        run: |
+          printf '%s\n' "PD_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_direct_build_v3" "PD_RECIPE=$GITHUB_WORKSPACE/base-recipe/tests/hia_native/publication_duplex_build_v3" "PD_PRIOR=$RUNNER_TEMP/direct-prior" "PD_RUN=$RUNNER_TEMP/direct-build" "PD_RECEIPTS=$RUNNER_TEMP/direct-receipts" "PD_DRIVER=$RUNNER_TEMP/direct-driver" "PD_EXPORT=$RUNNER_TEMP/direct-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_direct_build_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: base-recipe
+          ref: f4a348f6661aec513ac63e1807ff697e81704b3e
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Whole source and retained graph admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -S -B "$PD_SOURCE/entry.py" prepare --receipt "$PD_RECEIPTS/prepare" --recipe "$PD_RECIPE" --output "$PD_PRIOR"
+      - name: Actual fixed fixture GAS and HIA link pack
+        run: |
+          python3 -I -S -B "$PD_SOURCE/build.py" --recipe "$PD_RECIPE" --previous "$PD_PRIOR/extracted/capture" --output "$PD_RUN" --hepta "$GITHUB_WORKSPACE/compiler" > "$PD_DRIVER.stdout" 2> "$PD_DRIVER.stderr"
+          cat "$PD_DRIVER.stdout"
+      - name: Complete actual fixture pure read
+        run: python3 -I -S -B "$PD_SOURCE/entry.py" read --receipt "$PD_RECEIPTS/read" --recipe "$PD_RECIPE" --previous "$PD_PRIOR/extracted/capture" --capture "$PD_RUN" --output "$PD_RUN/READ_ONLY.json"
+      - name: Archive complete success or failure
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PD_RUN"]); r.mkdir(exist_ok=True); p=pathlib.Path(os.environ["PD_RECEIPTS"]); shutil.copytree(p,r/"process-records") if p.exists() else None; q=pathlib.Path(os.environ["PD_PRIOR"]); [(shutil.copyfile(q/n,r/("prior-"+n))) for n in ("READ.json","ARCHIVE.json","FILES.json","SUMMARY.json","READ_ONLY.json") if (q/n).exists()]'
+          python3 -I -S -B "$PD_SOURCE/archive.py" pack --source "$PD_SOURCE" --capture "$PD_RUN" --output "$PD_EXPORT" --driver-prefix "$PD_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; p=pathlib.Path(os.environ["PD_DRIVER"]+".stderr"); print(p.read_text() if p.exists() else "")'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: upload
+        if: always()
+        with:
+          name: publication-direct-build-v3-${{ github.sha }}
+          path: ${{ env.PD_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+  uploaded:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runner paths
+        run: |
+          printf '%s\n' "PD_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication_direct_build_v3" "PD_RECIPE=$GITHUB_WORKSPACE/base-recipe/tests/hia_native/publication_duplex_build_v3" "PD_PRIOR=$RUNNER_TEMP/direct-prior" "PD_READ=$RUNNER_TEMP/direct-uploaded" "PD_PROOF=$RUNNER_TEMP/direct-proof" "PD_RECEIPTS=$RUNNER_TEMP/direct-read-receipts" "PD_DRIVER=$RUNNER_TEMP/direct-read-driver" "PD_EXPORT=$RUNNER_TEMP/direct-read-export" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_direct_build_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: base-recipe
+          ref: f4a348f6661aec513ac63e1807ff697e81704b3e
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_v3
+      - name: Entire original graph source and archive read
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -S -B "$PD_SOURCE/entry.py" prepare --receipt "$PD_RECEIPTS/prepare" --recipe "$PD_RECIPE" --output "$PD_PRIOR"
+      - name: Independent full uploaded direct fixture read
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$PD_SOURCE/entry.py" uploaded --receipt "$PD_RECEIPTS/uploaded" --recipe "$PD_RECIPE" --previous "$PD_PRIOR/extracted/capture" --output "$PD_READ" --proof "$PD_PROOF" --artifact '${{ needs.build.outputs.artifact }}' --head '${{ github.sha }}' --digest '${{ needs.build.outputs.digest }}' > "$PD_DRIVER.stdout" 2> "$PD_DRIVER.stderr"
+          cat "$PD_DRIVER.stdout"
+      - name: Archive independent complete proof or failure
+        if: always()
+        run: |
+          python3 -I -S -B -c 'import os,pathlib,shutil; r=pathlib.Path(os.environ["PD_PROOF"]); r.mkdir(exist_ok=True); p=pathlib.Path(os.environ["PD_RECEIPTS"]); shutil.copytree(p,r/"process-records") if p.exists() else None; q=pathlib.Path(os.environ["PD_PRIOR"]); [(shutil.copyfile(q/n,r/("prior-"+n))) for n in ("READ.json","ARCHIVE.json","FILES.json","SUMMARY.json","READ_ONLY.json") if (q/n).exists()]'
+          python3 -I -S -B "$PD_SOURCE/archive.py" pack --source "$PD_SOURCE" --capture "$PD_PROOF" --output "$PD_EXPORT" --driver-prefix "$PD_DRIVER"
+          python3 -I -S -B -c 'import os,pathlib; p=pathlib.Path(os.environ["PD_DRIVER"]+".stderr"); print(p.read_text() if p.exists() else "")'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-direct-build-v3-independent-${{ github.sha }}
+          path: ${{ env.PD_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

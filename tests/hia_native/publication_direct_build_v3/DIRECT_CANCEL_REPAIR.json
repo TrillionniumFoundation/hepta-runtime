@@ -1,0 +1,46 @@
+{
+  "schema": "hepta.publication.direct-cancel-observation.v1",
+  "before": {
+    "bytes": 11151,
+    "sha256": "7e708069fdebcb6419d77c6146321f84cb66b7b632dac2d6e0f0bf7f8cb739ca",
+    "git_blob": "746cac2dedf260c93806ce8ef0f28a648975e767"
+  },
+  "after": {
+    "bytes": 11678,
+    "sha256": "a15ad2640e74d4c7678b05c4276e12678a0d13174b0a6ebd40eac914b61c21c8",
+    "git_blob": "c6adf1e222176cebd1d2e16e0de238bdb0d8b2f7"
+  },
+  "gateway": {
+    "path": "native/text_publication_gateway.hepta",
+    "bytes": 138275,
+    "sha256": "c88857f2c9c63bd9bc1d89088923a23a2f24a7474b15f609eec739c7223139e0",
+    "git_blob": "bd3218244d2c7e69c65d410f2d5a53b81f4c6d5d"
+  },
+  "edits": [
+    {
+      "before": "    cmp eax,32\n    jne public_span_fail\n    mov qword ptr [rbp+PN_P_ACTIVE],0\n    mov rax,[r15+8]\n    mov rax,[rax+67*64+8]\n    test rax,rax\n    jz public_span_fail\n    mov rax,[rax+PA_STAGE]\n    cmp rax,2\n    je pd_detach_returned\n    cmp rax,3\n    jne public_span_fail\n    mov qword ptr [rbp+PD_STATE],3\n    jmp pd_detach_copy_root\npd_detach_returned:\n    mov qword ptr [rbp+PD_STATE],2\n    jmp pd_detach_copy_root\n",
+      "after": "    cmp eax,32\n    je pd_detach_returned\n    cmp eax,0xfffffff7\n    jne public_span_fail\n    cmp qword ptr [rdx+56],0\n    jne public_span_fail\n    mov ecx,3\n    jmp pd_detach_terminal\npd_detach_returned:\n    mov ecx,2\npd_detach_terminal:\n    mov qword ptr [rbp+PN_P_ACTIVE],0\n    mov rax,[r15+8]\n    mov rax,[rax+67*64+8]\n    test rax,rax\n    jz public_span_fail\n    cmp [rax+PA_STAGE],rcx\n    jne public_span_fail\n    mov [rbp+PD_STATE],rcx\n    jmp pd_detach_copy_root\n"
+    },
+    {
+      "before": "direct_reply_result:\n    mov rax,[rbp+PN_P_DESCRIPTORS+48]\n",
+      "after": "direct_reply_result:\n    cmp qword ptr [rbp+PD_STATE],3\n    jne pd_reply_returned\n    mov eax,0xfffffff7\n    cmp [rbp+PN_P_DESCRIPTORS+48],rax\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_P_DESCRIPTORS+56],0\n    jne public_span_fail\n    /* The actual destroyed future has no response frame. Its raw CANCELLED\n     * return and full terminal state are retained in the fixed trace. */\n    mov qword ptr [r13+DC_OUTPUT],0\n    mov qword ptr [r13+DC_OUTPUT_LENGTH],0\n    ret\npd_reply_returned:\n    mov rax,[rbp+PN_P_DESCRIPTORS+48]\n"
+    },
+    {
+      "before": "    cmp qword ptr [rdx+8],2\n    ja public_span_fail\n",
+      "after": "    cmp qword ptr [rdx+8],1\n    ja public_span_fail\n"
+    }
+  ],
+  "production": "7567502bf4e76b5975a689b988e9f96e1206462a",
+  "production_changes": 0,
+  "actual_failure": false,
+  "source_review_found_before_application": true,
+  "contract": {
+    "normal_return": 32,
+    "normal_extent": "32 + full HRCFGM01 body",
+    "cancel_return": 4294967287,
+    "cancel_extent": 0,
+    "pending_return": 4294967263,
+    "no_synthetic_cancel_response": true
+  },
+  "original_domain": 8
+}
