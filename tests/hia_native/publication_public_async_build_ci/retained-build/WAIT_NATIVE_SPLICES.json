@@ -1,0 +1,26 @@
+[
+  [
+    ".endif\n    ret\n\n/* One process-owned fixed port.",
+    ".endif\n    call wait_fixture_preflight\n    ret\n\n/* One process-owned fixed port."
+  ],
+  [
+    "    xor eax,eax\n    PM_RETURN\n\n/* Fixed op/gen/arg0/arg1/payload/extent arguments.",
+    "    call wait_fixture_initialize\n    xor eax,eax\n    PM_RETURN\n\n/* Fixed op/gen/arg0/arg1/payload/extent arguments."
+  ],
+  [
+    "pump_tick:\n    PM_SAVE\n    call pump_service_worker",
+    "pump_tick:\n    PM_SAVE\n    call wait_fixture_tick\n    call pump_service_worker"
+  ],
+  [
+    "    mov rdx,-1\n    cmp qword ptr [r12+PM_PENDING],0",
+    "    mov dword ptr [r12+PM_POLL+24],-1\n    mov dword ptr [r12+PM_POLL+28],1\n    mov rax,[r12+PM_WAIT_FIXTURE]\n    cmp qword ptr [rax+XF_CLOSED],0\n    jne xwf_poll_control_ready\n    mov dword ptr [r12+PM_POLL+24],5\nxwf_poll_control_ready:\n    mov rdx,-1\n    cmp qword ptr [r12+PM_PENDING],0"
+  ],
+  [
+    "pump_poll_ready:\n    lea rdi,[r12+PM_POLL]\n    mov esi,3",
+    "pump_poll_ready:\n    lea rdi,[r12+PM_POLL]\n    mov esi,4"
+  ],
+  [
+    "    /* SDK registry58 has closed transport and drained owned tasks. */",
+    "    call wait_fixture_finish\n    /* SDK registry58 has closed transport and drained owned tasks. */"
+  ]
+]
