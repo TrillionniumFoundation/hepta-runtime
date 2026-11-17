@@ -1,0 +1,369 @@
+{
+  "schema": "hepta.runtime.path-error.qualified-handoff.v1",
+  "status": "LINUX_HBRDS_HMDSR_HOSER_NATIVE_DIAGNOSTICS_QUALIFIED",
+  "production": {
+    "source_commit": "a5e3a6f3d4ba6acbfac26000bf8ea24b72eb75b9",
+    "source_prefix": "qualification/path_error/v1/source",
+    "manifest_sha256": "ef8e643df7534ab05cb551334557b95cce55ce6ae14b2fd6ef3d63131c04c9fb",
+    "source_files": 34,
+    "hia": {
+      "path": "native/path_error.hepta",
+      "mode": "100644",
+      "bytes": 270554,
+      "sha256": "24f8e7e735a2c0c8b8b1a94958ab6d145b420ff00e54eab5f04525c3679c9f11",
+      "git_blob": "171e6454c0259a9b1252917e73b20810f78cbf84",
+      "functions": 32,
+      "instructions": 5515,
+      "blocks": 372
+    },
+    "composition": {
+      "path": "native/path_error_composition.json",
+      "mode": "100644",
+      "bytes": 4702,
+      "sha256": "26cf99d5d6e881930896dba07fd99e2085b31ce3af3f23eb0da3a3ec8e52805b",
+      "git_blob": "f8ef75d7d404e155d7179275d2fc1b2e5591da20"
+    },
+    "image": {
+      "bytes": 292230,
+      "sha256": "d8979f7ec54801dc8409aa62615ce164218e7e60d15bab527c4cf4995f47040d"
+    },
+    "manifest": {
+      "bytes": 709,
+      "sha256": "f225f74d707e9103b57381f4d58e12de256776a2d1e08e8cd61320adf5f800ed"
+    },
+    "fixed_workspace": 12288,
+    "frozen_platform_pool_bytes": 10152,
+    "old_qualified_functions_retained": 30,
+    "old_entry_relocation": "f0 to f30",
+    "non_entry_legacy_ir_unchanged": true,
+    "runtime_requires_python": false,
+    "runtime_requires_libc": false,
+    "runtime_requires_unicode_files": false
+  },
+  "input_contract": {
+    "legacy": "HBRDS001 kind3 unchanged with absent or string filename; integer and dual-filename variants remain invalid here",
+    "metadata": "HMDSR001 kind3 unchanged with absent or unsigned integer FD data; no descriptor authority",
+    "path": "HOSER001 kind3, sequence opaque u64, canonical exception class at24, errno1..4095 at32, first UTF-8 byte extent at40, filename kind3 at48, combined UTF-8 extent at56, first then second filename bytes at64",
+    "repr": "Each filename independently uses exact CPython repr quote/escape selection; both complete UTF-8 slices are validated, including split-codepoint refusal. Empty strings are valid. Output exactly matches Class: [Errno N] message: repr(first) -> repr(second).",
+    "return": "Complete UTF-8 byte count with no newline; INVALID0xffffffff and CAPACITY0xfffffffe; all full-buffer/tail behavior inherited and checked",
+    "no_authority": "Both filenames and integer values are formatting data only. This formatter neither opens paths nor invokes syscalls."
+  },
+  "qualification": {
+    "commit": "a5e3a6f3d4ba6acbfac26000bf8ea24b72eb75b9",
+    "run_id": 44117972967,
+    "job_id": 134161171148,
+    "conclusion": "SUCCESS",
+    "comparison": {
+      "controls": {
+        "calls": 1074,
+        "capacity": 384,
+        "invalid": 370,
+        "raw_bytes": 24261759,
+        "successes": 320
+      },
+      "dual_filename_cases": 8993,
+      "errno_values": 4095,
+      "groups": 164,
+      "integer_values": 222,
+      "legacy_cases": 4464,
+      "metadata_cases": 8444,
+      "native_cases": 21901,
+      "original_cases": 21901,
+      "unicode_scalars": 1112064
+    },
+    "native_calls": 22975,
+    "native_full_buffer_bytes": 996146469,
+    "original_full_bytes": 60270260,
+    "producer_processes": 331,
+    "physical_controls": {
+      "controls": [
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "case-count",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "module-image",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "original-result",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "source-byte",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "output-tail",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "workspace-tail",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "wire-input",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "integer-fd",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 5,
+          "name": "dual-separator",
+          "rejected": true
+        },
+        {
+          "admitted": true,
+          "changed_files": 0,
+          "name": "relocated-one",
+          "rejected": false
+        },
+        {
+          "admitted": true,
+          "changed_files": 0,
+          "name": "relocated-two",
+          "rejected": false
+        }
+      ],
+      "full_variant_bytes_modes_directories_checked": true,
+      "status": "PHYSICAL_READER_CONTROLS_PASS"
+    },
+    "original_reference_recaptured_for_changed_successor": true,
+    "in_run_application_retries": 0,
+    "source_frozen_before_application": true,
+    "binding": {
+      "schema": "hepta.runtime.path-error.uploaded-read-binding.v1",
+      "commit": "a5e3a6f3d4ba6acbfac26000bf8ea24b72eb75b9",
+      "tree": "40ee59fcaafcdda6d84c1ae192bff1ddda34e6a0",
+      "manifest_sha256": "ef8e643df7534ab05cb551334557b95cce55ce6ae14b2fd6ef3d63131c04c9fb",
+      "run_id": 44117972967,
+      "job_id": 134161171148,
+      "artifact": {
+        "id": 14343034170,
+        "bytes": 52280923,
+        "sha256": "2a022454ff7eec8932637d668e2c02cf952af0c1a5f988a01821cc98e6eed379"
+      },
+      "tar": {
+        "bytes": 52276686,
+        "sha256": "626a426690da74c94f071f643e6a1b65d6516d19750d912eb2f4474706c90451",
+        "logical_files": 33718,
+        "logical_bytes": 1598334859,
+        "directories": 4548,
+        "unique_objects": 2168,
+        "unique_bytes": 168274947
+      }
+    }
+  },
+  "independent_uploaded_read": {
+    "commit": "8a659c8c6f9277b9185565942054a136e988e95b",
+    "source_prefix": "qualification/path_error/v1/archive_reader",
+    "manifest_sha256": "cbec86a08e196ba04d0834319b5bb33236e2ab4a941008318064ae808b4cfab0",
+    "run_id": 44120048606,
+    "job_id": 134168592643,
+    "conclusion": "SUCCESS",
+    "complete_files": 33718,
+    "complete_directories": 4548,
+    "logical_bytes": 1598334859,
+    "entries": 40501,
+    "guards": 11,
+    "read_seconds": 81.53772602000004,
+    "processes": [
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-S",
+          "-B",
+          "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/path_error/v1/archive_reader/archive_reader.py",
+          "fetch",
+          "--work",
+          "/home/runner/work/_temp/path-error-uploaded",
+          "--source-manifest-sha256",
+          "cbec86a08e196ba04d0834319b5bb33236e2ab4a941008318064ae808b4cfab0"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/path_error/v1/archive_reader",
+        "elapsed_seconds": 1.1175183920000222,
+        "exit_code": 0,
+        "name": "fetch",
+        "parent_pid": 2514,
+        "pgid": 2515,
+        "pid": 2515,
+        "stderr": {
+          "bytes": 0,
+          "file": "fetch.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 149,
+          "file": "fetch.stdout",
+          "sha256": "1609b8b9b226c40e1911167b088740426e81d883c9f965b600a5aab6927654a4"
+        },
+        "timed_out": false,
+        "timeout_seconds": 60
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-S",
+          "-B",
+          "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/path_error/v1/archive_reader/archive_reader.py",
+          "restore",
+          "--work",
+          "/home/runner/work/_temp/path-error-uploaded",
+          "--source-manifest-sha256",
+          "cbec86a08e196ba04d0834319b5bb33236e2ab4a941008318064ae808b4cfab0"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/path_error/v1/archive_reader",
+        "elapsed_seconds": 9.772339165999995,
+        "exit_code": 0,
+        "name": "restore",
+        "parent_pid": 2514,
+        "pgid": 2516,
+        "pid": 2516,
+        "stderr": {
+          "bytes": 0,
+          "file": "restore.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 1183,
+          "file": "restore.stdout",
+          "sha256": "4914d396e30b580880606612725e0fa102159ad876484ecc82f72fe4554e9051"
+        },
+        "timed_out": false,
+        "timeout_seconds": 180
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-S",
+          "-B",
+          "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/path_error/v1/archive_reader/archive_reader.py",
+          "read",
+          "--work",
+          "/home/runner/work/_temp/path-error-uploaded",
+          "--source-manifest-sha256",
+          "cbec86a08e196ba04d0834319b5bb33236e2ab4a941008318064ae808b4cfab0"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/path_error/v1/archive_reader",
+        "elapsed_seconds": 81.53772602000004,
+        "exit_code": 0,
+        "name": "read",
+        "parent_pid": 2514,
+        "pgid": 2517,
+        "pid": 2517,
+        "stderr": {
+          "bytes": 0,
+          "file": "read.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 3948,
+          "file": "read.stdout",
+          "sha256": "4e2a0c8eddaffa343b49bbe6587236b8112a808c184e0b7da32c9356005a28c7"
+        },
+        "timed_out": false,
+        "timeout_seconds": 180
+      }
+    ],
+    "application_executions": 0,
+    "rust_executions": 0,
+    "complete_physical_variants_reread": true
+  },
+  "proof_artifact": {
+    "id": 14345680389,
+    "bytes": 5479912,
+    "sha256": "569483d8f42698192b0d8ac34709f500a0a0729cd328ae12f261449ccf0c7fc4",
+    "expires_at": "2026-12-17T15:58:08Z",
+    "export": {
+      "all_logical_files_and_directories_bound": true,
+      "all_object_bytes_and_modes_reread": true,
+      "archive": "evidence.tar.gz",
+      "bytes": 5475602,
+      "directories": 12,
+      "gate_status": "PASS",
+      "logical_bytes": 26299918,
+      "logical_files": 51,
+      "mode": 420,
+      "no_new_application_execution_during_export": true,
+      "schema": "hepta.runtime.path-error-uploaded-read.complete-archive-read.v1",
+      "sha256": "41062b8e0ef3086b67c8b3f4dc7412bdea07afbaa82c1f2d854d364e5cbaaa13",
+      "unique_bytes": 26201739,
+      "unique_objects": 45,
+      "whole_runtime_replaced": false
+    },
+    "proof_export_in_same_successful_job": true,
+    "recursive_third_proof_read_claimed": false
+  },
+  "predecessor": {
+    "qualified_handoff_commit": "037c5df97a3f627d3e5f905b8d2bd1b77e78c2e1",
+    "source_commit": "031650c38d4a2a8c052fb296c4dd68c7d010d3ca",
+    "hia_sha256": "163b024e301f9eaa2481d638e5b2d390b1325b090535c89b3009128332a428e1",
+    "composition_sha256": "a1d53705790cd887f6fc918834916e6a52674fb8ee8ece9e46386ac1c039dce2",
+    "all_12908_preceding_actual_cases_recaptured_against_new_candidate": true,
+    "retained_predecessor_failure_unchanged": true
+  },
+  "budgets": {
+    "author_seconds": 60,
+    "application_process_seconds": 60,
+    "build_seconds": 900,
+    "pure_reader_seconds": 180,
+    "workflow_minutes": 15
+  },
+  "scope": {
+    "dual_filename_repr": true,
+    "host_formatter_libc_required": false,
+    "host_formatter_python_required": false,
+    "integer_fd_decimal": true,
+    "linux_errno_1_to_4095": true,
+    "metadata_descriptor_authority_widened": false,
+    "original_python_diagnostics_compared": true,
+    "previous_30_functions_retained": true,
+    "private_error_formatter": true,
+    "public_routes": false,
+    "read_gateway_integrated": false,
+    "remote_transport": false,
+    "three_hbrds_hmdsr_hoser_envelopes": true,
+    "unicode_scalar_repr": true,
+    "whole_runtime_replaced": false
+  },
+  "not_yet_qualified": [
+    "Public metadata/file_info/publication wiring",
+    "Configured host/path authority",
+    "Remote/SSH transport",
+    "Write/upload publication caller",
+    "Full SDK/all136 handlers",
+    "Darwin platform",
+    "Old stack removal"
+  ],
+  "whole_runtime_replaced": false,
+  "main_updated": false,
+  "main_head": "5a5a35b355b7b58a23da797acd0002a832fc919b"
+}
