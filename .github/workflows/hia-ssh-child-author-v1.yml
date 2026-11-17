@@ -1,0 +1,50 @@
+name: Author and compile target SSH original-child custody
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-ssh-child-author-6780-v1-20261117']
+permissions:
+  contents: read
+jobs:
+  author-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set actual runner paths
+        run: |
+          printf '%s\n' "SC_SOURCE=$GITHUB_WORKSPACE/runtime/qualification/ssh_direct/v1/child_source" "SC_RUN=$RUNNER_TEMP/ssh-child" "SC_EXPORT=$RUNNER_TEMP/ssh-child-export" "SC_DRIVER=$RUNNER_TEMP/ssh-child-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/child_source
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Fresh author and real HIA compiler build
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$SC_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 6a9c58ff0c7285d1fcb8518dcd4377b5a842afd6323e3a808fa949c7781bd6b6
+          set +e
+          python3 -I -S -B "$SC_SOURCE/recipe/build.py" --source "$SC_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$SC_RUN" > "$SC_DRIVER.stdout" 2> "$SC_DRIVER.stderr"
+          sc_status=$?
+          cat "$SC_DRIVER.stderr"
+          cat "$SC_DRIVER.stdout"
+          exit "$sc_status"
+      - name: Preserve and reread all complete failure or success bytes
+        if: always()
+        run: |
+          python3 -I -S -B "$SC_SOURCE/recipe/archive.py" pack --source "$SC_SOURCE" --capture "$SC_RUN" --output "$SC_EXPORT" --driver-prefix "$SC_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-child-author-${{ github.sha }}
+          path: ${{ env.SC_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
