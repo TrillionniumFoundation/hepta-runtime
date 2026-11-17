@@ -1,0 +1,56 @@
+name: Qualify native HIA structured integer-FD diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-structured-error-qualify-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/structured_error/v1/source
+      BINARY_MANIFEST: 76641fd297a9f2c192ba0461ec315c954774515d6971445295d7d1fd47fff1b5
+    steps:
+      - name: Checkout frozen formatter and complete domain
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/structured_error/v1/source
+          persist-credentials: false
+      - name: Checkout exact HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Verify exact source heads
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = "d3e2c90173cf733e42b299d0c4274df4b593a12f"
+      - name: Run all original and native diagnostic inputs
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/scripts/driver.py" run \
+            --hepta "$GITHUB_WORKSPACE/compiler" --work "$RUNNER_TEMP/structured-error" \
+            --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Retain complete successful or failed evidence
+        if: always()
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/structured-error" --output "$RUNNER_TEMP/structured-error-export" \
+            --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Upload all captured bytes and process receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: structured-error-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/structured-error-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
