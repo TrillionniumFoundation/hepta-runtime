@@ -48,7 +48,7 @@ def after_body(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
 def prepare_resolve(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
     state = get(w, 424)
     if state == 0:
-        if not valid_expectation(s):
+        if valid_expectation(s) == False:
             count = publisher_literal(w, 2048, 1)
             return business_error(s, o, w, 2048, count)
         if load(s, 80) > 65536:
@@ -89,7 +89,7 @@ def valid_expectation(s: readbuf) -> bool:
     i = 0
     while i < count:
         value = byte(s, start + i)
-        if not ((value >= 48 and value <= 57) or (value >= 97 and value <= 102)):
+        if ((value >= 48 and value <= 57) or (value >= 97 and value <= 102)) == False:
             return False
         i = i + 1
     return True
@@ -123,7 +123,7 @@ def after_presence(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u3
         count = publisher_literal(w, 2048, 5)
         if count != size - 32:
             return INVALID
-        if not equal_workspace(w, at + 32, 2048, count):
+        if equal_workspace(w, at + 32, 2048, count) == False:
             return INVALID
         count = publisher_literal(w, 2048, 3)
         return business_error(s, o, w, 2048, count)
