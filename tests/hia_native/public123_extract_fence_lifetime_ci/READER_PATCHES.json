@@ -1,0 +1,68 @@
+{
+  "schema": "hepta.runtime.fence-successor.complete-graph-reader-delta.v1",
+  "before_commit": "eceaaa36f5b92b64d83807f9d2605f744c652e80",
+  "path": "tests/hia_native/public123_extract_local_policy_ci/read_successor.py",
+  "edits": [
+    {
+      "before": "\"\"\"Strict complete read of the one-owner successor, all inherited images and both entries.\"\"\"",
+      "after": "\"\"\"Strict complete read of mechanical fence successor, all115 retained images and both entries.\"\"\""
+    },
+    {
+      "before": "def verify(retained,output):",
+      "after": "def verify(retained,previous,output):"
+    },
+    {
+      "before": "    retained=Path(retained).resolve(strict=True);output=Path(output).resolve(strict=True)",
+      "after": "    retained=Path(retained).resolve(strict=True);previous=Path(previous).resolve(strict=True);output=Path(output).resolve(strict=True)"
+    },
+    {
+      "before": "    read_graph.source(retained);source_rows=patch_source.source(graph)",
+      "after": "    read_graph.source(retained);source_rows=patch_source.source(graph)\n    source_proof=patch_source.prove(previous,graph)\n    require(doc(output/\"SOURCE_PROOF.json\")==source_proof,\"complete mechanical inverse and retained HIA source proof\")"
+    },
+    {
+      "before": "report[\"status\"]==\"ONE_OWNER_SUCCESSOR123_BUILD_PASS\" and report[\"fresh_direct_hia_compiles\"]==1 and report[\"verified_reused_direct_hia_members\"]==114,\"one actual fresh owner only\"",
+      "after": "report[\"status\"]==\"RETAINED115_FENCE_SUCCESSOR123_BUILD_PASS\" and report[\"fresh_direct_hia_compiles\"]==0 and report[\"verified_reused_direct_hia_members\"]==115,\"all115 direct owners reverified without recompilation\""
+    },
+    {
+      "before": "    origin_output=Path(origin[\"output\"]);origin_retained=Path(origin[\"retained\"])",
+      "after": "    origin_output=Path(origin[\"output\"]);origin_retained=Path(origin[\"retained\"]);origin_previous=Path(origin[\"input_successor\"])"
+    },
+    {
+      "before": "        folder=output/\"build-public/modules\"/module if is_new else native/\"build-public/modules\"/module",
+      "after": "        folder=previous/\"build-public/modules\"/module if is_new else native/\"build-public/modules\"/module"
+    },
+    {
+      "before": "        origin_folder=origin_output/\"build-public/modules\"/module if is_new else origin_retained/\"capture/native-build/build-public/modules\"/module",
+      "after": "        origin_folder=origin_previous/\"build-public/modules\"/module if is_new else origin_retained/\"capture/native-build/build-public/modules\"/module"
+    },
+    {
+      "before": "\"buffer_profile\":profile,\"fresh_compile\":is_new",
+      "after": "\"buffer_profile\":profile,\"fresh_compile\":False"
+    },
+    {
+      "before": "        directory=output/(\"build-\"+role);folder=directory/(\"policy-\"+role)",
+      "after": "        directory=output/(\"build-\"+role);folder=directory/(\"fence-\"+role)"
+    },
+    {
+      "before": "        original_folder=original_directory/(\"policy-\"+role)",
+      "after": "        original_folder=original_directory/(\"fence-\"+role)"
+    },
+    {
+      "before": "require(m[\"members\"] == [dict(x[\"row\"], fresh_compile=(label == \"production\" and name == \"extract_gateway\")) for name,x in fresh.items()]",
+      "after": "require(m[\"members\"] == [x[\"row\"] for x in fresh.values()]"
+    },
+    {
+      "before": "module_names = {\"wide-elf-linker\", \"wide-image-pack\"} | ({\"policy-public-extract-gateway\"} if label == \"production\" else set())",
+      "after": "module_names = {\"wide-elf-linker\", \"wide-image-pack\"}"
+    },
+    {
+      "before": "\"direct_fresh_members\":1 if label==\"production\" else 0,\n            \"same_ci_reused_members\":114 if label==\"production\" else 115,",
+      "after": "\"direct_fresh_members\":0,\n            \"reverified_retained_direct_members\":115,"
+    },
+    {
+      "before": "\"status\":\"COMPLETE_LOCAL_POLICY_SUCCESSOR_GRAPH_READ_PASS\",\"runtime_hia_images\":123,\"fresh_direct\":1,\"reverified_reused_direct\":114",
+      "after": "\"status\":\"COMPLETE_REQUEST_OWNED_FENCE_GRAPH_READ_PASS\",\"runtime_hia_images\":123,\"fresh_direct\":0,\"reverified_reused_direct\":115"
+    }
+  ],
+  "actual_applications": 0
+}

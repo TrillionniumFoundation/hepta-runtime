@@ -1,0 +1,149 @@
+{
+  "schema": "hepta.runtime.request-owned-effect-fence-controller.v1",
+  "baseline_source": "fc73c39569c2c36ed027662d3f9e96614bd4b7d3",
+  "controller_slot": 27,
+  "native_backend_slot": 28,
+  "controller_installed_offset": 232,
+  "native_session_offset": 208,
+  "hub_offset": 224,
+  "pending_fields": {
+    "descriptor": 3584,
+    "continuation": 3648,
+    "installed": 3712,
+    "ownership": 3720,
+    "native": 3728,
+    "hub": 3736,
+    "range_end_exclusive": 3744
+  },
+  "actual_hia_guard_moved_without_release": true,
+  "all_hia_sources_unchanged": true,
+  "idle_controller_retired_only_after_hia_release": true,
+  "same_session_native_config_borrow": {
+    "requires_same_hub_and_native": true,
+    "requires_exact_config_bytes": true,
+    "requires_no_busy_frame_or_eof": true,
+    "adds_native_reference": false,
+    "keeps_cross_session_reference_rule": true,
+    "uses_actual_counter_baseline": true
+  },
+  "source_only": true,
+  "actual_wait_multi_permit_qualified": false,
+  "public_lifecycle_qualified": false,
+  "complete_source_files": 486,
+  "retained_hia_files": 138,
+  "before_binding": {
+    "bytes": 111996,
+    "sha256": "18234f394c9db95c6c78e486867da614fd3353453698e9994207bf4426d4b814"
+  },
+  "after_binding": {
+    "bytes": 113120,
+    "sha256": "dc10afee4618c97ff65bbdc8f62979ee970e194d725ff1f18b85b11ed3a95588"
+  },
+  "changed": [
+    {
+      "path": "native/runtime_mcp_sources.json",
+      "before": {
+        "bytes": 111996,
+        "git_blob": "deeda59a7e7706859de45578f78ba7dfcd9ce4e0",
+        "mode": "100644",
+        "path": "native/runtime_mcp_sources.json",
+        "sha256": "18234f394c9db95c6c78e486867da614fd3353453698e9994207bf4426d4b814"
+      },
+      "after": {
+        "bytes": 113120,
+        "git_blob": "f4be7002efc730006479e0a782220561d2978e3a",
+        "mode": "100644",
+        "path": "native/runtime_mcp_sources.json",
+        "sha256": "dc10afee4618c97ff65bbdc8f62979ee970e194d725ff1f18b85b11ed3a95588"
+      }
+    },
+    {
+      "path": "scripts/runtime_mcp_filesystem_fence_bridge.S",
+      "before": {
+        "bytes": 12036,
+        "git_blob": "fc4034781ed083dab3a87377d2b87b99b682083e",
+        "mode": "100644",
+        "path": "scripts/runtime_mcp_filesystem_fence_bridge.S",
+        "sha256": "4bc63ec63b7c93fe7a16e15b9318195d39a46916ee676502bed5f36d99da0533"
+      },
+      "after": {
+        "bytes": 12652,
+        "git_blob": "1cab465890dc8911a18bb56536203355572430e4",
+        "mode": "100644",
+        "path": "scripts/runtime_mcp_filesystem_fence_bridge.S",
+        "sha256": "23f9769f0a36362478a3e68036424c505ca46203224d1e6da7c1e7c73d976863"
+      }
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": {
+        "bytes": 12951,
+        "git_blob": "8bf143e50c0bf3bd1e1a8d72161950a31f00adbd",
+        "mode": "100644",
+        "path": "scripts/runtime_mcp_task_storage.S",
+        "sha256": "44c1a86502ccb0b4b02bc7907ecea35d14421a90428efba4dc6488882b236138"
+      },
+      "after": {
+        "bytes": 18406,
+        "git_blob": "89640cb5d7d84bfd7b21ea26b1874173bd0524aa",
+        "mode": "100644",
+        "path": "scripts/runtime_mcp_task_storage.S",
+        "sha256": "143023803703a8762f082ca65015258531f193e9ff52a8198f4ecf3b5fa8a63c"
+      }
+    }
+  ],
+  "patches": [
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": ".equ PN_X_OUTMAP,1176\n",
+      "after": ".equ PN_X_OUTMAP,1176\n/* Actual request-owned effect-fence controller; native context remains session-owned. */\n.equ PN_F_DESCRIPTOR,3584\n.equ PN_F_CONTINUATION,3648\n.equ PN_F_INSTALLED,3712\n.equ PN_F_OWNERSHIP,3720\n.equ PN_F_NATIVE,3728\n.equ PN_F_HUB,3736\n"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "    call pump_extract_detach\n    mov rdi,rbp\n    call pump_trace_detached",
+      "after": "    call pump_extract_detach\n    mov rdi,rbp\n    call pump_fence_detach\n    mov rdi,rbp\n    call pump_trace_detached"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "    call pump_extract_restore\n    mov rdi,rbp\n    call pump_trace_restored",
+      "after": "    call pump_extract_restore\n    mov rdi,rbp\n    call pump_fence_restore\n    mov rdi,rbp\n    call pump_trace_restored"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "pump_retire_untracked:\n    cmp qword ptr [rbp+PN_X_ACTIVE],0",
+      "after": "pump_retire_untracked:\n    mov rax,[rbp+PN_F_INSTALLED]\n    or rax,[rbp+PN_F_OWNERSHIP]\n    or rax,[rbp+PN_F_NATIVE]\n    or rax,[rbp+PN_F_HUB]\n    jnz public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0"
+    },
+    {
+      "path": "scripts/runtime_mcp_filesystem_fence_bridge.S",
+      "before": "fs_fence_configure:\n    cmp qword ptr [r14 + 208], 0\n    jne fs_fence_invalid\n    mov r15, [rdx + 8]",
+      "after": "fs_fence_configure:\n    mov qword ptr [rsp + 32], 0\n    cmp qword ptr [r14 + 208], 0\n    je fs_fence_configure_lookup\n    mov rax, [r14 + 208]\n    cmp [rdx + 8], rax\n    jne fs_fence_invalid\n    cmp qword ptr [rax + RF_BUSY], 0\n    jne fs_fence_invalid\n    cmp qword ptr [rax + RF_G_FRAME], 0\n    jne fs_fence_invalid\n    cmp qword ptr [rax + RF_G_EOF], 0\n    jne fs_fence_invalid\n    mov qword ptr [rsp + 32], 1\nfs_fence_configure_lookup:\n    mov r15, [rdx + 8]"
+    },
+    {
+      "path": "scripts/runtime_mcp_filesystem_fence_bridge.S",
+      "before": "    cmp qword ptr [r15 + RF_REFERENCES], -1\n    je fs_fence_resource\n    inc qword ptr [r15 + RF_REFERENCES]\n    mov rax, [r15 + RF_NATIVE_CALLS]",
+      "after": "    /* Same-session reborrow follows the full immutable config comparison.\n     * A separate session still owns exactly one additional native reference. */\n    cmp qword ptr [rsp + 32], 1\n    je fs_fence_same_session_borrow\n    cmp qword ptr [r15 + RF_REFERENCES], -1\n    je fs_fence_resource\n    inc qword ptr [r15 + RF_REFERENCES]\nfs_fence_same_session_borrow:\n    mov rax, [r15 + RF_NATIVE_CALLS]"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "before": "/* Best-effort restoration on an invariant failure.",
+      "after": "/* Move an admitted guard with its suspended request. Slot27's child borrow\n * is complete, but its actual +112 token stays live until HIA RELEASE. */\npump_fence_detach:\n    PM_SAVE\n    mov rbp,rdi\n    mov rax,[rbp+PN_F_INSTALLED]\n    or rax,[rbp+PN_F_OWNERSHIP]\n    or rax,[rbp+PN_F_NATIVE]\n    or rax,[rbp+PN_F_HUB]\n    jnz public_span_fail\n    mov rbx,[r15+8]\n    add rbx,27*64\n    lea r14,[r15+512+27*64]\n    mov rax,[r14]\n    or rax,[r14+8]\n    jnz public_span_fail\n    mov r13,[rbx+8]\n    test r13,r13\n    jz pf_detach_absent\n    cmp qword ptr [rbx+16],4096\n    jb public_span_fail\n    cmp qword ptr [r15+232],1\n    jne public_span_fail\n    cmp qword ptr [r13+8],0\n    jne public_span_fail\n    cmp qword ptr [r13+64],1\n    jne public_span_fail\n    cmp qword ptr [r13+112],0\n    je pf_detach_done\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_CONTEXT],0\n    je public_span_fail\n    bt qword ptr [r15+64],27\n    jnc public_span_fail\n    bt qword ptr [r15+72],27\n    jnc public_span_fail\n    lea rdi,[rbp+PN_F_DESCRIPTOR]\n    mov rsi,rbx\n    mov ecx,8\n    rep movsq\n    lea rdi,[rbp+PN_F_CONTINUATION]\n    mov rsi,r14\n    mov ecx,8\n    rep movsq\n    mov qword ptr [rbp+PN_F_INSTALLED],1\n    mov qword ptr [rbp+PN_F_OWNERSHIP],3\n    mov rax,[r15+208]\n    mov [rbp+PN_F_NATIVE],rax\n    mov rax,[r15+224]\n    test rax,rax\n    jz public_span_fail\n    mov [rbp+PN_F_HUB],rax\n    btr qword ptr [r15+64],27\n    btr qword ptr [r15+72],27\n    lea rdi,[rbx+8]\n    xor eax,eax\n    mov ecx,7\n    rep stosq\n    mov rdi,r14\n    mov ecx,8\n    rep stosq\n    mov qword ptr [r15+232],0\n    jmp pf_detach_done\npf_detach_absent:\n    cmp qword ptr [r15+232],0\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    jne public_span_fail\npf_detach_done:\n    PM_RETURN\n\n/* Retire only an already released reusable controller before restoring a\n * retained request. Its shared native fence and session reference stay alive. */\npump_fence_clear_idle:\n    PM_SAVE\n    mov rbx,[r15+8]\n    add rbx,27*64\n    lea r14,[r15+512+27*64]\n    mov rax,[r14]\n    or rax,[r14+8]\n    jnz public_span_fail\n    mov r13,[rbx+8]\n    test r13,r13\n    jz pf_idle_absent\n    cmp qword ptr [r15+232],1\n    jne public_span_fail\n    cmp qword ptr [rbx+16],4096\n    jb public_span_fail\n    cmp qword ptr [r13+64],1\n    jne public_span_fail\n    mov rax,[r13+8]\n    or rax,[r13+112]\n    jnz public_span_fail\n    bt qword ptr [r15+64],27\n    jnc public_span_fail\n    bt qword ptr [r15+72],27\n    jnc public_span_fail\n    mov rdi,r13\n    mov rsi,[rbx+16]\n    add rsi,4096\n    jc public_span_fail\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    mov rdi,[rbx+32]\n    test rdi,rdi\n    jz public_span_fail\n    mov rsi,[rbx+40]\n    test rsi,rsi\n    jz public_span_fail\n    add rsi,4096\n    jc public_span_fail\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    btr qword ptr [r15+64],27\n    btr qword ptr [r15+72],27\n    lea rdi,[rbx+8]\n    xor eax,eax\n    mov ecx,7\n    rep stosq\n    mov rdi,r14\n    mov ecx,8\n    rep stosq\n    mov qword ptr [r15+232],0\n    jmp pf_idle_done\npf_idle_absent:\n    cmp qword ptr [r15+232],0\n    jne public_span_fail\n    bt qword ptr [r15+64],27\n    jc public_span_fail\n    bt qword ptr [r15+72],27\n    jc public_span_fail\n    mov rax,[rbx+16]\n    or rax,[rbx+24]\n    or rax,[rbx+32]\n    or rax,[rbx+40]\n    or rax,[rbx+48]\n    or rax,[rbx+56]\n    jnz public_span_fail\npf_idle_done:\n    PM_RETURN\n\npump_fence_restore:\n    PM_SAVE\n    mov rbp,rdi\n    cmp qword ptr [rbp+PN_F_OWNERSHIP],0\n    je pf_restore_absent\n    cmp qword ptr [rbp+PN_F_OWNERSHIP],3\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_F_INSTALLED],1\n    jne public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],1\n    jne public_span_fail\n    mov rax,[rbp+PN_F_NATIVE]\n    cmp [r15+208],rax\n    jne public_span_fail\n    mov rax,[rbp+PN_F_HUB]\n    test rax,rax\n    jz public_span_fail\n    cmp [r15+224],rax\n    jne public_span_fail\n    call pump_fence_clear_idle\n    mov rbx,[r15+8]\n    add rbx,27*64\n    lea r14,[r15+512+27*64]\n    mov rax,[rbp+PN_F_DESCRIPTOR]\n    cmp [rbx],rax\n    jne public_span_fail\n    mov r13,[rbp+PN_F_DESCRIPTOR+8]\n    test r13,r13\n    jz public_span_fail\n    cmp qword ptr [r13+8],0\n    jne public_span_fail\n    cmp qword ptr [r13+112],0\n    je public_span_fail\n    mov rdi,rbx\n    lea rsi,[rbp+PN_F_DESCRIPTOR]\n    mov ecx,8\n    rep movsq\n    mov rdi,r14\n    lea rsi,[rbp+PN_F_CONTINUATION]\n    mov ecx,8\n    rep movsq\n    bts qword ptr [r15+64],27\n    bts qword ptr [r15+72],27\n    mov qword ptr [r15+232],1\n    mov qword ptr [rbp+PN_F_INSTALLED],0\n    mov qword ptr [rbp+PN_F_OWNERSHIP],0\n    mov qword ptr [rbp+PN_F_NATIVE],0\n    mov qword ptr [rbp+PN_F_HUB],0\n    jmp pf_restore_done\npf_restore_absent:\n    mov rax,[rbp+PN_F_INSTALLED]\n    or rax,[rbp+PN_F_NATIVE]\n    or rax,[rbp+PN_F_HUB]\n    jnz public_span_fail\n    cmp qword ptr [rbp+PN_X_ACTIVE],0\n    jne public_span_fail\npf_restore_done:\n    PM_RETURN\n\n/* Best-effort restoration on an invariant failure."
+    }
+  ],
+  "retained_actual_failure": {
+    "source": "42cccdc859b494d300f8756227b19c91009a0a72",
+    "run": 44062971639,
+    "job": 133969314804,
+    "artifact": 14318443480,
+    "completed_cases": 1,
+    "next_case": "fifo-three-cancel-middle",
+    "actual_exit": 111,
+    "rejection_slot": 27,
+    "actual_guard_still_live": true
+  },
+  "static_peer_review": {
+    "agent": "target_sdk_contracts",
+    "result": "no static blocker in mover ordering and same-session reborrow",
+    "runtime_qualification": false
+  },
+  "scope": "Source successor only; no new application or multi-permit qualification."
+}
