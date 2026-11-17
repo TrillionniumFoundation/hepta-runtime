@@ -66,9 +66,14 @@ def main():
         CAPACITY=0xfffffffe,WORK_SIZE=work_size,ERRNO_COUNT=errno_count,ERRNO_TABLE=errno_table,
         RANGE_COUNT=len(ranges),RANGES_AT=ranges_at,UNKNOWN_AT=unknown_at,UNKNOWN_SIZE=unknown_size,ERR_PREFIX=prefix_at)
     pseudo=(source/"authoring/binary_error.pseudo").read_text()
+    chunks=[(start,min(start+2048,len(pool)))for start in range(0,len(pool),2048)]
     pseudo+="\ndef install_data(w:mutbuf) -> u64:\n"
-    for at in range(0,len(pool),8):pseudo+=f"    put(w,{at},{int.from_bytes(pool[at:at+8],'little')})\n"
+    for index,_ in enumerate(chunks):pseudo+=f"    install_data_{index}(w)\n"
     pseudo+="    return 0\n"
+    for index,(start,end)in enumerate(chunks):
+        pseudo+=f"\ndef install_data_{index}(w:mutbuf) -> u64:\n"
+        for at in range(start,end,8):pseudo+=f"    put(w,{at},{int.from_bytes(pool[at:at+8],'little')})\n"
+        pseudo+="    return 0\n"
     pseudo=re.sub(r"\b("+"|".join(constants)+r")\b",lambda m:str(constants[m[0]]),pseudo)
     nodes=ast.parse(pseudo).body;assert all(isinstance(n,ast.FunctionDef)for n in nodes)and nodes[0].name=="entry"
     names={n.name:"f"+str(i)for i,n in enumerate(nodes)};names["utf8"]="f"+str(len(nodes))
@@ -86,8 +91,13 @@ def main():
     assert actual["functions"][-1]==retained and render_assembly(actual).encode()==raw
     operations=sum(len(b["ops"])for f in actual["functions"]for b in f["blocks"])
     assert operations<=8192,operations
+    limits=json.loads((a.hepta/"docs/HIA_SELFHOST_CORE_SUPPORT.json").read_bytes())["limits"]
+    assert len(actual["functions"])<=limits["functions"]==128
+    assert sum(len(f["blocks"])for f in actual["functions"])<=limits["blocks_total"]==1536
     for f in actual["functions"]:
         assert len(f["blocks"])<=256 and max(len(b["params"])for b in f["blocks"])<=16,f["name"]
+        fragment=render_assembly(dict(schema="hepta.hia.program.v8",module="ssa_budget",functions=[f]))
+        assert len(set(re.findall(r"\bv[0-9]+\b",fragment)))<=limits["ssa_names_per_function"]==2048,f["name"]
     data=dict(schema="hepta.runtime.binary-error.frozen-platform-data.v1",unicode_version=unicodedata.unidata_version,
         nonprintable_ranges=ranges,known_errno_messages=errors,errno_class_ids=classes,classes=CLASSES,
         data_bytes=len(pool),data_sha256=SHA(bytes(pool)),workspace_required=work_size,

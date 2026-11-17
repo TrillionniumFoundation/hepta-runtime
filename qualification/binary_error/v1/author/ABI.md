@@ -26,3 +26,7 @@ OSError wire class. The diagnostic formatter derives the full Python class
 from the errno, rendering ProcessLookupError and ChildProcessError respectively.
 Its internal class pool has 16 names; the input ABI remains the original 14
 wire classes. This distinction is included in the complete errno domain.
+
+## Compiler admission
+
+The immutable data installer is partitioned into five private 256-word chunks so every function remains within the pinned 2,048-SSA-name budget. The data bytes, wire ABI, and formatter algorithm are unchanged. The source author also checks the actual compiler contract's unchanged 128-function, 1,536-total-block and per-function SSA limits before emitting a candidate.
