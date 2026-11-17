@@ -1,0 +1,3 @@
+# Independent uploaded publication qualification
+
+Every group downloads its complete pinned qualification ZIP and the unchanged upstream native build. All ZIP/TAR members, object and logical bytes, file and directory modes, source manifests, application process streams, full HIA/OS/child buffers, existing guard records, and physical-control copies are read without any application execution. The two initial groups retain their original failed producer plus the successful pure recovery; the remaining groups retain their unique actual captures. No physical control is replayed by this independent reader. Each read remains bounded to 180 seconds, each download to 60 seconds, and each CI job to 15 minutes.
