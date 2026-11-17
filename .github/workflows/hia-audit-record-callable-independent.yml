@@ -1,0 +1,72 @@
+name: Independently read uploaded audit callable evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-record-callable-independent-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_record_callable_independent
+      - name: Admit all independent pure reader sources
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          export AUDIT_INDEPENDENT_ROOT="$RUNNER_TEMP/audit-record-callable-independent"
+          echo "AUDIT_INDEPENDENT_ROOT=$AUDIT_INDEPENDENT_ROOT" >> "$GITHUB_ENV"
+          mkdir -p "$AUDIT_INDEPENDENT_ROOT"
+          cp -a tests/hia_native/audit_record_callable_independent "$AUDIT_INDEPENDENT_ROOT/source"
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,os,sys
+          root=Path(os.environ["AUDIT_INDEPENDENT_ROOT"])/"source"
+          assert hashlib.sha256((root/"SOURCE.json").read_bytes()).hexdigest()=="221d570c1c4773bb2b8526272bdaccbf934acf9ad7ec76eeab51185de659623e"
+          sys.path.insert(0,str(root))
+          from independent_support import source
+          assert source()=="221d570c1c4773bb2b8526272bdaccbf934acf9ad7ec76eeab51185de659623e"
+          for path in root.rglob("*.py"):compile(path.read_bytes(),str(path),"exec")
+          PY
+      - name: Read complete uploaded ZIP and restore every logical file and mode
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14319322364/zip > "$AUDIT_INDEPENDENT_ROOT/recovery.zip"
+          timeout --signal=KILL 180 python3 -I -B "$AUDIT_INDEPENDENT_ROOT/source/read_archive.py" \
+            --archive "$AUDIT_INDEPENDENT_ROOT/recovery.zip" \
+            --destination "$AUDIT_INDEPENDENT_ROOT/capture" \
+            --report "$AUDIT_INDEPENDENT_ROOT/result/ARCHIVE.json"
+      - name: Independently verify full native original controls and process evidence read-only
+        run: |
+          python3 -I -B "$AUDIT_INDEPENDENT_ROOT/source/run_read.py" \
+            --capture "$AUDIT_INDEPENDENT_ROOT/capture" \
+            --output "$AUDIT_INDEPENDENT_ROOT/result"
+      - name: Preserve complete independent proof and full actual streams
+        if: always()
+        run: |
+          if test -d "$AUDIT_INDEPENDENT_ROOT/result"; then
+            timeout --signal=KILL 180 python3 -I -B "$AUDIT_INDEPENDENT_ROOT/source/export_proof.py" \
+              --output "$AUDIT_INDEPENDENT_ROOT/result" \
+              --archive "$AUDIT_INDEPENDENT_ROOT/audit-record-callable-independent.tar.gz"
+          fi
+      - name: Upload complete independent proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-callable-independent-${{ github.sha }}
+          path: |
+            ${{ env.AUDIT_INDEPENDENT_ROOT }}/audit-record-callable-independent.tar.gz
+            ${{ env.AUDIT_INDEPENDENT_ROOT }}/audit-record-callable-independent.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
