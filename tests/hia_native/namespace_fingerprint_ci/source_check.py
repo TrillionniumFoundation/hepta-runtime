@@ -36,8 +36,21 @@ def check():
     packages=tomllib.loads(read(ROOT/"reference/Cargo.lock").decode())["package"]
     target_packages=tomllib.loads(read(ROOT/"reference/target-Cargo.lock").decode())["package"]
     target_index={(p["name"],p["version"]):p for p in target_packages}
+    def dep(text,rows):
+        parts=text.split()
+        found=[(p["name"],p["version"])for p in rows if p["name"]==parts[0]and(len(parts)==1 or p["version"]==parts[1])]
+        require(len(parts)in(1,2)and len(found)==1,"one exact locked dependency identity")
+        return found[0]
+    plan=json.loads(read(ROOT/"reference/REGISTRY_PLAN.json"))
+    require(pin(read(ROOT/"reference/Cargo.lock"))==plan["reference_lock"]and
+            len([p for p in packages if"source"in p])==plan["packages"]==22,"actual frozen Cargo feature lock")
     for p in packages:
-        if"source"in p:require(target_index[(p["name"],p["version"])]==p,"entire target locked package, including dependencies")
+        if"source"in p:
+            q=target_index[(p["name"],p["version"])]
+            require({k:v for k,v in p.items()if k!="dependencies"}=={k:v for k,v in q.items()if k!="dependencies"},
+                    "whole target registry package identity and checksum")
+            require({dep(x,packages)for x in p.get("dependencies",[])}<={dep(x,target_packages)for x in q.get("dependencies",[])},
+                    "only actual feature-selected target edges")
     require({p["version"]for p in packages if p["name"]=="sha2"}=={"0.11.0"},"actual target SHA-256 dependency")
     return dict(status="SOURCE_ONLY_PASS",source_sha256=digest,source_files=len(json.loads(read(ROOT/"SOURCE.json"))["files"]),
         original_spans=len(spans["spans"]),native_or_rust_semantic_executions=0)
