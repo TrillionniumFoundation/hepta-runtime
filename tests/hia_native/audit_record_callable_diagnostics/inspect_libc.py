@@ -1,6 +1,6 @@
 """Read the complete preserved failure and inspect libc admission; no HIA/Rust execution."""
 from pathlib import Path, PurePosixPath
-import argparse,ctypes as C,hashlib,io,json,os,stat,tarfile,zipfile
+import argparse,ctypes as C,hashlib,io,json,os,stat,sys,tarfile,zipfile
 def need(ok,text):
     if not ok: raise ValueError(text)
 def pin(raw):return dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
@@ -60,21 +60,32 @@ def main(archive,output):
     (output/"FAILED_ARCHIVE_MANIFEST.json").write_bytes(encoded(manifest))
     class DlInfo(C.Structure):
         _fields_=[("filename",C.c_char_p),("base",C.c_void_p),("symbol",C.c_char_p),("symbol_address",C.c_void_p)]
-    library=C.CDLL(None)
-    lookup=library.dladdr;lookup.argtypes=[C.c_void_p,C.POINTER(DlInfo)];lookup.restype=C.c_int
+    resolver=C.CDLL("libc.so.6")
+    lookup=resolver.dladdr;lookup.argtypes=[C.c_void_p,C.POINTER(DlInfo)];lookup.restype=C.c_int
     functions=("__errno_location","openat","fstat","geteuid","read","write","fsync","close",
                "linkat","unlinkat","renameat","fcntl","fdopendir","readdir","closedir")
     rows=[]
-    for name in functions:
-        pointer=C.cast(getattr(library,name),C.c_void_p).value;info=DlInfo()
-        need(lookup(pointer,C.byref(info))!=0 and info.filename,"real loaded symbol")
-        original=info.filename.decode();resolved=Path(original).resolve(strict=True);body=resolved.read_bytes()
-        identity=pin(body);filename="library-"+identity["sha256"]+".bin"
-        if not (output/filename).exists():(output/filename).write_bytes(body)
-        rows.append(dict(name=name,pointer=pointer,filename=original,resolved_path=str(resolved),
-                         library=identity,library_file=filename,first16_hex=body[:16].hex(),
-                         base=info.base,symbol=None if info.symbol is None else info.symbol.decode(),
-                         symbol_address=info.symbol_address))
+    for scope in (None,"libc.so.6"):
+        library=C.CDLL(scope)
+        for name in functions:
+            pointer=C.cast(getattr(library,name),C.c_void_p).value;info=DlInfo()
+            need(lookup(pointer,C.byref(info))!=0 and info.filename,"real loaded symbol")
+            original=info.filename.decode()
+            row=dict(scope=scope,name=name,pointer=pointer,filename=original,base=info.base,
+                     symbol=None if info.symbol is None else info.symbol.decode(),
+                     symbol_address=info.symbol_address)
+            try:
+                candidate=Path(original)
+                if not candidate.is_absolute() and candidate.name==Path(sys.executable).name:
+                    candidate=Path("/proc/self/exe")
+                resolved=candidate.resolve(strict=True);body=resolved.read_bytes()
+                identity=pin(body);filename="library-"+identity["sha256"]+".bin"
+                if not (output/filename).exists():(output/filename).write_bytes(body)
+                row.update(resolved_path=str(resolved),library=identity,library_file=filename,
+                           first16_hex=body[:16].hex())
+            except (OSError,ValueError) as error:
+                row["path_observation_error"]=repr(error)
+            rows.append(row)
     (output/"PROCESS-MAPS.txt").write_bytes(Path("/proc/self/maps").read_bytes())
     value=dict(schema="hepta.audit-record-callable.libc-inspection.v1",status="OBSERVED",
                failed_head=manifest["git_head"],failed_run=44060098314,failed_job=133959441040,

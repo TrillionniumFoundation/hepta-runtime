@@ -2,7 +2,7 @@ name: Inspect preserved audit callable libc admission
 on:
   workflow_dispatch:
   push:
-    branches: [hia-audit-record-libc-inspection-6780-20261117]
+    branches: [hia-audit-record-libc-inspection-v2-6780-20261117]
 permissions:
   contents: read
   actions: read
@@ -28,7 +28,7 @@ jobs:
           from pathlib import Path
           p=Path("tests/hia_native/audit_record_callable_diagnostics/inspect_libc.py")
           raw=p.read_bytes()
-          assert hashlib.sha256(raw).hexdigest()=="ec245346b35642686bd31f7ef4a705a8e7d204f55c9c597eed2a4f76c8982f0e"
+          assert hashlib.sha256(raw).hexdigest()=="11a0a99c3c2a9dc7335c43327fd5fca02d080e846ce4d8d14165e17e6e3d62dd"
           compile(raw,str(p),"exec")
           PY
           timeout --signal=KILL 60 python3 -I -B tests/hia_native/audit_record_callable_diagnostics/inspect_libc.py \
