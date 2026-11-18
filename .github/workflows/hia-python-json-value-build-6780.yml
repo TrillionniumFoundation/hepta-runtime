@@ -2,7 +2,7 @@ name: Build HIA Python JSON value owner without applications
 on:
   workflow_dispatch:
   push:
-    branches: [hia-python-json-value-build-6780-20261118]
+    branches: [hia-python-json-value-build-v2-6780-20261118]
 permissions:
   contents: read
 jobs:
@@ -13,15 +13,15 @@ jobs:
       LC_ALL: C.UTF-8
       PYTHONDONTWRITEBYTECODE: '1'
       GH_TOKEN: ${{ github.token }}
-      PYJSON_SOURCE: ${{ github.workspace }}/runtime/qualification/python_json_value/v1/native_build
-      PYJSON_MANIFEST: 05de8fd97b9440b22acb8288e22562b0f724a6144c1af85a5c98b2c6756662b8
+      PYJSON_SOURCE: ${{ github.workspace }}/runtime/qualification/python_json_value/v2/native_build
+      PYJSON_MANIFEST: df75bb84f3f1b6a9f83225a18ff5cfa3f31ee4acc988e1ea6eb64b514acf2dce
     steps:
       - name: Checkout frozen source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: runtime
           ref: ${{ github.sha }}
-          sparse-checkout: qualification/python_json_value/v1/native_build
+          sparse-checkout: qualification/python_json_value/v2/native_build
           persist-credentials: false
       - name: Checkout exact compiler source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
