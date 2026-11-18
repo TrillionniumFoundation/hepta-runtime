@@ -19,8 +19,11 @@ Input bytes and bytes beyond the supplied output/work extents are unchanged.
 
 Success has a 64-byte HPYJIR01 header: kind 0 at 8, tag 7 at 16, dictionary truth
 at 24, zero at 32, item count at 40, zero at 48, total payload bytes at 56.
-Each item is key code point count (u64), full value record extent (u64), complete
-decoded key UTF-32LE, then a complete HPYJSR01 kind-0 typed value record. Nested
+Each item starts with four u64 words: key code point count, full typed-value record
+extent, original value lexical code point count, and reserved zero. Payload is the
+complete decoded key UTF-32LE, a complete HPYJSR01 kind-0 typed value record, and
+the complete original value lexical UTF-32LE. The last value's exact original span
+is retained even when duplicate keys replace an earlier value. Nested
 container values contain their full original UTF-32LE lexical span, with the
 existing value ABI's scalar tags, integer bytes, float bits, truth and encodings.
 The item stream contains no padding or omitted members.

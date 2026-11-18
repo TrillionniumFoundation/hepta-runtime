@@ -110,14 +110,23 @@ def items_output(s:readbuf,o:mutbuf,w:mutbuf,head:u64,writing:bool) -> u64:
         cp=get(w,key+48)
         key_bytes=cp*4
         value_bytes=64+items_payload_size(s,w,item)
+        raw_span=get(w,item+56)
+        raw_begin=raw_span&4294967295
+        raw_count=(raw_span>>32)-raw_begin
         if writing:
             put(o,at,cp)
             put(o,at+8,value_bytes)
+            put(o,at+16,raw_count)
+            put(o,at+24,0)
             i=0
             while i<key_bytes:
-                store(o,at+16+i,byte(w,get(w,key+40)+i))
+                store(o,at+32+i,byte(w,get(w,key+40)+i))
                 i=i+1
-            items_value(s,o,w,item,at+16+key_bytes)
-        at=at+16+key_bytes+value_bytes
+            items_value(s,o,w,item,at+32+key_bytes)
+            i=0
+            while i<raw_count*4:
+                store(o,at+32+key_bytes+value_bytes+i,byte(s,64+raw_begin*4+i))
+                i=i+1
+        at=at+32+key_bytes+value_bytes+raw_count*4
         item=original_next(w,item)
     return at-64
