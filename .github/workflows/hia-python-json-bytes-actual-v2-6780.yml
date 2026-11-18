@@ -1,0 +1,51 @@
+name: Qualify HIA Python JSON byte decoding
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-python-json-bytes-actual-6780-v2-20261118]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  actual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      PYJSON_SOURCE: ${{ github.workspace }}/runtime/qualification/python_json_bytes/v2/actual_source
+      PYJSON_MANIFEST: 51f193cb48c5db0ca6fd9c526ce7a0aabdd26037525efe89f3a8059781b46c0b
+    steps:
+      - name: Checkout complete frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/python_json_bytes/v2/actual_source
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Capture each original and HIA case once
+        run: |
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/gate.py" run \
+            --work "$RUNNER_TEMP/python-json-bytes-actual" --shard "${{ matrix.shard }}" \
+            --source-manifest-sha256 "$PYJSON_MANIFEST"
+      - name: Preserve complete captures including failures
+        if: always()
+        run: |
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/python-json-bytes-actual" --shard "${{ matrix.shard }}" \
+            --output "$RUNNER_TEMP/python-json-bytes-export" --source-manifest-sha256 "$PYJSON_MANIFEST"
+      - name: Upload complete evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-json-bytes-actual-${{ matrix.shard }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/python-json-bytes-export
+          if-no-files-found: error
+          retention-days: 14
