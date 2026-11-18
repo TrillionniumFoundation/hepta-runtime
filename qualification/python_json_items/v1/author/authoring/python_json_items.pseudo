@@ -1,0 +1,123 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<64 or load(s,0)!=REQUEST or load(s,8)!=1:
+        return INVALID
+    count=load(s,16)
+    budget=load(s,32)
+    if count>8388608 or load(s,24)!=0 or budget==0 or budget>20000:
+        return INVALID
+    if load(s,40)==0 or load(s,40)>20000 or load(s,48)!=0:
+        return INVALID
+    if load(s,56)!=count*4 or length(s)!=64+count*4:
+        return INVALID
+    at=0
+    while at<count:
+        if character(s,at)>1114111:
+            return INVALID
+        at=at+1
+    if length(w)<16480+40*count:
+        return WORKSPACE
+    put(w,12288,16384)
+    put(w,12296,length(w)&18446744073709551608)
+    put(w,12328,0)
+    put(w,12352,load(s,40))
+    put(w,12392,0)
+    root=parse(s,w,0,count,budget)
+    if root==0:
+        return report_error(s,o,w)
+    if get(w,root)!=7:
+        return items_error(o,w,get(w,root))
+    head=original_order(w,root)
+    needed=items_output(s,o,w,head,False)
+    if needed>4294901696:
+        return INVALID
+    if length(o)<64+needed:
+        return CAPACITY
+    header(o,0,7,choose(get(w,root+48)!=0,1,0),0,get(w,root+48),0,needed)
+    put(o,0,ITEMS_RESPONSE)
+    actual=items_output(s,o,w,head,True)
+    if actual!=needed:
+        return INVALID
+    return 64+needed
+
+def items_error(o:mutbuf,w:mutbuf,tag:u64) -> u32:
+    at=attribute_error(w,10000)
+    at=type_name(w,at,tag)
+    at=no_attribute(w,at)
+    at=items_suffix(w,at)
+    size=at-10000
+    if length(o)<64+size:
+        return CAPACITY
+    header(o,3,22,0,0,0,2,size)
+    i=0
+    while i<size:
+        store(o,64+i,byte(w,10000+i))
+        i=i+1
+    return 64+size
+
+def items_payload_size(s:readbuf,w:mutbuf,node:u64) -> u64:
+    tag=get(w,node)
+    if tag==3:
+        return integer_size(w,node)+choose(integer_negative(s,w,node),1,0)
+    if tag==5:
+        return get(w,node+48)*4
+    if tag>=6:
+        span=get(w,node+56)
+        return ((span>>32)-(span&4294967295))*4
+    return 0
+
+def items_value(s:readbuf,o:mutbuf,w:mutbuf,node:u64,at:u64) -> u64:
+    tag=get(w,node)
+    size=items_payload_size(s,w,node)
+    units=0
+    encoding=0
+    bits=0
+    if tag==3:
+        units=size
+        encoding=2
+    if tag==4:
+        bits=get(w,node+40)
+    if tag==5 or tag>=6:
+        units=size>>2
+        encoding=1
+    put(o,at,VALUE_RESPONSE)
+    put(o,at+8,0)
+    put(o,at+16,tag)
+    put(o,at+24,scalar_truth(s,w,node))
+    put(o,at+32,bits)
+    put(o,at+40,units)
+    put(o,at+48,encoding)
+    put(o,at+56,size)
+    if tag==3:
+        integer_output(s,o,w,node,at,True)
+    elif tag==5:
+        i=0
+        while i<size:
+            store(o,at+64+i,byte(w,get(w,node+40)+i))
+            i=i+1
+    elif tag>=6:
+        begin=get(w,node+56)&4294967295
+        i=0
+        while i<size:
+            store(o,at+64+i,byte(s,64+begin*4+i))
+            i=i+1
+    return at+64+size
+
+def items_output(s:readbuf,o:mutbuf,w:mutbuf,head:u64,writing:bool) -> u64:
+    at=64
+    item=head
+    while item!=0:
+        key=get(w,item+32)
+        cp=get(w,key+48)
+        key_bytes=cp*4
+        value_bytes=64+items_payload_size(s,w,item)
+        if writing:
+            put(o,at,cp)
+            put(o,at+8,value_bytes)
+            i=0
+            while i<key_bytes:
+                store(o,at+16+i,byte(w,get(w,key+40)+i))
+                i=i+1
+            items_value(s,o,w,item,at+16+key_bytes)
+        at=at+16+key_bytes+value_bytes
+        item=original_next(w,item)
+    return at-64
