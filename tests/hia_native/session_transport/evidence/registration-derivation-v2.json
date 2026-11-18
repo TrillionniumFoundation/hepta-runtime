@@ -1,0 +1,1190 @@
+{
+  "base_commit": "7384573a789eaa6ae6347e893bb47983442129ca",
+  "complete_text_inverse": true,
+  "files": {
+    ".github/workflows/hia-runtime-native.yml": {
+      "after_bytes": 47892,
+      "after_sha256": "fe065a41765d955ccf792d9482dd8b153f330fc3e65fb04f141c50a74599f139",
+      "before_bytes": 46832,
+      "before_sha256": "fa0bb53823caf23913f5653fb45a2ea2352cbd18b72f06a5d7645369d2db544d",
+      "edits": [
+        {
+          "after": "      - 'scripts/session_transport/*.S'\n",
+          "before": "",
+          "new_end": 50,
+          "new_start": 49,
+          "old_end": 49,
+          "old_start": 49
+        },
+        {
+          "after": "      - 'scripts/session_transport/*.S'\n",
+          "before": "",
+          "new_end": 156,
+          "new_start": 155,
+          "old_end": 154,
+          "old_start": 154
+        },
+        {
+          "after": "# The same fresh cold/build bytes feed all nine complete native partitions.\n",
+          "before": "# The same fresh cold/build bytes feed all eight complete native partitions.\n",
+          "new_end": 226,
+          "new_start": 225,
+          "old_end": 224,
+          "old_start": 223
+        },
+        {
+          "after": "# Twelve original groups retain all recipes and fixed Rust 1.95.0; the final job admits every group.\n",
+          "before": "# Eleven original groups retain all recipes and fixed Rust 1.95.0; the final job admits every group.\n",
+          "new_end": 229,
+          "new_start": 228,
+          "old_end": 227,
+          "old_start": 226
+        },
+        {
+          "after": "        group: [public, audit, storage, batch, text, json, config, system, session]\n",
+          "before": "        group: [public, audit, storage, batch, text, json, config, system]\n",
+          "new_end": 298,
+          "new_start": 297,
+          "old_end": 296,
+          "old_start": 295
+        },
+        {
+          "after": "  original_session:\n    name: Complete original session transport ownership recipes\n    needs: native_collect\n    uses: ./.github/workflows/hia-runtime-original-shard.yml\n    with:\n      group: session\n      runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}\n      invocation: ${{ github.run_id }}-${{ github.run_attempt }}\n      native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}\n\n",
+          "before": "",
+          "new_end": 596,
+          "new_start": 586,
+          "old_end": 584,
+          "old_start": 584
+        },
+        {
+          "after": "    needs: [native_collect, original_public, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_session]\n",
+          "before": "    needs: [native_collect, original_public, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit]\n",
+          "new_end": 599,
+          "new_start": 598,
+          "old_end": 587,
+          "old_start": 586
+        },
+        {
+          "after": "            --shard-sha256 \"session=${{ needs.original_session.outputs.sha256 }}\" \\\n",
+          "before": "",
+          "new_end": 674,
+          "new_start": 673,
+          "old_end": 661,
+          "old_start": 661
+        },
+        {
+          "after": "            --shard-sha256 \"session=${{ needs.original_session.outputs.sha256 }}\" \\\n",
+          "before": "",
+          "new_end": 687,
+          "new_start": 686,
+          "old_end": 673,
+          "old_start": 673
+        },
+        {
+          "after": "    needs: [native_collect, original_public, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_session, original_collect]\n",
+          "before": "    needs: [native_collect, original_public, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_collect]\n",
+          "new_end": 729,
+          "new_start": 728,
+          "old_end": 715,
+          "old_start": 714
+        },
+        {
+          "after": "            --shard-sha256 \"session=${{ needs.original_session.outputs.sha256 }}\" \\\n",
+          "before": "",
+          "new_end": 812,
+          "new_start": 811,
+          "old_end": 797,
+          "old_start": 797
+        },
+        {
+          "after": "            --shard-sha256 \"session=${{ needs.original_session.outputs.sha256 }}\" \\\n",
+          "before": "",
+          "new_end": 825,
+          "new_start": 824,
+          "old_end": 809,
+          "old_start": 809
+        },
+        {
+          "after": "    needs: [native_collect, original_public, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_session, original_collect, original_controls]\n",
+          "before": "    needs: [native_collect, original_public, original_bytes, original_state, original_services, original_json, original_config, original_system, original_batch, original_storage_types, original_storage_files, original_audit, original_collect, original_controls]\n",
+          "new_end": 868,
+          "new_start": 867,
+          "old_end": 852,
+          "old_start": 851
+        },
+        {
+          "after": "            --shard-sha256 \"session=${{ needs.original_session.outputs.sha256 }}\" \\\n",
+          "before": "",
+          "new_end": 949,
+          "new_start": 948,
+          "old_end": 932,
+          "old_start": 932
+        },
+        {
+          "after": "            --shard-sha256 \"session=${{ needs.original_session.outputs.sha256 }}\" \\\n",
+          "before": "",
+          "new_end": 974,
+          "new_start": 973,
+          "old_end": 956,
+          "old_start": 956
+        }
+      ],
+      "inverse_verified": true
+    },
+    "native/README.md": {
+      "after_bytes": 105282,
+      "after_sha256": "af37603e86442b1be28ef1fb8931b2a5681980d4f68160da0f48ac1bfdcdc7ac",
+      "before_bytes": 103982,
+      "before_sha256": "c5fddd00f8e505177832125693c254bd9efafa38ba6468ac4d67c9e241e832c9",
+      "edits": [
+        {
+          "after": "\n## Finite session transport ownership\n\nThe [session transport integration](session_transport_integration.md) registers\nfour source-bound graphs for ServerMessage, Worker request/result ownership,\nHandle initialization and LocalWorkerError. Their 38 unique semantic images and\n18 packers produce the exact qualified 15-, 32-, 36- and 38-image executables.\nThe intake adds 52 HIA sources and reuses four existing sources; it keeps the\nselected public server graph separate.\n\nThe mandatory native partition executes 1,120 owned programs and 180 message\nprojections in eight real processes, then verifies 27 compiler-record refusal\nand restoration controls. One fresh Rust 1.95 Cargo build produces four original\nbinaries from 139 locked registry dependencies and complete rmcp 3.4.1 source.\nFour actual original processes execute 342 programs, producing 684 comparisons\nagainst the retained native modes. ServerMessage's original scope is typed wire;\nthe other three domains compare actual Rust ownership and channel lifecycles.\nThe existing process and job deadlines are unchanged. Focused PASS does not\nstand in for the current commit's complete CI result or production activation.\n",
+          "before": "",
+          "new_end": 34,
+          "new_start": 15,
+          "old_end": 15,
+          "old_start": 15
+        },
+        {
+          "after": "CI executes the complete gate through one fresh prepare job, nine native\npartitions, twelve original-reference groups, and three final evidence jobs. The\n",
+          "before": "CI executes the complete gate through one fresh prepare job, seven native\npartitions, ten original-reference groups, and two final evidence jobs. The\n",
+          "new_end": 571,
+          "new_start": 569,
+          "old_end": 552,
+          "old_start": 550
+        },
+        {
+          "after": "Public, session ownership, batch, text/history/view, JSON, configuration/regex,\nsystem, storage and audit\n",
+          "before": "Batch, text/history/view, JSON, configuration/regex, system, storage and audit\n",
+          "new_end": 576,
+          "new_start": 574,
+          "old_end": 556,
+          "old_start": 555
+        },
+        {
+          "after": "A separate native collector admits all nine completed partitions and seals\n",
+          "before": "A separate native collector admits all seven completed partitions and seals\n",
+          "new_end": 581,
+          "new_start": 580,
+          "old_end": 561,
+          "old_start": 560
+        },
+        {
+          "after": "The 66 required recipes are assigned once to public, session ownership, bytes,\nstate, services, JSON, configuration, system, batch, storage types, storage files\nand audit groups.\n",
+          "before": "The 64 required recipes are assigned once to bytes, state, services, JSON,\nconfiguration, system, batch, storage types, storage files and audit groups.\n",
+          "new_end": 585,
+          "new_start": 582,
+          "old_end": 564,
+          "old_start": 562
+        },
+        {
+          "after": "workflow output. The first final job admits all twelve supplied identities, every\n",
+          "before": "workflow output. The first final job admits all ten supplied identities, every\n",
+          "new_end": 592,
+          "new_start": 591,
+          "old_end": 571,
+          "old_start": 570
+        },
+        {
+          "after": "bundle. This intermediate status is not PASS. A second job runs every quiescent\nmutation family. The final completion job binds the external collection and\ncontrol bundle SHAs, head, invocation and all shard seals before restoring the\ncomplete evidence and running the final complete input check. Only then does it\nwrite PASS; the regex controls and final artifact\n",
+          "before": "bundle. This intermediate status is not PASS. A separate completion job binds\nthe external bundle SHA, head, invocation and all shard seals before restoring\nthe complete evidence. It runs every quiescent mutation family and the final\ncomplete input check before writing PASS; the regex controls and final artifact\n",
+          "new_end": 598,
+          "new_start": 593,
+          "old_end": 576,
+          "old_start": 572
+        },
+        {
+          "after": "The declared gate has 192 native suite processes, one fresh compiler cold\nprocess and 66 required original recipes. Each CI original group additionally\nretains its actual Rust-version observation; the sequential entry retains one.\n",
+          "before": "The declared gate has 136 native suite processes, one fresh compiler cold\nprocess and 41 required original recipes. The CI groups additionally retain\nseven actual Rust-version observations; the sequential entry retains one.\n",
+          "new_end": 619,
+          "new_start": 616,
+          "old_end": 597,
+          "old_start": 594
+        }
+      ],
+      "inverse_verified": true
+    },
+    "native/migration.json": {
+      "after_bytes": 129232,
+      "after_sha256": "5d4ee22d0e31340151d0a4c50516aca26e4a7498514c54140c87861df0cf61a4",
+      "before_bytes": 107905,
+      "before_sha256": "3274f4c95f96ddf14ca7f1f97eb7740d7ef82d78d49925aaa78f02745900603a",
+      "edits": [
+        {
+          "after": "    },\n    {\n      \"source\": \"native/session_transport/cancellation.hepta\",\n      \"scope\": \"Finite session transport HIA owner cancellation.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/client_message.hepta\",\n      \"scope\": \"Finite session transport HIA owner client_message.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/client_message_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner client_message_drop.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/client_result.hepta\",\n      \"scope\": \"Finite session transport HIA owner client_result.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/event_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner event_drop.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/event_take.hepta\",\n      \"scope\": \"Finite session transport HIA owner event_take.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/handle_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner handle_drop.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/local_worker_error_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner local_worker_error_drop.hepta; actual physical ownership and full-flow qualification in local_worker_error. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/local_worker_error_owner.hepta\",\n      \"scope\": \"Finite session transport HIA owner local_worker_error_owner.hepta; actual physical ownership and full-flow qualification in local_worker_error. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/mpsc_controller.hepta\",\n      \"scope\": \"Finite session transport HIA owner mpsc_controller.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/mpsc_state.hepta\",\n      \"scope\": \"Finite session transport HIA owner mpsc_state.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/oneshot.hepta\",\n      \"scope\": \"Finite session transport HIA owner oneshot.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/owned_mpsc_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner owned_mpsc_drop.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/owned_send.hepta\",\n      \"scope\": \"Finite session transport HIA owner owned_send.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/handle_initialize_0.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/handle_initialize_1.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/handle_initialize_2.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/handle_initialize_3.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/handle_initialize_4.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/local_worker_error_0.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/local_worker_error_1.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/local_worker_error_2.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/local_worker_error_3.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/local_worker_error_4.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/server_message_0.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/server_message_1.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/server_message_2.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/worker_owners_0.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/worker_owners_1.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/worker_owners_2.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/worker_owners_3.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/packers/worker_owners_4.hepta\",\n      \"scope\": \"Fixed prefix/final HIA packer for four finite session graphs; no business policy in the packer. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/probe.hepta\",\n      \"scope\": \"Finite session transport HIA owner probe.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/result_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner result_drop.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/result_take.hepta\",\n      \"scope\": \"Finite session transport HIA owner result_take.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/semaphore.hepta\",\n      \"scope\": \"Finite session transport HIA owner semaphore.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/server_message_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner server_message_drop.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/server_message_emitter.hepta\",\n      \"scope\": \"Finite session transport HIA owner server_message_emitter.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/server_message_owner.hepta\",\n      \"scope\": \"Finite session transport HIA owner server_message_owner.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/server_message_schema.hepta\",\n      \"scope\": \"Finite session transport HIA owner server_message_schema.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/server_message_typed.hepta\",\n      \"scope\": \"Finite session transport HIA owner server_message_typed.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/session_error_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner session_error_drop.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/session_error_into_io.hepta\",\n      \"scope\": \"Finite session transport HIA owner session_error_into_io.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/session_error_owner.hepta\",\n      \"scope\": \"Finite session transport HIA owner session_error_owner.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/session_error_project.hepta\",\n      \"scope\": \"Finite session transport HIA owner session_error_project.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/session_handle_future.hepta\",\n      \"scope\": \"Finite session transport HIA owner session_handle_future.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/timer.hepta\",\n      \"scope\": \"Finite session transport HIA owner timer.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/worker_request_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner worker_request_drop.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/worker_request_take.hepta\",\n      \"scope\": \"Finite session transport HIA owner worker_request_take.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/worker_result_drop.hepta\",\n      \"scope\": \"Finite session transport HIA owner worker_result_drop.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/worker_result_take.hepta\",\n      \"scope\": \"Finite session transport HIA owner worker_result_take.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n    },\n    {\n      \"source\": \"native/session_transport/yield.hepta\",\n      \"scope\": \"Finite session transport HIA owner yield.hepta; actual physical ownership and full-flow qualification in handle_initialize, local_worker_error, server_message, worker_owners. No production call sites are replaced; complete LocalSessionWorker, SessionManager and HTTP transport remain unqualified.\",\n      \"legacy_call_sites_replaced\": false\n",
+          "before": "",
+          "new_end": 1436,
+          "new_start": 1176,
+          "old_end": 1176,
+          "old_start": 1176
+        }
+      ],
+      "inverse_verified": true
+    },
+    "scripts/compare_hia_runtime_rust.py": {
+      "after_bytes": 134211,
+      "after_sha256": "32323f1d9c2b141ddd6acbd1e98d0a023b1274f807d43895883d768560f6bb02",
+      "before_bytes": 132195,
+      "before_sha256": "83ff0e60be03a62a8958edd7a582fc57de99650c04e2b0dd6753d8c748d1ae08",
+      "edits": [
+        {
+          "after": "import hia_native_session_transport_pipeline as session_transport_pipeline\n",
+          "before": "",
+          "new_end": 30,
+          "new_start": 29,
+          "old_end": 29,
+          "old_start": 29
+        },
+        {
+          "after": "                                       serde_error_evidence, session_transport_evidence, result_storage_evidence, audit_readiness_evidence, audit_activity_evidence, audit_stamp_evidence, batch_write_evidence, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,\n",
+          "before": "                                       serde_error_evidence, result_storage_evidence, audit_readiness_evidence, audit_activity_evidence, audit_stamp_evidence, batch_write_evidence, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,\n",
+          "new_end": 44,
+          "new_start": 43,
+          "old_end": 43,
+          "old_start": 42
+        },
+        {
+          "after": "    if report.get(\"session_transport_evidence\") != session_transport_evidence(output, report):\n        raise ValueError(\"complete session transport native evidence changed\")\n    if \"session_transport\" in report.get(\"original_rust_comparisons\", {}):\n        actual = session_transport_pipeline.original_evidence(ROOT, output, report, completed_test_summary)\n        if report[\"original_rust_comparisons\"][\"session_transport\"] != actual:\n            raise ValueError(\"complete session transport original evidence changed\")\n",
+          "before": "",
+          "new_end": 215,
+          "new_start": 209,
+          "old_end": 208,
+          "old_start": 208
+        },
+        {
+          "after": "        if item.get(\"builder\") == \"session_transport\":\n            if (module.get(\"compiler_dependency\") != boot[\"dependency\"]\n                    or json.loads((ROOT / \"tests/hia_native/session_transport/graph.json\").read_bytes())[\"compiler_sha256\"]\n                        != report[\"compiler_image_sha256\"]):\n                raise ValueError(\"session graph compiler identity changed\")\n            # Complete module/packer/ELF and execution admission is mandatory\n            # in session_transport_evidence above; this is a four-graph manifest.\n            continue\n",
+          "before": "",
+          "new_end": 369,
+          "new_start": 361,
+          "old_end": 354,
+          "old_start": 354
+        },
+        {
+          "after": "def compare_session_transport(output: Path, report: dict, rustc: Path) -> dict:\n    before = session_transport_evidence(output, report)\n    if before != report.get(\"session_transport_evidence\"):\n        raise ValueError(\"session transport native evidence changed before original replay\")\n    for name, command in session_transport_pipeline.original_commands(ROOT, output, report, rustc).items():\n        record_check(output, report, name=name, command=command, timeout=180, env=qualification_env())\n    actual = session_transport_pipeline.original_evidence(ROOT, output, report, completed_test_summary)\n    if session_transport_evidence(output, report) != before:\n        raise ValueError(\"session transport native corpus changed during original replay\")\n    return actual\n\n\n",
+          "before": "",
+          "new_end": 1523,
+          "new_start": 1511,
+          "old_end": 1496,
+          "old_start": 1496
+        },
+        {
+          "after": "RECIPES = {\"session_transport\": compare_session_transport, \"serde_error\": compare_serde_error, \"batch_write\": compare_batch_write, \"runtime_bytes\": compare_bytes, \"text_budget\": compare_text,\n",
+          "before": "RECIPES = {\"serde_error\": compare_serde_error, \"batch_write\": compare_batch_write, \"runtime_bytes\": compare_bytes, \"text_budget\": compare_text,\n",
+          "new_end": 1800,
+          "new_start": 1799,
+          "old_end": 1773,
+          "old_start": 1772
+        }
+      ],
+      "inverse_verified": true
+    },
+    "scripts/hia_native_pipeline.py": {
+      "after_bytes": 31656,
+      "after_sha256": "2571292c4c6a9c2039647d5c33333f275478b722228b3f8a6c09709865b7d655",
+      "before_bytes": 31572,
+      "before_sha256": "384a4e71061b270e22d048b90796547cfbb164e2a508c11a9be78f03acbf250d",
+      "edits": [
+        {
+          "after": "One fresh cold/build artifact is admitted by its workflow-produced SHA256. Nine\n",
+          "before": "One fresh cold/build artifact is admitted by its workflow-produced SHA256. Eight\n",
+          "new_end": 3,
+          "new_start": 2,
+          "old_end": 3,
+          "old_start": 2
+        },
+        {
+          "after": "    \"session\": (\"session_transport\",),\n",
+          "before": "",
+          "new_end": 42,
+          "new_start": 41,
+          "old_end": 41,
+          "old_start": 41
+        },
+        {
+          "after": "    if set(partitions) != {\"batch\", \"text\", \"json\", \"config\", \"system\", \"storage\", \"audit\", \"public\", \"session\"} or len(flat) != len(set(flat)) or set(flat) != set(modules):\n",
+          "before": "    if set(partitions) != {\"batch\", \"text\", \"json\", \"config\", \"system\", \"storage\", \"audit\", \"public\"} or len(flat) != len(set(flat)) or set(flat) != set(modules):\n",
+          "new_end": 151,
+          "new_start": 150,
+          "old_end": 150,
+          "old_start": 149
+        },
+        {
+          "after": "                  q.batch_write_pipeline.q.SUITES, q.session_transport_pipeline.TESTS, q.serde_error_pipeline.TESTS, q.storage_pipeline.TESTS, q.audit_pipeline.TESTS, q.activity_pipeline.TESTS, q.stamp_pipeline.TESTS):\n",
+          "before": "                  q.batch_write_pipeline.q.SUITES, q.serde_error_pipeline.TESTS, q.storage_pipeline.TESTS, q.audit_pipeline.TESTS, q.activity_pipeline.TESTS, q.stamp_pipeline.TESTS):\n",
+          "new_end": 177,
+          "new_start": 176,
+          "old_end": 176,
+          "old_start": 175
+        },
+        {
+          "after": "            raise ValueError(\"collector requires exactly nine complete shard artifacts\")\n",
+          "before": "            raise ValueError(\"collector requires exactly eight complete shard artifacts\")\n",
+          "new_end": 441,
+          "new_start": 440,
+          "old_end": 440,
+          "old_start": 439
+        }
+      ],
+      "inverse_verified": true
+    },
+    "scripts/hia_native_rust_pipeline.py": {
+      "after_bytes": 40460,
+      "after_sha256": "c2c3ef4f12b835d0c196794f4340513f584afeb462b7601ab574160d4b1c1302",
+      "before_bytes": 40410,
+      "before_sha256": "578137b24c077cc46739a020425efd7abf127e269a7101607ab0730133a87844",
+      "edits": [
+        {
+          "after": "    \"session\": (\"session_transport\",),\n",
+          "before": "",
+          "new_end": 45,
+          "new_start": 44,
+          "old_end": 44,
+          "old_start": 44
+        },
+        {
+          "after": "                      \"storage_types\", \"storage_files\", \"audit\", \"public\", \"session\"}\n",
+          "before": "                      \"storage_types\", \"storage_files\", \"audit\", \"public\"}\n",
+          "new_end": 61,
+          "new_start": 60,
+          "old_end": 60,
+          "old_start": 59
+        }
+      ],
+      "inverse_verified": true
+    },
+    "scripts/qualify_hia_runtime_native.py": {
+      "after_bytes": 195286,
+      "after_sha256": "bdb006ce103ffafe1a84bc78e23ece36dcfc6848a98725b02b33a6401694972c",
+      "before_bytes": 190949,
+      "before_sha256": "44484efaeb0538bb5cb0096229ab05e55e0bcb77767d8a03dcd931d52f7d205d",
+      "edits": [
+        {
+          "after": "import hia_native_session_transport_pipeline as session_transport_pipeline\n",
+          "before": "",
+          "new_end": 74,
+          "new_start": 73,
+          "old_end": 73,
+          "old_start": 73
+        },
+        {
+          "after": "    {'key': 'session_transport', 'name': 'session-transport', 'source': 'native/session_transport/server_message_owner.hepta', 'standalone': None, 'builder': 'session_transport', 'manifest_env': 'HIA_SESSION_TRANSPORT_MANIFEST', 'test': 'test_session_transport_owned.py', 'additional_tests': ('test_session_transport_server.py', 'test_session_transport_receipts.py'), 'companion_sources': ('native/cooperative_budget.hepta', 'native/cooperative_defer.hepta', 'native/cooperative_scheduler.hepta', 'native/sdk_message_rawvalue.hepta', 'native/session_transport/cancellation.hepta', 'native/session_transport/client_message.hepta', 'native/session_transport/client_message_drop.hepta', 'native/session_transport/client_result.hepta', 'native/session_transport/event_drop.hepta', 'native/session_transport/event_take.hepta', 'native/session_transport/handle_drop.hepta', 'native/session_transport/local_worker_error_drop.hepta', 'native/session_transport/local_worker_error_owner.hepta', 'native/session_transport/mpsc_controller.hepta', 'native/session_transport/mpsc_state.hepta', 'native/session_transport/oneshot.hepta', 'native/session_transport/owned_mpsc_drop.hepta', 'native/session_transport/owned_send.hepta', 'native/session_transport/packers/handle_initialize_0.hepta', 'native/session_transport/packers/handle_initialize_1.hepta', 'native/session_transport/packers/handle_initialize_2.hepta', 'native/session_transport/packers/handle_initialize_3.hepta', 'native/session_transport/packers/handle_initialize_4.hepta', 'native/session_transport/packers/local_worker_error_0.hepta', 'native/session_transport/packers/local_worker_error_1.hepta', 'native/session_transport/packers/local_worker_error_2.hepta', 'native/session_transport/packers/local_worker_error_3.hepta', 'native/session_transport/packers/local_worker_error_4.hepta', 'native/session_transport/packers/server_message_0.hepta', 'native/session_transport/packers/server_message_1.hepta', 'native/session_transport/packers/server_message_2.hepta', 'native/session_transport/packers/worker_owners_0.hepta', 'native/session_transport/packers/worker_owners_1.hepta', 'native/session_transport/packers/worker_owners_2.hepta', 'native/session_transport/packers/worker_owners_3.hepta', 'native/session_transport/packers/worker_owners_4.hepta', 'native/session_transport/probe.hepta', 'native/session_transport/result_drop.hepta', 'native/session_transport/result_take.hepta', 'native/session_transport/semaphore.hepta', 'native/session_transport/server_message_drop.hepta', 'native/session_transport/server_message_emitter.hepta', 'native/session_transport/server_message_schema.hepta', 'native/session_transport/server_message_typed.hepta', 'native/session_transport/session_error_drop.hepta', 'native/session_transport/session_error_into_io.hepta', 'native/session_transport/session_error_owner.hepta', 'native/session_transport/session_error_project.hepta', 'native/session_transport/session_handle_future.hepta', 'native/session_transport/timer.hepta', 'native/session_transport/worker_request_drop.hepta', 'native/session_transport/worker_request_take.hepta', 'native/session_transport/worker_result_drop.hepta', 'native/session_transport/worker_result_take.hepta', 'native/session_transport/yield.hepta')},\n",
+          "before": "",
+          "new_end": 85,
+          "new_start": 84,
+          "old_end": 83,
+          "old_start": 83
+        },
+        {
+          "after": "    paths.update(ROOT / name for name in session_transport_pipeline.sources(ROOT))\n",
+          "before": "",
+          "new_end": 427,
+          "new_start": 426,
+          "old_end": 424,
+          "old_start": 424
+        },
+        {
+          "after": "    if set(tests) & set(session_transport_pipeline.TESTS):\n        config_commands.update(session_transport_pipeline.test_commands(ROOT, output, report))\n",
+          "before": "",
+          "new_end": 581,
+          "new_start": 579,
+          "old_end": 576,
+          "old_start": 576
+        },
+        {
+          "after": "\n\ndef session_transport_evidence(output: Path, report: dict) -> dict:\n    return session_transport_pipeline.native_evidence(ROOT, output, report, completed_test_summary)\n",
+          "before": "",
+          "new_end": 1072,
+          "new_start": 1068,
+          "old_end": 1063,
+          "old_start": 1063
+        },
+        {
+          "after": "        if item.get(\"builder\") == \"session_transport\":\n            from hia_native_session_transport_build import build_session_transport\n            built = build_session_transport(hepta, output / \"build\", ROOT)\n        elif item.get(\"builder\") == \"audit_stamp\":\n",
+          "before": "        if item.get(\"builder\") == \"audit_stamp\":\n",
+          "new_end": 2343,
+          "new_start": 2339,
+          "old_end": 2331,
+          "old_start": 2330
+        },
+        {
+          "after": "    commands.update(session_transport_pipeline.test_commands(ROOT, output, report))\n",
+          "before": "",
+          "new_end": 2476,
+          "new_start": 2475,
+          "old_end": 2463,
+          "old_start": 2463
+        },
+        {
+          "after": "    report[\"session_transport_evidence\"] = session_transport_evidence(output, report)\n",
+          "before": "",
+          "new_end": 2523,
+          "new_start": 2522,
+          "old_end": 2509,
+          "old_start": 2509
+        },
+        {
+          "after": "    report[\"rust_oracle_inputs\"].update(report[\"session_transport_evidence\"][\"artifact_sha256\"])\n    report[\"rust_oracle_inputs\"].update(report[\"session_transport_evidence\"][\"corpus_sha256\"])\n",
+          "before": "",
+          "new_end": 2571,
+          "new_start": 2569,
+          "old_end": 2555,
+          "old_start": 2555
+        }
+      ],
+      "inverse_verified": true
+    },
+    "tests/hia_native/test_native_pipeline.py": {
+      "after_bytes": 34037,
+      "after_sha256": "82ec3fdb917d40e0d6df2d42654a7dfc0dff6f25149d2f22be7b3ad59be1e436",
+      "before_bytes": 33938,
+      "before_sha256": "1720cb58a601b4cc329d56d15057f3fcf1ab51c5fea9854047a9d31684d1b6ab",
+      "edits": [
+        {
+          "after": "        self.assertEqual(set(partitions), {\"batch\", \"text\", \"json\", \"config\", \"system\", \"storage\", \"audit\", \"public\", \"session\"})\n        self.assertEqual(partitions[\"session\"], q.session_transport_pipeline.TESTS)\n",
+          "before": "        self.assertEqual(set(partitions), {\"batch\", \"text\", \"json\", \"config\", \"system\", \"storage\", \"audit\", \"public\"})\n",
+          "new_end": 125,
+          "new_start": 123,
+          "old_end": 124,
+          "old_start": 123
+        },
+        {
+          "after": "    def test_workflow_requires_all_nine_partitions_with_unchanged_process_and_job_limits(self):\n",
+          "before": "    def test_workflow_requires_all_eight_partitions_with_unchanged_process_and_job_limits(self):\n",
+          "new_end": 158,
+          "new_start": 157,
+          "old_end": 157,
+          "old_start": 156
+        },
+        {
+          "after": "        for group in (\"one\", \"two\", \"three\", \"four\", \"five\", \"six\", \"seven\", \"eight\", \"nine\"):\n",
+          "before": "        for group in (\"one\", \"two\", \"three\", \"four\", \"five\", \"six\", \"seven\", \"eight\"):\n",
+          "new_end": 458,
+          "new_start": 457,
+          "old_end": 457,
+          "old_start": 456
+        },
+        {
+          "after": "            shutil.rmtree(shards / \"nine\")\n            with self.assertRaisesRegex(ValueError, \"exactly nine\"):\n",
+          "before": "            shutil.rmtree(shards / \"eight\")\n            with self.assertRaisesRegex(ValueError, \"exactly eight\"):\n",
+          "new_end": 469,
+          "new_start": 467,
+          "old_end": 468,
+          "old_start": 466
+        },
+        {
+          "after": "    def test_nine_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):\n",
+          "before": "    def test_eight_actual_partitions_merge_once_and_retained_bytes_stay_binding(self):\n",
+          "new_end": 473,
+          "new_start": 472,
+          "old_end": 472,
+          "old_start": 471
+        }
+      ],
+      "inverse_verified": true
+    },
+    "tests/hia_native/test_original_pipeline.py": {
+      "after_bytes": 41829,
+      "after_sha256": "e3eb06df065dcdd18e09c3886679ed1ed3ebc7b1458500a7c0e650b1ec16dd9c",
+      "before_bytes": 41759,
+      "before_sha256": "03c591624b9afd6062e625f30d398df92898cecb45bb5fa142fc1b83adb31a01",
+      "edits": [
+        {
+          "after": "        self.assertEqual(len(flat), 66)\n",
+          "before": "        self.assertEqual(len(flat), 65)\n",
+          "new_end": 215,
+          "new_start": 214,
+          "old_end": 215,
+          "old_start": 214
+        },
+        {
+          "after": "        self.assertEqual(p.GROUPS[\"session\"], (\"session_transport\",))\n",
+          "before": "",
+          "new_end": 217,
+          "new_start": 216,
+          "old_end": 216,
+          "old_start": 216
+        }
+      ],
+      "inverse_verified": true
+    }
+  },
+  "legacy_handlers_unchanged": 125,
+  "native_components_appended": 52,
+  "new_files": {
+    "native/session_transport/cancellation.hepta": {
+      "bytes": 136176,
+      "sha256": "a03aeb1b10c71278c67c2b0df925741cda2ab1c4a69eeea0506f2dc5fd353a3d"
+    },
+    "native/session_transport/client_message.hepta": {
+      "bytes": 92549,
+      "sha256": "44dc8959b656a2f67a7b47da12c814e668c39038be024da359194d1c64d38d41"
+    },
+    "native/session_transport/client_message_drop.hepta": {
+      "bytes": 34184,
+      "sha256": "ad3900bb4ff074a92edfc84fe7e51487815ae850f33e25427522eeda09bb5c54"
+    },
+    "native/session_transport/client_result.hepta": {
+      "bytes": 337288,
+      "sha256": "ab946abacdb479562af7c736580c5069226a45032b9b44d464379d9accc9cbb1"
+    },
+    "native/session_transport/event_drop.hepta": {
+      "bytes": 45214,
+      "sha256": "31123a2d463ed49e8c95e02bf9c691e5c517166904b9a36460d0e982e947e96b"
+    },
+    "native/session_transport/event_take.hepta": {
+      "bytes": 33490,
+      "sha256": "09c127562ceecb204a85b927f4771ff3b8d44329924d4225a558f123d27f97c7"
+    },
+    "native/session_transport/handle_drop.hepta": {
+      "bytes": 44705,
+      "sha256": "37a9c2fced73c413080bcc3193f40d2dceda70442aa10698daec036ab2b7c0f2"
+    },
+    "native/session_transport/local_worker_error_drop.hepta": {
+      "bytes": 37661,
+      "sha256": "ec9aa98322b5eebbd80bb97272b497dcb2be32a9cde086bc2362137ed7744c8e"
+    },
+    "native/session_transport/local_worker_error_owner.hepta": {
+      "bytes": 56776,
+      "sha256": "be632b64af4372825da4d0a3f8e1f3838017045d6f7f864c27e2b1a8cac351fa"
+    },
+    "native/session_transport/mpsc_controller.hepta": {
+      "bytes": 80884,
+      "sha256": "f5b8bfd1d18d31ec3068494ab15adb33030822f63e96ab27f496eb8302fe6808"
+    },
+    "native/session_transport/mpsc_state.hepta": {
+      "bytes": 77094,
+      "sha256": "40200531797082d192391be3c8e99cdee4db6bd8c571b853af0b523891d7fb57"
+    },
+    "native/session_transport/oneshot.hepta": {
+      "bytes": 86316,
+      "sha256": "2707aa070e244702d131af8840477bcac159271dae32de889d752841b25f1cd4"
+    },
+    "native/session_transport/owned_mpsc_drop.hepta": {
+      "bytes": 59423,
+      "sha256": "e86398528c09d948375bdbfbd69fcebbaa0899a1a5a9d32eee09b1b9bea065b1"
+    },
+    "native/session_transport/owned_send.hepta": {
+      "bytes": 55743,
+      "sha256": "6ec5fef2c2362c1377a1b8c40289a354d235dca6bf3fdbaf04a804f6170ee338"
+    },
+    "native/session_transport/packers/handle_initialize_0.hepta": {
+      "bytes": 215737,
+      "sha256": "fa3bdb795b76b21021ceaf14fad7331a4ba35394611f4a7217ba42df54e10e12"
+    },
+    "native/session_transport/packers/handle_initialize_1.hepta": {
+      "bytes": 216569,
+      "sha256": "8b2d714392a23b6e9f98e577a3b05864e41797d7c2ebe1e947bef7633384e321"
+    },
+    "native/session_transport/packers/handle_initialize_2.hepta": {
+      "bytes": 216409,
+      "sha256": "7389c4d13b891943760637490d33589c0b2c68e2ffce4f9acdf7680f562f9fce"
+    },
+    "native/session_transport/packers/handle_initialize_3.hepta": {
+      "bytes": 127184,
+      "sha256": "378d04b6e7b0b9784e1cb300754742130c1b8fd1220db952ee66515778d0fa29"
+    },
+    "native/session_transport/packers/handle_initialize_4.hepta": {
+      "bytes": 57696,
+      "sha256": "173a0ca42dd691725fb210714b9228fadd29984f1577fb410d7fd583636dd432"
+    },
+    "native/session_transport/packers/local_worker_error_0.hepta": {
+      "bytes": 215737,
+      "sha256": "fa3bdb795b76b21021ceaf14fad7331a4ba35394611f4a7217ba42df54e10e12"
+    },
+    "native/session_transport/packers/local_worker_error_1.hepta": {
+      "bytes": 216569,
+      "sha256": "8b2d714392a23b6e9f98e577a3b05864e41797d7c2ebe1e947bef7633384e321"
+    },
+    "native/session_transport/packers/local_worker_error_2.hepta": {
+      "bytes": 216409,
+      "sha256": "7389c4d13b891943760637490d33589c0b2c68e2ffce4f9acdf7680f562f9fce"
+    },
+    "native/session_transport/packers/local_worker_error_3.hepta": {
+      "bytes": 156633,
+      "sha256": "36b46fa57af05f2ddfff6927a05b928d46101fbac87e1e988135e8bba4266ea7"
+    },
+    "native/session_transport/packers/local_worker_error_4.hepta": {
+      "bytes": 60408,
+      "sha256": "b0d182109e502847d18d6dcb6d217696165cc8ec62b5472fa2781aff5066c767"
+    },
+    "native/session_transport/packers/server_message_0.hepta": {
+      "bytes": 215739,
+      "sha256": "9f06012e271ab19c4a29dae89d744e218fc30a2f10eb4d91fe31d42461e765e6"
+    },
+    "native/session_transport/packers/server_message_1.hepta": {
+      "bytes": 95863,
+      "sha256": "c6ef7dbf25ad9b5b865b0410ebdd2cab4074d1004c1c5cd370d9c2fde79e06e4"
+    },
+    "native/session_transport/packers/server_message_2.hepta": {
+      "bytes": 27446,
+      "sha256": "c74b224f0799bdccb59ceb34febc23c2d6c226d96f2a68ffef6d6b5adc7c3e29"
+    },
+    "native/session_transport/packers/worker_owners_0.hepta": {
+      "bytes": 215737,
+      "sha256": "fa3bdb795b76b21021ceaf14fad7331a4ba35394611f4a7217ba42df54e10e12"
+    },
+    "native/session_transport/packers/worker_owners_1.hepta": {
+      "bytes": 216569,
+      "sha256": "8b2d714392a23b6e9f98e577a3b05864e41797d7c2ebe1e947bef7633384e321"
+    },
+    "native/session_transport/packers/worker_owners_2.hepta": {
+      "bytes": 216409,
+      "sha256": "1c68966941832a5804adf71e74a0dd0fbc05033238b63ea59fb640ba1941dba8"
+    },
+    "native/session_transport/packers/worker_owners_3.hepta": {
+      "bytes": 91104,
+      "sha256": "1b97c2c0679f02ba7859e73711deff7a02403211bda9390d0736a235eb2a9e58"
+    },
+    "native/session_transport/packers/worker_owners_4.hepta": {
+      "bytes": 52112,
+      "sha256": "5f51782817ee6864013b60456c04d5d1c581cd1ab1d5e72bb991992f95afc3b1"
+    },
+    "native/session_transport/probe.hepta": {
+      "bytes": 12606,
+      "sha256": "89aeb32fe02122f0af445fc6c71494c3ce91c923e29d0226b086661b0b581ffd"
+    },
+    "native/session_transport/result_drop.hepta": {
+      "bytes": 35323,
+      "sha256": "d8557cd58b0122a6c26d2aafadb42f121aa62914313ad074c9f277cb78ff5952"
+    },
+    "native/session_transport/result_take.hepta": {
+      "bytes": 27550,
+      "sha256": "96077bbcadce036bce8fd9283b5e44c9f0d582a122e08d5bf21bc0faabb79f8e"
+    },
+    "native/session_transport/semaphore.hepta": {
+      "bytes": 82748,
+      "sha256": "1194cfda6f5b1a903f7d2642748613fb960fe7af073f41c1bb6ff04aa5d20908"
+    },
+    "native/session_transport/server_message_drop.hepta": {
+      "bytes": 16002,
+      "sha256": "cb1d10230071e07a66cf701da4a2cbfdc4fb0b93691b04e3e0d169be4ce92300"
+    },
+    "native/session_transport/server_message_emitter.hepta": {
+      "bytes": 368590,
+      "sha256": "246dba6c6d22fba0021f391bad9d78e80858df58e65169728fb56de305b6ad5a"
+    },
+    "native/session_transport/server_message_owner.hepta": {
+      "bytes": 107600,
+      "sha256": "0789bd101eaddfee96cc33e2b4838c2c3c7d6a525203ba3c4ee9650768623093"
+    },
+    "native/session_transport/server_message_schema.hepta": {
+      "bytes": 213186,
+      "sha256": "a83593c52a97e01eaf007f493a3cbbc4a12a5155bf4a943fb92ecbc7de80ed6a"
+    },
+    "native/session_transport/server_message_typed.hepta": {
+      "bytes": 265366,
+      "sha256": "dcd4d0b94eb01b44fde0625ac3f037c3b81cd8e733d5818bb3ed4687019f7dfa"
+    },
+    "native/session_transport/session_error_drop.hepta": {
+      "bytes": 34799,
+      "sha256": "35825c14e3cfa6d4aeebf5a6e734c6d930b18025c5ceb16f3d1d4edd4251b570"
+    },
+    "native/session_transport/session_error_into_io.hepta": {
+      "bytes": 90544,
+      "sha256": "4223f8dfac03818c5ffd364274c2b3ec830e928e479cd00cad1937694a1fc039"
+    },
+    "native/session_transport/session_error_owner.hepta": {
+      "bytes": 78780,
+      "sha256": "cd91c3819780f2ae79b8e9721bbaaced8c5767e0d54a1cc36464aa017390ec93"
+    },
+    "native/session_transport/session_error_project.hepta": {
+      "bytes": 243729,
+      "sha256": "c948a6e111f21303ac549468340f35e124f4cf527f8510f025245ff364cd0066"
+    },
+    "native/session_transport/session_handle_future.hepta": {
+      "bytes": 140091,
+      "sha256": "383c2ad3a0f4de7f0f40aee1ff668b56816f5e4545045f49208c4e21dfbdce82"
+    },
+    "native/session_transport/timer.hepta": {
+      "bytes": 76996,
+      "sha256": "e86d09675698dc17af68ab6d85e8a8d0ccb7826fd09310ef21782e2fba6f52f4"
+    },
+    "native/session_transport/worker_request_drop.hepta": {
+      "bytes": 36940,
+      "sha256": "c523110b37e0479a4cc24cd6d47caa5e351393dfee776ca2ad85ffe92cb488a1"
+    },
+    "native/session_transport/worker_request_take.hepta": {
+      "bytes": 27164,
+      "sha256": "5f3ac5f3927c916ddf307ed8428477e05df0e145546aac4ae66bdc822108e637"
+    },
+    "native/session_transport/worker_result_drop.hepta": {
+      "bytes": 34691,
+      "sha256": "2ba09c4e37da26c58ee90170eb24bc14b48f4bf94c03ebf982011e54fbe2d28b"
+    },
+    "native/session_transport/worker_result_take.hepta": {
+      "bytes": 27081,
+      "sha256": "c3d82316e85650e88a7ecaf25748cebd030f092e88cbf2fd93cf877c7e2099e4"
+    },
+    "native/session_transport/yield.hepta": {
+      "bytes": 25917,
+      "sha256": "fb9b9d9c34b02c716a378d840727a9f8e56f5f2c413f03aa5460b9725e238209"
+    },
+    "native/session_transport_integration.md": {
+      "bytes": 7686,
+      "sha256": "9e878814a7860a7ef3d6e76ae91ddf3c3d96afaa211bf72a598c19ec214c6155"
+    },
+    "scripts/hia_native_session_transport_admission.py": {
+      "bytes": 11939,
+      "sha256": "cf75e3c861ca86e79412ccc50b6b1e1c36cfc85d05c7b0f6a8b31088748d9747"
+    },
+    "scripts/hia_native_session_transport_build.py": {
+      "bytes": 21216,
+      "sha256": "12d849f1e4032a28a288c3a758e594d402ab4cfbbfc0dc29bfe2345ce3324baf"
+    },
+    "scripts/hia_native_session_transport_capture.py": {
+      "bytes": 22690,
+      "sha256": "75f5de8a824e191c6fa087dc8f6738e17cfb1f31ddd2c46ee729f7023ba7bf37"
+    },
+    "scripts/hia_native_session_transport_controls.py": {
+      "bytes": 6200,
+      "sha256": "78d97614f8781336d74f467c7ff6e540ee52ef5eae50513474a58cd57863c7e9"
+    },
+    "scripts/hia_native_session_transport_pipeline.py": {
+      "bytes": 10243,
+      "sha256": "6830935238bb137022f5216ef4c094e9aed1d9372442f0fc9fa60ea68d5901f7"
+    },
+    "scripts/hia_native_session_transport_reference.py": {
+      "bytes": 34476,
+      "sha256": "067f6975298d9f688ac45a6e4c73ed26b9fca795cce7e3b5f4ac613991633748"
+    },
+    "scripts/hia_native_session_transport_server.py": {
+      "bytes": 17734,
+      "sha256": "4861ffde480fb4e6817f8a64f6a915597ddd87d9425503b087179d869f4440be"
+    },
+    "scripts/session_transport/handle_initialize_adapter.S": {
+      "bytes": 197389,
+      "sha256": "273c963a1f8cda89970d63d224cd2308091c6a93e667c7ee366376f5c91df26a"
+    },
+    "scripts/session_transport/local_worker_error_adapter.S": {
+      "bytes": 205439,
+      "sha256": "c251176a761308be4895d818b62d7477ce7bf36c6d1357b9e069566c24e730b9"
+    },
+    "scripts/session_transport/server_message_adapter.S": {
+      "bytes": 76327,
+      "sha256": "500905dc451894f5bdf4cef25bdf2ffab0fba577c8265c6beb498773f46ea3ce"
+    },
+    "scripts/session_transport/worker_owners_adapter.S": {
+      "bytes": 187399,
+      "sha256": "08b1a9defaf1c735a32ddfaddc4fbaf98f9e5392b2dca592afcb772915558161"
+    },
+    "tests/hia_native/session_transport/evidence/HANDLE-INITIALIZE-PROTOCOL.md": {
+      "bytes": 5449,
+      "sha256": "6ba6cd02e847fcbc4a797ae680effb35e64b8f29e22b800ce013d57f78d86549"
+    },
+    "tests/hia_native/session_transport/evidence/LOCAL-WORKER-ERROR-ABI.md": {
+      "bytes": 9715,
+      "sha256": "49589141729f81811a2527b6ff19ccaeaa1d6f1681f3d068bcf5bdad52869d3f"
+    },
+    "tests/hia_native/session_transport/evidence/SERVER-MESSAGE-ABI.md": {
+      "bytes": 12303,
+      "sha256": "6793fff03a95b64bf8da09bcd40b280f084c7f60c03de56addf379bf7f4dbd86"
+    },
+    "tests/hia_native/session_transport/evidence/WORKER-OWNERS-ABI.md": {
+      "bytes": 7950,
+      "sha256": "8221b0b8d6a3811533919aaaadd84b1da742525675b59a61fff7d2a394d80bdf"
+    },
+    "tests/hia_native/session_transport/evidence/build-and-capture-v4.external.json": {
+      "bytes": 23254,
+      "sha256": "0a16873883371bbf09c1f03786fac75791ea94c69302011164d603bec09a1e20"
+    },
+    "tests/hia_native/session_transport/evidence/canonical-intake-v1.json": {
+      "bytes": 2553,
+      "sha256": "675ebab14818a292ac6783e2a89315e85cc68d268d622fd69394c2ea1200a656"
+    },
+    "tests/hia_native/session_transport/evidence/original-reference-build-v2.external.json": {
+      "bytes": 4473,
+      "sha256": "60439d8fe25ce4b68f11d9c486635d16713e4e0d33221ad4f9b5e70ff5e3432a"
+    },
+    "tests/hia_native/session_transport/evidence/original-reference-replay-v2.external.json": {
+      "bytes": 13347,
+      "sha256": "dcbc6113e53bcd60c2e1c8f17aae0ebb3f32d9109dd7afe4d0e69405b1ecfdb8"
+    },
+    "tests/hia_native/session_transport/evidence/server-message-handoff.json": {
+      "bytes": 17278,
+      "sha256": "ee9188fbe71db39a6fbc0bc172530f567f8ce813ceb07b8861f385e5dc50f032"
+    },
+    "tests/hia_native/session_transport/evidence/worker-domains-handoff.json": {
+      "bytes": 11292,
+      "sha256": "4e0d2cd538b3b6a12ac0e2946df346e6f0b665d991478f91b20f1d8bb4b51b98"
+    },
+    "tests/hia_native/session_transport/graph.json": {
+      "bytes": 95073,
+      "sha256": "8a0fd1d041238a3e0a6f60e40b404cb9eb6339a9d288bc1f20506949d35482c2"
+    },
+    "tests/hia_native/session_transport/origin.json": {
+      "bytes": 5908,
+      "sha256": "cdc6d9e6d08ef3334393380692790c5cfc5887f217619e0782f1610691ec573a"
+    },
+    "tests/hia_native/session_transport/origin/handle_initialize_evidence_base_v1.py": {
+      "bytes": 9964,
+      "sha256": "6724a5fd74343987206944beaae040471d07ce6a05b9979a1c3e145ffd0fc534"
+    },
+    "tests/hia_native/session_transport/origin/handle_initialize_frames_v1.py": {
+      "bytes": 23224,
+      "sha256": "165b162c302419b5356af50a2d1d960094b903c25c94c90ba1ec59f0348aef64"
+    },
+    "tests/hia_native/session_transport/origin/local-worker-error-cases-v1.json": {
+      "bytes": 43115,
+      "sha256": "ca169cb75b8283b9507680f4de838366f1a9ef554ad371e6c2df0c2ea353daf0"
+    },
+    "tests/hia_native/session_transport/origin/local_worker_error_evidence_base_v1.py": {
+      "bytes": 9982,
+      "sha256": "cc8efcf5ca6a77c16cfcedc668ffe97d3e808acab12c3ec9787f5ce85287f55d"
+    },
+    "tests/hia_native/session_transport/origin/local_worker_error_frames_v3.py": {
+      "bytes": 33831,
+      "sha256": "27d0056ea0fd7d802788c01582fe730f3118d18a0f1cdaf70c29011a067b8d88"
+    },
+    "tests/hia_native/session_transport/origin/local_worker_error_machine_v1.py": {
+      "bytes": 6188,
+      "sha256": "70e41e2b3a4f4ce42f91412c73e99bcc3c2abc9e78cc1e5923051bb57227ab2b"
+    },
+    "tests/hia_native/session_transport/origin/qualify_handle_initialize_original_v1.py": {
+      "bytes": 5593,
+      "sha256": "d74bbbc8c2bd023d929d7148115bdf55746d72b5b517ad146e22739ec7d7120a"
+    },
+    "tests/hia_native/session_transport/origin/qualify_local_worker_error_native_v2.py": {
+      "bytes": 29182,
+      "sha256": "2bafb6ddccae6f401740066528aa5039b9f2d4d93f03c7547ab9ce067b07c2af"
+    },
+    "tests/hia_native/session_transport/origin/qualify_local_worker_error_original_v2.py": {
+      "bytes": 5953,
+      "sha256": "58f6fe36b63d59c372f5a9296d8c85cb176f1bd7a8b7649682c0e07dcc6a4d90"
+    },
+    "tests/hia_native/session_transport/origin/qualify_server_message_factory_v2.py": {
+      "bytes": 26762,
+      "sha256": "91e44d387db2aba8633b900a2c77fca44ef983d3ec6e7b8c827217ea32e18989"
+    },
+    "tests/hia_native/session_transport/origin/qualify_server_message_private_v1.py": {
+      "bytes": 26913,
+      "sha256": "604b2b4737de68421cebea98d1b89b9b5ecbfa92fb114a62a0366ee1618b0834"
+    },
+    "tests/hia_native/session_transport/origin/qualify_session_error_project_pairs_v2.py": {
+      "bytes": 13591,
+      "sha256": "1b7a5bb22d7b4a28d349ea925f512c89789ab89880a047e7583a3eb5e788633b"
+    },
+    "tests/hia_native/session_transport/origin/qualify_session_handle_initialize_native_v1.py": {
+      "bytes": 27785,
+      "sha256": "c0ee2a235a1fe6d226f604c0ce72f3fd1f84ea26d83e34309922e14e3c46af59"
+    },
+    "tests/hia_native/session_transport/origin/qualify_worker_owners_original_v2.py": {
+      "bytes": 5539,
+      "sha256": "3fca1c969ab1459803d5eead4df37c1da3ce1543b0fa8fd070ff7a1144ae9500"
+    },
+    "tests/hia_native/session_transport/origin/qualify_worker_transport_owners_native_v2.py": {
+      "bytes": 24591,
+      "sha256": "198db4ac2c8a82e5e416cab414a036ff3f04fc2ae20dbd98724419fffbb7c5a1"
+    },
+    "tests/hia_native/session_transport/origin/server_message_data_replay_v2.py": {
+      "bytes": 13566,
+      "sha256": "3d1fd9f9dae0419d9e8f0d82ba115b99655313da852fe0d2489192e4eaacfd65"
+    },
+    "tests/hia_native/session_transport/origin/server_message_factory_retained_v3.py": {
+      "bytes": 28030,
+      "sha256": "766c1e4fc8203c6b5011cfbaf386f1f47b4fac73cf5bd7f340c8a04260ee09c5"
+    },
+    "tests/hia_native/session_transport/origin/session-handle-initialize-cases-v1.json": {
+      "bytes": 18311,
+      "sha256": "340eb989c8212c4c76f2d5880a03e40694242513c82bc125ad4f8b4969a54c6d"
+    },
+    "tests/hia_native/session_transport/origin/session_error_corpus_v1.py": {
+      "bytes": 4842,
+      "sha256": "9e769bcb9422f2613c2cab6ba088a11d6f9c6298640ba0fc71477d99efc611cc"
+    },
+    "tests/hia_native/session_transport/origin/session_message_machine_v1.py": {
+      "bytes": 6131,
+      "sha256": "6434fec17163a287c3a7912a734c98b59419566d0e55ddb813dff9355105868c"
+    },
+    "tests/hia_native/session_transport/origin/worker-owner-cases-v1.json": {
+      "bytes": 28618,
+      "sha256": "906e67f5cf10feee565ede0846f8af7c0618ab331fd37e9999236144068d6f0d"
+    },
+    "tests/hia_native/session_transport/origin/worker_owners_evidence_base_v2.py": {
+      "bytes": 9766,
+      "sha256": "3379ca81b9c4b13b63ff1a37f34d9f2b26126ba7b143626f8d9c325be8a1756c"
+    },
+    "tests/hia_native/session_transport/origin/worker_owners_frames_v1.py": {
+      "bytes": 14749,
+      "sha256": "700e584e05a04abbcb21e985a1725651034c6085b1a2678c5eda1304bd3c9552"
+    },
+    "tests/hia_native/session_transport/origin/worker_transport_owners_machine_v2.py": {
+      "bytes": 6088,
+      "sha256": "f35cc2f1efb0fe8772f63d935e9691600f4f20315247fa65797d379ae69aef0f"
+    },
+    "tests/hia_native/session_transport/reference-source.tar.gz": {
+      "bytes": 1020571,
+      "sha256": "1c4cfb4364f406f4efe89f82cf0a4b2f341454f5c77ff1d57949ddf961bf3d73"
+    },
+    "tests/hia_native/session_transport/reference.json": {
+      "bytes": 85129,
+      "sha256": "efb5c0f7f34d43b7068d6d06bafe0b3f4d22a45477d4263985c54482beeb87fd"
+    },
+    "tests/hia_native/session_transport/server-origin.json": {
+      "bytes": 1449,
+      "sha256": "e426194960c9356eb4cfc7f07b969df383ea8a7ca10e024dd934a8b1a78bf56d"
+    },
+    "tests/hia_native/session_transport/server_origin/factory-fixture.json": {
+      "bytes": 78395,
+      "sha256": "0e3a5368eb58632a6c6051b89eab6b2dad4d7a6163531ed76c5c17554bebb079"
+    },
+    "tests/hia_native/session_transport/server_origin/qualify_server_message_factory_v2.py": {
+      "bytes": 26762,
+      "sha256": "91e44d387db2aba8633b900a2c77fca44ef983d3ec6e7b8c827217ea32e18989"
+    },
+    "tests/hia_native/session_transport/server_origin/reference-factory.stdin": {
+      "bytes": 22989,
+      "sha256": "b910c34ef08afcad0b481ed818cb96d1c192357bbc10c5bea4f879265e78d75a"
+    },
+    "tests/hia_native/session_transport/server_origin/reference-factory.stdout": {
+      "bytes": 28555,
+      "sha256": "3e85430408fc7a07cc6e37084f90f9113f00afde5e7e8d8bed46b7d17238d1d5"
+    },
+    "tests/hia_native/session_transport/server_origin/server_message_factory_retained_v3.py": {
+      "bytes": 28030,
+      "sha256": "766c1e4fc8203c6b5011cfbaf386f1f47b4fac73cf5bd7f340c8a04260ee09c5"
+    },
+    "tests/hia_native/session_transport/server_origin/server_message_machine_v1.py": {
+      "bytes": 5027,
+      "sha256": "a8eab79bdd39eef870e86be5a2d4853b24e0e00b1c69f8083a83f9ca7600aa6a"
+    }
+  },
+  "original_hia_sources_unchanged": {
+    "native/async_admission.hepta": "628afa35bb9d374ce7193551f676b54c1b2d349e18f451cc306f8873db9e8dcc",
+    "native/atomic_write.hepta": "bedb27429d970833db4800436511788eaae2bfaa5487b4c751a94f8e7cbe410b",
+    "native/atomic_write_packer.hepta": "3e5f23dfaf73053ada568ec5d56d1b3d3fa18c37864d265300f4f7f7d09d3bf3",
+    "native/atomic_write_shared.hepta": "c2c8727fb9d9c9d3c892538e7ac4d906db1a051086baeae6756190969b04372a",
+    "native/authority_loader.hepta": "fabb5314b1570d762de12b99968dd1109e9a5f5eb1ea06a6a5afdff6e0d4999a",
+    "native/authority_packer.hepta": "c54c54f664944b7a243d8e8e3d10e2ba623ab7e8e4f4189962542722617969d0",
+    "native/batch_apply.hepta": "d94768091c596264e9b297705409cc8e3252315423a0b1aa7d19604cc7d66ae9",
+    "native/batch_plan.hepta": "4a59ed5ce7d451c064b22f192f84c3810e7eba1247aae65105ca7d1558ec1d80",
+    "native/batch_render.hepta": "a0f1ade41d7ab97ef51b0f3416d1392133fa89f3466d09ced285eaf5a2298a51",
+    "native/batch_write.hepta": "afea0647eaff2d573e8ee20afc1e9ecdd2ed3037c745c7b86ba0ccf0ceba7e62",
+    "native/batch_write_packer.hepta": "b61f0af34b4ae0e85f00ea8c666c6f21d0f90b54904b5b18d4f21fc5ce86b7f1",
+    "native/binary32_json.hepta": "12c13ecc1cfa4bdfebf34fca69e990740f1a3c4d76e947d551f32e818fe7e341",
+    "native/binary_codec.hepta": "f58ab824ecb47545f19cd1d0daded9e41fca5457110693677d84e393e3098f23",
+    "native/blocking_pool.hepta": "a8659b2c012a27dfe3260d78d1861fdad845240d28cc521d3bd184931b8cb26a",
+    "native/caller_authority.hepta": "4bf4a50d560db251b5d6e1eaad59c53b67796c1da2c749e4a9d3985587f22af6",
+    "native/caller_authority_connection.hepta": "271b0d9215f7d368598178acc713a9abc22c8ecaa60bc488003f072a562f8797",
+    "native/canonical_path_policy.hepta": "3cdbad7ce235ebc6d80f8117ead8459b9dd7ee24cee2d1a092e4d504d88bc1d2",
+    "native/client_context.hepta": "d100237d43f59716b554ed89def17bdc5ebdf1773582c14f3e2f0b688323cef8",
+    "native/composition_packer.hepta": "4367179d1c4776853d5c9542db6582b24be2c59c76ac8d1c347d6373cb297d5a",
+    "native/config_directory_owner.hepta": "d3dd23f05a5da813cc03a64794fdc20825e735e22e3e218cbdf491b411ad39c9",
+    "native/config_fs.hepta": "dd55aa68e4479514e052f1ed8c8ec65f024a9f2fef3c5aa86d4cfeb28992ff9d",
+    "native/config_fs_packer.hepta": "e70df3d2482c0a8ff7a6fd7bd394ea8c424bef7ee0e69d06b51c02ec18dddfb3",
+    "native/config_identity.hepta": "59c849f25aa88c5dc9a86b8dc1990889a17abfbedc5d58557e193689894710ad",
+    "native/config_installed_owner.hepta": "f7e9c6ed7a2442ad63130df83378abe1ef1b1b9c074b1dfe09cd74c57ff9712b",
+    "native/config_json.hepta": "7cb065173fdb3bf266e1f234a18f8f309865d57db4c07d26e750047e4ec10ccb",
+    "native/config_mcp.hepta": "c1ab64af16fc1f74c4cafd35df4580e59907ca886af07ef6539d636f46672f48",
+    "native/config_mcp_packer.hepta": "891a739e59759bf69714ff1c2e7b33005e6a8cbfbf175827a77fb45fad387916",
+    "native/config_owner.hepta": "5f9e4cbaf8b8652a3a9eb05bdeccb90149258c9851a5fd8095465ea6cd12e5eb",
+    "native/config_owner_fixture_packer.hepta": "9ff808ba7c976185d3de759f6cd763d74a21ee1f15c47cfc50eb2d7c7c1b6f9e",
+    "native/config_owner_packer.hepta": "36f125b660535fad936101ddbdef2afc59f3d8931b01c0967fca7a3f25c12420",
+    "native/config_regex_packer.hepta": "61ad31832c8a774fb2d2af509841f8acce388faf2fd15cd08768f5d7bb1894bb",
+    "native/config_result_identity.hepta": "f779d43638f2dce94be4e7d55eed93f7538e9177f01de43d20abe13560e92d7a",
+    "native/config_result_owner.hepta": "088f0a15afb1b0ecc70203844f8ef3e4fddbd612e6f095c0114856d69e14024f",
+    "native/config_result_packer.hepta": "b8924549ebf1164ad3c74230a5a299ce26ef03c75732c6499dbb3e2056558250",
+    "native/config_validation.hepta": "bffa7d3cd65cae422a13589df7a057ff8e01b19bf91f34223cc318f07cb13ecc",
+    "native/cooperative_budget.hepta": "a97e3808f0be8c83878d69bb121b9715c6ca7be1d2061e80c4801a8f2d024c4d",
+    "native/cooperative_defer.hepta": "8c7e623d84164525b6f18b6e238c3d8ad5d7df3031bf2cdab39f9afd30b82de4",
+    "native/cooperative_scheduler.hepta": "e79c03c8f81a0b5ab4779b6c063cdceb4caae451f378dd8e59996235a780de9f",
+    "native/delta.hepta": "433e4f389a59fa05b4cf7f18df9f730a5a02b8049517b281b56ac520246e25f3",
+    "native/directory_caller.hepta": "ce931f60e573458a81c52b2309fec3dc1b8797d93bfe3e9eb5b1fbcd2c540307",
+    "native/directory_create.hepta": "61b4c69729b38a6e5410307dbfe7502afb7cdd0e8da5ae3276b06211949f16bb",
+    "native/directory_errno.hepta": "47932421785118ce245079ae00572a8ef4fa393666774a0268cb31bf93462daa",
+    "native/directory_fence_fs.hepta": "91f8a71436a272706a3ebfa578af357e54b6b64dbfa29afcc3152b72c9565c21",
+    "native/directory_fence_packer.hepta": "3918aae9bfacf19a8658ece3eedcd619b7d4e4a2c78eff38db2d8d3d04e9ae97",
+    "native/directory_fence_queue_fixture_packer.hepta": "ebd13524a3dc78ff6dbad5b494d59d8101d9eccd90462aaf99d07994ac949839",
+    "native/directory_service_packer.hepta": "d9c750d727ee857d178bad2c6467946be0da928be690af455e0310a97359e20b",
+    "native/directory_service_prefix.hepta": "f352791feee0d1ced93460bfe44b9ee10b1d7003cb8b09adc50dedbb6426cdfa",
+    "native/editable_content.hepta": "3ca1dd3fe69191dae3eb4a6df0cc103cf8cb7e6000148bfa95f31c957be0cedd",
+    "native/effect_fence_async_packer.hepta": "2931f3633c37cff84054d3ff0122bf6d8a24da83a38668d1d93728740cc4f837",
+    "native/effect_fence_async_queue_fixture_packer.hepta": "02089966e6bea50653387810f6410fa99fbaf116bcbed4414c72e1352237ea92",
+    "native/effect_fence_caller_manager.hepta": "0d6c382df8ae6c17690e634a02073a33a625d6f6f569fc8aae13a981f1c7c400",
+    "native/effect_fence_caller_owner.hepta": "702fbf43ede707bf1832105b4634a2170b4be48d1f1361869cb8b4f90a21694e",
+    "native/effect_fence_fs.hepta": "91f8a71436a272706a3ebfa578af357e54b6b64dbfa29afcc3152b72c9565c21",
+    "native/effect_fence_manager.hepta": "fc13e967d725d214dd20312fc38197f92e569b9af0e290a6a6cbaab97b34b812",
+    "native/effect_owner_acquisition.hepta": "ebe955511a0feb37d7cf2b3341936d7b459dd77630838e0fc9c4704e973bf87d",
+    "native/effect_owner_document.hepta": "dc99b1bce11440848f9e68c0d8b1d53ea6a5cae70515bede2449eab794c5b4d1",
+    "native/effect_owner_environment.hepta": "6753bc512d89d9fb684dab8fec0f752e9d11e7e6fcc9e48d7eab32fd5a094899",
+    "native/effect_owner_fence.hepta": "0320203ba3ce4f5bc66d43581784dc0084d16905cb1e253e78d117bb5647cc63",
+    "native/entropy_packer.hepta": "303124b6016a002005c5aa6aa30b7ebc17b87df0758265092eeaa14f7d93d08a",
+    "native/entropy_policy.hepta": "08e6c36da722f42016c01a39e3e41452398c644be469b50e9c49229672900e0d",
+    "native/execution_controller.hepta": "5ab993340f2f9bf8b1f6f295098570291307d5bd564332174c2d136454167a10",
+    "native/execution_json.hepta": "d1e1610120fcadd72960f04b742ad6bfcfc3bc430a2b828463f3ab2af1268f14",
+    "native/execution_shadow.hepta": "65aa4097e00ed497ab38efe4ddf515de99eaf45abeb7ad2829af4381e7704713",
+    "native/fence_json.hepta": "48e5985c40e560a387e1607f40682671388317356af176daba4e9d2739e212d0",
+    "native/file_info_service.hepta": "813b7be5957f6bf921ae57748afdb7e2f42165403f3fc708cfb6337d9ab57986",
+    "native/file_lock_key.hepta": "99174dd26e97882b65489e9f913a2a22663546dcc783a678c9f571458841ddce",
+    "native/file_lock_key_packer.hepta": "d1e18d570dc79cc387ba5ad08e61a0b53e95fa3ec903238aa2ea26c984900f8c",
+    "native/file_lock_service.hepta": "cb0e14b587c27617991d69a5d47442b7a5cab66edcbbc1897d37dd10717cc459",
+    "native/file_lock_service_packer.hepta": "72784c9efdd8486b5249521977a1e464a148fa26cad88babeb55467480916666",
+    "native/file_lock_state.hepta": "dd6d1e9938767ae6333af5267efbc684e23fd87d3def4e095ac914c80bbbcaa8",
+    "native/file_lock_state_packer.hepta": "50b3b1dae1b9489500e5c291bb9f85d5788ac6c5d33a0eab8d5d66cc007e9078",
+    "native/filter_packer.hepta": "bb1f96db711fb93a53ce0e0b2ca1036b29b08ec1b7e99769e616c3b1c55a73b6",
+    "native/history.hepta": "e00f11f708239c1c8b4ee06da7833433ef86427ebd77544fc9b46ce2b6eb44eb",
+    "native/host_health_core.hepta": "e052f62c5ce3d9db42d4c39dc52a54163a50d9ddfa03c5722a65a26518f182dc",
+    "native/host_health_handler.hepta": "5af7bf60e56122cc883b731d144df8d3a783a77b9290deb837cd9cc945a519ad",
+    "native/host_health_parameters.hepta": "8d71d29fb94bccea9903bd7500c3e6ba382f6badc74a7ef3db4b4e4b1a9fc594",
+    "native/host_health_probe.hepta": "23b94522185aecf71d1e4762b7999395324d535e1d00728efd2204c3f476baab",
+    "native/io_packer.hepta": "bae4106077c9b516654732159bc762ffb644878d6d28a38b4a8a1b805b8c41de",
+    "native/io_policy.hepta": "09acea4f1cc8e0ff01d6d1289b4f072755633362da57a3846a21ecbb33a6c7bf",
+    "native/line_endpoint.hepta": "7c1fd4c24114726d7d3446241c8bdc4ff0152ce2533193a309bc1c66c6031141",
+    "native/line_verify.hepta": "2a0cefe5c81a9659e7965c5d35b83e42d19efd6ad3b5c2c179f934f23b04c6e2",
+    "native/local_canonical.hepta": "e9bd842791a04c2224342df5992606978eb496e8943b1dba1ea7602c829e1257",
+    "native/local_path_policy.hepta": "2336e4ae60860a9f4788e481af08b82ecb3b6ebcff5147cb9c970b952096a911",
+    "native/local_read.hepta": "f538f3c484922f54d776f757c94b98c66cc616bd4668006b0380530eae72bc12",
+    "native/local_service.hepta": "ebb1084f819bb82c0b7ac185181a3bf5e8bbcec8c119c382996d972608c6c81d",
+    "native/metadata_parameters.hepta": "53f590b2f525a81333e7749523a339eeefb612fcbd4c2a4df3e79f54357fbcbc",
+    "native/multi_read_service.hepta": "63b53454f82d26073f50db11c2007c29f0301611231386f0b7e6588e12ef570c",
+    "native/operation_aead.hepta": "0c63d15055cae3fa9217bc92bfdeece3455880121806b58d349546b2755d092b",
+    "native/operation_kdf.hepta": "4bc99f1a2c5b0830fe2d2bc2b9bfd6dde2521ec0893d5103117af3a7243b8fb1",
+    "native/operation_nonce.hepta": "e59534a1a008c3354ea62b6413f444ed52ab3f2cac9a5c52ae3dab3cb9832452",
+    "native/operation_record.hepta": "21868a402b6f1dc957c94a5d3a6f7e30810105bc936968e90e8d0223683e423a",
+    "native/operation_scope.hepta": "10a46116ef61f2026f561d2199021c187bfbdf666bab86d04735341f522637a0",
+    "native/path_source.hepta": "7c9ab5062ce516cf49b6d85d2820f49d69daaf61e51fca99430d9e19c018bde7",
+    "native/policy.hepta": "57d64450b81a46b92687a3efec056e2491e4c4a4ffde57a0999124d6bb0736d0",
+    "native/public_call_lifecycle.hepta": "1478c9e37927b839cc93eb1fa9429248376cf72d36c0c8e8bbad155241d04a68",
+    "native/public_call_mapper.hepta": "5975a05369cfdaca65881d79d5d3d9a6e3676e42d7ad58a580ac464b26168aa1",
+    "native/public_lifecycle_dispatch.hepta": "3235d9e84276625231cc42a2513a917b9a33e1643f4214eb2af7dbfdd10dab02",
+    "native/public_lifecycle_prefix_0.hepta": "1f39913d225214b11e6c2802dd7e395bc6b4aebb19acbf4a0661641752f013c6",
+    "native/public_lifecycle_prefix_1.hepta": "f39b3e02ee8493600b94a63a1bffed7275e742325044db5c5a77341e40435e33",
+    "native/public_metadata_handler.hepta": "b08c97c7de600c962aa0f6c37c72d921e4d860d34b0c3d6c2dbe36ba0801bf5c",
+    "native/public_read_handler.hepta": "11bab28fea71518683712e300124764e1a83acc8ad4c2c3d6454a5552a49d265",
+    "native/public_result_wire.hepta": "614ad6c45cb27d76144f2007ada4cb654f6619e2c1892b62fdf14c0c4964c90e",
+    "native/public_runtime_packer.hepta": "c57c593baeac276a2a8090d14da101656cf434bda66debd79c2ac1385dc68964",
+    "native/public_sdk_pool.hepta": "2bc4cdb5e7d082c6e80831cacdebf01b5db9001561cce5ce72e2b44742b37e7a",
+    "native/public_start_cancel_handler.hepta": "ba38feb72455e29bfba933a027e816e37cc349bfae49d34ec93f9b7b3d242e43",
+    "native/public_tool_dispatch.hepta": "0c5d6aa6f14cee254bfe8a0ec01114153587b9789a05845a1cd0037e2cb9caf4",
+    "native/regex_controller.hepta": "325fb6c201fb854dc5427d4e66ac305eb9bf9d675b873b1927254ee33b569aa5",
+    "native/regex_hir.hepta": "bcb22a1a01c3f67367a94ee10bd99cb32de07f99824b9453c02e46b8648e6cd6",
+    "native/regex_hir_packer.hepta": "0d7c30dffd20ef10e1c56da796fdbd187bc0e2f1f3a5a87d84b20d68e83c6604",
+    "native/regex_match.hepta": "1aa3d9fe9ee69d0e5c26f50638329bc9d2d4a00b30711b3fc0b02bbe0fc266fb",
+    "native/regex_nfa.hepta": "5df8563300ead7a8ced4433c312f0a9978168bed0ca6ceb52d1cd942c89c25bd",
+    "native/regex_nfa_callable.hepta": "34c59b9c7c52b8a6fe9ffc2a2ca01265dbdb9e52afc3bb2e220b0618dd88ef66",
+    "native/regex_pipeline_packer.hepta": "1c9cb4e763442c17ebb138c7e6d4c62b918f9c08d59a3d2e6a7ce2d6703f3e16",
+    "native/regex_syntax.hepta": "33976157cad94b417eeaa755b70f571ac1c34bfc15c7aaddabd8e843b80eb0d9",
+    "native/regex_syntax_packer.hepta": "4e426e2270169ab456a7c63a400d2d8d51ea721a2356165b791d8df540f52026",
+    "native/regex_unicode.hepta": "20c3454140533d6ef6161322c0afa7ce23ea95db388cf2f8c3de757c7c4becf6",
+    "native/regex_unicode_data.hepta": "393255f182a0ade2bab7935b7669a8426f03aafa3ad5f510870859445a870fb6",
+    "native/regex_unicode_packer.hepta": "38d869202fed3ecf8e2b7c0f4a5da967ad796b22ca27ca200da9e2f051c5b695",
+    "native/request_archive_metadata.hepta": "5450981a73ee9678c31a7b24869debcff328f260e0db25328933a832265653cf",
+    "native/request_archive_metadata_packer.hepta": "32ecb67a9d72b50f5f745827ba942e461fd8887a9d4237739c5991b98687def1",
+    "native/request_archive_publish.hepta": "d6283acac75ab653d67f9f58d7ad8a9bf5274b5a69e78753dbdf86471d2a7dd1",
+    "native/request_archive_publish_packer.hepta": "2e0d466e4f5f304a317a66fadcd6b06a18d622f1b9ff88ecd653816f688f8d88",
+    "native/request_archive_store.hepta": "5d8ef6ba58fe91a40073e30cf263033083ebecc501d61fe4c518d256f3707b2f",
+    "native/request_archive_store_packer.hepta": "9f8e08a1d20bce092a07e1003fa4521511170fa95282ea031e9545e5fd384de0",
+    "native/request_async_identity.hepta": "3b684577cce70c245b6feba9087259ea7dd66fa1fcb30275b94b12b6651e5e4e",
+    "native/request_async_io.hepta": "224a9213f0269279332e950fdebdad0eecff070b3e457f9a915a250b573412f1",
+    "native/request_async_journal.hepta": "968003368077a529b4eebd9ba151e71fbfcd6c477925f3ea00b3c6cbc278b09f",
+    "native/request_async_observation.hepta": "4bad1c26be7b1c6754462cdfafaffec71e04dcb99e0b33275d3288d6548d6d62",
+    "native/request_async_producer.hepta": "a6d8e62571d05351707640a8ac81ef96b75ae357826fb8f0750647e96e4f9f34",
+    "native/request_async_records.hepta": "9dcef527ca99a422cd976752332a0b077762af831b74b083f9f8aafc442339a8",
+    "native/request_async_registry.hepta": "0ded28e9baaa24c072446005a5c7891654c0a1ceaf50df88712303c04d4a7e3d",
+    "native/request_async_shutdown.hepta": "852734037edda2347c66b939097956e1884b084a217eacd8c712c5c55532ee90",
+    "native/request_async_start.hepta": "63dc4c29e8cdde9deb95d9ca0fefb18b7f96355ffe2479197ff4cb04887f270c",
+    "native/request_audit_active.hepta": "62aa9c311ad9e9dc87227da28c35143238f0e490e31008662bfb7b13990945e9",
+    "native/request_audit_active_packer.hepta": "1ab7775606e7b5961e7fb0939ee6c0da9575bff8a089bd41ce350ba75c711399",
+    "native/request_audit_active_pin.hepta": "3e8fd28235a2c28ecd4aef95e3bd7157929583921d5a08821f47e7adff3e4813",
+    "native/request_audit_active_publication.hepta": "dbd201a5da51c591cd6720450b95057a90af9dea09f4e09334de7d95d8090d5f",
+    "native/request_audit_archive_anchor.hepta": "4cb1a3cd353bfdcf82cdeafe2c15b4f5f69d42fa2fad9bc27527e56e5b9b0c76",
+    "native/request_audit_archive_inner.hepta": "0b91f082d7421d64f05765f4e97c0f9f5f21f230e4887081b3f50047a681ff4a",
+    "native/request_audit_archive_legacy.hepta": "1a440bcdc03daa9b9e8b2de47dc6324e1ed789e7ad830bff27cfe3fb88b22aa5",
+    "native/request_audit_archive_metadata.hepta": "c6beebf1586bdcaec1ec799c5e6398beb02f078434a340f507a9b2c3c80b6c00",
+    "native/request_audit_archive_registry.hepta": "9bcf9c7129040c543f07f0345587aea2fe8c4268984e1bf17d086d5e63aadfd5",
+    "native/request_audit_archive_save.hepta": "520c90a850076c719d7f78083cecc6f95f62d1068651523e2e95e62a499e8edc",
+    "native/request_audit_archive_write.hepta": "5bfbb83a4c6b706ba2ec202f71ed66df6e8a9951f84773acf2e6c0b386d260a2",
+    "native/request_audit_cache_stamp.hepta": "fae8340056aafd4102ec661402338c10368b21f2ab2688aeb0da6d709836f950",
+    "native/request_audit_cache_stamp_packer.hepta": "fc603aeec55f74e556dc4d79dc31cf04d9f0bc89c557d619e0d50622920af39d",
+    "native/request_audit_clock.hepta": "f51444db3d5e7e2805e8cf38f952cb8de43d94df781e7884e74c1ec902c6d85f",
+    "native/request_audit_cold_cache.hepta": "792cce0fa357a790a7fab7b581321c41d21f994870c68340e641db36123f319d",
+    "native/request_audit_directory.hepta": "1a199dda8908a87b319b8bdd4114912bbbf783e27886c8804aa789ee54631fe6",
+    "native/request_audit_directory_packer.hepta": "3edb588cf250170e04561f0acf3d1800e9235f38180b3bb19d462f6bb23445f2",
+    "native/request_audit_entries.hepta": "0d41f5f5ccb5559ae3ca3b793f4ae6a0f64eb6cd7551ebbbc9266074310da946",
+    "native/request_audit_entries_packer.hepta": "527783ba33ec0dd598b3fabbca318cabf119267359dd94506473313c5edaa79a",
+    "native/request_audit_history.hepta": "9caa70c191f026cb09e070401afa816d9977a524a4e2b9d3b7bbe24aa79e8160",
+    "native/request_audit_hot_cache.hepta": "239e18463d787bb4b2c9c7d7e6c80bba08c00b05f80eef3b4ff5c839f5360c78",
+    "native/request_audit_identity.hepta": "54e5165acbf0e19d05bada1f2e4a467d1e2b81bb6c5677dd14cd98558a1f0cc4",
+    "native/request_audit_json.hepta": "f74fdc64d731878e1f943b6dfed84c5cae034eceb6b8b2336ae9f3ebc8b1e0f8",
+    "native/request_audit_lock.hepta": "0841a23cac67093344c7953efdf9ed420bc3159d6061a9923040e5d3a6de78c7",
+    "native/request_audit_lock_packer.hepta": "ece564bcb3d92dca31b2d992d05f1f46f0e5c147bf90cae6fa6fba8879c649b7",
+    "native/request_audit_observation.hepta": "8a1ad1818ca1b6182ed4caab797d0c8e7df89bbc79f0cf6b7d0de4974462924d",
+    "native/request_audit_read.hepta": "c6d615cbaa7c0ae36ae03aa324ae906a113157baa8c6b8b9a596a67e7f99f188",
+    "native/request_audit_read_packer.hepta": "7f960f5e7d7ca5f724a72627871f5648ca0f58ce8dce2f8cd5a193b3399ba0cc",
+    "native/request_audit_record_visitor.hepta": "d85c3d6e0bc24e638dd4d8726b49f75c063ab0d3e24db9fb04a510fb5208ff3b",
+    "native/request_audit_remove.hepta": "b4210adda23caac0651204ff97bba5f0ef47c103a69dd9253243b5545802e8cb",
+    "native/request_audit_remove_packer.hepta": "8b841857861b09be4072319403ab4742c24bc99a60412eafc9b295f684081702",
+    "native/request_audit_retention.hepta": "5e9d8ea36df00d10c1b648ea8762fd225b720e4d13e793a3de6bf468dd3814e5",
+    "native/request_audit_retention_files.hepta": "8073b36c0b855f4245b7c836c7f2f5c728a3a08d2348c88782921e7cf3610965",
+    "native/request_audit_shared_stamp.hepta": "f3911edb63c129b0e8249bda6666b2bafe4f55f1cec95537d05de4dffede251a",
+    "native/request_audit_stamp.hepta": "d36e39db25135d2b9a4cd9ab6267fa8d9423803d84d28bb80ab1cf6f9bcdcb44",
+    "native/request_audit_stamp_legacy_dependency.hepta": "d943e8dce3a5a09bbda421509be56c97ad314819352abb29a54731fe26c6f8dd",
+    "native/request_audit_stamp_namespace.hepta": "b5db5fc6095884436929600f5687be415e785d7058f8ae8cff78a2814810047b",
+    "native/request_audit_stamp_packer.hepta": "2b868254cb77845e785aeb8fec8586b439178e0ad45b649cb6abd7f3a67a9e9a",
+    "native/request_audit_ticket.hepta": "49ff0bc3717b0f69fdea9260b5e13d1f20932b3d31fe86ed337a68f4cc1cb0a1",
+    "native/request_audit_ticket_custody.hepta": "447497e2c159f7115188955c1efe29157cbac59043a21b6bbdc0c8bd459be7ac",
+    "native/request_audit_ticket_leaves.hepta": "cd2deb125998b3c25238f73685af966c7f9397e0e4cf29f7a64dd66262f9c256",
+    "native/request_audit_ticket_service.hepta": "e6f175ebbe8930026bc07f31082776087b5412e2d2ac7e1f3d5adc1341b70e76",
+    "native/request_audit_ticket_storage.hepta": "730051d7108cfd3fc4aa49ca1e812761dc4374dfba0a985e6310c651f1266e2b",
+    "native/request_audit_write.hepta": "cf444ed1fc25a95221a841f56438d76fdc452988eda391847eedcf49f4c00f0d",
+    "native/request_audit_write_packer.hepta": "a1a67a3e4532066c32ad0dcf56c5083e20db5095f96bc7843c432cab68863b47",
+    "native/request_history_caller.hepta": "fcf879ccb2d37f7c6a0c99c79b91186a735cc5673da6b40e1ebaac89a7b29126",
+    "native/request_history_worker_gate.hepta": "254c3468ebbfa757fc4b82b1fb6ef313adc9e731919847125b5ba972be29b2c5",
+    "native/request_read_early_id.hepta": "aaa6244c9f5a57de07442ab2c1f8f1aa6ea9eade2e4a930983cbac32569470e8",
+    "native/request_read_parameters.hepta": "9cb77d622d87ed2e4e9926620c87e74fb828f00589cfee0db8b6fcf193035fd8",
+    "native/request_record_io.hepta": "4d8f762164fd902356347c74dc859b2315f5f6d44842d3a999f322df849b0f28",
+    "native/request_record_io_packer.hepta": "81c8cd22e047ad403110dea4bc8f8befe4f712bffab1793c234e3566ae426d34",
+    "native/request_record_validation.hepta": "221a0582ea31df7c6ff3e067df61ce422c148242e75e81c300edfe3fea80d3df",
+    "native/request_result.hepta": "7bd290ed707687eb764603f62b6d9104b75154f7c6a1189512cf149a00ae2f73",
+    "native/request_result_intent.hepta": "1c5d01fb62f2c5fc9b4d7995ad2c1edf7200f5a12cc156bdf403dadf48562252",
+    "native/request_result_locks.hepta": "b197c24fa8a0ea1269072397036414c6a65380880c2e84efae0c4f0107004081",
+    "native/request_result_lookup.hepta": "006753cd161b4748f047341527211e032e1d43d2892a8eb956a2501ddddfaa5e",
+    "native/request_result_pages.hepta": "37123dbf2def9881b829027c9f00498062b44aaf3750ab23cd302b4719db8a70",
+    "native/request_result_read.hepta": "216df1104f0f5b5d2c2715254f79b5d02c48171cc01a84a4f622422781652fd9",
+    "native/request_result_read_error.hepta": "7ef18a917453ee9b580c52faf0147f03ea9c6770b7707aceac3fede4c9ddbae7",
+    "native/request_result_read_gate.hepta": "a6beda1858a4473941260ad3eda491e194a5a76d74049f7c7e017510b32d220e",
+    "native/request_result_record.hepta": "f6b7a81ea874cabf142332907fb9c3e9c1fb92a6494772a4611fec252e312bf6",
+    "native/request_result_workers.hepta": "5f94641e25bdf947c01e7015ff527e500eb3db308524b6566011500a7c63af0c",
+    "native/request_retention.hepta": "fd94a44ae0b92f8492225d6de013aa992f5c6dd7c9f79d7290fc913c534da9db",
+    "native/request_safe_dto.hepta": "56090d5e6e6e4011475c57e93962ea54b93b75bf591242c012d65dd43e263b1c",
+    "native/request_start_cancel_parameters.hepta": "e419f3938a6c13fd8b738d1338f65ffa044ad12f3cc3f162b6130ad9a2533556",
+    "native/request_status_merge.hepta": "44ae91f41c6b8306891f9f3ed16af49d7cce14378d9123abe5e8d85c3066092d",
+    "native/request_storage_json.hepta": "3dca192460879ca124649f17bfa753f8aabf76a734b0560e9096f1c723007128",
+    "native/request_storage_prepare.hepta": "fbdbc2b008a2f4c33474c9fe40d6648bbab09ff202c31fd3deff1c4c4ecd01a8",
+    "native/request_storage_prepare_packer.hepta": "7baae83eeba705fc3ae7fe4734f1da0b06ecbbaf43627c32e7321abf4a63abb5",
+    "native/request_store_acquire.hepta": "db88b78b9490af2a5ce8fb735656d96c3bba685d039f4cb65aaa9b04a1a621fc",
+    "native/request_store_directory.hepta": "74898c9249691ea6d7852766b76083d4e278754239d9e3d43aa432dfd8855701",
+    "native/request_store_directory_packer.hepta": "5b01c23cf786bd816ef9830a617abbfaecedb99bc6be49ed6320b584b365957b",
+    "native/result_storage_value.hepta": "1b4d10dfd51ae0c9b7fed6d646703ad317f1ae92a7e47e4929e30831d81f1a0b",
+    "native/runtime_bytes.hepta": "f59f8c520f83a4b9a06db9a3aa77196a1cc69cba33964ea6f793ae1d6a5f6250",
+    "native/runtime_protocol.hepta": "77be2919db9d3866f1d214c7d4fff57acbd0913bf9d1f0441f8fc5b8a41e9f96",
+    "native/scope_annotation.hepta": "8f344d8492505b1749e4fa10ace1d8e095db9ccd45762df96f92a943b74fd433",
+    "native/sdk_connection.hepta": "8bb5612e877d2dc8ad2e184d1cfff17f280a334e06b0e9e5d5dbffaca3b55f61",
+    "native/sdk_connection_packer.hepta": "27c7cdba8ca1dfd6a059e33d47807113cca90a31945fab3718d2785c0df3e11f",
+    "native/sdk_default_fixture.hepta": "52548bf8b328389fdc3c76939e9bd974208042f0e75841bf4e5d939022428dad",
+    "native/sdk_message.hepta": "d84d399a78e428a3505bd14258b0fb5a50cde46753551ff85703ac9094ba795d",
+    "native/sdk_message_rawvalue.hepta": "405024ac65adf5816deeb58ca524f35a2359313683ace9b8442ccca93b0eb4ce",
+    "native/serde_error.hepta": "14eea1ebc4bd12cb10e961d61bea58dded9befb15a3c67191fe6301577bc00e9",
+    "native/serde_filter_packer.hepta": "9f36fa06de096e0e49c97154528cdae2ad2f226b7b118617faea514ea8d5aa75",
+    "native/serde_json.hepta": "6c3afb7d322b3c42d89727651aaae7cc1907a7766773e0bff4fdac9b11567a96",
+    "native/serde_json_rawvalue.hepta": "f00f45eb02ad5e015cc5643e1b53d3e84ac6ee7ea1e8db67cadc2dc4509ff153",
+    "native/session_request_context.hepta": "49e641b85c0acb3677984b04c4dd20bf859bba9cef09ec9476c58c01c6d129ea",
+    "native/session_workdir.hepta": "63b8ea0e9b03c797cae1ecd51aba82a560f70329880e9758ea70612bb4161838",
+    "native/stat_version.hepta": "d5fedc22505bed6a6f8b12dffcfa699be46aeffb890d8a821710c05f0aaf3a3f",
+    "native/stdio_packer.hepta": "2a6291302a82e2307cd13e5d932295f976e24d19918b08681bc6d874924c3ff6",
+    "native/text_budget.hepta": "89df7b4320fdbd3525450e9446267ae3d54a5b62660d8904fe8f09be36a7fbf9",
+    "native/typed_result_json.hepta": "a9dfe2fec3f35b2ef2bcfaec56229007c75301cccb06a96a36691dc361aa0bec",
+    "native/view_cache.hepta": "d363c2d3b06bf6d3de0ab20ad40ea3a090baf5d02fef9d280e54e6ef78c6cb01",
+    "native/view_filter_packer.hepta": "fc0911e275e5af7751b73be89c10a60df5ed4d6b7b2826b5e2f84d27bdc1ba52",
+    "native/view_render.hepta": "d7012a796fd83744bcfb4951d01a95d3bab63f9a7ed185ad035c4665989066a3",
+    "native/workdir_caller.hepta": "e867bcdee2bb7703103e98dd3c5feb6a5b7c8310c428ddd27dea8a897bf86469",
+    "native/workdir_params.hepta": "70dcd6428e24cb0cd11bf4213fbec529d1f7fc0eb7f00a78a59a27e8d0127144",
+    "native/workdir_service_packer.hepta": "adf893c6c4f58d2958cfe6fc51b6a52bd67d2e8d94eaaea5650435128cfbc961",
+    "native/workdir_service_prefix.hepta": "ab98f25cda349cc9949402707c916daaec0fec4e46246d7f1f613c007225cb2d",
+    "native/write_chain.hepta": "336863dd2490828efc10a6936db6bf711621480f1dc13a25cc3416ac5369077f",
+    "native/write_chain_packer.hepta": "f85594673a0b96ac908d64917db18349478559359e60c3c333b58384967049a4"
+  },
+  "production_activated": false,
+  "production_owner_categories_unchanged": 10,
+  "schema": "hepta.runtime.session-registration-derivation.v2",
+  "whole_runtime_replaced": false
+}

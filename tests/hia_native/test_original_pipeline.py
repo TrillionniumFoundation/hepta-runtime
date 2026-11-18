@@ -212,8 +212,9 @@ class OriginalPipelineTests(unittest.TestCase):
 
     def test_registry_covers_every_recipe_once_and_keeps_shared_builds_together(self):
         flat = [key for keys in p.groups().values() for key in keys]
-        self.assertEqual(len(flat), 65)
+        self.assertEqual(len(flat), 66)
         self.assertEqual(p.GROUPS["public"], ("public_lifecycle",))
+        self.assertEqual(p.GROUPS["session"], ("session_transport",))
         self.assertEqual(set(flat), set(r.RECIPES))
         self.assertEqual(len(flat), len(set(flat)))
         self.assertEqual(p.GROUPS["config"], ("runtime_config",))

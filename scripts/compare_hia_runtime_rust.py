@@ -27,6 +27,7 @@ import hia_native_public_registry_qualification as public_registry_qualification
 import hia_native_public_lifecycle_qualification as public_lifecycle_qualification
 import hia_native_result_qualification as result_qualification
 import hia_native_serde_error_pipeline as serde_error_pipeline
+import hia_native_session_transport_pipeline as session_transport_pipeline
 import hia_native_result_storage_pipeline as storage_pipeline
 import hia_native_audit_pipeline as audit_pipeline
 import hia_native_activity_pipeline as activity_pipeline
@@ -40,7 +41,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        session_evidence, file_locks_evidence, file_lock_service_evidence,
                                        write_chain_evidence, directory_service_evidence,
                                        workdir_service_evidence, sdk_connection_evidence, public_registry_evidence, public_lifecycle_evidence, result_values_evidence,
-                                       serde_error_evidence, result_storage_evidence, audit_readiness_evidence, audit_activity_evidence, audit_stamp_evidence, batch_write_evidence, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
+                                       serde_error_evidence, session_transport_evidence, result_storage_evidence, audit_readiness_evidence, audit_activity_evidence, audit_stamp_evidence, batch_write_evidence, atomic_write_evidence, atomic_write_completed_process, atomic_write_retained_files,
                                        atomic_write_retire_fixtures,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
@@ -206,6 +207,12 @@ def check_input_pins(output: Path, report: dict) -> None:
         actual = batch_write_pipeline.retained_original(ROOT, output, report, rustc, completed_test_summary)
         if report["original_rust_comparisons"]["batch_write"] != actual:
             raise ValueError("complete original batch-write replay changed")
+    if report.get("session_transport_evidence") != session_transport_evidence(output, report):
+        raise ValueError("complete session transport native evidence changed")
+    if "session_transport" in report.get("original_rust_comparisons", {}):
+        actual = session_transport_pipeline.original_evidence(ROOT, output, report, completed_test_summary)
+        if report["original_rust_comparisons"]["session_transport"] != actual:
+            raise ValueError("complete session transport original evidence changed")
     if report.get("serde_error_evidence") != serde_error_evidence(output, report):
         raise ValueError("complete diagnostic native evidence changed")
     if report.get("result_storage_evidence") != result_storage_evidence(output, report):
@@ -352,6 +359,14 @@ def check_input_pins(output: Path, report: dict) -> None:
         if sha(manifest) != item["sha256"]:
             raise ValueError("compiled module manifest changed")
         module = json.loads(manifest.read_bytes())
+        if item.get("builder") == "session_transport":
+            if (module.get("compiler_dependency") != boot["dependency"]
+                    or json.loads((ROOT / "tests/hia_native/session_transport/graph.json").read_bytes())["compiler_sha256"]
+                        != report["compiler_image_sha256"]):
+                raise ValueError("session graph compiler identity changed")
+            # Complete module/packer/ELF and execution admission is mandatory
+            # in session_transport_evidence above; this is a four-graph manifest.
+            continue
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
@@ -1494,6 +1509,18 @@ def compare_sdk_connection(output: Path, report: dict, rustc: Path) -> dict:
                               record_check, qualification_env(), "sdk_connection")
 
 
+def compare_session_transport(output: Path, report: dict, rustc: Path) -> dict:
+    before = session_transport_evidence(output, report)
+    if before != report.get("session_transport_evidence"):
+        raise ValueError("session transport native evidence changed before original replay")
+    for name, command in session_transport_pipeline.original_commands(ROOT, output, report, rustc).items():
+        record_check(output, report, name=name, command=command, timeout=180, env=qualification_env())
+    actual = session_transport_pipeline.original_evidence(ROOT, output, report, completed_test_summary)
+    if session_transport_evidence(output, report) != before:
+        raise ValueError("session transport native corpus changed during original replay")
+    return actual
+
+
 def compare_serde_error(output: Path, report: dict, rustc: Path) -> dict:
     before = serde_error_evidence(output, report)
     if before != report.get("serde_error_evidence"):
@@ -1770,7 +1797,7 @@ def compare_batch_write(output: Path, report: dict, rustc: Path) -> dict:
                                                   record_check, qualification_env())
 
 
-RECIPES = {"serde_error": compare_serde_error, "batch_write": compare_batch_write, "runtime_bytes": compare_bytes, "text_budget": compare_text,
+RECIPES = {"session_transport": compare_session_transport, "serde_error": compare_serde_error, "batch_write": compare_batch_write, "runtime_bytes": compare_bytes, "text_budget": compare_text,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "atomic_write": compare_atomic_write,
            "editable_content": compare_editable_content, "view_render": compare_view_render,

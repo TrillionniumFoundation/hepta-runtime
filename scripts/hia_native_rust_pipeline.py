@@ -42,6 +42,7 @@ GROUPS = {
     "system": ("operation_kdf", "operation_aead", "operation_nonce", "operation_record", "system_entropy",
                "operation_scope", "operation_scope_os", "caller_authority", "multi_read_service"),
     "batch": ("batch_plan", "batch_apply", "atomic_write", "batch_write"),
+    "session": ("session_transport",),
 }
 NATIVE_SEAL = "original-native.json"
 NATIVE_REPORT = "original-native-report.json"
@@ -57,7 +58,7 @@ CONTROLLED_PHASE = "awaiting_final_original_admission"
 def groups() -> dict[str, tuple[str, ...]]:
     flat = tuple(key for keys in GROUPS.values() for key in keys)
     if (set(GROUPS) != {"bytes", "state", "services", "json", "config", "system", "batch",
-                      "storage_types", "storage_files", "audit", "public"}
+                      "storage_types", "storage_files", "audit", "public", "session"}
             or len(flat) != len(set(flat)) or set(flat) != set(r.RECIPES)):
         raise ValueError("every original recipe must belong to exactly one declared group")
     for together in (("fence_json", "serde_json"), tuple(r.result_qualification.KEYS),

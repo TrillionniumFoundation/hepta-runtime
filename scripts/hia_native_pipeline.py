@@ -1,6 +1,6 @@
 """Run the complete native gate across source-bound, independently retained jobs.
 
-One fresh cold/build artifact is admitted by its workflow-produced SHA256. Eight
+One fresh cold/build artifact is admitted by its workflow-produced SHA256. Nine
 explicit partitions execute every registered suite once. Collection rechecks all
 raw process bytes, immutable build inputs and complete shard inventories before
 the unchanged evidence owners can advance to the original Rust comparisons.
@@ -39,6 +39,7 @@ PARTITIONS = {
     "system": ("binary_codec", "operation_kdf", "operation_aead", "operation_nonce", "operation_record",
                "system_entropy", "operation_scope", "operation_scope_os", "caller_authority", "policy",
                "stat_version", "native_io", "multi_read_service", "file_info_service", "local_service", "directory_service"),
+    "session": ("session_transport",),
 }
 BUILD_SEAL = "native-build.json"
 BUILD_REPORT = "prepared-report.json"
@@ -147,7 +148,7 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
     partitions = PARTITIONS if partitions is None else partitions
     modules = {item["key"]: item for item in q.MODULES}
     flat = [key for keys in partitions.values() for key in keys]
-    if set(partitions) != {"batch", "text", "json", "config", "system", "storage", "audit", "public"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
+    if set(partitions) != {"batch", "text", "json", "config", "system", "storage", "audit", "public", "session"} or len(flat) != len(set(flat)) or set(flat) != set(modules):
         raise ValueError("every native module must belong to exactly one explicit partition")
     if partitions["public"] != ("public_lifecycle",):
         raise ValueError("the complete public lifecycle requires its independent partition")
@@ -173,7 +174,7 @@ def partition_tests(partitions=None) -> dict[str, tuple[str, ...]]:
                for names in result.values()):
         raise ValueError("file-lock state, service and evidence dependencies must stay ordered in one partition")
     for group in (q.write_chain_pipeline.q.SUITES, tuple(q.service_pipeline.DIRECTORY_TESTS),
-                  q.batch_write_pipeline.q.SUITES, q.serde_error_pipeline.TESTS, q.storage_pipeline.TESTS, q.audit_pipeline.TESTS, q.activity_pipeline.TESTS, q.stamp_pipeline.TESTS):
+                  q.batch_write_pipeline.q.SUITES, q.session_transport_pipeline.TESTS, q.serde_error_pipeline.TESTS, q.storage_pipeline.TESTS, q.audit_pipeline.TESTS, q.activity_pipeline.TESTS, q.stamp_pipeline.TESTS):
         if not any(all(name in names for name in group)
                    and [names.index(name) for name in group] == sorted(names.index(name) for name in group)
                    for names in result.values()):
@@ -437,7 +438,7 @@ def collect(output: Path, hepta: Path, expected: str, invocation: str, shards: P
     try:
         folders = sorted(shards.iterdir())
         if len(folders) != len(PARTITIONS) or any(p.is_symlink() or not p.is_dir() for p in folders):
-            raise ValueError("collector requires exactly eight complete shard artifacts")
+            raise ValueError("collector requires exactly nine complete shard artifacts")
         parts, copies, all_files, all_directories = {}, {}, {}, set()
         for folder in folders:
             receipt_path, report_path = owned(folder, "shard.json"), owned(folder, "shard-report.json")

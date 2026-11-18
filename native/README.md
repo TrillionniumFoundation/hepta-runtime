@@ -14,6 +14,25 @@ partial original-tool coverage; configured remote hosts and complete original
 authorization behavior remain outside that profile. Production activation and
 deletion of the original runtime remain incomplete.
 
+## Finite session transport ownership
+
+The [session transport integration](session_transport_integration.md) registers
+four source-bound graphs for ServerMessage, Worker request/result ownership,
+Handle initialization and LocalWorkerError. Their 38 unique semantic images and
+18 packers produce the exact qualified 15-, 32-, 36- and 38-image executables.
+The intake adds 52 HIA sources and reuses four existing sources; it keeps the
+selected public server graph separate.
+
+The mandatory native partition executes 1,120 owned programs and 180 message
+projections in eight real processes, then verifies 27 compiler-record refusal
+and restoration controls. One fresh Rust 1.95 Cargo build produces four original
+binaries from 139 locked registry dependencies and complete rmcp 3.4.1 source.
+Four actual original processes execute 342 programs, producing 684 comparisons
+against the retained native modes. ServerMessage's original scope is typed wire;
+the other three domains compare actual Rust ownership and channel lifecycles.
+The existing process and job deadlines are unchanged. Focused PASS does not
+stand in for the current commit's complete CI result or production activation.
+
 ## Selected public call lifecycle
 
 The [public lifecycle graph](public_lifecycle_abi.md) composes the existing
@@ -548,32 +567,35 @@ python3 -m venv /absolute/path/to/hia-reference-environment
   --rustc /absolute/path/to/rustc
 ```
 
-CI executes the complete gate through one fresh prepare job, seven native
-partitions, ten original-reference groups, and two final evidence jobs. The
+CI executes the complete gate through one fresh prepare job, nine native
+partitions, twelve original-reference groups, and three final evidence jobs. The
 prepare job executes the full cold gate and builds every module once. Each
 native partition admits that workflow-produced SHA256 and the full source,
 compiler, build and invocation identity before running its complete suite list.
-Batch, text/history/view, JSON, configuration/regex, system, storage and audit
+Public, session ownership, batch, text/history/view, JSON, configuration/regex,
+system, storage and audit
 suites run on separate runners. Each job retains 15 minutes, each native suite
 retains 180 seconds, and every original recipe and compiler cold deadline
 remains unchanged.
 
-A separate native collector admits all seven completed partitions and seals
+A separate native collector admits all nine completed partitions and seals
 the whole native corpus. Every original group starts from those exact bytes.
-The 64 required recipes are assigned once to bytes, state, services, JSON,
-configuration, system, batch, storage types, storage files and audit groups.
+The 66 required recipes are assigned once to public, session ownership, bytes,
+state, services, JSON, configuration, system, batch, storage types, storage files
+and audit groups.
 The two generic JSON recipes share one fresh locked build; the three result
 recipes share another. Workdir and Write stay together through their original
 fixture retirement, and the two independent OS reference workers retain their
 separate concurrent process receipts.
 
 Each successful original job publishes its own seal SHA256 through a dedicated
-workflow output. The first final job admits all ten supplied identities, every
+workflow output. The first final job admits all twelve supplied identities, every
 recipe and actual completed process, then retains an `ORIGINALS_COLLECTED`
-bundle. This intermediate status is not PASS. A separate completion job binds
-the external bundle SHA, head, invocation and all shard seals before restoring
-the complete evidence. It runs every quiescent mutation family and the final
-complete input check before writing PASS; the regex controls and final artifact
+bundle. This intermediate status is not PASS. A second job runs every quiescent
+mutation family. The final completion job binds the external collection and
+control bundle SHAs, head, invocation and all shard seals before restoring the
+complete evidence and running the final complete input check. Only then does it
+write PASS; the regex controls and final artifact
 export remain mandatory. ZIP-lost executable modes are restored only after all
 owned regular-file bytes pass; directory inventories preserve empty snapshots.
 
@@ -592,9 +614,9 @@ commands above remain available for the complete sequential gate.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared gate has 136 native suite processes, one fresh compiler cold
-process and 41 required original recipes. The CI groups additionally retain
-seven actual Rust-version observations; the sequential entry retains one.
+The declared gate has 192 native suite processes, one fresh compiler cold
+process and 66 required original recipes. Each CI original group additionally
+retains its actual Rust-version observation; the sequential entry retains one.
 Each recipe may contain several actual compile/replay checks, all counted from
 completed records. The configuration recipe retains both complete original
 processes. Twelve result controls, twenty public-registry controls and fourteen

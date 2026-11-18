@@ -71,6 +71,7 @@ import hia_native_public_registry_qualification as public_registry_qualification
 import hia_native_public_lifecycle_qualification as public_lifecycle_qualification
 import hia_native_result_qualification as result_qualification
 import hia_native_serde_error_pipeline as serde_error_pipeline
+import hia_native_session_transport_pipeline as session_transport_pipeline
 import hia_native_result_storage_pipeline as storage_pipeline
 import hia_native_audit_pipeline as audit_pipeline
 import hia_native_activity_pipeline as activity_pipeline
@@ -81,6 +82,7 @@ import hia_native_write_chain_pipeline as write_chain_pipeline
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
 MODULES = (
+    {'key': 'session_transport', 'name': 'session-transport', 'source': 'native/session_transport/server_message_owner.hepta', 'standalone': None, 'builder': 'session_transport', 'manifest_env': 'HIA_SESSION_TRANSPORT_MANIFEST', 'test': 'test_session_transport_owned.py', 'additional_tests': ('test_session_transport_server.py', 'test_session_transport_receipts.py'), 'companion_sources': ('native/cooperative_budget.hepta', 'native/cooperative_defer.hepta', 'native/cooperative_scheduler.hepta', 'native/sdk_message_rawvalue.hepta', 'native/session_transport/cancellation.hepta', 'native/session_transport/client_message.hepta', 'native/session_transport/client_message_drop.hepta', 'native/session_transport/client_result.hepta', 'native/session_transport/event_drop.hepta', 'native/session_transport/event_take.hepta', 'native/session_transport/handle_drop.hepta', 'native/session_transport/local_worker_error_drop.hepta', 'native/session_transport/local_worker_error_owner.hepta', 'native/session_transport/mpsc_controller.hepta', 'native/session_transport/mpsc_state.hepta', 'native/session_transport/oneshot.hepta', 'native/session_transport/owned_mpsc_drop.hepta', 'native/session_transport/owned_send.hepta', 'native/session_transport/packers/handle_initialize_0.hepta', 'native/session_transport/packers/handle_initialize_1.hepta', 'native/session_transport/packers/handle_initialize_2.hepta', 'native/session_transport/packers/handle_initialize_3.hepta', 'native/session_transport/packers/handle_initialize_4.hepta', 'native/session_transport/packers/local_worker_error_0.hepta', 'native/session_transport/packers/local_worker_error_1.hepta', 'native/session_transport/packers/local_worker_error_2.hepta', 'native/session_transport/packers/local_worker_error_3.hepta', 'native/session_transport/packers/local_worker_error_4.hepta', 'native/session_transport/packers/server_message_0.hepta', 'native/session_transport/packers/server_message_1.hepta', 'native/session_transport/packers/server_message_2.hepta', 'native/session_transport/packers/worker_owners_0.hepta', 'native/session_transport/packers/worker_owners_1.hepta', 'native/session_transport/packers/worker_owners_2.hepta', 'native/session_transport/packers/worker_owners_3.hepta', 'native/session_transport/packers/worker_owners_4.hepta', 'native/session_transport/probe.hepta', 'native/session_transport/result_drop.hepta', 'native/session_transport/result_take.hepta', 'native/session_transport/semaphore.hepta', 'native/session_transport/server_message_drop.hepta', 'native/session_transport/server_message_emitter.hepta', 'native/session_transport/server_message_schema.hepta', 'native/session_transport/server_message_typed.hepta', 'native/session_transport/session_error_drop.hepta', 'native/session_transport/session_error_into_io.hepta', 'native/session_transport/session_error_owner.hepta', 'native/session_transport/session_error_project.hepta', 'native/session_transport/session_handle_future.hepta', 'native/session_transport/timer.hepta', 'native/session_transport/worker_request_drop.hepta', 'native/session_transport/worker_request_take.hepta', 'native/session_transport/worker_result_drop.hepta', 'native/session_transport/worker_result_take.hepta', 'native/session_transport/yield.hepta')},
     {'key': 'request_audit_stamp', 'name': 'request-audit-stamp', 'source': 'native/request_audit_stamp.hepta', 'builder': 'audit_stamp', 'manifest_env': 'HIA_AUDIT_STAMP_BUILD', 'test': 'audit-stamp-stamp', 'additional_tests': ('audit-stamp-stamp-kernel', 'audit-stamp-stamp-controls'), 'companion_sources': ('native/request_audit_stamp_namespace.hepta', 'native/request_audit_stamp_legacy_dependency.hepta', 'native/request_audit_stamp_packer.hepta')},
     {'key': 'request_audit_cache_stamp', 'name': 'request-audit-cache-stamp', 'source': 'native/request_audit_cache_stamp.hepta', 'builder': 'audit_stamp', 'manifest_env': 'HIA_AUDIT_STAMP_BUILD', 'test': 'audit-stamp-cache-stamp', 'additional_tests': ('audit-stamp-cache-stamp-kernel', 'audit-stamp-cache-stamp-controls'), 'companion_sources': ('native/request_audit_cache_stamp_packer.hepta',)},
     {'key': 'request_audit_active', 'name': 'request-audit-active', 'source': 'native/request_audit_active.hepta', 'builder': 'audit_activity', 'manifest_env': 'HIA_AUDIT_ACTIVITY_BUILD', 'test': 'audit-activity-active', 'additional_tests': ('audit-activity-active-controls',), 'companion_sources': ('native/request_audit_active_packer.hepta',)},
@@ -422,6 +424,7 @@ def sources() -> dict:
     paths.update(ROOT / name for name in public_lifecycle_qualification.source_pins(ROOT))
     paths.update(ROOT / name for name in result_qualification.source_pins(ROOT))
     paths.update(ROOT / name for name in serde_error_pipeline.sources(ROOT))
+    paths.update(ROOT / name for name in session_transport_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in storage_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in audit_pipeline.sources(ROOT))
     paths.update(ROOT / name for name in activity_pipeline.sources(ROOT))
@@ -574,6 +577,8 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
         config_commands.update(public_registry_qualification.test_commands(ROOT, output, report))
     if set(tests) & set((*result_qualification.TESTS, result_qualification.CONTROL_TEST)):
         config_commands.update(result_qualification.test_commands(ROOT, output, report))
+    if set(tests) & set(session_transport_pipeline.TESTS):
+        config_commands.update(session_transport_pipeline.test_commands(ROOT, output, report))
     if set(tests) & set(serde_error_pipeline.TESTS):
         config_commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
     if set(tests) & set(storage_pipeline.TESTS):
@@ -1061,6 +1066,10 @@ def sdk_connection_evidence(output: Path, report: dict, *, create=False) -> dict
 
 def batch_write_evidence(output: Path, report: dict) -> dict:
     return batch_write_pipeline.qualification_evidence(ROOT, output, report, completed_test_summary)
+
+
+def session_transport_evidence(output: Path, report: dict) -> dict:
+    return session_transport_pipeline.native_evidence(ROOT, output, report, completed_test_summary)
 
 
 def serde_error_evidence(output: Path, report: dict) -> dict:
@@ -2328,7 +2337,10 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     (output / SCOPE_OS_FOLDER).mkdir(mode=0o700)
     (output / AUTHORITY_FOLDER).mkdir(mode=0o700)
     for item in MODULES:
-        if item.get("builder") == "audit_stamp":
+        if item.get("builder") == "session_transport":
+            from hia_native_session_transport_build import build_session_transport
+            built = build_session_transport(hepta, output / "build", ROOT)
+        elif item.get("builder") == "audit_stamp":
             built = stamp_pipeline.build_stamp(hepta, output / "build", ROOT)
         elif item.get("builder") == "audit_activity":
             built = activity_pipeline.build_activity(hepta, output / "build", ROOT)
@@ -2461,6 +2473,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
     commands.update(public_lifecycle_qualification.test_commands(ROOT, output, report))
     commands.update(result_qualification.test_commands(ROOT, output, report))
     commands.update(serde_error_pipeline.test_commands(ROOT, output, report))
+    commands.update(session_transport_pipeline.test_commands(ROOT, output, report))
     commands.update(storage_pipeline.test_commands(ROOT, output, report))
     commands.update(audit_pipeline.test_commands(ROOT, output, report))
     commands.update(activity_pipeline.test_commands(ROOT, output, report))
@@ -2507,6 +2520,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["public_lifecycle_evidence"] = public_lifecycle_evidence(output, report, create=True)
     report["result_values_evidence"] = result_values_evidence(output, report)
     report["serde_error_evidence"] = serde_error_evidence(output, report)
+    report["session_transport_evidence"] = session_transport_evidence(output, report)
     report["result_storage_evidence"] = result_storage_evidence(output, report, create=True)
     report["audit_readiness_evidence"] = audit_readiness_evidence(output, report, create=True)
     report["audit_activity_evidence"] = audit_activity_evidence(output, report, create=True)
@@ -2553,6 +2567,8 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["rust_oracle_inputs"].update(report["result_values_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["serde_error_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["serde_error_evidence"]["corpus_sha256"])
+    report["rust_oracle_inputs"].update(report["session_transport_evidence"]["artifact_sha256"])
+    report["rust_oracle_inputs"].update(report["session_transport_evidence"]["corpus_sha256"])
     report["rust_oracle_inputs"].update(report["result_storage_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["audit_readiness_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update(report["audit_activity_evidence"]["artifact_sha256"])
