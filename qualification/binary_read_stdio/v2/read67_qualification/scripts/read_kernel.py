@@ -104,7 +104,8 @@ def verify(folder,p,stdin,stdout,stderr,query,case):
             marks+=1;mark_ordinal=row["calls"]
         elif kind=="EXIT":
             require(exit_row is None and row["wait_status"]==p["wait_status"]and row["returncode"]==p["returncode"]
-                and row["open_exit"]==current and current is not None and current["number"]in(60,231),
+                and current is not None and row["open_exit"]=={k:v for k,v in current.items()if k not in("record","trace_row")}
+                and current["number"]in(60,231),
                 "whole process exits at observed syscall")
             exit_row=row;current=None
         else:raise ValueError("unrecognized complete kernel trace record")
