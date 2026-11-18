@@ -1,0 +1,52 @@
+name: Independently read all Python JSON byte captures
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-python-json-bytes-uploaded-read-6780-v2-20261118]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        group: [0, 1, 2, 3]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYJSON_SOURCE: ${{ github.workspace }}/runtime/qualification/python_json_bytes/v2/uploaded_read
+      PYJSON_MANIFEST: 75c4704342c356c2502f01c2a2c25a22ae0033ca04cc10aba35ad01016d174e6
+      PYJSON_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout frozen pure readers and the complete qualification source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/python_json_bytes/v2/uploaded_read
+          persist-credentials: false
+      - name: Fully read uploaded archives and original qualification evidence
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/driver.py" read \
+            --work "$RUNNER_TEMP/python-json-bytes-independent-$PYJSON_GROUP" --group "$PYJSON_GROUP" --source-manifest-sha256 "$PYJSON_MANIFEST"
+      - name: Retain complete independent read proof and any initial failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/python-json-bytes-independent-$PYJSON_GROUP" --group "$PYJSON_GROUP" --source-manifest-sha256 "$PYJSON_MANIFEST" \
+            --output "$RUNNER_TEMP/python-json-bytes-independent-$PYJSON_GROUP-export"
+      - name: Upload full independent read evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-json-bytes-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/python-json-bytes-independent-${{ matrix.group }}-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
