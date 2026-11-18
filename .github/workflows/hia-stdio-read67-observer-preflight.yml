@@ -1,0 +1,44 @@
+name: HIA stdio read67 passive observer preflight
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-stdio-read67-observer-preflight-6780-20261118]
+    paths:
+      - 'qualification/binary_read_stdio/v2/read67_qualification/**'
+      - '.github/workflows/hia-stdio-read67-observer-preflight.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  observer-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      STDIO_SOURCE: ${{ github.workspace }}/qualification/binary_read_stdio/v2/read67_qualification
+      STDIO_MANIFEST: 34a346b4333c93442484a6e7428614c3e3392701addc815b981d7ef56ed3f1b2
+    steps:
+      - name: Checkout complete frozen source and readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: |
+            qualification/binary_read_stdio/v2/read67_qualification
+          persist-credentials: false
+      - name: Source-only admission and two new independent observer probes
+        run: |
+          python3 -I -S -B "$STDIO_SOURCE/scripts/preflight_gate.py" --work "$RUNNER_TEMP/stdio-observer-preflight" --manifest "$STDIO_MANIFEST"
+      - name: Retain complete source and every observer process byte
+        if: always()
+        run: |
+          python3 -I -S -B "$STDIO_SOURCE/scripts/preflight_gate.py" --work "$RUNNER_TEMP/stdio-observer-preflight" --manifest "$STDIO_MANIFEST" --export-to "$RUNNER_TEMP/stdio-observer-preflight-export"
+      - name: Upload complete preflight evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stdio-read67-observer-preflight-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/stdio-observer-preflight-export
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 90
