@@ -1,0 +1,444 @@
+def is_numeric(tag:u64) -> bool:
+    return tag >= 1 and tag <= 4
+
+def equal_integer(s:readbuf,w:mutbuf,left:u64,right:u64) -> bool:
+    if integer_negative(s,w,left) != integer_negative(s,w,right):
+        return False
+    size = integer_size(w,left)
+    if size != integer_size(w,right):
+        return False
+    i = 0
+    while i < size:
+        if integer_digit(s,w,left,i) != integer_digit(s,w,right,i):
+            return False
+        i = i+1
+    return True
+
+def float_integer_digits(w:mutbuf,bits:u64) -> u64:
+    exponent = (bits>>52)&2047
+    mantissa = (bits&4503599627370495)|4503599627370496
+    if exponent < 1023 or exponent == 2047:
+        return 0
+    shift = 0
+    if exponent < 1075:
+        down = 1075-exponent
+        if (mantissa&((1<<down)-1)) != 0:
+            return 0
+        mantissa = mantissa>>down
+    else:
+        shift = exponent-1075
+    size = 0
+    while mantissa >= 10:
+        quotient = divide10(mantissa)
+        store(w,9500+size,mantissa-quotient*10)
+        size = size+1
+        mantissa = quotient
+    store(w,9500+size,mantissa)
+    size = size+1
+    i = 0
+    while i < shift:
+        j = 0
+        carry = 0
+        while j < size:
+            value = byte(w,9500+j)*2+carry
+            carry = 0
+            if value >= 10:
+                carry = 1
+                value = value-10
+            store(w,9500+j,value)
+            j = j+1
+        if carry != 0:
+            store(w,9500+size,carry)
+            size = size+1
+        i = i+1
+    return size
+
+def equal_float_integer(s:readbuf,w:mutbuf,floating:u64,integer:u64) -> bool:
+    bits = get(w,floating+40)
+    magnitude = bits&9223372036854775807
+    if magnitude == 0:
+        return integer_zero(s,w,integer)
+    if magnitude >= 9218868437227405312:
+        return False
+    if (bits>>63 != 0) != integer_negative(s,w,integer):
+        return False
+    size = float_integer_digits(w,bits)
+    if size == 0 or size != integer_size(w,integer):
+        return False
+    i = 0
+    while i < size:
+        if byte(w,9500+size-i-1)+48 != integer_digit(s,w,integer,i):
+            return False
+        i = i+1
+    return True
+
+def equal_numeric(s:readbuf,w:mutbuf,left:u64,right:u64,nested:bool) -> bool:
+    a = get(w,left)
+    b = get(w,right)
+    if a != 4 and b != 4:
+        return equal_integer(s,w,left,right)
+    if a == 4 and b != 4:
+        return equal_float_integer(s,w,left,right)
+    if b == 4 and a != 4:
+        return equal_float_integer(s,w,right,left)
+    x = get(w,left+40)
+    y = get(w,right+40)
+    xm = x&9223372036854775807
+    ym = y&9223372036854775807
+    if xm > 9218868437227405312 or ym > 9218868437227405312:
+        return nested and xm > 9218868437227405312 and ym > 9218868437227405312
+    if xm == 0 and ym == 0:
+        return True
+    return x == y
+
+def constant_identity(s:readbuf,w:mutbuf,node:u64) -> bool:
+    at = get(w,node+56)&4294967295
+    cp = character(s,at)
+    return cp == 78 or cp == 73 or (cp == 45 and character(s,at+1) == 73)
+
+def identity_equal(s:readbuf,w:mutbuf,left:u64,right:u64) -> bool:
+    tag = get(w,left)
+    if tag != get(w,right):
+        return False
+    if tag <= 2:
+        return True
+    if tag == 4:
+        return get(w,left+40) == get(w,right+40) and constant_identity(s,w,left) and constant_identity(s,w,right)
+    if tag == 5:
+        size = get(w,left+48)
+        if size > 1 or get(w,right+48) != size:
+            return False
+        if size == 0:
+            return True
+        cp = get32(w,get(w,left+40))
+        return cp <= 255 and cp == get32(w,get(w,right+40))
+    if tag == 3:
+        if integer_size(w,left) > 3 or equal_integer(s,w,left,right) == False:
+            return False
+        value = 0
+        i = 0
+        while i < integer_size(w,left):
+            value = value*10+integer_digit(s,w,left,i)-48
+            i = i+1
+        if integer_negative(s,w,left):
+            return value <= 5
+        return value <= 256
+    return False
+
+def original_next(w:mutbuf,node:u64) -> u64:
+    return get(w,get(w,node+32)+16)
+
+def original_link(w:mutbuf,node:u64,next:u64) -> u64:
+    put(w,get(w,node+32)+16,next)
+    return 0
+
+def original_merge(w:mutbuf,left:u64,right:u64,left_count:u64,right_count:u64) -> u64:
+    while left_count > 0 or (right_count > 0 and right != 0):
+        if left_count == 0:
+            chosen = right
+            right = original_next(w,right)
+            right_count = right_count-1
+        elif right_count == 0 or right == 0:
+            chosen = left
+            left = original_next(w,left)
+            left_count = left_count-1
+        elif get(w,get(w,left+32)+24) <= get(w,get(w,right+32)+24):
+            chosen = left
+            left = original_next(w,left)
+            left_count = left_count-1
+        else:
+            chosen = right
+            right = original_next(w,right)
+            right_count = right_count-1
+        tail = get(w,SORT_TAIL)
+        if tail == 0:
+            put(w,SORT_HEAD,chosen)
+        else:
+            original_link(w,tail,chosen)
+        put(w,SORT_TAIL,chosen)
+    return right
+
+def original_order(w:mutbuf,node:u64) -> u64:
+    head = get(w,node+24)
+    item = head
+    while item != 0:
+        original_link(w,item,get(w,item+16))
+        item = get(w,item+16)
+    if get(w,node+48) < 2:
+        return head
+    width = 1
+    going = True
+    while going:
+        put(w,SORT_HEAD,0)
+        put(w,SORT_TAIL,0)
+        left = head
+        merges = 0
+        while left != 0:
+            merges = merges+1
+            right = left
+            count = 0
+            while count < width and right != 0:
+                count = count+1
+                right = original_next(w,right)
+            left = original_merge(w,left,right,count,width)
+        original_link(w,get(w,SORT_TAIL),0)
+        head = get(w,SORT_HEAD)
+        if merges <= 1:
+            going = False
+        else:
+            width = width<<1
+    return head
+
+def map_dictionary(w:mutbuf,left:u64,right:u64) -> u64:
+    a = get(w,left+24)
+    b = get(w,right+24)
+    while a != 0:
+        key = get(w,a+32)
+        while b != 0 and string_compare(w,key,get(w,b+32)) == 2:
+            b = get(w,b+16)
+        found = 0
+        if b != 0 and string_compare(w,key,get(w,b+32)) == 0:
+            found = b
+        put(w,key+8,found)
+        a = get(w,a+16)
+    return 0
+
+def reverse_pairs(w:mutbuf,begin:u64,end:u64) -> u64:
+    while begin+24 < end:
+        end = end-24
+        i = 0
+        while i < 24:
+            value = get(w,begin+i)
+            put(w,begin+i,get(w,end+i))
+            put(w,end+i,value)
+            i = i+8
+        begin = begin+24
+    return 0
+
+def equal_values(s:readbuf,w:mutbuf,left:u64,right:u64) -> bool:
+    end = get(w,HEAP)
+    stack = end-24
+    if stack < get(w,NEXT):
+        put(w,ERR,16)
+        return False
+    put(w,stack,left)
+    put(w,stack+8,right)
+    put(w,stack+16,0)
+    while stack < end:
+        a = get(w,stack)
+        b = get(w,stack+8)
+        depth = get(w,stack+16)
+        stack = stack+24
+        if b == 0:
+            return False
+        same_object = depth != 0 and identity_equal(s,w,a,b)
+        if same_object == False:
+            if depth >= get(w,EQ_BUDGET):
+                put(w,ERR,19)
+                return False
+            atype = get(w,a)
+            btype = get(w,b)
+            if is_numeric(atype) and is_numeric(btype):
+                if equal_numeric(s,w,a,b,depth != 0) == False:
+                    return False
+            elif atype != btype:
+                return False
+            elif atype == 5:
+                if string_compare(w,a,b) != 0:
+                    return False
+            elif atype >= 6:
+                if get(w,a+48) != get(w,b+48):
+                    return False
+                x = get(w,a+24)
+                y = get(w,b+24)
+                if atype == 7:
+                    x = original_order(w,a)
+                    map_dictionary(w,a,b)
+                stop = stack
+                while x != 0:
+                    if atype == 7:
+                        y = get(w,get(w,x+32)+8)
+                    if stack < get(w,NEXT)+24:
+                        put(w,ERR,16)
+                        return False
+                    stack = stack-24
+                    put(w,stack,x)
+                    put(w,stack+8,y)
+                    put(w,stack+16,depth+1)
+                    if atype == 7:
+                        x = original_next(w,x)
+                    else:
+                        x = get(w,x+16)
+                        y = get(w,y+16)
+                reverse_pairs(w,stack,stop)
+    return True
+
+def divide10(value:u64) -> u64:
+    step = 64
+    remainder = 0
+    quotient = 0
+    while step > 0:
+        step = step-1
+        remainder = (remainder<<1)|((value>>step)&1)
+        if remainder >= 10:
+            remainder = remainder-10
+            quotient = quotient|(1<<step)
+    return quotient
+
+def diagnostic_decimal(w:mutbuf,at:u64,value:u64) -> u64:
+    count = 0
+    while value >= 10:
+        quotient = divide10(value)
+        store(w,9000+count,48+value-quotient*10)
+        value = quotient
+        count = count+1
+    store(w,9000+count,48+value)
+    count = count+1
+    while count > 0:
+        count = count-1
+        store(w,at,byte(w,9000+count))
+        at = at+1
+    return at
+
+def key_repr(s:readbuf,w:mutbuf,at:u64) -> u64:
+    begin = get(w,KEY_BASE)
+    size = get(w,KEY_SIZE)
+    single = False
+    double = False
+    i = 0
+    while i < size:
+        cp = character(s,begin+i)
+        single = single or cp == 39
+        double = double or cp == 34
+        i = i+1
+    quote = choose(single and double == False,34,39)
+    store(w,at,quote)
+    at = at+1
+    i = 0
+    while i < size:
+        cp = character(s,begin+i)
+        if cp == quote or cp == 92:
+            store(w,at,92)
+            store(w,at+1,cp)
+            at = at+2
+        elif cp == 9 or cp == 10 or cp == 13:
+            store(w,at,92)
+            store(w,at+1,choose(cp == 9,116,choose(cp == 10,110,114)))
+            at = at+2
+        elif cp < 32 or cp == 127:
+            store(w,at,92)
+            store(w,at+1,120)
+            store(w,at+2,hex_digit(cp>>4))
+            store(w,at+3,hex_digit(cp&15))
+            at = at+4
+        else:
+            store(w,at,cp)
+            at = at+1
+        i = i+1
+    store(w,at,quote)
+    return at+1
+
+def type_name(w:mutbuf,at:u64,tag:u64) -> u64:
+    if tag == 0:
+        return type_none(w,at)
+    if tag == 1 or tag == 2:
+        return type_bool(w,at)
+    if tag == 3:
+        return type_int(w,at)
+    if tag == 4:
+        return type_float(w,at)
+    if tag == 5:
+        return type_str(w,at)
+    if tag == 6:
+        return type_list(w,at)
+    return type_dict(w,at)
+
+def report_error(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    code = get(w,ERR)
+    if code == 0 or code == 16:
+        return 4294967295
+    at = 10000
+    if code <= 9:
+        at = json_error_prefix(w,at)
+        if code == 1:
+            at = expecting_value(w,at)
+        elif code == 2:
+            at = property_name(w,at)
+        elif code == 3:
+            at = colon(w,at)
+        elif code == 4:
+            at = comma(w,at)
+        elif code == 5:
+            at = unterminated(w,at)
+        elif code == 6:
+            at = control_character(w,at)
+        elif code == 7:
+            at = invalid_escape(w,at)
+        elif code == 8:
+            at = invalid_unicode(w,at)
+        else:
+            at = extra_data(w,at)
+        position = get(w,POSITION)
+        base = get(w,BASE)
+        line = 1
+        last_line = base
+        i = base
+        while i < position:
+            if character(s,i) == 10:
+                line = line+1
+                last_line = i+1
+            i = i+1
+        at = line_prefix(w,at)
+        at = diagnostic_decimal(w,at,line)
+        at = column_prefix(w,at)
+        at = diagnostic_decimal(w,at,position-last_line+1)
+        at = char_prefix(w,at)
+        at = diagnostic_decimal(w,at,position-base)
+        store(w,at,41)
+        at = at+1
+    elif code == 10:
+        at = integer_limit(w,at)
+        at = diagnostic_decimal(w,at,get(w,DETAIL))
+        at = integer_limit_tail(w,at)
+    elif code == 11:
+        at = recursion_array(w,at)
+    elif code == 12:
+        at = recursion_object(w,at)
+    elif code == 13:
+        at = key_error(w,at)
+        at = key_repr(s,w,at)
+    elif code == 17:
+        at = recursion_encode(w,at)
+    elif code == 19:
+        at = recursion_compare(w,at)
+    elif code == 20:
+        at = recursion_call(w,at)
+    elif code == 21:
+        at = recursion_plain(w,at)
+    elif code == 14:
+        tag = get(w,DETAIL)
+        if tag == 5:
+            at = string_indices(w,at)
+        elif tag == 6:
+            at = list_indices(w,at)
+        else:
+            at = type_error(w,at)
+            at = type_name(w,at,tag)
+            at = not_subscriptable(w,at)
+    else:
+        at = attribute_error(w,at)
+        at = type_name(w,at,get(w,DETAIL))
+        at = no_attribute(w,at)
+        if code == 15:
+            at = update_attribute(w,at)
+        else:
+            at = get_attribute(w,at)
+    size = at-10000
+    if length(o) < 64+size:
+        return 4294967294
+    header(o,3,code,0,0,0,2,size)
+    i = 0
+    while i < size:
+        store(o,64+i,byte(w,10000+i))
+        i = i+1
+    return 64+size
