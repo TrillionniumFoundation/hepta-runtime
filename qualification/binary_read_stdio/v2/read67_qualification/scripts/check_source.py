@@ -29,6 +29,14 @@ def verify(source):
     body=(b/"asm/binary_read_stdio.S").read_text()
     require(body.count("call hia_process_orphans_create")==1 and "mov rdx, [r15+112]"in body
         and "call binary_read_body_create"in body and "HBRLJR01"in body,"single pool and fixed lifecycle observer")
+    observer=decode((source/"reference/observer_preflight_recovery.json").read_bytes())
+    proof=observer["proof"];observed=proof["probes"]
+    require(observer["status"]=="PASS"and proof["status"]=="STDIO_OBSERVER_ORIGINAL_CAPTURE_RECOVERY_PASS"
+        and proof["original_failure_preserved"]is True and proof["first_source"]=="7859ca32f9f6ec94a5dd0dd4ea0345623a1d4867"
+        and proof["first_run"]==44213951398 and proof["probe_replays"]==proof["hia_applications"]==proof["original_target_applications"]==0
+        and observed["status"]=="STDIO_PASSIVE_OBSERVER_PREFLIGHT_PASS"and observed["probe_processes"]==2
+        and observed["kernel_calls"]==[683,683]and observed["orphans"]==[0,1]and observer["guard_probes"]==11,
+        "complete two already-captured actual observer probes before target execution")
     result=validate()
     return dict(status="STDIO_READ67_SOURCE_AND_INPUT_ONLY_PASS",source=identity,domain=result,
         original_cli_ast_sha256=hashlib.sha256(ast.dump(ast.Module(body=entry.body,type_ignores=[]),include_attributes=False).encode()).hexdigest(),
