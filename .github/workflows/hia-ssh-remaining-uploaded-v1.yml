@@ -1,0 +1,55 @@
+name: Read nine uploaded SSH lifecycle cases without application replay
+on:
+  push:
+    branches: ['hia-ssh-remaining-uploaded-6780-v1-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set independent source and complete capture paths
+        run: |
+          printf '%s\n' "UR_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/remaining_uploaded" "UR_STAGE=$RUNNER_TEMP/ssh-uploaded-stage" "UR_CAPTURE=$RUNNER_TEMP/ssh-uploaded-proof" "UR_EXPORT=$RUNNER_TEMP/ssh-uploaded-export" "UR_DRIVER=$RUNNER_TEMP/ssh-uploaded-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/remaining_uploaded
+      - name: Bind immutable source and read syntax
+        run: |
+          test "$(sha256sum "$UR_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 82ec6c099724aed0f6564237a8d2175d44fb83ae2d1475b165c9140d7c0e3148
+          python3 -I -S -B - <<'PY'
+          import ast,os
+          from pathlib import Path
+          for p in Path(os.environ["UR_SOURCE"]).rglob("*.py"):
+              ast.parse(p.read_bytes(),filename=str(p))
+          PY
+      - name: Download both completed immutable captures
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14389186724/zip" -o "$RUNNER_TEMP/native.zip"
+          curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14387814012/zip" -o "$RUNNER_TEMP/original.zip"
+      - name: Read every uploaded input buffer result and actual kernel effect
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$UR_SOURCE/recipe/read_uploaded.py" --source "$UR_SOURCE" --native "$RUNNER_TEMP/native.zip" --original "$RUNNER_TEMP/original.zip" --stage "$UR_STAGE" --output "$UR_CAPTURE" > "$UR_DRIVER.stdout" 2> "$UR_DRIVER.stderr"
+          ur_status=$?
+          cat "$UR_DRIVER.stderr"
+          cat "$UR_DRIVER.stdout"
+          exit "$ur_status"
+      - name: Preserve complete pure receipt and all frozen source
+        if: always()
+        run: |
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$UR_SOURCE/recipe/archive.py" pack --source "$UR_SOURCE" --capture "$UR_CAPTURE" --output "$UR_EXPORT" --driver-prefix "$UR_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-nine-independent-uploaded-${{ github.sha }}
+          path: ${{ env.UR_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
