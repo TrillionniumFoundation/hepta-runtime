@@ -1,0 +1,52 @@
+{
+  "schema": "hepta.remote-binary.private-wire.v1",
+  "keys": [
+    "root",
+    "path",
+    "op",
+    "expected_version",
+    "data_base64",
+    "offset",
+    "limit",
+    "upload_id",
+    "size",
+    "sha256",
+    "action",
+    "host",
+    "acknowledge_non_atomic",
+    "preserve_special_bits",
+    "transaction_id",
+    "expected_sha256"
+  ],
+  "operations": [
+    "info",
+    "read",
+    "write",
+    "upload_chunk",
+    "upload_commit",
+    "upload_abort",
+    "inode_patch",
+    "private_read"
+  ],
+  "masks": {
+    "1": 7,
+    "2": 111,
+    "3": 31,
+    "4": 959,
+    "5": 959,
+    "6": 959,
+    "7": 64575,
+    "8": 7
+  },
+  "bootstrap_literals": {
+    "1": "umask 077; d=$(mktemp -d /tmp/.hepta-hia-XXXXXXXXXX) || exit 125; trap 's=$?; trap - 0 1 2 15; rm -f \"$d/h\" || s=125; rmdir \"$d\" || s=125; exit \"$s\"' 0; trap 'exit 125' 1 2 15; dd bs=65536 count=",
+    "2": " iflag=fullblock of=\"$d/h\" status=none || exit 125; ",
+    "3": "dd bs=",
+    "4": " count=1 iflag=fullblock of=\"$d/h\" oflag=append conv=notrunc status=none || exit 125; ",
+    "5": "test \"$(wc -c < \"$d/h\")\" -eq ",
+    "6": " || exit 125; chmod 700 \"$d/h\" || exit 125; \"$d/h\" <&0 & h=$!; wait \"$h\""
+  },
+  "json_bytes_final": "3b837247060d13ed91feb3eade08636ddbb09f4a",
+  "json_items_candidate": "6e7b59950eeadf381677fa16c249c793d82bcc7f",
+  "json_items_qualified": false
+}

@@ -1,0 +1,56 @@
+name: Compile remote helper fields and fixed bootstrap HIA without application execution
+on:
+  push:
+    branches: ['hia-binary-remote-helper-leaf-build-6780-v1-20261118']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set fixed native build paths
+        run: |
+          printf '%s\n' "RB_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/binary_remote_helper/v1/leaf_build" "RB_CAPTURE=$RUNNER_TEMP/remote-helper-build" "RB_EXPORT=$RUNNER_TEMP/remote-helper-build-export" "RB_DRIVER=$RUNNER_TEMP/remote-helper-build-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/binary_remote_helper/v1/leaf_build
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Bind every raw HIA, composition and build dependency
+        run: |
+          test "$(sha256sum "$RB_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 136531571bb3a54868d800bbe5392085d01fcac8f630817218667acf821b111a
+          python3 -I -S -B - <<'PY'
+          import ast,os,sys
+          from pathlib import Path
+          root=Path(os.environ["RB_SOURCE"]);sys.path.insert(0,str(root/"recipe"))
+          from common import source_evidence
+          source_evidence(root)
+          for p in root.rglob("*.py"):ast.parse(p.read_bytes(),filename=str(p))
+          PY
+      - name: Build two actual HIA images with zero application execution
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 900s python3 -I -S -B "$RB_SOURCE/scripts/build.py" --source "$RB_SOURCE" --hepta "$GITHUB_WORKSPACE/hepta" --output "$RB_CAPTURE" > "$RB_DRIVER.stdout" 2> "$RB_DRIVER.stderr"
+          rb_status=$?
+          cat "$RB_DRIVER.stderr"
+          cat "$RB_DRIVER.stdout"
+          exit "$rb_status"
+      - name: Preserve every compiler output and frozen source
+        if: always()
+        run: |
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$RB_SOURCE/recipe/archive.py" pack --source "$RB_SOURCE" --capture "$RB_CAPTURE" --output "$RB_EXPORT" --driver-prefix "$RB_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: binary-remote-helper-leaf-build-${{ github.sha }}
+          path: ${{ env.RB_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
