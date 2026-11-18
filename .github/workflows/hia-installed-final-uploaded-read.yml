@@ -1,7 +1,7 @@
 name: Complete uploaded installed-bytes relocation read without replay
 on:
   push:
-    branches: ['hia-installed-final-uploaded-read-6780-v1-20261118']
+    branches: ['hia-installed-final-uploaded-read-6780-v2-20261118']
 permissions:
   contents: read
   actions: read
@@ -22,7 +22,8 @@ jobs:
       - name: Download completed immutable evidence
         env:
           GH_TOKEN: ${{ github.token }}
-        run: curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14388207669/zip" -o "$RUNNER_TEMP/complete.zip"
+        run: |
+          curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14388207669/zip" -o "$RUNNER_TEMP/complete.zip"
       - name: Read all final bytes and original phase receipts only
         run: |
           test "$(sha256sum "$IF_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 9f50ac3bcefb07dee0743d551504d9ef46f7341ef39be5553a40bfcefdc43433
