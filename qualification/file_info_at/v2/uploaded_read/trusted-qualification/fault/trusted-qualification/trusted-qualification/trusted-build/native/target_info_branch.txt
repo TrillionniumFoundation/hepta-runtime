@@ -1,0 +1,8 @@
+if op == 'info':
+            result = fingerprint(fd, name)
+            f = regular(fd, name)
+            try:
+                if version(os.fstat(f)) != result['version']: raise ValueError('file changed during metadata inspection')
+                result['metadata'] = metadata_summary(metadata_capture(f))
+            finally: os.close(f)
+            return {'path': q['path'], **result}
