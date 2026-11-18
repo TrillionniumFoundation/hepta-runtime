@@ -1,0 +1,44 @@
+name: Complete uploaded installed-bytes relocation read without replay
+on:
+  push:
+    branches: ['hia-installed-final-uploaded-read-6780-v1-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set complete immutable input paths
+        run: |
+          printf '%s\n' "IF_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/installed_bytes/v1/final_uploaded_read" "IF_CAPTURE=$RUNNER_TEMP/installed-final-read" "IF_STAGE=$RUNNER_TEMP/installed-final-stage" "IF_EXPORT=$RUNNER_TEMP/installed-final-export" "IF_DRIVER=$RUNNER_TEMP/installed-final-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/installed_bytes/v1/final_uploaded_read
+      - name: Download completed immutable evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14388207669/zip" -o "$RUNNER_TEMP/complete.zip"
+      - name: Read all final bytes and original phase receipts only
+        run: |
+          test "$(sha256sum "$IF_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 9f50ac3bcefb07dee0743d551504d9ef46f7341ef39be5553a40bfcefdc43433
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$IF_SOURCE/recipe/read.py" --source "$IF_SOURCE" --archive "$RUNNER_TEMP/complete.zip" --stage "$IF_STAGE" --output "$IF_CAPTURE" > "$IF_DRIVER.stdout" 2> "$IF_DRIVER.stderr"
+          if_status=$?
+          cat "$IF_DRIVER.stderr"
+          cat "$IF_DRIVER.stdout"
+          exit "$if_status"
+      - name: Preserve complete final reading source and receipt
+        if: always()
+        run: timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$IF_SOURCE/recipe/archive.py" pack --source "$IF_SOURCE" --capture "$IF_CAPTURE" --output "$IF_EXPORT" --driver-prefix "$IF_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: installed-bytes-final-uploaded-read-${{ github.sha }}
+          path: ${{ env.IF_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
