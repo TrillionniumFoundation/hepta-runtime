@@ -1,0 +1,58 @@
+name: Rebuild only final native SSH library from final production files
+on:
+  push:
+    branches: ['hia-ssh-final-library-build-6780-v1-20261118']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set final production source and zero-application build paths
+        run: |
+          printf '%s\n' "SB_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/production_build" "SB_CAPTURE=$RUNNER_TEMP/ssh-final-build" "SB_EXPORT=$RUNNER_TEMP/ssh-final-build-export" "SB_DRIVER=$RUNNER_TEMP/ssh-final-build-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/production_build
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Bind all frozen production bytes
+        run: |
+          test "$(sha256sum "$SB_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 4375173b3ee9e726c3c712b2c3ac9b4da1983aceb0e016bd6b9ff1ab4fbc9675
+          python3 -I -S -B - <<'PY'
+          import ast,os,sys
+          from pathlib import Path
+          source=Path(os.environ["SB_SOURCE"])
+          sys.path.insert(0,str(source/"recipe"))
+          from common import source_evidence
+          source_evidence(source)
+          for path in source.rglob("*.py"):
+              ast.parse(path.read_bytes(),filename=str(path))
+          PY
+      - name: Compile five raw HIA owners and link the identical qualified object
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 900s python3 -I -S -B "$SB_SOURCE/scripts/hia_native_ssh_direct_build.py" --source "$SB_SOURCE" --hepta "$GITHUB_WORKSPACE/hepta" --output "$SB_CAPTURE" > "$SB_DRIVER.stdout" 2> "$SB_DRIVER.stderr"
+          sb_status=$?
+          cat "$SB_DRIVER.stderr"
+          cat "$SB_DRIVER.stdout"
+          exit "$sb_status"
+      - name: Preserve every full build byte and original source
+        if: always()
+        run: |
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SB_SOURCE/recipe/archive.py" pack --source "$SB_SOURCE" --capture "$SB_CAPTURE" --output "$SB_EXPORT" --driver-prefix "$SB_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-final-native-library-${{ github.sha }}
+          path: ${{ env.SB_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
