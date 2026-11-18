@@ -1,0 +1,95 @@
+name: Compile HIA caller future and frozen original lifecycle fixtures
+on:
+  push:
+    branches: ['hia-ssh-lifecycle-build-6780-v2-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set fixed source and evidence paths
+        run: |
+          printf '%s\n' "SA_SOURCE=$GITHUB_WORKSPACE/runtime/qualification/ssh_direct/v1/lifecycle_source" "SA_RUN=$RUNNER_TEMP/ssh-lifecycle-native-build" "SA_EXPORT=$RUNNER_TEMP/ssh-lifecycle-native-export" "SA_DRIVER=$RUNNER_TEMP/ssh-lifecycle-native-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/lifecycle_source
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Compile and assemble without running any application
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$SA_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 0d6ff4423b778eb2aa8d57d1df3a9affcb105f723114ad1ef89cf14d116bf32a
+          set +e
+          timeout --signal=TERM --kill-after=5s 780s python3 -I -S -B "$SA_SOURCE/recipe/build.py" --source "$SA_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$SA_RUN" > "$SA_DRIVER.stdout" 2> "$SA_DRIVER.stderr"
+          sa_status=$?
+          cat "$SA_DRIVER.stderr"
+          cat "$SA_DRIVER.stdout"
+          exit "$sa_status"
+      - name: Archive and reread every source, compiler, build and diagnostic byte
+        if: always()
+        run: timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SA_SOURCE/recipe/archive.py" pack --source "$SA_SOURCE" --capture "$SA_RUN" --output "$SA_EXPORT" --driver-prefix "$SA_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-lifecycle-native-build-${{ github.sha }}
+          path: ${{ env.SA_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+  original-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set complete original compilation paths
+        run: |
+          printf '%s\n' "SO_PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/lifecycle_source" "SO_OUTPUT=$RUNNER_TEMP/ssh-lifecycle-original-build" "SO_EXPORT=$RUNNER_TEMP/ssh-lifecycle-original-export" "SO_DRIVER=$RUNNER_TEMP/ssh-lifecycle-original-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/lifecycle_source
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+          sparse-checkout: src
+      - name: Bind all source and original target
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git -C "$GITHUB_WORKSPACE/target" rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          test "$(sha256sum "$SO_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 0d6ff4423b778eb2aa8d57d1df3a9affcb105f723114ad1ef89cf14d116bf32a
+      - name: Install pinned original Rust compiler
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          printf '%s\n' "SO_RUST_BIN=$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Compile only without running old or new Rust tests
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 780s python3 -I -S -B "$SO_PACKAGE/recipe/build_reference.py" --source "$SO_PACKAGE" --output "$SO_OUTPUT" --toolchain "$SO_RUST_BIN" --target "$GITHUB_WORKSPACE/target" > "$SO_DRIVER.stdout" 2> "$SO_DRIVER.stderr"
+          so_status=$?
+          cat "$SO_DRIVER.stderr"
+          cat "$SO_DRIVER.stdout"
+          exit "$so_status"
+      - name: Archive every original source, compiler output and diagnostic
+        if: always()
+        run: timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SO_PACKAGE/recipe/archive.py" pack --source "$SO_PACKAGE" --capture "$SO_OUTPUT" --output "$SO_EXPORT" --driver-prefix "$SO_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-lifecycle-original-build-${{ github.sha }}
+          path: ${{ env.SO_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
