@@ -1,0 +1,67 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(w) < WORK or length(o) < 64:
+        return CAPACITY
+    if length(s) < 64 or length(s) > 1048576 or load(s, 0) != REQUEST_MAGIC:
+        return INVALID
+    operation = load(s, 8)
+    if operation == 3 or operation > 6:
+        return INVALID
+    if operation == 1 or operation == 2 or operation == 4:
+        if load(s, 16) < 1 or load(s, 16) > 17:
+            return INVALID
+    if operation != 6:
+        return cache(s, o, w)
+    if length(o) < 266432:
+        return CAPACITY
+    if length(s) != 64 or load(s, 16) > 15:
+        return INVALID
+    at = 24
+    while at < 64:
+        if load(s, at) != 0:
+            return INVALID
+        at = at + 8
+    if get(w, 0) == 0:
+        fill_range(w, 0, 1024, 0)
+        put(w, 0, STATE_MAGIC)
+    if get(w, 0) != STATE_MAGIC or not valid_cache(w):
+        return STATE
+    if get(w, PHASE) != 0:
+        return INVALID
+    return inspection(o, w, load(s, 16))
+
+def inspection(o:mutbuf, w:mutbuf, position:u64) -> u32:
+    count = get(w, CACHE_COUNT)
+    if position >= count or get(w, CACHE_POISON) == 1:
+        fill_range(o, 0, 64, 0)
+        put(o, 0, RESPONSE_MAGIC)
+        if get(w, CACHE_POISON) == 1:
+            put(o, 8, 43)
+        put(o, 48, count)
+        put(o, 56, get(w, CACHE_INITIALIZED))
+        return 64
+    base = CACHE_BASE + get(w, CACHE_ORDER + position * 8) * CACHE_STRIDE
+    records = get(w, base + 112)
+    index = 0
+    while index < records:
+        slot = base + 128 + index * RECORD_STRIDE
+        amount = get(w, slot)
+        if amount > 512 or not valid_projection(w, slot + 8, amount):
+            return STATE
+        index = index + 1
+    fill_range(o, 0, 64, 0)
+    put(o, 0, RESPONSE_MAGIC)
+    put(o, 32, 112)
+    put(o, 40, records)
+    put(o, 48, count)
+    put(o, 56, get(w, CACHE_INITIALIZED))
+    copy_range(o, w, 64, base, 112)
+    index = 0
+    at = 176
+    while index < records:
+        slot = base + 128 + index * RECORD_STRIDE
+        amount = get(w, slot)
+        put(o, at, amount)
+        copy_range(o, w, at + 8, slot + 8, amount)
+        at = at + 8 + amount
+        index = index + 1
+    return narrow(at)

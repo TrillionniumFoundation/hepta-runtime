@@ -1,0 +1,16 @@
+[package]
+name = "hia-atomic-write-original"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[[bin]]
+name = "hia-atomic-write-original"
+path = "../oracle_atomic_write.rs"
+
+[dependencies]
+anyhow = "=1.0.104"
+libc = "=0.2.189"
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "fs", "time", "sync"] }
+
+[workspace]

@@ -227,6 +227,20 @@ def problem(where, error):
     cleanup.append({'where': where, 'type': type(error).__name__, 'message': str(error)})
 
 
+def wait_for_effect(path, expected):
+    # Creation precedes write_bytes: admission requires the complete marker.
+    until = time.monotonic() + 3
+    while time.monotonic() < until:
+        try:
+            marker = path.read_bytes()
+        except FileNotFoundError:
+            marker = None
+        if marker == expected:
+            return True
+        time.sleep(0.005)
+    return False
+
+
 def popen(*args, **kwargs):
     if spawned:
         raise AssertionError('fixture permits exactly one workload Popen')
@@ -278,10 +292,7 @@ def start(thread, *args, **kwargs):
         state['child_receipt_before_fault'] = record['pid'] == spawned[0].pid
         if not state['child_receipt_before_fault']:
             raise AssertionError('fault must follow original child receipt publication')
-        until = time.monotonic() + 3
-        while not (job / 'effect').exists() and time.monotonic() < until:
-            time.sleep(0.005)
-        state['effect_before_fault'] = (job / 'effect').read_bytes() == b'original child\n'
+        state['effect_before_fault'] = wait_for_effect(job / 'effect', b'original child\n')
         if not state['effect_before_fault']:
             raise AssertionError('original child execution marker is missing')
         event['injected'] = True
@@ -1208,6 +1219,20 @@ state = {'phase': 'runner', 'injected': False, 'runner_exit': None, 'runner_exce
          'effect_before_fault': False, 'receipt_before_fault': False, 'external_reap': None}
 started = time.monotonic()
 
+def wait_for_effect(path, expected):
+    # Creation precedes write_bytes: admission requires the complete marker.
+    until = time.monotonic() + 3
+    while time.monotonic() < until:
+        try:
+            marker = path.read_bytes()
+        except FileNotFoundError:
+            marker = None
+        if marker == expected:
+            return True
+        time.sleep(0.005)
+    return False
+
+
 def popen(*args, **kwargs):
     child = real_popen(*args, **kwargs)
     if list(args[0]) != [req['executable'], *req['args']]:
@@ -1228,10 +1253,7 @@ def popen(*args, **kwargs):
 def inject(stage):
     assert not state['injected'] and len(spawned) == 1
     state['receipt_before_fault'] = json.loads((job / 'child.json').read_bytes())['pid'] == spawned[0].pid
-    until = time.monotonic() + 3
-    while not (job / 'effect').exists() and time.monotonic() < until:
-        time.sleep(0.005)
-    state['effect_before_fault'] = (job / 'effect').read_bytes() == b'original child once\n'
+    state['effect_before_fault'] = wait_for_effect(job / 'effect', b'original child once\n')
     assert state['receipt_before_fault'] and state['effect_before_fault']
     observer_events.append({'stage': stage, 'injected': True})
     state['injected'] = True
@@ -1635,6 +1657,20 @@ state = {'phase': 'runner', 'injected': False, 'runner_exit': None, 'runner_exce
          'effect_before_fault': False, 'child_binding_before_fault': False, 'external_reap': None}
 started = time.monotonic()
 
+def wait_for_effect(path, expected):
+    # Creation precedes write_bytes: admission requires the complete marker.
+    until = time.monotonic() + 3
+    while time.monotonic() < until:
+        try:
+            marker = path.read_bytes()
+        except FileNotFoundError:
+            marker = None
+        if marker == expected:
+            return True
+        time.sleep(0.005)
+    return False
+
+
 def popen(*args, **kwargs):
     command = args[0] if args else kwargs.get('args')
     workload = command == [req['executable'], *req['args']]
@@ -1662,10 +1698,7 @@ def prepare_fault(receipt):
     assert not state['injected'] and len(spawned) == 1
     state['child_binding_before_fault'] = json.loads((job / receipt).read_bytes())['pid'] == spawned[0].pid
     state['child_receipt_published_before_fault'] = (job / 'child.json').exists()
-    until = time.monotonic() + 3
-    while not (job / 'effect').exists() and time.monotonic() < until:
-        time.sleep(0.005)
-    state['effect_before_fault'] = (job / 'effect').read_bytes() == b'original child once\n'
+    state['effect_before_fault'] = wait_for_effect(job / 'effect', b'original child once\n')
     assert state['child_binding_before_fault'] and state['effect_before_fault']
     state['injected'] = True
 

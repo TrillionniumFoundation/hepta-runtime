@@ -1,0 +1,169 @@
+/* Framing is fixed; the two HIA owners make all public protocol decisions. */
+frame_next:
+    mov rcx, [r15 + 816]
+    test rcx, rcx
+    jz frame_scan
+    mov rdx, [r15 + 800]
+    cmp rcx, rdx
+    ja fatal
+    sub rdx, rcx
+    lea rdi, [r15 + INPUT]
+    lea rsi, [rdi + rcx]
+    mov rcx, rdx
+    rep movsb
+    mov [r15 + 800], rdx
+    mov qword ptr [r15 + 808], 0
+    mov qword ptr [r15 + 816], 0
+frame_scan:
+    mov rcx, [r15 + 808]
+    mov rdx, [r15 + 800]
+    lea rsi, [r15 + INPUT]
+frame_scan_byte:
+    cmp rcx, rdx
+    jae frame_need_input
+    cmp byte ptr [rsi + rcx], 10
+    je frame_found
+    inc rcx
+    jmp frame_scan_byte
+frame_found:
+    lea rax, [rcx + 1]
+    mov [r15 + 816], rax
+    jmp prepare_line
+frame_need_input:
+    mov [r15 + 808], rcx
+    cmp qword ptr [r15 + 824], 0
+    jne frame_final_line
+    cmp rdx, 8388610
+    jae fatal
+    mov ecx, 8388610
+    sub rcx, rdx
+    cmp rcx, 65536
+    jbe frame_read_bounded
+    mov ecx, 65536
+frame_read_bounded:
+    add rsi, rdx
+    mov rdx, rcx
+    xor edi, edi
+    xor eax, eax
+    syscall
+    cmp rax, -4
+    je frame_scan
+    cmp rax, -4095
+    jae fatal
+    test rax, rax
+    jz frame_input_eof
+    add [r15 + 800], rax
+    jmp frame_scan
+frame_input_eof:
+    mov qword ptr [r15 + 824], 1
+    jmp frame_scan
+frame_final_line:
+    test rdx, rdx
+    jz frame_eof
+    mov [r15 + 816], rdx
+    mov rcx, rdx
+prepare_line:
+    test rcx, rcx
+    jz frame_next
+    lea rsi, [r15 + INPUT]
+    cmp byte ptr [rsi + rcx - 1], 13
+    jne line_ready
+    dec rcx
+line_ready:
+    test rcx, rcx
+    jz frame_next
+    cmp rcx, 8388608
+    ja fatal
+    mov [r15 + 24], rcx
+    mov edi, MESSAGE_INPUT + 24
+    add rdi, r15
+    rep movsb
+    mov edi, MESSAGE_INPUT
+    add rdi, r15
+    mov rax, 0x313030514a435248 /* HRCJQ001 */
+    mov [rdi], rax
+    mov qword ptr [rdi + 8], 1
+    mov rsi, [r15 + 24]
+    mov [rdi + 16], rsi
+    add rsi, 24
+    mov edx, PROJECTION + 24
+    add rdx, r15
+    mov ecx, 67108864
+    lea r8, [r15 + VALUE_WORK]
+    mov r9d, ROOT_WCAP
+    .byte 0xe8
+message_call_displacement:
+    .long 0
+    cmp eax, 256
+    jb fatal
+    cmp eax, 67108864
+    ja fatal
+    mov edi, PROJECTION
+    add rdi, r15
+    mov rdx, 0x313030514e435248 /* HRCNQ001 */
+    mov [rdi], rdx
+    mov qword ptr [rdi + 8], 1
+    mov [rdi + 16], rax
+    lea rsi, [rax + 24]
+    jmp invoke_connection
+frame_eof:
+    mov edi, PROJECTION
+    add rdi, r15
+    mov rax, 0x313030514e435248
+    mov [rdi], rax
+    mov qword ptr [rdi + 8], 2
+    mov qword ptr [rdi + 16], 0
+    mov esi, 24
+invoke_connection:
+    mov edx, ADMISSION
+    add rdx, r15
+    mov ecx, 134217728
+    mov r8d, CONNECTION_WORK
+    add r8, r15
+    mov r9d, ROOT_WCAP
+    .byte 0xe8
+connection_call_displacement:
+    .long 0
+    cmp eax, 256
+    jb fatal
+    cmp eax, 134217728
+    ja fatal
+    mov [r15 + 904], rax
+    mov ebx, ADMISSION
+    add rbx, r15
+    mov rdx, 0x313030534e435248
+    cmp [rbx], rdx
+    jne fatal
+    mov rdx, [rbx + 16]
+    cmp rdx, 1
+    ja fatal
+    mov [r15 + 912], rdx
+    mov rdx, [rbx + 8]
+    cmp rdx, 6
+    je config_eof
+    test rdx, rdx
+    jz frame_next
+    cmp rdx, 1
+    je direct_response
+    cmp rdx, 5
+    ja fatal
+    jmp mcp_resume
+direct_response:
+    mov rdx, [rbx + 64]
+    mov rcx, [rbx + 72]
+    cmp rdx, 256
+    jb fatal
+    cmp rdx, rax
+    ja fatal
+    sub rax, rdx
+    cmp rcx, rax
+    ja fatal
+    lea rsi, [rbx + rdx]
+    mov rdx, rcx
+    jmp public_write
+config_eof:
+    mov qword ptr [r15 + 24], 0
+    lea rax, [r15 + ROOT_WORK + FOOTER]
+    mov qword ptr [rax + 120], 2
+    jmp owner_resume
+

@@ -1,0 +1,18 @@
+[package]
+name = "hia-effect-fence-reference"
+version = "0.0.0"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+[[bin]]
+name = "hia-effect-fence-reference"
+path = "../oracle_effect_fence.rs"
+
+[dependencies]
+anyhow = "=1.0.104"
+libc = "=0.2.189"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip", "raw_value"] }
+sha2 = "=0.11.0"
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "macros", "process", "fs", "sync", "signal", "io-std", "io-util", "net"] }

@@ -1,0 +1,477 @@
+{
+  "actual_execution": {
+    "contract_elf_processes": 13,
+    "controller_direct_calls": 133,
+    "evidence_refusals": 26,
+    "exit_code": 0,
+    "host": "ai395",
+    "job_id": "1a1dcd15557-392-1df0",
+    "kernel_effects_each": 5192,
+    "kernel_original_owner_operations": 224,
+    "kernel_pairs": 112,
+    "native_elf_requests": 237424,
+    "native_pack_calls": 6,
+    "original_concurrent_property_operations": 6210,
+    "outer_elapsed": 44.979214309947565,
+    "output_complete": true,
+    "output_durable": true,
+    "records": [
+      {
+        "command": [
+          "/usr/bin/python3",
+          "-I",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/tests/hia_native/test_file_lock_service.py",
+          "--bundle",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/build/file-lock-service/24f28d7a2ef0b85494ba1c804c741b510fcf67e0da05fcf961b91f7f1571ebe1/manifest.json",
+          "--state-corpus",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/state-corpus",
+          "--output",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/native"
+        ],
+        "cwd": "/home/qq/hepta-file-lock-service-final-bd947-v1",
+        "elapsed": 22.599501407938078,
+        "exit_code": 0,
+        "name": "native",
+        "stderr": {
+          "bytes": 365,
+          "sha256": "67b9640be00513de080288ca2bd3cb113525abf9e83806e5d76889311610ab63"
+        },
+        "stdout": {
+          "bytes": 226,
+          "sha256": "025b62685938f2925c9b5056313024b534403890e4ad1cd4a9fcce4561067c35"
+        },
+        "timeout_seconds": 180
+      },
+      {
+        "command": [
+          "/usr/bin/python3",
+          "-I",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/tests/hia_native/test_file_lock_service_contract.py",
+          "--bundle",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/build/file-lock-service/24f28d7a2ef0b85494ba1c804c741b510fcf67e0da05fcf961b91f7f1571ebe1/manifest.json",
+          "--output",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/contract"
+        ],
+        "cwd": "/home/qq/hepta-file-lock-service-final-bd947-v1",
+        "elapsed": 0.11421507620252669,
+        "exit_code": 0,
+        "name": "contract",
+        "stderr": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 285,
+          "sha256": "2d656dfe100450aed4bdc2255f38e37b47424a9b87c0c48aff735554b5f17ade"
+        },
+        "timeout_seconds": 180
+      },
+      {
+        "command": [
+          "/usr/bin/python3",
+          "-I",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/tests/hia_native/test_file_lock_service_evidence.py",
+          "--bundle",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/build/file-lock-service/24f28d7a2ef0b85494ba1c804c741b510fcf67e0da05fcf961b91f7f1571ebe1/manifest.json",
+          "--state-corpus",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/state-corpus",
+          "--native-corpus",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/native",
+          "--native-stdout",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/native.stdout",
+          "--contract-corpus",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/contract",
+          "--contract-stdout",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/contract.stdout",
+          "--output",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/controls"
+        ],
+        "cwd": "/home/qq/hepta-file-lock-service-final-bd947-v1",
+        "elapsed": 4.923917540116236,
+        "exit_code": 0,
+        "name": "controls",
+        "stderr": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 250,
+          "sha256": "f79327d42ae8b0248a678f577796654ca97ed1a60a0b653f83332acd4387cb93"
+        },
+        "timeout_seconds": 180
+      },
+      {
+        "command": [
+          "/usr/bin/python3",
+          "-I",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/tests/hia_native/compare_file_lock_service_original.py",
+          "--root",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1",
+          "--bundle",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/build/file-lock-service/24f28d7a2ef0b85494ba1c804c741b510fcf67e0da05fcf961b91f7f1571ebe1/manifest.json",
+          "--state-corpus",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/state-corpus",
+          "--native-corpus",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/native",
+          "--native-stdout",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/native.stdout",
+          "--output",
+          "/home/qq/hepta-file-lock-service-final-bd947-v1/qualification/original",
+          "--rustc",
+          "/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc",
+          "--cargo",
+          "/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+          "--rustfmt",
+          "/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustfmt",
+          "--offline"
+        ],
+        "cwd": "/home/qq/hepta-file-lock-service-final-bd947-v1",
+        "elapsed": 14.940369449090213,
+        "exit_code": 0,
+        "name": "original",
+        "stderr": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 318,
+          "sha256": "4d2128746d56e44eaceb7b9608021355baa0cbb0798d9066b6ff253a7f0323ef"
+        },
+        "timeout_seconds": 180
+      }
+    ],
+    "serial_original_byte_compared_rows": 231214,
+    "toolchain": {
+      "cargo": {
+        "bytes": 42185192,
+        "path": "/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "resolved_path": "/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "sha256": "841072d1d92f9e841d9ba5b0814182a0adf064acf4527cd120967b7bc49dcb66"
+      },
+      "rustc": {
+        "bytes": 644784,
+        "path": "/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc",
+        "resolved_path": "/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc",
+        "sha256": "bff349e72704ff70bc08a234a3847338e797065bbedde5e556808bc87b7bf7c6"
+      },
+      "rustfmt": {
+        "bytes": 5295560,
+        "path": "/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustfmt",
+        "resolved_path": "/home/qq/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustfmt",
+        "sha256": "56b31ad3ec8fe0277a2884a189e243b8f04e9b48e5fd22e547c1516c5f8fd34c"
+      }
+    },
+    "total_original_owner_operations": 237648
+  },
+  "asynchronous_wait_scheduler_closed": false,
+  "canonical_to_state_composition_closed": true,
+  "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+  "compiler_tree": "8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49",
+  "concurrent_shared_owner_closed": true,
+  "fresh_aggregate_executed": false,
+  "historical_records_preserved": {
+    "evidence/service-controls-v2/result.json": {
+      "bytes": 103123,
+      "sha256": "8c931ec70c483446b6683920dd635ff1be210953307fb861acde9d8c44a7bb52"
+    },
+    "evidence/service-controls-v3/result.json": {
+      "bytes": 261793,
+      "sha256": "3b57e6c4fe8fe7a98fd2c77233bcf4c969f20b7fc7d98230a23e6b241fb9dd2d"
+    },
+    "evidence/service-final-native-v1/result.json": {
+      "bytes": 13804,
+      "sha256": "53c3b60fa7079045444a0af3baad2ecc7c32df0345ac1550b2665d5fff88a4e3"
+    },
+    "reference/archive-failure-output.json": {
+      "bytes": 1119,
+      "sha256": "2dbbf97707a43354b15ec4016c255ec11387bbca4b2ae4bbed35239910ddc391"
+    },
+    "reference/kernel-v2-1.json": {
+      "bytes": 6277,
+      "sha256": "01080c1c7355bf98c3d188e332a8e0221645d5bd66a4b0f0bb071099e78854a2"
+    },
+    "reference/kernel-v2-2.json": {
+      "bytes": 2924,
+      "sha256": "e56a8e0b5ac7a8d1123b54a4439b718d32974f4427313946590c8273422ed6fe"
+    },
+    "reference/kernel-v2-3.json": {
+      "bytes": 1706,
+      "sha256": "73ee0b732c868c139de63589b6f793f6069a18d33da69745668d743f1c7e829e"
+    }
+  },
+  "integration_base": "738f80940754c87f6e046326e2f2ea2727bef65b",
+  "native_entry": {
+    "bytes": 399686,
+    "sha256": "8ccbab29589810c1ab41f34532c077fb81a0e1ada6f7272e611b716f8ab315d2"
+  },
+  "observation_only": true,
+  "old_stack_removable": false,
+  "operator_capture_correction": {
+    "field": "native_evidence",
+    "original_report_overwritten": false,
+    "reason": "The operator envelope reused its native evidence variable as the final stage-file loop key. The four actual process receipts and original comparison are unchanged.",
+    "recorded_type": "str",
+    "recorded_value": "tests/hia_native/test_file_lock_state.py"
+  },
+  "production_activated": false,
+  "production_handlers_ported": 0,
+  "recovered_inspection": {
+    "bytes": 326172,
+    "sha256": "7ad231768e3247f5b99a4cf32757f96a069bf76c5be3cd0683fb13ab56ffb86f"
+  },
+  "retained_archive": {
+    "actual_new_native_calls": 0,
+    "actual_new_original_calls": 0,
+    "archive": {
+      "bytes": 9458612,
+      "path": "/workspace/scratch/bd947b55c76e/native-file-lock-service-work/reference/service-final-v1-evidence.tar.gz",
+      "sha256": "a65c26c2a42a6fef7ef7fa13d1ef5051521918b685bfdf1df45fccab14d645b1"
+    },
+    "chunk_records": 145,
+    "retained": "/workspace/scratch/bd947b55c76e/native-file-lock-service-work/reference/service-final-v1-retained",
+    "status": "PASS",
+    "total_member_bytes": 97025400,
+    "verified_members": 1583
+  },
+  "retained_inspection": {
+    "bytes": 332151,
+    "sha256": "6fd2ce467456c2cfd62998a6d713cc03ab68d98352736392944d1aa1d2059047"
+  },
+  "schema": "hepta.runtime.file-lock-service-observation.v1",
+  "source_files": {
+    "native/atomic_write.hepta": {
+      "bytes": 333051,
+      "sha256": "bedb27429d970833db4800436511788eaae2bfaa5487b4c751a94f8e7cbe410b"
+    },
+    "native/file_lock_key.hepta": {
+      "bytes": 153353,
+      "sha256": "99174dd26e97882b65489e9f913a2a22663546dcc783a678c9f571458841ddce"
+    },
+    "native/file_lock_key_composition.json": {
+      "bytes": 1839,
+      "sha256": "89c567eb1633ec3669c6ddd7036d6d75a376370eb8aa4f6abd716404a9ab81be"
+    },
+    "native/file_lock_key_layout.json": {
+      "bytes": 629,
+      "sha256": "2a063ce82e685912415043fc8c7454d1b8921ddbcd032228690f217c38b06115"
+    },
+    "native/file_lock_key_packer.hepta": {
+      "bytes": 67174,
+      "sha256": "d1e18d570dc79cc387ba5ad08e61a0b53e95fa3ec903238aa2ea26c984900f8c"
+    },
+    "native/file_lock_service.hepta": {
+      "bytes": 42257,
+      "sha256": "cb0e14b587c27617991d69a5d47442b7a5cab66edcbbc1897d37dd10717cc459"
+    },
+    "native/file_lock_service_abi.md": {
+      "bytes": 9710,
+      "sha256": "870074e0f43ec44945770cf075b235724448586cd57d562beabc3a80e33bbef9"
+    },
+    "native/file_lock_service_composition.json": {
+      "bytes": 1105,
+      "sha256": "0561c291bbd225fc104e75aa5ca0a9c247efe0fdfdce68d2307a3c8c318a3ab6"
+    },
+    "native/file_lock_service_layout.json": {
+      "bytes": 1049,
+      "sha256": "845b80953e5fa8e988588f34492e35eb31ebd8b64be202817d10ba7df649b7a9"
+    },
+    "native/file_lock_service_packer.hepta": {
+      "bytes": 108728,
+      "sha256": "72784c9efdd8486b5249521977a1e464a148fa26cad88babeb55467480916666"
+    },
+    "native/file_lock_state.hepta": {
+      "bytes": 68122,
+      "sha256": "dd6d1e9938767ae6333af5267efbc684e23fd87d3def4e095ac914c80bbbcaa8"
+    },
+    "native/file_lock_state_composition.json": {
+      "bytes": 1320,
+      "sha256": "720cd7929707e6e7f6837f0999e1b2796db10904c9e3f8dd96fc3e527eb7c318"
+    },
+    "native/file_lock_state_layout.json": {
+      "bytes": 618,
+      "sha256": "741f4f1563da01d09dc73d4b8692210999fc94618b1b260e46a052814b36bcc5"
+    },
+    "native/file_lock_state_packer.hepta": {
+      "bytes": 25211,
+      "sha256": "50b3b1dae1b9489500e5c291bb9f85d5788ac6c5d33a0eab8d5d66cc007e9078"
+    },
+    "native/file_locks_abi.md": {
+      "bytes": 11290,
+      "sha256": "c37ca3824c2bb40addc68f10e276f18aee05a93820e1cff404cf80378b472d1e"
+    },
+    "native/text_budget.hepta": {
+      "bytes": 47464,
+      "sha256": "89df7b4320fdbd3525450e9446267ae3d54a5b62660d8904fe8f09be36a7fbf9"
+    },
+    "rustfmt.toml": {
+      "bytes": 17,
+      "sha256": "bce79651b2e2ff42e1c54b9a26c5e17af5222f9f65ab51d9563a48fd159dae84"
+    },
+    "scripts/hia_native_atomic_write_build.py": {
+      "bytes": 16901,
+      "sha256": "6f1ee87583efbce022efd37bffd7579604d4d7048d4aaa7cd0e27c16591389d1"
+    },
+    "scripts/hia_native_build.py": {
+      "bytes": 16253,
+      "sha256": "7b01d602d50835f2b73a2b7b39761c0cef08a372493985161d59184d52c0dcb2"
+    },
+    "scripts/hia_native_file_lock_build.py": {
+      "bytes": 16758,
+      "sha256": "b165233b19619d21289fab64fdd08637e704a1317caf699c43ddbaac0a7b13b7"
+    },
+    "scripts/hia_native_file_lock_qualification.py": {
+      "bytes": 43401,
+      "sha256": "10c47c59c612f166d0e9cecd0cc4e18917297e01f8ddec6b370b5796485eeddb"
+    },
+    "scripts/hia_native_file_lock_service_build.py": {
+      "bytes": 16239,
+      "sha256": "5921fb992b87348c28aeb40c238e945babc659057ef702b0e549e101c2952b0d"
+    },
+    "scripts/hia_native_file_lock_service_qualification.py": {
+      "bytes": 61697,
+      "sha256": "152ad5dd546ac854759da47b8db37cd1d4a9503daf9452e8b4a54883da5b573a"
+    },
+    "scripts/hia_native_loader.py": {
+      "bytes": 12728,
+      "sha256": "331b1fdc693df44847723f7171a1338918d1558f1cdc48f558cd29b32f2971e2"
+    },
+    "src/mcp/fs/remote.rs": {
+      "bytes": 48174,
+      "sha256": "d87cae1d18cfaf3479cc94e0df8c8c6eefe5d2eec34f62b7ba0f0c4693704d8c"
+    },
+    "src/mcp/fs/text_editing.rs": {
+      "bytes": 63372,
+      "sha256": "e55ce4df73d6e0b70e4065900d317f6b7329670ab6fcba44979ca69dcac80590"
+    },
+    "tests/hia_native/compare_file_lock_service_original.py": {
+      "bytes": 15142,
+      "sha256": "81b6879d4edc161816ec89c707b0602e3135738bb1469bd2351c2876509fb4f0"
+    },
+    "tests/hia_native/compare_file_locks_original.py": {
+      "bytes": 10923,
+      "sha256": "3255e15e84671f9572fd37f3d682f7f88eaf4e34f843fba5438d363fb6a0ca05"
+    },
+    "tests/hia_native/file_lock_fixture.py": {
+      "bytes": 3949,
+      "sha256": "4af2e36a32444eed13cbad9773d1f493be683d4a2756508d8b2b8bb348fa5ac3"
+    },
+    "tests/hia_native/file_lock_key_cases.py": {
+      "bytes": 3851,
+      "sha256": "9f8e0703b402c2e2a5135d77519289b5e04240573ba3743aea6a7575b9130ae5"
+    },
+    "tests/hia_native/file_lock_key_kernel.py": {
+      "bytes": 12929,
+      "sha256": "df730ff5980612cb312a94c4476963ee233815cbb0db21a9ea703e92f7a8787b"
+    },
+    "tests/hia_native/file_lock_key_supervisor.py": {
+      "bytes": 12443,
+      "sha256": "9e74eafd6b79451d63fc29aad15bffc21b75e57ca686b07c1c124520e49c7445"
+    },
+    "tests/hia_native/file_lock_oracle/Cargo.lock": {
+      "bytes": 1028,
+      "sha256": "85687bc7aec32f2b210e255c110a5114baa89696bba1e07328e4103ee99b8cd3"
+    },
+    "tests/hia_native/file_lock_oracle/Cargo.toml": {
+      "bytes": 409,
+      "sha256": "3cb1a0b25356bba406d505ec29e7bc605f868d14842af1ae25266a18b3a89d44"
+    },
+    "tests/hia_native/file_lock_oracle/build.rs": {
+      "bytes": 2215,
+      "sha256": "48b5e2068faffa1868d5ea879163cbbb7a48729a8797a00b500abaa85e9199a1"
+    },
+    "tests/hia_native/file_lock_service_kernel.py": {
+      "bytes": 10448,
+      "sha256": "edf8889888dd888a7bce074324031177083ae576d18dd53331541aa425ef16ee"
+    },
+    "tests/hia_native/file_lock_service_oracle/Cargo.lock": {
+      "bytes": 1036,
+      "sha256": "f9511f4ccf9300cc5e0203570948e8c97a5998c00c50aed2700a76bc100133d0"
+    },
+    "tests/hia_native/file_lock_service_oracle/Cargo.toml": {
+      "bytes": 346,
+      "sha256": "0e04c3818e74eb5c0864b2fbef07036fb42534b9d7f713ad8c61630b7a198602"
+    },
+    "tests/hia_native/file_lock_service_oracle/build.rs": {
+      "bytes": 2215,
+      "sha256": "48b5e2068faffa1868d5ea879163cbbb7a48729a8797a00b500abaa85e9199a1"
+    },
+    "tests/hia_native/file_lock_service_supervisor.py": {
+      "bytes": 15125,
+      "sha256": "bc8813ee7f11fe682c74885f3f14e662ed5bd6fdff00bebaea139de01d69b50d"
+    },
+    "tests/hia_native/oracle_file_lock_key.rs": {
+      "bytes": 4000,
+      "sha256": "0084e240f18dbc7db9e5ea930540d3ffeb4ba0ee67a75e1f45bfd5d15963afd8"
+    },
+    "tests/hia_native/oracle_file_lock_service.rs": {
+      "bytes": 14219,
+      "sha256": "26f787d8381a0d46df5259aca37356682a7561bc30e35e8d810fe49f68eb742e"
+    },
+    "tests/hia_native/oracle_file_lock_state.rs": {
+      "bytes": 9704,
+      "sha256": "dcf280cfd14c1ba3aa9804035fa129df15ca149f5649bc4c1e9de8fd70f12cae"
+    },
+    "tests/hia_native/run_file_lock_key.py": {
+      "bytes": 4206,
+      "sha256": "7f75dbec179c32328baa255d238dcb81a1fcb8f793e664aa7dc9ca738b2b60d3"
+    },
+    "tests/hia_native/test_file_lock_evidence.py": {
+      "bytes": 7772,
+      "sha256": "04c62fd90afd22385517ca3aa6b97977dc167c42c3f4243672c96a49aa4defd4"
+    },
+    "tests/hia_native/test_file_lock_key.py": {
+      "bytes": 10046,
+      "sha256": "3eca22a5751332a20e44823a031b255437f5e8292f32f3e20c1393aa4d04d90a"
+    },
+    "tests/hia_native/test_file_lock_service.py": {
+      "bytes": 15240,
+      "sha256": "13bf7e009dfdba333945855ce80c7928d55eb95453734bc5c1746eff4c6de2a2"
+    },
+    "tests/hia_native/test_file_lock_service_contract.py": {
+      "bytes": 13433,
+      "sha256": "97339f511579d7a6528bb13386d9363ec42fb7b0c78749b7a71a128d1bd6db5f"
+    },
+    "tests/hia_native/test_file_lock_service_evidence.py": {
+      "bytes": 8602,
+      "sha256": "d8e0c078f60fcccd387c29879d29896b570a29ad8ae866c81a4765bf9ecb1bd9"
+    },
+    "tests/hia_native/test_file_lock_state.py": {
+      "bytes": 19284,
+      "sha256": "cae6a1f6ef4fbb34422c79d97987864dd78c0d0904157e06ecd11c2a822e54ae"
+    }
+  },
+  "source_matched_result_files": {
+    "contract/result.json": {
+      "bytes": 76811,
+      "sha256": "4f8079b4f4367f98a86edc03f86e6e1350b42216a9e678b233e1ce6e78c8cfce"
+    },
+    "controls/result.json": {
+      "bytes": 261624,
+      "sha256": "a8311c6c991d699f35d33c9400b41cd52c47b48fe3f6ce96dd27e2d08661f3b8"
+    },
+    "native/result.json": {
+      "bytes": 52384,
+      "sha256": "95f342e87ec8ed6b39585000e10e65e68f673804cecf645679aaf62f7e8e135c"
+    },
+    "original/result.json": {
+      "bytes": 350315,
+      "sha256": "c563a08154b33fd2d681940fb4e72116540432de57e48c19051bfeb8fd69eed7"
+    },
+    "result.json": {
+      "bytes": 276010,
+      "sha256": "970bfdc009837977704c2afb9bcba90da0a606f0775c5f4dafda1837b4c154d9"
+    }
+  },
+  "stage_mode_differences": [
+    {
+      "after_mode": 448,
+      "before_mode": 320,
+      "bytes": 399686,
+      "path": "build/file-lock-service/24f28d7a2ef0b85494ba1c804c741b510fcf67e0da05fcf961b91f7f1571ebe1/file-lock-service.elf",
+      "sha256": "8ccbab29589810c1ab41f34532c077fb81a0e1ada6f7272e611b716f8ab315d2"
+    }
+  ],
+  "status": "PASS",
+  "upper_file_io_closed": false,
+  "whole_runtime_replaced": false
+}

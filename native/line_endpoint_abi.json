@@ -1,0 +1,47 @@
+{
+  "schema": "hepta.runtime.line-endpoint-abi.v1",
+  "target": "linux-x86_64-lp64",
+  "entry": "f0(readbuf,mutbuf,mutbuf)->u32",
+  "buffers": ["input", "output", "workspace"],
+  "integer_byte_order": "little-endian",
+  "input_limit_bytes": 8388608,
+  "minimum_workspace_bytes": 8,
+  "input": {
+    "header_bytes": 32,
+    "magic_ascii": "HIAEP001",
+    "fields": ["magic:8bytes", "kind:u64", "payload_length:u64", "scalar_bits:u64"],
+    "payload_follows_header": true,
+    "kinds": {
+      "0": "serde_json::Number with as_i64()=Some: scalar_bits contains the two-complement i64; empty payload",
+      "1": "serde_json::Number with as_i64()=None: scalar_bits=0; empty payload",
+      "2": "serde_json::String: scalar_bits=0; payload is decoded UTF-8 string bytes",
+      "3": "Other serde_json::Value: scalar_bits=0; payload is its exact compact Display UTF-8 bytes"
+    }
+  },
+  "output": {
+    "header_bytes": 32,
+    "magic_ascii": "HIAEPR01",
+    "fields": ["magic:8bytes", "tag:u64", "value:u64", "auxiliary:u64"],
+    "tags": {
+      "0": "Domain error: value is reason 1..7, auxiliary is UTF-8 diagnostic length; exact diagnostic follows header",
+      "1": "Endpoint::Number: value is two-complement i64, auxiliary=0; no payload",
+      "2": "Endpoint::Id: value is nonzero LP64 usize, auxiliary contains two lowercase ASCII hex bytes in its low 16 bits; no payload"
+    },
+    "error_reasons": {
+      "1": "non-i64 JSON number",
+      "2": "empty trimmed string",
+      "3": "invalid unsigned composite line number",
+      "4": "composite line number is zero",
+      "5": "invalid two-ASCII-hex hash",
+      "6": "invalid line value",
+      "7": "JSON value has another type"
+    }
+  },
+  "return": {
+    "0xffffffff": "Malformed ABI packet, invalid UTF-8, input outside bounded profile, or workspace shorter than 8 bytes",
+    "0xfffffffe": "Complete result does not fit output; output bytes remain unchanged",
+    "other": "Number of initialized output bytes"
+  },
+  "ownership": "HIA owns UTF-8 validation, exact Rust Unicode trimming, signed/unsigned parsing, overflow handling, hash validation/case normalization and all diagnostic bytes. JSON Value creation, Number classification and Display serialization are an explicit typed caller boundary.",
+  "scope": "Component parity for parse_endpoint within the bounded byte profile. This is not a complete filesystem tool, JSON decoder, deployed replacement or whole-runtime closure claim."
+}
