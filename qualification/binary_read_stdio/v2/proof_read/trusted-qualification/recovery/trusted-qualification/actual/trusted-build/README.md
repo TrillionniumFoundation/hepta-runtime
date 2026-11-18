@@ -1,0 +1,5 @@
+# Binary read stdio with the final shared pool and formatter
+
+This build-only successor has four HIA images and two fixed ELF variants. The production transport has only two source changes: create one process-lifetime orphan pool, and supply it to the qualified read67 create ABI. The observed variant adds full context/pool records and a fixed final zero-ACK pipe, entirely removed from production by the existing compile-time conditional. REBIND_PROOF.json and scripts/rebind_source.py prove that separation from the previous full bridge source.
+
+Only copied and reverified B3 may compile the unchanged qualified HIA sources. The complete native linker/packer buffers, four physical build refusals and two complete relocations remain bounded by the established 60/180/900-second limits and 15-minute CI job. Actual composed first-fstat EIO, descriptor custody, error/stdout results and EOF evidence must pass their newly frozen domain before installation. The earlier read stdio result stays bound to its earlier body and formatter and is not silently upgraded.
