@@ -53,7 +53,9 @@ def main():
     literals=json.loads((root/"authoring/literals.json").read_bytes())
     for name,value in literals.items():
         raw=value.encode("utf-8");pseudo+="\ndef "+name+"(w:mutbuf,at:u64) -> u64:\n"
-        for i,b in enumerate(raw):pseudo+="    store(w,at+"+str(i)+","+str(b)+")\n"
+        words=len(raw)//8*8
+        for i in range(0,words,8):pseudo+="    put(w,at+"+str(i)+","+str(int.from_bytes(raw[i:i+8],"little"))+")\n"
+        for i in range(words,len(raw)):pseudo+="    store(w,at+"+str(i)+","+str(raw[i])+")\n"
         pseudo+="    return at+"+str(len(raw))+"\n"
     nodes=ast.parse(pseudo).body+[converted,formatted,*helpers.values()]
     assert nodes[0].name=="entry"
@@ -61,7 +63,11 @@ def main():
     signatures={n.name:([p.annotation.id for p in n.args.args],n.returns.id)for n in nodes}
     total=total_scalar_functions(nodes);functions=[]
     for n in nodes:
-        b=Builder(n,names,signatures,total);b.statements(n.body)
+        b=Builder(n,names,signatures,total)
+        try:b.statements(n.body)
+        except BaseException:
+            print("AUTHOR_FUNCTION "+n.name,flush=True)
+            raise
         functions.append(dict(name=names[n.name],params=[b.param(p)for p in b.params],
             returns=[b.returns],effects=["read","write","trap"],entry="b0",blocks=b.blocks))
     compact=compact_authoring_cfg(dict(schema="hepta.hia.program.v8",module="python_json_value",functions=functions))
