@@ -1,0 +1,227 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<128 or length(s)>=LIMIT or load(s,0)!=REQUEST:
+        return INVALID
+    json_size=load(s,8)
+    item_size=load(s,16)
+    if json_size>6291456 or json_size>length(s)-64 or item_size!=length(s)-64-json_size or item_size<64:
+        return INVALID
+    at=24
+    while at<64:
+        if load(s,at)!=0:
+            return INVALID
+        at=at+8
+    base=64+json_size
+    if load(s,base)==VALUE and load(s,base+8)==3:
+        return exception(s,o,base,item_size)
+    if load(s,base)!=ITEMS or load(s,base+8)!=0 or load(s,base+16)!=7:
+        return INVALID
+    count=load(s,base+40)
+    if count>16 or load(s,base+24)!=choose(count==0,0,1):
+        return INVALID
+    if load(s,base+32)!=0 or load(s,base+48)!=0 or load(s,base+56)!=item_size-64:
+        return INVALID
+    needed=512+json_size+item_size
+    if needed>=LIMIT:
+        return INVALID
+    if length(w)<needed:
+        return WORK_SHORT
+    fill_range(w,0,512,0)
+    copy_in(s,w,64,512,json_size)
+    put(w,0,FLAT)
+    put(w,16,json_size)
+    put(w,448,512+json_size)
+    at=base+64
+    index=0
+    while index<count:
+        at=one_item(s,w,at)
+        if at==MAXIMUM:
+            return INVALID
+        index=index+1
+    if at!=length(s) or validate_fields(w)==0:
+        return INVALID
+    needed=get(w,448)
+    put(w,24,needed-512)
+    fill_range(w,448,64,0)
+    if length(o)<needed:
+        return OUTPUT_SHORT
+    copy_out(w,o,0,0,needed)
+    return needed
+
+def exception(s:readbuf,o:mutbuf,base:u64,size:u64) -> u32:
+    count=load(s,base+56)
+    if count!=size-64 or utf8(s,base+64,count)==0:
+        return INVALID
+    if length(o)<64+count:
+        return OUTPUT_SHORT
+    fill_range(o,0,64,0)
+    put(o,0,ERROR)
+    put(o,8,3)
+    put(o,56,count)
+    copy_span(o,s,64,base+64,count)
+    return 64+count
+
+def load(s:readbuf,at:u64) -> u64:
+    value=0
+    index=0
+    while index<8:
+        value=value|(byte(s,at+index)<<(index*8))
+        index=index+1
+    return value
+
+def codepoint(s:readbuf,at:u64) -> u64:
+    return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)
+
+def get(w:mutbuf,at:u64) -> u64:
+    value=0
+    index=0
+    while index<8:
+        value=value|(byte(w,at+index)<<(index*8))
+        index=index+1
+    return value
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    index=0
+    while index<8:
+        store(w,at+index,value>>(index*8))
+        index=index+1
+    return 0
+
+def copy_in(s:readbuf,w:mutbuf,at:u64,destination:u64,count:u64) -> u64:
+    copy_span(w,s,destination,at,count)
+    return 0
+
+def copy_out(w:mutbuf,o:mutbuf,at:u64,destination:u64,count:u64) -> u64:
+    index=0
+    while index<count:
+        store(o,destination+index,byte(w,at+index))
+        index=index+1
+    return 0
+
+def encode_string(s:readbuf,w:mutbuf,at:u64,count:u64,destination:u64) -> u64:
+    index=0
+    out=destination
+    while index<count:
+        value=codepoint(s,at+index*4)
+        if value>1114111 or (value>=55296 and value<=57343):
+            return MAXIMUM
+        if value<128:
+            store(w,out,value)
+            out=out+1
+        elif value<2048:
+            store(w,out,192|(value>>6))
+            store(w,out+1,128|(value&63))
+            out=out+2
+        elif value<65536:
+            store(w,out,224|(value>>12))
+            store(w,out+1,128|((value>>6)&63))
+            store(w,out+2,128|(value&63))
+            out=out+3
+        else:
+            store(w,out,240|(value>>18))
+            store(w,out+1,128|((value>>12)&63))
+            store(w,out+2,128|((value>>6)&63))
+            store(w,out+3,128|(value&63))
+            out=out+4
+        index=index+1
+    return out
+
+def integer(s:readbuf,w:mutbuf,at:u64,count:u64,descriptor:u64) -> u64:
+    if count==0 or count>20 or (count>1 and byte(s,at)==48):
+        return 0
+    value=0
+    index=0
+    while index<count:
+        digit=byte(s,at+index)
+        if digit<48 or digit>57:
+            return 0
+        digit=digit-48
+        if value>1844674407370955161 or (value==1844674407370955161 and digit>5):
+            return 0
+        value=value*10+digit
+        index=index+1
+    put(w,descriptor,2)
+    put(w,descriptor+8,value)
+    return 1
+
+def typed(s:readbuf,w:mutbuf,at:u64,size:u64,index:u64) -> u64:
+    if size<64 or load(s,at)!=VALUE or load(s,at+8)!=0 or load(s,at+56)!=size-64:
+        return 0
+    tag=load(s,at+16)
+    descriptor=64+index*24
+    if tag==0:
+        return choose(size==64,1,0)
+    if tag==1 or tag==2:
+        if size!=64:
+            return 0
+        put(w,descriptor,3)
+        put(w,descriptor+8,tag-1)
+        return 1
+    if tag==3:
+        if load(s,at+48)!=2:
+            return 0
+        return integer(s,w,at+64,size-64,descriptor)
+    if tag!=5 or load(s,at+48)!=1 or load(s,at+40)>(size-64)>>2 or load(s,at+40)*4!=size-64:
+        return 0
+    destination=get(w,448)
+    out=encode_string(s,w,at+64,load(s,at+40),destination)
+    if out==MAXIMUM:
+        return 0
+    put(w,descriptor,1)
+    put(w,descriptor+8,destination)
+    put(w,descriptor+16,out-destination)
+    put(w,448,out)
+    return 1
+
+def one_item(s:readbuf,w:mutbuf,at:u64) -> u64:
+    if at>length(s) or length(s)-at<32:
+        return MAXIMUM
+    key_count=load(s,at)
+    value_size=load(s,at+8)
+    raw_count=load(s,at+16)
+    if key_count>96 or load(s,at+24)!=0:
+        return MAXIMUM
+    at=at+32
+    if key_count>(length(s)-at)>>2:
+        return MAXIMUM
+    index=field_index(s,at,key_count)
+    if index>=16 or (get(w,32)&(1<<index))!=0:
+        return MAXIMUM
+    put(w,32,get(w,32)|(1<<index))
+    at=at+key_count*4
+    if value_size>length(s)-at or typed(s,w,at,value_size,index)==0:
+        return MAXIMUM
+    at=at+value_size
+    if raw_count>(length(s)-at)>>2:
+        return MAXIMUM
+    return at+raw_count*4
+
+def kind(w:mutbuf,index:u64) -> u64:
+    return get(w,64+index*24)
+
+def nullable(w:mutbuf,index:u64,allowed:u64) -> u64:
+    value=kind(w,index)
+    return choose(value==0 or value==allowed,1,0)
+
+def validate_fields(w:mutbuf) -> u64:
+    if kind(w,0)!=1 or kind(w,1)!=1 or kind(w,2)!=1:
+        return 0
+    op=operation(w,get(w,120),get(w,128))
+    if op==0 or get(w,32)!=field_mask(op):
+        return 0
+    put(w,8,op)
+    if op==1 or op==8:
+        return 1
+    if op==2:
+        if nullable(w,3,1)==0 or nullable(w,5,2)==0 or kind(w,6)!=2:
+            return 0
+        limit=get(w,216)
+        return choose(limit>=1 and limit<=65536,1,0)
+    if op==3:
+        return choose(kind(w,3)==1 and kind(w,4)==1,1,0)
+    if op>=4 and op<=6:
+        return choose(nullable(w,3,1)!=0 and nullable(w,4,1)!=0 and nullable(w,5,2)!=0 and kind(w,7)==1 and nullable(w,8,2)!=0 and nullable(w,9,1)!=0,1,0)
+    if nullable(w,3,1)==0 or nullable(w,4,1)==0 or kind(w,5)!=2:
+        return 0
+    if kind(w,10)!=1 or kind(w,11)!=1 or kind(w,12)!=3 or kind(w,13)!=3 or kind(w,14)!=1 or nullable(w,15,1)==0:
+        return 0
+    return 1
