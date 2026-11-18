@@ -2,7 +2,7 @@ name: Qualify HIA JSON C recursion boundaries
 on:
   workflow_dispatch:
   push:
-    branches: [hia-python-json-value-native-boundary-v2-6780-20261118]
+    branches: [hia-python-json-value-native-boundary-v3-6780-20261118]
 permissions:
   contents: read
   actions: read
@@ -20,7 +20,7 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       GH_TOKEN: ${{ github.token }}
       PYJSON_SOURCE: ${{ github.workspace }}/runtime/qualification/python_json_value/v2/native_boundary
-      PYJSON_MANIFEST: 238315656bada6632bbe6063e78a1c41e5e86f37a57e4d0e6bdbddf66b2b5da6
+      PYJSON_MANIFEST: c022fb38426a46773cd6eba7997182ba68367b1e3a11bdab56ec1caf93090d0b
     steps:
       - name: Checkout complete frozen source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

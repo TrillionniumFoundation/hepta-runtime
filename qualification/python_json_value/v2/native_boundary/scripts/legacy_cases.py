@@ -15,3 +15,5 @@ def cases(group):
     require(CURRENT is not None,"original profile cases admitted");return CURRENT.cases(group)
 def domain():
     require(CURRENT is not None,"original profile domain admitted");return CURRENT.domain()
+def text(shape,depth,leaf):
+    require(CURRENT is not None,"original profile text recipe admitted");return CURRENT.text(shape,depth,leaf)
