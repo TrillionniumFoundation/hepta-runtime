@@ -29,6 +29,7 @@ def main():
     text=text.replace("put(o, 0,","put(w, 8192,")
     assert "byte(s,"not in text and "put(o,"not in text
     converted=ast.parse(text).body[0]
+    converted.returns=ast.Name(id='u64',ctx=ast.Load())
     fmt_source=float_source();formatted=ast.parse(fmt_source).body[0]
     assert formatted.name=="render_binary64"
     text=ast.get_source_segment(fmt_source,formatted)
@@ -39,6 +40,7 @@ def main():
     text=text.replace("store(o, i, byte(w, 6144 + i))","store(w, destination+i, byte(w, 6144 + i))")
     assert "read64(s"not in text and "store(o,"not in text
     formatted=ast.parse(text).body[0]
+    formatted.returns=ast.Name(id='u64',ctx=ast.Load())
     helpers={}
     for node in [*math.body[1:],*ast.parse(fmt_source).body[1:]]:
         if node.name=="read64":continue
@@ -70,6 +72,13 @@ def main():
             raise
         functions.append(dict(name=names[n.name],params=[b.param(p)for p in b.params],
             returns=[b.returns],effects=["read","write","trap"],entry="b0",blocks=b.blocks))
+    for f in functions:
+        types={v["name"]:v["type"]for b in f["blocks"]for v in b["params"]}
+        types.update({v["name"]:v["type"]for b in f["blocks"]for op in b["ops"]for v in op["out"]})
+        for b in f["blocks"]:
+            for op in b["ops"]:
+                if op["op"].startswith("compare."):
+                    assert len({types[v]for v in op["args"]})==1,(f["name"],b["id"],op,[types[v]for v in op["args"]])
     compact=compact_authoring_cfg(dict(schema="hepta.hia.program.v8",module="python_json_value",functions=functions))
     operations=sum(len(b["ops"])for f in compact["functions"]for b in f["blocks"])
     blocks=sum(len(f["blocks"])for f in compact["functions"])
