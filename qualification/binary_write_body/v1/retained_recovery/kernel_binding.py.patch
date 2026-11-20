@@ -1,0 +1,30 @@
+--- actual/scripts/kernel_binding.py
++++ retained_recovery/kernel_binding.py
+@@ -8,6 +8,9 @@
+  "metadata":{1:5,2:196,3:193,4:93,5:91,6:199,7:190,8:74},
+  "entropy":{1:318,2:257,3:5,4:3,5:0,6:None}}
+ MAGIC={"write":b"HBWTHK01","publish":b"HPUBHK01","read":b"HBRDHK01","metadata":b"HMDTHK01","entropy":b"HENTHK01"}
++def duplicates_fd(number,args):
++    """Linux x86-64 descriptor duplication, excluding other fcntl commands."""
++    return number in(32,33,292)or(number==72 and args[1]in(0,1030))
+ def matches_phase(call,e):
+     phase=call["phase"]
+     return phase==dict(magic_hex=MAGIC[e["owner"]].hex(),words=[e["generation"],e["call"],e["sequence"],
+@@ -19,7 +22,7 @@
+         selected=[r for r in calls if r["scope"]==e["application_scope"]and matches_phase(r,e)]
+         if number is None:
+             require(e["raw_return"]==0 and not e["data"]and not e["request"],"actual orphan append envelope")
+-            require(not any(r["number"]in(3,32,33,292)and r["args"][0]==fd for r in selected),"orphan append closed or duplicated its FD")
++            require(not any((r["number"]==3 or duplicates_fd(r["number"],r["args"]))and r["args"][0]==fd for r in selected),"orphan append closed or duplicated its FD")
+             require(any(r["number"]==39 and r["exit"]["result"]==trace["start"]["pid"]for r in selected),
+                 "orphan append actual creator-PID check")
+             orphans.append(dict(fd=fd,context=e["context"],generation=e["generation"]));continue
+@@ -96,7 +99,7 @@
+         if n in(2,257)and ret>=0:
+             name=r["input_spans"]["path"]["raw"][:-1].decode("utf-8","surrogateescape")
+             live[ret]=dict(path=name,open_ordinal=r["ordinal"],flags=a[1]if n==2 else a[2])
+-        elif n in(32,33,292)and ret>=0:
++        elif duplicates_fd(n,a)and ret>=0:
+             live[ret]=dict(path="<duplicated-fd-"+str(a[0])+">",open_ordinal=r["ordinal"],flags=None)
+         elif n==3:
+             if ret==0:
