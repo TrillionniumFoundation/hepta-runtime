@@ -1,5 +1,12 @@
 # Hepta Runtime
 
+This documentation correction is not a new full-source qualification. In
+particular, it does not inherit CI 139's earlier 2,197-file historical source
+table: the native documents are included in that table, and the root README
+is included in the materialized-source receipt. All reported executions retain
+their original commit and `source_sha256` records. The 543-file execution
+closure and the separately published private-composition evidence are unchanged.
+
 ## HIA native implementation
 
 The [HIA native profile](native/README.md) provides executable `.hepta` owners
@@ -7,8 +14,10 @@ and Linux ELF transport packers. The resulting program runs without Python,
 Rust, libc, or a dynamic loader. A pinned Hepta compiler and explicit Python
 build and evidence readers produce and verify the executable.
 
-The default native builder assembles **124 HIA components**: 116 directly linked
-owners and an eight-component shared worker capability in 117 physical containers.
+The current default native builder assembles **126 HIA components**: 118 directly
+linked owners and an eight-component shared worker capability in **119 physical
+containers**. The descriptor table has **71 slots**, and its source closure binds
+**543 files**. These counts come from the current builder and source manifest.
 The graph routes thirteen target handlers: `host_list`, `effective_config`,
 `execution_shadow_admit`, `view`, `workdir`, `directory_create`, `file_move`,
 `directory_move`, `text_editor`, `batch_edit`, `weight_bellman_plan`,
@@ -40,30 +49,40 @@ python3 -I -B scripts/hia_native_runtime_mcp_build.py   --hepta /absolute/path/t
 /absolute/path/to/new-public-build/build/public-task-batch-extract/runtime-mcp.elf
 ```
 
-CI omits `--bootstrap` and freshly compiles all 124 components. The
-[current public qualification](native/runtime_mcp_current_qualification.md)
-binds all 536 source files and the actual default command. The complete new
-publisher regression compares 686 current-native cases with immutable actual
-current-Rust captures, including whole wire, file contents, session/cache,
-history and locks. All 24 native processes keep their original 180-second
-limit, with 60 seconds per exchange. Independent uploaded readers recheck
-the complete captures without executing either implementation.
+CI omits `--bootstrap` and freshly compiles all 126 components. The
+[public graph and qualification records](native/runtime_mcp_current_qualification.md)
+separate the current 543-file graph from the retained 124-component captures.
+The installed two-owner extension adds private binary-write parameters at slot
+69 and the binary caller planner at slot 70; it retains all thirteen existing
+routes and does not register `binary_write`. Its recorded public regression
+contains 116 response pairs from eight actual processes.
+
+The retained 124-component publisher regression compared 686 cases with
+immutable actual original captures, including whole wire, file contents,
+session/cache, history and locks. Its 24 native processes retained the original
+180-second limit and 60 seconds per exchange. Those captures and their uploaded
+readers keep their original source and ELF identities; they are not new
+126-component application executions.
 
 The dedicated [historical 58-image source profile](tests/hia_native/historical_public58/README.md)
 restores its exact 120 historical files and excludes current-only sources.
 The prior 91-, 102- and 111-component qualifications retain their original
 source identities. The old nine-role 111 result is retained evidence for that
-graph; it is not relabeled as a 124-component result. The current default
-workflow checks the exact candidate or PR head against the qualified
-536-source closure, builds that default entry, and requires the resulting
-ELF to equal the application-qualified current binary.
+graph. The retained 124-component captures likewise retain their own identity.
+The current default workflow checks the exact candidate or PR head against its
+543-file source closure, builds that default entry and independently rereads
+the resulting build. Application qualifications remain bound to their actual
+source, ELF and complete original input domains.
 
 The production target has 136 registered tool handlers. The current graph
 routes thirteen, leaving **123 unrouted target handlers**. The existing
 production runtime continues to own the remaining filesystem, process,
 host, SSH, HTTP, document, REA and model-worker behavior.
-[The source coverage inventory](native/migration.json) and
-[exact target snapshot](native/migration_target.json) retain these gaps.
+The [historical component inventory](native/migration.json) contains 125 old
+handler rows and 195 component entries; the [exact target snapshot](native/migration_target.json)
+contains 136 handler names. The current `native/` tree has 229 `.hepta` files,
+including packers and shared leaves. None of these file or component counts is
+a count of replaced public handlers.
 Full SDK, full asynchronous runtime, full handler replacement, production
 activation and removal of the old runtime remain unqualified.
 
