@@ -1,0 +1,212 @@
+{
+  "read_parent_capture.py": {
+    "complete_inverse": true,
+    "edits": [
+      {
+        "after": "from read_composition_build import read_build\nfrom read_composition import Prepared,check_flow\nfrom composition_domain import query_from_case",
+        "after_sha256": "fd32ca96bd625a32ddad4bfe52906e25be0e0e49253a985a54cb494c613862e9",
+        "before": "from read_parent_build import read_build",
+        "before_sha256": "8f65b603d2c7eee9329e24e3014ea16d30fc936960937ecbfa60b3574c461af8",
+        "count": 1
+      },
+      {
+        "after": "errors=[];last_error=None;last_body=None;parent_calls=0;body_calls=0;growth=None\n    pure=[];first_parent_input=None;first_parent_frame=None;last_parent_frame=None",
+        "after_sha256": "520f655f96bef2d28971a73bd7545d3bde389427745cebbefefa32b0e8d49622",
+        "before": "errors=[];last_error=None;last_body=None;parent_calls=0;body_calls=0;growth=None",
+        "before_sha256": "fd32ca96bd625a32ddad4bfe52906e25be0e0e49253a985a54cb494c613862e9",
+        "count": 1
+      },
+      {
+        "after": "            if tag==b\"HBCWJR01\":\n                head=tag+read(stream,120);payload=read(stream,U(head,32));all_count+=1\n                pure.append(dict(head=head,payload=payload,index=all_count));continue\n            if tag in JOURNALS:",
+        "after_sha256": "5d1cbaa5155b099a8d1ea58b3572546aa81aaa46bd6edd00399c6c19c6097b33",
+        "before": "            if tag in JOURNALS:",
+        "before_sha256": "520f655f96bef2d28971a73bd7545d3bde389427745cebbefefa32b0e8d49622",
+        "count": 1
+      },
+      {
+        "after": "                if tag!=b\"HBPWJR01\":continue\n                last_parent_frame=all_count\n                if first_parent_frame is None:\n                    require(event==1,\"first actual parent frame must be its immutable request\")\n                    first_parent_input=payload;first_parent_frame=all_count\n                if event==1:",
+        "after_sha256": "044a82fb107017030d3f4e82ecedbbead5f13e61208fd6fdd5bd8f69e155f37d",
+        "before": "                if tag!=b\"HBPWJR01\":continue\n                if event==1:",
+        "before_sha256": "5d1cbaa5155b099a8d1ea58b3572546aa81aaa46bd6edd00399c6c19c6097b33",
+        "count": 1
+      },
+      {
+        "after": "body_calls=body_calls,all_frames=all_count,final_workspace=last_workspace,composition_rows=pure,\n                first_parent_input=first_parent_input,first_parent_frame=first_parent_frame,last_parent_frame=last_parent_frame)",
+        "after_sha256": "66f8766d7955b030ccae10cda26e0cdcb909c29b42d6ff92f9a7a78407594d98",
+        "before": "body_calls=body_calls,all_frames=all_count,final_workspace=last_workspace)",
+        "before_sha256": "044a82fb107017030d3f4e82ecedbbead5f13e61208fd6fdd5bd8f69e155f37d",
+        "count": 1
+      },
+      {
+        "after": "def read_case(folder,binding,case,lane,store,executable,preparer,fixture):",
+        "after_sha256": "73f8dd651cf5f770ed74bd3ce99c19d9001a0f49dc2eb52f4b5a64896bc170da",
+        "before": "def read_case(folder,binding,case,lane,store,executable):",
+        "before_sha256": "66f8766d7955b030ccae10cda26e0cdcb909c29b42d6ff92f9a7a78407594d98",
+        "count": 1
+      },
+      {
+        "after": "    query=row[\"query\"]\n    same(query,query_from_case(case,fixture,lane!=\"native-unobserved\"),\"complete frozen query independently reconstructed\")\n    prepared=preparer.request(row[\"preparation\"],query,case[\"id\"],lane,packet)if native else None\n    if not native:require(row[\"preparation\"]is None,\"original did not invoke typed/planner preparation\")\n    if native:",
+        "after_sha256": "1d7f46ed5c6433748c7ccd7f8d8dabcfc83ed0de9612ce1b046a72d91359a076",
+        "before": "    query=row[\"query\"]\n    if native:",
+        "before_sha256": "73f8dd651cf5f770ed74bd3ce99c19d9001a0f49dc2eb52f4b5a64896bc170da",
+        "count": 1
+      },
+      {
+        "after": "require(prepared[\"parent\"]==expected,\"independent full HIA parent request encoding\")",
+        "after_sha256": "0b6c40118738239b52aed0acd6a43e6d836fd92d32c8a87f299761aa4388b467",
+        "before": "require(packet==expected,\"independent full HIA request encoding\")",
+        "before_sha256": "1d7f46ed5c6433748c7ccd7f8d8dabcfc83ed0de9612ce1b046a72d91359a076",
+        "count": 1
+      },
+      {
+        "after": "        native_journal=journal(folder,process[\"journal\"],store)\n        original_input=store.get(row[\"snapshots\"][\"input\"][\"bytes\"])\n        require(U(context,80)==len(expected) and original_input[:len(expected)]==expected,\"actual entire parent-owned initial request\")",
+        "after_sha256": "ac09e1f27519def7451d2e380990af13410652ef0b8c3f152befd8f769a4444d",
+        "before": "        native_journal=journal(folder,process[\"journal\"],store)",
+        "before_sha256": "0b6c40118738239b52aed0acd6a43e6d836fd92d32c8a87f299761aa4388b467",
+        "count": 1
+      },
+      {
+        "after": "            require(native_journal[\"final_workspace\"]==store.get(row[\"snapshots\"][\"workspace\"][\"bytes\"]),\"actual complete final parent workspace\")\n            row[\"composition_proof\"]=check_flow(native_journal[\"composition_rows\"],prepared,store,row,\n                native_journal[\"first_parent_input\"],native_journal[\"first_parent_frame\"],native_journal[\"last_parent_frame\"])",
+        "after_sha256": "713472abc9267032c687164370ecb398ce834226adfc4c6b25d39c441b032cd1",
+        "before": "            require(native_journal[\"final_workspace\"]==store.get(row[\"snapshots\"][\"workspace\"][\"bytes\"]),\"actual complete final parent workspace\")",
+        "before_sha256": "ac09e1f27519def7451d2e380990af13410652ef0b8c3f152befd8f769a4444d",
+        "count": 1
+      },
+      {
+        "after": "            require(native_journal[\"all_frames\"]==0 and native_journal[\"parent_calls\"]==0,\"unobserved lane emitted hidden application journals\")\n            require(native_journal[\"composition_rows\"]==[],\"unobserved pure owners emitted hidden journals\")\n            from read_composition import check_unobserved\n            row[\"composition_proof\"]=check_unobserved(prepared,store,row)",
+        "after_sha256": "a04e77d31016e89cc23b3112e806911bec363e6a86be8e0abcd6ef0e5424760c",
+        "before": "            require(native_journal[\"all_frames\"]==0 and native_journal[\"parent_calls\"]==0,\"unobserved lane emitted hidden application journals\")",
+        "before_sha256": "713472abc9267032c687164370ecb398ce834226adfc4c6b25d39c441b032cd1",
+        "count": 1
+      },
+      {
+        "after": "report[\"planned\"]==report[\"completed\"]==985",
+        "after_sha256": "101547e22a57539502fd88d59580e8c0210b6e6345b68d23c77345f177971e9d",
+        "before": "report[\"planned\"]==report[\"completed\"]==992",
+        "before_sha256": "a04e77d31016e89cc23b3112e806911bec363e6a86be8e0abcd6ef0e5424760c",
+        "count": 1
+      },
+      {
+        "after": "SOURCE/\"parent/DOMAIN.json\"",
+        "after_sha256": "3f2f9e3141bc9a32f0d126623c58788438b4ada9bce2644188be690366d54ffb",
+        "before": "SOURCE/\"DOMAIN.json\"",
+        "before_sha256": "101547e22a57539502fd88d59580e8c0210b6e6345b68d23c77345f177971e9d",
+        "count": 2
+      },
+      {
+        "after": "    admitted=[case for case in domain[\"cases\"]if type(case[\"expected_version\"])is str]\n    rejected=[case for case in domain[\"cases\"]if case[\"expected_version\"]is None]\n    require(len(admitted)==254 and len(rejected)==2 and len(admitted)+len(rejected)==256,\"complete ordered original typed-domain partition\")\n    require(report[\"original_parent_inputs\"]==256 and report[\"composed_parent_inputs\"]==254,\"explicit composition intersection scope\")\n    preparer=Prepared(capture/\"preparation\",args.images/\"adapter\")\n    planned=[(case,lane)for case in admitted for lane in LANES",
+        "after_sha256": "07a71e6a95beeeac5ad461c71fd5941cf79198b07742c3e9cb0abd33b7d213c8",
+        "before": "    planned=[(case,lane)for case in domain[\"cases\"]for lane in LANES",
+        "before_sha256": "3f2f9e3141bc9a32f0d126623c58788438b4ada9bce2644188be690366d54ffb",
+        "count": 1
+      },
+      {
+        "after": "len(planned)==len(report[\"cases\"])==985",
+        "after_sha256": "06cd0a9d92b2753b093ed345638ab74766a9d86289d8dbe9079ce1b578409598",
+        "before": "len(planned)==len(report[\"cases\"])==992",
+        "before_sha256": "07a71e6a95beeeac5ad461c71fd5941cf79198b07742c3e9cb0abd33b7d213c8",
+        "count": 1
+      },
+      {
+        "after": "    entire_original=[(case,lane)for case in domain[\"cases\"]for lane in LANES\n        if lane!=\"native-unobserved\"or not(case[\"fault_plans\"]or case[\"descriptor_actor\"]or case[\"nofile\"])]\n    omitted=[(case,lane)for case,lane in entire_original if case[\"expected_version\"]is None]\n    require(len(entire_original)==992 and len(omitted)==7,\"whole original natural domain retained as 985 plus seven typed-refused lanes\")\n    same([(case[\"id\"],lane)for case,lane in omitted],[(217,lane)for lane in LANES]+[(244,lane)for lane in LANES[:3]],\"exact original four-plus-three None lanes\")\n    same([(case[\"id\"],lane)for case,lane in entire_original if type(case[\"expected_version\"])is str],\n         [(case[\"id\"],lane)for case,lane in planned],\"independent complete ordered original-to-composed lane projection\")\n    require(len(planned)==len(report[\"cases\"])==985,\"complete frozen original/current lane set\")",
+        "after_sha256": "71182bdae3b47c8fbd58d6c7b0ab1c1245a5429f855e44260df231fdf166d278",
+        "before": "    require(len(planned)==len(report[\"cases\"])==985,\"complete frozen original/current lane set\")",
+        "before_sha256": "06cd0a9d92b2753b093ed345638ab74766a9d86289d8dbe9079ce1b578409598",
+        "count": 1
+      },
+      {
+        "after": "row=read_case(folder,binding,case,lane,store,build[\"executable\"],preparer,capture/\"fixture\")",
+        "after_sha256": "bacdabb5bbb1b1a015756b1c92093382851e6935a9dcd43ceee9f0cfb1996d14",
+        "before": "row=read_case(folder,binding,case,lane,store,build[\"executable\"])",
+        "before_sha256": "71182bdae3b47c8fbd58d6c7b0ab1c1245a5429f855e44260df231fdf166d278",
+        "count": 1
+      },
+      {
+        "after": "row=read_retry(capture/(\"retry-%02d-\"%case[\"id\"]+lane),binding,case,lane,store,build[\"executable\"],preparer,capture/\"fixture\")",
+        "after_sha256": "d8adcdbf6e64cdf87005fadde40da1c5a3b619088e9f2e117ea5075db6687c9d",
+        "before": "row=read_retry(capture/(\"retry-%02d-\"%case[\"id\"]+lane),binding,case,lane,store,build[\"executable\"])",
+        "before_sha256": "bacdabb5bbb1b1a015756b1c92093382851e6935a9dcd43ceee9f0cfb1996d14",
+        "count": 1
+      },
+      {
+        "after": "    require(len(report[\"typed_rejections\"])==2,\"both original None inputs retained\")\n    for case,row in zip(rejected,report[\"typed_rejections\"]):\n        same(row[\"input\"],case,\"complete ordered original None input\")\n        same(row[\"query\"],query_from_case(case,capture/\"fixture\",True),\"exact None input projection\")\n        preparer.request(row[\"preparation\"],row[\"query\"],case[\"id\"],\"typed-rejected\",None)\n        require(row[\"parent_processes_created\"]==row[\"parent_invocations\"]==row[\"parent_effects\"]==0,\"typed rejection cannot claim a parent invocation\")\n        same(filesystem(row[\"setup\"]),filesystem(row[\"before_refusal\"]),\"whole fixture preparation preserves all contents and structural metadata\")\n        same(row[\"before_refusal\"],row[\"after\"],\"all None refusal filesystem bytes and metadata remain unchanged\")\n    same(preparer.finish(),report[\"preparation\"],\"entire exact actual preparation calls\")\n    buffers=store.finish()",
+        "after_sha256": "6b4e07bb9c7e063d393420fa58b09ad829e43862f8cfa9e0a35266bc47f175cf",
+        "before": "    buffers=store.finish()",
+        "before_sha256": "d8adcdbf6e64cdf87005fadde40da1c5a3b619088e9f2e117ea5075db6687c9d",
+        "count": 1
+      },
+      {
+        "after": "schema=\"hepta.runtime.binary-write-composition-readback.v1\",status=\"PASS_COMPLETE_FROZEN_COMPOSITION_DOMAIN\"",
+        "after_sha256": "443c8f7eb1dc9a1a3e8fbce33501f364ce1b4958d7c68995b0dd738ceae829f0",
+        "before": "schema=\"hepta.runtime.binary-parent-readback.v1\",status=\"PASS_COMPLETE_FROZEN_PARENT_DOMAIN\"",
+        "before_sha256": "6b4e07bb9c7e063d393420fa58b09ad829e43862f8cfa9e0a35266bc47f175cf",
+        "count": 1
+      },
+      {
+        "after": "cases=254,original_parent_inputs=256,typed_null_refusals=2,complete_lane_runs=985,original_complete_lane_runs=992,\n                typed_rejected_original_lanes=[dict(id=case[\"id\"],lane=lane)for case,lane in omitted],\n                original_runs=508,native_observed_runs=254,native_unobserved_runs=223",
+        "after_sha256": "ef15aaa0af36863ea09e0f387185cec5419f91200713b45e0e0e2bb6b1ac8e6a",
+        "before": "cases=256,complete_lane_runs=992,\n                original_runs=512,native_observed_runs=256,native_unobserved_runs=224",
+        "before_sha256": "443c8f7eb1dc9a1a3e8fbce33501f364ce1b4958d7c68995b0dd738ceae829f0",
+        "count": 1
+      },
+      {
+        "after": "def read_all(capture,images,build_root,capture_sha256):\n    identity=source_evidence(SOURCE)\n    capture=Path(capture).resolve(strict=True)\n    images=Path(images).resolve(strict=True)\n    build_root=Path(build_root).resolve(strict=True)",
+        "after_sha256": "36b7ea60505ae9fcca293ce33e1a7393934ca214588767f8fadbf65cc38254dc",
+        "before": "def main():\n    parser=argparse.ArgumentParser(description=__doc__)\n    for name in(\"capture\",\"images\",\"build\",\"output\"):parser.add_argument(\"--\"+name,type=Path,required=True)\n    parser.add_argument(\"--capture-sha256\",required=True)\n    args=parser.parse_args()\n    identity=source_evidence(SOURCE)\n    capture=args.capture.resolve(strict=True)",
+        "before_sha256": "ef15aaa0af36863ea09e0f387185cec5419f91200713b45e0e0e2bb6b1ac8e6a",
+        "count": 1
+      },
+      {
+        "after": "hashlib.sha256(raw).hexdigest()==capture_sha256",
+        "after_sha256": "d73814cd4bcd317e121d2646e23c5ae52c287171e242e88d73f69d8063ab97b6",
+        "before": "hashlib.sha256(raw).hexdigest()==args.capture_sha256",
+        "before_sha256": "36b7ea60505ae9fcca293ce33e1a7393934ca214588767f8fadbf65cc38254dc",
+        "count": 1
+      },
+      {
+        "after": "read_build(SOURCE,images,build_root)",
+        "after_sha256": "2fb9b93d1a67a5cc0bd2fd48b05e1c01d5476882dd42e8984bea763dff9fd6a5",
+        "before": "read_build(SOURCE,args.images,args.build)",
+        "before_sha256": "d73814cd4bcd317e121d2646e23c5ae52c287171e242e88d73f69d8063ab97b6",
+        "count": 1
+      },
+      {
+        "after": "Prepared(capture/\"preparation\",images/\"adapter\")",
+        "after_sha256": "fbebb1acbd741e4bc93d0d0ecd6eb9279df82becb4ed98484c3cb441e62662b0",
+        "before": "Prepared(capture/\"preparation\",args.images/\"adapter\")",
+        "before_sha256": "2fb9b93d1a67a5cc0bd2fd48b05e1c01d5476882dd42e8984bea763dff9fd6a5",
+        "count": 1
+      },
+      {
+        "after": "    return result\n\n\ndef main():\n    parser=argparse.ArgumentParser(description=__doc__)\n    for name in(\"capture\",\"images\",\"build\",\"output\"):parser.add_argument(\"--\"+name,type=Path,required=True)\n    parser.add_argument(\"--capture-sha256\",required=True)\n    args=parser.parse_args()\n    require(not args.output.exists(),\"fresh DATA readback receipt\")\n    result=read_all(args.capture,args.images,args.build,args.capture_sha256)\n    args.output.write_bytes(encoded(result))",
+        "after_sha256": "db9d04b6a612533ef339739e12443682112a4fd6d2d508af39136ef4bdb675bf",
+        "before": "    require(not args.output.exists(),\"fresh DATA readback receipt\")\n    args.output.write_bytes(encoded(result))",
+        "before_sha256": "fbebb1acbd741e4bc93d0d0ecd6eb9279df82becb4ed98484c3cb441e62662b0",
+        "count": 1
+      }
+    ],
+    "original": "8f65b603d2c7eee9329e24e3014ea16d30fc936960937ecbfa60b3574c461af8",
+    "source": "db9d04b6a612533ef339739e12443682112a4fd6d2d508af39136ef4bdb675bf"
+  },
+  "read_retry_capture.py": {
+    "complete_inverse": true,
+    "edits": [
+      {
+        "after": "def read_retry(folder,binding,case,lane,store,executable,preparer,fixture):",
+        "after_sha256": "5eba4e0cf161be75e4ca69e78f0b3cc8ff5d04b54d43dab5eaaab6e11a04a2e3",
+        "before": "def read_retry(folder,binding,case,lane,store,executable):",
+        "before_sha256": "eed59bcbc132b480081c2bc0bee481531627438921ff0eef3e132247fa5f63fe",
+        "count": 1
+      },
+      {
+        "after": "    packet=store.get(row[\"application_input\"])\n    from composition_domain import query_from_case\n    same(row[\"query\"],query_from_case(case,fixture,True),\"entire original retry query\")\n    if lane==\"native-observed\":\n        from read_parent_capture import journal\n        from read_composition import check_flow\n        prepared=preparer.request(row[\"preparation\"],row[\"query\"],10000+case[\"id\"],\"retry-\"+lane,packet)\n        actual=journal(folder,process[\"journal\"],store)\n        row[\"composition_proof\"]=check_flow(actual[\"composition_rows\"],prepared,store,row,actual[\"first_parent_input\"],\n            actual[\"first_parent_frame\"],actual[\"last_parent_frame\"],finished=False)\n    else:require(row[\"preparation\"]is None and decode(packet)==row[\"query\"],\"unchanged full original retry arguments\")",
+        "after_sha256": "4d77a4e48ac17014574fb66975506f6f7328f754331c35a8f9c74ab7930df5e6",
+        "before": "    packet=store.get(row[\"application_input\"])",
+        "before_sha256": "5eba4e0cf161be75e4ca69e78f0b3cc8ff5d04b54d43dab5eaaab6e11a04a2e3",
+        "count": 1
+      }
+    ],
+    "original": "eed59bcbc132b480081c2bc0bee481531627438921ff0eef3e132247fa5f63fe",
+    "source": "4d77a4e48ac17014574fb66975506f6f7328f754331c35a8f9c74ab7930df5e6"
+  }
+}

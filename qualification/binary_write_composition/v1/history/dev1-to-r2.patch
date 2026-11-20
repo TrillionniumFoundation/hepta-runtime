@@ -1,0 +1,944 @@
+--- dev1/ABI.md
++++ r2/ABI.md
+@@ -84,5 +84,27 @@
+ The historical parent receipt and build are retained with their desktop origin;
+ new construction uses fresh local source-bound compiler/linker/packer outputs.
+ 
++The composed effect intersection is 254 String-version inputs and all 984
++originally eligible natural lanes. The independent reader derives those inputs
++and the two actual typed-`None` refusals from the complete unchanged 256-input
++parent domain. All six original permanent-EINTR/SIGTERM controls remain.
++Additional observed boundary processes exercise both real planner mismatch
++branches and a physically invalid header, with complete parent context, kernel,
++file, descriptor, busy, release and destruction evidence. The original minimum
++48-byte qualification transport remains unchanged; a shorter transport packet
++is not represented as an executed HIA input.
++
++The entire 433/196/256 pure-owner regression is freshly executed separately.
++The complete composition DATA reader has the original 600-second limit and
++retained eleven-capability denial guard, with whole file bytes and metadata
++snapshotted before and after. The producer's 60-second exchange, 180-second
++case and 1800+5-second whole-process-group limits are unchanged.
++
++The new wrapper's partial release and failed result-allocation ownership paths
++have source review but do not yet have dedicated dynamic failure controls.
++Those controls and public host/audit/SSH/response lifecycle remain explicit
++requirements before public registration; the bounded private evidence must not
++be used as a claim that those remaining domains have been exercised.
++
+ `public_binary_write_registered`, `host_audit_ssh_lifecycle_qualified` and
+ `whole_runtime_replaced` remain false.
+--- dev1/authoring/author_capture_integrations.py
++++ r2/authoring/author_capture_integrations.py
+@@ -52,10 +52,11 @@
+  edit('        require(source_evidence(SOURCE)==identity,"whole frozen source changed during capture")',
+       '        for case in rejected:\n'
+       '            fixture=output/"fixture";initial=setup(fixture);query=concrete(case,fixture,True)\n'
++      '            before_refusal=projection(fixture)\n'
+       '            packet,ordinal=PREPARER.request(query,case["id"],"typed-rejected")\n'
+       '            require(packet is None,"original None unexpectedly admitted by typed String owner")\n'
+-      '            after=projection(fixture);require(encoded(initial)==encoded(after),"typed refusal changed target filesystem")\n'
+-      '            typed_rejections.append(dict(input=case,query=query,preparation=ordinal,setup=initial,after=after,\n'
++      '            after=projection(fixture);require(encoded(before_refusal)==encoded(after),"typed refusal changed target filesystem")\n'
++      '            typed_rejections.append(dict(input=case,query=query,preparation=ordinal,setup=initial,before_refusal=before_refusal,after=after,\n'
+       '                parent_processes_created=0,parent_invocations=0,parent_effects=0))\n'
+       '            discard(fixture)\n'
+       '        preparation=PREPARER.close();PREPARER=None\n'
+--- dev1/authoring/author_reader_integrations.py
++++ r2/authoring/author_reader_integrations.py
+@@ -81,13 +81,21 @@
+       '        same(row["query"],query_from_case(case,capture/"fixture",True),"exact None input projection")\n'
+       '        preparer.request(row["preparation"],row["query"],case["id"],"typed-rejected",None)\n'
+       '        require(row["parent_processes_created"]==row["parent_invocations"]==row["parent_effects"]==0,"typed rejection cannot claim a parent invocation")\n'
+-      '        same(row["setup"],row["after"],"all None refusal filesystem bytes and metadata remain unchanged")\n'
++      '        same(filesystem(row["setup"]),filesystem(row["before_refusal"]),"whole fixture preparation preserves all contents and structural metadata")\n'
++      '        same(row["before_refusal"],row["after"],"all None refusal filesystem bytes and metadata remain unchanged")\n'
+       '    same(preparer.finish(),report["preparation"],"entire exact actual preparation calls")\n'
+       '    buffers=store.finish()')
+  edit('schema="hepta.runtime.binary-parent-readback.v1",status="PASS_COMPLETE_FROZEN_PARENT_DOMAIN"',
+       'schema="hepta.runtime.binary-write-composition-readback.v1",status="PASS_COMPLETE_FROZEN_COMPOSITION_DOMAIN"')
+  edit('cases=256,complete_lane_runs=992,\n                original_runs=512,native_observed_runs=256,native_unobserved_runs=224',
+       'cases=254,original_parent_inputs=256,typed_null_refusals=2,complete_lane_runs=984,\n                original_runs=508,native_observed_runs=254,native_unobserved_runs=222')
++ edit('def main():\n    parser=argparse.ArgumentParser(description=__doc__)\n    for name in("capture","images","build","output"):parser.add_argument("--"+name,type=Path,required=True)\n    parser.add_argument("--capture-sha256",required=True)\n    args=parser.parse_args()\n    identity=source_evidence(SOURCE)\n    capture=args.capture.resolve(strict=True)',
++      'def read_all(capture,images,build_root,capture_sha256):\n    identity=source_evidence(SOURCE)\n    capture=Path(capture).resolve(strict=True)\n    images=Path(images).resolve(strict=True)\n    build_root=Path(build_root).resolve(strict=True)')
++ edit('hashlib.sha256(raw).hexdigest()==args.capture_sha256','hashlib.sha256(raw).hexdigest()==capture_sha256')
++ edit('read_build(SOURCE,args.images,args.build)','read_build(SOURCE,images,build_root)')
++ edit('Prepared(capture/"preparation",args.images/"adapter")','Prepared(capture/"preparation",images/"adapter")')
++ edit('    require(not args.output.exists(),"fresh DATA readback receipt")\n    args.output.write_bytes(encoded(result))',
++      '    return result\n\n\ndef main():\n    parser=argparse.ArgumentParser(description=__doc__)\n    for name in("capture","images","build","output"):parser.add_argument("--"+name,type=Path,required=True)\n    parser.add_argument("--capture-sha256",required=True)\n    args=parser.parse_args()\n    require(not args.output.exists(),"fresh DATA readback receipt")\n    result=read_all(args.capture,args.images,args.build,args.capture_sha256)\n    args.output.write_bytes(encoded(result))')
+  finish()
+  begin('read_retry_capture.py')
+  edit('def read_retry(folder,binding,case,lane,store,executable):','def read_retry(folder,binding,case,lane,store,executable,preparer,fixture):')
+--- dev1/authoring/integration_edits.json
++++ r2/authoring/integration_edits.json
+@@ -94,43 +94,43 @@
+         "count": 1
+       },
+       {
+-        "after": "        for case in rejected:\n            fixture=output/\"fixture\";initial=setup(fixture);query=concrete(case,fixture,True)\n            packet,ordinal=PREPARER.request(query,case[\"id\"],\"typed-rejected\")\n            require(packet is None,\"original None unexpectedly admitted by typed String owner\")\n            after=projection(fixture);require(encoded(initial)==encoded(after),\"typed refusal changed target filesystem\")\n            typed_rejections.append(dict(input=case,query=query,preparation=ordinal,setup=initial,after=after,\n                parent_processes_created=0,parent_invocations=0,parent_effects=0))\n            discard(fixture)\n        preparation=PREPARER.close();PREPARER=None\n        require(source_evidence(SOURCE)==identity,\"whole frozen source changed during capture\")",
+-        "after_sha256": "2b00019bc69fa20bd1c965c5d0225edaa8a9f563c8d7bf9f2e9a1455c217f530",
++        "after": "        for case in rejected:\n            fixture=output/\"fixture\";initial=setup(fixture);query=concrete(case,fixture,True)\n            before_refusal=projection(fixture)\n            packet,ordinal=PREPARER.request(query,case[\"id\"],\"typed-rejected\")\n            require(packet is None,\"original None unexpectedly admitted by typed String owner\")\n            after=projection(fixture);require(encoded(before_refusal)==encoded(after),\"typed refusal changed target filesystem\")\n            typed_rejections.append(dict(input=case,query=query,preparation=ordinal,setup=initial,before_refusal=before_refusal,after=after,\n                parent_processes_created=0,parent_invocations=0,parent_effects=0))\n            discard(fixture)\n        preparation=PREPARER.close();PREPARER=None\n        require(source_evidence(SOURCE)==identity,\"whole frozen source changed during capture\")",
++        "after_sha256": "166b6642454a35bd1692340f9d2eae882263084857f62be569852da7071dd431",
+         "before": "        require(source_evidence(SOURCE)==identity,\"whole frozen source changed during capture\")",
+         "before_sha256": "d47bd322cb16c03cccdcea95bfc9cca5f3842d186f0c22bac5f5cb648e9ae528",
+         "count": 1
+       },
+       {
+         "after": "                    source=identity,domain=pin(SOURCE/\"parent/DOMAIN.json\"),build=pin(build/\"BUILD.json\"),\n                    typed_rejections=typed_rejections,preparation=preparation,original_parent_inputs=256,composed_parent_inputs=254,",
+-        "after_sha256": "3f71fbae29728fc8a4d4b1b8cd7a0e4a4aa886a31561a4a37d4f8b5c042a115e",
++        "after_sha256": "140aa404e89c151f680ef8d22898e1efb09e5cb0fd994bd24885fe292630ccb6",
+         "before": "                    source=identity,domain=pin(SOURCE/\"parent/DOMAIN.json\"),build=pin(build/\"BUILD.json\"),",
+-        "before_sha256": "2b00019bc69fa20bd1c965c5d0225edaa8a9f563c8d7bf9f2e9a1455c217f530",
++        "before_sha256": "166b6642454a35bd1692340f9d2eae882263084857f62be569852da7071dd431",
+         "count": 1
+       },
+       {
+         "after": "    except BaseException as error:\n        if PREPARER is not None:\n            PREPARER.close();PREPARER=None\n        (output/\"FAILURE.json\")",
+-        "after_sha256": "9527255837dd83a4a038bf3ea189826f31be435ce9c45b3842f60e214e37f299",
++        "after_sha256": "bc1a35decaaa5d7d11a5f87f1fcfd020fd3c5264b817f5defa29839fa88309ba",
+         "before": "    except BaseException as error:\n        (output/\"FAILURE.json\")",
+-        "before_sha256": "3f71fbae29728fc8a4d4b1b8cd7a0e4a4aa886a31561a4a37d4f8b5c042a115e",
++        "before_sha256": "140aa404e89c151f680ef8d22898e1efb09e5cb0fd994bd24885fe292630ccb6",
+         "count": 1
+       },
+       {
+         "after": "hepta.runtime.binary-write-composition-capture.v1",
+-        "after_sha256": "52ae865725c95751367afa66885cc77c11b66e1296e9f1b6f27931555f831440",
++        "after_sha256": "0c8878eee7b0453d8c5e6d81d9dba0ab877397bcf0078bd44e3e6f0fa2103f6c",
+         "before": "hepta.runtime.binary-parent-capture.v1",
+-        "before_sha256": "9527255837dd83a4a038bf3ea189826f31be435ce9c45b3842f60e214e37f299",
++        "before_sha256": "bc1a35decaaa5d7d11a5f87f1fcfd020fd3c5264b817f5defa29839fa88309ba",
+         "count": 1
+       },
+       {
+         "after": "run_retry(case,lane,output/\"fixture\",folder,binary,store,SOURCE,PREPARER)",
+-        "after_sha256": "c4f2d9681a72a3e50951a6f967d43940904748c0350806eed014736fcb15dd5a",
++        "after_sha256": "cfc9be1a77dec4c3f8b94376eed4b90b6127f918dd50cdc6a7d1e40d838e9d6c",
+         "before": "run_retry(case,lane,output/\"fixture\",folder,binary,store,SOURCE)",
+-        "before_sha256": "52ae865725c95751367afa66885cc77c11b66e1296e9f1b6f27931555f831440",
++        "before_sha256": "0c8878eee7b0453d8c5e6d81d9dba0ab877397bcf0078bd44e3e6f0fa2103f6c",
+         "count": 1
+       }
+     ],
+     "original": "a8bc2a24ad562f6a213a4049762ca980cb609fe17515e0b379878cfd9025bbea",
+-    "source": "c4f2d9681a72a3e50951a6f967d43940904748c0350806eed014736fcb15dd5a"
++    "source": "cfc9be1a77dec4c3f8b94376eed4b90b6127f918dd50cdc6a7d1e40d838e9d6c"
+   },
+   "retry_capture.py": {
+     "complete_inverse": true,
+--- dev1/authoring/reader_integration_edits.json
++++ r2/authoring/reader_integration_edits.json
+@@ -122,29 +122,64 @@
+         "count": 1
+       },
+       {
+-        "after": "    require(len(report[\"typed_rejections\"])==2,\"both original None inputs retained\")\n    for case,row in zip(rejected,report[\"typed_rejections\"]):\n        same(row[\"input\"],case,\"complete ordered original None input\")\n        same(row[\"query\"],query_from_case(case,capture/\"fixture\",True),\"exact None input projection\")\n        preparer.request(row[\"preparation\"],row[\"query\"],case[\"id\"],\"typed-rejected\",None)\n        require(row[\"parent_processes_created\"]==row[\"parent_invocations\"]==row[\"parent_effects\"]==0,\"typed rejection cannot claim a parent invocation\")\n        same(row[\"setup\"],row[\"after\"],\"all None refusal filesystem bytes and metadata remain unchanged\")\n    same(preparer.finish(),report[\"preparation\"],\"entire exact actual preparation calls\")\n    buffers=store.finish()",
+-        "after_sha256": "42b749d7e4fc50cb8a9ee24cf6a7343aed3f1140c4dbfd4d943c25fe95b0a8dc",
++        "after": "    require(len(report[\"typed_rejections\"])==2,\"both original None inputs retained\")\n    for case,row in zip(rejected,report[\"typed_rejections\"]):\n        same(row[\"input\"],case,\"complete ordered original None input\")\n        same(row[\"query\"],query_from_case(case,capture/\"fixture\",True),\"exact None input projection\")\n        preparer.request(row[\"preparation\"],row[\"query\"],case[\"id\"],\"typed-rejected\",None)\n        require(row[\"parent_processes_created\"]==row[\"parent_invocations\"]==row[\"parent_effects\"]==0,\"typed rejection cannot claim a parent invocation\")\n        same(filesystem(row[\"setup\"]),filesystem(row[\"before_refusal\"]),\"whole fixture preparation preserves all contents and structural metadata\")\n        same(row[\"before_refusal\"],row[\"after\"],\"all None refusal filesystem bytes and metadata remain unchanged\")\n    same(preparer.finish(),report[\"preparation\"],\"entire exact actual preparation calls\")\n    buffers=store.finish()",
++        "after_sha256": "1f6c9282d0222031b0e8b4325d1648111e62d37956cc3f7017195fa5c92c8883",
+         "before": "    buffers=store.finish()",
+         "before_sha256": "c9e92aedb57a80ab44375a77bd8c9bcb34646b6a6b341ec22c733c48e1fe3029",
+         "count": 1
+       },
+       {
+         "after": "schema=\"hepta.runtime.binary-write-composition-readback.v1\",status=\"PASS_COMPLETE_FROZEN_COMPOSITION_DOMAIN\"",
+-        "after_sha256": "614823e91498e731599cd47513a1fd2b2c080dc66ff000f130579b42d0d1232a",
++        "after_sha256": "7a2cabc58b298184f4f7b0c912bc50309f04ca096994632d1861c3c0da18c0ad",
+         "before": "schema=\"hepta.runtime.binary-parent-readback.v1\",status=\"PASS_COMPLETE_FROZEN_PARENT_DOMAIN\"",
+-        "before_sha256": "42b749d7e4fc50cb8a9ee24cf6a7343aed3f1140c4dbfd4d943c25fe95b0a8dc",
++        "before_sha256": "1f6c9282d0222031b0e8b4325d1648111e62d37956cc3f7017195fa5c92c8883",
+         "count": 1
+       },
+       {
+         "after": "cases=254,original_parent_inputs=256,typed_null_refusals=2,complete_lane_runs=984,\n                original_runs=508,native_observed_runs=254,native_unobserved_runs=222",
+-        "after_sha256": "17bac2d293c192cf35743db8053708bb148bf835141b512b80f595d382104def",
++        "after_sha256": "7ed55a6ecc913356d560f7cc1982025adb54e4c1241c86e13a110258afb04cc2",
+         "before": "cases=256,complete_lane_runs=992,\n                original_runs=512,native_observed_runs=256,native_unobserved_runs=224",
+-        "before_sha256": "614823e91498e731599cd47513a1fd2b2c080dc66ff000f130579b42d0d1232a",
++        "before_sha256": "7a2cabc58b298184f4f7b0c912bc50309f04ca096994632d1861c3c0da18c0ad",
++        "count": 1
++      },
++      {
++        "after": "def read_all(capture,images,build_root,capture_sha256):\n    identity=source_evidence(SOURCE)\n    capture=Path(capture).resolve(strict=True)\n    images=Path(images).resolve(strict=True)\n    build_root=Path(build_root).resolve(strict=True)",
++        "after_sha256": "5f6bec1f27685985f259e8456e3f86e39cf129269cb90e3371fc19d5d9fbb070",
++        "before": "def main():\n    parser=argparse.ArgumentParser(description=__doc__)\n    for name in(\"capture\",\"images\",\"build\",\"output\"):parser.add_argument(\"--\"+name,type=Path,required=True)\n    parser.add_argument(\"--capture-sha256\",required=True)\n    args=parser.parse_args()\n    identity=source_evidence(SOURCE)\n    capture=args.capture.resolve(strict=True)",
++        "before_sha256": "7ed55a6ecc913356d560f7cc1982025adb54e4c1241c86e13a110258afb04cc2",
++        "count": 1
++      },
++      {
++        "after": "hashlib.sha256(raw).hexdigest()==capture_sha256",
++        "after_sha256": "e9f66c8d9554001dd52903a6b2faf073f5e0cc1435fa3208d4f9e426b3989b27",
++        "before": "hashlib.sha256(raw).hexdigest()==args.capture_sha256",
++        "before_sha256": "5f6bec1f27685985f259e8456e3f86e39cf129269cb90e3371fc19d5d9fbb070",
++        "count": 1
++      },
++      {
++        "after": "read_build(SOURCE,images,build_root)",
++        "after_sha256": "1dcb856cef5bf38b95f56288c8923d426f00c40c605c821d347d6768c2d487cc",
++        "before": "read_build(SOURCE,args.images,args.build)",
++        "before_sha256": "e9f66c8d9554001dd52903a6b2faf073f5e0cc1435fa3208d4f9e426b3989b27",
++        "count": 1
++      },
++      {
++        "after": "Prepared(capture/\"preparation\",images/\"adapter\")",
++        "after_sha256": "ae778b1d641c7a87f414d48c71cfd427941b7527a3d2df465b33827ef79b0066",
++        "before": "Prepared(capture/\"preparation\",args.images/\"adapter\")",
++        "before_sha256": "1dcb856cef5bf38b95f56288c8923d426f00c40c605c821d347d6768c2d487cc",
++        "count": 1
++      },
++      {
++        "after": "    return result\n\n\ndef main():\n    parser=argparse.ArgumentParser(description=__doc__)\n    for name in(\"capture\",\"images\",\"build\",\"output\"):parser.add_argument(\"--\"+name,type=Path,required=True)\n    parser.add_argument(\"--capture-sha256\",required=True)\n    args=parser.parse_args()\n    require(not args.output.exists(),\"fresh DATA readback receipt\")\n    result=read_all(args.capture,args.images,args.build,args.capture_sha256)\n    args.output.write_bytes(encoded(result))",
++        "after_sha256": "e16364c81cffc243a4afed9358d4265990ced84fb6895be5df7f699e02e5f301",
++        "before": "    require(not args.output.exists(),\"fresh DATA readback receipt\")\n    args.output.write_bytes(encoded(result))",
++        "before_sha256": "ae778b1d641c7a87f414d48c71cfd427941b7527a3d2df465b33827ef79b0066",
+         "count": 1
+       }
+     ],
+     "original": "8f65b603d2c7eee9329e24e3014ea16d30fc936960937ecbfa60b3574c461af8",
+-    "source": "17bac2d293c192cf35743db8053708bb148bf835141b512b80f595d382104def"
++    "source": "e16364c81cffc243a4afed9358d4265990ced84fb6895be5df7f699e02e5f301"
+   },
+   "read_retry_capture.py": {
+     "complete_inverse": true,
+--- dev1/inputs/reader-controls/ORIGIN.json
++++ r2/inputs/reader-controls/ORIGIN.json
+@@ -0,0 +1,28 @@
++{
++  "actual_five_span_entries": 4,
++  "decoded_control_bytes": 6469883,
++  "decoded_control_sha256": "b0eadc4792e6b6905c6af3e2bfed0c7b30e16a84a3648a931062e4403a905e79",
++  "files": {
++    "CONTROL.json.xz": {
++      "bytes": 17988,
++      "sha256": "8ded11b80ba4de25d694c5dce58eae55a9dc5e47b2f1f4af74cbc5ed08cffdb4"
++    },
++    "PREPARATION.json": {
++      "bytes": 321,
++      "sha256": "b540cb7b994a71c85348c6dc9d5e5aa3dc3999549d0c0274deb8cee3e4e57926"
++    },
++    "PREPARED.json": {
++      "bytes": 10455,
++      "sha256": "8a436e60a35bc109881493f04d6d790aef87cef1dfd95df331146e520f828db1"
++    },
++    "calls.bin.gz": {
++      "bytes": 4439,
++      "sha256": "990fb0020b8096551519ea6930a4dfcaaec9360bd981351269e0a881818d0c0b"
++    },
++    "calls.jsonl": {
++      "bytes": 11130,
++      "sha256": "19f27ff6e3fe4cbb904892436b21b2af5411b99c21acf8f0229b5b1dfe54a824"
++    }
++  },
++  "whole_source_qualification": false
++}
+--- dev1/inputs/reader-controls/PREPARATION.json
++++ r2/inputs/reader-controls/PREPARATION.json
+@@ -0,0 +1 @@
++{"images":{"bytes":127497,"sha256":"26f3502f0fc1509e6ade4d152ddddfc3b9b03d5f6ce0bfb6871b93285790f953"},"parent_effect_calls":0,"requests":2,"schema":"hepta.runtime.binary-write-composition-preparation.v1","summary":{"by_owner":{"adapter":0,"map":6,"planner":4,"typed":6},"calls":16,"contexts":6,"logical_bytes":1007564}}
+--- dev1/inputs/reader-controls/PREPARED.json
++++ r2/inputs/reader-controls/PREPARED.json
+@@ -0,0 +1 @@
++[{"case_id":0,"label":"native-observed","planner_calls":[7,8],"planner_request_hex":"4842504c513030310200000000000000000000000000000073010000000000007100000000000000000000000000000048425052523030310000000000000000030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000130000000000000056000000000000000400000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000636f6d706f736974696f6e2d666978747572652f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c6541413d3d616273656e7448524346474d30310000000000000000000000000000000051000000000000002f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f66697874757265","planner_return":314,"raw_json_hex":"7b22646174615f626173653634223a2241413d3d222c2265787065637465645f76657273696f6e223a22616273656e74222c22686f7374223a22636f6d706f736974696f6e2d66697874757265222c2270617468223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c65227d","ready_hex":"4842504c52303031030000000000000003000000000000000000000000000000030000000000000001000000000000000000000000000000fa000000000000007b22646174615f626173653634223a2241413d3d222c2265787065637465645f76657273696f6e223a22616273656e74222c226f70223a227772697465222c2270617468223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c65222c22726f6f74223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f66697874757265227d","request_hex":"48425741513030310100000000000000000000000000000000000000000000004e0300000000000014020000000000004842504c513030310200000000000000000000000000000073010000000000007100000000000000000000000000000048425052523030310000000000000000030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000130000000000000056000000000000000400000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000636f6d706f736974696f6e2d666978747572652f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c6541413d3d616273656e7448524346474d30310000000000000000000000000000000051000000000000002f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572654842504c52303031030000000000000003000000000000000000000000000000030000000000000001000000000000000000000000000000fa000000000000007b22646174615f626173653634223a2241413d3d222c2265787065637465645f76657273696f6e223a22616273656e74222c226f70223a227772697465222c2270617468223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c65222c22726f6f74223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f66697874757265227d","typed_calls":[4,5,6],"typed_frame":"48425052523030310000000000000000030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000130000000000000056000000000000000400000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000636f6d706f736974696f6e2d666978747572652f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c6541413d3d616273656e74","value_calls":[1,2,3],"value_frame":"484a5356523030320000000000000000af0000000000000000000000000000007b22646174615f626173653634223a2241413d3d222c2265787065637465645f76657273696f6e223a22616273656e74222c22686f7374223a22636f6d706f736974696f6e2d66697874757265222c2270617468223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c65227d"},{"case_id":0,"label":"native-unobserved","planner_calls":[15,16],"planner_request_hex":"4842504c513030310200000000000000000000000000000073010000000000007100000000000000000000000000000048425052523030310000000000000000030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000130000000000000056000000000000000400000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000636f6d706f736974696f6e2d666978747572652f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c6541413d3d616273656e7448524346474d30310000000000000000000000000000000051000000000000002f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f66697874757265","planner_return":314,"raw_json_hex":"7b22646174615f626173653634223a2241413d3d222c2265787065637465645f76657273696f6e223a22616273656e74222c22686f7374223a22636f6d706f736974696f6e2d66697874757265222c2270617468223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c65227d","ready_hex":"4842504c52303031030000000000000003000000000000000000000000000000030000000000000001000000000000000000000000000000fa000000000000007b22646174615f626173653634223a2241413d3d222c2265787065637465645f76657273696f6e223a22616273656e74222c226f70223a227772697465222c2270617468223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c65222c22726f6f74223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f66697874757265227d","request_hex":"48425741513030310100000000000000000000000000000000000000000000004e0300000000000014020000000000004842504c513030310200000000000000000000000000000073010000000000007100000000000000000000000000000048425052523030310000000000000000030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000130000000000000056000000000000000400000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000636f6d706f736974696f6e2d666978747572652f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c6541413d3d616273656e7448524346474d30310000000000000000000000000000000051000000000000002f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572654842504c52303031030000000000000003000000000000000000000000000000030000000000000001000000000000000000000000000000fa000000000000007b22646174615f626173653634223a2241413d3d222c2265787065637465645f76657273696f6e223a22616273656e74222c226f70223a227772697465222c2270617468223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c65222c22726f6f74223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f66697874757265227d","typed_calls":[12,13,14],"typed_frame":"48425052523030310000000000000000030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000130000000000000056000000000000000400000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000636f6d706f736974696f6e2d666978747572652f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c6541413d3d616273656e74","value_calls":[9,10,11],"value_frame":"484a5356523030320000000000000000af0000000000000000000000000000007b22646174615f626173653634223a2241413d3d222c2265787065637465645f76657273696f6e223a22616273656e74222c22686f7374223a22636f6d706f736974696f6e2d66697874757265222c2270617468223a222f686f6d652f7169616e2d71692f6869612d62696e6172792d636f6d706f736974696f6e2d32303236313132302d646576312f646576656c6f706d656e742d636170747572652d72322f666978747572652f66696c65227d"}]
+--- dev1/inputs/reader-controls/calls.jsonl
++++ r2/inputs/reader-controls/calls.jsonl
+@@ -0,0 +1,16 @@
++{"after_sha256":"73d1c4a09368270aa6a7d3afa3f9ef5c4829804812186e74f2727d765de38721","before_sha256":"cba9bbe8af2edc223f41e862382e349efb07a6a001c8cd40e38a6e87431b9b5a","bytes":33351,"call":1,"case_id":0,"context":1,"input_bytes":199,"input_sha256":"c2aa1c5296af813b4f743f63e1d3ef3ff3a25bb6363a882fa421a08576235134","label":"native-observed-map","offset":0,"output_before_sha256":"fc8b64001c5fdd0f2f40fb67dae4a865a2c5bd17836676d6d5b58b7917e33717","output_capacity":32,"output_sha256":"cc95a17e901ca3307df3ef4ef7381be3564a750ff01d1db3f720baaedefaff29","owner":1,"record_sha256":"f33f66e2de199cb6bc97100085349bc03c583a171c404bbdfaa8f8b454af4ff2","return_code":32,"workspace_capacity":16512}
++{"after_sha256":"9b38beb7289c424a06194f1444fb56e526b64b88aa1dafbcc4b0729034cf2445","before_sha256":"610b338dd7d4635bc99956eec7309a09f173031623fc1e3022f4eb0d3e66d019","bytes":34133,"call":2,"case_id":0,"context":1,"input_bytes":199,"input_sha256":"c2aa1c5296af813b4f743f63e1d3ef3ff3a25bb6363a882fa421a08576235134","label":"native-observed-map","offset":33351,"output_before_sha256":"fc8b64001c5fdd0f2f40fb67dae4a865a2c5bd17836676d6d5b58b7917e33717","output_capacity":32,"output_sha256":"a34430ba736107bf0f420bce81e453c2f7a0bf60500b04560cb9ba08b28b345e","owner":1,"record_sha256":"1883aa97eb19b931d9ea941a1b0e766a746e6ef4c1f6910bd8ee2f437be5a818","return_code":32,"workspace_capacity":16903}
++{"after_sha256":"5b62b8c30bde7d249e64fa62c99c95303e2b0debe7a0a685b9c160b96a84cf13","before_sha256":"9b38beb7289c424a06194f1444fb56e526b64b88aa1dafbcc4b0729034cf2445","bytes":34483,"call":3,"case_id":0,"context":1,"input_bytes":199,"input_sha256":"c2aa1c5296af813b4f743f63e1d3ef3ff3a25bb6363a882fa421a08576235134","label":"native-observed-map","offset":67484,"output_before_sha256":"248f60102507c812e5d0a9701fe7480bc642cdc80b7fb6544121966795e21e57","output_capacity":207,"output_sha256":"b0cbe3c8a75dbd1151ae2b1e014143c521d4b123c84a1741e18e862a74081722","owner":1,"record_sha256":"1dbf290a277dcf997481a71f4bf8962cf2d285fd5cfecaa2235ee9947b37486b","return_code":32,"workspace_capacity":16903}
++{"after_sha256":"de2f256064a0af797747c2b97505dc0b9f3df0de4f489eac731c23ae9ca9cc31","before_sha256":"de2f256064a0af797747c2b97505dc0b9f3df0de4f489eac731c23ae9ca9cc31","bytes":131847,"call":4,"case_id":0,"context":2,"input_bytes":199,"input_sha256":"e39a637723161a1e94d2eeba9578662aebc7402cf0804f80966d6f8a2f270bd6","label":"native-observed-typed","offset":101967,"output_before_sha256":"2c41a1dd584e3773b95674841b685f36c76b48ec4db75863372c2fd6e19a61ce","output_capacity":256,"output_sha256":"6a0359689c746aa79481823bfa93967da44656f79a0999ff1996ed2259fae12c","owner":4,"record_sha256":"83fcccb5043f3408811f397a5c997fc13635369a0d0f12682d3867b7babc1e3f","return_code":256,"workspace_capacity":65536}
++{"after_sha256":"0eb592861c39f1fd0b1a8c8499741da5d82b6a7003c9044f0832cc05e004985b","before_sha256":"cf1cc8dd4cd12e47492694deec42bb220abab3309d4efe581741ff6430fe7de5","bytes":132871,"call":5,"case_id":0,"context":2,"input_bytes":199,"input_sha256":"e39a637723161a1e94d2eeba9578662aebc7402cf0804f80966d6f8a2f270bd6","label":"native-observed-typed","offset":233814,"output_before_sha256":"2c41a1dd584e3773b95674841b685f36c76b48ec4db75863372c2fd6e19a61ce","output_capacity":256,"output_sha256":"124c4339c35f54a1054e56ddea43485eb0d629c5cb25e7f258fa831ae3099b19","owner":4,"record_sha256":"98ffe2caa953af2bf6437af1273ed252e6150f223171f78cca630bf789dab949","return_code":256,"workspace_capacity":66048}
++{"after_sha256":"843c846a4bbf976e7dd2b552d808200ccffc3959bb1337c334a67261ae06d5b6","before_sha256":"0eb592861c39f1fd0b1a8c8499741da5d82b6a7003c9044f0832cc05e004985b","bytes":133101,"call":6,"case_id":0,"context":2,"input_bytes":199,"input_sha256":"e39a637723161a1e94d2eeba9578662aebc7402cf0804f80966d6f8a2f270bd6","label":"native-observed-typed","offset":366685,"output_before_sha256":"5dc0c4c97a4ffa6549d3e1ba3ee2913eadc58f32bbd510b9c28f15e2234b54ff","output_capacity":371,"output_sha256":"292b7dfbae879577cdb91a7201cfba0b5272f9f5f667472313e5b484f13a9208","owner":4,"record_sha256":"10fa5d8ba26aeac97e6036901ae9971606df7988502cb8487915bab0c050e62d","return_code":256,"workspace_capacity":66048}
++{"after_sha256":"6f3355f9bb165779b6fda8d6f807f1522dd789a91aed6468b08052f012a23e4b","before_sha256":"076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560","bytes":1748,"call":7,"case_id":0,"context":3,"input_bytes":532,"input_sha256":"79c0bb13e1eab16ad77d4d510b097fde4fa3594d36f14856f50b038d04fb1a1c","label":"native-observed-planner","offset":499786,"output_before_sha256":"bb626e5577021df95ea17eb6339e75904855b80087e40660931c4a89b302f74a","output_capacity":64,"output_sha256":"c569e933f7fb134bff9cfca047d81cadf87f0f676b376cde363f4f607dc970a2","owner":7,"record_sha256":"2a965b6703bc5a54f93b68ae81f7e33bca47c9ffdbe4d6f7f3487e99f4dac165","return_code":4294967248,"workspace_capacity":512}
++{"after_sha256":"8fe938fbcfdc42ae9e7a5bae49be7ff439f23fadb5e28dab880ea30dea689dfb","before_sha256":"6f3355f9bb165779b6fda8d6f807f1522dd789a91aed6468b08052f012a23e4b","bytes":2248,"call":8,"case_id":0,"context":3,"input_bytes":532,"input_sha256":"79c0bb13e1eab16ad77d4d510b097fde4fa3594d36f14856f50b038d04fb1a1c","label":"native-observed-planner","offset":501534,"output_before_sha256":"071b0003f92559ad58ec19627d690a6444bcd1c09c505d9aefb59ee7d5d1533e","output_capacity":314,"output_sha256":"2ca636af908022335f09acfa1753a62dc0e4cea474ee8a248ba798c8e757d5f7","owner":7,"record_sha256":"bdaf5bdaebae0950430095ba1fd59d243f06a73cc957867653b74c0cc8e28293","return_code":314,"workspace_capacity":512}
++{"after_sha256":"73d1c4a09368270aa6a7d3afa3f9ef5c4829804812186e74f2727d765de38721","before_sha256":"cba9bbe8af2edc223f41e862382e349efb07a6a001c8cd40e38a6e87431b9b5a","bytes":33351,"call":9,"case_id":0,"context":4,"input_bytes":199,"input_sha256":"c2aa1c5296af813b4f743f63e1d3ef3ff3a25bb6363a882fa421a08576235134","label":"native-unobserved-map","offset":503782,"output_before_sha256":"fc8b64001c5fdd0f2f40fb67dae4a865a2c5bd17836676d6d5b58b7917e33717","output_capacity":32,"output_sha256":"cc95a17e901ca3307df3ef4ef7381be3564a750ff01d1db3f720baaedefaff29","owner":1,"record_sha256":"6d788dd2b3411ec24856d3dda19ea4826c6b40a831949df213cf7ace88ca98e7","return_code":32,"workspace_capacity":16512}
++{"after_sha256":"9b38beb7289c424a06194f1444fb56e526b64b88aa1dafbcc4b0729034cf2445","before_sha256":"610b338dd7d4635bc99956eec7309a09f173031623fc1e3022f4eb0d3e66d019","bytes":34133,"call":10,"case_id":0,"context":4,"input_bytes":199,"input_sha256":"c2aa1c5296af813b4f743f63e1d3ef3ff3a25bb6363a882fa421a08576235134","label":"native-unobserved-map","offset":537133,"output_before_sha256":"fc8b64001c5fdd0f2f40fb67dae4a865a2c5bd17836676d6d5b58b7917e33717","output_capacity":32,"output_sha256":"a34430ba736107bf0f420bce81e453c2f7a0bf60500b04560cb9ba08b28b345e","owner":1,"record_sha256":"3b28cb9bb41ad2037e550f926d309c69a177cec40b20eac96046016d4f3b0062","return_code":32,"workspace_capacity":16903}
++{"after_sha256":"5b62b8c30bde7d249e64fa62c99c95303e2b0debe7a0a685b9c160b96a84cf13","before_sha256":"9b38beb7289c424a06194f1444fb56e526b64b88aa1dafbcc4b0729034cf2445","bytes":34483,"call":11,"case_id":0,"context":4,"input_bytes":199,"input_sha256":"c2aa1c5296af813b4f743f63e1d3ef3ff3a25bb6363a882fa421a08576235134","label":"native-unobserved-map","offset":571266,"output_before_sha256":"248f60102507c812e5d0a9701fe7480bc642cdc80b7fb6544121966795e21e57","output_capacity":207,"output_sha256":"b0cbe3c8a75dbd1151ae2b1e014143c521d4b123c84a1741e18e862a74081722","owner":1,"record_sha256":"d02c2aa50b0777cf44a3b28ab9851ed15cbbf1c04e3bb3f2a85e260a41aff53e","return_code":32,"workspace_capacity":16903}
++{"after_sha256":"de2f256064a0af797747c2b97505dc0b9f3df0de4f489eac731c23ae9ca9cc31","before_sha256":"de2f256064a0af797747c2b97505dc0b9f3df0de4f489eac731c23ae9ca9cc31","bytes":131847,"call":12,"case_id":0,"context":5,"input_bytes":199,"input_sha256":"e39a637723161a1e94d2eeba9578662aebc7402cf0804f80966d6f8a2f270bd6","label":"native-unobserved-typed","offset":605749,"output_before_sha256":"2c41a1dd584e3773b95674841b685f36c76b48ec4db75863372c2fd6e19a61ce","output_capacity":256,"output_sha256":"6a0359689c746aa79481823bfa93967da44656f79a0999ff1996ed2259fae12c","owner":4,"record_sha256":"30efa7c0ddad0e16b591088dd7af09dbd05fb6453b5be47fe374ef8f88782928","return_code":256,"workspace_capacity":65536}
++{"after_sha256":"0eb592861c39f1fd0b1a8c8499741da5d82b6a7003c9044f0832cc05e004985b","before_sha256":"cf1cc8dd4cd12e47492694deec42bb220abab3309d4efe581741ff6430fe7de5","bytes":132871,"call":13,"case_id":0,"context":5,"input_bytes":199,"input_sha256":"e39a637723161a1e94d2eeba9578662aebc7402cf0804f80966d6f8a2f270bd6","label":"native-unobserved-typed","offset":737596,"output_before_sha256":"2c41a1dd584e3773b95674841b685f36c76b48ec4db75863372c2fd6e19a61ce","output_capacity":256,"output_sha256":"124c4339c35f54a1054e56ddea43485eb0d629c5cb25e7f258fa831ae3099b19","owner":4,"record_sha256":"9f41a18baa8fae5e52449348a48e2fdaad0556eacf2f4c2b962dbbfe3330ff90","return_code":256,"workspace_capacity":66048}
++{"after_sha256":"843c846a4bbf976e7dd2b552d808200ccffc3959bb1337c334a67261ae06d5b6","before_sha256":"0eb592861c39f1fd0b1a8c8499741da5d82b6a7003c9044f0832cc05e004985b","bytes":133101,"call":14,"case_id":0,"context":5,"input_bytes":199,"input_sha256":"e39a637723161a1e94d2eeba9578662aebc7402cf0804f80966d6f8a2f270bd6","label":"native-unobserved-typed","offset":870467,"output_before_sha256":"5dc0c4c97a4ffa6549d3e1ba3ee2913eadc58f32bbd510b9c28f15e2234b54ff","output_capacity":371,"output_sha256":"292b7dfbae879577cdb91a7201cfba0b5272f9f5f667472313e5b484f13a9208","owner":4,"record_sha256":"2917c09d92b20f3ec2b91f42401e106d1f258182b97fa08f9b4f9c49f794893f","return_code":256,"workspace_capacity":66048}
++{"after_sha256":"6f3355f9bb165779b6fda8d6f807f1522dd789a91aed6468b08052f012a23e4b","before_sha256":"076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560","bytes":1748,"call":15,"case_id":0,"context":6,"input_bytes":532,"input_sha256":"79c0bb13e1eab16ad77d4d510b097fde4fa3594d36f14856f50b038d04fb1a1c","label":"native-unobserved-planner","offset":1003568,"output_before_sha256":"bb626e5577021df95ea17eb6339e75904855b80087e40660931c4a89b302f74a","output_capacity":64,"output_sha256":"c569e933f7fb134bff9cfca047d81cadf87f0f676b376cde363f4f607dc970a2","owner":7,"record_sha256":"76c41389cf96d1e895fe71e882cfba5b49d582f0a0b5c19c47aecd2bf0f222d2","return_code":4294967248,"workspace_capacity":512}
++{"after_sha256":"8fe938fbcfdc42ae9e7a5bae49be7ff439f23fadb5e28dab880ea30dea689dfb","before_sha256":"6f3355f9bb165779b6fda8d6f807f1522dd789a91aed6468b08052f012a23e4b","bytes":2248,"call":16,"case_id":0,"context":6,"input_bytes":532,"input_sha256":"79c0bb13e1eab16ad77d4d510b097fde4fa3594d36f14856f50b038d04fb1a1c","label":"native-unobserved-planner","offset":1005316,"output_before_sha256":"071b0003f92559ad58ec19627d690a6444bcd1c09c505d9aefb59ee7d5d1533e","output_capacity":314,"output_sha256":"2ca636af908022335f09acfa1753a62dc0e4cea474ee8a248ba798c8e757d5f7","owner":7,"record_sha256":"3e1a19f983d5bd098736c69b62d0abcdbceb47eb97ecacecbf2477c508e5e0ea","return_code":314,"workspace_capacity":512}
+--- dev1/scripts/capture_boundary.py
++++ r2/scripts/capture_boundary.py
+@@ -0,0 +1,84 @@
++#!/usr/bin/env python3
++"""Actual new wrapper rejection branches; whole original fixture and ptrace."""
++import argparse,json,sys,time,traceback
++from pathlib import Path
++sys.dont_write_bytecode=True
++ROOT=Path(__file__).resolve().parents[1]
++sys.path.insert(0,str(ROOT/'scripts'))
++from evidence_common import encoded,decode,pin,require,source_evidence
++from buffer_store import Writer
++from carrier import Carrier
++from composition_prepare import Preparer
++from parent_capture import setup,discard,projection,concrete
++from protocol import U,proc_fds
++
++NAMES=('actual-ready-mismatch','actual-planner-invalid','physical-invalid-header')
++
++def main():
++ p=argparse.ArgumentParser(description=__doc__)
++ for name in('images','build','output'):p.add_argument('--'+name,type=Path,required=True)
++ a=p.parse_args();out=a.output.absolute();require(not out.exists(),'fresh boundary capture');out.mkdir(parents=True)
++ source=source_evidence(ROOT);started=time.monotonic_ns();binary=a.build.resolve()/'binary-write-composition.elf'
++ require(pin(binary)==decode((a.build/'BUILD.json').read_bytes())['executable'],'actual frozen composed ELF')
++ domain=decode((ROOT/'parent/DOMAIN.json').read_bytes());original=domain['cases'][0]
++ store=Writer(out/'buffers');prep=Preparer(a.images.resolve()/'adapter',out/'preparation');rows=[]
++ try:
++  for ordinal,name in enumerate(NAMES):
++   began=time.monotonic_ns();fixture=out/'fixture';initial=setup(fixture);before=projection(fixture)
++   query=concrete(original,fixture,True);start,preparation=prep.request(query,20000+ordinal,name)
++   require(start is not None,'original exact String input')
++   wire=bytearray(start)
++   if name=='actual-ready-mismatch':wire[-2]^=1
++   elif name=='actual-planner-invalid':wire[48+304]=255
++   else:wire=wire[:48];wire[0]^=1
++   wire=bytes(wire);folder=out/name;folder.mkdir();carrier=Carrier(binary,folder,store)
++   row=dict(name=name,query=query,preparation=preparation,application_input=store.put(wire),setup=initial,before=before,events=[],snapshots={})
++   def exchange(command,payload=b'',application=False):
++    raw,index=carrier.exchange(command,0,payload,application=application)
++    row['events'].append(dict(command=command,exchange=index,result=U(raw,8)))
++    return raw,index
++   def snapshot(command,label):
++    raw,index=exchange(command);require(U(raw,8)==0,'whole actual boundary snapshot')
++    entry=dict(exchange=index,bytes=store.put(raw[64:]));row['snapshots'][label]=entry
++    if command in(4,29):entry['actual_process_bytes']=carrier.observed_context(raw[64:])
++    return raw[64:]
++   try:
++    raw,_=exchange(8);require(U(raw,8)==0,'actual observed composition construction')
++    for cmd,label in((4,'parent_before'),(29,'wrapper_before'),(30,'adapter_before'),(11,'pool_before')):snapshot(cmd,label)
++    row['fds_before']=proc_fds(carrier.pid)
++    raw,index=exchange(1,wire,True);row['application_exchange']=index;row['application_frame']=store.put(raw[64:])
++    expected=0xffffffff if name=='physical-invalid-header'else 64
++    require(U(raw,8)==expected and U(raw,24)==(0 if expected!=64 else 2),'actual frozen boundary terminal')
++    for cmd,label in((4,'parent_held'),(29,'wrapper_held'),(30,'adapter_held'),(31,'planner_held'),(32,'adapter_output'),(33,'planner_output'),(34,'input_held')):
++     value=snapshot(cmd,label)
++     if label=='wrapper_held':held=value
++    if expected==64:
++     for label,cmd,payload in(('busy-invoke',1,wire),('busy-destroy',3,b'')):
++      raw,index=exchange(cmd,payload);require(U(raw,8)==0xfffffffd,'actual held wrapper refusal')
++      require(snapshot(29,label)==held,'busy refusal preserves whole live wrapper')
++    raw,index=exchange(2);row['release_exchange']=index
++    require(U(raw,8)==(0xffffffff if expected!=64 else 0),'actual held-or-idle release result')
++    for cmd,label in((4,'parent_released'),(29,'wrapper_released'),(30,'adapter_released'),(32,'adapter_release_output')):snapshot(cmd,label)
++    row['fds_after_release']=proc_fds(carrier.pid)
++    raw,index=exchange(3);row['destroy_exchange']=index;require(U(raw,8)==0,'actual boundary owner destruction')
++    snapshot(11,'pool_after_destroy');row['fds_after_destroy']=proc_fds(carrier.pid)
++    row['process']=carrier.finish();row['after']=projection(fixture)
++    require(encoded(before)==encoded(row['after']),'boundary rejection altered any target bytes or metadata')
++    row['elapsed_ns']=time.monotonic_ns()-began;require(row['elapsed_ns']<180_000_000_000,'original boundary case budget')
++    (folder/'BOUNDARY.json').write_bytes(encoded(row));rows.append(dict(name=name,record=pin(folder/'BOUNDARY.json')))
++    discard(fixture)
++   except BaseException as error:
++    (folder/'FAILURE.json').write_bytes(encoded(dict(status='HOLD',observations=row,error_type=type(error).__name__,message=str(error),traceback=traceback.format_exc())))
++    raise
++   finally:carrier.cleanup()
++  preparation=prep.close();prep=None
++  require(source_evidence(ROOT)==source,'full boundary source custody')
++  result=dict(schema='hepta.runtime.binary-write-composition-boundary.v1',status='COMPLETE_ACTUAL_BOUNDARY_CAPTURE',source=source,
++              executable=pin(binary),images=pin(a.images/'IMAGES.json'),cases=rows,preparation=preparation,
++              elapsed_ns=time.monotonic_ns()-started,buffers=dict(images=store.images,logical_bytes=store.logical_bytes,blocks=len(store.known)),
++              public_binary_write_registered=False,whole_runtime_replaced=False)
++  (out/'BOUNDARY.json').write_bytes(encoded(result));print(json.dumps(dict(status=result['status'],cases=len(rows),elapsed_ns=result['elapsed_ns']),sort_keys=True))
++ finally:
++  if prep is not None:prep.close()
++
++if __name__=='__main__':main()
+--- dev1/scripts/guarded_read.py
++++ r2/scripts/guarded_read.py
+@@ -0,0 +1,34 @@
++#!/usr/bin/env python3
++"""Complete composition DATA read under the retained eleven-capability guard."""
++import argparse,hashlib,importlib.util,json,sys,time
++from pathlib import Path
++sys.dont_write_bytecode=True
++ROOT=Path(__file__).resolve().parents[1]
++sys.path.insert(0,str(ROOT/'scripts'))
++import read_parent_capture,read_retry_capture,read_boundary
++from evidence_common import require,encoded
++
++def load(name,path):
++ spec=importlib.util.spec_from_file_location(name,path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
++
++def main():
++ p=argparse.ArgumentParser(description=__doc__)
++ for name in('capture','images','build','output'):p.add_argument('--'+name,type=Path,required=True)
++ p.add_argument('--capture-sha256',required=True);p.add_argument('--mode',choices=('composition','boundary'),required=True)
++ a=p.parse_args();require(not a.output.exists(),'fresh complete guarded DATA receipt')
++ for name,sha in {'common.py':'7d6f584b8cd52b0b6f0755d2c7b956d515a6a7d912b48c2d8e6c7e7f47db0be1','readonly.py':'e7ded2104b5089abe17e6f7095b60a69e84fb41ab6735b2d3d1c72547e5eb5e3'}.items():
++  require(hashlib.sha256((ROOT/'adapter/guard'/name).read_bytes()).hexdigest()==sha,'complete retained eleven-capability guard')
++ previous=sys.modules['common'];sys.modules['common']=load('composition_original_guard_common',ROOT/'adapter/guard/common.py')
++ try:guard=load('composition_original_guard',ROOT/'adapter/guard/readonly.py')
++ finally:sys.modules['common']=previous
++ began=time.monotonic();reader=read_parent_capture if a.mode=='composition'else read_boundary
++ roots=[ROOT,a.images,a.build,a.capture.parent if a.mode=='composition'else a.capture]
++ report=guard.guarded(lambda:reader.read_all(a.capture,a.images,a.build,a.capture_sha256),roots=roots)
++ elapsed=time.monotonic()-began;require(elapsed<600,'complete original 600-second DATA budget')
++ expected='PASS_COMPLETE_FROZEN_COMPOSITION_DOMAIN'if a.mode=='composition'else'PASS_ACTUAL_COMPOSITION_BOUNDARIES'
++ require(report['evidence']['status']==expected,'complete actual DATA qualification')
++ report.update(elapsed_seconds=elapsed,timeout_seconds=600,compiler_executed=False,mode=a.mode)
++ a.output.write_bytes(encoded(report))
++ print(json.dumps(dict(status=report['status'],evidence=expected,entries=report['entries'],probes=len(report['probes']),elapsed_seconds=elapsed),sort_keys=True))
++
++if __name__=='__main__':main()
+--- dev1/scripts/parent_capture.py
++++ r2/scripts/parent_capture.py
+@@ -293,10 +293,11 @@
+                     seconds=round(row["elapsed_ns"]/1e9,3)),sort_keys=True),flush=True)
+         for case in rejected:
+             fixture=output/"fixture";initial=setup(fixture);query=concrete(case,fixture,True)
++            before_refusal=projection(fixture)
+             packet,ordinal=PREPARER.request(query,case["id"],"typed-rejected")
+             require(packet is None,"original None unexpectedly admitted by typed String owner")
+-            after=projection(fixture);require(encoded(initial)==encoded(after),"typed refusal changed target filesystem")
+-            typed_rejections.append(dict(input=case,query=query,preparation=ordinal,setup=initial,after=after,
++            after=projection(fixture);require(encoded(before_refusal)==encoded(after),"typed refusal changed target filesystem")
++            typed_rejections.append(dict(input=case,query=query,preparation=ordinal,setup=initial,before_refusal=before_refusal,after=after,
+                 parent_processes_created=0,parent_invocations=0,parent_effects=0))
+             discard(fixture)
+         preparation=PREPARER.close();PREPARER=None
+--- dev1/scripts/qualify.py
++++ r2/scripts/qualify.py
+@@ -0,0 +1,65 @@
++#!/usr/bin/env python3
++"""Fresh exact builds, original pure domains and actual full private composition."""
++import argparse,json,os,signal,subprocess,sys,time
++from pathlib import Path
++sys.dont_write_bytecode=True
++ROOT=Path(__file__).resolve().parents[1]
++sys.path.insert(0,str(ROOT/'scripts'))
++from evidence_common import encoded,decode,pin,require,source_evidence
++
++def main():
++ p=argparse.ArgumentParser(description=__doc__)
++ for name in('hepta','retained-bootstrap','output'):p.add_argument('--'+name,type=Path,required=True)
++ a=p.parse_args();out=a.output.absolute();require(not out.exists(),'fresh exclusive qualification root');out.mkdir(parents=True)
++ source=source_evidence(ROOT);rows=[];began=time.monotonic_ns();python=[sys.executable,'-I','-S','-B']
++ def stage(name,arguments,limit):
++  started=time.monotonic_ns();command=python+[str(x)for x in arguments]
++  record=dict(name=name,argv=command,limit_seconds=limit,cleanup_seconds=5,timed_out=False)
++  with(out/(name+'.stdout')).open('xb')as stdout,(out/(name+'.stderr')).open('xb')as stderr:
++   child=subprocess.Popen(command,stdin=subprocess.DEVNULL,stdout=stdout,stderr=stderr,start_new_session=True)
++   record.update(pid=child.pid,pgid=os.getpgid(child.pid),parent_pgid=os.getpgrp())
++   require(record['pid']==record['pgid']!=record['parent_pgid'],'independent actual qualification stage group')
++   (out/(name+'.start.json')).write_bytes(encoded(record))
++   try:child.wait(timeout=limit)
++   except subprocess.TimeoutExpired:
++    record['timed_out']=True;os.killpg(child.pid,signal.SIGTERM)
++    try:child.wait(timeout=5)
++    except subprocess.TimeoutExpired:os.killpg(child.pid,signal.SIGKILL);child.wait()
++   record.update(returncode=child.returncode,elapsed_ns=time.monotonic_ns()-started)
++  try:os.killpg(child.pid,0)
++  except ProcessLookupError:record['whole_group_gone']=True
++  else:
++   record['whole_group_gone']=False;os.killpg(child.pid,signal.SIGKILL)
++  record['streams']={stream:pin(out/(name+'.'+stream))for stream in('stdout','stderr')}
++  record['source_after']=source_evidence(ROOT);rows.append(record)
++  (out/(name+'.process.json')).write_bytes(encoded(record))
++  passed=record['returncode']==0 and not record['timed_out'] and record['whole_group_gone'] and record['source_after']==source
++  state=dict(schema='hepta.runtime.binary-write-composition-qualification.v1',source=source,stages=rows,
++             elapsed_ns=time.monotonic_ns()-began,status='RUNNING'if passed else'HOLD',public_binary_write_registered=False,whole_runtime_replaced=False)
++  (out/'QUALIFICATION.json').write_bytes(encoded(state));print(json.dumps(dict(stage=name,returncode=record['returncode'],elapsed_ns=record['elapsed_ns'],timed_out=record['timed_out']),sort_keys=True),flush=True)
++  require(passed,'actual complete qualification stage failed: '+name)
++  return state
++ stage('source',[ROOT/'scripts/read_composition_source.py'],60)
++ stage('reader-controls',[ROOT/'tests/test_composition_data.py'],60)
++ stage('parent-reader-controls',[ROOT/'parent/tests/test_parent_data.py'],60)
++ stage('adapter-reader-controls',[ROOT/'adapter/tests/test_reader.py'],60)
++ stage('build',[ROOT/'scripts/build_images.py','--hepta',a.hepta.resolve(strict=True),'--retained-bootstrap',a.retained_bootstrap.resolve(strict=True),'--output',out/'images'],180)
++ stage('link',[ROOT/'scripts/link_callable.py','--images',out/'images','--output',out/'linked'],30)
++ stage('build-data',[ROOT/'scripts/read_composition_build.py','--images',out/'images','--build',out/'linked'],60)
++ stage('boundary',[ROOT/'scripts/capture_boundary.py','--images',out/'images','--build',out/'linked','--output',out/'boundary'],180)
++ stage('boundary-data',[ROOT/'scripts/guarded_read.py','--mode','boundary','--capture',out/'boundary','--images',out/'images','--build',out/'linked',
++       '--capture-sha256',pin(out/'boundary/BOUNDARY.json')['sha256'],'--output',out/'BOUNDARY_READBACK.json'],600)
++ stage('original-pure-capture',[ROOT/'adapter/scripts/run_capture.py','--images',out/'images/adapter','--output',out/'pure'],1805)
++ stage('original-pure-data',[ROOT/'adapter/scripts/guarded_read.py','--capture',out/'pure','--images',out/'images/adapter',
++       '--source-sha256',pin(ROOT/'adapter/SOURCE_MANIFEST.json')['sha256'],'--capture-sha256',pin(out/'pure/RUN.json')['sha256'],'--output',out/'PURE_READBACK.json'],180)
++ # The unchanged complete-capture supervisor below owns the actual 1800+5
++ # product group. This coordinator waits for its receipt; it grants no second
++ # product timeout and cannot convert an inner HOLD into qualification.
++ stage('full-capture',[ROOT/'scripts/run_capture.py','--build',out/'linked','--output',out/'full'],None)
++ state=stage('full-data',[ROOT/'scripts/guarded_read.py','--mode','composition','--capture',out/'full/capture','--images',out/'images','--build',out/'linked',
++       '--capture-sha256',pin(out/'full/capture/CAPTURE.json')['sha256'],'--output',out/'READBACK.json'],600)
++ state['status']='PASS_COMPLETE_PRIVATE_COMPOSITION';state['source_after']=source_evidence(ROOT)
++ state['receipts']={name:pin(out/name)for name in('BOUNDARY_READBACK.json','PURE_READBACK.json','READBACK.json')}
++ (out/'QUALIFICATION.json').write_bytes(encoded(state));print(json.dumps(dict(status=state['status'],stages=len(rows),elapsed_ns=state['elapsed_ns']),sort_keys=True),flush=True)
++
++if __name__=='__main__':main()
+--- dev1/scripts/read_boundary.py
++++ r2/scripts/read_boundary.py
+@@ -0,0 +1,134 @@
++#!/usr/bin/env python3
++"""Independent full DATA admission of the new wrapper's actual refusal paths."""
++import argparse,gzip,hashlib,struct,sys
++from pathlib import Path
++sys.dont_write_bytecode=True
++ROOT=Path(__file__).resolve().parents[1]
++sys.path.insert(0,str(ROOT/'scripts'))
++from evidence_common import encoded,decode,pin,require,source_evidence
++from buffer_store import Reader
++from protocol import U
++from read_kernel import read_trace
++from read_parent_capture import journal,all_buffers,fd_view,filesystem
++from read_composition import Prepared,composed_calls,complete_chain,PACK
++from composition_domain import query_from_case
++
++def read_all(folder,images,build,authority):
++ folder,images,build=map(lambda p:Path(p).resolve(strict=True),(folder,images,build))
++ source=source_evidence(ROOT);raw=(folder/'BOUNDARY.json').read_bytes()
++ require(hashlib.sha256(raw).hexdigest()==authority,'external complete boundary authority')
++ report=decode(raw);binary=pin(build/'binary-write-composition.elf')
++ require(report['schema']=='hepta.runtime.binary-write-composition-boundary.v1' and report['status']=='COMPLETE_ACTUAL_BOUNDARY_CAPTURE'
++         and report['source']==source and report['executable']==binary and report['images']==pin(images/'IMAGES.json')
++         and report['public_binary_write_registered']is False and report['whole_runtime_replaced']is False,'frozen actual boundary scope')
++ names=('actual-ready-mismatch','actual-planner-invalid','physical-invalid-header')
++ require([x['name']for x in report['cases']]==list(names),'complete independently fixed boundary order')
++ store=Reader(folder/'buffers');prep=Prepared(folder/'preparation',images/'adapter');original=decode((ROOT/'parent/DOMAIN.json').read_bytes())['cases'][0]
++ checked=[]
++ for number,(name,binding)in enumerate(zip(names,report['cases'])):
++  root=folder/name;case_raw=(root/'BOUNDARY.json').read_bytes();require(pin(root/'BOUNDARY.json')==binding['record'],'whole actual boundary record')
++  row=decode(case_raw);all_buffers(row,store);query=query_from_case(original,folder/'fixture',True)
++  require(row['name']==name and row['query']==query and row['elapsed_ns']<180_000_000_000,'exact bounded declared boundary input')
++  require(filesystem(row['setup'])==filesystem(row['before']) and encoded(row['before'])==encoded(row['after']),'all actual target nodes, bytes and metadata unchanged by rejection')
++  nominal=bytes.fromhex(prep.rows[number]['request_hex'])
++  prepared=prep.request(row['preparation'],query,20000+number,name,nominal)
++  wire=bytearray(nominal)
++  if number==0:wire[-2]^=1
++  elif number==1:wire[352]=255
++  else:wire=wire[:48];wire[0]^=1
++  wire=bytes(wire);require(store.get(row['application_input'])==wire,'independently reconstructed exact invalid/mismatching input')
++  process=row['process'];require(process==decode((root/'carrier-process.json').read_bytes()) and process['binary']==binary
++          and process['argv']==[str(build/'binary-write-composition.elf')] and process['returncode']==0
++          and process['same_outer_process_group']is True and process['elapsed_ns']<180_000_000_000,'whole actual bounded executable process')
++  require(process['observer_wait']==dict(kind='SIGCHLD-pipe',parent_only=True,target_signal_replacement=False),'unaltered actual observer')
++  for stream in('stdin','stderr'):require(pin(root/('carrier.'+stream))==process['streams'][stream],'whole actual carrier stream')
++  require((root/'carrier.stderr').read_bytes()==b'','actual target stderr')
++  output=gzip.decompress((root/'carrier.stdout.gz').read_bytes())
++  require(pin(root/'carrier.stdout.gz')==process['stdout']['compressed'] and dict(bytes=len(output),sha256=hashlib.sha256(output).hexdigest())==process['stdout']['raw'],'whole actual output stream')
++  exchanges=[decode(line)for line in(root/'exchanges.jsonl').read_bytes().splitlines()];all_buffers(exchanges,store)
++  sequence=[(8,None),(4,'parent_before'),(29,'wrapper_before'),(30,'adapter_before'),(11,'pool_before'),(1,'application'),
++            (4,'parent_held'),(29,'wrapper_held'),(30,'adapter_held'),(31,'planner_held'),(32,'adapter_output'),(33,'planner_output'),(34,'input_held')]
++  if number<2:sequence += [(1,'busy-invoke-call'),(29,'busy-invoke'),(3,'busy-destroy-call'),(29,'busy-destroy')]
++  sequence += [(2,'release'),(4,'parent_released'),(29,'wrapper_released'),(30,'adapter_released'),(32,'adapter_release_output'),(3,'destroy'),(11,'pool_after_destroy')]
++  require(len(exchanges)==len(sequence) and [e['exchange']for e in exchanges]==list(range(1,len(sequence)+1)),'every exact private fixture exchange')
++  require(b''.join(store.get(e['input'])for e in exchanges)==(root/'carrier.stdin').read_bytes()
++          and b''.join(store.get(e['output'])for e in exchanges)==output,'complete input/output attribution')
++  expected_events=[]
++  for index,(exchange,(command,label))in enumerate(zip(exchanges,sequence),1):
++   payload=wire if command==1 else b'';expected=b'HBWTFQ01'+PACK(command,0,len(payload),0,0,0,0)+payload
++   actual=store.get(exchange['output']);expected_code=0
++   if label=='application':expected_code=0xffffffff if number==2 else 64
++   elif label in('busy-invoke-call','busy-destroy-call'):expected_code=0xfffffffd
++   elif label=='release'and number==2:expected_code=0xffffffff
++   require(exchange['command']==command and exchange['session']==0 and exchange['application']is(label=='application')
++           and exchange['elapsed_ns']<60_000_000_000 and store.get(exchange['input'])==PACK(len(expected))+expected
++           and actual[:8]==b'HBWTFR01' and U(actual,8)==expected_code and U(actual,16)==len(actual)-64,'exact physical request and actual return')
++   if label in row['snapshots']:
++    s=row['snapshots'][label];require(s['exchange']==index and store.get(s['bytes'])==actual[64:],'whole actual snapshot bound to exact exchange')
++   elif label=='application':require(row['application_exchange']==index and store.get(row['application_frame'])==actual[64:],'actual entire refusal publication')
++   elif label=='release':require(row['release_exchange']==index and len(actual)==64,'actual empty release response')
++   elif label=='destroy':require(row['destroy_exchange']==index and len(actual)==64,'actual empty destroy response')
++   else:require(len(actual)==64,'no unexpected fixture payload')
++   expected_events.append(dict(command=command,exchange=index,result=expected_code))
++  require(row['events']==expected_events,'summary cannot rename actual controls')
++  kernel=read_trace(root,process['kernel']);require(kernel['application_calls']==1,'one real boundary invoke')
++  scopes={mark['scope']for mark in kernel['marks']if mark['application']}
++  active=[call for call in kernel['calls']if call['scope']in scopes]
++  require(active and all(call['number']in(0,1,9,10,11,39)for call in active),'refusal performs only observed transport, memory and PID primitives')
++  require(all(call['args'][0]in(1,3)for call in active if call['number']==1)
++          and all(call['args'][0]==0 for call in active if call['number']==0),'no target file read/write on refusal')
++  observed=journal(root,process['journal'],store)
++  require(observed['parent_calls']==observed['body_calls']==0 and observed['actors']==[] and observed['first_parent_input']is None
++          and observed['all_frames']==len(observed['composition_rows']),'no parent/body/effect/actor entry can hide among complete raw frames')
++  calls,last,address=composed_calls(observed['composition_rows']);at,first,_=complete_chain(calls,1,7,wire)
++  held=store.get(row['snapshots']['wrapper_held']['bytes']);released=store.get(row['snapshots']['wrapper_released']['bytes'])
++  parent=store.get(row['snapshots']['parent_before']['bytes'])
++  require(parent==store.get(row['snapshots']['parent_held']['bytes'])==store.get(row['snapshots']['parent_released']['bytes'])
++          and parent[:8]==b'HBPWCI01' and U(parent,56)==U(parent,192)==U(parent,248)==0,'whole real parent remains never invoked')
++  for label in('parent_before','parent_held','parent_released','wrapper_before','wrapper_held','wrapper_released',*(()if number==2 else('busy-invoke','busy-destroy'))):
++   snapshot=row['snapshots'][label];value=store.get(snapshot['bytes']);obs=snapshot['actual_process_bytes']
++   matches=[item for item in obs['candidates']if store.get(item['bytes'])==value]
++   require(obs['writes']==0 and obs['observation']=='process_vm_readv' and len(matches)==1
++           and matches[0]['address']==obs['address'] and store.get(matches[0]['second'])==value,'full actual read-only context observation')
++   require(obs['address']==(U(held,384)if label.startswith('parent')else address),'exact observed parent/wrapper capabilities')
++  require(held[:8]==released[:8]==b'HBCWCI01' and U(held,480)==U(parent,480)==process['pid']
++          and U(held,376)==U(parent,376) and U(held,408)==U(parent,408) and U(held,192)==1 and U(held,568)==0 and U(held,640)==0,'exact owned graph with no parent loan')
++  initial=store.get(row['snapshots']['input_held']['bytes']);require(initial==wire+bytes(len(initial)-len(wire)),'entire immutable boundary request')
++  if number==2:
++   require(first['code']==0xffffffff and at==len(calls)+1 and U(held,56)==U(held,576)==0
++           and held==released and store.get(row['application_frame'])==b'','physical rejection stays idle and release cannot mutate it')
++   require(store.get(row['snapshots']['adapter_before']['bytes'])==store.get(row['snapshots']['adapter_held']['bytes'])
++           ==store.get(row['snapshots']['adapter_released']['bytes'])==bytes(4096),'physical input rejection retains whole initial HIA workspace')
++  else:
++   plan=wire[48:48+U(wire,40)];require(first['frame']==b'HBWAR001'+PACK(1,1,len(plan),0,0,0,0)+plan,'actual fixed planner request')
++   at,child,_=complete_chain(calls,at,8,plan)
++   if number==0:require(child['code']==len(prepared['ready']) and child['frame']==prepared['ready'],'mismatch still consumes actual unchanged planner result')
++   else:require(child['code']==0xffffffff and child['frame']==b'','actual invalid planner return, without fabricated child bytes')
++   resume=b'HBWAQ001'+PACK(2,1,child['code'],len(child['frame']),0)+child['frame']
++   at,done,_=complete_chain(calls,at,7,resume)
++   expected=b'HBWAR001'+PACK(3,1,0,2 if number==0 else 1,0,0,0)
++   require(done['frame']==expected==store.get(row['application_frame']) and U(held,56)==2 and U(held,576)==1
++           and U(held,584)==64 and U(held,168)==64,'complete actual mismatch owner publication and retained adapter loan')
++   for label in('busy-invoke','busy-destroy'):require(store.get(row['snapshots'][label]['bytes'])==held,'actual busy operations preserve every context byte')
++   at,end,_=complete_chain(calls,at,7,b'HBWAQ001'+PACK(3,1,0,0,0))
++   require(at==len(calls)+1 and end['frame']==b'HBWAR001'+PACK(0,1,0,0,0,0,0),'actual complete release, no hidden invocation')
++   expected_context=bytearray(held)
++   for offset in(56,168,176,568,576,640):struct.pack_into('<Q',expected_context,offset,0)
++   for offset,value in((208,48),(248,U(held,248)+1),(632,1)):struct.pack_into('<Q',expected_context,offset,value)
++   require(released==bytes(expected_context),'whole mismatch release changes only declared control words')
++   require(store.get(row['snapshots']['adapter_held']['bytes'])==done['after'] and store.get(row['snapshots']['adapter_released']['bytes'])==end['after']
++           and store.get(row['snapshots']['adapter_output']['bytes'])==done['output'] and store.get(row['snapshots']['adapter_release_output']['bytes'])==end['output']
++           and store.get(row['snapshots']['planner_held']['bytes'])==child['after'] and store.get(row['snapshots']['planner_output']['bytes'])==child['output'],'all actual pure buffers retained through held and released phases')
++  require(store.get(row['snapshots']['pool_before']['bytes'])==store.get(row['snapshots']['pool_after_destroy']['bytes']),'whole shared orphan pool unchanged')
++  require(fd_view(row['fds_before'])==fd_view(row['fds_after_release'])==fd_view(row['fds_after_destroy']),'actual target descriptor table unchanged')
++  require((root/'BOUNDARY.json').read_bytes()==case_raw,'whole boundary raw custody');checked.append(dict(name=name,native_entries=len(calls),parent_entries=0))
++ require(prep.finish()==report['preparation'],'every actual boundary predecessor call credited')
++ buffers=store.finish();require(source_evidence(ROOT)==source and(folder/'BOUNDARY.json').read_bytes()==raw,'whole boundary source/evidence custody')
++ return dict(status='PASS_ACTUAL_COMPOSITION_BOUNDARIES',source=source,executable=binary,cases=checked,buffers=buffers,
++             public_binary_write_registered=False,whole_runtime_replaced=False)
++
++if __name__=='__main__':
++ p=argparse.ArgumentParser(description=__doc__)
++ for name in('capture','images','build','output'):p.add_argument('--'+name,type=Path,required=True)
++ p.add_argument('--capture-sha256',required=True);a=p.parse_args();require(not a.output.exists(),'fresh boundary DATA receipt')
++ a.output.write_bytes(encoded(read_all(a.capture,a.images,a.build,a.capture_sha256)))
+--- dev1/scripts/read_composition.py
++++ r2/scripts/read_composition.py
+@@ -77,7 +77,7 @@
+                 and U(h,56)==ordinal and U(h,80)==context for h in heads),'actual one context/generation and exact entry ordinal')
+         require([row['index']for row in group]==list(range(group[0]['index'],group[0]['index']+5)),'no hidden frame inside one fixed pure call')
+         wire,before,old_output,out,after=arrays
+-        command=U(wire,8)if owner==7 and len(wire)>=48 else None
++        command=U(wire,8)if owner==7 and len(wire)>=16 else None
+         phase=2 if command==3 else 1
+         sequence=0 if command==1 else 1
+         planner_generation=0 if command==1 else 1
+--- dev1/scripts/read_composition_build.py
++++ r2/scripts/read_composition_build.py
+@@ -24,8 +24,8 @@
+     identity=source_evidence(source);capture=[]
+     def raw(root,name):
+         path=owned(root,name);value=path.read_bytes();capture.append((path,value));return value
+-    original=parent.read_build(source/'parent',images_root/'parent',images_root/'original-parent-linked')
+-    require(original['executable']==dict(bytes=1794048,sha256='6e5fefef8a116d25c07e476b92b96f5b5e39a87f74d1dc10bf1f7ba8dbf7d076'),'fresh entire original parent machine graph changed')
++    original_parent=parent.read_build(source/'parent',images_root/'parent',images_root/'original-parent-linked')
++    require(original_parent['executable']==dict(bytes=1794048,sha256='6e5fefef8a116d25c07e476b92b96f5b5e39a87f74d1dc10bf1f7ba8dbf7d076'),'fresh entire original parent machine graph changed')
+     old_adapter=adapter.read_images(images_root/'adapter',adapter_source(source/'adapter'))
+     manifest_raw=raw(images_root,'IMAGES.json');images=decode(manifest_raw)
+     require(images['schema']=='hepta.runtime.binary-write-composition-images.v1' and images['status']=='FRESH_ACTUAL_B3_COMPILE_PASS'
+@@ -33,7 +33,7 @@
+             and images['new_seed_executions']==images['new_bootstrap_generations']==images['application_executions']==0
+             and images['public_binary_write_registered']is False and images['whole_runtime_replaced']is False,'actual new build scope')
+     require(images['children']=={kind:pin(images_root/kind/'IMAGES.json')for kind in('parent','adapter')}
+-            and images['original_parent_executable']==original['executable'],'exact retained child provenance')
++            and images['original_parent_executable']==original_parent['executable'],'exact retained child provenance')
+     derived={};bodies={}
+     for kind in('parent','adapter'):
+         child=decode(raw(images_root/kind,'IMAGES.json'))
+@@ -44,8 +44,18 @@
+     require(derived==images['members'] and set(derived)==set(ORDER)|{'linker','packer'},'entire exact fourteen-member source map')
+     labels=('parent','adapter','original-parent-link','composition-fixture-author')
+     require(len(images['processes'])==len(labels),'all actual build subprocesses')
++    first=images['processes'][0]['argv']
++    require(len(first)==11 and Path(first[6]).is_absolute() and Path(first[8]).is_absolute(),'absolute exact retained compiler and bootstrap inputs')
++    expected_argv={kind:[sys.executable,'-I','-S','-B',str(source/kind/'scripts/build_images.py'),
++                         '--hepta',first[6],'--retained-bootstrap',first[8],'--output',str(images_root/kind)]
++                   for kind in('parent','adapter')}
++    expected_argv['original-parent-link']=[sys.executable,'-I','-S','-B',str(source/'parent/scripts/link_callable.py'),
++        '--images',str(images_root/'parent'),'--output',str(images_root/'original-parent-linked')]
++    expected_argv['composition-fixture-author']=[sys.executable,'-I','-S','-B',str(source/'authoring/author_composition_fixture.py'),
++        '--source',str(source),'--output',str(images_root/'authored')]
+     for label,record in zip(labels,images['processes']):
+-        require(record==decode(raw(images_root,label+'.json')) and type(record['returncode'])is int and record['returncode']==0
++        require(record==decode(raw(images_root,label+'.json')) and record['argv']==expected_argv[label]
++                and type(record['returncode'])is int and record['returncode']==0
+                 and record['limit_seconds']==(120 if label in('parent','adapter')else 30)
+                 and 0<=record['elapsed_ns']<record['limit_seconds']*1000000000,'actual bounded fresh build subprocess')
+         for stream in('stdout','stderr'):require(pin(images_root/(label+'.'+stream))==record[stream],'entire build subprocess stream')
+@@ -115,5 +125,11 @@
+     for path,value in capture:require(path.read_bytes()==value,"raw build custody changed during DATA readback")
+     require(source_evidence(source)==identity,"whole source changed during build readback")
+     return dict(status='PASS_ACTUAL_BUILD_DATA_READBACK',source=identity,images=16,runtime_images=12,
+-                original_parent_executable=original['executable'],executable=record['executable'],compiler_sha256=parent.B3,
++                original_parent_executable=original_parent['executable'],executable=record['executable'],compiler_sha256=parent.B3,
+                 whole_runtime_replaced=False,public_binary_write_registered=False)
++
++if __name__=='__main__':
++    import argparse
++    parser=argparse.ArgumentParser(description=__doc__)
++    for name in('images','build'):parser.add_argument('--'+name,type=Path,required=True)
++    args=parser.parse_args();print(json.dumps(read_build(ROOT,args.images,args.build),sort_keys=True))
+--- dev1/scripts/read_composition_source.py
++++ r2/scripts/read_composition_source.py
+@@ -0,0 +1,57 @@
++#!/usr/bin/env python3
++"""Read only exact source inheritance and independently derive the input split."""
++import ast,hashlib,importlib.util,json,sys
++from pathlib import Path
++ROOT=Path(__file__).resolve().parents[1]
++sys.path.insert(0,str(ROOT/'scripts'))
++from evidence_common import decode,pin,require,source_evidence
++
++PARENT='b674d9c033dd43350a2d5f38039df469c8983149c0e568ab9c51ca614411d612'
++ADAPTER='1c38b08d610c2440ae2e246bc06519f416591bbca590850f758ea8eef5848d4a'
++DOMAIN='0dc9c300dab0380e746ead00b3a8338db7abf9b8c15190208436377838999114'
++sha=lambda b:hashlib.sha256(b).hexdigest()
++
++def read_source(root=ROOT):
++ root=Path(root);identity=source_evidence(root)
++ require(pin(root/'parent/SOURCE_MANIFEST.json')['sha256']==PARENT and pin(root/'adapter/SOURCE_MANIFEST.json')['sha256']==ADAPTER,'original entire qualified child source manifests')
++ parent=source_evidence(root/'parent');require(parent['files']==57,'all frozen parent source files')
++ adapter=decode((root/'adapter/SOURCE_MANIFEST.json').read_bytes())['files']
++ require(len(adapter)==38 and {p.relative_to(root/'adapter').as_posix()for p in(root/'adapter').rglob('*')if p.is_file()}==set(adapter)|{'SOURCE_MANIFEST.json'},'all frozen adapter source paths')
++ for name,record in adapter.items():
++  file=root/'adapter'/name;require({**pin(file),'mode':file.stat().st_mode&0o777}==record,'whole original adapter bytes/modes')
++ require(pin(root/'parent/DOMAIN.json')['sha256']==DOMAIN,'complete original parent input bytes')
++ domain=decode((root/'parent/DOMAIN.json').read_bytes());admitted=[];rejected=[]
++ for case in domain['cases']:
++  require(type(case['expected_version'])is str or case['expected_version']is None,'original declared typed values only')
++  (rejected if case['expected_version']is None else admitted).append(case['id'])
++ require(domain['case_count']==len(domain['cases'])==256 and len(admitted)==254 and len(rejected)==2,'complete disjoint ordered parent input split')
++ require(len(domain['retry_controls'])*len(domain['retry_lanes'])==6,'entire unchanged EINTR cancellation set')
++ evidence={}
++ for file in('integration_edits.json','reader_integration_edits.json'):
++  records=decode((root/'authoring'/file).read_bytes())
++  for name,row in records.items():
++   current=(root/'scripts'/name).read_text();original=(root/'parent/scripts'/name).read_bytes()
++   require(row['complete_inverse']is True and sha(original)==row['original'] and sha(current.encode())==row['source'],'exact source/inverse endpoints')
++   restored=current
++   for edit in reversed(row['edits']):
++    require(sha(restored.encode())==edit['after_sha256'] and restored.count(edit['after'])==edit['count'],'exact inverse edit position/count')
++    restored=restored.replace(edit['after'],edit['before'])
++    require(sha(restored.encode())==edit['before_sha256'],'full inverse intermediate bytes')
++   require(restored.encode()==original,'complete original capture/reader recovered')
++   replay=original.decode()
++   for edit in row['edits']:
++    require(replay.count(edit['before'])==edit['count'],'exact forward occurrence count');replay=replay.replace(edit['before'],edit['after'])
++   require(replay==current,'whole current source reproduced forward')
++   evidence[name]=dict(original=row['original'],current=row['source'],edits=len(row['edits']))
++ row=decode((root/'authoring/binary_write_composition_fixture_edits.json').read_bytes())
++ full=(root/'asm/binary_write_composition_fixture.S').read_bytes();extension=(root/'authoring/composition_fixture_extension.S').read_bytes();original=(root/'parent/asm/binary_parent_owner_fixture.S').read_bytes()
++ require(row['complete_inverse']is True and sha(full)==row['source'] and sha(extension)==row['extension'] and sha(original)==row['original'] and full.endswith(b'\n'+extension),'exact whole frozen mechanical fixture inheritance')
++ restored=full[:-len(extension)-1].decode()
++ for edit in reversed(row['edits']):
++  require(sha(restored.encode())==edit['after_sha256'] and restored.count(edit['after'])==edit['count'],'exact fixture inverse')
++  restored=restored.replace(edit['after'],edit['before']);require(sha(restored.encode())==edit['before_sha256'],'whole fixture inverse step')
++ require(restored.encode()==original,'all original fixture/fault/actor bytes retained')
++ for path in(root/'scripts').glob('*.py'):ast.parse(path.read_bytes(),filename=str(path))
++ require(source_evidence(root)==identity,'whole source custody during DATA read')
++ return dict(status='PASS_EXACT_SOURCE_INHERITANCE',source=identity,parent_source=parent,adapter_sources=38,original_parent_inputs=256,admitted_ids=admitted,typed_rejected_ids=rejected,retries=6,inverse=evidence,public_binary_write_registered=False,whole_runtime_replaced=False)
++if __name__=='__main__':print(json.dumps(read_source(),sort_keys=True))
+--- dev1/scripts/read_parent_capture.py
++++ r2/scripts/read_parent_capture.py
+@@ -400,15 +400,13 @@
+             same(current["result"]["error_chain"],original["result"]["error_chain"],"all original exception contexts")
+ 
+ 
+-def main():
+-    parser=argparse.ArgumentParser(description=__doc__)
+-    for name in("capture","images","build","output"):parser.add_argument("--"+name,type=Path,required=True)
+-    parser.add_argument("--capture-sha256",required=True)
+-    args=parser.parse_args()
++def read_all(capture,images,build_root,capture_sha256):
+     identity=source_evidence(SOURCE)
+-    capture=args.capture.resolve(strict=True)
++    capture=Path(capture).resolve(strict=True)
++    images=Path(images).resolve(strict=True)
++    build_root=Path(build_root).resolve(strict=True)
+     raw=(capture/"CAPTURE.json").read_bytes()
+-    require(hashlib.sha256(raw).hexdigest()==args.capture_sha256,"fixed complete capture authority")
++    require(hashlib.sha256(raw).hexdigest()==capture_sha256,"fixed complete capture authority")
+     report=decode(raw)
+     require(report["status"]=="COMPLETE_ACTUAL_CAPTURE"and report["source"]==identity
+             and report["planned"]==report["completed"]==984 and report["retry_planned"]==report["retry_completed"]==6
+@@ -425,14 +423,14 @@
+     domain=decode((SOURCE/"parent/DOMAIN.json").read_bytes())
+     same(report["domain"],pin(SOURCE/"parent/DOMAIN.json"),"all frozen inputs")
+     same(report["limits"],domain["limits"],"all original resource budgets")
+-    build=read_build(SOURCE,args.images,args.build)
++    build=read_build(SOURCE,images,build_root)
+     same(report["executable"],build["executable"],"capture executed this exact freshly compiled/link-packed image")
+     store=Reader(capture/"buffers")
+     admitted=[case for case in domain["cases"]if type(case["expected_version"])is str]
+     rejected=[case for case in domain["cases"]if case["expected_version"]is None]
+     require(len(admitted)==254 and len(rejected)==2 and len(admitted)+len(rejected)==256,"complete ordered original typed-domain partition")
+     require(report["original_parent_inputs"]==256 and report["composed_parent_inputs"]==254,"explicit composition intersection scope")
+-    preparer=Prepared(capture/"preparation",args.images/"adapter")
++    preparer=Prepared(capture/"preparation",images/"adapter")
+     planned=[(case,lane)for case in admitted for lane in LANES
+              if lane!="native-unobserved"or not(case["fault_plans"]or case["descriptor_actor"]or case["nofile"])]
+     require(len(planned)==len(report["cases"])==984,"complete frozen original/current lane set")
+@@ -466,7 +464,8 @@
+         same(row["query"],query_from_case(case,capture/"fixture",True),"exact None input projection")
+         preparer.request(row["preparation"],row["query"],case["id"],"typed-rejected",None)
+         require(row["parent_processes_created"]==row["parent_invocations"]==row["parent_effects"]==0,"typed rejection cannot claim a parent invocation")
+-        same(row["setup"],row["after"],"all None refusal filesystem bytes and metadata remain unchanged")
++        same(filesystem(row["setup"]),filesystem(row["before_refusal"]),"whole fixture preparation preserves all contents and structural metadata")
++        same(row["before_refusal"],row["after"],"all None refusal filesystem bytes and metadata remain unchanged")
+     same(preparer.finish(),report["preparation"],"entire exact actual preparation calls")
+     buffers=store.finish()
+     require((capture/"CAPTURE.json").read_bytes()==raw and(capture.parent/"OWNED.json").read_bytes()==owner_raw
+@@ -477,7 +476,16 @@
+                 actual_retry_controls=6,explicit_sigterm_cancellations=6,retry_checked=retry_checked,
+                 runtime_python_required=False,whole_runtime_replaced=False,public_binary_write_registered=False,
+                 old_body_101_requalified=False)
++    return result
++
++
++def main():
++    parser=argparse.ArgumentParser(description=__doc__)
++    for name in("capture","images","build","output"):parser.add_argument("--"+name,type=Path,required=True)
++    parser.add_argument("--capture-sha256",required=True)
++    args=parser.parse_args()
+     require(not args.output.exists(),"fresh DATA readback receipt")
++    result=read_all(args.capture,args.images,args.build,args.capture_sha256)
+     args.output.write_bytes(encoded(result))
+     print(json.dumps({key:result[key]for key in("status","cases","complete_lane_runs","original_runs","native_observed_runs","native_unobserved_runs")},sort_keys=True))
+ 
+--- dev1/tests/test_composition_data.py
++++ r2/tests/test_composition_data.py
+@@ -0,0 +1,143 @@
++"""Meaningful rejection controls over whole real development capture bytes."""
++import base64,copy,hashlib,json,lzma,struct,sys,unittest
++from pathlib import Path
++ROOT=Path(__file__).resolve().parents[1]
++sys.path.insert(0,str(ROOT/'scripts'))
++import read_composition as reader
++from evidence_common import pin
++FOLDER=ROOT/'inputs/reader-controls'
++
++def load():
++ origin=json.loads((FOLDER/'ORIGIN.json').read_bytes())
++ for name,row in origin['files'].items():assert pin(FOLDER/name)==row
++ raw=lzma.decompress((FOLDER/'CONTROL.json.xz').read_bytes())
++ assert len(raw)==origin['decoded_control_bytes'] and hashlib.sha256(raw).hexdigest()==origin['decoded_control_sha256']
++ value=json.loads(raw);assert value['qualification']is False and value['case']['input']['id']==0 and value['case']['lane']=='native-observed'
++ value['pure_rows']=[dict(index=r['index'],head=bytes.fromhex(r['head']),payload=base64.b64decode(r['payload'],validate=True))for r in value['pure_rows']]
++ value['prepared']={k:bytes.fromhex(v)for k,v in value['prepared'].items()};value['parent_input']=bytes.fromhex(value['parent_input'])
++ return value
++
++class Store:
++ def __init__(self,data):self.data=data
++ def get(self,ref):
++  raw=base64.b64decode(self.data['buffer_bytes_base64'][ref['sha256']],validate=True)
++  if len(raw)!=ref['bytes']or hashlib.sha256(raw).hexdigest()!=ref['sha256']:raise ValueError('whole immutable fixture buffer')
++  return raw
++
++def check(value):
++ return reader.check_flow(value['pure_rows'],value['prepared'],Store(value),value['case'],value['parent_input'],value['parent_first'],value['parent_last'])
++
++def word(raw,at,value):
++ b=bytearray(raw);struct.pack_into('<Q',b,at,value);return bytes(b)
++
++def rebind(value,label,offset,new):
++ """Change bytes and every matching raw observation identity consistently.
++ This ensures controls exercise semantic ownership, not a trivial hash error.
++ """
++ ref=value['case']['snapshots'][label]['bytes'];old=ref['sha256'];raw=Store(value).get(ref);raw=word(raw,offset,new);sha=hashlib.sha256(raw).hexdigest()
++ replacement=dict(bytes=len(raw),sha256=sha,blocks=[hashlib.sha256(raw[i:i+4096]).hexdigest()for i in range(0,len(raw),4096)])
++ value['buffer_bytes_base64'][sha]=base64.b64encode(raw).decode()
++ def replace(v):
++  if type(v)is dict:
++   if set(v)=={'bytes','sha256','blocks'}and v['sha256']==old:v.clear();v.update(replacement)
++   else:
++    for child in v.values():replace(child)
++  elif type(v)is list:
++   for child in v:replace(child)
++ replace(value['case'])
++
++class CompositionDataTests(unittest.TestCase):
++ @classmethod
++ def setUpClass(cls):cls.original=load()
++ def fresh(self):return copy.deepcopy(self.original)
++ def rejects(self,value):
++  with self.assertRaises((ValueError,KeyError,IndexError,struct.error)):check(value)
++ def test_00_complete_actual_four_entry_flow(self):
++  self.assertEqual(check(self.fresh()),dict(calls=4,parent_started=True,adapter_released=True))
++ def test_01_each_omitted_entry_rejected(self):
++  for at in range(0,20,5):
++   with self.subTest(at=at):
++    v=self.fresh();del v['pure_rows'][at:at+5];self.rejects(v)
++ def test_02_every_adjacent_span_reordering_rejected(self):
++  for at in range(19):
++   with self.subTest(at=at):
++    v=self.fresh();v['pure_rows'][at],v['pure_rows'][at+1]=v['pure_rows'][at+1],v['pure_rows'][at];self.rejects(v)
++ def test_03_fixed_owner_and_invocation_cannot_be_renamed(self):
++  for at in range(0,20,5):
++   for offset,new in((16,9),(24,2),(56,99)):
++    with self.subTest(at=at,offset=offset):
++     v=self.fresh()
++     for r in v['pure_rows'][at:at+5]:r['head']=word(r['head'],offset,new)
++     self.rejects(v)
++ def test_04_exact_phase_sequence_and_borrow_flags(self):
++  for at in range(0,20,5):
++   for offset in(40,96,104,112,120):
++    with self.subTest(at=at,offset=offset):
++     v=self.fresh()
++     for r in v['pure_rows'][at:at+5]:r['head']=word(r['head'],offset,reader.U(r['head'],offset)+1)
++     self.rejects(v)
++ def test_05_whole_input_of_every_owner_is_bound(self):
++  for at in(0,5,10,15):
++   with self.subTest(at=at):
++    v=self.fresh();raw=bytearray(v['pure_rows'][at]['payload']);raw[-1]^=1;v['pure_rows'][at]['payload']=bytes(raw);self.rejects(v)
++ def test_06_actual_planner_payload_cannot_match_only_a_header(self):
++  v=self.fresh();raw=bytearray(v['pure_rows'][8]['payload']);raw[reader.U(v['pure_rows'][8]['head'],48)-2]^=1;v['pure_rows'][8]['payload']=bytes(raw);self.rejects(v)
++ def test_07_parent_receives_whole_exact_adapter_packet(self):
++  v=self.fresh();v['parent_input']=v['parent_input'][:-1]+bytes([v['parent_input'][-1]^1]);self.rejects(v)
++ def test_08_parent_cannot_start_before_permission_or_outlive_release(self):
++  for field,new in(('parent_first',1),('parent_last',1<<32)):
++   v=self.fresh();v[field]=new;self.rejects(v)
++ def test_09_all_workspace_bytes_are_owned(self):
++  for at in(1,6,11,16):
++   v=self.fresh();raw=bytearray(v['pure_rows'][at]['payload']);raw[-1]^=1;v['pure_rows'][at]['payload']=bytes(raw);self.rejects(v)
++ def test_10_all_output_before_and_after_tails_are_owned(self):
++  for at in(2,3,7,8,12,13,17,18):
++   v=self.fresh();raw=bytearray(v['pure_rows'][at]['payload']);raw[-1]^=1;v['pure_rows'][at]['payload']=bytes(raw);self.rejects(v)
++ def test_11_held_child_capabilities_and_actual_address_are_bound(self):
++  for offset in(384,376,408,480,568,576,584):
++   v=self.fresh();c=Store(v).get(v['case']['snapshots']['composition']['bytes']);rebind(v,'composition',offset,reader.U(c,offset)+1);self.rejects(v)
++ def test_12_extra_release_mutation_cannot_hide_behind_valid_phase(self):
++  for label,offset in(('composition_after_release',1000),('composition_after_release',192),('parent_after_release',272),('parent_after_release',1000),('adapter_after_release',1000)):
++   v=self.fresh();rebind(v,label,offset,0x71);self.rejects(v)
++ def test_13_context_address_cannot_be_reassigned_by_journal(self):
++  v=self.fresh()
++  for r in v['pure_rows']:r['head']=word(r['head'],80,reader.U(r['head'],80)+4096)
++  self.rejects(v)
++ def test_14_capacities_cannot_be_claimed_by_mutable_headers(self):
++  for offset in(64,72,88):
++   v=self.fresh()
++   for r in v['pure_rows'][:5]:r['head']=word(r['head'],offset,reader.U(r['head'],offset)+1)
++   self.rejects(v)
++ def test_15_replayed_child_or_release_sequence_rejected(self):
++  for at in(10,15):
++   v=self.fresh();v['pure_rows'][at]['payload']=word(v['pure_rows'][at]['payload'],16,2);self.rejects(v)
++
++class PreparationDataTests(unittest.TestCase):
++ def make(self):
++  p=reader.Prepared.__new__(reader.Prepared);p.folder=FOLDER;p.native,p.summary=reader.old.records(FOLDER);p.used=set();p.cursor=0;p.rows=json.loads((FOLDER/'PREPARED.json').read_bytes());p.receipt=json.loads((FOLDER/'PREPARATION.json').read_bytes());p.null_error=b'not used in the String fixture';return p
++ def test_00_actual_preparation_all_calls_credited_once(self):
++  p=self.make();v=load();query=v['case']['query']
++  self.assertEqual(p.request(1,query,0,'native-observed',v['prepared']['start']),v['prepared'])
++  query=dict(query,observer=False);p.request(2,query,0,'native-unobserved',v['prepared']['start']);self.assertEqual(p.finish(),p.receipt)
++ def test_01_ordinal_case_label_and_actual_packet_bound(self):
++  for changed in('ordinal','case','label','packet'):
++   p=self.make();v=load();args=[1,v['case']['query'],0,'native-observed',v['prepared']['start']]
++   if changed=='ordinal':args[0]=2
++   elif changed=='case':args[2]=1
++   elif changed=='label':args[3]='native-unobserved'
++   else:args[4]=args[4][:-1]+bytes([args[4][-1]^1])
++   with self.subTest(changed=changed),self.assertRaises(ValueError):p.request(*args)
++ def test_02_another_valid_map_context_cannot_impersonate_the_input(self):
++  p=self.make();v=load();p.rows[0]['value_calls']=p.rows[1]['value_calls']
++  with self.assertRaises(ValueError):p.request(1,v['case']['query'],0,'native-observed',v['prepared']['start'])
++ def test_03_mutable_planner_return_cannot_replace_actual_code(self):
++  p=self.make();v=load();p.rows[0]['planner_return']+=1
++  with self.assertRaises(ValueError):p.request(1,v['case']['query'],0,'native-observed',v['prepared']['start'])
++ def test_04_missing_preparation_cannot_be_silently_uncredited(self):
++  p=self.make();v=load();p.request(1,v['case']['query'],0,'native-observed',v['prepared']['start'])
++  with self.assertRaises(ValueError):p.finish()
++ def test_05_none_cannot_be_converted_to_absent_or_empty_string(self):
++  p=self.make();v=load();query=dict(v['case']['query'],expected_version=None)
++  with self.assertRaises(ValueError):p.request(1,query,0,'native-observed',v['prepared']['start'])
++
++if __name__=='__main__':unittest.main()

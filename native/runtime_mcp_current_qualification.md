@@ -1,4 +1,51 @@
-# Current default124 public qualification
+# Current public graph and retained qualification
+
+This documentation correction is not a new full-source qualification. In
+particular, it does not inherit CI 139's earlier 2,197-file historical source
+table: the native documents are included in that table, and the root README
+is included in the materialized-source receipt. All reported executions retain
+their original commit and `source_sha256` records. The 543-file execution
+closure and the separately published private-composition evidence are unchanged.
+
+## Current 126-component graph
+
+The installed builder and `runtime_mcp_sources.json` describe **118 direct HIA
+owners plus eight packed HIA owners: 126 components in 119 physical containers,
+71 descriptor slots and 543 bound source files**. The source-closure SHA256 is
+`280261f2df19a9b0ba988b984ddf8d70e3c77efe68c7a908cb9348db952a1cb7`.
+The current graph still routes thirteen of the fixed 136 target handlers;
+the configured catalog advertises eleven, or eight without configuration.
+
+The [installed two-owner result](../tests/hia_native/binary_owners_product/RESULTS.json)
+records the complete fresh build and its 26,787,840-byte ELF,
+`d995069de6fa4f98f62a8e0412f90f7ff7cd3746706e6e0a91589569979952af`.
+Its retained complete private domains contain 1,388 typed inputs, 433 caller
+plan inputs and 196 installed write inputs, plus the unchanged public thirteen
+routes' 116 response pairs from eight actual processes. Installed slots 69 and
+70 own binary-write typed admission and the caller plan. They do not register a
+fourteenth public route.
+
+The separately retained request adapter and real adapter-to-parent/body private
+composition do not change this public graph. Full host/audit/SSH and public
+binary-write lifetime acceptance remain incomplete; the later allocation and
+partial-release acceptance work was interrupted and is not qualified. Full
+136-handler replacement, production activation and old-stack removal remain
+false.
+
+`migration.json` remains the historical 125-handler/195-component inventory;
+`migration_target.json` is the 136-handler target. The actual current `native/`
+tree contains 229 `.hepta` files, including shared leaves and packers. These
+counts serve different purposes and cannot substitute for route coverage.
+
+## Retained 124-component qualification record
+
+The record below keeps the original 124-component, 117-container, 69-slot and
+536-source qualification identities. Its commands, source hashes, captures,
+budgets and results describe those pinned earlier executions. They are not new
+executions of the 126-component graph. The 124 record's wording about its
+"current" command or executable is scoped to those recorded source identities.
+
+### Original default124 public qualification
 
 This graph has **124 HIA components in 117 physical containers**, comprising
 116 direct HIA owners and eight HIA owners in one packed worker capability.

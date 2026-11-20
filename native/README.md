@@ -1,5 +1,12 @@
 # HIA native runtime
 
+This documentation correction is not a new full-source qualification. In
+particular, it does not inherit CI 139's earlier 2,197-file historical source
+table: the native documents are included in that table, and the root README
+is included in the materialized-source receipt. All reported executions retain
+their original commit and `source_sha256` records. The 543-file execution
+closure and the separately published private-composition evidence are unchanged.
+
 This directory holds the current HIA implementations, ABI contracts and
 reproducible qualification inputs. The production target has **136 MCP
 handlers**; no production handler is declared replaced. `whole_runtime_replaced`,
@@ -82,9 +89,12 @@ not activate a filesystem handler or replace a public route.
 
 ## Current public stdio entry
 
-The default `scripts/hia_native_runtime_mcp_build.py` API/CLI builds 124 HIA
-components in 117 physical containers, using 69 private descriptor slots.
-Its complete 536-file source closure is `runtime_mcp_sources.json`.
+The current `scripts/hia_native_runtime_mcp_build.py` API/CLI builds 126 HIA
+components: 118 direct owners plus eight packed owners in 119 physical
+containers, using 71 private descriptor slots. Its complete 543-file source
+closure is `runtime_mcp_sources.json`. Binary-write parameters and the binary
+caller planner occupy private slots 69 and 70; `binary_write` remains
+unregistered as a public tool.
 Thirteen target handlers have actual routes; the configured catalog advertises
 eleven, or eight without runtime configuration. Batch and Bellman remain
 routed separately from catalog advertising. The other 123 target handlers
@@ -99,13 +109,19 @@ file, cache, history, lock and worker ownership records remain in the exact
 qualification archives. These bounded results do not establish Remote SSH,
 all SDK concurrency, global request audit or removal of the existing runtime.
 
-The default CI freshly builds all 116 direct and eight packed HIA owners,
-checks the complete installed-source closure and the exact resulting ELF,
-and independently reads the uploaded build. The application-qualified public
-ELF is 26,247,168 bytes with SHA256
-`cfc51c7004da6dd45d7d42314188563b6e83c6b03df4478a2281ef0b5d750755`.
-The old nine-role 111-component gate remains bound to its original source;
-its case counts are not recast as a new graph qualification.
+The default CI freshly builds all 118 direct and eight packed HIA owners,
+checks the complete installed-source closure and independently reads the
+uploaded build. The installed two-owner record retains a 26,787,840-byte ELF,
+SHA256 `d995069de6fa4f98f62a8e0412f90f7ff7cd3746706e6e0a91589569979952af`,
+and 116 public response pairs from eight actual processes. See
+[the exact installed result](../tests/hia_native/binary_owners_product/RESULTS.json)
+for its full private typed/planner domains and explicit incomplete flags.
+
+The earlier publisher application ELF is the distinct 124-component,
+26,247,168-byte capture `cfc51c7004da6dd45d7d42314188563b6e83c6b03df4478a2281ef0b5d750755`.
+Its 686 ordinary and 22-plus-eight lifecycle cases remain bound to that source
+and executable. The old nine-role 111-component gate also retains its original
+source; these case counts are not recast as new 126-component executions.
 
 Exact provenance, completed domains, preserved failures, build commands and
 remaining limits are in
@@ -200,11 +216,13 @@ python3 -m venv /absolute/path/to/hia-reference-environment
 ```
 
 Both phases are required and run inside the source view created above. CI uses
-one fresh cold/build job, ten native partitions, a native collector, eight
+one fresh cold/build job, eleven native partitions, a native collector, eight
 original comparison partitions and the final collector. The retained registry
 contains 87 component builds, 225 native suites, 81 original Rust recipes and
-195 HIA sources. Current83 qualification is a separate mandatory job; these
-historical public results do not qualify its current framing or SDK behavior. The ten independent rendering,
+195 HIA component entries. The current native source directory has 229 `.hepta`
+files; its 126-component default graph and public application domains have
+separate qualification identities. Historical component results do not qualify
+the complete current public graph or all 136 target handlers. The ten independent rendering,
 cache, history and session suites occupy `view_components`; the twenty
 read, parameter, caller, public MCP and filesystem suites retain their producer order and
 fixture retirement together in `view`. Each suite and original recipe still

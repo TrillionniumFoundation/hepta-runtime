@@ -1,0 +1,405 @@
+--- r3/ABI.md
++++ r4/ABI.md
+@@ -84,9 +84,9 @@
+ The historical parent receipt and build are retained with their desktop origin;
+ new construction uses fresh local source-bound compiler/linker/packer outputs.
+ 
+-The composed effect intersection is 254 String-version inputs and all 984
++The composed effect intersection is 254 String-version inputs and all 985
+ originally eligible natural lanes. The independent reader derives those inputs
+-and the two actual typed-`None` refusals from the complete unchanged 256-input
++and the two actual typed-`None` refusals (seven original lanes: four for input217 and three for faulted input244) from the complete unchanged 256-input
+ parent domain. All six original permanent-EINTR/SIGTERM controls remain.
+ Additional observed boundary processes exercise both real planner mismatch
+ branches and a physically invalid header, with complete parent context, kernel,
+--- r3/authoring/author_capture_integrations.py
++++ r4/authoring/author_capture_integrations.py
+@@ -48,7 +48,7 @@
+       '    require(len(admitted)==254 and len(rejected)==2 and len(admitted)+len(rejected)==len(domain["cases"]),"complete original typed-domain partition")\n'
+       '    PREPARER=Preparer(Path(build_record["images_directory"])/"adapter",output/"preparation")\n'
+       '    planned=[(case,lane)for case in admitted for lane in LANES if eligible(case,lane)]\n'
+-      '    require(len(planned)==984,"complete 254-input original/native lane intersection")')
++      '    require(len(planned)==985,"complete 254-input original/native lane intersection")')
+  edit('        require(source_evidence(SOURCE)==identity,"whole frozen source changed during capture")',
+       '        for case in rejected:\n'
+       '            fixture=output/"fixture";initial=setup(fixture);query=concrete(case,fixture,True)\n'
+--- r3/authoring/author_reader_integrations.py
++++ r4/authoring/author_reader_integrations.py
+@@ -60,7 +60,7 @@
+       '            require(native_journal["composition_rows"]==[],"unobserved pure owners emitted hidden journals")\n'
+       '            from read_composition import check_unobserved\n'
+       '            row["composition_proof"]=check_unobserved(prepared,store,row)')
+- edit('report["planned"]==report["completed"]==992','report["planned"]==report["completed"]==984')
++ edit('report["planned"]==report["completed"]==992','report["planned"]==report["completed"]==985')
+  edit('SOURCE/"DOMAIN.json"','SOURCE/"parent/DOMAIN.json"',2)
+  edit('    planned=[(case,lane)for case in domain["cases"]for lane in LANES',
+       '    admitted=[case for case in domain["cases"]if type(case["expected_version"])is str]\n'
+@@ -69,7 +69,16 @@
+       '    require(report["original_parent_inputs"]==256 and report["composed_parent_inputs"]==254,"explicit composition intersection scope")\n'
+       '    preparer=Prepared(capture/"preparation",args.images/"adapter")\n'
+       '    planned=[(case,lane)for case in admitted for lane in LANES')
+- edit('len(planned)==len(report["cases"])==992','len(planned)==len(report["cases"])==984')
++ edit('len(planned)==len(report["cases"])==992','len(planned)==len(report["cases"])==985')
++ edit('    require(len(planned)==len(report["cases"])==985,"complete frozen original/current lane set")',
++      '    entire_original=[(case,lane)for case in domain["cases"]for lane in LANES\n'
++      '        if lane!="native-unobserved"or not(case["fault_plans"]or case["descriptor_actor"]or case["nofile"])]\n'
++      '    omitted=[(case,lane)for case,lane in entire_original if case["expected_version"]is None]\n'
++      '    require(len(entire_original)==992 and len(omitted)==7,"whole original natural domain retained as 985 plus seven typed-refused lanes")\n'
++      '    same([(case["id"],lane)for case,lane in omitted],[(217,lane)for lane in LANES]+[(244,lane)for lane in LANES[:3]],"exact original four-plus-three None lanes")\n'
++      '    same([(case["id"],lane)for case,lane in entire_original if type(case["expected_version"])is str],\n'
++      '         [(case["id"],lane)for case,lane in planned],"independent complete ordered original-to-composed lane projection")\n'
++      '    require(len(planned)==len(report["cases"])==985,"complete frozen original/current lane set")')
+  edit('row=read_case(folder,binding,case,lane,store,build["executable"])',
+       'row=read_case(folder,binding,case,lane,store,build["executable"],preparer,capture/"fixture")')
+  edit('row=read_retry(capture/("retry-%02d-"%case["id"]+lane),binding,case,lane,store,build["executable"])',
+@@ -88,7 +97,9 @@
+  edit('schema="hepta.runtime.binary-parent-readback.v1",status="PASS_COMPLETE_FROZEN_PARENT_DOMAIN"',
+       'schema="hepta.runtime.binary-write-composition-readback.v1",status="PASS_COMPLETE_FROZEN_COMPOSITION_DOMAIN"')
+  edit('cases=256,complete_lane_runs=992,\n                original_runs=512,native_observed_runs=256,native_unobserved_runs=224',
+-      'cases=254,original_parent_inputs=256,typed_null_refusals=2,complete_lane_runs=984,\n                original_runs=508,native_observed_runs=254,native_unobserved_runs=222')
++      'cases=254,original_parent_inputs=256,typed_null_refusals=2,complete_lane_runs=985,original_complete_lane_runs=992,\n'
++      '                typed_rejected_original_lanes=[dict(id=case["id"],lane=lane)for case,lane in omitted],\n'
++      '                original_runs=508,native_observed_runs=254,native_unobserved_runs=223')
+  edit('def main():\n    parser=argparse.ArgumentParser(description=__doc__)\n    for name in("capture","images","build","output"):parser.add_argument("--"+name,type=Path,required=True)\n    parser.add_argument("--capture-sha256",required=True)\n    args=parser.parse_args()\n    identity=source_evidence(SOURCE)\n    capture=args.capture.resolve(strict=True)',
+       'def read_all(capture,images,build_root,capture_sha256):\n    identity=source_evidence(SOURCE)\n    capture=Path(capture).resolve(strict=True)\n    images=Path(images).resolve(strict=True)\n    build_root=Path(build_root).resolve(strict=True)')
+  edit('hashlib.sha256(raw).hexdigest()==args.capture_sha256','hashlib.sha256(raw).hexdigest()==capture_sha256')
+--- r3/authoring/integration_edits.json
++++ r4/authoring/integration_edits.json
+@@ -87,50 +87,50 @@
+         "count": 1
+       },
+       {
+-        "after": "    rows=[];retry_rows=[];typed_rejections=[]\n    admitted=[case for case in domain[\"cases\"]if type(case[\"expected_version\"])is str]\n    rejected=[case for case in domain[\"cases\"]if case[\"expected_version\"]is None]\n    require(len(admitted)==254 and len(rejected)==2 and len(admitted)+len(rejected)==len(domain[\"cases\"]),\"complete original typed-domain partition\")\n    PREPARER=Preparer(Path(build_record[\"images_directory\"])/\"adapter\",output/\"preparation\")\n    planned=[(case,lane)for case in admitted for lane in LANES if eligible(case,lane)]\n    require(len(planned)==984,\"complete 254-input original/native lane intersection\")",
+-        "after_sha256": "d47bd322cb16c03cccdcea95bfc9cca5f3842d186f0c22bac5f5cb648e9ae528",
++        "after": "    rows=[];retry_rows=[];typed_rejections=[]\n    admitted=[case for case in domain[\"cases\"]if type(case[\"expected_version\"])is str]\n    rejected=[case for case in domain[\"cases\"]if case[\"expected_version\"]is None]\n    require(len(admitted)==254 and len(rejected)==2 and len(admitted)+len(rejected)==len(domain[\"cases\"]),\"complete original typed-domain partition\")\n    PREPARER=Preparer(Path(build_record[\"images_directory\"])/\"adapter\",output/\"preparation\")\n    planned=[(case,lane)for case in admitted for lane in LANES if eligible(case,lane)]\n    require(len(planned)==985,\"complete 254-input original/native lane intersection\")",
++        "after_sha256": "e58420068edfb0406f11e5b3809c834f8b22f4f2daae3e7893804aed53cb59f5",
+         "before": "    rows=[];retry_rows=[]\n    planned=[(case,lane)for case in domain[\"cases\"]for lane in LANES if eligible(case,lane)]",
+         "before_sha256": "ed9d04ca3c8156378f842090b20b21d973ef4dce4d92eb84519685198faea385",
+         "count": 1
+       },
+       {
+         "after": "        for case in rejected:\n            fixture=output/\"fixture\";initial=setup(fixture);query=concrete(case,fixture,True)\n            before_refusal=projection(fixture)\n            packet,ordinal=PREPARER.request(query,case[\"id\"],\"typed-rejected\")\n            require(packet is None,\"original None unexpectedly admitted by typed String owner\")\n            after=projection(fixture);require(encoded(before_refusal)==encoded(after),\"typed refusal changed target filesystem\")\n            typed_rejections.append(dict(input=case,query=query,preparation=ordinal,setup=initial,before_refusal=before_refusal,after=after,\n                parent_processes_created=0,parent_invocations=0,parent_effects=0))\n            discard(fixture)\n        preparation=PREPARER.close();PREPARER=None\n        require(source_evidence(SOURCE)==identity,\"whole frozen source changed during capture\")",
+-        "after_sha256": "166b6642454a35bd1692340f9d2eae882263084857f62be569852da7071dd431",
++        "after_sha256": "6a8c2695a3feda5639c8022a5b9c8e78f4adf45ec75d7ef27f7104997b33fe83",
+         "before": "        require(source_evidence(SOURCE)==identity,\"whole frozen source changed during capture\")",
+-        "before_sha256": "d47bd322cb16c03cccdcea95bfc9cca5f3842d186f0c22bac5f5cb648e9ae528",
++        "before_sha256": "e58420068edfb0406f11e5b3809c834f8b22f4f2daae3e7893804aed53cb59f5",
+         "count": 1
+       },
+       {
+         "after": "                    source=identity,domain=pin(SOURCE/\"parent/DOMAIN.json\"),build=pin(build/\"BUILD.json\"),\n                    typed_rejections=typed_rejections,preparation=preparation,original_parent_inputs=256,composed_parent_inputs=254,",
+-        "after_sha256": "140aa404e89c151f680ef8d22898e1efb09e5cb0fd994bd24885fe292630ccb6",
++        "after_sha256": "cdc97a9fd62704e6133881a719a33c4ca69f012caaee21b978e4b33d288f3383",
+         "before": "                    source=identity,domain=pin(SOURCE/\"parent/DOMAIN.json\"),build=pin(build/\"BUILD.json\"),",
+-        "before_sha256": "166b6642454a35bd1692340f9d2eae882263084857f62be569852da7071dd431",
++        "before_sha256": "6a8c2695a3feda5639c8022a5b9c8e78f4adf45ec75d7ef27f7104997b33fe83",
+         "count": 1
+       },
+       {
+         "after": "    except BaseException as error:\n        if PREPARER is not None:\n            PREPARER.close();PREPARER=None\n        (output/\"FAILURE.json\")",
+-        "after_sha256": "bc1a35decaaa5d7d11a5f87f1fcfd020fd3c5264b817f5defa29839fa88309ba",
++        "after_sha256": "cc6c949b42f59d41916f30f232d4c1cf3770ff55487d3dd150623e6bb5ea5de9",
+         "before": "    except BaseException as error:\n        (output/\"FAILURE.json\")",
+-        "before_sha256": "140aa404e89c151f680ef8d22898e1efb09e5cb0fd994bd24885fe292630ccb6",
++        "before_sha256": "cdc97a9fd62704e6133881a719a33c4ca69f012caaee21b978e4b33d288f3383",
+         "count": 1
+       },
+       {
+         "after": "hepta.runtime.binary-write-composition-capture.v1",
+-        "after_sha256": "0c8878eee7b0453d8c5e6d81d9dba0ab877397bcf0078bd44e3e6f0fa2103f6c",
++        "after_sha256": "fdcfd9fb74d02811444269a55f372327630bc2ae1f62dfec750ba748995ebd35",
+         "before": "hepta.runtime.binary-parent-capture.v1",
+-        "before_sha256": "bc1a35decaaa5d7d11a5f87f1fcfd020fd3c5264b817f5defa29839fa88309ba",
++        "before_sha256": "cc6c949b42f59d41916f30f232d4c1cf3770ff55487d3dd150623e6bb5ea5de9",
+         "count": 1
+       },
+       {
+         "after": "run_retry(case,lane,output/\"fixture\",folder,binary,store,SOURCE,PREPARER)",
+-        "after_sha256": "cfc9be1a77dec4c3f8b94376eed4b90b6127f918dd50cdc6a7d1e40d838e9d6c",
++        "after_sha256": "e7e7bf37481c3523b98df2f10cb009f358e088875ad5f73ce92979298165c1ab",
+         "before": "run_retry(case,lane,output/\"fixture\",folder,binary,store,SOURCE)",
+-        "before_sha256": "0c8878eee7b0453d8c5e6d81d9dba0ab877397bcf0078bd44e3e6f0fa2103f6c",
++        "before_sha256": "fdcfd9fb74d02811444269a55f372327630bc2ae1f62dfec750ba748995ebd35",
+         "count": 1
+       }
+     ],
+     "original": "a8bc2a24ad562f6a213a4049762ca980cb609fe17515e0b379878cfd9025bbea",
+-    "source": "cfc9be1a77dec4c3f8b94376eed4b90b6127f918dd50cdc6a7d1e40d838e9d6c"
++    "source": "e7e7bf37481c3523b98df2f10cb009f358e088875ad5f73ce92979298165c1ab"
+   },
+   "retry_capture.py": {
+     "complete_inverse": true,
+--- r3/authoring/reader_integration_edits.json
++++ r4/authoring/reader_integration_edits.json
+@@ -80,106 +80,113 @@
+         "count": 1
+       },
+       {
+-        "after": "report[\"planned\"]==report[\"completed\"]==984",
+-        "after_sha256": "aaca7a052898aa380293e5660a3c57a39d064757a5b44b7c585f5b056ac74ae9",
++        "after": "report[\"planned\"]==report[\"completed\"]==985",
++        "after_sha256": "101547e22a57539502fd88d59580e8c0210b6e6345b68d23c77345f177971e9d",
+         "before": "report[\"planned\"]==report[\"completed\"]==992",
+         "before_sha256": "a04e77d31016e89cc23b3112e806911bec363e6a86be8e0abcd6ef0e5424760c",
+         "count": 1
+       },
+       {
+         "after": "SOURCE/\"parent/DOMAIN.json\"",
+-        "after_sha256": "7eeec3f22b2a29fc3ccfd585e4214846b55e4291555003139d34eaf2f66abd74",
++        "after_sha256": "3f2f9e3141bc9a32f0d126623c58788438b4ada9bce2644188be690366d54ffb",
+         "before": "SOURCE/\"DOMAIN.json\"",
+-        "before_sha256": "aaca7a052898aa380293e5660a3c57a39d064757a5b44b7c585f5b056ac74ae9",
++        "before_sha256": "101547e22a57539502fd88d59580e8c0210b6e6345b68d23c77345f177971e9d",
+         "count": 2
+       },
+       {
+         "after": "    admitted=[case for case in domain[\"cases\"]if type(case[\"expected_version\"])is str]\n    rejected=[case for case in domain[\"cases\"]if case[\"expected_version\"]is None]\n    require(len(admitted)==254 and len(rejected)==2 and len(admitted)+len(rejected)==256,\"complete ordered original typed-domain partition\")\n    require(report[\"original_parent_inputs\"]==256 and report[\"composed_parent_inputs\"]==254,\"explicit composition intersection scope\")\n    preparer=Prepared(capture/\"preparation\",args.images/\"adapter\")\n    planned=[(case,lane)for case in admitted for lane in LANES",
+-        "after_sha256": "9806494e3811a2179c2eb5db86907775830139b65314424ca354c741840068be",
++        "after_sha256": "07a71e6a95beeeac5ad461c71fd5941cf79198b07742c3e9cb0abd33b7d213c8",
+         "before": "    planned=[(case,lane)for case in domain[\"cases\"]for lane in LANES",
+-        "before_sha256": "7eeec3f22b2a29fc3ccfd585e4214846b55e4291555003139d34eaf2f66abd74",
+-        "count": 1
+-      },
+-      {
+-        "after": "len(planned)==len(report[\"cases\"])==984",
+-        "after_sha256": "795be6efa9626c5100aac5f2d1fe43791587fd145bdfc724344391f71ff18a49",
++        "before_sha256": "3f2f9e3141bc9a32f0d126623c58788438b4ada9bce2644188be690366d54ffb",
++        "count": 1
++      },
++      {
++        "after": "len(planned)==len(report[\"cases\"])==985",
++        "after_sha256": "06cd0a9d92b2753b093ed345638ab74766a9d86289d8dbe9079ce1b578409598",
+         "before": "len(planned)==len(report[\"cases\"])==992",
+-        "before_sha256": "9806494e3811a2179c2eb5db86907775830139b65314424ca354c741840068be",
++        "before_sha256": "07a71e6a95beeeac5ad461c71fd5941cf79198b07742c3e9cb0abd33b7d213c8",
++        "count": 1
++      },
++      {
++        "after": "    entire_original=[(case,lane)for case in domain[\"cases\"]for lane in LANES\n        if lane!=\"native-unobserved\"or not(case[\"fault_plans\"]or case[\"descriptor_actor\"]or case[\"nofile\"])]\n    omitted=[(case,lane)for case,lane in entire_original if case[\"expected_version\"]is None]\n    require(len(entire_original)==992 and len(omitted)==7,\"whole original natural domain retained as 985 plus seven typed-refused lanes\")\n    same([(case[\"id\"],lane)for case,lane in omitted],[(217,lane)for lane in LANES]+[(244,lane)for lane in LANES[:3]],\"exact original four-plus-three None lanes\")\n    same([(case[\"id\"],lane)for case,lane in entire_original if type(case[\"expected_version\"])is str],\n         [(case[\"id\"],lane)for case,lane in planned],\"independent complete ordered original-to-composed lane projection\")\n    require(len(planned)==len(report[\"cases\"])==985,\"complete frozen original/current lane set\")",
++        "after_sha256": "71182bdae3b47c8fbd58d6c7b0ab1c1245a5429f855e44260df231fdf166d278",
++        "before": "    require(len(planned)==len(report[\"cases\"])==985,\"complete frozen original/current lane set\")",
++        "before_sha256": "06cd0a9d92b2753b093ed345638ab74766a9d86289d8dbe9079ce1b578409598",
+         "count": 1
+       },
+       {
+         "after": "row=read_case(folder,binding,case,lane,store,build[\"executable\"],preparer,capture/\"fixture\")",
+-        "after_sha256": "7b80b2ce6d612b2c818f8b6db6372822c143274e954dc534abb1635ff0582376",
++        "after_sha256": "bacdabb5bbb1b1a015756b1c92093382851e6935a9dcd43ceee9f0cfb1996d14",
+         "before": "row=read_case(folder,binding,case,lane,store,build[\"executable\"])",
+-        "before_sha256": "795be6efa9626c5100aac5f2d1fe43791587fd145bdfc724344391f71ff18a49",
++        "before_sha256": "71182bdae3b47c8fbd58d6c7b0ab1c1245a5429f855e44260df231fdf166d278",
+         "count": 1
+       },
+       {
+         "after": "row=read_retry(capture/(\"retry-%02d-\"%case[\"id\"]+lane),binding,case,lane,store,build[\"executable\"],preparer,capture/\"fixture\")",
+-        "after_sha256": "c9e92aedb57a80ab44375a77bd8c9bcb34646b6a6b341ec22c733c48e1fe3029",
++        "after_sha256": "d8adcdbf6e64cdf87005fadde40da1c5a3b619088e9f2e117ea5075db6687c9d",
+         "before": "row=read_retry(capture/(\"retry-%02d-\"%case[\"id\"]+lane),binding,case,lane,store,build[\"executable\"])",
+-        "before_sha256": "7b80b2ce6d612b2c818f8b6db6372822c143274e954dc534abb1635ff0582376",
++        "before_sha256": "bacdabb5bbb1b1a015756b1c92093382851e6935a9dcd43ceee9f0cfb1996d14",
+         "count": 1
+       },
+       {
+         "after": "    require(len(report[\"typed_rejections\"])==2,\"both original None inputs retained\")\n    for case,row in zip(rejected,report[\"typed_rejections\"]):\n        same(row[\"input\"],case,\"complete ordered original None input\")\n        same(row[\"query\"],query_from_case(case,capture/\"fixture\",True),\"exact None input projection\")\n        preparer.request(row[\"preparation\"],row[\"query\"],case[\"id\"],\"typed-rejected\",None)\n        require(row[\"parent_processes_created\"]==row[\"parent_invocations\"]==row[\"parent_effects\"]==0,\"typed rejection cannot claim a parent invocation\")\n        same(filesystem(row[\"setup\"]),filesystem(row[\"before_refusal\"]),\"whole fixture preparation preserves all contents and structural metadata\")\n        same(row[\"before_refusal\"],row[\"after\"],\"all None refusal filesystem bytes and metadata remain unchanged\")\n    same(preparer.finish(),report[\"preparation\"],\"entire exact actual preparation calls\")\n    buffers=store.finish()",
+-        "after_sha256": "1f6c9282d0222031b0e8b4325d1648111e62d37956cc3f7017195fa5c92c8883",
++        "after_sha256": "6b4e07bb9c7e063d393420fa58b09ad829e43862f8cfa9e0a35266bc47f175cf",
+         "before": "    buffers=store.finish()",
+-        "before_sha256": "c9e92aedb57a80ab44375a77bd8c9bcb34646b6a6b341ec22c733c48e1fe3029",
++        "before_sha256": "d8adcdbf6e64cdf87005fadde40da1c5a3b619088e9f2e117ea5075db6687c9d",
+         "count": 1
+       },
+       {
+         "after": "schema=\"hepta.runtime.binary-write-composition-readback.v1\",status=\"PASS_COMPLETE_FROZEN_COMPOSITION_DOMAIN\"",
+-        "after_sha256": "7a2cabc58b298184f4f7b0c912bc50309f04ca096994632d1861c3c0da18c0ad",
++        "after_sha256": "443c8f7eb1dc9a1a3e8fbce33501f364ce1b4958d7c68995b0dd738ceae829f0",
+         "before": "schema=\"hepta.runtime.binary-parent-readback.v1\",status=\"PASS_COMPLETE_FROZEN_PARENT_DOMAIN\"",
+-        "before_sha256": "1f6c9282d0222031b0e8b4325d1648111e62d37956cc3f7017195fa5c92c8883",
+-        "count": 1
+-      },
+-      {
+-        "after": "cases=254,original_parent_inputs=256,typed_null_refusals=2,complete_lane_runs=984,\n                original_runs=508,native_observed_runs=254,native_unobserved_runs=222",
+-        "after_sha256": "7ed55a6ecc913356d560f7cc1982025adb54e4c1241c86e13a110258afb04cc2",
++        "before_sha256": "6b4e07bb9c7e063d393420fa58b09ad829e43862f8cfa9e0a35266bc47f175cf",
++        "count": 1
++      },
++      {
++        "after": "cases=254,original_parent_inputs=256,typed_null_refusals=2,complete_lane_runs=985,original_complete_lane_runs=992,\n                typed_rejected_original_lanes=[dict(id=case[\"id\"],lane=lane)for case,lane in omitted],\n                original_runs=508,native_observed_runs=254,native_unobserved_runs=223",
++        "after_sha256": "ef15aaa0af36863ea09e0f387185cec5419f91200713b45e0e0e2bb6b1ac8e6a",
+         "before": "cases=256,complete_lane_runs=992,\n                original_runs=512,native_observed_runs=256,native_unobserved_runs=224",
+-        "before_sha256": "7a2cabc58b298184f4f7b0c912bc50309f04ca096994632d1861c3c0da18c0ad",
++        "before_sha256": "443c8f7eb1dc9a1a3e8fbce33501f364ce1b4958d7c68995b0dd738ceae829f0",
+         "count": 1
+       },
+       {
+         "after": "def read_all(capture,images,build_root,capture_sha256):\n    identity=source_evidence(SOURCE)\n    capture=Path(capture).resolve(strict=True)\n    images=Path(images).resolve(strict=True)\n    build_root=Path(build_root).resolve(strict=True)",
+-        "after_sha256": "5f6bec1f27685985f259e8456e3f86e39cf129269cb90e3371fc19d5d9fbb070",
++        "after_sha256": "36b7ea60505ae9fcca293ce33e1a7393934ca214588767f8fadbf65cc38254dc",
+         "before": "def main():\n    parser=argparse.ArgumentParser(description=__doc__)\n    for name in(\"capture\",\"images\",\"build\",\"output\"):parser.add_argument(\"--\"+name,type=Path,required=True)\n    parser.add_argument(\"--capture-sha256\",required=True)\n    args=parser.parse_args()\n    identity=source_evidence(SOURCE)\n    capture=args.capture.resolve(strict=True)",
+-        "before_sha256": "7ed55a6ecc913356d560f7cc1982025adb54e4c1241c86e13a110258afb04cc2",
++        "before_sha256": "ef15aaa0af36863ea09e0f387185cec5419f91200713b45e0e0e2bb6b1ac8e6a",
+         "count": 1
+       },
+       {
+         "after": "hashlib.sha256(raw).hexdigest()==capture_sha256",
+-        "after_sha256": "e9f66c8d9554001dd52903a6b2faf073f5e0cc1435fa3208d4f9e426b3989b27",
++        "after_sha256": "d73814cd4bcd317e121d2646e23c5ae52c287171e242e88d73f69d8063ab97b6",
+         "before": "hashlib.sha256(raw).hexdigest()==args.capture_sha256",
+-        "before_sha256": "5f6bec1f27685985f259e8456e3f86e39cf129269cb90e3371fc19d5d9fbb070",
++        "before_sha256": "36b7ea60505ae9fcca293ce33e1a7393934ca214588767f8fadbf65cc38254dc",
+         "count": 1
+       },
+       {
+         "after": "read_build(SOURCE,images,build_root)",
+-        "after_sha256": "1dcb856cef5bf38b95f56288c8923d426f00c40c605c821d347d6768c2d487cc",
++        "after_sha256": "2fb9b93d1a67a5cc0bd2fd48b05e1c01d5476882dd42e8984bea763dff9fd6a5",
+         "before": "read_build(SOURCE,args.images,args.build)",
+-        "before_sha256": "e9f66c8d9554001dd52903a6b2faf073f5e0cc1435fa3208d4f9e426b3989b27",
++        "before_sha256": "d73814cd4bcd317e121d2646e23c5ae52c287171e242e88d73f69d8063ab97b6",
+         "count": 1
+       },
+       {
+         "after": "Prepared(capture/\"preparation\",images/\"adapter\")",
+-        "after_sha256": "ae778b1d641c7a87f414d48c71cfd427941b7527a3d2df465b33827ef79b0066",
++        "after_sha256": "fbebb1acbd741e4bc93d0d0ecd6eb9279df82becb4ed98484c3cb441e62662b0",
+         "before": "Prepared(capture/\"preparation\",args.images/\"adapter\")",
+-        "before_sha256": "1dcb856cef5bf38b95f56288c8923d426f00c40c605c821d347d6768c2d487cc",
++        "before_sha256": "2fb9b93d1a67a5cc0bd2fd48b05e1c01d5476882dd42e8984bea763dff9fd6a5",
+         "count": 1
+       },
+       {
+         "after": "    return result\n\n\ndef main():\n    parser=argparse.ArgumentParser(description=__doc__)\n    for name in(\"capture\",\"images\",\"build\",\"output\"):parser.add_argument(\"--\"+name,type=Path,required=True)\n    parser.add_argument(\"--capture-sha256\",required=True)\n    args=parser.parse_args()\n    require(not args.output.exists(),\"fresh DATA readback receipt\")\n    result=read_all(args.capture,args.images,args.build,args.capture_sha256)\n    args.output.write_bytes(encoded(result))",
+-        "after_sha256": "e16364c81cffc243a4afed9358d4265990ced84fb6895be5df7f699e02e5f301",
++        "after_sha256": "db9d04b6a612533ef339739e12443682112a4fd6d2d508af39136ef4bdb675bf",
+         "before": "    require(not args.output.exists(),\"fresh DATA readback receipt\")\n    args.output.write_bytes(encoded(result))",
+-        "before_sha256": "ae778b1d641c7a87f414d48c71cfd427941b7527a3d2df465b33827ef79b0066",
++        "before_sha256": "fbebb1acbd741e4bc93d0d0ecd6eb9279df82becb4ed98484c3cb441e62662b0",
+         "count": 1
+       }
+     ],
+     "original": "8f65b603d2c7eee9329e24e3014ea16d30fc936960937ecbfa60b3574c461af8",
+-    "source": "e16364c81cffc243a4afed9358d4265990ced84fb6895be5df7f699e02e5f301"
++    "source": "db9d04b6a612533ef339739e12443682112a4fd6d2d508af39136ef4bdb675bf"
+   },
+   "read_retry_capture.py": {
+     "complete_inverse": true,
+--- r3/scripts/parent_capture.py
++++ r4/scripts/parent_capture.py
+@@ -274,7 +274,7 @@
+     require(len(admitted)==254 and len(rejected)==2 and len(admitted)+len(rejected)==len(domain["cases"]),"complete original typed-domain partition")
+     PREPARER=Preparer(Path(build_record["images_directory"])/"adapter",output/"preparation")
+     planned=[(case,lane)for case in admitted for lane in LANES if eligible(case,lane)]
+-    require(len(planned)==984,"complete 254-input original/native lane intersection")
++    require(len(planned)==985,"complete 254-input original/native lane intersection")
+     try:
+         for case,lane in planned:
+             require(time.monotonic_ns()-started<1800_000_000_000,"complete original 1800-second capture budget")
+--- r3/scripts/read_composition_source.py
++++ r4/scripts/read_composition_source.py
+@@ -10,6 +10,21 @@
+ ADAPTER='1c38b08d610c2440ae2e246bc06519f416591bbca590850f758ea8eef5848d4a'
+ DOMAIN='0dc9c300dab0380e746ead00b3a8338db7abf9b8c15190208436377838999114'
+ sha=lambda b:hashlib.sha256(b).hexdigest()
++
++def partition(domain):
++ require(domain['lanes']==['original-1','original-2','native-observed','native-unobserved'],'entire original lane order')
++ require([row['id']for row in domain['cases']]==list(range(256)),'entire original input order')
++ original=[];admitted=[];rejected=[]
++ for case in domain['cases']:
++  require(type(case['expected_version'])is str or case['expected_version']is None,'original exact String or None boundary')
++  for lane in domain['lanes']:
++   if lane=='native-unobserved'and(case['fault_plans']or case['descriptor_actor']or case['nofile']):continue
++   pair=[case['id'],lane];original.append(pair)
++   (rejected if case['expected_version']is None else admitted).append(pair)
++ require(len(original)==992 and len(admitted)==985 and len(rejected)==7,'complete original 992 lanes partition as 985 plus seven None lanes')
++ require(rejected==[[217,lane]for lane in domain['lanes']]+[[244,lane]for lane in domain['lanes'][:3]],'original None 217 has four lanes; faulted None244 has three')
++ require({lane:sum(p[1]==lane for p in admitted)for lane in domain['lanes']}==dict(zip(domain['lanes'],(254,254,254,223))),'complete original lane multiplicities')
++ return dict(original=original,admitted=admitted,typed_rejected=rejected)
+ 
+ def read_source(root=ROOT):
+  root=Path(root);identity=source_evidence(root)
+@@ -25,6 +40,7 @@
+   require(type(case['expected_version'])is str or case['expected_version']is None,'original declared typed values only')
+   (rejected if case['expected_version']is None else admitted).append(case['id'])
+  require(domain['case_count']==len(domain['cases'])==256 and len(admitted)==254 and len(rejected)==2,'complete disjoint ordered parent input split')
++ lanes=partition(domain)
+  require(len(domain['retry_controls'])*len(domain['retry_lanes'])==6,'entire unchanged EINTR cancellation set')
+  evidence={}
+  for file in('integration_edits.json','reader_integration_edits.json'):
+@@ -53,5 +69,5 @@
+  require(restored.encode()==original,'all original fixture/fault/actor bytes retained')
+  for path in(root/'scripts').glob('*.py'):ast.parse(path.read_bytes(),filename=str(path))
+  require(source_evidence(root)==identity,'whole source custody during DATA read')
+- return dict(status='PASS_EXACT_SOURCE_INHERITANCE',source=identity,parent_source=parent,adapter_sources=38,original_parent_inputs=256,admitted_ids=admitted,typed_rejected_ids=rejected,retries=6,inverse=evidence,public_binary_write_registered=False,whole_runtime_replaced=False)
++ return dict(status='PASS_EXACT_SOURCE_INHERITANCE',source=identity,parent_source=parent,adapter_sources=38,original_parent_inputs=256,admitted_ids=admitted,typed_rejected_ids=rejected,ordered_lane_partition=lanes,retries=6,inverse=evidence,public_binary_write_registered=False,whole_runtime_replaced=False)
+ if __name__=='__main__':print(json.dumps(read_source(),sort_keys=True))
+--- r3/scripts/read_parent_capture.py
++++ r4/scripts/read_parent_capture.py
+@@ -409,7 +409,7 @@
+     require(hashlib.sha256(raw).hexdigest()==capture_sha256,"fixed complete capture authority")
+     report=decode(raw)
+     require(report["status"]=="COMPLETE_ACTUAL_CAPTURE"and report["source"]==identity
+-            and report["planned"]==report["completed"]==984 and report["retry_planned"]==report["retry_completed"]==6
++            and report["planned"]==report["completed"]==985 and report["retry_planned"]==report["retry_completed"]==6
+             and report["elapsed_ns"]<1800_000_000_000,
+             "whole original bounded capture did not complete")
+     owner_raw=(capture.parent/"OWNED.json").read_bytes();owner=decode(owner_raw)
+@@ -433,7 +433,14 @@
+     preparer=Prepared(capture/"preparation",images/"adapter")
+     planned=[(case,lane)for case in admitted for lane in LANES
+              if lane!="native-unobserved"or not(case["fault_plans"]or case["descriptor_actor"]or case["nofile"])]
+-    require(len(planned)==len(report["cases"])==984,"complete frozen original/current lane set")
++    entire_original=[(case,lane)for case in domain["cases"]for lane in LANES
++        if lane!="native-unobserved"or not(case["fault_plans"]or case["descriptor_actor"]or case["nofile"])]
++    omitted=[(case,lane)for case,lane in entire_original if case["expected_version"]is None]
++    require(len(entire_original)==992 and len(omitted)==7,"whole original natural domain retained as 985 plus seven typed-refused lanes")
++    same([(case["id"],lane)for case,lane in omitted],[(217,lane)for lane in LANES]+[(244,lane)for lane in LANES[:3]],"exact original four-plus-three None lanes")
++    same([(case["id"],lane)for case,lane in entire_original if type(case["expected_version"])is str],
++         [(case["id"],lane)for case,lane in planned],"independent complete ordered original-to-composed lane projection")
++    require(len(planned)==len(report["cases"])==985,"complete frozen original/current lane set")
+     originals={};checked=[]
+     for binding,(case,lane)in zip(report["cases"],planned):
+         require((binding["id"],binding["name"],binding["lane"])==(case["id"],case["name"],lane),"complete unchanged case order")
+@@ -471,8 +478,9 @@
+     require((capture/"CAPTURE.json").read_bytes()==raw and(capture.parent/"OWNED.json").read_bytes()==owner_raw
+             and source_evidence(SOURCE)==identity,"complete final source/capture custody")
+     result=dict(schema="hepta.runtime.binary-write-composition-readback.v1",status="PASS_COMPLETE_FROZEN_COMPOSITION_DOMAIN",
+-                source=identity,capture=pin(capture/"CAPTURE.json"),build=build,cases=254,original_parent_inputs=256,typed_null_refusals=2,complete_lane_runs=984,
+-                original_runs=508,native_observed_runs=254,native_unobserved_runs=222,checked=checked,buffers=buffers,
++                source=identity,capture=pin(capture/"CAPTURE.json"),build=build,cases=254,original_parent_inputs=256,typed_null_refusals=2,complete_lane_runs=985,original_complete_lane_runs=992,
++                typed_rejected_original_lanes=[dict(id=case["id"],lane=lane)for case,lane in omitted],
++                original_runs=508,native_observed_runs=254,native_unobserved_runs=223,checked=checked,buffers=buffers,
+                 actual_retry_controls=6,explicit_sigterm_cancellations=6,retry_checked=retry_checked,
+                 runtime_python_required=False,whole_runtime_replaced=False,public_binary_write_registered=False,
+                 old_body_101_requalified=False)
+--- r3/tests/test_composition_data.py
++++ r4/tests/test_composition_data.py
+@@ -158,4 +158,29 @@
+     raw=bytearray(frame);raw[offset]^=1
+     with self.subTest(offset=offset),self.assertRaises(ValueError):reader.mismatch_frame(bytes(raw),child,seq,detail)
+ 
++class CompleteDomainPartitionTests(unittest.TestCase):
++ def values(self):
++  import read_composition_source
++  return read_composition_source.partition,json.loads((ROOT/'parent/DOMAIN.json').read_bytes())
++ def test_00_complete_985_and_seven_original_lanes(self):
++  partition,domain=self.values();result=partition(domain)
++  self.assertEqual((len(result['original']),len(result['admitted']),len(result['typed_rejected'])),(992,985,7))
++  self.assertEqual(sum(lane=='native-unobserved'for _,lane in result['admitted']),223)
++  self.assertIn([244,'native-observed'],result['typed_rejected']);self.assertNotIn([244,'native-unobserved'],result['original'])
++ def test_01_no_input_or_lane_can_be_omitted_or_reordered(self):
++  for kind in('case-omit','case-reorder','lane-omit','lane-reorder'):
++   partition,domain=self.values()
++   if kind=='case-omit':domain['cases'].pop(100)
++   elif kind=='case-reorder':domain['cases'][100],domain['cases'][101]=domain['cases'][101],domain['cases'][100]
++   elif kind=='lane-omit':domain['lanes'].pop()
++   else:domain['lanes'][0],domain['lanes'][1]=domain['lanes'][1],domain['lanes'][0]
++   with self.subTest(kind=kind),self.assertRaises(ValueError):partition(domain)
++ def test_02_original_fault_and_none_semantics_cannot_be_changed_to_match_a_count(self):
++  for kind in('fault','none','drop-eligible-unobserved'):
++   partition,domain=self.values()
++   if kind=='fault':domain['cases'][244]['fault_plans']=[]
++   elif kind=='none':domain['cases'][244]['expected_version']=''
++   else:domain['cases'][0]['nofile']=1
++   with self.subTest(kind=kind),self.assertRaises(ValueError):partition(domain)
++
+ if __name__=='__main__':unittest.main()

@@ -41,7 +41,12 @@ def line(q, raw, number):
     q.need(pid > 0 and (result == -1) == (error is not None), 'actual syscall PID/return/errno shape')
     error_number = getattr(errno, error, None) if error else 0
     q.need(type(error_number) is int and (not error or error_number > 0), 'actual syscall errno name')
-    return {'pid': pid, 'name': name, 'args': q.split_arguments(m[3].decode('ascii')),
+    arguments = m[3].decode('ascii')
+    # This complete subset has exactly two unquoted commas and one hex string.
+    # Preserve every spelling and let all other input use the original parser.
+    write = re.fullmatch(r'\s*([0-9]+)\s*,\s*("(?:\\x[0-9a-f]{2})*"(?:\.\.\.)?)\s*,\s*([0-9]+)\s*', arguments) if name == 'write' else None
+    args = list(write.groups()) if write is not None else q.split_arguments(arguments)
+    return {'pid': pid, 'name': name, 'args': args,
             'return': result, 'errno': error, 'errno_number': error_number,
             'normalized_return': -error_number if error else result,
             'line': number, 'bytes': len(raw), 'sha256': q.sha(raw)}
